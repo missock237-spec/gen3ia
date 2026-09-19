@@ -24,6 +24,16 @@ const PatchSchema = z.object({
   memoryEnabled: z.boolean().optional(),
   webResearchEnabled: z.boolean().optional(),
   documentGenerationEnabled: z.boolean().optional(),
+  voiceEnabled: z.boolean().optional(),
+  voiceConfig: z.object({
+    language: z.enum(["fr-FR", "en-US", "en-GB", "es-ES", "de-DE"]).optional(),
+    greeting: z.string().trim().min(2).max(800).optional(),
+    maxTurns: z.number().int().min(1).max(40).optional(),
+    maxDurationSeconds: z.number().int().min(30).max(1800).optional(),
+    inboundEnabled: z.boolean().optional(),
+    outboundEnabled: z.boolean().optional(),
+    voiceEnabled: z.boolean().optional(),
+  }).optional(),
   status: z.enum(["draft", "active", "paused", "archived"]).optional(),
 });
 
