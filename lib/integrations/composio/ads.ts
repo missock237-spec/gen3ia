@@ -1,4 +1,5 @@
 import { getComposio } from "./client";
+import { getAppUrl } from "@/lib/url/app-url";
 
 export type AdsProvider = "google_ads" | "meta_ads" | "tiktok_ads";
 
@@ -27,12 +28,7 @@ function assertAdsToolSlug(provider: AdsProvider, toolSlug: string) {
 export async function authorizeAdsProvider(userId: string, provider: string) {
   if (!userId) throw new Error("userId is required.");
   const toolkit = getAdsToolkit(provider);
-  const callbackUrl = `${(
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : "https://gen3ia.online")
-  ).replace(/\\/$/, "")}/studio?composio_connected=1&toolkit=${encodeURIComponent(toolkit)}`;
+  const callbackUrl = `${getAppUrl()}/studio?composio_connected=1&toolkit=${encodeURIComponent(toolkit)}`;
 
   const session = await getComposio().create(userId, {
     manageConnections: {
