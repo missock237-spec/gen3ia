@@ -7,7 +7,7 @@ const Schema = z.object({ executionId: z.string().min(1), agentId: z.string().ma
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const guard = await protectRoute(request); if (!guard.ok) return guard.response;
+  const guard = await protectRoute(request, { key: "camera-request", rateLimit: { limit: 10, windowMs: 10 * 60 * 1000 } }); if (!guard.ok) return guard.response;
   try { const body = Schema.parse(await request.json()); return NextResponse.json(await requestCameraCapture({ userId: guard.context.userId, ...body })); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Camera request failed" }, { status: 400 }); }
 }

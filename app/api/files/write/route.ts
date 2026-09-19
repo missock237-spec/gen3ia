@@ -27,7 +27,7 @@ export async function POST(
   request: NextRequest
 ) {
   const guard =
-    await protectRoute(request);
+    await protectRoute(request, { key: "files-write", rateLimit: { limit: 60, windowMs: 5 * 60 * 1000 } });
 
   if (!guard.ok) {
     return guard.response;

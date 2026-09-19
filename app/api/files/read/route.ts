@@ -24,7 +24,7 @@ export async function POST(
   request: NextRequest
 ) {
   const guard =
-    await protectRoute(request);
+    await protectRoute(request, { key: "files-read", rateLimit: { limit: 120, windowMs: 5 * 60 * 1000 } });
 
   if (!guard.ok) {
     return guard.response;

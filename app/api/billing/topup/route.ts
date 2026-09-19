@@ -5,6 +5,8 @@ import {
   getChariowTopupProductId,
 } from "@/lib/billing/chariow";
 import { WALLET_CURRENCY } from "@/lib/billing/wallet";
+import { rateLimit } from "@/lib/security/rate-limit";
+import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
 
 function appOrigin(request: Request): string {
   const configured = process.env.APP_URL?.trim();
@@ -27,6 +29,17 @@ function appOrigin(request: Request): string {
 export async function POST(request: Request) {
   try {
     const token = await verifyFirebaseToken(request);
+    const topupLimit = rateLimit(`billing-topup:${token.uid}`, { limit: 10, windowMs: 10 * 60 * 1000 });
+    if (!topupLimit.allowed) {
+      return Response.json({ error: "Trop de tentatives de rechargement. Reessayez plus tard." }, { status: 429, headers: { "retry-after": String(Math.max(1, Math.ceil(topupLimit.retryAfterMs / 1000))) } });
+    }
+    await appendSecurityAuditEvent({
+      userId: token.uid,
+      executionId: `topup_${Date.now()}`,
+      toolName: "billing.topup",
+      event: "started",
+      input: { hasProductId: Boolean(getChariowTopupProductId()) },
+    });
     const email = token.email?.trim().toLowerCase();
     if (!email) {
       throw new Error("Your Firebase account must have an email address for Chariow checkout.");

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
+import { rateLimit } from "@/lib/security/rate-limit";
 import { planUniversalAgent } from "@/lib/agents/runtime/unified-agent";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/execution-policy";
@@ -71,6 +72,10 @@ function finalResponseText(plan: RuntimePlan, outputs: Record<string, unknown>):
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser(request);
+    const chatLimit = rateLimit(`agent-chat:${user.uid}`, { limit: 60, windowMs: 5 * 60 * 1000 });
+    if (!chatLimit.allowed) {
+      return NextResponse.json({ error: "Trop de messages rapproches. Reessayez dans quelques instants." }, { status: 429, headers: { "retry-after": String(Math.max(1, Math.ceil(chatLimit.retryAfterMs / 1000))) } });
+    }
     const body = Body.parse(await request.json());
 
     let conversationId = body.conversationId;

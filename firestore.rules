@@ -116,5 +116,15 @@ service cloud.firestore {
     match /developerRevenue/{entryId} { allow read: if signedIn() && resource.data.developerId == request.auth.uid; allow write: if false; }
     match /developerApiKeys/{keyHash} { allow read, write: if false; }
     match /system/{document=**} { allow read, write: if false; }
+    // Collections serveur uniquement (Admin SDK) : acces client explicitement interdit.
+    match /liveAgentSessions/{sessionId} { allow read, write: if false; }
+    match /agentCameraRequests/{requestId} { allow read, write: if false; }
+    match /agentWorkspaceTasks/{taskId} { allow read, write: if false; }
+    match /chatConversations/{conversationId} { allow read, write: if false; }
+    match /chatMessages/{messageId} { allow read, write: if false; }
+    match /skillVersions/{versionId} { allow read, write: if false; }
+    match /skillEvaluations/{evaluationId} { allow read, write: if false; }
+    match /chariowPulseDeliveries/{deliveryId} { allow read, write: if false; }
+    match /events/{eventId} { allow read, write: if false; }
   }
 }

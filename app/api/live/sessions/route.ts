@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
+import { rateLimit } from "@/lib/security/rate-limit";
+import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
 import { detectDeviceFromHeaders } from "@/lib/device/detect";
 import { createLiveSession, listLiveSessions } from "@/lib/live/repository";
 import { createPairingToken, hashPairingToken } from "@/lib/live/security";
@@ -42,6 +44,10 @@ export async function POST(request: Request) {
     const pcOnly = pcOnlyGuard(request);
     if (pcOnly) return pcOnly;
     const token = await verifyFirebaseAuth(request);
+    const liveLimit = rateLimit(`live-session:${token.uid}`, { limit: 20, windowMs: 5 * 60 * 1000 });
+    if (!liveLimit.allowed) {
+      return NextResponse.json({ error: "Trop de sessions creees rapprochees. Reessayez dans quelques minutes." }, { status: 429 });
+    }
     const body = CreateSchema.parse(await request.json());
     const pairingToken = createPairingToken();
     const viewerToken = createPairingToken();
@@ -54,6 +60,13 @@ export async function POST(request: Request) {
       expiresAt: Date.now() + body.ttlMs,
       pairingTokenHash: hashPairingToken(pairingToken),
       viewerTokenHash: hashPairingToken(viewerToken),
+    });
+    await appendSecurityAuditEvent({
+      userId: token.uid,
+      executionId: session.id,
+      toolName: "live.session_started",
+      event: "started",
+      input: { name: body.name, permissions: body.permissions, objectiveChars: body.objective.length },
     });
     return NextResponse.json({ session, pairingToken, viewerToken }, { status: 201 });
   } catch (error) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyFirebaseToken } from "@/lib/firebase/auth-server";
+import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 import { ensureUserProfile } from "@/lib/firebase/users";
 import { getWallet } from "@/lib/billing/wallet";
 import {
@@ -27,6 +28,10 @@ interface SessionResponseBody {
 
 export async function POST(request: NextRequest) {
   try {
+    const ipLimit = rateLimit(`auth-session:${clientIp(request)}`, { limit: 30, windowMs: 5 * 60 * 1000 });
+    if (!ipLimit.allowed) {
+      return NextResponse.json({ authenticated: false, error: "Trop de tentatives de session. Reessayez plus tard." }, { status: 429, headers: { "retry-after": String(Math.max(1, Math.ceil(ipLimit.retryAfterMs / 1000))) } });
+    }
     const token = await verifyFirebaseToken(request.headers.get("authorization"));
     const provider = token.firebase?.sign_in_provider || "unknown";
     await ensureUserProfile({ uid: token.uid, email: token.email, displayName: token.name, photoURL: token.picture, provider });
