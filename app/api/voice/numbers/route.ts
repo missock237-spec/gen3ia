@@ -9,6 +9,7 @@ import {
   releaseAgentPhoneNumber,
   searchAvailableNumbers,
 } from "@/lib/integrations/twilio/numbers";
+import { searchAvailablePlivoNumbers, purchasePlivoNumberForAgent, releasePlivoNumber } from "@/lib/integrations/plivo/numbers";
 
 export const runtime = "nodejs";
 
@@ -25,9 +26,12 @@ export async function GET(request: NextRequest) {
     const user = await requireUser(request);
     const agentId = request.nextUrl.searchParams.get("agentId") ?? undefined;
     const country = request.nextUrl.searchParams.get("country");
+    const provider = request.nextUrl.searchParams.get("provider") ?? "twilio";
     if (country) {
-      const numbers = await searchAvailableNumbers(country, request.nextUrl.searchParams.get("areaCode") ?? undefined);
-      return NextResponse.json({ numbers, monthlyPriceMinor: Number(process.env.GEN3IA_PHONE_NUMBER_PRICE_MINOR ?? 5000), currency: process.env.GEN3IA_WALLET_CURRENCY ?? "XAF" });
+      const numbers = provider === "plivo"
+        ? await searchAvailablePlivoNumbers(country, request.nextUrl.searchParams.get("areaCode") ?? undefined)
+        : await searchAvailableNumbers(country, request.nextUrl.searchParams.get("areaCode") ?? undefined);
+      return NextResponse.json({ provider, numbers, monthlyPriceMinor: Number(process.env.GEN3IA_PHONE_NUMBER_PRICE_MINOR ?? 5000), currency: process.env.GEN3IA_WALLET_CURRENCY ?? "XAF" });
     }
     return NextResponse.json({ numbers: await listAgentPhoneNumbers(user.uid, agentId) });
   } catch (error) {
@@ -50,7 +54,9 @@ export async function POST(request: NextRequest) {
 
     const parsed = PurchaseSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Invalid phone number data." }, { status: 400 });
-    const record = await purchaseNumberForAgent({ ownerId: user.uid, agentId: parsed.data.agentId, phoneNumber: parsed.data.phoneNumber });
+    const record = body?.provider === "plivo"
+      ? await purchasePlivoNumberForAgent({ ownerId: user.uid, agentId: parsed.data.agentId, phoneNumber: parsed.data.phoneNumber })
+      : await purchaseNumberForAgent({ ownerId: user.uid, agentId: parsed.data.agentId, phoneNumber: parsed.data.phoneNumber });
     return NextResponse.json({ number: record });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Phone number operation failed." }, { status: 400 });
