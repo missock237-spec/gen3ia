@@ -49,6 +49,8 @@ export async function createPhoneCallSession(params: {
   await reserveDailyPhoneCallSlot(params.userId);
   const id = randomUUID();
   const now = Date.now();
+  const from = params.from ?? config.fromNumber;
+  if (!from) throw new Error("No caller phone number is configured for this call.");
   const session: PhoneCallSession = {
     id,
     userId: params.userId,
@@ -56,7 +58,7 @@ export async function createPhoneCallSession(params: {
     agentId: params.agentId,
     systemPrompt: params.systemPrompt,
     to: params.to,
-    from: params.from ?? config.fromNumber,
+    from,
     objective: params.objective,
     opening: params.opening,
     language: params.language,
