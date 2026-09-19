@@ -34,7 +34,7 @@ export function getTwilioConfig() {
   return {
     accountSid: requiredEnv("TWILIO_ACCOUNT_SID"),
     authToken: requiredEnv("TWILIO_AUTH_TOKEN"),
-    fromNumber: requiredEnv("TWILIO_PHONE_NUMBER"),
+    fromNumber: process.env.TWILIO_PHONE_NUMBER?.trim() || "",
     appUrl: requiredEnv("NEXT_PUBLIC_APP_URL").replace(/\/$/, ""),
   };
 }
