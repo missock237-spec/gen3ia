@@ -27,7 +27,8 @@ export const phoneCallTool: ToolDefinition<z.infer<typeof PhoneCallInput>, {
   risk: "high",
   inputSchema: PhoneCallInput,
   async execute(input, context) {
-    const agent = input.agentId ? await getAgentForOwner(context.userId, input.agentId) : null;
+    const selectedAgentId = input.agentId ?? context.agentId;
+    const agent = selectedAgentId ? await getAgentForOwner(context.userId, selectedAgentId) : null;
     if (input.agentId && !agent) throw new Error("Voice agent not found.");
     if (agent && !agent.voiceEnabled) throw new Error("Voice calls are disabled for this agent.");
     const assignedNumber = agent ? (await listAgentPhoneNumbers(context.userId, agent.id)).find((item) => item.status === "active") : null;
