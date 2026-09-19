@@ -39,7 +39,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       executionId: randomUUID(),
       from: assigned.phoneNumber,
       to: parsed.data.to,
-      objective: parsed.data.objective ?? agent.description || "Assister le correspondant dans le périmètre de cet agent.",
+      objective: parsed.data.objective ?? (agent.description || "Assister le correspondant dans le périmètre de cet agent."),
       opening: config?.greeting ?? "Bonjour, je suis l'agent IA de Gen3ia. Comment puis-je vous aider ?",
       language: config?.language ?? "fr-FR",
       maxTurns: config?.maxTurns ?? 20,
