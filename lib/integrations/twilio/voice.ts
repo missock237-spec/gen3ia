@@ -4,6 +4,7 @@ const MAX_HISTORY = 40;
 
 export interface PhoneCallSession {
   id: string;
+  provider?: "twilio" | "plivo";
   userId: string;
   executionId: string;
   agentId?: string;
