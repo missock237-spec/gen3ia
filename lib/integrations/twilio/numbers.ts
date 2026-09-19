@@ -49,10 +49,8 @@ export interface AgentPhoneNumber {
 }
 
 export async function listAgentPhoneNumbers(ownerId: string, agentId?: string) {
-  let query = adminDb.collection(COLLECTION).where("ownerId", "==", ownerId);
-  if (agentId) query = query.where("agentId", "==", agentId) as typeof query;
-  const snap = await query.limit(100).get();
-  return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<AgentPhoneNumber, "id">) }));
+  const snap = await adminDb.collection(COLLECTION).where("ownerId", "==", ownerId).limit(100).get();
+  return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<AgentPhoneNumber, "id">) })).filter((item) => !agentId || item.agentId === agentId);
 }
 
 async function configureTwilioNumber(phoneSid: string, sessionId: string) {
@@ -167,10 +165,10 @@ export async function attachExistingTwilioNumber(params: { ownerId: string; agen
 }
 
 export async function getAgentPhoneNumberByNumber(phoneNumber: string) {
-  const snap = await adminDb.collection(COLLECTION).where("phoneNumber", "==", phoneNumber).where("status", "==", "active").limit(1).get();
-  if (snap.empty) return null;
-  const doc = snap.docs[0];
-  return { id: doc.id, ...(doc.data() as Omit<AgentPhoneNumber, "id">) };
+  const snap = await adminDb.collection(COLLECTION).where("phoneNumber", "==", phoneNumber).limit(5).get();
+  const match = snap.docs.find((doc) => doc.data().status === "active");
+  if (!match) return null;
+  return { id: match.id, ...(match.data() as Omit<AgentPhoneNumber, "id">) };
 }
 
 export async function getAgentPhoneNumberById(id: string) {
