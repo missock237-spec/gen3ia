@@ -10,6 +10,21 @@ import { z } from "zod";
  */
 export const AGENT_TYPES = ["universal", "code", "content", "research", "automation"] as const;
 
+export const VOICE_LANGUAGES = ["fr-FR", "en-US", "en-GB", "es-ES", "de-DE"] as const;
+export type VoiceLanguage = (typeof VOICE_LANGUAGES)[number];
+
+export const VoiceConfigSchema = z.object({
+  language: z.enum(VOICE_LANGUAGES).default("fr-FR"),
+  greeting: z.string().trim().min(2).max(800).default("Bonjour, je suis l'agent IA de Gen3ia. Comment puis-je vous aider ?"),
+  maxTurns: z.number().int().min(1).max(40).default(20),
+  maxDurationSeconds: z.number().int().min(30).max(1800).default(300),
+  inboundEnabled: z.boolean().default(true),
+  outboundEnabled: z.boolean().default(true),
+  voiceEnabled: z.boolean().default(true),
+});
+
+export type VoiceConfig = z.infer<typeof VoiceConfigSchema>;
+
 export type AgentType = (typeof AGENT_TYPES)[number];
 
 export const AGENT_TYPE_META: Record<
@@ -57,6 +72,8 @@ export const AgentRecordSchema = z.object({
   memoryEnabled: z.boolean().default(true),
   webResearchEnabled: z.boolean().default(true),
   documentGenerationEnabled: z.boolean().default(true),
+  voiceEnabled: z.boolean().default(false),
+  voiceConfig: VoiceConfigSchema.optional(),
   status: z.enum(["draft", "active", "paused", "archived"]).default("active"),
 });
 
@@ -85,6 +102,8 @@ export type AgentSummary = Pick<
   | "memoryEnabled"
   | "webResearchEnabled"
   | "documentGenerationEnabled"
+  | "voiceEnabled"
+  | "voiceConfig"
   | "createdAt"
   | "updatedAt"
 >;
