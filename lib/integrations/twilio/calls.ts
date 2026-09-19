@@ -53,6 +53,7 @@ export async function createPhoneCallSession(params: {
   const now = Date.now();
   const session: PhoneCallSession = {
     id,
+    provider: params.provider ?? "twilio",
     userId: params.userId,
     executionId: params.executionId,
     agentId: params.agentId,
@@ -163,6 +164,7 @@ export async function incrementPhoneCallTurn(sessionId: string) {
 export async function createInboundPhoneCallSession(params: {
   userId: string;
   agentId: string;
+  provider?: "twilio" | "plivo";
   executionId: string;
   to: string;
   from: string;
