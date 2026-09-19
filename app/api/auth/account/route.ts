@@ -12,6 +12,30 @@ export const runtime = "nodejs";
 /** Taille maximale des lots de suppression Firestore (limite plateforme). */
 const BATCH_LIMIT = 400;
 
+const FIREBASE_IDENTITY_API = "https://identitytoolkit.googleapis.com/v1/accounts:delete";
+const FIREBASE_API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "";
+
+/**
+ * Fallback RGPD : suppression via l'API identitytoolkit client avec le jeton
+ * ID de l'utilisateur lui-meme. Utilisée quand l'Admin SDK échoue (ex. état
+ * "soft-deleted" remonté par le projet côté Google alors que l'auth client
+ * reste opérationnelle). L'utilisateur ne peut supprimer que son propre
+ * compte : le jeton est celui qu'il vient de présenter.
+ */
+async function deleteAuthAccountViaIdentityToolkit(idToken: string): Promise<boolean> {
+  if (!FIREBASE_API_KEY || !idToken) return false;
+  try {
+    const response = await fetch(`${FIREBASE_IDENTITY_API}?key=${FIREBASE_API_KEY}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ idToken }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function deleteWhere(
   collection: string,
   field: string,
@@ -63,8 +87,18 @@ export async function DELETE(request: NextRequest) {
     await adminDb.recursiveDelete(adminDb.collection("userWallets").doc(uid));
     await adminDb.recursiveDelete(adminDb.collection("users").doc(uid));
 
-    // 3. Compte d'authentification Firebase.
-    await getAuth(getApp()).deleteUser(uid);
+    // 3. Compte d'authentification Firebase. Admin SDK d'abord ; en cas
+    // d'échec côté projet (ex. PROJECT_SOFT_DELETED), repli sur l'API
+    // identitytoolkit avec le jeton ID présenté par l'utilisateur.
+    const idToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+    try {
+      await getAuth(getApp()).deleteUser(uid);
+    } catch (adminError) {
+      const deleted = await deleteAuthAccountViaIdentityToolkit(idToken);
+      if (!deleted) {
+        throw adminError instanceof Error ? adminError : new Error("Suppression du compte d'authentification impossible.");
+      }
+    }
 
     // 4. Trace d'audit de l'effacement (sans donnee personnelle).
     await appendSecurityAuditEvent({
