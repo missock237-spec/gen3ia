@@ -409,6 +409,8 @@ export function AgentManager() {
                   </Link>
                 )}
 
+                {agent.voiceEnabled && <button type="button" className="mt-3 w-full rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-left text-sm text-sky-700 hover:bg-sky-100" onClick={() => setVoiceSetupAgentId(agent.id)}>📞 Configurer le numéro et la voix</button>}
+
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <input
                     className="g3-input flex-1"
