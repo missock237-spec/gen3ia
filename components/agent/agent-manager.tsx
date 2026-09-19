@@ -52,6 +52,7 @@ const TOOL_OPTIONS = [
   { id: "zip.create", label: "Archives ZIP" },
   { id: "memory.write", label: "Memoire permanente" },
   { id: "ui.components", label: "Composants 21st.dev (code)" },
+  { id: "phone.call", label: "Appels téléphoniques IA" },
 ];
 
 interface RunResult {
