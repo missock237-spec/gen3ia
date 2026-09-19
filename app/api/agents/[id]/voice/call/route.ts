@@ -6,6 +6,7 @@ import { getAgentForOwner } from "@/lib/agents/repository";
 import { listAgentPhoneNumbers } from "@/lib/integrations/twilio/numbers";
 import { createPhoneCallSession, startPhoneCall } from "@/lib/integrations/twilio/calls";
 import { rateLimit } from "@/lib/security/rate-limit";
+import { createPlivoPhoneCallSession, startPlivoPhoneCall } from "@/lib/integrations/plivo/calls";
 
 const CallSchema = z.object({
   to: z.string().regex(/^\+[1-9]\d{7,14}$/),
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (!assigned) return NextResponse.json({ error: "Attribuez d'abord un numéro de téléphone à cet agent." }, { status: 400 });
 
     const config = agent.voiceConfig;
-    const session = await createPhoneCallSession({
+    const sessionInput = {
       userId: user.uid,
       agentId: agent.id,
       executionId: randomUUID(),
@@ -45,8 +46,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       maxTurns: config?.maxTurns ?? 20,
       maxDurationSeconds: config?.maxDurationSeconds ?? 300,
       systemPrompt: agent.systemPrompt,
-    });
-    const call = await startPhoneCall(session.id);
+    };
+    const call = assigned.provider === "plivo"
+      ? await startPlivoPhoneCall((await createPlivoPhoneCallSession(sessionInput)).id)
+      : await startPhoneCall((await createPhoneCallSession(sessionInput)).id);
     return NextResponse.json({ sessionId: session.id, callSid: call.callSid, status: call.status, from: assigned.phoneNumber, to: parsed.data.to });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Appel impossible." }, { status: 400 });
