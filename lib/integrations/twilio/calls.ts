@@ -38,6 +38,7 @@ export async function createPhoneCallSession(params: {
   to: string;
   objective: string;
   opening: string;
+  from?: string;
   language: string;
   maxTurns: number;
   maxDurationSeconds: number;
@@ -55,7 +56,7 @@ export async function createPhoneCallSession(params: {
     agentId: params.agentId,
     systemPrompt: params.systemPrompt,
     to: params.to,
-    from: config.fromNumber,
+    from: params.from ?? config.fromNumber,
     objective: params.objective,
     opening: params.opening,
     language: params.language,
