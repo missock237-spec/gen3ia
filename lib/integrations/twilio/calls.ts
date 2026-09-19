@@ -46,11 +46,11 @@ export async function createPhoneCallSession(params: {
   assertOwner(params.userId);
   if (!isValidE164(params.to)) throw new Error("Phone number must use E.164 format, for example +2376XXXXXXXX.");
   const config = getTwilioConfig();
+  const from = params.from ?? config.fromNumber;
+  if (!from) throw new Error("No caller phone number is configured for this call.");
   await reserveDailyPhoneCallSlot(params.userId);
   const id = randomUUID();
   const now = Date.now();
-  const from = params.from ?? config.fromNumber;
-  if (!from) throw new Error("No caller phone number is configured for this call.");
   const session: PhoneCallSession = {
     id,
     userId: params.userId,
