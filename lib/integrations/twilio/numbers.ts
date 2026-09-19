@@ -42,6 +42,7 @@ export interface AgentPhoneNumber {
   agentId: string;
   phoneNumber: string;
   twilioSid: string;
+  provider?: "twilio" | "plivo";
   source: "gen3ia" | "own";
   status: "active" | "pending" | "released";
   createdAt: number;
@@ -117,6 +118,7 @@ export async function purchaseNumberForAgent(params: { ownerId: string; agentId:
       agentId: params.agentId,
       phoneNumber: phone,
       twilioSid: purchasedSid,
+      provider: "twilio",
       source: "gen3ia",
       status: "active",
       createdAt: now,
@@ -157,6 +159,7 @@ export async function attachExistingTwilioNumber(params: { ownerId: string; agen
     agentId: params.agentId,
     phoneNumber: params.phoneNumber,
     twilioSid: sid,
+    provider: "twilio",
     source: "own",
     status: "active",
     createdAt: now,
