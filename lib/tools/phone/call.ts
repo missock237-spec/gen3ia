@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { ToolDefinition } from "@/lib/tools/types";
 import { createPhoneCallSession, startPhoneCall } from "@/lib/integrations/twilio/calls";
 import { getAgentForOwner } from "@/lib/agents/repository";
+import { listAgentPhoneNumbers } from "@/lib/integrations/twilio/numbers";
 
 const PhoneCallInput = z.object({
   agentId: z.string().min(1).optional(),
@@ -29,6 +30,8 @@ export const phoneCallTool: ToolDefinition<z.infer<typeof PhoneCallInput>, {
     const agent = input.agentId ? await getAgentForOwner(context.userId, input.agentId) : null;
     if (input.agentId && !agent) throw new Error("Voice agent not found.");
     if (agent && !agent.voiceEnabled) throw new Error("Voice calls are disabled for this agent.");
+    const assignedNumber = agent ? (await listAgentPhoneNumbers(context.userId, agent.id)).find((item) => item.status === "active") : null;
+    if (agent && !assignedNumber) throw new Error("This voice agent has no active phone number.");
     const session = await createPhoneCallSession({
       userId: context.userId,
       agentId: agent?.id,
