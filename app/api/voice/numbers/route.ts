@@ -68,7 +68,10 @@ export async function DELETE(request: NextRequest) {
     const user = await requireUser(request);
     const parsed = ReleaseSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Invalid number id." }, { status: 400 });
-    await releaseAgentPhoneNumber(user.uid, parsed.data.id);
+    const snap = await (await import("@/lib/firebase/admin")).adminDb.collection("agentPhoneNumbers").doc(parsed.data.id).get();
+    const record = snap.exists ? snap.data() as { provider?: string } : null;
+    if (record?.provider === "plivo") await releasePlivoNumber(user.uid, parsed.data.id);
+    else await releaseAgentPhoneNumber(user.uid, parsed.data.id);
     return NextResponse.json({ released: true });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Release failed." }, { status: 400 });
