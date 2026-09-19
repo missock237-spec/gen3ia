@@ -33,6 +33,8 @@ function assertOwner(userId: string) {
 export async function createPhoneCallSession(params: {
   userId: string;
   executionId: string;
+  agentId?: string;
+  systemPrompt?: string;
   to: string;
   objective: string;
   opening: string;
@@ -50,6 +52,8 @@ export async function createPhoneCallSession(params: {
     id,
     userId: params.userId,
     executionId: params.executionId,
+    agentId: params.agentId,
+    systemPrompt: params.systemPrompt,
     to: params.to,
     from: config.fromNumber,
     objective: params.objective,
@@ -150,4 +154,44 @@ export async function appendPhoneCallHistory(sessionId: string, item: PhoneCallS
 export async function incrementPhoneCallTurn(sessionId: string) {
   const ref = adminDb.collection(COLLECTION).doc(sessionId);
   await ref.update({ turnCount: FieldValue.increment(1), updatedAt: Date.now() });
+}
+
+
+export async function createInboundPhoneCallSession(params: {
+  userId: string;
+  agentId: string;
+  executionId: string;
+  to: string;
+  from: string;
+  objective: string;
+  opening: string;
+  language: string;
+  maxTurns: number;
+  maxDurationSeconds: number;
+  systemPrompt?: string;
+}) {
+  assertOwner(params.userId);
+  const id = randomUUID();
+  const now = Date.now();
+  const session: PhoneCallSession = {
+    id,
+    userId: params.userId,
+    agentId: params.agentId,
+    systemPrompt: params.systemPrompt,
+    executionId: params.executionId,
+    to: params.to,
+    from: params.from,
+    objective: params.objective,
+    opening: params.opening,
+    language: params.language,
+    maxTurns: params.maxTurns,
+    maxDurationSeconds: params.maxDurationSeconds,
+    status: "in-progress",
+    history: [],
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: now + (params.maxDurationSeconds + 120) * 1000,
+  };
+  await adminDb.collection(COLLECTION).doc(id).set(session);
+  return session;
 }
