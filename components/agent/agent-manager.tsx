@@ -354,6 +354,10 @@ export function AgentManager() {
         </div>
       )}
 
+      {voiceSetupAgentId && (
+        <VoiceAgentSetup agentId={voiceSetupAgentId} onDone={async () => { setVoiceSetupAgentId(null); await refresh(); }} />
+      )}
+
       {/* Liste des agents */}
       {loading ? (
         <div className="g3-card p-8 text-center text-sm text-neutral-500">
