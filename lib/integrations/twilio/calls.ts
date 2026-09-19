@@ -65,9 +65,9 @@ export async function startPhoneCall(sessionId: string) {
     Method: "POST",
     StatusCallback: `${config.appUrl}/api/voice/twilio/status?sessionId=${encodeURIComponent(session.id)}`,
     StatusCallbackMethod: "POST",
-    StatusCallbackEvent: "initiated ringing answered completed",
     Timeout: "30",
   });
+  body.append("StatusCallbackEvent", "completed");
 
   const basic = Buffer.from(`${config.accountSid}:${config.authToken}`).toString("base64");
   const response = await fetch(
