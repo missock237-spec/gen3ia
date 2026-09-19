@@ -75,6 +75,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       policy,
       signal: request.signal,
       agent: {
+        agentId: agent.id,
         name: agent.name,
         type: agent.type,
         systemPrompt: agent.systemPrompt,
