@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/firebase/auth-client";
 import { RuntimePlanSchema, validateDAG, type RuntimePlan, type RuntimeStep } from "@/lib/agents/runtime/types-and-dag";
 
@@ -160,14 +160,9 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
   }
 
   const isEditable = task?.status === "draft" || task?.status === "awaiting_approval";
-  const hasChanges = useMemo(
-    () => JSON.stringify(task?.plan ?? null) !== JSON.stringify(draftPlan),
-    [task?.plan, draftPlan],
-  );
-  const validationErrors = useMemo(
-    () => (draftPlan ? validatePlan(draftPlan) : []),
-    [draftPlan],
-  );
+  const currentPlan = task?.plan ?? null;
+  const hasChanges = JSON.stringify(currentPlan) !== JSON.stringify(draftPlan);
+  const validationErrors = draftPlan ? validatePlan(draftPlan) : [];
 
   function updateStep(stepId: string, patch: Partial<RuntimeStep>) {
     setDraftPlan((current) => {
@@ -346,7 +341,7 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
 
       <div className="g3-workspace-task-toolbar">
         <div>
-          <strong>Plan d'exécution</strong>
+          <strong>Plan d’exécution</strong>
           <span>{steps.length} étape{steps.length > 1 ? "s" : ""} · {plan?.maxConcurrency ?? 0} concurrentes max</span>
         </div>
         {isEditable && (
@@ -412,11 +407,11 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
       {error && <div className="g3-workspace-task-inline-error" role="alert">{error}</div>}
       {saveMessage && <div className="g3-workspace-task-save-message" role="status">{saveMessage}</div>}
 
-      {task.status === "awaiting_approval" && <p className="g3-workspace-task-note">Le plan est visible avant toute exécution. Les actions sensibles restent protégées par les politiques d'autorisation.</p>}
-      {task.status === "approved" && <p className="g3-workspace-task-note">Plan approuvé. L'exécution utilise le runtime sécurisé Gen3ia et ses politiques d'outils.</p>}
+      {task.status === "awaiting_approval" && <p className="g3-workspace-task-note">Le plan est visible avant toute exécution. Les actions sensibles restent protégées par les politiques d’autorisation.</p>}
+      {task.status === "approved" && <p className="g3-workspace-task-note">Plan approuvé. L’exécution utilise le runtime sécurisé Gen3ia et ses politiques d’outils.</p>}
       {executionResult && (
         <div className="g3-workspace-task-execution-result">
-          <strong>Résultat d'exécution · {executionResult.status}</strong>
+          <strong>Résultat d’exécution · {executionResult.status}</strong>
           {executionResult.outputs && <pre>{JSON.stringify(executionResult.outputs, null, 2)}</pre>}
         </div>
       )}
