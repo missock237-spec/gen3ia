@@ -34,10 +34,26 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
   const [error, setError] = useState("");
 
   const load = async () => {
-    const response = await authFetch("/api/voice/numbers?agentId=" + encodeURIComponent(agentId), { cache: "no-store" });
-    if (!response.ok) return;
-    const data = await response.json();
-    setNumbers(data.numbers ?? []);
+    const [numberResponse, voiceResponse] = await Promise.all([
+      authFetch("/api/voice/numbers?agentId=" + encodeURIComponent(agentId), { cache: "no-store" }),
+      authFetch("/api/agents/" + encodeURIComponent(agentId) + "/voice", { cache: "no-store" }),
+    ]);
+    if (numberResponse.ok) {
+      const data = await numberResponse.json();
+      setNumbers(data.numbers ?? []);
+    }
+    if (voiceResponse.ok) {
+      const data = await voiceResponse.json();
+      const voice = data.voice;
+      if (voice) {
+        setGreeting(voice.greeting ?? "Bonjour, je suis l'agent IA de Gen3ia. Comment puis-je vous aider ?");
+        setLanguage(voice.language ?? "fr-FR");
+        setMaxTurns(Number(voice.maxTurns ?? 20));
+        setMaxDurationSeconds(Number(voice.maxDurationSeconds ?? 300));
+        setInboundEnabled(voice.inboundEnabled !== false);
+        setOutboundEnabled(voice.outboundEnabled !== false);
+      }
+    }
   };
 
   useEffect(() => { void load(); }, [agentId]);
