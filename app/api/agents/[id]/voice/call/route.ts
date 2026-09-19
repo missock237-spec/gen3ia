@@ -47,9 +47,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       maxDurationSeconds: config?.maxDurationSeconds ?? 300,
       systemPrompt: agent.systemPrompt,
     };
+    const session = assigned.provider === "plivo"
+      ? await createPlivoPhoneCallSession(sessionInput)
+      : await createPhoneCallSession(sessionInput);
     const call = assigned.provider === "plivo"
-      ? await startPlivoPhoneCall((await createPlivoPhoneCallSession(sessionInput)).id)
-      : await startPhoneCall((await createPhoneCallSession(sessionInput)).id);
+      ? await startPlivoPhoneCall(session.id)
+      : await startPhoneCall(session.id);
     return NextResponse.json({ sessionId: session.id, callSid: call.callSid, status: call.status, from: assigned.phoneNumber, to: parsed.data.to });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Appel impossible." }, { status: 400 });

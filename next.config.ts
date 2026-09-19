@@ -1,4 +1,11 @@
 import type { NextConfig } from "next";
+import bundleAnalyzer from "@next/bundle-analyzer";
+
+// Analyse du poids des bundles : ANALYZE=true npm run analyze
+const withBundleAnalyzer =
+  process.env.ANALYZE === "true"
+    ? bundleAnalyzer({ enabled: true })
+    : (config: NextConfig): NextConfig => config;
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -19,4 +26,4 @@ const nextConfig: NextConfig = {
   ],
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

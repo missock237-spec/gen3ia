@@ -4,6 +4,7 @@ import { z } from "zod";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 import { rateLimit } from "@/lib/security/rate-limit";
 import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
+import { captureServerException } from "@/lib/observability/sentry";
 import { detectDeviceFromHeaders } from "@/lib/device/detect";
 import { createLiveSession, listLiveSessions } from "@/lib/live/repository";
 import { createPairingToken, hashPairingToken } from "@/lib/live/security";
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ session, pairingToken, viewerToken }, { status: 201 });
   } catch (error) {
+    captureServerException(error, { route: "live.sessions.create" });
     if (error instanceof Error && /authorization|token|revoked|scheme/i.test(error.message)) return unauthorized(error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid request" }, { status: 400 });
   }
