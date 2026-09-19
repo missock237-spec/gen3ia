@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ToolDefinition } from "@/lib/tools/types";
 import { createPhoneCallSession, startPhoneCall } from "@/lib/integrations/twilio/calls";
+import { getAgentForOwner } from "@/lib/agents/repository";
 
 const PhoneCallInput = z.object({
+  agentId: z.string().min(1).optional(),
   to: z.string().regex(/^\+[1-9]\d{7,14}$/),
   objective: z.string().min(3).max(4000),
   opening: z.string().min(2).max(800).default("Bonjour, je vous appelle au nom de Gen3ia."),
@@ -24,15 +26,20 @@ export const phoneCallTool: ToolDefinition<z.infer<typeof PhoneCallInput>, {
   risk: "high",
   inputSchema: PhoneCallInput,
   async execute(input, context) {
+    const agent = input.agentId ? await getAgentForOwner(context.userId, input.agentId) : null;
+    if (input.agentId && !agent) throw new Error("Voice agent not found.");
+    if (agent && !agent.voiceEnabled) throw new Error("Voice calls are disabled for this agent.");
     const session = await createPhoneCallSession({
       userId: context.userId,
+      agentId: agent?.id,
+      systemPrompt: agent?.systemPrompt,
       executionId: context.executionId ?? randomUUID(),
       to: input.to,
       objective: input.objective,
-      opening: input.opening,
-      language: input.language,
-      maxTurns: input.maxTurns,
-      maxDurationSeconds: input.maxDurationSeconds,
+      opening: agent?.voiceConfig?.greeting ?? input.opening, input.opening,
+      language: agent?.voiceConfig?.language ?? input.language,
+      maxTurns: agent?.voiceConfig?.maxTurns ?? input.maxTurns,
+      maxDurationSeconds: agent?.voiceConfig?.maxDurationSeconds ?? input.maxDurationSeconds,
     });
     try {
       const call = await startPhoneCall(session.id);
