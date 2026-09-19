@@ -91,21 +91,66 @@ export async function POST(request: NextRequest) {
     });
 
     const plan = await planUniversalAgent(user.uid, body.message);
-    const approvalSteps = plan.steps.filter((step) => step.type === "tool" && (step.requiresApproval || step.sideEffect));
+    const approvalSteps = plan.steps.filter((step) =>
+      step.type === "tool" && (step.requiresApproval || step.sideEffect),
+    );
 
-    const approvals = await Promise.all(approvalSteps.map(async (step) => {
-      const approval = await createActionApproval({
-        ownerId: user.uid,
+    if (approvalSteps.length > 0) {
+      const checkpoint = {
         executionId: plan.executionId,
-        role: "admin",
-        toolSlug: step.toolName ?? step.type,
-        arguments: { ...step.input, __stepId: step.id },
-        reason: step.description,
+        userId: user.uid,
+        objective: body.message,
+        conversationId,
+        status: "pending" as const,
+        plan,
+        observations: [],
+        evaluations: [],
+        outputs: {},
+        iteration: 0,
+        totalRetries: 0,
+        maxTotalRetries: 15,
+        billing: { currency: "XAF", totalChargeMinor: 0, totalProviderCostEur: 0, llmInputTokens: 0, llmOutputTokens: 0 },
+      };
+      const { createCheckpoint } = await import("@/lib/agents/runtime/checkpoint");
+      await createCheckpoint(checkpoint);
+
+      const approvals = await Promise.all(approvalSteps.map(async (step) => {
+        const approval = await createActionApproval({
+          ownerId: user.uid,
+          executionId: plan.executionId,
+          role: "admin",
+          toolSlug: step.toolName ?? step.type,
+          arguments: { ...step.input, __stepId: step.id },
+          reason: step.description,
+        });
+        step.status = "waiting_approval";
+        return approval;
+      }));
+
+      await appendMessage({
+        conversationId,
+        userId: user.uid,
+        role: "assistant",
+        content: "J’ai préparé le plan. Une ou plusieurs actions externes nécessitent votre confirmation avant que l’agent ne les exécute.",
       });
-      step.status = "waiting_approval";
-      step.input = { ...step.input, __stepId: step.id };
-      return approval;
-    }));
+
+      return NextResponse.json({
+        mode: "agent",
+        status: "waiting_approval",
+        executionId: plan.executionId,
+        conversationId,
+        objective: body.message,
+        plan,
+        approvals: approvals.map((item) => ({
+          id: item.id,
+          toolSlug: item.toolSlug,
+          reason: item.reason,
+          status: item.status,
+          expiresAt: item.expiresAt,
+          stepId: typeof item.arguments.__stepId === "string" ? item.arguments.__stepId : undefined,
+        })),
+      });
+    }
 
     const runtime = new AgentRuntime({
       userId: user.uid,
