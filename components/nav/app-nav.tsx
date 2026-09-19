@@ -5,47 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logout, useAuth } from "@/lib/firebase/auth-client";
 
-type NavItem = {
-  href: string;
-  label: string;
-  icon: string;
-  shortcut?: string;
-  hint?: string;
-};
-
-const WORKSPACE: NavItem[] = [
-  { href: "/dashboard", label: "Accueil", icon: "⌂", shortcut: "H" },
-  { href: "/studio", label: "Agent", icon: "✦", shortcut: "A" },
-  { href: "/live", label: "Live", icon: "◉" },
-  { href: "/marketplace", label: "Marketplace", icon: "◇" },
-];
-
-const TOOLS: NavItem[] = [
-  { href: "/studio/interface-lab", label: "Atelier d'Interfaces", icon: "⌘", hint: "Réservé aux agents de code" },
-  { href: "/studio/schedules", label: "Tâches planifiées", icon: "◷" },
-];
-
-const LIBRARY: NavItem[] = [
-  { href: "/storage", label: "Fichiers", icon: "□" },
-  { href: "/marketplace/purchases", label: "Mes achats", icon: "◈" },
-  { href: "/team", label: "Équipe", icon: "◎" },
-];
-
-const PLATFORM: NavItem[] = [
-  { href: "/developer", label: "Développeur", icon: "⌥" },
-  { href: "/billing", label: "Facturation", icon: "₣" },
-];
-
-const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
-  { title: "Espace de travail", items: WORKSPACE },
-  { title: "Outils", items: TOOLS },
-  { title: "Bibliothèque", items: LIBRARY },
-  { title: "Plateforme", items: PLATFORM },
-];
-
-const COMMAND_INDEX = NAV_GROUPS.flatMap((group) =>
-  group.items.map((item) => ({ ...item, group: group.title }))
-);
+import { CommandPalette } from "./command-palette";
+import { NAV_GROUPS, type NavItem } from "./nav-items";
 
 export function AppNav() {
   const pathname = usePathname();
@@ -54,9 +15,7 @@ export function AppNav() {
   const [open, setOpen] = useState(false);
   const [compact, setCompact] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [commandOpen, setCommandOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [cursor, setCursor] = useState(0);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
     const handler = () => setOpen(true);
@@ -68,10 +27,10 @@ export function AppNav() {
     const handler = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setCommandOpen((value) => !value);
+        setPaletteOpen((value) => !value);
+        return;
       }
       if (event.key === "Escape") {
-        setCommandOpen(false);
         setAccountOpen(false);
       }
     };
@@ -86,26 +45,6 @@ export function AppNav() {
   const initial = name.charAt(0).toUpperCase();
   const active = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
-
-  const commandItems = COMMAND_INDEX;
-  const normalized = (value: string) =>
-    value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const filteredCommands = commandItems.filter((item) =>
-    normalized(item.label).includes(normalized(query.trim()))
-  );
-
-  const openCommand = () => {
-    setQuery("");
-    setCursor(0);
-    setCommandOpen(true);
-  };
-
-  const goTo = (href: string) => {
-    setCommandOpen(false);
-    setQuery("");
-    setOpen(false);
-    router.push(href);
-  };
 
   const NavGroup = ({
     title,
@@ -144,68 +83,7 @@ export function AppNav() {
 
   return (
     <>
-      {commandOpen && (
-        <div className="g3-command-overlay" role="dialog" aria-modal="true" aria-label="Navigation Gen3ia">
-          <button type="button" className="g3-command-backdrop" onClick={() => setCommandOpen(false)} aria-label="Fermer" />
-          <div className="g3-command-panel">
-            <div className="g3-command-search">
-              <span aria-hidden="true">⌕</span>
-              <input
-                autoFocus
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setCursor(0);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "ArrowDown") {
-                    event.preventDefault();
-                    setCursor((value) => Math.min(value + 1, Math.max(filteredCommands.length - 1, 0)));
-                  } else if (event.key === "ArrowUp") {
-                    event.preventDefault();
-                    setCursor((value) => Math.max(value - 1, 0));
-                  } else if (event.key === "Enter") {
-                    event.preventDefault();
-                    const target = filteredCommands[cursor];
-                    if (target) goTo(target.href);
-                  }
-                }}
-                placeholder="Aller à…"
-                aria-label="Rechercher une destination"
-                role="combobox"
-                aria-expanded="true"
-                aria-controls="g3-command-listbox"
-                aria-activedescendant={filteredCommands[cursor] ? `g3-command-opt-${cursor}` : undefined}
-              />
-              <kbd>ESC</kbd>
-            </div>
-            <div className="g3-command-list" id="g3-command-listbox" role="listbox">
-              {filteredCommands.length ? filteredCommands.map((item, index) => (
-                <button
-                  key={item.href}
-                  id={`g3-command-opt-${index}`}
-                  type="button"
-                  role="option"
-                  aria-selected={index === cursor}
-                  onMouseEnter={() => setCursor(index)}
-                  onClick={() => goTo(item.href)}
-                  className={`g3-command-item ${index === cursor ? "is-cursor" : ""}`}
-                >
-                  <span className="g3-side-icon">{item.icon}</span>
-                  <span className="flex-1 text-left">{item.label}</span>
-                  <span className="g3-command-group">{item.group}</span>
-                  {active(item.href) && <span className="g3-command-current">Actuel</span>}
-                </button>
-              )) : (
-                <div className="px-4 py-8 text-center text-xs text-neutral-400">Aucune destination trouvée.</div>
-              )}
-            </div>
-            <div className="g3-command-footer">
-              <span>Navigation rapide</span><span><kbd>↑ ↓</kbd> choisir</span><span><kbd>↵</kbd> ouvrir</span><span><kbd>Esc</kbd> fermer</span>
-            </div>
-          </div>
-        </div>
-      )}
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <div
         className={`g3-sidebar-backdrop ${open ? "is-open" : ""}`}
         onClick={() => setOpen(false)}
@@ -243,7 +121,7 @@ export function AppNav() {
             </Link>
             <button
               type="button"
-              onClick={openCommand}
+              onClick={() => setPaletteOpen(true)}
               className={`g3-nav-search ${compact ? "is-compact" : ""}`}
               aria-label="Rechercher une destination"
             >
