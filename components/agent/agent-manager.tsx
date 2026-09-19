@@ -147,15 +147,19 @@ export function AgentManager() {
           webResearchEnabled,
           documentGenerationEnabled,
           status: "active",
+          voiceEnabled: agentMode === "voice",
+          voiceConfig: agentMode === "voice" ? { language: "fr-FR", greeting: "Bonjour, je suis l'agent IA de Gen3ia. Comment puis-je vous aider ?", maxTurns: 20, maxDurationSeconds: 300, inboundEnabled: true, outboundEnabled: true, voiceEnabled: true } : undefined,
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Creation impossible");
       setMessage(`Agent « ${data.agent.name} » cree et actif. Il peut desormais executer vos missions.`);
       setShowForm(false);
+      if (agentMode === "voice") setVoiceSetupAgentId(data.agent.id);
       setName("");
       setDescription("");
       setSystemPrompt("");
+      setAgentMode("standard");
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Creation impossible");
