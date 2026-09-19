@@ -9,6 +9,22 @@ import {
 } from "./voice";
 
 const COLLECTION = "agentPhoneCalls";
+const DAILY_LIMIT_COLLECTION = "agentPhoneCallDaily";
+const DEFAULT_DAILY_LIMIT = 20;
+
+async function reserveDailyPhoneCallSlot(userId: string) {
+  const configured = Number(process.env.GEN3IA_MAX_DAILY_PHONE_CALLS ?? DEFAULT_DAILY_LIMIT);
+  const limit = Number.isInteger(configured) && configured > 0 ? Math.min(configured, 100) : DEFAULT_DAILY_LIMIT;
+  const day = new Date().toISOString().slice(0, 10);
+  const ref = adminDb.collection(DAILY_LIMIT_COLLECTION).doc(`${userId}_${day}`);
+  await adminDb.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const count = snap.exists && typeof snap.data()?.count === "number" ? Number(snap.data()?.count) : 0;
+    if (count >= limit) throw new Error(`Daily AI phone-call limit reached (${limit}).`);
+    transaction.set(ref, { userId, day, count: count + 1, updatedAt: Date.now() }, { merge: true });
+  });
+}
+
 
 function assertOwner(userId: string) {
   if (!userId.trim()) throw new Error("Missing user id.");
@@ -27,6 +43,7 @@ export async function createPhoneCallSession(params: {
   assertOwner(params.userId);
   if (!isValidE164(params.to)) throw new Error("Phone number must use E.164 format, for example +2376XXXXXXXX.");
   const config = getTwilioConfig();
+  await reserveDailyPhoneCallSlot(params.userId);
   const id = randomUUID();
   const now = Date.now();
   const session: PhoneCallSession = {
