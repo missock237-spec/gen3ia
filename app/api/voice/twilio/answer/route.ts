@@ -1,18 +1,45 @@
-import { appendPhoneCallHistory, getPhoneCallSession, updatePhoneCallStatus } from "@/lib/integrations/twilio/calls";
+import { appendPhoneCallHistory, createInboundPhoneCallSession, getPhoneCallSession, updatePhoneCallStatus } from "@/lib/integrations/twilio/calls";
+import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentPhoneNumberByNumber } from "@/lib/integrations/twilio/numbers";
 import { buildTwiML, escapeXml, verifyTwilioSignature } from "@/lib/integrations/twilio/voice";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const url = new URL(request.url);
-  const sessionId = url.searchParams.get("sessionId");
-  if (!sessionId) return new Response("Missing sessionId", { status: 400 });
+  let sessionId = url.searchParams.get("sessionId");
+  const numberId = url.searchParams.get("numberId");
 
   const form = await request.formData();
   const params = Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)]));
   if (!verifyTwilioSignature(request, params)) return new Response("Unauthorized", { status: 401 });
 
-  const session = await getPhoneCallSession(sessionId);
+  let session = sessionId ? await getPhoneCallSession(sessionId) : null;
+
+  if (!session) {
+    const destination = String(params.To ?? "");
+    const mapping = await getAgentPhoneNumberByNumber(destination);
+    if (!mapping) return new Response("No Gen3ia voice agent is assigned to this number.", { status: 404 });
+    const agent = await getAgentForOwner(mapping.ownerId, mapping.agentId);
+    if (!agent?.voiceEnabled || agent.voiceConfig?.inboundEnabled === false) {
+      return buildTwiML("<Say>Ce numéro n'accepte pas les appels pour le moment.</Say><Hangup/>");
+    }
+    session = await createInboundPhoneCallSession({
+      userId: mapping.ownerId,
+      agentId: agent.id,
+      executionId: params.CallSid ?? crypto.randomUUID(),
+      to: destination,
+      from: String(params.From ?? "unknown"),
+      objective: agent.description || "Répondre aux appels entrants et aider l'appelant dans le périmètre de l'agent.",
+      opening: agent.voiceConfig?.greeting ?? "Bonjour, je suis l'agent IA de Gen3ia. Comment puis-je vous aider ?",
+      language: agent.voiceConfig?.language ?? "fr-FR",
+      maxTurns: agent.voiceConfig?.maxTurns ?? 20,
+      maxDurationSeconds: agent.voiceConfig?.maxDurationSeconds ?? 300,
+      systemPrompt: agent.systemPrompt,
+    });
+    sessionId = session.id;
+  }
+
   if (!session || Date.now() > session.expiresAt) return new Response("Call session expired", { status: 410 });
   await updatePhoneCallStatus(session.id, "in-progress", params.CallSid);
   if (session.history.length === 0) {
