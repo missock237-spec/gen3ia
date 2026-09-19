@@ -156,7 +156,10 @@ export class AgentRuntime {
 
   private async executeTool(step: RuntimeStep): Promise<unknown> {
     if (!step.toolName) throw new Error(`Tool step ${step.id} has no toolName`);
-    return executeToolSecurely({ userId: this.state.userId, executionId: this.state.executionId, toolName: step.toolName, input: { ...step.input, dependencies: this.getDependencyOutputs(step) }, policy: this.policy, signal: this.signal });
+    const input = { ...step.input, dependencies: this.getDependencyOutputs(step) };
+    const approvalId = typeof input.approvalId === "string" ? input.approvalId : undefined;
+    delete input.approvalId;
+    return executeToolSecurely({ userId: this.state.userId, executionId: this.state.executionId, toolName: step.toolName, input, approvalId, policy: this.policy, signal: this.signal });
   }
 
   private async executeCode(step: RuntimeStep): Promise<unknown> {
