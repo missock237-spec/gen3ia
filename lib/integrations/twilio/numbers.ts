@@ -100,14 +100,15 @@ export async function purchaseNumberForAgent(params: { ownerId: string; agentId:
     metadata: { product: "gen3ia_phone_number", agentId: params.agentId, phoneNumber: params.phoneNumber },
   });
 
+  let purchasedSid = "";
   try {
     const body = new URLSearchParams({ PhoneNumber: params.phoneNumber, FriendlyName: `Gen3ia Agent ${params.agentId.slice(0, 8)}` });
     const purchased = await twilioRequest("/IncomingPhoneNumbers.json", { method: "POST", body });
-    const sid = String(purchased.sid ?? "");
+    purchasedSid = String(purchased.sid ?? "");
     const phone = String(purchased.phone_number ?? params.phoneNumber);
-    if (!sid) throw new Error("Twilio did not return a phone-number SID.");
+    if (!purchasedSid) throw new Error("Twilio did not return a phone-number SID.");
 
-    await configureTwilioNumber(sid, params.agentId);
+    await configureTwilioNumber(purchasedSid, params.agentId);
     const doc = adminDb.collection(COLLECTION).doc();
     const now = Date.now();
     const record: AgentPhoneNumber = {
@@ -115,7 +116,7 @@ export async function purchaseNumberForAgent(params: { ownerId: string; agentId:
       ownerId: params.ownerId,
       agentId: params.agentId,
       phoneNumber: phone,
-      twilioSid: sid,
+      twilioSid: purchasedSid,
       source: "gen3ia",
       status: "active",
       createdAt: now,
@@ -131,6 +132,7 @@ export async function purchaseNumberForAgent(params: { ownerId: string; agentId:
     });
     return { ...record, priceMinor };
   } catch (error) {
+    if (purchasedSid) await twilioRequest(`/IncomingPhoneNumbers/${encodeURIComponent(purchasedSid)}.json`, { method: "DELETE" }).catch(() => undefined);
     await releaseReservation({ userId: params.ownerId, reference, reservedMinor: priceMinor }).catch(() => undefined);
     throw error;
   }
