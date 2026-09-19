@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ToolDefinition } from "@/lib/tools/types";
 import { createPhoneCallSession, startPhoneCall } from "@/lib/integrations/twilio/calls";
@@ -25,7 +26,7 @@ export const phoneCallTool: ToolDefinition<z.infer<typeof PhoneCallInput>, {
   async execute(input, context) {
     const session = await createPhoneCallSession({
       userId: context.userId,
-      executionId: context.executionId ?? crypto.randomUUID(),
+      executionId: context.executionId ?? randomUUID(),
       to: input.to,
       objective: input.objective,
       opening: input.opening,
