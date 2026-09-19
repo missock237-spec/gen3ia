@@ -7,6 +7,7 @@ interface VoiceNumber {
   id: string;
   phoneNumber: string;
   twilioSid: string;
+  provider?: "twilio" | "plivo";
   source: "gen3ia" | "own";
   status: string;
 }
