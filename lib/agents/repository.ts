@@ -95,6 +95,8 @@ export async function updateAgentForOwner(
     memoryEnabled: patch.memoryEnabled ?? current.memoryEnabled,
     webResearchEnabled: patch.webResearchEnabled ?? current.webResearchEnabled,
     documentGenerationEnabled: patch.documentGenerationEnabled ?? current.documentGenerationEnabled,
+    voiceEnabled: patch.voiceEnabled ?? current.voiceEnabled,
+    voiceConfig: patch.voiceConfig ?? current.voiceConfig,
     status: patch.status ?? current.status,
   });
 
@@ -139,6 +141,8 @@ export function toSummary(record: AgentRecord): AgentSummary {
     memoryEnabled: record.memoryEnabled,
     webResearchEnabled: record.webResearchEnabled,
     documentGenerationEnabled: record.documentGenerationEnabled,
+    voiceEnabled: record.voiceEnabled,
+    voiceConfig: record.voiceConfig,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
