@@ -128,7 +128,7 @@ export async function purchaseNumberForAgent(params: { ownerId: string; agentId:
       reference,
       reservedMinor: priceMinor,
       actualChargeMinor: priceMinor,
-      metadata: { product: "gen3ia_phone_number", agentId: params.agentId, twilioSid: sid },
+      metadata: { product: "gen3ia_phone_number", agentId: params.agentId, twilioSid: purchasedSid },
     });
     return { ...record, priceMinor };
   } catch (error) {
