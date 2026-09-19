@@ -15,6 +15,7 @@ import {
   voiceSpeakTool,
 } from "@/lib/integrations/elevenlabs/tools";
 import { twentyFirstUiTool } from "@/lib/integrations/twentyfirst/tool";
+import { phoneCallTool } from "@/lib/tools/phone/call";
 
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -28,6 +29,7 @@ export function createDefaultToolRegistry(): ToolRegistry {
     analyzeZipTool,
     extractZipTool,
     adsReadTool,
+    phoneCallTool,
   ]) registry.register(tool);
   if (process.env.COMPOSIO_API_KEY) registry.register(createComposioTool());
   if (process.env.GITHUB_TOKEN) registry.register(githubCreateRepositoryTool);
