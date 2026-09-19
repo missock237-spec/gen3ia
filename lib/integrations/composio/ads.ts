@@ -27,7 +27,22 @@ function assertAdsToolSlug(provider: AdsProvider, toolSlug: string) {
 export async function authorizeAdsProvider(userId: string, provider: string) {
   if (!userId) throw new Error("userId is required.");
   const toolkit = getAdsToolkit(provider);
-  return getComposio().toolkits.authorize(userId, toolkit);
+  const callbackUrl = `${(
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : "https://gen3ia.online")
+  ).replace(/\\/$/, "")}/studio?composio_connected=1&toolkit=${encodeURIComponent(toolkit)}`;
+
+  const session = await getComposio().create(userId, {
+    manageConnections: {
+      enable: true,
+      callbackUrl,
+      waitForConnections: false,
+    },
+  });
+
+  return session.authorize(toolkit, { callbackUrl });
 }
 
 export async function listAdsConnections(userId: string) {
