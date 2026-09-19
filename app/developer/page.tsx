@@ -36,6 +36,12 @@ interface ApiKeyEntry {
   createdAt: number;
 }
 
+interface SecretRef {
+  ref: string;
+  description?: string;
+  configured: boolean;
+}
+
 const MANIFEST_TEMPLATE = `{
   "id": "mon-extension",
   "name": "Mon Extension",
@@ -78,6 +84,8 @@ export default function DeveloperPage() {
   const [logs, setLogs] = useState<Array<Record<string, unknown>>>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [secrets, setSecrets] = useState<SecretRef[]>([]);
+  const [secretValues, setSecretValues] = useState<Record<string, string>>({});
   const sessionDisponible = useSessionAvailable();
 
   const authedFetch = useCallback(async (path: string, init?: RequestInit) => {
@@ -158,6 +166,68 @@ export default function DeveloperPage() {
     }
   };
 
+  const revokeApiKey = async (prefix: string) => {
+    if (!window.confirm(`Révoquer définitivement la clé ${prefix}… ? Les intégrations qui l'utilisent cesseront de fonctionner.`)) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await authedFetch("/api/developer/api-keys", { method: "DELETE", body: JSON.stringify({ prefix }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setMessage(`Clé ${prefix}… révoquée.`);
+      await loadAll();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Révocation impossible");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const loadSecrets = async (extensionId: string) => {
+    setSelected(extensionId);
+    setSecrets([]);
+    setSecretValues({});
+    const response = await authedFetch(`/api/developer/secrets?extensionId=${encodeURIComponent(extensionId)}`);
+    const data = await response.json();
+    if (!response.ok) { setMessage(data.error ?? "Chargement des secrets impossible"); return; }
+    setSecrets(data.secrets ?? []);
+  };
+
+  const saveSecret = async (extensionId: string, ref: string) => {
+    const value = secretValues[ref];
+    if (!value || !value.trim()) { setMessage(`Valeur vide pour ${ref}.`); return; }
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await authedFetch("/api/developer/secrets", { method: "PUT", body: JSON.stringify({ extensionId, ref, value: value.trim() }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setMessage(`Secret ${ref} enregistré (jamais relu par l'interface).`);
+      setSecretValues((current) => ({ ...current, [ref]: "" }));
+      await loadSecrets(extensionId);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Enregistrement impossible");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeSecret = async (extensionId: string, ref: string) => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await authedFetch("/api/developer/secrets", { method: "DELETE", body: JSON.stringify({ extensionId, ref }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setMessage(`Secret ${ref} supprimé.`);
+      await loadSecrets(extensionId);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Suppression impossible");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const loadLogs = async (extensionId: string) => {
     setSelected(extensionId);
     const response = await authedFetch(`/api/extensions/${extensionId}/executions?limit=30`);
@@ -232,11 +302,15 @@ export default function DeveloperPage() {
               <button disabled={busy} onClick={createApiKey} className="mt-3 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold hover:bg-neutral-50">Générer une clé</button>
               <ul className="mt-4 space-y-2 text-xs text-neutral-500">
                 {apiKeys.map((key, index) => (
-                  <li key={index} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
+                  <li key={index} className="flex items-center justify-between gap-2 rounded-lg bg-neutral-50 px-3 py-2">
                     <span className="font-mono">{key.prefix}…</span>
-                    <span>{key.status}</span>
+                    <span className={key.status === "active" ? "text-emerald-600" : "text-neutral-400"}>{key.status === "active" ? "active" : key.status}</span>
+                    {key.status === "active" && (
+                      <button disabled={busy} onClick={() => revokeApiKey(key.prefix)} className="rounded-md border border-red-200 bg-red-50 px-2 py-1 font-semibold text-red-600 hover:bg-red-100 disabled:opacity-40">Révoquer</button>
+                    )}
                   </li>
                 ))}
+                {apiKeys.length === 0 && <li>Aucune clé SDK pour le moment.</li>}
               </ul>
             </div>
 
@@ -278,6 +352,7 @@ export default function DeveloperPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => void loadLogs(extension.id)} className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50">Logs</button>
+                  <button onClick={() => void loadSecrets(extension.id)} className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50">Secrets</button>
                   <button disabled={busy || extension.status === "approved"} onClick={() => submit(extension.id, extension.latestVersion)} className="rounded-full bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800 disabled:opacity-40">Soumettre v{extension.latestVersion}</button>
                 </div>
               </div>
@@ -297,6 +372,29 @@ export default function DeveloperPage() {
                     ))}
                     {logs.length === 0 && <li>Aucune exécution enregistrée.</li>}
                   </ul>
+                </div>
+              )}
+              {selected === extension.id && secrets.length > 0 && (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="text-xs uppercase tracking-widest text-amber-700">Secrets de l&apos;extension (stockés côté serveur, jamais relus)</div>
+                  <div className="mt-3 space-y-3">
+                    {secrets.map((secret) => (
+                      <div key={secret.ref} className="flex flex-wrap items-center gap-2">
+                        <code className="font-mono text-[11px] text-amber-800">{secret.ref}</code>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${secret.configured ? "bg-emerald-100 text-emerald-700" : "bg-neutral-100 text-neutral-500"}`}>{secret.configured ? "configuré" : "non configuré"}</span>
+                        <input
+                          type="password"
+                          autoComplete="off"
+                          placeholder="valeur du secret"
+                          value={secretValues[secret.ref] ?? ""}
+                          onChange={(event) => setSecretValues((current) => ({ ...current, [secret.ref]: event.target.value }))}
+                          className="min-w-40 flex-1 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-amber-400"
+                        />
+                        <button disabled={busy} onClick={() => void saveSecret(extension.id, secret.ref)} className="rounded-lg bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-neutral-800 disabled:opacity-40">Enregistrer</button>
+                        {secret.configured && <button disabled={busy} onClick={() => void removeSecret(extension.id, secret.ref)} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40">Supprimer</button>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

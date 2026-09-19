@@ -24,6 +24,17 @@ const PERMISSION_LABELS: Record<Permission, string> = {
   "browser.control": "Contrôler le navigateur",
 };
 
+interface LivePendingActionInfo {
+  actionId: string;
+  action?: { type?: string; description?: string } | string;
+  createdAt?: number;
+}
+
+interface LiveInFlightInfo {
+  actionId: string;
+  action?: { type?: string; description?: string } | string;
+}
+
 interface LiveSessionPublic {
   id: string;
   name: string;
@@ -33,6 +44,8 @@ interface LiveSessionPublic {
   createdAt: number;
   expiresAt?: number;
   deviceId?: string;
+  pendingAction?: LivePendingActionInfo | null;
+  inFlightAction?: LiveInFlightInfo | null;
 }
 
 interface CreatedSession {
@@ -53,6 +66,13 @@ const STATUS_STYLES: Record<string, string> = {
 
 function formatDate(ts: number) {
   return new Date(ts).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function actionLabel(action: LivePendingActionInfo["action"] | LiveInFlightInfo["action"]): string {
+  if (!action) return "action inconnue";
+  if (typeof action === "string") return action;
+  const parts = [action.type, action.description].filter(Boolean);
+  return parts.length > 0 ? parts.join(" — ") : "action inconnue";
 }
 
 export function LiveDashboard() {
@@ -131,6 +151,42 @@ export function LiveDashboard() {
     });
     await loadSessions();
   };
+
+  const approveAction = async (sessionId: string, actionId: string) => {
+    if (sessionDisponible === false) { setError("Session expirée. Reconnectez-vous."); return; }
+    setError("");
+    try {
+      const response = await authFetch(`/api/live/sessions/${sessionId}/actions/${actionId}/approve`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Approbation impossible");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Approbation impossible");
+    } finally {
+      await loadSessions();
+    }
+  };
+
+  const retryAction = async (sessionId: string, actionId: string) => {
+    if (sessionDisponible === false) { setError("Session expirée. Reconnectez-vous."); return; }
+    if (!window.confirm("Le résultat de l'action précédente est inconnu : réessayer peut l'exécuter deux fois. Continuer ?")) return;
+    setError("");
+    try {
+      const response = await authFetch(`/api/live/sessions/${sessionId}/actions/${actionId}/retry`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Réessai impossible");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Réessai impossible");
+    } finally {
+      await loadSessions();
+    }
+  };
+
+  // Rafraîchit les sessions pour afficher les actions en attente de validation.
+  useEffect(() => {
+    if (!authReady) return;
+    const interval = setInterval(() => { void loadSessions(); }, 6_000);
+    return () => clearInterval(interval);
+  }, [authReady, loadSessions]);
 
   useEffect(() => {
     if (!created?.viewerToken) return;
@@ -329,6 +385,38 @@ GEN3IA_LIVE_DEVICE_ID=<nom du PC>`}
                       </span>
                     ))}
                   </div>
+                  {session.pendingAction?.actionId && (
+                    <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3">
+                      <div className="text-xs font-semibold text-amber-700">Action sensible en attente de votre validation</div>
+                      <div className="mt-1 truncate font-mono text-[10px] text-amber-600">{actionLabel(session.pendingAction.action)}</div>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => approveAction(session.id, session.pendingAction!.actionId)}
+                          className="rounded-lg border border-emerald-300 bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-200"
+                        >
+                          Approuver
+                        </button>
+                        <button
+                          onClick={() => stopSession(session.id)}
+                          className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100"
+                        >
+                          Refuser et arrêter
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {session.inFlightAction?.actionId && (
+                    <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3">
+                      <div className="text-xs font-semibold text-sky-700">Action en cours dont le résultat est inconnu</div>
+                      <div className="mt-1 truncate font-mono text-[10px] text-sky-600">{actionLabel(session.inFlightAction.action)}</div>
+                      <button
+                        onClick={() => retryAction(session.id, session.inFlightAction!.actionId)}
+                        className="mt-2 rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-100"
+                      >
+                        Réessayer
+                      </button>
+                    </div>
+                  )}
                   {["pending", "connected", "running", "paused"].includes(session.status) && (
                     <button
                       onClick={() => stopSession(session.id)}

@@ -27,6 +27,13 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "voice.speak": { name: "voice.speak", risk: "external", requiredPermissions: ["tool.external", "network.read"], network: true },
   "voice.list": { name: "voice.list", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "phone.call": { name: "phone.call", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  "notion.search": { name: "notion.search", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  "notion.create_page": { name: "notion.create_page", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  "jules.create_task": { name: "jules.create_task", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  "jules.get_task": { name: "jules.get_task", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  "cloudflare.zones.list": { name: "cloudflare.zones.list", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  "cloudflare.dns.list": { name: "cloudflare.dns.list", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  "cloudflare.dns.create": { name: "cloudflare.dns.create", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
 };
 
 export function getToolSecurityDefinition(toolName: string): ToolSecurityDefinition { const definition = TOOL_SECURITY[toolName]; if (!definition) throw new Error(`Unknown tool security definition: ${toolName}`); return definition; }

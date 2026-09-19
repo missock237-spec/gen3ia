@@ -49,6 +49,7 @@ export default function ExtensionFichePage() {
   const [reviewBody, setReviewBody] = useState("");
   const [permissionDraft, setPermissionDraft] = useState<string[]>([]);
   const [permissionsDirty, setPermissionsDirty] = useState(false);
+  const [runResult, setRunResult] = useState<{ tool: string; output: string } | null>(null);
 
   const load = useCallback(async () => {
     const id = window.location.pathname.split("/").pop();
@@ -100,6 +101,22 @@ export default function ExtensionFichePage() {
     setReviewBody("");
   };
 
+  const runTool = async (toolId: string) => {
+    setBusy(true); setMessage(""); setRunResult(null);
+    try {
+      const response = await authFetch(`/api/extensions/${extension.id}/run`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ toolId, input: {} }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error ?? "Exécution impossible");
+      setRunResult({ tool: toolId, output: JSON.stringify(data.output ?? data, null, 2).slice(0, 4000) });
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Exécution impossible");
+    } finally { setBusy(false); }
+  };
+
   return (
     <div className="min-h-full bg-[#f6f4ef] p-4 text-neutral-900 sm:p-6 md:p-8">
       <div className="mx-auto max-w-6xl">
@@ -133,7 +150,7 @@ export default function ExtensionFichePage() {
           <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
             <div className="flex items-end justify-between gap-3"><div><p className="text-[10px] font-bold tracking-[.2em] text-sky-700">CAPACITÉS</p><h2 className="mt-1 font-serif text-xl font-semibold">Tools, skills & workflows</h2></div><span className="text-xs text-neutral-400">{(version?.tools.length ?? 0) + (version?.skills.length ?? 0) + (version?.workflows.length ?? 0)} capacités</span></div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {(version?.tools ?? []).map((tool) => <div key={`tool-${tool.id}`} className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4"><span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">Tool</span><h3 className="mt-2 text-sm font-semibold">{tool.name}</h3><p className="mt-1 text-xs leading-5 text-neutral-500">{tool.description}</p><code className="mt-3 block truncate text-[10px] text-neutral-400">ext.{extension.id}.{tool.id}</code></div>)}
+              {(version?.tools ?? []).map((tool) => <div key={`tool-${tool.id}`} className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4"><span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">Tool</span><h3 className="mt-2 text-sm font-semibold">{tool.name}</h3><p className="mt-1 text-xs leading-5 text-neutral-500">{tool.description}</p><code className="mt-3 block truncate text-[10px] text-neutral-400">ext.{extension.id}.{tool.id}</code>{userState?.installed && <button disabled={busy} onClick={() => runTool(tool.id)} className="mt-3 rounded-full bg-sky-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-sky-800 disabled:opacity-40">Exécuter</button>}{runResult?.tool === tool.id && <pre className="mt-3 max-h-56 overflow-auto rounded-xl border border-neutral-200 bg-white p-3 text-[11px] leading-5 text-neutral-700" role="status">{runResult.output}</pre>}</div>)}
               {(version?.skills ?? []).map((skill) => <div key={`skill-${skill.id}`} className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4"><span className="text-[10px] font-bold uppercase tracking-wider text-violet-700">Skill</span><h3 className="mt-2 text-sm font-semibold">{skill.name}</h3><p className="mt-1 text-xs leading-5 text-neutral-500">{skill.description}</p></div>)}
               {(version?.workflows ?? []).map((workflow) => <div key={`workflow-${workflow.id}`} className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4"><span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Workflow</span><h3 className="mt-2 text-sm font-semibold">{workflow.name}</h3><p className="mt-1 text-xs leading-5 text-neutral-500">{workflow.description}</p></div>)}
             </div>

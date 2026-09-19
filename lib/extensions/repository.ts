@@ -207,3 +207,17 @@ export async function listDeveloperApiKeys(userId: string) {
 export async function revokeDeveloperApiKey(keyHash: string, userId: string): Promise<void> {
   await adminDb.collection(COL.apiKeys).doc(keyHash).update({ status: "revoked", revokedAt: now(), userId });
 }
+
+/** Revokes by visible prefix — used by the Developer Studio UI where the plaintext key is unknown. */
+export async function revokeDeveloperApiKeyByPrefix(prefix: string, userId: string): Promise<void> {
+  const snap = await adminDb
+    .collection(COL.apiKeys)
+    .where("userId", "==", userId)
+    .where("prefix", "==", prefix)
+    .where("status", "==", "active")
+    .limit(2)
+    .get();
+  if (snap.empty) throw new Error("Clé SDK active introuvable pour ce préfixe.");
+  if (snap.size > 1) throw new Error("Préfixe ambigu ; révoquez la clé complète.");
+  await snap.docs[0].ref.update({ status: "revoked", revokedAt: now(), userId });
+}

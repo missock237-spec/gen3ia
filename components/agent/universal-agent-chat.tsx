@@ -45,6 +45,13 @@ type Message = {
   result?: AgentResult;
 };
 
+type ConversationSummary = {
+  id: string;
+  title: string;
+  messageCount: number;
+  updatedAt: string;
+};
+
 const QUICK_ACTIONS = [
   "Analyse mes fichiers et résume les informations importantes.",
   "Fais une recherche web et prépare un rapport structuré.",
@@ -104,12 +111,60 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
   const [isListening, setIsListening] = React.useState(false);
   const [showTrace, setShowTrace] = React.useState(true);
   const logRef = React.useRef<HTMLDivElement | null>(null);
+  const lastObjectiveRef = React.useRef<string | null>(null);
+  const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
+  const [showHistory, setShowHistory] = React.useState(false);
+  const [historyLoading, setHistoryLoading] = React.useState(false);
 
   // Suit le bas du fil a chaque nouveau message ou changement d'etat.
   React.useEffect(() => {
     const node = logRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [messages, loading, active]);
+
+  // Historique des conversations (source unique : /api/chat/conversations).
+  const loadConversations = React.useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const response = await fetch("/api/chat/conversations?limit=20", { cache: "no-store" });
+      if (response.ok) setConversations(((await response.json()).conversations ?? []) as ConversationSummary[]);
+    } catch { /* historique indisponible */ } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => { void loadConversations(); }, [loadConversations]);
+
+  async function openConversation(id: string) {
+    if (loading) return;
+    setError("");
+    setHistoryLoading(true);
+    try {
+      const response = await fetch(`/api/chat/conversations/${id}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Conversation introuvable.");
+      const items = ((data.messages ?? []) as Array<{ id: string; role: string; content: string }>).map((item): Message => ({
+        id: item.id,
+        role: item.role === "user" ? "user" : "agent",
+        text: item.content,
+      }));
+      setConversationId(id);
+      setActive(null);
+      setMessages(items);
+      setShowHistory(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Conversation introuvable.");
+    } finally { setHistoryLoading(false); }
+  }
+
+  async function deleteConversation(id: string) {
+    try {
+      const response = await fetch(`/api/chat/conversations/${id}`, { method: "DELETE" });
+      if (!response.ok) return;
+      if (id === conversationId) resetConversation();
+      await loadConversations();
+    } catch { /* suppression best effort */ }
+  }
 
   React.useEffect(() => {
     if (initialMessage.trim() && !message.trim()) setMessage(initialMessage.trim());
@@ -124,15 +179,10 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
   const activeToolName = selectedTool ? capabilityLabels[selectedTool] : "Auto";
   const statusText = loading ? "Agent en cours" : active ? statusLabel(active.status) : "Prêt";
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const objective = message.trim();
-    if (!objective || loading) return;
-
+  async function runObjective(objective: string) {
     setLoading(true);
     setError("");
-    setMessages((items) => [...items, { id: crypto.randomUUID(), role: "user", text: objective }]);
-    setMessage("");
+    lastObjectiveRef.current = objective;
 
     try {
       const enrichedObjective = [
@@ -173,7 +223,25 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
       setError(e instanceof Error ? e.message : "Erreur de l’agent.");
     } finally {
       setLoading(false);
+      void loadConversations();
     }
+  }
+
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const objective = message.trim();
+    if (!objective || loading) return;
+
+    setMessages((items) => [...items, { id: crypto.randomUUID(), role: "user", text: objective }]);
+    setMessage("");
+    void runObjective(objective);
+  }
+
+  function retryLast() {
+    const objective = lastObjectiveRef.current;
+    if (!objective || loading) return;
+    setMessages((items) => [...items, { id: crypto.randomUUID(), role: "user", text: objective }]);
+    void runObjective(objective);
   }
 
   async function approve(approvalId: string, action: "approve" | "reject" = "approve") {
@@ -204,6 +272,7 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
       setError(e instanceof Error ? e.message : "Erreur pendant l’approbation.");
     } finally {
       setLoading(false);
+      void loadConversations();
     }
   }
 
@@ -274,6 +343,7 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
     setAttachment(null);
     setAttachmentPath(null);
     setSelectedTool(null);
+    lastObjectiveRef.current = null;
     setMessage("");
   }
 
@@ -337,9 +407,43 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
                 <span className={`h-1.5 w-1.5 rounded-full ${loading ? "animate-pulse bg-sky-500" : "bg-emerald-500"}`}/>
                 {loading ? "Exécution" : "Sécurisé"}
               </span>
+              <button type="button" onClick={() => { void loadConversations(); setShowHistory((current) => !current); }} className="rounded-xl border border-[rgba(23,23,20,0.09)] px-3 py-2 text-[11px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900" aria-expanded={showHistory}>Historique</button>
               <button type="button" onClick={resetConversation} disabled={loading} className="rounded-xl border border-[rgba(23,23,20,0.09)] px-3 py-2 text-[11px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-30">Nouveau</button>
             </div>
           </header>
+
+          {showHistory && (
+            <div className="border-b border-[rgba(23,23,20,0.09)] bg-neutral-50/70 px-4 py-3 md:px-5" role="region" aria-label="Historique des conversations">
+              {historyLoading && conversations.length === 0 ? (
+                <p className="text-xs text-neutral-400">Chargement de l’historique…</p>
+              ) : conversations.length === 0 ? (
+                <p className="text-xs text-neutral-400">Aucune conversation enregistrée pour le moment.</p>
+              ) : (
+                <ul className="grid max-h-56 gap-1.5 overflow-y-auto">
+                  {conversations.map((conversation) => (
+                    <li key={conversation.id} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openConversation(conversation.id)}
+                        className={`min-w-0 flex-1 rounded-xl px-3 py-2 text-left text-xs transition ${conversation.id === conversationId ? "bg-sky-100 text-sky-800" : "bg-white text-neutral-700 hover:bg-neutral-100"}`}
+                      >
+                        <span className="block truncate font-semibold">{conversation.title || "Sans titre"}</span>
+                        <span className="block text-[10px] text-neutral-400">{conversation.messageCount} message{conversation.messageCount > 1 ? "s" : ""} · {new Date(conversation.updatedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteConversation(conversation.id)}
+                        aria-label={`Supprimer ${conversation.title || "la conversation"}`}
+                        className="shrink-0 rounded-lg border border-[rgba(23,23,20,0.09)] bg-white px-2 py-1.5 text-[10px] text-neutral-400 hover:border-red-200 hover:text-red-600"
+                      >
+                        Supprimer
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto p-4 md:p-5">
             {messages.length === 0 && (
@@ -384,6 +488,26 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
                 <div className="mr-auto flex items-center gap-3 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white px-4 py-3 text-xs text-neutral-500">
                   <span className="flex gap-1"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-sky-500"/><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-sky-400 [animation-delay:120ms]"/><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-sky-500 [animation-delay:240ms]"/></span>
                   L’agent analyse votre objectif…
+                </div>
+              )}
+
+              {error && !loading && (
+                <div role="alert" className="mr-auto max-w-[96%]">
+                  <div className="mb-1.5 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[.2em] text-red-400">
+                    <span>Gen3ia Agent</span>
+                  </div>
+                  <div className="rounded-2xl rounded-bl-md border border-red-200 bg-red-50 px-4 py-3.5 text-sm leading-6 text-red-700">
+                    {error}
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={retryLast}
+                        className="rounded-full border border-red-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                      >
+                        Réessayer
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

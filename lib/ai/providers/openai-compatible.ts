@@ -76,17 +76,29 @@ export async function callOpenAICompatible(
   ];
 
   const response =
-    await client.chat.completions.create({
-      model,
+    await client.chat.completions.create(
+      {
+        model,
 
-      messages,
+        messages,
 
-      temperature:
-        request.temperature ?? 0.2,
+        temperature:
+          request.temperature ?? 0.2,
 
-      max_tokens:
-        request.maxTokens ?? 8192,
-    });
+        max_tokens:
+          request.maxTokens ?? 8192,
+
+        ...(request.requiresStructuredOutput
+          ? { response_format: { type: "json_object" as const } }
+          : {}),
+      },
+      // Fail fast instead of hanging the serverless function: providers must
+      // answer within AI_PROVIDER_TIMEOUT_MS (default 55s, under Vercel limits).
+      {
+        timeout: Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 55_000),
+        maxRetries: 1,
+      },
+    );
 
   const choice =
     response.choices[0];

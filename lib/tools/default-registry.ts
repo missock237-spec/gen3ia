@@ -16,6 +16,19 @@ import {
 } from "@/lib/integrations/elevenlabs/tools";
 import { twentyFirstUiTool } from "@/lib/integrations/twentyfirst/tool";
 import { phoneCallTool } from "@/lib/tools/phone/call";
+import {
+  notionCreatePageTool,
+  notionSearchTool,
+} from "@/lib/integrations/notion/tools";
+import {
+  julesCreateTaskTool,
+  julesGetTaskTool,
+} from "@/lib/integrations/jules/tools";
+import {
+  cloudflareDnsCreateTool,
+  cloudflareDnsListTool,
+  cloudflareZonesListTool,
+} from "@/lib/integrations/cloudflare/tools";
 
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -38,5 +51,18 @@ export function createDefaultToolRegistry(): ToolRegistry {
     registry.register(voiceListTool);
   }
   if (process.env.TWENTY_FIRST_API_KEY) registry.register(twentyFirstUiTool);
+  if (process.env.NOTION_API_TOKEN) {
+    registry.register(notionSearchTool);
+    registry.register(notionCreatePageTool);
+  }
+  if (process.env.JULES_API_KEY) {
+    registry.register(julesCreateTaskTool);
+    registry.register(julesGetTaskTool);
+  }
+  if (process.env.CLOUDFLARE_API_TOKEN) {
+    registry.register(cloudflareZonesListTool);
+    registry.register(cloudflareDnsListTool);
+    registry.register(cloudflareDnsCreateTool);
+  }
   return registry;
 }

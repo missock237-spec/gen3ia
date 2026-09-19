@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 import { extensionApiError } from "@/lib/extensions/api";
 import { hashDeveloperApiKey, issueDeveloperApiKey } from "@/lib/extensions/developer-keys";
-import { listDeveloperApiKeys, revokeDeveloperApiKey } from "@/lib/extensions/repository";
+import { listDeveloperApiKeys, revokeDeveloperApiKey, revokeDeveloperApiKeyByPrefix } from "@/lib/extensions/repository";
 
 /**
  * Developer SDK/API keys (Developer Studio only — Firebase session required).
@@ -41,7 +41,12 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const token = await verifyFirebaseAuth(request);
-    const body = (await request.json().catch(() => ({}))) as { key?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { key?: unknown; prefix?: unknown };
+    // Preferred: revoke by visible prefix (UI flow). Fallback: full plaintext key.
+    if (typeof body.prefix === "string" && body.prefix.trim()) {
+      await revokeDeveloperApiKeyByPrefix(body.prefix.trim(), token.uid);
+      return NextResponse.json({ ok: true });
+    }
     const key = typeof body.key === "string" ? body.key.trim() : "";
     if (!key.startsWith("g3x_")) {
       return NextResponse.json({ error: "Clé SDK invalide." }, { status: 400 });

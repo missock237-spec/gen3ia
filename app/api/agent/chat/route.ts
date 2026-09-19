@@ -215,9 +215,11 @@ export async function POST(request: NextRequest) {
       finalText: status === "completed" ? finalText : undefined,
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Agent request failed.";
+    const upstream = message.includes("provider") || message.includes("planner") || message.includes("plan généré");
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Agent request failed." },
-      { status: 400 },
+      { error: upstream ? `${message}` : "Impossible de lancer la mission pour le moment. Réessayez." },
+      { status: upstream ? 502 : 400 },
     );
   }
 }

@@ -27,6 +27,31 @@ const COUNTRY_CODES = [
 
 type TopupPhase = "idle" | "creating" | "phone" | "redirecting";
 
+interface WalletTransaction {
+  id: string;
+  type: string;
+  amountMinor: number;
+  currency: string;
+  provider?: string;
+  reference?: string;
+  createdAt: number;
+}
+
+const TRANSACTION_LABELS: Record<string, string> = {
+  topup: "Recharge",
+  charge: "Consommation",
+  charge_confirmed: "Consommation confirmée",
+  reserve: "Réservation",
+  release: "Réservation annulée",
+  refund: "Remboursement",
+  welcome_credit: "Crédit de bienvenue",
+  adjustment: "Ajustement",
+};
+
+function formatTransactionDate(ts: number) {
+  return new Date(ts).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" });
+}
+
 export default function BillingPage() {
   const [user, setUser] = useState<User | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -37,6 +62,7 @@ export default function BillingPage() {
   const [phase, setPhase] = useState<TopupPhase>("idle");
   const [countryCode, setCountryCode] = useState("CM");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const sessionDisponible = useSessionAvailable();
 
   const loadWallet = useCallback(async () => {
@@ -47,21 +73,31 @@ export default function BillingPage() {
     setWallet(data.wallet);
   }, []);
 
+  const loadTransactions = useCallback(async () => {
+    try {
+      const response = await authFetch("/api/billing/transactions?limit=15", { cache: "no-store" });
+      if (!response.ok) return;
+      const data = await response.json();
+      setTransactions(data.transactions ?? []);
+    } catch { /* historique indisponible : section masquée */ }
+  }, []);
+
   useEffect(() => onAuthStateChanged(auth, async (current) => {
     setUser(current);
     // L'etat Firebase client peut etre perdu (webviews mobiles) : on charge
     // quand meme le solde via le cookie de session serveur.
     if (!current) {
-      try { await loadWallet(); } catch { /* aucune session : page de connexion affichee */ }
+      try { await loadWallet(); await loadTransactions(); } catch { /* aucune session : page de connexion affichee */ }
       finally { setLoading(false); }
       return;
     }
     try {
       await loadWallet();
+      await loadTransactions();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Impossible de charger le solde.");
     } finally { setLoading(false); }
-  }), [loadWallet]);
+  }), [loadWallet, loadTransactions]);
 
   // Retour de paiement Chariow : ?topup=success&sale=sal_xxx
   useEffect(() => {

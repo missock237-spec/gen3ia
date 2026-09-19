@@ -26,6 +26,47 @@ function toolCatalog(): string {
   ).join("\n");
 }
 
+/**
+ * Extracts a JSON object from a model response. Providers occasionally wrap
+ * JSON in markdown fences or prepend reasoning text despite
+ * `response_format: json_object`; this defensive extractor finds the
+ * outermost object instead of failing outright.
+ */
+function extractJsonObject(raw: string): unknown {
+  const text = raw.trim();
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidates = [fenced?.[1]?.trim(), text].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      const start = candidate.indexOf("{");
+      const end = candidate.lastIndexOf("}");
+      if (start >= 0 && end > start) {
+        try {
+          return JSON.parse(candidate.slice(start, end + 1));
+        } catch {
+          // Try the next candidate.
+        }
+      }
+    }
+  }
+  throw new Error("The agent planner returned invalid JSON.");
+}
+
+/** Coerces planner steps into schema-valid steps when the model omits ids. */
+function normalizeSteps(rawSteps: unknown): unknown[] {
+  if (!Array.isArray(rawSteps)) return rawSteps as unknown[];
+  return rawSteps.map((step, index) => {
+    if (typeof step !== "object" || step === null) return step;
+    const record = { ...(step as Record<string, unknown>) };
+    if (typeof record.id !== "string" || !record.id.trim()) record.id = `step-${index + 1}`;
+    if (!record.status) record.status = "pending";
+    return record;
+  });
+}
+
 function normalizePlan(plan: RuntimePlan, objective: string): RuntimePlan {
   const normalized = RuntimePlanSchema.parse({
     ...plan,
@@ -66,12 +107,26 @@ export async function planUniversalAgent(
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(response.text);
-  } catch {
-    throw new Error("The agent planner returned invalid JSON.");
+    parsed = extractJsonObject(response.text);
+  } catch (error) {
+    throw new Error(
+      error instanceof Error ? error.message : "The agent planner returned invalid JSON.",
+    );
   }
 
-  const plan = normalizePlan(RuntimePlanSchema.parse(parsed), trimmed);
+  if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).steps)) {
+    (parsed as Record<string, unknown>).steps = normalizeSteps((parsed as Record<string, unknown>).steps);
+  }
+
+  let plan: RuntimePlan;
+  try {
+    plan = normalizePlan(RuntimePlanSchema.parse(parsed), trimmed);
+  } catch (error) {
+    // Do not leak raw zod diagnostics to end users; keep the message actionable.
+    if (error instanceof Error && error.message.startsWith("Tool step")) throw error;
+    if (error instanceof Error && error.message.startsWith("Planner selected")) throw error;
+    throw new Error("Le plan généré par l'agent est incomplet. Reformulez votre demande ou réessayez.");
+  }
   const runtime = new AgentRuntime({
     userId,
     objective: trimmed,
