@@ -103,6 +103,13 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
   const [attachmentPath, setAttachmentPath] = React.useState<string | null>(null);
   const [isListening, setIsListening] = React.useState(false);
   const [showTrace, setShowTrace] = React.useState(true);
+  const logRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Suit le bas du fil a chaque nouveau message ou changement d'etat.
+  React.useEffect(() => {
+    const node = logRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [messages, loading, active]);
 
   React.useEffect(() => {
     if (initialMessage.trim() && !message.trim()) setMessage(initialMessage.trim());
@@ -169,7 +176,7 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
     }
   }
 
-  async function approve(approvalId: string) {
+  async function approve(approvalId: string, action: "approve" | "reject" = "approve") {
     if (loading) return;
     setLoading(true);
     setError("");
@@ -177,7 +184,7 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
       const response = await fetch("/api/agent/chat/approve", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ approvalId }),
+        body: JSON.stringify({ approvalId, action }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Approbation impossible.");
@@ -358,13 +365,18 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
               </div>
             )}
 
-            <div className="mx-auto max-w-3xl space-y-5" role="log" aria-live="polite" aria-label="Fil de conversation avec l'agent">
+            <div ref={logRef} className="mx-auto max-w-3xl space-y-5 overflow-y-auto" role="log" aria-live="polite" aria-label="Fil de conversation avec l'agent">
               {messages.map((item) => (
                 <div key={item.id} className={item.role === "user" ? "ml-auto max-w-[88%] md:max-w-[78%]" : "mr-auto max-w-[96%]"}>
-                  <div className="mb-1.5 text-[9px] font-bold uppercase tracking-[.2em] text-neutral-400">{item.role === "user" ? "Vous" : "Gen3ia Agent"}</div>
+                  <div className="mb-1.5 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[.2em] text-neutral-400">
+                    <span>{item.role === "user" ? "Vous" : "Gen3ia Agent"}</span>
+                    <time className="font-medium normal-case tracking-normal text-neutral-300">
+                      {new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                    </time>
+                  </div>
                   <div className={item.role === "user"
-                    ? "rounded-2xl rounded-br-md bg-neutral-900 px-4 py-3.5 text-sm leading-6 text-white shadow-lg shadow-neutral-900/10"
-                    : "rounded-2xl rounded-bl-md border border-[rgba(23,23,20,0.09)] bg-white px-4 py-3.5 text-sm leading-6 text-neutral-800"}>{item.text}</div>
+                    ? "whitespace-pre-wrap rounded-2xl rounded-br-md bg-neutral-900 px-4 py-3.5 text-sm leading-6 text-white shadow-lg shadow-neutral-900/10"
+                    : "whitespace-pre-wrap rounded-2xl rounded-bl-md border border-[rgba(23,23,20,0.09)] bg-white px-4 py-3.5 text-sm leading-6 text-neutral-800"}>{item.text}</div>
                 </div>
               ))}
 
@@ -395,6 +407,13 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
                         <span className="absolute right-0 top-0 h-full w-12 animate-pulse bg-white/60 blur-sm"/>
                       </div>
                     </div>
+
+                    {active.billing && (
+                      <div className="mt-2.5 flex items-center justify-between text-[10px] text-neutral-400">
+                        <span>Coût de la mission</span>
+                        <span className="font-mono font-semibold text-neutral-600">{(active.billing.totalChargeMinor / 100).toFixed(4)} EUR</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-4">
@@ -429,7 +448,8 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
                                 <div className="truncate text-xs font-semibold text-neutral-900">{approval.toolSlug}</div>
                                 <div className="mt-1 text-[10px] leading-4 text-neutral-500">{approval.reason}</div>
                               </div>
-                              <button type="button" disabled={loading} onClick={() => approve(approval.id)} className="shrink-0 rounded-xl bg-amber-400 px-3 py-2 text-[10px] font-black text-black transition hover:bg-amber-300 disabled:opacity-40">Autoriser</button>
+                              <button type="button" disabled={loading} onClick={() => approve(approval.id, "approve")} className="shrink-0 rounded-xl bg-amber-400 px-3 py-2 text-[10px] font-black text-black transition hover:bg-amber-300 disabled:opacity-40">Autoriser</button>
+                              <button type="button" disabled={loading} onClick={() => approve(approval.id, "reject")} className="shrink-0 rounded-xl border border-red-200 bg-white px-3 py-2 text-[10px] font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-40">Refuser</button>
                             </div>
                           ))}
                         </div>

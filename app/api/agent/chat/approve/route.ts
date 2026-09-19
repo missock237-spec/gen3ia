@@ -6,6 +6,7 @@ import {
   claimActionExecution,
   failAction,
   listActionApprovals,
+  rejectAction,
 } from "@/lib/agents/action-approvals";
 import { loadCheckpoint } from "@/lib/agents/runtime/checkpoint";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
@@ -14,7 +15,7 @@ import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage } from "@/lib/chat/repository";
 
-const Body = z.object({ approvalId: z.string().min(1).max(256) });
+const Body = z.object({ approvalId: z.string().min(1).max(256), action: z.enum(["approve", "reject"]).default("approve") });
 
 /**
  * Reconstruit le texte final affiché a l'utilisateur après une exécution
@@ -75,9 +76,28 @@ function buildPolicy(plan: RuntimePlan): ExecutionPolicy {
 
 export async function POST(request: NextRequest) {
   const user = await requireUser(request);
-  const { approvalId } = Body.parse(await request.json());
+  const { approvalId, action } = Body.parse(await request.json());
 
   try {
+    if (action === "reject") {
+      const rejected = await rejectAction(user.uid, approvalId);
+      // Trace de conversation : le refus fait partie de l'historique.
+      const checkpoint = await loadCheckpoint(rejected.executionId);
+      if (checkpoint?.conversationId) {
+        await appendMessage({
+          conversationId: checkpoint.conversationId,
+          userId: user.uid,
+          role: "assistant",
+          content: "Vous avez refusé cette action. L'agent ne l'exécutera pas : la mission s'arrête ici pour votre sécurité.",
+        }).catch(() => undefined);
+      }
+      return NextResponse.json({
+        status: "rejected_by_user",
+        executionId: rejected.executionId,
+        finalText: "Vous avez refusé cette action. L'agent ne l'exécutera pas : la mission s'arrête ici pour votre sécurité.",
+        plan: checkpoint?.plan,
+      });
+    }
     const approval = await approveAction(user.uid, approvalId);
     const executionId = approval.executionId;
     const state = await loadCheckpoint(executionId);
