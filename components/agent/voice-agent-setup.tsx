@@ -160,7 +160,7 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
         <div className="space-y-4">
           <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4">
             <h4 className="font-semibold">1. Acheter un numéro Gen3ia</h4>
-            {priceMinor !== null && <p className="mt-1 text-xs font-semibold text-sky-700">Prix Gen3ia configuré : {(priceMinor / 100).toFixed(2)} {currency} / mois</p>}
+            {priceMinor !== null && <p className="mt-1 text-xs font-semibold text-sky-700">Prix d’attribution Gen3ia configuré : {(priceMinor / 100).toFixed(2)} {currency}</p>}
             <p className="mt-1 text-xs leading-5 text-neutral-500">Gen3ia cherche un numéro Twilio disponible puis l'attribue à cet agent. Le prix Gen3ia est débité du wallet.</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <input className="g3-input" value={country} onChange={(e) => setCountry(e.target.value.toUpperCase().slice(0, 2))} placeholder="US" maxLength={2} />
