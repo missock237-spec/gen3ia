@@ -6,6 +6,8 @@ export interface PhoneCallSession {
   id: string;
   userId: string;
   executionId: string;
+  agentId?: string;
+  systemPrompt?: string;
   to: string;
   from: string;
   objective: string;
