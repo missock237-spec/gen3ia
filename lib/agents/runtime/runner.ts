@@ -15,6 +15,7 @@ import { RuntimeScheduler } from "./scheduler";
  * orientent le routeur IA.
  */
 export interface RuntimeAgentConfig {
+  agentId?: string;
   name: string;
   type?: string;
   systemPrompt?: string;
@@ -160,13 +161,13 @@ export class AgentRuntime {
     const input: Record<string, unknown> = Object.keys(dependencies).length > 0 ? { ...step.input, dependencies } : { ...step.input };
     const approvalId = typeof input.approvalId === "string" ? input.approvalId : undefined;
     delete input.approvalId;
-    return executeToolSecurely({ userId: this.state.userId, executionId: this.state.executionId, toolName: step.toolName, input, approvalId, policy: this.policy, signal: this.signal });
+    return executeToolSecurely({ userId: this.state.userId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName: step.toolName, input, approvalId, policy: this.policy, signal: this.signal });
   }
 
   private async executeCode(step: RuntimeStep): Promise<unknown> {
     const code = typeof step.input.code === "string" ? step.input.code : null;
     if (!code) throw new Error("Code execution requires input.code");
-    return executeToolSecurely({ userId: this.state.userId, executionId: this.state.executionId, toolName: "code.execute", input: { ...step.input, code }, policy: this.policy, signal: this.signal });
+    return executeToolSecurely({ userId: this.state.userId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName: "code.execute", input: { ...step.input, code }, policy: this.policy, signal: this.signal });
   }
 
   private evaluateCondition(step: RuntimeStep): boolean {
