@@ -1,4 +1,4 @@
-import { getPhoneCallSession } from "@/lib/integrations/twilio/calls";
+import { appendPhoneCallHistory, getPhoneCallSession, updatePhoneCallStatus } from "@/lib/integrations/twilio/calls";
 import { buildTwiML, escapeXml, verifyTwilioSignature } from "@/lib/integrations/twilio/voice";
 
 export const runtime = "nodejs";
@@ -14,6 +14,10 @@ export async function POST(request: Request) {
 
   const session = await getPhoneCallSession(sessionId);
   if (!session || Date.now() > session.expiresAt) return new Response("Call session expired", { status: 410 });
+  await updatePhoneCallStatus(session.id, "in-progress", params.CallSid);
+  if (session.history.length === 0) {
+    await appendPhoneCallHistory(session.id, { role: "assistant", text: session.opening, at: new Date().toISOString() });
+  }
 
   const actionUrl = `/api/voice/twilio/turn?sessionId=${encodeURIComponent(session.id)}`;
   const prompt = session.opening || "Bonjour. Je vous écoute.";
