@@ -832,3 +832,16 @@ body {
 .g3-breadcrumb .g3-breadcrumb-sep{color:#c9c5bc}
 @media(max-width:1023px){.g3-breadcrumb{padding:14px 58px 0 58px}}
 @media(prefers-reduced-motion:reduce){.g3-nav-search,.g3-breadcrumb a{transition:none}}
+
+/* Accessibilite : lien d'evitement visible uniquement au focus clavier */
+.g3-skip-link{
+  position:fixed;left:12px;top:-48px;z-index:100;padding:9px 14px;border-radius:11px;
+  background:#1c1b18;color:#fff;font-size:12px;font-weight:600;text-decoration:none;
+  transition:top .18s cubic-bezier(.22,1,.36,1);
+}
+.g3-skip-link:focus{top:12px}
+.g3-skip-link:focus-visible{outline:2px solid var(--gen3ia-sky);outline-offset:2px}
+/* Focus clavier visible partout par defaut */
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{
+  outline:2px solid var(--gen3ia-sky);outline-offset:2px;
+}

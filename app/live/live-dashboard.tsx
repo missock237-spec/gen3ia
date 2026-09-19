@@ -62,6 +62,7 @@ export function LiveDashboard() {
   const [created, setCreated] = useState<CreatedSession | null>(null);
   const [name, setName] = useState("");
   const [objective, setObjective] = useState("");
+  const [liveConsent, setLiveConsent] = useState(false);
   const [permissions, setPermissions] = useState<Permission[]>([
     "screen.read",
     "input.mouse",
@@ -100,7 +101,7 @@ export function LiveDashboard() {
 
   const createSession = async () => {
     if (sessionDisponible === false) { setError("Session expirée. Reconnectez-vous."); return; }
-    if (name.trim().length === 0 || objective.trim().length < 10 || permissions.length === 0) return;
+    if (name.trim().length === 0 || objective.trim().length < 10 || permissions.length === 0 || !liveConsent) return;
     setBusy(true);
     setError("");
     setCreated(null);
@@ -217,10 +218,22 @@ export function LiveDashboard() {
             ))}
           </div>
         </div>
+        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-white px-4 py-3 text-sm leading-6 text-neutral-700">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 accent-neutral-900"
+            checked={liveConsent}
+            onChange={(e) => setLiveConsent(e.target.checked)}
+          />
+          <span>
+            J'ai compris que cet agent va <strong>agir sur cet ordinateur</strong> selon les permissions
+            sélectionnées (clavier, souris, écran). Je donne mon consentement explicite avant chaque session.
+          </span>
+        </label>
         <button
-          disabled={busy || name.trim().length === 0 || objective.trim().length < 10 || permissions.length === 0}
+          disabled={busy || name.trim().length === 0 || objective.trim().length < 10 || permissions.length === 0 || !liveConsent}
           onClick={createSession}
-          className="g3-btn g3-btn-primary mt-5"
+          className="g3-btn g3-btn-primary mt-4"
         >
           {busy ? "Création…" : "Créer la session Live"}
         </button>

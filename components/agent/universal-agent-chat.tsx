@@ -358,7 +358,7 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
               </div>
             )}
 
-            <div className="mx-auto max-w-3xl space-y-5">
+            <div className="mx-auto max-w-3xl space-y-5" role="log" aria-live="polite" aria-label="Fil de conversation avec l'agent">
               {messages.map((item) => (
                 <div key={item.id} className={item.role === "user" ? "ml-auto max-w-[88%] md:max-w-[78%]" : "mr-auto max-w-[96%]"}>
                   <div className="mb-1.5 text-[9px] font-bold uppercase tracking-[.2em] text-neutral-400">{item.role === "user" ? "Vous" : "Gen3ia Agent"}</div>

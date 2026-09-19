@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { logout, useAuth } from "@/lib/firebase/auth-client";
+import { authFetch, logout, useAuth } from "@/lib/firebase/auth-client";
 
 import { CommandPalette } from "./command-palette";
 import { NAV_GROUPS, type NavItem } from "./nav-items";
@@ -16,6 +16,8 @@ export function AppNav() {
   const [compact, setCompact] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const handler = () => setOpen(true);
@@ -140,20 +142,65 @@ export function AppNav() {
             <div className="relative">
               {accountOpen && (
                 <div className={`g3-account-menu ${compact ? "is-compact" : ""}`}>
-                  <Link href="/team" onClick={() => setAccountOpen(false)} className="g3-account-item">
-                    Paramètres & équipe
-                  </Link>
-                  <button
-                    type="button"
-                    className="g3-account-item danger"
-                    onClick={async () => {
-                      setAccountOpen(false);
-                      await logout();
-                      router.push("/login");
-                    }}
-                  >
-                    Se déconnecter
-                  </button>
+                  {confirmDelete ? (
+                    <div className="space-y-1">
+                      <p className="px-2 py-1 text-[10px] font-semibold leading-4 text-red-600">
+                        Supprimer définitivement votre compte et toutes vos données ?
+                      </p>
+                      <button
+                        type="button"
+                        className="g3-account-item danger font-semibold"
+                        disabled={deleting}
+                        onClick={async () => {
+                          setDeleting(true);
+                          try {
+                            const response = await authFetch("/api/auth/account", { method: "DELETE" });
+                            if (!response.ok) {
+                              const data = await response.json().catch(() => ({}));
+                              throw new Error(data.error ?? "Suppression impossible.");
+                            }
+                            await logout();
+                            router.push("/login");
+                          } catch {
+                            setDeleting(false);
+                            setConfirmDelete(false);
+                          }
+                        }}
+                      >
+                        {deleting ? "Suppression…" : "Oui, tout supprimer"}
+                      </button>
+                      <button type="button" className="g3-account-item" onClick={() => setConfirmDelete(false)}>
+                        Annuler
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Link href="/team" onClick={() => setAccountOpen(false)} className="g3-account-item">
+                        Paramètres & équipe
+                      </Link>
+                      <Link href="/privacy" onClick={() => setAccountOpen(false)} className="g3-account-item">
+                        Politique de confidentialité
+                      </Link>
+                      <button
+                        type="button"
+                        className="g3-account-item danger"
+                        onClick={() => setConfirmDelete(true)}
+                      >
+                        Supprimer le compte
+                      </button>
+                      <button
+                        type="button"
+                        className="g3-account-item"
+                        onClick={async () => {
+                          setAccountOpen(false);
+                          await logout();
+                          router.push("/login");
+                        }}
+                      >
+                        Se déconnecter
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
               <button
