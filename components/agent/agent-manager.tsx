@@ -255,6 +255,19 @@ export function AgentManager() {
                 <input id="agent-desc" className="g3-input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="A quoi sert cet agent ?" maxLength={500} />
               </div>
               <div>
+                <span className="g3-label">Mode de création</span>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="g3-chip" data-selected={agentMode === "standard"} aria-pressed={agentMode === "standard"} onClick={() => setAgentMode("standard")}>
+                    Standard
+                  </button>
+                  <button type="button" className="g3-chip" data-selected={agentMode === "voice"} aria-pressed={agentMode === "voice"} onClick={() => setAgentMode("voice")}>
+                    Agent téléphonique (voix)
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-neutral-400">En mode voix, l&apos;écran de configuration vocale s&apos;ouvre juste après la création.</p>
+              </div>
+
+              <div>
                 <span className="g3-label">Type d&apos;agent</span>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {(Object.keys(TYPE_META) as AgentType[]).map((key) => {

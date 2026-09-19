@@ -40,7 +40,7 @@ export const phoneCallTool: ToolDefinition<z.infer<typeof PhoneCallInput>, {
       executionId: context.executionId ?? randomUUID(),
       to: input.to,
       objective: input.objective,
-      opening: agent?.voiceConfig?.greeting ?? input.opening, input.opening,
+      opening: agent?.voiceConfig?.greeting ?? input.opening,
       language: agent?.voiceConfig?.language ?? input.language,
       maxTurns: agent?.voiceConfig?.maxTurns ?? input.maxTurns,
       maxDurationSeconds: agent?.voiceConfig?.maxDurationSeconds ?? input.maxDurationSeconds,
