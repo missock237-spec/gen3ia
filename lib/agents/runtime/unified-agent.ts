@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { ZodError } from "zod";
 import { generate } from "@/lib/ai/router";
 import { GEN3IA_TOOLS } from "@/lib/tools/registry";
 import { AgentRuntime } from "./runner";
@@ -55,16 +56,55 @@ function extractJsonObject(raw: string): unknown {
   throw new Error("The agent planner returned invalid JSON.");
 }
 
-/** Coerces planner steps into schema-valid steps when the model omits ids. */
+/** Maps fuzzy model step types onto the runtime's strict enum. */
+const STEP_TYPE_ALIASES: Record<string, string> = {
+  search: "research", web: "research", websearch: "research", research: "research",
+  tool: "tool", tools: "tool",
+  llm: "llm", text: "llm", reasoning: "llm", chat: "llm", answer: "llm", write: "llm", summary: "llm",
+  document: "document", doc: "document", docs: "document",
+  media: "media", image: "media",
+  code: "code", compute: "code",
+  condition: "condition",
+};
+
+/** Coerces any plausible planner output into schema-valid steps. */
 function normalizeSteps(rawSteps: unknown): unknown[] {
-  if (!Array.isArray(rawSteps)) return rawSteps as unknown[];
-  return rawSteps.map((step, index) => {
-    if (typeof step !== "object" || step === null) return step;
-    const record = { ...(step as Record<string, unknown>) };
-    if (typeof record.id !== "string" || !record.id.trim()) record.id = `step-${index + 1}`;
-    if (!record.status) record.status = "pending";
-    return record;
+  if (!Array.isArray(rawSteps)) return [];
+  const knownIds = new Set<string>();
+  const mapped = rawSteps.map((step, index) => {
+    const base: Record<string, unknown> = (typeof step === "object" && step !== null)
+      ? { ...(step as Record<string, unknown>) }
+      : { description: String(step ?? "") };
+    if (typeof base.id !== "string" || !base.id.trim()) base.id = `step-${index + 1}`;
+    knownIds.add(base.id);
+    return base;
   });
+
+  for (const record of mapped) {
+    const typeRaw = typeof record.type === "string" ? record.type.toLowerCase().replace(/[^a-z]/g, "") : "";
+    record.type = STEP_TYPE_ALIASES[typeRaw] ?? "llm";
+    if (record.type === "tool" && (typeof record.toolName !== "string" || !record.toolName.trim())) {
+      // A tool step without a target is unusable: degrade to reasoning.
+      record.type = "llm";
+    }
+    if (!record.status) record.status = "pending";
+    const nameSource = [record.name, record.title, record.toolName, record.description].find(
+      (value) => typeof value === "string" && value.trim(),
+    );
+    record.name = typeof nameSource === "string" ? nameSource.trim().slice(0, 120) : `Étape`;
+    const descriptionSource = [record.description, record.name, record.objective].find(
+      (value) => typeof value === "string" && value.trim(),
+    );
+    record.description = typeof descriptionSource === "string" ? descriptionSource.trim().slice(0, 600) : record.name;
+    if (typeof record.input !== "object" || record.input === null || Array.isArray(record.input)) record.input = {};
+    record.dependencies = Array.isArray(record.dependencies)
+      ? (record.dependencies as unknown[]).map(String).filter((dep) => knownIds.has(dep))
+      : [];
+    if (record.skillIds !== undefined && !Array.isArray(record.skillIds)) delete record.skillIds;
+    if (record.maxRetries !== undefined && !Number.isInteger(Number(record.maxRetries))) delete record.maxRetries;
+    if (record.timeoutMs !== undefined && !Number.isFinite(Number(record.timeoutMs))) delete record.timeoutMs;
+  }
+  return mapped;
 }
 
 function normalizePlan(plan: RuntimePlan, objective: string): RuntimePlan {
@@ -125,6 +165,9 @@ export async function planUniversalAgent(
     // Do not leak raw zod diagnostics to end users; keep the message actionable.
     if (error instanceof Error && error.message.startsWith("Tool step")) throw error;
     if (error instanceof Error && error.message.startsWith("Planner selected")) throw error;
+    if (error instanceof ZodError) {
+      console.error("[planner] invalid plan issues:", JSON.stringify(error.issues).slice(0, 1200));
+    }
     throw new Error("Le plan généré par l'agent est incomplet. Reformulez votre demande ou réessayez.");
   }
   const runtime = new AgentRuntime({
