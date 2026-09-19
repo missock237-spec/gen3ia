@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 const MAX_HISTORY = 40;
 
@@ -75,10 +75,10 @@ export function verifyTwilioSignature(
     .sort()
     .reduce((acc, key) => acc + key + params[key], base);
 
-  const expected = crypto.createHmac("sha1", authToken).update(data).digest("base64");
+  const expected = createHmac("sha1", authToken).update(data).digest("base64");
   const expectedBuffer = Buffer.from(expected);
   const actualBuffer = Buffer.from(signature);
-  return expectedBuffer.length === actualBuffer.length && crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  return expectedBuffer.length === actualBuffer.length && timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
 export function appendHistory(
