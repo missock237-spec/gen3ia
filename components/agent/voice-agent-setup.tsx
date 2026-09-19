@@ -149,9 +149,9 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
     <section className="g3-card anim-slide-up p-5 md:p-7">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="g3-eyebrow">AGENT D'APPEL</div>
+          <div className="g3-eyebrow">AGENT D’APPEL</div>
           <h3 className="mt-1 text-xl font-bold">Attribuer un vrai numéro</h3>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-500">L'agent reste entièrement personnalisable comme les autres agents. Le numéro sert aux appels entrants et sortants selon les réglages ci-dessous.</p>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-500">L’agent reste entièrement personnalisable comme les autres agents. Le numéro sert aux appels entrants et sortants selon les réglages ci-dessous.</p>
         </div>
         <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">Voix active</span>
       </div>
@@ -161,7 +161,7 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
           <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4">
             <h4 className="font-semibold">1. Acheter un numéro Gen3ia</h4>
             {priceMinor !== null && <p className="mt-1 text-xs font-semibold text-sky-700">Prix d’attribution Gen3ia configuré : {(priceMinor / 100).toFixed(2)} {currency}</p>}
-            <p className="mt-1 text-xs leading-5 text-neutral-500">Gen3ia cherche un numéro Twilio disponible puis l'attribue à cet agent. Le prix Gen3ia est débité du wallet.</p>
+            <p className="mt-1 text-xs leading-5 text-neutral-500">Gen3ia cherche un numéro Twilio disponible puis l’attribue à cet agent. Le prix Gen3ia est débité du wallet.</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <input className="g3-input" value={country} onChange={(e) => setCountry(e.target.value.toUpperCase().slice(0, 2))} placeholder="US" maxLength={2} />
               <input className="g3-input" value={areaCode} onChange={(e) => setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 5))} placeholder="Area code (optionnel)" />
@@ -181,10 +181,10 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
 
         <div className="space-y-4">
           <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4">
-            <h4 className="font-semibold">3. Personnaliser l'agent vocal</h4>
+            <h4 className="font-semibold">3. Personnaliser l’agent vocal</h4>
             <div className="mt-4 space-y-3">
               <label className="g3-label">Langue<select className="g3-select mt-1" value={language} onChange={(e) => setLanguage(e.target.value)}><option value="fr-FR">Français</option><option value="en-US">English US</option><option value="en-GB">English UK</option><option value="es-ES">Español</option><option value="de-DE">Deutsch</option></select></label>
-              <label className="g3-label">Phrase d'accueil<textarea className="g3-textarea mt-1 min-h-24" value={greeting} onChange={(e) => setGreeting(e.target.value)} maxLength={800} /></label>
+              <label className="g3-label">Phrase d’accueil<textarea className="g3-textarea mt-1 min-h-24" value={greeting} onChange={(e) => setGreeting(e.target.value)} maxLength={800} /></label>
               <div className="grid grid-cols-2 gap-2"><label className="g3-label">Tours max<input className="g3-input mt-1" type="number" min={1} max={40} value={maxTurns} onChange={(e) => setMaxTurns(Number(e.target.value))} /></label><label className="g3-label">Durée max (s)<input className="g3-input mt-1" type="number" min={30} max={1800} value={maxDurationSeconds} onChange={(e) => setMaxDurationSeconds(Number(e.target.value))} /></label></div>
               <div className="grid grid-cols-2 gap-2"><Toggle label="Appels entrants" checked={inboundEnabled} onChange={setInboundEnabled} /><Toggle label="Appels sortants" checked={outboundEnabled} onChange={setOutboundEnabled} /></div>
               <button type="button" className="g3-btn g3-btn-primary" disabled={busy} onClick={save}>Enregistrer la personnalisation</button>
@@ -193,7 +193,7 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
 
           <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
             <h4 className="font-semibold text-sky-900">4. Tester un vrai appel</h4>
-            <p className="mt-1 text-xs leading-5 text-sky-800">Le test utilise le numéro attribué à l'agent comme numéro appelant.</p>
+            <p className="mt-1 text-xs leading-5 text-sky-800">Le test utilise le numéro attribué à l’agent comme numéro appelant.</p>
             <div className="mt-3 flex gap-2"><input className="g3-input flex-1" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="+14155551234" /><button type="button" className="g3-btn g3-btn-primary" disabled={busy || numbers.length === 0} onClick={testCall}>Appeler</button></div>
           </div>
         </div>
