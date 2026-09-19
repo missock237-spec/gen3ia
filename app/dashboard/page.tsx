@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { authFetch, useAuth } from "@/lib/firebase/auth-client";
 import { FeatureAuthGate, useServerSessionUser } from "@/components/auth/feature-auth-gate";
@@ -20,6 +21,7 @@ function Arrow() {
 
 function DashboardContent() {
   const { user } = useAuth();
+  const router = useRouter();
   const serverUser = useServerSessionUser();
   const [objective, setObjective] = useState("");
   const [recentTasks, setRecentTasks] = useState<Array<{ id:string; objective:string; status:string; updatedAt:number }>>([]);
@@ -51,7 +53,7 @@ function DashboardContent() {
     event.preventDefault();
     const value = objective.trim();
     if (!value || starting) {
-      if (!value) window.location.assign("/studio");
+      if (!value) router.push("/studio");
       return;
     }
     setStarting(true);
@@ -63,7 +65,7 @@ function DashboardContent() {
       });
       const data = await response.json();
       if (!response.ok || !data.task?.id) throw new Error(data.error || "Impossible de préparer la tâche.");
-      window.location.assign("/studio?taskId=" + encodeURIComponent(data.task.id));
+      router.push("/studio?taskId=" + encodeURIComponent(data.task.id));
     } catch (error) {
       setStarting(false);
       window.alert(error instanceof Error ? error.message : "Impossible de préparer la tâche.");

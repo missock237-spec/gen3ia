@@ -85,6 +85,7 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- rechargement volontairement cle sur taskId ; load lit l'etat courant
   useEffect(() => { void load(); }, [taskId]);
 
   async function loadHistory() {

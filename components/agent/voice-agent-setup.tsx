@@ -60,6 +60,7 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- chargement volontairement declenche par agentId uniquement
   useEffect(() => { void load(); }, [agentId]);
 
   const search = async () => {

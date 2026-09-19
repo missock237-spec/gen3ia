@@ -31,7 +31,8 @@ export async function POST(request: Request) {
     //   `,
     // });
 
-    console.log(`📧 Invitation envoyée à ${email} : ${inviteUrl}`);
+    // Le lien contient un jeton secret : ne jamais le journaliser.
+    console.log(`📧 Invitation créée pour ${email}`);
 
     return NextResponse.json({ success: true, inviteUrl });
   } catch (error: any) {

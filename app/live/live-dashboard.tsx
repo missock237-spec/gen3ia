@@ -226,7 +226,7 @@ export function LiveDashboard() {
             onChange={(e) => setLiveConsent(e.target.checked)}
           />
           <span>
-            J'ai compris que cet agent va <strong>agir sur cet ordinateur</strong> selon les permissions
+            J’ai compris que cet agent va <strong>agir sur cet ordinateur</strong> selon les permissions
             sélectionnées (clavier, souris, écran). Je donne mon consentement explicite avant chaque session.
           </span>
         </label>
@@ -273,6 +273,7 @@ export function LiveDashboard() {
               <span className="rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-2.5 py-1 text-[11px] text-neutral-600">{viewerStatus === "live" ? "LIVE" : viewerStatus}</span>
             </div>
             <div className="mt-4 overflow-hidden rounded-2xl border border-[rgba(23,23,20,0.09)] bg-black aspect-video flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element -- flux data-URL temps reel, next/image inapplicable */}
               {liveFrame ? <img src={liveFrame} alt="Écran du PC contrôlé par Gen3ia Live" className="h-full w-full object-contain" /> : <span className="text-sm text-neutral-300">En attente du flux écran…</span>}
             </div>
             <p className="mt-3 text-xs leading-5 text-neutral-500">Le flux est accessible uniquement avec le jeton de visualisation de cette session. Il ne permet pas de prendre le contrôle du PC.</p>
