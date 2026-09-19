@@ -76,7 +76,7 @@ function normalizeSteps(rawSteps: unknown): unknown[] {
       ? { ...(step as Record<string, unknown>) }
       : { description: String(step ?? "") };
     if (typeof base.id !== "string" || !base.id.trim()) base.id = `step-${index + 1}`;
-    knownIds.add(base.id);
+    knownIds.add(String(base.id));
     return base;
   });
 
