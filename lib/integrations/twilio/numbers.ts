@@ -1,0 +1,187 @@
+import { FieldValue } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebase/admin";
+import { getTwilioConfig, isValidE164 } from "./voice";
+import { reserveFunds, releaseReservation, settleReservation } from "@/lib/billing/wallet";
+
+const COLLECTION = "agentPhoneNumbers";
+const DEFAULT_PRICE_MINOR = 5000;
+
+function authHeader(accountSid: string, authToken: string) {
+  return "Basic " + Buffer.from(accountSid + ":" + authToken).toString("base64");
+}
+
+function apiBase(accountSid: string) {
+  return `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}`;
+}
+
+function configuredPriceMinor() {
+  const value = Number(process.env.GEN3IA_PHONE_NUMBER_PRICE_MINOR ?? DEFAULT_PRICE_MINOR);
+  return Number.isSafeInteger(value) && value > 0 ? value : DEFAULT_PRICE_MINOR;
+}
+
+async function twilioRequest(path: string, init: RequestInit = {}) {
+  const config = getTwilioConfig();
+  const response = await fetch(apiBase(config.accountSid) + path, {
+    ...init,
+    headers: {
+      Authorization: authHeader(config.accountSid, config.authToken),
+      ...(init.body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+      ...(init.headers ?? {}),
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(String(payload.message ?? payload.detail ?? `Twilio HTTP ${response.status}`));
+  }
+  return payload as Record<string, unknown>;
+}
+
+export interface AgentPhoneNumber {
+  id: string;
+  ownerId: string;
+  agentId: string;
+  phoneNumber: string;
+  twilioSid: string;
+  source: "gen3ia" | "own";
+  status: "active" | "pending" | "released";
+  createdAt: number;
+  updatedAt: number;
+}
+
+export async function listAgentPhoneNumbers(ownerId: string, agentId?: string) {
+  let query = adminDb.collection(COLLECTION).where("ownerId", "==", ownerId);
+  if (agentId) query = query.where("agentId", "==", agentId) as typeof query;
+  const snap = await query.limit(100).get();
+  return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<AgentPhoneNumber, "id">) }));
+}
+
+async function configureTwilioNumber(phoneSid: string, sessionId: string) {
+  const config = getTwilioConfig();
+  const voiceUrl = `${config.appUrl}/api/voice/twilio/answer?numberId=${encodeURIComponent(sessionId)}`;
+  const statusUrl = `${config.appUrl}/api/voice/twilio/status?numberId=${encodeURIComponent(sessionId)}`;
+  const body = new URLSearchParams({
+    VoiceUrl: voiceUrl,
+    VoiceMethod: "POST",
+    StatusCallback: statusUrl,
+    StatusCallbackMethod: "POST",
+  });
+  await twilioRequest(`/IncomingPhoneNumbers/${encodeURIComponent(phoneSid)}.json`, { method: "POST", body });
+}
+
+export async function searchAvailableNumbers(country: string, areaCode?: string, limit = 10) {
+  const normalizedCountry = country.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(normalizedCountry)) throw new Error("Country must be an ISO-3166 alpha-2 code.");
+  const query = new URLSearchParams({ VoiceEnabled: "true", PageSize: String(Math.min(20, Math.max(1, limit))) });
+  if (areaCode?.trim()) query.set("AreaCode", areaCode.trim());
+  const payload = await twilioRequest(`/AvailablePhoneNumbers/${normalizedCountry}/Local.json?${query.toString()}`);
+  const numbers = Array.isArray(payload.available_phone_numbers) ? payload.available_phone_numbers : [];
+  return numbers.map((item) => {
+    const value = item as Record<string, unknown>;
+    return {
+      phoneNumber: String(value.phone_number ?? ""),
+      friendlyName: String(value.friendly_name ?? value.phone_number ?? ""),
+      locality: String(value.locality ?? ""),
+      region: String(value.region ?? ""),
+      isoCountry: String(value.iso_country ?? normalizedCountry),
+      capabilities: value.capabilities ?? { voice: true },
+    };
+  }).filter((item) => isValidE164(item.phoneNumber));
+}
+
+export async function purchaseNumberForAgent(params: { ownerId: string; agentId: string; phoneNumber: string }) {
+  if (!isValidE164(params.phoneNumber)) throw new Error("Phone number must use E.164 format.");
+  const existing = await listAgentPhoneNumbers(params.ownerId, params.agentId);
+  if (existing.some((item) => item.status === "active")) throw new Error("This agent already has an active phone number.");
+
+  const priceMinor = configuredPriceMinor();
+  const reference = `phone-number-${params.agentId}-${params.phoneNumber}`;
+  await reserveFunds({
+    userId: params.ownerId,
+    amountMinor: priceMinor,
+    reference,
+    metadata: { product: "gen3ia_phone_number", agentId: params.agentId, phoneNumber: params.phoneNumber },
+  });
+
+  try {
+    const body = new URLSearchParams({ PhoneNumber: params.phoneNumber, FriendlyName: `Gen3ia Agent ${params.agentId.slice(0, 8)}` });
+    const purchased = await twilioRequest("/IncomingPhoneNumbers.json", { method: "POST", body });
+    const sid = String(purchased.sid ?? "");
+    const phone = String(purchased.phone_number ?? params.phoneNumber);
+    if (!sid) throw new Error("Twilio did not return a phone-number SID.");
+
+    await configureTwilioNumber(sid, params.agentId);
+    const doc = adminDb.collection(COLLECTION).doc();
+    const now = Date.now();
+    const record: AgentPhoneNumber = {
+      id: doc.id,
+      ownerId: params.ownerId,
+      agentId: params.agentId,
+      phoneNumber: phone,
+      twilioSid: sid,
+      source: "gen3ia",
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    };
+    await doc.set(record);
+    await settleReservation({
+      userId: params.ownerId,
+      reference,
+      reservedMinor: priceMinor,
+      actualChargeMinor: priceMinor,
+      metadata: { product: "gen3ia_phone_number", agentId: params.agentId, twilioSid: sid },
+    });
+    return { ...record, priceMinor };
+  } catch (error) {
+    await releaseReservation({ userId: params.ownerId, reference, reservedMinor: priceMinor }).catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function attachExistingTwilioNumber(params: { ownerId: string; agentId: string; phoneNumber: string }) {
+  if (!isValidE164(params.phoneNumber)) throw new Error("Phone number must use E.164 format.");
+  const payload = await twilioRequest(`/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(params.phoneNumber)}`);
+  const numbers = Array.isArray(payload.incoming_phone_numbers) ? payload.incoming_phone_numbers : [];
+  const match = numbers.find((item) => String((item as Record<string, unknown>).phone_number ?? "") === params.phoneNumber) as Record<string, unknown> | undefined;
+  if (!match?.sid) {
+    throw new Error("Ce numéro n'est pas encore hébergé dans le compte téléphonique Gen3ia. Pour conserver votre numéro opérateur, il faut le porter/héberger chez Twilio avant de l'attribuer à l'agent.");
+  }
+
+  const sid = String(match.sid);
+  await configureTwilioNumber(sid, params.agentId);
+  const doc = adminDb.collection(COLLECTION).doc();
+  const now = Date.now();
+  const record: AgentPhoneNumber = {
+    id: doc.id,
+    ownerId: params.ownerId,
+    agentId: params.agentId,
+    phoneNumber: params.phoneNumber,
+    twilioSid: sid,
+    source: "own",
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+  };
+  await doc.set(record);
+  return record;
+}
+
+export async function getAgentPhoneNumberByNumber(phoneNumber: string) {
+  const snap = await adminDb.collection(COLLECTION).where("phoneNumber", "==", phoneNumber).where("status", "==", "active").limit(1).get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { id: doc.id, ...(doc.data() as Omit<AgentPhoneNumber, "id">) };
+}
+
+export async function getAgentPhoneNumberById(id: string) {
+  const snap = await adminDb.collection(COLLECTION).doc(id).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...(snap.data() as Omit<AgentPhoneNumber, "id">) };
+}
+
+export async function releaseAgentPhoneNumber(ownerId: string, id: string) {
+  const record = await getAgentPhoneNumberById(id);
+  if (!record || record.ownerId !== ownerId) throw new Error("Phone number not found.");
+  await twilioRequest(`/IncomingPhoneNumbers/${encodeURIComponent(record.twilioSid)}.json`, { method: "DELETE" });
+  await adminDb.collection(COLLECTION).doc(id).update({ status: "released", updatedAt: FieldValue.serverTimestamp() });
+}
