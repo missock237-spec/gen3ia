@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
+import { VoiceAgentSetup } from "@/components/agent/voice-agent-setup";
 
 /**
  * Gestionnaire d'agents personnalises : creation + personnalisation complete,
@@ -28,6 +29,8 @@ export interface AgentSummary {
   memoryEnabled: boolean;
   webResearchEnabled: boolean;
   documentGenerationEnabled: boolean;
+  voiceEnabled: boolean;
+  voiceConfig?: { language: string; greeting: string; maxTurns: number; maxDurationSeconds: number; inboundEnabled: boolean; outboundEnabled: boolean; };
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +77,7 @@ export function AgentManager() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [voiceSetupAgentId, setVoiceSetupAgentId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [runningId, setRunningId] = useState<string | null>(null);
@@ -84,6 +88,7 @@ export function AgentManager() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<AgentType>("universal");
+  const [agentMode, setAgentMode] = useState<"standard" | "voice">("standard");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [modelStrategy, setModelStrategy] = useState<"automatic" | "fixed">("automatic");
   const [provider, setProvider] = useState<string>("groq");
