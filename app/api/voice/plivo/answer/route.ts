@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
   const session = await createInboundPhoneCallSession({
     userId: mapping.ownerId,
     agentId: agent.id,
+    provider: "plivo",
     executionId: params.CallUUID ?? crypto.randomUUID(),
     to: destination,
     from: String(params.From ?? "unknown"),
@@ -32,7 +33,6 @@ export async function POST(request: NextRequest) {
     maxDurationSeconds: agent.voiceConfig?.maxDurationSeconds ?? 300,
     systemPrompt: agent.systemPrompt,
   });
-  session.provider = "plivo";
   await updatePhoneCallStatus(session.id, "in-progress", params.CallUUID);
   await appendPhoneCallHistory(session.id, { role: "assistant", text: session.opening, at: new Date().toISOString() });
 
