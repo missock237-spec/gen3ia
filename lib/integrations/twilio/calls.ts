@@ -32,6 +32,7 @@ function assertOwner(userId: string) {
 
 export async function createPhoneCallSession(params: {
   userId: string;
+  provider?: "twilio" | "plivo";
   executionId: string;
   agentId?: string;
   systemPrompt?: string;
@@ -180,6 +181,7 @@ export async function createInboundPhoneCallSession(params: {
   const now = Date.now();
   const session: PhoneCallSession = {
     id,
+    provider: params.provider ?? "twilio",
     userId: params.userId,
     agentId: params.agentId,
     systemPrompt: params.systemPrompt,
