@@ -6,7 +6,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 
-type Tab = "overview" | "projects" | "build" | "keys" | "extensions" | "monitor";
+type Tab = "overview" | "projects" | "build" | "connectors" | "keys" | "extensions" | "monitor";
 type Project = { id:string; name:string; slug:string; description:string; framework:string; environment:string; status:string; updatedAt:number };
 type ApiKey = { prefix:string; name:string; status:string; createdAt:number; projectId?:string|null };
 type Extension = { id:string; name:string; status:string; latestVersion:string|null; stats:{installs:number;executions:number}; permissions:string[] };
@@ -41,7 +41,7 @@ export default function DeveloperPage(){
     return authFetch(path,{...init,headers:{"content-type":"application/json",...(init?.headers??{})}});
   },[]);
 
-  const load=useCallback(async()=>{
+  const loadConnectors=useCallback(async(search=connectorSearch,cursor?:string)=>{ const q=new URLSearchParams({limit:"50"}); if(search.trim())q.set("search",search.trim()); if(cursor)q.set("cursor",cursor); const r=await api("/api/integrations/catalog?"+q.toString()); if(!r.ok)return; const d=await r.json(); setConnectors(d.items??[]); setConnectorNextCursor(d.nextCursor??null); },[api,connectorSearch]);\n\n  const load=useCallback(async()=>{
     const [p,k,e,r]=await Promise.all([api("/api/developer/projects"),api("/api/developer/api-keys"),api(`/api/developer/extensions?projectId=${encodeURIComponent(selectedProject)}`),api("/api/developer/revenue")]);
     if(p.ok){const d=await p.json();setProjects(d.projects??[]);if(!selectedProject&&d.projects?.[0])setSelectedProject(d.projects[0].id);}
     if(k.ok)setKeys((await k.json()).keys??[]);
@@ -50,7 +50,7 @@ export default function DeveloperPage(){
     if(selectedProject){const rr=await api(`/api/developer/projects/${encodeURIComponent(selectedProject)}/resources`);if(rr.ok)setResourceSummary((await rr.json()).summary??null);}
   },[api,selectedProject]);
 
-  useEffect(()=>{const u=onAuthStateChanged(auth,x=>setUser(x));void load();return()=>u();},[load]);
+  useEffect(()=>{const u=onAuthStateChanged(auth,x=>setUser(x));void load();return()=>u();},[load]);\n  useEffect(()=>{if(tab==="connectors")void loadConnectors();},[tab,loadConnectors]);
 
   const createProject=async()=>{
     setBusy(true);setMessage("");
@@ -75,7 +75,7 @@ export default function DeveloperPage(){
 
   if(session===false)return <div className="flex min-h-full items-center justify-center p-6"><div className="rounded-3xl border bg-white p-8 text-center"><h1 className="text-2xl font-bold">Developer Studio</h1><p className="mt-2 text-sm text-neutral-500">Connectez-vous pour accéder à l&apos;espace développeur.</p><Link href="/login" className="mt-5 inline-flex rounded-full bg-neutral-900 px-5 py-3 text-sm text-white">Se connecter</Link></div></div>;
 
-  const nav:[Tab,string,string][]=[["overview","⌂","Vue d'ensemble"],["projects","▦","Projets"],["build","＋","Build"],["keys","⚿","API & SDK"],["extensions","◇","Extensions"],["monitor","◷","Monitoring"]];
+  const nav:[Tab,string,string][]=[["overview","⌂","Vue d'ensemble"],["projects","▦","Projets"],["build","＋","Build"],["connectors","◎","Connecteurs"],["keys","⚿","API & SDK"],["extensions","◇","Extensions"],["monitor","◷","Monitoring"]];
   const project=projects.find(p=>p.id===selectedProject);
 
   return <div className="min-h-full bg-[#f5f5f2] text-neutral-950"><div className="mx-auto flex min-h-full max-w-[1500px] flex-col lg:flex-row">
