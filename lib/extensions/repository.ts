@@ -81,6 +81,7 @@ export async function addDeveloperRevenue(params:{developerId:string;extensionId
 // --- Fonctions restaurees (perdues lors de la reecriture d7a9046) ---
 
 export async function listExtensionExecutions(params: {
+  projectId?: string;
   extensionId: string;
   userId?: string;
   limit?: number;
@@ -89,6 +90,10 @@ export async function listExtensionExecutions(params: {
     .collection(COL.executions)
     .where("extensionId", "==", params.extensionId);
   if (params.userId) query = query.where("userId", "==", params.userId);
+  if (params.projectId) {
+    const extension = await getExtension(params.extensionId);
+    if (!extension || extension.projectId !== params.projectId) throw new Error("Extension is not linked to this Gen3ia project.");
+  }
   const snap = await query.orderBy("createdAt", "desc").limit(Math.min(params.limit ?? 50, 200)).get();
   return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
@@ -125,19 +130,22 @@ export async function setExtensionSecret(extensionId: string, ref: string, value
   });
 }
 
-export async function getExtensionSecrets(extensionId: string): Promise<Record<string, string>> {
+export async function getExtensionSecrets(extensionId: string, developerId?: string, projectId?: string): Promise<Record<string, string>> {
+  if (developerId && projectId) await assertExtensionProject(extensionId, developerId, projectId);
   const snap = await adminDb.collection(COL.secrets).where("extensionId", "==", extensionId).get();
   const secrets: Record<string, string> = {};
   for (const doc of snap.docs) secrets[String(doc.get("ref"))] = String(doc.get("value") ?? "");
   return secrets;
 }
 
-export async function listExtensionSecretRefs(extensionId: string): Promise<string[]> {
+export async function listExtensionSecretRefs(extensionId: string, developerId?: string, projectId?: string): Promise<string[]> {
+  if (developerId && projectId) await assertExtensionProject(extensionId, developerId, projectId);
   const snap = await adminDb.collection(COL.secrets).where("extensionId", "==", extensionId).get();
   return snap.docs.map((doc) => String(doc.get("ref")));
 }
 
-export async function deleteExtensionSecret(extensionId: string, ref: string): Promise<void> {
+export async function deleteExtensionSecret(extensionId: string, ref: string, developerId?: string, projectId?: string): Promise<void> {
+  if (developerId && projectId) await assertExtensionProject(extensionId, developerId, projectId);
   await adminDb.collection(COL.secrets).doc(`${extensionId}__${ref}`).delete();
 }
 
