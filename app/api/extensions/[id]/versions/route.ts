@@ -8,10 +8,21 @@ import { createVersion, getExtension, getVersion, listVersions } from "@/lib/ext
 type Params = { params: Promise<{ id: string }> };
 
 /** GET /api/extensions/:id/versions — version history (developer or public metadata). */
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   try {
     const { id } = await params;
-    const versions = await listVersions(id);
+    let versions;
+    try {
+      const developer = await authenticateDeveloper(request);
+      if (!developer.projectId) throw new Error("Developer project is required.");
+      versions = await listVersions(id, developer.userId, developer.projectId);
+    } catch {
+      const extension = await getExtension(id);
+      if (!extension || extension.status !== "approved") {
+        return NextResponse.json({ error: "Historique non disponible." }, { status: 404 });
+      }
+      versions = (await listVersions(id)).filter((version) => version.status === "approved");
+    }
     return NextResponse.json({
       versions: versions.map((version) => ({
         version: version.version,
@@ -19,7 +30,7 @@ export async function GET(_request: Request, { params }: Params) {
         status: version.status,
         submittedAt: version.submittedAt ?? null,
         reviewedAt: version.reviewedAt ?? null,
-        reviewNote: version.reviewNote ?? null,
+        ...(version.status === "approved" ? {} : { reviewNote: version.reviewNote ?? null }),
         createdAt: version.createdAt,
       })),
     });
