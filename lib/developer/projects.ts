@@ -47,6 +47,7 @@ export async function createDeveloperProject(ownerId: string, input: { name: str
     environment: "development",
     status: "active",
     createdAt: timestamp,
+    resourceVersion: 1,
     updatedAt: timestamp,
   };
   await ref.create(project);
