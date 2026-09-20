@@ -19,6 +19,11 @@ type Schedule = {
   endTime: string;
   intervalMinutes: number;
   enabled: boolean;
+  maxRetries: number;
+  retryDelayMinutes: number;
+  catchUp: boolean;
+  maxCatchUpRuns: number;
+  nextRunAt?: string;
   lastExecutionStatus?: string;
   lastExecutionAt?: string;
   lastError?: string;
@@ -45,6 +50,10 @@ export default function AgentSchedulesPage() {
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("18:00");
   const [intervalMinutes, setIntervalMinutes] = useState(0);
+  const [maxRetries, setMaxRetries] = useState(2);
+  const [retryDelayMinutes, setRetryDelayMinutes] = useState(5);
+  const [catchUp, setCatchUp] = useState(false);
+  const [maxCatchUpRuns, setMaxCatchUpRuns] = useState(1);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState<Record<string, { id: string; status: string; startedAt?: string; completedAt?: string; error?: string }[]>>({});
@@ -94,7 +103,7 @@ export default function AgentSchedulesPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name, agentId, objective, timezone, daysOfWeek: selectedDays,
-          startTime, endTime, intervalMinutes, enabled: true,
+          startTime, endTime, intervalMinutes, maxRetries, retryDelayMinutes, catchUp, maxCatchUpRuns, enabled: true,
         }),
       });
       const data = await response.json();
@@ -187,6 +196,14 @@ export default function AgentSchedulesPage() {
               <label className="text-sm text-neutral-600">Arrêt<input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="g3-input mt-2" /></label>
               <label className="text-sm text-neutral-600">Répétition<input type="number" min={0} max={1440} value={intervalMinutes} onChange={(e) => setIntervalMinutes(Math.max(0, Math.min(1440, Number(e.target.value) || 0)))} className="g3-input mt-2" /><span className="mt-1 block text-xs text-neutral-400">0 = une activation au début de la fenêtre</span></label>
             </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <label className="text-sm text-neutral-600">Retries automatiques<input type="number" min={0} max={5} value={maxRetries} onChange={(e) => setMaxRetries(Math.max(0, Math.min(5, Number(e.target.value) || 0)))} className="g3-input mt-2" /></label>
+              <label className="text-sm text-neutral-600">Délai entre retries (min)<input type="number" min={1} max={1440} value={retryDelayMinutes} onChange={(e) => setRetryDelayMinutes(Math.max(1, Math.min(1440, Number(e.target.value) || 1)))} className="g3-input mt-2" /></label>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={catchUp} onChange={(e) => setCatchUp(e.target.checked)} /> Rattraper les exécutions manquées</label>
+              {catchUp && <label className="flex items-center gap-2">Maximum <input type="number" min={0} max={10} value={maxCatchUpRuns} onChange={(e) => setMaxCatchUpRuns(Math.max(0, Math.min(10, Number(e.target.value) || 0)))} className="w-20 rounded-lg border p-2" /></label>}
+            </div>
             <label className="mt-4 block text-sm text-neutral-600">Fuseau horaire<input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="Africa/Douala" className="g3-input mt-2" /></label>
             <div className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-3 text-sm text-neutral-600">{summary} · {timezone}</div>
             <button disabled={busy || !user || !name.trim() || !agentId.trim() || objective.trim().length < 3 || selectedDays.length === 0} onClick={create} className="g3-btn g3-btn-primary mt-4 w-full">Enregistrer la planification</button>
@@ -197,7 +214,7 @@ export default function AgentSchedulesPage() {
             <h2 className="font-serif text-xl font-semibold">Vos planifications</h2>
             <p className="mt-2 text-sm text-neutral-500">La planification est stockée dans Firestore et traitée côté serveur.</p>
             <div className="mt-5 space-y-3">
-              {schedules.length === 0 ? <div className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">Aucune planification.</div> : schedules.map((schedule) => <article key={schedule.id} className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{schedule.name}</h3><p className="mt-1 text-xs text-neutral-400">{schedule.agentId}</p></div><span className={`rounded-full px-2 py-1 text-[10px] uppercase ${schedule.enabled ? "bg-emerald-100 text-emerald-600" : "bg-neutral-200/70 text-neutral-500"}`}>{schedule.enabled ? "active" : "pause"}</span></div><p className="mt-3 line-clamp-2 text-sm text-neutral-500">{schedule.objective}</p><div className="mt-3 text-xs text-neutral-500">{days.filter(([value]) => schedule.daysOfWeek.includes(value)).map(([, label]) => label).join(" · ")} · {schedule.startTime} → {schedule.endTime}</div><div className="mt-1 text-xs text-neutral-400">{schedule.timezone}{schedule.intervalMinutes ? ` · toutes les ${schedule.intervalMinutes} min` : " · au début de la fenêtre"}</div>
+              {schedules.length === 0 ? <div className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">Aucune planification.</div> : schedules.map((schedule) => <article key={schedule.id} className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{schedule.name}</h3><p className="mt-1 text-xs text-neutral-400">{schedule.agentId}</p></div><span className={`rounded-full px-2 py-1 text-[10px] uppercase ${schedule.enabled ? "bg-emerald-100 text-emerald-600" : "bg-neutral-200/70 text-neutral-500"}`}>{schedule.enabled ? "active" : "pause"}</span></div><p className="mt-3 line-clamp-2 text-sm text-neutral-500">{schedule.objective}</p><div className="mt-3 text-xs text-neutral-500">{days.filter(([value]) => schedule.daysOfWeek.includes(value)).map(([, label]) => label).join(" · ")} · {schedule.startTime} → {schedule.endTime}</div><div className="mt-1 text-xs text-neutral-400">{schedule.timezone}{schedule.intervalMinutes ? ` · toutes les ${schedule.intervalMinutes} min` : " · au début de la fenêtre"}{schedule.nextRunAt ? ` · prochaine : ${new Date(schedule.nextRunAt).toLocaleString()}` : ""}</div>
                   <div className="mt-2 text-xs">
                     {schedule.lastExecutionStatus === "running" ? <span className="text-amber-600">Exécution en cours…</span> : schedule.lastExecutionStatus ? <span className={schedule.lastExecutionStatus === "completed" ? "text-emerald-600" : "text-red-600"}>Dernière exécution : {schedule.lastExecutionStatus}{schedule.lastExecutionAt ? ` · ${new Date(schedule.lastExecutionAt).toLocaleString()}` : ""}</span> : <span className="text-neutral-400">Aucune exécution</span>}
                   </div>
