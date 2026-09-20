@@ -176,6 +176,23 @@ export async function revokeHubConnection(userId: string, connectionId: string):
 }
 
 /** Découverte des actions disponibles pour un toolkit connecté. */
+export async function getProjectToolkitTools(userId: string, projectId: string, toolkit: string, search?: string) {
+  const { listDeveloperProjectConnectors } = await import("@/lib/developer/connectors");
+  const connectors = await listDeveloperProjectConnectors(userId, projectId);
+  const normalized = assertSupportedToolkit(toolkit);
+  const connected = connectors.some((item) => item.toolkit === normalized && item.status === "active");
+  if (!connected) throw new Error(`Toolkit "${normalized}" is not connected to this Gen3ia project.`);
+  return getToolkitTools(userId, normalized, search);
+}
+
+export async function getProjectComposioTools(userId: string, projectId: string, search?: string) {
+  const { listDeveloperProjectConnectors } = await import("@/lib/developer/connectors");
+  const connectors = await listDeveloperProjectConnectors(userId, projectId);
+  const toolkits = connectors.filter((item) => item.status === "active").map((item) => item.toolkit);
+  if (toolkits.length === 0) return { items: [], nextCursor: null };
+  return getComposio().tools.get(userId, { toolkits, ...(search ? { search } : {}), limit: 100 });
+}
+
 export async function getToolkitTools(userId: string, toolkit: string, search?: string) {
   if (!userId) throw new Error("userId is required.");
   const normalized = assertSupportedToolkit(toolkit);
