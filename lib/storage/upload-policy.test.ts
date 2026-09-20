@@ -7,6 +7,7 @@ import {
   isExtensionAllowed,
   MAX_FILES_PER_BATCH,
   sanitizeFilename,
+  validateSingleUpload,
   validateUploadBatch,
 } from "./upload-policy";
 
@@ -83,5 +84,16 @@ describe("upload policy", () => {
     expect(formatBytes(2048)).toBe("2 Ko");
     expect(formatBytes(100 * 1024 * 1024)).toBe("100 Mo");
     expect(formatBytes(2 * 1024 * 1024 * 1024)).toBe("2 Go");
+  });
+
+  it("valide un fichier isole sans annuler le lot", () => {
+    const good = validateSingleUpload({ filename: "rapport.txt", contentType: "text/plain", sizeBytes: 128 });
+    expect(good.ok).toBe(true);
+    const bad = validateSingleUpload({ filename: "virus.exe", contentType: "application/x-msdownload", sizeBytes: 128 });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.reason).toContain("non autorise");
+    const vide = validateSingleUpload({ filename: "vide.pdf", contentType: "application/pdf", sizeBytes: 0 });
+    expect(vide.ok).toBe(false);
+    if (!vide.ok) expect(vide.reason).toContain("vide");
   });
 });

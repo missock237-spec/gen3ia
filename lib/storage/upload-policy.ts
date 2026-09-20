@@ -172,6 +172,27 @@ export function validateUploadBatch(
   return { ok: true, intents: validated, totalBytes };
 }
 
+/** Valide un fichier isolément (permet de rejeter un fichier sans annuler le lot). */
+export function validateSingleUpload(intent: UploadIntent): { ok: true; intent: ValidatedUploadIntent } | { ok: false; reason: string } {
+  const safeFilename = sanitizeFilename(intent.filename);
+  if (!safeFilename) return { ok: false, reason: "Nom de fichier invalide." };
+  if (!Number.isFinite(intent.sizeBytes) || intent.sizeBytes <= 0) return { ok: false, reason: "Fichier vide." };
+  if (intent.sizeBytes > MAX_FILE_BYTES) {
+    return { ok: false, reason: `Fichier trop volumineux (max ${formatBytes(MAX_FILE_BYTES)}).` };
+  }
+  if (!isExtensionAllowed(safeFilename)) return { ok: false, reason: "Type de fichier non autorise." };
+  return {
+    ok: true,
+    intent: {
+      filename: intent.filename,
+      safeFilename,
+      contentType: intent.contentType || "application/octet-stream",
+      sizeBytes: intent.sizeBytes,
+      extension: extensionOf(safeFilename),
+    },
+  };
+}
+
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 o";
   const units = ["o", "Ko", "Mo", "Go"];

@@ -4,7 +4,7 @@ import { authFetch } from "@/lib/firebase/auth-client";
 import {
   CHUNK_SIZE_BYTES,
   MAX_FILES_PER_BATCH,
-  validateUploadBatch,
+  validateSingleUpload,
 } from "@/lib/storage/upload-policy";
 
 export type UploadItemStatus = "pending" | "uploading" | "done" | "error" | "cancelled";
@@ -71,21 +71,29 @@ export async function uploadPermanentFiles(
 
   const notify = () => onProgress?.(items.map((item) => ({ ...item })));
 
-  // Pre-validation client (le serveur reste l'autorite finale).
-  const validation = validateUploadBatch(
-    files.map((file) => ({ filename: file.name, contentType: file.type || "", sizeBytes: file.size })),
-  );
-  if (!validation.ok) {
-    for (const rejection of validation.rejections) {
-      const item = items[rejection.index];
-      if (item) { item.status = "error"; item.error = rejection.reason; }
+  // Pre-validation client fichier par fichier (le serveur reste l'autorite
+  // finale) : un fichier invalide est rejete seul, sans annuler le lot.
+  if (files.length > MAX_FILES_PER_BATCH) {
+    for (let index = MAX_FILES_PER_BATCH; index < items.length; index += 1) {
+      items[index].status = "error";
+      items[index].error = `Maximum ${MAX_FILES_PER_BATCH} fichiers par lot.`;
     }
-    // Rejet global (quota, taille de lot) : tous les fichiers encore en attente
-    // recuperent la meme raison.
-    items.forEach((item) => {
-      if (item.status === "pending") { item.status = "error"; item.error = validation.rejections[0]?.reason ?? "Lot refuse."; }
-    });
-    notify();
+  }
+  const validIndexes: number[] = [];
+  const validPayloads: Array<{ filename: string; contentType: string; sizeBytes: number }> = [];
+  for (let index = 0; index < Math.min(files.length, MAX_FILES_PER_BATCH); index += 1) {
+    const file = files[index];
+    const verdict = validateSingleUpload({ filename: file.name, contentType: file.type || "", sizeBytes: file.size });
+    if (verdict.ok) {
+      validIndexes.push(index);
+      validPayloads.push({ filename: file.name, contentType: file.type || "", sizeBytes: file.size });
+    } else {
+      items[index].status = "error";
+      items[index].error = verdict.reason;
+    }
+  }
+  notify();
+  if (validIndexes.length === 0) {
     return { uploaded: [], failed: items.filter((item) => item.status === "error") };
   }
 
@@ -96,28 +104,29 @@ export async function uploadPermanentFiles(
     const response = await authFetch("/api/storage/permanent/session", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        files: files.map((file) => ({ filename: file.name, contentType: file.type || "", sizeBytes: file.size })),
-      }),
+      body: JSON.stringify({ files: validPayloads }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(await jsonError(response, "Session de televersement refusee."));
     sessions = (body as { sessions?: Array<{ uploadId: string; filename: string }> }).sessions ?? [];
-    if (sessions.length !== files.length) throw new Error("Le serveur n'a pas valide tous les fichiers du lot.");
+    if (sessions.length !== validIndexes.length) throw new Error("Le serveur n'a pas valide tous les fichiers du lot.");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Session de televersement refusee.";
-    items.forEach((item) => { if (item.status !== "done") { item.status = "error"; item.error = message; } });
+    validIndexes.forEach((index) => {
+      const item = items[index];
+      if (item && item.status !== "done") { item.status = "error"; item.error = message; }
+    });
     notify();
-    return { uploaded: [], failed: items };
+    return { uploaded: [], failed: items.filter((item) => item.status === "error") };
   }
 
   const uploaded: UploadedFile[] = [];
   const failed: UploadItem[] = [];
 
   // 2) Televersement chunk par chunk, fichier par fichier.
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index];
-    const session = sessions[index];
+  for (let position = 0; position < validIndexes.length; position += 1) {
+    const item = items[validIndexes[position]];
+    const session = sessions[position];
     if (!item || !session) continue;
     if (shouldAbort?.()) { item.status = "cancelled"; failed.push(item); notify(); continue; }
 
