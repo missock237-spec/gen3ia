@@ -73,7 +73,7 @@ export default function DeveloperPage(){
     catch(e){setMessage(e instanceof Error?e.message:"Manifest JSON invalide");}finally{setBusy(false);}
   };
 
-  if(session===false)return <div className="flex min-h-full items-center justify-center p-6"><div className="rounded-3xl border bg-white p-8 text-center"><h1 className="text-2xl font-bold">Developer Studio</h1><p className="mt-2 text-sm text-neutral-500">Connectez-vous pour accéder à l'espace développeur.</p><Link href="/login" className="mt-5 inline-flex rounded-full bg-neutral-900 px-5 py-3 text-sm text-white">Se connecter</Link></div></div>;
+  if(session===false)return <div className="flex min-h-full items-center justify-center p-6"><div className="rounded-3xl border bg-white p-8 text-center"><h1 className="text-2xl font-bold">Developer Studio</h1><p className="mt-2 text-sm text-neutral-500">Connectez-vous pour accéder à l&apos;espace développeur.</p><Link href="/login" className="mt-5 inline-flex rounded-full bg-neutral-900 px-5 py-3 text-sm text-white">Se connecter</Link></div></div>;
 
   const nav:[Tab,string,string][]=[["overview","⌂","Vue d'ensemble"],["projects","▦","Projets"],["build","＋","Build"],["keys","⚿","API & SDK"],["extensions","◇","Extensions"],["monitor","◷","Monitoring"]];
   const project=projects.find(p=>p.id===selectedProject);

@@ -10,6 +10,19 @@ const withBundleAnalyzer =
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Strict-Transport-Security", value: "max-age=63072000" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+    ];
+  },
   // La config web Firebase est fournie directement via les variables
   // NEXT_PUBLIC_FIREBASE_* (inlinees par Next.js a build time).
   // ⚠️ Ne PAS remapper FIREBASE_* (projet ADMIN "gen3ia") vers NEXT_PUBLIC_*
