@@ -17,6 +17,10 @@ export const ScheduleSchema = z.object({
   endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   intervalMinutes: z.number().int().min(0).max(1440).default(0),
   enabled: z.boolean().default(true),
+  maxRetries: z.number().int().min(0).max(5).default(2),
+  retryDelayMinutes: z.number().int().min(1).max(1440).default(5),
+  catchUp: z.boolean().default(false),
+  maxCatchUpRuns: z.number().int().min(0).max(10).default(1),
 });
 
 export type AgentSchedule = z.infer<typeof ScheduleSchema> & {
@@ -31,6 +35,7 @@ export type AgentSchedule = z.infer<typeof ScheduleSchema> & {
   runningExecutionStartedAt?: string;
   createdAt?: string;
   updatedAt?: string;
+  nextRunAt?: string;
 };
 
 export type ScheduleRun = {
@@ -43,6 +48,8 @@ export type ScheduleRun = {
   startedAt?: string;
   completedAt?: string;
   error?: string;
+  attempt?: number;
+  trigger?: "scheduled" | "manual" | "retry" | "catch_up";
 };
 
 const COLLECTION = "agentSchedules";
@@ -92,8 +99,38 @@ function previousCalendarDate(year: number, month: number, day: number) {
   return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
 }
 
+function toDateKey(year: number, month: number, day: number) {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function nextOccurrence(schedule: AgentSchedule, now = new Date()) {
+  const base = new Date(now);
+  for (let offset = 0; offset <= 8; offset++) {
+    const probe = new Date(base.getTime() + offset * 86_400_000);
+    const local = localParts(probe, schedule.timezone);
+    if (!schedule.daysOfWeek.includes(local.weekday)) continue;
+    const start = minutes(schedule.startTime);
+    const end = minutes(schedule.endTime);
+    const first = new Date(probe);
+    const localDate = toDateKey(local.year, local.month, local.day);
+    if (schedule.intervalMinutes <= 0) {
+      const candidate = new Date(`${localDate}T${schedule.startTime}:00`);
+      if (candidate.getTime() > now.getTime()) return candidate.toISOString();
+      continue;
+    }
+    const elapsedStart = new Date(`${localDate}T${schedule.startTime}:00`);
+    const windowMinutes = start <= end ? Math.max(0, end - start) : Math.max(0, 1440 - start + end);
+    const maxSlots = Math.floor(windowMinutes / schedule.intervalMinutes);
+    for (let slot = 0; slot <= maxSlots; slot++) {
+      const candidate = new Date(elapsedStart.getTime() + slot * schedule.intervalMinutes * 60_000);
+      if (candidate.getTime() > now.getTime()) return candidate.toISOString();
+    }
+  }
+  return undefined;
+}
+
 function calendarDate(local: ReturnType<typeof localParts>) {
-  return `${String(local.year).padStart(4, "0")}-${String(local.month).padStart(2, "0")}-${String(local.day).padStart(2, "0")}`;
+  return toDateKey(local.year, local.month, local.day);
 }
 
 export function isScheduleActive(schedule: AgentSchedule, now = new Date()) {
@@ -353,6 +390,7 @@ export function serializeSchedule(id: string, data: DocumentData): AgentSchedule
     updatedAt: toIso(data.updatedAt),
     lastExecutionAt: toIso(data.lastExecutionAt),
     runningExecutionStartedAt: toIso(data.runningExecutionStartedAt),
+    nextRunAt: typeof data.nextRunAt === "string" ? data.nextRunAt : undefined,
   };
 }
 
