@@ -83,7 +83,8 @@ export async function listComposioToolkits(options?: { category?: string; search
     ...(options?.category ? { category: options.category } : {}),
     ...(options?.search ? { search: options.search } : {}),
     ...(options?.cursor ? { cursor: options.cursor } : {}),
-    limit: Math.min(50, Math.max(1, options?.limit ?? 50)),
+    limit: Math.min(1000, Math.max(1, options?.limit ?? 1000)),
+    sort_by: "alphabetically",
     managed_by: "all",
     include_deprecated: false,
   } as never);
@@ -92,13 +93,18 @@ export async function listComposioToolkits(options?: { category?: string; search
     items: items.map((item: any) => ({
       toolkit: item.slug,
       label: item.name ?? item.slug,
-      description: item.description ?? "",
-      logo: item.logo ?? item.logo_url ?? null,
-      categories: item.categories ?? [],
+      description: item.description ?? item.meta?.description ?? "",
+      logo: item.logo ?? item.logo_url ?? item.meta?.logo ?? null,
+      categories: Array.isArray(item.categories)
+        ? item.categories.map((category: any) => typeof category === "string" ? category : category?.name ?? category?.slug).filter(Boolean)
+        : Array.isArray(item.meta?.categories)
+          ? item.meta.categories.map((category: any) => typeof category === "string" ? category : category?.name ?? category?.slug).filter(Boolean)
+          : [],
       authSchemes: item.composio_managed_auth_schemes ?? item.auth_schemes ?? [],
       managedBy: item.managed_by ?? "composio",
     })),
     nextCursor: (result as any)?.next_cursor ?? (result as any)?.nextCursor ?? null,
+    totalItems: Number((result as any)?.total_items ?? (result as any)?.totalItems ?? items.length),
   };
 }
 
