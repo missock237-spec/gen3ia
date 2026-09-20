@@ -227,6 +227,7 @@ export async function updateSchedule(userId: string, id: string, input: unknown)
     ...parsed,
     ...(parsed.daysOfWeek ? { daysOfWeek: [...new Set(parsed.daysOfWeek)].sort((a, b) => a - b) } : {}),
     updatedAt: FieldValue.serverTimestamp(),
+    nextRunAt: parsed.enabled ? nextOccurrence({ ...parsed, id, userId } as AgentSchedule) : FieldValue.delete(),
   });
   return getSchedule(userId, id);
 }
@@ -272,6 +273,7 @@ export async function claimDueSchedule(schedule: AgentSchedule, now = new Date()
       lastExecutionStatus: "running",
       lastError: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
+      nextRunAt: scheduleData.enabled ? nextOccurrence({ ...(scheduleData as Omit<AgentSchedule, "id">), id: scheduleId } as AgentSchedule, now) : FieldValue.delete(),
     });
     tx.set(runRef, {
       scheduleId: schedule.id,
