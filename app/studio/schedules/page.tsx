@@ -45,6 +45,8 @@ export default function AgentSchedulesPage() {
   const [intervalMinutes, setIntervalMinutes] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [history, setHistory] = useState<Record<string, { id: string; status: string; startedAt?: string; completedAt?: string; error?: string }[]>>({});
+
   const sessionDisponible = useSessionAvailable();
 
   const load = async () => {
@@ -117,6 +119,28 @@ export default function AgentSchedulesPage() {
     finally { setBusy(false); }
   };
 
+  const runNow = async (schedule: Schedule) => {
+    if (sessionDisponible === false) return;
+    setBusy(true); setMessage("");
+    try {
+      const response = await authFetch(`/api/agents/schedules/${encodeURIComponent(schedule.id)}/run`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Exécution impossible");
+      setSchedules((current) => current.map((item) => item.id === schedule.id ? { ...item, lastExecutionStatus: data.status ?? "running", lastExecutionAt: new Date().toISOString() } : item));
+      setMessage("Exécution manuelle lancée.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Exécution impossible"); }
+    finally { setBusy(false); }
+  };
+
+  const loadHistory = async (schedule: Schedule) => {
+    try {
+      const response = await authFetch(`/api/agents/schedules/${encodeURIComponent(schedule.id)}/runs?limit=10`, { cache: "no-store" });
+      if (!response.ok) throw new Error((await response.json()).error ?? "Historique indisponible");
+      const data = await response.json();
+      setHistory((current) => ({ ...current, [schedule.id]: data.runs ?? [] }));
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Historique indisponible"); }
+  };
+
   const remove = async (schedule: Schedule) => {
     if (sessionDisponible === false || !window.confirm(`Supprimer « ${schedule.name} » ?`)) return;
     setBusy(true); setMessage("");
@@ -175,7 +199,7 @@ export default function AgentSchedulesPage() {
                   <div className="mt-2 text-xs">
                     {schedule.lastExecutionStatus === "running" ? <span className="text-amber-600">Exécution en cours…</span> : schedule.lastExecutionStatus ? <span className={schedule.lastExecutionStatus === "completed" ? "text-emerald-600" : "text-red-600"}>Dernière exécution : {schedule.lastExecutionStatus}{schedule.lastExecutionAt ? ` · ${new Date(schedule.lastExecutionAt).toLocaleString()}` : ""}</span> : <span className="text-neutral-400">Aucune exécution</span>}
                   </div>
-                  {schedule.lastError && <div className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-600">{schedule.lastError}</div>}<div className="mt-4 flex gap-2"><button disabled={busy} onClick={() => toggle(schedule)} className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-white px-3 py-2 text-xs hover:bg-neutral-100">{schedule.enabled ? "Mettre en pause" : "Activer"}</button><button disabled={busy} onClick={() => remove(schedule)} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 hover:bg-red-100">Supprimer</button></div></article>)}
+                  {schedule.lastError && <div className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-600">{schedule.lastError}</div>}<div className="mt-4 flex flex-wrap gap-2"><button disabled={busy} onClick={() => runNow(schedule)} className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700 hover:bg-sky-100">Exécuter maintenant</button><button disabled={busy} onClick={() => loadHistory(schedule)} className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-white px-3 py-2 text-xs hover:bg-neutral-100">Historique</button><button disabled={busy} onClick={() => toggle(schedule)} className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-white px-3 py-2 text-xs hover:bg-neutral-100">{schedule.enabled ? "Mettre en pause" : "Activer"}</button><button disabled={busy} onClick={() => remove(schedule)} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 hover:bg-red-100">Supprimer</button></div>{history[schedule.id] && <div className="mt-3 space-y-1 rounded-xl border border-[rgba(23,23,20,0.09)] bg-white p-3">{history[schedule.id].length === 0 ? <div className="text-xs text-neutral-400">Aucune exécution.</div> : history[schedule.id].map((run) => <div key={run.id} className="flex items-center justify-between gap-2 text-xs"><span className="truncate">{run.status}{run.startedAt ? ` · ${new Date(run.startedAt).toLocaleString()}` : ""}</span>{run.error && <span className="truncate text-red-600">{run.error}</span>}</div>)}</div>}</article>)}
             </div>
           </div>
         </section>
