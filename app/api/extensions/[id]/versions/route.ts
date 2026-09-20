@@ -44,6 +44,9 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     const body = await request.json().catch(() => null);
+    const requestedProjectId = typeof (body as { projectId?: unknown } | null)?.projectId === "string" ? String((body as { projectId: string }).projectId).trim() : "";
+    const projectId = developer.projectId ?? requestedProjectId;
+    if (!projectId || extension.projectId !== projectId) return NextResponse.json({ error: "Cette extension n'appartient pas au projet Gen3ia lié." }, { status: 403 });
     const result = validateManifest((body as { manifest?: unknown } | null)?.manifest ?? body);
     if (!result.ok) {
       return NextResponse.json({ error: "Manifest invalide.", details: result.errors }, { status: 400 });
@@ -59,7 +62,7 @@ export async function POST(request: Request, { params }: Params) {
       typeof (body as { changelog?: unknown } | null)?.changelog === "string"
         ? (body as { changelog: string }).changelog
         : "Nouvelle version.";
-    const version = await createVersion(developer.userId, { ...result.manifest, author: developer.userId }, changelog);
+    const version = await createVersion(developer.userId, projectId, { ...result.manifest, author: developer.userId }, changelog);
     return NextResponse.json({ version: { version: version.version, status: version.status }, warnings: result.warnings }, { status: 201 });
   } catch (error) {
     return extensionApiError(error);
