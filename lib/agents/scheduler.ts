@@ -273,7 +273,7 @@ export async function claimDueSchedule(schedule: AgentSchedule, now = new Date()
       lastExecutionStatus: "running",
       lastError: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
-      nextRunAt: scheduleData.enabled ? nextOccurrence({ ...(scheduleData as Omit<AgentSchedule, "id">), id: scheduleId } as AgentSchedule, now) : FieldValue.delete(),
+      nextRunAt: schedule.enabled ? nextOccurrence(schedule, now) : FieldValue.delete(),
     });
     tx.set(runRef, {
       scheduleId: schedule.id,
