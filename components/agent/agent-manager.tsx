@@ -5,6 +5,8 @@ import Link from "next/link";
 
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { VoiceAgentSetup } from "@/components/agent/voice-agent-setup";
+import { Callout } from "@/components/studio/callout";
+import { AgentGridSkeleton } from "@/components/studio/skeletons";
 
 /**
  * Gestionnaire d'agents personnalises : creation + personnalisation complete,
@@ -270,12 +272,8 @@ export function AgentManager() {
         </div>
       </div>
 
-      {message && (
-        <div className="anim-fade-in rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{message}</div>
-      )}
-      {error && (
-        <div className="anim-fade-in rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">{error}</div>
-      )}
+      {message && <Callout tone="success" className="rounded-2xl">{message}</Callout>}
+      {error && <Callout tone="error" className="rounded-2xl">{error}</Callout>}
 
       {/* Formulaire de creation / personnalisation */}
       {showForm && (
@@ -443,9 +441,7 @@ export function AgentManager() {
 
       {/* Liste des agents */}
       {loading ? (
-        <div className="g3-card p-8 text-center text-sm text-neutral-500">
-          Chargement de vos agents<span className="g3-dots"><span /><span /><span /></span>
-        </div>
+        <AgentGridSkeleton count={4} />
       ) : agents.length === 0 ? (
         <div className="g3-card p-10 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-200 bg-violet-100 anim-float">
