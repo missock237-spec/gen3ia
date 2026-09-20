@@ -14,7 +14,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const search = new URL(request.url).searchParams.get("search")?.trim() || undefined;
     const raw = await getProjectComposioTools(guard.context.userId, id, search);
     const payload = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
-    const items = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.tools) ? payload.tools : Array.isArray(raw) ? raw : [];
+    const items = Array.isArray(payload.items)
+      ? payload.items
+      : Array.isArray(payload.tools)
+        ? payload.tools
+        : Array.isArray(raw)
+          ? raw
+          : Object.values(payload).filter((value) => value && typeof value === "object");
     const tools = items.map((item) => {
       const value = item && typeof item === "object" ? item as Record<string, unknown> : {};
       const toolkitValue = value.toolkit ?? value.toolkit_slug ?? value.toolkitSlug;
