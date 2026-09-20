@@ -139,7 +139,7 @@ export async function executeToolSecurely(options: SecureToolExecutionOptions): 
       const onAbort = () => controller.abort();
       options.signal?.addEventListener("abort", onAbort, { once: true });
       try {
-        const toolResult = await executeTool({ userId: options.userId, executionId: options.executionId, toolName: options.toolName, input: options.input, signal: controller.signal, policy });
+        const toolResult = await executeTool({ userId: options.userId, executionId: options.executionId, toolName: options.toolName, input: options.input, signal: controller.signal, policy, projectId: options.projectId });
         if (!toolResult.success) throw new Error(toolResult.error ?? `Tool ${options.toolName} failed`);
         result = toolResult.output;
       } finally {
