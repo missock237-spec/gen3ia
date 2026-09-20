@@ -136,7 +136,7 @@ export function AgentManager() {
     }
     let cancelled = false;
     setLoadingProjectTools(true);
-    void authFetch(`/api/developer/projects/${encodeURIComponent(projectId)}/connectors/tools`, { cache: "no-store" })
+    void authFetch(`/api/developer/projects/${encodeURIComponent(projectId)}/connectors/sync`, { cache: "no-store" }).catch(() => undefined).then(() => authFetch(`/api/developer/projects/${encodeURIComponent(projectId)}/connectors/tools`, { cache: "no-store" }))
       .then(async (response) => {
         if (!response.ok) return;
         const data = await response.json();
