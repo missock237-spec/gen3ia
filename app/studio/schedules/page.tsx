@@ -6,7 +6,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 
-type Schedule = {
+type Agent = { id: string; name: string; status: string; type: string; };\n\ntype Schedule = {
   id: string;
   agentId: string;
   name: string;
@@ -18,6 +18,8 @@ type Schedule = {
   intervalMinutes: number;
   enabled: boolean;
   lastExecutionStatus?: string;
+  lastExecutionAt?: string;
+  lastError?: string;
 };
 
 const days = [
@@ -32,6 +34,7 @@ function browserTimezone() {
 export default function AgentSchedulesPage() {
   const [user, setUser] = useState<User | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [name, setName] = useState("");
   const [agentId, setAgentId] = useState("");
   const [objective, setObjective] = useState("");
@@ -46,8 +49,15 @@ export default function AgentSchedulesPage() {
 
   const load = async () => {
     // authFetch : ID token Firebase si disponible, sinon cookie de session.
-    const response = await authFetch("/api/agents/schedules", { cache: "no-store" });
+    const [response, agentsResponse] = await Promise.all([
+      authFetch("/api/agents/schedules", { cache: "no-store" }),
+      authFetch("/api/agents", { cache: "no-store" }),
+    ]);
     if (!response.ok) throw new Error((await response.json()).error ?? "Chargement impossible");
+    if (agentsResponse.ok) {
+      const agentData = await agentsResponse.json();
+      setAgents((agentData.agents ?? []).filter((agent: Agent) => agent.status === "active"));
+    }
     setSchedules((await response.json()).schedules ?? []);
   };
 
@@ -137,7 +147,12 @@ export default function AgentSchedulesPage() {
             <div className="flex items-center justify-between"><h2 className="font-serif text-xl font-semibold">Nouvelle planification</h2><span className="rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-xs text-emerald-600">Fuseau serveur contrôlé</span></div>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <label className="text-sm text-neutral-600">Nom<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Agent du matin" className="g3-input mt-2" /></label>
-              <label className="text-sm text-neutral-600">ID de l’agent<input value={agentId} onChange={(e) => setAgentId(e.target.value)} placeholder="agent_..." className="g3-input mt-2" /></label>
+              <label className="text-sm text-neutral-600">Agent
+                <select value={agentId} onChange={(e) => setAgentId(e.target.value)} className="g3-input mt-2">
+                  <option value="">Sélectionner un agent actif</option>
+                  {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name} · {agent.id.slice(0, 8)}</option>)}
+                </select>
+              </label>
             </div>
             <label className="mt-4 block text-sm text-neutral-600">Objectif<textarea value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="Ex. Surveille les nouveautés de mon secteur et prépare un rapport." className="g3-textarea mt-2 min-h-28" /></label>
             <div className="mt-5"><div className="text-sm text-neutral-600">Jours actifs</div><div className="mt-2 flex flex-wrap gap-2">{days.map(([value, label]) => <button type="button" key={value} onClick={() => toggleDay(value)} className={`rounded-xl border px-3 py-2 text-sm ${selectedDays.includes(value) ? "border-sky-200 bg-sky-100 text-sky-700" : "border-[rgba(23,23,20,0.09)] bg-neutral-50 text-neutral-500"}`}>{label}</button>)}</div></div>
@@ -156,7 +171,11 @@ export default function AgentSchedulesPage() {
             <h2 className="font-serif text-xl font-semibold">Vos planifications</h2>
             <p className="mt-2 text-sm text-neutral-500">La planification est stockée dans Firestore et traitée côté serveur.</p>
             <div className="mt-5 space-y-3">
-              {schedules.length === 0 ? <div className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">Aucune planification.</div> : schedules.map((schedule) => <article key={schedule.id} className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{schedule.name}</h3><p className="mt-1 text-xs text-neutral-400">{schedule.agentId}</p></div><span className={`rounded-full px-2 py-1 text-[10px] uppercase ${schedule.enabled ? "bg-emerald-100 text-emerald-600" : "bg-neutral-200/70 text-neutral-500"}`}>{schedule.enabled ? "active" : "pause"}</span></div><p className="mt-3 line-clamp-2 text-sm text-neutral-500">{schedule.objective}</p><div className="mt-3 text-xs text-neutral-500">{days.filter(([value]) => schedule.daysOfWeek.includes(value)).map(([, label]) => label).join(" · ")} · {schedule.startTime} → {schedule.endTime}</div><div className="mt-1 text-xs text-neutral-400">{schedule.timezone}{schedule.intervalMinutes ? ` · toutes les ${schedule.intervalMinutes} min` : " · au début de la fenêtre"}</div><div className="mt-4 flex gap-2"><button disabled={busy} onClick={() => toggle(schedule)} className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-white px-3 py-2 text-xs hover:bg-neutral-100">{schedule.enabled ? "Mettre en pause" : "Activer"}</button><button disabled={busy} onClick={() => remove(schedule)} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 hover:bg-red-100">Supprimer</button></div></article>)}
+              {schedules.length === 0 ? <div className="rounded-2xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">Aucune planification.</div> : schedules.map((schedule) => <article key={schedule.id} className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{schedule.name}</h3><p className="mt-1 text-xs text-neutral-400">{schedule.agentId}</p></div><span className={`rounded-full px-2 py-1 text-[10px] uppercase ${schedule.enabled ? "bg-emerald-100 text-emerald-600" : "bg-neutral-200/70 text-neutral-500"}`}>{schedule.enabled ? "active" : "pause"}</span></div><p className="mt-3 line-clamp-2 text-sm text-neutral-500">{schedule.objective}</p><div className="mt-3 text-xs text-neutral-500">{days.filter(([value]) => schedule.daysOfWeek.includes(value)).map(([, label]) => label).join(" · ")} · {schedule.startTime} → {schedule.endTime}</div><div className="mt-1 text-xs text-neutral-400">{schedule.timezone}{schedule.intervalMinutes ? ` · toutes les ${schedule.intervalMinutes} min` : " · au début de la fenêtre"}</div>
+                  <div className="mt-2 text-xs">
+                    {schedule.lastExecutionStatus === "running" ? <span className="text-amber-600">Exécution en cours…</span> : schedule.lastExecutionStatus ? <span className={schedule.lastExecutionStatus === "completed" ? "text-emerald-600" : "text-red-600"}>Dernière exécution : {schedule.lastExecutionStatus}{schedule.lastExecutionAt ? ` · ${new Date(schedule.lastExecutionAt).toLocaleString()}` : ""}</span> : <span className="text-neutral-400">Aucune exécution</span>}
+                  </div>
+                  {schedule.lastError && <div className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-600">{schedule.lastError}</div>}<div className="mt-4 flex gap-2"><button disabled={busy} onClick={() => toggle(schedule)} className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-white px-3 py-2 text-xs hover:bg-neutral-100">{schedule.enabled ? "Mettre en pause" : "Activer"}</button><button disabled={busy} onClick={() => remove(schedule)} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 hover:bg-red-100">Supprimer</button></div></article>)}
             </div>
           </div>
         </section>
