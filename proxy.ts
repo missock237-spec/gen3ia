@@ -18,7 +18,33 @@ const CONTENT_SECURITY_POLICY = [
   "worker-src 'self' blob:",
 ].join('; ');
 
+const CLIENT_ACCESS_COOKIE = "gen3ia_client_access";
+
+function isClientRoute(pathname: string) {
+  return /^\/client\/[^/]+$/.test(pathname);
+}
+
+function getClientEntry(request: NextRequest) {
+  const value = request.cookies.get(CLIENT_ACCESS_COOKIE)?.value;
+  return value?.startsWith("/client/") ? value : undefined;
+}
+
+function isPublicClientApi(pathname: string) {
+  return pathname === "/api/public" || pathname.startsWith("/api/public/");
+}
+
 export function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const hasClientAccess = Boolean(getClientEntry(request));
+  const isClientEntry = isClientRoute(pathname);
+  const isAllowedClientRequest = isClientEntry || isPublicClientApi(pathname) || pathname.startsWith("/_next/") || pathname === "/favicon.ico";
+
+  // Un lien client ouvre un espace isolé : tant que ce marqueur existe,
+  // aucune page de l'application n'est accessible depuis ce navigateur.
+  if (hasClientAccess && !isAllowedClientRequest) {
+    return NextResponse.redirect(new URL(getClientEntry(request) ?? "/client", request.url));
+  }
+
   // Detection automatique d'appareils : le resultat est expose aux pages
   // serveur et aux routes API via les en-tetes x-gen3ia-device-*.
   const device = detectDeviceFromHeaders(request.headers);
@@ -28,6 +54,15 @@ export function proxy(request: NextRequest) {
   requestHeaders.set("x-gen3ia-device-app", device.isDesktopApp ? "desktop-app" : "web");
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
+
+  if (isClientEntry) {
+    response.cookies.set(CLIENT_ACCESS_COOKIE, pathname, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+    });
+  }
 
   response.headers.set("X-Gen3ia-Device", device.type);
   response.headers.set("X-Content-Type-Options", "nosniff");
