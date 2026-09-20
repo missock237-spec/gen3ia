@@ -9,6 +9,12 @@ import { analyzeZipTool } from "./files/analyze-zip";
 import { extractZipTool } from "./files/extract-zip";
 import { createComposioTool } from "@/lib/integrations/composio/adapter";
 import { adsReadTool } from "@/lib/integrations/composio/ads-tool";
+import { messagingSendTool } from "@/lib/integrations/messaging/tools";
+import { getMessagingChannelStatus } from "@/lib/integrations/messaging";
+import { emailSendTool } from "@/lib/integrations/email/tools";
+import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
+import { socialPublishTool } from "@/lib/integrations/social/tools";
+import { webhookEmitTool } from "@/lib/integrations/webhooks/tools";
 import { githubCreateRepositoryTool } from "@/lib/integrations/github/tools";
 import {
   voiceListTool,
@@ -44,7 +50,16 @@ export function createDefaultToolRegistry(): ToolRegistry {
     adsReadTool,
     phoneCallTool,
   ]) registry.register(tool);
-  if (process.env.COMPOSIO_API_KEY) registry.register(createComposioTool());
+  if (process.env.COMPOSIO_API_KEY) {
+    registry.register(createComposioTool());
+    registry.register(socialPublishTool);
+  }
+  const messagingStatus = getMessagingChannelStatus();
+  if (messagingStatus.whatsapp || messagingStatus.telegram || messagingStatus.slack) {
+    registry.register(messagingSendTool);
+  }
+  if (isEmailProviderConfigured()) registry.register(emailSendTool);
+  registry.register(webhookEmitTool);
   if (process.env.GITHUB_TOKEN) registry.register(githubCreateRepositoryTool);
   if (process.env.ELEVENLABS_API_KEY) {
     registry.register(voiceSpeakTool);
