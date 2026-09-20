@@ -79,7 +79,7 @@ export function assertSupportedToolkit(toolkit: string): string {
 
 export async function listComposioToolkits(options?: { category?: string; search?: string; cursor?: string; limit?: number }) {
   const composio = getComposio();
-  const result = await composio.toolkits.list({
+  const result = await composio.toolkits.get({
     ...(options?.category ? { category: options.category } : {}),
     ...(options?.search ? { search: options.search } : {}),
     ...(options?.cursor ? { cursor: options.cursor } : {}),

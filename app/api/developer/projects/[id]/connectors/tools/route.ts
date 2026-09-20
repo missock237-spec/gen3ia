@@ -5,13 +5,14 @@ import { getProjectComposioTools } from "@/lib/integrations/composio/connections
 
 export const runtime = "nodejs";
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await protectRoute(request);
   if (!guard.ok) return guard.response;
+  const { id } = await params;
   try {
-    await verifyDeveloperProjectAccess(guard.context.userId, params.id);
+    await verifyDeveloperProjectAccess(guard.context.userId, id);
     const search = new URL(request.url).searchParams.get("search")?.trim() || undefined;
-    const tools = await getProjectComposioTools(guard.context.userId, params.id, search);
+    const tools = await getProjectComposioTools(guard.context.userId, id, search);
     return NextResponse.json({ tools });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to list project tools." }, { status: 400 });

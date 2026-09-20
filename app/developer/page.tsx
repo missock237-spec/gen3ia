@@ -48,7 +48,9 @@ export default function DeveloperPage(){
     return authFetch(path,{...init,headers:{"content-type":"application/json",...(init?.headers??{})}});
   },[]);
 
-  const loadConnectors=useCallback(async(search=connectorSearch,cursor?:string)=>{ const q=new URLSearchParams({limit:"50"}); if(search.trim())q.set("search",search.trim()); if(cursor)q.set("cursor",cursor); const r=await api("/api/integrations/catalog?"+q.toString()); if(!r.ok)return; const d=await r.json(); setConnectors(d.items??[]); setConnectorNextCursor(d.nextCursor??null); },[api,connectorSearch]);\n\n  const [projectTools,setProjectTools]=useState<Array<{slug:string;name?:string;description?:string;toolkit?:string}>>([]);
+  const loadConnectors=useCallback(async(search=connectorSearch,cursor?:string)=>{ const q=new URLSearchParams({limit:"50"}); if(search.trim())q.set("search",search.trim()); if(cursor)q.set("cursor",cursor); const r=await api("/api/integrations/catalog?"+q.toString()); if(!r.ok)return; const d=await r.json(); setConnectors(d.items??[]); setConnectorNextCursor(d.nextCursor??null); },[api,connectorSearch]);
+
+  const [projectTools,setProjectTools]=useState<Array<{slug:string;name?:string;description?:string;toolkit?:string}>>([]);
   const [toolSearch,setToolSearch]=useState("");
   const loadProjectTools=useCallback(async(search=toolSearch)=>{
     if(!selectedProject){setProjectTools([]);return;}
@@ -61,7 +63,7 @@ export default function DeveloperPage(){
 
   const connectToolkit=async(toolkit:string)=>{if(!selectedProject){setMessage("Sélectionne un projet avant de connecter une application.");setTab("projects");return;}setBusy(true);try{const r=await api("/api/integrations/composio/connect",{method:"POST",body:JSON.stringify({toolkit,projectId:selectedProject})});const d=await r.json();if(!r.ok)throw new Error(d.error);if(d.authorizationUrl)window.location.assign(d.authorizationUrl);else await loadProjectConnectors();}catch(e){setMessage(e instanceof Error?e.message:"Connexion impossible");}finally{setBusy(false);}};
 
-  const load=(async()=>{
+  const load=useCallback(async()=>{
     const [p,k,e,r]=await Promise.all([api("/api/developer/projects"),api("/api/developer/api-keys"),api(`/api/developer/extensions?projectId=${encodeURIComponent(selectedProject)}`),api("/api/developer/revenue")]);
     if(p.ok){const d=await p.json();setProjects(d.projects??[]);if(!selectedProject&&d.projects?.[0])setSelectedProject(d.projects[0].id);}
     if(k.ok)setKeys((await k.json()).keys??[]);
