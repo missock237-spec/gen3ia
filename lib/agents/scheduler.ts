@@ -334,11 +334,12 @@ export async function listScheduleRuns(userId: string, scheduleId: string, limit
   const snap = await adminDb
     .collection(RUNS_COLLECTION)
     .where("scheduleId", "==", scheduleId)
-    .where("userId", "==", userId)
-    .limit(safeLimit)
+    .limit(Math.min(100, safeLimit * 2))
     .get();
 
   return snap.docs
+    .filter((doc) => doc.data().userId === userId)
+    .slice(0, safeLimit)
     .map((doc) => serializeRun(doc.id, doc.data()))
     .sort((a, b) => (b.startedAt ?? "").localeCompare(a.startedAt ?? ""));
 }
