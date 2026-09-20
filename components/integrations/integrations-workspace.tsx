@@ -167,7 +167,7 @@ export function IntegrationsWorkspace() {
         setError(body.error ?? "Connexion impossible.");
         return;
       }
-      window.location.href = body.authorizationUrl;
+      window.location.assign(body.authorizationUrl);
     } catch {
       setError("Connexion impossible. Réessayez.");
     } finally {
