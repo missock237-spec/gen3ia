@@ -75,6 +75,9 @@ export function createComposioTool(): ToolDefinition<
         arguments:
           input.arguments,
 
+        connectedAccountId:
+          connector.connectionId,
+
         signal:
           context.signal,
       });
