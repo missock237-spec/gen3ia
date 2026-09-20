@@ -11,6 +11,7 @@ export interface DeveloperProject {
   status: "active" | "archived";
   createdAt: number;
   updatedAt: number;
+  resourceVersion: 1;
 }
 
 const COL = "developerProjects";
