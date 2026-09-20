@@ -24,9 +24,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const token = await verifyFirebaseAuth(request);
-    const body = (await request.json().catch(() => ({}))) as { name?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { name?: unknown; projectId?: unknown };
+    const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
+    if (!projectId) return NextResponse.json({ error: "Sélectionnez un projet Gen3ia avant de générer une clé." }, { status: 400 });
     const name = typeof body.name === "string" && body.name.trim() ? body.name.trim().slice(0, 100) : "clé SDK";
-    const issued = await issueDeveloperApiKey(token.uid, name);
+    const issued = await issueDeveloperApiKey(token.uid, name, projectId);
     return NextResponse.json({
       key: issued.key,
       prefix: issued.prefix,
