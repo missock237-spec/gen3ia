@@ -3,413 +3,120 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { onAuthStateChanged, type User } from "firebase/auth";
-
 import { auth } from "@/lib/firebase/client";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 
-interface DeveloperExtension {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  status: string;
-  latestVersion: string | null;
-  approvedVersion: string | null;
-  permissions: string[];
-  pricing: { model: string };
-  stats: { installs: number; ratingCount: number; executions: number };
-  rating: number | null;
-}
+type Tab = "overview" | "projects" | "build" | "keys" | "extensions" | "monitor";
+type Project = { id:string; name:string; slug:string; description:string; framework:string; environment:string; status:string; updatedAt:number };
+type ApiKey = { prefix:string; name:string; status:string; createdAt:number; projectId?:string|null };
+type Extension = { id:string; name:string; status:string; latestVersion:string|null; stats:{installs:number;executions:number}; permissions:string[] };
+type Revenue = { totalNetMinor:number; currency:string; totalGrossMinor:number; totalFeeMinor:number; entries:number };
 
-interface RevenueSummary {
-  totalGrossMinor: number;
-  totalFeeMinor: number;
-  totalNetMinor: number;
-  currency: string;
-  entries: number;
-}
+const TEMPLATE = JSON.stringify({
+  id:"mon-extension", name:"Mon Extension", version:"1.0.0", author:"Moi",
+  description:"Extension Gen3ia", category:"productivity", tags:["gen3ia"],
+  permissions:["http.fetch:api.exemple.com"],
+  secrets:{api_key:{description:"Clé API externe"}},
+  tools:[{id:"search",name:"Recherche",description:"Interroge mon API",inputSchema:{query:{type:"string",required:true}},outputSchema:{result:{type:"string"}},endpoint:{method:"GET",url:"https://api.exemple.com/search?q={{input.query}}",headers:[{name:"Authorization",value:"Bearer {{secret.api_key}}"}],timeoutMs:8000}}],
+  skills:[], workflows:[], settings:[], pricing:{model:"free",maxExecutionsPerDay:100}
+},null,2);
 
-interface ApiKeyEntry {
-  prefix: string;
-  name: string;
-  status: string;
-  createdAt: number;
-}
+export default function DeveloperPage(){
+  const session = useSessionAvailable();
+  const [user,setUser]=useState<User|null>(null);
+  const [tab,setTab]=useState<Tab>("overview");
+  const [projects,setProjects]=useState<Project[]>([]);
+  const [keys,setKeys]=useState<ApiKey[]>([]);
+  const [extensions,setExtensions]=useState<Extension[]>([]);
+  const [revenue,setRevenue]=useState<Revenue|null>(null);
+  const [selectedProject,setSelectedProject]=useState("");
+  const [newProject,setNewProject]=useState({name:"",description:"",framework:"nextjs"});
+  const [manifest,setManifest]=useState(TEMPLATE);
+  const [newKey,setNewKey]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState("");
 
-interface SecretRef {
-  ref: string;
-  description?: string;
-  configured: boolean;
-}
+  const api=useCallback(async(path:string,init?:RequestInit)=>{
+    return authFetch(path,{...init,headers:{"content-type":"application/json",...(init?.headers??{})}});
+  },[]);
 
-const MANIFEST_TEMPLATE = `{
-  "id": "mon-extension",
-  "name": "Mon Extension",
-  "version": "1.0.0",
-  "author": "rempli-automatiquement",
-  "description": "Ce que fait mon extension pour les agents Gen3ia.",
-  "category": "productivity",
-  "tags": ["exemple"],
-  "permissions": ["http.fetch:api.exemple.com"],
-  "secrets": { "api_key": { "description": "Clé API du service externe" } },
-  "tools": [
-    {
-      "id": "exemple-appel",
-      "name": "Appel exemple",
-      "description": "Interroge l'API externe.",
-      "inputSchema": { "query": { "type": "string", "required": true, "maxLength": 200 } },
-      "outputSchema": { "result": { "type": "string" } },
-      "endpoint": {
-        "method": "GET",
-        "url": "https://api.exemple.com/v1/search?q={{input.query}}",
-        "headers": [{ "name": "Authorization", "value": "Bearer {{secret.api_key}}" }],
-        "timeoutMs": 8000
-      }
-    }
-  ],
-  "skills": [],
-  "workflows": [],
-  "settings": [],
-  "pricing": { "model": "free", "maxExecutionsPerDay": 100 }
-}`;
+  const load=useCallback(async()=>{
+    const [p,k,e,r]=await Promise.all([api("/api/developer/projects"),api("/api/developer/api-keys"),api("/api/developer/extensions"),api("/api/developer/revenue")]);
+    if(p.ok){const d=await p.json();setProjects(d.projects??[]);if(!selectedProject&&d.projects?.[0])setSelectedProject(d.projects[0].id);}
+    if(k.ok)setKeys((await k.json()).keys??[]);
+    if(e.ok)setExtensions((await e.json()).extensions??[]);
+    if(r.ok)setRevenue((await r.json()).revenue??null);
+  },[api,selectedProject]);
 
-export default function DeveloperPage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [extensions, setExtensions] = useState<DeveloperExtension[]>([]);
-  const [revenue, setRevenue] = useState<RevenueSummary | null>(null);
-  const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
-  const [manifest, setManifest] = useState(MANIFEST_TEMPLATE);
-  const [newKey, setNewKey] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
-  const [logs, setLogs] = useState<Array<Record<string, unknown>>>([]);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [secrets, setSecrets] = useState<SecretRef[]>([]);
-  const [secretValues, setSecretValues] = useState<Record<string, string>>({});
-  const sessionDisponible = useSessionAvailable();
+  useEffect(()=>{const u=onAuthStateChanged(auth,x=>setUser(x));void load();return()=>u();},[load]);
 
-  const authedFetch = useCallback(async (path: string, init?: RequestInit) => {
-    // authFetch : ID token Firebase si disponible, sinon cookie de session.
-    return authFetch(path, {
-      ...init,
-      headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
-    });
-  }, []);
-
-  const loadAll = useCallback(async () => {
-    const [extensionsRes, revenueRes, keysRes] = await Promise.all([
-      authedFetch("/api/developer/extensions"),
-      authedFetch("/api/developer/revenue"),
-      authedFetch("/api/developer/api-keys"),
-    ]);
-    if (extensionsRes.ok) setExtensions((await extensionsRes.json()).extensions ?? []);
-    if (revenueRes.ok) setRevenue((await revenueRes.json()).revenue ?? null);
-    if (keysRes.ok) setApiKeys((await keysRes.json()).keys ?? []);
-  }, [authedFetch]);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (current) => {
-      setUser(current);
-      void loadAll();
-    });
-    // Charge aussi sans etat Firebase client (le cookie de session suffit).
-    void loadAll();
-    return () => unsubscribe();
-  }, [loadAll]);
-
-  const createExtension = async () => {
-    setBusy(true);
-    setMessage("");
-    try {
-      const parsed = JSON.parse(manifest);
-      const response = await authedFetch("/api/extensions", { method: "POST", body: JSON.stringify({ manifest: parsed }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error([data.error, ...(data.details ?? [])].filter(Boolean).join(" — "));
-      setMessage(`Extension « ${data.extension.id} » créée (v${data.extension.latestVersion}). Soumettez-la après tests.`);
-      await loadAll();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Création impossible");
-    } finally {
-      setBusy(false);
-    }
+  const createProject=async()=>{
+    setBusy(true);setMessage("");
+    try{const r=await api("/api/developer/projects",{method:"POST",body:JSON.stringify(newProject)});const d=await r.json();if(!r.ok)throw new Error(d.error);setProjects(x=>[d.project,...x]);setSelectedProject(d.project.id);setNewProject({name:"",description:"",framework:"nextjs"});setMessage("Projet Gen3ia créé.");setTab("projects");}
+    catch(e){setMessage(e instanceof Error?e.message:"Création impossible");}finally{setBusy(false);}
   };
 
-  const submit = async (extensionId: string, version: string | null) => {
-    if (!version) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const response = await authedFetch(`/api/extensions/${extensionId}/submit`, { method: "POST", body: JSON.stringify({ version }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setMessage(`Version ${version} soumise à la modération.`);
-      await loadAll();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Soumission impossible");
-    } finally {
-      setBusy(false);
-    }
+  const createKey=async()=>{
+    if(!selectedProject){setMessage("Sélectionne un projet Gen3ia.");setTab("projects");return;}
+    setBusy(true);setMessage("");
+    try{const r=await api("/api/developer/api-keys",{method:"POST",body:JSON.stringify({name:"SDK",projectId:selectedProject})});const d=await r.json();if(!r.ok)throw new Error(d.error);setNewKey(d.key);await load();setMessage("Clé créée : elle est liée au projet sélectionné.");}
+    catch(e){setMessage(e instanceof Error?e.message:"Création impossible");}finally{setBusy(false);}
   };
 
-  const createApiKey = async () => {
-    setBusy(true);
-    try {
-      const response = await authedFetch("/api/developer/api-keys", { method: "POST", body: JSON.stringify({ name: "SDK" }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setNewKey(data.key);
-      await loadAll();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Création de clé impossible");
-    } finally {
-      setBusy(false);
-    }
+  const revoke=async(prefix:string)=>{if(!confirm("Révoquer cette clé ?"))return;setBusy(true);try{const r=await api("/api/developer/api-keys",{method:"DELETE",body:JSON.stringify({prefix})});if(!r.ok)throw new Error((await r.json()).error);await load();setMessage("Clé révoquée.");}catch(e){setMessage(e instanceof Error?e.message:"Révocation impossible");}finally{setBusy(false);}};
+
+  const createExtension=async()=>{
+    setBusy(true);setMessage("");
+    try{const parsed=JSON.parse(manifest);const r=await api("/api/extensions",{method:"POST",body:JSON.stringify({manifest:parsed})});const d=await r.json();if(!r.ok)throw new Error([d.error,...(d.details??[])].filter(Boolean).join(" — "));setMessage("Extension créée en brouillon.");await load();setTab("extensions");}
+    catch(e){setMessage(e instanceof Error?e.message:"Manifest JSON invalide");}finally{setBusy(false);}
   };
 
-  const revokeApiKey = async (prefix: string) => {
-    if (!window.confirm(`Révoquer définitivement la clé ${prefix}… ? Les intégrations qui l'utilisent cesseront de fonctionner.`)) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const response = await authedFetch("/api/developer/api-keys", { method: "DELETE", body: JSON.stringify({ prefix }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setMessage(`Clé ${prefix}… révoquée.`);
-      await loadAll();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Révocation impossible");
-    } finally {
-      setBusy(false);
-    }
-  };
+  if(session===false)return <div className="flex min-h-full items-center justify-center p-6"><div className="rounded-3xl border bg-white p-8 text-center"><h1 className="text-2xl font-bold">Developer Studio</h1><p className="mt-2 text-sm text-neutral-500">Connectez-vous pour accéder à l'espace développeur.</p><Link href="/login" className="mt-5 inline-flex rounded-full bg-neutral-900 px-5 py-3 text-sm text-white">Se connecter</Link></div></div>;
 
-  const loadSecrets = async (extensionId: string) => {
-    setSelected(extensionId);
-    setSecrets([]);
-    setSecretValues({});
-    const response = await authedFetch(`/api/developer/secrets?extensionId=${encodeURIComponent(extensionId)}`);
-    const data = await response.json();
-    if (!response.ok) { setMessage(data.error ?? "Chargement des secrets impossible"); return; }
-    setSecrets(data.secrets ?? []);
-  };
+  const nav:[Tab,string,string][]=[["overview","⌂","Vue d'ensemble"],["projects","▦","Projets"],["build","＋","Build"],["keys","⚿","API & SDK"],["extensions","◇","Extensions"],["monitor","◷","Monitoring"]];
+  const project=projects.find(p=>p.id===selectedProject);
 
-  const saveSecret = async (extensionId: string, ref: string) => {
-    const value = secretValues[ref];
-    if (!value || !value.trim()) { setMessage(`Valeur vide pour ${ref}.`); return; }
-    setBusy(true);
-    setMessage("");
-    try {
-      const response = await authedFetch("/api/developer/secrets", { method: "PUT", body: JSON.stringify({ extensionId, ref, value: value.trim() }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setMessage(`Secret ${ref} enregistré (jamais relu par l'interface).`);
-      setSecretValues((current) => ({ ...current, [ref]: "" }));
-      await loadSecrets(extensionId);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Enregistrement impossible");
-    } finally {
-      setBusy(false);
-    }
-  };
+  return <div className="min-h-full bg-[#f5f5f2] text-neutral-950"><div className="mx-auto flex min-h-full max-w-[1500px] flex-col lg:flex-row">
+    <aside className="w-full border-b bg-[#11120f] p-4 text-white lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r lg:p-5">
+      <Link href="/dashboard" className="flex items-center gap-2 text-lg font-bold"><span className="grid h-8 w-8 place-items-center rounded-xl bg-white text-black">G</span> Gen3ia</Link>
+      <div className="mt-1 text-[10px] uppercase tracking-[.25em] text-neutral-500">Developer Studio</div>
+      <nav className="mt-8 space-y-1">{nav.map(([id,icon,label])=><button key={id} onClick={()=>setTab(id)} className={"flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm "+(tab===id?"bg-white text-black":"text-neutral-400 hover:bg-neutral-800 hover:text-white")}><span className="w-5 text-center">{icon}</span>{label}</button>)}</nav>
+      <div className="mt-8 border-t border-neutral-800 pt-5"><div className="text-[10px] uppercase tracking-widest text-neutral-600">Projet actif</div><select value={selectedProject} onChange={e=>setSelectedProject(e.target.value)} className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-white"><option value="">Sélectionner</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+      <div className="mt-8 rounded-2xl border border-neutral-800 p-3 text-xs text-neutral-500">{user?.email||"Compte développeur"}</div>
+    </aside>
 
-  const removeSecret = async (extensionId: string, ref: string) => {
-    setBusy(true);
-    setMessage("");
-    try {
-      const response = await authedFetch("/api/developer/secrets", { method: "DELETE", body: JSON.stringify({ extensionId, ref }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setMessage(`Secret ${ref} supprimé.`);
-      await loadSecrets(extensionId);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Suppression impossible");
-    } finally {
-      setBusy(false);
-    }
-  };
+    <main className="min-w-0 flex-1 p-5 md:p-8">
+      <header className="mb-7 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="text-xs font-semibold uppercase tracking-[.28em] text-sky-700">Gen3ia / Developer</div><h1 className="mt-2 text-3xl font-bold tracking-tight">{nav.find(x=>x[0]===tab)?.[2]}</h1><p className="mt-1 text-sm text-neutral-500">Construis, connecte, teste et déploie tes applications Gen3ia.</p></div><div className="flex gap-2"><Link href="/studio" className="rounded-xl border bg-white px-4 py-2 text-sm">Studio</Link><button onClick={()=>setTab("projects")} className="rounded-xl bg-black px-4 py-2 text-sm text-white">+ Nouveau projet</button></div></header>
+      {message&&<div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm">{message}</div>}
 
-  const loadLogs = async (extensionId: string) => {
-    setSelected(extensionId);
-    const response = await authedFetch(`/api/extensions/${extensionId}/executions?limit=30`);
-    if (response.ok) setLogs((await response.json()).executions ?? []);
-  };
-
-  if (sessionDisponible === false) {
-    return (
-      <div className="flex min-h-full items-center justify-center bg-[#f6f4ef] p-6 text-neutral-900">
-        <div className="max-w-md rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-          <h1 className="font-serif text-xl font-bold">Espace développeur</h1>
-          <p className="mt-2 text-sm text-neutral-600">Connectez-vous pour créer et publier des extensions Gen3ia.</p>
-          <Link href="/login" className="mt-6 inline-flex rounded-full bg-neutral-900 px-6 py-3 text-sm font-semibold text-white hover:bg-neutral-800">Se connecter</Link>
+      {tab==="overview"&&<section className="space-y-5">
+        <div className="grid gap-4 md:grid-cols-4"><Card title="Projets" value={projects.length}/><Card title="Clés actives" value={keys.filter(k=>k.status==="active").length}/><Card title="Extensions" value={extensions.length}/><Card title="Revenus nets" value={revenue?((revenue.totalNetMinor/100).toLocaleString("fr-FR")+" "+revenue.currency):"—"}/></div>
+        <div className="grid gap-5 lg:grid-cols-[1.4fr_.8fr]">
+          <Panel title="Construire rapidement" subtitle="Les ressources sont persistées côté serveur."><div className="grid gap-3 sm:grid-cols-2">{[["Projet","Créer une application isolée","projects"],["API & SDK","Générer une clé liée à un projet","keys"],["Extension","Créer un tool déclaratif","extensions"],["Monitoring","Voir l'activité développeur","monitor"]].map(x=><button key={x[2]} onClick={()=>setTab(x[2] as Tab)} className="rounded-2xl border p-4 text-left hover:border-neutral-400"><div className="font-semibold">{x[0]}</div><div className="mt-1 text-xs text-neutral-500">{x[1]}</div></button>)}</div></Panel>
+          <Panel title="Sécurité des clés" subtitle="Contrôle côté serveur"><div className="space-y-3"><Rule n="1" t="Chaque clé possède un projectId."/><Rule n="2" t="Chaque requête par clé doit envoyer X-Gen3ia-Project-Id."/><Rule n="3" t="Un projectId différent est refusé."/><Rule n="4" t="Une clé sans projet est refusée." /></div></Panel>
         </div>
-      </div>
-    );
-  }
+      </section>}
 
-  return (
-    <div className="min-h-full bg-[#f6f4ef] text-neutral-900 p-5 md:p-8">
-      <div className="mx-auto max-w-6xl">
-        <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-xs tracking-[.3em] text-sky-700">GEN3IA DEVELOPER STUDIO</div>
-            <h1 className="mt-2 font-serif text-3xl font-bold">Mes extensions</h1>
-            <p className="mt-2 text-neutral-600">Créez, testez, soumettez et monétisez vos extensions.</p>
-          </div>
-          <div className="flex gap-3">
-            <Link href="/marketplace" className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm hover:bg-neutral-50">Marketplace</Link>
-            <Link href="/studio" className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm hover:bg-neutral-50">Studio</Link>
-          </div>
-        </header>
+      {tab==="projects"&&<section className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
+        <Panel title="Nouveau projet" subtitle="Un projet est l'unité de sécurité des clés."><div className="space-y-3"><input value={newProject.name} onChange={e=>setNewProject({...newProject,name:e.target.value})} placeholder="Nom du projet" className="w-full rounded-xl border p-3 text-sm"/><textarea value={newProject.description} onChange={e=>setNewProject({...newProject,description:e.target.value})} placeholder="Description" className="min-h-24 w-full rounded-xl border p-3 text-sm"/><select value={newProject.framework} onChange={e=>setNewProject({...newProject,framework:e.target.value})} className="w-full rounded-xl border p-3 text-sm"><option value="nextjs">Next.js</option><option value="node">Node.js</option><option value="python">Python</option><option value="other">Autre</option></select><button disabled={busy} onClick={createProject} className="w-full rounded-xl bg-black p-3 text-sm font-semibold text-white disabled:opacity-40">Créer le projet</button></div></Panel>
+        <Panel title="Mes projets" subtitle="Projets enregistrés dans Gen3ia.">{projects.length===0?<Empty text="Aucun projet. Crée le premier à gauche."/>:<div className="space-y-2">{projects.map(p=><button key={p.id} onClick={()=>setSelectedProject(p.id)} className={"flex w-full items-center justify-between rounded-2xl border p-4 text-left "+(selectedProject===p.id?"border-sky-400 bg-sky-50":"bg-white")}><div><div className="font-semibold">{p.name}</div><div className="mt-1 text-xs text-neutral-500">{p.framework+" · "+p.environment+" · "+p.slug}</div></div><span className="rounded-full bg-neutral-100 px-2 py-1 text-[10px]">{p.status}</span></button>)}</div>}</Panel>
+      </section>}
 
-        {message && <div className="mb-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-neutral-800">{message}</div>}
+      {tab==="keys"&&<section className="space-y-5"><Panel title="API & SDK" subtitle="Les clés Gen3ia ne sont pas globales : elles sont liées à un projet précis."><div className="flex flex-col gap-3 md:flex-row"><select value={selectedProject} onChange={e=>setSelectedProject(e.target.value)} className="flex-1 rounded-xl border p-3 text-sm"><option value="">Choisir le projet lié</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button disabled={busy||!selectedProject} onClick={createKey} className="rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">Générer une clé</button></div>{newKey&&<div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><div className="text-xs font-semibold text-emerald-700">À copier maintenant — affichée une seule fois</div><code className="mt-2 block break-all font-mono text-xs">{newKey}</code></div>}</Panel>
+        <Panel title="Clés existantes" subtitle="La révocation coupe immédiatement l'accès.">{keys.length===0?<Empty text="Aucune clé générée."/>:<div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-xs text-neutral-400"><th className="p-3">Clé</th><th className="p-3">Projet</th><th className="p-3">Statut</th><th className="p-3"></th></tr></thead><tbody>{keys.map(k=><tr key={k.prefix} className="border-b last:border-0"><td className="p-3 font-mono">{k.prefix}…</td><td className="p-3">{projects.find(p=>p.id===k.projectId)?.name||"Projet inconnu"}</td><td className="p-3">{k.status}</td><td className="p-3 text-right">{k.status==="active"&&<button onClick={()=>void revoke(k.prefix)} className="text-red-600">Révoquer</button>}</td></tr>)}</tbody></table></div>}</Panel>
+        <Panel title="Contrat SDK" subtitle="Les deux éléments sont obligatoires pour une requête authentifiée par clé."><pre className="overflow-x-auto rounded-2xl bg-neutral-950 p-4 text-xs text-neutral-200">{"Authorization: Bearer g3x_...\nX-Gen3ia-Project-Id: <project_id>"}</pre></Panel>
+      </section>}
 
-        <section className="mb-8 grid gap-4 md:grid-cols-4">
-          <Stat title="Extensions" value={String(extensions.length)} />
-          <Stat title="Installations" value={String(extensions.reduce((total, extension) => total + extension.stats.installs, 0))} />
-          <Stat title="Exécutions" value={String(extensions.reduce((total, extension) => total + extension.stats.executions, 0))} />
-          <Stat title="Revenus nets" value={revenue ? `${(revenue.totalNetMinor / 100).toLocaleString("fr-FR")} ${revenue.currency}` : "—"} />
-        </section>
+      {tab==="build"&&<section className="grid gap-5 lg:grid-cols-[1.2fr_.8fr]"><Panel title="Extension / Tool Builder" subtitle="Création déclarative."><textarea value={manifest} onChange={e=>setManifest(e.target.value)} className="min-h-[520px] w-full rounded-2xl border bg-[#fbfbf9] p-4 font-mono text-xs" spellCheck={false}/><button disabled={busy} onClick={createExtension} className="mt-3 rounded-xl bg-black px-5 py-3 text-sm text-white">Créer le brouillon</button></Panel><Panel title="Surface développeur" subtitle="Modules"><div className="space-y-2">{["APIs & routes","Tools","Connecteurs OAuth","Extensions","Skills","Webhooks","Knowledge / RAG","Secrets","Sandbox","Evaluations","Deployments"].map(x=><div key={x} className="flex items-center justify-between rounded-xl border p-3 text-sm"><span>{x}</span><span className="text-xs text-neutral-400">{x==="Extensions"?"Disponible":"Workspace"}</span></div>)}</div></Panel></section>}
 
-        <section className="mb-8 grid gap-5 lg:grid-cols-[1.3fr_1fr]">
-          <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-            <h2 className="font-serif text-xl font-semibold">Créer une extension (manifest)</h2>
-            <p className="mt-2 text-sm text-neutral-500">
-              Le manifest déclare tools, skills, workflows, permissions, secrets et prix.
-              Il est validé côté serveur à chaque étape. Aucun code tiers n’est exécuté :
-              les tools sont des connecteurs HTTPS déclaratifs.
-            </p>
-            <textarea
-              value={manifest}
-              onChange={(event) => setManifest(event.target.value)}
-              className="mt-4 min-h-80 w-full resize-y rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4 font-mono text-xs leading-5 outline-none focus:border-sky-300"
-              spellCheck={false}
-            />
-            <button disabled={busy} onClick={createExtension} className="mt-4 rounded-full bg-neutral-900 px-5 py-3 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-40">
-              Créer l’extension
-            </button>
-          </div>
+      {tab==="extensions"&&<section><Panel title="Extensions" subtitle="Versions, permissions, installations et exécutions.">{extensions.length===0?<Empty text="Aucune extension. Utilise Build pour créer la première."/>:<div className="grid gap-3 md:grid-cols-2">{extensions.map(e=><div key={e.id} className="rounded-2xl border p-4"><div className="flex justify-between"><b>{e.name}</b><span className="text-xs">{e.status}</span></div><div className="mt-2 text-xs text-neutral-500">{e.id+" · v"+(e.latestVersion||"—")}</div><div className="mt-3 text-xs">{e.stats.installs+" installations · "+e.stats.executions+" exécutions"}</div><div className="mt-3 flex flex-wrap gap-1">{e.permissions.map(p=><span key={p} className="rounded bg-neutral-100 px-2 py-1 font-mono text-[10px]">{p}</span>)}</div></div>)}</div>}</Panel></section>}
 
-          <div className="space-y-5">
-            <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-              <h2 className="font-serif text-lg font-semibold">Clés SDK / API</h2>
-              <p className="mt-1 text-xs text-neutral-500">Authentifie l’API développeur depuis vos outils CI (`Authorization: Bearer g3x_…`).</p>
-              {newKey && (
-                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                  <div className="text-xs text-emerald-600">Nouvelle clé (affichée une seule fois) :</div>
-                  <code className="mt-1 block overflow-x-auto font-mono text-xs text-emerald-700">{newKey}</code>
-                </div>
-              )}
-              <button disabled={busy} onClick={createApiKey} className="mt-3 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold hover:bg-neutral-50">Générer une clé</button>
-              <ul className="mt-4 space-y-2 text-xs text-neutral-500">
-                {apiKeys.map((key, index) => (
-                  <li key={index} className="flex items-center justify-between gap-2 rounded-lg bg-neutral-50 px-3 py-2">
-                    <span className="font-mono">{key.prefix}…</span>
-                    <span className={key.status === "active" ? "text-emerald-600" : "text-neutral-400"}>{key.status === "active" ? "active" : key.status}</span>
-                    {key.status === "active" && (
-                      <button disabled={busy} onClick={() => revokeApiKey(key.prefix)} className="rounded-md border border-red-200 bg-red-50 px-2 py-1 font-semibold text-red-600 hover:bg-red-100 disabled:opacity-40">Révoquer</button>
-                    )}
-                  </li>
-                ))}
-                {apiKeys.length === 0 && <li>Aucune clé SDK pour le moment.</li>}
-              </ul>
-            </div>
-
-            <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-              <h2 className="font-serif text-lg font-semibold">Revenus</h2>
-              {revenue ? (
-                <div className="mt-3 space-y-1 text-sm text-neutral-600">
-                  <div>Brut : {(revenue.totalGrossMinor / 100).toLocaleString("fr-FR")} {revenue.currency}</div>
-                  <div>Commission plateforme : {(revenue.totalFeeMinor / 100).toLocaleString("fr-FR")} {revenue.currency}</div>
-                  <div className="font-semibold text-emerald-600">Net : {(revenue.totalNetMinor / 100).toLocaleString("fr-FR")} {revenue.currency}</div>
-                  <p className="mt-2 text-xs text-neutral-400">{revenue.entries} transactions vérifiées (wallet/Chariow).</p>
-                </div>
-              ) : (
-                <p className="mt-2 text-sm text-neutral-400">Aucun revenu pour le moment.</p>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <h2 className="font-serif text-xl font-semibold">Mes extensions publiées</h2>
-          {extensions.length === 0 && <p className="text-sm text-neutral-400">Aucune extension — créez la première ci-dessus.</p>}
-          {extensions.map((extension) => (
-            <div key={extension.id} className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">{extension.name}</h3>
-                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] ${
-                      extension.status === "approved" ? "bg-emerald-100 text-emerald-600" :
-                      extension.status === "pending" ? "bg-amber-100 text-amber-700" :
-                      extension.status === "rejected" || extension.status === "suspended" ? "bg-red-50 text-red-600" :
-                      "bg-neutral-100 text-neutral-500"
-                    }`}>{extension.status}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-neutral-500">
-                    {extension.id} · v{extension.latestVersion} · {extension.stats.installs} install. · {extension.stats.executions} exéc.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={() => void loadLogs(extension.id)} className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50">Logs</button>
-                  <button onClick={() => void loadSecrets(extension.id)} className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50">Secrets</button>
-                  <button disabled={busy || extension.status === "approved"} onClick={() => submit(extension.id, extension.latestVersion)} className="rounded-full bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800 disabled:opacity-40">Soumettre v{extension.latestVersion}</button>
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {extension.permissions.map((permission) => (
-                  <span key={permission} className="rounded-md bg-neutral-100 px-2 py-0.5 font-mono text-[10px] text-neutral-500">{permission}</span>
-                ))}
-              </div>
-              {selected === extension.id && (
-                <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50 p-4">
-                  <div className="text-xs uppercase tracking-widest text-neutral-400">Dernières exécutions</div>
-                  <ul className="mt-2 space-y-1 font-mono text-[11px] text-neutral-500">
-                    {logs.map((log, index) => (
-                      <li key={index}>
-                        {String(log.createdAt ? new Date(Number(log.createdAt)).toLocaleString("fr-FR") : "")} · {String(log.toolId)} · {String(log.status)} · {String(log.durationMs)}ms{log.error ? ` · ${String(log.error).slice(0, 120)}` : ""}
-                      </li>
-                    ))}
-                    {logs.length === 0 && <li>Aucune exécution enregistrée.</li>}
-                  </ul>
-                </div>
-              )}
-              {selected === extension.id && secrets.length > 0 && (
-                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <div className="text-xs uppercase tracking-widest text-amber-700">Secrets de l&apos;extension (stockés côté serveur, jamais relus)</div>
-                  <div className="mt-3 space-y-3">
-                    {secrets.map((secret) => (
-                      <div key={secret.ref} className="flex flex-wrap items-center gap-2">
-                        <code className="font-mono text-[11px] text-amber-800">{secret.ref}</code>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${secret.configured ? "bg-emerald-100 text-emerald-700" : "bg-neutral-100 text-neutral-500"}`}>{secret.configured ? "configuré" : "non configuré"}</span>
-                        <input
-                          type="password"
-                          autoComplete="off"
-                          placeholder="valeur du secret"
-                          value={secretValues[secret.ref] ?? ""}
-                          onChange={(event) => setSecretValues((current) => ({ ...current, [secret.ref]: event.target.value }))}
-                          className="min-w-40 flex-1 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-amber-400"
-                        />
-                        <button disabled={busy} onClick={() => void saveSecret(extension.id, secret.ref)} className="rounded-lg bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-neutral-800 disabled:opacity-40">Enregistrer</button>
-                        {secret.configured && <button disabled={busy} onClick={() => void removeSecret(extension.id, secret.ref)} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40">Supprimer</button>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </section>
-      </div>
-    </div>
-  );
+      {tab==="monitor"&&<section className="grid gap-5 md:grid-cols-3"><Card title="Exécutions extensions" value={extensions.reduce((n,e)=>n+e.stats.executions,0)}/><Card title="Installations" value={extensions.reduce((n,e)=>n+e.stats.installs,0)}/><Card title="Transactions" value={revenue?.entries??0}/><div className="md:col-span-3"><Panel title="Projet actif" subtitle={project?.name||"Aucun projet sélectionné"}><div className="text-sm text-neutral-600">{project?("ID: "+project.id+" · "+project.framework+" · "+project.environment):"Sélectionne un projet pour voir ses ressources."}</div></Panel></div></section>}
+    </main>
+  </div></div>;
 }
 
-function Stat({ title, value }: { title: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-      <div className="text-xs text-neutral-500">{title}</div>
-      <div className="mt-2 text-xl font-bold">{value}</div>
-    </div>
-  );
-}
+function Card({title,value}:{title:string;value:string|number}){return <div className="rounded-3xl border bg-white p-5"><div className="text-xs text-neutral-500">{title}</div><div className="mt-2 text-2xl font-bold">{value}</div></div>}
+function Panel({title,subtitle,children}:{title:string;subtitle?:string;children:React.ReactNode}){return <div className="rounded-3xl border bg-white p-6 shadow-sm"><h2 className="text-lg font-bold">{title}</h2>{subtitle&&<p className="mt-1 text-xs text-neutral-500">{subtitle}</p>}<div className="mt-5">{children}</div></div>}
+function Empty({text}:{text:string}){return <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-neutral-400">{text}</div>}
+function Rule({n,t}:{n:string;t:string}){return <div className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-neutral-100 text-xs font-bold">{n}</span><span className="text-xs leading-5 text-neutral-600">{t}</span></div>}
