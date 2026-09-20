@@ -9,9 +9,12 @@ import { useEffect } from "react";
 export function PwaRegister() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
+      /* Le service worker est optionnel. */
+    });
     void navigator.serviceWorker.getRegistrations().then((registrations) => {
       for (const registration of registrations) {
-        void registration.unregister();
+        void registration.update().catch(() => undefined);
       }
     });
   }, []);
