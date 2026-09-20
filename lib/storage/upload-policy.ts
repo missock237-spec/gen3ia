@@ -6,28 +6,33 @@
  * d'environnement afin d'ajuster la production sans redéploiement de code.
  */
 
+/**
+ * Lit une limite numerique d'environnement. Une variable vide ou invalide
+ * (ex. GEN3IA_MAX_PERMANENT_FILE_BYTES = "" sur Vercel) retombe sur la
+ * valeur par defaut au lieu de produire 0 — ce qui bloquait tout
+ * televersement en production.
+ */
+function envLimit(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || String(raw).trim() === "") return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 /** 100 Mo max par fichier. */
-export const MAX_FILE_BYTES = Number(
-  process.env.GEN3IA_MAX_PERMANENT_FILE_BYTES ?? 100 * 1024 * 1024,
-);
+export const MAX_FILE_BYTES = envLimit("GEN3IA_MAX_PERMANENT_FILE_BYTES", 100 * 1024 * 1024);
 
 /** 10 fichiers max par lot de televersement. */
-export const MAX_FILES_PER_BATCH = Number(
-  process.env.GEN3IA_MAX_PERMANENT_BATCH_FILES ?? 10,
-);
+export const MAX_FILES_PER_BATCH = envLimit("GEN3IA_MAX_PERMANENT_BATCH_FILES", 10);
 
 /** Quota total par utilisateur (defaut : 2 Go). */
-export const MAX_USER_QUOTA_BYTES = Number(
-  process.env.GEN3IA_MAX_PERMANENT_QUOTA_BYTES ?? 2 * 1024 * 1024 * 1024,
-);
+export const MAX_USER_QUOTA_BYTES = envLimit("GEN3IA_MAX_PERMANENT_QUOTA_BYTES", 2 * 1024 * 1024 * 1024);
 
 /**
  * Taille d'un chunk : 3 Mo, sous la limite de corps de requete serverless
  * Vercel (~4,5 Mo) pour garantir le passage meme avec les en-tetes.
  */
-export const CHUNK_SIZE_BYTES = Number(
-  process.env.GEN3IA_PERMANENT_CHUNK_BYTES ?? 3 * 1024 * 1024,
-);
+export const CHUNK_SIZE_BYTES = envLimit("GEN3IA_PERMANENT_CHUNK_BYTES", 3 * 1024 * 1024);
 
 /** Limite de composants par appel GCS compose (max reel : 32). */
 export const COMPOSE_BATCH_SIZE = 30;

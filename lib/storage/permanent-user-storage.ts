@@ -5,6 +5,7 @@ import { adminDb, adminStorage } from "@/lib/firebase/admin";
 import {
   CHUNK_SIZE_BYTES,
   COMPOSE_BATCH_SIZE,
+  MAX_FILE_BYTES,
   MAX_USER_QUOTA_BYTES,
   SESSION_TTL_MS,
   chunkCountFor,
@@ -12,7 +13,6 @@ import {
   type ValidatedUploadIntent,
 } from "@/lib/storage/upload-policy";
 
-const MAX_FILE_BYTES = Number(process.env.GEN3IA_MAX_PERMANENT_FILE_BYTES ?? 100 * 1024 * 1024);
 const bucket = () => adminStorage.bucket();
 const FILES_COLLECTION = "permanentFiles";
 const SESSIONS_COLLECTION = "storageUploads";
