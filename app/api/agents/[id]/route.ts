@@ -11,6 +11,10 @@ interface RouteContext { params: Promise<{ id: string }> }
 const PatchSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(), description: z.string().trim().max(500).optional(),
   type: z.enum(AGENT_TYPES).optional(), projectId: z.string().trim().min(1).max(128).optional(),
+  typeLabel: z.string().trim().min(1).max(80).optional(),
+  skills: z.array(z.string().trim().min(1).max(80)).max(24).optional(),
+  agentMode: z.enum(["standard", "call"]).optional(),
+  memoryFile: z.object({ path: z.string().trim().min(1).max(500), name: z.string().trim().min(1).max(255) }).optional(),
   systemPrompt: z.string().trim().min(10).max(20_000).optional(), modelStrategy: z.enum(["automatic", "fixed"]).optional(),
   preferredProvider: z.string().trim().max(60).optional(), preferredModel: z.string().trim().max(160).optional(),
   autonomous: z.boolean().optional(), maxIterations: z.number().int().min(1).max(20).optional(),

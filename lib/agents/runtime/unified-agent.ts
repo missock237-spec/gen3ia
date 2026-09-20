@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 import { generate } from "@/lib/ai/router";
+import type { AIProvider } from "@/lib/ai/models";
 import { GEN3IA_TOOLS } from "@/lib/tools/registry";
 import { AgentRuntime } from "./runner";
 import { RuntimePlanSchema, type RuntimePlan } from "./types";
@@ -21,8 +22,8 @@ const PLAN_SYSTEM = [
   "Return JSON only with: executionId, objective, steps, maxConcurrency, maxIterations.",
 ].join(" ");
 
-function toolCatalog(): string {
-  return GEN3IA_TOOLS.map((tool) =>
+function toolCatalog(tools: typeof GEN3IA_TOOLS = GEN3IA_TOOLS): string {
+  return tools.map((tool) =>
     `- ${tool.name}: ${tool.description}; risk=${tool.risk}; permission=${tool.permission}; sideEffect=${tool.sideEffect}`,
   ).join("\n");
 }
@@ -128,20 +129,45 @@ function normalizePlan(plan: RuntimePlan, objective: string): RuntimePlan {
 export async function planUniversalAgent(
   userId: string,
   objective: string,
-  options?: { policy?: ExecutionPolicy; signal?: AbortSignal },
+  options?: {
+    policy?: ExecutionPolicy;
+    signal?: AbortSignal;
+    /** Contexte d'un agent personnalisé : charte de périmètre + whitelist d'outils. */
+    agent?: { charter?: string; allowedTools?: string[] };
+    provider?: AIProvider;
+    model?: string;
+  },
 ): Promise<RuntimePlan> {
   const trimmed = objective.trim();
   if (!trimmed || trimmed.length > MAX_OBJECTIVE_LENGTH) throw new Error("Invalid agent objective.");
 
+  const agentContext = options?.agent;
+  const allowedTools = agentContext?.allowedTools;
+  const catalog = allowedTools
+    ? GEN3IA_TOOLS.filter((tool) => allowedTools.includes(tool.name))
+    : GEN3IA_TOOLS;
+
+  const systemPrompt = agentContext?.charter
+    ? [
+        PLAN_SYSTEM,
+        "",
+        "AGENT PERSONNALISÉ — CHARTE OBLIGATOIRE :",
+        agentContext.charter,
+        "Chaque étape du plan doit respecter strictement cette charte : n'inclus AUCUNE étape qui sortirait du périmètre de l'agent. Si l'objectif sort du périmètre, produis un plan minimal d'une seule étape llm qui le signale et refuse courtoisement.",
+      ].join("\n")
+    : PLAN_SYSTEM;
+
   const response = await generate({
     task: "agent",
     messages: [
-      { role: "system", content: PLAN_SYSTEM },
-      { role: "user", content: JSON.stringify({ objective: trimmed, availableCapabilities: toolCatalog() }) },
+      { role: "system", content: systemPrompt },
+      { role: "user", content: JSON.stringify({ objective: trimmed, availableCapabilities: toolCatalog(catalog) }) },
     ],
     requiresStructuredOutput: true,
     preferFree: true,
     maxTokens: 6000,
+    provider: options?.provider,
+    model: options?.model,
     metadata: { userId },
   });
 
@@ -169,6 +195,19 @@ export async function planUniversalAgent(
       console.error("[planner] invalid plan issues:", JSON.stringify(error.issues).slice(0, 1200));
     }
     throw new Error("Le plan généré par l'agent est incomplet. Reformulez votre demande ou réessayez.");
+  }
+
+  // Application de la whitelist d'outils de l'agent : une étape tool hors
+  // périmètre est dégradée en étape de raisonnement (résilient) plutôt que
+  // de faire échouer toute la mission.
+  if (allowedTools) {
+    for (const step of plan.steps) {
+      if (step.type === "tool" && step.toolName && !allowedTools.includes(step.toolName)) {
+        step.type = "llm";
+        step.toolName = undefined;
+        step.description = `${step.description} (outil hors périmètre remplacé par une analyse textuelle)`;
+      }
+    }
   }
   const runtime = new AgentRuntime({
     userId,

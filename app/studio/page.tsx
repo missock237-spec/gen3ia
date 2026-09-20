@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-import { AgentManager } from "@/components/agent/agent-manager";
-import { UniversalAgentChat } from "@/components/agent/universal-agent-chat";
+import { AgentChatWorkshop } from "@/components/agent/agent-chat-workshop";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { WorkspaceTaskPanel } from "@/components/agent/workspace-task-panel";
 import { AdsWorkshop } from "@/components/studio/ads-workshop";
@@ -21,9 +20,10 @@ function isStudioTab(value: string | null): value is StudioTab {
  * Architecture entreprise :
  *  - en-tête unifié via StudioHeader, navigation de section via le layout ;
  *  - onglet synchronisé avec l'URL (?tab=ads) — partageable et restaurable ;
- *  - les deux panneaux restent montés (hidden) : la conversation de l'agent
- *    et le formulaire Ads ne perdent plus leur état au changement d'onglet ;
- *  - AdsWorkshop extrait dans components/studio/ads-workshop.tsx.
+ *  - le panneau Ads reste monté (hidden) : son état survit aux onglets ;
+ *  - l'onglet agents = AgentChatWorkshop : personnalisation obligatoire
+ *    (nom, description, compétences, mémoire, nature, type) puis chat
+ *    agent-scopé (classification requête / périmètre strict).
  */
 export default function StudioPage() {
   const [tab, setTab] = useState<StudioTab>("agents");
@@ -57,7 +57,7 @@ export default function StudioPage() {
         eyebrow="GEN3IA AI STUDIO"
         title="Studio"
         highlight="d'agents IA"
-        description="Créez un agent, personnalisez-le, exécutez-le immédiatement. Les agents de code accèdent en exclusivité à l'Atelier d'Interfaces propulsé par 21st.dev."
+        description="Personnalisez votre agent IA (nom, compétences, mémoire, type), puis dialoguez : il répond ou exécute, sans jamais sortir de son périmètre. Les agents de code accèdent en exclusivité à l'Atelier d'Interfaces propulsé par 21st.dev."
         actions={
           <>
             <Link href="/memory" className="g3-btn g3-btn-ghost text-xs">
@@ -83,14 +83,9 @@ export default function StudioPage() {
         ]}
       />
 
-      {/* Panneaux maintenus montés pour préserver l'état entre les onglets. */}
-      <div role="tabpanel" aria-label="Mes agents" hidden={tab !== "agents"} className="space-y-6">
-        {hydrated && (
-          <>
-            {taskId ? <WorkspaceTaskPanel taskId={taskId} /> : <AgentManager />}
-            <UniversalAgentChat initialMessage={taskId ? "" : task} />
-          </>
-        )}
+      {/* Panneau Ads maintenu monté pour préserver son état entre les onglets. */}
+      <div role="tabpanel" aria-label="Mes agents" className="space-y-6">
+        {hydrated && (taskId ? <WorkspaceTaskPanel taskId={taskId} /> : <AgentChatWorkshop initialMessage={task} />)}
       </div>
       <div role="tabpanel" aria-label="Studio Ads" hidden={tab !== "ads"}>
         {hydrated && <AdsWorkshop />}

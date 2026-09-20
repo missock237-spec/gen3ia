@@ -28,8 +28,22 @@ export const AgentRecordSchema = z.object({
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(500).default(""),
   type: z.enum(AGENT_TYPES).default("universal"),
+  // Libellé métier choisi par l'utilisateur dans le wizard (prédéfini ou
+  // type personnalisé). Pilote la charte de périmètre de l'agent.
+  typeLabel: z.string().trim().min(1).max(80).optional(),
+  // Compétences déclarées par l'utilisateur (au moins une côté wizard).
+  skills: z.array(z.string().trim().min(1).max(80)).max(24).default([]),
+  // Nature de l'agent : standard (chat) ou appel (voix/téléphonie).
+  agentMode: z.enum(["standard", "call"]).default("standard"),
+  // Fichier mémoire optionnel associé à l'agent (stockage Gen3ia).
+  memoryFile: z.object({
+    path: z.string().trim().min(1).max(500),
+    name: z.string().trim().min(1).max(255),
+  }).optional(),
   projectId: z.string().trim().min(1).max(128).optional(),
-  systemPrompt: z.string().trim().min(10).max(20_000),
+  // Optionnel : sans prompt saisi, la charte professionnelle est générée
+  // automatiquement côté serveur (lib/agents/charter.ts).
+  systemPrompt: z.string().trim().max(20_000).optional(),
   modelStrategy: z.enum(["automatic", "fixed"]).default("automatic"),
   preferredProvider: z.string().trim().max(60).optional(),
   preferredModel: z.string().trim().max(160).optional(),
@@ -48,7 +62,8 @@ export type AgentRecordInput = z.input<typeof AgentRecordSchema>;
 export type AgentRecord = z.infer<typeof AgentRecordSchema> & { id: string; ownerId: string; createdAt: string; updatedAt: string };
 
 export type AgentSummary = Pick<AgentRecord,
-  "id" | "name" | "description" | "type" | "projectId" | "status" | "modelStrategy" |
+  "id" | "name" | "description" | "type" | "typeLabel" | "skills" | "agentMode" | "memoryFile" |
+  "projectId" | "status" | "modelStrategy" |
   "preferredProvider" | "preferredModel" | "autonomous" | "maxIterations" | "tools" |
   "memoryEnabled" | "webResearchEnabled" | "documentGenerationEnabled" | "voiceEnabled" |
   "voiceConfig" | "createdAt" | "updatedAt"
