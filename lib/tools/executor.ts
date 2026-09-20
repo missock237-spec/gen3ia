@@ -15,6 +15,7 @@ export interface ToolApprovalService {
 export interface ExecuteToolRequest {
   userId: string;
   executionId: string;
+  projectId?: string;
   toolName: string;
   input: unknown;
   signal?: AbortSignal;
@@ -69,6 +70,7 @@ export async function executeTool(request: ExecuteToolRequest) {
     const output = await tool.execute(parsedInput, {
       userId: request.userId,
       executionId: request.executionId,
+      projectId: request.projectId,
       signal: request.signal,
     });
     return { success: true, output };
