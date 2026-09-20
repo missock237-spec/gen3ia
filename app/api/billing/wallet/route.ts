@@ -1,9 +1,9 @@
-import { verifyFirebaseToken } from "@/lib/auth/firebase";
+import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { getWallet } from "@/lib/billing/wallet";
 
 export async function GET(request: Request) {
   try {
-    const token = await verifyFirebaseToken(request);
+    const token = await verifyFirebaseRequest(request);
     const wallet = await getWallet(token.uid);
     return Response.json({ success: true, wallet });
   } catch (error) {

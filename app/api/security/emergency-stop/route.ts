@@ -1,4 +1,4 @@
-import { verifyFirebaseToken } from "@/lib/auth/firebase";
+import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { rateLimit } from "@/lib/security/rate-limit";
 import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
 import { activateEmergencyStop, clearEmergencyStop, type StopScope } from "@/lib/security/emergency-stop";
@@ -11,7 +11,7 @@ function parseScope(value: unknown): StopScope {
 
 export async function POST(request: Request) {
   try {
-    const token = await verifyFirebaseToken(request);
+    const token = await verifyFirebaseRequest(request);
     const stopLimit = rateLimit(`emergency-stop:${token.uid}`, { limit: 30, windowMs: 5 * 60 * 1000 });
     if (!stopLimit.allowed) return Response.json({ error: "Trop de tentatives" }, { status: 429 });
     const body = await request.json().catch(() => ({}));
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const token = await verifyFirebaseToken(request);
+    const token = await verifyFirebaseRequest(request);
     const stopLimit = rateLimit(`emergency-stop:${token.uid}`, { limit: 30, windowMs: 5 * 60 * 1000 });
     if (!stopLimit.allowed) return Response.json({ error: "Trop de tentatives" }, { status: 429 });
     const body = await request.json().catch(() => ({}));

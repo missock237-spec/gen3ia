@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { verifyFirebaseToken } from "@/lib/auth/firebase";
+import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { createActionApproval } from "@/lib/agents/action-approvals";
 import { roleCanUseExternalActions } from "@/lib/agents/orchestrator-actions";
 
@@ -13,7 +13,7 @@ const BodySchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const token = await verifyFirebaseToken(request);
+    const token = await verifyFirebaseRequest(request);
     const body = BodySchema.parse(await request.json());
 
     if (!roleCanUseExternalActions(body.role)) {

@@ -1,4 +1,4 @@
-import { verifyFirebaseToken } from "@/lib/auth/firebase";
+import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { claimActionExecution, completeAction, failAction, getActionApproval } from "@/lib/agents/action-approvals";
 import { executeToolSecurely } from "@/lib/agents/runtime/secure-tool-executor";
 import { buildOrchestratorActionPolicy, roleCanUseExternalActions } from "@/lib/agents/orchestrator-actions";
@@ -7,7 +7,7 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
   let ownerId = "";
   let approvalId = "";
   try {
-    const token = await verifyFirebaseToken(_request);
+    const token = await verifyFirebaseRequest(_request);
     ownerId = token.uid;
     const { id } = await context.params;
     approvalId = id;

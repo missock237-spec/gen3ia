@@ -13,10 +13,10 @@ const dummyPrivateKeyPem = privateKey
 export default defineConfig({
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "."),
+      "@": path.resolve(import.meta.dirname, "."),
       // `server-only` is a build-time guard that throws outside React Server
       // Components. Unit tests run in plain Node, so stub it out.
-      "server-only": path.resolve(__dirname, "vitest/stubs/server-only.ts"),
+      "server-only": path.resolve(import.meta.dirname, "vitest/stubs/server-only.ts"),
     },
   },
   test: {

@@ -1,4 +1,4 @@
-import { verifyFirebaseToken } from "@/lib/auth/firebase";
+import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import {
   createChariowTopupCheckout,
   getChariowStoreUrl,
@@ -29,7 +29,7 @@ function appOrigin(request: Request): string {
  */
 export async function POST(request: Request) {
   try {
-    const token = await verifyFirebaseToken(request);
+    const token = await verifyFirebaseRequest(request);
     const topupLimit = rateLimit(`billing-topup:${token.uid}`, { limit: 10, windowMs: 10 * 60 * 1000 });
     if (!topupLimit.allowed) {
       return Response.json({ error: "Trop de tentatives de rechargement. Reessayez plus tard." }, { status: 429, headers: { "retry-after": String(Math.max(1, Math.ceil(topupLimit.retryAfterMs / 1000))) } });

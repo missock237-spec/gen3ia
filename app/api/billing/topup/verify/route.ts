@@ -1,4 +1,4 @@
-import { verifyFirebaseToken } from "@/lib/auth/firebase";
+import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { getChariowSale, getChariowTopupProductId } from "@/lib/billing/chariow";
 import { applyTopup, getWallet, WALLET_CURRENCY } from "@/lib/billing/wallet";
 
@@ -15,7 +15,7 @@ const CREDITABLE_STATUSES = new Set(["completed", "settled"]);
  */
 export async function POST(request: Request) {
   try {
-    const token = await verifyFirebaseToken(request);
+    const token = await verifyFirebaseRequest(request);
     const email = token.email?.trim().toLowerCase();
     if (!email) throw new Error("Your Firebase account must have an email address.");
 

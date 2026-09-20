@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { verifyFirebaseToken } from "@/lib/auth/firebase";
+import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { classifyRoles } from "@/lib/agents/orchestrator";
 import { planExternalActions } from "@/lib/agents/action-planner";
 
@@ -12,7 +12,7 @@ const BodySchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const token = await verifyFirebaseToken(request);
+    const token = await verifyFirebaseRequest(request);
     const body = BodySchema.parse(await request.json());
     const roles = classifyRoles(body.objective, body.requestedRoles);
     const executionId = randomUUID();

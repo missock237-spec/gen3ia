@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Le module admin Firestore est lourd (certificats, reseau) : on isole les
 // dependances externes pour tester le contrat HTTP de la route.
 vi.mock("@/lib/auth/firebase", () => ({
-  verifyFirebaseToken: vi.fn(),
+  verifyFirebaseRequest: vi.fn(),
 }));
 
 vi.mock("@/lib/security/emergency-stop", () => ({
@@ -15,12 +15,12 @@ vi.mock("@/lib/security/security-audit", () => ({
   appendSecurityAuditEvent: vi.fn(),
 }));
 
-import { verifyFirebaseToken } from "@/lib/auth/firebase";
+import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { activateEmergencyStop, clearEmergencyStop } from "@/lib/security/emergency-stop";
 import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
 import { DELETE, POST } from "./route";
 
-const mockedVerify = vi.mocked(verifyFirebaseToken);
+const mockedVerify = vi.mocked(verifyFirebaseRequest);
 const mockedActivate = vi.mocked(activateEmergencyStop);
 const mockedClear = vi.mocked(clearEmergencyStop);
 const mockedAudit = vi.mocked(appendSecurityAuditEvent);

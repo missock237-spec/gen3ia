@@ -1,9 +1,9 @@
-import { verifyFirebaseToken } from "@/lib/auth/firebase";
+import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { rejectAction } from "@/lib/agents/action-approvals";
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const token = await verifyFirebaseToken(_request);
+    const token = await verifyFirebaseRequest(_request);
     const { id } = await context.params;
     const approval = await rejectAction(token.uid, id);
     return Response.json({ success: true, approval });

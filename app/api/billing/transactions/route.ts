@@ -1,9 +1,9 @@
-import { verifyFirebaseToken } from "@/lib/auth/firebase";
+import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { adminDb } from "@/lib/firebase/admin";
 
 export async function GET(request: Request) {
   try {
-    const token = await verifyFirebaseToken(request);
+    const token = await verifyFirebaseRequest(request);
     const url = new URL(request.url);
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? 50)));
     const snapshot = await adminDb.collection("walletLedger").where("userId", "==", token.uid).orderBy("createdAt", "desc").limit(limit).get();
