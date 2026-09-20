@@ -11,6 +11,7 @@ import { executionLogger, safeError } from "@/lib/observability/logger";
 
 const RunAgentSchema = z.object({
   objective: z.string().min(3).max(50_000),
+  projectId: z.string().trim().min(1).max(128).optional(),
   plan: RuntimePlanSchema
     .omit({ executionId: true, objective: true })
     .optional(),
@@ -34,8 +35,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (parsed.data.projectId) {
+      const { getDeveloperProject } = await import("@/lib/developer/projects");
+      if (!(await getDeveloperProject(user.uid, parsed.data.projectId))) {
+        return NextResponse.json({ error: "Projet introuvable ou inaccessible", requestId }, { status: 403 });
+      }
+    }
+
     const executionId = randomUUID();
-    const executionLog = log.child({ executionId, userId: user.uid });
+    const executionLog = log.child({ executionId, userId: user.uid, projectId: parsed.data.projectId });
 
     const plan = parsed.data.plan ?? {
       steps: [
@@ -76,6 +84,7 @@ export async function POST(request: NextRequest) {
 
     const runtime = new AgentRuntime({
       userId: user.uid,
+      projectId: parsed.data.projectId,
       objective: parsed.data.objective,
       plan: runtimePlan,
       signal: request.signal,
