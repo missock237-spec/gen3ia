@@ -163,7 +163,18 @@ export class AgentRuntime {
     const input: Record<string, unknown> = Object.keys(dependencies).length > 0 ? { ...step.input, dependencies } : { ...step.input };
     const approvalId = typeof input.approvalId === "string" ? input.approvalId : undefined;
     delete input.approvalId;
-    return executeToolSecurely({ userId: this.state.userId, projectId: this.projectId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName: step.toolName, input, approvalId, policy: this.policy, signal: this.signal });
+    let toolName = step.toolName;
+    if (toolName.startsWith("composio:")) {
+      const parts = toolName.split(":");
+      const toolkit = parts[1];
+      const toolSlug = parts.slice(2).join(":");
+      if (!toolkit || !toolSlug) throw new Error("Invalid Composio tool selection: " + step.toolName);
+      input.toolkit = toolkit;
+      input.toolSlug = toolSlug;
+      if (!input.arguments || typeof input.arguments !== "object" || Array.isArray(input.arguments)) input.arguments = {};
+      toolName = "composio.execute";
+    }
+    return executeToolSecurely({ userId: this.state.userId, projectId: this.projectId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName, input, approvalId, policy: this.policy, signal: this.signal });
   }
 
   private async executeCode(step: RuntimeStep): Promise<unknown> {
