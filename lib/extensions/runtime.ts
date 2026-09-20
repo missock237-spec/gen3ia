@@ -69,6 +69,8 @@ export interface ExecuteExtensionToolOptions {
   input: Record<string, unknown>;
   executionId?: string;
   signal?: AbortSignal;
+  /** Project context is required for developer-owned runtime calls. */
+  projectId?: string;
 }
 
 interface ResolvedTool {
@@ -105,6 +107,9 @@ export async function executeExtensionTool(options: ExecuteExtensionToolOptions)
   const startedAt = Date.now();
 
   const resolved = await resolveTool(extensionId, toolId, options.userId);
+  if (options.projectId && (await getExtension(extensionId))?.projectId !== options.projectId) {
+    throw new Error("Extension is not linked to this Gen3ia project.");
+  }
 
   // 1) Entitlement (paid models).
   const pricing = pricingFromManifest(resolved.manifest) as PricingInfo;
@@ -242,6 +247,7 @@ export async function runExtensionWorkflow(params: {
   input: Record<string, unknown>;
   executionId?: string;
   signal?: AbortSignal;
+  projectId?: string;
 }): Promise<Array<{ toolId: string; output: unknown }>> {
   const installation = await getInstallation(params.extensionId, params.userId);
   if (!installation || installation.status !== "active") {
@@ -265,6 +271,7 @@ export async function runExtensionWorkflow(params: {
       input: stepInput,
       executionId: params.executionId,
       signal: params.signal,
+      projectId: params.projectId,
     });
     outputs.push({ toolId: step.toolId, output });
     accumulated[`step${index + 1}`] = output;
