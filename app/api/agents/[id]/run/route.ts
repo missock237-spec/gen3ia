@@ -61,7 +61,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const executionId = randomUUID();
     const plan = createPersonalizedPlan(agent, parsed.data.objective, executionId);
     const policy = policyForAgent(agent);
-    const executionLog = log.child({ executionId, userId: user.uid, agentId: agent.id });
+    const executionLog = log.child({ executionId, userId: user.uid, agentId: agent.id, projectId: agent.projectId });
 
     executionLog.info(
       { event: "agent.execution.started", stepCount: plan.steps.length, type: agent.type },
@@ -70,6 +70,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const runtime = new AgentRuntime({
       userId: user.uid,
+      projectId: agent.projectId,
       objective: parsed.data.objective,
       plan,
       policy,
