@@ -4,6 +4,7 @@ import type {
   ToolDefinition,
   ToolContext,
 } from "@/lib/tools/types";
+import { listDeveloperProjectConnectors } from "@/lib/developer/connectors";
 
 import {
   executeComposioTool,
