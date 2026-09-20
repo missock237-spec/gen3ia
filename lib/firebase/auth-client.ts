@@ -261,7 +261,15 @@ export function useSessionAvailable(): boolean | null {
  * fonctionnalite ne devienne inaccessible apres une connexion reussie.
  */
 export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const currentUser = auth.currentUser;
+  // Le cookie de session serveur reste utilisable même si la configuration
+  // Firebase Web n'est pas injectée dans un déploiement public.
+  let currentUser: User | null = null;
+  try {
+    currentUser = auth.currentUser;
+  } catch {
+    currentUser = null;
+  }
+
   if (currentUser) {
     try {
       const token = await currentUser.getIdToken();
