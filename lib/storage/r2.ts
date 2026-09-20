@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client, HeadObjectCommand, ListObjectsV2Command, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, PutBucketCorsCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 function getConfig() {
@@ -89,4 +89,83 @@ export async function createR2DownloadUrl(key: string, expiresIn = 300): Promise
 
 export async function createDownloadUrl(key: string, expiresIn = 600): Promise<string> {
   return createR2DownloadUrl(key, expiresIn);
+}
+
+/* ------------------------------------------------------------------ */
+/* Multipart (televersement direct navigateur -> R2)                   */
+/* ------------------------------------------------------------------ */
+
+export type MultipartPart = { partNumber: number; etag: string };
+
+/** Ouvre un upload multipart et retourne son identifiant R2. */
+export async function createMultipartUpload(key: string, contentType: string): Promise<string> {
+  const { bucket } = getConfig();
+  const response = await getClient().send(new CreateMultipartUploadCommand({ Bucket: bucket, Key: key, ContentType: contentType || "application/octet-stream" }));
+  if (!response.UploadId) throw new Error("R2 n'a pas retourne d'identifiant multipart.");
+  return response.UploadId;
+}
+
+/** URL presignee (1 h) pour qu'un navigateur depose une piece directement chez R2. */
+export async function presignPartUpload(key: string, uploadId: string, partNumber: number, expiresIn = 3600): Promise<string> {
+  const { bucket } = getConfig();
+  if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10000) throw new Error("Numéro de partie invalide.");
+  return getSignedUrl(getClient(), new UploadPartCommand({ Bucket: bucket, Key: key, UploadId: uploadId, PartNumber: partNumber }), { expiresIn });
+}
+
+/** Assemble definitivement l'objet a partir des pieces recues. */
+export async function completeMultipartUpload(key: string, uploadId: string, parts: MultipartPart[]): Promise<{ sizeBytes: number; contentType: string }> {
+  const { bucket } = getConfig();
+  const sorted = [...parts].sort((a, b) => a.partNumber - b.partNumber);
+  await getClient().send(new CompleteMultipartUploadCommand({
+    Bucket: bucket,
+    Key: key,
+    UploadId: uploadId,
+    MultipartUpload: { Parts: sorted.map((part) => ({ PartNumber: part.partNumber, ETag: part.etag })) },
+  }));
+  const head = await getClient().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+  return { sizeBytes: Number(head.ContentLength ?? 0), contentType: String(head.ContentType ?? "application/octet-stream") };
+}
+
+/** Annule un upload multipart (les pieces deposees sont purgees par R2). */
+export async function abortMultipartUpload(key: string, uploadId: string): Promise<void> {
+  const { bucket } = getConfig();
+  await getClient().send(new AbortMultipartUploadCommand({ Bucket: bucket, Key: key, UploadId: uploadId }));
+}
+
+/** Liste les objets sous un prefixe (nom, taille, date). */
+export async function listObjectsUnderPrefix(prefix: string, maxResults = 500): Promise<Array<{ key: string; sizeBytes: number; updatedAt: string }>> {
+  const { bucket } = getConfig();
+  const results: Array<{ key: string; sizeBytes: number; updatedAt: string }> = [];
+  let continuationToken: string | undefined;
+  do {
+    const response = await getClient().send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, MaxKeys: Math.min(1000, Math.max(1, maxResults - results.length)), ContinuationToken: continuationToken }));
+    for (const object of response.Contents ?? []) {
+      if (!object.Key) continue;
+      results.push({
+        key: object.Key,
+        sizeBytes: Number(object.Size ?? 0),
+        updatedAt: object.LastModified ? object.LastModified.toISOString() : "",
+      });
+    }
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken && results.length < maxResults);
+  return results;
+}
+
+/** Configuration CORS du bucket (televersement direct navigateur). */
+export async function ensureBucketCors(allowedOrigins: string[]): Promise<{ applied: boolean }> {
+  const { bucket } = getConfig();
+  await getClient().send(new PutBucketCorsCommand({
+    Bucket: bucket,
+    CORSConfiguration: {
+      CORSRules: [{
+        AllowedOrigins: allowedOrigins,
+        AllowedMethods: ["PUT", "GET", "HEAD"],
+        AllowedHeaders: ["*"],
+        ExposeHeaders: ["ETag"],
+        MaxAgeSeconds: 3600,
+      }],
+    },
+  }));
+  return { applied: true };
 }

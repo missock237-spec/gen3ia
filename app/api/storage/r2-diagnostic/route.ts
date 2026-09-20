@@ -7,6 +7,7 @@ import {
   DeleteObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { bootstrapBucketCors } from "@/lib/storage/permanent-user-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -86,7 +87,16 @@ export async function GET(request: NextRequest) {
     steps.createBucket = { ok: true, bucket, skipped: "already exists" };
   }
 
-  // 3. Cycle put/get/delete
+  // 3. Configuration CORS (televersement direct navigateur -> R2)
+  const origin = process.env.APP_URL || "https://gen3ia.online";
+  try {
+    steps.cors = { ...(await bootstrapBucketCors([origin, "https://www.gen3ia.online", "http://localhost:3000"])), origins: [origin, "https://www.gen3ia.online", "http://localhost:3000"] };
+  } catch (error) {
+    steps.cors = { ok: false, error: error instanceof Error ? `${error.name}: ${error.message}` : String(error) };
+    return NextResponse.json({ ok: false, steps }, { status: 502 });
+  }
+
+  // 4. Cycle put/get/delete
   const key = "_healthcheck/r2-diagnostic.txt";
   const payload = Buffer.from(`Gen3ia R2 diagnostic ${new Date().toISOString()}`);
   try {
@@ -107,6 +117,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     steps,
-    message: "R2 entierement operationnel depuis la production.",
+    message: "R2 entierement operationnel (bucket, CORS, cycle put/get/delete) depuis la production.",
   });
 }

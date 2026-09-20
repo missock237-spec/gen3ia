@@ -2,8 +2,8 @@
 
 import { authFetch } from "@/lib/firebase/auth-client";
 import {
-  CHUNK_SIZE_BYTES,
   MAX_FILES_PER_BATCH,
+  PART_SIZE_BYTES,
   validateSingleUpload,
 } from "@/lib/storage/upload-policy";
 
@@ -33,7 +33,14 @@ export type UploadBatchResult = {
   failed: UploadItem[];
 };
 
-const CHUNK_RETRIES = 3;
+const PART_RETRIES = 3;
+
+type SessionView = {
+  uploadId: string;
+  filename: string;
+  partsTotal: number;
+  partUrls: Array<{ partNumber: number; url: string }>;
+};
 
 function extractError(body: unknown, fallback: string): string {
   if (body && typeof body === "object" && "error" in body) {
@@ -48,11 +55,13 @@ async function jsonError(response: Response, fallback: string): Promise<string> 
 }
 
 /**
- * Televerse un lot de fichiers vers le stockage permanent via l'API chunked :
- * session -> chunks (3 Mo) -> commit. Chaque requete reste sous la limite
- * serverless (~4,5 Mo), ce qui autorise des fichiers jusqu'a 100 Mo en
- * production Vercel. Les fichiers sont traites sequentiellement pour rester
- * doux avec les connexions mobiles ; les chunks disposent de 3 tentatives.
+ * Televerse un lot de fichiers vers le stockage permanent via le flux
+ * multipart a URLs presignees :
+ *   1. session serveur (validation, quota, presignature des parties) ;
+ *   2. le navigateur depose chaque partie (8 Mo) DIRECTEMENT chez R2 ;
+ *   3. commit serveur (CompleteMultipartUpload + verification de taille).
+ * Aucune donnee ne transite par la limite de corps serverless Vercel :
+ * les fichiers jusqu'a 100 Mo passent en production.
  */
 export async function uploadPermanentFiles(
   files: File[],
@@ -97,9 +106,8 @@ export async function uploadPermanentFiles(
     return { uploaded: [], failed: items.filter((item) => item.status === "error") };
   }
 
-  // 1) Session serveur : validation finale + quota + quotas de lot.
-  notify();
-  let sessions: Array<{ uploadId: string; filename: string }> = [];
+  // 1) Session serveur : validation finale + quota + URLs presignees.
+  let sessions: SessionView[] = [];
   try {
     const response = await authFetch("/api/storage/permanent/session", {
       method: "POST",
@@ -108,7 +116,7 @@ export async function uploadPermanentFiles(
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(await jsonError(response, "Session de televersement refusee."));
-    sessions = (body as { sessions?: Array<{ uploadId: string; filename: string }> }).sessions ?? [];
+    sessions = (body as { sessions?: SessionView[] }).sessions ?? [];
     if (sessions.length !== validIndexes.length) throw new Error("Le serveur n'a pas valide tous les fichiers du lot.");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Session de televersement refusee.";
@@ -123,7 +131,7 @@ export async function uploadPermanentFiles(
   const uploaded: UploadedFile[] = [];
   const failed: UploadItem[] = [];
 
-  // 2) Televersement chunk par chunk, fichier par fichier.
+  // 2) Deposition des parties directement chez R2, fichier par fichier.
   for (let position = 0; position < validIndexes.length; position += 1) {
     const item = items[validIndexes[position]];
     const session = sessions[position];
@@ -135,38 +143,43 @@ export async function uploadPermanentFiles(
     notify();
 
     try {
-      const chunksTotal = Math.max(1, Math.ceil(item.file.size / CHUNK_SIZE_BYTES));
-      for (let chunkIndex = 0; chunkIndex < chunksTotal; chunkIndex += 1) {
+      const parts: Array<{ partNumber: number; etag: string }> = [];
+      for (const partUrl of session.partUrls) {
         if (shouldAbort?.()) throw new Error("Televersement annule.");
-        const start = chunkIndex * CHUNK_SIZE_BYTES;
-        const blob = item.file.slice(start, Math.min(start + CHUNK_SIZE_BYTES, item.file.size));
+        const start = (partUrl.partNumber - 1) * PART_SIZE_BYTES;
+        const blob = item.file.slice(start, Math.min(start + PART_SIZE_BYTES, item.file.size));
 
+        let etag: string | null = null;
         let lastError: Error | null = null;
-        for (let attempt = 0; attempt < CHUNK_RETRIES; attempt += 1) {
-          const response = await authFetch(
-            `/api/storage/permanent/chunk?uploadId=${encodeURIComponent(session.uploadId)}&index=${chunkIndex}`,
-            { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: blob },
-          );
-          if (response.ok) { lastError = null; break; }
-          lastError = new Error(await jsonError(response, "Chunk refuse par le serveur."));
-          if (response.status >= 500 && attempt < CHUNK_RETRIES - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
-            continue;
+        for (let attempt = 0; attempt < PART_RETRIES; attempt += 1) {
+          try {
+            const response = await fetch(partUrl.url, { method: "PUT", body: blob });
+            const header = response.headers.get("etag") ?? response.headers.get("ETag");
+            if (response.ok && header) { etag = header.replace(/"/g, ""); break; }
+            if (response.ok && !header) {
+              throw new Error("Reponse R2 sans ETag : CORS du bucket a mettre a jour (ExposeHeaders).");
+            }
+            lastError = new Error(`Partie refusee par le stockage (${response.status}).`);
+          } catch (error) {
+            lastError = error instanceof Error ? error : new Error("Partie non deposee.");
           }
-          break;
+          if (attempt < PART_RETRIES - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+          }
         }
-        if (lastError) throw lastError;
+        if (!etag) throw lastError ?? new Error("Partie non deposee.");
 
+        parts.push({ partNumber: partUrl.partNumber, etag });
         item.sentBytes = Math.min(start + blob.size, item.file.size);
         item.progress = item.sentBytes / item.file.size;
         notify();
       }
 
-      // 3) Commit : assemblage GCS + verification d'integrite.
+      // 3) Commit : assemblage R2 + verification d'integrite.
       const commitResponse = await authFetch("/api/storage/permanent/commit", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ uploadId: session.uploadId }),
+        body: JSON.stringify({ uploadId: session.uploadId, parts }),
       });
       const commitBody = await commitResponse.json().catch(() => ({}));
       if (!commitResponse.ok) throw new Error(await jsonError(commitResponse, "Assemblage du fichier impossible."));
@@ -175,15 +188,14 @@ export async function uploadPermanentFiles(
       item.status = "done";
       item.progress = 1;
       item.sentBytes = item.file.size;
-      if (committed) uploaded.push(committed);
-      else uploaded.push({ path: "", filename: item.filename, sizeBytes: item.sizeBytes, contentType: item.file.type || "application/octet-stream" });
+      uploaded.push(committed ?? { path: "", filename: item.filename, sizeBytes: item.sizeBytes, contentType: item.file.type || "application/octet-stream" });
       notify();
     } catch (error) {
       item.status = "error";
       item.error = error instanceof Error ? error.message : "Televersement impossible.";
       failed.push(item);
       notify();
-      // Purge des chunks temporaires de ce fichier, sans bloquer le lot.
+      // Purge de l'upload multipart de ce fichier, sans bloquer le lot.
       if (item.uploadId) {
         void authFetch(`/api/storage/permanent/session?uploadId=${encodeURIComponent(item.uploadId)}`, { method: "DELETE" }).catch(() => undefined);
       }
@@ -194,4 +206,4 @@ export async function uploadPermanentFiles(
   return { uploaded, failed };
 }
 
-export const UPLOAD_LIMITS = { CHUNK_SIZE_BYTES, MAX_FILES_PER_BATCH };
+export const UPLOAD_LIMITS = { PART_SIZE_BYTES, MAX_FILES_PER_BATCH };

@@ -1,19 +1,28 @@
 import { randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
-import type { File as GcsFile } from "@google-cloud/storage";
-import { adminDb, adminStorage } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import {
-  CHUNK_SIZE_BYTES,
-  COMPOSE_BATCH_SIZE,
+  abortMultipartUpload,
+  completeMultipartUpload,
+  createDownloadUrl,
+  createMultipartUpload,
+  deleteFromR2,
+  ensureBucketCors,
+  listObjectsUnderPrefix,
+  presignPartUpload,
+  putObject,
+} from "@/lib/storage/r2";
+import {
   MAX_FILE_BYTES,
   MAX_USER_QUOTA_BYTES,
+  PART_SIZE_BYTES,
   SESSION_TTL_MS,
-  chunkCountFor,
+  partCountFor,
   sanitizeFilename,
   type ValidatedUploadIntent,
 } from "@/lib/storage/upload-policy";
 
-const bucket = () => adminStorage.bucket();
+const bucketName = () => process.env.R2_BUCKET || "gen3ia-artifacts";
 const FILES_COLLECTION = "permanentFiles";
 const SESSIONS_COLLECTION = "storageUploads";
 
@@ -22,8 +31,11 @@ function safeName(name: string) {
   if (!cleaned || cleaned === "." || cleaned === "..") throw new Error("Invalid file name.");
   return cleaned.slice(0, 180);
 }
-function objectPath(userId: string, name: string) { return `users/${userId}/permanent/${randomUUID()}-${safeName(name)}`; }
-function tmpPrefix(userId: string, uploadId: string) { return `users/${userId}/tmp/${uploadId}/`; }
+function objectKey(userId: string, name: string) { return `users/${userId}/permanent/${randomUUID()}-${safeName(name)}`; }
+
+function isOwnedPermanentKey(userId: string, key: string) {
+  return typeof key === "string" && key.startsWith(`users/${userId}/permanent/`) && !key.includes("..");
+}
 
 /* ------------------------------------------------------------------ */
 /* Stockage direct (piece jointe chat, capture camera, petit fichier)  */
@@ -32,36 +44,33 @@ function tmpPrefix(userId: string, uploadId: string) { return `users/${userId}/t
 export async function storePermanentFile(params: { userId: string; filename: string; content: Buffer; contentType?: string; metadata?: Record<string, string> }) {
   if (!params.userId?.trim()) throw new Error("Permanent storage requires userId.");
   if (params.content.length === 0 || params.content.length > MAX_FILE_BYTES) throw new Error("File exceeds the permanent storage limit.");
-  const path = objectPath(params.userId, params.filename);
-  const file = bucket().file(path);
-  await file.save(params.content, { resumable: params.content.length > 5 * 1024 * 1024, contentType: params.contentType || "application/octet-stream", metadata: { metadata: { userId: params.userId, originalName: safeName(params.filename), ...(params.metadata ?? {}) } }, validation: "crc32c" });
-  return { path, filename: safeName(params.filename), sizeBytes: params.content.length, contentType: params.contentType || "application/octet-stream" };
+  const filename = safeName(params.filename);
+  const key = objectKey(params.userId, params.filename);
+  await putObject({ key, body: params.content, contentType: params.contentType || "application/octet-stream" });
+  return { path: key, filename, sizeBytes: params.content.length, contentType: params.contentType || "application/octet-stream" };
 }
 
 export async function listPermanentFiles(userId: string, limit = 100) {
-  const [files] = await bucket().getFiles({ prefix: `users/${userId}/permanent/`, maxResults: Math.min(Math.max(limit, 1), 500) });
-  return Promise.all(files.map(async (file) => {
-    const [metadata] = await file.getMetadata();
-    return { path: file.name, filename: String(metadata.metadata?.originalName ?? file.name.split("/").pop()), sizeBytes: Number(metadata.size ?? 0), contentType: String(metadata.contentType ?? "application/octet-stream"), updatedAt: String(metadata.updated ?? "") };
+  const objects = await listObjectsUnderPrefix(`users/${userId}/permanent/`, Math.min(Math.max(limit, 1), 500));
+  return objects.map((object) => ({
+    path: object.key,
+    filename: object.key.split("/").pop() ?? object.key,
+    sizeBytes: object.sizeBytes,
+    contentType: "application/octet-stream",
+    updatedAt: object.updatedAt,
   }));
 }
 
 export async function createPermanentDownloadUrl(userId: string, path: string) {
-  if (!isOwnedPermanentPath(userId, path)) throw new Error("Invalid permanent storage path.");
-  const [url] = await bucket().file(path).getSignedUrl({ action: "read", expires: Date.now() + 10 * 60 * 1000 });
-  return url;
+  if (!isOwnedPermanentKey(userId, path)) throw new Error("Invalid permanent storage path.");
+  return createDownloadUrl(path, 600);
 }
 
 export async function deletePermanentFile(userId: string, path: string) {
-  if (!isOwnedPermanentPath(userId, path)) throw new Error("Invalid permanent storage path.");
-  await bucket().file(path).delete({ ignoreNotFound: true });
-  // Nettoyage de la fiche metadonnee associee (televersements chunkes).
+  if (!isOwnedPermanentKey(userId, path)) throw new Error("Invalid permanent storage path.");
+  await deleteFromR2(path);
   const snap = await adminDb.collection(FILES_COLLECTION).where("userId", "==", userId).where("path", "==", path).limit(1).get();
   await Promise.all(snap.docs.map((doc) => doc.ref.delete()));
-}
-
-function isOwnedPermanentPath(userId: string, path: string) {
-  return typeof path === "string" && path.startsWith(`users/${userId}/permanent/`) && !path.includes("..");
 }
 
 /* ------------------------------------------------------------------ */
@@ -82,7 +91,12 @@ export async function getUserStorageUsage(userId: string): Promise<StorageUsage>
 }
 
 /* ------------------------------------------------------------------ */
-/* Televersement chunké (fichiers jusqu'a 100 Mo via serverless)       */
+/* Televersement multipart (fichiers jusqu'a 100 Mo)                   */
+/*                                                                     */
+/* Le serveur ouvre un upload multipart R2 et presigne une URL par     */
+/* partie : le navigateur depose les donnees DIRECTEMENT chez R2, sans */
+/* transiter par la limite de corps serverless (~4,5 Mo). Le commit    */
+/* assemble l'objet cote R2 (CompleteMultipartUpload).                 */
 /* ------------------------------------------------------------------ */
 
 export type UploadSessionView = {
@@ -91,8 +105,9 @@ export type UploadSessionView = {
   filename: string;
   sizeBytes: number;
   contentType: string;
-  chunksTotal: number;
-  chunkSizeBytes: number;
+  partsTotal: number;
+  partSizeBytes: number;
+  partUrls: Array<{ partNumber: number; url: string }>;
 };
 
 type SessionDoc = {
@@ -101,8 +116,9 @@ type SessionDoc = {
   filename: string;
   contentType: string;
   sizeBytes: number;
-  chunksTotal: number;
-  receivedChunks: number[];
+  partsTotal: number;
+  r2Key: string;
+  r2UploadId: string;
   status: "active" | "committed" | "aborted";
   createdAt: FirebaseFirestore.Timestamp | Date | null;
 };
@@ -121,50 +137,40 @@ export async function createUploadSessions(params: { userId: string; intents: Va
   }
 
   const views: UploadSessionView[] = [];
-  const batch = adminDb.batch();
 
   for (const intent of params.intents) {
     const uploadId = randomUUID();
-    const path = objectPath(params.userId, intent.safeFilename);
-    const chunksTotal = chunkCountFor(intent.sizeBytes);
+    const key = objectKey(params.userId, intent.safeFilename);
+    const contentType = intent.contentType || "application/octet-stream";
+    const r2UploadId = await createMultipartUpload(key, contentType);
+    const partsTotal = partCountFor(intent.sizeBytes);
+    const partUrls: Array<{ partNumber: number; url: string }> = [];
+    for (let partNumber = 1; partNumber <= partsTotal; partNumber += 1) {
+      partUrls.push({ partNumber, url: await presignPartUpload(key, r2UploadId, partNumber) });
+    }
     const doc: SessionDoc = {
       userId: params.userId,
-      path,
+      path: key,
       filename: intent.safeFilename,
-      contentType: intent.contentType || "application/octet-stream",
+      contentType,
       sizeBytes: intent.sizeBytes,
-      chunksTotal,
-      receivedChunks: [],
+      partsTotal,
+      r2Key: key,
+      r2UploadId,
       status: "active",
       createdAt: FieldValue.serverTimestamp() as unknown as SessionDoc["createdAt"],
     };
-    batch.set(sessionRef(uploadId), doc);
-    views.push({ uploadId, path, filename: intent.safeFilename, sizeBytes: intent.sizeBytes, contentType: doc.contentType, chunksTotal, chunkSizeBytes: CHUNK_SIZE_BYTES });
+    await sessionRef(uploadId).set(doc);
+    views.push({ uploadId, path: key, filename: intent.safeFilename, sizeBytes: intent.sizeBytes, contentType, partsTotal, partSizeBytes: PART_SIZE_BYTES, partUrls });
   }
-  await batch.commit();
   return views;
 }
 
-/** Ecrit un chunk dans la zone temporaire GCS et l'enregistre dans la session. */
-export async function recordChunk(params: { userId: string; uploadId: string; index: number; content: Buffer }) {
-  const session = await loadOwnedSession(params.userId, params.uploadId);
-  if (session.status !== "active") throw new Error("Cette session de televersement est déjà terminée.");
-  if (!Number.isInteger(params.index) || params.index < 0 || params.index >= session.chunksTotal) throw new Error("Index de chunk invalide.");
-
-  const isLast = params.index === session.chunksTotal - 1;
-  const expectedSize = isLast ? session.sizeBytes - CHUNK_SIZE_BYTES * (session.chunksTotal - 1) : CHUNK_SIZE_BYTES;
-  if (params.content.length !== expectedSize) {
-    throw new Error(`Taille de chunk invalide (recu ${params.content.length} octets, attendu ${expectedSize}).`);
-  }
-
-  const tmpPath = `${tmpPrefix(params.userId, params.uploadId)}${String(params.index).padStart(6, "0")}`;
-  await bucket().file(tmpPath).save(params.content, { resumable: false, contentType: "application/octet-stream", validation: "crc32c" });
-  await sessionRef(params.uploadId).update({ receivedChunks: FieldValue.arrayUnion(params.index) });
-  return { received: session.receivedChunks.length + 1, total: session.chunksTotal };
-}
-
-/** Assemble les chunks (GCS compose), finalise le fichier et ecrit la metadonnee. */
-export async function commitUpload(params: { userId: string; uploadId: string }) {
+/**
+ * Finalise un fichier : assemble les pieces chez R2, verifie la taille
+ * reelle et enregistre la metadonnee.
+ */
+export async function commitUpload(params: { userId: string; uploadId: string; parts: Array<{ partNumber: number; etag: string }> }) {
   const session = await loadOwnedSession(params.userId, params.uploadId);
 
   if (session.status === "committed") {
@@ -174,28 +180,18 @@ export async function commitUpload(params: { userId: string; uploadId: string })
   }
   if (session.status !== "active") throw new Error("Cette session de televersement a été annulée.");
 
-  const received = [...new Set(session.receivedChunks)].sort((a, b) => a - b);
-  if (received.length !== session.chunksTotal) {
-    throw new Error(`Televersement incomplet : ${received.length}/${session.chunksTotal} chunks recus.`);
+  const cleanParts = params.parts
+    .filter((part) => Number.isInteger(part.partNumber) && part.partNumber >= 1 && part.partNumber <= session.partsTotal && typeof part.etag === "string" && part.etag.length > 0)
+    .map((part) => ({ partNumber: part.partNumber, etag: part.etag.replace(/"/g, "") }));
+  const uniqueParts = [...new Map(cleanParts.map((part) => [part.partNumber, part])).values()].sort((a, b) => a.partNumber - b.partNumber);
+  if (uniqueParts.length !== session.partsTotal) {
+    throw new Error(`Televersement incomplet : ${uniqueParts.length}/${session.partsTotal} parties recues.`);
   }
 
-  const tmp = tmpPrefix(params.userId, params.uploadId);
-  const bucketRef = bucket();
-  const chunkFiles = received.map((index) => bucketRef.file(`${tmp}${String(index).padStart(6, "0")}`));
-  const destination = bucketRef.file(session.path);
-
-  if (chunkFiles.length === 1) {
-    await chunkFiles[0].rename(destination);
-  } else {
-    await composeIteratively(chunkFiles, destination, tmp);
-  }
-
-  // Verification d'integrite : la taille finale doit correspondre a la session.
-  const [finalMetadata] = await destination.getMetadata();
-  const finalSize = Number(finalMetadata.size ?? 0);
-  if (finalSize !== session.sizeBytes) {
-    await destination.delete({ ignoreNotFound: true });
-    throw new Error(`Taille du fichier final incoherente (${finalSize} != ${session.sizeBytes}). Televersement annule.`);
+  const completed = await completeMultipartUpload(session.r2Key, session.r2UploadId, uniqueParts);
+  if (completed.sizeBytes !== session.sizeBytes) {
+    await deleteFromR2(session.r2Key);
+    throw new Error(`Taille du fichier final incoherente (${completed.sizeBytes} != ${session.sizeBytes}). Televersement annule.`);
   }
 
   const metadataDoc = {
@@ -210,10 +206,6 @@ export async function commitUpload(params: { userId: string; uploadId: string })
   await adminDb.collection(FILES_COLLECTION).doc(params.uploadId).set(metadataDoc);
   await sessionRef(params.uploadId).update({ status: "committed" });
 
-  // Nettoyage des intermediaires eventuels + chunks restants (rename a deja
-  // deplace le premier chunk dans le cas mono-chunk).
-  await deleteUnderPrefix(params.userId, tmp);
-
   return {
     uploadId: params.uploadId,
     path: session.path,
@@ -223,31 +215,11 @@ export async function commitUpload(params: { userId: string; uploadId: string })
   };
 }
 
-/** Compose iteratif par lots de 30 max (limite GCS : 32 composants). */
-async function composeIteratively(chunkFiles: GcsFile[], destination: GcsFile, tmpPrefixPath: string) {
-  const bucketRef = bucket();
-  let level: string[] = chunkFiles.map((file) => file.name);
-  let round = 0;
-  while (level.length > 1) {
-    const nextLevel: string[] = [];
-    for (let offset = 0; offset < level.length; offset += COMPOSE_BATCH_SIZE) {
-      const batchPaths = level.slice(offset, offset + COMPOSE_BATCH_SIZE);
-      if (batchPaths.length === 1) { nextLevel.push(batchPaths[0]); continue; }
-      const intermediatePath = `${tmpPrefixPath}compose-r${round}-${offset}`;
-      await bucketRef.combine(batchPaths, intermediatePath);
-      nextLevel.push(intermediatePath);
-    }
-    level = nextLevel;
-    round += 1;
-  }
-  await bucketRef.file(level[0]).rename(destination);
-}
-
-/** Annule une session et supprime ses objets temporaires. */
+/** Annule une session et libere l'upload multipart R2. */
 export async function abortUpload(params: { userId: string; uploadId: string }) {
   const session = await loadOwnedSession(params.userId, params.uploadId);
   if (session.status === "active") {
-    await deleteUnderPrefix(params.userId, tmpPrefix(params.userId, params.uploadId));
+    await abortMultipartUpload(session.r2Key, session.r2UploadId).catch(() => undefined);
     await sessionRef(params.uploadId).update({ status: "aborted" });
   }
 }
@@ -259,11 +231,6 @@ async function loadOwnedSession(userId: string, uploadId: string) {
   const data = snap.data() as SessionDoc | undefined;
   if (!data || data.userId !== userId) throw new Error("Session de televersement introuvable.");
   return data;
-}
-
-async function deleteUnderPrefix(userId: string, prefix: string) {
-  const [files] = await bucket().getFiles({ prefix, maxResults: 500 });
-  await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })));
 }
 
 /* ------------------------------------------------------------------ */
@@ -294,11 +261,11 @@ function permanentFileFromDoc(uploadId: string, doc: FirebaseFirestore.DocumentS
 
 /**
  * Liste authoritative : les metadonnees Firestore d'abord, completee par le
- * listing GCS pour les fichiers depose via les flux legacy (chat, camera)
+ * listing R2 pour les fichiers depose via les flux legacy (chat, camera)
  * sans fiche metadonnee.
  */
 export async function listPermanentFilesWithMetadata(userId: string): Promise<PermanentFileEntry[]> {
-  const [filesSnap, legacyFiles] = await Promise.all([
+  const [filesSnap, legacyObjects] = await Promise.all([
     adminDb.collection(FILES_COLLECTION).where("userId", "==", userId).get(),
     listPermanentFiles(userId).catch(() => []),
   ]);
@@ -308,7 +275,7 @@ export async function listPermanentFilesWithMetadata(userId: string): Promise<Pe
     const entry = permanentFileFromDoc(doc.id, doc);
     if (entry.path) merged.set(entry.path, entry);
   });
-  for (const legacy of legacyFiles) {
+  for (const legacy of legacyObjects) {
     if (!merged.has(legacy.path)) {
       merged.set(legacy.path, {
         path: legacy.path,
@@ -327,17 +294,23 @@ export async function listPermanentFilesWithMetadata(userId: string): Promise<Pe
 export async function cleanupExpiredSessions(userId: string): Promise<number> {
   const snap = await adminDb.collection(SESSIONS_COLLECTION).where("userId", "==", userId).where("status", "==", "active").get();
   const now = Date.now();
-  let deleted = 0;
-  await Promise.all(snap.docs.map(async (doc) => {
+  let cleaned = 0;
+  for (const doc of snap.docs) {
     const createdAt = doc.get("createdAt");
     const createdMs = typeof createdAt?.toMillis === "function" ? createdAt.toMillis() : 0;
     if (createdMs > 0 && now - createdMs > SESSION_TTL_MS) {
-      await deleteUnderPrefix(userId, tmpPrefix(userId, doc.id));
+      const data = doc.data() as SessionDoc;
+      await abortMultipartUpload(data.r2Key, data.r2UploadId).catch(() => undefined);
       await doc.ref.update({ status: "aborted" });
-      deleted += 1;
+      cleaned += 1;
     }
-  }));
-  return deleted;
+  }
+  return cleaned;
 }
 
-export { sanitizeFilename };
+/** Bootstrap unique : bucket + CORS pour le televersement direct. */
+export async function bootstrapBucketCors(allowedOrigins: string[]) {
+  return ensureBucketCors(allowedOrigins);
+}
+
+export { sanitizeFilename, bucketName };

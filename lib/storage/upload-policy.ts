@@ -29,13 +29,12 @@ export const MAX_FILES_PER_BATCH = envLimit("GEN3IA_MAX_PERMANENT_BATCH_FILES", 
 export const MAX_USER_QUOTA_BYTES = envLimit("GEN3IA_MAX_PERMANENT_QUOTA_BYTES", 2 * 1024 * 1024 * 1024);
 
 /**
- * Taille d'un chunk : 3 Mo, sous la limite de corps de requete serverless
- * Vercel (~4,5 Mo) pour garantir le passage meme avec les en-tetes.
+ * Taille d'une partie multipart : 8 Mo. Contrainte double :
+ * - >= 5 MiB minimum impose par le multipart S3/R2 (hors derniere partie) ;
+ * - l'URL presignee permet au navigateur d'envoyer la partie DIRECTEMENT a
+ *   R2, donc aucune contrainte de corps serverless n'est traversée.
  */
-export const CHUNK_SIZE_BYTES = envLimit("GEN3IA_PERMANENT_CHUNK_BYTES", 3 * 1024 * 1024);
-
-/** Limite de composants par appel GCS compose (max reel : 32). */
-export const COMPOSE_BATCH_SIZE = 30;
+export const PART_SIZE_BYTES = envLimit("GEN3IA_PERMANENT_PART_BYTES", 8 * 1024 * 1024);
 
 /** Duree de vie d'une session de televersement interrompue. */
 export const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -208,5 +207,7 @@ export function formatBytes(bytes: number): string {
 
 export function chunkCountFor(sizeBytes: number): number {
   if (sizeBytes <= 0) return 0;
-  return Math.ceil(sizeBytes / CHUNK_SIZE_BYTES);
+  return Math.ceil(sizeBytes / PART_SIZE_BYTES);
 }
+
+export const partCountFor = chunkCountFor;

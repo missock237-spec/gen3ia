@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  CHUNK_SIZE_BYTES,
+  PART_SIZE_BYTES,
   chunkCountFor,
   formatBytes,
   isExtensionAllowed,
@@ -74,9 +74,9 @@ describe("upload policy", () => {
   it("calcule le nombre de chunks", () => {
     expect(chunkCountFor(0)).toBe(0);
     expect(chunkCountFor(1)).toBe(1);
-    expect(chunkCountFor(CHUNK_SIZE_BYTES)).toBe(1);
-    expect(chunkCountFor(CHUNK_SIZE_BYTES + 1)).toBe(2);
-    expect(chunkCountFor(100 * 1024 * 1024)).toBe(Math.ceil((100 * 1024 * 1024) / CHUNK_SIZE_BYTES));
+    expect(chunkCountFor(PART_SIZE_BYTES)).toBe(1);
+    expect(chunkCountFor(PART_SIZE_BYTES + 1)).toBe(2);
+    expect(chunkCountFor(100 * 1024 * 1024)).toBe(Math.ceil((100 * 1024 * 1024) / PART_SIZE_BYTES));
   });
 
   it("formate les tailles lisiblement", () => {
