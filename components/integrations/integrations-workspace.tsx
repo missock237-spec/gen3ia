@@ -157,7 +157,7 @@ export function IntegrationsWorkspace() {
     setError("");
     // allSettled : un endpoint en echec ne doit pas priver les autres sections.
     const [catalogRes, connectionsRes, webhooksRes, statusRes, prefsRes] = await Promise.allSettled([
-      authFetch("/api/integrations/catalog?limit=1000", { cache: "no-store" }),
+      authFetch("/api/integrations/catalog?limit=5000", { cache: "no-store" }),
       authFetch("/api/integrations/composio/connections", { cache: "no-store" }),
       authFetch("/api/integrations/webhooks", { cache: "no-store" }),
       authFetch("/api/integrations/status", { cache: "no-store" }),
@@ -168,8 +168,8 @@ export function IntegrationsWorkspace() {
       if (catalogRes.status === "fulfilled" && catalogRes.value.ok) {
         setCatalog(versCatalogue(await lireJson(catalogRes.value)));
       }
-      // Le catalogue complet (plus de 800 apps) est demandé en une requête :
-      // la limite serveur est portée à 1000 avec agrégation paginée en amont.
+      // Le catalogue COMPLET (1553+ apps) est demandé en une requête :
+      // limite serveur 5000 avec agrégation paginée + cache mémoire en amont.
       if (connectionsRes.status === "fulfilled" && connectionsRes.value.ok) {
         const body = await lireJson(connectionsRes.value);
         setConnections(versListe((body as { connections?: unknown })?.connections, (entry) => ({
