@@ -394,3 +394,50 @@ export async function dispatchSchedules(now = new Date()) {
 
   return { checked: snap.size, due: due.length, executed: results };
 }
+
+
+export async function triggerScheduleNow(userId: string, scheduleId: string) {
+  const schedule = await getSchedule(userId, scheduleId);
+  if (!schedule) throw new Error("Schedule not found");
+  if (!schedule.enabled) throw new Error("Schedule is paused");
+
+  const executionId = randomUUID();
+  const slot = `manual:${executionId}`;
+  const ref = adminDb.collection(COLLECTION).doc(scheduleId);
+  const runRef = adminDb.collection(RUNS_COLLECTION).doc(executionId);
+  const now = Timestamp.now();
+
+  await adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data()?.userId !== userId) throw new Error("Schedule not found");
+
+    const data = snap.data()!;
+    const runningStarted = data.runningExecutionStartedAt instanceof Timestamp
+      ? data.runningExecutionStartedAt.toDate().getTime()
+      : 0;
+    const runningActive = Boolean(data.runningExecutionId) && runningStarted > 0 &&
+      Date.now() - runningStarted < EXECUTION_LEASE_MS;
+    if (runningActive) throw new Error("A schedule execution is already running");
+
+    tx.update(ref, {
+      runningExecutionId: executionId,
+      runningExecutionStartedAt: now,
+      lastExecutionId: executionId,
+      lastExecutionStatus: "running",
+      lastError: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(runRef, {
+      scheduleId,
+      userId,
+      agentId: schedule.agentId,
+      slot,
+      status: "running",
+      startedAt: now,
+      trigger: "manual",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+
+  return runSchedule(schedule, executionId, slot);
+}
