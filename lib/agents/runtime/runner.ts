@@ -23,7 +23,7 @@ export interface RuntimeAgentConfig {
   model?: string;
 }
 
-export interface RuntimeRunnerOptions { userId: string; objective: string; plan: RuntimePlan; conversationId?: string; signal?: AbortSignal; policy?: ExecutionPolicy; agent?: RuntimeAgentConfig; }
+export interface RuntimeRunnerOptions { userId: string; projectId?: string; objective: string; plan: RuntimePlan; conversationId?: string; signal?: AbortSignal; policy?: ExecutionPolicy; agent?: RuntimeAgentConfig; }
 
 export class AgentRuntime {
   private state: RuntimeExecutionState;
@@ -32,6 +32,7 @@ export class AgentRuntime {
   private readonly policy: ExecutionPolicy;
   private readonly startedAtMs: number;
   private readonly agentConfig?: RuntimeAgentConfig;
+  private readonly projectId?: string;
 
   constructor(options: RuntimeRunnerOptions) {
     const validation = validateDAG(options.plan);
@@ -39,6 +40,7 @@ export class AgentRuntime {
     this.signal = options.signal;
     this.policy = options.policy ?? DEFAULT_EXECUTION_POLICY;
     this.agentConfig = options.agent;
+    this.projectId = options.projectId;
     this.scheduler = new RuntimeScheduler(options.plan.maxConcurrency);
     this.startedAtMs = Date.now();
     this.state = {
@@ -161,7 +163,7 @@ export class AgentRuntime {
     const input: Record<string, unknown> = Object.keys(dependencies).length > 0 ? { ...step.input, dependencies } : { ...step.input };
     const approvalId = typeof input.approvalId === "string" ? input.approvalId : undefined;
     delete input.approvalId;
-    return executeToolSecurely({ userId: this.state.userId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName: step.toolName, input, approvalId, policy: this.policy, signal: this.signal });
+    return executeToolSecurely({ userId: this.state.userId, projectId: this.projectId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName: step.toolName, input, approvalId, policy: this.policy, signal: this.signal });
   }
 
   private async executeCode(step: RuntimeStep): Promise<unknown> {
