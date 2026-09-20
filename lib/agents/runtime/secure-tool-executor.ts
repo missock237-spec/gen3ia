@@ -21,6 +21,7 @@ import { isExtensionToolName } from "@/lib/security/tool-permissions";
 
 export interface SecureToolExecutionOptions {
   userId: string;
+  projectId?: string;
   executionId: string;
   agentId?: string;
   toolName: string;
