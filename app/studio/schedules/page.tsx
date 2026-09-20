@@ -6,7 +6,9 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 
-type Agent = { id: string; name: string; status: string; type: string; };\n\ntype Schedule = {
+type Agent = { id: string; name: string; status: string; type: string; };
+
+type Schedule = {
   id: string;
   agentId: string;
   name: string;
