@@ -42,7 +42,7 @@ export default function DeveloperPage(){
   },[]);
 
   const load=useCallback(async()=>{
-    const [p,k,e,r]=await Promise.all([api("/api/developer/projects"),api("/api/developer/api-keys"),api("/api/developer/extensions"),api("/api/developer/revenue")]);
+    const [p,k,e,r]=await Promise.all([api("/api/developer/projects"),api("/api/developer/api-keys"),api(`/api/developer/extensions?projectId=${encodeURIComponent(selectedProject)}`),api("/api/developer/revenue")]);
     if(p.ok){const d=await p.json();setProjects(d.projects??[]);if(!selectedProject&&d.projects?.[0])setSelectedProject(d.projects[0].id);}
     if(k.ok)setKeys((await k.json()).keys??[]);
     if(e.ok)setExtensions((await e.json()).extensions??[]);
