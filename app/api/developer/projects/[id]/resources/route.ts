@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 import { extensionApiError } from "@/lib/extensions/api";
-import { verifyDeveloperProjectAccess } from "@/lib/extensions/repository";
+import { getDeveloperProjectResourceSummary } from "@/lib/extensions/repository";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const token = await verifyFirebaseAuth(request);
     const { id } = await params;
-    await verifyDeveloperProjectAccess(token.uid, id);
+    const summary = await getDeveloperProjectResourceSummary(token.uid, id);
     const url = new URL(request.url);
     return NextResponse.json({
       projectId: id,
@@ -21,6 +21,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         { id: "deployments", label: "Deployments", href: `/developer?project=${encodeURIComponent(id)}&tab=monitor`, status: "available" },
       ],
       authenticated: true,
+      summary: summary.resources,
+      extensionIds: summary.extensionIds,
     });
   } catch (error) {
     return extensionApiError(error);
