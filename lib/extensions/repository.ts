@@ -201,6 +201,18 @@ export async function verifyDeveloperProjectAccess(userId: string, projectId: st
   }
 }
 
+export async function getDeveloperProjectResourceSummary(userId:string,projectId:string){
+  await verifyDeveloperProjectAccess(userId,projectId);
+  const [extensionsSnap,keysSnap]=await Promise.all([
+    adminDb.collection(COL.extensions).where("developerId","==",userId).where("projectId","==",projectId).where("deletedAt","==",null).limit(100).get(),
+    adminDb.collection(COL.apiKeys).where("userId","==",userId).where("projectId","==",projectId).where("status","==","active").limit(100).get(),
+  ]);
+  const extensions=extensionsSnap.docs.map(d=>d.data() as ExtensionDoc);
+  const executions=extensions.reduce((n,e)=>n+Number(e.stats?.executions??0),0);
+  const installations=extensions.reduce((n,e)=>n+Number(e.stats?.installs??0),0);
+  return {projectId,resources:{extensions:extensions.length,activeApiKeys:keysSnap.size,executions,installations,approvedExtensions:extensions.filter(e=>e.status==="approved").length,draftExtensions:extensions.filter(e=>e.status==="draft").length},extensionIds:extensions.map(e=>e.id)};
+}
+
 export async function listDeveloperApiKeys(userId: string) {
   const snap = await adminDb
     .collection(COL.apiKeys)
