@@ -18,7 +18,7 @@ export default function ClientAgentPage({ params }: { params: Promise<{ agentId:
     if (!text || !agentId || loading) return;
     setMessage(""); setError(""); setMessages((items) => [...items, { role: "client", text }]); setLoading(true);
     try {
-      const response = await fetch(`/api/public/agents/${agentId}/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: text }) });
+      const response = await fetch(`/api/public/agents/${agentId}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: text }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Réponse indisponible.");
       setMessages((items) => [...items, { role: "agent", text: data.text }]);

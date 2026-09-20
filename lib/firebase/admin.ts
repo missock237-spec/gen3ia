@@ -16,7 +16,10 @@ import {
 } from "firebase-admin/storage";
 
 function getFirebaseAdminConfig() {
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY
+    ?.trim()
+    .replace(/^['"]|['"]$/g, "")
+    .replace(/\\n/g, "\n");
 
   if (
     !process.env.FIREBASE_PROJECT_ID ||
