@@ -67,7 +67,7 @@ export default function DeveloperPage(){
 
   const createExtension=async()=>{
     setBusy(true);setMessage("");
-    try{const parsed=JSON.parse(manifest);const r=await api("/api/extensions",{method:"POST",body:JSON.stringify({manifest:parsed})});const d=await r.json();if(!r.ok)throw new Error([d.error,...(d.details??[])].filter(Boolean).join(" — "));setMessage("Extension créée en brouillon.");await load();setTab("extensions");}
+    try{const parsed=JSON.parse(manifest);const r=await api("/api/extensions",{method:"POST",body:JSON.stringify({manifest:parsed,projectId:selectedProject})});const d=await r.json();if(!r.ok)throw new Error([d.error,...(d.details??[])].filter(Boolean).join(" — "));setMessage("Extension créée en brouillon.");await load();setTab("extensions");}
     catch(e){setMessage(e instanceof Error?e.message:"Manifest JSON invalide");}finally{setBusy(false);}
   };
 
