@@ -20,6 +20,7 @@ export interface AgentSummary {
   description: string;
   type: AgentType;
   status: string;
+  projectId?: string;
   modelStrategy: "automatic" | "fixed";
   preferredProvider?: string;
   preferredModel?: string;
@@ -99,22 +100,59 @@ export function AgentManager() {
   const [memoryEnabled, setMemoryEnabled] = useState(true);
   const [webResearchEnabled, setWebResearchEnabled] = useState(true);
   const [documentGenerationEnabled, setDocumentGenerationEnabled] = useState(true);
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
+  const [projectId, setProjectId] = useState("");
+  const [projectTools, setProjectTools] = useState<Array<{ id: string; name: string; toolkit: string; description?: string }>>([]);
+  const [loadingProjectTools, setLoadingProjectTools] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const response = await authFetch("/api/agents", { cache: "no-store" });
+      const [response, projectsResponse] = await Promise.all([
+        authFetch(projectId ? `/api/agents?projectId=${encodeURIComponent(projectId)}` : "/api/agents", { cache: "no-store" }),
+        authFetch("/api/developer/projects", { cache: "no-store" }),
+      ]);
       if (response.ok) {
         const data = await response.json();
         setAgents(data.agents ?? []);
       }
+      if (projectsResponse.ok) {
+        const projectData = await projectsResponse.json();
+        const nextProjects = (projectData.projects ?? []).filter((p: { status?: string }) => p.status !== "archived");
+        setProjects(nextProjects);
+        if (!projectId && nextProjects[0]?.id) setProjectId(nextProjects[0].id);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  useEffect(() => {
+    if (!projectId) {
+      setProjectTools([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingProjectTools(true);
+    void authFetch(`/api/developer/projects/${encodeURIComponent(projectId)}/connectors/tools`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled) {
+          const normalized = (data.tools ?? []).map((tool: Record<string, unknown>) => ({
+            id: typeof tool.slug === "string" ? tool.slug : typeof tool.name === "string" ? tool.name : "",
+            name: typeof tool.name === "string" ? tool.name : typeof tool.slug === "string" ? tool.slug : "Tool",
+            toolkit: typeof tool.toolkit === "string" ? tool.toolkit : typeof tool.toolkit_slug === "string" ? tool.toolkit_slug : "composio",
+            description: typeof tool.description === "string" ? tool.description : "",
+          })).filter((tool: { id: string }) => tool.id);
+          setProjectTools(normalized);
+        }
+      })
+      .finally(() => { if (!cancelled) setLoadingProjectTools(false); });
+    return () => { cancelled = true; };
+  }, [projectId]);
 
   const hasCodeAgent = agents.some((agent) => agent.type === "code" && agent.status === "active");
 
@@ -138,6 +176,7 @@ export function AgentManager() {
           name,
           description,
           type,
+          projectId: projectId || undefined,
           systemPrompt,
           modelStrategy,
           preferredProvider: modelStrategy === "fixed" ? provider : undefined,
@@ -182,7 +221,7 @@ export function AgentManager() {
       const response = await authFetch(`/api/agents/${agent.id}/run`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ objective }),
+        body: JSON.stringify({ objective, projectId: agent.projectId || undefined }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Execution impossible");
@@ -341,6 +380,15 @@ export function AgentManager() {
               )}
 
               <div>
+                <span className="g3-label">Projet Gen3ia</span>
+                <select className="g3-select" value={projectId} onChange={(e) => { setProjectId(e.target.value); setTools((current) => current.filter((tool) => !tool.startsWith("composio:"))); }}>
+                  <option value="">Aucun projet</option>
+                  {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                </select>
+                <p className="mt-1 text-xs text-neutral-400">Les connecteurs Composio sont strictement isolés par projet.</p>
+              </div>
+
+              <div>
                 <span className="g3-label">Outils autorises</span>
                 <div className="flex flex-wrap gap-2">
                   {TOOL_OPTIONS.map((tool) => (
@@ -349,6 +397,27 @@ export function AgentManager() {
                     </button>
                   ))}
                 </div>
+                {projectId && (
+                  <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-sky-800">Outils des connecteurs Composio</span>
+                      <Link href="/developer" className="text-[11px] font-semibold text-sky-700 hover:underline">Gérer les connecteurs →</Link>
+                    </div>
+                    {loadingProjectTools ? <p className="mt-2 text-xs text-sky-700">Chargement des outils…</p> : projectTools.length === 0 ? (
+                      <p className="mt-2 text-xs text-sky-700">Aucun outil disponible. Connectez d’abord une application dans le projet.</p>
+                    ) : (
+                      <div className="mt-2 max-h-48 space-y-1 overflow-auto">
+                        {projectTools.map((tool) => {
+                          const selection = `composio:${tool.toolkit}:${tool.id}`;
+                          return <button key={selection} type="button" className="flex w-full items-start gap-2 rounded-lg border border-sky-100 bg-white px-2.5 py-2 text-left hover:bg-sky-50" onClick={() => toggleTool(selection)} aria-pressed={tools.includes(selection)}>
+                            <span className={`mt-0.5 h-3 w-3 shrink-0 rounded border ${tools.includes(selection) ? "border-sky-600 bg-sky-600" : "border-sky-300"}`} />
+                            <span className="min-w-0"><span className="block truncate text-xs font-medium text-neutral-800">{tool.name}</span><span className="block truncate text-[10px] text-neutral-500">{tool.toolkit}{tool.description ? ` · ${tool.description}` : ""}</span></span>
+                          </button>;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
