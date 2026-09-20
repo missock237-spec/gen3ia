@@ -8,7 +8,7 @@ import { listDeveloperApiKeys, revokeDeveloperApiKey, revokeDeveloperApiKeyByPre
 /**
  * Developer SDK/API keys (Developer Studio only — Firebase session required).
  * GET    — list keys (prefix + metadata only, never the plaintext).
- * POST   — issue a key; the plaintext is returned exactly once. Body: { name }
+ * POST   — issue a key; the plaintext is returned exactly once. Body: { name, projectId }
  * DELETE — revoke a key. Body: { key } (the full plaintext key to revoke).
  */
 export async function GET(request: Request) {
