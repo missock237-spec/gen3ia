@@ -10,12 +10,19 @@ export async function POST(request: Request) {
   try {
     const developer = await authenticateDeveloper(request);
     const body = await request.json().catch(() => null);
+    const requestedProjectId = typeof (body as { projectId?: unknown } | null)?.projectId === "string" ? String((body as { projectId: string }).projectId).trim() : "";
+    const projectId = developer.projectId ?? requestedProjectId;
+    if (!projectId) return NextResponse.json({ error: "Sélectionnez un projet Gen3ia avant de créer une extension." }, { status: 400 });
+    if (!developer.projectId) {
+      const { verifyDeveloperProjectAccess } = await import("@/lib/extensions/repository");
+      await verifyDeveloperProjectAccess(developer.userId, projectId);
+    }
     const result = validateManifest((body as { manifest?: unknown } | null)?.manifest ?? body);
     if (!result.ok) return NextResponse.json({ error: "Manifest invalide.", details: result.errors }, { status: 400 });
     const existing = await getExtension(result.manifest.id);
     if (existing) return NextResponse.json({ error: `L'identifiant "${result.manifest.id}" est déjà utilisé.` }, { status: 400 });
     const manifest = { ...result.manifest, author: developer.userId };
-    const extension = await createExtension({ userId: developer.userId, displayName: developer.displayName }, manifest);
+    const extension = await createExtension({ userId: developer.userId, displayName: developer.displayName, projectId }, manifest);
     return NextResponse.json({ extension, warnings: result.warnings }, { status: 201 });
   } catch (error) { return extensionApiError(error); }
 }
