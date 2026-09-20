@@ -11,9 +11,17 @@ import { listExtensionsByDeveloper } from "@/lib/extensions/repository";
 export async function GET(request: Request) {
   try {
     const developer = await authenticateDeveloper(request);
-    const extensions = await listExtensionsByDeveloper(developer.userId);
+    const url = new URL(request.url);
+    const requestedProjectId = url.searchParams.get("projectId")?.trim() ?? "";
+    const projectId = developer.projectId ?? requestedProjectId;
+    if (!projectId) throw new Error("Sélectionnez un projet Gen3ia.");
+    if (!developer.projectId) {
+      const { verifyDeveloperProjectAccess } = await import("@/lib/extensions/repository");
+      await verifyDeveloperProjectAccess(developer.userId, projectId);
+    }
+    const extensions = await listExtensionsByDeveloper(developer.userId, projectId);
     return NextResponse.json({
-      developer: { userId: developer.userId, displayName: developer.displayName },
+      developer: { userId: developer.userId, displayName: developer.displayName, projectId },
       extensions: extensions.map((extension) => ({
         id: extension.id,
         name: extension.name,
