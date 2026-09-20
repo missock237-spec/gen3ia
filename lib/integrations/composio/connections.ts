@@ -31,37 +31,21 @@ export interface CatalogEntry {
 }
 
 export const CONNECTIONS_CATALOG: CatalogEntry[] = [
-  // ---- Messagerie ----
-  { toolkit: "whatsapp", label: "WhatsApp", description: "Messages et notifications WhatsApp Business pilotés par vos agents.", category: "messaging", auth: "oauth" },
-  { toolkit: "telegram", label: "Telegram", description: "Envoi de messages, alertes et approbations via un bot Telegram.", category: "messaging", auth: "api_key" },
-  { toolkit: "slack", label: "Slack", description: "Publications et alertes dans vos espaces de travail Slack.", category: "messaging", auth: "oauth" },
-  { toolkit: "discord", label: "Discord", description: "Messages et annonces dans vos serveurs Discord.", category: "messaging", auth: "api_key" },
-  // ---- Réseaux sociaux ----
-  { toolkit: "linkedin", label: "LinkedIn", description: "Publication de posts et gestion de la présence professionnelle.", category: "social", auth: "oauth" },
-  { toolkit: "x", label: "X (Twitter)", description: "Publication de tweets et suivi de l'audience.", category: "social", auth: "oauth" },
-  { toolkit: "instagram", label: "Instagram", description: "Publication de contenus visuels et stories.", category: "social", auth: "oauth" },
-  { toolkit: "facebook", label: "Facebook Pages", description: "Publications sur les pages Facebook de votre marque.", category: "social", auth: "oauth" },
-  { toolkit: "reddit", label: "Reddit", description: "Publications et interactions communautaires Reddit.", category: "social", auth: "oauth" },
-  { toolkit: "youtube", label: "YouTube", description: "Publication de vidéos et gestion des métadonnées.", category: "social", auth: "oauth" },
-  // ---- Email & calendrier ----
-  { toolkit: "gmail", label: "Gmail", description: "Lecture et envoi d'emails depuis une boîte Gmail autorisée.", category: "email_calendar", auth: "oauth" },
-  { toolkit: "googlecalendar", label: "Google Agenda", description: "Consultation des disponibilités et création d'événements.", category: "email_calendar", auth: "oauth" },
-  { toolkit: "outlook", label: "Outlook Email", description: "Lecture et envoi d'emails via Microsoft Outlook.", category: "email_calendar", auth: "oauth" },
-  // ---- CRM ----
-  { toolkit: "hubspot", label: "HubSpot", description: "Contacts, deals et pipeline commercial enrichis par vos agents.", category: "crm", auth: "oauth" },
-  { toolkit: "pipedrive", label: "Pipedrive", description: "Prospection et mise à jour automatisée du pipeline.", category: "crm", auth: "api_key" },
-  { toolkit: "salesforce", label: "Salesforce", description: "Synchronisation CRM Salesforce (leads, comptes, opportunités).", category: "crm", auth: "oauth" },
-  // ---- E-commerce & paiements ----
-  { toolkit: "stripe", label: "Stripe", description: "Factures, clients et paiements Stripe.", category: "ecommerce", auth: "api_key" },
-  { toolkit: "shopify", label: "Shopify", description: "Commandes, produits et clients de votre boutique Shopify.", category: "ecommerce", auth: "api_key" },
-  // ---- Développement ----
-  { toolkit: "github", label: "GitHub", description: "Dépôts, issues et pull requests GitHub.", category: "developer", auth: "oauth" },
-  { toolkit: "jira", label: "Jira", description: "Tickets et suivi de projets Jira.", category: "developer", auth: "oauth" },
-  // ---- Connaissances & données ----
-  { toolkit: "googledrive", label: "Google Drive", description: "Synchronisation de fichiers Drive vers la mémoire Gen3ia.", category: "knowledge", auth: "oauth" },
-  { toolkit: "confluence", label: "Confluence", description: "Synchronisation de votre base de connaissances Confluence.", category: "knowledge", auth: "oauth" },
-  { toolkit: "airtable", label: "Airtable", description: "Lecture et écriture dans vos bases Airtable.", category: "data", auth: "api_key" },
-  { toolkit: "postgres", label: "PostgreSQL", description: "Requêtes en lecture sur vos bases PostgreSQL externes.", category: "data", auth: "api_key" },
+  { toolkit: "github", label: "GitHub", description: "Repositories, issues and pull requests.", category: "developer", auth: "oauth" },
+  { toolkit: "gmail", label: "Gmail", description: "Email and mailbox automation.", category: "email_calendar", auth: "oauth" },
+  { toolkit: "slack", label: "Slack", description: "Messages, channels and notifications.", category: "messaging", auth: "oauth" },
+  { toolkit: "googlecalendar", label: "Google Calendar", description: "Events and calendar automation.", category: "email_calendar", auth: "oauth" },
+  { toolkit: "googledrive", label: "Google Drive", description: "Files and documents.", category: "knowledge", auth: "oauth" },
+  { toolkit: "linkedin", label: "LinkedIn", description: "Professional social automation.", category: "social", auth: "oauth" },
+  { toolkit: "instagram", label: "Instagram", description: "Instagram content automation.", category: "social", auth: "oauth" },
+  { toolkit: "facebook", label: "Facebook", description: "Facebook automation.", category: "social", auth: "oauth" },
+  { toolkit: "youtube", label: "YouTube", description: "YouTube channel automation.", category: "social", auth: "oauth" },
+  { toolkit: "whatsapp", label: "WhatsApp", description: "WhatsApp automation.", category: "messaging", auth: "oauth" },
+  { toolkit: "notion", label: "Notion", description: "Pages, databases and knowledge.", category: "knowledge", auth: "oauth" },
+  { toolkit: "hubspot", label: "HubSpot", description: "CRM and sales automation.", category: "crm", auth: "oauth" },
+  { toolkit: "salesforce", label: "Salesforce", description: "CRM automation.", category: "crm", auth: "oauth" },
+  { toolkit: "shopify", label: "Shopify", description: "Store, products and orders.", category: "ecommerce", auth: "oauth" },
+  { toolkit: "stripe", label: "Stripe", description: "Payments and billing automation.", category: "ecommerce", auth: "api_key" },
 ];
 
 export const CONNECTION_CATEGORIES: ConnectionCategory[] = [
@@ -90,8 +74,32 @@ const TOOLKIT_SLUG_RE = /^[a-z0-9_]{2,64}$/;
 export function assertSupportedToolkit(toolkit: string): string {
   const normalized = toolkit.trim().toLowerCase();
   if (!TOOLKIT_SLUG_RE.test(normalized)) throw new Error("Invalid toolkit identifier.");
-  if (!CATALOG_INDEX.has(normalized)) throw new Error(`Toolkit "${normalized}" is not available in the Gen3ia connections catalog.`);
   return normalized;
+}
+
+export async function listComposioToolkits(options?: { category?: string; search?: string; cursor?: string; limit?: number }) {
+  const composio = getComposio();
+  const result = await composio.toolkits.list({
+    ...(options?.category ? { category: options.category } : {}),
+    ...(options?.search ? { search: options.search } : {}),
+    ...(options?.cursor ? { cursor: options.cursor } : {}),
+    limit: Math.min(50, Math.max(1, options?.limit ?? 50)),
+    managed_by: "all",
+    include_deprecated: false,
+  } as never);
+  const items = (result as any)?.items ?? [];
+  return {
+    items: items.map((item: any) => ({
+      toolkit: item.slug,
+      label: item.name ?? item.slug,
+      description: item.description ?? "",
+      logo: item.logo ?? item.logo_url ?? null,
+      categories: item.categories ?? [],
+      authSchemes: item.composio_managed_auth_schemes ?? item.auth_schemes ?? [],
+      managedBy: item.managed_by ?? "composio",
+    })),
+    nextCursor: (result as any)?.next_cursor ?? (result as any)?.nextCursor ?? null,
+  };
 }
 
 /** Valide l'existence réelle du toolkit côté Composio (appel une fois par connexion). */
