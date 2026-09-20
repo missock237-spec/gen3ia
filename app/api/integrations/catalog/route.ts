@@ -26,6 +26,63 @@ type CatalogItem = {
 
 const CATEGORY_SET = new Set<string>(CONNECTION_CATEGORIES);
 
+/**
+ * Taxonomie Composio -> catégories Gen3ia. Une entrée par slug Composio
+ * significatif ; les slugs absents tombent dans "other". Ordre sans importance :
+ * la première catégorie du toolkit qui matche gagne (ordre du tableau du toolkit).
+ */
+const COMPOSIO_CATEGORY_MAP: Record<string, ConnectionCategory | "other"> = {
+  // Messagerie
+  "team-chat": "messaging",
+  "communication": "messaging",
+  "phone-&-sms": "messaging",
+  "notifications": "messaging",
+  // Réseaux sociaux
+  "social-media-accounts": "social",
+  "social-media-marketing": "social",
+  // Email & calendrier
+  "email": "email_calendar",
+  "calendar": "email_calendar",
+  "transactional-email": "email_calendar",
+  "email-newsletters": "email_calendar",
+  "drip-emails": "email_calendar",
+  "scheduling-&-booking": "email_calendar",
+  // CRM
+  "crm": "crm",
+  "sales-&-crm": "crm",
+  "contact-management": "crm",
+  "customer-support": "crm",
+  "support": "crm",
+  // E-commerce & paiements
+  "ecommerce": "ecommerce",
+  "commerce": "ecommerce",
+  "payment-processing": "ecommerce",
+  "accounting": "ecommerce",
+  "proposal-&-invoice-management": "ecommerce",
+  "taxes": "ecommerce",
+  // Développement
+  "developer-tools": "developer",
+  "developer-tools-&-devops": "developer",
+  "it-operations": "developer",
+  "server-monitoring": "developer",
+  "security-&-identity-tools": "developer",
+  "website-builders": "developer",
+  "website-&-app-building": "developer",
+  "app-builder": "developer",
+  "model-context-protocol": "developer",
+  // Base de connaissances
+  "notes": "knowledge",
+  "documents": "knowledge",
+  "file-management-&-storage": "knowledge",
+  "bookmark-managers": "knowledge",
+  // Données
+  "databases": "data",
+  "spreadsheets": "data",
+  "analytics": "data",
+  "business-intelligence": "data",
+  "dashboards": "data",
+};
+
 function normaliserAuth(item: { authSchemes?: string[]; noAuth?: boolean }): CatalogItem["auth"] {
   if (item.noAuth) return "no_auth";
   const schemes = Array.isArray(item.authSchemes) ? item.authSchemes.map((scheme) => String(scheme).toUpperCase()) : [];
@@ -37,8 +94,10 @@ function normaliserAuth(item: { authSchemes?: string[]; noAuth?: boolean }): Cat
 
 function normaliserCategories(item: { categories?: string[] }): ConnectionCategory | "other" {
   const list = Array.isArray(item.categories) ? item.categories : [];
-  const matched = list.find((category) => typeof category === "string" && CATEGORY_SET.has(category));
-  return (matched as ConnectionCategory | undefined) ?? "other";
+  const direct = list.find((category) => typeof category === "string" && CATEGORY_SET.has(category));
+  if (direct) return direct as ConnectionCategory;
+  const mapped = list.map((category) => (typeof category === "string" ? COMPOSIO_CATEGORY_MAP[category] : undefined)).find(Boolean);
+  return mapped ?? "other";
 }
 
 function versItemCatalogue(item: {
