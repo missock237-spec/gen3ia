@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { AgentRuntime, RuntimePlanSchema } from "@/lib/agents/runtime";
+import { getAgentForOwner } from "@/lib/agents/repository";
 
 export const ScheduleSchema = z.object({
   agentId: z.string().trim().min(1).max(200),
@@ -22,11 +23,31 @@ export type AgentSchedule = z.infer<typeof ScheduleSchema> & {
   id: string;
   userId: string;
   lastTriggeredSlot?: string;
+  lastExecutionId?: string;
+  lastExecutionStatus?: string;
+  lastExecutionAt?: string;
+  lastError?: string;
+  runningExecutionId?: string;
+  runningExecutionStartedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 };
 
+export type ScheduleRun = {
+  id: string;
+  scheduleId: string;
+  userId: string;
+  agentId: string;
+  slot: string;
+  status: string;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
+};
+
 const COLLECTION = "agentSchedules";
+const RUNS_COLLECTION = "agentScheduleRuns";
+const EXECUTION_LEASE_MS = 2 * 60 * 60 * 1000;
 
 function assertTimezone(timezone: string) {
   try {
@@ -120,6 +141,11 @@ function slotFor(schedule: AgentSchedule, now = new Date()) {
 export async function createSchedule(userId: string, input: unknown) {
   const parsed = ScheduleSchema.parse(input);
   assertTimezone(parsed.timezone);
+
+  const agent = await getAgentForOwner(userId, parsed.agentId);
+  if (!agent) throw new Error("Agent not found or not owned by this account");
+  if (agent.status !== "active") throw new Error("Only active agents can be scheduled");
+
   const id = randomUUID();
   const now = FieldValue.serverTimestamp();
 
@@ -142,15 +168,23 @@ export async function getSchedule(userId: string, id: string) {
 
 export async function listSchedules(userId: string) {
   const snap = await adminDb.collection(COLLECTION).where("userId", "==", userId).limit(100).get();
-  return snap.docs.map((doc) => serializeSchedule(doc.id, doc.data())).sort((a, b) => a.startTime.localeCompare(b.startTime));
+  return snap.docs
+    .map((doc) => serializeSchedule(doc.id, doc.data()))
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
 }
 
 export async function updateSchedule(userId: string, id: string, input: unknown) {
   const parsed = ScheduleSchema.partial().parse(input);
   if (parsed.timezone) assertTimezone(parsed.timezone);
+
   const ref = adminDb.collection(COLLECTION).doc(id);
   const current = await ref.get();
   if (!current.exists || current.data()?.userId !== userId) return null;
+
+  if (parsed.agentId) {
+    const agent = await getAgentForOwner(userId, parsed.agentId);
+    if (!agent || agent.status !== "active") throw new Error("Agent not found, not owned, or inactive");
+  }
 
   await ref.update({
     ...parsed,
@@ -168,29 +202,55 @@ export async function deleteSchedule(userId: string, id: string) {
   return true;
 }
 
-export async function claimDueSchedule(schedule: AgentSchedule, now = new Date()) {
-  const slot = slotFor(schedule, now);
-  if (!slot) return false;
+type ClaimedRun = { executionId: string; slot: string };
 
+export async function claimDueSchedule(schedule: AgentSchedule, now = new Date()): Promise<ClaimedRun | null> {
+  const slot = slotFor(schedule, now);
+  if (!slot) return null;
+
+  const executionId = randomUUID();
   const ref = adminDb.collection(COLLECTION).doc(schedule.id);
+  const runRef = adminDb.collection(RUNS_COLLECTION).doc(executionId);
+
   return adminDb.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    if (!snap.exists) return false;
-    const data = snap.data()!;
-    if (data.userId !== schedule.userId || data.enabled !== true) return false;
-    if (data.lastTriggeredSlot === slot) return false;
+    if (!snap.exists) return null;
 
+    const data = snap.data()!;
+    if (data.userId !== schedule.userId || data.enabled !== true) return null;
+    if (data.lastTriggeredSlot === slot) return null;
+
+    const runningStarted = data.runningExecutionStartedAt instanceof Timestamp
+      ? data.runningExecutionStartedAt.toDate().getTime()
+      : 0;
+    const runningActive = Boolean(data.runningExecutionId) && runningStarted > 0 && now.getTime() - runningStarted < EXECUTION_LEASE_MS;
+    if (runningActive) return null;
+
+    const startedAt = Timestamp.fromDate(now);
     tx.update(ref, {
       lastTriggeredSlot: slot,
-      lastTriggeredAt: Timestamp.fromDate(now),
+      runningExecutionId: executionId,
+      runningExecutionStartedAt: startedAt,
+      lastExecutionId: executionId,
+      lastExecutionStatus: "running",
+      lastError: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    return true;
+    tx.set(runRef, {
+      scheduleId: schedule.id,
+      userId: schedule.userId,
+      agentId: schedule.agentId,
+      slot,
+      status: "running",
+      startedAt,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    return { executionId, slot };
   });
 }
 
-export async function runSchedule(schedule: AgentSchedule) {
-  const executionId = randomUUID();
+export async function runSchedule(schedule: AgentSchedule, executionId: string, slot: string) {
   const plan = schedule.plan ?? {
     steps: [{
       id: "scheduled_step",
@@ -210,25 +270,104 @@ export async function runSchedule(schedule: AgentSchedule) {
     maxIterations: 10,
   };
 
-  const runtime = new AgentRuntime({
-    userId: schedule.userId,
-    objective: schedule.objective,
-    plan: { ...plan, executionId, objective: schedule.objective },
-  });
+  try {
+    const runtime = new AgentRuntime({
+      userId: schedule.userId,
+      objective: schedule.objective,
+      plan: { ...plan, executionId, objective: schedule.objective },
+    });
+    const state = await runtime.run();
 
-  const state = await runtime.run();
-  await adminDb.collection(COLLECTION).doc(schedule.id).update({
-    lastExecutionId: executionId,
-    lastExecutionStatus: state.status,
-    lastExecutionAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
+    await finishScheduleRun(schedule.id, schedule.userId, executionId, state.status, undefined, slot);
+    return { executionId, status: state.status };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Scheduled execution failed";
+    await finishScheduleRun(schedule.id, schedule.userId, executionId, "failed", message, slot);
+    throw error;
+  }
+}
+
+async function finishScheduleRun(
+  scheduleId: string,
+  userId: string,
+  executionId: string,
+  status: string,
+  error: string | undefined,
+  slot: string,
+) {
+  const now = Timestamp.now();
+  const scheduleRef = adminDb.collection(COLLECTION).doc(scheduleId);
+  const runRef = adminDb.collection(RUNS_COLLECTION).doc(executionId);
+
+  await adminDb.runTransaction(async (tx) => {
+    const scheduleSnap = await tx.get(scheduleRef);
+    if (!scheduleSnap.exists) return;
+
+    const scheduleData = scheduleSnap.data()!;
+    if (scheduleData.userId !== userId || scheduleData.runningExecutionId !== executionId) return;
+
+    tx.update(scheduleRef, {
+      runningExecutionId: FieldValue.delete(),
+      runningExecutionStartedAt: FieldValue.delete(),
+      lastExecutionStatus: status,
+      lastExecutionAt: now,
+      ...(error ? { lastError: error.slice(0, 4000) } : { lastError: FieldValue.delete() }),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(runRef, {
+      status,
+      completedAt: now,
+      ...(error ? { error: error.slice(0, 4000) } : {}),
+      slot,
+      scheduleId,
+      userId,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
   });
-  return { executionId, status: state.status };
+}
+
+export async function listScheduleRuns(userId: string, scheduleId: string, limit = 25) {
+  const schedule = await getSchedule(userId, scheduleId);
+  if (!schedule) return null;
+
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+  const snap = await adminDb
+    .collection(RUNS_COLLECTION)
+    .where("scheduleId", "==", scheduleId)
+    .where("userId", "==", userId)
+    .limit(safeLimit)
+    .get();
+
+  return snap.docs
+    .map((doc) => serializeRun(doc.id, doc.data()))
+    .sort((a, b) => (b.startedAt ?? "").localeCompare(a.startedAt ?? ""));
 }
 
 export function serializeSchedule(id: string, data: DocumentData): AgentSchedule {
   const toIso = (value: unknown) => value instanceof Timestamp ? value.toDate().toISOString() : undefined;
-  return { ...(data as Omit<AgentSchedule, "id">), id, createdAt: toIso(data.createdAt), updatedAt: toIso(data.updatedAt) };
+  return {
+    ...(data as Omit<AgentSchedule, "id">),
+    id,
+    createdAt: toIso(data.createdAt),
+    updatedAt: toIso(data.updatedAt),
+    lastExecutionAt: toIso(data.lastExecutionAt),
+    runningExecutionStartedAt: toIso(data.runningExecutionStartedAt),
+  };
+}
+
+function serializeRun(id: string, data: DocumentData): ScheduleRun {
+  const toIso = (value: unknown) => value instanceof Timestamp ? value.toDate().toISOString() : undefined;
+  return {
+    id,
+    scheduleId: String(data.scheduleId),
+    userId: String(data.userId),
+    agentId: String(data.agentId),
+    slot: String(data.slot),
+    status: String(data.status),
+    startedAt: toIso(data.startedAt),
+    completedAt: toIso(data.completedAt),
+    error: typeof data.error === "string" ? data.error : undefined,
+  };
 }
 
 export async function dispatchSchedules(now = new Date()) {
@@ -237,12 +376,18 @@ export async function dispatchSchedules(now = new Date()) {
   const results: Array<Record<string, unknown>> = [];
 
   for (const schedule of due) {
-    const claimed = await claimDueSchedule(schedule, now);
-    if (!claimed) continue;
+    const claim = await claimDueSchedule(schedule, now);
+    if (!claim) continue;
+
     try {
-      results.push({ scheduleId: schedule.id, ...(await runSchedule(schedule)) });
+      results.push({ scheduleId: schedule.id, ...(await runSchedule(schedule, claim.executionId, claim.slot)) });
     } catch (error) {
-      results.push({ scheduleId: schedule.id, status: "failed", error: error instanceof Error ? error.message : "Scheduled execution failed" });
+      results.push({
+        scheduleId: schedule.id,
+        executionId: claim.executionId,
+        status: "failed",
+        error: error instanceof Error ? error.message : "Scheduled execution failed",
+      });
     }
   }
 
