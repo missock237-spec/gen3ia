@@ -15,29 +15,33 @@ import {
   type Storage,
 } from "firebase-admin/storage";
 
-function getFirebaseAdminConfig() {
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY
-    ?.trim()
-    .replace(/^['"]|['"]$/g, "")
-    .replace(/\\n/g, "\n");
+function readServerEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value && value !== "undefined" && value !== "null" ? value : undefined;
+}
 
-  if (
-    !process.env.FIREBASE_PROJECT_ID ||
-    !process.env.FIREBASE_CLIENT_EMAIL ||
-    !privateKey
-  ) {
-    throw new Error("Firebase Admin environment variables are missing.");
+function getFirebaseAdminConfig() {
+  const projectId = readServerEnv("FIREBASE_PROJECT_ID");
+  const clientEmail = readServerEnv("FIREBASE_CLIENT_EMAIL");
+  const rawPrivateKey = readServerEnv("FIREBASE_PRIVATE_KEY");
+  const privateKey = rawPrivateKey
+    ?.replace(/^['"]|['"]$/g, "")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .trim();
+
+  if (!projectId || !clientEmail || !privateKey?.includes("BEGIN PRIVATE KEY")) {
+    throw new Error("Firebase Admin configuration is missing or invalid. Configure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in the production environment.");
   }
 
-  return {
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey,
-  };
+  return { projectId, clientEmail, privateKey };
 }
 
 function getFirebaseAdmin() {
-  const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
+  const existingApp = getApps()[0];
+  if (existingApp) return existingApp;
+
+  const projectId = readServerEnv("FIREBASE_PROJECT_ID");
 
   // Firebase Admin automatically routes Auth/Firestore calls to the local
   // emulators when these environment variables are present. No service
@@ -49,8 +53,8 @@ function getFirebaseAdmin() {
   return initializeApp({
     credential: cert(getFirebaseAdminConfig()),
     storageBucket:
-      process.env.FIREBASE_STORAGE_BUCKET ??
-      process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+      readServerEnv("FIREBASE_STORAGE_BUCKET") ??
+      readServerEnv("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"),
   });
 }
 

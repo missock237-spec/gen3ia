@@ -7,14 +7,25 @@ type Context = { params: Promise<{ agentId: string }> };
 
 export async function GET(_request: NextRequest, context: Context) {
   const { agentId } = await context.params;
-  const agent = await getAgentById(agentId);
-  if (!agent) return NextResponse.json({ error: "Agent introuvable." }, { status: 404 });
-  return NextResponse.json({ name: agent.name, description: agent.description });
+  try {
+    const agent = await getAgentById(agentId);
+    if (!agent) return NextResponse.json({ error: "Agent introuvable." }, { status: 404 });
+    return NextResponse.json({ name: agent.name, description: agent.description });
+  } catch (error) {
+    console.error("[public-agent] Firebase lookup failed", error);
+    return NextResponse.json({ error: "Le chat client est temporairement indisponible. La configuration Firebase doit être activée en production." }, { status: 503 });
+  }
 }
 
 export async function POST(request: NextRequest, context: Context) {
   const { agentId } = await context.params;
-  const agent = await getAgentById(agentId);
+  let agent: Awaited<ReturnType<typeof getAgentById>>;
+  try {
+    agent = await getAgentById(agentId);
+  } catch (error) {
+    console.error("[public-agent] Firebase lookup failed", error);
+    return NextResponse.json({ error: "Le chat client est temporairement indisponible. La configuration Firebase doit être activée en production." }, { status: 503 });
+  }
   if (!agent) return NextResponse.json({ error: "Agent introuvable." }, { status: 404 });
   const body = (await request.json()) as { message?: string };
   const message = body.message?.trim();

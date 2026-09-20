@@ -10,7 +10,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isVitrine = pathname === "/";
   const isAuth = pathname === "/login" || pathname === "/signup";
   const isApproval = pathname.startsWith("/approvals");
-  const chrome = isVitrine || isAuth || isApproval;
+  const isClient = pathname === "/client" || pathname.startsWith("/client/");
+  const chrome = isVitrine || isAuth || isApproval || isClient;
 
   return (
     <div className="g3-shell flex overflow-hidden">
