@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { protectRoute } from "@/lib/security/route-guard";
-import { storePermanentFile, listPermanentFiles, createPermanentDownloadUrl, deletePermanentFile } from "@/lib/storage/permanent-user-storage";
+import { storePermanentFile, createPermanentDownloadUrl, deletePermanentFile, listPermanentFilesWithMetadata, getUserStorageUsage } from "@/lib/storage/permanent-user-storage";
 import { billUsage } from "@/lib/billing/media-meter";
 import { randomUUID } from "node:crypto";
 
@@ -12,7 +12,11 @@ export async function GET(request: NextRequest) {
   const path = request.nextUrl.searchParams.get("path");
   try {
     if (path) return NextResponse.json({ url: await createPermanentDownloadUrl(guard.context.userId, path) });
-    return NextResponse.json({ files: await listPermanentFiles(guard.context.userId) }, { headers: { "cache-control": "no-store" } });
+    const [files, usage] = await Promise.all([
+      listPermanentFilesWithMetadata(guard.context.userId),
+      getUserStorageUsage(guard.context.userId),
+    ]);
+    return NextResponse.json({ files, usage }, { headers: { "cache-control": "no-store" } });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Storage operation failed" }, { status: 400 }); }
 }
 

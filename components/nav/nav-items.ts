@@ -19,6 +19,7 @@ export const TOOLS: NavItem[] = [
 ];
 
 export const LIBRARY: NavItem[] = [
+  { href: "/memory", label: "Mémoire permanente", icon: "◆" },
   { href: "/storage", label: "Fichiers", icon: "□" },
   { href: "/marketplace/purchases", label: "Mes achats", icon: "◈" },
   { href: "/team", label: "Équipe", icon: "◎" },

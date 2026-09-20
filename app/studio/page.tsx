@@ -9,7 +9,6 @@ import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 
 import { AgentManager } from "@/components/agent/agent-manager";
 import { UniversalAgentChat } from "@/components/agent/universal-agent-chat";
-import { MemoryPanel } from "@/components/agent/memory-panel";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { WorkspaceTaskPanel } from "@/components/agent/workspace-task-panel";
 
@@ -103,7 +102,7 @@ function AdsWorkshop() {
           {publishResult && <div className="anim-fade-in mt-3 rounded-xl border border-emerald-200 bg-emerald-100 p-4 text-sm text-emerald-700">{publishResult}</div>}
         </div>
         <Feature title="Terminal IA" text="Un terminal sandboxé réservé aux agents. Aucun accès direct utilisateur au shell d'exécution." />
-        <Feature title="Mémoire permanente" text="Les agents peuvent mémoriser des informations utiles, avec protection contre les secrets et contrôle propriétaire." />
+        <FeatureLink href="/memory" title="Mémoire permanente" text="Souvenirs et documents (100 Mo max, 10 fichiers par lot) conservés pour vos missions. Gestion sur une page dédiée." cta="Ouvrir la mémoire" />
         <Feature title="Caméra & fichiers" text="La caméra fonctionne uniquement après autorisation explicite. Les captures et fichiers peuvent être conservés dans le stockage permanent." />
       </section>
       <footer className="rounded-2xl border border-amber-200 bg-amber-100 p-4 text-xs text-amber-700">Les actions externes, dépenses publicitaires et opérations sensibles restent soumises aux politiques de sécurité et à une confirmation humaine. Les agents ne peuvent pas contourner ces contrôles.</footer>
@@ -113,6 +112,10 @@ function AdsWorkshop() {
 
 function Feature({ title, text }: { title: string; text: string }) {
   return <div className="g3-card p-5"><h3 className="font-semibold">{title}</h3><p className="mt-2 text-sm leading-6 text-neutral-500">{text}</p></div>;
+}
+
+function FeatureLink({ href, title, text, cta }: { href: string; title: string; text: string; cta: string }) {
+  return <Link href={href} className="g3-card block p-5 transition hover:bg-white"><h3 className="font-semibold">{title}</h3><p className="mt-2 text-sm leading-6 text-neutral-500">{text}</p><span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-sky-700">{cta} →</span></Link>;
 }
 
 function StudioPageInner() {
@@ -134,6 +137,7 @@ function StudioPageInner() {
             <p className="mt-2 max-w-2xl text-sm text-neutral-500 md:text-base">Créez un agent, personnalisez-le, exécutez-le immédiatement. Les agents de code accèdent en exclusivité à l&apos;Atelier d&apos;Interfaces propulsé par 21st.dev.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Link href="/memory" className="g3-btn g3-btn-ghost text-xs">Mémoire<span className="rounded-md border border-emerald-200 bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-emerald-700">Nouveau</span></Link>
             <Link href="/marketplace" className="g3-btn g3-btn-ghost text-xs">Marketplace</Link>
             <Link href="/live" className="g3-btn g3-btn-ghost text-xs">Agent Live<span className="rounded-md border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-700">PC</span></Link>
           </div>
@@ -151,7 +155,7 @@ function StudioPageInner() {
           />
         </div>
 
-        {tab === "agents" ? <div className="space-y-6">{taskId ? <WorkspaceTaskPanel taskId={taskId} /> : <AgentManager />}<UniversalAgentChat initialMessage={taskId ? "" : initialTask} /><MemoryPanel /></div> : <AdsWorkshop />}
+        {tab === "agents" ? <div className="space-y-6">{taskId ? <WorkspaceTaskPanel taskId={taskId} /> : <AgentManager />}<UniversalAgentChat initialMessage={taskId ? "" : initialTask} /></div> : <AdsWorkshop />}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { PromptBox, AGENT_TOOLS } from "@/components/ui/chatgpt-prompt-input";
+import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 
 type AgentStep = {
   id: string;
@@ -281,13 +282,16 @@ export function UniversalAgentChat({ initialMessage = "" }: { initialMessage?: s
     setAttachmentPath(null);
     setError("");
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const response = await fetch("/api/storage/permanent", { method: "POST", body: form });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Téléversement impossible.");
-      const path = typeof data.file?.path === "string" ? data.file.path : typeof data.file?.filename === "string" ? data.file.filename : null;
-      if (!path) throw new Error("Le stockage n’a pas retourné le chemin du fichier.");
+      // Televersement chunked : chaque requete reste sous la limite serverless
+      // (~4,5 Mo), ce qui autorise des pieces jointes jusqu'a 100 Mo.
+      const result = await uploadPermanentFiles([file]);
+      const uploaded = result.uploaded[0];
+      if (!uploaded) {
+        const reason = result.failed[0]?.error || "Televersement impossible.";
+        throw new Error(reason);
+      }
+      const path = uploaded.path || uploaded.filename;
+      if (!path) throw new Error("Le stockage n\u2019a pas retourn\u00e9 le chemin du fichier.");
       setAttachmentPath(path);
     } catch (e) {
       setAttachment(null);
