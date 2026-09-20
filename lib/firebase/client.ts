@@ -8,15 +8,30 @@ import {
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
+function readPublicConfig(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value && value !== "undefined" && value !== "null" ? value : undefined;
+}
+
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId:
-    process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+  apiKey: readPublicConfig("NEXT_PUBLIC_FIREBASE_API_KEY"),
+  authDomain: readPublicConfig("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"),
+  projectId: readPublicConfig("NEXT_PUBLIC_FIREBASE_PROJECT_ID"),
+  storageBucket: readPublicConfig("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId: readPublicConfig(
+    "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+  ),
+  appId: readPublicConfig("NEXT_PUBLIC_FIREBASE_APP_ID"),
 };
+
+export function hasFirebaseClientConfig(): boolean {
+  return Boolean(
+    firebaseConfig.apiKey &&
+      firebaseConfig.authDomain &&
+      firebaseConfig.projectId &&
+      firebaseConfig.appId,
+  );
+}
 
 /**
  * Lazily initialized Firebase web app.

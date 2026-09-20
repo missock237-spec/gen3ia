@@ -15,7 +15,12 @@ import {
   User,
 } from "firebase/auth";
 
-import { auth, googleProvider, githubProvider } from "./client";
+import {
+  auth,
+  googleProvider,
+  githubProvider,
+  hasFirebaseClientConfig,
+} from "./client";
 
 export interface AuthState {
   user: User | null;
@@ -36,11 +41,21 @@ export function useAuth(): AuthState {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
-      setUser(nextUser);
+    if (!hasFirebaseClientConfig()) {
       setLoading(false);
-    });
-    return unsubscribe;
+      return;
+    }
+
+    try {
+      const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+        setUser(nextUser);
+        setLoading(false);
+      });
+      return unsubscribe;
+    } catch {
+      setLoading(false);
+      return undefined;
+    }
   }, []);
 
   return { user, loading };
