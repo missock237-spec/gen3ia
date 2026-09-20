@@ -64,6 +64,14 @@ export async function listAgentsByOwner(ownerId: string): Promise<AgentRecord[]>
     .map((doc) => toRecord(doc.id, doc.data() as AgentDoc));
 }
 
+export async function getAgentById(agentId: string): Promise<AgentRecord | null> {
+  const snap = await adminDb.collection(COLLECTION).doc(agentId).get();
+  if (!snap.exists) return null;
+  const data = snap.data() as AgentDoc | undefined;
+  if (!data || data.status !== "active") return null;
+  return toRecord(snap.id, data);
+}
+
 export async function getAgentForOwner(ownerId: string, agentId: string): Promise<AgentRecord | null> {
   const ref = adminDb.collection(COLLECTION).doc(agentId);
   const snap = await ref.get();

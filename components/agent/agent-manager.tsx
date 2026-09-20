@@ -423,7 +423,15 @@ export function AgentManager() {
                   </Link>
                 )}
 
-                {agent.voiceEnabled && <button type="button" className="mt-3 w-full rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-left text-sm text-sky-700 hover:bg-sky-100" onClick={() => setVoiceSetupAgentId(agent.id)}>📞 Configurer le numéro et la voix</button>}
+                {agent.voiceEnabled && <button type="button" className="mt-3 w-full rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-left text-sm text-sky-700 hover:bg-sky-100" onClick={() => setVoiceSetupAgentId(agent.id)}>Configurer le numéro et la voix</button>}
+
+                <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div><p className="text-xs font-bold uppercase tracking-wide text-violet-700">Lien client</p><p className="mt-1 text-xs text-violet-900">Partagez ce lien dans vos publicités pour ouvrir le chat.</p></div>
+                    <button type="button" className="g3-btn g3-btn-ghost !px-3 !py-2 text-xs" onClick={() => void navigator.clipboard?.writeText(`${window.location.origin}/client/${agent.id}`)}>Copier le lien</button>
+                  </div>
+                  <p className="mt-2 truncate rounded-lg bg-white/70 px-2 py-1 text-xs text-violet-800">{typeof window !== "undefined" ? `${window.location.origin}/client/${agent.id}` : `/client/${agent.id}`}</p>
+                </div>
 
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <input
