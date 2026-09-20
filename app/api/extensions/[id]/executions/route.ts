@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
+import { authenticateDeveloper } from "@/lib/extensions/developer-keys";
 import { extensionApiError } from "@/lib/extensions/api";
 import { getExtension, listExtensionExecutions } from "@/lib/extensions/repository";
 
@@ -14,16 +14,19 @@ type Params = { params: Promise<{ id: string }> };
  */
 export async function GET(request: Request, { params }: Params) {
   try {
-    const token = await verifyFirebaseAuth(request);
+    const developer = await authenticateDeveloper(request);
     const { id } = await params;
     const extension = await getExtension(id);
     if (!extension) return NextResponse.json({ error: "Extension introuvable." }, { status: 404 });
-    const isDeveloper = extension.developerId === token.uid;
+    const isDeveloper = extension.developerId === developer.userId;
     const url = new URL(request.url);
+    const projectId = developer.projectId ?? url.searchParams.get("projectId")?.trim() ?? "";
+    if (isDeveloper && (!projectId || extension.projectId !== projectId)) return NextResponse.json({ error: "Cette extension n'appartient pas au projet Gen3ia lié." }, { status: 403 });
     const limit = Number(url.searchParams.get("limit") ?? 50);
     const executions = await listExtensionExecutions({
       extensionId: id,
-      userId: isDeveloper ? undefined : token.uid,
+      userId: isDeveloper ? undefined : developer.userId,
+      projectId: isDeveloper ? projectId : undefined,
       limit,
     });
     return NextResponse.json({
