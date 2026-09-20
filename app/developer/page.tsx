@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
+import { type User } from "firebase/auth";
+import { watchAuth } from "@/lib/firebase/client";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 
 type Tab = "overview" | "projects" | "build" | "connectors" | "keys" | "extensions" | "monitor";
@@ -70,7 +70,7 @@ export default function DeveloperPage(){
     if(selectedProject){const rr=await api(`/api/developer/projects/${encodeURIComponent(selectedProject)}/resources`);if(rr.ok)setResourceSummary((await rr.json()).summary??null);}
   },[api,selectedProject]);
 
-  useEffect(()=>{const u=onAuthStateChanged(auth,x=>setUser(x));return()=>u();},[]);
+  useEffect(()=>{const u=watchAuth(x=>setUser(x));return()=>u();},[]);
   useEffect(()=>{void load();},[load]);
   useEffect(()=>{if(tab==="connectors"){void loadConnectors();void loadProjectConnectors();void loadProjectTools();}},[tab,loadConnectors,loadProjectConnectors,loadProjectTools]);
 

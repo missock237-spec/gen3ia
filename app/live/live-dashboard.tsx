@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { onAuthStateChanged, type User } from "firebase/auth";
+import { type User } from "firebase/auth";
 
-import { auth } from "@/lib/firebase/client";
+import { watchAuth } from "@/lib/firebase/client";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 
 type Permission =
@@ -103,7 +103,7 @@ export function LiveDashboard() {
 
   useEffect(
     () =>
-      onAuthStateChanged(auth, async (current) => {
+      watchAuth(async (current) => {
         setUser(current);
         setAuthReady(true);
         await loadSessions();

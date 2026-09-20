@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
+import { type User } from "firebase/auth";
+import { watchAuth } from "@/lib/firebase/client";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 
 interface Wallet {
@@ -82,7 +82,7 @@ export default function BillingPage() {
     } catch { /* historique indisponible : section masquée */ }
   }, []);
 
-  useEffect(() => onAuthStateChanged(auth, async (current) => {
+  useEffect(() => watchAuth(async (current) => {
     setUser(current);
     // L'etat Firebase client peut etre perdu (webviews mobiles) : on charge
     // quand meme le solde via le cookie de session serveur.

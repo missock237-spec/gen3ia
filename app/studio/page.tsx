@@ -3,8 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
+import { type User } from "firebase/auth";
+import { watchAuth } from "@/lib/firebase/client";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 
 import { AgentManager } from "@/components/agent/agent-manager";
@@ -125,7 +125,7 @@ function StudioPageInner() {
   const taskId = searchParams.get("taskId") ?? "";
   const [, setUser] = useState<User | null>(null);
 
-  useEffect(() => onAuthStateChanged(auth, (current) => setUser(current)), []);
+  useEffect(() => watchAuth((current) => setUser(current)), []);
 
   return (
     <div className="min-h-full bg-[#f6f4ef] text-neutral-900 p-4 md:p-8">

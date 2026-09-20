@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
+import { type User } from "firebase/auth";
+import { watchAuth } from "@/lib/firebase/client";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 
 type Agent = { id: string; name: string; status: string; type: string; };
@@ -77,7 +77,7 @@ export default function AgentSchedulesPage() {
   useEffect(() => {
     // Differe d'un tick pour eviter un rendu en cascade synchrone (set-state-in-effect).
     const timer = setTimeout(() => setTimezone(browserTimezone()), 0);
-    const unsubscribe = onAuthStateChanged(auth, async (current) => {
+    const unsubscribe = watchAuth(async (current) => {
       setUser(current);
       try { await load(); } catch (error) { setMessage(error instanceof Error ? error.message : "Chargement impossible"); }
     });
