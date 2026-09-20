@@ -11,6 +11,47 @@ interface CatalogEntry {
   auth: string;
 }
 
+/**
+ * Garde-fou : l'API peut renvoyer une forme inattendue (evolution du contrat
+ * serveur, repli statique, proxy...) — la page ne doit JAMAIS planter pour
+ * autant (même classe de bug que le crash du Studio : une exception de rendu
+ * bascule toute la page sur l'error boundary).
+ */
+function versCatalogue(value: unknown): CatalogEntry[] {
+  const raw = Array.isArray(value)
+    ? value
+    : value && typeof value === "object" && Array.isArray((value as { items?: unknown }).items)
+      ? (value as { items: unknown[] }).items
+      : value && typeof value === "object" && Array.isArray((value as { catalog?: unknown }).catalog)
+        ? (value as { catalog: unknown[] }).catalog
+        : [];
+  return raw
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
+    .map((entry) => ({
+      toolkit: String(entry.toolkit ?? ""),
+      label: String(entry.label ?? entry.toolkit ?? ""),
+      description: String(entry.description ?? ""),
+      category: String(entry.category ?? "other"),
+      auth: String(entry.auth ?? "oauth"),
+    }))
+    .filter((entry) => entry.toolkit);
+}
+
+function versListe<T>(value: unknown, adapt: (entry: Record<string, unknown>) => T): T[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
+    .map(adapt);
+}
+
+async function lireJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 interface HubConnection {
   id: string;
   toolkit: string;
@@ -90,6 +131,7 @@ export function IntegrationsWorkspace() {
   const [preferences, setPreferences] = useState<MessagingPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [connecting, setConnecting] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -106,33 +148,71 @@ export function IntegrationsWorkspace() {
 
   const reload = useCallback(async () => {
     setError("");
+    // allSettled : un endpoint en echec ne doit pas priver les autres sections.
+    const [catalogRes, connectionsRes, webhooksRes, statusRes, prefsRes] = await Promise.allSettled([
+      authFetch("/api/integrations/catalog", { cache: "no-store" }),
+      authFetch("/api/integrations/composio/connections", { cache: "no-store" }),
+      authFetch("/api/integrations/webhooks", { cache: "no-store" }),
+      authFetch("/api/integrations/status", { cache: "no-store" }),
+      authFetch("/api/integrations/messaging/preferences", { cache: "no-store" }),
+    ]);
+
     try {
-      const [catalogRes, connectionsRes, webhooksRes, statusRes, prefsRes] = await Promise.all([
-        authFetch("/api/integrations/catalog", { cache: "no-store" }),
-        authFetch("/api/integrations/composio/connections", { cache: "no-store" }),
-        authFetch("/api/integrations/webhooks", { cache: "no-store" }),
-        authFetch("/api/integrations/status", { cache: "no-store" }),
-        authFetch("/api/integrations/messaging/preferences", { cache: "no-store" }),
-      ]);
-      if (catalogRes.ok) setCatalog(((await catalogRes.json()) as { catalog: CatalogEntry[] }).catalog);
-      if (connectionsRes.ok) setConnections(((await connectionsRes.json()) as { connections: HubConnection[] }).connections);
-      if (webhooksRes.ok) {
-        const body = (await webhooksRes.json()) as { webhooks: OutgoingWebhook[]; availableEvents: string[] };
-        setWebhooks(body.webhooks ?? []);
-        setAvailableEvents(body.availableEvents ?? []);
+      if (catalogRes.status === "fulfilled" && catalogRes.value.ok) {
+        setCatalog(versCatalogue(await lireJson(catalogRes.value)));
       }
-      if (statusRes.ok) setStatus((await statusRes.json()) as PlatformStatus);
-      if (prefsRes.ok) {
-        const body = (await prefsRes.json()) as { preferences: MessagingPreferences | null };
-        if (body.preferences) {
-          setPreferences(body.preferences);
-          setPrefChannel(body.preferences.channel);
-          setPrefRecipient(body.preferences.recipient);
-          setPrefApprovals(body.preferences.approvalsEnabled ?? true);
+      if (connectionsRes.status === "fulfilled" && connectionsRes.value.ok) {
+        const body = await lireJson(connectionsRes.value);
+        setConnections(versListe((body as { connections?: unknown })?.connections, (entry) => ({
+          id: String(entry.id ?? ""),
+          toolkit: String(entry.toolkit ?? ""),
+          label: String(entry.label ?? entry.toolkit ?? ""),
+          category: String(entry.category ?? "other"),
+          status: String(entry.status ?? ""),
+          enabled: entry.enabled !== false,
+        })));
+      }
+      if (webhooksRes.status === "fulfilled" && webhooksRes.value.ok) {
+        const body = (await lireJson(webhooksRes.value)) as { webhooks?: unknown; availableEvents?: unknown } | null;
+        setWebhooks(versListe(body?.webhooks, (entry) => ({
+          id: String(entry.id ?? ""),
+          url: String(entry.url ?? ""),
+          events: Array.isArray(entry.events) ? entry.events.map(String) : [],
+          description: typeof entry.description === "string" ? entry.description : undefined,
+          disabled: entry.disabled === true,
+          createdAt: Number(entry.createdAt ?? 0),
+        })));
+        setAvailableEvents(Array.isArray(body?.availableEvents) ? body!.availableEvents.map(String) : []);
+      }
+      if (statusRes.status === "fulfilled" && statusRes.value.ok) {
+        const body = (await lireJson(statusRes.value)) as Partial<PlatformStatus> | null;
+        setStatus({
+          messaging: {
+            whatsapp: body?.messaging?.whatsapp === true,
+            telegram: body?.messaging?.telegram === true,
+            slack: body?.messaging?.slack === true,
+          },
+          email: body?.email === true,
+          composio: body?.composio === true,
+        });
+      }
+      if (prefsRes.status === "fulfilled" && prefsRes.value.ok) {
+        const body = (await lireJson(prefsRes.value)) as { preferences?: Partial<MessagingPreferences> | null } | null;
+        if (body?.preferences && typeof body.preferences === "object") {
+          const preferences: MessagingPreferences = {
+            channel: (body.preferences.channel === "whatsapp" || body.preferences.channel === "slack" ? body.preferences.channel : "telegram"),
+            recipient: String(body.preferences.recipient ?? ""),
+            approvalsEnabled: body.preferences.approvalsEnabled !== false,
+          };
+          setPreferences(preferences);
+          setPrefChannel(preferences.channel);
+          setPrefRecipient(preferences.recipient);
+          setPrefApprovals(preferences.approvalsEnabled);
         }
       }
     } catch {
-      setError("Impossible de charger vos intégrations. Réessayez.");
+      // Aucun bloc de parsing ne doit faire crasher la page : on degrade en erreur affichable.
+      setError("Certaines intégrations n'ont pas pu être chargées. Réessayez.");
     } finally {
       setLoading(false);
     }
@@ -141,6 +221,17 @@ export function IntegrationsWorkspace() {
   useEffect(() => {
     if (sessionAvailable === true) void reload();
     else if (sessionAvailable === false) setLoading(false);
+  }, [sessionAvailable, reload]);
+
+  // Retour du flux OAuth Composio : /integrations?connected=<toolkit>
+  useEffect(() => {
+    if (sessionAvailable !== true) return;
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("connected");
+    if (!connected) return;
+    setNotice(`Connexion « ${connected} » enregistrée. Elle sera active une fois l'autorisation confirmée côté service.`);
+    window.history.replaceState(null, "", window.location.pathname);
+    void reload();
   }, [sessionAvailable, reload]);
 
   const catalogByCategory = useMemo(() => {
@@ -266,6 +357,8 @@ export function IntegrationsWorkspace() {
   const connectedToolkits = new Set(connections.filter((connection) => connection.enabled && connection.status === "ACTIVE").map((connection) => connection.toolkit));
   const categoriesToShow = statusFilter === "all" ? [...catalogByCategory.keys()] : [statusFilter];
 
+  const catalogueVide = catalog.length === 0;
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pb-20 pt-6 sm:px-6 sm:pt-10">
       <header>
@@ -277,6 +370,7 @@ export function IntegrationsWorkspace() {
       </header>
 
       {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+      {notice ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</div> : null}
 
       {loading ? (
         <p className="mt-10 text-sm text-neutral-500">Chargement des intégrations…</p>
@@ -323,6 +417,10 @@ export function IntegrationsWorkspace() {
 
           {/* Catalogue */}
           <SectionCard title="Catalogue de services" subtitle="Cliquez sur Connecter pour autoriser un service via OAuth sécurisé.">
+            {catalogueVide ? (
+              <p className="text-sm text-neutral-500">Le catalogue est momentanément indisponible. Réessayez dans quelques instants.</p>
+            ) : (
+              <>
             <div className="mb-4 flex flex-wrap gap-2">
               <button type="button" onClick={() => setStatusFilter("all")} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusFilter === "all" ? "bg-neutral-900 text-white" : "border border-neutral-300"}`}>
                 Tous
@@ -361,6 +459,8 @@ export function IntegrationsWorkspace() {
                 </div>
               ))}
             </div>
+              </>
+            )}
           </SectionCard>
 
           {/* Notifications & approbation distante */}

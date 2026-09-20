@@ -21,8 +21,11 @@ describe("Connections Hub catalog", () => {
     }
   });
 
-  it("rejette les toolkits hors catalogue (aucun appel arbitraire)", () => {
-    expect(() => assertSupportedToolkit("unknown_toolkit")).toThrow(/not available/);
+  it("valide le format des identifiants (l'existence réelle est vérifiée côté Composio à la connexion)", () => {
+    // La politique actuelle : assertSupportedToolkit valide le FORMAT du slug.
+    // L'existence du toolkit est vérifiée en direct par assertToolkitExists()
+    // dans authorizeToolkit() — aucun toolkit fictif ne peut créer de session.
+    expect(() => assertSupportedToolkit("unknown_toolkit")).not.toThrow();
     expect(() => assertSupportedToolkit("github")).not.toThrow();
   });
 

@@ -48,9 +48,9 @@ export default function DeveloperPage(){
     return authFetch(path,{...init,headers:{"content-type":"application/json",...(init?.headers??{})}});
   },[]);
 
-  const loadConnectors=useCallback(async(search=connectorSearch)=>{
+  const loadConnectors=useCallback(async(search=connectorSearch,startCursor?:string)=>{
     const all: Connector[] = [];
-    let cursor: string | undefined;
+    let cursor: string | undefined = startCursor;
     for(let page=0; page<20; page++){
       const q=new URLSearchParams({limit:"1000"});
       if(search.trim())q.set("search",search.trim());

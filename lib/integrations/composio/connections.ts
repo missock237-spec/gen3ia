@@ -40,12 +40,16 @@ export const CONNECTIONS_CATALOG: CatalogEntry[] = [
   { toolkit: "instagram", label: "Instagram", description: "Instagram content automation.", category: "social", auth: "oauth" },
   { toolkit: "facebook", label: "Facebook", description: "Facebook automation.", category: "social", auth: "oauth" },
   { toolkit: "youtube", label: "YouTube", description: "YouTube channel automation.", category: "social", auth: "oauth" },
+  { toolkit: "x", label: "X (Twitter)", description: "Posts and social publishing.", category: "social", auth: "oauth" },
   { toolkit: "whatsapp", label: "WhatsApp", description: "WhatsApp automation.", category: "messaging", auth: "oauth" },
+  { toolkit: "telegram", label: "Telegram", description: "Messages, channels and remote approvals.", category: "messaging", auth: "api_key" },
   { toolkit: "notion", label: "Notion", description: "Pages, databases and knowledge.", category: "knowledge", auth: "oauth" },
   { toolkit: "hubspot", label: "HubSpot", description: "CRM and sales automation.", category: "crm", auth: "oauth" },
   { toolkit: "salesforce", label: "Salesforce", description: "CRM automation.", category: "crm", auth: "oauth" },
   { toolkit: "shopify", label: "Shopify", description: "Store, products and orders.", category: "ecommerce", auth: "oauth" },
   { toolkit: "stripe", label: "Stripe", description: "Payments and billing automation.", category: "ecommerce", auth: "api_key" },
+  { toolkit: "googlesheets", label: "Google Sheets", description: "Spreadsheets and data capture.", category: "data", auth: "oauth" },
+  { toolkit: "airtable", label: "Airtable", description: "Databases, records and automations.", category: "data", auth: "oauth" },
 ];
 
 export const CONNECTION_CATEGORIES: ConnectionCategory[] = [
@@ -88,23 +92,39 @@ export async function listComposioToolkits(options?: { category?: string; search
     managed_by: "all",
     include_deprecated: false,
   } as never);
-  const items = (result as any)?.items ?? [];
+
+  // Le SDK @composio/core 0.17 transforme la liste en TABLEAU direct d'objets
+  // camelCase (voir transformToolkitListResponse). On reste tolerant : certains
+  // wrappers ou versions anterieures peuvent renvoyer { items: [...] }.
+  const raw: any[] = Array.isArray(result)
+    ? result
+    : Array.isArray((result as any)?.items)
+      ? (result as any).items
+      : [];
+
   return {
-    items: items.map((item: any) => ({
-      toolkit: item.slug,
-      label: item.name ?? item.slug,
-      description: item.description ?? item.meta?.description ?? "",
-      logo: item.logo ?? item.logo_url ?? item.meta?.logo ?? null,
-      categories: Array.isArray(item.categories)
-        ? item.categories.map((category: any) => typeof category === "string" ? category : category?.name ?? category?.slug).filter(Boolean)
-        : Array.isArray(item.meta?.categories)
-          ? item.meta.categories.map((category: any) => typeof category === "string" ? category : category?.name ?? category?.slug).filter(Boolean)
-          : [],
-      authSchemes: item.composio_managed_auth_schemes ?? item.auth_schemes ?? [],
-      managedBy: item.managed_by ?? "composio",
-    })),
-    nextCursor: (result as any)?.next_cursor ?? (result as any)?.nextCursor ?? null,
-    totalItems: Number((result as any)?.total_items ?? (result as any)?.totalItems ?? items.length),
+    items: raw
+      .map((item: any) => ({
+        toolkit: String(item?.slug ?? ""),
+        label: String(item?.name ?? item?.slug ?? ""),
+        description: String(item?.meta?.description ?? item?.description ?? ""),
+        logo: item?.meta?.logo ?? item?.logo ?? item?.logo_url ?? null,
+        categories: Array.isArray(item?.meta?.categories)
+          ? item.meta.categories
+              .map((category: any) => (typeof category === "string" ? category : category?.slug ?? category?.name))
+              .filter(Boolean)
+          : Array.isArray(item?.categories)
+            ? item.categories
+                .map((category: any) => (typeof category === "string" ? category : category?.slug ?? category?.name))
+                .filter(Boolean)
+            : [],
+        authSchemes: item?.composioManagedAuthSchemes ?? item?.authSchemes ?? item?.auth_schemes ?? [],
+        managedBy: item?.managedBy ?? item?.managed_by ?? "composio",
+        noAuth: Boolean(item?.noAuth ?? item?.no_auth ?? false),
+      }))
+      .filter((entry: { toolkit: string }) => entry.toolkit),
+    nextCursor: (result as any)?.nextCursor ?? (result as any)?.next_cursor ?? null,
+    totalItems: Number((result as any)?.totalItems ?? (result as any)?.total_items ?? raw.length),
   };
 }
 

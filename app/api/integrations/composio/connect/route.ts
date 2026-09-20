@@ -7,7 +7,9 @@ import { upsertDeveloperProjectConnector } from "@/lib/developer/connectors";
 
 const Schema = z.object({
   toolkit: z.string().min(2).max(64),
-  projectId: z.string().min(1),
+  // Optionnel : present depuis l'atelier developpeur (liaison projet),
+  // absent depuis /integrations (connexion Hub simple).
+  projectId: z.string().min(1).optional(),
 });
 
 export const runtime = "nodejs";
@@ -18,9 +20,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const { toolkit, projectId } = Schema.parse(await request.json());
-    await verifyDeveloperProjectAccess(guard.context.userId, projectId);
     const connection = await authorizeToolkit(guard.context.userId, toolkit);
-    await upsertDeveloperProjectConnector({ projectId, userId: guard.context.userId, toolkit, connectionId: connection.id });
+    if (projectId) {
+      await verifyDeveloperProjectAccess(guard.context.userId, projectId);
+      await upsertDeveloperProjectConnector({ projectId, userId: guard.context.userId, toolkit, connectionId: connection.id });
+    }
 
     return NextResponse.json({
       toolkit,
