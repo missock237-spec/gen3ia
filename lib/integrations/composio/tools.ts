@@ -34,6 +34,7 @@ export async function executeComposioTool(
       string,
       unknown
     >;
+    connectedAccountId?: string;
     version?: string;
     signal?: AbortSignal;
   },
@@ -52,6 +53,8 @@ export async function executeComposioTool(
         userId:
           params.userId,
 
+        ...(params.connectedAccountId ? { connectedAccountId: params.connectedAccountId } : {}),
+
         version,
 
         arguments:
@@ -69,6 +72,8 @@ export async function executeComposioTool(
     {
       userId:
         params.userId,
+
+      ...(params.connectedAccountId ? { connectedAccountId: params.connectedAccountId } : {}),
 
       arguments:
         params.arguments,
