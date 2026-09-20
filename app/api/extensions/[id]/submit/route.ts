@@ -21,7 +21,9 @@ export async function POST(request: Request, { params }: Params) {
     if (extension.developerId !== developer.userId) {
       return NextResponse.json({ error: "Seul le développeur peut soumettre cette extension." }, { status: 403 });
     }
-    const body = (await request.json().catch(() => ({}))) as { version?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { version?: unknown; projectId?: unknown };
+    const projectId = developer.projectId ?? (typeof body.projectId === "string" ? body.projectId.trim() : "");
+    if (!projectId || extension.projectId !== projectId) return NextResponse.json({ error: "Cette extension n'appartient pas au projet Gen3ia lié." }, { status: 403 });
     const version = typeof body.version === "string" ? body.version : extension.latestVersion;
     if (!version) return NextResponse.json({ error: "Aucune version à soumettre." }, { status: 400 });
     const existing = await getVersion(id, version);
@@ -29,7 +31,7 @@ export async function POST(request: Request, { params }: Params) {
     if (existing.status === "approved") {
       return NextResponse.json({ error: "Cette version est déjà approuvée." }, { status: 400 });
     }
-    const submitted = await submitVersion(developer.userId, id, version);
+    const submitted = await submitVersion(developer.userId, id, version, projectId);
     return NextResponse.json({
       version: { version: submitted.version, status: submitted.status, submittedAt: submitted.submittedAt },
     });
