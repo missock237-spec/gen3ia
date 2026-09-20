@@ -48,7 +48,26 @@ export default function DeveloperPage(){
     return authFetch(path,{...init,headers:{"content-type":"application/json",...(init?.headers??{})}});
   },[]);
 
-  const loadConnectors=useCallback(async(search=connectorSearch,cursor?:string)=>{ const q=new URLSearchParams({limit:"50"}); if(search.trim())q.set("search",search.trim()); if(cursor)q.set("cursor",cursor); const r=await api("/api/integrations/catalog?"+q.toString()); if(!r.ok)return; const d=await r.json(); setConnectors(d.items??[]); setConnectorNextCursor(d.nextCursor??null); },[api,connectorSearch]);
+  const loadConnectors=useCallback(async(search=connectorSearch)=>{
+    const all: Connector[] = [];
+    let cursor: string | undefined;
+    for(let page=0; page<20; page++){
+      const q=new URLSearchParams({limit:"1000"});
+      if(search.trim())q.set("search",search.trim());
+      if(cursor)q.set("cursor",cursor);
+      const response=await api("/api/integrations/catalog?"+q.toString());
+      if(!response.ok)break;
+      const data=await response.json();
+      if(Array.isArray(data.items)) all.push(...data.items);
+      const next=typeof data.nextCursor==="string"&&data.nextCursor?data.nextCursor:"";
+      if(!next || next===cursor) { cursor=undefined; break; }
+      cursor=next;
+    }
+    const unique=new Map<string,Connector>();
+    for(const item of all){ if(item?.toolkit) unique.set(item.toolkit,item); }
+    setConnectors(Array.from(unique.values()));
+    setConnectorNextCursor(null);
+  },[api,connectorSearch]);
 
   const [projectTools,setProjectTools]=useState<Array<{slug:string;name?:string;description?:string;toolkit?:string}>>([]);
   const [toolSearch,setToolSearch]=useState("");
