@@ -81,50 +81,106 @@ export function assertSupportedToolkit(toolkit: string): string {
   return normalized;
 }
 
+export interface ToolkitCatalogItem {
+  toolkit: string;
+  label: string;
+  description: string;
+  logo: string | null;
+  categories: string[];
+  authSchemes: string[];
+  managedBy: string;
+  noAuth: boolean;
+}
+
+/**
+ * Normalise un item toolkit brut (client HTTP snake_case) ou transformé
+ * (wrapper SDK camelCase) vers la forme du catalogue Gen3ia.
+ * Exporté pour les tests unitaires.
+ */
+export function mapRawToolkitItem(item: any): ToolkitCatalogItem {
+  const categories = Array.isArray(item?.meta?.categories)
+    ? item.meta.categories
+    : Array.isArray(item?.categories)
+      ? item.categories
+      : [];
+  return {
+    toolkit: String(item?.slug ?? ""),
+    label: String(item?.name ?? item?.slug ?? ""),
+    description: String(item?.meta?.description ?? item?.description ?? ""),
+    logo: item?.meta?.logo ?? item?.logo ?? item?.logo_url ?? null,
+    categories: categories
+      .map((category: any) =>
+        typeof category === "string" ? category : category?.slug ?? category?.id ?? category?.name,
+      )
+      .filter(Boolean),
+    authSchemes:
+      item?.composio_managed_auth_schemes ?? item?.composioManagedAuthSchemes ?? item?.auth_schemes ?? item?.authSchemes ?? [],
+    managedBy: item?.managed_by ?? item?.managedBy ?? "composio",
+    noAuth: Boolean(item?.no_auth ?? item?.noAuth ?? false),
+  };
+}
+
+/** Limite par page imposée par l'API Composio (/api/v3.1/toolkits). */
+const TOOLKITS_PAGE_LIMIT = 1000;
+/** Garde-fou d'agrégation : 5 pages = 5000 toolkits maximum par requête. */
+const TOOLKITS_MAX_PAGES = 5;
+
+/**
+ * Liste les toolkits Composio via le client HTTP BRUT (composio.client).
+ *
+ * Pourquoi le client brut : le wrapper `composio.toolkits.get()` transforme la
+ * réponse en simple TABLEAU et perd `next_cursor`/`total_items`/`search`, ce
+ * qui rendait la pagination et la recherche serveur impossibles (le catalogue
+ * restait vide ou tronqué à 1000 entrées).
+ *
+ * Sans `options.cursor`, TOUTES les pages sont agrégées (jusqu'à
+ * TOOLKITS_MAX_PAGES) afin de renvoyer le catalogue complet — plus de 800
+ * applications — en une seule réponse.
+ */
 export async function listComposioToolkits(options?: { category?: string; search?: string; cursor?: string; limit?: number }) {
   const composio = getComposio();
-  const result = await composio.toolkits.get({
-    ...(options?.category ? { category: options.category } : {}),
-    ...(options?.search ? { search: options.search } : {}),
-    ...(options?.cursor ? { cursor: options.cursor } : {}),
-    limit: Math.min(1000, Math.max(1, options?.limit ?? 1000)),
-    sort_by: "alphabetically",
-    managed_by: "all",
-    include_deprecated: false,
-  } as never);
+  const rawClient = (
+    composio as unknown as {
+      client: { toolkits: { list: (query: Record<string, unknown>) => Promise<any> } };
+    }
+  ).client.toolkits;
+  if (!rawClient?.list) throw new Error("Composio raw toolkits client unavailable.");
 
-  // Le SDK @composio/core 0.17 transforme la liste en TABLEAU direct d'objets
-  // camelCase (voir transformToolkitListResponse). On reste tolerant : certains
-  // wrappers ou versions anterieures peuvent renvoyer { items: [...] }.
-  const raw: any[] = Array.isArray(result)
-    ? result
-    : Array.isArray((result as any)?.items)
-      ? (result as any).items
-      : [];
+  const aggregate = !options?.cursor;
+  const maxPages = aggregate ? TOOLKITS_MAX_PAGES : 1;
+  const pageLimit = Math.min(TOOLKITS_PAGE_LIMIT, Math.max(1, options?.limit ?? TOOLKITS_PAGE_LIMIT));
+
+  let cursor: string | null = options?.cursor ?? null;
+  const collected: any[] = [];
+  let totalItems = 0;
+
+  for (let page = 0; page < maxPages; page++) {
+    const result = await rawClient.list({
+      ...(options?.category ? { category: options.category } : {}),
+      ...(options?.search ? { search: options.search } : {}),
+      ...(cursor ? { cursor } : {}),
+      limit: pageLimit,
+      sort_by: "alphabetically",
+      managed_by: "all",
+      include_deprecated: false,
+    });
+
+    const items = Array.isArray(result?.items) ? result.items : Array.isArray(result) ? result : [];
+    collected.push(...items);
+    totalItems = Number(result?.total_items ?? 0) || collected.length;
+
+    const next = typeof result?.next_cursor === "string" && result.next_cursor ? result.next_cursor : null;
+    if (!next || collected.length >= totalItems) {
+      cursor = null;
+      break;
+    }
+    cursor = next;
+  }
 
   return {
-    items: raw
-      .map((item: any) => ({
-        toolkit: String(item?.slug ?? ""),
-        label: String(item?.name ?? item?.slug ?? ""),
-        description: String(item?.meta?.description ?? item?.description ?? ""),
-        logo: item?.meta?.logo ?? item?.logo ?? item?.logo_url ?? null,
-        categories: Array.isArray(item?.meta?.categories)
-          ? item.meta.categories
-              .map((category: any) => (typeof category === "string" ? category : category?.slug ?? category?.name))
-              .filter(Boolean)
-          : Array.isArray(item?.categories)
-            ? item.categories
-                .map((category: any) => (typeof category === "string" ? category : category?.slug ?? category?.name))
-                .filter(Boolean)
-            : [],
-        authSchemes: item?.composioManagedAuthSchemes ?? item?.authSchemes ?? item?.auth_schemes ?? [],
-        managedBy: item?.managedBy ?? item?.managed_by ?? "composio",
-        noAuth: Boolean(item?.noAuth ?? item?.no_auth ?? false),
-      }))
-      .filter((entry: { toolkit: string }) => entry.toolkit),
-    nextCursor: (result as any)?.nextCursor ?? (result as any)?.next_cursor ?? null,
-    totalItems: Number((result as any)?.totalItems ?? (result as any)?.total_items ?? raw.length),
+    items: collected.map(mapRawToolkitItem).filter((entry: ToolkitCatalogItem) => entry.toolkit),
+    nextCursor: cursor ?? null,
+    totalItems: Math.max(totalItems, collected.length),
   };
 }
 

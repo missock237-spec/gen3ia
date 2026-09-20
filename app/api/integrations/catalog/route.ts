@@ -124,23 +124,63 @@ function versItemCatalogue(item: {
 }
 
 function catalogueStatique(options: { search?: string; category?: string }): CatalogItem[] {
-  const search = options.search?.toLowerCase();
-  return CONNECTIONS_CATALOG.filter((entry) => {
-    if (options.category && entry.category !== options.category) return false;
+  return filtrerCatalogue(
+    CONNECTIONS_CATALOG.map((entry) => ({
+      ...entry,
+      logo: null,
+      categories: [entry.category],
+      authSchemes: entry.auth === "oauth" ? ["OAUTH2"] : entry.auth === "api_key" ? ["API_KEY"] : ["NO_AUTH"],
+      managedBy: "gen3ia",
+      noAuth: entry.auth === "no_auth",
+    })),
+    options,
+  );
+}
+
+function filtrerCatalogue(items: CatalogItem[], options: { search?: string; category?: string }): CatalogItem[] {
+  const search = options.search?.trim().toLowerCase();
+  if (!options.category && !search) return items;
+  return items.filter((item) => {
+    if (options.category && item.category !== options.category) return false;
     if (!search) return true;
     return (
-      entry.label.toLowerCase().includes(search) ||
-      entry.toolkit.toLowerCase().includes(search) ||
-      entry.description.toLowerCase().includes(search)
+      item.label.toLowerCase().includes(search) ||
+      item.toolkit.toLowerCase().includes(search) ||
+      item.description.toLowerCase().includes(search)
     );
-  }).map((entry) => ({
-    ...entry,
-    logo: null,
-    categories: [entry.category],
-    authSchemes: entry.auth === "oauth" ? ["OAUTH2"] : entry.auth === "api_key" ? ["API_KEY"] : ["NO_AUTH"],
-    managedBy: "gen3ia",
-    noAuth: entry.auth === "no_auth",
-  }));
+  });
+}
+
+/**
+ * Cache mémoire du catalogue complet (processus serveur).
+ *
+ * L'agrégation paginée coute plusieurs appels Composio (1 à 5 selon le total) :
+ * on met en cache la liste NORMALISÉE complète 10 minutes pour que chaque
+ * requête (recherche, filtre, rechargement) réponde instantanément. Les
+ * requêtes concurrentes partagent la même promesse de chargement.
+ */
+const CACHE_TTL_MS = 10 * 60 * 1000;
+let cachedItems: CatalogItem[] | null = null;
+let cacheExpiresAt = 0;
+let cachePromise: Promise<CatalogItem[]> | null = null;
+
+async function chargerCatalogueComplet(): Promise<CatalogItem[]> {
+  if (cachedItems && Date.now() < cacheExpiresAt) return cachedItems;
+  if (!cachePromise) {
+    cachePromise = listComposioToolkits({ limit: 1000 })
+      .then((dynamic) => dynamic.items.map(versItemCatalogue))
+      .then((items) => {
+        if (items.length > 0) {
+          cachedItems = items;
+          cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+        }
+        return items;
+      })
+      .finally(() => {
+        cachePromise = null;
+      });
+  }
+  return cachePromise;
 }
 
 export async function GET(request: NextRequest) {
@@ -150,33 +190,41 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const search = url.searchParams.get("search")?.trim() || undefined;
   const category = url.searchParams.get("category")?.trim() || undefined;
-  const cursor = url.searchParams.get("cursor")?.trim() || undefined;
-  const limit = Number(url.searchParams.get("limit") || "50");
+  const limit = Math.min(5000, Math.max(1, Number(url.searchParams.get("limit") || "1000")));
 
   let items: CatalogItem[] = [];
-  let nextCursor: string | null = null;
   let source: "composio" | "catalogue-integre" = "catalogue-integre";
 
-  // 1) Catalogue dynamique Composio (des centaines de services, recherche incluse).
+  // 1) Catalogue dynamique Composio complet (plus de 800 services), servi
+  //    depuis le cache mémoire et filtré en mémoire — réponse instantanée.
   try {
-    const dynamic = await listComposioToolkits({ search, category, cursor, limit });
-    items = dynamic.items.map(versItemCatalogue);
-    nextCursor = dynamic.nextCursor;
-    if (items.length > 0) source = "composio";
+    const full = await chargerCatalogueComplet();
+    if (full.length > 0) {
+      source = "composio";
+      items = filtrerCatalogue(full, { search, category });
+    }
   } catch {
-    // Composio indisponible ou cle absente : on retombe sur le catalogue integre.
+    // Composio indisponible ou clé absente : on retombe sur le catalogue intégré.
     items = [];
   }
 
-  // 2) Repli : catalogue integre — la page ne doit JAMAIS rester vide, sinon
-  //    l'utilisateur ne peut pas demarrer une connexion OAuth.
+  // 2) Repli : catalogue intégré — la page ne doit JAMAIS rester vide, sinon
+  //    l'utilisateur ne peut pas démarrer une connexion OAuth.
   if (items.length === 0) {
     items = catalogueStatique({ search, category });
-    nextCursor = null;
+    source = "catalogue-integre";
   }
 
+  const returned = items.slice(0, limit);
   return NextResponse.json(
-    { items, nextCursor, totalItems: items.length, categories: CONNECTION_CATEGORIES, provider: "composio", source },
+    {
+      items: returned,
+      nextCursor: null,
+      totalItems: items.length,
+      categories: CONNECTION_CATEGORIES,
+      provider: "composio",
+      source,
+    },
     { headers: { "cache-control": "private, max-age=60, stale-while-revalidate=300" } },
   );
 }

@@ -111,6 +111,9 @@ const CHANNEL_HINTS: Record<string, string> = {
   slack: "ID de canal (C123456) ou #canal",
 };
 
+/** Nombre d'applications affichées avant le bouton « Afficher plus ». */
+const VISIBLE_STEP = 240;
+
 function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
@@ -141,6 +144,10 @@ export function IntegrationsWorkspace() {
   const [webhookSecret, setWebhookSecret] = useState("");
   const [webhookError, setWebhookError] = useState("");
 
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState(VISIBLE_STEP);
+
   const [prefChannel, setPrefChannel] = useState<"whatsapp" | "telegram" | "slack">("telegram");
   const [prefRecipient, setPrefRecipient] = useState("");
   const [prefApprovals, setPrefApprovals] = useState(true);
@@ -150,7 +157,7 @@ export function IntegrationsWorkspace() {
     setError("");
     // allSettled : un endpoint en echec ne doit pas priver les autres sections.
     const [catalogRes, connectionsRes, webhooksRes, statusRes, prefsRes] = await Promise.allSettled([
-      authFetch("/api/integrations/catalog", { cache: "no-store" }),
+      authFetch("/api/integrations/catalog?limit=1000", { cache: "no-store" }),
       authFetch("/api/integrations/composio/connections", { cache: "no-store" }),
       authFetch("/api/integrations/webhooks", { cache: "no-store" }),
       authFetch("/api/integrations/status", { cache: "no-store" }),
@@ -161,6 +168,8 @@ export function IntegrationsWorkspace() {
       if (catalogRes.status === "fulfilled" && catalogRes.value.ok) {
         setCatalog(versCatalogue(await lireJson(catalogRes.value)));
       }
+      // Le catalogue complet (plus de 800 apps) est demandé en une requête :
+      // la limite serveur est portée à 1000 avec agrégation paginée en amont.
       if (connectionsRes.status === "fulfilled" && connectionsRes.value.ok) {
         const body = await lireJson(connectionsRes.value);
         setConnections(versListe((body as { connections?: unknown })?.connections, (entry) => ({
@@ -234,15 +243,38 @@ export function IntegrationsWorkspace() {
     void reload();
   }, [sessionAvailable, reload]);
 
+  // Recherche live avec léger debounce : le catalogue est déjà chargé en
+  // mémoire, le filtrage est purement client — instantané, sans requête.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAppliedSearch(searchInput);
+      setVisibleCount(VISIBLE_STEP);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Catalogue filtré par la recherche appliquée (client, instantané), puis
+  // regroupé par catégorie pour l'affichage.
+  const searchedCatalog = useMemo(() => {
+    const query = appliedSearch.trim().toLowerCase();
+    if (!query) return catalog;
+    return catalog.filter(
+      (entry) =>
+        entry.label.toLowerCase().includes(query) ||
+        entry.toolkit.toLowerCase().includes(query) ||
+        entry.description.toLowerCase().includes(query),
+    );
+  }, [catalog, appliedSearch]);
+
   const catalogByCategory = useMemo(() => {
     const groups = new Map<string, CatalogEntry[]>();
-    for (const entry of catalog) {
+    for (const entry of searchedCatalog) {
       const list = groups.get(entry.category) ?? [];
       list.push(entry);
       groups.set(entry.category, list);
     }
     return groups;
-  }, [catalog]);
+  }, [searchedCatalog]);
 
   async function connect(toolkit: string) {
     setConnecting(toolkit);
@@ -355,9 +387,26 @@ export function IntegrationsWorkspace() {
   }
 
   const connectedToolkits = new Set(connections.filter((connection) => connection.enabled && connection.status === "ACTIVE").map((connection) => connection.toolkit));
-  const categoriesToShow = statusFilter === "all" ? [...catalogByCategory.keys()] : [statusFilter];
+  const allCategories = [...catalogByCategory.keys()];
+  const categoriesToShow = statusFilter === "all" ? allCategories : allCategories.filter((category) => category === statusFilter);
+  const isFiltered = statusFilter !== "all" || appliedSearch.trim() !== "";
 
+  // Révélation progressive : en vue complète (sans filtre) on n'affiche qu'une
+  // partie du catalogue pour garder le DOM léger, avec un bouton « Afficher plus ».
   const catalogueVide = catalog.length === 0;
+  const resultatsVides = searchedCatalog.length === 0 && !catalogueVide;
+  const affichées = isFiltered ? searchedCatalog.length : Math.min(visibleCount, searchedCatalog.length);
+  const resteAAfficher = searchedCatalog.length - affichées;
+
+  let budget = affichées;
+  const categoriesVisibles: Array<{ category: string; entries: CatalogEntry[] }> = [];
+  for (const category of categoriesToShow) {
+    const entries = catalogByCategory.get(category) ?? [];
+    if (budget <= 0) break;
+    const slice = entries.slice(0, budget);
+    budget -= slice.length;
+    if (slice.length > 0) categoriesVisibles.push({ category, entries: slice });
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pb-20 pt-6 sm:px-6 sm:pt-10">
@@ -416,27 +465,69 @@ export function IntegrationsWorkspace() {
           </SectionCard>
 
           {/* Catalogue */}
-          <SectionCard title="Catalogue de services" subtitle="Cliquez sur Connecter pour autoriser un service via OAuth sécurisé.">
+          <SectionCard
+            title={`Catalogue de services (${searchedCatalog.length})`}
+            subtitle="Plus de 800 applications externes prêtes à être connectées à vos agents. Cliquez sur Connecter pour autoriser un service via OAuth sécurisé."
+          >
             {catalogueVide ? (
               <p className="text-sm text-neutral-500">Le catalogue est momentanément indisponible. Réessayez dans quelques instants.</p>
             ) : (
               <>
+            <form
+              className="mb-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setAppliedSearch(searchInput);
+                setVisibleCount(VISIBLE_STEP);
+              }}
+            >
+              <input
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Rechercher une application (ex. gmail, notion, stripe…)"
+                className="w-full rounded-xl border border-neutral-300 px-4 py-2.5 text-sm"
+                type="search"
+              />
+            </form>
+            {resultatsVides ? (
+              <p className="text-sm text-neutral-500">
+                Aucune application ne correspond à «&nbsp;{appliedSearch}&nbsp;». Essayez un autre mot-clé.
+              </p>
+            ) : (
+              <>
             <div className="mb-4 flex flex-wrap gap-2">
-              <button type="button" onClick={() => setStatusFilter("all")} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusFilter === "all" ? "bg-neutral-900 text-white" : "border border-neutral-300"}`}>
-                Tous
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter("all");
+                  setVisibleCount(VISIBLE_STEP);
+                }}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusFilter === "all" ? "bg-neutral-900 text-white" : "border border-neutral-300"}`}
+              >
+                Tous ({searchedCatalog.length})
               </button>
-              {[...catalogByCategory.keys()].map((category) => (
-                <button key={category} type="button" onClick={() => setStatusFilter(category)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusFilter === category ? "bg-neutral-900 text-white" : "border border-neutral-300"}`}>
-                  {CATEGORY_LABELS[category] ?? category}
+              {allCategories.map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => {
+                    setStatusFilter(category);
+                    setVisibleCount(VISIBLE_STEP);
+                  }}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusFilter === category ? "bg-neutral-900 text-white" : "border border-neutral-300"}`}
+                >
+                  {CATEGORY_LABELS[category] ?? category} ({(catalogByCategory.get(category) ?? []).length})
                 </button>
               ))}
             </div>
             <div className="grid gap-5">
-              {categoriesToShow.map((category) => (
+              {categoriesVisibles.map(({ category, entries }) => (
                 <div key={category}>
-                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">{CATEGORY_LABELS[category] ?? category}</h3>
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+                    {CATEGORY_LABELS[category] ?? category} ({(catalogByCategory.get(category) ?? []).length})
+                  </h3>
                   <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {(catalogByCategory.get(category) ?? []).map((entry) => (
+                    {entries.map((entry) => (
                       <li key={entry.toolkit} className="flex flex-col justify-between rounded-xl border border-neutral-200 p-4">
                         <div>
                           <div className="flex items-center justify-between gap-2">
@@ -459,6 +550,17 @@ export function IntegrationsWorkspace() {
                 </div>
               ))}
             </div>
+            {resteAAfficher > 0 ? (
+              <button
+                type="button"
+                onClick={() => setVisibleCount((previous) => previous + VISIBLE_STEP)}
+                className="mt-5 w-full rounded-xl border border-neutral-300 px-4 py-2.5 text-sm font-semibold hover:bg-neutral-100"
+              >
+                Afficher plus ({resteAAfficher} applications restantes)
+              </button>
+            ) : null}
+              </>
+            )}
               </>
             )}
           </SectionCard>
