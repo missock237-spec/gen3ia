@@ -169,12 +169,14 @@ export async function createDeveloperApiKey(params: {
   keyHash: string;
   prefix: string;
   name: string;
+  projectId: string;
 }): Promise<void> {
   await adminDb.collection(COL.apiKeys).doc(params.keyHash).create({
     keyHash: params.keyHash,
     prefix: params.prefix,
     name: params.name.slice(0, 100),
     userId: params.userId,
+    projectId: params.projectId,
     status: "active",
     createdAt: now(),
     lastUsedAt: null,
@@ -185,8 +187,15 @@ export async function createDeveloperApiKey(params: {
 export async function getDeveloperApiKey(keyHash: string) {
   const snap = await adminDb.collection(COL.apiKeys).doc(keyHash).get();
   if (!snap.exists) return null;
-  if (snap.get("status") !== "active" || snap.get("revokedAt")) return null;
-  return snap.data() as { userId: string; prefix: string; name: string };
+  if (snap.get("status") !== "active" || snap.get("revokedAt") || !snap.get("projectId")) return null;
+  return snap.data() as { userId: string; prefix: string; name: string; projectId: string };
+}
+
+export async function verifyDeveloperProjectAccess(userId: string, projectId: string): Promise<void> {
+  const snap = await adminDb.collection("developerProjects").doc(projectId).get();
+  if (!snap.exists || snap.get("ownerId") !== userId || snap.get("status") !== "active") {
+    throw new Error("Projet Gen3ia introuvable ou non lié à ce compte.");
+  }
 }
 
 export async function listDeveloperApiKeys(userId: string) {
@@ -201,6 +210,7 @@ export async function listDeveloperApiKeys(userId: string) {
     name: String(doc.get("name")),
     status: String(doc.get("status")),
     createdAt: Number(doc.get("createdAt")),
+    projectId: doc.get("projectId") ? String(doc.get("projectId")) : null,
   }));
 }
 
