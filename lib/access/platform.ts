@@ -1,5 +1,7 @@
+import type { DecodedIdToken } from "firebase-admin/auth";
+
 import { adminDb } from "@/lib/firebase/admin";
-import { verifyFirebaseAuth, type DecodedIdToken } from "@/lib/firebase/auth-server";
+import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 
 export type PlatformRole = "user" | "developer" | "admin";
 
@@ -15,7 +17,10 @@ function claimIsTrue(token: DecodedIdToken, name: string): boolean {
   return (token as unknown as Record<string, unknown>)[name] === true;
 }
 
-export async function getPlatformRole(userId: string, token?: DecodedIdToken): Promise<PlatformRole> {
+export async function getPlatformRole(
+  userId: string,
+  token?: DecodedIdToken,
+): Promise<PlatformRole> {
   if (token && (claimIsTrue(token, "admin") || claimIsTrue(token, "developer"))) {
     return claimIsTrue(token, "admin") ? "admin" : "developer";
   }
@@ -28,6 +33,20 @@ export async function getPlatformRole(userId: string, token?: DecodedIdToken): P
   }
 
   return "user";
+}
+
+export async function assertDeveloperRole(userId: string): Promise<void> {
+  const role = await getPlatformRole(userId);
+  if (role !== "developer" && role !== "admin") {
+    throw new Error("Developer access required.");
+  }
+}
+
+export async function assertAdminRole(userId: string): Promise<void> {
+  const role = await getPlatformRole(userId);
+  if (role !== "admin") {
+    throw new Error("Administrator access required.");
+  }
 }
 
 export async function getPlatformAccess(
@@ -48,9 +67,14 @@ export async function requireDeveloperAccess(
   request: Request | { headers: { get(name: string): string | null } },
 ): Promise<DecodedIdToken> {
   const token = await verifyFirebaseAuth(request);
-  const role = await getPlatformRole(token.uid, token);
-  if (role !== "developer" && role !== "admin") {
-    throw new Error("Developer access required.");
-  }
+  await assertDeveloperRole(token.uid);
+  return token;
+}
+
+export async function requireAdminAccess(
+  request: Request | { headers: { get(name: string): string | null } },
+): Promise<DecodedIdToken> {
+  const token = await verifyFirebaseAuth(request);
+  await assertAdminRole(token.uid);
   return token;
 }
