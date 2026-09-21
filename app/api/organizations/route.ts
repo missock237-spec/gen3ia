@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { rateLimit } from "@/lib/security/rate-limit";
 import { requestTraceId } from "@/lib/observability/logger";
+import { errorBody } from "@/lib/security/http-errors";
 import {
   acceptInvitation,
   createOrganization,
@@ -14,7 +15,7 @@ import {
 export const runtime = "nodejs";
 
 const unauthorized = (request: NextRequest) => NextResponse.json(
-  { success: false, error: "Authentification requise." },
+  { success: false, error: "Authentification requise.", code: "AUTH_REQUIRED" },
   { status: 401, headers: { "x-gen3ia-trace-id": requestTraceId(request) } },
 );
 
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ organizations, invitations }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Organisations indisponibles." },
+      errorBody(error, "Organisations indisponibles."),
       { status: 400 },
     );
   }
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ organization });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Opération impossible." },
+      errorBody(error, "Opération impossible."),
       { status: 400 },
     );
   }

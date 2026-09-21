@@ -10,6 +10,7 @@ import {
 } from "@/lib/security/authenticated-request";
 
 import {
+  errorBody,
   errorStatus,
 } from "@/lib/security/http-errors";
 
@@ -66,12 +67,7 @@ export async function POST(
     );
 
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Planner failed",
-      },
+      errorBody(error, "Planner failed"),
       {
         status: errorStatus(error),
       },

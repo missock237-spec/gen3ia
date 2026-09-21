@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { ZodError } from "zod";
 import { generate } from "@/lib/ai/router";
 import type { AIProvider } from "@/lib/ai/models";
 import { GEN3IA_TOOLS } from "@/lib/tools/registry";
@@ -108,22 +107,27 @@ function normalizeSteps(rawSteps: unknown): unknown[] {
   return mapped;
 }
 
-function normalizePlan(plan: RuntimePlan, objective: string): RuntimePlan {
-  const normalized = RuntimePlanSchema.parse({
-    ...plan,
-    executionId: plan.executionId || randomUUID(),
+/**
+ * Plan de repli déterministe : une seule étape llm portant l'objectif.
+ * Toujours valide par construction — garantit qu'aucun plan invalide (en
+ * particulier steps: []) n'atteint jamais le runtime, et que la demande de
+ * l'utilisateur aboutit même quand le planificateur LLM déraille.
+ */
+function fallbackPlan(objective: string): RuntimePlan {
+  return RuntimePlanSchema.parse({
+    executionId: randomUUID(),
     objective,
-    steps: plan.steps.slice(0, MAX_PLAN_STEPS),
-    maxConcurrency: Math.min(plan.maxConcurrency ?? 4, 4),
-    maxIterations: Math.min(plan.maxIterations ?? 10, 20),
+    steps: [{
+      id: "step-1",
+      type: "llm",
+      name: "Traiter la demande",
+      description: `Exécuter l'objectif suivant de façon autonome : ${objective.slice(0, 300)}`,
+      dependencies: [],
+      input: { objective: objective.slice(0, 300) },
+    }],
+    maxConcurrency: 1,
+    maxIterations: 1,
   });
-  for (const step of normalized.steps) {
-    if (step.type === "tool" && !step.toolName) throw new Error(`Tool step ${step.id} has no toolName.`);
-    if (step.type === "tool" && !GEN3IA_TOOLS.some((tool) => tool.name === step.toolName)) {
-      throw new Error(`Planner selected an unavailable tool: ${step.toolName}`);
-    }
-  }
-  return normalized;
 }
 
 export async function planUniversalAgent(
@@ -157,67 +161,111 @@ export async function planUniversalAgent(
       ].join("\n")
     : PLAN_SYSTEM;
 
-  const response = await generate({
-    task: "agent",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: JSON.stringify({ objective: trimmed, availableCapabilities: toolCatalog(catalog) }) },
-    ],
-    requiresStructuredOutput: true,
-    preferFree: true,
-    maxTokens: 6000,
-    provider: options?.provider,
-    model: options?.model,
-    metadata: { userId },
-  });
+  const buildUserPrompt = (correctiveHint?: string) =>
+    [
+      JSON.stringify({ objective: trimmed, availableCapabilities: toolCatalog(catalog) }),
+      correctiveHint
+        ? `\nIMPORTANT — ta réponse précédente a été rejetée :\n${correctiveHint}\nCorrige-la et renvoie un JSON valide avec AU MOINS UNE étape.`
+        : "",
+    ].join("");
 
-  let parsed: unknown;
-  try {
-    parsed = extractJsonObject(response.text);
-  } catch (error) {
-    throw new Error(
-      error instanceof Error ? error.message : "The agent planner returned invalid JSON.",
-    );
-  }
+  // Résilience (jamais de plan invalide au runtime) : 1) tentative initiale ;
+  // 2) une tentative corrective avec l'erreur renvoyée au modèle ; 3) plan de
+  // repli déterministe. `steps: []` est le cas d'échec observé en production.
+  const tentatives = 2;
+  let dernierErreur = "";
+  for (let essai = 1; essai <= tentatives; essai++) {
+    const response = await generate({
+      task: "agent",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: buildUserPrompt(essai > 1 ? dernierErreur : undefined) },
+      ],
+      requiresStructuredOutput: true,
+      preferFree: true,
+      maxTokens: 6000,
+      provider: options?.provider,
+      model: options?.model,
+      metadata: { userId },
+    });
 
-  if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).steps)) {
-    (parsed as Record<string, unknown>).steps = normalizeSteps((parsed as Record<string, unknown>).steps);
-  }
-
-  let plan: RuntimePlan;
-  try {
-    plan = normalizePlan(RuntimePlanSchema.parse(parsed), trimmed);
-  } catch (error) {
-    // Do not leak raw zod diagnostics to end users; keep the message actionable.
-    if (error instanceof Error && error.message.startsWith("Tool step")) throw error;
-    if (error instanceof Error && error.message.startsWith("Planner selected")) throw error;
-    if (error instanceof ZodError) {
-      console.error("[planner] invalid plan issues:", JSON.stringify(error.issues).slice(0, 1200));
+    let parsed: unknown;
+    try {
+      parsed = extractJsonObject(response.text);
+    } catch (error) {
+      dernierErreur = error instanceof Error ? error.message : "The agent planner returned invalid JSON.";
+      console.warn(`[planner] Tentative ${essai}/${tentatives} échouée (JSON):`, dernierErreur);
+      continue;
     }
-    throw new Error("Le plan généré par l'agent est incomplet. Reformulez votre demande ou réessayez.");
+
+    if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).steps)) {
+      (parsed as Record<string, unknown>).steps = normalizeSteps((parsed as Record<string, unknown>).steps);
+    }
+
+    try {
+      return finaliserPlan(userId, RuntimePlanSchema.parse(parsed), trimmed, allowedTools);
+    } catch (error) {
+      dernierErreur = error instanceof Error ? error.message : "invalid plan";
+      console.warn(`[planner] Tentative ${essai}/${tentatives} échouée (plan):`, dernierErreur.slice(0, 300));
+    }
+  }
+
+  // Palier final : repli déterministe — la mission reste exécutable au lieu
+  // d'une erreur "Le plan généré par l'agent est incomplet".
+  console.warn("[planner] Repli déterministe après échec du planificateur LLM:", dernierErreur.slice(0, 300));
+  return finaliserPlan(userId, fallbackPlan(trimmed), trimmed, allowedTools);
+}
+
+/**
+ * Finalise un plan validé par le schéma : dégradation résiliente des outils
+ * inconnus ou hors périmètre (étape llm) puis validation du DAG par le
+ * runtime. Ne jette QUE sur un vrai problème de DAG (cycle), jamais sur une
+ * sortie LLM réparables — un plan invalide n'atteint jamais l'exécuteur.
+ */
+function finaliserPlan(userId: string, plan: RuntimePlan, objective: string, allowedTools?: string[]): RuntimePlan {
+  const normalized = RuntimePlanSchema.parse({
+    ...plan,
+    objective,
+    steps: plan.steps.slice(0, MAX_PLAN_STEPS),
+    maxConcurrency: Math.min(plan.maxConcurrency ?? 4, 4),
+    maxIterations: Math.min(plan.maxIterations ?? 10, 20),
+  });
+  for (const step of normalized.steps) {
+    if (step.type === "tool" && !step.toolName) {
+      // Étape tool sans cible : inutilisable, dégradée en raisonnement.
+      step.type = "llm";
+      step.description = `${step.description} (outil non spécifié remplacé par une analyse textuelle)`.slice(0, 600);
+      continue;
+    }
+    if (step.type === "tool" && step.toolName && !GEN3IA_TOOLS.some((tool) => tool.name === step.toolName)) {
+      // Outil inexistant au registre : dégradation plutôt qu'échec brut.
+      step.type = "llm";
+      step.toolName = undefined;
+      step.description = `${step.description} (outil indisponible remplacé par une analyse textuelle)`.slice(0, 600);
+    }
   }
 
   // Application de la whitelist d'outils de l'agent : une étape tool hors
   // périmètre est dégradée en étape de raisonnement (résilient) plutôt que
   // de faire échouer toute la mission.
   if (allowedTools) {
-    for (const step of plan.steps) {
+    for (const step of normalized.steps) {
       if (step.type === "tool" && step.toolName && !allowedTools.includes(step.toolName)) {
         step.type = "llm";
         step.toolName = undefined;
-        step.description = `${step.description} (outil hors périmètre remplacé par une analyse textuelle)`;
+        step.description = `${step.description} (outil hors périmètre remplacé par une analyse textuelle)`.slice(0, 600);
       }
     }
   }
+
   const runtime = new AgentRuntime({
     userId,
-    objective: trimmed,
-    plan,
-    policy: options?.policy ?? DEFAULT_EXECUTION_POLICY,
-    signal: options?.signal,
+    objective,
+    plan: normalized,
+    policy: DEFAULT_EXECUTION_POLICY,
   });
   // Construction validates the DAG. Execution is intentionally separate so
   // callers can inspect/approve the generated plan before side effects.
   void runtime;
-  return plan;
+  return normalized;
 }

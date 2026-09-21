@@ -81,6 +81,9 @@ interface PlatformStatus {
   messaging: { whatsapp: boolean; telegram: boolean; slack: boolean };
   email: boolean;
   composio: boolean;
+  llm?: { configured: boolean; providers: Array<{ id: string; configured: boolean }> };
+  search?: { provider: string; configured: boolean };
+  voice?: { elevenlabs: boolean };
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -204,6 +207,9 @@ export function IntegrationsWorkspace() {
           },
           email: body?.email === true,
           composio: body?.composio === true,
+          llm: Array.isArray(body?.llm?.providers) ? body!.llm! : undefined,
+          search: body?.search && typeof body.search === "object" ? body.search : undefined,
+          voice: body?.voice && typeof body.voice === "object" ? body.voice : undefined,
         });
       }
       if (prefsRes.status === "fulfilled" && prefsRes.value.ok) {
@@ -428,13 +434,16 @@ export function IntegrationsWorkspace() {
         <div className="mt-6 grid gap-5">
           {/* Statut plateforme */}
           <SectionCard title="Canaux natifs de la plateforme" subtitle="Fournisseurs configurés côté serveur, disponibles immédiatement pour vos agents.">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {[
                 { label: "WhatsApp", ok: status?.messaging.whatsapp },
                 { label: "Telegram", ok: status?.messaging.telegram },
                 { label: "Slack", ok: status?.messaging.slack },
                 { label: "Email (Resend)", ok: status?.email },
                 { label: "Composio Hub", ok: status?.composio },
+                { label: "Moteurs IA", ok: status?.llm?.configured === true },
+                { label: "Recherche web", ok: status?.search?.configured === true },
+                { label: "Voix (ElevenLabs)", ok: status?.voice?.elevenlabs === true },
               ].map((item) => (
                 <div key={item.label} className="rounded-xl border border-neutral-200 px-4 py-3">
                   <p className="text-sm font-medium">{item.label}</p>

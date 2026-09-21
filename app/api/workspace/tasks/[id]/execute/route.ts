@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
-import { errorStatus } from "@/lib/security/http-errors";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { rateLimit } from "@/lib/security/rate-limit";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
@@ -71,6 +71,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     throw error;
   }
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Execution impossible." }, { status: errorStatus(error) });
+    return NextResponse.json(errorBody(error, "Execution impossible."), { status: errorStatus(error) });
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
+import { errorBody } from "@/lib/security/http-errors";
 import { rateLimit } from "@/lib/security/rate-limit";
 import { planUniversalAgent } from "@/lib/agents/runtime/unified-agent";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
@@ -487,10 +488,16 @@ export async function POST(request: NextRequest) {
       finalText: status === "completed" ? finalText : undefined,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Agent request failed.";
-    const upstream = message.includes("provider") || message.includes("planner") || message.includes("plan généré");
+    // Erreur structurée : un code machine (PROVIDER_UNAVAILABLE, INTERNAL…)
+    // permet à l'UI d'afficher l'état réel (réessayer vs réconnecter) au lieu
+    // de deviner à partir du message.
+    const body = errorBody(error, "Agent request failed.");
+    const upstream = body.code === "PROVIDER_UNAVAILABLE"
+      || body.error.includes("provider")
+      || body.error.includes("planner")
+      || body.error.includes("plan généré");
     return NextResponse.json(
-      { error: upstream ? `${message}` : "Impossible de lancer la mission pour le moment. Réessayez." },
+      { error: upstream ? body.error : "Impossible de lancer la mission pour le moment. Réessayez.", code: body.code },
       { status: upstream ? 502 : 400 },
     );
   }
