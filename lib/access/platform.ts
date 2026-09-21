@@ -1,5 +1,7 @@
+import type { DecodedIdToken } from "firebase-admin/auth";
+
 import { adminDb } from "@/lib/firebase/admin";
-import { verifyFirebaseAuth, type DecodedIdToken } from "@/lib/firebase/auth-server";
+import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 
 export type PlatformRole = "user" | "developer" | "admin";
 
