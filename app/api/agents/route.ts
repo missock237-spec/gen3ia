@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { requireUser } from "@/lib/security/authenticated-request";
+import { errorStatus } from "@/lib/security/http-errors";
 import { rateLimit } from "@/lib/security/rate-limit";
 import { createAgentRecord, listAgentsByOwner, toSummary } from "@/lib/agents/repository";
 import { AgentRecordSchema } from "@/lib/agents/schema";
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
     const agents = await listAgentsByOwner(user.uid, projectId);
     return NextResponse.json({ agents: agents.map(toSummary), requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Liste des agents indisponible", requestId }, { status: error instanceof Error && error.message.includes("auth") ? 401 : 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Liste des agents indisponible", requestId }, { status: errorStatus(error) });
   }
 }
 
@@ -31,6 +32,6 @@ export async function POST(request: NextRequest) {
     const record = await createAgentRecord(user.uid, parsed.data);
     return NextResponse.json({ agent: toSummary(record), requestId }, { status: 201, headers: { "x-request-id": requestId } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Creation d'agent impossible", requestId }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Creation d'agent impossible", requestId }, { status: errorStatus(error) });
   }
 }

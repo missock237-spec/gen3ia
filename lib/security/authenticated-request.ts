@@ -12,6 +12,10 @@ import {
   validateRequest,
 } from "./request-security";
 
+import {
+  unauthorized,
+} from "./http-errors";
+
 export interface AuthenticatedUser {
   uid: string;
 
@@ -106,7 +110,5 @@ export async function requireUser(
     };
   }
 
-  throw new Error(
-    "Missing Authorization header"
-  );
+  throw unauthorized();
 }

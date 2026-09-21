@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { type User } from "firebase/auth";
 import { watchAuth } from "@/lib/firebase/client";
-import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
+import { authFetch, readJsonSafely, useSessionAvailable } from "@/lib/firebase/auth-client";
 
 type Tab = "overview" | "projects" | "build" | "connectors" | "keys" | "extensions" | "monitor";
 type Project = { id:string; name:string; slug:string; description:string; framework:string; environment:string; status:string; updatedAt:number };
@@ -43,6 +43,8 @@ export default function DeveloperPage(){
   const [projectConnectors,setProjectConnectors]=useState<ProjectConnector[]>([]);
   const [connectorSearch,setConnectorSearch]=useState("");
   const [connectorNextCursor,setConnectorNextCursor]=useState<string|null>(null);
+  const [loadError,setLoadError]=useState<string|null>(null);
+  const [loaded,setLoaded]=useState(false);
 
   const api=useCallback(async(path:string,init?:RequestInit)=>{
     return authFetch(path,{...init,headers:{"content-type":"application/json",...(init?.headers??{})}});
@@ -83,12 +85,29 @@ export default function DeveloperPage(){
   const connectToolkit=async(toolkit:string)=>{if(!selectedProject){setMessage("Sélectionne un projet avant de connecter une application.");setTab("projects");return;}setBusy(true);try{const r=await api("/api/integrations/composio/connect",{method:"POST",body:JSON.stringify({toolkit,projectId:selectedProject})});const d=await r.json();if(!r.ok)throw new Error(d.error);if(d.authorizationUrl)window.location.assign(d.authorizationUrl);else await loadProjectConnectors();}catch(e){setMessage(e instanceof Error?e.message:"Connexion impossible");}finally{setBusy(false);}};
 
   const load=useCallback(async()=>{
-    const [p,k,e,r]=await Promise.all([api("/api/developer/projects"),api("/api/developer/api-keys"),api(`/api/developer/extensions?projectId=${encodeURIComponent(selectedProject)}`),api("/api/developer/revenue")]);
-    if(p.ok){const d=await p.json();setProjects(d.projects??[]);if(!selectedProject&&d.projects?.[0])setSelectedProject(d.projects[0].id);}
-    if(k.ok)setKeys((await k.json()).keys??[]);
-    if(e.ok)setExtensions((await e.json()).extensions??[]);
-    if(r.ok)setRevenue((await r.json()).revenue??null);
-    if(selectedProject){const rr=await api(`/api/developer/projects/${encodeURIComponent(selectedProject)}/resources`);if(rr.ok)setResourceSummary((await rr.json()).summary??null);}
+    // Robustesse : chaque panneau charge ses données indépendamment ; une
+    // réponse en échec n'efface pas les données déjà affichées, et une panne
+    // réseau est signalée (avec reprise) au lieu de laisser des zéros muets.
+    setLoadError(null);
+    const results=await Promise.allSettled([
+      api("/api/developer/projects"),
+      api("/api/developer/api-keys"),
+      api(`/api/developer/extensions?projectId=${encodeURIComponent(selectedProject)}`),
+      api("/api/developer/revenue"),
+    ]);
+    const [p,k,e,r]=results.map(x=>x.status==="fulfilled"?x.value:null);
+    try{
+      if(p?.ok){const d=await readJsonSafely<{projects?:Project[]}>(p);setProjects(d?.projects??[]);if(!selectedProject&&d?.projects?.[0])setSelectedProject(d.projects[0].id);}
+      if(k?.ok)setKeys((await readJsonSafely<{keys?:ApiKey[]}>(k))?.keys??[]);
+      if(e?.ok)setExtensions((await readJsonSafely<{extensions?:Extension[]}>(e))?.extensions??[]);
+      if(r?.ok)setRevenue((await readJsonSafely<{revenue?:Revenue|null}>(r))?.revenue??null);
+      if(selectedProject){const rr=await api(`/api/developer/projects/${encodeURIComponent(selectedProject)}/resources`);if(rr.ok)setResourceSummary((await readJsonSafely<{summary?:typeof resourceSummary}>(rr))?.summary??null);}
+    }catch{ /* JSON illisible : les valeurs par défaut restent en place */ }
+    const echecs=results.filter(x=>x.status==="rejected").length+(p&&!p.ok?1:0)+(k&&!k.ok?1:0)+(e&&!e.ok?1:0)+(r&&!r.ok?1:0);
+    if(echecs>0){
+      setLoadError(echecs>=4?"Impossible de charger l'espace développeur (serveur momentanément indisponible).":"Certains panneaux n'ont pas pu être chargés — les données affichées peuvent être incomplètes.");
+    }
+    setLoaded(true);
   },[api,selectedProject]);
 
   useEffect(()=>{const u=watchAuth(x=>setUser(x));return()=>u();},[]);
@@ -132,6 +151,7 @@ export default function DeveloperPage(){
 
     <main className="min-w-0 flex-1 p-5 md:p-8">
       <header className="mb-7 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="text-xs font-semibold uppercase tracking-[.28em] text-sky-700">Gen3ia / Developer</div><h1 className="mt-2 text-3xl font-bold tracking-tight">{nav.find(x=>x[0]===tab)?.[2]}</h1><p className="mt-1 text-sm text-neutral-500">Construis, connecte, teste et déploie tes applications Gen3ia.</p></div><div className="flex gap-2"><Link href="/studio" className="rounded-xl border bg-white px-4 py-2 text-sm">Studio</Link><button onClick={()=>setTab("projects")} className="rounded-xl bg-black px-4 py-2 text-sm text-white">+ Nouveau projet</button></div></header>
+      {loadError&&<div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><span>{loadError}</span><button onClick={()=>void load()} className="shrink-0 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-500">Recharger</button></div>}
       {message&&<div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm">{message}</div>}
 
       {tab==="overview"&&<section className="space-y-5">

@@ -13,6 +13,17 @@ export interface RateLimitConfig {
   windowMs: number;
 }
 
+const MAX_STORE_ENTRIES = 10_000;
+
+function nettoyerEntreesExpirees(now: number): void {
+  // Sans éviction, la Map croît indéfiniment entre les cold starts :
+  // fuite mémoire lente sur les instances longues.
+  if (store.size < MAX_STORE_ENTRIES) return;
+  for (const [key, entry] of store) {
+    if (entry.resetAt <= now) store.delete(key);
+  }
+}
+
 export function rateLimit(
   key: string,
   config: RateLimitConfig,
@@ -25,6 +36,8 @@ export function rateLimit(
 } {
   const now =
     Date.now();
+
+  nettoyerEntreesExpirees(now);
 
   const existing =
     store.get(key);
@@ -79,7 +92,12 @@ export function rateLimit(
 
 /** Meilleure identification client possible derriere le proxy Vercel. */
 export function clientIp(request: Request): string {
+  // x-real-ip est posé par la plateforme Vercel depuis la connexion TCP :
+  // non falsifiable par le client. x-forwarded-for n'est consulté qu'en
+  // repli (le premier hop peut être forgé par le client).
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0].trim();
-  return request.headers.get("x-real-ip")?.trim() || "unknown";
+  return "unknown";
 }

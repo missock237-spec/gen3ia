@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
+import { errorStatus } from "@/lib/security/http-errors";
 import { rateLimit } from "@/lib/security/rate-limit";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
@@ -11,6 +12,7 @@ import { FieldValue } from "firebase-admin/firestore";
 const BodySchema = z.object({}).optional();
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
   const user = await requireUser(request);
   const { id } = await params;
   const limit = rateLimit(`workspace-execute:${user.uid}`, { limit: 6, windowMs: 5 * 60 * 1000 });
@@ -61,6 +63,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       throw error;
     }
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Execution impossible." }, { status: 500 });
+    // Erreurs métier (tâche non approuvée, plan manquant, "Task not found") :
+    // statut 4xx précis plutôt qu'un 500 générique.
+    if (error instanceof Error && /Task not found|doit être approuvée|aucun plan/i.test(error.message)) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    throw error;
+  }
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Execution impossible." }, { status: errorStatus(error) });
   }
 }

@@ -97,8 +97,15 @@ export function LiveDashboard() {
 
   const loadSessions = useCallback(async () => {
     // authFetch : ID token Firebase si disponible, sinon cookie de session.
-    const response = await authFetch("/api/live/sessions", { cache: "no-store" });
-    if (response.ok) setSessions((await response.json()).sessions ?? []);
+    // Une panne réseau est isolée : elle ne provoque ni rejet non géré dans
+    // le callback watchAuth, ni écran vide silencieux.
+    try {
+      const response = await authFetch("/api/live/sessions", { cache: "no-store" });
+      if (response.ok) setSessions((await response.json()).sessions ?? []);
+      else if (response.status >= 500) setError("Impossible de charger vos sessions Live (serveur momentanément indisponible).");
+    } catch {
+      setError("Connexion au serveur impossible pour charger vos sessions Live.");
+    }
   }, []);
 
   useEffect(

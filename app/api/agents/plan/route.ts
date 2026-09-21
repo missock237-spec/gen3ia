@@ -10,6 +10,10 @@ import {
 } from "@/lib/security/authenticated-request";
 
 import {
+  errorStatus,
+} from "@/lib/security/http-errors";
+
+import {
   createAgentPlan,
 } from "@/lib/agents/planner/service";
 
@@ -69,7 +73,7 @@ export async function POST(
             : "Planner failed",
       },
       {
-        status: 500,
+        status: errorStatus(error),
       },
     );
   }

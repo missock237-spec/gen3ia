@@ -51,6 +51,22 @@ export class AgentRuntime {
     };
   }
 
+  /**
+   * Persistance du checkpoint TOLÉRANTE aux pannes : un checkpoint est une
+   * reprise à chaud, pas une étape métier. Un incident Firestore ne doit
+   * JAMAIS marquer une étape réussie comme "failed" ni faire échouer une
+   * mission dont le travail LLM/outils a réussi (bug historique : un blip
+   * Firestore en fin d'étape condamnait la mission ET gelait la réservation
+   * wallet en laissant des fonds bloqués en reservedMinor).
+   */
+  private async persistCheckpoint(): Promise<void> {
+    try {
+      await saveCheckpoint(this.state);
+    } catch (error) {
+      console.error("[runtime] Checkpoint non persisté (exécution poursuivie):", error instanceof Error ? error.message : error);
+    }
+  }
+
   async run(): Promise<RuntimeExecutionState> {
     this.state.status = "running";
     this.state.startedAt = new Date().toISOString();
@@ -68,17 +84,17 @@ export class AgentRuntime {
         if (ready.length === 0 && this.scheduler.getRunning().length === 0) break;
         const executable = ready.slice(0, this.scheduler.capacity);
         await Promise.all(executable.map((step) => this.executeStep(step)));
-        await saveCheckpoint(this.state);
+        await this.persistCheckpoint();
         if (this.areAllStepsFinished()) break;
       }
       this.finalize();
-      await saveCheckpoint(this.state);
+      await this.persistCheckpoint();
       return this.state;
     } catch (error) {
       this.state.status = this.signal?.aborted ? "cancelled" : "failed";
       this.state.error = error instanceof Error ? error.message : String(error);
       this.state.completedAt = new Date().toISOString();
-      await saveCheckpoint(this.state);
+      await this.persistCheckpoint();
       throw error;
     }
   }
@@ -103,7 +119,7 @@ export class AgentRuntime {
       step.status = "pending";
     } finally {
       this.scheduler.finish(step);
-      await saveCheckpoint(this.state);
+      await this.persistCheckpoint();
     }
   }
 

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { type User } from "firebase/auth";
 import { watchAuth } from "@/lib/firebase/client";
-import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
+import { authFetch, readJsonSafely, useSessionAvailable } from "@/lib/firebase/auth-client";
 
 interface Wallet {
   currency: string;
@@ -67,17 +67,19 @@ export default function BillingPage() {
 
   const loadWallet = useCallback(async () => {
     // authFetch : ID token Firebase si disponible, sinon cookie de session.
+    // readJsonSafely : un 502 HTML du proxy ne doit pas masquer l'erreur
+    // réelle par une SyntaxError sur response.json().
     const response = await authFetch("/api/billing/wallet", { cache: "no-store" });
-    const data = await response.json();
+    const data = (await readJsonSafely<{ error?: string; wallet?: Wallet | null }>(response)) ?? {};
     if (!response.ok) throw new Error(data.error ?? "Impossible de charger le solde.");
-    setWallet(data.wallet);
+    setWallet(data.wallet ?? null);
   }, []);
 
   const loadTransactions = useCallback(async () => {
     try {
       const response = await authFetch("/api/billing/transactions?limit=15", { cache: "no-store" });
       if (!response.ok) return;
-      const data = await response.json();
+      const data = (await readJsonSafely<{ transactions?: WalletTransaction[] }>(response)) ?? {};
       setTransactions(data.transactions ?? []);
     } catch { /* historique indisponible : section masquée */ }
   }, []);

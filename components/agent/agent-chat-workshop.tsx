@@ -36,14 +36,27 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   const [voiceSetupAgentId, setVoiceSetupAgentId] = React.useState<string | null>(null);
   const [showRailMobile, setShowRailMobile] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [loadFailed, setLoadFailed] = React.useState(false);
 
   const refresh = React.useCallback(async () => {
+    setLoading(true);
     try {
       const response = await authFetch("/api/agents", { cache: "no-store" });
       if (response.ok) {
         const data = await response.json();
         setAgents((data.agents ?? []) as AgentSummary[]);
+        setError("");
+        setLoadFailed(false);
+      } else {
+        // 401/500/panne : on ne vide PAS la liste (données potentiellement
+        // déjà chargées) et on N'OUVRE PAS l'assistant de création — un
+        // échec réseau ne doit pas ressembler à "aucun agent".
+        setLoadFailed(true);
+        if (response.status !== 401) setError("Impossible de charger vos agents. Vérifiez votre connexion puis réessayez.");
       }
+    } catch {
+      setLoadFailed(true);
+      setError("Connexion au serveur impossible. Vos agents réapparaîtront au réessai.");
     } finally {
       setLoading(false);
     }
@@ -53,11 +66,12 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
 
   const activeAgent = agents.find((agent) => agent.id === activeId) ?? null;
 
-  // Pas encore d'agent : l'assistant de personnalisation s'ouvre d'office.
+  // Pas encore d'agent : l'assistant de personnalisation s'ouvre d'office —
+  // uniquement si la liste a été réellement chargée (jamais sur une panne).
   React.useEffect(() => {
-    if (!loading && agents.length === 0) setView("wizard");
+    if (!loading && !loadFailed && agents.length === 0) setView("wizard");
     if (!loading && agents.length > 0 && !activeId) setActiveId(agents[0].id);
-  }, [loading, agents, activeId]);
+  }, [loading, loadFailed, agents, activeId]);
 
   async function deleteAgent(agent: AgentSummary) {
     if (!window.confirm(`Supprimer définitivement l'agent « ${agent.name} » ?`)) return;
@@ -143,7 +157,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   return (
     <div className="space-y-5">
       {sessionDisponible === false && <Callout tone="warning" className="rounded-2xl">Session expirée — reconnectez-vous pour discuter avec vos agents.</Callout>}
-      {error && <Callout tone="error" className="rounded-2xl">{error}</Callout>}
+      {error && <Callout tone="error" className="rounded-2xl"><span className="flex items-center justify-between gap-3"><span>{error}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Réessayer</button></span></Callout>}
 
       {/* Sélecteur mobile : le rail se replie sous lg */}
       <button

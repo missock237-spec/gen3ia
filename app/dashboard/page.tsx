@@ -26,18 +26,26 @@ function DashboardContent() {
   const [objective, setObjective] = useState("");
   const [recentTasks, setRecentTasks] = useState<Array<{ id:string; objective:string; status:string; updatedAt:number }>>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
+  const [tasksError, setTasksError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function loadRecentTasks() {
+      setTasksLoading(true); setTasksError(null);
       try {
-        const response = await fetch("/api/workspace/tasks?limit=8", { credentials: "include", cache: "no-store" });
-        if (!response.ok) throw new Error("Unable to load tasks");
+        // authFetch : fonctionne aussi avec le seul cookie de session
+        // (webviews où l'état Firebase client est perdu).
+        const response = await authFetch("/api/workspace/tasks?limit=8", { cache: "no-store" });
+        if (!response.ok) throw new Error(response.status >= 500 ? "Le serveur n'a pas pu charger vos tâches." : "Impossible de charger vos tâches.");
         const data = await response.json() as { tasks?: Array<{ id:string; objective:string; status:string; updatedAt:number }> };
         if (!cancelled) setRecentTasks(data.tasks ?? []);
-      } catch {
-        if (!cancelled) setRecentTasks([]);
+      } catch (error) {
+        if (!cancelled) {
+          setRecentTasks([]);
+          // Une panne ne doit pas ressembler à "aucune tâche récente".
+          setTasksError(error instanceof Error ? error.message : "Impossible de charger vos tâches.");
+        }
       } finally {
         if (!cancelled) setTasksLoading(false);
       }
@@ -176,7 +184,9 @@ function DashboardContent() {
                   </span>
                   <Arrow />
                 </Link>
-              )) : (
+              )) : tasksError ? (
+                <div className="g3-home-recent" aria-live="polite"><span className="g3-home-recent-dot" /><span className="min-w-0 flex-1"><strong>Impossible de charger les tâches</strong><span className="mt-1 block text-xs text-neutral-400">{tasksError}</span></span></div>
+              ) : (
                 <div className="g3-home-recent" aria-live="polite"><span className="g3-home-recent-dot" /><span className="min-w-0 flex-1"><strong>Aucune tache recente</strong><span className="mt-1 block text-xs text-neutral-400">Lancez votre premiere mission depuis le champ ci-dessus.</span></span></div>
               )}          </div>
           </div>

@@ -24,6 +24,14 @@ export interface SessionPayload {
 }
 
 function signingSecret(): Buffer {
+  // Secret dédié si fourni : la rotation des credentials Firebase ne
+  // doit JAMAIS invalider en masse les cookies de session (déconnexions
+  // généralisées silencieuses). À configurer : SESSION_SECRET (>= 32 chars).
+  const explicit = process.env.SESSION_SECRET?.trim();
+  if (explicit) {
+    return createHash("sha256").update(`gen3ia-session-secret|${explicit}`).digest();
+  }
+
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n") ?? "";
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL ?? "";
   const projectId =

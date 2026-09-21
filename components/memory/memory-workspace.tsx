@@ -24,13 +24,15 @@ export function MemoryWorkspace() {
   const [files, setFiles] = useState<DocumentFileEntry[]>([]);
   const [usage, setUsage] = useState<StorageUsageView | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [globalMessage, setGlobalMessage] = useState("");
 
   const refreshMemories = useCallback(async () => {
     try {
       const response = await authFetch("/api/memory", { cache: "no-store" });
-      if (response.ok) setMemories((await response.json()).memories ?? []);
-    } catch { /* indisponible ponctuellement */ }
+      if (response.ok) { setMemories((await response.json()).memories ?? []); setLoadError(false); }
+      else if (response.status >= 500) setLoadError(true);
+    } catch { setLoadError(true); /* panne reseau signalée plutot que des 0 silencieux */ }
   }, []);
 
   const refreshFiles = useCallback(async () => {
@@ -41,7 +43,7 @@ export function MemoryWorkspace() {
         setFiles(body.files ?? []);
         if (body.usage) setUsage(body.usage);
       }
-    } catch { /* indisponible ponctuellement */ }
+    } catch { /* la section fichiers reste vide, l'erreur globale suffit */ }
   }, []);
 
   useEffect(() => {
@@ -111,6 +113,19 @@ export function MemoryWorkspace() {
         {globalMessage && (
           <div className="anim-fade-in mt-4 rounded-xl border border-violet-200 bg-violet-100 p-4 text-sm text-violet-700" role="status">
             {globalMessage}
+          </div>
+        )}
+
+        {loadError && (
+          <div className="anim-fade-in mt-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800" role="alert">
+            <span>Impossible de charger vos souvenirs pour le moment (serveur momentanément indisponible).</span>
+            <button
+              type="button"
+              onClick={() => { setLoadError(false); void Promise.all([refreshMemories(), refreshFiles()]); }}
+              className="shrink-0 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-500"
+            >
+              Réessayer
+            </button>
           </div>
         )}
 

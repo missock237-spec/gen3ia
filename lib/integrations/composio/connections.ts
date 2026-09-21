@@ -72,6 +72,26 @@ export function getCatalogEntry(toolkit: string): CatalogEntry | undefined {
 const TOOLKIT_SLUG_RE = /^[a-z0-9_]{2,64}$/;
 
 /**
+ * Garde-fou de durée pour les appels SDK Composio : sans lui, un Composio
+ * suspendu (slow upstream, incident réseau) suspend la route API entière
+ * jusqu'au kill de la plateforme — l'utilisateur voit un spinner infini sur
+ * /integrations. 20 s couvrent le pire cas nominal observé (~5 s par page).
+ */
+const COMPOSIO_CALL_TIMEOUT_MS = 20_000;
+
+export async function timedComposioCall<T>(operation: () => Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Composio timeout after ${COMPOSIO_CALL_TIMEOUT_MS}ms (${label})`)), COMPOSIO_CALL_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([operation(), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
  * Autorise uniquement les toolkits du catalogue : jamais de connexion
  * arbitraire non déclarée (même principe que les permissions d'extensions).
  */
@@ -155,7 +175,7 @@ export async function listComposioToolkits(options?: { category?: string; search
   let totalItems = 0;
 
   for (let page = 0; page < maxPages; page++) {
-    const result = await rawClient.list({
+    const result = await timedComposioCall(() => rawClient.list({
       ...(options?.category ? { category: options.category } : {}),
       ...(options?.search ? { search: options.search } : {}),
       ...(cursor ? { cursor } : {}),
@@ -163,7 +183,7 @@ export async function listComposioToolkits(options?: { category?: string; search
       sort_by: "alphabetically",
       managed_by: "all",
       include_deprecated: false,
-    });
+    }), `toolkits.list page ${page + 1}`);
 
     const items = Array.isArray(result?.items) ? result.items : Array.isArray(result) ? result : [];
     collected.push(...items);
@@ -188,7 +208,7 @@ export async function listComposioToolkits(options?: { category?: string; search
 export async function assertToolkitExists(toolkit: string): Promise<void> {
   const composio = getComposio();
   try {
-    await composio.toolkits.get(toolkit);
+    await timedComposioCall(() => composio.toolkits.get(toolkit), `toolkits.get ${toolkit}`);
   } catch {
     throw new Error(`Toolkit "${toolkit}" is not reachable through Composio. Check the catalog configuration.`);
   }
@@ -200,15 +220,19 @@ export async function authorizeToolkit(userId: string, toolkit: string) {
   await assertToolkitExists(normalized);
   const callbackUrl = `${getAppUrl()}/integrations?connected=${encodeURIComponent(normalized)}`;
 
-  const session = await getComposio().create(userId, {
-    manageConnections: {
-      enable: true,
-      callbackUrl,
-      waitForConnections: false,
-    },
-  });
+  const session = await timedComposioCall(
+    () =>
+      getComposio().create(userId, {
+        manageConnections: {
+          enable: true,
+          callbackUrl,
+          waitForConnections: false,
+        },
+      }),
+    `create connection session ${normalized}`,
+  );
 
-  return session.authorize(normalized, { callbackUrl });
+  return timedComposioCall(() => session.authorize(normalized, { callbackUrl }), `authorize ${normalized}`);
 }
 
 export interface HubConnection {
@@ -229,7 +253,10 @@ function catalogInfo(toolkitSlug: string): { label: string; category: Connection
 /** Liste TOUTES les connexions Composio de l'utilisateur (hub + Ads hérité). */
 export async function listHubConnections(userId: string): Promise<HubConnection[]> {
   if (!userId) throw new Error("userId is required.");
-  const result = await getComposio().connectedAccounts.list({ userIds: [userId] });
+  const result = await timedComposioCall(
+    () => getComposio().connectedAccounts.list({ userIds: [userId] }),
+    `connectedAccounts.list ${userId}`,
+  );
   return result.items
     .filter((account) => Boolean(account.toolkit?.slug))
     .map((account) => {
@@ -251,10 +278,10 @@ export async function revokeHubConnection(userId: string, connectionId: string):
   if (!userId) throw new Error("userId is required.");
   if (!connectionId || connectionId.length > 256) throw new Error("A valid connection id is required.");
   const composio = getComposio();
-  const accounts = await composio.connectedAccounts.list({ userIds: [userId] });
+  const accounts = await timedComposioCall(() => composio.connectedAccounts.list({ userIds: [userId] }), `connectedAccounts.list ${userId}`);
   const owned = accounts.items.find((item) => item.id === connectionId);
   if (!owned) throw new Error("Connection not found for this user.");
-  await composio.connectedAccounts.delete(connectionId);
+  await timedComposioCall(() => composio.connectedAccounts.delete(connectionId), `connectedAccounts.delete ${connectionId}`);
 }
 
 /** Découverte des actions disponibles pour un toolkit connecté. */
@@ -279,8 +306,12 @@ export async function getToolkitTools(userId: string, toolkit: string, search?: 
   if (!userId) throw new Error("userId is required.");
   const normalized = assertSupportedToolkit(toolkit);
   const composio = getComposio();
-  return composio.tools.get(userId, {
-    toolkits: [normalized],
-    ...(search ? { search, limit: 25 } : { limit: 100 }),
-  });
+  return timedComposioCall(
+    () =>
+      composio.tools.get(userId, {
+        toolkits: [normalized],
+        ...(search ? { search, limit: 25 } : { limit: 100 }),
+      }),
+    `tools.get ${normalized}`,
+  );
 }

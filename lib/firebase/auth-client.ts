@@ -147,39 +147,68 @@ export async function signUpWithEmail(
   validateProfile(profile);
   const result = await createUserWithEmailAndPassword(auth, email.trim(), password);
 
-  try {
+  const enregistrerProfil = async (): Promise<void> => {
     const displayName = `${profile.firstName.trim()} ${profile.lastName.trim()}`.replace(/\s+/g, " ");
     await updateProfile(result.user, { displayName });
 
     const token = await result.user.getIdToken(true);
-    const response = await fetch("/api/auth/profile", {
-      method: "POST",
-      headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        firstName: profile.firstName,
-        lastName: profile.lastName,
-        username: profile.username,
-        country: profile.country || null,
-        language: profile.language || "fr",
-        timezone: profile.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-        photoURL: result.user.photoURL || null,
-      }),
-    });
-    if (!response.ok) {
+    let dernierDetail = "";
+    // 2 tentatives : une panne Firestore transitoire ne doit pas casser
+    // l'inscription (le compte Firebase est desormais le bien de l'utilisateur).
+    for (let essai = 1; essai <= 2; essai++) {
+      let response: Response;
+      try {
+        response = await fetch("/api/auth/profile", {
+          method: "POST",
+          headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            username: profile.username,
+            country: profile.country || null,
+            language: profile.language || "fr",
+            timezone: profile.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+            photoURL: result.user.photoURL || null,
+          }),
+          signal: AbortSignal.timeout(20_000),
+        });
+      } catch {
+        dernierDetail = "serveur injoignable";
+        if (essai < 2) { await attendre(800); continue; }
+        break;
+      }
+      if (response.ok) return;
       let detail = "";
       try {
         const errBody = (await response.json()) as { error?: string };
         if (errBody?.error) detail = errBody.error;
       } catch { /* corps illisible */ }
-      throw new Error(detail ? `Le profil n'a pas pu etre enregistre (${detail}).` : "Le profil n'a pas pu etre enregistre.");
+      dernierDetail = detail || `erreur ${response.status}`;
+      if (response.status >= 500 && essai < 2) { await attendre(800); continue; }
+      break;
     }
+    throw new Error(
+      `Votre compte a bien ete cree, mais le profil n'a pas pu etre enregistre (${dernierDetail}). ` +
+      "Reessayez de vous connecter dans un instant : la session finalisera la synchronisation automatiquement.",
+    );
+  };
 
+  try {
+    await enregistrerProfil();
     try { await sendEmailVerification(result.user); } catch { /* best effort */ }
     return result.user;
   } catch (error) {
-    try { await result.user.delete(); } catch { /* evite de laisser un compte Auth a moitié cree quand c'est possible */ }
+    // IMPORTANT : on ne supprime PLUS le compte Firebase en cas d'echec du
+    // profil — une panne serveur transitoire detruisait sinon un compte
+    // valide (et l'utilisateur repartait de zero). Il peut se connecter :
+    // la session se synchronise automatiquement (mode dégradé serveur).
     throw error;
   }
+}
+
+/** Petite attente avec backoff pour les reprises réseau. */
+function attendre(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -187,20 +216,56 @@ export async function signUpWithEmail(
  * Firebase reussie, puis redirige vers le tableau de bord (ou la destination
  * `redirectTo` fournie : chemin interne uniquement, pour eviter les
  * redirections ouvertes).
- * Remonte le message d'erreur exact du serveur pour faciliter le diagnostic.
+ *
+ * Robustesse : 3 tentatives en cas d'erreur reseau, 429 ou 5xx (pannes
+ * transitoires de Firestore côté serveur) — un échec définitif remonte le
+ * message d'erreur exact du serveur pour faciliter le diagnostic.
  */
 export async function establishSession(user: User, redirectTo?: string | null): Promise<void> {
   const token = await user.getIdToken(true);
-  const response = await fetch("/api/auth/session", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
-  if (!response.ok) {
+  const tentatives = 3;
+  let dernierDetail = "";
+
+  for (let essai = 1; essai <= tentatives; essai++) {
+    let response: Response;
+    try {
+      response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(20_000),
+      });
+    } catch {
+      // Erreur reseau/timeout : reprise utile si la panne est transitoire.
+      dernierDetail = "connexion au serveur impossible";
+      if (essai < tentatives) { await attendre(600 * essai); continue; }
+      break;
+    }
+
+    if (response.ok) {
+      window.location.href = sanitizeRedirect(redirectTo) ?? "/dashboard";
+      return;
+    }
+
+    // 429/5xx = panne transitoire côté serveur -> nouvelle tentative.
+    // 4xx definitifs (401, 403...) = pas la peine d'insister.
     let detail = "";
     try {
       const body = (await response.json()) as { error?: string };
       if (body?.error) detail = body.error;
     } catch { /* corps illisible : message generique */ }
-    throw new Error(detail ? `Impossible d'etablir la session authentifiee (${detail}).` : "Impossible d'etablir la session authentifiee.");
+    dernierDetail = detail;
+
+    if (response.status === 429 || response.status >= 500) {
+      if (essai < tentatives) { await attendre(800 * essai); continue; }
+    }
+    break;
   }
-  window.location.href = sanitizeRedirect(redirectTo) ?? "/dashboard";
+
+  throw new Error(
+    dernierDetail
+      ? `Impossible d'etablir la session authentifiee (${dernierDetail}).`
+      : "Impossible d'etablir la session authentifiee. Verifiez votre connexion puis reessayez.",
+  );
 }
 
 /** N'accepte qu'un chemin interne relatif ("(("/")…") — bloque les URL externes. */
@@ -232,11 +297,27 @@ export function useSessionAvailable(): boolean | null {
     if (loading) return;
     let cancelled = false;
     (async () => {
-      try {
-        const response = await fetch("/api/auth/session", { cache: "no-store" });
-        if (!cancelled) setServerSession(response.ok);
-      } catch {
-        if (!cancelled) setServerSession(false);
+      // 2 tentatives : une erreur reseau isolée ne doit pas basculer un
+      // utilisateur authentifié (cookie présent) vers le portail de login.
+      for (let essai = 1; essai <= 2; essai++) {
+        try {
+          const response = await fetch("/api/auth/session", {
+            cache: "no-store",
+            signal: AbortSignal.timeout(12_000),
+          });
+          // 200 = session valide (même en mode dégradé). 401 = vraiment
+          // sans session. 5xx = panne serveur transitoire -> reprise.
+          if (!cancelled) {
+            if (response.ok) { setServerSession(true); return; }
+            if (response.status < 500 && essai < 2) { await attendre(500); continue; }
+            setServerSession(response.ok);
+            if (response.status < 500) return;
+          }
+          if (response.status < 500) return;
+        } catch {
+          if (!cancelled && essai >= 2) { setServerSession(false); return; }
+        }
+        if (essai < 2) await attendre(600);
       }
     })();
     return () => { cancelled = true; };
@@ -248,19 +329,39 @@ export function useSessionAvailable(): boolean | null {
 }
 
 /**
- * fetch authentifie pour toutes les fonctionnalites de la plateforme.
- *
- * - Si le SDK Firebase connait l'utilisateur courant : ID token en Bearer
- *   (comportement historique).
- * - Sinon (etat Firebase client perdu : webviews mobiles, stockage bloque,
- *   reload apres redirection OAuth) : la requete part "nue" et le cookie de
- *   session signe pose par POST /api/auth/session authentifie l'appel cote
- *   serveur (requireUser accepte les deux).
- *
- * A utiliser partout a la place d'un fetch + getIdToken manuel, afin qu'aucune
- * fonctionnalite ne devienne inaccessible apres une connexion reussie.
+ * Lit le corps JSON d'une reponse sans jamais lever : retourne null si le
+ * corps est vide, tronque ou non-JSON (502 HTML du proxy, gateway timeout…).
+ * A preferer a `await response.json()` nu dans tout code qui affiche une
+ * erreur utilisateur — un JSON illisible ne doit pas masquer l'erreur reelle.
  */
-export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export async function readJsonSafely<T>(response: Response): Promise<T | null> {
+  try {
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+export interface AuthFetchOptions {
+  /** Timeout global de la requete en ms (aucun par defaut : certaines
+   *  operations agents durent plusieurs minutes). */
+  timeoutMs?: number;
+  /** Retenter une fois sur erreur reseau/5xx (defaut : GET et HEAD only,
+   *  car seuls ces verbes sont idempotents). */
+  retry?: boolean;
+}
+
+async function fetchUneFois(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  opts: AuthFetchOptions | undefined,
+): Promise<Response> {
+  const signal = opts?.timeoutMs
+    ? (init?.signal
+      ? AbortSignal.any([init.signal, AbortSignal.timeout(opts.timeoutMs)])
+      : AbortSignal.timeout(opts.timeoutMs))
+    : init?.signal;
+
   // Le cookie de session serveur reste utilisable même si la configuration
   // Firebase Web n'est pas injectée dans un déploiement public.
   let currentUser: User | null = null;
@@ -275,12 +376,57 @@ export async function authFetch(input: RequestInfo | URL, init?: RequestInit): P
       const token = await currentUser.getIdToken();
       const headers = new Headers(init?.headers ?? undefined);
       headers.set("Authorization", `Bearer ${token}`);
-      return fetch(input, { ...init, headers, credentials: init?.credentials ?? "same-origin" });
-    } catch {
+      return await fetch(input, { ...init, headers, signal, credentials: init?.credentials ?? "same-origin" });
+    } catch (error) {
+      // Abort volontaire de l'appelant : ne pas retomber sur un second appel.
+      if (signal?.aborted) throw error;
       /* ID token indisponible : on retombe sur le cookie de session. */
     }
   }
-  return fetch(input, { ...init, credentials: init?.credentials ?? "same-origin" });
+  return fetch(input, { ...init, signal, credentials: init?.credentials ?? "same-origin" });
+}
+
+/**
+ * fetch authentifie pour toutes les fonctionnalites de la plateforme.
+ *
+ * - Si le SDK Firebase connait l'utilisateur courant : ID token en Bearer
+ *   (comportement historique).
+ * - Sinon (etat Firebase client perdu : webviews mobiles, stockage bloque,
+ *   reload apres redirection OAuth) : la requete part "nue" et le cookie de
+ *   session signe pose par POST /api/auth/session authentifie l'appel cote
+ *   serveur (requireUser accepte les deux).
+ *
+ * Robustesse : retry automatique (1x) sur erreur reseau ou 502/503/504 pour
+ * les verbes idempotents (GET/HEAD), timeout optionnel via { timeoutMs }.
+ * A utiliser partout a la place d'un fetch + getIdToken manuel, afin qu'aucune
+ * fonctionnalite ne devienne inaccessible apres une connexion reussie.
+ */
+export async function authFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  opts?: AuthFetchOptions,
+): Promise<Response> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const idempotent = method === "GET" || method === "HEAD";
+  const peutRetenter = opts?.retry ?? idempotent;
+
+  try {
+    const response = await fetchUneFois(input, init, opts);
+    if (
+      peutRetenter &&
+      (response.status === 502 || response.status === 503 || response.status === 504)
+    ) {
+      await attendre(500);
+      return fetchUneFois(input, init, opts);
+    }
+    return response;
+  } catch (error) {
+    if (opts?.timeoutMs && error instanceof DOMException && error.name === "TimeoutError") throw error;
+    if (init?.signal?.aborted) throw error;
+    if (!peutRetenter) throw error;
+    await attendre(500);
+    return fetchUneFois(input, init, opts);
+  }
 }
 
 export async function signInWithEmail(email: string, password: string): Promise<User> {

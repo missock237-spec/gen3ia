@@ -4,6 +4,12 @@ import {
   DynamicPlanSchema,
 } from "./schema";
 
+import {
+  extractJsonObject,
+  fallbackPlanSteps,
+  normalizePlanSteps,
+} from "./normalize";
+
 export interface PlanGenerationInput {
   objective: string;
 
@@ -21,10 +27,10 @@ export interface PlanGenerationInput {
   }>;
 }
 
-export async function generatePlan(
-  input: PlanGenerationInput,
-): Promise<DynamicPlan> {
-  const prompt = `
+const SYSTEM_PROMPT = "You are Gen3ia Planner. Output valid JSON only.";
+
+function buildPrompt(input: PlanGenerationInput, correctiveHint?: string): string {
+  return `
 You are the Gen3ia autonomous planning engine.
 
 Your task is to transform the user objective into
@@ -67,46 +73,73 @@ RULES:
 16. maxIterations must be between 1 and 20.
 
 Return ONLY valid JSON.
-`;
+${correctiveHint ? `\nIMPORTANT — your previous response was rejected:\n${correctiveHint}\nFix it and return valid JSON again.\n` : ""}`;
+}
 
-  const response = await generate({
+async function callPlanner(input: PlanGenerationInput, correctiveHint?: string) {
+  return generate({
     task: "reasoning",
 
     messages: [
-      {
-        role: "system",
-        content:
-          "You are Gen3ia Planner. Output valid JSON only.",
-      },
-      {
-        role: "user",
-        content: prompt,
-      },
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: buildPrompt(input, correctiveHint) },
     ],
   });
+}
 
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(
-      response.text,
-    );
-  } catch {
-    throw new Error(
-      "Planner returned invalid JSON",
-    );
-  }
-
-  const result =
-    DynamicPlanSchema.safeParse(
-      parsed,
-    );
-
+/**
+ * Tente de construire un DynamicPlan valide à partir d'une réponse LLM :
+ * extraction JSON défensive + normalisation des étapes + validation schéma.
+ * Retourne l'erreur exacte si rien n'est récupérable (pour la tentative
+ * corrective suivante).
+ */
+async function parsePlanResponse(text: string): Promise<DynamicPlan> {
+  const parsed = extractJsonObject(text);
+  const candidate = (parsed && typeof parsed === "object" && Array.isArray((parsed as { steps?: unknown }).steps))
+    ? { ...(parsed as Record<string, unknown>), steps: normalizePlanSteps((parsed as { steps: unknown }).steps) }
+    : parsed;
+  const result = DynamicPlanSchema.safeParse(candidate);
   if (!result.success) {
-    throw new Error(
-      `Invalid generated plan: ${result.error.message}`,
-    );
+    throw new Error(`Invalid generated plan: ${result.error.issues.slice(0, 3).map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")}`);
+  }
+  return result.data;
+}
+
+export async function generatePlan(
+  input: PlanGenerationInput,
+): Promise<DynamicPlan> {
+  // Résilience : le planning ne doit jamais faire échouer la création d'une
+  // mission à cause d'une sortie LLM malformée ou d'une panne ponctuelle.
+  // Stratégie en 3 paliers :
+  //   1. tentative initiale ;
+  //   2. 1 tentative corrective (l'erreur est renvoyée au modèle) ;
+  //   3. plan de repli déterministe (une étape LLM sur l'objectif) —
+  //      l'utilisateur obtient une mission exécutable au lieu d'une erreur.
+  const tentatives = 2;
+  let dernierErreur = "";
+
+  for (let essai = 1; essai <= tentatives; essai++) {
+    try {
+      const response = await callPlanner(input, essai > 1 ? dernierErreur : undefined);
+      return await parsePlanResponse(response.text);
+    } catch (error) {
+      dernierErreur = error instanceof Error ? error.message : String(error);
+    }
   }
 
-  return result.data;
+  // Palier final : plan de repli déterministe, toujours valide par
+  // construction (une étape llm, aucun outil/skill inventé).
+  const fallback = DynamicPlanSchema.safeParse({
+    objective: input.objective,
+    reasoning: "Plan de repli : le moteur de planning n'a pas répondu correctement.",
+    steps: fallbackPlanSteps(input.objective),
+    maxConcurrency: 1,
+    maxIterations: 1,
+    estimatedCredits: 0,
+  });
+  if (fallback.success) return fallback.data;
+
+  // Inatteignable en pratique (le repli est valide par construction) mais
+  // on ne masque jamais silencieusement une erreur de programmation.
+  throw new Error(`Planner failed: ${dernierErreur}`);
 }

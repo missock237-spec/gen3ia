@@ -7,6 +7,7 @@ import {
   listComposioToolkits,
   type ConnectionCategory,
 } from "@/lib/integrations/composio/connections";
+import { logger } from "@/lib/observability/logger";
 
 export const runtime = "nodejs";
 
@@ -164,10 +165,18 @@ let cachedItems: CatalogItem[] | null = null;
 let cacheExpiresAt = 0;
 let cachePromise: Promise<CatalogItem[]> | null = null;
 
+/**
+ * Budget global de l'agrégation Composio (1 à 5 appels paginés) : au-delà,
+ * on renonce pour cette requête et on sert le catalogue intégré — la page
+ * /integrations doit répondre en quelques secondes même si Composio est
+ * lent ou en panne. Les tentatives suivantes repartiront du cache vide.
+ */
+const AGGREGATION_BUDGET_MS = 25_000;
+
 async function chargerCatalogueComplet(): Promise<CatalogItem[]> {
   if (cachedItems && Date.now() < cacheExpiresAt) return cachedItems;
   if (!cachePromise) {
-    cachePromise = listComposioToolkits({ limit: 1000 })
+    const aggregation = listComposioToolkits({ limit: 1000 })
       .then((dynamic) => dynamic.items.map(versItemCatalogue))
       .then((items) => {
         if (items.length > 0) {
@@ -179,8 +188,12 @@ async function chargerCatalogueComplet(): Promise<CatalogItem[]> {
       .finally(() => {
         cachePromise = null;
       });
+    cachePromise = aggregation;
   }
-  return cachePromise;
+  const budget = new Promise<CatalogItem[]>((resolve) =>
+    setTimeout(() => resolve([]), AGGREGATION_BUDGET_MS),
+  );
+  return Promise.race([cachePromise, budget]);
 }
 
 export async function GET(request: NextRequest) {
@@ -194,6 +207,7 @@ export async function GET(request: NextRequest) {
 
   let items: CatalogItem[] = [];
   let source: "composio" | "catalogue-integre" = "catalogue-integre";
+  let degradedReason: string | null = null;
 
   // 1) Catalogue dynamique Composio complet (plus de 800 services), servi
   //    depuis le cache mémoire et filtré en mémoire — réponse instantanée.
@@ -202,10 +216,15 @@ export async function GET(request: NextRequest) {
     if (full.length > 0) {
       source = "composio";
       items = filtrerCatalogue(full, { search, category });
+    } else {
+      degradedReason = "catalogue Composio momentanément indisponible";
     }
-  } catch {
-    // Composio indisponible ou clé absente : on retombe sur le catalogue intégré.
-    items = [];
+  } catch (error) {
+    // Composio indisponible ou clé absente : on retombe sur le catalogue
+    // intégré — MAIS on trace la cause et on l'annonce à l'UI (bannière
+    // mode dégradé) au lieu d'un silentieux "19 apps" sans explication.
+    degradedReason = error instanceof Error ? error.message : "Composio indisponible";
+    logger.warn({ err: error, route: "/api/integrations/catalog" }, "integrations.catalog.degraded");
   }
 
   // 2) Repli : catalogue intégré — la page ne doit JAMAIS rester vide, sinon
@@ -224,6 +243,7 @@ export async function GET(request: NextRequest) {
       categories: CONNECTION_CATEGORIES,
       provider: "composio",
       source,
+      ...(degradedReason ? { degraded: true, degradedReason } : {}),
     },
     { headers: { "cache-control": "private, max-age=60, stale-while-revalidate=300" } },
   );

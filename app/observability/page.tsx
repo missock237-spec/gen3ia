@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
@@ -20,19 +20,26 @@ export default function ObservabilityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [days, setDays] = useState(14);
+  // Garde anti-désordre : si l'utilisateur change de fenêtre (7→14→30) pendant
+  // qu'une requête est en vol, la réponse périmée ne doit pas écraser la plus
+  // récente (ni réafficher une erreur obsolète).
+  const loadTokenRef = useRef(0);
 
   const load = useCallback(async (windowDays: number) => {
+    const token = ++loadTokenRef.current;
     setLoading(true);
     setError("");
     try {
       const response = await authFetch(`/api/observability/overview?days=${windowDays}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Observabilité indisponible.");
+      if (token !== loadTokenRef.current) return;
       setOverview(data as ObservabilityOverviewView);
     } catch (e) {
+      if (token !== loadTokenRef.current) return;
       setError(e instanceof Error ? e.message : "Observabilité indisponible.");
     } finally {
-      setLoading(false);
+      if (token === loadTokenRef.current) setLoading(false);
     }
   }, []);
 
