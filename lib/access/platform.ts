@@ -40,6 +40,13 @@ export async function assertDeveloperRole(userId: string): Promise<void> {
   }
 }
 
+export async function assertAdminRole(userId: string): Promise<void> {
+  const role = await getPlatformRole(userId);
+  if (role !== "admin") {
+    throw new Error("Administrator access required.");
+  }
+}
+
 export async function getPlatformAccess(
   request: Request | { headers: { get(name: string): string | null } },
 ): Promise<PlatformAccess> {
@@ -59,5 +66,13 @@ export async function requireDeveloperAccess(
 ): Promise<DecodedIdToken> {
   const token = await verifyFirebaseAuth(request);
   await assertDeveloperRole(token.uid);
+  return token;
+}
+
+export async function requireAdminAccess(
+  request: Request | { headers: { get(name: string): string | null } },
+): Promise<DecodedIdToken> {
+  const token = await verifyFirebaseAuth(request);
+  await assertAdminRole(token.uid);
   return token;
 }
