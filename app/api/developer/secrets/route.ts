@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
+import { requireDeveloperAccess } from "@/lib/access/platform";
 import { extensionApiError } from "@/lib/extensions/api";
 import {
   deleteExtensionSecret,
@@ -21,20 +21,31 @@ import { MAX_SECRETS } from "@/lib/extensions/manifest";
  */
 export async function GET(request: Request) {
   try {
-    const token = await verifyFirebaseAuth(request);
+    const token = await requireDeveloperAccess(request);
     const extensionId = new URL(request.url).searchParams.get("extensionId") ?? "";
     const extension = await getExtension(extensionId);
-    if (!extension) return NextResponse.json({ error: "Extension introuvable." }, { status: 404 });
-    if (extension.developerId !== token.uid) {
-      return NextResponse.json({ error: "Seul le développeur peut consulter les secrets." }, { status: 403 });
+
+    if (!extension) {
+      return NextResponse.json(
+        { error: "Extension introuvable." },
+        { status: 404 },
+      );
     }
-    // Declared refs come from the manifest of the newest known version.
+
+    if (extension.developerId !== token.uid) {
+      return NextResponse.json(
+        { error: "Seul le développeur peut consulter les secrets." },
+        { status: 403 },
+      );
+    }
+
     const versions = await listVersions(extensionId);
     const declaredFromManifest =
       versions.find((version) => version.version === extension.latestVersion)?.manifest.secrets ??
       versions[0]?.manifest.secrets ??
       {};
     const configured = await listExtensionSecretRefs(extensionId);
+
     return NextResponse.json({
       secrets: Object.entries(declaredFromManifest).map(([ref, meta]) => ({
         ref,
@@ -49,27 +60,47 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const token = await verifyFirebaseAuth(request);
+    const token = await requireDeveloperAccess(request);
     const body = (await request.json().catch(() => ({}))) as {
       extensionId?: unknown;
       ref?: unknown;
       value?: unknown;
     };
+
     const extensionId = typeof body.extensionId === "string" ? body.extensionId : "";
     const ref = typeof body.ref === "string" ? body.ref.trim() : "";
     const value = typeof body.value === "string" ? body.value : "";
+
     if (!extensionId || !ref || !value) {
-      return NextResponse.json({ error: "extensionId, ref et value sont requis." }, { status: 400 });
+      return NextResponse.json(
+        { error: "extensionId, ref et value sont requis." },
+        { status: 400 },
+      );
     }
+
     const extension = await getExtension(extensionId);
-    if (!extension) return NextResponse.json({ error: "Extension introuvable." }, { status: 404 });
-    if (extension.developerId !== token.uid) {
-      return NextResponse.json({ error: "Seul le développeur peut définir les secrets." }, { status: 403 });
+    if (!extension) {
+      return NextResponse.json(
+        { error: "Extension introuvable." },
+        { status: 404 },
+      );
     }
+
+    if (extension.developerId !== token.uid) {
+      return NextResponse.json(
+        { error: "Seul le développeur peut définir les secrets." },
+        { status: 403 },
+      );
+    }
+
     const declared = await listExtensionSecretRefs(extensionId);
     if (!declared.includes(ref) && declared.length >= MAX_SECRETS) {
-      return NextResponse.json({ error: "Nombre maximum de secrets atteint." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Nombre maximum de secrets atteint." },
+        { status: 400 },
+      );
     }
+
     await setExtensionSecret(extensionId, ref, value);
     return NextResponse.json({ ok: true, ref });
   } catch (error) {
@@ -79,15 +110,37 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const token = await verifyFirebaseAuth(request);
-    const body = (await request.json().catch(() => ({}))) as { extensionId?: unknown; ref?: unknown };
+    const token = await requireDeveloperAccess(request);
+    const body = (await request.json().catch(() => ({}))) as {
+      extensionId?: unknown;
+      ref?: unknown;
+    };
+
     const extensionId = typeof body.extensionId === "string" ? body.extensionId : "";
     const ref = typeof body.ref === "string" ? body.ref.trim() : "";
-    const extension = await getExtension(extensionId);
-    if (!extension) return NextResponse.json({ error: "Extension introuvable." }, { status: 404 });
-    if (extension.developerId !== token.uid) {
-      return NextResponse.json({ error: "Seul le développeur peut supprimer les secrets." }, { status: 403 });
+
+    if (!extensionId || !ref) {
+      return NextResponse.json(
+        { error: "extensionId et ref sont requis." },
+        { status: 400 },
+      );
     }
+
+    const extension = await getExtension(extensionId);
+    if (!extension) {
+      return NextResponse.json(
+        { error: "Extension introuvable." },
+        { status: 404 },
+      );
+    }
+
+    if (extension.developerId !== token.uid) {
+      return NextResponse.json(
+        { error: "Seul le développeur peut supprimer les secrets." },
+        { status: 403 },
+      );
+    }
+
     await deleteExtensionSecret(extensionId, ref);
     return NextResponse.json({ ok: true });
   } catch (error) {
