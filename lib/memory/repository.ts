@@ -76,3 +76,22 @@ export async function listProjectMemories(
       doc.data() as MemoryRecord,
   );
 }
+
+export async function listAgentMemories(
+  userId: string,
+  agentId: string,
+  limit = 200,
+): Promise<MemoryRecord[]> {
+  const snapshot =
+    await collection()
+      .where("userId", "==", userId)
+      .where("agentId", "==", agentId)
+      .orderBy("updatedAt", "desc")
+      .limit(limit)
+      .get();
+
+  return snapshot.docs.map(
+    (doc) =>
+      doc.data() as MemoryRecord,
+  );
+}

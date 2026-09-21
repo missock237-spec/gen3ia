@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { rateLimit } from "@/lib/security/rate-limit";
@@ -12,6 +12,8 @@ import { appendMessage, createConversation, getConversation, listMessages } from
 import { getAgentForOwner } from "@/lib/agents/repository";
 import { policyForAgent } from "@/lib/agents/personalized-plan";
 import { answerAsAgent, classifyRequest, outOfScopeReply, planAgentTask } from "@/lib/agents/chat-engine";
+import { recallAgentContext, recordExchange, shouldSummarize, summarizeConversation } from "@/lib/memory/episodic";
+import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import type { AgentRecord } from "@/lib/agents/schema";
 
 const Body = z.object({
@@ -143,6 +145,18 @@ export async function POST(request: NextRequest) {
       const classification = await classifyRequest(agent, body.message);
       const note = contextNoteFor(body.attachmentPath, agent);
 
+      // Mémoire épisodique : rappel sémantique des échanges passés de cet
+      // agent (similarité cosinus sur embeddings) — silence si indisponible.
+      const memoryNote = agent.memoryEnabled
+        ? await recallAgentContext(user.uid, agent.id, body.message)
+        : undefined;
+      // Découverte automatique des outils MCP connectés (si l'agent en
+      // dispose) : le planificateur connaît serverId + noms d'outils exacts.
+      const mcpNote = agent.tools.includes("mcp.call")
+        ? await describeServersForPrompt(user.uid)
+        : undefined;
+      const fullNote = [note, memoryNote, mcpNote].filter(Boolean).join("\n\n") || undefined;
+
       await appendMessage({
         conversationId,
         userId: user.uid,
@@ -154,6 +168,7 @@ export async function POST(request: NextRequest) {
       if (!classification.inScope) {
         const reply = outOfScopeReply(agent, body.message);
         await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
+        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: reply, mode: "chat" }));
         return NextResponse.json({
           mode: "chat",
           conversationId,
@@ -165,8 +180,17 @@ export async function POST(request: NextRequest) {
 
       // Réponse claire et simple : la charte pilote un appel LLM direct.
       if (classification.mode === "chat") {
-        const reply = await answerAsAgent(agent, history.map((item) => ({ role: item.role, content: item.content })), body.message, note);
+        const reply = await answerAsAgent(agent, history.map((item) => ({ role: item.role, content: item.content })), body.message, fullNote);
         await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
+        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: reply, mode: "chat" }));
+        if (agent.memoryEnabled && shouldSummarize(history.length + 2)) {
+          after(() => summarizeConversation({
+            userId: user.uid,
+            agentId: agent.id,
+            conversationId,
+            history: [...history.map((item) => ({ role: item.role, content: item.content })), { role: "user", content: body.message }, { role: "assistant", content: reply }],
+          }));
+        }
         return NextResponse.json({
           mode: "chat",
           conversationId,
@@ -178,7 +202,7 @@ export async function POST(request: NextRequest) {
 
       // Mode task : exécution concrète de la tâche, dans le périmètre de
       // l'agent (charte injectée dans le planificateur, outils restreints).
-      const objectiveNote = note ? `${note}\n\n${body.message}` : body.message;
+      const objectiveNote = fullNote ? `${fullNote}\n\n${body.message}` : body.message;
       const plan = await planAgentTask(user.uid, agent, objectiveNote);
       const approvalSteps = plan.steps.filter((step) =>
         step.type === "tool" && (step.requiresApproval || step.sideEffect),
@@ -278,14 +302,16 @@ export async function POST(request: NextRequest) {
       const pending = currentApprovals.filter((item) => item.status === "pending");
       const status = pending.length > 0 ? "waiting_approval" : result.status;
       const finalText = finalResponseText(result.plan, result.outputs);
+      const taskReply = status === "waiting_approval"
+        ? "J'ai exécuté les étapes autorisées. Une ou plusieurs actions nécessitent maintenant votre confirmation."
+        : finalText;
       await appendMessage({
         conversationId,
         userId: user.uid,
         role: "assistant",
-        content: status === "waiting_approval"
-          ? "J'ai exécuté les étapes autorisées. Une ou plusieurs actions nécessitent maintenant votre confirmation."
-          : finalText,
+        content: taskReply,
       });
+      after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: taskReply, mode: "task" }));
 
       return NextResponse.json({
         mode: "agent",

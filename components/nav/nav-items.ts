@@ -16,6 +16,7 @@ export const WORKSPACE: NavItem[] = [
 export const TOOLS: NavItem[] = [
   { href: "/studio/interface-lab", label: "Atelier d'Interfaces", icon: "⌘", hint: "Réservé aux agents de code" },
   { href: "/studio/schedules", label: "Tâches planifiées", icon: "◷" },
+  { href: "/observability", label: "Observabilité", icon: "∿", hint: "Traces, coûts et alertes des agents" },
   { href: "/integrations", label: "Intégrations", icon: "⧉", hint: "WhatsApp, Telegram, LinkedIn, Stripe…" },
 ];
 

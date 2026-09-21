@@ -6,7 +6,7 @@ import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import { Callout } from "@/components/studio/callout";
 import { WIZARD_AGENT_TYPES, wizardTypeForKey, type WizardAgentType } from "@/lib/agents/charter";
-import type { AgentSummary } from "@/lib/agents/schema";
+import type { AgentPersona, AgentSummary } from "@/lib/agents/schema";
 
 /**
  * Assistant de personnalisation d'un agent IA (Studio Gen3ia).
@@ -19,6 +19,50 @@ import type { AgentSummary } from "@/lib/agents/schema";
 
 const MEMORY_FILE_ACCEPT = ".txt,.md,.json,.csv,.pdf,.zip,.doc,.docx,.xls,.xlsx,image/*";
 const MEMORY_MAX_BYTES = 20 * 1024 * 1024;
+
+const TONE_OPTIONS: Array<{ value: NonNullable<AgentPersona["tone"]>; label: string }> = [
+  { value: "professionnel", label: "Professionnel" },
+  { value: "convivial", label: "Convivial" },
+  { value: "direct", label: "Direct" },
+  { value: "inspirant", label: "Inspirant" },
+  { value: "pedagogue", label: "Pédagogue" },
+];
+const VERBOSITY_OPTIONS: Array<{ value: NonNullable<AgentPersona["verbosity"]>; label: string }> = [
+  { value: "concis", label: "Concis" },
+  { value: "equilibre", label: "Équilibré" },
+  { value: "detaille", label: "Détaillé" },
+];
+const HUMOR_OPTIONS: Array<{ value: NonNullable<AgentPersona["humor"]>; label: string }> = [
+  { value: "aucun", label: "Aucun" },
+  { value: "leger", label: "Léger" },
+  { value: "present", label: "Présent" },
+];
+type AvatarColor = NonNullable<AgentPersona["avatar"]>["color"];
+const AVATAR_COLORS: Array<{ value: AvatarColor; label: string; className: string }> = [
+  { value: "neutral", label: "Ardoise", className: "bg-neutral-900" },
+  { value: "emerald", label: "Émeraude", className: "bg-emerald-600" },
+  { value: "sky", label: "Ciel", className: "bg-sky-600" },
+  { value: "amber", label: "Ambre", className: "bg-amber-500" },
+  { value: "rose", label: "Rose", className: "bg-rose-500" },
+  { value: "violet", label: "Violet", className: "bg-violet-600" },
+];
+const AVATAR_EMOJIS = ["🤖", "⚡", "🧠", "🎯", "📈", "🛠️", "📞", "✍️", "📊", "🧭", "💡", "🚀"];
+const CAPABILITY_OPTIONS: Array<{ key: keyof NonNullable<AgentPersona["capabilities"]>; label: string; detail: string }> = [
+  { key: "webSearch", label: "Recherche web", detail: "L'agent peut consulter le web pour vérifier et enrichir ses réponses." },
+  { key: "codeExecution", label: "Exécution de code", detail: "L'agent peut exécuter du code dans la sandbox isolée." },
+  { key: "dataAnalysis", label: "Analyse de données", detail: "L'agent peut manipuler et interpréter des données chiffrées." },
+  { key: "fileGeneration", label: "Génération de fichiers", detail: "L'agent peut produire des livrables (documents, rapports, artefacts)." },
+];
+
+const DEFAULT_PERSONA: AgentPersona = {
+  tone: "professionnel",
+  verbosity: "equilibre",
+  humor: "aucun",
+  language: "Français",
+  constraints: [],
+  capabilities: { webSearch: true, codeExecution: true, dataAnalysis: true, fileGeneration: true },
+  avatar: undefined,
+};
 
 interface AgentWizardProps {
   /** Agent à modifier (mode édition) ou null (création). */
@@ -60,6 +104,8 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
   const [agentMode, setAgentMode] = React.useState<"standard" | "call">(editing?.agentMode ?? "standard");
   const [memoryFile, setMemoryFile] = React.useState<{ path: string; name: string } | null>(editing?.memoryFile ?? null);
   const [memoryUploading, setMemoryUploading] = React.useState(false);
+  const [persona, setPersona] = React.useState<AgentPersona>(() => ({ ...DEFAULT_PERSONA, ...(editing?.persona ?? {}) }));
+  const [constraintDraft, setConstraintDraft] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
 
@@ -75,6 +121,18 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
     setSkills((current) => [...current, skill]);
     setSkillDraft("");
   };
+
+  const addConstraint = (value: string) => {
+    const constraint = value.trim().slice(0, 160);
+    if (!constraint || persona.constraints.includes(constraint) || persona.constraints.length >= 10) return;
+    setPersona((current) => ({ ...current, constraints: [...current.constraints, constraint] }));
+    setConstraintDraft("");
+  };
+
+  const personaPayload = React.useMemo<AgentPersona>(() => ({
+    ...persona,
+    avatar: persona.avatar?.emoji ? persona.avatar : undefined,
+  }), [persona]);
 
   const handleMemoryFile = async (file: File) => {
     setError("");
@@ -122,6 +180,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
         skills,
         agentMode,
         memoryFile: memoryFile ?? undefined,
+        persona: personaPayload,
         tools: selectedType.declaredTools,
         status: "active" as const,
         voiceEnabled: agentMode === "call",
@@ -316,6 +375,150 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
               <strong>{effectiveLabel || "spécialiste (type à préciser)"}</strong>
               {skills.length > 0 ? <> avec les compétences : {skills.join(", ")}</> : null}. Toute demande hors de ce domaine recevra un refus professionnel.
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Personnalité & style (personnalisation avancée, optionnelle) ── */}
+      <div className="mt-8 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-neutral-50/60 p-5 md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-bold">Personnalité &amp; style</h3>
+            <p className="mt-0.5 text-sm text-neutral-500">
+              Affinez la voix de votre agent : ton, format, humour, langue, interdictions et capacités. Des valeurs par défaut professionnelles s&apos;appliquent si vous ne touchez à rien.
+            </p>
+          </div>
+          <span className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500">Optionnel</span>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-3">
+          <div>
+            <span className="g3-label">Ton</span>
+            <div className="flex flex-wrap gap-1.5">
+              {TONE_OPTIONS.map((option) => (
+                <Chip key={option.value} label={option.label} selected={persona.tone === option.value} onClick={() => setPersona((c) => ({ ...c, tone: option.value }))} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <span className="g3-label">Longueur des réponses</span>
+            <div className="flex flex-wrap gap-1.5">
+              {VERBOSITY_OPTIONS.map((option) => (
+                <Chip key={option.value} label={option.label} selected={persona.verbosity === option.value} onClick={() => setPersona((c) => ({ ...c, verbosity: option.value }))} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <span className="g3-label">Humour</span>
+            <div className="flex flex-wrap gap-1.5">
+              {HUMOR_OPTIONS.map((option) => (
+                <Chip key={option.value} label={option.label} selected={persona.humor === option.value} onClick={() => setPersona((c) => ({ ...c, humor: option.value }))} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <div>
+            <label className="g3-label" htmlFor="wizard-language">Langue de réponse</label>
+            <input
+              id="wizard-language"
+              className="g3-input"
+              value={persona.language}
+              onChange={(e) => setPersona((c) => ({ ...c, language: e.target.value }))}
+              placeholder="Ex. Français, English, Español…"
+              maxLength={30}
+            />
+          </div>
+          <div>
+            <span className="g3-label">Avatar <span className="font-normal text-neutral-400">(affiché dans le Studio)</span></span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {AVATAR_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  aria-pressed={persona.avatar?.emoji === emoji}
+                  onClick={() => setPersona((c) => ({ ...c, avatar: { emoji, color: c.avatar?.color ?? "neutral" } }))}
+                  className={`h-9 w-9 rounded-lg border text-lg transition-all ${persona.avatar?.emoji === emoji ? "border-neutral-900 bg-white shadow-sm" : "border-[rgba(23,23,20,0.09)] bg-white hover:border-neutral-300"}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+              {persona.avatar?.emoji ? (
+                <button type="button" className="g3-btn g3-btn-ghost !px-2.5 !py-1.5 text-xs" onClick={() => setPersona((c) => ({ ...c, avatar: undefined }))}>Retirer</button>
+              ) : null}
+            </div>
+            {persona.avatar?.emoji ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {AVATAR_COLORS.map((color) => (
+                  <button
+                    key={color.value}
+                    type="button"
+                    aria-label={`Couleur ${color.label}`}
+                    aria-pressed={persona.avatar?.color === color.value}
+                    onClick={() => setPersona((c) => ({ ...c, avatar: { emoji: c.avatar?.emoji ?? "🤖", color: color.value } }))}
+                    className={`h-6 w-6 rounded-full ${color.className} ${persona.avatar?.color === color.value ? "ring-2 ring-neutral-900 ring-offset-2" : "opacity-70 hover:opacity-100"}`}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <div>
+            <label className="g3-label" htmlFor="wizard-constraint">Interdictions <span className="font-normal text-neutral-400">(ce que l&apos;agent ne doit JAMAIS faire, 10 max)</span></label>
+            <div className="flex gap-2">
+              <input
+                id="wizard-constraint"
+                className="g3-input flex-1"
+                value={constraintDraft}
+                onChange={(e) => setConstraintDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addConstraint(constraintDraft);
+                  }
+                }}
+                placeholder="Ex. Ne jamais donner de conseil médical, ne jamais promettre de délai…"
+                maxLength={160}
+              />
+              <button type="button" className="g3-btn g3-btn-ghost" onClick={() => addConstraint(constraintDraft)} disabled={!constraintDraft.trim() || persona.constraints.length >= 10}>
+                Ajouter
+              </button>
+            </div>
+            {persona.constraints.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {persona.constraints.map((constraint) => (
+                  <span key={constraint} className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
+                    {constraint}
+                    <button type="button" onClick={() => setPersona((c) => ({ ...c, constraints: c.constraints.filter((item) => item !== constraint) }))} aria-label={`Retirer ${constraint}`} className="text-rose-500 hover:text-rose-800">×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <span className="g3-label">Capacités activables</span>
+            <div className="grid gap-2">
+              {CAPABILITY_OPTIONS.map((option) => {
+                const enabled = persona.capabilities[option.key];
+                return (
+                  <label key={option.key} className="flex cursor-pointer items-start gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-white px-3.5 py-2.5">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 accent-neutral-900"
+                      checked={enabled}
+                      onChange={(e) => setPersona((c) => ({ ...c, capabilities: { ...c.capabilities, [option.key]: e.target.checked } }))}
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold">{option.label}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-neutral-500">{option.detail}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

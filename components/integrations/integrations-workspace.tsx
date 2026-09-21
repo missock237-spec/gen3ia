@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
+import { McpServersPanel } from "@/components/integrations/mcp-servers-panel";
 
 interface CatalogEntry {
   toolkit: string;
@@ -564,6 +565,9 @@ export function IntegrationsWorkspace() {
               </>
             )}
           </SectionCard>
+
+          {/* Serveurs MCP */}
+          <McpServersPanel />
 
           {/* Notifications & approbation distante */}
           <SectionCard title="Notifications & approbation depuis votre messagerie" subtitle="Recevez les demandes d'approbation d'actions sensibles sur WhatsApp, Telegram ou Slack, et approuvez-les d'un clic depuis votre téléphone.">

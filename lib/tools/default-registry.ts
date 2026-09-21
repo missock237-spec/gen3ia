@@ -8,6 +8,7 @@ import { createZipTool } from "./files/create-zip";
 import { analyzeZipTool } from "./files/analyze-zip";
 import { extractZipTool } from "./files/extract-zip";
 import { createComposioTool } from "@/lib/integrations/composio/adapter";
+import { mcpCallTool } from "@/lib/integrations/mcp/tool";
 import { adsReadTool } from "@/lib/integrations/composio/ads-tool";
 import { messagingSendTool } from "@/lib/integrations/messaging/tools";
 import { getMessagingChannelStatus } from "@/lib/integrations/messaging";
@@ -60,6 +61,9 @@ export function createDefaultToolRegistry(): ToolRegistry {
   }
   if (isEmailProviderConfigured()) registry.register(emailSendTool);
   registry.register(webhookEmitTool);
+  // MCP : l'outil est toujours enregistré — l'exécution échoue proprement
+  // (« serveur introuvable ») si l'utilisateur n'a connecté aucun serveur.
+  registry.register(mcpCallTool);
   if (process.env.GITHUB_TOKEN) registry.register(githubCreateRepositoryTool);
   if (process.env.ELEVENLABS_API_KEY) {
     registry.register(voiceSpeakTool);

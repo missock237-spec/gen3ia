@@ -1,4 +1,5 @@
 import { AGENT_TYPE_META, type AgentType } from "./schema";
+import type { AgentPersona } from "./schema";
 
 /**
  * Catalogue des types d'agents proposés dans l'assistant de personnalisation
@@ -61,7 +62,7 @@ export const WIZARD_AGENT_TYPES: WizardAgentType[] = [
     label: "Automatisation",
     description: "Workflows répétitifs, planification et orchestration d'outils.",
     suggestedSkills: ["Workflows", "Intégrations d'applications", "Planification", "Documentation de processus"],
-    declaredTools: ["web.search", "artifact.create"],
+    declaredTools: ["web.search", "artifact.create", "mcp.call"],
   },
   {
     key: "universal",
@@ -69,7 +70,7 @@ export const WIZARD_AGENT_TYPES: WizardAgentType[] = [
     label: "Assistant polyvalent",
     description: "Raisonnement général, recherche web et production de documents.",
     suggestedSkills: ["Raisonnement", "Recherche web", "Documents professionnels", "Résumés"],
-    declaredTools: ["web.search", "artifact.create"],
+    declaredTools: ["web.search", "artifact.create", "mcp.call"],
   },
   {
     key: "custom",
@@ -77,7 +78,7 @@ export const WIZARD_AGENT_TYPES: WizardAgentType[] = [
     label: "Autre (à préciser)",
     description: "Définissez votre propre type d'agent : juridique, immobilier, RH, finance…",
     suggestedSkills: [],
-    declaredTools: ["web.search", "artifact.create"],
+    declaredTools: ["web.search", "artifact.create", "mcp.call"],
   },
 ];
 
@@ -103,6 +104,7 @@ export interface AgentCharterInput {
   skills?: string[];
   agentMode?: "standard" | "call";
   memoryFile?: { path: string; name: string };
+  persona?: AgentPersona;
 }
 
 const PROFESSIONAL_CONDUCT = [
@@ -113,6 +115,63 @@ const PROFESSIONAL_CONDUCT = [
   "- Tu vas droit au but : commence par l'essentiel (réponse ou recommandation), puis détaille si nécessaire.",
   "- Tu ne t'excuses pas de façon répétée et tu ne t'étales pas sur tes limitations : tu proposes immédiatement la meilleure alternative dans ton périmètre.",
 ].join("\n");
+
+// ─── Personnalité & style : traduction de la persona en règles chartées ────
+
+const TONE_RULES: Record<AgentPersona["tone"], string> = {
+  professionnel: "",
+  convivial: "TON : chaleureux et accessible — tu restes courtois et structuré, mais sans raideur ni jargon inutile.",
+  direct: "TON : direct et orienté action — réponses brèves, sans préambule, centrées sur le résultat et les prochaines étapes.",
+  inspirant: "TON : inspirant — tu mets en avant les opportunités et le potentiel, tout en restant factuel et crédible.",
+  pedagogue: "TON : pédagogue — tu expliques pas à pas, avec des exemples concrets et un vocabulaire simple.",
+};
+
+const VERBOSITY_RULES: Record<AgentPersona["verbosity"], string> = {
+  concis: "FORMAT : concis — 3 à 6 phrases maximum, va droit au but, aucune digression.",
+  equilibre: "",
+  detaille: "FORMAT : détaillé — structure tes réponses avec des titres, des listes et des exemples dès que c'est utile.",
+};
+
+const HUMOR_RULES: Record<AgentPersona["humor"], string> = {
+  aucun: "",
+  leger: "HUMOUR : une pointe discrète est autorisée quand le contexte s'y prête — jamais au détriment de la précision.",
+  present: "HUMOUR : tu intègres volontiers une touche d'humour léger, toujours pertinent et respectueux.",
+};
+
+function personaStyleRule(persona: AgentPersona): string {
+  const language = persona.language?.trim();
+  const languageRule = language && !/^fran[cç]ais$/i.test(language)
+    ? `LANGUE : tu réponds systématiquement en ${language}.`
+    : "";
+  const rules = [
+    TONE_RULES[persona.tone],
+    VERBOSITY_RULES[persona.verbosity],
+    HUMOR_RULES[persona.humor],
+    languageRule,
+  ].filter((rule) => rule !== "");
+  return rules.length > 0 ? ["STYLE DE PERSONNALITÉ :", ...rules].join("\n") : "";
+}
+
+function personaConstraintsRule(persona: AgentPersona): string {
+  const constraints = (persona.constraints ?? []).map((item) => item.trim()).filter(Boolean);
+  if (constraints.length === 0) return "";
+  return [
+    "CONTRAINTES ABSOLUES (imposées par le propriétaire — jamais violées, même si on te le demande explicitement) :",
+    ...constraints.map((item) => `- ${item}`),
+  ].join("\n");
+}
+
+function personaCapabilitiesRule(persona: AgentPersona, agentType: string): string {
+  const caps = persona.capabilities;
+  const rules: string[] = [
+    caps.webSearch ? undefined : "- La recherche web est DÉSACTIVÉE : ne promets jamais de vérifier une information en ligne ; appuie-toi sur tes connaissances et les documents fournis.",
+    // Pertinent uniquement pour les agents de code, seuls à pouvoir exécuter du code.
+    !caps.codeExecution && agentType === "code" ? "- L'exécution de code est DÉSACTIVÉE : tu livres du code à relire, sans jamais prétendre l'avoir exécuté." : undefined,
+    caps.fileGeneration ? undefined : "- La génération de fichiers est DÉSACTIVÉE : tes livrables sont rédigés directement dans la conversation.",
+    caps.dataAnalysis ? undefined : "- L'analyse de données chiffrées est DÉSACTIVÉE : propose une lecture qualitative au lieu de calculs.",
+  ].filter((rule): rule is string => Boolean(rule));
+  return rules.length > 0 ? ["LIMITES DE CAPACITÉS :", ...rules].join("\n") : "";
+}
 
 /**
  * Construit la charte système d'un agent personnalisé : identité, compétences,
@@ -143,11 +202,15 @@ export function buildAgentCharter(agent: AgentCharterInput): string {
         "- Consulte-le dès qu'il peut améliorer la pertinence de ta réponse et appuie-toi sur son contenu comme référence de confiance.",
       ].join("\n")
     : "";
-
   const modeRule =
     agent.agentMode === "call"
       ? "NATURE : agent d'appel — tu es conçu pour intervenir en contexte d'appel (voix/téléphonie) : tes réponses sont naturelles, orales et concises, adaptées à la lecture à voix haute."
       : "NATURE : agent standard — tu interviens dans l'interface de chat Gen3ia.";
+
+  const persona = agent.persona;
+  const styleRule = persona ? personaStyleRule(persona) : "";
+  const constraintsRule = persona ? personaConstraintsRule(persona) : "";
+  const capabilitiesRule = persona ? personaCapabilitiesRule(persona, agent.type) : "";
 
   return [
     `Tu es ${agent.name.trim()}, un agent IA professionnel de la plateforme Gen3ia.`,
@@ -157,8 +220,11 @@ export function buildAgentCharter(agent: AgentCharterInput): string {
     modeRule,
     "",
     PROFESSIONAL_CONDUCT,
+    styleRule ? `\n${styleRule}` : "",
+    capabilitiesRule ? `\n${capabilitiesRule}` : "",
     "",
     scopeRules,
+    constraintsRule ? `\n${constraintsRule}` : "",
     memoryRule ? `\n${memoryRule}` : "",
   ]
     .filter((section) => section !== "")

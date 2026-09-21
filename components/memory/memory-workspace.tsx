@@ -7,6 +7,7 @@ import { AnimatedTabs, AnimatedTabsSection } from "@/components/ui/animated-tabs
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { SouvenirsPanel, type MemoryEntry } from "@/components/memory/souvenirs-panel";
 import { DocumentsPanel, type DocumentFileEntry } from "@/components/memory/documents-panel";
+import { SemanticSearchPanel } from "@/components/memory/semantic-search-panel";
 import { formatBytes } from "@/lib/storage/upload-policy";
 
 export type StorageUsageView = { usedBytes: number; quotaBytes: number; fileCount: number };
@@ -121,6 +122,7 @@ export function MemoryWorkspace() {
             tabs={[
               { key: "souvenirs", label: `Souvenirs texte${memories.length ? ` · ${memories.length}` : ""}` },
               { key: "documents", label: `Documents${files.length ? ` · ${files.length}` : ""}` },
+              { key: "recherche", label: "Recherche sémantique" },
             ]}
           />
         </div>
@@ -129,7 +131,7 @@ export function MemoryWorkspace() {
           <AnimatedTabsSection>
             <SouvenirsPanel memories={memories} loaded={loaded} onRefresh={refreshMemories} onNotify={setGlobalMessage} />
           </AnimatedTabsSection>
-        ) : (
+        ) : tab === "documents" ? (
           <AnimatedTabsSection>
             <DocumentsPanel
               files={files}
@@ -138,6 +140,10 @@ export function MemoryWorkspace() {
               onRefresh={refreshFiles}
               onNotify={setGlobalMessage}
             />
+          </AnimatedTabsSection>
+        ) : (
+          <AnimatedTabsSection>
+            <SemanticSearchPanel />
           </AnimatedTabsSection>
         )}
 

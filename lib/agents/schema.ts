@@ -24,6 +24,40 @@ export const AGENT_TYPE_META: Record<AgentType, { label: string; description: st
   automation: { label: "Automatisation", description: "Workflows repetitifs, planification et orchestration d'outils.", securityLevel: "standard" },
 };
 
+// ─── Personnalité & style (personnalisation avancée) ────────────────────────
+// Piliers optionnels configurés dans le wizard : ton, verbosité, humour,
+// langue, contraintes absolues (ce que l'agent ne doit JAMAIS faire),
+// capacités activables et avatar.
+export const AGENT_TONES = ["professionnel", "convivial", "direct", "inspirant", "pedagogue"] as const;
+export const AGENT_VERBOSITY_LEVELS = ["concis", "equilibre", "detaille"] as const;
+export const AGENT_HUMOR_LEVELS = ["aucun", "leger", "present"] as const;
+export const AGENT_AVATAR_COLORS = ["neutral", "emerald", "sky", "amber", "rose", "violet"] as const;
+
+export const AgentPersonaSchema = z.object({
+  tone: z.enum(AGENT_TONES).default("professionnel"),
+  verbosity: z.enum(AGENT_VERBOSITY_LEVELS).default("equilibre"),
+  humor: z.enum(AGENT_HUMOR_LEVELS).default("aucun"),
+  // Langue de réponse (libellé libre : "Français", "English", "Español"…).
+  language: z.string().trim().min(2).max(30).default("Français"),
+  // Garde-fous imposés par le propriétaire : jamais violés, même à la demande.
+  constraints: z.array(z.string().trim().min(1).max(160)).max(10).default([]),
+  // Compétences activables — mappées sur la whitelist d'outils du runtime.
+  // Défauts : tout ce que le type d'agent autorise reste disponible ; les
+  // désactivations sont des opt-out explicites du propriétaire.
+  capabilities: z.object({
+    webSearch: z.boolean().default(true),
+    codeExecution: z.boolean().default(true),
+    dataAnalysis: z.boolean().default(true),
+    fileGeneration: z.boolean().default(true),
+  }).default({ webSearch: true, codeExecution: true, dataAnalysis: true, fileGeneration: true }),
+  // Avatar visuel affiché dans le Studio (emoji + couleur d'accent).
+  avatar: z.object({
+    emoji: z.string().trim().min(1).max(8),
+    color: z.enum(AGENT_AVATAR_COLORS).default("neutral"),
+  }).optional(),
+});
+export type AgentPersona = z.infer<typeof AgentPersonaSchema>;
+
 export const AgentRecordSchema = z.object({
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(500).default(""),
@@ -55,6 +89,8 @@ export const AgentRecordSchema = z.object({
   documentGenerationEnabled: z.boolean().default(true),
   voiceEnabled: z.boolean().default(false),
   voiceConfig: VoiceConfigSchema.optional(),
+  // Personnalité & style avancés (optionnel : valeurs par défaut pros).
+  persona: AgentPersonaSchema.optional(),
   status: z.enum(["draft", "active", "paused", "archived"]).default("active"),
 });
 
@@ -66,5 +102,5 @@ export type AgentSummary = Pick<AgentRecord,
   "projectId" | "status" | "modelStrategy" |
   "preferredProvider" | "preferredModel" | "autonomous" | "maxIterations" | "tools" |
   "memoryEnabled" | "webResearchEnabled" | "documentGenerationEnabled" | "voiceEnabled" |
-  "voiceConfig" | "createdAt" | "updatedAt"
+  "voiceConfig" | "persona" | "createdAt" | "updatedAt"
 >;

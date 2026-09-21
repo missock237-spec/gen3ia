@@ -31,6 +31,11 @@ export function ScheduleForm({
   const [retryDelayMinutes, setRetryDelayMinutes] = useState(5);
   const [catchUp, setCatchUp] = useState(false);
   const [maxCatchUpRuns, setMaxCatchUpRuns] = useState(1);
+  // Agent « toujours actif » : mode de déclenchement + sources de veille.
+  const [triggerMode, setTriggerMode] = useState<"cron" | "webhook" | "watch">("cron");
+  const [watchSources, setWatchSources] = useState<Array<{ type: "rss" | "web"; url: string; label: string }>>(
+    [{ type: "rss", url: "", label: "" }],
+  );
 
   // Fuseau du navigateur appliqué après montage, différé d'un tick
   // (évite le rendu en cascade synchrone — pattern établi du codebase).
@@ -48,13 +53,25 @@ export function ScheduleForm({
     setSelectedDays((current) => current.includes(day) ? current.filter((value) => value !== day) : [...current, day].sort());
   };
 
-  const valid = name.trim().length > 0 && agentId.trim().length > 0 && objective.trim().length >= 3 && selectedDays.length > 0;
+  const valid =
+    name.trim().length > 0 &&
+    agentId.trim().length > 0 &&
+    objective.trim().length >= 3 &&
+    (triggerMode === "cron"
+      ? selectedDays.length > 0
+      : triggerMode === "webhook"
+        ? true
+        : watchSources.some((source) => source.url.trim().length > 8));
 
   const submit = async () => {
     if (!valid || busy) return;
     await onCreate({
       name: name.trim(), agentId, objective: objective.trim(), timezone, daysOfWeek: selectedDays,
       startTime, endTime, intervalMinutes, maxRetries, retryDelayMinutes, catchUp, maxCatchUpRuns,
+      ...(triggerMode === "webhook" ? { enableWebhook: true } : {}),
+      ...(triggerMode === "watch"
+        ? { watchSourceInputs: watchSources.filter((source) => source.url.trim().length > 8).map(({ type, url, label }) => ({ type, url: url.trim(), ...(label.trim() ? { label: label.trim() } : {}) })) }
+        : {}),
     });
     setName(""); setAgentId(""); setObjective("");
   };
@@ -89,6 +106,75 @@ export function ScheduleForm({
           <textarea id="schedule-objective" value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="Ex. Surveille les nouveautés de mon secteur et prépare un rapport." className="g3-textarea min-h-28" maxLength={20_000} />
         </div>
 
+        <fieldset className="mt-5">
+          <legend className="g3-label">Déclencheur</legend>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {([
+              { key: "cron", title: "Planifié", detail: "Jours + fenêtre horaire (cron)" },
+              { key: "webhook", title: "Webhook", detail: "Un appel d'URL externe déclenche l'agent" },
+              { key: "watch", title: "Veille RSS / Web", detail: "Détecte les changements d'une source" },
+            ] as const).map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setTriggerMode(option.key)}
+                aria-pressed={triggerMode === option.key}
+                className={`rounded-xl border p-3 text-left transition-colors ${triggerMode === option.key ? "border-sky-200 bg-sky-100 text-sky-800" : "border-[rgba(23,23,20,0.09)] bg-neutral-50 hover:bg-neutral-100"}`}
+              >
+                <span className="block text-sm font-semibold">{option.title}</span>
+                <span className="mt-0.5 block text-xs text-neutral-500">{option.detail}</span>
+              </button>
+            ))}
+          </div>
+          {triggerMode === "webhook" ? (
+            <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-700">
+              L&apos;URL du webhook (avec token secret) sera affichée sur la carte après enregistrement. Chaque POST déclenche la mission ; l&apos;agent vous notifie à la fin.
+            </p>
+          ) : null}
+          {triggerMode === "watch" ? (
+            <div className="mt-2 space-y-2">
+              {watchSources.map((source, index) => (
+                <div key={index} className="grid gap-2 sm:grid-cols-[110px_1fr_1fr_40px]">
+                  <select
+                    value={source.type}
+                    onChange={(e) => setWatchSources((current) => current.map((item, i) => (i === index ? { ...item, type: e.target.value as "rss" | "web" } : item)))}
+                    className="g3-select"
+                    aria-label={`Type de la source ${index + 1}`}
+                  >
+                    <option value="rss">Flux RSS</option>
+                    <option value="web">Page web</option>
+                  </select>
+                  <input
+                    value={source.url}
+                    onChange={(e) => setWatchSources((current) => current.map((item, i) => (i === index ? { ...item, url: e.target.value } : item)))}
+                    placeholder="https://exemple.com/flux"
+                    className="g3-input"
+                    aria-label={`URL de la source ${index + 1}`}
+                    maxLength={2000}
+                  />
+                  <input
+                    value={source.label}
+                    onChange={(e) => setWatchSources((current) => current.map((item, i) => (i === index ? { ...item, label: e.target.value } : item)))}
+                    placeholder="Libellé (optionnel)"
+                    className="g3-input"
+                    aria-label={`Libellé de la source ${index + 1}`}
+                    maxLength={120}
+                  />
+                  <button type="button" onClick={() => setWatchSources((current) => current.filter((_, i) => i !== index))} className="rounded-xl border border-neutral-300 text-neutral-400 hover:bg-neutral-100" aria-label={`Retirer la source ${index + 1}`}>×</button>
+                </div>
+              ))}
+              {watchSources.length < 5 ? (
+                <button type="button" onClick={() => setWatchSources((current) => [...current, { type: "rss", url: "", label: "" }])} className="text-xs font-semibold text-sky-700 hover:underline">
+                  + Ajouter une source ({watchSources.length}/5)
+                </button>
+              ) : null}
+              <p className="text-xs text-neutral-400">À la première vérification, la baseline est enregistrée sans déclencher l&apos;agent. Ensuite, tout changement de contenu lance la mission.</p>
+            </div>
+          ) : null}
+        </fieldset>
+
+        {triggerMode === "cron" ? (
+          <>
         <fieldset className="mt-5">
           <legend className="g3-label">Jours actifs</legend>
           <div className="flex flex-wrap gap-2">
@@ -145,15 +231,23 @@ export function ScheduleForm({
             </label>
           )}
         </div>
+          </>
+        ) : null}
 
         <div className="mt-4">
           <label className="g3-label" htmlFor="schedule-timezone">Fuseau horaire</label>
           <input id="schedule-timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="Africa/Douala" className="g3-input" />
         </div>
 
-        <div className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-3 text-sm text-neutral-600" aria-live="polite">
-          {summary} · {timezone}
-        </div>
+        {triggerMode === "cron" ? (
+          <div className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-3 text-sm text-neutral-600" aria-live="polite">
+            {summary} · {timezone}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-3 text-sm text-neutral-600" aria-live="polite">
+            {triggerMode === "webhook" ? "Déclenchement par événement externe (webhook)" : `Veille active sur ${watchSources.filter((source) => source.url.trim().length > 8).length} source(s)`} · {timezone}
+          </div>
+        )}
 
         <button
           type="submit"

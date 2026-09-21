@@ -5,6 +5,15 @@
 
 export type Agent = { id: string; name: string; status: string; type: string };
 
+export type WatchSourceView = {
+  id: string;
+  type: "rss" | "web";
+  url: string;
+  label?: string;
+  lastHash?: string;
+  lastCheckedAt?: string;
+};
+
 export type Schedule = {
   id: string;
   agentId: string;
@@ -24,6 +33,8 @@ export type Schedule = {
   lastExecutionStatus?: string;
   lastExecutionAt?: string;
   lastError?: string;
+  alwaysOnWebhookToken?: string;
+  watchSources?: WatchSourceView[];
 };
 
 export type ScheduleRun = {
@@ -52,6 +63,8 @@ export type ScheduleDraft = {
   retryDelayMinutes: number;
   catchUp: boolean;
   maxCatchUpRuns: number;
+  enableWebhook?: boolean;
+  watchSourceInputs?: Array<{ type: "rss" | "web"; url: string; label?: string }>;
 };
 
 export function browserTimezone() {

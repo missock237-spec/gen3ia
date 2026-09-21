@@ -45,11 +45,19 @@ export function policyForAgent(agent: AgentRecord): ExecutionPolicy {
   const level = securityLevelForAgent(agent);
   const base = createAgentPolicy(level);
   const declaredTools = agent.tools.filter((tool) => /^[a-z0-9_.]+$/.test(tool) && tool.length <= 80);
+  // Capacités activables de la persona : désactiver une capacité retire les
+  // outils correspondants de la whitelist, même s'ils étaient déclarés.
+  const caps = agent.persona?.capabilities;
   const allowed = Array.from(new Set([...(base.allowedTools ?? []), ...declaredTools])).filter(
     // ui.components est l'outil EXCLUSIF des agents de type "code" : un autre
     // type d'agent ne peut pas l'obtenir en le declarant dans sa config.
     (tool) => tool !== "ui.components" || agent.type === "code",
-  );
+  ).filter((tool) => {
+    if (caps?.webSearch === false && tool === "web.search") return false;
+    if (caps?.codeExecution === false && tool === "code.execute") return false;
+    if (caps?.fileGeneration === false && tool === "artifact.create") return false;
+    return true;
+  });
   return {
     ...base,
     // Les outils declares par le proprietaire s'ajoutent a la whitelist de son

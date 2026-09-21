@@ -15,6 +15,7 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "artifact.create": { name: "artifact.create", risk: "write", requiredPermissions: ["tool.write", "file.write"], filesystemRead: true, filesystemWrite: true },
   "artifact.download": { name: "artifact.download", risk: "read", requiredPermissions: ["tool.read", "file.read"] },
   "composio.execute": { name: "composio.execute", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  "mcp.call": { name: "mcp.call", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   "code.execute": { name: "code.execute", risk: "destructive", requiredPermissions: ["code.execute"] },
   "ui.components": { name: "ui.components", risk: "read", requiredPermissions: ["tool.external", "network.read"], network: true },
   "terminal.execute": { name: "terminal.execute", risk: "destructive", requiredPermissions: ["terminal.execute"] },

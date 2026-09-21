@@ -76,3 +76,39 @@ export async function notifyApprovalResolved(approval: ActionApproval, outcome: 
     /* best effort : la résolution ne dépend jamais d'une notification. */
   }
 }
+
+/**
+ * Notification « agent toujours actif » : prévient l'utilisateur sur son
+ * canal préféré quand une exécution déclenchée automatiquement (planification,
+ * webhook, veille) se termine. Best effort par construction.
+ */
+export async function notifyScheduleRunCompleted(params: {
+  userId: string;
+  scheduleId: string;
+  status: string;
+  error?: string;
+}): Promise<void> {
+  try {
+    const preferences = await getMessagingPreferences(params.userId);
+    if (!preferences) return;
+    const status = getMessagingChannelStatus();
+    if (!status[preferences.channel]) return;
+
+    const outcomes: Record<string, string> = {
+      completed: "🏁 mission terminée avec succès.",
+      failed: "⚠️ mission terminée en échec.",
+      cancelled: "■ mission annulée.",
+    };
+    const outcome = outcomes[params.status] ?? `ℹ️ mission terminée (${params.status}).`;
+    const scheduleName = params.scheduleId.slice(0, 8);
+    const detail = params.error ? `\nErreur : ${params.error.slice(0, 200)}` : "";
+    await sendAgentMessage({
+      userId: params.userId,
+      channel: preferences.channel,
+      to: preferences.recipient,
+      text: `GEN3IA — Votre agent (planification ${scheduleName}) : ${outcome}${detail}`,
+    });
+  } catch {
+    /* best effort : la notification ne doit jamais faire échouer l'exécution. */
+  }
+}

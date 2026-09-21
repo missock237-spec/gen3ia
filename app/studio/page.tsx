@@ -7,12 +7,13 @@ import { AgentChatWorkshop } from "@/components/agent/agent-chat-workshop";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { WorkspaceTaskPanel } from "@/components/agent/workspace-task-panel";
 import { AdsWorkshop } from "@/components/studio/ads-workshop";
+import { VideoWorkshop } from "@/components/studio/video-workshop";
 import { StudioHeader } from "@/components/studio/studio-header";
 
-type StudioTab = "agents" | "ads";
+type StudioTab = "agents" | "ads" | "video";
 
 function isStudioTab(value: string | null): value is StudioTab {
-  return value === "agents" || value === "ads";
+  return value === "agents" || value === "ads" || value === "video";
 }
 
 /**
@@ -46,7 +47,7 @@ export default function StudioPage() {
     const next = isStudioTab(key) ? key : "agents";
     setTab(next);
     const url = new URL(window.location.href);
-    if (next === "ads") url.searchParams.set("tab", "ads");
+    if (next === "ads" || next === "video") url.searchParams.set("tab", next);
     else url.searchParams.delete("tab");
     window.history.replaceState(null, "", url);
   };
@@ -80,6 +81,7 @@ export default function StudioPage() {
         tabs={[
           { key: "agents", label: "🤖 Mes agents" },
           { key: "ads", label: "📣 Studio Ads" },
+          { key: "video", label: "🎬 Studio Vidéo" },
         ]}
       />
 
@@ -89,6 +91,9 @@ export default function StudioPage() {
       </div>
       <div role="tabpanel" aria-label="Studio Ads" hidden={tab !== "ads"}>
         {hydrated && <AdsWorkshop />}
+      </div>
+      <div role="tabpanel" aria-label="Studio Vidéo" hidden={tab !== "video"}>
+        {hydrated && tab === "video" ? <VideoWorkshop /> : null}
       </div>
     </div>
   );

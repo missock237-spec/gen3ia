@@ -120,6 +120,22 @@ export default function AgentSchedulesPage() {
     }
   };
 
+  const checkWatch = async (schedule: Schedule) => {
+    if (sessionDisponible === false) return;
+    setBusy(true); setMessage("");
+    try {
+      const response = await authFetch(`/api/agents/schedules/${encodeURIComponent(schedule.id)}/watch`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Vérification impossible");
+      const statuses = (data.results ?? []).map((result: { status?: string }) => result.status ?? "?").join(", ");
+      notify(`Veille vérifiée : ${statuses}. Un contenu modifié a déclenché l'agent.`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Vérification impossible", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const loadHistory = async (schedule: Schedule) => {
     try {
       const response = await authFetch(`/api/agents/schedules/${encodeURIComponent(schedule.id)}/runs?limit=10`, { cache: "no-store" });
@@ -184,6 +200,7 @@ export default function AgentSchedulesPage() {
                   busy={busy}
                   history={history[schedule.id]}
                   onRun={(item) => void runNow(item)}
+                  onCheckWatch={(item) => void checkWatch(item)}
                   onToggle={(item) => void toggle(item)}
                   onRemove={(item) => void remove(item)}
                   onLoadHistory={(item) => void loadHistory(item)}

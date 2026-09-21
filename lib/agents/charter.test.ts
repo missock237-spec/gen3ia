@@ -56,6 +56,79 @@ describe("charter de l'agent", () => {
   });
 });
 
+describe("persona avancée dans la charte", () => {
+  it("injecte ton, format, humour et langue configurés", () => {
+    const charter = buildAgentCharter({
+      ...baseAgent,
+      persona: {
+        tone: "convivial",
+        verbosity: "concis",
+        humor: "leger",
+        language: "English",
+        constraints: [],
+        capabilities: { webSearch: true, codeExecution: true, dataAnalysis: true, fileGeneration: true },
+      },
+    });
+    expect(charter).toContain("STYLE DE PERSONNALITÉ");
+    expect(charter).toContain("chaleureux et accessible");
+    expect(charter).toContain("3 à 6 phrases maximum");
+    expect(charter).toContain("pointe discrète");
+    expect(charter).toContain("systématiquement en English");
+  });
+
+  it("n'ajoute aucune section de style pour la persona par défaut", () => {
+    const charter = buildAgentCharter({
+      ...baseAgent,
+      persona: {
+        tone: "professionnel",
+        verbosity: "equilibre",
+        humor: "aucun",
+        language: "Français",
+        constraints: [],
+        capabilities: { webSearch: true, codeExecution: true, dataAnalysis: true, fileGeneration: true },
+      },
+    });
+    expect(charter).not.toContain("STYLE DE PERSONNALITÉ");
+    expect(charter).not.toContain("CONTRAINTES ABSOLUES");
+    expect(charter).not.toContain("LIMITES DE CAPACITÉS");
+  });
+
+  it("inscrit les interdictions du propriétaire comme contraintes absolues", () => {
+    const charter = buildAgentCharter({
+      ...baseAgent,
+      persona: {
+        tone: "professionnel",
+        verbosity: "equilibre",
+        humor: "aucun",
+        language: "Français",
+        constraints: ["Ne jamais donner de conseil médical", "Ne jamais promettre de délai"],
+        capabilities: { webSearch: true, codeExecution: true, dataAnalysis: true, fileGeneration: true },
+      },
+    });
+    expect(charter).toContain("CONTRAINTES ABSOLUES");
+    expect(charter).toContain("Ne jamais donner de conseil médical");
+    expect(charter).toContain("Ne jamais promettre de délai");
+  });
+
+  it("annonce les capacités désactivées comme limites", () => {
+    const charter = buildAgentCharter({
+      ...baseAgent,
+      persona: {
+        tone: "professionnel",
+        verbosity: "equilibre",
+        humor: "aucun",
+        language: "Français",
+        constraints: [],
+        capabilities: { webSearch: false, codeExecution: false, dataAnalysis: true, fileGeneration: false },
+      },
+    });
+    expect(charter).toContain("LIMITES DE CAPACITÉS");
+    expect(charter).toContain("recherche web est DÉSACTIVÉE");
+    expect(charter).toContain("exécution de code est DÉSACTIVÉE");
+    expect(charter).toContain("génération de fichiers est DÉSACTIVÉE");
+  });
+});
+
 describe("catalogue des types du wizard", () => {
   it("expose les 7 options dont un type personnalisé", () => {
     expect(WIZARD_AGENT_TYPES).toHaveLength(7);
