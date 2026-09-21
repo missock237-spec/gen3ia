@@ -23,6 +23,9 @@ import { LiveActionSchema } from "@/lib/live/types";
 const PC_ONLY_MESSAGE =
   "L'agent Live est reserve aux ordinateurs (Windows/Linux/macOS) : il utilise le partage d'ecran natif du navigateur.";
 
+// La boucle de vision (LLM) peut dépasser la durée par défaut des fonctions.
+export const maxDuration = 60;
+
 const ACTION_RESULT_MAX_AGE_MS = 5 * 60_000;
 
 const FrameSchema = z.object({
