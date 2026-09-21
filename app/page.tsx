@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { AppDownloads } from "@/components/home/app-downloads";
 import { VitrineHeader } from "@/components/home/vitrine-header";
@@ -264,8 +263,10 @@ const SECURITY_POINTS = [
 ];
 
 export default function HomePage() {
-  redirect("/dashboard");
-
+  // Vitrine publique servie à la racine : indispensable au référencement
+  // (Google/Bing) ET à la recommandation par les LLM (ChatGPT, Perplexity,
+  // Claude…) qui doivent lire FAQ + données structurées. Les utilisateurs
+  // connectés continuent via le lien « Tableau de bord » (header).
   return (
     <div className="flex min-h-full flex-col bg-[#f6f4ef] text-neutral-900">
       {/* ---------- Navigation (style Runable : pilules blanches flottantes) ---------- */}
