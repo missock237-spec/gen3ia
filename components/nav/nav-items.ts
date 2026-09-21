@@ -4,6 +4,7 @@ export type NavItem = {
   icon: string;
   shortcut?: string;
   hint?: string;
+  requiredRole?: "developer";
 };
 
 export const WORKSPACE: NavItem[] = [
@@ -13,12 +14,10 @@ export const WORKSPACE: NavItem[] = [
   { href: "/marketplace", label: "Marketplace", icon: "◇" },
 ];
 
-export const TOOLS: NavItem[] = [
-  { href: "/studio/interface-lab", label: "Atelier d'Interfaces", icon: "⌘", hint: "Réservé aux agents de code" },
+export const AGENTS: NavItem[] = [
   { href: "/studio/schedules", label: "Tâches planifiées", icon: "◷" },
-  { href: "/observability", label: "Observabilité", icon: "∿", hint: "Traces, coûts et alertes des agents" },
-  { href: "/integrations", label: "Intégrations", icon: "⧉", hint: "WhatsApp, Telegram, LinkedIn, Stripe…" },
-  { href: "/features", label: "Fonctionnalités cachées", icon: "✧", hint: "Portail client, API, webhooks, voix…" },
+  { href: "/observability", label: "Observabilité", icon: "∿", hint: "Traces, coûts et alertes de vos agents" },
+  { href: "/integrations", label: "Intégrations", icon: "⧉", hint: "Connecter vos services externes" },
 ];
 
 export const LIBRARY: NavItem[] = [
@@ -26,18 +25,18 @@ export const LIBRARY: NavItem[] = [
   { href: "/storage", label: "Fichiers", icon: "□" },
   { href: "/marketplace/purchases", label: "Mes achats", icon: "◈" },
   { href: "/team", label: "Équipe", icon: "◎" },
+  { href: "/billing", label: "Facturation", icon: "₣" },
 ];
 
-export const PLATFORM: NavItem[] = [
-  { href: "/developer", label: "Développeur", icon: "⌥" },
-  { href: "/billing", label: "Facturation", icon: "₣" },
+export const DEVELOPER: NavItem[] = [
+  { href: "/developer", label: "Developer Studio", icon: "⌥", hint: "API, SDK, extensions et connecteurs", requiredRole: "developer" },
 ];
 
 export const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
   { title: "Espace de travail", items: WORKSPACE },
-  { title: "Outils", items: TOOLS },
-  { title: "Bibliothèque", items: LIBRARY },
-  { title: "Plateforme", items: PLATFORM },
+  { title: "Agents & automatisation", items: AGENTS },
+  { title: "Ressources", items: LIBRARY },
+  { title: "Développeur", items: DEVELOPER },
 ];
 
 /** Index plat consommé par la palette de navigation (⌘K). */
