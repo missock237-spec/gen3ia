@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { rateLimit } from "@/lib/security/rate-limit";
+import { requestTraceId } from "@/lib/observability/logger";
 import {
   inviteMember,
   removeMember,
@@ -13,6 +14,11 @@ import {
 } from "@/lib/tenants/organizations";
 
 export const runtime = "nodejs";
+
+const unauthorized = (request: NextRequest) => NextResponse.json(
+  { success: false, error: "Authentification requise." },
+  { status: 401, headers: { "x-gen3ia-trace-id": requestTraceId(request) } },
+);
 
 const InviteBody = z.object({
   action: z.literal("invite"),
@@ -43,7 +49,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },
 ) {
-  const user = await requireUser(request);
+  let user;
+  try {
+    user = await requireUser(request);
+  } catch {
+    return unauthorized(request);
+  }
   const limit = rateLimit(`org-members:${user.uid}`, { limit: 30, windowMs: 10 * 60 * 1000 });
   if (!limit.allowed) {
     return NextResponse.json({ error: "Trop de requêtes. Réessayez dans quelques instants." }, { status: 429 });

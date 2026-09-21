@@ -7,27 +7,9 @@ const withBundleAnalyzer =
     ? bundleAnalyzer({ enabled: true })
     : (config: NextConfig): NextConfig => config;
 
-// Content-Security-Policy pragmatique pour la stack Gen3ia :
-// - Next.js requiert 'unsafe-inline' (scripts d'hydratation inline) ;
-// - Firebase Auth / Identity Toolkit : apis.google.com, gstatic, googleapis ;
-// - connect-src ouvert https:/wss: (Firestore, Composio, Sentry, webhooks) —
-//   resserrement possible après audit des domaines réellement appelés.
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://www.googletagmanager.com",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https://fonts.gstatic.com",
-  "img-src 'self' data: blob: https:",
-  "media-src 'self' blob: https:",
-  "connect-src 'self' https: wss:",
-  "frame-src 'self' https://apis.google.com https://*.firebaseapp.com https://accounts.google.com",
-  "worker-src 'self' blob:",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  "upgrade-insecure-requests",
-].join("; ");
+// Content-Security-Policy : posée de manière centralisée par le middleware
+// (proxy.ts), qui couvre toutes les réponses y compris les routes API.
+// Ne pas redéclarer ici : deux en-têtes CSP = l'intersection s'applique.
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -42,7 +24,6 @@ const nextConfig: NextConfig = {
           { key: "Strict-Transport-Security", value: "max-age=63072000" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           { key: "X-Frame-Options", value: "DENY" },
-          { key: "Content-Security-Policy", value: CSP },
         ],
       },
     ];

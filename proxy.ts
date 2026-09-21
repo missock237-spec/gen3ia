@@ -16,6 +16,7 @@ const CONTENT_SECURITY_POLICY = [
   "connect-src 'self' https: wss:",
   "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.firebaseio.com",
   "worker-src 'self' blob:",
+  "upgrade-insecure-requests",
 ].join('; ');
 
 const CLIENT_ACCESS_COOKIE = "gen3ia_client_access";

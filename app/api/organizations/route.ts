@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { rateLimit } from "@/lib/security/rate-limit";
+import { requestTraceId } from "@/lib/observability/logger";
 import {
   acceptInvitation,
   createOrganization,
@@ -11,6 +12,11 @@ import {
 } from "@/lib/tenants/organizations";
 
 export const runtime = "nodejs";
+
+const unauthorized = (request: NextRequest) => NextResponse.json(
+  { success: false, error: "Authentification requise." },
+  { status: 401, headers: { "x-gen3ia-trace-id": requestTraceId(request) } },
+);
 
 const CreateBody = z.object({
   action: z.literal("create"),
@@ -27,7 +33,12 @@ const Body = z.discriminatedUnion("action", [CreateBody, AcceptBody]);
 
 /** GET : organisations de l'utilisateur + invitations en attente pour son email. */
 export async function GET(request: NextRequest) {
-  const user = await requireUser(request);
+  let user;
+  try {
+    user = await requireUser(request);
+  } catch {
+    return unauthorized(request);
+  }
   if (!user.email) return NextResponse.json({ error: "Adresse email requise." }, { status: 400 });
   try {
     const [organizations, invitations] = await Promise.all([
@@ -45,7 +56,12 @@ export async function GET(request: NextRequest) {
 
 /** POST : création d'organisation ou acceptation d'invitation. */
 export async function POST(request: NextRequest) {
-  const user = await requireUser(request);
+  let user;
+  try {
+    user = await requireUser(request);
+  } catch {
+    return unauthorized(request);
+  }
   const limit = rateLimit(`orgs:${user.uid}`, { limit: 20, windowMs: 10 * 60 * 1000 });
   if (!limit.allowed) {
     return NextResponse.json({ error: "Trop de requêtes. Réessayez dans quelques instants." }, { status: 429 });
