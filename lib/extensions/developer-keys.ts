@@ -1,14 +1,22 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { verifyFirebaseAuth, verifyFirebaseToken } from "@/lib/firebase/auth-server";
-import { getPlatformRole } from "@/lib/access/platform";
-import { verifyDeveloperProjectAccess, createDeveloperApiKey, getDeveloperApiKey } from "./repository";
+import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
+import { assertDeveloperRole, getPlatformRole } from "@/lib/access/platform";
+import {
+  createDeveloperApiKey,
+  getDeveloperApiKey,
+  verifyDeveloperProjectAccess,
+} from "./repository";
 
 const KEY_PREFIX = "g3x_";
 
 export function generateDeveloperApiKey() {
   const key = KEY_PREFIX + randomBytes(32).toString("base64url");
-  return { key, keyHash: hashDeveloperApiKey(key), prefix: KEY_PREFIX + key.slice(4, 10) };
+  return {
+    key,
+    keyHash: hashDeveloperApiKey(key),
+    prefix: KEY_PREFIX + key.slice(4, 10),
+  };
 }
 
 export function hashDeveloperApiKey(key: string) {
@@ -22,17 +30,40 @@ export interface DeveloperIdentity {
   projectId?: string;
 }
 
-export async function authenticateDeveloper(request: Request): Promise<DeveloperIdentity> {
+export async function authenticateDeveloper(
+  request: Request,
+): Promise<DeveloperIdentity> {
   const authorization = request.headers.get("authorization") ?? "";
-  const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+  const token = authorization.startsWith("Bearer ")
+    ? authorization.slice(7).trim()
+    : "";
 
   if (token.startsWith(KEY_PREFIX)) {
     const record = await getDeveloperApiKey(hashDeveloperApiKey(token));
-    if (!record) throw new Error("Clé API Gen3ia invalide ou révoquée.");
-    const projectId = request.headers.get("x-gen3ia-project-id")?.trim() ?? "";
-    if (!projectId) throw new Error("Cette clé est liée à un projet Gen3ia. Envoyez X-Gen3ia-Project-Id.");
-    if (record.projectId !== projectId) throw new Error("Cette clé API ne peut être utilisée que sur son projet Gen3ia lié.");
+    if (!record) {
+      throw new Error("Clé API Gen3ia invalide ou révoquée.");
+    }
+
+    // A stored key is not, by itself, an ongoing role grant. Re-check the
+    // owner's platform role so revoked/downgraded developer accounts cannot
+    // continue using previously issued credentials.
+    await assertDeveloperRole(record.userId);
+
+    const projectId =
+      request.headers.get("x-gen3ia-project-id")?.trim() ?? "";
+    if (!projectId) {
+      throw new Error(
+        "Cette clé est liée à un projet Gen3ia. Envoyez X-Gen3ia-Project-Id.",
+      );
+    }
+    if (record.projectId !== projectId) {
+      throw new Error(
+        "Cette clé API ne peut être utilisée que sur son projet Gen3ia lié.",
+      );
+    }
+
     await verifyDeveloperProjectAccess(record.userId, projectId);
+
     return {
       userId: record.userId,
       via: "api_key",
@@ -49,7 +80,8 @@ export async function authenticateDeveloper(request: Request): Promise<Developer
 
   const displayName =
     (decoded.name && String(decoded.name).slice(0, 80)) ||
-    (decoded.email && String(decoded.email).split("@")[0].slice(0, 80)) ||
+    (decoded.email &&
+      String(decoded.email).split("@")[0].slice(0, 80)) ||
     ("developer-" + decoded.uid.slice(0, 8));
 
   return {
@@ -59,9 +91,22 @@ export async function authenticateDeveloper(request: Request): Promise<Developer
   };
 }
 
-export async function issueDeveloperApiKey(userId: string, name: string, projectId: string) {
+export async function issueDeveloperApiKey(
+  userId: string,
+  name: string,
+  projectId: string,
+) {
+  await assertDeveloperRole(userId);
   await verifyDeveloperProjectAccess(userId, projectId);
+
   const { key, keyHash, prefix } = generateDeveloperApiKey();
-  await createDeveloperApiKey({ userId, keyHash, prefix, name, projectId });
+  await createDeveloperApiKey({
+    userId,
+    keyHash,
+    prefix,
+    name,
+    projectId,
+  });
+
   return { key, prefix, name, projectId };
 }
