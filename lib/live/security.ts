@@ -77,3 +77,19 @@ export function assertFreshLiveTimestamp(timestamp: number, now = Date.now()): v
     throw new Error("Live message timestamp is outside the allowed clock window.");
   }
 }
+
+/** Taille maximale d'une frame JPEG Live, en octets (identique gateway et API). */
+export const LIVE_MAX_FRAME_BYTES = 1_500_000;
+
+/**
+ * Valide une frame JPEG transportée en base64 (encodage, taille, décodage).
+ * Utilisée à la fois par la gateway WebSocket et par l'API HTTP du mode
+ * navigateur afin d'appliquer exactement les mêmes règles.
+ */
+export function validateFrameBase64(value: string): Buffer {
+  if (value.length > Math.ceil((LIVE_MAX_FRAME_BYTES * 4) / 3) + 4) throw new Error("Live frame is too large");
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value) || value.length % 4 === 1) throw new Error("Invalid frame encoding");
+  const buffer = Buffer.from(value, "base64");
+  if (buffer.length === 0 || buffer.length > LIVE_MAX_FRAME_BYTES) throw new Error("Invalid live frame size");
+  return buffer;
+}

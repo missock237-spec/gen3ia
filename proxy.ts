@@ -69,7 +69,7 @@ export function proxy(request: NextRequest) {
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  response.headers.set("Permissions-Policy", "camera=(self), microphone=(self), geolocation=()");
+  response.headers.set("Permissions-Policy", "camera=(self), microphone=(self), display-capture=(self), geolocation=()");
   response.headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
   response.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
   response.headers.set("Cross-Origin-Resource-Policy", "same-origin");

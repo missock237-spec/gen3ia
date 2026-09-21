@@ -1,7 +1,0 @@
-node_modules/
-dist/
-*.exe
-*.AppImage
-*.deb
-*.dmg
-*.blockmap

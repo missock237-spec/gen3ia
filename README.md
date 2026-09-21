@@ -17,8 +17,7 @@ multi-tenancy par organisations, marketplace d'extensions et observabilité.
 | `components/` | UI React 19 (agent, studio, integrations, marketplace, memory, nav…) |
 | `lib/` | Logique métier : `agents`, `ai`, `billing`, `chat`, `memory`, `observability`, `orchestrator`, `security`, `tenants`, `integrations/composio`… |
 | `functions/` | Firebase Functions |
-| `live-agent/` | Agent live WebSocket |
-| `desktop/` | Clients desktop (Windows/Linux) |
+| `live-agent/` | Client Live WebSocket (contrôle PC complet, optionnel) |
 | `e2e/`, `vitest/` | Tests E2E et unitaires |
 
 **Stack** : Next.js 16 · React 19 · Tailwind 4 · Firebase (Auth, Firestore, Storage,

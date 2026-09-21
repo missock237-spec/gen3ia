@@ -1,5 +1,5 @@
 import { adminDb } from "@/lib/firebase/admin";
-import type { LiveAction, LivePermission, LivePendingAction, LiveRuntimeState, LiveSession, LiveSessionStatus } from "./types";
+import type { LiveAction, LivePermission, LivePendingAction, LiveRuntimeState, LiveSession, LiveSessionMode, LiveSessionStatus } from "./types";
 
 const COLLECTION = "liveAgentSessions";
 const PENDING_ACTION_MAX_AGE_MS = 10 * 60_000;
@@ -9,10 +9,10 @@ function ref(id: string) {
   return adminDb.collection(COLLECTION).doc(id);
 }
 
-export async function createLiveSession(input: { id: string; ownerId: string; name: string; objective: string; permissions: LivePermission[]; expiresAt?: number; pairingTokenHash: string; viewerTokenHash?: string; }): Promise<LiveSession> {
+export async function createLiveSession(input: { id: string; ownerId: string; name: string; objective: string; permissions: LivePermission[]; expiresAt?: number; pairingTokenHash: string; viewerTokenHash?: string; mode?: LiveSessionMode; }): Promise<LiveSession> {
   const now = Date.now();
   const runtime: LiveRuntimeState = { status: "idle", iteration: 0, maxIterations: DEFAULT_MAX_ITERATIONS };
-  const session: LiveSession = { id: input.id, ownerId: input.ownerId, name: input.name, objective: input.objective, status: "pending", permissions: input.permissions, createdAt: now, updatedAt: now, expiresAt: input.expiresAt, version: 1, runtime };
+  const session: LiveSession = { id: input.id, ownerId: input.ownerId, name: input.name, objective: input.objective, status: "pending", permissions: input.permissions, createdAt: now, updatedAt: now, expiresAt: input.expiresAt, version: 1, runtime, ...(input.mode ? { mode: input.mode } : {}) };
   await ref(input.id).set({ ...session, pairingTokenHash: input.pairingTokenHash, ...(input.viewerTokenHash ? { viewerTokenHash: input.viewerTokenHash } : {}) });
   return session;
 }

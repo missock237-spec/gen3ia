@@ -15,6 +15,17 @@ export const LiveSessionStatusSchema = z.enum([
 ]);
 export type LiveSessionStatus = z.infer<typeof LiveSessionStatusSchema>;
 
+/**
+ * Mode d'exécution de la session Live :
+ * - "browser" : le client est le navigateur de l'utilisateur (partage d'écran
+ *   natif getDisplayMedia, aucun téléchargement requis). Les actions clavier,
+ *   souris et fichiers ne sont pas exécutables — l'agent observe, décrit et
+ *   attend.
+ * - "desktop" : un client installé (client Node live-agent/) pilote le PC.
+ */
+export const LiveSessionModeSchema = z.enum(["browser", "desktop"]);
+export type LiveSessionMode = z.infer<typeof LiveSessionModeSchema>;
+
 export const LiveRuntimeStatusSchema = z.enum([
   "idle", "running", "waiting_confirmation", "paused", "recovering", "completed", "failed", "stopped",
 ]);
@@ -60,6 +71,8 @@ export interface LiveSession {
   permissions: LivePermission[]; deviceId?: string; createdAt: number; updatedAt: number;
   lastHeartbeatAt?: number; expiresAt?: number; version: number; runtime?: LiveRuntimeState;
   pendingAction?: LivePendingAction; inFlightAction?: LiveInFlightAction; viewerTokenHash?: string;
+  /** Mode d'exécution ("browser" par défaut pour les nouvelles sessions). */
+  mode?: LiveSessionMode;
 }
 
 export type LiveClientMessage =

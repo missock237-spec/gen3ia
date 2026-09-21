@@ -12,11 +12,12 @@ export const metadata = {
 };
 
 /**
- * Page Agent Live — reservee aux ordinateurs.
+ * Page Agent Live — réservée aux ordinateurs, testable directement dans le
+ * navigateur (partage d'écran natif, aucun téléchargement requis).
  *
  * Double protection :
- * 1. Serveur : la detection d'appareils (headers poses par le proxy, repli
- *    sur l'User-Agent brut) bloque mobile et tablette ici meme.
+ * 1. Serveur : la détection d'appareils (headers posés par le proxy, repli
+ *    sur l'User-Agent brut) bloque mobile et tablette ici même.
  * 2. API : POST /api/live/sessions refuse aussi tout appareil non desktop.
  */
 export default async function LivePage() {

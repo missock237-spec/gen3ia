@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 /**
- * Ecran affiche quand l'agent Live est ouvert depuis un appareil non supporte
- * (mobile ou tablette). La fonctionnalite exige la capture d'ecran et le
- * controle clavier/souris d'un vrai ordinateur (Windows/Linux/macOS).
+ * Écran affiché quand l'agent Live est ouvert depuis un appareil non supporté
+ * (mobile ou tablette). Le partage d'écran natif du navigateur et l'agent
+ * Live sont conçus pour un vrai ordinateur (Windows/Linux/macOS).
  */
 export function PcOnlyNotice({ deviceType }: { deviceType?: string }) {
   const appareil =
@@ -22,31 +22,23 @@ export function PcOnlyNotice({ deviceType }: { deviceType?: string }) {
         <h1 className="mt-6 font-serif text-2xl font-semibold">Agent Live — PC uniquement</h1>
         <p className="mt-3 text-sm leading-6 text-neutral-500">
           Cette fonctionnalité n’est pas disponible depuis votre {appareil}.
-          L’agent Live observe l’écran et contrôle le clavier et la souris d’un
-          ordinateur : il nécessite Windows, Linux ou macOS.
+          L’agent Live observe l’écran via le partage d’écran natif du
+          navigateur : il nécessite un ordinateur sous Windows, Linux ou macOS.
         </p>
         <ul className="mx-auto mt-5 max-w-sm space-y-2 text-left text-sm text-neutral-500">
           <li className="rounded-xl border border-[rgba(23,23,20,0.08)] bg-neutral-50 px-4 py-2.5">
-            Sur Android / iPhone : utilisez le site web ou l’application
-            installable depuis votre navigateur.
+            Aucun téléchargement n’est nécessaire : sur PC, ouvrez simplement
+            gen3ia.online/live dans votre navigateur.
           </li>
           <li className="rounded-xl border border-[rgba(23,23,20,0.08)] bg-neutral-50 px-4 py-2.5">
-            Sur PC : ouvrez gen3ia.online, l’app Gen3ia Desktop, ou installez
-            le client Live.
+            Sur Android / iPhone : utilisez le site web ou l’application
+            installable depuis votre navigateur.
           </li>
         </ul>
         <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link href="/studio" className="g3-btn g3-btn-ghost rounded-full">
             Retour au Studio
           </Link>
-          <a
-            href="https://github.com/missock237-spec/Gen3ia-ia-studio/releases"
-            target="_blank"
-            rel="noreferrer"
-            className="g3-btn g3-btn-primary rounded-full"
-          >
-            Télécharger l’app PC (Windows / Linux)
-          </a>
         </div>
       </div>
     </div>

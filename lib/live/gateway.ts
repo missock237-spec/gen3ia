@@ -15,7 +15,7 @@ import {
   startLiveRuntime,
   updateLiveSessionStatus,
 } from "./repository";
-import { assertActionAllowed, assertFreshLiveTimestamp, constantTimeEqual, hashPairingToken, LiveAuthFailureLimiter, LiveRateLimiter } from "./security";
+import { assertActionAllowed, assertFreshLiveTimestamp, constantTimeEqual, hashPairingToken, LiveAuthFailureLimiter, LiveRateLimiter, validateFrameBase64 } from "./security";
 import { actionRequiresConfirmation, decideLiveAction } from "./vision-decider";
 import { LiveActionSchema, LiveClientMessageSchema, type LiveClientMessage, type LiveServerMessage } from "./types";
 
@@ -41,14 +41,6 @@ const viewers = new Map<string, Set<WebSocket>>();
 
 function send(socket: WebSocket, message: LiveServerMessage) {
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
-}
-
-function validateFrameBase64(value: string): Buffer {
-  if (value.length > Math.ceil((MAX_FRAME_BYTES * 4) / 3) + 4) throw new Error("Live frame is too large");
-  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value) || value.length % 4 === 1) throw new Error("Invalid frame encoding");
-  const buffer = Buffer.from(value, "base64");
-  if (buffer.length === 0 || buffer.length > MAX_FRAME_BYTES) throw new Error("Invalid live frame size");
-  return buffer;
 }
 
 async function authenticateHello(message: Extract<LiveClientMessage, { type: "hello" }>) {

@@ -23,6 +23,12 @@ export interface LiveActionFeedback {
   at: number;
 }
 
+const BROWSER_MODE_RULES = [
+  "The client is the user's own web browser using native screen sharing: it CANNOT move the mouse, type, or touch files.",
+  "In this mode you may only return `wait` actions (to let the screen evolve) — never mouse.*, keyboard.* or file.*.",
+  "Describe precisely what you observe, explain in `message` the exact next step that should be performed on the computer, and mark done=true once the objective is visually achieved or impossible from observation alone.",
+].join(" ");
+
 export async function decideLiveAction(
   session: LiveSession,
   jpeg: Buffer,
@@ -35,6 +41,7 @@ export async function decideLiveAction(
 
   const client = getClient();
   const model = process.env.LIVE_AGENT_VISION_MODEL || "gpt-4.1-mini";
+  const browserMode = session.mode === "browser";
   const response = await client.chat.completions.create({
     model,
     temperature: 0,
@@ -52,6 +59,7 @@ export async function decideLiveAction(
           "File writes are sensitive and must be presented for explicit confirmation by the user.",
           "If the screen is ambiguous or a human decision is required, return action=null and explain what is needed.",
           "Coordinates are pixels in the supplied frame.",
+          ...(browserMode ? [BROWSER_MODE_RULES] : []),
           "Return strict JSON: {done:boolean,message:string,action:null|{type,...}}.",
         ].join(" "),
       },
@@ -76,6 +84,13 @@ export async function decideLiveAction(
   if (!content) throw new Error("Live vision model returned no decision");
   const parsed = DecisionSchema.parse(JSON.parse(content));
   if (parsed.action) LiveActionSchema.parse(parsed.action);
+  // Garde dure : en mode navigateur, aucune action hors `wait` ne peut être
+  // renvoyée au client (le navigateur ne contrôle ni le clavier, ni la souris,
+  // ni les fichiers). L'intention reste visible dans `message`.
+  if (browserMode && parsed.action && parsed.action.type !== "wait") {
+    parsed.message = `${parsed.message} (Action « ${parsed.action.type} » non exécutable en mode navigateur — à réaliser sur l'ordinateur.)`.slice(0, 2000);
+    parsed.action = null;
+  }
   return parsed;
 }
 

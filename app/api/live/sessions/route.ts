@@ -8,15 +8,15 @@ import { captureServerException } from "@/lib/observability/sentry";
 import { detectDeviceFromHeaders } from "@/lib/device/detect";
 import { createLiveSession, listLiveSessions } from "@/lib/live/repository";
 import { createPairingToken, hashPairingToken } from "@/lib/live/security";
-import { LivePermissionSchema } from "@/lib/live/types";
+import { LivePermissionSchema, LiveSessionModeSchema } from "@/lib/live/types";
 
 const PC_ONLY_MESSAGE =
-  "L'agent Live est reserve aux ordinateurs (Windows/Linux/macOS) : il exige la capture d'ecran et le controle clavier/souris.";
+  "L'agent Live est reserve aux ordinateurs (Windows/Linux/macOS) : il utilise le partage d'ecran natif du navigateur.";
 
 /**
- * Garde serveur PC-only : l'agent Live pilote un vrai ordinateur via
- * capture d'ecran + controle clavier/souris. Toute session doit etre creee
- * depuis un desktop (navigateur PC ou app Gen3ia Desktop).
+ * Garde serveur PC-only : l'agent Live observe un vrai ordinateur via le
+ * partage d'écran natif du navigateur. Toute session doit être créée depuis
+ * un ordinateur (Windows/Linux/macOS) — mode navigateur, sans téléchargement.
  */
 function pcOnlyGuard(request: Request): NextResponse | null {
   const device = detectDeviceFromHeaders(request.headers);
@@ -34,6 +34,8 @@ const CreateSchema = z.object({
   objective: z.string().trim().min(1).max(20_000),
   permissions: z.array(LivePermissionSchema).min(1).max(6),
   ttlMs: z.number().int().min(60_000).max(30 * 24 * 60 * 60 * 1000).default(24 * 60 * 60 * 1000),
+  /** "browser" : l'agent est testé directement dans le navigateur (sans téléchargement). */
+  mode: LiveSessionModeSchema.default("browser"),
 });
 
 function unauthorized(error: unknown) {
@@ -61,6 +63,7 @@ export async function POST(request: Request) {
       expiresAt: Date.now() + body.ttlMs,
       pairingTokenHash: hashPairingToken(pairingToken),
       viewerTokenHash: hashPairingToken(viewerToken),
+      mode: body.mode,
     });
     await appendSecurityAuditEvent({
       userId: token.uid,
