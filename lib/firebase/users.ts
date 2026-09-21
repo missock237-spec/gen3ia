@@ -16,7 +16,7 @@ export interface UserProfile {
   language: string;
   timezone: string;
   providers: string[];
-  role: "user" | "admin";
+  role: "user" | "developer" | "admin";
   plan: "free" | "pro" | "enterprise";
   credits: number;
   createdAt: Timestamp | FieldValue;
