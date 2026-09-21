@@ -126,3 +126,16 @@ Pour en savoir plus sur l'architecture, la roadmap et les spécifications techni
 - 🎯 **[Analyse du Projet](docs/analyse-projet.md)** : Rapport d'analyse d'architecture, forces de la plateforme et leviers d'amélioration.
 - 📐 **[Décisions d'Architecture (ADR)](docs/architecture-decisions.md)** : Journal des choix techniques structurants (Next.js API routes, state management, etc.).
 - 🗺️ **[Feuille de Route SaaS (Roadmap)](docs/saas-roadmap.md)** : État d'implémentation de la couverture entreprise (Multi-tenant, Sécurité, Observabilité, Billing).
+
+## Système d'Auto-Amélioration (Self-Improvement)
+
+Le projet intègre un système d'audit automatique de qualité pour évaluer le code (TypeScript, ESLint, dette TODO/FIXME, tests).
+
+### Exécution Manuelle
+Pour lancer l'audit en local :
+```bash
+node scripts/self-improve.mjs
+```
+
+### Déclenchement Automatique
+Le workflow GitHub Actions s'exécute chaque semaine (lundi à 08:00 UTC) ou à la demande via `workflow_dispatch` pour créer ou mettre à jour un rapport dans les Issues GitHub.

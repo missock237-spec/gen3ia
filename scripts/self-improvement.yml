@@ -1,0 +1,39 @@
+name: Self Improvement Quality Audit
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        continue-on-error: true
+
+      - name: Run Self-Improvement Audit
+        id: audit
+        run: node scripts/self-improve.mjs
+
+      - name: Create or Update Quality Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const title = "Rapport d'auto-amélioration";
+            const body = `## 📊 Rapport d'Auto-Amélioration Hédomadaire\n\n\`\`\`text\n${fs.readFileSync('lint_output.txt', 'utf8') || 'Audit completed.'}\n\`\`\``;
