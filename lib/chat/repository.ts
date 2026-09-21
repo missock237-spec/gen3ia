@@ -22,6 +22,8 @@ export interface ChatMessage {
   content: string;
   provider?: string;
   model?: string;
+  /** URL d'une image générée (Agnes AI) jointe à la réponse. */
+  imageUrl?: string;
   usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
   createdAt: string;
 }
@@ -65,7 +67,7 @@ export async function listMessages(userId: string, conversationId: string, limit
   const snap = await adminDb.collection("chatMessages").where("conversationId", "==", conversationId).where("userId", "==", userId).orderBy("createdAt", "asc").limit(Math.min(limit, 200)).get();
   return snap.docs.map(d => {
     const x = d.data();
-    return { id: d.id, conversationId, userId, role: x.role, content: String(x.content ?? ""), provider: x.provider, model: x.model, usage: x.usage, createdAt: iso(x.createdAt) };
+    return { id: d.id, conversationId, userId, role: x.role, content: String(x.content ?? ""), provider: x.provider, model: x.model, imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : undefined, usage: x.usage, createdAt: iso(x.createdAt) };
   });
 }
 

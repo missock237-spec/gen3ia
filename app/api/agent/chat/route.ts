@@ -15,7 +15,14 @@ import { policyForAgent } from "@/lib/agents/personalized-plan";
 import { answerAsAgent, classifyRequest, outOfScopeReply, planAgentTask } from "@/lib/agents/chat-engine";
 import { recallAgentContext, recordExchange, shouldSummarize, summarizeConversation } from "@/lib/memory/episodic";
 import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
-import { describeConnectorsForPrompt } from "@/lib/integrations/mention";
+import { describeConnectorsForPrompt, describeConnectedConnectorsForPrompt, type ConnectedConnectorsContext } from "@/lib/integrations/mention";
+import {
+  extractImagePrompt,
+  generateImageWithAgnes,
+  ImageGenerationError,
+  isImageGenerationEnabled,
+  looksLikeImageRequest,
+} from "@/lib/ai/image-generation";
 import type { AgentRecord } from "@/lib/agents/schema";
 
 const Body = z.object({
@@ -90,12 +97,14 @@ function planPolicyForAgent(agent: AgentRecord, plan: RuntimePlan): ExecutionPol
 }
 
 /**
- * Politique effective d'une mission agent. Les connecteurs
- * activés via « @ » ouvrent composio.execute (reste soumis aux approvals).
+ * Politique effective d'une mission agent. Les connecteurs ouverts :
+ *  - activés via « @ » (intentions explicites, même non connectés) ;
+ *  - OU détectés automatiquement au statut « connecté » sur le compte.
+ * Reste soumis aux approvals pour les actions à effet externe.
  */
-function policyForAgentMission(agent: AgentRecord, plan: RuntimePlan, activatedConnectors: string[]): ExecutionPolicy {
+function policyForAgentMission(agent: AgentRecord, plan: RuntimePlan, activatedConnectors: string[], connectedToolkits: string[] = []): ExecutionPolicy {
   const policy = planPolicyForAgent(agent, plan);
-  if (activatedConnectors.length === 0) return policy;
+  if (activatedConnectors.length === 0 && connectedToolkits.length === 0) return policy;
   return {
     ...policy,
     allowedTools: [...new Set([...(policy.allowedTools ?? []), "composio.execute"])],
@@ -120,6 +129,40 @@ function contextNoteFor(attachmentPath: string | undefined, agent: AgentRecord |
     return `[Mémoire de l'agent : le fichier « ${agent.memoryFile.name} » (${agent.memoryFile.path}) est disponible dans le stockage Gen3ia. Utilise l'outil file.read pour le consulter dès qu'il peut améliorer ta réponse.]`;
   }
   return undefined;
+}
+
+/**
+ * Réponse d'un message demandant une image : génération RÉELLE via Agnes AI.
+ * La conversation conserve le message utilisateur + la réponse (avec l'URL
+ * de l'image) — l'UI affiche l'image au lieu d'une réponse textuelle.
+ */
+async function respondWithImage(params: {
+  userId: string;
+  conversationId: string;
+  message: string;
+  agentId?: string;
+}): Promise<{ reply: string; imageUrl: string | undefined; model: string | undefined }> {
+  const { userId, conversationId, message } = params;
+  if (!isImageGenerationEnabled()) {
+    const reply = "La génération d'images n'est pas encore disponible sur la plateforme. Réessayez bientôt.";
+    await appendMessage({ conversationId, userId, role: "assistant", content: reply });
+    return { reply, imageUrl: undefined, model: undefined };
+  }
+  try {
+    const image = await generateImageWithAgnes({ prompt: extractImagePrompt(message) });
+    const reply = "Voici l'image que j'ai générée pour vous.";
+    await appendMessage({
+      conversationId, userId, role: "assistant", content: reply,
+      imageUrl: image.imageUrl, provider: "agnes", model: image.model,
+    });
+    return { reply, imageUrl: image.imageUrl, model: image.model };
+  } catch (error) {
+    const reply = error instanceof ImageGenerationError
+      ? error.message
+      : "La génération d'image a échoué. Réessayez dans un instant.";
+    await appendMessage({ conversationId, userId, role: "assistant", content: reply });
+    return { reply, imageUrl: undefined, model: undefined };
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -154,10 +197,46 @@ export async function POST(request: NextRequest) {
     // et de réponse en mode chat).
     const history = await listMessages(user.uid, conversationId, 20);
 
+    // Connecteurs connectés découverts AUTOMATIQUEMENT (statut « connecté ») :
+    // les agents peuvent agir sur toutes les applications déjà autorisées,
+    // sans activation manuelle « @ ». En parallèle de la classification pour
+    // ne pas ajouter de latence au chemin nominal.
+    const connectedPromise: Promise<ConnectedConnectorsContext> = describeConnectedConnectorsForPrompt(user.uid).catch(
+      (): ConnectedConnectorsContext => ({ toolkits: [] }),
+    );
+
     if (agent) {
       // ────────────────────────────────────────────────────────────────
       // Chemin agent personnalisé : classification → réponse/refus/exécution.
       // ────────────────────────────────────────────────────────────────
+      await appendMessage({
+        conversationId,
+        userId: user.uid,
+        role: "user",
+        content: body.message,
+      });
+
+      // Génération d'images réelle (Agnes AI) : une demande explicite d'image
+      // est servie directement, quel que soit le type d'agent — c'est une
+      // capacité de la plateforme, pas du LLM conversationnel.
+      if (looksLikeImageRequest(body.message)) {
+        const imageResult = await respondWithImage({
+          userId: user.uid,
+          conversationId,
+          message: body.message,
+          agentId: agent.id,
+        });
+        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: imageResult.reply, mode: "chat" }));
+        return NextResponse.json({
+          mode: "chat",
+          conversationId,
+          agentId: agent.id,
+          classification: { mode: "chat" as const, inScope: true, reason: "Génération d'image" },
+          reply: imageResult.reply,
+          imageUrl: imageResult.imageUrl,
+        });
+      }
+
       const classification = await classifyRequest(agent, body.message);
       const note = contextNoteFor(body.attachmentPath, agent);
 
@@ -171,19 +250,17 @@ export async function POST(request: NextRequest) {
       const mcpNote = agent.tools.includes("mcp.call")
         ? await describeServersForPrompt(user.uid)
         : undefined;
-      // Connecteurs activés via « @ » : contexte des actions réelles dispo.
+      // Connecteurs : TOUT ce qui est au statut « connecté » est disponible
+      // automatiquement ; le sélecteur « @ » reste prioritaire (intentions
+      // explicites, y compris pour un toolkit pas encore connecté).
+      const connected = await connectedPromise;
       const activatedConnectors = body.activatedConnectors ?? [];
-      const connectorsNote = activatedConnectors.length > 0
-        ? await describeConnectorsForPrompt(user.uid, activatedConnectors)
-        : undefined;
+      const extraActivated = activatedConnectors.filter((toolkit) => !connected.toolkits.includes(toolkit));
+      const connectorsNote = [
+        connected.note,
+        extraActivated.length > 0 ? await describeConnectorsForPrompt(user.uid, extraActivated) : undefined,
+      ].filter(Boolean).join("\n\n") || undefined;
       const fullNote = [note, memoryNote, mcpNote, connectorsNote].filter(Boolean).join("\n\n") || undefined;
-
-      await appendMessage({
-        conversationId,
-        userId: user.uid,
-        role: "user",
-        content: body.message,
-      });
 
       // Hors périmètre : refus professionnel, sans exécution ni coût LLM.
       if (!classification.inScope) {
@@ -289,7 +366,7 @@ export async function POST(request: NextRequest) {
         projectId: agent.projectId,
         objective: body.message,
         plan,
-        policy: policyForAgentMission(agent, plan, activatedConnectors),
+        policy: policyForAgentMission(agent, plan, activatedConnectors, connected.toolkits),
         signal: request.signal,
         agent: {
           agentId: agent.id,
@@ -368,7 +445,31 @@ export async function POST(request: NextRequest) {
       content: body.message,
     });
 
-    const plan = await planUniversalAgent(user.uid, body.message);
+    // Génération d'images réelle (Agnes AI) sur le chemin universel aussi.
+    if (looksLikeImageRequest(body.message)) {
+      const imageResult = await respondWithImage({
+        userId: user.uid,
+        conversationId,
+        message: body.message,
+      });
+      return NextResponse.json({
+        mode: "chat",
+        status: "completed",
+        conversationId,
+        objective: body.message,
+        reply: imageResult.reply,
+        imageUrl: imageResult.imageUrl,
+      });
+    }
+
+    // Connecteurs connectés : contexte injecté + composio.execute ouvert,
+    // comme sur le chemin agent personnalisé.
+    const connectedUniversal = await connectedPromise;
+    const universalObjective = connectedUniversal.note
+      ? `${connectedUniversal.note}\n\n${body.message}`
+      : body.message;
+
+    const plan = await planUniversalAgent(user.uid, universalObjective);
     const approvalSteps = plan.steps.filter((step) =>
       step.type === "tool" && (step.requiresApproval || step.sideEffect),
     );
@@ -434,7 +535,12 @@ export async function POST(request: NextRequest) {
       userId: user.uid,
       objective: body.message,
       plan,
-      policy: buildPolicy(plan),
+      policy: {
+        ...buildPolicy(plan),
+        allowedTools: connectedUniversal.toolkits.length > 0
+          ? [...new Set([...(buildPolicy(plan).allowedTools ?? []), "composio.execute"])]
+          : buildPolicy(plan).allowedTools,
+      },
     });
 
     let result;

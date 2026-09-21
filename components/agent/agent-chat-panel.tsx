@@ -49,6 +49,8 @@ type Message = {
   role: "user" | "agent";
   text: string;
   mode?: "chat" | "task";
+  /** URL d'une image générée par l'agent (Agnes AI), affichée sous le texte. */
+  imageUrl?: string;
   result?: AgentResult;
 };
 
@@ -220,10 +222,11 @@ export function AgentChatPanel({
       const response = await fetch(`/api/chat/conversations/${id}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Conversation introuvable.");
-      const items = ((data.messages ?? []) as Array<{ id: string; role: string; content: string }>).map((item): Message => ({
+      const items = ((data.messages ?? []) as Array<{ id: string; role: string; content: string; imageUrl?: string }>).map((item): Message => ({
         id: item.id,
         role: item.role === "user" ? "user" : "agent",
         text: item.content,
+        imageUrl: item.imageUrl,
       }));
       setConversationId(id);
       setActive(null);
@@ -328,6 +331,7 @@ export function AgentChatPanel({
           id: crypto.randomUUID(),
           role: "agent",
           text: String(data.reply ?? ""),
+          ...(data.imageUrl ? { imageUrl: String(data.imageUrl) } : {}),
           mode: "chat",
         }]);
         setActive(null);
@@ -504,6 +508,14 @@ export function AgentChatPanel({
                 <div className={item.role === "user"
                   ? "whitespace-pre-wrap rounded-2xl rounded-br-md bg-neutral-900 px-4 py-3.5 text-sm leading-6 text-white shadow-lg shadow-neutral-900/10"
                   : "whitespace-pre-wrap rounded-2xl rounded-bl-md border border-[rgba(23,23,20,0.09)] bg-white px-4 py-3.5 text-sm leading-6 text-neutral-800"}>{item.text}</div>
+
+                {/* Image générée par l'agent (Agnes AI) — cliquable en plein écran. */}
+                {item.imageUrl && (
+                  <a href={item.imageUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block overflow-hidden rounded-2xl border border-[rgba(23,23,20,0.09)] shadow-[0_8px_24px_-14px_rgba(28,27,24,0.35)]" aria-label="Ouvrir l'image générée en plein écran">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- URL externe (CDN Agnes) signée par le provider, pas de domaine fixe pour next/image */}
+                    <img src={item.imageUrl} alt="Image générée par IA" loading="lazy" className="max-h-96 w-auto max-w-full bg-neutral-50 object-contain" />
+                  </a>
+                )}
 
                 {/* Trace d'exécution + approbations (mode task uniquement) */}
                 {item.result && (

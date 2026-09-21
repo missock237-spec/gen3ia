@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { generate } from "@/lib/ai/router";
+import {
+  extractImagePrompt,
+  generateImageWithAgnes,
+  ImageGenerationError,
+  looksLikeImageRequest,
+} from "@/lib/ai/image-generation";
 import { appendMessage, createConversation, getConversation, listMessages } from "@/lib/chat/repository";
 
 const Body = z.object({
   conversationId: z.string().min(1).max(128).optional(),
   message: z.string().trim().min(1).max(20000),
-  provider: z.enum(["groq","openrouter","anthropic","openai","glm","huggingface"]).optional(),
+  provider: z.enum(["groq","openrouter","anthropic","openai","glm","agnes","huggingface"]).optional(),
   model: z.string().trim().max(200).optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().positive().max(20000).optional(),
@@ -24,6 +30,27 @@ export async function POST(request: NextRequest) {
 
     const history = await listMessages(user.uid, conversationId, 100);
     await appendMessage({ conversationId, userId: user.uid, role: "user", content: body.message });
+
+    // Génération d'images réelle (Agnes AI) : une demande explicite d'image
+    // est servie directement — pas de réponse textuelle en guise d'image.
+    if (looksLikeImageRequest(body.message)) {
+      try {
+        const image = await generateImageWithAgnes({ prompt: extractImagePrompt(body.message) });
+        const reply = `Voici l'image que j'ai générée pour vous.`;
+        const assistant = await appendMessage({
+          conversationId, userId: user.uid, role: "assistant", content: reply,
+          imageUrl: image.imageUrl, provider: "agnes", model: image.model,
+        });
+        return NextResponse.json({ conversationId, message: assistant, response: { provider: "agnes", model: image.model, latencyMs: image.latencyMs, finishReason: "stop" } });
+      } catch (error) {
+        // Panne image : on ne masque pas l'échec derrière une réponse textuelle.
+        const message = error instanceof ImageGenerationError
+          ? error.message
+          : "La génération d'image a échoué. Réessayez dans un instant.";
+        const assistant = await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: message });
+        return NextResponse.json({ conversationId, message: assistant, response: { provider: "agnes", model: "image", finishReason: "error" } });
+      }
+    }
 
     const response = await generate({
       task: "chat",

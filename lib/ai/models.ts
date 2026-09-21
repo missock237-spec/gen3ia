@@ -4,6 +4,7 @@ export type AIProvider =
   | "anthropic"
   | "openai"
   | "glm"
+  | "agnes"
   | "huggingface";
 
 export type TaskType =

@@ -21,6 +21,7 @@ export async function callProvider(
     case "groq":
     case "openrouter":
     case "glm":
+    case "agnes":
       return callOpenAICompatible(
         request,
         provider,

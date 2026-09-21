@@ -26,15 +26,66 @@ export const viewport: Viewport = {
   themeColor: "#f6f4ef",
 };
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://gen3ia.online";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "Gen3ia AI Studio",
-    template: "%s | Gen3ia AI Studio",
+    default: "Gen3ia — Plateforme d'agents IA autonomes",
+    template: "%s | Gen3ia",
   },
   description:
-    "Un seul agent IA pour créer, exécuter et faire grandir vos projets : agents autonomes, skills dynamiques, recherche en temps réel et marketplace.",
-  applicationName: "Gen3ia AI Studio",
+    "Gen3ia : décrivez un objectif, un agent IA personnalisé le planifie et l'exécute — recherche web, génération d'images, documents, 800+ applications connectées. Validation humaine des actions sensibles, facturation à l'usage.",
+  keywords: [
+    "agents IA autonomes",
+    "agent IA",
+    "plateforme d'agents IA",
+    "génération d'images IA",
+    "automatisation d'entreprise IA",
+    "chatbot d'entreprise",
+    "intégrations IA",
+    "marketplace d'extensions IA",
+    "agent IA francophone",
+    "Gen3ia",
+  ],
+  applicationName: "Gen3ia",
   manifest: "/manifest.webmanifest",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: "Gen3ia",
+    title: "Gen3ia — Plateforme d'agents IA autonomes",
+    description:
+      "Décrivez un objectif en une phrase : un agent IA Gen3ia le planifie, l'exécute et livre un résultat vérifié. Images par IA, 800+ connecteurs, marketplace d'extensions.",
+    locale: "fr_FR",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1312,
+        height: 736,
+        alt: "Gen3ia — agents IA autonomes : décrivez, l'agent exécute",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Gen3ia — Plateforme d'agents IA autonomes",
+    description:
+      "Décrivez un objectif : un agent IA le planifie, l'exécute et livre un résultat vérifié. Images par IA, 800+ connecteurs.",
+    images: ["/og-image.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

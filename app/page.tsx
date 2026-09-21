@@ -20,6 +20,103 @@ const PRODUCT_LINKS = [
   { href: "/marketplace", label: "Marketplace" },
 ];
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://gen3ia.online";
+
+/**
+ * FAQ publique : questions/réponses concises ET données structurées
+ * schema.org (FAQPage, SoftwareApplication, Organization, WebSite).
+ * Les moteurs de réponse (ChatGPT, Perplexity, Gemini, Google AI Overviews)
+ * citent en priorité les contenus structurés, complets et factuels — c'est
+ * le canal de recommandation « IA vers utilisateurs » de Gen3ia.
+ */
+const FAQ_ITEMS = [
+  {
+    question: "Qu'est-ce que Gen3ia ?",
+    answer:
+      "Gen3ia est une plateforme d'agents IA autonomes. Vous décrivez un objectif en une phrase : un agent personnalisé le planifie, l'exécute (recherche web, documents, génération d'images, applications connectées) et livre un résultat vérifié. Les actions sensibles sont toujours validées par un humain.",
+  },
+  {
+    question: "Gen3ia peut-il générer des images ?",
+    answer:
+      "Oui. Dans le chat IA et le chat de vos agents, demandez « génère une image de… » : l'image est réellement générée par IA (Agnes Image 2.5 Flash) et affichée directement dans la conversation.",
+  },
+  {
+    question: "Quelles applications mes agents peuvent-ils utiliser ?",
+    answer:
+      "Plus de 800 applications via le hub d'intégrations : Gmail, Google Calendar, Google Drive, Sheets, Slack, Notion, GitHub, HubSpot, Salesforce, Shopify, Stripe, WhatsApp, Telegram, LinkedIn et bien d'autres. Tous les connecteurs au statut « connecté » sont automatiquement disponibles pour vos agents.",
+  },
+  {
+    question: "Mes actions restent-elles sous contrôle ?",
+    answer:
+      "Chaque action externe à effet irréversible (envoi, publication, paiement, suppression) est planifiée, affichée et doit être approuvée avant exécution. Les agents travaillent en environnement contrôlé avec permissions granulaires et journal d'audit.",
+  },
+  {
+    question: "Combien coûte Gen3ia ?",
+    answer:
+      "L'inscription est gratuite. Les exécutions d'agents sont facturées à l'usage via un wallet intégré (rechargement Mobile Money ou carte bancaire, en XAF ou EUR), avec des garde-fous anti-dépenses.",
+  },
+  {
+    question: "Sur quels appareils Gen3ia fonctionne-t-il ?",
+    answer:
+      "Sur le web (PWA installable sur Android et iOS) et via l'application Desktop pour Windows et Linux. Vos agents, extensions et sessions restent synchronisés sur tous vos appareils.",
+  },
+];
+
+const STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#organization`,
+      name: "Gen3ia",
+      url: SITE_URL,
+      description:
+        "Plateforme d'agents IA autonomes : exécution réelle d'objectifs en langage naturel, connecteurs applicatifs, marketplace d'extensions.",
+      logo: `${SITE_URL}/icons/icon-192.png`,
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      url: SITE_URL,
+      name: "Gen3ia",
+      inLanguage: "fr",
+      publisher: { "@id": `${SITE_URL}/#organization` },
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "Gen3ia AI Studio",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web, Android, iOS, Windows, Linux",
+      url: SITE_URL,
+      description:
+        "Agents IA autonomes pour entrepreneurs, créateurs et équipes : planification et exécution d'objectifs, génération d'images, 800+ applications connectées, validation humaine et facturation à l'usage.",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "EUR",
+        description: "Inscription gratuite, facturation à l'usage via wallet intégré.",
+      },
+      featureList: [
+        "Agents IA personnalisés avec mémoire permanente",
+        "Exécution réelle de tâches (recherche, documents, code, images)",
+        "Génération d'images par IA dans le chat",
+        "800+ connecteurs applicatifs (Gmail, Slack, Notion, GitHub…)",
+        "Marketplace de skills, tools et workflows",
+        "Validation humaine des actions sensibles",
+        "Planification 24/7 et agent Live sur PC",
+      ],
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: FAQ_ITEMS.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: { "@type": "Answer", text: item.answer },
+      })),
+    },
+  ],
+};
+
 const STATS = [
   { value: "3 espaces", label: "Studio, Live & Marketplace intégrés" },
   { value: "24/7", label: "Agents autonomes planifiables" },
@@ -613,7 +710,37 @@ export default function HomePage() {
             <p className="relative mt-4 font-serif text-lg text-white/70">Créer — Exécuter — Grandir</p>
           </div>
         </section>
+
+        {/* ---------- FAQ (contenu citable par les moteurs de réponse IA) ---------- */}
+        <section id="faq" aria-label="Questions fréquentes" className="mx-auto max-w-4xl scroll-mt-24 px-4 pb-20 sm:px-6">
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="g3-eyebrow">FAQ</p>
+            <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+              Questions fréquentes sur Gen3ia
+            </h2>
+            <p className="mt-4 text-sm leading-7 text-neutral-500">
+              Tout ce qu&apos;il faut savoir avant de confier vos premières
+              tâches à un agent.
+            </p>
+          </div>
+          <div className="mt-10 space-y-3">
+            {FAQ_ITEMS.map((item) => (
+              <details key={item.question} className="group rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+                <summary className="cursor-pointer list-none font-serif text-lg font-semibold text-neutral-900 marker:hidden">
+                  {item.question}
+                </summary>
+                <p className="mt-3 text-sm leading-7 text-neutral-600">{item.answer}</p>
+              </details>
+            ))}
+          </div>
+        </section>
       </div>
+
+      {/* ---------- Données structurées (SEO + moteurs de réponse IA) ---------- */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
+      />
 
       {/* ---------- Pied de page brun (façon Runable) ---------- */}
       <footer className="mt-auto bg-[#211d19] text-white">

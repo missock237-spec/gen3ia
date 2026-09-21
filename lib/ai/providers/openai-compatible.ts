@@ -17,7 +17,8 @@ export async function callOpenAICompatible(
     "openai" |
       "groq" |
       "openrouter" |
-      "glm"
+      "glm" |
+      "agnes"
   >,
 ): Promise<AIResponse> {
   const config =

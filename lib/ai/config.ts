@@ -114,6 +114,25 @@ export const PROVIDERS:
 
       priority: 95,
     },
+
+    {
+      provider: "agnes",
+
+      enabled:
+        Boolean(process.env.AGNES_API_KEY),
+
+      apiKey:
+        process.env.AGNES_API_KEY,
+
+      baseURL:
+        "https://apihub.agnes-ai.com/v1",
+
+      defaultModel:
+        process.env.AGNES_TEXT_MODEL ||
+        "agnes-3.0-flash",
+
+      priority: 85,
+    },
   ];
 
 export function getProvider(
@@ -255,5 +274,26 @@ export const MODEL_CAPABILITIES:
       streaming: true,
 
       priority: 95,
+    },
+
+    {
+      provider: "agnes",
+
+      model:
+        process.env.AGNES_TEXT_MODEL ||
+        "agnes-3.0-flash",
+
+      tasks: [
+        "chat",
+        "reasoning",
+        "agent",
+      ],
+
+      toolCalling: true,
+      vision: true,
+      structuredOutput: true,
+      streaming: true,
+
+      priority: 85,
     },
   ];
