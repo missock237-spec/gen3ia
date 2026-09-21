@@ -7,7 +7,10 @@ export default async function DeveloperLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   try {
-    const access = await getPlatformAccess(await headers());
+    const request = new Request("https://gen3ia.local/developer", {
+      headers: await headers(),
+    });
+    const access = await getPlatformAccess(request);
     if (access.canDeveloper) return children;
   } catch {
     // fall through to the access page
