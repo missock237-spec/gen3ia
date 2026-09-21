@@ -8,6 +8,8 @@ import { authFetch, logout, useAuth } from "@/lib/firebase/auth-client";
 import { CommandPalette } from "./command-palette";
 import { NAV_GROUPS, type NavItem } from "./nav-items";
 
+type PlatformRole = "user" | "developer" | "admin";
+
 export function AppNav() {
   const pathname = usePathname();
   const router = useRouter();
@@ -18,6 +20,7 @@ export function AppNav() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [platformRole, setPlatformRole] = useState<PlatformRole>("user");
 
   useEffect(() => {
     const handler = () => setOpen(true);
@@ -40,13 +43,39 @@ export function AppNav() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void authFetch("/api/auth/access", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = (await response.json()) as { role?: PlatformRole };
+        if (!cancelled && (data.role === "admin" || data.role === "developer" || data.role === "user")) {
+          setPlatformRole(data.role);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPlatformRole("user");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   if (pathname === "/") return null;
 
+  const canDeveloper = platformRole === "developer" || platformRole === "admin";
   const name =
     user?.displayName?.trim() || user?.email?.split("@")[0] || "Compte";
   const initial = name.charAt(0).toUpperCase();
   const active = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
+
+  const visibleGroups = NAV_GROUPS
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => item.requiredRole !== "developer" || canDeveloper),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const NavGroup = ({
     title,
@@ -65,7 +94,9 @@ export function AppNav() {
             title={compact ? item.label : undefined}
             aria-current={active(item.href) ? "page" : undefined}
             onClick={() => setOpen(false)}
-            className={`g3-side-link ${active(item.href) ? "is-active" : ""}`}
+            className={
+              "g3-side-link " + (active(item.href) ? "is-active" : "")
+            }
           >
             <span className="g3-side-icon" aria-hidden="true">{item.icon}</span>
             {!compact && (
@@ -85,20 +116,24 @@ export function AppNav() {
 
   return (
     <>
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        canDeveloper={canDeveloper}
+      />
       <div
-        className={`g3-sidebar-backdrop ${open ? "is-open" : ""}`}
+        className={"g3-sidebar-backdrop " + (open ? "is-open" : "")}
         onClick={() => setOpen(false)}
         aria-hidden="true"
       />
-      <aside className={`g3-sidebar ${open ? "is-open" : ""} ${compact ? "is-compact" : ""}`}>
+      <aside className={
+        "g3-sidebar " + (open ? "is-open " : "") + (compact ? "is-compact" : "")
+      }>
         <div className="flex h-full flex-col">
           <div className="g3-nav-header">
             <Link href="/dashboard" className="g3-brand" onClick={() => setOpen(false)}>
               <span className="g3-brand-mark">G3</span>
-              {!compact && (
-                <span className="g3-brand-name">Gen3ia</span>
-              )}
+              {!compact && <span className="g3-brand-name">Gen3ia</span>}
             </Link>
             <button
               type="button"
@@ -115,7 +150,7 @@ export function AppNav() {
             <Link
               href="/studio"
               onClick={() => setOpen(false)}
-              className={`g3-new-task ${compact ? "is-compact" : ""}`}
+              className={"g3-new-task " + (compact ? "is-compact" : "")}
               title={compact ? "Nouvelle tâche" : undefined}
             >
               <span>+</span>
@@ -124,7 +159,7 @@ export function AppNav() {
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className={`g3-nav-search ${compact ? "is-compact" : ""}`}
+              className={"g3-nav-search " + (compact ? "is-compact" : "")}
               aria-label="Rechercher une destination"
             >
               <span aria-hidden="true">⌕</span>
@@ -133,7 +168,7 @@ export function AppNav() {
           </div>
 
           <nav className="g3-nav-scroll flex-1 space-y-5 px-2.5 py-4" aria-label="Navigation principale">
-            {NAV_GROUPS.map((group) => (
+            {visibleGroups.map((group) => (
               <NavGroup key={group.title} title={group.title} items={group.items} />
             ))}
           </nav>
@@ -141,7 +176,7 @@ export function AppNav() {
           <div className="g3-nav-footer">
             <div className="relative">
               {accountOpen && (
-                <div className={`g3-account-menu ${compact ? "is-compact" : ""}`}>
+                <div className={"g3-account-menu " + (compact ? "is-compact" : "")}>
                   {confirmDelete ? (
                     <div className="space-y-1">
                       <p className="px-2 py-1 text-[10px] font-semibold leading-4 text-red-600">
@@ -175,6 +210,11 @@ export function AppNav() {
                     </div>
                   ) : (
                     <>
+                      {canDeveloper && (
+                        <Link href="/developer" onClick={() => setAccountOpen(false)} className="g3-account-item">
+                          Developer Studio
+                        </Link>
+                      )}
                       <Link href="/team" onClick={() => setAccountOpen(false)} className="g3-account-item">
                         Paramètres & équipe
                       </Link>
@@ -206,7 +246,7 @@ export function AppNav() {
               <button
                 type="button"
                 onClick={() => setAccountOpen((value) => !value)}
-                className={`g3-account-button ${compact ? "is-compact" : ""}`}
+                className={"g3-account-button " + (compact ? "is-compact" : "")}
                 aria-expanded={accountOpen}
               >
                 <span className="g3-account-avatar">{initial}</span>
