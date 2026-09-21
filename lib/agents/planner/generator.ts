@@ -124,6 +124,9 @@ export async function generatePlan(
       return await parsePlanResponse(response.text);
     } catch (error) {
       dernierErreur = error instanceof Error ? error.message : String(error);
+      // Diagnostic : sans ce log, un repli silencieux est indiscernable d'une
+      // panne provider (403/timeout) ou d'une sortie LLM hors schéma.
+      console.warn(`[planner] Tentative ${essai}/${tentatives} échouée:`, dernierErreur);
     }
   }
 
