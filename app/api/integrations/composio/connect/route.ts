@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { protectRoute } from "@/lib/security/route-guard";
+import { assertDeveloperRole } from "@/lib/access/platform";
 import { authorizeToolkit } from "@/lib/integrations/composio/connections";
 import { verifyDeveloperProjectAccess } from "@/lib/extensions/repository";
 import { upsertDeveloperProjectConnector } from "@/lib/developer/connectors";
 
 const Schema = z.object({
   toolkit: z.string().min(2).max(64),
-  // Optionnel : present depuis l'atelier developpeur (liaison projet),
-  // absent depuis /integrations (connexion Hub simple).
   projectId: z.string().min(1).optional(),
 });
 
@@ -21,9 +20,16 @@ export async function POST(request: NextRequest) {
   try {
     const { toolkit, projectId } = Schema.parse(await request.json());
     const connection = await authorizeToolkit(guard.context.userId, toolkit);
+
     if (projectId) {
+      await assertDeveloperRole(guard.context.userId);
       await verifyDeveloperProjectAccess(guard.context.userId, projectId);
-      await upsertDeveloperProjectConnector({ projectId, userId: guard.context.userId, toolkit, connectionId: connection.id });
+      await upsertDeveloperProjectConnector({
+        projectId,
+        userId: guard.context.userId,
+        toolkit,
+        connectionId: connection.id,
+      });
     }
 
     return NextResponse.json({
