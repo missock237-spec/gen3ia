@@ -74,7 +74,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Édition invalide (scènes ou instruction)." }, { status: 400 });
     }
     const message = error instanceof Error ? error.message : "Édition impossible.";
-    return NextResponse.json({ error: message, requestId }, { status: 502 });
+    const status = message.includes("Authorization") ? 401 : 502;
+    return NextResponse.json({ error: message, requestId }, { status });
   }
 }
 
@@ -86,7 +87,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Suppression impossible.";
-    const status = message.includes("introuvable") ? 404 : 500;
+    const status = message.includes("introuvable") ? 404 : message.includes("Authorization") ? 401 : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

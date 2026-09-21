@@ -68,7 +68,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "sceneId requis.", requestId }, { status: 400 });
     }
     const message = error instanceof Error ? error.message : "Génération de l'image clé impossible.";
-    return NextResponse.json({ error: message, requestId }, { status: message.includes("Scène introuvable") ? 404 : 502 });
+    const status = message.includes("Scène introuvable") ? 404 : message.includes("Authorization") ? 401 : 502;
+    return NextResponse.json({ error: message, requestId }, { status });
   }
 }
 
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "URL indisponible" },
-      { status: 500 },
+      { status: error instanceof Error && error.message.includes("Authorization") ? 401 : 500 },
     );
   }
 }

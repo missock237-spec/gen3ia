@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Brief vidéo invalide (titre, description, format)." }, { status: 400 });
     }
     const message = error instanceof Error ? error.message : "Création du projet vidéo impossible.";
-    const status = message.includes("planificateur") ? 502 : 500;
+    const status = message.includes("planificateur") ? 502 : message.includes("Authorization") ? 401 : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }
