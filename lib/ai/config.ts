@@ -73,7 +73,7 @@ export const PROVIDERS:
 
       defaultModel:
         process.env.OPENAI_TEXT_MODEL ||
-        "auto",
+        "gpt-4o",
 
       priority: 100,
     },
@@ -91,7 +91,7 @@ export const PROVIDERS:
 
       defaultModel:
         process.env.CLAUDE_MODEL ||
-        "auto",
+        "claude-3-5-sonnet-20241022",
 
       priority: 98,
     },
@@ -110,7 +110,7 @@ export const PROVIDERS:
 
       defaultModel:
         process.env.GLM_MODEL ||
-        "auto",
+        "glm-4-flash",
 
       priority: 95,
     },
@@ -212,7 +212,7 @@ export const MODEL_CAPABILITIES:
 
       model:
         process.env.OPENAI_TEXT_MODEL ||
-        "auto",
+        "gpt-4o",
 
       tasks: [
         "chat",
@@ -235,7 +235,7 @@ export const MODEL_CAPABILITIES:
 
       model:
         process.env.CLAUDE_MODEL ||
-        "auto",
+        "claude-3-5-sonnet-20241022",
 
       tasks: [
         "chat",
@@ -258,7 +258,7 @@ export const MODEL_CAPABILITIES:
 
       model:
         process.env.GLM_MODEL ||
-        "auto",
+        "glm-4-flash",
 
       tasks: [
         "chat",
