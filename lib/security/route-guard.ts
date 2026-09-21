@@ -15,6 +15,11 @@ import {
   securityHeaders,
 } from "./request-security";
 
+import {
+  requestTraceId,
+  traceLogger,
+} from "@/lib/observability/logger";
+
 export interface RouteContext {
   userId: string;
 
@@ -24,6 +29,9 @@ export interface RouteContext {
     string,
     unknown
   >;
+
+  /** Identifiant de corrélation de la requête (logs + header réponse). */
+  traceId: string;
 }
 
 export interface RouteGuardOptions {
@@ -80,17 +88,21 @@ export async function protectRoute(
       );
 
     const routeKey = options.key ?? new URL(request.url).pathname;
+    const traceId = requestTraceId(request);
     const limit = rateLimit(
       `${routeKey}:${user.uid}`,
       options.rateLimit ?? { limit: 240, windowMs: 5 * 60 * 1000 },
     );
 
     if (!limit.allowed) {
+      traceLogger(traceId, { userId: user.uid, route: routeKey }).warn({ event: "request.rate_limited" }, "Rate limit atteint");
       return {
         ok: false,
         response: tooManyRequests(limit.retryAfterMs),
       };
     }
+
+    traceLogger(traceId, { userId: user.uid, route: routeKey }).info({ event: "request.authorized" }, "Accès autorisé");
 
     return {
       ok: true,
@@ -101,6 +113,8 @@ export async function protectRoute(
         email: user.email,
 
         claims: user.claims,
+
+        traceId,
       },
     };
   } catch (error) {
@@ -116,6 +130,7 @@ export async function protectRoute(
         },
         {
           status: 401,
+          headers: { "x-gen3ia-trace-id": requestTraceId(request) },
         },
       );
 

@@ -14,6 +14,7 @@ import { policyForAgent } from "@/lib/agents/personalized-plan";
 import { answerAsAgent, classifyRequest, outOfScopeReply, planAgentTask } from "@/lib/agents/chat-engine";
 import { recallAgentContext, recordExchange, shouldSummarize, summarizeConversation } from "@/lib/memory/episodic";
 import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
+import { describeConnectorsForPrompt } from "@/lib/integrations/mention";
 import type { AgentRecord } from "@/lib/agents/schema";
 
 const Body = z.object({
@@ -24,6 +25,11 @@ const Body = z.object({
   agentId: z.string().trim().min(1).max(128).optional(),
   attachmentPath: z.string().trim().min(1).max(500).optional(),
   attachmentName: z.string().trim().min(1).max(255).optional(),
+  // Connecteurs activés par l'utilisateur via le sélecteur « @ » du chat :
+  // l'agent reçoit le contexte des actions disponibles et peut agir dessus.
+  activatedConnectors: z.array(
+    z.string().trim().toLowerCase().regex(/^[a-z0-9_]{2,64}$/, "connecteur invalide"),
+  ).max(10).optional(),
 });
 
 function buildPolicy(plan: RuntimePlan): ExecutionPolicy {
@@ -72,17 +78,26 @@ function buildPolicy(plan: RuntimePlan): ExecutionPolicy {
   };
 }
 
-/**
- * Politique effective d'une mission agent : intersection entre les outils
- * requis par le plan et la whitelist de l'agent. Double barrière avec le
- * filtrage du catalogue au moment de la planification.
- */
-function policyForAgentPlan(agent: AgentRecord, plan: RuntimePlan): ExecutionPolicy {
+/** Intersection entre les outils requis par le plan et la whitelist de l'agent. */
+function planPolicyForAgent(agent: AgentRecord, plan: RuntimePlan): ExecutionPolicy {
   const agentAllowed = new Set(policyForAgent(agent).allowedTools ?? []);
   const planPolicy = buildPolicy(plan);
   return {
     ...planPolicy,
     allowedTools: (planPolicy.allowedTools ?? []).filter((tool) => agentAllowed.has(tool)),
+  };
+}
+
+/**
+ * Politique effective d'une mission agent. Les connecteurs
+ * activés via « @ » ouvrent composio.execute (reste soumis aux approvals).
+ */
+function policyForAgentMission(agent: AgentRecord, plan: RuntimePlan, activatedConnectors: string[]): ExecutionPolicy {
+  const policy = planPolicyForAgent(agent, plan);
+  if (activatedConnectors.length === 0) return policy;
+  return {
+    ...policy,
+    allowedTools: [...new Set([...(policy.allowedTools ?? []), "composio.execute"])],
   };
 }
 
@@ -155,7 +170,12 @@ export async function POST(request: NextRequest) {
       const mcpNote = agent.tools.includes("mcp.call")
         ? await describeServersForPrompt(user.uid)
         : undefined;
-      const fullNote = [note, memoryNote, mcpNote].filter(Boolean).join("\n\n") || undefined;
+      // Connecteurs activés via « @ » : contexte des actions réelles dispo.
+      const activatedConnectors = body.activatedConnectors ?? [];
+      const connectorsNote = activatedConnectors.length > 0
+        ? await describeConnectorsForPrompt(user.uid, activatedConnectors)
+        : undefined;
+      const fullNote = [note, memoryNote, mcpNote, connectorsNote].filter(Boolean).join("\n\n") || undefined;
 
       await appendMessage({
         conversationId,
@@ -268,7 +288,7 @@ export async function POST(request: NextRequest) {
         projectId: agent.projectId,
         objective: body.message,
         plan,
-        policy: policyForAgentPlan(agent, plan),
+        policy: policyForAgentMission(agent, plan, activatedConnectors),
         signal: request.signal,
         agent: {
           agentId: agent.id,

@@ -126,5 +126,32 @@ service cloud.firestore {
     match /skillEvaluations/{evaluationId} { allow read, write: if false; }
     match /chariowPulseDeliveries/{deliveryId} { allow read, write: if false; }
     match /events/{eventId} { allow read, write: if false; }
+
+    // ── Multi-tenant : organisations (tenants) ──────────────────────────
+    // Isolation : toute lecture/écriture exige l'appartenance documentée
+    // (members/{uid}). Les mutations sensibles passent par l'Admin SDK
+    // (rôles vérifiés serveur) ; le client ne peut que lire et s'inscrire.
+    function isOrgMember(orgId) {
+      return signedIn() && exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid));
+    }
+    match /organizations/{orgId} {
+      allow read: if isOrgMember(orgId);
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if false; // via Admin SDK uniquement
+      match /members/{memberId} {
+        allow read: if isOrgMember(orgId);
+        allow write: if false; // invitations/rôles via Admin SDK
+      }
+      match /invitations/{invitationId} {
+        // Lecture par l'invité pour afficher l'invitation, acceptation
+        // logique via Admin SDK : le client ne mute que son propre statut.
+        allow read: if signedIn();
+        allow write: if false;
+      }
+    }
+    match /orgMemberships/{membershipId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false; // index serveur uniquement
+    }
   }
 }

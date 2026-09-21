@@ -49,6 +49,27 @@ export function executionLogger(context: {
   return logger.child(context);
 }
 
+const TRACE_HEADER_CANDIDATES = ["x-gen3ia-trace-id", "x-request-id", "x-trace-id"];
+const TRACE_ID_RE = /^[a-zA-Z0-9_-]{8,64}$/;
+
+/**
+ * Identifiant de corrélation par requête : réutilise celui de l'appelant
+ * (passerelle, client SDK) s'il est sain, sinon en génère un. À propager
+ * dans tous les logs de la requête et dans les réponses (header renvoyé).
+ */
+export function requestTraceId(request: Request): string {
+  for (const header of TRACE_HEADER_CANDIDATES) {
+    const value = request.headers.get(header);
+    if (value && TRACE_ID_RE.test(value)) return value;
+  }
+  return `trc_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Logger enfant avec corrélation traceId + identité tenant/utilisateur. */
+export function traceLogger(traceId: string, context: { userId?: string; orgId?: string; route?: string } = {}): Logger {
+  return logger.child({ traceId, ...context });
+}
+
 export function safeError(error: unknown): { name: string; message: string; stack?: string } {
   if (error instanceof Error) {
     return {

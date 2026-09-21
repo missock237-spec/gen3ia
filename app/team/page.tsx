@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { FeatureAuthGate } from "@/components/auth/feature-auth-gate";
+import { OrganizationsPanel } from "@/components/team/OrganizationsPanel";
 import { useTeam, type Team } from "@/lib/team/useTeam";
 
 /**
@@ -74,7 +75,11 @@ function TeamsContent() {
           </p>
         </header>
 
-        <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <div className="mt-10 anim-fade-up anim-delay-1">
+          <OrganizationsPanel />
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
           {/* Colonne principale : mes équipes */}
           <section className="anim-fade-up anim-delay-1 lg:col-span-3" aria-label="Mes équipes">
             <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] md:p-8">

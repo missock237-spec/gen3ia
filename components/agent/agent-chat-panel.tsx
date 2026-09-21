@@ -59,6 +59,14 @@ type ConversationSummary = {
   updatedAt: string;
 };
 
+type MentionConnector = {
+  toolkit: string;
+  label: string;
+  description: string;
+  category: string;
+  connected: boolean;
+};
+
 const QUICK_PROMPTS: Record<string, string[]> = {
   code: ["Corrige ce code et explique chaque correction.", "Crée un composant React réutilisable et documenté.", "Explique-moi cette erreur et comment la résoudre."],
   marketing: ["Prépare une stratégie de lancement pour mon produit.", "Rédige un email de prospection percutant.", "Analyse ma cible et propose un positionnement."],
@@ -119,6 +127,13 @@ export function AgentChatPanel({
   const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
   const [showHistory, setShowHistory] = React.useState(false);
   const [historyLoading, setHistoryLoading] = React.useState(false);
+  // Sélecteur « @ » : activation de connecteurs dans la conversation.
+  const [activated, setActivated] = React.useState<MentionConnector[]>([]);
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const [pickerManual, setPickerManual] = React.useState(false);
+  const [pickerQuery, setPickerQuery] = React.useState("");
+  const [pickerItems, setPickerItems] = React.useState<MentionConnector[]>([]);
+  const [pickerLoading, setPickerLoading] = React.useState(false);
   const logRef = React.useRef<HTMLDivElement | null>(null);
 
   const typeLabel = labelForAgent(agent);
@@ -153,6 +168,49 @@ export function AgentChatPanel({
   React.useEffect(() => {
     if (initialMessage.trim() && !message.trim()) setMessage(initialMessage.trim());
   }, [initialMessage, message]);
+
+  // Détection de « @ » en fin de saisie : ouvre le sélecteur de connecteurs.
+  const mentionMatch = /(?:^|\s)@([a-z0-9_-]{0,32})$/i.exec(message);
+  React.useEffect(() => {
+    if (pickerManual) return;
+    if (mentionMatch) {
+      setPickerOpen(true);
+      setPickerQuery(mentionMatch[1]);
+    } else {
+      setPickerOpen(false);
+      setPickerQuery("");
+    }
+  }, [mentionMatch, pickerManual]);
+
+  React.useEffect(() => {
+    if (!pickerOpen) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setPickerLoading(true);
+      try {
+        const response = await fetch(`/api/integrations/mention?q=${encodeURIComponent(pickerQuery)}`, { cache: "no-store" });
+        const data = await response.json();
+        if (!cancelled) setPickerItems(((data.connectors ?? []) as MentionConnector[]));
+      } catch {
+        if (!cancelled) setPickerItems([]);
+      } finally {
+        if (!cancelled) setPickerLoading(false);
+      }
+    }, 180);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [pickerOpen, pickerQuery]);
+
+  function activateConnector(connector: MentionConnector) {
+    setActivated((current) => current.some((item) => item.toolkit === connector.toolkit) ? current : [...current, connector]);
+    if (mentionMatch) setMessage((current) => current.replace(/@([a-z0-9_-]{0,32})$/i, "").trimEnd());
+    setPickerManual(false);
+    setPickerOpen(false);
+    setPickerQuery("");
+  }
+
+  function deactivateConnector(toolkit: string) {
+    setActivated((current) => current.filter((item) => item.toolkit !== toolkit));
+  }
 
   async function openConversation(id: string) {
     if (loading) return;
@@ -257,6 +315,7 @@ export function AgentChatPanel({
           agentId: agent.id,
           ...(conversationId ? { conversationId } : {}),
           ...(attachmentPath ? { attachmentPath, attachmentName: attachment?.name } : {}),
+          ...(activated.length > 0 ? { activatedConnectors: activated.map((item) => item.toolkit) } : {}),
         }),
       });
       const data = await response.json();
@@ -505,18 +564,77 @@ export function AgentChatPanel({
               <button type="button" onClick={() => { setAttachment(null); setAttachmentPath(null); }} className="text-neutral-400 hover:text-neutral-900" aria-label="Retirer la pièce jointe">Retirer</button>
             </div>
           )}
-          <PromptBox
-            value={message}
-            onValueChange={setMessage}
-            onSubmit={submit}
-            disabled={loading || uploading}
-            placeholder={`Message pour ${agent.name} — question ou tâche dans son domaine…`}
-            onFile={(file) => void handleAttachment(file)}
-            onVoice={startVoice}
-          />
-          <p className="mt-2 text-center text-[10px] text-neutral-400">
-            {agent.name} répond et agit uniquement en {typeLabel.toLowerCase()} · saisie vocale {isListening ? "active" : "disponible"} · pièces jointes acceptées
-          </p>
+          {activated.length > 0 && (
+            <div className="mb-2 flex flex-wrap items-center gap-1.5" aria-label="Connecteurs activés pour cette conversation">
+              {activated.map((connector) => (
+                <span key={connector.toolkit} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${connector.connected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                  <span aria-hidden="true">@</span>{connector.label}
+                  <span className="text-[9px] uppercase tracking-wide opacity-70">{connector.connected ? "connecté" : "à connecter"}</span>
+                  <button type="button" onClick={() => deactivateConnector(connector.toolkit)} className="ml-0.5 rounded-full p-0.5 hover:bg-black/5" aria-label={`Désactiver ${connector.label}`}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="relative">
+            {pickerOpen && (
+              <div className="absolute bottom-full left-0 z-50 mb-2 w-full max-w-md overflow-hidden rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-2 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.35)]" role="listbox" aria-label="Choisir un connecteur à activer">
+                <div className="flex items-center justify-between px-2 py-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-[.2em] text-neutral-400">Connecteurs · activables avec @</span>
+                  <button type="button" onClick={() => { setPickerOpen(false); setPickerManual(false); }} className="rounded-full p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900" aria-label="Fermer le sélecteur">×</button>
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {pickerLoading && pickerItems.length === 0 ? (
+                    <p className="px-3 py-4 text-xs text-neutral-400">Chargement des connecteurs…</p>
+                  ) : pickerItems.length === 0 ? (
+                    <p className="px-3 py-4 text-xs text-neutral-400">Aucun connecteur ne correspond.</p>
+                  ) : (
+                    pickerItems.map((connector) => {
+                      const isActive = activated.some((item) => item.toolkit === connector.toolkit);
+                      return (
+                        <button
+                          key={connector.toolkit}
+                          type="button"
+                          onClick={() => activateConnector(connector)}
+                          disabled={isActive}
+                          className="flex w-full items-start gap-3 rounded-xl p-2.5 text-left transition hover:bg-neutral-100 disabled:opacity-40"
+                          role="option"
+                          aria-selected={isActive}
+                        >
+                          <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-xs font-bold ${connector.connected ? "bg-emerald-100 text-emerald-700" : "bg-neutral-100 text-neutral-500"}`}>@</span>
+                          <span className="min-w-0">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
+                              {connector.label}
+                              <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${connector.connected ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{connector.connected ? "connecté" : "à connecter"}</span>
+                            </span>
+                            <span className="mt-0.5 block truncate text-[10px] leading-4 text-neutral-400">{connector.description}</span>
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+            <PromptBox
+              value={message}
+              onValueChange={setMessage}
+              onSubmit={submit}
+              disabled={loading || uploading}
+              placeholder={`Message pour ${agent.name} — tapez @ pour activer un connecteur…`}
+              onFile={(file) => void handleAttachment(file)}
+              onVoice={startVoice}
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-[10px] text-neutral-400">
+            <span>{agent.name} répond et agit uniquement en {typeLabel.toLowerCase()}</span>
+            <button
+              type="button"
+              onClick={() => { setPickerManual(true); setPickerOpen(true); setPickerQuery(""); }}
+              className="rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-2.5 py-1 font-semibold text-neutral-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+              aria-expanded={pickerOpen}
+            >@ Connecteur</button>
+            <span>saisie vocale {isListening ? "active" : "disponible"} · pièces jointes acceptées</span>
+          </div>
         </div>
       </div>
     </section>
