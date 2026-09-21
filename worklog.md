@@ -37,3 +37,51 @@ Stage Summary:
 - Agents : tous les connecteurs « connecté » utilisables automatiquement.
 - Artefacts : scripts/e2e_image_prod.mjs, scripts/load_test_500rps.mjs, scripts/push_github.sh (token GitHub).
 - Sécurité : clé Agnes transmise en clair dans le chat → recommander la rotation à l'utilisateur (comme pour le token GitHub).
+
+---
+Task ID: 13
+Agent: Super Z (principal)
+Task: « Le live agent est actuellement impossible à l'utilisation — supprime le
+système de téléchargement du projet qui bloque le live agent ia pour que le
+live agent puisse être testé sur ordinateur via le navigateur. »
+
+Work Log:
+- Diagnostic : aucune gateway WebSocket déployée (NEXT_PUBLIC_LIVE_GATEWAY_URL
+  absente de Vercel), seule voie proposée = télécharger l'app Electron
+  « Gen3ia Desktop » ou le client Node live-agent/ ; OPENAI_API_KEY (vision)
+  VIDE côté Vercel → live agent factiquement inutilisable en production.
+- Agent Live 100 % navigateur : app/live/live-dashboard.tsx réécrit —
+  capture d'écran native getDisplayMedia (canvas → JPEG ≤1280 px, 1 frame/3 s,
+  seulement onglet visible), POST /api/live/sessions/[id]/start (le navigateur
+  devient le client officiel, deviceId web-*), boucle frames → décision vision
+  → actions, journal d'observations en direct, exécution wait + résultats
+  d'actions honnêtes (clavier/souris/fichiers = non exécutable en navigateur).
+- Routes serverless nouvelles : /start, /frames (POST frame → vision ; PUT
+  résultat d'action), miroir exact de la logique gateway (approbations,
+  runtime, événements, limites) ; validateFrameBase64 mutualisée dans
+  lib/live/security.ts ; maxDuration 60 s.
+- Vision multi-fournisseurs avec repli : OPENAI_API_KEY (vide) → GROQ_API_KEY
+  (llama-4-scout) → AGNES_API_KEY (agnes-3.0-flash, validé vision sur frame
+  réelle) ; LIVE_AGENT_VISION_MODEL peut forcer un modèle ; garde dure :
+  en mode browser, toute action hors wait est neutralisée.
+- Système de téléchargement SUPPRIMÉ : desktop/ (app Electron), workflow
+  desktop-build.yml, boutons « Télécharger l'app PC » (PC-only-notice),
+  cartes Desktop Windows/Linux de la vitrine (recentrées : Agent Live
+  s'ouvre dans le navigateur), README mis à jour.
+- proxy.ts : Permissions-Policy ajoute display-capture=(self).
+- Sessions : champ mode « browser | desktop » (défaut browser), Firestore.
+- Vérifications : typecheck 0 erreur ; vitest 197/197 ; build OK ;
+  push f36b08a (GitHub Push Protection a d'abord bloqué le token dans
+  scripts/push_github.sh → retiré du git, conservé hors dépôt) puis db7c8fe.
+
+Stage Summary:
+- Production gen3ia.online = commit db7c8fe, READY.
+- E2E PRODUCTION (scripts/e2e_live_browser_prod.mjs) : 6/6 verts — session
+  browser créée, start, 2 frames réelles analysées (vision FR correcte :
+  fenêtre, barre de titre, boutons), runtime iterations=2, arrêt propre.
+- Le live agent se teste maintenant sur ordinateur via le navigateur, sans
+  aucun téléchargement (partage d'écran natif + IA vision serverless).
+- Artefacts : scripts/e2e_live_browser_prod.mjs, scripts/gen_live_fixtures.py,
+  scripts/fixtures/live_frame_*.jpg/.b64.
+- Sécurité : token GitHub exclu du dépôt (push protection) ; rappeler la
+  rotation de la clé Agnes transmise en clair (Task 12).
