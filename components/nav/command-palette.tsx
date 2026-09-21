@@ -10,22 +10,20 @@ type PaletteItem = {
   label: string;
   icon: string;
   group: string;
+  requiredRole?: "developer";
 };
 
 const normalized = (value: string) =>
   value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-/**
- * Palette de navigation (⌘K) : recherche insensible aux accents sur
- * toutes les destinations de la plateforme, clavier complet
- * (↑ ↓ choisir, ↵ ouvrir, Esc fermer).
- */
 export function CommandPalette({
   open,
   onClose,
+  canDeveloper,
 }: {
   open: boolean;
   onClose: () => void;
+  canDeveloper: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -58,11 +56,13 @@ export function CommandPalette({
     pathname === href || pathname.startsWith(href + "/");
 
   const filtered = useMemo(() => {
-    const items: PaletteItem[] = NAV_COMMAND_INDEX;
+    const items: PaletteItem[] = NAV_COMMAND_INDEX.filter(
+      (item) => item.requiredRole !== "developer" || canDeveloper,
+    );
     return items.filter((item) =>
       normalized(item.label).includes(normalized(query.trim())),
     );
-  }, [query]);
+  }, [query, canDeveloper]);
 
   const goTo = (href: string) => {
     onClose();
@@ -102,7 +102,7 @@ export function CommandPalette({
             role="combobox"
             aria-expanded="true"
             aria-controls="g3-command-listbox"
-            aria-activedescendant={filtered[cursor] ? `g3-command-opt-${cursor}` : undefined}
+            aria-activedescendant={filtered[cursor] ? "g3-command-opt-" + cursor : undefined}
           />
           <kbd>ESC</kbd>
         </div>
@@ -110,13 +110,13 @@ export function CommandPalette({
           {filtered.length ? filtered.map((item, index) => (
             <button
               key={item.href}
-              id={`g3-command-opt-${index}`}
+              id={"g3-command-opt-" + index}
               type="button"
               role="option"
               aria-selected={index === cursor}
               onMouseEnter={() => setCursor(index)}
               onClick={() => goTo(item.href)}
-              className={`g3-command-item ${index === cursor ? "is-cursor" : ""}`}
+              className={"g3-command-item " + (index === cursor ? "is-cursor" : "")}
             >
               <span className="g3-side-icon">{item.icon}</span>
               <span className="flex-1 text-left">{item.label}</span>
