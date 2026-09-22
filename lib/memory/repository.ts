@@ -10,10 +10,43 @@ import {
   MemoryRecord,
 } from "./types";
 
+import {
+  VECTOR_COLLECTION_MEMORIES,
+  upsertVectorPoints,
+} from "./vector-store";
+
 function collection() {
   return adminDb.collection(
     "memories",
   );
+}
+
+/**
+ * Miroir vectoriel best-effort : Firestore reste la source de vérité,
+ * Qdrant accélère la recherche sémantique. Toute erreur est absorbée
+ * (l'écriture Firestore ne doit JAMAIS échouer à cause de l'index).
+ */
+async function mirrorMemoryToVectorStore(memory: MemoryRecord): Promise<void> {
+  if (!memory.embedding || memory.embedding.length === 0) return;
+  try {
+    await upsertVectorPoints(VECTOR_COLLECTION_MEMORIES, [
+      {
+        id: memory.id,
+        vector: memory.embedding,
+        payload: {
+          userId: memory.userId,
+          projectId: memory.projectId ?? null,
+          agentId: memory.agentId ?? null,
+          memoryId: memory.id,
+          type: memory.type ?? null,
+          // Aperçu court pour l'affichage des hits sans re-lire Firestore.
+          preview: (memory.content ?? "").slice(0, 240),
+        },
+      },
+    ]);
+  } catch {
+    // Fail-soft assumé : la recherche retombera sur le parcours Firestore.
+  }
 }
 
 export async function saveMemory(
@@ -30,6 +63,9 @@ export async function saveMemory(
       updatedAt:
         FieldValue.serverTimestamp(),
     });
+
+  // Miroir vectoriel (best-effort, après la persistance Firestore).
+  await mirrorMemoryToVectorStore(memory);
 }
 
 export async function getMemory(

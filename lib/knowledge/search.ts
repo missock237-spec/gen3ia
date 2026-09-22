@@ -10,12 +10,63 @@ import {
   cosineSimilarity,
 } from "@/lib/memory/similarity";
 
+import {
+  VECTOR_COLLECTION_KNOWLEDGE,
+  searchVectorPoints,
+} from "@/lib/memory/vector-store";
+
+export interface KnowledgeSearchResult {
+  id: string;
+
+  documentId: string;
+
+  text: string;
+
+  chunkIndex: number;
+
+  score: number;
+}
+
+/**
+ * Recherche dans la base de connaissances.
+ *
+ * Chemin rapide (Qdrant configuré) : kNN filtré userId + projectId, texte
+ * du fragment repris du payload (identique au Firestore : écrit ensemble).
+ *
+ * Chemin de repli : parcours Firestore (≤ 500 fragments) + cosinus en
+ * mémoire — comportement historique, conservé pour la résilience.
+ */
 export async function searchKnowledge(
   userId: string,
   projectId: string,
   query: string,
   limit = 8,
-) {
+): Promise<KnowledgeSearchResult[]> {
+  const queryEmbedding =
+    await createMemoryEmbedding(
+      query,
+    );
+
+  const hits =
+    await searchVectorPoints(
+      VECTOR_COLLECTION_KNOWLEDGE,
+      queryEmbedding,
+      {
+        limit,
+        filter: { userId, projectId },
+      },
+    );
+
+  if (hits && hits.length > 0) {
+    return hits.map((hit) => ({
+      id: hit.id,
+      documentId: String(hit.payload.documentId ?? ""),
+      text: String(hit.payload.text ?? hit.payload.preview ?? ""),
+      chunkIndex: Number(hit.payload.chunkIndex ?? 0),
+      score: hit.score,
+    }));
+  }
+
   const snapshot =
     await adminDb
       .collection(
@@ -37,11 +88,6 @@ export async function searchKnowledge(
   if (snapshot.empty) {
     return [];
   }
-
-  const queryEmbedding =
-    await createMemoryEmbedding(
-      query,
-    );
 
   return snapshot.docs
     .map((doc) => {

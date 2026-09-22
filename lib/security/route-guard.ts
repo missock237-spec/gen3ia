@@ -12,6 +12,10 @@ import {
 } from "./rate-limit";
 
 import {
+  rateLimitDistributed,
+} from "@/lib/cache/redis";
+
+import {
   securityHeaders,
 } from "./request-security";
 
@@ -89,16 +93,25 @@ export async function protectRoute(
 
     const routeKey = options.key ?? new URL(request.url).pathname;
     const traceId = requestTraceId(request);
-    const limit = rateLimit(
-      `${routeKey}:${user.uid}`,
-      options.rateLimit ?? { limit: 240, windowMs: 5 * 60 * 1000 },
-    );
+    const limitKey = `${routeKey}:${user.uid}`;
+    const limitConfig = options.rateLimit ?? { limit: 240, windowMs: 5 * 60 * 1000 };
 
-    if (!limit.allowed) {
-      traceLogger(traceId, { userId: user.uid, route: routeKey }).warn({ event: "request.rate_limited" }, "Rate limit atteint");
+    // Couche 1 — locale (instantanée, protège l'instance courante).
+    const limit = rateLimit(limitKey, limitConfig);
+
+    // Couche 2 — distribuée (Redis Upstash, partagée par toutes les
+    // instances serverless). Absente/indisponible = repli transparent
+    // sur la décision locale uniquement (jamais de blocage pour autant).
+    const distributed = await rateLimitDistributed(limitKey, limitConfig);
+
+    const allowed = limit.allowed && distributed.allowed;
+    const retryAfterMs = limit.allowed ? distributed.retryAfterMs : limit.retryAfterMs;
+
+    if (!allowed) {
+      traceLogger(traceId, { userId: user.uid, route: routeKey }).warn({ event: "request.rate_limited", distributed: distributed.distributed }, "Rate limit atteint");
       return {
         ok: false,
-        response: tooManyRequests(limit.retryAfterMs),
+        response: tooManyRequests(retryAfterMs),
       };
     }
 

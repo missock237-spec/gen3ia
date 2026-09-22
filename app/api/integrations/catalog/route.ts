@@ -7,6 +7,7 @@ import {
   listComposioToolkits,
   type ConnectionCategory,
 } from "@/lib/integrations/composio/connections";
+import { cacheSet, cacheWrap } from "@/lib/cache/redis";
 import { logger } from "@/lib/observability/logger";
 
 export const runtime = "nodejs";
@@ -153,14 +154,19 @@ function filtrerCatalogue(items: CatalogItem[], options: { search?: string; cate
 }
 
 /**
- * Cache mémoire du catalogue complet (processus serveur).
+ * Cache mémoire du catalogue complet (processus serveur) + cache distribué
+ * Redis (partagé entre les instances serverless).
  *
- * L'agrégation paginée coute plusieurs appels Composio (1 à 5 selon le total) :
- * on met en cache la liste NORMALISÉE complète 10 minutes pour que chaque
- * requête (recherche, filtre, rechargement) réponde instantanément. Les
- * requêtes concurrentes partagent la même promesse de chargement.
+ * L'agrégation paginée coute plusieurs appels Composio (1 à 5 selon le
+ * total) : le cache processe couvre les requêtes rafales sur une même
+ * instance, le cache Redis couvre les cold starts et répartit la charge —
+ * une seule instance agrège Composio toutes les 10 minutes, les autres
+ * servent la liste normalisée depuis Upstash (~10 ms au lieu de ~25 s).
+ * Les requêtes concurrentes partagent la même promesse de chargement.
  */
 const CACHE_TTL_MS = 10 * 60 * 1000;
+const REDIS_CATALOG_KEY = "integrations:catalog:v2";
+const REDIS_CATALOG_TTL_SECONDS = 10 * 60;
 let cachedItems: CatalogItem[] | null = null;
 let cacheExpiresAt = 0;
 let cachePromise: Promise<CatalogItem[]> | null = null;
@@ -175,6 +181,24 @@ const AGGREGATION_BUDGET_MS = 25_000;
 
 async function chargerCatalogueComplet(): Promise<CatalogItem[]> {
   if (cachedItems && Date.now() < cacheExpiresAt) return cachedItems;
+
+  // Cache distribué Redis : sert immédiatement si une autre instance a
+  // déjà agrégé Composio récemment.
+  const redis = await cacheWrap<CatalogItem[]>(
+    REDIS_CATALOG_KEY,
+    REDIS_CATALOG_TTL_SECONDS,
+    async () => {
+      const dynamic = await listComposioToolkits({ limit: 1000 });
+      return dynamic.items.map(versItemCatalogue);
+    },
+  );
+
+  if (redis.value.length > 0) {
+    cachedItems = redis.value;
+    cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+    return cachedItems;
+  }
+
   if (!cachePromise) {
     const aggregation = listComposioToolkits({ limit: 1000 })
       .then((dynamic) => dynamic.items.map(versItemCatalogue))
@@ -182,6 +206,9 @@ async function chargerCatalogueComplet(): Promise<CatalogItem[]> {
         if (items.length > 0) {
           cachedItems = items;
           cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+          // Opportuniste : alimente le cache Redis pour les autres
+          // instances (échec silencieux si Redis indisponible).
+          void cacheSet(REDIS_CATALOG_KEY, items, REDIS_CATALOG_TTL_SECONDS);
         }
         return items;
       })
