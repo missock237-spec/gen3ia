@@ -80,7 +80,7 @@ export async function listGenConnectors(userId: string): Promise<string[]> {
   try {
     const accounts = await listHubConnections(userId);
     return accounts
-      .filter((account) => account.status === "ACTIVE" && account.enabled)
+      .filter((account) => account.verified && account.enabled)
       .map((account) => account.toolkit)
       .slice(0, 16);
   } catch {
@@ -186,9 +186,16 @@ export async function runGenTurn(input: {
   userId?: string;
   message: string;
   conversationId?: string;
+  selectedConnectors?: string[];
 }): Promise<GenReply> {
   const conversationId = input.conversationId ?? randomUUID();
-  const connected = input.userId ? await listGenConnectors(input.userId) : [];
+  const connectedAll = input.userId ? await listGenConnectors(input.userId) : [];
+  const requested = [...new Set((input.selectedConnectors ?? []).map((item) => item.trim().toLowerCase()))];
+  // La sélection utilisateur ne peut qu'intersecter les connexions déjà
+  // réellement actives et vérifiées ; elle ne crée jamais une permission.
+  const connected = requested.length > 0
+    ? connectedAll.filter((toolkit) => requested.includes(toolkit))
+    : connectedAll;
 
   const history = await loadGenHistory(input.userId, conversationId);
 

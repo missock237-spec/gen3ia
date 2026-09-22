@@ -215,8 +215,11 @@ export function AppNav() {
                           Developer Studio
                         </Link>
                       )}
+                      <Link href="/settings" onClick={() => setAccountOpen(false)} className="g3-account-item">
+                        Paramètres
+                      </Link>
                       <Link href="/team" onClick={() => setAccountOpen(false)} className="g3-account-item">
-                        Paramètres & équipe
+                        Équipe
                       </Link>
                       <Link href="/privacy" onClick={() => setAccountOpen(false)} className="g3-account-item">
                         Politique de confidentialité

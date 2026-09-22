@@ -15,8 +15,15 @@ import { authFetch } from "@/lib/firebase/auth-client";
 
 interface GenBubble {
   role: "user" | "gen";
-
   text: string;
+}
+
+interface GenConnector {
+  toolkit: string;
+  label: string;
+  description: string;
+  category: string;
+  connected: boolean;
 }
 
 export function GenChatWidget() {
@@ -30,11 +37,25 @@ export function GenChatWidget() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [connectors, setConnectors] = useState<GenConnector[]>([]);
+  const [selectedConnectors, setSelectedConnectors] = useState<string[]>([]);
+  const [connectorMenuOpen, setConnectorMenuOpen] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (open) endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [bubbles, open, sending]);
+
+  useEffect(() => {
+    if (!open || connectors.length > 0) return;
+    void authFetch("/api/integrations/mention?q=", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = await response.json();
+        setConnectors(Array.isArray(data.connectors) ? data.connectors.filter((item: GenConnector) => item.connected) : []);
+      })
+      .catch(() => undefined);
+  }, [open, connectors.length]);
 
   async function send() {
     const message = input.trim();
@@ -48,7 +69,11 @@ export function GenChatWidget() {
       const response = await authFetch("/api/gen/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message, ...(conversationId ? { conversationId } : {}) }),
+        body: JSON.stringify({
+          message,
+          ...(conversationId ? { conversationId } : {}),
+          ...(selectedConnectors.length > 0 ? { selectedConnectors } : {}),
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gen est indisponible.");
@@ -108,6 +133,59 @@ export function GenChatWidget() {
           </div>
 
           <footer className="border-t border-neutral-200 bg-white p-2.5">
+            {selectedConnectors.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5 px-1">
+                {selectedConnectors.map((toolkit) => {
+                  const item = connectors.find((connector) => connector.toolkit === toolkit);
+                  return (
+                    <button
+                      key={toolkit}
+                      type="button"
+                      onClick={() => setSelectedConnectors((current) => current.filter((value) => value !== toolkit))}
+                      className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700"
+                    >
+                      {item?.label ?? toolkit} ×
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {connectorMenuOpen && (
+              <div className="mb-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-lg">
+                {connectors.length === 0 ? (
+                  <p className="px-2 py-2 text-xs text-neutral-500">Aucun connecteur vérifié. Connectez d’abord une application dans Intégrations.</p>
+                ) : (
+                  <div className="max-h-36 space-y-1 overflow-y-auto">
+                    {connectors.map((connector) => {
+                      const active = selectedConnectors.includes(connector.toolkit);
+                      return (
+                        <button
+                          key={connector.toolkit}
+                          type="button"
+                          onClick={() => setSelectedConnectors((current) => active ? current.filter((value) => value !== connector.toolkit) : [...current, connector.toolkit])}
+                          className={"flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs " + (active ? "bg-sky-50 text-sky-700" : "hover:bg-neutral-50")}
+                        >
+                          <span>
+                            <span className="block font-semibold">{connector.label}</span>
+                            <span className="block truncate text-[10px] text-neutral-400">{connector.description}</span>
+                          </span>
+                          <span>{active ? "✓" : "+"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="mb-2 flex justify-end px-1">
+              <button
+                type="button"
+                onClick={() => setConnectorMenuOpen((value) => !value)}
+                className="rounded-full border border-neutral-200 px-2.5 py-1 text-[10px] font-semibold text-neutral-500 hover:bg-neutral-50"
+              >
+                {selectedConnectors.length > 0 ? "Connecteurs sélectionnés" : "Connecteurs"}
+              </button>
+            </div>
             <div className="flex items-end gap-2">
               <textarea
                 value={input}

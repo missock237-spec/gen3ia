@@ -163,7 +163,10 @@ export function outOfScopeReply(agent: Pick<AgentRecord, "name" | "type" | "type
  */
 export async function planAgentTask(userId: string, agent: AgentRecord, objective: string): Promise<RuntimePlan> {
   const policy = policyForAgent(agent);
-  const allowed = policy.allowedTools ?? [];
+  // Le runtime autorise ensuite l'exécution externe uniquement contre les
+  // connexions effectivement vérifiées. Le planificateur doit donc pouvoir
+  // proposer composio.execute quand un connecteur connecté est pertinent.
+  const allowed = [...new Set([...(policy.allowedTools ?? []), "composio.execute"])];
   // Fournisseur fixé par le propriétaire : le routeur valide la valeur (un
   // fournisseur inconnu est simplement ignoré par selectProvider).
   const fixedProvider = agent.modelStrategy === "fixed" && agent.preferredProvider

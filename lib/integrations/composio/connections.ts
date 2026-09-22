@@ -242,6 +242,61 @@ export interface HubConnection {
   category: ConnectionCategory | "other";
   status: string;
   enabled: boolean;
+  verified: boolean;
+}
+
+function isActiveConnection(account: { status?: unknown; isDisabled?: unknown }): boolean {
+  return String(account.status ?? "").toUpperCase() === "ACTIVE" && account.isDisabled !== true;
+}
+
+export interface VerifiedConnectionResult {
+  verified: boolean;
+  connection: HubConnection | null;
+}
+
+/**
+ * Vérifie réellement qu'un compte Composio est passé à l'état ACTIVE.
+ * Après OAuth, Composio peut conserver temporairement l'état en attente :
+ * cette fonction patiente puis ne considère la connexion valide qu'après
+ * confirmation ACTIVE côté Connected Accounts.
+ */
+export async function verifyToolkitConnection(
+  userId: string,
+  toolkit: string,
+  timeoutMs = 12_000,
+): Promise<VerifiedConnectionResult> {
+  if (!userId) throw new Error("userId is required.");
+  const normalized = assertSupportedToolkit(toolkit);
+  const deadline = Date.now() + Math.max(0, Math.min(timeoutMs, 30_000));
+
+  do {
+    const result = await timedComposioCall(
+      () => getComposio().connectedAccounts.list({ userIds: [userId] }),
+      "connectedAccounts.list verification " + normalized,
+    );
+    const account = result.items.find(
+      (item) => item.toolkit?.slug === normalized && isActiveConnection(item),
+    );
+    if (account) {
+      const info = catalogInfo(normalized);
+      return {
+        verified: true,
+        connection: {
+          id: account.id,
+          toolkit: normalized,
+          label: info.label,
+          category: info.category,
+          status: String(account.status ?? "ACTIVE"),
+          enabled: !account.isDisabled,
+          verified: true,
+        },
+      };
+    }
+    if (Date.now() >= deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  } while (Date.now() < deadline);
+
+  return { verified: false, connection: null };
 }
 
 function catalogInfo(toolkitSlug: string): { label: string; category: ConnectionCategory | "other" } {
@@ -262,13 +317,15 @@ export async function listHubConnections(userId: string): Promise<HubConnection[
     .map((account) => {
       const slug = account.toolkit?.slug ?? "unknown";
       const info = catalogInfo(slug);
+      const verified = isActiveConnection(account);
       return {
         id: account.id,
         toolkit: slug,
         label: info.label,
         category: info.category,
-        status: account.status,
+        status: String(account.status ?? "UNKNOWN"),
         enabled: !account.isDisabled,
+        verified,
       };
     });
 }

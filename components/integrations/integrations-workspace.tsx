@@ -97,6 +97,7 @@ interface HubConnection {
   category: string;
   status: string;
   enabled: boolean;
+  verified: boolean;
 }
 
 interface OutgoingWebhook {
@@ -220,6 +221,7 @@ export function IntegrationsWorkspace() {
           category: String(entry.category ?? "other"),
           status: String(entry.status ?? ""),
           enabled: entry.enabled !== false,
+          verified: entry.verified === true,
         })));
       }
       if (webhooksRes.status === "fulfilled" && webhooksRes.value.ok) {
@@ -282,9 +284,25 @@ export function IntegrationsWorkspace() {
     const params = new URLSearchParams(window.location.search);
     const connected = params.get("connected");
     if (!connected) return;
-    setNotice(`Connexion « ${connected} » enregistrée. Elle sera active une fois l'autorisation confirmée côté service.`);
     window.history.replaceState(null, "", window.location.pathname);
-    void reload();
+    void (async () => {
+      try {
+        const verification = await authFetch(
+          `/api/integrations/composio/connections/verify?toolkit=${encodeURIComponent(connected)}`,
+          { cache: "no-store" },
+        );
+        const body = await verification.json();
+        if (verification.ok && body.verified) {
+          setNotice(`Connexion « ${connected} » vérifiée et active. Gen3ia peut maintenant l'utiliser dans les agents.`);
+        } else {
+          setNotice(`L'autorisation de « ${connected} » n'a pas encore été confirmée. L'application ne sera utilisable qu'après vérification.`);
+        }
+      } catch {
+        setNotice(`La vérification de « ${connected} » n'a pas abouti. Réessayez depuis Intégrations.`);
+      } finally {
+        await reload();
+      }
+    })();
   }, [sessionAvailable, reload]);
 
   // Recherche live avec léger debounce : le catalogue est déjà chargé en
@@ -439,7 +457,11 @@ export function IntegrationsWorkspace() {
     );
   }
 
-  const connectedToolkits = new Set(connections.filter((connection) => connection.enabled && connection.status === "ACTIVE").map((connection) => connection.toolkit));
+  const connectedToolkits = new Set(
+    connections
+      .filter((connection) => connection.enabled && connection.verified && connection.status.toUpperCase() === "ACTIVE")
+      .map((connection) => connection.toolkit),
+  );
   const allCategories = [...catalogByCategory.keys()];
   const categoriesToShow = statusFilter === "all" ? allCategories : allCategories.filter((category) => category === statusFilter);
   const isFiltered = statusFilter !== "all" || appliedSearch.trim() !== "";
@@ -500,7 +522,7 @@ export function IntegrationsWorkspace() {
           </SectionCard>
 
           {/* Connexions actives */}
-          <SectionCard title={`Connexions actives (${connections.length})`} subtitle="Comptes OAuth liés à vos agents. Vous pouvez révoquer une connexion à tout moment.">
+          <SectionCard title={`Connexions vérifiées (${connections.filter((connection) => connection.verified).length})`} subtitle="Seuls les comptes réellement actifs et vérifiés sont utilisables par les agents. Vous pouvez révoquer une connexion à tout moment.">
             {connections.length === 0 ? (
               <p className="text-sm text-neutral-500">Aucune connexion pour le moment. Choisissez un service dans le catalogue ci-dessous.</p>
             ) : (
@@ -511,7 +533,7 @@ export function IntegrationsWorkspace() {
                       <AppLogo entry={{ toolkit: connection.toolkit, label: connection.label, logo: catalogLogoByToolkit.get(connection.toolkit) ?? null }} size={32} />
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{connection.label}</p>
-                        <p className="text-xs text-neutral-500">{CATEGORY_LABELS[connection.category] ?? connection.category} · {connection.status}</p>
+                        <p className="text-xs text-neutral-500">{CATEGORY_LABELS[connection.category] ?? connection.category} · {connection.status} · {connection.verified ? "vérifiée" : "non vérifiée"}</p>
                       </div>
                     </div>
                     <button type="button" onClick={() => revoke(connection.id)} className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-100">
@@ -526,7 +548,7 @@ export function IntegrationsWorkspace() {
           {/* Catalogue */}
           <SectionCard
             title={`Catalogue de services (${searchedCatalog.length})`}
-            subtitle="Plus de 800 applications externes prêtes à être connectées à vos agents. Cliquez sur Connecter pour autoriser un service via OAuth sécurisé."
+            subtitle="Applications externes prêtes à être connectées à vos agents. Après OAuth, Gen3ia vérifie le compte avant de le considérer comme utilisable."
           >
             {catalogueVide ? (
               <p className="text-sm text-neutral-500">Le catalogue est momentanément indisponible. Réessayez dans quelques instants.</p>

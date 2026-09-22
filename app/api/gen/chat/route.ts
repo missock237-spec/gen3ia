@@ -19,6 +19,9 @@ export const maxDuration = 60;
 const MessageSchema = z.object({
   message: z.string().trim().min(1).max(2_000),
   conversationId: z.string().trim().min(8).max(128).optional(),
+  selectedConnectors: z.array(
+    z.string().trim().toLowerCase().regex(/^[a-z0-9_]{2,64}$/, "connecteur invalide"),
+  ).max(10).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -49,6 +52,7 @@ export async function POST(request: NextRequest) {
       userId,
       message: parsed.data.message,
       conversationId: parsed.data.conversationId,
+      selectedConnectors: parsed.data.selectedConnectors,
     });
 
     return NextResponse.json({

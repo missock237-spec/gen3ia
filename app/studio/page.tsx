@@ -4,29 +4,18 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { AgentChatWorkshop } from "@/components/agent/agent-chat-workshop";
-import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { WorkspaceTaskPanel } from "@/components/agent/workspace-task-panel";
-import { AdsWorkshop } from "@/components/studio/ads-workshop";
 import { StudioHeader } from "@/components/studio/studio-header";
-
-type StudioTab = "agents" | "ads";
-
-function isStudioTab(value: string | null): value is StudioTab {
-  return value === "agents" || value === "ads";
-}
 
 /**
  * Page principale du Studio.
  * Architecture entreprise :
- *  - en-tête unifié via StudioHeader, navigation de section via le layout ;
- *  - onglet synchronisé avec l'URL (?tab=ads) — partageable et restaurable ;
- *  - le panneau Ads reste monté (hidden) : son état survit aux onglets ;
+ *  - en-tête unifié via StudioHeader et navigation de section via le layout ;
  *  - l'onglet agents = AgentChatWorkshop : personnalisation obligatoire
  *    (nom, description, compétences, mémoire, nature, type) puis chat
  *    agent-scopé (classification requête / périmètre strict).
  */
 export default function StudioPage() {
-  const [tab, setTab] = useState<StudioTab>("agents");
   const [task, setTask] = useState("");
   const [taskId, setTaskId] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -35,21 +24,10 @@ export default function StudioPage() {
   // useSearchParams et le double-montage du panneau agents).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const urlTab = params.get("tab");
-    if (isStudioTab(urlTab)) setTab(urlTab);
     setTask(params.get("task") ?? "");
     setTaskId(params.get("taskId") ?? "");
     setHydrated(true);
   }, []);
-
-  const switchTab = (key: string) => {
-    const next = isStudioTab(key) ? key : "agents";
-    setTab(next);
-    const url = new URL(window.location.href);
-    if (next === "ads") url.searchParams.set("tab", next);
-    else url.searchParams.delete("tab");
-    window.history.replaceState(null, "", url);
-  };
 
   return (
     <div className="space-y-6">
@@ -73,22 +51,10 @@ export default function StudioPage() {
         }
       />
 
-      <AnimatedTabs
-        ariaLabel="Sections du studio"
-        active={tab}
-        onChange={switchTab}
-        tabs={[
-          { key: "agents", label: "🤖 Mes agents" },
-          { key: "ads", label: "📣 Studio Ads" },
-        ]}
-      />
 
-      {/* Panneau Ads maintenu monté pour préserver son état entre les onglets. */}
+
       <div role="tabpanel" aria-label="Mes agents" className="space-y-6">
         {hydrated && (taskId ? <WorkspaceTaskPanel taskId={taskId} /> : <AgentChatWorkshop initialMessage={task} />)}
-      </div>
-      <div role="tabpanel" aria-label="Studio Ads" hidden={tab !== "ads"}>
-        {hydrated && <AdsWorkshop />}
       </div>
     </div>
   );
