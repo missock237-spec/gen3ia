@@ -4,9 +4,9 @@ import { CONNECTIONS_CATALOG, getCatalogEntry, type ConnectionCategory } from ".
 import { getComposioTools } from "./composio/tools";
 
 /**
- * Sélecteur « @ » du chat agent : active un connecteur dans une conversation.
- * L'utilisateur tape @ dans la messagerie, choisit une application, et
- * l'agent reçoit le contexte (actions réelles disponibles) pour agir dessus.
+ * Sélecteur « @ » du chat agent : active un connecteur déjà connecté et
+ * vérifié dans une conversation. L'utilisateur tape @ dans la messagerie,
+ * choisit une application autorisée, et l'agent reçoit ses actions réelles.
  */
 
 export interface MentionConnector {
@@ -44,12 +44,10 @@ export async function listMentionConnectors(userId: string, search?: string): Pr
     // Composio indisponible : le sélecteur retombe sur le catalogue statique.
   }
 
-  const known = new Set(connected.map((item) => item.toolkit));
-  const catalog: MentionConnector[] = CONNECTIONS_CATALOG
-    .filter((entry) => !known.has(entry.toolkit))
-    .map((entry) => ({ toolkit: entry.toolkit, label: entry.label, description: entry.description, category: entry.category, connected: false }));
-
-  const pool = [...connected, ...catalog];
+  // Le sélecteur @ ne présente volontairement que les applications
+  // réellement connectées et vérifiées. Une app du catalogue non connectée
+  // doit d'abord être autorisée depuis /integrations.
+  const pool = connected.filter((item) => item.connected);
   if (!query) return pool.slice(0, MAX_LIST);
   return pool
     .filter((item) =>
@@ -167,11 +165,26 @@ export async function describeConnectedConnectorsForPrompt(userId: string, budge
  * pour que le planificateur utilise composio.execute avec des toolSlugs exacts.
  */
 export async function describeConnectorsForPrompt(userId: string, toolkits: string[]): Promise<string | undefined> {
-  const clean = [...new Set(
+  const requested = [...new Set(
     toolkits
       .map((toolkit) => toolkit.trim().toLowerCase())
       .filter((toolkit) => /^[a-z0-9_]{2,64}$/.test(toolkit)),
   )].slice(0, 10);
+  if (requested.length === 0) return undefined;
+
+  let verified = new Set<string>();
+  try {
+    const { listHubConnections } = await import("./composio/connections");
+    verified = new Set(
+      (await listHubConnections(userId))
+        .filter((account) => account.verified && account.enabled)
+        .map((account) => account.toolkit),
+    );
+  } catch {
+    return undefined;
+  }
+
+  const clean = requested.filter((toolkit) => verified.has(toolkit));
   if (clean.length === 0) return undefined;
 
   const lines: string[] = [];
