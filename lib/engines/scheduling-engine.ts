@@ -58,7 +58,7 @@ export interface CalendarEvent {
   updatedAt: number;
 }
 
-export async function createEvent(input: CalendarEventCreate): Promise<CalendarEvent> {
+export async function createEvent(input: CalendarEventCreate, options?: { skipEventEmission?: boolean }): Promise<CalendarEvent> {
   const parsed = CalendarEventCreateSchema.parse(input);
   const now = Date.now();
   const ref = adminDb.collection(CALENDAR_COLLECTION).doc();
@@ -79,13 +79,17 @@ export async function createEvent(input: CalendarEventCreate): Promise<CalendarE
   await ref.set(event);
 
   // Hook d'automatisation : les workflows de l'utilisateur peuvent écouter
-  // la création d'événements (ex. "quand un rendez-vous est créé, préparer
-  // un compte-rendu"). Émission best-effort, jamais bloquante.
-  void emitBusinessEvent({
-    userId: parsed.userId,
-    eventType: "calendar.event_created",
-    payload: { eventId: event.id, type: event.type, title: event.title, startAt: event.startAt },
-  }).catch(() => undefined);
+  // la création d'événements. Émission attendue (contexte serverless :
+  // une promesse en arrière-plan serait gelée après la réponse) et jamais
+  // bloquante en cas d'échec (try/catch interne à emitBusinessEvent).
+  // skipEventEmission empêche les récursions (workflow → createEvent → event).
+  if (!options?.skipEventEmission) {
+    await emitBusinessEvent({
+      userId: parsed.userId,
+      eventType: "calendar.event_created",
+      payload: { eventId: event.id, type: event.type, title: event.title, startAt: event.startAt },
+    }).catch(() => undefined);
+  }
 
   return event;
 }

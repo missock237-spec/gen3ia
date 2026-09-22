@@ -175,7 +175,7 @@ export async function PATCH(request: NextRequest) {
           { label: "Horodatage UTC", value: new Date().toISOString() },
         ],
       });
-      void emitBusinessEvent({
+      await emitBusinessEvent({
         userId: user.uid,
         eventType: "documents.contract_signed",
         payload: { contractId: record.id, title: String(data.title ?? ""), clientName: String(data.clientName ?? "") },

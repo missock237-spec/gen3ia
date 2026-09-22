@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       } satisfies LeaveData as unknown as Record<string, unknown>,
     });
 
-    void emitBusinessEvent({
+    await emitBusinessEvent({
       userId: user.uid,
       eventType: "hr.leave_requested",
       payload: { leaveId: record.id, employeeName: parsed.data.employeeName, days, type: parsed.data.type, startAt, endAt },
@@ -138,7 +138,7 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
-    void emitBusinessEvent({
+    await emitBusinessEvent({
       userId: user.uid,
       eventType: "hr.leave_decided",
       payload: { leaveId: record.id, employeeName: data.employeeName, status: parsed.data.status, days: data.days },

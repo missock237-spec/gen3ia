@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
           artifactId: null,
         },
       });
-      void emitBusinessEvent({
+      await emitBusinessEvent({
         userId: user.uid,
         eventType: "marketing.content_generated",
         payload: { assetId: record.id, title: body.title },

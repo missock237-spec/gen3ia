@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    void emitBusinessEvent({
+    await emitBusinessEvent({
       userId: user.uid,
       eventType: "sales.call_analyzed",
       payload: { insightId: record.id, callSessionId: session.id, to: session.to, score: insight.score, interestLevel: insight.interestLevel },

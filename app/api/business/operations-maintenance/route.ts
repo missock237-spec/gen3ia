@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
       notes: body.notes,
     });
 
-    void emitBusinessEvent({
+    await emitBusinessEvent({
       userId: user.uid,
       eventType: "operations.maintenance_recorded",
       payload: { assetId: record.id, assetName: data.name, performedAt, nextDueAt },

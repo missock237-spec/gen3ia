@@ -104,7 +104,7 @@ export async function PATCH(request: NextRequest) {
     });
 
     if (!wasCompleted && nextStatus === "completed") {
-      void emitBusinessEvent({
+      await emitBusinessEvent({
         userId: user.uid,
         eventType: "hr.training_completed",
         payload: {

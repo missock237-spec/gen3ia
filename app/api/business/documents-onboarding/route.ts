@@ -125,7 +125,7 @@ export async function PATCH(request: NextRequest) {
     const updated = await updateRecord(COLLECTION, user.uid, record.id, { steps, status: allDone ? "completed" : "in_progress" });
 
     if (allDone && !wasCompleted) {
-      void emitBusinessEvent({
+      await emitBusinessEvent({
         userId: user.uid,
         eventType: "documents.onboarding_completed",
         payload: { flowId: record.id, name: String(data.name ?? ""), targetName: String(data.targetName ?? "") },

@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
           reminders: [],
         },
       });
-      void emitBusinessEvent({
+      await emitBusinessEvent({
         userId: user.uid,
         eventType: "finance.invoice_created",
         payload: { invoiceId: record.id, invoiceNumber: fields.invoiceNumber, amount: fields.amount, currency: fields.currency, dueDate: fields.dueDate },
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
     const nextStatus = body.level === "courtoise" ? "reminded_1" : body.level === "ferme" ? "reminded_2" : "escalated";
     const updated = await updateRecord(COLLECTION, user.uid, record.id, { reminders, status: nextStatus, lastReminderAt: new Date().toISOString() });
 
-    void emitBusinessEvent({
+    await emitBusinessEvent({
       userId: user.uid,
       eventType: "finance.invoice_reminded",
       payload: { invoiceId: record.id, invoiceNumber: data.invoiceNumber, level: body.level, lateDays },
@@ -206,7 +206,7 @@ export async function PATCH(request: NextRequest) {
     });
 
     if (parsed.data.status === "paid" && data.status !== "paid") {
-      void emitBusinessEvent({
+      await emitBusinessEvent({
         userId: user.uid,
         eventType: "finance.invoice_paid",
         payload: { invoiceId: record.id, invoiceNumber: String(data.invoiceNumber ?? ""), amount: Number(data.amount ?? 0), currency: String(data.currency ?? "EUR") },

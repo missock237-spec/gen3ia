@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
       related: { module: "compliance", refId: record.id },
     });
 
-    void emitBusinessEvent({
+    await emitBusinessEvent({
       userId: user.uid,
       eventType: "gdpr.request_received",
       payload: { requestId: record.id, type: parsed.data.type, subjectName: parsed.data.subjectName, deadlineAt: deadlineAt.toISOString() },
@@ -180,7 +180,7 @@ export async function PATCH(request: NextRequest) {
     });
 
     if (parsed.data.kind === "request" && parsed.data.status === "fulfilled") {
-      void emitBusinessEvent({
+      await emitBusinessEvent({
         userId: user.uid,
         eventType: "gdpr.request_fulfilled",
         payload: { requestId: record.id, subjectName: String((record.data as { subjectName?: string }).subjectName ?? "") },

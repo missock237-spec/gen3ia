@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
       }
       const updated = await updateRecord(COLLECTION, user.uid, page.id, { status: "published" });
       const data = page.data as { name?: string; content?: LandingContent };
-      void emitBusinessEvent({
+      await emitBusinessEvent({
         userId: user.uid,
         eventType: "marketing.landing_published",
         payload: { landingId: page.id, name: String(data.name ?? ""), headline: String(data.content?.headline ?? "") },

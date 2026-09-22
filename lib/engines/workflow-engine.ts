@@ -282,16 +282,21 @@ async function executeStep(
       // startAt peut être une expression ISO interpolée, ou "+Nd" (dans N jours).
       const startAt = resolveFlexibleDate(cfg.startAt);
       const endAt = cfg.endAt ? resolveFlexibleDate(cfg.endAt) : undefined;
-      const event = await createEvent({
-        userId,
-        type: cfg.type,
-        title: cfg.title,
-        ...(cfg.description ? { description: cfg.description } : {}),
-        startAt,
-        ...(endAt ? { endAt } : {}),
-        ...(cfg.allDay !== undefined ? { allDay: cfg.allDay } : {}),
-        related: { module: "automations", refId: workflow.id },
-      });
+      const event = await createEvent(
+        {
+          userId,
+          type: cfg.type,
+          title: cfg.title,
+          ...(cfg.description ? { description: cfg.description } : {}),
+          startAt,
+          ...(endAt ? { endAt } : {}),
+          ...(cfg.allDay !== undefined ? { allDay: cfg.allDay } : {}),
+          related: { module: "automations", refId: workflow.id },
+        },
+        // Garde de récursion : un workflow qui crée un événement ne doit pas
+        // re-déclencher les workflows écoutant calendar.event_created.
+        { skipEventEmission: true },
+      );
       return { output: `Événement créé : ${event.title} (${event.startAt})` };
     }
     case "create_record": {
