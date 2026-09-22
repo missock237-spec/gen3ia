@@ -38,6 +38,7 @@ export const LIBRARY: NavItem[] = [
   { href: "/marketplace/purchases", label: "Mes achats", icon: "◈" },
   { href: "/team", label: "Équipe", icon: "◎" },
   { href: "/billing", label: "Facturation", icon: "₣" },
+  { href: "/settings", label: "Paramètres", icon: "⚙" },
 ];
 
 export const DEVELOPER: NavItem[] = [
