@@ -80,7 +80,7 @@ export async function listGenConnectors(userId: string): Promise<string[]> {
   try {
     const accounts = await listHubConnections(userId);
     return accounts
-      .filter((account) => account.status === "ACTIVE" && account.enabled)
+      .filter((account) => account.verified && account.enabled)
       .map((account) => account.toolkit)
       .slice(0, 16);
   } catch {
