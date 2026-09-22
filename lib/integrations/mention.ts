@@ -29,7 +29,7 @@ export async function listMentionConnectors(userId: string, search?: string): Pr
     const { listHubConnections } = await import("./composio/connections");
     const accounts = await listHubConnections(userId);
     connected = accounts
-      .filter((account) => account.status === "ACTIVE" && account.enabled)
+      .filter((account) => account.verified && account.enabled)
       .map((account) => {
         const entry = getCatalogEntry(account.toolkit);
         return {
