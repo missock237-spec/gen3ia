@@ -136,7 +136,7 @@ export default function MarketingLandingPage() {
 
       <ModuleSection title={`Landing pages (${pages.length})`}>
         {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
-        {!loading && pages.length === 0 ? <EmptyHint>Aucune landing page pour l'instant. Créez votre premier brief ci-dessus.</EmptyHint> : null}
+        {!loading && pages.length === 0 ? <EmptyHint>Aucune landing page pour l&apos;instant. Créez votre premier brief ci-dessus.</EmptyHint> : null}
         <div className="grid gap-4 lg:grid-cols-2">
           {pages.map((page) => (
             <article key={page.id} className={cardCls}>

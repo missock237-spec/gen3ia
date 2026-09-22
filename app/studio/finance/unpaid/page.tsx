@@ -160,7 +160,7 @@ export default function FinanceUnpaidPage() {
 
       <ModuleSection title={`Factures (${invoices.length})`}>
         {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
-        {!loading && invoices.length === 0 ? <EmptyHint>Aucune facture pour l'instant.</EmptyHint> : null}
+        {!loading && invoices.length === 0 ? <EmptyHint>Aucune facture pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2.5">
           {invoices.map((invoice) => {
             const isLate = invoice.lateDays > 0 && !["paid", "written_off"].includes(invoice.status);

@@ -120,6 +120,7 @@ export function AppNav() {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         canDeveloper={canDeveloper}
+        isAdmin={platformRole === "admin"}
       />
       <div
         className={"g3-sidebar-backdrop " + (open ? "is-open" : "")}
@@ -131,7 +132,7 @@ export function AppNav() {
       }>
         <div className="flex h-full flex-col">
           <div className="g3-nav-header">
-            <Link href="/dashboard" className="g3-brand" onClick={() => setOpen(false)}>
+            <Link href="/studio" className="g3-brand" onClick={() => setOpen(false)}>
               <span className="g3-brand-mark">G3</span>
               {!compact && <span className="g3-brand-name">Gen3ia</span>}
             </Link>

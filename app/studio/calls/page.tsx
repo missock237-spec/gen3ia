@@ -184,7 +184,7 @@ export default function StudioCallsPage() {
                 <input className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} placeholder="+2376XXXXXXXX" />
               </div>
               <div>
-                <label className={labelClass}>Objectif de l'appel</label>
+                <label className={labelClass}>Objectif de l&apos;appel</label>
                 <textarea className={inputClass} rows={3} value={objective} onChange={(e) => setObjective(e.target.value)} maxLength={4_000} placeholder="Confirmer le rendez-vous de demain à 15h…" />
               </div>
               <button type="button" onClick={() => void startCall()} disabled={busy || !selectedAgent || !to.trim()} className="rounded-xl bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">
@@ -234,7 +234,7 @@ export default function StudioCallsPage() {
                       {liveSession?.lastError && <p className="mb-2 text-xs text-red-600">Erreur : {liveSession.lastError}</p>}
                       <div className="max-h-64 space-y-1.5 overflow-y-auto">
                         {(liveSession?.history ?? session.history ?? []).length === 0 && (
-                          <p className="text-xs text-neutral-500">Aucun échange enregistré pour l'instant.</p>
+                          <p className="text-xs text-neutral-500">Aucun échange enregistré pour l&apos;instant.</p>
                         )}
                         {(liveSession?.history ?? session.history ?? []).map((item, index) => (
                           <p key={index} className={"text-xs " + (item.role === "assistant" ? "text-emerald-800" : "text-neutral-800")}>

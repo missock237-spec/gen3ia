@@ -198,7 +198,7 @@ export default function AutomationsPage() {
 
       <ModuleSection title={`Automatisations (${workflows.length})`}>
         {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
-        {!loading && workflows.length === 0 ? <EmptyHint>Aucune automatisation pour l'instant. Créez la première ci-dessus.</EmptyHint> : null}
+        {!loading && workflows.length === 0 ? <EmptyHint>Aucune automatisation pour l&apos;instant. Créez la première ci-dessus.</EmptyHint> : null}
         <div className="space-y-2.5">
           {workflows.map((workflow) => (
             <article key={workflow.id} className={cardCls}>
@@ -246,7 +246,7 @@ export default function AutomationsPage() {
       </ModuleSection>
 
       <ModuleSection title="Journal des exécutions">
-        {!loading && runs.length === 0 ? <EmptyHint>Aucune exécution pour l'instant.</EmptyHint> : null}
+        {!loading && runs.length === 0 ? <EmptyHint>Aucune exécution pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2">
           {runs.map((run) => (
             <div key={run.id} className="rounded-xl border border-neutral-200 bg-white px-4 py-3">

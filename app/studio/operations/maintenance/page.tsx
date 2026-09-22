@@ -117,14 +117,14 @@ export default function OperationsMaintenancePage() {
         </div>
         <div className="mt-4 flex justify-end">
           <button className={btnPrimaryCls} disabled={busy || !form.name} onClick={create}>
-            Ajouter l'actif
+            Ajouter l&apos;actif
           </button>
         </div>
       </div>
 
       <ModuleSection title={`Actifs (${assets.length})`}>
         {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
-        {!loading && assets.length === 0 ? <EmptyHint>Aucun actif pour l'instant.</EmptyHint> : null}
+        {!loading && assets.length === 0 ? <EmptyHint>Aucun actif pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2.5">
           {assets.map((asset) => (
             <article key={asset.id} className={cardCls}>
@@ -158,7 +158,7 @@ export default function OperationsMaintenancePage() {
                       Annuler
                     </button>
                     <button className={btnPrimaryCls} disabled={busy} onClick={() => recordIntervention(asset.id)}>
-                      Enregistrer l'intervention
+                      Enregistrer l&apos;intervention
                     </button>
                   </div>
                 </div>

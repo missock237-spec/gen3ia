@@ -141,7 +141,7 @@ export default function DocumentsContractsPage() {
 
       <ModuleSection title={`Contrats (${contracts.length})`}>
         {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
-        {!loading && contracts.length === 0 ? <EmptyHint>Aucun contrat pour l'instant.</EmptyHint> : null}
+        {!loading && contracts.length === 0 ? <EmptyHint>Aucun contrat pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2.5">
           {contracts.map((contract) => (
             <article key={contract.id} className={cardCls}>

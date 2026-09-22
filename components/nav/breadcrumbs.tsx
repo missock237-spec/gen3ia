@@ -3,39 +3,38 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { matchNavRoute, NAV_REGISTRY } from "@/components/shells/nav-registry";
+
 type Crumb = { label: string; href?: string };
 
 /**
- * Fil d'Ariane global — orientation dans la hiérarchie de navigation.
- * Le dernier élément est la page courante (non cliquable, aria-current).
+ * Fil d'Ariane global — dérivé du NavRegistry unique (architecture à 3
+ * espaces) : [Espace de travail, …parents, page courante]. Le dernier élément
+ * est la page courante (non cliquable, aria-current).
  */
 function crumbsFor(pathname: string): Crumb[] {
-  if (pathname.startsWith("/dashboard")) return [{ label: "Accueil", href: "/dashboard" }];
-  if (pathname === "/studio/interface-lab")
-    return [{ label: "Accueil", href: "/dashboard" }, { label: "Agent", href: "/studio" }, { label: "Atelier d'Interfaces" }];
-  if (pathname === "/studio/schedules")
-    return [{ label: "Accueil", href: "/dashboard" }, { label: "Agent", href: "/studio" }, { label: "Tâches planifiées" }];
-  if (pathname.startsWith("/studio")) return [{ label: "Accueil", href: "/dashboard" }, { label: "Agent", href: "/studio" }];
-  if (pathname === "/marketplace/purchases")
-    return [{ label: "Accueil", href: "/dashboard" }, { label: "Marketplace", href: "/marketplace" }, { label: "Mes achats" }];
-  if (pathname.startsWith("/marketplace/"))
-    return [{ label: "Accueil", href: "/dashboard" }, { label: "Marketplace", href: "/marketplace" }, { label: "Fiche extension" }];
-  if (pathname.startsWith("/marketplace")) return [{ label: "Accueil", href: "/dashboard" }, { label: "Marketplace", href: "/marketplace" }];
-  if (pathname.startsWith("/live")) return [{ label: "Accueil", href: "/dashboard" }, { label: "Agent Live", href: "/live" }];
-  if (pathname === "/team/join")
-    return [{ label: "Accueil", href: "/dashboard" }, { label: "Équipe", href: "/team" }, { label: "Rejoindre une équipe" }];
-  if (pathname.startsWith("/team/"))
-    return [{ label: "Accueil", href: "/dashboard" }, { label: "Équipe", href: "/team" }, { label: "Espace d'équipe" }];
-  if (pathname.startsWith("/team")) return [{ label: "Accueil", href: "/dashboard" }, { label: "Équipe", href: "/team" }];
-  if (pathname.startsWith("/storage")) return [{ label: "Accueil", href: "/dashboard" }, { label: "Fichiers", href: "/storage" }];
-  if (pathname.startsWith("/developer")) return [{ label: "Accueil", href: "/dashboard" }, { label: "Espace développeur", href: "/developer" }];
-  if (pathname.startsWith("/billing")) return [{ label: "Accueil", href: "/dashboard" }, { label: "Facturation", href: "/billing" }];
-  return [];
+  const matched = matchNavRoute(pathname);
+  if (!matched) return [];
+
+  // Chemin de parents : remonte les préfixes connus du registre
+  // (ex. /studio/marketing/landing → Espace de travail / Missions / landing).
+  const prefixes = NAV_REGISTRY.filter(
+    (route) => route.href !== matched.href && matched.href.startsWith(route.href + "/"),
+  ).sort((a, b) => a.href.length - b.href.length);
+
+  const crumbs: Crumb[] = [{ label: "Espace de travail", href: "/studio" }];
+  for (const parent of prefixes) {
+    crumbs.push({ label: parent.label, href: parent.href });
+  }
+  crumbs.push({ label: matched.label });
+  return crumbs;
 }
 
 export function Breadcrumbs() {
   const pathname = usePathname();
   if (pathname === "/" || pathname === "/login" || pathname === "/signup") return null;
+  // Le studio et ses sous-espaces gèrent leur fil d'Ariane dans SectionHeader.
+  if (pathname.startsWith("/studio") || pathname.startsWith("/developer") || pathname.startsWith("/admin")) return null;
   const crumbs = crumbsFor(pathname);
   if (!crumbs.length) return null;
 

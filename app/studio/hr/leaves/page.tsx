@@ -131,7 +131,7 @@ export default function HrLeavesPage() {
 
       <ModuleSection title={`Demandes (${leaves.length})`}>
         {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
-        {!loading && leaves.length === 0 ? <EmptyHint>Aucune demande pour l'instant.</EmptyHint> : null}
+        {!loading && leaves.length === 0 ? <EmptyHint>Aucune demande pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2.5">
           {leaves.map((leave) => (
             <article key={leave.id} className={cardCls}>

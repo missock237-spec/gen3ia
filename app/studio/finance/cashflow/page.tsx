@@ -132,7 +132,7 @@ export default function FinanceCashflowPage() {
 
       <ModuleSection title={`Flux (${entries.length})`}>
         {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
-        {!loading && entries.length === 0 ? <EmptyHint>Aucun flux pour l'instant. Ajoutez vos encaissements et décaissements prévus.</EmptyHint> : null}
+        {!loading && entries.length === 0 ? <EmptyHint>Aucun flux pour l&apos;instant. Ajoutez vos encaissements et décaissements prévus.</EmptyHint> : null}
         <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
           <table className="w-full text-left text-[13px]">
             <thead className="bg-neutral-50 text-[11.5px] uppercase tracking-wide text-neutral-500">

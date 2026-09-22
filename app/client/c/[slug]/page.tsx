@@ -124,7 +124,7 @@ export default function ClientCommercialPage() {
       </header>
 
       <section className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-t-3xl bg-neutral-50 px-4 py-4" aria-live="polite">
-        {loading && <p className="mx-auto text-sm text-neutral-500">Connexion à l'assistant…</p>}
+        {loading && <p className="mx-auto text-sm text-neutral-500">Connexion à l&apos;assistant…</p>}
         {error && !greeting && <p className="mx-auto rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         {bubbles.map((bubble, index) => (
           <article
@@ -138,7 +138,7 @@ export default function ClientCommercialPage() {
             {bubble.text}
           </article>
         ))}
-        {sending && <p className="mr-auto text-xs text-neutral-500">L'assistant écrit…</p>}
+        {sending && <p className="mr-auto text-xs text-neutral-500">L&apos;assistant écrit…</p>}
 
         {showLead && (
           <div className="mr-auto max-w-[90%] rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
