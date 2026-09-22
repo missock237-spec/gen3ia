@@ -31,7 +31,16 @@ export async function GET(request: NextRequest) {
       const numbers = provider === "plivo"
         ? await searchAvailablePlivoNumbers(country, request.nextUrl.searchParams.get("areaCode") ?? undefined)
         : await searchAvailableNumbers(country, request.nextUrl.searchParams.get("areaCode") ?? undefined);
-      return NextResponse.json({ provider, numbers, monthlyPriceMinor: Number(process.env.GEN3IA_PHONE_NUMBER_PRICE_MINOR ?? 5000), currency: process.env.GEN3IA_WALLET_CURRENCY ?? "XAF" });
+      const pricing = (numbers[0] as { pricing?: { providerPriceUsdMinor: number; sellPriceUsdMinor: number; markupBps: number; currency: string; source: string } } | undefined)?.pricing ?? null;
+      return NextResponse.json({
+        provider,
+        numbers,
+        // Tarification margée (fournisseur + 20 %) quand disponible ;
+        // repli sur le prix configuré historique sinon.
+        ...(pricing
+          ? { pricing: { providerPriceUsdMinor: pricing.providerPriceUsdMinor, sellPriceUsdMinor: pricing.sellPriceUsdMinor, markupBps: pricing.markupBps, currency: pricing.currency, source: pricing.source } }
+          : { monthlyPriceMinor: Number(process.env.GEN3IA_PHONE_NUMBER_PRICE_MINOR ?? 5000), currency: process.env.GEN3IA_WALLET_CURRENCY ?? "XAF" }),
+      });
     }
     return NextResponse.json({ numbers: await listAgentPhoneNumbers(user.uid, agentId) });
   } catch (error) {

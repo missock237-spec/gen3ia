@@ -498,7 +498,27 @@ export async function dispatchSchedules(now = new Date()) {
   const due = all.filter((schedule) => isScheduleActive(schedule, now));
   const results: Array<Record<string, unknown>> = [];
 
+  // Cache de statut agent par dispatch : un agent mis en pause (Studio)
+  // suspend SES planifications en arrière-plan — reprise instantanée à la
+  // réactivation, sans perdre aucun créneau futur.
+  const agentStatusCache = new Map<string, string | null>();
+  const resolveAgentStatus = async (agentId: string): Promise<string | null> => {
+    if (agentStatusCache.has(agentId)) return agentStatusCache.get(agentId) ?? null;
+    let status: string | null = null;
+    try {
+      const agentSnap = await adminDb.collection("agents").doc(agentId).get();
+      status = agentSnap.exists ? String((agentSnap.data() as { status?: string }).status ?? "active") : null;
+    } catch { status = null; }
+    agentStatusCache.set(agentId, status);
+    return status;
+  };
+
   for (const schedule of due) {
+    const agentStatus = await resolveAgentStatus(schedule.agentId);
+    if (agentStatus === "paused" || agentStatus === "archived") {
+      results.push({ scheduleId: schedule.id, agentId: schedule.agentId, status: "skipped", reason: `agent ${agentStatus}` });
+      continue;
+    }
     const claim = await claimDueSchedule(schedule, now);
     if (!claim) continue;
 

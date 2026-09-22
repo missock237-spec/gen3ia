@@ -1,7 +1,8 @@
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { getTwilioConfig, isValidE164 } from "./voice";
 import { reserveFunds, releaseReservation, settleReservation } from "@/lib/billing/wallet";
+import { getNumberPricing, usdMinorToWalletMinor } from "@/lib/voice/pricing";
 
 const COLLECTION = "agentPhoneNumbers";
 const DEFAULT_PRICE_MINOR = 5000;
@@ -72,7 +73,12 @@ export async function searchAvailableNumbers(country: string, areaCode?: string,
   if (!/^[A-Z]{2}$/.test(normalizedCountry)) throw new Error("Country must be an ISO-3166 alpha-2 code.");
   const query = new URLSearchParams({ VoiceEnabled: "true", PageSize: String(Math.min(20, Math.max(1, limit))) });
   if (areaCode?.trim()) query.set("AreaCode", areaCode.trim());
-  const payload = await twilioRequest(`/AvailablePhoneNumbers/${normalizedCountry}/Local.json?${query.toString()}`);
+  const [payload, pricing] = await Promise.all([
+    twilioRequest(`/AvailablePhoneNumbers/${normalizedCountry}/Local.json?${query.toString()}`),
+    // Tarification margée (fournisseur + 20 %), calculée une fois par pays
+    // et servie à l'UI pour un achat éclairé.
+    getNumberPricing(normalizedCountry).catch(() => null),
+  ]);
   const numbers = Array.isArray(payload.available_phone_numbers) ? payload.available_phone_numbers : [];
   return numbers.map((item) => {
     const value = item as Record<string, unknown>;
@@ -83,6 +89,7 @@ export async function searchAvailableNumbers(country: string, areaCode?: string,
       region: String(value.region ?? ""),
       isoCountry: String(value.iso_country ?? normalizedCountry),
       capabilities: value.capabilities ?? { voice: true },
+      pricing,
     };
   }).filter((item) => isValidE164(item.phoneNumber));
 }
@@ -92,13 +99,25 @@ export async function purchaseNumberForAgent(params: { ownerId: string; agentId:
   const existing = await listAgentPhoneNumbers(params.ownerId, params.agentId);
   if (existing.some((item) => item.status === "active")) throw new Error("This agent already has an active phone number.");
 
-  const priceMinor = configuredPriceMinor();
+  // Prix vendu = prix fournisseur + marge (défaut 20 %) — ex. 5,00 USD/mois
+  // chez le fournisseur ⇒ 6,00 USD/mois côté client. Débit wallet converti
+  // explicitement (GEN3IA_USD_TO_XAF) et journalisé dans le metadata.
+  const pricing = await getNumberPricing(params.phoneNumber.slice(0, 2) === "+1" ? "US" : params.phoneNumber.slice(1, 3));
+  const sellPriceUsdMinor = pricing.sellPriceUsdMinor;
+  const chargeMinor = usdMinorToWalletMinor(sellPriceUsdMinor);
   const reference = `phone-number-${params.agentId}-${params.phoneNumber}`;
   await reserveFunds({
     userId: params.ownerId,
-    amountMinor: priceMinor,
+    amountMinor: chargeMinor,
     reference,
-    metadata: { product: "gen3ia_phone_number", agentId: params.agentId, phoneNumber: params.phoneNumber },
+    metadata: {
+      product: "gen3ia_phone_number",
+      agentId: params.agentId,
+      phoneNumber: params.phoneNumber,
+      sellPriceUsdMinor: String(sellPriceUsdMinor),
+      providerPriceUsdMinor: String(pricing.providerPriceUsdMinor),
+      markupBps: String(pricing.markupBps),
+    },
   });
 
   let purchasedSid = "";
@@ -112,6 +131,7 @@ export async function purchaseNumberForAgent(params: { ownerId: string; agentId:
     await configureTwilioNumber(purchasedSid, params.agentId);
     const doc = adminDb.collection(COLLECTION).doc();
     const now = Date.now();
+    const nextRenewalAt = now + 30 * 24 * 60 * 60 * 1000;
     const record: AgentPhoneNumber = {
       id: doc.id,
       ownerId: params.ownerId,
@@ -124,18 +144,25 @@ export async function purchaseNumberForAgent(params: { ownerId: string; agentId:
       createdAt: now,
       updatedAt: now,
     };
-    await doc.set(record);
+    await doc.set({
+      ...record,
+      providerPriceUsdMinor: pricing.providerPriceUsdMinor,
+      sellPriceUsdMinor,
+      markupBps: pricing.markupBps,
+      monthlyChargeMinor: chargeMinor,
+      nextRenewalAt: Timestamp.fromMillis(nextRenewalAt),
+    });
     await settleReservation({
       userId: params.ownerId,
       reference,
-      reservedMinor: priceMinor,
-      actualChargeMinor: priceMinor,
-      metadata: { product: "gen3ia_phone_number", agentId: params.agentId, twilioSid: purchasedSid },
+      reservedMinor: chargeMinor,
+      actualChargeMinor: chargeMinor,
+      metadata: { product: "gen3ia_phone_number", agentId: params.agentId, twilioSid: purchasedSid, sellPriceUsdMinor: String(sellPriceUsdMinor) },
     });
-    return { ...record, priceMinor };
+    return { ...record, sellPriceUsdMinor, providerPriceUsdMinor: pricing.providerPriceUsdMinor, chargeMinor, nextRenewalAt };
   } catch (error) {
     if (purchasedSid) await twilioRequest(`/IncomingPhoneNumbers/${encodeURIComponent(purchasedSid)}.json`, { method: "DELETE" }).catch(() => undefined);
-    await releaseReservation({ userId: params.ownerId, reference, reservedMinor: priceMinor }).catch(() => undefined);
+    await releaseReservation({ userId: params.ownerId, reference, reservedMinor: chargeMinor }).catch(() => undefined);
     throw error;
   }
 }
