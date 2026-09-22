@@ -61,7 +61,6 @@ export default function StudioPage() {
         ]}
       />
 
-      {/* Panneau Ads maintenu monté pour préserver son état entre les onglets. */}
       <div role="tabpanel" aria-label="Mes agents" className="space-y-6">
         {hydrated && (taskId ? <WorkspaceTaskPanel taskId={taskId} /> : <AgentChatWorkshop initialMessage={task} />)}
       </div>
