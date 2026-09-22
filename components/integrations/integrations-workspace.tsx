@@ -522,7 +522,7 @@ export function IntegrationsWorkspace() {
           </SectionCard>
 
           {/* Connexions actives */}
-          <SectionCard title={`Connexions actives (${connections.length})`} subtitle="Comptes OAuth liés à vos agents. Vous pouvez révoquer une connexion à tout moment.">
+          <SectionCard title={`Connexions vérifiées (${connections.filter((connection) => connection.verified).length})`} subtitle="Seuls les comptes réellement actifs et vérifiés sont utilisables par les agents. Vous pouvez révoquer une connexion à tout moment.">
             {connections.length === 0 ? (
               <p className="text-sm text-neutral-500">Aucune connexion pour le moment. Choisissez un service dans le catalogue ci-dessous.</p>
             ) : (
@@ -548,7 +548,7 @@ export function IntegrationsWorkspace() {
           {/* Catalogue */}
           <SectionCard
             title={`Catalogue de services (${searchedCatalog.length})`}
-            subtitle="Plus de 800 applications externes prêtes à être connectées à vos agents. Cliquez sur Connecter pour autoriser un service via OAuth sécurisé."
+            subtitle="Applications externes prêtes à être connectées à vos agents. Après OAuth, Gen3ia vérifie le compte avant de le considérer comme utilisable."
           >
             {catalogueVide ? (
               <p className="text-sm text-neutral-500">Le catalogue est momentanément indisponible. Réessayez dans quelques instants.</p>
