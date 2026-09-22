@@ -203,3 +203,29 @@ Stage Summary:
 - 6 moteurs communs opérationnels ; tout nouveau module est désormais une composition fine des moteurs.
 - Modules livrés : Landing Pages, Webinar→Contenus, Call Intelligence, Congés, Formations, Contrats, Onboarding, RGPD, Maintenance, Cashflow, Impayés, Automatisations.
 - Page d'accueil + chat Gen vérifiés en production (réponses réelles auth/visiteur).
+
+---
+Task ID: 16
+Agent: Super Z (principal)
+Task: Architecture à 3 espaces (Workspace / Développeur / Administration) — NavRegistry unique, composants structurants partagés, /studio recentré sur les Missions, vérification page d'accueil + chat Gen.
+
+Work Log:
+- NavRegistry unique typé (components/shells/nav-registry.ts) : toutes les routes des 3 espaces avec contexts (workspace/developer/admin), minRole, section, keywords ; navFor/navPrimaryFor/matchNavRoute/navCommandIndex filtrés par rôle.
+- Primitives partagées : SectionHeader (titre, description, action, fil d'Ariane auto), StatusBadge (mapping centralisé des statuts fr), ResourceList (lignes missions/clés/extensions/comptes), PermissionNotice + BackToWorkspace, EmptyState/LoadingState/MetricCard.
+- WorkspaceShell (barre primaire Missions/Créer/Résultats/Connexions/Équipe + barre outils Studio) branché dans app/studio/layout.tsx ; StudioSectionNav retiré du layout.
+- /studio = hub Missions : composer global (MissionComposer, ⌘+Entrée), groupes À valider / En cours / Brouillons / Historique (API /api/workspace/tasks), vue mission détaillée via ?taskId= (WorkspaceTaskPanel chargé en lazy).
+- /studio/create : composer avec 13 modèles de mission (lib/missions/templates.ts) — les 8 modules métier deviennent des modèles/filtres, retirés de la navigation permanente (nav-items.ts réécrit par-dessus le registre).
+- /studio/results : livrables du stockage permanent (téléchargement signé) + missions closes. /studio/connections : hub Composio (état vérifié) + services plateforme. /studio/agents : chat agent transféré depuis l'ancienne /studio.
+- /dashboard → page d'accueil légère : redirect serveur /studio ; liens "Accueil" (breadcrumbs, not-found, auth-client, developer layout) repeints vers /studio ; fil d'Ariane global dérivé du NavRegistry.
+- DeveloperShell : nav/header/sélecteur projet/états extraits du monolithe de 900 lignes ; DeveloperContext (projets, clés, extensions, revenus, connecteurs, outils, reload tolérant aux pannes) ; 7 vraies routes /developer/* (overview, projects, build, connectors, api, extensions, monitoring) ; barrière serveur conservée dans app/developer/layout.tsx.
+- AdminShell (bandeau d'élévation visible : rôle, contexte Administration, retour Workspace) + app/admin/layout.tsx (barrière serveur getPlatformAccess/canAdmin = source d'autorité) ; 6 pages : Vue plateforme, Utilisateurs et équipes, Extensions à revoir (reprise de la modération, restylée), Inventaire publicitaire (CRUD complet), Sécurité et audit (toolAuditLogs + demandes caméra), Observabilité.
+- 4 nouvelles API admin protégées requireAdmin : /api/admin/platform (compteurs Firestore tolérants aux pannes + missions par statut), /api/admin/users (comptes + équipes), /api/admin/security (audit outils, 80 dernières), /api/admin/observability (exécutions, usage IA agrégé).
+- CommandPalette alimentée par commandIndexForRole (config typée, filtration user/developer/admin) ; isAdmin ajouté dans app-nav.
+- Lint : 16 fichiers hérités corrigés (apostrophes JSX) + hook-order /studio/clients ; typecheck 0 erreur ; 287 tests vitest OK ; build OK (toutes routes présentes) ; smoke local 20/20.
+
+Stage Summary:
+- Production gen3ia.online = commit 5ea1b53, READY (auto-deploy Git).
+- 3 espaces opérationnels : Workspace (/studio Missions + composer + modèles métier), Développeur (7 onglets, shell partagé), Administration (6 pages, barrière serveur, 4 API dédiées).
+- /dashboard redirige vers /studio ; modules métier = modèles dans Créer (plus de 8 entrées de menu).
+- E2E vague 15 re-passé : TOUT VERT (accueil 200, chat Gen répond réellement, 10 modules, workflows événementiels, Redis OK).
+- Limites connues : /api/auth/access + Firebase claims restent la référence des rôles ; les pages admin gèrent le 403 gracieusement ; nav BUILD/Espaces hérités inchangés.
