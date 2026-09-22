@@ -85,3 +85,100 @@ Stage Summary:
   scripts/fixtures/live_frame_*.jpg/.b64.
 - Sécurité : token GitHub exclu du dépôt (push protection) ; rappeler la
   rotation de la clé Agnes transmise en clair (Task 12).
+
+---
+Task ID: 14
+Agent: Super Z (principal)
+Task: Commande utilisateur (FR) : ① configurer Redis (Upstash) et Qdrant dans
+le projet + variables Vercel env ; ② agent IA mise à l'arrêt pour tâche
+terminée (pause/reprise) ; ③ améliorer le terminal + système de simulation de
+code, utilisés par l'agent de code ; ④ agents IA accèdent aux services du
+projet pour exécuter les tâches ; ⑤ page Client ID (agent commercial
+personnalisé + lien client de conversation) ; ⑥ logos officiels des apps
+connecteurs ; ⑦ un agent utilise plusieurs connecteurs simultanément ; ⑧ chat
+IA « gen » isolé sur la page d'accueil ; ⑨ automatisation agents en
+arrière-plan ; ⑩ numéros virtuels dans les paramètres avec marge (5€→6€) ;
+⑪ Call App évoluée ; ⑫ passe qualité (aucun code de démonstration).
+
+Work Log:
+- Sandbox réinitialisé une fois en cours de route : repo re-cloné, npm ci,
+  reconfiguration Vercel CLI (token utilisateur). Environnements Vercel posés
+  sur les 3 cibles : UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN,
+  QDRANT_URL, QDRANT_API_KEY (vérifiés live : Redis PING/SET/GET,
+  Qdrant collections).
+- ① Redis/Qdrant : lib/cache/redis.ts (client @upstash/redis, cache-aside,
+  rateLimitDistributed INCR+PEXPIRE atomique avec repli local) ;
+  lib/memory/vector-store.ts (@qdrant/js-client-rest v1.19, collections
+  gen3ia_memories/gen3ia_knowledge, index payload keyword userId auto-réparés,
+  query API) ; route-guard couche 2 distribuée ; écritures miroir
+  Firestore→Qdrant dans saveMemory + indexKnowledgeDocument ; recherches
+  Qdrant-first avec repli cosine-Firestore ; catalogue intégrations en cache
+  Redis 10 min partagé. verify_redis_qdrant.mjs : 8/8 VERTS.
+- ② Pause/reprise : lib/agents/runtime/pause.ts (agentPauseControls,
+  PauseRequestedError), runner consulte la pause entre lots d'étapes → état
+  « paused » + checkpoint complet (travail payé conservé) ; workspace statut
+  paused, plan re-persisté à chaque exécution ; routes pause/resume (reprise
+  ACTIVE : lève la pause ET continue) ; UI workspace-task-panel.
+- ③ Terminal + simulation : lib/sandbox/simulation.ts — Node = VRAIE VM V8
+  restreinte (sans require/process/fs/net, timeout natif), Python/Shell =
+  analyse statique honnête ; runSandboxOrSimulation (sandbox Docker si
+  déployé, sinon simulation, mode TOUJOURS annoncé) ; outil code.simulate
+  (read, sans side-effect) ; routes /api/developer/terminal|simulation
+  (garde code-agent) ; UI /studio/console (Terminal + Simulation).
+- ④ Services du projet : lib/agents/services/bridge.ts (catalogue
+  documents/fichiers/ZIP/recherche/mémoire/knowledge/code/connecteurs/MCP/
+  messagerie/email) ; PROJECT_SERVICE_TOOLS injectés dans les politiques de
+  mission ; nouvel outil knowledge.search ; catalogue injecté au
+  planificateur de /api/agent/chat.
+- ⑤ Commercial/Client ID : lib/agents/commercial.ts (fiche entreprise
+  complète, slug rotatif, prompt commercial avec interdictions, transcript +
+  leads) ; /api/commercial + /api/public/commercial/[slug] (quota Redis
+  distribué 12/5min IP+slug, outils lectures sûres, facturation
+  propriétaire) ; UI /studio/clients (fiche + lien client copiable + transcript)
+  et /client/c/[slug] (salon client mobile-first, capture lead discrète).
+- ⑥ Logos : composant AppLogo (URL Composio, repli initiales) sur catalogue
+  ET connexions actives de /integrations (8/8 logos vérifiés en prod).
+- ⑦ Multi-connecteurs : plafond auto-découverte 8→16 + consigne de
+  COMBINAISON de connecteurs dans un même plan (étapes indépendantes en
+  parallèle via le scheduler DAG).
+- ⑧ Chat Gen : lib/gen/chat.ts — surface ISOLÉE par construction (aucun
+  AgentRuntime/executeToolSecurely), réponses visiteurs + UNE tâche simple via
+  UN connecteur utilisateur en LECTURE stricte (allowlist slug après retrait
+  du toolkit + interdit global), collections dédiées genChatConversations,
+  quota Redis (6/5min IP anonyme, 20/5min connecté) ; POST /api/gen/chat ;
+  widget flottant sur la vitrine.
+- ⑨ Automatisation arrière-plan : scheduler suspend les planifications d'un
+  agent paused/archived ; route cron pilote aussi renouvellements numéros.
+- ⑩ Numéros virtuels : lib/voice/pricing.ts (API Pricing Twilio cache Redis
+  24h, marge GEN3IA_NUMBER_MARKUP_BPS défaut 2000 = 20 % arrondie au cent
+  supérieur — 5,00→6,00 USD/mois) ; achat débité au prix margé avec metadata
+  transparentes + nextRenewalAt ; lib/voice/renewals.ts (renouvellement
+  mensuel idempotent, grâce 7 j, libération 30 j, réactivation après
+  recharge) ; UI /settings/numbers.
+- ⑪ Call App : listPhoneCallSessions ; GET/POST /api/voice/calls ;
+  POST /api/voice/calls/[id]/summary (résumé IA facturé + cache) ; UI
+  /studio/calls (lancement, suivi live polling 4 s, transcript, résumé) ;
+  nav Studio enrichie (Clients ID, Appels, Console).
+- ⑫ Qualité : typecheck 0 erreur ; vitest 250/250 (3 cycles) ; build OK ;
+  15 nouveaux fichiers testés (redis 17, vector-store 11, pause 7,
+  simulation 9, commercial 4, gen 3) ; build production vérifié avec toutes
+  les nouvelles routes.
+- INCIDENT DÉPLOIEMENT : b89788b→3987c23 jamais déployés par Git — le cron
+  */5 * * * * est refusé par le plan Hobby Vercel. Corrigé (retour à
+  0 6 * * *, granularité temps réel couverte par les webhooks always-on),
+  redeploy CLI puis auto-deploy Git restauré (7a1e7927 READY).
+- E2E PRODUCTION (scripts/e2e_wave14_prod.mjs) : 10/10 VERTS — infra
+  (redis.ping=true, qdrant=true), création agent + fiche commerciale, salon
+  client public avec réponse EXACTE au prix de la fiche (15 €), Gen
+  authentifié + anonyme, catalogue 8/8 logos via cache Redis.
+
+Stage Summary:
+- Production gen3ia.online = commit 7a1e7927, READY (auto-deploy Git OK).
+- Redis + Qdrant opérationnels en production (rate limit distribué, cache
+  partagé, recherche vectorielle managée avec replis).
+- Agents : pause/reprise, services du projet, multi-connecteurs, terminal +
+  simulation pour l'agent de code.
+- Nouvelles surfaces : /studio/clients (Client ID) + /client/c/[slug],
+  /studio/console, /studio/calls, /settings/numbers, chat Gen sur la vitrine.
+- Sécurité : clés transmises en clair dans le chat (Upstash, Qdrant, plus
+  tôt Agnes/GitHub) → recommander la rotation ; salons publics quota Redis.
