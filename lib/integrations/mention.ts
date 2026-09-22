@@ -1,6 +1,6 @@
 import "server-only";
 
-import { CONNECTIONS_CATALOG, getCatalogEntry, type ConnectionCategory } from "./composio/connections";
+import { getCatalogEntry, type ConnectionCategory } from "./composio/connections";
 import { getComposioTools } from "./composio/tools";
 
 /**
