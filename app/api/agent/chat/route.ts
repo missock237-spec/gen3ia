@@ -99,8 +99,9 @@ function planPolicyForAgent(agent: AgentRecord, plan: RuntimePlan): ExecutionPol
 
 /**
  * Politique effective d'une mission agent. Les connecteurs ouverts :
- *  - activés via « @ » (intentions explicites, même non connectés) ;
+ *  - activés via « @ » lorsqu'ils sont déjà connectés et vérifiés ;
  *  - OU détectés automatiquement au statut « connecté » sur le compte.
+ * Une sélection client d'un toolkit non connecté est systématiquement ignorée.
  * Reste soumis aux approvals pour les actions à effet externe.
  */
 function policyForAgentMission(agent: AgentRecord, plan: RuntimePlan, activatedConnectors: string[], connectedToolkits: string[] = []): ExecutionPolicy {
@@ -261,12 +262,15 @@ export async function POST(request: NextRequest) {
       // automatiquement ; le sélecteur « @ » reste prioritaire (intentions
       // explicites, y compris pour un toolkit pas encore connecté).
       const connected = await connectedPromise;
-      const activatedConnectors = body.activatedConnectors ?? [];
-      const extraActivated = activatedConnectors.filter((toolkit) => !connected.toolkits.includes(toolkit));
-      const connectorsNote = [
-        connected.note,
-        extraActivated.length > 0 ? await describeConnectorsForPrompt(user.uid, extraActivated) : undefined,
-      ].filter(Boolean).join("\n\n") || undefined;
+      // Défense serveur : une sélection envoyée par le client n'accorde aucun
+      // accès. Seuls les toolkits déjà vérifiés/connectés sont retenus.
+      const requestedConnectors = body.activatedConnectors ?? [];
+      const activatedConnectors = requestedConnectors.filter((toolkit) => connected.toolkits.includes(toolkit));
+      const rejectedConnectors = requestedConnectors.filter((toolkit) => !connected.toolkits.includes(toolkit));
+      const selectedNote = activatedConnectors.length > 0
+        ? await describeConnectorsForPrompt(user.uid, activatedConnectors)
+        : undefined;
+      const connectorsNote = [connected.note, selectedNote].filter(Boolean).join("\n\n") || undefined;
       // Services du projet : catalogue injecté pour que le planificateur
       // sache quels services (documents, fichiers, recherche, mémoire…)
       // sont utilisables et comment les nommer.
