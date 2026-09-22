@@ -7,6 +7,7 @@ import { RuntimeExecutionState, RuntimePlan, RuntimeStep } from "./types";
 import { createCheckpoint, saveCheckpoint } from "./checkpoint";
 import { getReadySteps, validateDAG } from "./dag";
 import { RuntimeScheduler } from "./scheduler";
+import { assertNotPaused } from "./pause";
 
 /**
  * Configuration d'un agent personnalise du Studio. Injectee dans chaque step
@@ -76,6 +77,7 @@ export class AgentRuntime {
     try {
       while (this.state.iteration < this.state.plan.maxIterations) {
         this.throwIfCancelled();
+        await this.throwIfPaused();
         this.assertExecutionBudget();
         this.state.iteration++;
         const completed = this.getCompletedSteps();
@@ -91,12 +93,25 @@ export class AgentRuntime {
       await this.persistCheckpoint();
       return this.state;
     } catch (error) {
+      if (error instanceof Error && error.name === "PauseRequestedError") {
+        // Pause propre : le travail déjà payé est conservé (étapes
+        // complétées + outputs), les étapes restantes restent "pending" —
+        // la reprise ré-exécute le même plan et saute le terminé.
+        this.state.status = "paused";
+        await this.persistCheckpoint();
+        return this.state;
+      }
       this.state.status = this.signal?.aborted ? "cancelled" : "failed";
       this.state.error = error instanceof Error ? error.message : String(error);
       this.state.completedAt = new Date().toISOString();
       await this.persistCheckpoint();
       throw error;
     }
+  }
+
+  /** Consulte le contrôle de pause (tolérant aux pannes Firestore). */
+  private async throwIfPaused(): Promise<void> {
+    await assertNotPaused(this.state.executionId);
   }
 
   private async executeStep(step: RuntimeStep): Promise<void> {

@@ -7,7 +7,7 @@ import { RuntimePlanSchema, validateDAG, type RuntimePlan, type RuntimeStep } fr
 type WorkspaceTask = {
   id: string;
   objective: string;
-  status: "draft" | "awaiting_approval" | "approved" | "running" | "completed" | "failed" | "cancelled";
+  status: "draft" | "awaiting_approval" | "approved" | "running" | "completed" | "failed" | "cancelled" | "paused";
   plan?: RuntimePlan;
   createdAt: number;
   updatedAt: number;
@@ -22,6 +22,7 @@ const STATUS: Record<string, string> = {
   completed: "Terminée",
   failed: "Échec",
   cancelled: "Annulée",
+  paused: "En pause",
 };
 
 const STEP_TYPES = ["llm", "tool", "research", "document", "media", "code", "condition"] as const;
@@ -273,6 +274,39 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
     }
   }
 
+  async function pauseTask() {
+    if (!task || busy || task.status !== "running") return;
+    setBusy(true); setError("");
+    try {
+      const response = await authFetch("/api/workspace/tasks/" + encodeURIComponent(task.id) + "/pause", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason: "Pause demandée depuis le workspace" }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Pause impossible.");
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : "Pause impossible."); }
+    finally { setBusy(false); }
+  }
+
+  async function resumeTask() {
+    if (!task || busy || task.status !== "paused") return;
+    setBusy(true); setError(""); setExecutionResult(null);
+    try {
+      // Reprise active : la pause est levée ET l'exécution continue
+      // immédiatement (les étapes déjà terminées sont sautées).
+      const response = await authFetch("/api/workspace/tasks/" + encodeURIComponent(task.id) + "/resume", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ continue: true }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Reprise impossible.");
+      setExecutionResult({ status: data.status ?? "resumed", outputs: data.outputs, observations: data.observations });
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : "Reprise impossible."); await load(); }
+    finally { setBusy(false); }
+  }
+
   if (loading) return <section className="g3-workspace-task"><div className="g3-workspace-task-loading">Chargement du plan...</div></section>;
   if (error && !task) return <section className="g3-workspace-task"><div className="g3-workspace-task-error">{error}<button type="button" onClick={() => void load()}>Réessayer</button></div></section>;
   if (!task) return null;
@@ -303,6 +337,16 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
           {task.status === "approved" && (
             <button type="button" disabled={busy} onClick={() => void executeTask()} className="g3-workspace-task-approve">
               {busy ? "Exécution..." : "Exécuter la tâche"}
+            </button>
+          )}
+          {task.status === "running" && (
+            <button type="button" disabled={busy} onClick={() => void pauseTask()} className="g3-workspace-task-pause">
+              {busy ? "Pause..." : "Mettre en pause"}
+            </button>
+          )}
+          {task.status === "paused" && (
+            <button type="button" disabled={busy} onClick={() => void resumeTask()} className="g3-workspace-task-approve">
+              {busy ? "Reprise..." : "Reprendre l'exécution"}
             </button>
           )}
         </div>
@@ -336,7 +380,7 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
       <div className="g3-workspace-task-flow">
         <span className="is-active">1. Plan</span><span>→</span>
         <span className={task.status !== "awaiting_approval" && task.status !== "draft" ? "is-active" : ""}>2. Autorisation</span><span>→</span>
-        <span className={task.status === "running" || task.status === "completed" ? "is-active" : ""}>3. Exécution</span><span>→</span>
+        <span className={task.status === "running" || task.status === "completed" || task.status === "paused" ? "is-active" : ""}>3. Exécution</span><span>→</span>
         <span className={task.status === "completed" ? "is-active" : ""}>4. Vérification</span>
       </div>
 
@@ -410,6 +454,8 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
 
       {task.status === "awaiting_approval" && <p className="g3-workspace-task-note">Le plan est visible avant toute exécution. Les actions sensibles restent protégées par les politiques d’autorisation.</p>}
       {task.status === "approved" && <p className="g3-workspace-task-note">Plan approuvé. L’exécution utilise le runtime sécurisé Gen3ia et ses politiques d’outils.</p>}
+      {task.status === "running" && <p className="g3-workspace-task-note">Exécution en cours. La pause prend effet entre deux étapes — le travail déjà réalisé est conservé.</p>}
+      {task.status === "paused" && <p className="g3-workspace-task-note">Tâche en pause. La reprise continue aux étapes restantes, sans re-payer les étapes terminées.</p>}
       {executionResult && (
         <div className="g3-workspace-task-execution-result">
           <strong>Résultat d’exécution · {executionResult.status}</strong>

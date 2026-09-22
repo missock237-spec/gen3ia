@@ -1,29 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { rateLimit } from "@/lib/security/rate-limit";
+import { resumeWorkspaceTask } from "@/lib/agents/workspace";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
-import { getWorkspaceTask } from "@/lib/agents/workspace";
 import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 
-const BodySchema = z.object({}).optional();
-
+/**
+ * Reprise d'une tâche en pause.
+ *
+ * Par défaut, la reprise est ACTIVE : le contrôle de pause est levé puis
+ * l'exécution continue immédiatement (le plan persisté conserve les étapes
+ * complétées — le planificateur DAG saute le terminé et reprend les étapes
+ * restantes). `continue: false` se contente de lever la pause (reprise
+ * manuelle via la route d'exécution habituelle).
+ */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-  const user = await requireUser(request);
-  const { id } = await params;
-  const limit = rateLimit(`workspace-execute:${user.uid}`, { limit: 6, windowMs: 5 * 60 * 1000 });
-  if (!limit.allowed) return NextResponse.json({ error: "Trop d'exécutions rapprochées. Réessayez dans quelques minutes." }, { status: 429 });
+    const user = await requireUser(request);
+    const { id } = await params;
+    const limit = rateLimit(`workspace-resume:${user.uid}`, { limit: 12, windowMs: 5 * 60 * 1000 });
+    if (!limit.allowed) return NextResponse.json({ error: "Trop de reprises rapprochées. Réessayez dans quelques minutes." }, { status: 429 });
 
-  try {
-    BodySchema.parse(await request.json().catch(() => ({})));
-    const task = await getWorkspaceTask(user.uid, id);
-    if (task.status !== "approved") {
-      return NextResponse.json({ error: "La tâche doit être approuvée avant son exécution." }, { status: 409 });
+    const body = await request.json().catch(() => ({}));
+    const continueExecution = body?.continue !== false;
+
+    const task = await resumeWorkspaceTask(user.uid, id);
+
+    if (!continueExecution) {
+      return NextResponse.json({
+        success: true,
+        task,
+        message: "Pause levée : relancez l'exécution pour continuer les étapes restantes.",
+      });
     }
+
     if (!task.plan) return NextResponse.json({ error: "La tâche ne possède aucun plan exécutable." }, { status: 409 });
 
     const taskRef = adminDb.collection("agentWorkspaceTasks").doc(id);
@@ -34,7 +47,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       tx.update(taskRef, { status: "running", updatedAt: FieldValue.serverTimestamp() });
       return true;
     });
-    if (!claimed) return NextResponse.json({ error: "Cette tâche est déjà en cours ou n'est plus approuvée." }, { status: 409 });
+    if (!claimed) return NextResponse.json({ error: "La tâche n'est plus reprenable (état modifié entre-temps)." }, { status: 409 });
 
     try {
       const runtime = new AgentRuntime({
@@ -45,8 +58,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         signal: request.signal,
       });
       const state = await runtime.run();
-      // Le plan (avec les statuts d'étapes mis à jour) est re-persisté : une
-      // reprise après pause ré-exécute le même plan et saute le terminé.
       await taskRef.update({
         plan: state.plan,
         status: state.status === "completed" ? "completed" : state.status === "paused" ? "paused" : "failed",
@@ -66,14 +77,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       throw error;
     }
   } catch (error) {
-    // Erreurs métier (tâche non approuvée, plan manquant, "Task not found") :
-    // statut 4xx précis plutôt qu'un 500 générique.
-    if (error instanceof Error && /Task not found|doit être approuvée|aucun plan/i.test(error.message)) {
+    if (error instanceof Error && /Task not found|peut être reprise/i.test(error.message)) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
-    throw error;
-  }
-  } catch (error) {
-    return NextResponse.json(errorBody(error, "Execution impossible."), { status: errorStatus(error) });
+    return NextResponse.json(errorBody(error, "Reprise impossible."), { status: errorStatus(error) });
   }
 }

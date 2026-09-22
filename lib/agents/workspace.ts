@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import { createAgentPlan } from "@/lib/agents/planner/service";
 import type { RuntimePlan } from "@/lib/agents/runtime";
+import { clearExecutionPause, requestExecutionPause } from "@/lib/agents/runtime/pause";
 
-export type WorkspaceTaskStatus = "draft"|"awaiting_approval"|"approved"|"running"|"completed"|"failed"|"cancelled";
+export type WorkspaceTaskStatus = "draft"|"awaiting_approval"|"approved"|"running"|"completed"|"failed"|"cancelled"|"paused";
 export interface WorkspaceTask { id:string; ownerId:string; objective:string; status:WorkspaceTaskStatus; plan?:RuntimePlan; parentTaskId?:string; activeBranchId:string; createdAt:number; updatedAt:number; approvedAt?:number; completedAt?:number; }
 function assertOwner(ownerId:string){if(!ownerId?.trim()) throw new Error("ownerId is required.");}
 function ms(v:unknown){return v instanceof Timestamp?v.toMillis():typeof v==="number"?v:Date.now();}
@@ -52,3 +53,39 @@ export async function switchWorkspaceBranch(ownerId:string,taskId:string,branchI
 
 export async function rollbackTask(ownerId:string,taskId:string,snapshotId:string){const task=await getWorkspaceTask(ownerId,taskId);const snap=await adminDb.collection(SNAPSHOTS).doc(snapshotId).get();if(!snap.exists||snap.get("ownerId")!==ownerId||snap.get("taskId")!==taskId)throw new Error("Snapshot not found.");const state=snap.get("state") as {plan?:RuntimePlan;status?:WorkspaceTaskStatus}|undefined;await adminDb.collection(TASKS).doc(taskId).update({plan:state?.plan??task.plan,status:state?.status==="running"?"approved":state?.status??"approved",updatedAt:FieldValue.serverTimestamp()});return getWorkspaceTask(ownerId,taskId);}
 export async function snapshotWorkspaceTask(ownerId:string,taskId:string,state:Record<string,unknown>){const task=await getWorkspaceTask(ownerId,taskId);const id=randomUUID();await adminDb.collection(SNAPSHOTS).doc(id).create({ownerId,taskId,branchId:task.activeBranchId,state,createdAt:FieldValue.serverTimestamp()});return id;}
+
+/**
+ * Pause d'une tâche workspace en cours d'exécution.
+ *
+ * Mécanisme : le runtime consulte un contrôle de pause (agentPauseControls)
+ * entre chaque lot d'étapes — à la première consultation, il s'arrête
+ * proprement, conserve les étapes déjà payées et retourne un état "paused".
+ * L'executionId courant est lu sur la tâche (persisté à la revendication
+ * d'exécution) ; sans exécution en cours, la pause est refusée.
+ */
+export async function pauseWorkspaceTask(ownerId:string,taskId:string,reason?:string){
+  const task=await getWorkspaceTask(ownerId,taskId);
+  if(task.status!=="running") throw new Error("Seule une tâche en cours d'exécution peut être mise en pause.");
+  const executionId=task.plan?.executionId;
+  if(!executionId) throw new Error("Aucune exécution active identifiable pour cette tâche.");
+  await requestExecutionPause({userId:ownerId,executionId,taskId,reason});
+  await adminDb.collection(TASKS).doc(taskId).update({pauseRequested:true,...(reason?{pauseReason:reason.slice(0,500)}:{}),updatedAt:FieldValue.serverTimestamp()});
+  return getWorkspaceTask(ownerId,taskId);
+}
+
+/**
+ * Reprise d'une tâche en pause : supprime le contrôle de pause. La reprise
+ * effective se fait via la route d'exécution habituelle (le plan persisté
+ * conserve les étapes complétées — le planificateur DAG saute le terminé
+ * et reprend les étapes restantes).
+ */
+export async function resumeWorkspaceTask(ownerId:string,taskId:string){
+  const task=await getWorkspaceTask(ownerId,taskId);
+  if(task.status!=="paused") throw new Error("Seule une tâche en pause peut être reprise.");
+  const executionId=task.plan?.executionId;
+  if(executionId){
+    try { await clearExecutionPause(ownerId,executionId); } catch { /* contrôle déjà absent : rien à lever */ }
+  }
+  await adminDb.collection(TASKS).doc(taskId).update({status:"approved",pauseRequested:FieldValue.delete(),pauseReason:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp()});
+  return getWorkspaceTask(ownerId,taskId);
+}

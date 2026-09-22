@@ -31,7 +31,7 @@ export interface RuntimeBillingState {
 }
 export interface RuntimeExecutionState {
   executionId: string; userId: string; objective: string; conversationId?: string;
-  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  status: "pending" | "running" | "completed" | "failed" | "cancelled" | "paused";
   plan: RuntimePlan; observations: RuntimeObservation[]; evaluations: RuntimeEvaluation[];
   outputs: Record<string, unknown>; iteration: number; totalRetries: number; maxTotalRetries: number;
   billing: RuntimeBillingState;
