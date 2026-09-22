@@ -202,3 +202,16 @@ export async function createInboundPhoneCallSession(params: {
   await adminDb.collection(COLLECTION).doc(id).set(session);
   return session;
 }
+
+/** Liste les sessions d'appel de l'utilisateur (Call App, plus récentes d'abord). */
+export async function listPhoneCallSessions(userId: string, agentId?: string, limit = 30) {
+  const snapshot = await adminDb
+    .collection(COLLECTION)
+    .where("userId", "==", userId)
+    .orderBy("createdAt", "desc")
+    .limit(Math.min(100, limit))
+    .get();
+  return snapshot.docs
+    .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<PhoneCallSession, "id">) }))
+    .filter((session) => !agentId || session.agentId === agentId);
+}
