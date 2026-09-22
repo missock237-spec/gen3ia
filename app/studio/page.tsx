@@ -51,15 +51,7 @@ export default function StudioPage() {
         }
       />
 
-      <AnimatedTabs
-        ariaLabel="Sections du studio"
-        active={tab}
-        onChange={switchTab}
-        tabs={[
-          { key: "agents", label: "🤖 Mes agents" },
-          { key: "ads", label: "📣 Studio Ads" },
-        ]}
-      />
+
 
       <div role="tabpanel" aria-label="Mes agents" className="space-y-6">
         {hydrated && (taskId ? <WorkspaceTaskPanel taskId={taskId} /> : <AgentChatWorkshop initialMessage={task} />)}
