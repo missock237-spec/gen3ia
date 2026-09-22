@@ -37,6 +37,15 @@ const BASE_TOOLS_BY_LEVEL: Record<AgentSecurityLevel, string[]> = {
   admin: ["*"],
 };
 
+/**
+ * Outils d'exécution exclusifs aux agents de type "code" : terminal isolé,
+ * exécution sandbox et simulation de code. Ajoutés à la whitelist du niveau
+ * power (leur niveau) SAUF si la persona désactive l'exécution de code —
+ * l'agent de code doit pouvoir, de sa propre initiative, exécuter ou
+ * simuler le code qu'il produit (terminal, vérification, débogage).
+ */
+const CODE_AGENT_TOOLS = ["terminal.execute", "code.execute", "code.simulate"];
+
 export function securityLevelForAgent(agent: AgentRecord): AgentSecurityLevel {
   return AGENT_TYPE_META[agent.type]?.securityLevel ?? "standard";
 }
@@ -58,12 +67,17 @@ export function policyForAgent(agent: AgentRecord): ExecutionPolicy {
     if (caps?.fileGeneration === false && tool === "artifact.create") return false;
     return true;
   });
+  // Les agents de code reçoivent en plus le terminal isolé et la simulation :
+  // retirés si la persona coupe l'exécution de code.
+  if (agent.type === "code" && caps?.codeExecution !== false) {
+    for (const tool of CODE_AGENT_TOOLS) allowed.push(tool);
+  }
   return {
     ...base,
     // Les outils declares par le proprietaire s'ajoutent a la whitelist de son
     // niveau. Ils restent soumis aux garde-fous (authorizeTool, approval,
     // metering) dans executeToolSecurely.
-    allowedTools: allowed,
+    allowedTools: Array.from(new Set(allowed)),
   };
 }
 
@@ -106,7 +120,10 @@ export function createPersonalizedPlan(agent: AgentRecord, objective: string, ex
       id: "deliver_result",
       type: "llm",
       name: "Execution de la mission",
-      description: objective,
+      description:
+        agent.type === "code"
+          ? `${objective}\n\nConsignes d'agent de code : produis un code complet et prêt à exécuter. Utilise le terminal isolé (terminal.execute) pour explorer et vérifier, et code.simulate pour valider tout extrait de code sensible sans effet externe. Announce clairement le mode d'exécution utilisé.`
+          : objective,
       agentRole: role,
       ...(steps.length > 0 ? { dependencies: [steps[0].id] } : {}),
     }),

@@ -7,7 +7,7 @@ import { assertExecutionNotStopped } from "@/lib/security/emergency-stop";
 import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
 import { claimExecutionIdempotency, completeExecutionIdempotency, failExecutionIdempotency } from "@/lib/security/execution-idempotency";
 import { assertExecutionInputSize, assertOutputSize } from "./execution-limits";
-import { executeSandbox } from "@/lib/sandbox/client";
+import { runSandboxOrSimulation, simulateSandboxJob } from "@/lib/sandbox/simulation";
 import type { SandboxRuntime, SandboxLimits } from "@/lib/sandbox/types";
 import { executeAgentTerminal } from "./agent-terminal";
 import { recall, remember } from "@/lib/memory/user-memory";
@@ -127,7 +127,13 @@ export async function executeToolSecurely(options: SecureToolExecutionOptions): 
       result = await requestCameraCapture({ userId: options.userId, executionId: options.executionId, agentId: typeof options.input.agentId === "string" ? options.input.agentId : undefined, reason: options.input.reason, facingMode: options.input.facingMode === "user" ? "user" : "environment" });
     } else if (options.toolName === "code.execute") {
       const sandbox = parseSandboxInput(options.input);
-      result = await executeSandbox({ executionId: options.executionId, userId: options.userId, runtime: sandbox.runtime, code: sandbox.code, input: sandbox.input, limits: sandbox.limits, network: "none" });
+      // Sandbox Docker si déployé, sinon simulation intégrée (VM node
+      // restreinte / analyse statique) — le mode réel est rapporté.
+      result = await runSandboxOrSimulation({ executionId: options.executionId, userId: options.userId, runtime: sandbox.runtime, code: sandbox.code, input: sandbox.input, limits: sandbox.limits, network: "none" });
+    } else if (options.toolName === "code.simulate") {
+      const sandbox = parseSandboxInput(options.input);
+      // Simulation pure (aucune exécution réelle, aucun effet externe).
+      result = await simulateSandboxJob({ executionId: options.executionId, userId: options.userId, runtime: sandbox.runtime, code: sandbox.code, input: sandbox.input, limits: sandbox.limits, network: "none" });
     } else if (isExtensionToolName(options.toolName)) {
       // Declarative extension tool: runs through the Extension Runtime
  // pipeline (entitlement, quotas, rate limit, permission engine, SSRF

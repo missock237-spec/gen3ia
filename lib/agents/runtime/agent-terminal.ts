@@ -1,4 +1,4 @@
-import { executeSandbox } from "@/lib/sandbox/client";
+import { runSandboxOrSimulation } from "@/lib/sandbox/simulation";
 import type { SandboxLimits } from "@/lib/sandbox/types";
 
 const MAX_COMMAND_LENGTH = 50_000;
@@ -33,5 +33,7 @@ export async function executeAgentTerminal(params: AgentTerminalRequest) {
   const cwd = params.cwd ?? WORKSPACE_ROOT;
   assertWorkspaceCwd(cwd);
   const limits: SandboxLimits = { timeoutMs: Math.min(Math.max(params.timeoutMs ?? 30_000, 100), 120_000), memoryMb: Math.min(Math.max(params.memoryMb ?? 512, 64), 2_048), cpu: 1, maxOutputBytes: MAX_OUTPUT_BYTES };
-  return executeSandbox({ executionId: params.executionId, userId: params.userId, runtime: "shell", code: params.command, input: { cwd }, limits, network: "none" });
+  // Terminal : sandbox Docker si déployé, sinon dry-run simulé — le mode
+  // est annoncé dans le résultat (aucune prétention d'exécution réelle).
+  return runSandboxOrSimulation({ executionId: params.executionId, userId: params.userId, runtime: "shell", code: params.command, input: { cwd }, limits, network: "none" });
 }

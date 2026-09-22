@@ -54,6 +54,7 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "voice.list", description: "List available voice profiles.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "phone.call", description: "Place a bounded outbound AI phone call.", risk: "external", permission: "tool.external", sideEffect: true },
   { name: "code.execute", description: "Execute code in the isolated sandbox.", risk: "external", permission: "code.execute", sideEffect: true },
+  { name: "code.simulate", description: "Simulate code execution without side effects (VM restreinte Node, analyse statique Python/shell) et retourne le mode réel utilisé.", risk: "read", permission: "code.execute", sideEffect: false },
   { name: "composio.execute", description: "Execute an authorized external action.", risk: "external", permission: "tool.external", sideEffect: true },
   { name: "mcp.call", description: "Execute a tool exposed by one of the user's connected MCP servers (Google Drive, GitHub, databases, etc.) using { serverId, tool, args }.", risk: "external", permission: "tool.external", sideEffect: true },
   { name: "messaging.send", description: "Send a WhatsApp, Telegram or Slack message from the agent.", risk: "external", permission: "tool.external", sideEffect: true },
