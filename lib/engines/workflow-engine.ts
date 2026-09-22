@@ -435,15 +435,18 @@ export async function runWorkflow(options: {
  * avec plafond (10 workflows max par événement).
  */
 export async function dispatchEvent(input: BusinessEventInput): Promise<{ dispatched: number }> {
+  // Requête volontairement mono-champ (userId) : une double égalité
+  // userId+enabled exigerait un index composite Firestore ; on filtre
+  // enabled/eventType en mémoire pour rester robuste sans provisioning.
   const snap = await adminDb
     .collection(WORKFLOW_COLLECTION)
     .where("userId", "==", input.userId)
-    .where("enabled", "==", true)
-    .limit(50)
+    .limit(100)
     .get();
 
   const candidates = snap.docs
     .map((doc) => doc.data() as BusinessWorkflow)
+    .filter((wf) => wf.enabled === true)
     .filter((wf) => wf.trigger.type === "event" && wf.trigger.eventType === (input.eventType as BusinessEventType))
     .slice(0, 10);
 
