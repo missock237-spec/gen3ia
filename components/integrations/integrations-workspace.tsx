@@ -221,6 +221,7 @@ export function IntegrationsWorkspace() {
           category: String(entry.category ?? "other"),
           status: String(entry.status ?? ""),
           enabled: entry.enabled !== false,
+          verified: entry.verified === true,
         })));
       }
       if (webhooksRes.status === "fulfilled" && webhooksRes.value.ok) {
