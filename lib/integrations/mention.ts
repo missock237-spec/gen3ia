@@ -62,7 +62,7 @@ export async function listMentionConnectors(userId: string, search?: string): Pr
 const MAX_ACTIONS_PER_TOOLKIT = 12;
 
 /** Nombre maximal de connecteurs injectés automatiquement dans un chat agent. */
-const MAX_AUTO_TOOLKITS = 8;
+const MAX_AUTO_TOOLKITS = 16;
 
 export interface ConnectedConnectorsContext {
   /** Slugs des toolkits réellement connectés (status ACTIVE + enabled). */
@@ -150,6 +150,7 @@ export async function describeConnectedConnectorsForPrompt(userId: string, budge
       note: [
         "[Connecteurs connectés de l'utilisateur (disponibles automatiquement) :",
         ...lines,
+        "MULTI-CONNECTEURS : tu peux COMBINER PLUSIEURS connecteurs dans un même plan — ex. lire un email (gmail) puis créer une ligne de suivi (notion), ou chercher un contact (crm) puis poster un message (slack). Crée autant d'étapes composio.execute que nécessaire ; les étapes indépendantes s'exécutent en parallèle.",
         "Pour agir sur ces applications, utilise l'outil composio.execute avec un toolSlug exact d'une action listée et les arguments attendus. Toute action à effet externe restera soumise à validation avant exécution. Si une action requiert une connexion inexistante ou échoue, dis-le clairement au lieu d'inventer un résultat.]",
       ].join("\n"),
     };

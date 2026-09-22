@@ -10,6 +10,42 @@ interface CatalogEntry {
   description: string;
   category: string;
   auth: string;
+  /** Logo officiel de l'app (hébergé par Composio), ou null. */
+  logo: string | null;
+}
+
+/**
+ * Logo officiel d'une app connecteur — avec repli élégant sur les initiales
+ * quand l'URL est absente ou en échec de chargement (jamais d'icône cassée).
+ */
+function AppLogo({ entry, size = 36 }: { entry: { toolkit: string; label: string; logo?: string | null }; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  const initials = entry.label.slice(0, 2).toUpperCase();
+  if (!entry.logo || failed) {
+    return (
+      <span
+        aria-hidden
+        className="flex shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-100 to-indigo-100 text-[11px] font-black text-indigo-700"
+        style={{ width: size, height: size }}
+      >
+        {initials}
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- URL d'icône Composio externe, dimensions fixes
+    <img
+      src={entry.logo}
+      alt=""
+      width={size}
+      height={size}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      className="shrink-0 rounded-lg bg-white object-contain"
+      style={{ width: size, height: size }}
+    />
+  );
 }
 
 /**
@@ -34,6 +70,7 @@ function versCatalogue(value: unknown): CatalogEntry[] {
       description: String(entry.description ?? ""),
       category: String(entry.category ?? "other"),
       auth: String(entry.auth ?? "oauth"),
+      logo: typeof entry.logo === "string" && /^https:\/\//.test(entry.logo) ? entry.logo : null,
     }))
     .filter((entry) => entry.toolkit);
 }
@@ -283,6 +320,15 @@ export function IntegrationsWorkspace() {
     return groups;
   }, [searchedCatalog]);
 
+  /** toolkit → logo officiel : sert la liste des connexions actives. */
+  const catalogLogoByToolkit = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of catalog) {
+      if (entry.logo) map.set(entry.toolkit, entry.logo);
+    }
+    return map;
+  }, [catalog]);
+
   async function connect(toolkit: string) {
     setConnecting(toolkit);
     setError("");
@@ -461,9 +507,12 @@ export function IntegrationsWorkspace() {
               <ul className="grid gap-3 sm:grid-cols-2">
                 {connections.map((connection) => (
                   <li key={connection.id} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{connection.label}</p>
-                      <p className="text-xs text-neutral-500">{CATEGORY_LABELS[connection.category] ?? connection.category} · {connection.status}</p>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <AppLogo entry={{ toolkit: connection.toolkit, label: connection.label, logo: catalogLogoByToolkit.get(connection.toolkit) ?? null }} size={32} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{connection.label}</p>
+                        <p className="text-xs text-neutral-500">{CATEGORY_LABELS[connection.category] ?? connection.category} · {connection.status}</p>
+                      </div>
                     </div>
                     <button type="button" onClick={() => revoke(connection.id)} className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-100">
                       Révoquer
@@ -540,11 +589,17 @@ export function IntegrationsWorkspace() {
                     {entries.map((entry) => (
                       <li key={entry.toolkit} className="flex flex-col justify-between rounded-xl border border-neutral-200 p-4">
                         <div>
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-semibold">{entry.label}</p>
-                            {connectedToolkits.has(entry.toolkit) ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Connecté</span> : null}
+                          <div className="flex items-center gap-3">
+                            <AppLogo entry={entry} />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="truncate text-sm font-semibold">{entry.label}</p>
+                                {connectedToolkits.has(entry.toolkit) ? <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Connecté</span> : null}
+                              </div>
+                              <p className="text-xs text-neutral-400">{entry.toolkit}</p>
+                            </div>
                           </div>
-                          <p className="mt-1 text-xs text-neutral-500">{entry.description}</p>
+                          <p className="mt-2 text-xs text-neutral-500">{entry.description}</p>
                         </div>
                         <button
                           type="button"
