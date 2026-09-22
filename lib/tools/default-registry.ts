@@ -1,6 +1,7 @@
 import { ToolRegistry } from "./registry";
 import { webSearchTool } from "./web/search";
 import { webOpenTool } from "./web/open";
+import { knowledgeSearchTool } from "./knowledge/search";
 import { getArtifactTool } from "./files/get-artifact";
 import { createArtifactTool } from "./files/create-artifact";
 import { createFileTool } from "./files/create";
@@ -42,6 +43,7 @@ export function createDefaultToolRegistry(): ToolRegistry {
   for (const tool of [
     webSearchTool,
     webOpenTool,
+    knowledgeSearchTool,
     getArtifactTool,
     createArtifactTool,
     createFileTool,

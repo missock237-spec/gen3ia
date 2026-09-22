@@ -16,6 +16,7 @@ import { answerAsAgent, classifyRequest, outOfScopeReply, planAgentTask } from "
 import { recallAgentContext, recordExchange, shouldSummarize, summarizeConversation } from "@/lib/memory/episodic";
 import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import { describeConnectorsForPrompt, describeConnectedConnectorsForPrompt, type ConnectedConnectorsContext } from "@/lib/integrations/mention";
+import { describeProjectServicesForPrompt, PROJECT_SERVICE_TOOLS } from "@/lib/agents/services/bridge";
 import {
   extractImagePrompt,
   generateImageWithAgnes,
@@ -104,10 +105,16 @@ function planPolicyForAgent(agent: AgentRecord, plan: RuntimePlan): ExecutionPol
  */
 function policyForAgentMission(agent: AgentRecord, plan: RuntimePlan, activatedConnectors: string[], connectedToolkits: string[] = []): ExecutionPolicy {
   const policy = planPolicyForAgent(agent, plan);
-  if (activatedConnectors.length === 0 && connectedToolkits.length === 0) return policy;
+  // Les agents accèdent par défaut aux services du projet (documents,
+  // fichiers, archives, recherche, mémoire, knowledge base, simulation) :
+  // c'est ce qui leur permet d'EXÉCUTER les tâches, pas seulement répondre.
+  const withServices = [...new Set([...(policy.allowedTools ?? []), ...PROJECT_SERVICE_TOOLS])];
+  if (activatedConnectors.length === 0 && connectedToolkits.length === 0) {
+    return { ...policy, allowedTools: withServices };
+  }
   return {
     ...policy,
-    allowedTools: [...new Set([...(policy.allowedTools ?? []), "composio.execute"])],
+    allowedTools: [...new Set([...withServices, "composio.execute"])],
   };
 }
 
@@ -260,7 +267,11 @@ export async function POST(request: NextRequest) {
         connected.note,
         extraActivated.length > 0 ? await describeConnectorsForPrompt(user.uid, extraActivated) : undefined,
       ].filter(Boolean).join("\n\n") || undefined;
-      const fullNote = [note, memoryNote, mcpNote, connectorsNote].filter(Boolean).join("\n\n") || undefined;
+      // Services du projet : catalogue injecté pour que le planificateur
+      // sache quels services (documents, fichiers, recherche, mémoire…)
+      // sont utilisables et comment les nommer.
+      const servicesNote = describeProjectServicesForPrompt();
+      const fullNote = [note, memoryNote, mcpNote, connectorsNote, servicesNote].filter(Boolean).join("\n\n") || undefined;
 
       // Hors périmètre : refus professionnel, sans exécution ni coût LLM.
       if (!classification.inScope) {
