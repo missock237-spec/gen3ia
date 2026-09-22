@@ -182,3 +182,24 @@ Stage Summary:
   /studio/console, /studio/calls, /settings/numbers, chat Gen sur la vitrine.
 - Sécurité : clés transmises en clair dans le chat (Upstash, Qdrant, plus
   tôt Agnes/GitHub) → recommander la rotation ; salons publics quota Redis.
+
+---
+Task ID: 15
+Agent: Super Z (principal)
+Task: Architecture à 6 moteurs communs + 10 modules métier (Marketing, Sales, RH, Documents, Conformité, Opérations, Finance, Automatisations) + vérification page d'accueil et chat Gen.
+
+Work Log:
+- lib/engines/ : 6 moteurs partagés — ai-engine (runAI + runAIJSON avec relance corrective), document-engine (buildDocument/proofDocument/blocksFromMarkdown), workflow-engine (CRUD + conditions + interpolation + exécution séquentielle journalisée), scheduling-engine (calendrier unifié, jours ouvrés, maintenance), analytics-engine (agrégats, régression linéaire, forecastDaily, buildReport), data-engine (enregistrements métier + cache Redis à compteur de version) ; bus d'événements events.ts (import dynamique anti-cycle).
+- 15 événements métier (BUSINESS_EVENT_TYPES) émis par les modules, consommés par le Workflow Engine.
+- 12 routes /api/business/* : auth requireUser, quotas Redis distribués, zod discriminé, errorBody/errorStatus ; 12 pages Studio + kit components/business/kit.tsx (useModuleData, Field, StatCard, Pill…).
+- Nav : groupe "Modules métier" (nav-items.ts), section Automatisations (studio-section-nav), grille modules sur /dashboard.
+- FIX 1 : dispatchEvent sans index composite Firestore (filtre mémoire).
+- FIX 2 (diagnostic local scripts/diag_workflow_dispatch.ts) : await des émissions — Vercel serverless fige les promesses en arrière-plan après la réponse ; garde de récursion skipEventEmission pour create_event.
+- Qualité : typecheck 0 erreur, 287 tests vitest (dont 37 moteurs), build OK.
+- E2E prod scripts/e2e_wave15_prod.mjs : 20/20 VERTS (accueil 200 + Gen répond, 12 routes, congés 5 jours ouvrés, workflow événementiel facture→notification success, run manuel success, 13 pages 200).
+
+Stage Summary:
+- Production gen3ia.online = commit 6aee2c9, READY (auto-deploy Git).
+- 6 moteurs communs opérationnels ; tout nouveau module est désormais une composition fine des moteurs.
+- Modules livrés : Landing Pages, Webinar→Contenus, Call Intelligence, Congés, Formations, Contrats, Onboarding, RGPD, Maintenance, Cashflow, Impayés, Automatisations.
+- Page d'accueil + chat Gen vérifiés en production (réponses réelles auth/visiteur).
