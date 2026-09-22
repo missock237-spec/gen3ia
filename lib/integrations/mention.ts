@@ -60,7 +60,7 @@ export async function listMentionConnectors(userId: string, search?: string): Pr
 const MAX_ACTIONS_PER_TOOLKIT = 12;
 
 /** Nombre maximal de connecteurs injectés automatiquement dans un chat agent. */
-const MAX_AUTO_TOOLKITS = 16;
+const MAX_AUTO_TOOLKITS = 32;
 
 export interface ConnectedConnectorsContext {
   /** Slugs des toolkits réellement connectés (status ACTIVE + enabled). */
@@ -96,7 +96,7 @@ export async function describeConnectedConnectorsForPrompt(userId: string, budge
     const { listHubConnections } = await import("./composio/connections");
     const accounts = await budget(listHubConnections(userId), Math.min(6_000, budgetMs));
     const toolkits = accounts
-      .filter((account) => account.status === "ACTIVE" && account.enabled)
+      .filter((account) => account.verified && account.enabled)
       .map((account) => account.toolkit)
       .slice(0, MAX_AUTO_TOOLKITS);
 
