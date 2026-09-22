@@ -13,6 +13,18 @@ const MODES = [
   { href: "/marketplace", label: "Marketplace", description: "Ajouter des capacités", icon: "◇" },
 ];
 
+/** Modules métier (Task 15) — construits sur les 6 moteurs communs. */
+const BUSINESS_MODULES = [
+  { href: "/studio/marketing/landing", label: "Marketing", description: "Landing Pages · Webinar → Contenus", icon: "▶" },
+  { href: "/studio/sales/call-intelligence", label: "Sales", description: "Call Intelligence", icon: "☎" },
+  { href: "/studio/hr/leaves", label: "RH", description: "Congés · Formations", icon: "☺" },
+  { href: "/studio/documents/contracts", label: "Documents", description: "Contrats · Onboarding", icon: "▤" },
+  { href: "/studio/compliance/gdpr", label: "Conformité", description: "RGPD", icon: "⚖" },
+  { href: "/studio/operations/maintenance", label: "Opérations", description: "Maintenance", icon: "⚒" },
+  { href: "/studio/finance/cashflow", label: "Finance", description: "Cashflow · Impayés", icon: "₣" },
+  { href: "/studio/automations", label: "Automatisations", description: "Workflows entre modules", icon: "⚡" },
+];
+
 const STATUS_LABELS: Record<string,string> = { draft:"Brouillon", awaiting_approval:"A valider", approved:"Approuvee", running:"En cours", completed:"Terminee", failed:"Echec", cancelled:"Annulee" };
 
 function Arrow() {
@@ -153,6 +165,27 @@ function DashboardContent() {
                 <span className="min-w-0 flex-1">
                   <strong>{mode.label}</strong>
                   <small>{mode.description}</small>
+                </span>
+                <Arrow />
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-14" aria-label="Modules métier">
+          <div className="mb-4 flex items-end justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[.22em] text-neutral-400">Votre entreprise</p>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight">Modules métier</h2>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {BUSINESS_MODULES.map((module) => (
+              <Link key={module.href} href={module.href} className="g3-home-mode group">
+                <span className="g3-home-mode-icon">{module.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <strong>{module.label}</strong>
+                  <small>{module.description}</small>
                 </span>
                 <Arrow />
               </Link>

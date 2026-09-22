@@ -20,6 +20,18 @@ export const AGENTS: NavItem[] = [
   { href: "/integrations", label: "Intégrations", icon: "⧉", hint: "Connecter vos services externes" },
 ];
 
+/** Modules métier (Task 15) — construits sur les 6 moteurs communs. */
+export const BUSINESS: NavItem[] = [
+  { href: "/studio/marketing/landing", label: "Marketing", icon: "▶", hint: "Landing Pages et Webinar → Contenus" },
+  { href: "/studio/sales/call-intelligence", label: "Ventes", icon: "☎", hint: "Call Intelligence : analyse de vos appels" },
+  { href: "/studio/hr/leaves", label: "RH", icon: "☺", hint: "Congés et formations" },
+  { href: "/studio/documents/contracts", label: "Documents", icon: "▤", hint: "Contrats et onboarding" },
+  { href: "/studio/compliance/gdpr", label: "Conformité", icon: "⚖", hint: "RGPD : registre et demandes" },
+  { href: "/studio/operations/maintenance", label: "Opérations", icon: "⚒", hint: "Maintenance préventive" },
+  { href: "/studio/finance/cashflow", label: "Finance", icon: "₣", hint: "Cashflow et impayés" },
+  { href: "/studio/automations", label: "Automatisations", icon: "⚡", hint: "Workflows événementiels entre modules" },
+];
+
 export const LIBRARY: NavItem[] = [
   { href: "/memory", label: "Mémoire permanente", icon: "◆" },
   { href: "/storage", label: "Fichiers", icon: "□" },
@@ -35,6 +47,7 @@ export const DEVELOPER: NavItem[] = [
 export const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
   { title: "Espace de travail", items: WORKSPACE },
   { title: "Agents & automatisation", items: AGENTS },
+  { title: "Modules métier", items: BUSINESS },
   { title: "Ressources", items: LIBRARY },
   { title: "Développeur", items: DEVELOPER },
 ];
