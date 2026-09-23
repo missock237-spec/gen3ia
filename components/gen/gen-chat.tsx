@@ -64,6 +64,16 @@ export function GenChatWidget() {
     setInput("");
     setBubbles((current) => [...current, { role: "user", text: message }]);
     try {
+      // Historique client : les derniers échanges (hors message d'accueil)
+      // accompagnent la requête pour donner à Gen une mémoire de fil pour
+      // les visiteurs anonymes — sans aucune persistance serveur (vie privée).
+      const history = bubbles
+        .slice(1) // exclut le message d'accueil
+        .slice(-6)
+        .map((bubble) => ({
+          role: bubble.role === "user" ? ("user" as const) : ("assistant" as const),
+          content: bubble.text.slice(0, 2_000),
+        }));
       // authFetch : session incluse si connecté (sinon 401 géré côté API
       // qui bascule sur le mode visiteur).
       const response = await authFetch("/api/gen/chat", {
@@ -73,6 +83,7 @@ export function GenChatWidget() {
           message,
           ...(conversationId ? { conversationId } : {}),
           ...(selectedConnectors.length > 0 ? { selectedConnectors } : {}),
+          ...(history.length > 0 ? { history } : {}),
         }),
       });
       const data = await response.json();

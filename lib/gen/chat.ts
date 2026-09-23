@@ -182,11 +182,40 @@ export interface GenReply {
   connectorUsed: { toolkit: string; toolSlug: string } | null;
 }
 
+/**
+ * Historique transmis par le client (visiteurs anonymes).
+ *
+ * Vie privée : pour un visiteur non connecté, Gen3ia ne persiste RIEN
+ * (persistGenExchange ne stocke pas les échanges anonymes). La continuité
+ * de conversation est donc portée par le client, qui renvoie les derniers
+ * tours à chaque requête. Côté serveur : assaini (rôles limités, contenus
+ * bornés, 6 derniers messages) et utilisé UNIQUEMENT comme contexte LLM —
+ * jamais écrit en base.
+ */
+export function sanitizeClientHistory(
+  history: Array<{ role: string; content: string }> | undefined,
+): Array<{ role: "user" | "assistant"; content: string }> {
+  if (!Array.isArray(history)) return [];
+  return history
+    .filter(
+      (item): item is { role: "user" | "assistant"; content: string } =>
+        (item?.role === "user" || item?.role === "assistant") &&
+        typeof item?.content === "string" &&
+        item.content.trim().length > 0,
+    )
+    .map((item) => ({
+      role: item.role,
+      content: item.content.trim().slice(0, 2_000),
+    }))
+    .slice(-6);
+}
+
 export async function runGenTurn(input: {
   userId?: string;
   message: string;
   conversationId?: string;
   selectedConnectors?: string[];
+  history?: Array<{ role: string; content: string }>;
 }): Promise<GenReply> {
   const conversationId = input.conversationId ?? randomUUID();
   const connectedAll = input.userId ? await listGenConnectors(input.userId) : [];
@@ -197,7 +226,12 @@ export async function runGenTurn(input: {
     ? connectedAll.filter((toolkit) => requested.includes(toolkit))
     : connectedAll;
 
-  const history = await loadGenHistory(input.userId, conversationId);
+  const persisted = await loadGenHistory(input.userId, conversationId);
+  // Utilisateur connecté : l'historique persisté fait foi. Visiteur
+  // anonyme : repli sur l'historique client (jamais persisté).
+  const history = persisted.length > 0
+    ? persisted
+    : sanitizeClientHistory(input.history);
 
   const decision = await decide(input.message, connected, history);
 

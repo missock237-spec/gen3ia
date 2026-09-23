@@ -22,6 +22,12 @@ const MessageSchema = z.object({
   selectedConnectors: z.array(
     z.string().trim().toLowerCase().regex(/^[a-z0-9_]{2,64}$/, "connecteur invalide"),
   ).max(10).optional(),
+  // Historique client (visiteurs anonymes) : contexte de conversation
+  // transmis par le navigateur, utilisé côté serveur mais JAMAIS persisté.
+  history: z.array(z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string().trim().min(1).max(2_000),
+  })).max(12).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -53,6 +59,7 @@ export async function POST(request: NextRequest) {
       message: parsed.data.message,
       conversationId: parsed.data.conversationId,
       selectedConnectors: parsed.data.selectedConnectors,
+      history: parsed.data.history,
     });
 
     return NextResponse.json({
