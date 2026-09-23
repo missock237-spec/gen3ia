@@ -166,7 +166,11 @@ async function main() {
     `run=${run?.id ?? "aucun"} statut=${run?.status ?? "?"} étapes=${run?.steps?.length ?? 0}`,
   );
   const executedTool = run?.steps?.find((s) => s.toolName);
-  check("7/outil-reel", !!executedTool, executedTool ? `outil=${executedTool.toolName} statut=${executedTool.status}` : "aucun outil exécuté");
+  check(
+    "7/outil-reel",
+    !!executedTool && executedTool.status === "done" && run.status === "completed",
+    executedTool ? `outil=${executedTool.toolName} statut=${executedTool.status} run=${run.status}` : "aucun outil exécuté",
+  );
 
   // 8. Projets
   const projectRes = await fetch(`${BASE}/api/workspace/projects`, {
