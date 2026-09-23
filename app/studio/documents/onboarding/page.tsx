@@ -112,7 +112,7 @@ export default function DocumentsOnboardingPage() {
 
       <ModuleSection title={`Parcours (${flows.length})`}>
         {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
-        {!loading && flows.length === 0 ? <EmptyHint>Aucun parcours pour l'instant.</EmptyHint> : null}
+        {!loading && flows.length === 0 ? <EmptyHint>Aucun parcours pour l&apos;instant.</EmptyHint> : null}
         <div className="grid gap-4 lg:grid-cols-2">
           {flows.map((flow) => {
             const done = flow.steps?.filter((s) => s.done).length ?? 0;

@@ -193,7 +193,7 @@ export default function SettingsNumbersPage() {
             <input className={inputClass} value={areaCode} onChange={(e) => setAreaCode(e.target.value)} maxLength={6} />
           </div>
           <div>
-            <label className={labelClass}>Attribuer à l'agent</label>
+            <label className={labelClass}>Attribuer à l&apos;agent</label>
             <select className={inputClass} value={selectedAgent} onChange={(e) => setSelectedAgent(e.target.value)}>
               {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
             </select>

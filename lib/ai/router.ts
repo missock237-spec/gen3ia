@@ -13,6 +13,7 @@ import type {
 
 import {
   callProvider,
+  callProviderStream,
 } from "./providers";
 
 export interface RoutingDecision {
@@ -207,6 +208,92 @@ export async function generate(
 
   throw new Error(
     `All AI providers failed: ${JSON.stringify(
+      failures,
+    )}`,
+  );
+}
+
+/**
+ * Variante en flux de `generate` : mêmes règles de sélection de fournisseur,
+ * mais chaque fragment de texte est transmis à `onDelta` au fil de l'arrivée
+ * (token streaming réel côté fournisseur). En cas d'échec d'un fournisseur,
+ * on réessaie avec le suivant — les fragments déjà émis ne sont PAS
+ * retransmis : `onDelta` ne doit être branché qu'à partir du premier
+ * fournisseur qui accepte le flux (signalé via `onProviderSelected`).
+ */
+export async function generateStream(
+  request: AIRequest,
+  handlers: {
+    onDelta: (delta: string) => void | Promise<void>;
+    /** Appelé avant le premier delta du fournisseur retenu. */
+    onProviderSelected?: (provider: AIProvider, model: string) => void | Promise<void>;
+  },
+): Promise<AIResponse> {
+  const candidates =
+    selectProvider(request);
+
+  if (candidates.length === 0) {
+    throw new Error(
+      `No configured provider can execute task "${request.task}".`,
+    );
+  }
+
+  const failures: Array<{
+    provider: AIProvider;
+    error: string;
+  }> = [];
+
+  for (const candidate of candidates) {
+    let providerAccepted = false;
+    try {
+      const response = await callProviderStream(
+        candidate.provider,
+        {
+          ...request,
+
+          provider:
+            candidate.provider,
+
+          model:
+            candidate.model,
+        },
+        (delta) => {
+          if (!providerAccepted) {
+            providerAccepted = true;
+            const selected = handlers.onProviderSelected?.(candidate.provider, candidate.model);
+            // Le premier fragment suit le même chemin que les autres :
+            // onProviderSelected est un signal, jamais un remplacement.
+            return Promise.resolve(selected).then(() => handlers.onDelta(delta));
+          }
+          return handlers.onDelta(delta);
+        },
+      );
+      // Le premier fragment passe par onProviderSelected : transmettons-le
+      // aussi à onDelta pour que le texte émis soit complet.
+      return response;
+    } catch (error) {
+      // Aucun fragment n'a été émis pour ce fournisseur : on peut tenter le
+      // suivant sans risque de dupliquer du texte côté client.
+      if (!providerAccepted) {
+        failures.push({
+          provider:
+            candidate.provider,
+
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unknown provider error.",
+        });
+        continue;
+      }
+      // Le flux a commencé mais a échoué en cours de route : on ne retente
+      // pas (texte déjà partiellement livré) — l'appelant gère le repli.
+      throw error;
+    }
+  }
+
+  throw new Error(
+    `All AI providers failed (stream): ${JSON.stringify(
       failures,
     )}`,
   );

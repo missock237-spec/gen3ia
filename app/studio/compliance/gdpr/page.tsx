@@ -207,7 +207,7 @@ export default function ComplianceGdprPage() {
               </Field>
               <Field label="Type de demande">
                 <select className={inputCls} value={req.type} onChange={(e) => setReq({ ...req, type: e.target.value })}>
-                  <option value="access">Droit d'accès</option>
+                  <option value="access">Droit d&apos;accès</option>
                   <option value="rectification">Rectification</option>
                   <option value="erasure">Effacement</option>
                   <option value="portability">Portabilité</option>
@@ -226,7 +226,7 @@ export default function ComplianceGdprPage() {
           </div>
 
           <ModuleSection title={`Demandes (${requests.length})`}>
-            {!loading && requests.length === 0 ? <EmptyHint>Aucune demande pour l'instant.</EmptyHint> : null}
+            {!loading && requests.length === 0 ? <EmptyHint>Aucune demande pour l&apos;instant.</EmptyHint> : null}
             <div className="space-y-2.5">
               {requests.map((request) => (
                 <article key={request.id} className={cardCls}>

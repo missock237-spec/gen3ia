@@ -17,7 +17,7 @@ export default function NotFound() {
           Vérifiez l&apos;adresse, ou reprenez depuis votre tableau de bord.
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-          <Link href="/dashboard" className="g3-btn g3-btn-primary rounded-full">
+          <Link href="/studio" className="g3-btn g3-btn-primary rounded-full">
             Tableau de bord
           </Link>
           <Link href="/studio" className="g3-btn g3-btn-ghost rounded-full">

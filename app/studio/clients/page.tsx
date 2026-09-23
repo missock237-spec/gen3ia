@@ -93,8 +93,6 @@ export default function StudioClientsPage() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => { void reload(); }, []);
-
   async function reload() {
     setLoading(true);
     setError("");
@@ -115,6 +113,9 @@ export default function StudioClientsPage() {
       setLoading(false);
     }
   }
+
+  // Effet placé après les déclarations de fonctions (règle react-hooks).
+  useEffect(() => { void reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- chargement initial uniquement
 
   async function selectConfig(config: CommercialConfig) {
     setSelectedId(config.id);
@@ -316,7 +317,7 @@ export default function StudioClientsPage() {
                   <select className={inputClass} value={form.agentId || (agents[0]?.id ?? "")} onChange={(e) => setForm({ ...form, agentId: e.target.value })}>
                     {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name} ({agent.type})</option>)}
                   </select>
-                  {agents.length === 0 && <p className="mt-1 text-xs text-red-600">Créez d'abord un agent dans le Studio.</p>}
+                  {agents.length === 0 && <p className="mt-1 text-xs text-red-600">Créez d&apos;abord un agent dans le Studio.</p>}
                 </div>
                 {sharedFields()}
                 <button type="button" onClick={() => void createConfig()} disabled={busy || !form.companyName.trim() || !form.agentId} className="self-start rounded-xl bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">
@@ -371,11 +372,11 @@ export default function StudioClientsPage() {
       <>
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className={labelClass}>Nom de l'entreprise *</label>
+            <label className={labelClass}>Nom de l&apos;entreprise *</label>
             <input className={inputClass} value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} maxLength={160} />
           </div>
           <div>
-            <label className={labelClass}>Secteur d'activité</label>
+            <label className={labelClass}>Secteur d&apos;activité</label>
             <input className={inputClass} value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })} maxLength={200} placeholder="Restaurant, immobilier, artisan…" />
           </div>
         </div>
@@ -385,7 +386,7 @@ export default function StudioClientsPage() {
             <textarea className={inputClass} rows={4} value={form.products} onChange={(e) => setForm({ ...form, products: e.target.value })} />
           </div>
           <div>
-            <label className={labelClass}>Tarifs (un par ligne — l'agent ne fera jamais d'autres prix)</label>
+            <label className={labelClass}>Tarifs (un par ligne — l&apos;agent ne fera jamais d&apos;autres prix)</label>
             <textarea className={inputClass} rows={4} value={form.pricing} onChange={(e) => setForm({ ...form, pricing: e.target.value })} placeholder="Menu du jour : 12€&#10;Livraison : 3€" />
           </div>
         </div>
@@ -421,7 +422,7 @@ export default function StudioClientsPage() {
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className={labelClass}>Ton de l'agent</label>
+            <label className={labelClass}>Ton de l&apos;agent</label>
             <input className={inputClass} value={form.tone} onChange={(e) => setForm({ ...form, tone: e.target.value })} maxLength={300} />
           </div>
           <div>
@@ -435,7 +436,7 @@ export default function StudioClientsPage() {
           </div>
         </div>
         <div>
-          <label className={labelClass}>Message d'accueil</label>
+          <label className={labelClass}>Message d&apos;accueil</label>
           <input className={inputClass} value={form.welcomeMessage} onChange={(e) => setForm({ ...form, welcomeMessage: e.target.value })} maxLength={800} />
         </div>
       </>

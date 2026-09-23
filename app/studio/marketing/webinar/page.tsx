@@ -96,7 +96,7 @@ export default function MarketingWebinarPage() {
 
       <ModuleSection title={`Kits générés (${assets.length})`}>
         {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
-        {!loading && assets.length === 0 ? <EmptyHint>Aucun kit pour l'instant. Générez le premier depuis une transcription.</EmptyHint> : null}
+        {!loading && assets.length === 0 ? <EmptyHint>Aucun kit pour l&apos;instant. Générez le premier depuis une transcription.</EmptyHint> : null}
         <div className="space-y-3">
           {assets.map((asset) => (
             <article key={asset.id} className={cardCls}>

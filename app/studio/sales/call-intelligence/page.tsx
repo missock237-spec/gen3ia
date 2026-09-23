@@ -108,7 +108,7 @@ export default function SalesCallIntelligencePage() {
 
       <ModuleSection title={`Analyses (${insights.length})`}>
         {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
-        {!loading && insights.length === 0 ? <EmptyHint>Aucune analyse pour l'instant.</EmptyHint> : null}
+        {!loading && insights.length === 0 ? <EmptyHint>Aucune analyse pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-3">
           {insights.map((row) => (
             <article key={row.id} className={cardCls}>

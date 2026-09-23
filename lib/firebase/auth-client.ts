@@ -242,7 +242,7 @@ export async function establishSession(user: User, redirectTo?: string | null): 
     }
 
     if (response.ok) {
-      window.location.href = sanitizeRedirect(redirectTo) ?? "/dashboard";
+      window.location.href = sanitizeRedirect(redirectTo) ?? "/studio";
       return;
     }
 

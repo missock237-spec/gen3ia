@@ -3,27 +3,33 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { NAV_COMMAND_INDEX } from "./nav-items";
+import { commandIndexForRole } from "./nav-items";
 
 type PaletteItem = {
   href: string;
   label: string;
   icon: string;
   group: string;
-  requiredRole?: "developer";
+  requiredRole?: "developer" | "admin";
 };
 
 const normalized = (value: string) =>
   value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+/**
+ * CommandPalette — alimentée par une configuration de routes typée
+ * (NavRegistry via commandIndexForRole) et filtrée par rôle.
+ */
 export function CommandPalette({
   open,
   onClose,
   canDeveloper,
+  isAdmin = false,
 }: {
   open: boolean;
   onClose: () => void;
   canDeveloper: boolean;
+  isAdmin?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -56,13 +62,14 @@ export function CommandPalette({
     pathname === href || pathname.startsWith(href + "/");
 
   const filtered = useMemo(() => {
-    const items: PaletteItem[] = NAV_COMMAND_INDEX.filter(
-      (item) => item.requiredRole !== "developer" || canDeveloper,
-    );
-    return items.filter((item) =>
-      normalized(item.label).includes(normalized(query.trim())),
-    );
-  }, [query, canDeveloper]);
+    const role = isAdmin ? "admin" : canDeveloper ? "developer" : "user";
+    const items: PaletteItem[] = commandIndexForRole(role);
+    const needle = normalized(query.trim());
+    return items.filter((item) => {
+      const haystack = normalized(`${item.label} ${item.group}`);
+      return haystack.includes(needle);
+    });
+  }, [query, canDeveloper, isAdmin]);
 
   const goTo = (href: string) => {
     onClose();

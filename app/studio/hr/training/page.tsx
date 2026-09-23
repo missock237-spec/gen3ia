@@ -127,7 +127,7 @@ export default function HrTrainingPage() {
 
       <ModuleSection title={`Plan de formation (${trainings.length})`}>
         {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
-        {!loading && trainings.length === 0 ? <EmptyHint>Aucune formation pour l'instant.</EmptyHint> : null}
+        {!loading && trainings.length === 0 ? <EmptyHint>Aucune formation pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2.5">
           {trainings.map((training) => (
             <article key={training.id} className={cardCls}>

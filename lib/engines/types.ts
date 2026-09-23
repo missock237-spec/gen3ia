@@ -59,7 +59,9 @@ export type EngineFeature =
   | "finance-cashflow"
   | "finance-unpaid"
   | "automations-hub"
-  | "analytics-report";
+  | "analytics-report"
+  /** Moteur conversationnel du workspace (Conversation-first). */
+  | "conversation-turn";
 
 /** Champs communs de toutes les entités modules (document Firestore brut). */
 export interface BusinessDocBase {
