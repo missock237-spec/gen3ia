@@ -10,6 +10,7 @@ import {
   signInWithGitHub,
   traduireErreurAuth
 } from "@/lib/firebase/auth-client";
+import { useToast } from "@/components/ui/toast";
 
 function GoogleLogo() {
   return (
@@ -31,19 +32,24 @@ function GitHubLogo() {
 }
 
 export default function AuthButtons() {
+  const toast = useToast();
   // Connexion par redirection (mobile) : au retour du flux OAuth sur /login,
   // on recupere le resultat et on etablit la session serveur.
   const [nextPath, setNextPath] = useState<string | null>(null);
+  const [inlineError, setInlineError] = useState("");
   useEffect(() => { setNextPath(readNextRedirect()); }, []);
   useEffect(() => {
     completerConnexionRedirect(nextPath).catch((error) => {
-      window.alert(traduireErreurAuth(error));
+      const message = traduireErreurAuth(error);
+      setInlineError(message);
+      toast.error(message);
     });
-  }, [nextPath]);
+  }, [nextPath, toast]);
 
   async function authenticate(
     provider: "google" | "github"
   ) {
+    setInlineError("");
     try {
       const user =
         provider === "google"
@@ -57,12 +63,19 @@ export default function AuthButtons() {
       if (error instanceof Error && error.message === "REDIRECTION_EN_COURS") {
         return;
       }
-      window.alert(traduireErreurAuth(error));
+      const message = traduireErreurAuth(error);
+      setInlineError(message);
+      toast.error(message);
     }
   }
 
   return (
     <div className="flex flex-col gap-3">
+      {inlineError && (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] leading-snug text-red-700" role="alert">
+          {inlineError}
+        </p>
+      )}
       {/* Bouton conforme a l'identite Google : fond blanc, bordure #dadce0,
           logo G multicolore et texte #3c4043. */}
       <button

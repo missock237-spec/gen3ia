@@ -76,6 +76,8 @@ export interface ConversationMessage {
   imageUrl?: string;
   /** Run lié à ce message (timeline d'exécution affichée inline). */
   runId?: string;
+  /** Connecteurs activés par l'utilisateur pour ce tour (slugs Composio). */
+  connectors?: string[];
   usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
   createdAt: string;
 }

@@ -26,12 +26,29 @@ interface MessageThreadProps {
   artifacts: ConversationArtifact[];
   /** Message en cours de génération (état « streaming » visuel). */
   generating: boolean;
+  /** Texte de la réponse en cours d'écriture (streaming token par token). */
+  streamingContent?: string;
+  /** Libellé de la phase de travail en cours (analyse, exécution…). */
+  streamingStatus?: string;
+  /** Run en cours de construction (timeline vivante du tour en cours). */
+  liveRun?: ConversationRun | null;
   onDecide: (approvalId: string, decision: "approved" | "rejected") => Promise<void>;
 }
 
-export function MessageThread({ messages, runs, approvals, artifacts, generating, onDecide }: MessageThreadProps) {
+export function MessageThread({
+  messages,
+  runs,
+  approvals,
+  artifacts,
+  generating,
+  streamingContent,
+  streamingStatus,
+  liveRun,
+  onDecide,
+}: MessageThreadProps) {
   const runsById = new Map(runs.map((run) => [run.id, run]));
   const artifactsById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
+  const streaming = typeof streamingContent === "string";
 
   return (
     <div className="space-y-4">
@@ -133,12 +150,37 @@ export function MessageThread({ messages, runs, approvals, artifacts, generating
         );
       })}
 
-      {generating && (
+      {liveRun && <RunTimeline run={liveRun} />}
+
+      {streaming && (
+        <div aria-live="polite">
+          <article className="mr-auto max-w-[92%] rounded-2xl rounded-bl-md border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-800">
+            {streamingContent.length > 0 ? (
+              <div className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                <MarkdownContent content={streamingContent} />
+                <span className="g3-caret" aria-hidden />
+              </div>
+            ) : (
+              <span className="g3-dots" aria-hidden>
+                <span /><span /><span />
+              </span>
+            )}
+          </article>
+          {streamingStatus && (
+            <p className="mt-1.5 flex items-center gap-1.5 pl-1 text-[11px] text-neutral-500">
+              <span className="inline-block size-1.5 animate-pulse rounded-full bg-neutral-400" aria-hidden />
+              {streamingStatus}
+            </p>
+          )}
+        </div>
+      )}
+
+      {generating && !streaming && (
         <div className="mr-auto flex items-center gap-2 rounded-2xl rounded-bl-md border border-neutral-200 bg-white px-4 py-3" aria-live="polite">
           <span className="g3-dots" aria-hidden>
             <span /><span /><span />
           </span>
-          <span className="text-xs text-neutral-500">Gen3ia travaille…</span>
+          <span className="text-xs text-neutral-500">{streamingStatus || "Gen3ia travaille…"}</span>
         </div>
       )}
     </div>

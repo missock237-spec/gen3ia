@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { ConnectorPicker } from "./connector-picker";
 import type { MessageAttachment } from "@/lib/domain/conversations/types";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 
 /**
  * Composer de conversation : texte multi-lignes, pièces jointes (stockage
- * permanent réel), sélection du projet de contexte et envoi au clavier.
+ * permanent réel), connecteurs activables pour le message, sélection du
+ * projet de contexte et envoi au clavier.
  */
 
 interface ComposerProps {
@@ -16,6 +18,9 @@ interface ComposerProps {
   projects: WorkspaceProject[];
   projectId?: string;
   onProjectChange?: (projectId: string | undefined) => void;
+  /** Connecteurs activés pour le prochain message (slugs Composio). */
+  connectors?: string[];
+  onConnectorsChange?: (connectors: string[]) => void;
   suggestions?: string[];
   placeholder?: string;
   autoFocus?: boolean;
@@ -27,6 +32,8 @@ export function Composer({
   projects,
   projectId,
   onProjectChange,
+  connectors = [],
+  onConnectorsChange,
   suggestions,
   placeholder = "Décrivez votre objectif — Gen3ia planifie et exécute…",
   autoFocus = false,
@@ -144,6 +151,10 @@ export function Composer({
           />
         </label>
 
+        {onConnectorsChange && (
+          <ConnectorPicker selected={connectors} onChange={onConnectorsChange} disabled={disabled} />
+        )}
+
         <textarea
           ref={textareaRef}
           value={value}
@@ -185,6 +196,12 @@ export function Composer({
         </button>
       </div>
       {uploading && <p className="text-[11px] text-neutral-500">Envoi du fichier en cours…</p>}
+      {connectors.length > 0 && (
+        <p className="text-[11px] text-neutral-500">
+          Connecteurs activés : <span className="font-semibold text-neutral-800">{connectors.join(", ")}</span> — les
+          actions externes restent soumises à votre validation.
+        </p>
+      )}
     </div>
   );
 }

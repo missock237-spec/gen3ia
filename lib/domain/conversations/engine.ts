@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { runAI, runAIJSON } from "@/lib/engines/ai-engine";
-import { generate } from "@/lib/ai/router";
+import { generate, generateStream } from "@/lib/ai/router";
 import {
   extractImagePrompt,
   generateImageWithAgnes,
@@ -37,6 +37,7 @@ import type {
   MessageAttachment,
   RunStep,
 } from "./types";
+import { safeEmitter, type StreamEventEmitter } from "./stream-events";
 
 /**
  * Moteur conversationnel — chaque tour de conversation peut être :
@@ -229,10 +230,22 @@ export function extractSearchQuery(message: string): string {
   return cleaned || message.replace(/^[^\p{L}\p{N}]+/u, "").trim().slice(0, 300) || message.slice(0, 300);
 }
 
-export function buildIntentSystemPrompt(catalog: ToolCatalogEntry[], project?: WorkspaceProject | null): string {
+export function buildIntentSystemPrompt(
+  catalog: ToolCatalogEntry[],
+  project?: WorkspaceProject | null,
+  connectors?: string[],
+): string {
   const toolLines = catalog
     .map((t) => `- ${t.name} (risque ${t.risk}${t.requiresApproval ? ", validation requise" : ""}) : ${t.description}`)
     .join("\n");
+  const connectorSection = connectors && connectors.length > 0
+    ? [
+        "",
+        `Connecteurs activés explicitement par l'utilisateur pour CETTE demande : ${connectors.join(", ")}.`,
+        "Si la demande concerne ces services, utilise l'outil composio.execute avec input { toolkit: \"<slug>\", action: \"<action>\", params: { … } }.",
+        "Les actions externes (envoi, publication, modification) sont sensibles : décris leur impact précisément, la validation humaine sera demandée.",
+      ].join("\n")
+    : "";
   return [
     "Tu es le moteur d'exécution de Gen3ia, une plateforme d'agents avec connecteurs.",
     "Pour chaque demande utilisateur, tu décides :",
@@ -248,6 +261,7 @@ export function buildIntentSystemPrompt(catalog: ToolCatalogEntry[], project?: W
     "",
     project?.instructions ? `Instructions persistantes du projet « ${project.name} » (à respecter) :\n${project.instructions}` : "",
     project?.privacyRules ? `Règles de confidentialité du projet (impératives) :\n${project.privacyRules}` : "",
+    connectorSection,
     "Réponds UNIQUEMENT avec l'objet JSON conforme au schéma.",
   ]
     .filter(Boolean)
@@ -266,6 +280,10 @@ export interface ConversationTurnInput {
   projectId?: string;
   provider?: string;
   model?: string;
+  /** Connecteurs activés explicitement pour ce tour (slugs Composio). */
+  connectors?: string[];
+  /** Émetteur d'événements de flux (streaming NDJSON) — absent = API classique. */
+  onEvent?: StreamEventEmitter;
 }
 
 export interface ConversationTurnResult {
@@ -309,6 +327,9 @@ function attachmentsContext(attachments?: MessageAttachment[]): string {
 }
 
 export async function runConversationTurn(input: ConversationTurnInput): Promise<ConversationTurnResult> {
+  // L'émetteur est enveloppé : une erreur de flux (client déconnecté…) ne
+  // doit jamais interrompre le tour ni la persistance serveur.
+  const onEvent = safeEmitter(input.onEvent);
   const conversation: ChatConversation | null = await getConversation(input.userId, input.conversationId);
   if (!conversation) throw new Error("Conversation introuvable.");
 
@@ -316,28 +337,39 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const project = projectId ? await getProject(input.userId, projectId) : null;
   if (projectId && !project) throw new Error("Projet introuvable pour cette conversation.");
 
-  // 1) Message utilisateur persisté (pièces jointes incluses).
+  // 1) Message utilisateur persisté (pièces jointes + connecteurs inclus).
   const userMessage = await appendMessage({
     conversationId: input.conversationId,
     userId: input.userId,
     role: "user",
     content: input.message,
     attachments: input.attachments,
+    connectors: input.connectors,
     generationStatus: "complete",
   });
+  await onEvent({ type: "turn_started", conversationId: input.conversationId, userMessage });
 
   const history = await listMessages(input.userId, input.conversationId, 100);
   const priorHistory = history.slice(0, -1);
 
   // 2) Demande d'image : génération réelle (Agnes AI) + artefact image.
   if (looksLikeImageRequest(input.message)) {
-    return runImageTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
+    await onEvent({ type: "status", phase: "image", label: "Génération de l'image en cours…" });
+    const result = await runImageTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
   }
 
   // 3) Décision d'intention structurée — tâche de classification simple :
   // routée sur les modèles "chat" (rapides) pour rester sous le budget de
   // latence de la fonction serverless.
   const catalog = conversationToolCatalog();
+  await onEvent({ type: "status", phase: "intention", label: "Analyse de votre demande…" });
   let intent: TurnIntent;
   try {
     const result = await withTimeout(
@@ -345,7 +377,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
         userId: input.userId,
         feature: "conversation-turn",
         task: "chat",
-        system: buildIntentSystemPrompt(catalog, project),
+        system: buildIntentSystemPrompt(catalog, project, input.connectors),
         prompt:
           `Historique récent :\n${priorHistory.slice(-6).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 500)}`).join("\n") || "(vide)"}` +
           `\n\nNouvelle demande : ${input.message.slice(0, 4000)}${attachmentsContext(input.attachments)}`,
@@ -382,9 +414,24 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     }
   }
   if (intent.mode === "chat") {
-    return runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent });
+    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent });
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
   }
-  return runPlanTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent });
+  const result = await runPlanTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent });
+  await onEvent({
+    type: "done",
+    assistantMessage: result.assistantMessage,
+    run: result.run,
+    artifacts: result.artifacts,
+    approvals: result.approvals,
+  });
+  return result;
 }
 
 /* ------------------------------------------------------------------ */
@@ -403,49 +450,126 @@ interface TurnContext extends TurnBase {
 }
 
 async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  const streaming = Boolean(ctx.onEvent);
   const systemParts = [
     "Tu es Gen3ia, l'assistant de travail qui exécute : tu réponds de façon directe, structurée et actionnable.",
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
   ].filter(Boolean);
 
+  const requestMessages = [
+    ...(systemParts.length > 0
+      ? [{ role: "system" as const, content: systemParts.join("\n\n") }]
+      : []),
+    ...historyForModel(ctx.priorHistory),
+    { role: "user" as const, content: ctx.message },
+  ];
+
   let content: string;
   let provider: string | undefined;
   let model: string | undefined;
   let usage: { inputTokens: number; outputTokens: number; totalTokens: number } | undefined;
   let generationStatus: "complete" | "failed" = "complete";
-  try {
-    const response = await withTimeout(
-      generate({
-        task: "chat",
-        messages: [
-          ...(systemParts.length > 0
-            ? [{ role: "system" as const, content: systemParts.join("\n\n") }]
-            : []),
-          ...historyForModel(ctx.priorHistory),
-          { role: "user", content: ctx.message },
-        ],
-        provider: ctx.provider as never,
-        model: ctx.model,
-        preferFree: true,
-        metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
-      }),
-      CHAT_BUDGET_MS,
-      "réponse conversationnelle",
-    );
-    content = response.text;
-    provider = response.provider;
-    model = response.model;
-    usage = response.usage;
-  } catch (error) {
-    // Échec/timeout IA : réponse honnête persistée dans le fil (jamais de 504
-    // opaque), l'utilisateur peut renvoyer le message.
-    content =
-      "Je n'ai pas réussi à produire une réponse dans le délai imparti (le fournisseur IA est surchargé). " +
-      "Réessayez en renvoyant votre message — il reste dans la conversation.";
-    provider = "gen3ia";
-    generationStatus = "failed";
-    console.error("[conversation] échec réponse chat:", error instanceof Error ? error.message : error);
+
+  if (streaming) {
+    // Streaming réel : chaque fragment est transmis au client au fil de
+    // l'arrivée ; le texte complet est ensuite persisté d'un bloc.
+    await onEvent({ type: "status", phase: "synthesis", label: "L'assistant rédige sa réponse…" });
+    let streamedText = "";
+    try {
+      const response = await withTimeout(
+        generateStream(
+          {
+            task: "chat",
+            messages: requestMessages,
+            provider: ctx.provider as never,
+            model: ctx.model,
+            preferFree: true,
+            metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
+          },
+          {
+            onDelta: (delta) => {
+              streamedText += delta;
+              return onEvent({ type: "message_delta", delta });
+            },
+          },
+        ),
+        CHAT_BUDGET_MS,
+        "réponse conversationnelle",
+      );
+      content = response.text;
+      provider = response.provider;
+      model = response.model;
+      usage = response.usage;
+    } catch (error) {
+      if (streamedText.length > 0) {
+        // Flux interrompu en cours de route : le texte partiel déjà affiché
+        // est conservé et complété d'une note honnête — jamais de texte perdu.
+        content =
+          `${streamedText}\n\n_(réponse interrompue — renvoyez votre message pour une réponse complète)_`;
+        provider = "gen3ia";
+        generationStatus = "failed";
+        console.error("[conversation] flux interrompu en cours:", error instanceof Error ? error.message : error);
+      } else {
+        // Aucun fournisseur n'a pu démarrer : repli sur la réponse classique
+        // (sans duplication de texte, rien n'a encore été émis côté client).
+        try {
+          const response = await withTimeout(
+            generate({
+              task: "chat",
+              messages: requestMessages,
+              provider: ctx.provider as never,
+              model: ctx.model,
+              preferFree: true,
+              metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
+            }),
+            CHAT_BUDGET_MS,
+            "réponse conversationnelle",
+          );
+          content = response.text;
+          provider = response.provider;
+          model = response.model;
+          usage = response.usage;
+          await onEvent({ type: "message_delta", delta: content });
+        } catch (fallbackError) {
+          content =
+            "Je n'ai pas réussi à produire une réponse dans le délai imparti (le fournisseur IA est surchargé). " +
+            "Réessayez en renvoyant votre message — il reste dans la conversation.";
+          provider = "gen3ia";
+          generationStatus = "failed";
+          console.error("[conversation] échec réponse chat:", fallbackError instanceof Error ? fallbackError.message : fallbackError);
+        }
+      }
+    }
+  } else {
+    try {
+      const response = await withTimeout(
+        generate({
+          task: "chat",
+          messages: requestMessages,
+          provider: ctx.provider as never,
+          model: ctx.model,
+          preferFree: true,
+          metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
+        }),
+        CHAT_BUDGET_MS,
+        "réponse conversationnelle",
+      );
+      content = response.text;
+      provider = response.provider;
+      model = response.model;
+      usage = response.usage;
+    } catch (error) {
+      // Échec/timeout IA : réponse honnête persistée dans le fil (jamais de 504
+      // opaque), l'utilisateur peut renvoyer le message.
+      content =
+        "Je n'ai pas réussi à produire une réponse dans le délai imparti (le fournisseur IA est surchargé). " +
+        "Réessayez en renvoyant votre message — il reste dans la conversation.";
+      provider = "gen3ia";
+      generationStatus = "failed";
+      console.error("[conversation] échec réponse chat:", error instanceof Error ? error.message : error);
+    }
   }
 
   const assistantMessage = await appendMessage({
@@ -458,6 +582,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     generationStatus,
     usage,
   });
+  await onEvent({ type: "message_complete", message: assistantMessage });
 
   return {
     conversationId: ctx.conversationId,
@@ -532,6 +657,8 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
 const TOOL_OUTPUT_ARTIFACTS: ReadonlySet<string> = new Set(["artifact.create", "file.create", "zip.create"]);
 
 async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  const streaming = Boolean(ctx.onEvent);
   const catalog = conversationToolCatalog();
   const catalogByName = new Map(catalog.map((t) => [t.name, t]));
   const plannedSteps = (ctx.intent.steps ?? []).slice(0, 8);
@@ -561,6 +688,8 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     objective: ctx.intent.objective || ctx.message.slice(0, 500),
     steps,
   });
+  await onEvent({ type: "run_created", run: { ...run, status: "running", steps } });
+  await onEvent({ type: "status", phase: "execution", label: "Exécution du plan en cours…" });
 
   let executedSomething = false;
   let anyFailure = false;
@@ -568,14 +697,14 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   for (const planned of plannedSteps) {
     const toolEntry = planned.toolName ? catalogByName.get(planned.toolName) : undefined;
     if (planned.toolName && !toolEntry) {
-      steps.push(
-        makeStep({
-          phase: "tools",
-          title: planned.title,
-          detail: `Outil demandé introuvable dans le catalogue : ${planned.toolName}`,
-          status: "skipped",
-        }),
-      );
+      const step = makeStep({
+        phase: "tools",
+        title: planned.title,
+        detail: `Outil demandé introuvable dans le catalogue : ${planned.toolName}`,
+        status: "skipped",
+      });
+      steps.push(step);
+      await onEvent({ type: "step_update", runId: run.id, step });
       continue;
     }
 
@@ -595,6 +724,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         status: "awaiting",
       });
       steps.push(step);
+      await onEvent({ type: "step_update", runId: run.id, step });
       const approval = await createApproval({
         userId: ctx.userId,
         conversationId: ctx.conversationId,
@@ -608,6 +738,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         risk,
       });
       approvals.push(approval);
+      await onEvent({ type: "approval_created", approval });
       continue;
     }
 
@@ -621,6 +752,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
       status: "in_progress",
     });
     steps.push(step);
+    await onEvent({ type: "step_update", runId: run.id, step });
 
     if (toolName) {
       const startedAt = new Date().toISOString();
@@ -651,6 +783,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
           if (artifact) {
             artifacts.push(artifact);
             step.artifactId = artifact.id;
+            await onEvent({ type: "artifact_created", artifact });
           }
         }
       } else {
@@ -658,10 +791,12 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         step.output = result.error;
         anyFailure = true;
       }
+      await onEvent({ type: "step_update", runId: run.id, step });
     } else {
       // Étape de rédaction : traitée par le modèle à la synthèse finale.
       step.status = "done";
       step.finishedAt = new Date().toISOString();
+      await onEvent({ type: "step_update", runId: run.id, step });
     }
   }
 
@@ -672,19 +807,21 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     : anyFailure && !executedSomething
       ? ("failed" as const)
       : ("completed" as const);
-  steps.push(
-    makeStep({
-      phase: "result",
-      title: hasPending ? "En attente de votre validation" : "Résultat",
-      detail: hasPending
-        ? `${approvals.length} action(s) sensible(s) attend(ent) votre approbation ci-dessous.`
-        : `${steps.filter((s) => s.status === "done").length} étape(s) réalisée(s).`,
-      status: "done",
-    }),
-  );
+  const resultStep = makeStep({
+    phase: "result",
+    title: hasPending ? "En attente de votre validation" : "Résultat",
+    detail: hasPending
+      ? `${approvals.length} action(s) sensible(s) attend(ent) votre approbation ci-dessous.`
+      : `${steps.filter((s) => s.status === "done").length} étape(s) réalisée(s).`,
+    status: "done",
+  });
+  steps.push(resultStep);
+  await onEvent({ type: "step_update", runId: run.id, step: resultStep });
+  await onEvent({ type: "run_status", runId: run.id, status: hasPending ? "awaiting_approval" : runStatus });
 
-  // 5) Synthèse finale de l'assistant.
-  const summary = await summarizePlanTurn(ctx, run, steps, artifacts, approvals, hasPending);
+  // 5) Synthèse finale de l'assistant (en flux quand le client suit le tour).
+  await onEvent({ type: "status", phase: "synthesis", label: "Rédaction du résultat…" });
+  const summary = await summarizePlanTurn(ctx, run, steps, artifacts, approvals, hasPending, streaming ? (delta) => onEvent({ type: "message_delta", delta }) : undefined);
 
   if (hasPending) {
     await updateRunSteps(ctx.userId, run.id, steps);
@@ -700,6 +837,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     runId: run.id,
     generationStatus: "complete",
   });
+  await onEvent({ type: "message_complete", message: assistantMessage });
 
   return {
     conversationId: ctx.conversationId,
@@ -720,6 +858,7 @@ async function summarizePlanTurn(
   artifacts: ConversationArtifact[],
   approvals: ConversationApproval[],
   hasPending: boolean,
+  onDelta?: (delta: string) => Promise<void> | void,
 ): Promise<string> {
   const deterministic = [
     `**${run.objective}**`,
@@ -738,35 +877,44 @@ async function summarizePlanTurn(
     .join("\n");
 
   try {
-    const response = await withTimeout(
-      generate({
-        task: "chat",
-        messages: [
-          {
-            role: "system",
-            content:
-              "Tu synthétises le résultat d'un plan d'exécution pour l'utilisateur de Gen3ia. " +
-              "Style : concis, factuel, orienté résultat. Mentionne les artefacts créés et, s'il y en a, " +
-              "les actions sensibles qui attendent sa validation. Pas de markdown de titre (#).",
-          },
-          {
-            role: "user",
-            content:
-              `Demande : ${ctx.message.slice(0, 1000)}\nObjectif du plan : ${run.objective}\n` +
-              `Étapes :\n${steps.map((s) => `- [${s.status}] ${s.title}${s.output ? ` : ${s.output.slice(0, 400)}` : ""}`).join("\n")}\n` +
-              `Artefacts : ${artifacts.map((a) => `${a.title} (${a.type})`).join(", ") || "aucun"}\n` +
-              `Validations en attente : ${approvals.map((a) => `${a.title} — impact : ${a.impact}`).join(" ; ") || "aucune"}`,
-          },
-        ],
-        preferFree: true,
-        maxTokens: 700,
-        metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
-      }),
-      SUMMARY_BUDGET_MS,
-      "synthèse du plan",
-    );
+    const request = {
+      task: "chat" as const,
+      messages: [
+        {
+          role: "system" as const,
+          content:
+            "Tu synthétises le résultat d'un plan d'exécution pour l'utilisateur de Gen3ia. " +
+            "Style : concis, factuel, orienté résultat. Mentionne les artefacts créés et, s'il y en a, " +
+            "les actions sensibles qui attendent sa validation. Pas de markdown de titre (#).",
+        },
+        {
+          role: "user" as const,
+          content:
+            `Demande : ${ctx.message.slice(0, 1000)}\nObjectif du plan : ${run.objective}\n` +
+            `Étapes :\n${steps.map((s) => `- [${s.status}] ${s.title}${s.output ? ` : ${s.output.slice(0, 400)}` : ""}`).join("\n")}\n` +
+            `Artefacts : ${artifacts.map((a) => `${a.title} (${a.type})`).join(", ") || "aucun"}\n` +
+            `Validations en attente : ${approvals.map((a) => `${a.title} — impact : ${a.impact}`).join(" ; ") || "aucune"}`,
+        },
+      ],
+      preferFree: true,
+      maxTokens: 700,
+      metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
+    };
+    if (onDelta) {
+      // Synthèse en flux : les fragments rejoignent le fil en direct.
+      const response = await withTimeout(
+        generateStream(request, { onDelta }),
+        SUMMARY_BUDGET_MS,
+        "synthèse du plan",
+      );
+      return response.text || deterministic;
+    }
+    const response = await withTimeout(generate(request), SUMMARY_BUDGET_MS, "synthèse du plan");
     return response.text || deterministic;
   } catch {
+    // Synthèse indisponible (ou flux interrompu) : le repli déterministe est
+    // renvoyé d'un bloc — le client remplace le texte en cours par la version
+    // finale au moment de message_complete.
     return deterministic;
   }
 }

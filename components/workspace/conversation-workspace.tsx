@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApprovalCard } from "./approval-card";
 import { ArtifactPanel } from "./artifact-panel";
@@ -18,17 +18,20 @@ import type {
   ConversationRun,
   MessageAttachment,
 } from "@/lib/domain/conversations/types";
+import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
+import { streamConversationTurn } from "@/lib/domain/conversations/stream-client";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 
 /**
  * Orchestrateur de l'espace conversation (layout 3 colonnes) :
  *  - gauche : conversations récentes, projets, recherche ;
- *  - centre : fil de messages + composer (pièces jointes, mentions projet) ;
+ *  - centre : fil de messages + composer (pièces jointes, connecteurs,
+ *    mentions projet) — réponse écrite en direct (streaming) ;
  *  - droite : plan d'exécution, outils, validations et livrables.
  *
- * Le dashboard devient une page d'accueil légère ; le centre de gravité est
- * ici : une application de conversations persistantes avec exécution
- * d'agents — « Reprendre une conversation » se fait en un clic.
+ * Le tour conversationnel est consommé en flux NDJSON : phases de travail,
+ * fragments de texte, étapes d'outils et validations arrivent en direct ;
+ * à la fin, l'état serveur (autoritaire) remplace la vue locale.
  */
 
 interface ConversationWorkspaceProps {
@@ -44,12 +47,28 @@ interface ConversationDetail {
   approvals: ConversationApproval[];
 }
 
+/** État vivant du tour en cours (rendu en direct dans le fil). */
+interface LiveTurn {
+  status: string;
+  content: string;
+  run: ConversationRun | null;
+  approvals: ConversationApproval[];
+  artifacts: ConversationArtifact[];
+}
+
 const STARTER_SUGGESTIONS = [
   "Analyse mes ventes du mois et rédige un compte rendu",
   "Prépare un point hebdo à partir de mes notes",
   "Crée un rapport de suivi avec les prochaines échéances",
   "Recherche les dernières tendances de mon marché",
 ];
+
+/** Message en attente après création depuis l'accueil (hand-off entre pages). */
+const PENDING_MESSAGE_PREFIX = "g3-pending-message:";
+
+function emptyLive(): LiveTurn {
+  return { status: "", content: "", run: null, approvals: [], artifacts: [] };
+}
 
 export function ConversationWorkspace({ conversationId }: ConversationWorkspaceProps) {
   const router = useRouter();
@@ -64,6 +83,9 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   const [listCollapsed, setListCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [projectId, setProjectId] = useState<string | undefined>(undefined);
+  const [connectors, setConnectors] = useState<string[]>([]);
+  const [live, setLive] = useState<LiveTurn | null>(null);
+  const threadScrollRef = useRef<HTMLDivElement>(null);
 
   const loadLists = useCallback(async () => {
     try {
@@ -118,16 +140,73 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
     }
   }, [conversationId, loadDetail]);
 
-  const createConversation = useCallback(async () => {
-    const response = await fetch("/api/workspace/conversations", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(projectId ? { projectId } : {}),
-    });
-    if (!response.ok) return;
-    const data = (await response.json()) as { conversation: Conversation };
-    router.push(`/workspace/conversations/${data.conversation.id}`);
-  }, [projectId, router]);
+  // Défilement automatique pendant l'écriture en direct (et à l'arrivée
+  // de nouveaux messages) — l'utilisateur garde la dernière ligne en vue.
+  useEffect(() => {
+    const container = threadScrollRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+  }, [detail?.messages.length, live?.content, live?.run, live?.status]);
+
+  const consumeEvent = useCallback((event: ConversationStreamEvent) => {
+    switch (event.type) {
+      case "turn_started":
+        // Remplace le message optimiste par le message persisté (vrai id).
+        setDetail((current) => {
+          if (!current) return current;
+          const withoutOptimistic = current.messages.filter((m) => !m.id.startsWith("local-"));
+          return { ...current, messages: [...withoutOptimistic, event.userMessage] };
+        });
+        break;
+      case "status":
+        setLive((current) => ({ ...(current ?? emptyLive()), status: event.label }));
+        break;
+      case "message_delta":
+        setLive((current) => ({ ...(current ?? emptyLive()), content: (current?.content ?? "") + event.delta }));
+        break;
+      case "run_created":
+        setLive((current) => ({ ...(current ?? emptyLive()), run: event.run }));
+        break;
+      case "run_status":
+        setLive((current) => (current?.run ? { ...current, run: { ...current.run, status: event.status } } : current));
+        break;
+      case "step_update":
+        setLive((current) => {
+          if (!current?.run) return current;
+          const steps = [...current.run.steps];
+          const index = steps.findIndex((s) => s.id === event.step.id);
+          if (index >= 0) steps[index] = event.step;
+          else steps.push(event.step);
+          return { ...current, run: { ...current.run, steps } };
+        });
+        break;
+      case "approval_created":
+        setLive((current) => ({ ...(current ?? emptyLive()), approvals: [...current?.approvals ?? [], event.approval] }));
+        break;
+      case "artifact_created":
+        setLive((current) => ({ ...(current ?? emptyLive()), artifacts: [...current?.artifacts ?? [], event.artifact] }));
+        break;
+      case "message_complete":
+        // Le texte final remplace le buffer en cours (source de vérité serveur).
+        setLive((current) => ({ ...(current ?? emptyLive()), content: event.message.content, status: "" }));
+        break;
+      case "done":
+        break;
+      case "error":
+        throw new Error(event.message);
+      default:
+        break;
+    }
+  }, []);
+
+  const finishTurn = useCallback(
+    async (conversationId: string) => {
+      setLive(null);
+      await loadDetail(conversationId, true);
+      void loadLists();
+    },
+    [loadDetail, loadLists],
+  );
 
   const sendMessage = useCallback(
     async (message: string, attachments: MessageAttachment[]) => {
@@ -148,28 +227,76 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
       setDetail((current) =>
         current ? { ...current, messages: [...current.messages, optimistic] } : current,
       );
+      setLive(emptyLive());
       try {
-        const response = await fetch(`/api/workspace/conversations/${conversationId}/messages`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ message, attachments, projectId }),
+        // 1) Streaming NDJSON — rendu en direct du tour complet.
+        await streamConversationTurn({
+          conversationId,
+          message,
+          attachments,
+          projectId,
+          connectors,
+          onEvent: consumeEvent,
         });
-        if (!response.ok) {
-          const data = (await response.json().catch(() => ({}))) as { error?: string };
-          throw new Error(data.error ?? "Le message n'a pas pu être traité.");
+      } catch (streamError) {
+        // 2) Repli : route classique (résultat complet, même persistance).
+        try {
+          const response = await fetch(`/api/workspace/conversations/${conversationId}/messages`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              message,
+              attachments,
+              projectId,
+              ...(connectors.length > 0 ? { connectors } : {}),
+            }),
+          });
+          if (!response.ok) {
+            const data = (await response.json().catch(() => ({}))) as { error?: string };
+            throw new Error(data.error ?? (streamError instanceof Error ? streamError.message : "Le message n'a pas pu être traité."));
+          }
+        } catch (fallbackError) {
+          setError(fallbackError instanceof Error ? fallbackError.message : "Le message n'a pas pu être traité.");
+          setLive(null);
+          setGenerating(false);
+          return;
         }
-        // Le tour complet est rechargé : message utilisateur réel, réponse,
-        // timeline, artefacts et validations persistés côté serveur.
-        await loadDetail(conversationId, true);
-        void loadLists();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Le message n'a pas pu être traité.");
-      } finally {
-        setGenerating(false);
       }
+      await finishTurn(conversationId);
+      setGenerating(false);
     },
-    [conversationId, loadDetail, loadLists, projectId],
+    [conversationId, connectors, consumeEvent, finishTurn, projectId],
   );
+
+  const createConversation = useCallback(async () => {
+    const response = await fetch("/api/workspace/conversations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(projectId ? { projectId } : {}),
+    });
+    if (!response.ok) return;
+    const data = (await response.json()) as { conversation: Conversation };
+    router.push(`/workspace/conversations/${data.conversation.id}`);
+  }, [projectId, router]);
+
+  // Premier message envoyé depuis l'accueil : transmis via un marqueur de
+  // session, consommé ici pour profiter du même rendu en direct.
+  useEffect(() => {
+    if (!conversationId || loadingDetail || detail === null) return;
+    const key = `${PENDING_MESSAGE_PREFIX}${conversationId}`;
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return;
+    sessionStorage.removeItem(key);
+    try {
+      const pending = JSON.parse(raw) as { message: string; attachments?: MessageAttachment[] };
+      if (pending.message) void sendMessage(pending.message, pending.attachments ?? []);
+    } catch {
+      /* marqueur illisible : ignoré */
+    }
+    // sendMessage est volontairement hors dépendances : le hand-off ne
+    // doit se produire qu'une seule fois, au chargement de la conversation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, loadingDetail, detail === null]);
 
   const decideApproval = useCallback(
     async (approvalId: string, decision: "approved" | "rejected") => {
@@ -215,7 +342,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         <div className="w-full max-w-xl">
           <Composer
             onSend={async (message, attachments) => {
-              // Crée la conversation puis envoie le premier message.
+              // Crée la conversation puis transmet le premier message au
+              // nouveau rendu (hand-off) pour le même streaming que la suite.
               const response = await fetch("/api/workspace/conversations", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
@@ -229,24 +357,42 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
                 return;
               }
               const data = (await response.json()) as { conversation: Conversation };
+              try {
+                sessionStorage.setItem(
+                  `${PENDING_MESSAGE_PREFIX}${data.conversation.id}`,
+                  JSON.stringify({ message, attachments }),
+                );
+              } catch {
+                /* stockage indisponible : le message sera simplement renvoyé */
+              }
               router.push(`/workspace/conversations/${data.conversation.id}`);
-              // Premier message après le rendu de la conversation créée.
-              await fetch(`/api/workspace/conversations/${data.conversation.id}/messages`, {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ message, attachments, projectId }),
-              });
               router.refresh();
             }}
             projects={projects}
             projectId={projectId}
             onProjectChange={setProjectId}
+            connectors={connectors}
+            onConnectorsChange={setConnectors}
             suggestions={STARTER_SUGGESTIONS}
           />
         </div>
       </div>
     ),
-    [projectId, projects, router],
+    [connectors, projectId, projects, router],
+  );
+
+  // Fusion des entités vivantes (tour en cours) avec l'état serveur.
+  const mergedRuns = useMemo(
+    () => (live?.run && detail ? [...detail.runs.filter((r) => r.id !== live.run?.id), live.run] : detail?.runs ?? []),
+    [detail, live],
+  );
+  const mergedApprovals = useMemo(
+    () => (live && live.approvals.length > 0 && detail ? [...detail.approvals, ...live.approvals] : detail?.approvals ?? []),
+    [detail, live],
+  );
+  const mergedArtifacts = useMemo(
+    () => (live && live.artifacts.length > 0 && detail ? [...detail.artifacts, ...live.artifacts] : detail?.artifacts ?? []),
+    [detail, live],
   );
 
   return (
@@ -290,7 +436,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto pr-1">
+        <div ref={threadScrollRef} className="flex-1 overflow-y-auto pr-1">
           {loadingDetail ? (
             <div className="space-y-3 py-4" aria-busy>
               {[0, 1, 2].map((i) => (
@@ -309,10 +455,13 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           ) : detail ? (
             <MessageThread
               messages={detail.messages}
-              runs={detail.runs}
-              approvals={detail.approvals}
-              artifacts={detail.artifacts}
+              runs={mergedRuns}
+              approvals={mergedApprovals}
+              artifacts={mergedArtifacts}
               generating={generating}
+              streamingContent={live ? live.content : undefined}
+              streamingStatus={live?.status}
+              liveRun={live?.run}
               onDecide={decideApproval}
             />
           ) : null}
@@ -332,6 +481,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               projects={projects}
               projectId={projectId}
               onProjectChange={setProjectId}
+              connectors={connectors}
+              onConnectorsChange={setConnectors}
               autoFocus
             />
           </div>
@@ -346,9 +497,9 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
             onToggle={() => setDrawerOpen((open) => !open)}
             conversationTitle={detail.conversation.title}
             project={detail.project}
-            runs={detail.runs}
-            approvals={detail.approvals}
-            artifacts={detail.artifacts}
+            runs={mergedRuns}
+            approvals={mergedApprovals}
+            artifacts={mergedArtifacts}
             onDecide={decideApproval}
           />
         )}

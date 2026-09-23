@@ -11,6 +11,8 @@ import {
   inferArtifactType,
   stepRequiresApproval,
 } from "./engine";
+import { silentEmitter, safeEmitter } from "./stream-events";
+import type { ConversationStreamEvent, StreamEventEmitter } from "./stream-events";
 import { deriveRunStatus, makeStep } from "../runs/repository";
 import { ARTIFACT_TYPES, isArtifactType } from "../artifacts/repository";
 import type { RunStep } from "./types";
@@ -72,6 +74,75 @@ describe("moteur conversationnel — contrôle humain des actions sensibles", ()
     expect(prompt).toContain("validation requise");
     expect(prompt).toContain("Lancement produit");
     expect(prompt).toContain("Ne jamais citer de données clients.");
+  });
+
+  it("injecte les connecteurs activés dans le prompt d'intention (composer)", () => {
+    const withConnectors = buildIntentSystemPrompt(
+      [
+        { name: "web.search", description: "Recherche web.", risk: "low", requiresApproval: false },
+        { name: "composio.execute", description: "Application connectée.", risk: "high", requiresApproval: true },
+      ],
+      null,
+      ["gmail", "notion"],
+    );
+    expect(withConnectors).toContain("Connecteurs activés explicitement");
+    expect(withConnectors).toContain("gmail, notion");
+    expect(withConnectors).toContain("composio.execute");
+    // Sans connecteurs : aucune section (ne pollue pas la décision).
+    const without = buildIntentSystemPrompt(
+      [{ name: "web.search", description: "Recherche web.", risk: "low", requiresApproval: false }],
+    );
+    expect(without).not.toContain("Connecteurs activés explicitement");
+  });
+});
+
+describe("moteur conversationnel — événements de flux (streaming)", () => {
+  const collect = (): { events: ConversationStreamEvent[]; emitter: StreamEventEmitter } => {
+    const events: ConversationStreamEvent[] = [];
+    return { events, emitter: (event) => void events.push(event) };
+  };
+
+  it("l'émetteur silencieux ne produit rien et ne lève jamais", async () => {
+    expect(() => silentEmitter({ type: "status", phase: "plan", label: "test" })).not.toThrow();
+    await Promise.resolve(silentEmitter({ type: "status", phase: "plan", label: "test" }));
+  });
+
+  it("safeEmitter avale les erreurs d'émission (client déconnecté) sans interrompre le tour", async () => {
+    const crashing: StreamEventEmitter = () => {
+      throw new Error("socket hang up");
+    };
+    const safe = safeEmitter(crashing);
+    await expect(safe({ type: "status", phase: "plan", label: "avant crash" })).resolves.toBeUndefined();
+  });
+
+  it("safeEmitter tolère une promesse rejetée par l'émetteur", async () => {
+    const rejecting: StreamEventEmitter = () => Promise.reject(new Error("write after end"));
+    const safe = safeEmitter(rejecting);
+    await expect(safe({ type: "message_delta", delta: "coucou" })).resolves.toBeUndefined();
+  });
+
+  it("safeEmitter sans émetteur se comporte comme l'émetteur silencieux", async () => {
+    const safe = safeEmitter(undefined);
+    expect(() => safe({ type: "error", message: "n'importe quoi" })).not.toThrow();
+    await Promise.resolve(safe({ type: "error", message: "n'importe quoi" }));
+  });
+
+  it("les événements de flux couvrent le cycle complet d'un tour", () => {
+    const { events, emitter } = collect();
+    emitter({ type: "status", phase: "intention", label: "Analyse…" });
+    emitter({ type: "turn_started", conversationId: "c1", userMessage: { id: "m1", conversationId: "c1", userId: "u1", role: "user", content: "bonjour", createdAt: new Date().toISOString() } });
+    emitter({ type: "run_created", run: { id: "r1", userId: "u1", conversationId: "c1", objective: "o", status: "running", steps: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } });
+    emitter({ type: "message_delta", delta: "Réponse " });
+    emitter({ type: "message_delta", delta: "en direct" });
+    emitter({ type: "message_complete", message: { id: "m2", conversationId: "c1", userId: "u1", role: "assistant", content: "Réponse en direct", createdAt: new Date().toISOString() } });
+    expect(events.map((event) => event.type)).toEqual([
+      "status",
+      "turn_started",
+      "run_created",
+      "message_delta",
+      "message_delta",
+      "message_complete",
+    ]);
   });
 });
 

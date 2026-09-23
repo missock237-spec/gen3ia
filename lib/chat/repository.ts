@@ -188,6 +188,9 @@ export async function listMessages(userId: string, conversationId: string, limit
       model: x.model,
       imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : undefined,
       runId: typeof x.runId === "string" ? x.runId : undefined,
+      connectors: Array.isArray(x.connectors)
+        ? x.connectors.filter((c: unknown): c is string => typeof c === "string" && c.length > 0 && c.length <= 60)
+        : undefined,
       usage: x.usage,
       createdAt: iso(x.createdAt),
     };

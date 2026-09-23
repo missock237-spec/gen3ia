@@ -20,12 +20,19 @@ const AttachmentSchema = z.object({
   sizeBytes: z.number().int().nonnegative().max(200 * 1024 * 1024).optional(),
 });
 
+const ConnectorSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/, "Slug de connecteur invalide.");
+
 const BodySchema = z.object({
   message: z.string().trim().min(1).max(20000),
   attachments: z.array(AttachmentSchema).max(8).optional(),
   projectId: z.string().trim().min(1).max(128).optional(),
   provider: z.string().trim().max(60).optional(),
   model: z.string().trim().max(200).optional(),
+  connectors: z.array(ConnectorSchema).max(8).optional(),
 });
 
 /**
@@ -58,6 +65,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       projectId: body.projectId,
       provider: body.provider,
       model: body.model,
+      connectors: body.connectors,
     });
     return NextResponse.json(result);
   } catch (error) {

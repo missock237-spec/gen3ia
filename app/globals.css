@@ -111,6 +111,32 @@ body {
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(24px) scale(.97); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes toast-bar {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+/* Curseur d'écriture en direct (streaming de la réponse de l'assistant). */
+.g3-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: #171714;
+  animation: caret-blink 1s steps(1) infinite;
+}
+
+@keyframes caret-blink {
+  0%, 60% { opacity: 1; }
+  61%, 100% { opacity: 0; }
+}
+
 @keyframes gen3ia-progress {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(320%); }
