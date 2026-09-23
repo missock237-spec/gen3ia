@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
 import { captureServerException } from "@/lib/observability/sentry";
 import { detectDeviceFromHeaders } from "@/lib/device/detect";
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     const pcOnly = pcOnlyGuard(request);
     if (pcOnly) return pcOnly;
     const token = await verifyFirebaseAuth(request);
-    const liveLimit = rateLimit(`live-session:${token.uid}`, { limit: 20, windowMs: 5 * 60 * 1000 });
+    const liveLimit = await enforceRateLimit(`live-session:${token.uid}`, { limit: 20, windowMs: 5 * 60 * 1000 });
     if (!liveLimit.allowed) {
       return NextResponse.json({ error: "Trop de sessions creees rapprochees. Reessayez dans quelques minutes." }, { status: 429 });
     }

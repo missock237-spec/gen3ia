@@ -9,6 +9,10 @@ import type {
   MessageCitation,
 } from "@/lib/domain/conversations/types";
 
+import {
+  indexConversationMessage,
+} from "@/lib/chat/vector-index";
+
 export interface ChatConversation {
   id: string;
   userId: string;
@@ -200,10 +204,18 @@ export async function listMessages(userId: string, conversationId: string, limit
 export async function appendMessage(input: Omit<ChatMessage, "id" | "createdAt">) {
   const ref = adminDb.collection("chatMessages").doc();
   const now = new Date();
+  // Rattachement projet de la conversation (capturé pendant la transaction,
+  // sans lecture Firestore supplémentaire) : sert au filtrage du miroir
+  // vectoriel par projet (recherche sémantique contextuelle).
+  let conversationProjectId: string | null = null;
   await adminDb.runTransaction(async tx => {
     const conversation = conversationRef(input.conversationId);
     const snap = await tx.get(conversation);
     if (!snap.exists || snap.data()?.userId !== input.userId) throw new Error("Conversation introuvable.");
+    const data = snap.data();
+    if (typeof data?.projectId === "string" && data.projectId.length > 0) {
+      conversationProjectId = data.projectId;
+    }
     tx.set(ref, {
       ...input,
       generationStatus: input.generationStatus ?? "complete",
@@ -212,7 +224,29 @@ export async function appendMessage(input: Omit<ChatMessage, "id" | "createdAt">
     const current = Number(snap.data()?.messageCount ?? 0);
     tx.update(conversation, { messageCount: current + 1, updatedAt: FieldValue.serverTimestamp() });
   });
-  return { ...input, generationStatus: input.generationStatus ?? "complete", id: ref.id, createdAt: now.toISOString() };
+  const saved: ChatMessage = { ...input, generationStatus: input.generationStatus ?? "complete", id: ref.id, createdAt: now.toISOString() };
+
+  // Miroir vectoriel (recherche sémantique de l'historique) : best-effort,
+  // après la persistance Firestore. L'indexation n'ajoute que l'appel
+  // d'embedding (~200-400 ms) à un tour de chat qui dure déjà plusieurs
+  // secondes ; elle ne peut JAMAIS faire échouer l'envoi du message.
+  // (Serveur : on attend — un travail « fire-and-forget » serait tué par
+  // la fin de l'invocation serverless avant d'être envoyé.)
+  try {
+    await indexConversationMessage({
+      messageId: saved.id,
+      conversationId: saved.conversationId,
+      userId: saved.userId,
+      role: saved.role,
+      content: saved.content,
+      createdAt: saved.createdAt,
+      projectId: conversationProjectId,
+    });
+  } catch {
+    // Déjà avalé dans indexConversationMessage — double ceinture.
+  }
+
+  return saved;
 }
 
 export async function renameConversation(userId: string, id: string, title: string) {

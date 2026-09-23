@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 import { extensionApiError } from "@/lib/extensions/api";
 import { createReport } from "@/lib/extensions/repository";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -24,7 +24,7 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const token = await verifyFirebaseAuth(request);
     const { id } = await params;
-    const limit = rateLimit(`ext-report:${token.uid}`, { limit: 5, windowMs: 60 * 60 * 1000 });
+    const limit = await enforceRateLimit(`ext-report:${token.uid}`, { limit: 5, windowMs: 60 * 60 * 1000 });
     if (!limit.allowed) {
       return NextResponse.json({ error: "Trop de signalements. Réessayez plus tard." }, { status: 429 });
     }

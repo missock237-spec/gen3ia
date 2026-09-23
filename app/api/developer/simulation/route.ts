@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 
 import { requireCodeAgentOwner } from "@/lib/agents/code-agent-guard";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { simulateSandboxJob } from "@/lib/sandbox/simulation";
 
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const guard = await requireCodeAgentOwner(request);
     if ("forbidden" in guard) return guard.forbidden;
 
-    const limit = rateLimit(`dev-simulation:${guard.user.uid}`, { limit: 60, windowMs: 5 * 60 * 1000 });
+    const limit = await enforceRateLimit(`dev-simulation:${guard.user.uid}`, { limit: 60, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) {
       return NextResponse.json({ error: "Trop de simulations rapprochées. Réessayez dans quelques instants." }, { status: 429 });
     }

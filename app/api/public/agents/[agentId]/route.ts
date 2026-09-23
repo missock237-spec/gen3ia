@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAgentById } from "@/lib/agents/repository";
-import { rateLimit, clientIp } from "@/lib/security/rate-limit";
+import { clientIp, enforceRateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 

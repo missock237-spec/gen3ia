@@ -5,7 +5,7 @@ import {
   getChariowTopupProductId,
 } from "@/lib/billing/chariow";
 import { WALLET_CURRENCY } from "@/lib/billing/wallet";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
 import { captureServerException } from "@/lib/observability/sentry";
 
@@ -30,7 +30,7 @@ function appOrigin(request: Request): string {
 export async function POST(request: Request) {
   try {
     const token = await verifyFirebaseRequest(request);
-    const topupLimit = rateLimit(`billing-topup:${token.uid}`, { limit: 10, windowMs: 10 * 60 * 1000 });
+    const topupLimit = await enforceRateLimit(`billing-topup:${token.uid}`, { limit: 10, windowMs: 10 * 60 * 1000 });
     if (!topupLimit.allowed) {
       return Response.json({ error: "Trop de tentatives de rechargement. Reessayez plus tard." }, { status: 429, headers: { "retry-after": String(Math.max(1, Math.ceil(topupLimit.retryAfterMs / 1000))) } });
     }

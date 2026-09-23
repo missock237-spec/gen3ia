@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { createAgentRecord, listAgentsByOwner, toSummary } from "@/lib/agents/repository";
 import { AgentRecordSchema } from "@/lib/agents/schema";
 import { getDeveloperProject } from "@/lib/developer/projects";
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
     const user = await requireUser(request);
-    const limit = rateLimit(`agent-create:${user.uid}`, { limit: 20, windowMs: 60 * 60 * 1000 });
+    const limit = await enforceRateLimit(`agent-create:${user.uid}`, { limit: 20, windowMs: 60 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Limite de creation d'agents atteinte, reessayez plus tard.", requestId }, { status: 429 });
     const parsed = AgentRecordSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Donnees d'agent invalides", issues: parsed.error.flatten(), requestId }, { status: 400 });

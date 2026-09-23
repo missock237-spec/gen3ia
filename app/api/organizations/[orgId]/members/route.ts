@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { requestTraceId } from "@/lib/observability/logger";
 import {
   inviteMember,
@@ -55,7 +55,7 @@ export async function POST(
   } catch {
     return unauthorized(request);
   }
-  const limit = rateLimit(`org-members:${user.uid}`, { limit: 30, windowMs: 10 * 60 * 1000 });
+  const limit = await enforceRateLimit(`org-members:${user.uid}`, { limit: 30, windowMs: 10 * 60 * 1000 });
   if (!limit.allowed) {
     return NextResponse.json({ error: "Trop de requêtes. Réessayez dans quelques instants." }, { status: 429 });
   }

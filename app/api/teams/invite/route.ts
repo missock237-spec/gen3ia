@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { createTeamInvitation, getInvitationByToken, type TeamRole } from "@/lib/teams/repository";
 
 /** GET /api/teams/invite?token=… — lit une invitation par son token. */
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
     const user = await requireUser(request);
-    const limit = rateLimit(`team-invite:${user.uid}`, { limit: 30, windowMs: 60 * 60 * 1000 });
+    const limit = await enforceRateLimit(`team-invite:${user.uid}`, { limit: 30, windowMs: 60 * 60 * 1000 });
     if (!limit.allowed) {
       return NextResponse.json(
         { error: "Limite d'invitations atteinte, reessayez plus tard.", requestId },

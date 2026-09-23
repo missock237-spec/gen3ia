@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { protectRoute } from "@/lib/security/route-guard";
 import { isRedisConfigured, redisPing } from "@/lib/cache/redis";
 import { countVectorPoints, isVectorStoreConfigured, VECTOR_COLLECTION_KNOWLEDGE, VECTOR_COLLECTION_MEMORIES } from "@/lib/memory/vector-store";
+import { CONVERSATION_VECTOR_COLLECTION } from "@/lib/chat/vector-index";
 import { isSandboxConfigured } from "@/lib/sandbox/simulation";
 
 export const runtime = "nodejs";
@@ -20,10 +21,11 @@ export async function GET(request: NextRequest) {
   const guard = await protectRoute(request, { rateLimit: { limit: 30, windowMs: 60_000 } });
   if (!guard.ok) return guard.response;
 
-  const [redis, memoriesCount, knowledgeCount] = await Promise.all([
+  const [redis, memoriesCount, knowledgeCount, conversationsCount] = await Promise.all([
     redisPing(),
     isVectorStoreConfigured() ? countVectorPoints(VECTOR_COLLECTION_MEMORIES) : Promise.resolve(null),
     isVectorStoreConfigured() ? countVectorPoints(VECTOR_COLLECTION_KNOWLEDGE) : Promise.resolve(null),
+    isVectorStoreConfigured() ? countVectorPoints(CONVERSATION_VECTOR_COLLECTION) : Promise.resolve(null),
   ]);
 
   return NextResponse.json({
@@ -39,8 +41,9 @@ export async function GET(request: NextRequest) {
         collections: {
           [VECTOR_COLLECTION_MEMORIES]: memoriesCount,
           [VECTOR_COLLECTION_KNOWLEDGE]: knowledgeCount,
+          [CONVERSATION_VECTOR_COLLECTION]: conversationsCount,
         },
-        role: "recherche vectorielle (repli : Firestore cosine)",
+        role: "recherche vectorielle (mémoires, connaissances, historique des conversations — repli : Firestore cosine)",
       },
       sandbox: {
         deployed: isSandboxConfigured(),

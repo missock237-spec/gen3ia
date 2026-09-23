@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { triggerScheduleByWebhookToken } from "@/lib/agents/scheduler";
 
 /**
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   // Limiteur par token : un webhook ne doit pas pouvoir marteler l'agent.
-  const limit = rateLimit(`agent-webhook:${token}`, { limit: 20, windowMs: 60 * 60 * 1000 });
+  const limit = await enforceRateLimit(`agent-webhook:${token}`, { limit: 20, windowMs: 60 * 60 * 1000 });
   if (!limit.allowed) {
     return NextResponse.json({ error: "Trop de déclenchements pour ce webhook." }, { status: 429 });
   }

@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { getAgentForOwner } from "@/lib/agents/repository";
 import { listAgentPhoneNumbers } from "@/lib/integrations/twilio/numbers";
 import { createPhoneCallSession, startPhoneCall } from "@/lib/integrations/twilio/calls";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { createPlivoPhoneCallSession, startPlivoPhoneCall } from "@/lib/integrations/plivo/calls";
 
 const CallSchema = z.object({
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   try {
     const user = await requireUser(request);
     const { id } = await context.params;
-    const limit = rateLimit(`voice-call:${user.uid}`, { limit: 10, windowMs: 60 * 60 * 1000 });
+    const limit = await enforceRateLimit(`voice-call:${user.uid}`, { limit: 10, windowMs: 60 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Limite d'appels vocaux atteinte pour cette heure." }, { status: 429 });
 
     const parsed = CallSchema.safeParse(await request.json());

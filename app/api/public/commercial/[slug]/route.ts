@@ -8,7 +8,7 @@ import {
   getCommercialConfigBySlug,
 } from "@/lib/agents/commercial";
 import { rateLimitDistributed } from "@/lib/cache/redis";
-import { clientIp } from "@/lib/security/rate-limit";
+import { clientIp, enforceRateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

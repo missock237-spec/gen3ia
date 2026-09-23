@@ -24,6 +24,15 @@ const nextConfig: NextConfig = {
           { key: "Strict-Transport-Security", value: "max-age=63072000" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           { key: "X-Frame-Options", value: "DENY" },
+          // Isolation cross-origin : les onglets tiers ne peuvent pas référencer
+          // la fenêtre Gen3ia (mitigation Spectre / XS-Leaks). « allow-popups »
+          // conserve le flux OAuth Google (popup + postMessage).
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+          // Les ressources Gen3ia ne se chargent pas depuis un document
+          // cross-origin (protection contre l'embarquement d'assets).
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+          // Réduction du bruit réseau sortant au survol des liens.
+          { key: "X-DNS-Prefetch-Control", value: "off" },
         ],
       },
     ];

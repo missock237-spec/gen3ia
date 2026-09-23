@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { getAgentForOwner } from "@/lib/agents/repository";
 import { listAgentPhoneNumbers } from "@/lib/integrations/twilio/numbers";
 import { createPhoneCallSession, listPhoneCallSessions, startPhoneCall } from "@/lib/integrations/twilio/calls";
@@ -24,7 +24,7 @@ export const maxDuration = 60;
 export async function GET(request: NextRequest) {
   try {
     const user = await requireUser(request);
-    const limit = rateLimit(`voice-calls-list:${user.uid}`, { limit: 120, windowMs: 5 * 60 * 1000 });
+    const limit = await enforceRateLimit(`voice-calls-list:${user.uid}`, { limit: 120, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Trop de requêtes." }, { status: 429 });
     const agentId = request.nextUrl.searchParams.get("agentId") ?? undefined;
     const sessions = await listPhoneCallSessions(user.uid, agentId, 40);
@@ -43,7 +43,7 @@ const CallSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser(request);
-    const limit = rateLimit(`voice-call:${user.uid}`, { limit: 10, windowMs: 60 * 60 * 1000 });
+    const limit = await enforceRateLimit(`voice-call:${user.uid}`, { limit: 10, windowMs: 60 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Limite d'appels vocaux atteinte pour cette heure." }, { status: 429 });
 
     const parsed = CallSchema.safeParse(await request.json());

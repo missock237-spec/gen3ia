@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { getAgentForOwner } from "@/lib/agents/repository";
 import { createPersonalizedPlan, policyForAgent } from "@/lib/agents/personalized-plan";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   try {
     const user = await requireUser(request);
-    const limit = rateLimit(`agent-run:${user.uid}`, { limit: 12, windowMs: 5 * 60 * 1000 });
+    const limit = await enforceRateLimit(`agent-run:${user.uid}`, { limit: 12, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) {
       return NextResponse.json(
         { error: "Trop d'executions rapprochees. Reessayez dans quelques minutes.", requestId },

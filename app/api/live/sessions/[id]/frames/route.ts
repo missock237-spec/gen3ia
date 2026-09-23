@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { captureServerException } from "@/lib/observability/sentry";
 import { detectDeviceFromHeaders } from "@/lib/device/detect";
 import {
@@ -59,7 +59,7 @@ export async function POST(request: Request, { params }: Params) {
     }
     const token = await verifyFirebaseAuth(request);
     // Garde-fou coût/abus : une frame déclenche au plus un appel vision.
-    const frameLimit = rateLimit(`live-frames:${token.uid}`, { limit: 30, windowMs: 60_000 });
+    const frameLimit = await enforceRateLimit(`live-frames:${token.uid}`, { limit: 30, windowMs: 60_000 });
     if (!frameLimit.allowed) {
       return fail(429, "Trop de frames envoyées. Ralentissez l'envoi (une frame toutes les ~3 s suffit).", "LIVE_RATE_LIMITED");
     }

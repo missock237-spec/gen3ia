@@ -3,7 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { assertPhoneCallOwner, getPhoneCallSession } from "@/lib/integrations/twilio/calls";
 import type { PhoneCallSession } from "@/lib/integrations/twilio/voice";
 import { generateForUser } from "@/lib/billing/ai-execution";
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const user = await requireUser(request);
     const { id } = await context.params;
-    const limit = rateLimit(`call-summary:${user.uid}`, { limit: 30, windowMs: 5 * 60 * 1000 });
+    const limit = await enforceRateLimit(`call-summary:${user.uid}`, { limit: 30, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Trop de demandes de résumé." }, { status: 429 });
 
     await assertPhoneCallOwner(user.uid, id);

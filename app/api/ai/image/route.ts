@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import {
   generateImageWithAgnes,
   IMAGE_RATIOS,
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     // Quota dédié : 12 images / 5 minutes / utilisateur (protège la clé
     // partagée sans gêner un usage conversationnel normal).
-    const limit = rateLimit(`ai-image:${user.uid}`, { limit: 12, windowMs: 5 * 60 * 1000 });
+    const limit = await enforceRateLimit(`ai-image:${user.uid}`, { limit: 12, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) {
       return NextResponse.json(
         { error: "Limite de génération d'images atteinte. Réessayez dans quelques minutes.", code: "RATE_LIMITED" },

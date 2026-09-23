@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { acceptTeamInvitation } from "@/lib/teams/repository";
 
 /** POST /api/teams/accept — accepte une invitation par token. */
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
     const user = await requireUser(request);
-    const limit = rateLimit(`team-accept:${user.uid}`, { limit: 20, windowMs: 60 * 60 * 1000 });
+    const limit = await enforceRateLimit(`team-accept:${user.uid}`, { limit: 20, windowMs: 60 * 60 * 1000 });
     if (!limit.allowed) {
       return NextResponse.json(
         { error: "Trop de tentatives, reessayez plus tard.", requestId },

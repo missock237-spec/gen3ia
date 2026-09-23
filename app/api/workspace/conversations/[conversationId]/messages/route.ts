@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
-import { clientIp } from "@/lib/security/rate-limit";
+import { clientIp, enforceRateLimit } from "@/lib/security/rate-limit";
 import { rateLimitDistributed } from "@/lib/cache/redis";
 import { runConversationTurn } from "@/lib/domain/conversations/engine";
 

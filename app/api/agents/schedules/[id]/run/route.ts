@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { triggerScheduleNow } from "@/lib/agents/scheduler";
 
 interface RouteContext { params: Promise<{ id: string }>; }
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
     const user = await requireUser(request);
-    const limit = rateLimit(`schedule-manual-run:${user.uid}`, { limit: 10, windowMs: 60 * 60 * 1000 });
+    const limit = await enforceRateLimit(`schedule-manual-run:${user.uid}`, { limit: 10, windowMs: 60 * 60 * 1000 });
     if (!limit.allowed) {
       return NextResponse.json(
         { error: "Manual schedule execution limit reached", requestId },

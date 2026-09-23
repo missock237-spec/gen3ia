@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import {
   deleteCommercialConfig,
   getCommercialConfig,
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const user = await requireUser(request);
     const { id } = await context.params;
-    const limit = rateLimit(`commercial-get:${user.uid}`, { limit: 60, windowMs: 5 * 60 * 1000 });
+    const limit = await enforceRateLimit(`commercial-get:${user.uid}`, { limit: 60, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Trop de requêtes." }, { status: 429 });
     const config = await getCommercialConfig(user.uid, id);
     const chats = await listClientChats(user.uid, id, 20);
@@ -60,7 +60,7 @@ export async function PATCH(request: NextRequest, context: Context) {
   try {
     const user = await requireUser(request);
     const { id } = await context.params;
-    const limit = rateLimit(`commercial-patch:${user.uid}`, { limit: 40, windowMs: 5 * 60 * 1000 });
+    const limit = await enforceRateLimit(`commercial-patch:${user.uid}`, { limit: 40, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Trop de mises à jour rapprochées." }, { status: 429 });
 
     const parsed = PatchSchema.safeParse(await request.json());
@@ -88,7 +88,7 @@ export async function DELETE(request: NextRequest, context: Context) {
   try {
     const user = await requireUser(request);
     const { id } = await context.params;
-    const limit = rateLimit(`commercial-delete:${user.uid}`, { limit: 20, windowMs: 5 * 60 * 1000 });
+    const limit = await enforceRateLimit(`commercial-delete:${user.uid}`, { limit: 20, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Trop de requêtes." }, { status: 429 });
     const deleted = await deleteCommercialConfig(user.uid, id);
     if (!deleted) return NextResponse.json({ error: "Configuration introuvable." }, { status: 404 });

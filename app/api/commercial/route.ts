@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { getAgentForOwner } from "@/lib/agents/repository";
 import { createCommercialConfig, listCommercialConfigs } from "@/lib/agents/commercial";
 
@@ -35,7 +35,7 @@ const CreateSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const user = await requireUser(request);
-    const limit = rateLimit(`commercial-list:${user.uid}`, { limit: 60, windowMs: 5 * 60 * 1000 });
+    const limit = await enforceRateLimit(`commercial-list:${user.uid}`, { limit: 60, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Trop de requêtes." }, { status: 429 });
     const configs = await listCommercialConfigs(user.uid);
     return NextResponse.json({ configs });
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser(request);
-    const limit = rateLimit(`commercial-create:${user.uid}`, { limit: 20, windowMs: 5 * 60 * 1000 });
+    const limit = await enforceRateLimit(`commercial-create:${user.uid}`, { limit: 20, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Trop de créations rapprochées." }, { status: 429 });
 
     const parsed = CreateSchema.safeParse(await request.json());

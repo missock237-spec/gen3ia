@@ -44,3 +44,4 @@ ui-debug.log
 .idea/
 .vscode/
 *.swp
+.env*

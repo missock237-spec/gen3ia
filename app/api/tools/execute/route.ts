@@ -7,9 +7,7 @@ import {
   protectRoute,
 } from "@/lib/security/route-guard";
 
-import {
-  rateLimit,
-} from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 import {
   executeThroughGateway,
@@ -43,7 +41,7 @@ export async function POST(
     auth.context.userId;
 
   const limit =
-    rateLimit(
+    await enforceRateLimit(
       `tools:${userId}`,
       {
         limit: 30,

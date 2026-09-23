@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 
 import { requireCodeAgentOwner } from "@/lib/agents/code-agent-guard";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { TwentyFirstError } from "@/lib/integrations/twentyfirst/client";
 
 /** Utilitaires communs aux routes 21st.dev (fichier prive, non-route). */
@@ -21,7 +21,7 @@ export async function guard21st(
   const guard = await requireCodeAgentOwner(request);
   if ("forbidden" in guard) return { response: guard.forbidden };
 
-  const limit = rateLimit(`21st-${bucket}:${guard.user.uid}`, { limit: limitPerMinute, windowMs: 60 * 1000 });
+  const limit = await enforceRateLimit(`21st-${bucket}:${guard.user.uid}`, { limit: limitPerMinute, windowMs: 60 * 1000 });
   if (!limit.allowed) {
     return {
       response: NextResponse.json(

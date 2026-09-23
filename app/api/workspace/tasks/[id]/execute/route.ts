@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
 import { getWorkspaceTask } from "@/lib/agents/workspace";
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
   const user = await requireUser(request);
   const { id } = await params;
-  const limit = rateLimit(`workspace-execute:${user.uid}`, { limit: 6, windowMs: 5 * 60 * 1000 });
+  const limit = await enforceRateLimit(`workspace-execute:${user.uid}`, { limit: 6, windowMs: 5 * 60 * 1000 });
   if (!limit.allowed) return NextResponse.json({ error: "Trop d'exécutions rapprochées. Réessayez dans quelques minutes." }, { status: 429 });
 
   try {

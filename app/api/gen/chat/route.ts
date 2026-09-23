@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
-import { clientIp } from "@/lib/security/rate-limit";
+import { clientIp, enforceRateLimit } from "@/lib/security/rate-limit";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { checkGenQuota, genIsolationGuarantees, runGenTurn } from "@/lib/gen/chat";
 
