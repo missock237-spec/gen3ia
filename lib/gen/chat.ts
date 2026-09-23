@@ -71,8 +71,11 @@ export async function checkGenQuota(params: { userId?: string; ip: string }): Pr
   }
   // Sans Redis (rare), rateLimitDistributed retombe sur un compteur local :
   // le quota reste effectif par instance.
-  const result = await rateLimitDistributed(`gen:ip:${params.ip}`, { limit: 6, windowMs: 5 * 60 * 1000 });
-  return { allowed: result.allowed, limit: 6, retryAfterMs: result.retryAfterMs, bucket: "anonymous" };
+  // 15/5 min par IP : un visiteur réel qui explore le chat reste loin du
+  // seuil (et deux collègues derrière le même NAT ne se bloquent pas), tout
+  // en mordant franchement sur un trafic automatisé.
+  const result = await rateLimitDistributed(`gen:ip:${params.ip}`, { limit: 15, windowMs: 5 * 60 * 1000 });
+  return { allowed: result.allowed, limit: 15, retryAfterMs: result.retryAfterMs, bucket: "anonymous" };
 }
 
 /** Connecteurs connectés de l'utilisateur (lecture seule pour gen). */

@@ -23,7 +23,7 @@ async function chat(message, conversationId) {
     body: JSON.stringify(conversationId ? { message, conversationId } : { message }),
   });
   const body = await r.json().catch(() => ({}));
-  return { status: r.status, body, latencyMs: Date.now() - t0 };
+  return { status: r.status, body, headers: r.headers, latencyMs: Date.now() - t0 };
 }
 
 // 1) Réponses réelles.
