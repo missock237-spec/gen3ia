@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { createTeamForUser, listTeamsForUser } from "@/lib/teams/repository";
 
 /** GET /api/teams — liste les equipes de l'utilisateur. */
@@ -13,10 +14,12 @@ export async function GET(request: NextRequest) {
     const teams = await listTeamsForUser(user.uid);
     return NextResponse.json({ teams, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Liste des equipes indisponible";
+    // Statut déduit de l'erreur typée (401 auth, 503 infra, 500 défaut) —
+    // plus de mapping au message sensible à la casse qui renvoyait 500
+    // pour une simple absence de session.
     return NextResponse.json(
-      { error: message, requestId },
-      { status: message.includes("auth") ? 401 : 500 },
+      { ...errorBody(error, "Liste des equipes indisponible"), requestId },
+      { status: errorStatus(error, 500), headers: { "x-request-id": requestId } },
     );
   }
 }
@@ -47,7 +50,9 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json({ team, requestId }, { status: 201, headers: { "x-request-id": requestId } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Creation d'equipe impossible";
-    return NextResponse.json({ error: message, requestId }, { status: 400 });
+    return NextResponse.json(
+      { ...errorBody(error, "Creation d'equipe impossible"), requestId },
+      { status: errorStatus(error, 400), headers: { "x-request-id": requestId } },
+    );
   }
 }

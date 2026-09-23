@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { createTeamInvitation, getInvitationByToken, type TeamRole } from "@/lib/teams/repository";
 
 /** GET /api/teams/invite?token=… — lit une invitation par son token. */
@@ -17,8 +18,10 @@ export async function GET(request: NextRequest) {
     const invitation = await getInvitationByToken(token);
     return NextResponse.json({ invitation, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Invitation indisponible";
-    return NextResponse.json({ error: message, requestId }, { status: message.includes("auth") ? 401 : 404 });
+    return NextResponse.json(
+      { ...errorBody(error, "Invitation indisponible"), requestId },
+      { status: errorStatus(error, 404), headers: { "x-request-id": requestId } },
+    );
   }
 }
 
@@ -46,7 +49,9 @@ export async function POST(request: NextRequest) {
     const result = await createTeamInvitation(user.uid, { teamId, email, role });
     return NextResponse.json(result, { status: 201, headers: { "x-request-id": requestId } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Invitation impossible";
-    return NextResponse.json({ error: message, requestId }, { status: 400 });
+    return NextResponse.json(
+      { ...errorBody(error, "Invitation impossible"), requestId },
+      { status: errorStatus(error, 400), headers: { "x-request-id": requestId } },
+    );
   }
 }

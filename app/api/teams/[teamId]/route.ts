@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { getTeamWithMembers } from "@/lib/teams/repository";
 
 /** GET /api/teams/[teamId] — details de l'equipe + membres. */
@@ -20,7 +21,12 @@ export async function GET(
     return NextResponse.json(result, { headers: { "x-request-id": requestId } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Equipe indisponible";
-    const status = message.includes("Acces refuse") ? 403 : message.includes("auth") ? 401 : 404;
-    return NextResponse.json({ error: message, requestId }, { status });
+    // Accès refusé (403) d'abord, puis classification typée (401 auth,
+    // 503 infra, sinon 404) — insensible à la casse et aux accents.
+    const status = /acces\s*refuse|acc[eè]s\s*refus[eé]/i.test(message) ? 403 : errorStatus(error, 404);
+    return NextResponse.json(
+      { ...errorBody(error, "Equipe indisponible"), requestId },
+      { status, headers: { "x-request-id": requestId } },
+    );
   }
 }
