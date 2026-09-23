@@ -140,8 +140,13 @@ export function AgentChatPanel({
   const quickPrompts = QUICK_PROMPTS[agent.type] ?? QUICK_PROMPTS.custom;
 
   React.useEffect(() => {
+    // Suivi du bas du fil : c'est le CONTENEUR défilant (parent du log,
+    // marqué .g3-agent-thread-scroll) qui doit défiler — le log lui-même
+    // ne défile pas. Indispensable en chat plein écran (h-[100dvh]).
     const node = logRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
+    if (!node) return;
+    const scroller = node.closest<HTMLElement>(".g3-agent-thread-scroll");
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }, [messages, loading]);
 
   const loadConversations = React.useCallback(async () => {
@@ -374,12 +379,18 @@ export function AgentChatPanel({
   ]), [agent.id]);
 
   return (
-    <section className="relative overflow-hidden rounded-[30px] border border-white/10 bg-[#0b0b0d] shadow-[0_24px_70px_-28px_rgba(0,0,0,0.95)]" aria-label={`Chat avec ${agent.name}`}>
+    // Chat PLEIN ÉCRAN : la section remplit toute la hauteur disponible
+    // (100dvh via la chaîne AppShell → layout → atelier) ; le fil défile
+    // en interne (flex-1 + min-h-0) et le composer reste collé en bas.
+    <section
+      className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[#0b0b0d] shadow-[0_24px_70px_-28px_rgba(0,0,0,0.95)]"
+      aria-label={`Chat avec ${agent.name}`}
+    >
       <div className="pointer-events-none absolute -left-32 -top-32 h-72 w-72 rounded-full bg-white/5 blur-3xl" aria-hidden="true" />
       <div className="pointer-events-none absolute -bottom-40 -right-20 h-80 w-80 rounded-full bg-white/5 blur-3xl" aria-hidden="true" />
 
       {/* En-tête : identité de l'agent */}
-      <header className="relative flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3.5 md:px-5">
+      <header className="relative flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3.5 md:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative">
             <Avatar name={agent.name} />
@@ -402,7 +413,7 @@ export function AgentChatPanel({
       </header>
 
       {agent.skills.length > 0 && (
-        <div className="relative flex flex-wrap gap-1.5 border-b border-white/10 bg-white/[0.03] px-4 py-2.5 md:px-5" aria-label="Compétences de l'agent">
+        <div className="relative flex shrink-0 flex-wrap gap-1.5 border-b border-white/10 bg-white/[0.03] px-4 py-2.5 md:px-5" aria-label="Compétences de l'agent">
           {agent.skills.slice(0, 8).map((skill) => (
             <span key={skill} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-neutral-300">{skill}</span>
           ))}
@@ -414,7 +425,7 @@ export function AgentChatPanel({
       )}
 
       {showHistory && (
-        <div className="relative border-b border-white/10 bg-white/[0.03] px-4 py-3 md:px-5" role="region" aria-label="Historique des conversations">
+        <div className="relative shrink-0 border-b border-white/10 bg-white/[0.03] px-4 py-3 md:px-5" role="region" aria-label="Historique des conversations">
           {historyLoading && conversations.length === 0 ? (
             <p className="text-xs text-neutral-500">Chargement de l&apos;historique…</p>
           ) : conversations.length === 0 ? (
@@ -438,9 +449,10 @@ export function AgentChatPanel({
         </div>
       )}
 
-      {/* Fil de conversation */}
-      <div className="relative flex min-h-[520px] flex-col">
-        <div className="flex-1 overflow-y-auto p-4 md:p-5" style={{ maxHeight: "58vh" }}>
+      {/* Fil de conversation — défile en interne sur toute la hauteur restante
+          (plus de plafond arbitraire 58vh ni de hauteur minimale fixe) */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="g3-agent-thread-scroll min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
           {messages.length === 0 && (
             <div className="flex min-h-[380px] items-center justify-center">
               <div className="w-full max-w-2xl text-center">
@@ -536,8 +548,9 @@ export function AgentChatPanel({
           </div>
         </div>
 
-        {/* Zone de saisie : CommandComposer unifié (identique au chat IA) */}
-        <div className="border-t border-white/10 p-3 md:p-4">
+        {/* Zone de saisie : CommandComposer unifié (identique au chat IA) —
+            collée en bas, au-dessus de la zone sûre (encoche/barre iOS) */}
+        <div className="shrink-0 border-t border-white/10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:p-4 md:pb-[max(1rem,env(safe-area-inset-bottom))]">
           {error && <Callout tone="error" className="mb-3 rounded-2xl">{error}</Callout>}
           <CommandComposer
             ref={composerRef}

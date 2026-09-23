@@ -400,7 +400,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   );
 
   return (
-    <div className="g3-card flex h-[calc(100dvh-9.5rem)] min-h-[520px] gap-3 !p-3">
+    <div className="relative flex h-full min-h-0 gap-2 bg-white p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-3 sm:p-3">
       {/* Colonne gauche — conversations récentes, projets, recherche */}
       <div
         className={`shrink-0 transition-all ${listCollapsed ? "w-14" : "w-64"} border-r border-neutral-100 pr-3 max-lg:hidden`}
@@ -493,8 +493,9 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         )}
       </div>
 
-      {/* Panneau droit optionnel — plan, outils, validations, livrables */}
-      <div className={`shrink-0 transition-all ${drawerOpen ? "w-80 border-l border-neutral-100 pl-3" : "w-10"}`}>
+      {/* Panneau droit optionnel — plan, outils, validations, livrables
+          (desktop uniquement : sur mobile le fil occupe toute la largeur) */}
+      <div className={`shrink-0 transition-all max-lg:hidden ${drawerOpen ? "w-80 border-l border-neutral-100 pl-3" : "w-10"}`}>
         {detail && (
           <ContextDrawer
             open={drawerOpen}

@@ -65,6 +65,9 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   React.useEffect(() => { void refresh(); }, [refresh]);
 
   const activeAgent = agents.find((agent) => agent.id === activeId) ?? null;
+  // Mode chat plein écran : l'interface (rail + panneau) occupe toute la
+  // hauteur de l'appareil. L'assistant de création garde un flux normal.
+  const chatMode = view === "chat" && activeAgent !== null;
 
   // Pas encore d'agent : l'assistant de personnalisation s'ouvre d'office —
   // uniquement si la liste a été réellement chargée (jamais sur une panne).
@@ -97,7 +100,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   }
 
   const rail = (
-    <aside className="rounded-[26px] border border-[rgba(23,23,20,0.09)] bg-white p-4 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.18)]" aria-label="Mes agents IA">
+    <aside className="flex h-full min-h-0 flex-col rounded-[26px] border border-[rgba(23,23,20,0.09)] bg-white p-4 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.18)]" aria-label="Mes agents IA">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xs font-black uppercase tracking-[.24em] text-neutral-500">Mes agents</h2>
         <span className="rounded-full border border-[rgba(23,23,20,0.09)] bg-neutral-50 px-2 py-0.5 text-[10px] font-bold text-neutral-500">{agents.length}</span>
@@ -111,7 +114,9 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
         + Nouvel agent personnalisé
       </button>
 
-      <div className="mt-3 max-h-[420px] space-y-2 overflow-y-auto pr-0.5">
+      {/* Liste flexible : remplit la hauteur disponible en chat plein écran
+          (desktop) et reste plafonnée en flux normal / mobile. */}
+      <div className="mt-3 max-h-[420px] min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5 lg:max-h-none">
         {loading ? (
           <AgentGridSkeleton count={2} />
         ) : agents.length === 0 ? (
@@ -155,7 +160,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   );
 
   return (
-    <div className="space-y-5">
+    <div className={chatMode ? "flex h-full min-h-0 flex-col gap-4" : "space-y-5"}>
       {sessionDisponible === false && <Callout tone="warning" className="rounded-2xl">Session expirée — reconnectez-vous pour discuter avec vos agents.</Callout>}
       {error && <Callout tone="error" className="rounded-2xl"><span className="flex items-center justify-between gap-3"><span>{error}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Réessayer</button></span></Callout>}
 
@@ -181,10 +186,10 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
       </button>
       {showRailMobile && <div className="lg:hidden">{rail}</div>}
 
-      <div className="grid gap-5 lg:grid-cols-[290px_minmax(0,1fr)]">
-        <div className="hidden lg:block">{rail}</div>
+      <div className={chatMode ? "grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 lg:grid-cols-[290px_minmax(0,1fr)]" : "grid gap-5 lg:grid-cols-[290px_minmax(0,1fr)]"}>
+        <div className="hidden min-h-0 lg:block">{rail}</div>
 
-        <div className="min-w-0">
+        <div className="min-h-0 min-w-0">
           {loading ? (
             <div className="g3-card p-10"><AgentGridSkeleton count={2} /></div>
           ) : view === "wizard" || !activeAgent ? (
