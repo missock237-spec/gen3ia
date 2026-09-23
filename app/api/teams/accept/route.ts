@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
@@ -31,6 +32,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result, { headers: { "x-request-id": requestId } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Acceptation impossible";
-    return NextResponse.json({ error: message, requestId }, { status: 400 });
+    return NextResponse.json({ error: message, requestId }, { status: errorStatus(error, 400) });
   }
 }

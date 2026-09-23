@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       errorBody(error, "Organisations indisponibles."),
-      { status: 400 },
+      { status: errorStatus(error, 400) },
     );
   }
 }
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       errorBody(error, "Opération impossible."),
-      { status: 400 },
+      { status: errorStatus(error, 400) },
     );
   }
 }

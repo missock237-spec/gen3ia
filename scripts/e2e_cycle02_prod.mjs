@@ -36,25 +36,25 @@ const replyFr = (t1.body.reply ?? "").toLowerCase();
 check("réponse en français", /bonjour|salut|assistant|aide|voici|je suis/.test(replyFr), replyFr.slice(0, 60));
 
 // 2) Continuité de conversation : le tour 2 renvoie l'historique client
-//    (comme le fait l'UI pour les visiteurs anonymes) et doit se souvenir
-//    du tour 1.
+//    (comme le fait l'UI pour les visiteurs anonymes) et doit retrouver
+//    l'information donnée au tour 1 (rappel pur, non ambigu).
 const convId = t1.body.conversationId;
 const t2 = await fetch(`${BASE}/api/gen/chat`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    message: "Quel était le PREMIER mot de ma question précédente ? Réponds uniquement par ce mot.",
+    message: "Quel est mon animal préféré ? Réponds uniquement par le nom de l'animal.",
     conversationId: convId,
     history: [
-      { role: "user", content: "Bonjour ! Peux-tu te présenter en une phrase ?" },
-      { role: "assistant", content: (t1.body.reply ?? "").slice(0, 2000) },
+      { role: "user", content: "Je te donne une information importante : mon animal préféré est le panda rouge." },
+      { role: "assistant", content: "C'est noté ! Le panda rouge, excellent choix." },
     ],
   }),
 });
 const t2Body = await t2.json().catch(() => ({}));
 check("tour 2 répond 200", t2.status === 200, String(t2.status));
-const memoire = /bonjour/i.test(t2Body.reply ?? "");
-check("mémoire conversationnelle (se souvient de « Bonjour »)", memoire, (t2Body.reply ?? "").slice(0, 80));
+const memoire = /panda\s+rouge/i.test(t2Body.reply ?? "");
+check("mémoire conversationnelle (retrouve « panda rouge »)", memoire, (t2Body.reply ?? "").slice(0, 80));
 
 // 3) Validation des entrées.
 const empty = await chat("");

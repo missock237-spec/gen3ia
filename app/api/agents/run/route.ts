@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
         error: error instanceof Error ? error.message : "Agent execution failed",
         requestId,
       },
-      { status: 500, headers: { "x-request-id": requestId } },
+      { status: errorStatus(error, 500), headers: { "x-request-id": requestId } },
     );
   }
 }

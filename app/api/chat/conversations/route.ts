@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const limit = Number(new URL(request.url).searchParams.get("limit") ?? 50);
     return NextResponse.json({ conversations: await listConversations(user.uid, Number.isFinite(limit) ? limit : 50) });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur." }, { status: 401 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur." }, { status: errorStatus(error, 401) });
   }
 }
 

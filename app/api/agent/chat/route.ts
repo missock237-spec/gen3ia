@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody } from "@/lib/security/http-errors";
@@ -408,7 +409,7 @@ export async function POST(request: NextRequest) {
           plan,
           error: error instanceof Error ? error.message : "Agent execution failed.",
           approvals: await listActionApprovals(user.uid, plan.executionId),
-        }, { status: 400 });
+        }, { status: errorStatus(error, 400) });
       }
 
       const currentApprovals = await listActionApprovals(user.uid, plan.executionId);
@@ -571,7 +572,7 @@ export async function POST(request: NextRequest) {
         plan,
         error: error instanceof Error ? error.message : "Agent execution failed.",
         approvals: await listActionApprovals(user.uid, plan.executionId),
-      }, { status: 400 });
+      }, { status: errorStatus(error, 400) });
     }
 
     const currentApprovals = await listActionApprovals(user.uid, plan.executionId);

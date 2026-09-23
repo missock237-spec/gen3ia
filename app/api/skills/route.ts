@@ -1,5 +1,5 @@
-import {
-  NextRequest,
+import { errorStatus } from "@/lib/security/http-errors";
+import {  NextRequest,
   NextResponse,
 } from "next/server";
 
@@ -60,7 +60,7 @@ export async function GET(
             : "Unable to list skills.",
       },
       {
-        status: 401,
+        status: errorStatus(error, 401),
       },
     );
   }

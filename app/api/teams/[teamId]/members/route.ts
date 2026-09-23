@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
@@ -23,7 +24,7 @@ export async function PATCH(
     return NextResponse.json({ ok: true, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Modification impossible";
-    return NextResponse.json({ error: message, requestId }, { status: 400 });
+    return NextResponse.json({ error: message, requestId }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -45,6 +46,6 @@ export async function DELETE(
     return NextResponse.json({ ok: true, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Suppression impossible";
-    return NextResponse.json({ error: message, requestId }, { status: 400 });
+    return NextResponse.json({ error: message, requestId }, { status: errorStatus(error, 400) });
   }
 }

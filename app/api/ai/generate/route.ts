@@ -1,5 +1,5 @@
-import {
-  NextRequest,
+import { errorStatus } from "@/lib/security/http-errors";
+import {  NextRequest,
   NextResponse,
 } from "next/server";
 
@@ -114,7 +114,7 @@ export async function POST(
             : "AI generation failed.",
       },
       {
-        status: 400,
+        status: errorStatus(error, 400),
       },
     );
   }

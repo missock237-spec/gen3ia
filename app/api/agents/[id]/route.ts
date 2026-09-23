@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const record = await getAgentForOwner(user.uid, id);
     if (!record) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
     return NextResponse.json({ agent: { ...toSummary(record), systemPrompt: record.systemPrompt }, requestId }, { headers: { "x-request-id": requestId } });
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Agent indisponible", requestId }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Agent indisponible", requestId }, { status: errorStatus(error, 500) }); }
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
@@ -48,7 +49,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const record = await updateAgentForOwner(user.uid, id, parsed.data);
     if (!record) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
     return NextResponse.json({ agent: toSummary(record), requestId }, { headers: { "x-request-id": requestId } });
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Mise a jour impossible", requestId }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Mise a jour impossible", requestId }, { status: errorStatus(error, 500) }); }
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
@@ -58,5 +59,5 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const deleted = await deleteAgentForOwner(user.uid, id);
     if (!deleted) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
     return NextResponse.json({ deleted: true, requestId }, { headers: { "x-request-id": requestId } });
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Suppression impossible", requestId }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Suppression impossible", requestId }, { status: errorStatus(error, 500) }); }
 }

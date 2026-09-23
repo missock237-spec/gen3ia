@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 
 import {
   requireUser,
@@ -45,7 +46,7 @@ export async function GET(
             : "Artifact not found.",
       },
       {
-        status: 404,
+        status: errorStatus(error, 404),
       },
     );
   }

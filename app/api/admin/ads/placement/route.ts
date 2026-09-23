@@ -36,7 +36,7 @@ async function guardAdmin(request: NextRequest) {
     return {
       error: NextResponse.json(
         { error: error instanceof Error ? error.message : "Accès administrateur requis." },
-        { status: 403 },
+        { status: errorStatus(error, 403) },
       ),
     };
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to list schedule runs", requestId },
-      { status: 401, headers: { "x-request-id": requestId } },
+      { status: errorStatus(error, 401), headers: { "x-request-id": requestId } },
     );
   }
 }

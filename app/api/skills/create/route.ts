@@ -8,6 +8,11 @@ import {
 } from "@/lib/security/authenticated-request";
 
 import {
+  errorBody,
+  errorStatus,
+} from "@/lib/security/http-errors";
+
+import {
   SkillFactoryRequestSchema,
 } from "@/lib/skills/schema";
 
@@ -110,15 +115,15 @@ export async function POST(
       },
     );
   } catch (error) {
+    // errorStatus préserve le 403 CSRF (HttpError de requireUser), le 401
+    // d'authentification et le 503 d'infrastructure — seul le reste tombe
+    // au repli 400 de la validation d'entrée.
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Skill creation failed.",
+        ...errorBody(error, "Skill creation failed."),
       },
       {
-        status: 400,
+        status: errorStatus(error, 400),
       },
     );
   }

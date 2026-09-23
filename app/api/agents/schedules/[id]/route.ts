@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (!schedule) return NextResponse.json({ error: "Schedule not found", requestId }, { status: 404 });
     return NextResponse.json({ schedule, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to get schedule", requestId }, { status: 401 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to get schedule", requestId }, { status: errorStatus(error, 401) });
   }
 }
 
@@ -34,7 +35,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (!schedule) return NextResponse.json({ error: "Schedule not found", requestId }, { status: 404 });
     return NextResponse.json({ schedule, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update schedule", requestId }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update schedule", requestId }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -47,6 +48,6 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     if (!deleted) return NextResponse.json({ error: "Schedule not found", requestId }, { status: 404 });
     return NextResponse.json({ success: true, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to delete schedule", requestId }, { status: 401 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to delete schedule", requestId }, { status: errorStatus(error, 401) });
   }
 }

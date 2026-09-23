@@ -1,2 +1,3 @@
 import { NextRequest,NextResponse } from "next/server"; import { requireUser } from "@/lib/security/authenticated-request"; import { approveWorkspaceTask } from "@/lib/agents/workspace";
-export async function POST(request:NextRequest,{params}:{params:Promise<{id:string}>}){try{const user=await requireUser(request);const {id}=await params;return NextResponse.json({success:true,task:await approveWorkspaceTask(user.uid,id)});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Approval failed"},{status:400});}}
+import { errorStatus } from "@/lib/security/http-errors";
+export async function POST(request:NextRequest,{params}:{params:Promise<{id:string}>}){try{const user=await requireUser(request);const {id}=await params;return NextResponse.json({success:true,task:await approveWorkspaceTask(user.uid,id)});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Approval failed"},{status: errorStatus(e, 400)});}}
