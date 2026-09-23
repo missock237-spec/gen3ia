@@ -4,9 +4,10 @@
  * vérité entre les 3 shells (workspace / developer / admin), le fil d'Ariane
  * et la palette de commandes.
  *
- * Architecture à 3 espaces : les modules métier (Marketing, Ventes, RH…)
- * ne sont plus des entrées permanentes du menu — ce sont des modèles dans
- * « Créer » (lib/missions/templates.ts).
+ * Architecture conversation-first : la navigation principale est
+ * Conversations · Projets · Fichiers · Connecteurs · Bibliothèque ; les
+ * modules métier sont des capacités (bibliothèque + conversations), pas
+ * des entrées de menu permanentes.
  */
 import { NAV_REGISTRY, navCommandIndex, type NavRoute } from "@/components/shells/nav-registry";
 
@@ -36,14 +37,14 @@ function groupByIds(ids: string[], extras: Record<string, Partial<NavItem>> = {}
     .map((route) => toItem(route, extras[route.id] ?? {}));
 }
 
-/** Espace de travail — centre de gravité « Missions ». */
-export const WORKSPACE: NavItem[] = groupByIds(["missions", "create", "results", "connections", "team"], {
-  missions: { shortcut: "M" },
+/** Espace de travail — centre de gravité « Conversations ». */
+export const WORKSPACE: NavItem[] = groupByIds(["conversations", "projects", "files", "connectors", "library", "missions", "team"], {
+  conversations: { shortcut: "C" },
 });
 
 /** Agents & automatisation (surfaces transverses). */
 export const AGENTS: NavItem[] = [
-  ...groupByIds(["schedules"]),
+  ...groupByIds(["schedules", "live"]),
   { href: "/studio/agents", label: "Agents & chat", icon: "✦", hint: "Personnaliser et dialoguer avec vos agents" },
   { href: "/observability", label: "Observabilité", icon: "∿", hint: "Traces, coûts et alertes de vos agents" },
   { href: "/integrations", label: "Intégrations", icon: "⧉", hint: "Connecter vos services externes" },
@@ -51,8 +52,7 @@ export const AGENTS: NavItem[] = [
 
 /** Ressources. */
 export const LIBRARY: NavItem[] = [
-  ...groupByIds(["memory", "storage"]),
-  { href: "/marketplace", label: "Marketplace", icon: "◇", hint: "Ajouter des capacités à vos agents" },
+  ...groupByIds(["memory", "marketplace"]),
   ...groupByIds(["billing", "settings"]),
 ];
 
