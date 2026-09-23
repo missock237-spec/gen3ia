@@ -276,3 +276,36 @@ Stage Summary:
 - La feuille de route « conversation-first » est COMPLÈTE : Gen3ia écrit ses réponses en direct (token streaming), montre son travail étape par étape (timeline vivante), demande les validations en flux, et active les connecteurs depuis le composer — sans aucune perte de l'existant (persistance identique, replis multiples).
 - Priorité utilisateur respectée : un assistant conversationnel persistant auquel les capacités métier/connecteurs/outils Live/artefacts restent accessibles dans le contexte de la conversation.
 - Rappel permanent : rotation des clés transmises en clair (Upstash, Qdrant, GitHub, Vercel, Agnes).
+
+---
+Task ID: 19
+Agent: Super Z (principal)
+Task: « Améliore la sécurité du projet puis renforcé les fonctionnalités du projet puis améliore l'expérience utilisateur » — trois axes dans l'ordre demandé.
+
+Work Log:
+- AXE 1 SÉCURITÉ :
+  - enforceRateLimit (lib/security/rate-limit.ts) : fusion des couches locale (instantanée) et DISTRIBUÉE Redis Upstash (INCR+PEXPIRE atomique en pipeline, fenêtre fixe, TTL résiduel = reset exact) ; `allowed` exige les deux couches, retryAfter = la plus contraignante, remaining = le plus faible ; repli transparent sur décision locale si Redis absent/panne (jamais de blocage du trafic légitime).
+  - 34 routes API migrées du rate-limit mémoire seul (contournable par répartition entre instances serverless) vers enforceRateLimit via script de migration (scripts/migrate_enforce_rate_limit.mjs) : auth/session, agent/chat, ai/image, voice, live, teams, organizations, commercial, workspace tasks, developer terminal/simulation, emergency-stop, webhooks, billing, extensions, code-agents, tools/execute.
+  - Défense CSRF (lib/security/request-security.ts) : verifierOrigine sur POST/PUT/PATCH/DELETE dans validateRequest (appelé par requireUser, donc toutes les routes protégées) — Origin/Referer doivent correspondre à l'hôte sur les requêtes modifiant l'état ; rejet 403 typé HttpError ; absence des deux en-têtes = autorisé (clients non-navigateurs, Bearer/webhooks immunisés au CSRF par conception) ; SameSite=Lax du cookie conservé.
+  - Headers renforcés (next.config.ts + securityHeaders API alignés) : Cross-Origin-Opener-Policy: same-origin-allow-popups (mitigation XS-Leaks/Spectre, OAuth Google popup préservé), Cross-Origin-Resource-Policy: same-origin, X-DNS-Prefetch-Control: off. HSTS/nosniff/DENY conservés.
+  - Cookie session vérifié : HttpOnly + Secure + SameSite=Lax + HMAC-SHA256 — conforme, aucune modification requise.
+- AXE 2 FONCTIONNALITÉS (recherche sémantique de l'historique — roadmap Phase 2) :
+  - gen3ia_conversations (Qdrant, lib/chat/vector-index.ts) : index vectoriel des messages via embeddings HuggingFace MiniLM 384 (même modèle que mémoires/connaissances) ; IDs de points DÉTERMINISTES (UUID v5 du messageId → backfill idempotent, pas de doublons) ; payload userId/conversationId/messageId/projectId/role/createdAt/preview ; fail-soft total (aucune erreur ne remonte).
+  - Miroir vectoriel automatique dans appendMessage (lib/chat/repository.ts) : chaque message (utilisateur + assistant) indexé après la transaction Firestore, projectId capturé sans lecture supplémentaire, couvre la route classique ET le streaming (point unique).
+  - GET /api/workspace/conversations/search : mode sémantique (kNN filtré userId OBLIGATOIRE + re-vérification Firestore de propriété = défense en profondeur contre un payload falsifié) puis repli textuel Firestore ; dédoublonnage par messageId puis meilleur hit par conversation (bestHitPerConversation, fonction pure testée) ; réponse { mode, results[{ conversationId, title, excerpt, score, messageCount }] } ; rate limit 60/5 min.
+  - UI : recherche débouncée 350 ms dans la colonne gauche (components/workspace/conversation-list.tsx) — ≥3 caractères interroge l'API, affiche « Correspondances dans le contenu » avec extrait cité et pertinence %, compteur de séquence ignore les réponses dépassées, repli silencieux sur le filtrage local ; indicateur spinner inline.
+  - Scripts : backfill_conversation_index.ts (indexation de l'historique existant, dry-run, lots, idempotent) + qa_semantic_search.ts (QA réel bout-en-bout).
+  - health/infra : compte gen3ia_conversations.
+- AXE 3 EXPÉRIENCE UTILISATEUR :
+  - Skeletons route-level (components/workspace/skeletons.tsx + 6 loading.tsx) : conversations, conversation, projets, projet, fichiers, bibliothèque — silhouettes gabarités sur les formes réelles (grille cartes, colonnes conversation, listes fichiers), zéro JS client, CLS minimal ; la navigation serveur affiche immédiatement la structure de la page cible.
+- ENV de test : vercel link + env pull production (CLI 59) ; valeurs [SENSITIVE] remplacées par les credentials réels pour le QA local (fichiers .env*.local git-ignorés, jamais commités) ; points de test Qdrant supprimés après QA (filtre userId=qa-vector-test).
+- Qualité : typecheck 0 erreur ; lint 0 erreur ; 316 tests vitest (10 nouveaux : fail-soft sans config, déterminisme UUID v5, payload multi-tenant complet, avalage erreur embedding, mapping hits + filtre userId transmis, regroupement/dédoublonnage, liste vide) ; build OK (route search présente) ; smoke local : accueil/login 200, headers vérifiés, 403 cross-origin, 401 routes protégées, 429 à la 31e requête (mono-IP), chat Gen réel agnes-3.0-flash, indexation Qdrant true + recherche sémantique réelle (« promouvoir mes produits sur les réseaux sociaux » retrouve « campagne publicitaire Facebook » par le SENS, score 0.60, zéro mot commun).
+- E2E PRODUCTION vague 19 (scripts/e2e_wave19_prod.mjs) : 14/14 VERTS — accueil 200 ; COOP/CORP/X-DNS-Prefetch actifs ; HSTS actif (valeur plateforme max-age=31536000; includeSubDomains, le header next.config est écrasé par Vercel — observation documentée) ; route recherche sémantique déployée + protégée 401 ; CSRF cross-origin 403 ; POST same-origin sans session 401 ; rate-limit distribué prouvé (90 requêtes : 429 observés, IPs du réseau de test rotatives franchissent la limite par IP) ; chat Gen répond réellement ; 4 pages workspace 200/307. Non-régression vague 18 : 14/14 VERTS.
+
+Stage Summary:
+- Production gen3ia.online = commit 4693b83 (+ bca938b scripts), READY (auto-deploy Git).
+- Sécurité : rate-limit DISTRIBUÉ partout (34 routes, limite globale réelle entre instances), CSRF same-origin sur toutes les mutations authentifiées, isolation cross-origin complète (COOP/CORP).
+- Fonctionnalité : l'historique des conversations est désormais interrogeable par le SENS (Qdrant + HuggingFace), avec replis à chaque étage et backfill idempotent de l'existant ; scripts/backfill_conversation_index.ts à lancer avec vercel env pull pour couvrir l'historique antérieur.
+- UX : navigation workspace avec feedback instantané (skeletons gabarités) et recherche live avec extraits.
+- Note : UPSTASH_*/QDRANT_* sont target=production uniquement — ajouter preview/development sur Vercel si les déploiements preview doivent en disposer.
+- Rappel permanent : rotation des clés transmises en clair (Upstash, Qdrant, GitHub, Vercel, Agnes).
