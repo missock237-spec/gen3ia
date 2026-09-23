@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { choosePlatformAd, recordPlatformAdEvent } from "@/lib/ads/platform-placement";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const Query = z.object({
   placement: z.string().trim().min(1).max(80).default("settings"),
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Enregistrement impossible." },
-      { status: 400 },
+      { status: errorStatus(error, 400) },
     );
   }
 }

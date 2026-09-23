@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { adminDb } from "@/lib/firebase/admin";
 import { clearSessionCookieHeader } from "@/lib/server/session-cookie";
 import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
+import { errorStatus } from "@/lib/security/http-errors";
 
 export const runtime = "nodejs";
 
@@ -122,7 +123,7 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Suppression du compte impossible." },
-      { status: 400 },
+      { status: errorStatus(error, 400) },
     );
   }
 }

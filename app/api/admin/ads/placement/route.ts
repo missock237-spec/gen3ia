@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/security/admin-access";
-import {
-  createPlatformAd,
+import {  createPlatformAd,
   deletePlatformAd,
   listPlatformAds,
   updatePlatformAd,
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     const placement = new URL(request.url).searchParams.get("placement")?.trim() || undefined;
     return NextResponse.json({ ads: await listPlatformAds(placement) }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Impossible de charger les publicités." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Impossible de charger les publicités." }, { status: errorStatus(error, 500) });
   }
 }
 
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     const ad = await createPlatformAd(parsed.data as PlatformAdInput);
     return NextResponse.json({ ad }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Création impossible." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Création impossible." }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -79,7 +79,7 @@ export async function PATCH(request: NextRequest) {
     const ad = await updatePlatformAd(id, parsed.data as Partial<PlatformAdInput>);
     return NextResponse.json({ ad });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Modification impossible." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Modification impossible." }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -92,6 +92,6 @@ export async function DELETE(request: NextRequest) {
     await deletePlatformAd(id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Suppression impossible." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Suppression impossible." }, { status: errorStatus(error, 400) });
   }
 }

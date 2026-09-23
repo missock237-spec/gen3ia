@@ -3,6 +3,7 @@ import { z } from "zod";
 import { protectRoute } from "@/lib/security/route-guard";
 import { validateUploadBatch } from "@/lib/storage/upload-policy";
 import { abortUpload, cleanupExpiredSessions, createUploadSessions, getUserStorageUsage } from "@/lib/storage/permanent-user-storage";
+import { errorStatus } from "@/lib/security/http-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
     const sessions = await createUploadSessions({ userId: guard.context.userId, intents: validation.intents });
     return NextResponse.json({ sessions }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Session creation failed" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Session creation failed" }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -47,6 +48,6 @@ export async function DELETE(request: NextRequest) {
     await abortUpload({ userId: guard.context.userId, uploadId });
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Session abort failed" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Session abort failed" }, { status: errorStatus(error, 400) });
   }
 }

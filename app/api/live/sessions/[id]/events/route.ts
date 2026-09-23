@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 import { assertLiveSessionOwner } from "@/lib/live/repository";
 import { adminDb } from "@/lib/firebase/admin";
+import { errorStatus } from "@/lib/security/http-errors";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -15,6 +16,6 @@ export async function GET(request: Request, { params }: Params) {
     const events = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     return NextResponse.json({ events });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to read live events" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to read live events" }, { status: errorStatus(error, 400) });
   }
 }

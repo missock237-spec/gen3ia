@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAgentById } from "@/lib/agents/repository";
 import { clientIp, enforceRateLimit } from "@/lib/security/rate-limit";
+import { errorStatus } from "@/lib/security/http-errors";
 
 export const runtime = "nodejs";
 
@@ -41,6 +42,6 @@ export async function POST(request: NextRequest, context: Context) {
     const text = outputs.find((value): value is string => typeof value === "string" && value.trim().length > 0) ?? "Merci pour votre message. Je reviens vers vous rapidement.";
     return NextResponse.json({ text });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Réponse indisponible." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Réponse indisponible." }, { status: errorStatus(error, 500) });
   }
 }

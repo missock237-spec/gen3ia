@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyRemoteApprovalToken } from "@/lib/integrations/messaging/remote-approval";
 import { approveAction, rejectAction, getActionApproval } from "@/lib/agents/action-approvals";
+import { errorStatus } from "@/lib/security/http-errors";
 
 /**
  * Approbation distante depuis WhatsApp / Telegram : aucun cookie requis,
@@ -35,6 +36,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, status: updated.status });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Approbation distante impossible." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Approbation distante impossible." }, { status: errorStatus(error, 400) });
   }
 }

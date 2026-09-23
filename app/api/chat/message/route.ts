@@ -9,6 +9,7 @@ import {
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
 import { appendMessage, createConversation, getConversation, listMessages } from "@/lib/chat/repository";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const Body = z.object({
   conversationId: z.string().min(1).max(128).optional(),
@@ -65,6 +66,6 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ conversationId, message: assistant, response: { id: response.id, provider: response.provider, model: response.model, usage: response.usage, latencyMs: response.latencyMs, finishReason: response.finishReason } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "La génération IA a échoué." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "La génération IA a échoué." }, { status: errorStatus(error, 400) });
   }
 }

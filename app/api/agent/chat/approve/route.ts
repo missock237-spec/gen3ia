@@ -14,6 +14,7 @@ import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/e
 import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage } from "@/lib/chat/repository";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const Body = z.object({ approvalId: z.string().min(1).max(256), action: z.enum(["approve", "reject"]).default("approve") });
 
@@ -181,7 +182,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Approval/execution failed." },
-      { status: 400 },
+      { status: errorStatus(error, 400) },
     );
   }
 }

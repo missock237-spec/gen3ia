@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { getAgentForOwner } from "@/lib/agents/repository";
 import {
   attachExistingTwilioNumber,
@@ -44,7 +45,10 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({ numbers: await listAgentPhoneNumbers(user.uid, agentId) });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Phone numbers unavailable." }, { status: 500 });
+    return NextResponse.json(
+      { ...errorBody(error, "Phone numbers unavailable.") },
+      { status: errorStatus(error, 500) },
+    );
   }
 }
 
@@ -68,7 +72,7 @@ export async function POST(request: NextRequest) {
       : await purchaseNumberForAgent({ ownerId: user.uid, agentId: parsed.data.agentId, phoneNumber: parsed.data.phoneNumber });
     return NextResponse.json({ number: record });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Phone number operation failed." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Phone number operation failed." }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -83,6 +87,6 @@ export async function DELETE(request: NextRequest) {
     else await releaseAgentPhoneNumber(user.uid, parsed.data.id);
     return NextResponse.json({ released: true });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Release failed." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Release failed." }, { status: errorStatus(error, 400) });
   }
 }

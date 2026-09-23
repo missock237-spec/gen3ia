@@ -9,6 +9,7 @@ import { detectDeviceFromHeaders } from "@/lib/device/detect";
 import { createLiveSession, listLiveSessions } from "@/lib/live/repository";
 import { createPairingToken, hashPairingToken } from "@/lib/live/security";
 import { LivePermissionSchema, LiveSessionModeSchema } from "@/lib/live/types";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const PC_ONLY_MESSAGE =
   "L'agent Live est reserve aux ordinateurs (Windows/Linux/macOS) : il utilise le partage d'ecran natif du navigateur.";
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
   } catch (error) {
     captureServerException(error, { route: "live.sessions.create" });
     if (error instanceof Error && /authorization|token|revoked|scheme/i.test(error.message)) return unauthorized(error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid request" }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -87,6 +88,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ sessions });
   } catch (error) {
     if (error instanceof Error && /authorization|token|revoked|scheme/i.test(error.message)) return unauthorized(error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid request" }, { status: errorStatus(error, 400) });
   }
 }

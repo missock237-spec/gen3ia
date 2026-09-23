@@ -7,6 +7,7 @@ import { listAgentPhoneNumbers } from "@/lib/integrations/twilio/numbers";
 import { createPhoneCallSession, startPhoneCall } from "@/lib/integrations/twilio/calls";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { createPlivoPhoneCallSession, startPlivoPhoneCall } from "@/lib/integrations/plivo/calls";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const CallSchema = z.object({
   to: z.string().regex(/^\+[1-9]\d{7,14}$/),
@@ -55,6 +56,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       : await startPhoneCall(session.id);
     return NextResponse.json({ sessionId: session.id, callSid: call.callSid, status: call.status, from: assigned.phoneNumber, to: parsed.data.to });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Appel impossible." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Appel impossible." }, { status: errorStatus(error, 400) });
   }
 }

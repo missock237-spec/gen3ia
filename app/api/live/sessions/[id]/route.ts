@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 import { assertLiveSessionOwner, getLiveSession, updateLiveSessionStatus } from "@/lib/live/repository";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const ActionSchema = z.object({ action: z.enum(["pause", "resume", "stop"]) });
 
@@ -30,7 +31,7 @@ export async function POST(request: Request, { params }: Params) {
     await updateLiveSessionStatus(id, status);
     return NextResponse.json({ ok: true, status });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid request" }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -42,6 +43,6 @@ export async function DELETE(request: Request, { params }: Params) {
     await updateLiveSessionStatus(id, "stopped");
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unauthorized" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unauthorized" }, { status: errorStatus(error, 400) });
   }
 }

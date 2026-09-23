@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { verifyFirebaseToken } from "@/lib/firebase/auth-server";
 import { ensureUserProfile } from "@/lib/firebase/users";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const ProfileSchema = z.object({
   firstName: z.string().trim().min(1).max(80),
@@ -42,6 +43,6 @@ export async function POST(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ ok: false, error: "Profil invalide.", details: error.issues }, { status: 400 });
     }
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Impossible d'enregistrer le profil." }, { status: 500 });
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Impossible d'enregistrer le profil." }, { status: errorStatus(error, 500) });
   }
 }

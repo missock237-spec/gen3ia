@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { requestTraceId } from "@/lib/observability/logger";
-import {
-  inviteMember,
+import {  inviteMember,
   removeMember,
   requireOrgContext,
   revokeInvitation,
@@ -79,7 +79,7 @@ export async function POST(
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Opération impossible." },
-      { status: 400 },
+      { status: errorStatus(error, 400) },
     );
   }
 }

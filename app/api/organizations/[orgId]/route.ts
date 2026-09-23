@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { requestTraceId } from "@/lib/observability/logger";
 import { requireOrgContext, quotasForPlan, listMembers, listOrgInvitations } from "@/lib/tenants/organizations";
+import { errorStatus } from "@/lib/security/http-errors";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,7 @@ export async function GET(
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Organisation indisponible." },
-      { status: 404 },
+      { status: errorStatus(error, 404) },
     );
   }
 }

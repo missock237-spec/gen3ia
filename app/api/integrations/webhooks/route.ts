@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorStatus } from "@/lib/security/http-errors";
 import { z } from "zod";
 import { protectRoute } from "@/lib/security/route-guard";
-import {
-  createOutgoingWebhook,
+import {  createOutgoingWebhook,
   deleteOutgoingWebhook,
   listOutgoingWebhooks,
   OUTGOING_WEBHOOK_EVENTS,
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const webhooks = await listOutgoingWebhooks(guard.context.userId);
     return NextResponse.json({ webhooks, availableEvents: OUTGOING_WEBHOOK_EVENTS }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to list webhooks." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to list webhooks." }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     // Le secret n'est retourné qu'une seule fois, à la création.
     return NextResponse.json({ webhook: { ...webhook, secret: webhook.secret } }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to create the webhook." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to create the webhook." }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -65,7 +65,7 @@ export async function PATCH(request: NextRequest) {
     }
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update the webhook." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update the webhook." }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -78,6 +78,6 @@ export async function DELETE(request: NextRequest) {
     await deleteOutgoingWebhook(guard.context.userId, body.webhookId);
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to delete the webhook." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to delete the webhook." }, { status: errorStatus(error, 400) });
   }
 }

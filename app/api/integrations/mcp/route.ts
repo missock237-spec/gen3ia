@@ -10,6 +10,7 @@ import {
   McpServiceError,
 } from "@/lib/integrations/mcp/service";
 import { maskHeaders } from "@/lib/integrations/mcp/store";
+import { errorStatus } from "@/lib/security/http-errors";
 void maskHeaders; // réservé à un affichage détaillé ultérieur
 
 /**
@@ -33,7 +34,7 @@ const PatchSchema = z.union([
   z.object({ id: z.string().trim().min(1).max(128), action: z.literal("refresh") }),
 ]);
 
-function errorStatus(message: string): number {
+function mcpErrorStatus(message: string): number {
   if (message.includes("injoignable") || message.includes("répondu") || message.includes("à temps") || message.includes("explosable") || message.includes("valide") || message.includes("URL")) return 502;
   if (message.includes("introuvable") || message.includes("Limite")) return message.includes("introuvable") ? 404 : 409;
   return 400;
@@ -58,9 +59,9 @@ export async function POST(request: NextRequest) {
     const server = await addUserServer(guard.context.userId, input);
     return NextResponse.json({ server: toClient(server) }, { status: 201 });
   } catch (error) {
-    if (error instanceof McpServiceError) return NextResponse.json({ error: error.message }, { status: errorStatus(error.message) });
+    if (error instanceof McpServiceError) return NextResponse.json({ error: error.message }, { status: mcpErrorStatus(error.message) });
     if (error instanceof z.ZodError) return NextResponse.json({ error: "Données de serveur invalides (nom, URL, en-têtes)." }, { status: 400 });
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Ajout du serveur MCP impossible." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Ajout du serveur MCP impossible." }, { status: errorStatus(error, 500) });
   }
 }
 
@@ -76,9 +77,9 @@ export async function PATCH(request: NextRequest) {
     const server = await refreshUserServer(guard.context.userId, input.id);
     return NextResponse.json({ server: toClient(server) });
   } catch (error) {
-    if (error instanceof McpServiceError) return NextResponse.json({ error: error.message }, { status: errorStatus(error.message) });
+    if (error instanceof McpServiceError) return NextResponse.json({ error: error.message }, { status: mcpErrorStatus(error.message) });
     if (error instanceof z.ZodError) return NextResponse.json({ error: "Requête de mise à jour invalide." }, { status: 400 });
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Mise à jour impossible." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Mise à jour impossible." }, { status: errorStatus(error, 500) });
   }
 }
 

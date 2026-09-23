@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertPhoneCallOwner } from "@/lib/integrations/twilio/calls";
 import { requireUser } from "@/lib/security/authenticated-request";
+import { errorStatus } from "@/lib/security/http-errors";
 
 export const runtime = "nodejs";
 
@@ -29,7 +30,7 @@ export async function GET(
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Phone call not found." },
-      { status: 404 },
+      { status: errorStatus(error, 404) },
     );
   }
 }

@@ -5,6 +5,7 @@ import { createAutonomousPlan } from "@/lib/agents/autonomous/planner";
 import { MultiAgentOrchestrator } from "@/lib/agents/orchestrator/orchestrator";
 import type { AgentNode } from "@/lib/agents/orchestrator/types";
 import { generate } from "@/lib/ai/router";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const RequestSchema = z.object({
   objective: z.string().trim().min(3).max(20_000),
@@ -89,6 +90,6 @@ export async function POST(request: NextRequest) {
     console.error("Autonomous agent execution error:", error);
     return NextResponse.json({
       error: error instanceof Error ? error.message : "Autonomous execution failed",
-    }, { status: 500 });
+    }, { status: errorStatus(error, 500) });
   }
 }

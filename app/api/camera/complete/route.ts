@@ -5,6 +5,7 @@ import { storePermanentFile } from "@/lib/storage/permanent-user-storage";
 import { completeCameraCapture } from "@/lib/camera/agent-camera";
 import { billUsage } from "@/lib/billing/media-meter";
 import { randomUUID } from "node:crypto";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const Schema = z.object({ requestId: z.string().uuid() });
 export const runtime = "nodejs";
@@ -19,5 +20,5 @@ export async function POST(request: NextRequest) {
     await completeCameraCapture({ userId: guard.context.userId, requestId, storagePath: stored.path });
     await billUsage({ userId: guard.context.userId, executionId: randomUUID(), kind: "storage_write", quantity: Math.max(bytes.length / (1024 ** 3), 1 / (1024 ** 3)), metadata: { source: "camera", requestId } });
     return NextResponse.json({ ok: true, file: stored });
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Camera capture failed" }, { status: 400 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Camera capture failed" }, { status: errorStatus(error, 400) }); }
 }

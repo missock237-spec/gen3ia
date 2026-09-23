@@ -5,6 +5,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { searchAgentMemories } from "@/lib/memory/episodic";
 import { createMemoryEmbedding } from "@/lib/memory/embeddings";
 import { cosineSimilarity } from "@/lib/memory/similarity";
+import { errorStatus } from "@/lib/security/http-errors";
 
 /**
  * Recherche sémantique dans la mémoire (souvenirs épisodiques, décisions,
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Recherche mémoire impossible" },
-      { status: 400 },
+      { status: errorStatus(error, 400) },
     );
   }
 }

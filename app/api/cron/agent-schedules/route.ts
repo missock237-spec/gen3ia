@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { dispatchSchedules } from "@/lib/agents/scheduler";
 import { renewDueNumbers, reactivateNumbersInGrace } from "@/lib/voice/renewals";
+import { errorStatus } from "@/lib/security/http-errors";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
     console.error("Agent schedule dispatcher failed", error);
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Dispatcher failed" },
-      { status: 500 },
+      { status: errorStatus(error, 500) },
     );
   }
 }

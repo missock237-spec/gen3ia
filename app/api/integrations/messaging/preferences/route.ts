@@ -3,6 +3,7 @@ import { z } from "zod";
 import { protectRoute } from "@/lib/security/route-guard";
 import { getMessagingPreferences, setMessagingPreferences } from "@/lib/integrations/messaging/preferences";
 import { getMessagingChannelStatus } from "@/lib/integrations/messaging";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const PutSchema = z.object({
   channel: z.enum(["whatsapp", "telegram", "slack"]),
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
     const preferences = await getMessagingPreferences(guard.context.userId);
     return NextResponse.json({ preferences, channelStatus: getMessagingChannelStatus() }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to read messaging preferences." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to read messaging preferences." }, { status: errorStatus(error, 400) });
   }
 }
 
@@ -33,6 +34,6 @@ export async function PUT(request: NextRequest) {
     const preferences = await setMessagingPreferences(guard.context.userId, body);
     return NextResponse.json({ preferences });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to save messaging preferences." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to save messaging preferences." }, { status: errorStatus(error, 400) });
   }
 }

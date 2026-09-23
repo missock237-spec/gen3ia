@@ -5,6 +5,7 @@ import { protectRoute } from "@/lib/security/route-guard";
 import { generateForUser } from "@/lib/billing/ai-execution";
 import { createActionApproval } from "@/lib/agents/action-approvals";
 import { getAdsTools } from "@/lib/integrations/composio/ads";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const Schema = z.object({
   objective: z.string().min(10).max(4000),
@@ -95,6 +96,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ executionId, proposal: parsed, approvalId: approval.id, requiresHumanApproval: true });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Ad generation failed" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Ad generation failed" }, { status: errorStatus(error, 400) });
   }
 }

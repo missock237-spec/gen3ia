@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { getAgentForOwner, updateAgentForOwner } from "@/lib/agents/repository";
 import { listAgentPhoneNumbers } from "@/lib/integrations/twilio/numbers";
+import { errorStatus } from "@/lib/security/http-errors";
 
 const VoicePatchSchema = z.object({
   voiceEnabled: z.boolean().optional(),
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const numbers = await listAgentPhoneNumbers(user.uid, id);
     return NextResponse.json({ voice: agent.voiceConfig ?? null, numbers });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Voice configuration unavailable." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Voice configuration unavailable." }, { status: errorStatus(error, 500) });
   }
 }
 
@@ -48,6 +49,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const updated = await updateAgentForOwner(user.uid, id, { voiceEnabled: voiceConfig.voiceEnabled ?? true, voiceConfig });
     return NextResponse.json({ voice: updated?.voiceConfig ?? voiceConfig });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Voice update failed." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Voice update failed." }, { status: errorStatus(error, 400) });
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { protectRoute } from "@/lib/security/route-guard";
 import { commitUpload } from "@/lib/storage/permanent-user-storage";
+import { errorStatus } from "@/lib/security/http-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,6 @@ export async function POST(request: NextRequest) {
     const file = await commitUpload({ userId: guard.context.userId, uploadId: input.uploadId, parts: input.parts });
     return NextResponse.json({ file }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Commit failed" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Commit failed" }, { status: errorStatus(error, 400) });
   }
 }
