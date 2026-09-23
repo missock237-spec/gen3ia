@@ -933,3 +933,144 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .g3-workspace-task-pause:disabled{opacity:.5;cursor:not-allowed}
 .g3-workspace-task-status.status-paused{border-color:#fde68a;background:#fffbeb;color:#a16207}
 .g3-workspace-task-status.status-running{border-color:#bae6fd;background:#f0f9ff;color:#0369a1}
+
+/* ============================================================
+   Gen3ia design system v4 — « Nexus »
+   Vitrine sombre premium : fond nuit, dégradés violet → cyan,
+   verre dépoli, grilles lumineuses, micro-interactions.
+   ============================================================ */
+.nx-root {
+  --nx-bg: #07080d;
+  background: var(--nx-bg);
+  color: #fff;
+  color-scheme: dark;
+}
+.nx-root ::selection { background: rgba(139, 92, 246, 0.45); }
+
+.nx-grid {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, #000 30%, transparent 75%);
+}
+.nx-orb { position: absolute; border-radius: 9999px; filter: blur(120px); pointer-events: none; animation: gen3ia-pulse-glow 10s ease-in-out infinite; }
+.nx-orb-a { width: 620px; height: 520px; top: -260px; left: 50%; transform: translateX(-70%); background: rgba(124, 58, 237, .45); }
+.nx-orb-b { width: 520px; height: 420px; top: -120px; left: 50%; margin-left: 60px; background: rgba(6, 182, 212, .28); animation-delay: -4s; }
+
+.nx-gradient-text {
+  background: linear-gradient(100deg, #c4b5fd 0%, #818cf8 30%, #22d3ee 60%, #c4b5fd 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: gen3ia-gradient-pan 9s ease infinite;
+}
+
+.nx-pill {
+  display: inline-flex; align-items: center; gap: .55rem;
+  padding: .4rem .85rem .4rem .6rem; border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04);
+  font-size: 12.5px; color: rgba(255,255,255,.75); backdrop-filter: blur(10px);
+  transition: border-color .2s, background .2s;
+}
+.nx-pill:hover { border-color: rgba(167,139,250,.5); background: rgba(139,92,246,.1); }
+.nx-pill-dot { width: 7px; height: 7px; border-radius: 9999px; background: #34d399; box-shadow: 0 0 0 4px rgba(52,211,153,.18); }
+
+.nx-composer {
+  position: relative; padding: 14px; border-radius: 22px;
+  background: rgba(17, 18, 28, .78); backdrop-filter: blur(18px);
+  border: 1px solid rgba(255,255,255,.09);
+  box-shadow: 0 30px 80px -30px rgba(124,58,237,.55), inset 0 1px 0 rgba(255,255,255,.06);
+  transition: border-color .25s, box-shadow .25s;
+}
+.nx-composer:focus-within { border-color: rgba(167,139,250,.55); box-shadow: 0 30px 90px -25px rgba(124,58,237,.75), 0 0 0 4px rgba(139,92,246,.15); }
+.nx-tag { font-size: 11px; padding: .3rem .6rem; border-radius: 9999px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.07); color: rgba(255,255,255,.55); }
+.nx-send {
+  display: grid; place-items: center; width: 42px; height: 42px; flex-shrink: 0; border-radius: 14px; color: #fff;
+  background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+  box-shadow: 0 10px 25px -8px rgba(139,92,246,.8); transition: transform .2s, filter .2s;
+}
+.nx-send:hover { transform: translateY(-1px) scale(1.04); filter: brightness(1.1); }
+
+.nx-chip {
+  display: inline-flex; align-items: center; gap: .45rem; padding: .45rem .85rem; border-radius: 9999px;
+  font-size: 13px; color: rgba(255,255,255,.7); background: rgba(255,255,255,.035);
+  border: 1px solid rgba(255,255,255,.07); transition: all .2s;
+}
+.nx-chip:hover { color: #fff; background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.16); transform: translateY(-1px); }
+
+.nx-glow-frame {
+  padding: 1px; border-radius: 22px;
+  background: linear-gradient(140deg, rgba(167,139,250,.6), rgba(255,255,255,.06) 40%, rgba(34,211,238,.45));
+  box-shadow: 0 50px 120px -40px rgba(124,58,237,.6);
+}
+.nx-window { border-radius: 21px; background: #0c0d15; overflow: hidden; }
+
+.nx-marquee { overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+.nx-marquee-track { display: flex; width: max-content; gap: 3rem; animation: nx-marquee 40s linear infinite; }
+.nx-marquee-item { font-size: 1.05rem; font-weight: 600; letter-spacing: -.01em; color: rgba(255,255,255,.35); white-space: nowrap; }
+@keyframes nx-marquee { to { transform: translateX(-50%); } }
+
+.nx-eyebrow {
+  display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase;
+  background: linear-gradient(90deg, #a78bfa, #22d3ee); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+.nx-card {
+  position: relative; border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+  border: 1px solid rgba(255,255,255,.07);
+}
+.nx-card-hover { transition: transform .35s cubic-bezier(.22,1,.36,1), border-color .3s, box-shadow .35s; }
+.nx-card-hover:hover { transform: translateY(-4px); border-color: rgba(167,139,250,.35); box-shadow: 0 30px 60px -30px rgba(124,58,237,.5); }
+.nx-icon {
+  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; color: #c4b5fd;
+  background: linear-gradient(135deg, rgba(139,92,246,.2), rgba(6,182,212,.12));
+  border: 1px solid rgba(255,255,255,.08);
+}
+.nx-step-num {
+  display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 14px;
+  font-weight: 700; font-size: 14px; color: #fff; background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+  box-shadow: 0 10px 25px -10px rgba(139,92,246,.8);
+}
+.nx-steps-line { position: absolute; top: 50px; left: 12%; right: 12%; height: 1px; background: linear-gradient(90deg, transparent, rgba(167,139,250,.5), rgba(34,211,238,.5), transparent); }
+.nx-shield {
+  display: grid; place-items: center; width: 200px; height: 200px; border-radius: 9999px; color: #a78bfa;
+  background: radial-gradient(circle, rgba(139,92,246,.25), transparent 70%);
+  border: 1px solid rgba(167,139,250,.25); box-shadow: 0 0 0 30px rgba(139,92,246,.05), 0 0 0 60px rgba(139,92,246,.03);
+  animation: gen3ia-float 6s ease-in-out infinite;
+}
+.nx-cta { background: linear-gradient(135deg, #5b21b6 0%, #4338ca 45%, #0e7490 100%); }
+.nx-cta::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px); background-size: 40px 40px; mask-image: radial-gradient(ellipse at center, #000, transparent 75%); }
+.nx-btn-light { display: inline-flex; align-items: center; gap: .5rem; padding: .85rem 1.75rem; border-radius: 9999px; background: #fff; color: #0b0c12; font-weight: 600; font-size: 14px; transition: transform .2s, box-shadow .2s; box-shadow: 0 10px 30px -10px rgba(255,255,255,.45); }
+.nx-btn-light:hover { transform: translateY(-1px); box-shadow: 0 14px 36px -10px rgba(255,255,255,.6); }
+.nx-btn-outline { display: inline-flex; align-items: center; padding: .85rem 1.75rem; border-radius: 9999px; border: 1px solid rgba(255,255,255,.3); color: #fff; font-weight: 600; font-size: 14px; transition: background .2s; }
+.nx-btn-outline:hover { background: rgba(255,255,255,.1); }
+.nx-logo {
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; font-size: 11px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, #8b5cf6, #06b6d4); box-shadow: 0 6px 18px -6px rgba(139,92,246,.8);
+}
+.nx-faq { border-radius: 18px; padding: 1.1rem 1.25rem; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07); transition: border-color .2s, background .2s; }
+.nx-faq[open] { background: rgba(255,255,255,.05); border-color: rgba(167,139,250,.3); }
+.nx-faq summary::-webkit-details-marker { display: none; }
+
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-marquee-track, .nx-orb, .nx-shield, .nx-gradient-text { animation: none; }
+}
+
+/* ============================================================
+   Application (v4) : accents violet → cyan sur la coquille
+   ============================================================ */
+.g3-brand-mark, .g3-account-avatar, .g3-new-task > span { background: linear-gradient(135deg, #8b5cf6, #06b6d4); }
+.g3-side-link { border-radius: 12px; }
+.g3-side-link.is-active {
+  background: linear-gradient(135deg, #1c1b18, #2a2540);
+  box-shadow: 0 8px 22px -12px rgba(91, 33, 182, .6), inset 0 0 0 1px rgba(167,139,250,.25);
+}
+.g3-side-link.is-active .g3-side-icon { background: linear-gradient(135deg, rgba(139,92,246,.45), rgba(6,182,212,.35)); }
+.g3-btn-primary { background: linear-gradient(135deg, #1c1b18, #312a4a); }
+.g3-btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, #2a2724, #3f3563); box-shadow: 0 12px 30px -10px rgba(91,33,182,.55); }
+.g3-card { transition: box-shadow .3s ease, transform .3s ease, border-color .3s ease; }
+.g3-card:hover { border-color: rgba(139, 92, 246, .22); }
+.g3-input:focus, .g3-textarea:focus, .g3-select:focus { border-color: rgba(139,92,246,.55) !important; box-shadow: 0 0 0 4px rgba(139,92,246,.12) !important; }
