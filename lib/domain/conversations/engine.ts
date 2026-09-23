@@ -308,20 +308,23 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     return runImageTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
   }
 
-  // 3) Décision d'intention structurée.
+  // 3) Décision d'intention structurée — tâche de classification simple :
+  // routée sur les modèles "chat" (rapides) pour rester sous le budget de
+  // latence de la fonction serverless.
   const catalog = conversationToolCatalog();
   let intent: TurnIntent;
   try {
     const result = await runAIJSON({
       userId: input.userId,
       feature: "conversation-turn",
+      task: "chat",
       system: buildIntentSystemPrompt(catalog, project),
       prompt:
         `Historique récent :\n${priorHistory.slice(-6).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 500)}`).join("\n") || "(vide)"}` +
         `\n\nNouvelle demande : ${input.message.slice(0, 4000)}${attachmentsContext(input.attachments)}`,
       schema: IntentSchema,
       label: "intention-conversation",
-      maxTokens: 3000,
+      maxTokens: 2500,
     });
     intent = result.data;
   } catch {

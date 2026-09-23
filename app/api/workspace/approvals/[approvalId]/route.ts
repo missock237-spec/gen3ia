@@ -15,7 +15,7 @@ import {
 } from "@/lib/domain/conversations/engine";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 type RouteContext = { params: Promise<{ approvalId: string }> };
 
