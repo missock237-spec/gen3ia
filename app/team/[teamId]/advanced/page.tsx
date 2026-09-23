@@ -27,7 +27,7 @@ export default function TeamAdvancedPage() {
     } catch(e){setError(e instanceof DOMException&&e.name==='AbortError'?'La requête a expiré. Réessayez.':e instanceof Error?e.message:'Erreur inconnue');} finally{window.clearTimeout(timeout);setBusy(false);}
   },[teamId, sessionDisponible]);
 
-  if (sessionDisponible === null) return <div className="min-h-full bg-[#f6f4ef] p-10 text-center text-neutral-500">Chargement…</div>;
+  if (sessionDisponible === null) return <div className="min-h-full bg-[var(--g3-bg)] p-10 text-center text-neutral-500">Chargement…</div>;
   if (sessionDisponible === false) return <FeatureAuthGate feature="Studio d’équipe Gen3ia" description="Connectez-vous pour accéder à la coordination multi-agent, à la mémoire d’équipe et à l’analyse préventive des risques."><span/></FeatureAuthGate>;
   const safeObjective=objective.trim().slice(0,MAX_OBJECTIVE_LENGTH);
   return <div className="mx-auto max-w-5xl space-y-8 p-8"><header><p className="text-sm font-medium text-sky-700">Espace équipe</p><h1 className="font-serif text-3xl font-semibold">Intelligence d’équipe avancée</h1><p className="mt-2 text-gray-500">Coordination multi-agent, mémoire de travail optimisée et anticipation des échecs. L’accès aux opérations est réservé aux membres authentifiés de cette équipe.</p></header>

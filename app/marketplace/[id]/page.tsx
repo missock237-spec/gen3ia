@@ -69,9 +69,9 @@ export default function ExtensionFichePage() {
     return () => clearTimeout(timer);
   }, [load, sessionDisponible]);
 
-  if (sessionDisponible === null) return <div className="min-h-full bg-[#f6f4ef] p-10 text-center text-neutral-500">Chargement…</div>;
+  if (sessionDisponible === null) return <div className="min-h-full bg-[var(--g3-bg)] p-10 text-center text-neutral-500">Chargement…</div>;
   if (sessionDisponible === false) return <FeatureAuthGate feature="Marketplace Gen3ia" description="Connectez-vous pour consulter les extensions, leurs permissions, leurs versions et leurs avis."><span /></FeatureAuthGate>;
-  if (!fiche) return <div className="min-h-full bg-[#f6f4ef] p-10 text-center text-neutral-500">{message || "Chargement…"}</div>;
+  if (!fiche) return <div className="min-h-full bg-[var(--g3-bg)] p-10 text-center text-neutral-500">{message || "Chargement…"}</div>;
 
   const { extension, version, reviews, userState } = fiche;
   const action = async (path: string, init?: RequestInit) => {
@@ -118,7 +118,7 @@ export default function ExtensionFichePage() {
   };
 
   return (
-    <div className="min-h-full bg-[#f6f4ef] p-4 text-neutral-900 sm:p-6 md:p-8">
+    <div className="min-h-full bg-[var(--g3-bg)] p-4 text-neutral-900 sm:p-6 md:p-8">
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between gap-4">
           <Link href="/marketplace" className="text-sm text-neutral-500 hover:text-neutral-900">← Marketplace</Link>

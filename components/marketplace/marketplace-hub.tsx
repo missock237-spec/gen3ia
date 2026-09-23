@@ -109,7 +109,7 @@ export function MarketplaceHub() {
   const tabs: [HubTab, string, string][] = [["discover", "Explorer", "Découvrir les capacités"], ["installed", "Installées", "Extensions actives"], ["favorites", "Favoris", "Votre sélection"], ["purchases", "Achats", "Licences et accès"]];
 
   return (
-    <div className="min-h-full bg-[#f6f4ef] text-neutral-900">
+    <div className="min-h-full bg-[var(--g3-bg)] text-neutral-900">
       <div className="mx-auto flex max-w-[1480px] gap-0 px-3 py-3 sm:px-5 lg:px-7">
         <aside className="sticky top-3 hidden h-[calc(100dvh-88px)] w-[248px] shrink-0 flex-col rounded-[28px] border border-[rgba(23,23,20,0.09)] bg-white shadow-[0_2px_10px_rgba(15,23,42,0.05)] p-4 lg:flex">
           <Link href="/marketplace" className="mb-7 flex items-center gap-3 px-2 py-2"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-neutral-900 text-white text-sm font-black">G3</span><span><b className="block text-sm">Gen3ia</b><small className="text-neutral-400">Marketplace</small></span></Link>

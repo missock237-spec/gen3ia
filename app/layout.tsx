@@ -24,7 +24,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f6f4ef",
+  themeColor: "#fafafa",
 };
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://gen3ia.online";

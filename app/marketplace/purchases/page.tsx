@@ -78,7 +78,7 @@ function PurchasesContent() {
   }, []);
 
   return (
-    <div className="min-h-full bg-[#f6f4ef] px-4 py-6 text-neutral-900 sm:px-6 lg:px-10">
+    <div className="min-h-full bg-[var(--g3-bg)] px-4 py-6 text-neutral-900 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-6xl">
         <Link href="/marketplace" className="text-xs text-sky-700 hover:text-sky-800">← Marketplace</Link>
         <div className="mt-5 rounded-[30px] border border-[rgba(23,23,20,0.09)] bg-white p-7 shadow-[0_2px_10px_rgba(15,23,42,0.05)] sm:p-9">

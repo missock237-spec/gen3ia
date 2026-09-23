@@ -36,7 +36,7 @@ export default function RemoteApprovalPage() {
   const busy = status === "loading";
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-[#f6f4ef] px-4 text-neutral-900">
+    <div className="flex min-h-full items-center justify-center bg-[var(--g3-bg)] px-4 text-neutral-900">
       <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">GEN3IA · Approbation d&apos;action</p>
         <h1 className="mt-2 text-xl font-semibold">Une action sensible attend votre décision</h1>
@@ -45,7 +45,7 @@ export default function RemoteApprovalPage() {
         </p>
 
         {status === "approved" || status === "rejected" ? (
-          <div className="mt-6 rounded-xl border border-neutral-200 bg-[#f6f4ef] px-4 py-3 text-sm">{message}</div>
+          <div className="mt-6 rounded-xl border border-neutral-200 bg-[var(--g3-bg)] px-4 py-3 text-sm">{message}</div>
         ) : (
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <button

@@ -67,7 +67,7 @@ export default function StoragePage() {
     } finally { setBusy(false); }
   };
 
-  return <div className="min-h-full bg-[#f6f4ef] text-neutral-900 p-6"><div className="mx-auto max-w-6xl"><h1 className="font-serif text-3xl font-bold">Stockage permanent</h1><p className="mt-2 text-neutral-500">Vos fichiers restent associés à votre compte. Les agents peuvent les lire et les manipuler uniquement selon leurs permissions.</p>
+  return <div className="min-h-full bg-[var(--g3-bg)] text-neutral-900 p-6"><div className="mx-auto max-w-6xl"><h1 className="font-serif text-3xl font-bold">Stockage permanent</h1><p className="mt-2 text-neutral-500">Vos fichiers restent associés à votre compte. Les agents peuvent les lire et les manipuler uniquement selon leurs permissions.</p>
     {actionError && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{actionError}</div>}
     <div className="mt-6 rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]"><label className="inline-flex cursor-pointer rounded-full bg-neutral-900 px-5 py-3 font-semibold text-white hover:bg-neutral-800"><input type="file" className="hidden" disabled={busy} onChange={e => e.target.files?.[0] && upload(e.target.files[0])}/>Importer un fichier</label>
     {loadError && <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><span>{loadError}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-500">Réessayer</button></div>}

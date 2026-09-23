@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { navPrimaryFor } from "@/components/shells/nav-registry";
+import { NavIcon } from "@/components/ui/nav-icon";
 
 /**
  * AdminShell — shell opérateur de l'espace d'administration (architecture à
@@ -54,7 +55,7 @@ export function AdminShell({ children, role }: { children: ReactNode; role: stri
                       : "text-neutral-400 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <span aria-hidden="true">{route.icon}</span>
+                  <NavIcon glyph={route.icon} size={15} />
                   {route.label}
                 </Link>
               </li>

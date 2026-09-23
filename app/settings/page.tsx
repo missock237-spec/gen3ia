@@ -5,7 +5,7 @@ import { SettingsAdSpace } from "@/components/settings/settings-ad-space";
 
 function SettingsContent() {
   return (
-    <div className="min-h-full bg-[#f6f4ef] text-neutral-900">
+    <div className="min-h-full bg-[var(--g3-bg)] text-neutral-900">
       <main className="mx-auto w-full max-w-5xl px-4 py-10 md:px-8 md:py-14">
         <header>
           <p className="g3-eyebrow">GEN3IA · PARAMÈTRES</p>

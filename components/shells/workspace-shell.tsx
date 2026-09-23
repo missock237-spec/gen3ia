@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { navPrimaryFor, type NavRole } from "./nav-registry";
+import { NavIcon } from "@/components/ui/nav-icon";
 
 /**
  * WorkspaceShell — navigation de l'espace utilisateur (architecture 3 espaces).
@@ -65,7 +66,7 @@ export function WorkspaceShell() {
                     : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
                 }`}
               >
-                <span aria-hidden="true">{route.icon}</span>
+                <NavIcon glyph={route.icon} href={route.href} size={15} />
                 {route.label}
               </Link>
             </li>

@@ -14,7 +14,7 @@ export function PcOnlyNotice({ deviceType }: { deviceType?: string }) {
         : "appareil actuel";
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-[#f6f4ef] p-6 text-neutral-900">
+    <div className="flex min-h-full items-center justify-center bg-[var(--g3-bg)] p-6 text-neutral-900">
       <div className="anim-scale-in w-full max-w-lg rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-8 text-center shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)]">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-100 text-xs font-bold uppercase tracking-widest text-amber-700">
           PC
