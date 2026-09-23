@@ -282,6 +282,25 @@ function historyForModel(history: ChatMessage[], limit = 16) {
   return history.slice(-limit).map((m) => ({ role: m.role, content: m.content }));
 }
 
+/**
+ * Budget temps par appel IA : la fonction serverless a 60 s (plan Hobby).
+ * Chaque étape IA reçoit un délai ferme, avec replis prévus — la fonction
+ * rend toujours la main sous le plafond, jamais de 504 opaque.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Délai dépassé (${label})`)), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
+const INTENT_BUDGET_MS = 25_000;
+const CHAT_BUDGET_MS = 35_000;
+const SUMMARY_BUDGET_MS = 15_000;
+
 /** Contexte des pièces jointes injecté au modèle. */
 function attachmentsContext(attachments?: MessageAttachment[]): string {
   if (!attachments || attachments.length === 0) return "";
@@ -321,18 +340,22 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const catalog = conversationToolCatalog();
   let intent: TurnIntent;
   try {
-    const result = await runAIJSON({
-      userId: input.userId,
-      feature: "conversation-turn",
-      task: "chat",
-      system: buildIntentSystemPrompt(catalog, project),
-      prompt:
-        `Historique récent :\n${priorHistory.slice(-6).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 500)}`).join("\n") || "(vide)"}` +
-        `\n\nNouvelle demande : ${input.message.slice(0, 4000)}${attachmentsContext(input.attachments)}`,
-      schema: IntentSchema,
-      label: "intention-conversation",
-      maxTokens: 2500,
-    });
+    const result = await withTimeout(
+      runAIJSON({
+        userId: input.userId,
+        feature: "conversation-turn",
+        task: "chat",
+        system: buildIntentSystemPrompt(catalog, project),
+        prompt:
+          `Historique récent :\n${priorHistory.slice(-6).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 500)}`).join("\n") || "(vide)"}` +
+          `\n\nNouvelle demande : ${input.message.slice(0, 4000)}${attachmentsContext(input.attachments)}`,
+        schema: IntentSchema,
+        label: "intention-conversation",
+        maxTokens: 2500,
+      }),
+      INTENT_BUDGET_MS,
+      "décision d'intention",
+    );
     intent = result.data;
   } catch {
     // Décision indisponible : repli sûr = réponse conversationnelle simple.
@@ -386,30 +409,54 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
   ].filter(Boolean);
 
-  const response = await generate({
-    task: "chat",
-    messages: [
-      ...(systemParts.length > 0
-        ? [{ role: "system" as const, content: systemParts.join("\n\n") }]
-        : []),
-      ...historyForModel(ctx.priorHistory),
-      { role: "user", content: ctx.message },
-    ],
-    provider: ctx.provider as never,
-    model: ctx.model,
-    preferFree: true,
-    metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
-  });
+  let content: string;
+  let provider: string | undefined;
+  let model: string | undefined;
+  let usage: { inputTokens: number; outputTokens: number; totalTokens: number } | undefined;
+  let generationStatus: "complete" | "failed" = "complete";
+  try {
+    const response = await withTimeout(
+      generate({
+        task: "chat",
+        messages: [
+          ...(systemParts.length > 0
+            ? [{ role: "system" as const, content: systemParts.join("\n\n") }]
+            : []),
+          ...historyForModel(ctx.priorHistory),
+          { role: "user", content: ctx.message },
+        ],
+        provider: ctx.provider as never,
+        model: ctx.model,
+        preferFree: true,
+        metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
+      }),
+      CHAT_BUDGET_MS,
+      "réponse conversationnelle",
+    );
+    content = response.text;
+    provider = response.provider;
+    model = response.model;
+    usage = response.usage;
+  } catch (error) {
+    // Échec/timeout IA : réponse honnête persistée dans le fil (jamais de 504
+    // opaque), l'utilisateur peut renvoyer le message.
+    content =
+      "Je n'ai pas réussi à produire une réponse dans le délai imparti (le fournisseur IA est surchargé). " +
+      "Réessayez en renvoyant votre message — il reste dans la conversation.";
+    provider = "gen3ia";
+    generationStatus = "failed";
+    console.error("[conversation] échec réponse chat:", error instanceof Error ? error.message : error);
+  }
 
   const assistantMessage = await appendMessage({
     conversationId: ctx.conversationId,
     userId: ctx.userId,
     role: "assistant",
-    content: response.text || ctx.intent.reply || "…",
-    provider: response.provider,
-    model: response.model,
-    generationStatus: "complete",
-    usage: response.usage,
+    content,
+    provider,
+    model,
+    generationStatus,
+    usage,
   });
 
   return {
@@ -691,29 +738,33 @@ async function summarizePlanTurn(
     .join("\n");
 
   try {
-    const response = await generate({
-      task: "chat",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Tu synthétises le résultat d'un plan d'exécution pour l'utilisateur de Gen3ia. " +
-            "Style : concis, factuel, orienté résultat. Mentionne les artefacts créés et, s'il y en a, " +
-            "les actions sensibles qui attendent sa validation. Pas de markdown de titre (#).",
-        },
-        {
-          role: "user",
-          content:
-            `Demande : ${ctx.message.slice(0, 1000)}\nObjectif du plan : ${run.objective}\n` +
-            `Étapes :\n${steps.map((s) => `- [${s.status}] ${s.title}${s.output ? ` : ${s.output.slice(0, 400)}` : ""}`).join("\n")}\n` +
-            `Artefacts : ${artifacts.map((a) => `${a.title} (${a.type})`).join(", ") || "aucun"}\n` +
-            `Validations en attente : ${approvals.map((a) => `${a.title} — impact : ${a.impact}`).join(" ; ") || "aucune"}`,
-        },
-      ],
-      preferFree: true,
-      maxTokens: 700,
-      metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
-    });
+    const response = await withTimeout(
+      generate({
+        task: "chat",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Tu synthétises le résultat d'un plan d'exécution pour l'utilisateur de Gen3ia. " +
+              "Style : concis, factuel, orienté résultat. Mentionne les artefacts créés et, s'il y en a, " +
+              "les actions sensibles qui attendent sa validation. Pas de markdown de titre (#).",
+          },
+          {
+            role: "user",
+            content:
+              `Demande : ${ctx.message.slice(0, 1000)}\nObjectif du plan : ${run.objective}\n` +
+              `Étapes :\n${steps.map((s) => `- [${s.status}] ${s.title}${s.output ? ` : ${s.output.slice(0, 400)}` : ""}`).join("\n")}\n` +
+              `Artefacts : ${artifacts.map((a) => `${a.title} (${a.type})`).join(", ") || "aucun"}\n` +
+              `Validations en attente : ${approvals.map((a) => `${a.title} — impact : ${a.impact}`).join(" ; ") || "aucune"}`,
+          },
+        ],
+        preferFree: true,
+        maxTokens: 700,
+        metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
+      }),
+      SUMMARY_BUDGET_MS,
+      "synthèse du plan",
+    );
     return response.text || deterministic;
   } catch {
     return deterministic;
