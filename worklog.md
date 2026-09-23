@@ -335,3 +335,20 @@ Stage Summary:
 - Production gen3ia.online = commit f8ae1fe (+ d0be45e script e2e), READY (auto-deploy Git).
 - Gen3ia dispose d'un Workshop IDE unifié façon VS Code/Cursor : le terminal n'est plus un panneau isolé mais le flux des exécutions de ses agents (lecture seule, audit complet, contrôle arrêt session/arrêt d'urgence), l'éditeur Monaco est relié au terminal (une erreur cliquée ouvre le fichier à la ligne), et toute app HTML créée par un agent affiche un bouton d'aperçu en direct directement dans la conversation.
 - Rappel permanent : rotation des clés transmises en clair (Upstash, Qdrant, GitHub, Vercel, Agnes).
+
+---
+Task ID: 21 (préparation — capture manquante)
+Agent: Super Z (principal)
+Task: « Analyser la capture Screenshot_20260923_141348.jpg puis la reproduire à l'identique dans le chat IA et le chat d'agent IA de tout l'ensemble du projet ».
+
+Work Log:
+- Sandbox réinitialisé (gen3ia absent du disque) → re-clonage GitHub OK (remote missock237-spec/gen3ia, HEAD 176e6b1 = Task 20 déjà poussé).
+- npm install OK (587 paquets, NEXT OK) ; vercel link recréé (.env.local OK).
+- Sync git : clone frais = HEAD distant → AUCUNE modification non poussée (rien à pusher, conformité « push les directement » vérifiée).
+- Cibles localisées et lues intégralement : components/gen/gen-chat.tsx (chat IA page d'accueil, widget flottant Gen) ; components/agent/agent-chat-workshop.tsx (rail agents) + agent-chat-panel.tsx 654 lignes (chat d'agent IA Studio).
+- RECHERCHE EXHAUSTIVE de la capture (find global, tous montages, /home /tmp /var/tmp, tout fichier image du 22-23 sept) : LE FICHIER N'EST PAS ARRIVÉ SUR LE SERVEUR (upload perdu — reset sandbox simultané). Aucune image du jour n'existe nulle part.
+- Décision d'intégrité : ne JAMAIS fabriquer une reproduction d'une image non vue. Blocage signalé à l'utilisateur → nouvelle demande d'upload. Terrain 100% prêt pour agir dès réception.
+
+Stage Summary:
+- Environnement restauré et synchronisé (production gen3ia.online = 176e6b1, IDE unifié Task 20 en ligne).
+- Capture manquante : utilisateur doit re-envoyer Screenshot_20260923_141348.jpg. Dès réception : analyse → reproduction à l'identique dans gen-chat.tsx ET agent-chat-panel/workshop.tsx (+ tout autre chat du projet si la capture s'y applique).
