@@ -88,7 +88,11 @@ export function conversationToolCatalog(): ToolCatalogEntry[] {
  * arbitraire, ni terminal, ni caméra dans ce contexte.
  */
 export const CONVERSATION_EXECUTION_POLICY: ExecutionPolicy = {
-  allowedTools: [],
+  // "*" : le filtrage réel est fait en amont (catalogue conversationnel sans
+  // code.execute/camera.capture, plan validé par l'IA d'intention, et
+  // validations humaines pour les risques high/critical). Les permissions
+  // ci-dessous restent la barrière fine de chaque outil.
+  allowedTools: ["*"],
   permissions: [
     "tool.read", "tool.write", "tool.external",
     "file.read", "file.write", "file.create",
@@ -213,13 +217,16 @@ export function detectExplicitToolIntent(message: string, catalog: ToolCatalogEn
 
 /** Requête condensée pour l'outil de recherche (nettoyage des formules). */
 export function extractSearchQuery(message: string): string {
-  return message
+  const cleaned = message
     .replace(/^(fais[ez]?|peux[- ]tu|pourrais[- ]tu|merci de|stp|s'il te pla[eî]t)\s+/i, "")
     .replace(/(une |la |de )?(recherche[s]? (web|internet|sur internet)|search)\s*(sur|about|for)?\s*/i, "")
     .replace(/^(sur |about )+/i, "")
     .replace(/\s+et r[eé]sume[- ].*$/i, "")
+    // Séparateurs résiduels après suppression de la formule (" : ", " - "…).
+    .replace(/^[^\p{L}\p{N}]+/u, "")
     .trim()
-    .slice(0, 300) || message.slice(0, 300);
+    .slice(0, 300);
+  return cleaned || message.replace(/^[^\p{L}\p{N}]+/u, "").trim().slice(0, 300) || message.slice(0, 300);
 }
 
 export function buildIntentSystemPrompt(catalog: ToolCatalogEntry[], project?: WorkspaceProject | null): string {
