@@ -119,7 +119,7 @@ export function ScheduleForm({
                 type="button"
                 onClick={() => setTriggerMode(option.key)}
                 aria-pressed={triggerMode === option.key}
-                className={`rounded-xl border p-3 text-left transition-colors ${triggerMode === option.key ? "border-sky-200 bg-sky-100 text-sky-800" : "border-[rgba(23,23,20,0.09)] bg-neutral-50 hover:bg-neutral-100"}`}
+                className={`rounded-xl border p-3 text-left transition-colors ${triggerMode === option.key ? "border-sky-200 bg-sky-100 text-sky-800" : "border-[var(--g3-border)] bg-neutral-50 hover:bg-neutral-100"}`}
               >
                 <span className="block text-sm font-semibold">{option.title}</span>
                 <span className="mt-0.5 block text-xs text-neutral-500">{option.detail}</span>
@@ -184,7 +184,7 @@ export function ScheduleForm({
                 key={value}
                 onClick={() => toggleDay(value)}
                 aria-pressed={selectedDays.includes(value)}
-                className={`rounded-xl border px-3 py-2 text-sm transition-colors ${selectedDays.includes(value) ? "border-sky-200 bg-sky-100 text-sky-700" : "border-[rgba(23,23,20,0.09)] bg-neutral-50 text-neutral-500 hover:bg-neutral-100"}`}
+                className={`rounded-xl border px-3 py-2 text-sm transition-colors ${selectedDays.includes(value) ? "border-sky-200 bg-sky-100 text-sky-700" : "border-[var(--g3-border)] bg-neutral-50 text-neutral-500 hover:bg-neutral-100"}`}
               >
                 {label}
               </button>
@@ -240,11 +240,11 @@ export function ScheduleForm({
         </div>
 
         {triggerMode === "cron" ? (
-          <div className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-3 text-sm text-neutral-600" aria-live="polite">
+          <div className="mt-4 rounded-xl border border-[var(--g3-border)] bg-neutral-50 p-3 text-sm text-neutral-600" aria-live="polite">
             {summary} · {timezone}
           </div>
         ) : (
-          <div className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-3 text-sm text-neutral-600" aria-live="polite">
+          <div className="mt-4 rounded-xl border border-[var(--g3-border)] bg-neutral-50 p-3 text-sm text-neutral-600" aria-live="polite">
             {triggerMode === "webhook" ? "Déclenchement par événement externe (webhook)" : `Veille active sur ${watchSources.filter((source) => source.url.trim().length > 8).length} source(s)`} · {timezone}
           </div>
         )}

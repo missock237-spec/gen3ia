@@ -143,7 +143,7 @@ export function OrganizationsPanel() {
   const canManage = (org: Organization) => org.myRole === "owner" || org.myRole === "admin";
 
   return (
-    <section className="anim-fade-up rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] md:p-8" aria-label="Organisations">
+    <section className="anim-fade-up rounded-3xl border border-[var(--g3-border)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] md:p-8" aria-label="Organisations">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-serif text-2xl font-semibold">Organisations</h2>
@@ -189,7 +189,7 @@ export function OrganizationsPanel() {
       ) : (
         <ul className="mt-5 space-y-3">
           {organizations.map((org) => (
-            <li key={org.id} className="rounded-2xl border border-[rgba(23,23,20,0.09)]">
+            <li key={org.id} className="rounded-2xl border border-[var(--g3-border)]">
               <button
                 type="button"
                 onClick={() => toggleExpand(org)}
@@ -211,7 +211,7 @@ export function OrganizationsPanel() {
               </button>
 
               {expanded === org.id && (
-                <div className="border-t border-[rgba(23,23,20,0.09)] p-4">
+                <div className="border-t border-[var(--g3-border)] p-4">
                   {detailLoading || !detail ? (
                     <p className="text-xs text-neutral-400">Chargement des membres…</p>
                   ) : (
@@ -321,7 +321,7 @@ export function OrganizationsPanel() {
         </ul>
       )}
 
-      <div className="mt-6 flex flex-wrap items-end gap-2 border-t border-[rgba(23,23,20,0.09)] pt-5">
+      <div className="mt-6 flex flex-wrap items-end gap-2 border-t border-[var(--g3-border)] pt-5">
         <div className="min-w-[220px] flex-1">
           <label htmlFor="new-org-name" className="g3-label">Nouvelle organisation</label>
           <input

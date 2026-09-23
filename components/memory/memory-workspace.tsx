@@ -162,7 +162,7 @@ export function MemoryWorkspace() {
           </AnimatedTabsSection>
         )}
 
-        <footer className="mt-8 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4 text-xs leading-5 text-neutral-400">
+        <footer className="mt-8 rounded-2xl border border-[var(--g3-border)] bg-white p-4 text-xs leading-5 text-neutral-400">
           Vos données restent associées à votre compte : les agents n&apos;y accèdent qu&apos;avec les permissions
           que vous leur accordez. Aucune publication externe n&apos;est possible depuis la mémoire permanente.
         </footer>

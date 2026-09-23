@@ -275,7 +275,7 @@ export default function StudioClientsPage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
           <aside className="flex flex-col gap-3">
-            <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4">
+            <div className="rounded-2xl border border-[var(--g3-border)] bg-white p-4">
               <h2 className="mb-2 text-sm font-bold">Mes agents commerciaux</h2>
               {configs.length === 0 && <p className="text-xs text-neutral-500">Aucun agent commercial. Créez-en un ci-contre.</p>}
               <div className="flex flex-col gap-2">
@@ -308,7 +308,7 @@ export default function StudioClientsPage() {
             )}
           </aside>
 
-          <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5">
+          <section className="rounded-2xl border border-[var(--g3-border)] bg-white p-5">
             {configs.length === 0 ? (
               <div className="flex flex-col gap-4">
                 <h2 className="text-base font-bold">Nouvel agent commercial</h2>

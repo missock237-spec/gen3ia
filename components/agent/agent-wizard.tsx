@@ -300,7 +300,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
                 <input
                   type="file"
                   accept={MEMORY_FILE_ACCEPT}
-                  className="block w-full cursor-pointer rounded-xl border border-[rgba(23,23,20,0.09)] bg-white px-3 py-2.5 text-sm text-neutral-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-neutral-900 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-neutral-800"
+                  className="block w-full cursor-pointer rounded-xl border border-[var(--g3-border)] bg-white px-3 py-2.5 text-sm text-neutral-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-neutral-900 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-neutral-800"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     e.target.value = "";
@@ -330,7 +330,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
                     type="button"
                     onClick={() => setAgentMode(option.key)}
                     aria-pressed={selected}
-                    className={`rounded-xl border p-3.5 text-left transition-all duration-300 ${selected ? "border-neutral-900 bg-neutral-50 shadow-[0_8px_24px_-12px_rgba(28,27,24,0.35)]" : "border-[rgba(23,23,20,0.09)] bg-white hover:border-neutral-300 hover:bg-neutral-50"}`}
+                    className={`rounded-xl border p-3.5 text-left transition-all duration-300 ${selected ? "border-[var(--g3-accent)] bg-[var(--g3-accent-soft)] shadow-[0_0_0_3px_var(--g3-accent-ring)]" : "border-[var(--g3-border)] bg-white hover:border-neutral-300 hover:bg-neutral-50"}`}
                   >
                     <span className="block text-sm font-bold">{option.title}</span>
                     <span className="mt-1 block text-xs leading-5 text-neutral-500">{option.detail}</span>
@@ -351,7 +351,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
                     type="button"
                     onClick={() => setWizardKey(entry.key)}
                     aria-pressed={selected}
-                    className={`rounded-xl border p-3 text-left transition-all duration-300 ${selected ? "border-neutral-900 bg-neutral-50 shadow-[0_8px_24px_-12px_rgba(28,27,24,0.35)]" : "border-[rgba(23,23,20,0.09)] bg-white hover:border-neutral-300 hover:bg-neutral-50"}`}
+                    className={`rounded-xl border p-3 text-left transition-all duration-300 ${selected ? "border-[var(--g3-accent)] bg-[var(--g3-accent-soft)] shadow-[0_0_0_3px_var(--g3-accent-ring)]" : "border-[var(--g3-border)] bg-white hover:border-neutral-300 hover:bg-neutral-50"}`}
                   >
                     <span className="block text-sm font-semibold">{entry.label}</span>
                     <span className="mt-1 block text-xs leading-5 text-neutral-500">{entry.description}</span>
@@ -380,7 +380,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
       </div>
 
       {/* ── Personnalité & style (personnalisation avancée, optionnelle) ── */}
-      <div className="mt-8 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-neutral-50/60 p-5 md:p-6">
+      <div className="mt-8 rounded-2xl border border-[var(--g3-border)] bg-neutral-50/60 p-5 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-bold">Personnalité &amp; style</h3>
@@ -439,7 +439,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
                   type="button"
                   aria-pressed={persona.avatar?.emoji === emoji}
                   onClick={() => setPersona((c) => ({ ...c, avatar: { emoji, color: c.avatar?.color ?? "neutral" } }))}
-                  className={`h-9 w-9 rounded-lg border text-lg transition-all ${persona.avatar?.emoji === emoji ? "border-neutral-900 bg-white shadow-sm" : "border-[rgba(23,23,20,0.09)] bg-white hover:border-neutral-300"}`}
+                  className={`h-9 w-9 rounded-lg border text-lg transition-all ${persona.avatar?.emoji === emoji ? "border-neutral-900 bg-white shadow-sm" : "border-[var(--g3-border)] bg-white hover:border-neutral-300"}`}
                 >
                   {emoji}
                 </button>
@@ -504,7 +504,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
               {CAPABILITY_OPTIONS.map((option) => {
                 const enabled = persona.capabilities[option.key];
                 return (
-                  <label key={option.key} className="flex cursor-pointer items-start gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-white px-3.5 py-2.5">
+                  <label key={option.key} className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--g3-border)] bg-white px-3.5 py-2.5">
                     <input
                       type="checkbox"
                       className="mt-0.5 h-4 w-4 accent-neutral-900"
@@ -523,7 +523,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
         </div>
       </div>
 
-      <div className="mt-6 flex flex-col gap-2 border-t border-[rgba(23,23,20,0.09)] pt-5 sm:flex-row sm:justify-end">
+      <div className="mt-6 flex flex-col gap-2 border-t border-[var(--g3-border)] pt-5 sm:flex-row sm:justify-end">
         <button type="button" className="g3-btn g3-btn-ghost" onClick={onCancel}>Annuler</button>
         <button type="submit" className="g3-btn g3-btn-primary" disabled={!canSubmit || saving}>
           {saving ? <>Enregistrement<span className="g3-dots"><span /><span /><span /></span></> : editing ? "Enregistrer les modifications" : "Créer mon agent IA"}

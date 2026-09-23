@@ -161,7 +161,7 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
 
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
         <div className="space-y-4">
-          <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4">
+          <div className="rounded-2xl border border-[var(--g3-border)] bg-neutral-50 p-4">
             <h4 className="font-semibold">1. Acheter un numéro Gen3ia</h4>
             <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" className={`rounded-xl border px-3 py-2 text-left text-sm ${provider === "twilio" ? "border-sky-500 bg-sky-50" : "bg-white"}`} onClick={() => setProvider("twilio")}><b>Twilio</b><span className="block text-[11px] text-neutral-500">Réseau Twilio</span></button><button type="button" className={`rounded-xl border px-3 py-2 text-left text-sm ${provider === "plivo" ? "border-sky-500 bg-sky-50" : "bg-white"}`} onClick={() => setProvider("plivo")}><b>Plivo</b><span className="block text-[11px] text-neutral-500">Réseau Plivo</span></button></div>
             {priceMinor !== null && <p className="mt-1 text-xs font-semibold text-sky-700">Prix d’attribution Gen3ia configuré : {(priceMinor / 100).toFixed(2)} {currency}</p>}
@@ -174,7 +174,7 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
             {available.length > 0 && <div className="mt-3 max-h-48 space-y-2 overflow-auto">{available.map((item) => <div key={item.phoneNumber} className="flex items-center justify-between gap-2 rounded-xl border bg-white p-3"><div><div className="font-semibold">{item.phoneNumber}</div><div className="text-[10px] uppercase tracking-wide text-sky-700">{provider}</div><div className="text-[11px] text-neutral-500">{item.locality}{item.region ? ", " + item.region : ""}</div></div><button type="button" className="g3-btn g3-btn-cyan !px-3 !py-2 text-xs" disabled={busy} onClick={() => buy(item.phoneNumber)}>Acheter</button></div>)}</div>}
           </div>
 
-          <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4">
+          <div className="rounded-2xl border border-[var(--g3-border)] bg-white p-4">
             <h4 className="font-semibold">2. Utiliser votre propre numéro</h4>
             <p className="mt-1 text-xs leading-5 text-neutral-500">Pour que Gen3ia reçoive directement les appels, le numéro doit être déjà dans le compte Twilio Gen3ia, ou être porté/hébergé chez Twilio. Un simple Caller ID vérifié ne suffit pas pour recevoir les appels.</p>
             <div className="mt-3 flex gap-2"><input className="g3-input flex-1" value={ownNumber} onChange={(e) => setOwnNumber(e.target.value)} placeholder="+14155551234" /><button type="button" className="g3-btn g3-btn-ghost" disabled={busy} onClick={attach}>Attribuer</button></div>
@@ -184,7 +184,7 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4">
+          <div className="rounded-2xl border border-[var(--g3-border)] bg-white p-4">
             <h4 className="font-semibold">3. Personnaliser l’agent vocal</h4>
             <div className="mt-4 space-y-3">
               <label className="g3-label">Langue<select className="g3-select mt-1" value={language} onChange={(e) => setLanguage(e.target.value)}><option value="fr-FR">Français</option><option value="en-US">English US</option><option value="en-GB">English UK</option><option value="es-ES">Español</option><option value="de-DE">Deutsch</option></select></label>
@@ -211,5 +211,5 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return <label className="flex cursor-pointer items-center justify-between rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 px-3 py-2.5 text-sm"><span>{label}</span><button type="button" role="switch" aria-checked={checked} data-on={checked} className="g3-switch" onClick={() => onChange(!checked)} /></label>;
+  return <label className="flex cursor-pointer items-center justify-between rounded-xl border border-[var(--g3-border)] bg-neutral-50 px-3 py-2.5 text-sm"><span>{label}</span><button type="button" role="switch" aria-checked={checked} data-on={checked} className="g3-switch" onClick={() => onChange(!checked)} /></label>;
 }

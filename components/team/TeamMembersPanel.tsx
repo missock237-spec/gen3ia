@@ -133,7 +133,7 @@ export function TeamMembersPanel({ teamId }: { teamId: string }) {
         {members.map((member) => (
           <li
             key={member.userId}
-            className="flex flex-col gap-3 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4 transition hover:border-neutral-300 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-3 rounded-2xl border border-[var(--g3-border)] bg-white p-4 transition hover:border-neutral-300 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex min-w-0 items-center gap-3">
               {member.photoURL ? (

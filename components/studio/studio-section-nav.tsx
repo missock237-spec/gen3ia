@@ -66,7 +66,7 @@ export function StudioSectionNav() {
 
   return (
     <nav aria-label="Sections du Studio" className="no-scrollbar mb-6 max-w-full overflow-x-auto md:mb-7">
-      <ul className="inline-flex min-w-full items-center gap-1.5 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-1.5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+      <ul className="inline-flex min-w-full items-center gap-1.5 rounded-2xl border border-[var(--g3-border)] bg-white p-1.5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
         {STUDIO_SECTIONS.map((section) => {
           const active = pathname === section.href;
           return (

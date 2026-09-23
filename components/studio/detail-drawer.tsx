@@ -81,7 +81,7 @@ export function DetailDrawer({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="g3-drawer anim-slide-in-right h-full w-full max-w-3xl overflow-y-auto border-l border-[rgba(23,23,20,0.09)] bg-white p-5 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)] outline-none md:p-7"
+        className="g3-drawer anim-slide-in-right h-full w-full max-w-3xl overflow-y-auto border-l border-[var(--g3-border)] bg-white p-5 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)] outline-none md:p-7"
         onClick={(event) => event.stopPropagation()}
       >
         {children}

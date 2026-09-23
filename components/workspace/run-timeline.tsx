@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { NavIcon } from "@/components/ui/nav-icon";
+
 import { RUN_STATUS_LABELS, RUN_STATUS_STYLES, STEP_STATUS_LABELS, STEP_STATUS_MARKS } from "./labels";
 import type { ConversationRun, RunStep } from "@/lib/domain/conversations/types";
 
@@ -25,12 +27,12 @@ const PHASE_LABELS: Record<Phase, string> = {
 };
 
 const PHASE_ICONS: Record<Phase, string> = {
-  understanding: "◎",
-  plan: "≡",
+  understanding: "✦",
+  plan: "◈",
   tools: "⚙",
   approval: "⚖",
-  execution: "▸",
-  result: "▣",
+  execution: "▶",
+  result: "□",
 };
 
 function groupSteps(steps: RunStep[]): Array<{ phase: Phase; steps: RunStep[] }> {
@@ -63,28 +65,34 @@ export function RunTimeline({ run, compact = false }: RunTimelineProps) {
 
   const groups = groupSteps(run.steps);
   const pendingCount = run.steps.filter((s) => s.status === "awaiting").length;
+  const doneCount = run.steps.filter((s) => s.status === "done" || s.status === "skipped").length;
+  const progress = run.steps.length ? Math.round((doneCount / run.steps.length) * 100) : 0;
+  const isRunning = run.status === "running" || run.status === "planning";
 
   return (
-    <div className="my-2 overflow-hidden rounded-xl border border-neutral-200 bg-white/70" data-run-id={run.id}>
-      <div className="flex items-center justify-between gap-2 border-b border-neutral-200 bg-neutral-50/70 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="g3-side-icon shrink-0" aria-hidden>◷</span>
-          <p className="truncate text-xs font-medium text-neutral-700">{run.objective}</p>
+    <div className="my-2 overflow-hidden rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] shadow-[var(--g3-shadow-xs)]" data-run-id={run.id}>
+      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className={`grid size-6 shrink-0 place-items-center rounded-md ${isRunning ? "bg-[var(--g3-accent-soft)] text-[var(--g3-accent)]" : "bg-[var(--g3-surface-2)] text-[var(--g3-muted)]"}`} aria-hidden>
+            {isRunning ? <span className="size-3 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" /> : <NavIcon glyph="∿" size={13} />}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-medium text-[var(--g3-ink)]">{run.objective}</p>
+            <p className="text-[11px] tabular-nums text-[var(--g3-muted)]">{doneCount}/{run.steps.length} étapes{pendingCount > 0 ? ` · ${pendingCount} validation(s) en attente` : ""}</p>
+          </div>
         </div>
-        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${RUN_STATUS_STYLES[run.status]}`}>
+        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${RUN_STATUS_STYLES[run.status]}`}>
           {RUN_STATUS_LABELS[run.status]}
         </span>
       </div>
+      <div className="h-0.5 bg-[var(--g3-surface-2)]" aria-hidden>
+        <div className="h-full bg-[var(--g3-accent)] transition-[width] duration-500" style={{ width: `${progress}%` }} />
+      </div>
 
       {compact ? (
-        <div className="px-3 py-2">
-          <p className="text-[11px] leading-relaxed text-neutral-500">
-            {run.steps.filter((s) => s.status === "done").length}/{run.steps.length} étapes
-            {pendingCount > 0 ? ` · ${pendingCount} validation(s) en attente` : ""}
-          </p>
-        </div>
+        null
       ) : (
-        <div className="divide-y divide-neutral-100">
+        <div className="divide-y divide-[var(--g3-border)] border-t border-[var(--g3-border)]">
           {groups.map(({ phase, steps }) => {
             const open = openPhases.has(phase);
             const allDone = steps.every((s) => s.status === "done" || s.status === "skipped");
@@ -93,37 +101,38 @@ export function RunTimeline({ run, compact = false }: RunTimelineProps) {
                 <button
                   type="button"
                   onClick={() => toggle(phase)}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors hover:bg-neutral-50"
+                  className="flex w-full items-center justify-between gap-2 px-3.5 py-2 text-left transition-colors hover:bg-[var(--g3-bg)]"
                   aria-expanded={open}
                 >
-                  <span className="flex items-center gap-2 text-xs font-medium text-neutral-700">
-                    <span className="g3-side-icon" aria-hidden>{PHASE_ICONS[phase]}</span>
+                  <span className="flex items-center gap-2 text-[12.5px] font-medium text-[var(--g3-ink-2)]">
+                    <NavIcon glyph={PHASE_ICONS[phase]} size={14} className="text-[var(--g3-muted)]" />
                     {PHASE_LABELS[phase]}
-                    <span className="text-[10px] font-normal text-neutral-400">({steps.length})</span>
+                    <span className="text-[11px] font-normal tabular-nums text-[var(--g3-subtle)]">{steps.length}</span>
                   </span>
                   <span className="flex items-center gap-2">
-                    <span className={`text-[10px] ${allDone ? "text-emerald-600" : "text-neutral-400"}`}>
-                      {allDone ? "✓" : open ? "▾" : "▸"}
-                    </span>
+                    {allDone && (
+                      <svg aria-label="Terminé" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-emerald-600"><path d="M20 6 9 17l-5-5" /></svg>
+                    )}
+                    <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-[var(--g3-subtle)] transition-transform ${open ? "" : "-rotate-90"}`}><path d="m6 9 6 6 6-6" /></svg>
                   </span>
                 </button>
                 {open && (
-                  <ul className="space-y-2 px-3 pb-3 pt-1">
+                  <ul className="relative ml-[21px] space-y-2 border-l border-[var(--g3-border)] pb-3 pl-4 pr-3.5 pt-1">
                     {steps.map((step) => (
-                      <li key={step.id} className="rounded-lg bg-neutral-50 px-3 py-2">
-                        <p className="flex items-start gap-2 text-xs font-medium text-neutral-800">
+                      <li key={step.id} className="relative rounded-lg px-1 py-1">
+                        <p className="flex items-start gap-2 text-[12.5px] font-medium text-[var(--g3-ink)]">
                           <span aria-hidden className={step.status === "failed" ? "text-red-500" : step.status === "done" ? "text-emerald-600" : "text-amber-600"}>
                             {STEP_STATUS_MARKS[step.status]}
                           </span>
                           <span className="flex-1">{step.title}</span>
-                          <span className="shrink-0 text-[10px] font-normal text-neutral-500">{STEP_STATUS_LABELS[step.status]}</span>
+                          <span className="shrink-0 text-[11px] font-normal text-[var(--g3-muted)]">{STEP_STATUS_LABELS[step.status]}</span>
                         </p>
                         {step.toolName && (
-                          <p className="mt-1 pl-5 font-mono text-[10px] text-neutral-500">
+                          <p className="mt-1 pl-5 font-mono text-[11px] text-[var(--g3-muted)]">
                             outil : {step.toolName}
                           </p>
                         )}
-                        {step.detail && <p className="mt-1 whitespace-pre-wrap pl-5 text-[11px] leading-relaxed text-neutral-600">{step.detail}</p>}
+                        {step.detail && <p className="mt-1 whitespace-pre-wrap pl-5 text-[12px] leading-relaxed text-[var(--g3-muted)]">{step.detail}</p>}
                         {step.output && (
                           <pre className="g3-code mt-1.5 ml-5 max-h-44 overflow-auto rounded-lg p-2 text-[10px] leading-relaxed">{step.output}</pre>
                         )}

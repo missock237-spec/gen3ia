@@ -220,7 +220,7 @@ export function DocumentsPanel(props: {
         {props.loaded && filtered.length > 0 && (
           <ul className="mt-4 space-y-2">
             {filtered.map((file) => (
-              <li key={file.path} className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 px-4 py-3">
+              <li key={file.path} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--g3-border)] bg-neutral-50 px-4 py-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-900 font-mono text-[10px] font-bold text-white" aria-hidden="true">
                     {fileBadge(file)}
@@ -238,7 +238,7 @@ export function DocumentsPanel(props: {
                   <button
                     disabled={busyFile === file.path}
                     onClick={() => download(file)}
-                    className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-3 text-[11px] font-semibold text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
+                    className="min-h-9 rounded-md border border-[var(--g3-border)] bg-white px-3 text-[11px] font-semibold text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
                   >
                     Télécharger
                   </button>
@@ -253,7 +253,7 @@ export function DocumentsPanel(props: {
                       </button>
                       <button
                         onClick={() => setConfirmingPath(null)}
-                        className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-2.5 text-[11px] font-semibold text-neutral-500"
+                        className="min-h-9 rounded-md border border-[var(--g3-border)] bg-white px-2.5 text-[11px] font-semibold text-neutral-500"
                       >
                         Annuler
                       </button>

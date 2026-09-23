@@ -91,17 +91,17 @@ function statusLabel(status?: string) {
 }
 
 function statusClass(status?: string) {
-  if (status === "completed") return "text-emerald-300";
-  if (status === "failed" || status === "blocked") return "text-red-300";
-  if (status === "running") return "text-sky-300";
-  if (status === "waiting_approval") return "text-amber-300";
-  return "text-neutral-500";
+  if (status === "completed") return "text-emerald-700";
+  if (status === "failed" || status === "blocked") return "text-red-600";
+  if (status === "running") return "text-[var(--g3-accent)]";
+  if (status === "waiting_approval") return "text-amber-700";
+  return "text-[var(--g3-muted)]";
 }
 
 function Avatar({ name, size = "md" }: { name: string; size?: "md" | "lg" }) {
   const initial = name.trim().charAt(0).toUpperCase() || "A";
-  const dimension = size === "lg" ? "h-14 w-14 text-xl" : "h-9 w-9 text-sm";
-  return <span className={`grid shrink-0 place-items-center rounded-2xl border border-white/15 bg-white/10 font-serif font-bold text-neutral-100 ${dimension}`}>{initial}</span>;
+  const dimension = size === "lg" ? "h-14 w-14 text-xl rounded-2xl" : "h-9 w-9 text-sm rounded-xl";
+  return <span className={`grid shrink-0 place-items-center bg-gradient-to-br from-indigo-500 to-violet-500 font-semibold text-white shadow-[var(--g3-shadow-sm)] ring-1 ring-inset ring-white/20 ${dimension}`}>{initial}</span>;
 }
 
 export function AgentChatPanel({
@@ -383,53 +383,51 @@ export function AgentChatPanel({
     // (100dvh via la chaîne AppShell → layout → atelier) ; le fil défile
     // en interne (flex-1 + min-h-0) et le composer reste collé en bas.
     <section
-      className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[#0b0b0d] shadow-[0_24px_70px_-28px_rgba(0,0,0,0.95)]"
+      className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-[var(--g3-radius-lg)] border border-[var(--g3-border)] bg-[var(--g3-surface)] shadow-[var(--g3-shadow-sm)]"
       aria-label={`Chat avec ${agent.name}`}
     >
-      <div className="pointer-events-none absolute -left-32 -top-32 h-72 w-72 rounded-full bg-white/5 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute -bottom-40 -right-20 h-80 w-80 rounded-full bg-white/5 blur-3xl" aria-hidden="true" />
 
       {/* En-tête : identité de l'agent */}
-      <header className="relative flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3.5 md:px-5">
+      <header className="relative flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--g3-border)] px-4 py-3.5 md:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative">
             <Avatar name={agent.name} />
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0b0b0d] bg-emerald-400" aria-hidden="true" />
+            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-sm font-bold text-neutral-100">{agent.name}</h2>
-              <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-neutral-200">{typeLabel}</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-neutral-400">{agent.agentMode === "call" ? "Agent d'appel" : "Agent standard"}</span>
+              <h2 className="truncate text-sm font-bold text-[var(--g3-ink)]">{agent.name}</h2>
+              <span className="rounded-full border border-indigo-200 bg-[var(--g3-accent-soft)] px-2 py-0.5 text-[10.5px] font-medium text-[var(--g3-accent-hover)]">{typeLabel}</span>
+              <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-bg)] px-2 py-0.5 text-[10.5px] font-medium text-[var(--g3-muted)]">{agent.agentMode === "call" ? "Agent d'appel" : "Agent standard"}</span>
             </div>
-            <p className="mt-0.5 hidden truncate text-[11px] text-neutral-400 sm:block">{agent.description}</p>
+            <p className="mt-0.5 hidden truncate text-[11px] text-[var(--g3-muted)] sm:block">{agent.description}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={onEdit} className="rounded-xl border border-white/10 px-3 py-2 text-[11px] text-neutral-300 transition hover:bg-white/5 hover:text-white">Personnaliser</button>
-          <button type="button" onClick={() => { void loadConversations(); setShowHistory((current) => !current); }} aria-expanded={showHistory} className="rounded-xl border border-white/10 px-3 py-2 text-[11px] text-neutral-300 transition hover:bg-white/5 hover:text-white">Historique</button>
-          <button type="button" onClick={resetConversation} disabled={loading} className="rounded-xl border border-white/10 px-3 py-2 text-[11px] text-neutral-300 transition hover:bg-white/5 hover:text-white disabled:opacity-30">Nouveau</button>
+          <button type="button" onClick={onEdit} className="g3-btn g3-btn-ghost !h-8 !px-3 text-xs">Personnaliser</button>
+          <button type="button" onClick={() => { void loadConversations(); setShowHistory((current) => !current); }} aria-expanded={showHistory} className="g3-btn g3-btn-ghost !h-8 !px-3 text-xs">Historique</button>
+          <button type="button" onClick={resetConversation} disabled={loading} className="g3-btn g3-btn-ghost !h-8 !px-3 text-xs disabled:opacity-30">Nouveau</button>
         </div>
       </header>
 
       {agent.skills.length > 0 && (
-        <div className="relative flex shrink-0 flex-wrap gap-1.5 border-b border-white/10 bg-white/[0.03] px-4 py-2.5 md:px-5" aria-label="Compétences de l'agent">
+        <div className="relative flex shrink-0 flex-wrap gap-1.5 border-b border-[var(--g3-border)] bg-[var(--g3-bg)] px-4 py-2.5 md:px-5" aria-label="Compétences de l'agent">
           {agent.skills.slice(0, 8).map((skill) => (
-            <span key={skill} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-neutral-300">{skill}</span>
+            <span key={skill} className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface-2)] px-2.5 py-1 text-[10px] font-medium text-[var(--g3-ink-2)]">{skill}</span>
           ))}
-          {agent.skills.length > 8 && <span className="rounded-full px-2 py-1 text-[10px] text-neutral-500">+{agent.skills.length - 8}</span>}
+          {agent.skills.length > 8 && <span className="rounded-full px-2 py-1 text-[10px] text-[var(--g3-muted)]">+{agent.skills.length - 8}</span>}
           {agent.memoryFile && (
-            <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-medium text-emerald-300">Mémoire : {agent.memoryFile.name}</span>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10.5px] font-medium text-emerald-700">Mémoire : {agent.memoryFile.name}</span>
           )}
         </div>
       )}
 
       {showHistory && (
-        <div className="relative shrink-0 border-b border-white/10 bg-white/[0.03] px-4 py-3 md:px-5" role="region" aria-label="Historique des conversations">
+        <div className="relative shrink-0 border-b border-[var(--g3-border)] bg-[var(--g3-bg)] px-4 py-3 md:px-5" role="region" aria-label="Historique des conversations">
           {historyLoading && conversations.length === 0 ? (
-            <p className="text-xs text-neutral-500">Chargement de l&apos;historique…</p>
+            <p className="text-xs text-[var(--g3-muted)]">Chargement de l&apos;historique…</p>
           ) : conversations.length === 0 ? (
-            <p className="text-xs text-neutral-500">Aucune conversation enregistrée pour le moment.</p>
+            <p className="text-xs text-[var(--g3-muted)]">Aucune conversation enregistrée pour le moment.</p>
           ) : (
             <ul className="grid max-h-56 gap-1.5 overflow-y-auto">
               {conversations.map((conversation) => (
@@ -437,10 +435,10 @@ export function AgentChatPanel({
                   <button
                     type="button"
                     onClick={() => openConversation(conversation.id)}
-                    className={`min-w-0 flex-1 rounded-xl px-3 py-2 text-left text-xs transition ${conversation.id === conversationId ? "bg-white/10 text-white" : "bg-white/5 text-neutral-300 hover:bg-white/10"}`}
+                    className={`min-w-0 flex-1 rounded-xl px-3 py-2 text-left text-xs transition ${conversation.id === conversationId ? "bg-[var(--g3-surface)] text-[var(--g3-ink)] shadow-[var(--g3-shadow-sm)] ring-1 ring-[var(--g3-border)]" : "text-[var(--g3-ink-2)] hover:bg-[var(--g3-surface-2)]"}`}
                   >
                     <span className="block truncate font-semibold">{conversation.title || "Sans titre"}</span>
-                    <span className="block text-[10px] text-neutral-500">{conversation.messageCount} message{conversation.messageCount > 1 ? "s" : ""} · {new Date(conversation.updatedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</span>
+                    <span className="block text-[10px] text-[var(--g3-muted)]">{conversation.messageCount} message{conversation.messageCount > 1 ? "s" : ""} · {new Date(conversation.updatedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</span>
                   </button>
                 </li>
               ))}
@@ -456,17 +454,17 @@ export function AgentChatPanel({
           {messages.length === 0 && (
             <div className="flex min-h-[380px] items-center justify-center">
               <div className="w-full max-w-2xl text-center">
-                <div className="relative mx-auto grid h-20 w-20 place-items-center rounded-[24px] border border-white/15 bg-white/10 shadow-[0_14px_40px_-18px_rgba(255,255,255,0.25)]">
+                <div className="relative mx-auto grid h-20 w-20 place-items-center rounded-[22px] border border-[var(--g3-border)] bg-[var(--g3-bg)] shadow-[var(--g3-shadow-md)]">
                   <Avatar name={agent.name} size="lg" />
                 </div>
-                <h3 className="mt-5 font-serif text-2xl font-bold tracking-tight text-neutral-100 md:text-3xl">Bonjour, je suis {agent.name}.</h3>
-                <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-neutral-400">
+                <h3 className="mt-5 text-2xl font-semibold tracking-[-0.03em] text-[var(--g3-ink)] md:text-[28px]">Bonjour, je suis {agent.name}.</h3>
+                <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-[var(--g3-muted)]">
                   {agent.description || "Votre agent IA personnalisé."} Je réponds de manière professionnelle et j&apos;exécute vos tâches{" "}
-                  <strong className="text-neutral-200">exclusivement dans mon domaine : {typeLabel}</strong>.
+                  <strong className="font-medium text-[var(--g3-ink)]">exclusivement dans mon domaine : {typeLabel}</strong>.
                 </p>
                 <div className="mt-6 grid gap-2 sm:grid-cols-2">
                   {quickPrompts.map((prompt) => (
-                    <button key={prompt} type="button" onClick={() => { setMessage(prompt); composerRef.current?.focus(); }} className="rounded-2xl border border-white/10 bg-white/5 p-3 text-left text-xs leading-5 text-neutral-300 transition duration-300 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/10 hover:text-white">
+                    <button key={prompt} type="button" onClick={() => { setMessage(prompt); composerRef.current?.focus(); }} className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-3.5 text-left text-[13px] leading-5 text-[var(--g3-ink-2)] shadow-[var(--g3-shadow-xs)] transition-[border-color,box-shadow,color] hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-ink)] hover:shadow-[var(--g3-shadow-md)]">
                       {prompt}
                     </button>
                   ))}
@@ -478,31 +476,31 @@ export function AgentChatPanel({
           <div ref={logRef} className="mx-auto max-w-3xl space-y-5" role="log" aria-live="polite" aria-label="Fil de conversation avec l'agent">
             {messages.map((item) => (
               <div key={item.id} className={item.role === "user" ? "ml-auto max-w-[88%] md:max-w-[78%]" : "mr-auto max-w-[96%]"}>
-                <div className="mb-1.5 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[.2em] text-neutral-500">
+                <div className="mb-1.5 flex items-center gap-2 text-[12px] font-medium text-[var(--g3-muted)]">
                   <span>{item.role === "user" ? "Vous" : agent.name}</span>
                   {item.role === "agent" && item.mode === "chat" && (
-                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[8px] font-bold tracking-wider text-neutral-300 normal-case">Réponse directe</span>
+                    <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface-2)] px-2 py-0.5 text-[10.5px] font-medium text-[var(--g3-muted)]">Réponse directe</span>
                   )}
                   {item.role === "agent" && item.mode === "task" && (
-                    <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[8px] font-bold tracking-wider text-neutral-200 normal-case">Mission exécutée</span>
+                    <span className="rounded-full border border-[var(--g3-border-strong)] bg-[var(--g3-surface-2)] px-2 py-0.5 text-[10.5px] font-medium text-[var(--g3-accent)]">Mission exécutée</span>
                   )}
                 </div>
                 <div className={item.role === "user"
-                  ? "whitespace-pre-wrap rounded-2xl rounded-br-md bg-neutral-100 px-4 py-3.5 text-sm leading-6 text-neutral-900 shadow-[0_10px_30px_-16px_rgba(255,255,255,0.35)]"
-                  : "whitespace-pre-wrap rounded-2xl rounded-bl-md border border-white/10 bg-[#1b1b1d] px-4 py-3.5 text-sm leading-6 text-neutral-100"}>{item.text}</div>
+                  ? "whitespace-pre-wrap rounded-[18px] rounded-br-md bg-[var(--g3-surface-2)] px-4 py-2.5 text-[14.5px] leading-relaxed text-[var(--g3-ink)]"
+                  : "whitespace-pre-wrap text-[14.5px] leading-7 text-[var(--g3-ink-2)]"}>{item.text}</div>
 
                 {/* Image générée par l'agent (Agnes AI) — cliquable en plein écran. */}
                 {item.imageUrl && (
-                  <a href={item.imageUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block overflow-hidden rounded-2xl border border-white/10 shadow-[0_10px_30px_-16px_rgba(0,0,0,0.8)]" aria-label="Ouvrir l'image générée en plein écran">
+                  <a href={item.imageUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block overflow-hidden rounded-2xl border border-[var(--g3-border)] shadow-[var(--g3-shadow-sm)]" aria-label="Ouvrir l'image générée en plein écran">
                     {/* eslint-disable-next-line @next/next/no-img-element -- URL externe (CDN Agnes) signée par le provider, pas de domaine fixe pour next/image */}
-                    <img src={item.imageUrl} alt="Image générée par IA" loading="lazy" className="max-h-96 w-auto max-w-full bg-[#1b1b1d] object-contain" />
+                    <img src={item.imageUrl} alt="Image générée par IA" loading="lazy" className="max-h-96 w-auto max-w-full bg-[var(--g3-bg)] object-contain" />
                   </a>
                 )}
 
                 {/* Trace d'exécution + approbations (mode task uniquement) */}
                 {item.result && (
-                  <div className="mt-2 rounded-2xl border border-white/10 bg-[#161618] p-3">
-                    <button type="button" onClick={() => setShowTrace((current) => !current)} aria-expanded={showTrace} className="flex w-full items-center justify-between text-[11px] font-bold uppercase tracking-wider text-neutral-400 hover:text-neutral-200">
+                  <div className="mt-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-3 shadow-[var(--g3-shadow-xs)]">
+                    <button type="button" onClick={() => setShowTrace((current) => !current)} aria-expanded={showTrace} className="flex w-full items-center justify-between text-[12px] font-medium text-[var(--g3-ink-2)] hover:text-[var(--g3-ink)]">
                       <span>Plan d&apos;exécution · {statusLabel(item.result.status)}</span>
                       <span aria-hidden="true">{showTrace ? "−" : "+"}</span>
                     </button>
@@ -510,10 +508,10 @@ export function AgentChatPanel({
                       <ol className="mt-2 space-y-1.5">
                         {item.result.plan.steps.map((step) => (
                           <li key={step.id} className="flex items-start gap-2 text-xs">
-                            <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${step.status === "completed" ? "bg-emerald-400" : step.status === "failed" ? "bg-red-400" : step.status === "waiting_approval" ? "bg-amber-400" : "bg-neutral-600"}`} aria-hidden="true" />
+                            <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${step.status === "completed" ? "bg-emerald-500" : step.status === "failed" ? "bg-red-500" : step.status === "waiting_approval" ? "bg-amber-500" : "bg-neutral-300"}`} aria-hidden="true" />
                             <span className="min-w-0">
-                              <span className="block truncate font-medium text-neutral-200">{step.name || step.id}</span>
-                              {step.toolName && <span className="block text-[10px] text-neutral-500">Outil : {step.toolName}</span>}
+                              <span className="block truncate font-medium text-[var(--g3-ink)]">{step.name || step.id}</span>
+                              {step.toolName && <span className="block text-[10px] text-[var(--g3-muted)]">Outil : {step.toolName}</span>}
                             </span>
                             <span className={`ml-auto shrink-0 text-[10px] font-semibold ${statusClass(step.status)}`}>{statusLabel(step.status)}</span>
                           </li>
@@ -523,12 +521,12 @@ export function AgentChatPanel({
                     {item.result.status === "waiting_approval" && pendingApprovals.length > 0 && (
                       <div className="mt-3 space-y-2">
                         {pendingApprovals.map((approval) => (
-                          <div key={approval.id} className="rounded-xl border border-amber-400/25 bg-amber-400/10 p-3">
-                            <p className="text-xs font-semibold text-amber-200">Action sensible : {approval.toolSlug}</p>
-                            {approval.reason && <p className="mt-0.5 text-[11px] leading-5 text-amber-200/80">{approval.reason}</p>}
+                          <div key={approval.id} className="rounded-xl border border-amber-300 bg-amber-50 p-3 ring-4 ring-amber-100/60">
+                            <p className="text-xs font-semibold text-amber-900">Action sensible : {approval.toolSlug}</p>
+                            {approval.reason && <p className="mt-0.5 text-[11px] leading-5 text-amber-800">{approval.reason}</p>}
                             <div className="mt-2 flex gap-2">
-                              <button type="button" onClick={() => void decideApproval(approval.id, "approve")} disabled={loading} className="rounded-lg bg-white px-3 py-1.5 text-[11px] font-semibold text-neutral-900 transition hover:bg-neutral-200 disabled:opacity-40">Approuver</button>
-                              <button type="button" onClick={() => void decideApproval(approval.id, "reject")} disabled={loading} className="rounded-lg border border-amber-400/30 bg-transparent px-3 py-1.5 text-[11px] font-semibold text-amber-200 transition hover:bg-amber-400/20 disabled:opacity-40">Rejeter</button>
+                              <button type="button" onClick={() => void decideApproval(approval.id, "approve")} disabled={loading} className="g3-btn g3-btn-primary !h-8 text-xs disabled:opacity-40">Approuver</button>
+                              <button type="button" onClick={() => void decideApproval(approval.id, "reject")} disabled={loading} className="g3-btn g3-btn-ghost !h-8 text-xs disabled:opacity-40">Rejeter</button>
                             </div>
                           </div>
                         ))}
@@ -540,8 +538,8 @@ export function AgentChatPanel({
             ))}
 
             {loading && (
-              <div className="mr-auto flex items-center gap-3 rounded-2xl border border-white/10 bg-[#1b1b1d] px-4 py-3 text-xs text-neutral-400">
-                <span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-300" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-300 [animation-delay:240ms]" /></span>
+              <div className="mr-auto flex items-center gap-3 px-1 py-2 text-[13px] text-[var(--g3-muted)]">
+                <span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-accent)]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-300 [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-accent)] [animation-delay:240ms]" /></span>
                 J&apos;analyse votre demande — réponse ou exécution selon le besoin…
               </div>
             )}
@@ -550,7 +548,7 @@ export function AgentChatPanel({
 
         {/* Zone de saisie : CommandComposer unifié (identique au chat IA) —
             collée en bas, au-dessus de la zone sûre (encoche/barre iOS) */}
-        <div className="shrink-0 border-t border-white/10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:p-4 md:pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 border-t border-[var(--g3-border)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:p-4 md:pb-[max(1rem,env(safe-area-inset-bottom))]">
           {error && <Callout tone="error" className="mb-3 rounded-2xl">{error}</Callout>}
           <CommandComposer
             ref={composerRef}
@@ -573,7 +571,7 @@ export function AgentChatPanel({
             authorizationMode={authorizationMode}
             onAuthorizationModeChange={setAuthorizationMode}
           />
-          <p className="mt-2 text-center text-[10px] text-neutral-500">
+          <p className="mt-2 text-center text-[10px] text-[var(--g3-muted)]">
             {agent.name} répond et agit uniquement en {typeLabel.toLowerCase()} · Entrée envoie · Maj+Entrée nouvelle ligne
           </p>
         </div>

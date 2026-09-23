@@ -100,10 +100,10 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   }
 
   const rail = (
-    <aside className="flex h-full min-h-0 flex-col rounded-[26px] border border-[rgba(23,23,20,0.09)] bg-white p-4 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.18)]" aria-label="Mes agents IA">
+    <aside className="flex h-full min-h-0 flex-col rounded-[26px] border border-[var(--g3-border)] bg-white p-4 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.18)]" aria-label="Mes agents IA">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xs font-black uppercase tracking-[.24em] text-neutral-500">Mes agents</h2>
-        <span className="rounded-full border border-[rgba(23,23,20,0.09)] bg-neutral-50 px-2 py-0.5 text-[10px] font-bold text-neutral-500">{agents.length}</span>
+        <span className="rounded-full border border-[var(--g3-border)] bg-neutral-50 px-2 py-0.5 text-[10px] font-bold text-neutral-500">{agents.length}</span>
       </div>
 
       <button
@@ -125,7 +125,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
           agents.map((agent) => {
             const selected = agent.id === activeId && view === "chat";
             return (
-              <div key={agent.id} className={`group relative rounded-2xl border p-3 transition ${selected ? "border-neutral-900 bg-neutral-50 shadow-[0_8px_24px_-12px_rgba(28,27,24,0.35)]" : "border-[rgba(23,23,20,0.09)] bg-white hover:border-neutral-300"}`}>
+              <div key={agent.id} className={`group relative rounded-2xl border p-3 transition ${selected ? "border-[var(--g3-accent)] bg-[var(--g3-accent-soft)] shadow-[0_0_0_3px_var(--g3-accent-ring)]" : "border-[var(--g3-border)] bg-white hover:border-neutral-300"}`}>
                 <button
                   type="button"
                   onClick={() => { setActiveId(agent.id); setView("chat"); setShowRailMobile(false); }}
@@ -137,8 +137,8 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
                     <span className="block truncate text-sm font-bold text-neutral-900">{agent.name}</span>
                     <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-wide text-violet-600">{labelForAgent(agent)}</span>
                     <span className="mt-1 flex flex-wrap items-center gap-1 text-[9px] text-neutral-400">
-                      <span className="rounded border border-[rgba(23,23,20,0.09)] px-1 py-0.5">{agent.agentMode === "call" ? "Appel" : "Standard"}</span>
-                      <span className="rounded border border-[rgba(23,23,20,0.09)] px-1 py-0.5">{agent.skills.length} compétence{agent.skills.length > 1 ? "s" : ""}</span>
+                      <span className="rounded border border-[var(--g3-border)] px-1 py-0.5">{agent.agentMode === "call" ? "Appel" : "Standard"}</span>
+                      <span className="rounded border border-[var(--g3-border)] px-1 py-0.5">{agent.skills.length} compétence{agent.skills.length > 1 ? "s" : ""}</span>
                       {agent.memoryFile && <span className="rounded border border-emerald-200 bg-emerald-50 px-1 py-0.5 text-emerald-600">Mémoire</span>}
                     </span>
                   </span>
@@ -147,7 +147,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
                   type="button"
                   onClick={() => void deleteAgent(agent)}
                   aria-label={`Supprimer ${agent.name}`}
-                  className="absolute right-2 top-2 hidden rounded-lg border border-[rgba(23,23,20,0.09)] bg-white px-1.5 py-1 text-[9px] text-neutral-400 transition hover:border-red-200 hover:text-red-600 group-hover:block"
+                  className="absolute right-2 top-2 hidden rounded-lg border border-[var(--g3-border)] bg-white px-1.5 py-1 text-[9px] text-neutral-400 transition hover:border-red-200 hover:text-red-600 group-hover:block"
                 >
                   Suppr.
                 </button>
@@ -169,7 +169,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
         type="button"
         onClick={() => setShowRailMobile((current) => !current)}
         aria-expanded={showRailMobile}
-        className="flex w-full items-center justify-between rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white px-4 py-3 text-sm lg:hidden"
+        className="flex w-full items-center justify-between rounded-2xl border border-[var(--g3-border)] bg-white px-4 py-3 text-sm lg:hidden"
       >
         <span className="flex items-center gap-2">
           {activeAgent ? (

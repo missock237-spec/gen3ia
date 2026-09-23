@@ -54,7 +54,7 @@ export function WorkspaceShell() {
   return (
     <div className="mb-6 space-y-2 md:mb-7">
       <nav aria-label="Espace de travail" className="no-scrollbar max-w-full overflow-x-auto">
-        <ul className="inline-flex min-w-full items-center gap-1.5 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-1.5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+        <ul className="inline-flex min-w-full items-center gap-1.5 rounded-2xl border border-[var(--g3-border)] bg-white p-1.5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
           {primary.map((route) => (
             <li key={route.id} className="flex-1">
               <Link
