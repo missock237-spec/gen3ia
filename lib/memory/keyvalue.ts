@@ -30,12 +30,27 @@ export const SECRET_PATTERNS = [
 
 /**
  * Forme canonique d'une valeur telle qu'elle est stockée (chaîne) : un objet
- * est sérialisé en JSON pour que la comparaison de doublons soit stable entre
- * deux envois `{"a":1}` et `{ a: 1 }`.
+ * est sérialisé en JSON avec les clés triées récursivement pour que la
+ * comparaison de doublons soit stable entre deux envois `{"a":1,"b":2}` et
+ * `{"b":2,"a":1}` (l'idempotence ne doit pas dépendre de l'ordre des clés,
+ * qui varie selon les clients et les sérialiseurs).
  * Fonction pure : ne jette jamais (retourne "" pour vide).
  */
 export function normalizeMemoryValue(value: unknown): string {
-  return typeof value === "string" ? value : JSON.stringify(value) ?? "";
+  if (typeof value === "string") return value;
+  return JSON.stringify(sortKeysDeep(value)) ?? "";
+}
+
+/** Trie récursivement les clés d'objets (tableaux préservés dans l'ordre). */
+function sortKeysDeep(input: unknown): unknown {
+  if (Array.isArray(input)) return input.map(sortKeysDeep);
+  if (input !== null && typeof input === "object") {
+    const source = input as Record<string, unknown>;
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(source).sort()) sorted[key] = sortKeysDeep(source[key]);
+    return sorted;
+  }
+  return input;
 }
 
 /**

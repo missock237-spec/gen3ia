@@ -11,6 +11,20 @@ describe("normalizeMemoryValue", () => {
   it("sérialise les objets pour une comparaison stable", () => {
     expect(normalizeMemoryValue({ a: 1 })).toBe(JSON.stringify({ a: 1 }));
   });
+
+  it("rend la comparaison indépendante de l'ordre des clés (idempotence)", () => {
+    expect(normalizeMemoryValue({ projet: "gen3ia", note: "v1" })).toBe(normalizeMemoryValue({ note: "v1", projet: "gen3ia" }));
+  });
+
+  it("trie les clés récursivement, y compris dans les objets imbriqués et les tableaux", () => {
+    const a = { meta: { b: 2, a: 1 }, items: [{ y: 1, x: 2 }] };
+    const b = { items: [{ x: 2, y: 1 }], meta: { a: 1, b: 2 } };
+    expect(normalizeMemoryValue(a)).toBe(normalizeMemoryValue(b));
+  });
+
+  it("préserve l'ordre des tableaux (les listes sont significatives)", () => {
+    expect(normalizeMemoryValue([1, 2])).not.toBe(normalizeMemoryValue([2, 1]));
+  });
 });
 
 describe("assertSafeMemoryValue (garde-fou secrets, à ne pas casser)", () => {

@@ -76,16 +76,35 @@ const DEGRADED_MESSAGE_RE =
   /failed precondition|unavailable|firestore|deadline exceeded|quota exceeded|resource.exhausted|backend error|service.*(indisponible|unavailable)/i;
 
 /**
+ * Détection par empreinte (duck-typing) d'une ZodError : chaque route qui
+ * appelle `schema.parse()` dans son try/catch central se retrouve ici quand
+ * la validation échoue. Sans cette reconnaissance, la ZodError tombait dans
+ * le repli générique : statut 400 + `error.message` = dump Zod brut en langue
+ * machine exposé au client (audit 25-a D4, observé en prod sur POST messages).
+ * On évite `instanceof` pour rester robuste aux doublons de module zod.
+ */
+export function isZodErrorLike(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.name === "ZodError" &&
+    Array.isArray((error as { issues?: unknown }).issues)
+  );
+}
+
+/**
  * Détermine le statut HTTP d'une erreur attrapée dans une route :
  * 1. HttpError -> son statut ;
- * 2. message d'authentification -> 401 (compatibilité avec les messages
+ * 2. ZodError -> 422 (validation : requête syntaxiquement invalide mais
+ *    compréhensible — voir `zodValidationError` pour le message lisible) ;
+ * 3. message d'authentification -> 401 (compatibilité avec les messages
  *    historiques "Missing Authorization header") ;
- * 3. panne d'infrastructure connue -> 503 (l'UI sait alors qu'il faut
+ * 4. panne d'infrastructure connue -> 503 (l'UI sait alors qu'il faut
  *    réessayer, pas se reconnecter) ;
- * 4. sinon -> le statut de repli fourni (500 par défaut).
+ * 5. sinon -> le statut de repli fourni (500 par défaut).
  */
 export function errorStatus(error: unknown, fallback = 500): number {
   if (error instanceof HttpError) return error.status;
+  if (isZodErrorLike(error)) return 422;
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (AUTH_MESSAGE_RE.test(message)) return 401;
   if (DEGRADED_MESSAGE_RE.test(message)) return 503;
@@ -98,6 +117,7 @@ export function errorStatus(error: unknown, fallback = 500): number {
  */
 export function errorCode(error: unknown): ApiErrorCode {
   if (error instanceof HttpError) return error.code;
+  if (isZodErrorLike(error)) return "INVALID_REQUEST";
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (AUTH_MESSAGE_RE.test(message)) return "AUTH_REQUIRED";
   if (DEGRADED_MESSAGE_RE.test(message)) return "PROVIDER_UNAVAILABLE";
@@ -107,8 +127,14 @@ export function errorCode(error: unknown): ApiErrorCode {
 /**
  * Corps JSON d'erreur standardisé pour les routes : `{ error, code }`.
  * Usage : `NextResponse.json(errorBody(e), { status: errorStatus(e) })`.
+ * Une ZodError est automatiquement traduite en message humain lisible via
+ * `zodValidationError` — plus aucun dump Zod brut ne sort par ce chemin.
  */
 export function errorBody(error: unknown, fallbackMessage = "Une erreur inattendue est survenue."): { error: string; code: ApiErrorCode } {
+  if (isZodErrorLike(error) && typeof (error as { issues?: unknown }).issues !== "undefined") {
+    const validation = zodValidationError(error as { issues: ReadonlyArray<{ code: string; path: PropertyKey[] }> });
+    return { error: validation.message, code: validation.code };
+  }
   return {
     error: error instanceof Error && error.message ? error.message : fallbackMessage,
     code: errorCode(error),
