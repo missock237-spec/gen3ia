@@ -3,14 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 
 import { authFetch } from "@/lib/firebase/auth-client";
+import { CommandComposer, type CommandComposerHandle } from "@/components/ui/command-composer";
+import type { MentionItem } from "@/lib/ui/command-composer-helpers";
 
 /**
  * Widget GEN — chat IA de la page d'accueil (bouton flottant + panneau).
  *
+ * Interface sombre unifiée : le composer est le CommandComposer commun à
+ * tous les chats Gen3ia (réplique de la maquette validée : @ compétences /
+ * connecteurs, / commandes, « Toujours demander ▼ », 🎙, bouton ↑).
+ *
  * Surface ISOLÉE par construction : gen répond aux visiteurs et peut exécuter
  * des tâches simples via les connecteurs de l'utilisateur connecté, en
  * lecture stricte uniquement. Aucun outil d'agent (fichiers, code,
- * documents…) n'est accessible depuis ce chat.
+ * documents…) n'est accessible depuis ce chat : le bouton « + » ouvre les
+ * sources connectées (jamais de faux téléversement).
  */
 
 interface GenBubble {
@@ -26,6 +33,8 @@ interface GenConnector {
   connected: boolean;
 }
 
+const GEN_PLACEHOLDER = "Posez n'importe quelle question… Tapez @ pour mentionner des compétences ou connecteurs, ou / pour les commandes";
+
 export function GenChatWidget() {
   const [open, setOpen] = useState(false);
   const [bubbles, setBubbles] = useState<GenBubble[]>([
@@ -38,8 +47,8 @@ export function GenChatWidget() {
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [connectors, setConnectors] = useState<GenConnector[]>([]);
-  const [selectedConnectors, setSelectedConnectors] = useState<string[]>([]);
-  const [connectorMenuOpen, setConnectorMenuOpen] = useState(false);
+  const [activated, setActivated] = useState<MentionItem[]>([]);
+  const composerRef = useRef<CommandComposerHandle | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -57,7 +66,23 @@ export function GenChatWidget() {
       .catch(() => undefined);
   }, [open, connectors.length]);
 
-  async function send() {
+  // Le sélecteur « @ » du CommandComposer : mêmes connecteurs que l'ancien menu.
+  const loadMentions = async (query: string): Promise<MentionItem[]> => {
+    if (connectors.length > 0 && !query) {
+      return connectors.map((connector) => ({ ...connector }));
+    }
+    try {
+      const response = await authFetch(`/api/integrations/mention?q=${encodeURIComponent(query)}`, { cache: "no-store" });
+      if (!response.ok) return [];
+      const data = await response.json();
+      return (Array.isArray(data.connectors) ? (data.connectors as GenConnector[]) : []).map((connector) => ({ ...connector }));
+    } catch {
+      return [];
+    }
+  };
+
+  async function send(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     const message = input.trim();
     if (!message || sending) return;
     setSending(true);
@@ -74,7 +99,7 @@ export function GenChatWidget() {
           role: bubble.role === "user" ? ("user" as const) : ("assistant" as const),
           content: bubble.text.slice(0, 2_000),
         }));
-      // authFetch : session incluse si connecté (sinon 401 géré côté API
+      // authFetch : session incluse si connecté (sinon 401 gérée côté API
       // qui bascule sur le mode visiteur).
       const response = await authFetch("/api/gen/chat", {
         method: "POST",
@@ -82,7 +107,7 @@ export function GenChatWidget() {
         body: JSON.stringify({
           message,
           ...(conversationId ? { conversationId } : {}),
-          ...(selectedConnectors.length > 0 ? { selectedConnectors } : {}),
+          ...(activated.length > 0 ? { selectedConnectors: activated.map((item) => item.toolkit) } : {}),
           ...(history.length > 0 ? { history } : {}),
         }),
       });
@@ -106,129 +131,90 @@ export function GenChatWidget() {
     }
   }
 
-  function onKey(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      void send();
-    }
-  }
+  const genCommands = [
+    {
+      id: "connecteurs",
+      label: "Choisir des connecteurs",
+      description: "Mentionnez une application connectée à consulter (lecture seule).",
+      run: () => composerRef.current?.openMentions(),
+    },
+    {
+      id: "effacer",
+      label: "Effacer la conversation",
+      description: "Vide le fil affiché (aucune trace serveur pour les visiteurs).",
+      run: () => {
+        setConversationId(null);
+        setBubbles([{ role: "gen", text: "Nouvelle conversation. Posez-moi vos questions sur Gen3ia !" }]);
+      },
+    },
+  ];
 
   return (
     <>
       {open && (
-        <div className="fixed bottom-24 right-4 z-50 flex h-[520px] w-[min(94vw,380px)] flex-col overflow-hidden rounded-3xl border border-[rgba(15,23,42,0.14)] bg-white shadow-2xl sm:right-6" role="dialog" aria-label="Chat avec Gen">
-          <header className="flex items-center gap-3 bg-gradient-to-r from-sky-600 to-indigo-600 px-4 py-3 text-white">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-lg font-black">G</div>
+        <div className="fixed bottom-24 right-4 z-50 flex h-[560px] w-[min(94vw,420px)] flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[#0b0b0d] shadow-[0_30px_80px_-24px_rgba(0,0,0,0.95)] sm:right-6" role="dialog" aria-label="Chat avec Gen">
+          <header className="flex items-center gap-3 border-b border-white/10 bg-[#131315] px-4 py-3 text-white">
+            <div className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-lg font-black text-neutral-100">G</div>
             <div className="flex-1">
-              <p className="text-sm font-bold">Gen — assistante Gen3ia</p>
-              <p className="text-[11px] text-white/80">Réponses + consultations connecteurs (lecture seule)</p>
+              <p className="text-sm font-bold text-neutral-100">Gen — assistante Gen3ia</p>
+              <p className="text-[11px] text-neutral-400">Réponses + consultations connecteurs (lecture seule)</p>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Fermer le chat" className="rounded-full px-2 py-1 text-lg leading-none hover:bg-white/10">×</button>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Fermer le chat" className="rounded-full px-2 py-1 text-lg leading-none text-neutral-400 hover:bg-white/10 hover:text-white">×</button>
           </header>
 
-          <div className="flex flex-1 flex-col gap-2 overflow-y-auto bg-neutral-50 px-3 py-3">
+          <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-3">
             {bubbles.map((bubble, index) => (
               <article
                 key={index}
                 className={
                   bubble.role === "user"
-                    ? "ml-auto max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-neutral-900 px-3.5 py-2 text-sm text-white"
-                    : "mr-auto max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-bl-md border border-neutral-200 bg-white px-3.5 py-2 text-sm text-neutral-800"
+                    ? "ml-auto max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-neutral-100 px-3.5 py-2 text-sm text-neutral-900"
+                    : "mr-auto max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-bl-md border border-white/10 bg-[#1b1b1d] px-3.5 py-2 text-sm text-neutral-100"
                 }
               >
                 {bubble.text}
               </article>
             ))}
-            {sending && <p className="mr-auto text-xs text-neutral-500">Gen écrit…</p>}
+            {sending && (
+              <p className="mr-auto flex items-center gap-2 text-xs text-neutral-500">
+                <span className="flex gap-1" aria-hidden="true">
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-500 [animation-delay:120ms]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 [animation-delay:240ms]" />
+                </span>
+                Gen écrit…
+              </p>
+            )}
             <div ref={endRef} />
           </div>
 
-          <footer className="border-t border-neutral-200 bg-white p-2.5">
-            {selectedConnectors.length > 0 && (
-              <div className="mb-2 flex flex-wrap gap-1.5 px-1">
-                {selectedConnectors.map((toolkit) => {
-                  const item = connectors.find((connector) => connector.toolkit === toolkit);
-                  return (
-                    <button
-                      key={toolkit}
-                      type="button"
-                      onClick={() => setSelectedConnectors((current) => current.filter((value) => value !== toolkit))}
-                      className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700"
-                    >
-                      {item?.label ?? toolkit} ×
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {connectorMenuOpen && (
-              <div className="mb-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-lg">
-                {connectors.length === 0 ? (
-                  <p className="px-2 py-2 text-xs text-neutral-500">Aucun connecteur vérifié. Connectez d’abord une application dans Intégrations.</p>
-                ) : (
-                  <div className="max-h-36 space-y-1 overflow-y-auto">
-                    {connectors.map((connector) => {
-                      const active = selectedConnectors.includes(connector.toolkit);
-                      return (
-                        <button
-                          key={connector.toolkit}
-                          type="button"
-                          onClick={() => setSelectedConnectors((current) => active ? current.filter((value) => value !== connector.toolkit) : [...current, connector.toolkit])}
-                          className={"flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs " + (active ? "bg-sky-50 text-sky-700" : "hover:bg-neutral-50")}
-                        >
-                          <span>
-                            <span className="block font-semibold">{connector.label}</span>
-                            <span className="block truncate text-[10px] text-neutral-400">{connector.description}</span>
-                          </span>
-                          <span>{active ? "✓" : "+"}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="mb-2 flex justify-end px-1">
-              <button
-                type="button"
-                onClick={() => setConnectorMenuOpen((value) => !value)}
-                className="rounded-full border border-neutral-200 px-2.5 py-1 text-[10px] font-semibold text-neutral-500 hover:bg-neutral-50"
-              >
-                {selectedConnectors.length > 0 ? "Connecteurs sélectionnés" : "Connecteurs"}
-              </button>
-            </div>
-            <div className="flex items-end gap-2">
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={onKey}
-                rows={1}
-                maxLength={2_000}
-                placeholder="Votre message à Gen…"
-                disabled={sending}
-                className="max-h-28 flex-1 resize-none rounded-2xl border border-neutral-200 px-3 py-2.5 text-sm"
-                aria-label="Message pour Gen"
-              />
-              <button
-                type="button"
-                onClick={() => void send()}
-                disabled={sending || !input.trim()}
-                className="rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40"
-              >
-                Envoyer
-              </button>
-            </div>
-          </footer>
+          <div className="p-2.5">
+            <CommandComposer
+              ref={composerRef}
+              value={input}
+              onValueChange={setInput}
+              onSubmit={send}
+              disabled={sending}
+              maxLength={2_000}
+              placeholder={GEN_PLACEHOLDER}
+              plusAction="mentions"
+              loadMentions={loadMentions}
+              activatedMentions={activated}
+              onActivateMention={(item) => setActivated((current) => (current.some((active) => active.toolkit === item.toolkit) ? current : [...current, item]))}
+              onDeactivateMention={(toolkit) => setActivated((current) => current.filter((item) => item.toolkit !== toolkit))}
+              commands={genCommands}
+            />
+          </div>
         </div>
       )}
 
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="fixed bottom-6 right-4 z-50 flex h-14 items-center gap-2 rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 px-5 text-sm font-bold text-white shadow-xl transition-transform hover:scale-105 sm:right-6"
+        className="fixed bottom-6 right-4 z-50 flex h-14 items-center gap-2 rounded-full border border-white/15 bg-[#141416] px-5 text-sm font-bold text-white shadow-[0_18px_50px_-16px_rgba(0,0,0,0.9)] transition-transform hover:scale-105 sm:right-6"
         aria-expanded={open}
       >
-        <span className="text-lg">💬</span>
+        <span className="text-lg" aria-hidden="true">💬</span>
         {open ? "Fermer Gen" : "Discuter avec Gen"}
       </button>
     </>

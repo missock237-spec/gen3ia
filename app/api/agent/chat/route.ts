@@ -8,7 +8,8 @@ import { planUniversalAgent } from "@/lib/agents/runtime/unified-agent";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/execution-policy";
 import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
-import { createActionApproval, listActionApprovals } from "@/lib/agents/action-approvals";
+import { createActionApproval, listActionApprovals, approveAction, claimActionExecution } from "@/lib/agents/action-approvals";
+import { AUTO_APPROVAL_AUDIT_REASON, isNeverAutoApprove, type AuthorizationMode } from "@/lib/security/authorization-mode";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage, createConversation, getConversation, listMessages } from "@/lib/chat/repository";
 import { getAgentForOwner } from "@/lib/agents/repository";
@@ -40,6 +41,11 @@ const Body = z.object({
   activatedConnectors: z.array(
     z.string().trim().toLowerCase().regex(/^[a-z0-9_]{2,64}$/, "connecteur invalide"),
   ).max(10).optional(),
+  // Mode d'autorisation HITL choisi dans le composer (« Toujours demander ▼ ») :
+  // always_ask (défaut) et ask_if_needed suivent le flux d'approbations
+  // standard ; auto_allow approuve automatiquement les actions non critiques
+  // (les outils critiques restent TOUJOURS soumis à confirmation humaine).
+  authorizationMode: z.enum(["always_ask", "ask_if_needed", "auto_allow"]).optional(),
 });
 
 function buildPolicy(plan: RuntimePlan): ExecutionPolicy {
@@ -127,6 +133,67 @@ function finalResponseText(plan: RuntimePlan, outputs: Record<string, unknown>):
     if (typeof value === "string" && value.trim()) return value;
   }
   return "Le plan de l'agent a été exécuté. Consultez les étapes et résultats ci-dessous.";
+}
+
+type CreatedApproval = Awaited<ReturnType<typeof createActionApproval>>;
+
+/**
+ * Mode d'autorisation « Autoriser automatiquement » (auto_allow) :
+ *  1. approuve automatiquement chaque approbation NON critique (audit :
+ *     événement approval.approved + log serveur structuré) ;
+ *  2. s'il reste des approbations critiques en attente → "partial" (le flux
+ *     d'approbation classique continue pour celles-ci uniquement) ;
+ *  3. sinon réclame les approuvées et patche le plan avec les approvalId →
+ *     "executed" : l'appelant lance immédiatement le runtime.
+ *
+ * Renvoie null quand le mode ne s'applique pas (always_ask / ask_if_needed) :
+ * le flux standard d'approbation humaine est conservé à l'identique.
+ */
+async function applyAutoApprovalPolicy(
+  mode: AuthorizationMode | undefined,
+  userId: string,
+  plan: RuntimePlan,
+  approvals: CreatedApproval[],
+): Promise<"executed" | "partial" | null> {
+  if (mode !== "auto_allow") return null;
+
+  const autoApprovable = approvals.filter((item) => !isNeverAutoApprove(item.toolSlug));
+  await Promise.all(autoApprovable.map((item) => approveAction(userId, item.id)));
+  if (autoApprovable.length > 0) {
+    // Piste d'audit : la décision automatique est tracée avec sa cause.
+    console.log(JSON.stringify({
+      event: "approval.auto_approved",
+      reason: AUTO_APPROVAL_AUDIT_REASON,
+      userId,
+      executionId: plan.executionId,
+      approvalIds: autoApprovable.map((item) => item.id),
+      toolSlugs: autoApprovable.map((item) => item.toolSlug),
+    }));
+  }
+
+  const current = await listActionApprovals(userId, plan.executionId);
+  const stillPending = current.filter((item) => item.status === "pending");
+  if (stillPending.length > 0) return "partial";
+
+  const claimed: string[] = [];
+  for (const item of current) {
+    if (item.status === "approved") {
+      await claimActionExecution(userId, item.id);
+      claimed.push(item.id);
+    }
+  }
+  const claimedByStep = new Map(claimed.map((id) => {
+    const item = current.find((approval) => approval.id === id)!;
+    return [String(item.arguments.__stepId ?? ""), id] as const;
+  }));
+  for (const step of plan.steps) {
+    const id = claimedByStep.get(step.id);
+    if (id) {
+      step.status = "pending";
+      step.input = { ...step.input, __stepId: step.id, approvalId: id };
+    }
+  }
+  return "executed";
 }
 
 /** Note de contexte (pièce jointe ou fichier mémoire) ajoutée au message. */
@@ -354,27 +421,59 @@ export async function POST(request: NextRequest) {
           return approval;
         }));
 
-        const waitingText = `J'ai préparé le plan d'exécution dans mon domaine (${classification.reason || "tâche confirmée"}). Une ou plusieurs actions externes nécessitent votre confirmation avant exécution.`;
-        await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: waitingText });
+        // Mode d'autorisation choisi dans le composer (« Toujours demander ▼ »).
+        const autoOutcome = await applyAutoApprovalPolicy(body.authorizationMode, user.uid, plan, approvals);
+        if (autoOutcome === "partial") {
+          // Actions non critiques auto-approuvées ; seules les critiques
+          // (ads.publish, file.delete, phone.call) attendent l'utilisateur.
+          const nowApprovals = await listActionApprovals(user.uid, plan.executionId);
+          const waitingText = "J'ai préparé le plan d'exécution dans mon domaine. Les actions non critiques ont été autorisées automatiquement ; une ou plusieurs actions CRITIQUES nécessitent encore votre confirmation avant exécution.";
+          await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: waitingText });
+          return NextResponse.json({
+            mode: "agent",
+            status: "waiting_approval",
+            executionId: plan.executionId,
+            conversationId,
+            agentId: agent.id,
+            classification,
+            objective: body.message,
+            plan,
+            approvals: nowApprovals.map((item) => ({
+              id: item.id,
+              toolSlug: item.toolSlug,
+              reason: item.reason,
+              status: item.status,
+              expiresAt: item.expiresAt,
+              stepId: typeof item.arguments.__stepId === "string" ? item.arguments.__stepId : undefined,
+            })),
+          });
+        }
+        if (autoOutcome === null) {
+          const waitingText = `J'ai préparé le plan d'exécution dans mon domaine (${classification.reason || "tâche confirmée"}). Une ou plusieurs actions externes nécessitent votre confirmation avant exécution.`;
+          await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: waitingText });
 
-        return NextResponse.json({
-          mode: "agent",
-          status: "waiting_approval",
-          executionId: plan.executionId,
-          conversationId,
-          agentId: agent.id,
-          classification,
-          objective: body.message,
-          plan,
-          approvals: approvals.map((item) => ({
-            id: item.id,
-            toolSlug: item.toolSlug,
-            reason: item.reason,
-            status: item.status,
-            expiresAt: item.expiresAt,
-            stepId: typeof item.arguments.__stepId === "string" ? item.arguments.__stepId : undefined,
-          })),
-        });
+          return NextResponse.json({
+            mode: "agent",
+            status: "waiting_approval",
+            executionId: plan.executionId,
+            conversationId,
+            agentId: agent.id,
+            classification,
+            objective: body.message,
+            plan,
+            approvals: approvals.map((item) => ({
+              id: item.id,
+              toolSlug: item.toolSlug,
+              reason: item.reason,
+              status: item.status,
+              expiresAt: item.expiresAt,
+              stepId: typeof item.arguments.__stepId === "string" ? item.arguments.__stepId : undefined,
+            })),
+          });
+        }
+        // autoOutcome === "executed" : toutes les approbations sont réglées,
+        // le plan est patché avec les approvalId → l'exécution continue plus
+        // bas dans le bloc runtime commun.
       }
 
       const runtime = new AgentRuntime({
@@ -522,29 +621,59 @@ export async function POST(request: NextRequest) {
         return approval;
       }));
 
-      await appendMessage({
-        conversationId,
-        userId: user.uid,
-        role: "assistant",
-        content: "J'ai préparé le plan. Une ou plusieurs actions externes nécessitent votre confirmation avant que l'agent ne les exécute.",
-      });
+      // Mode d'autorisation choisi dans le composer (« Toujours demander ▼ »).
+      const autoOutcome = await applyAutoApprovalPolicy(body.authorizationMode, user.uid, plan, approvals);
+      if (autoOutcome === "partial") {
+        const nowApprovals = await listActionApprovals(user.uid, plan.executionId);
+        await appendMessage({
+          conversationId,
+          userId: user.uid,
+          role: "assistant",
+          content: "J'ai préparé le plan. Les actions non critiques ont été autorisées automatiquement ; une ou plusieurs actions CRITIQUES nécessitent encore votre confirmation avant exécution.",
+        });
+        return NextResponse.json({
+          mode: "agent",
+          status: "waiting_approval",
+          executionId: plan.executionId,
+          conversationId,
+          objective: body.message,
+          plan,
+          approvals: nowApprovals.map((item) => ({
+            id: item.id,
+            toolSlug: item.toolSlug,
+            reason: item.reason,
+            status: item.status,
+            expiresAt: item.expiresAt,
+            stepId: typeof item.arguments.__stepId === "string" ? item.arguments.__stepId : undefined,
+          })),
+        });
+      }
+      if (autoOutcome === null) {
+        await appendMessage({
+          conversationId,
+          userId: user.uid,
+          role: "assistant",
+          content: "J'ai préparé le plan. Une ou plusieurs actions externes nécessitent votre confirmation avant que l'agent ne les exécute.",
+        });
 
-      return NextResponse.json({
-        mode: "agent",
-        status: "waiting_approval",
-        executionId: plan.executionId,
-        conversationId,
-        objective: body.message,
-        plan,
-        approvals: approvals.map((item) => ({
-          id: item.id,
-          toolSlug: item.toolSlug,
-          reason: item.reason,
-          status: item.status,
-          expiresAt: item.expiresAt,
-          stepId: typeof item.arguments.__stepId === "string" ? item.arguments.__stepId : undefined,
-        })),
-      });
+        return NextResponse.json({
+          mode: "agent",
+          status: "waiting_approval",
+          executionId: plan.executionId,
+          conversationId,
+          objective: body.message,
+          plan,
+          approvals: approvals.map((item) => ({
+            id: item.id,
+            toolSlug: item.toolSlug,
+            reason: item.reason,
+            status: item.status,
+            expiresAt: item.expiresAt,
+            stepId: typeof item.arguments.__stepId === "string" ? item.arguments.__stepId : undefined,
+          })),
+        });
+      }
+      // autoOutcome === "executed" : exécution immédiate dans le bloc runtime commun.
     }
 
     const runtime = new AgentRuntime({
