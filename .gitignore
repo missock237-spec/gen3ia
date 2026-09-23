@@ -45,3 +45,4 @@ ui-debug.log
 .vscode/
 *.swp
 .env*
+scripts/push_github.sh
