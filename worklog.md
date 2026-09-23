@@ -352,3 +352,25 @@ Work Log:
 Stage Summary:
 - Environnement restauré et synchronisé (production gen3ia.online = 176e6b1, IDE unifié Task 20 en ligne).
 - Capture manquante : utilisateur doit re-envoyer Screenshot_20260923_141348.jpg. Dès réception : analyse → reproduction à l'identique dans gen-chat.tsx ET agent-chat-panel/workshop.tsx (+ tout autre chat du projet si la capture s'y applique).
+
+---
+Task ID: 22
+Agent: Super Z (principal)
+Task: « Analyser la capture puis la reproduire à l'identique dans le chat IA et le chat d'agent IA de tout l'ensemble du projet » (capture non parvenue au serveur → reproduction pilotée par l'analyse détaillée fournie par l'utilisateur).
+
+Work Log:
+- COMPOSER UNIFIÉ (components/ui/command-composer.tsx) : réplique fidèle de la maquette — grande zone de texte anthracite (#1b1b1d) fortement arrondie (28px) sur fond sombre, placeholder exact « Posez n'importe quelle question… Tapez @ pour mentionner des compétences ou connecteurs, ou / pour les commandes », bouton « + » à gauche (pièce jointe réelle ou sources connectées), sélecteur « Toujours demander ▼ » centré (3 modes HITL : Toujours demander / Demander si nécessaire / Autoriser automatiquement, persisté localStorage), 🎙 (Web Speech API fr-FR) puis bouton circulaire ↑ à droite (sombre désactivé, blanc actif — état exact de la capture).
+- Menus sombres « @ » (compétences/connecteurs via /api/integrations/mention, debounce 180ms, puces activées) et « / » (commandes rapides filtrées) avec navigation clavier ↑↓/Entrée/Tab/Échap.
+- BUG CORRIGÉ en test navigateur : les matchs vides ("@" ou "/" nus) renvoient "" (falsy) — conditions changées pour des comparaisons explicites à null sinon les menus ne s'ouvraient jamais.
+- CHAT IA (gen-chat.tsx) : panneau entièrement thématisé sombre (en-tête, bulles, launcher), CommandComposer branché — @ wired sur les connecteurs (sélection → selectedConnectors envoyés à /api/gen/chat), commandes réelles (Choisir des connecteurs, Effacer la conversation), bouton « + » ouvre les sources connectées (pas de faux upload : Gen est lecture seule).
+- CHAT D'AGENT IA (agent-chat-panel.tsx) : thème sombre complet (en-tête, compétences, historique, bulles, plan d'exécution, cartes d'approbation), PromptBox remplacé par le CommandComposer (même design que le chat IA), fichiers réels conservés (uploadPermanentFiles), commandes (Nouvelle conversation / Historique / Personnaliser / Connecteurs / Joindre un fichier).
+- BACKEND HITL : lib/security/authorization-mode.ts (3 modes + plancher de sécurité — ads.publish, file.delete, phone.call JAMAIS auto-approuvés) ; /api/agent/chat accepte authorizationMode (zod) et applyAutoApprovalPolicy : en auto_allow, approuve automatiquement les actions non critiques avec piste d'audit (log approval.auto_approved + événement broadcast), gère le cas partiel (critiques en attente) et le cas exécuté (claim + patch plan + runtime immédiat) ; chemins agent personnalisé ET universel ; always_ask/ask_if_needed = flux d'approbation historique inchangé.
+- LOGIQUE PURE testable : lib/ui/command-composer-helpers.ts (détection @//, filtrage, navigation) — déplacée de components/ vers lib/ car vitest ne collecte que lib/** et app/**.
+- QUALITÉ : typecheck 0 erreur, lint 0 erreur, 358 tests verts (21 nouveaux : helpers @-/-navigation ×11, modes d'autorisation ×5, correctif assertion filtre description), build OK (173 pages).
+- VÉRIFICATION NAVIGATEUR (dev puis production) : design conforme à la capture, menus / et @ ouverts, sélecteur mode avec les 3 options + descriptions, bouton ↑ passe au blanc dès saisie.
+- E2E PRODUCTION : déploiement 91642fb READY (auto-deploy Git), accueil 200, /studio/agents 200, widget Gen de gen3ia.online testé au navigateur — composer sombre + menu commandes fonctionnels en production.
+
+Stage Summary:
+- Production gen3ia.online = commit 91642fb, READY.
+- Le chat IA (accueil) et le chat d'agent IA (Studio) partagent désormais le MÊME composer sombre, réplique de la capture validée : @ compétences/connecteurs, / commandes, + fichiers, « Toujours demander ▼ » branché au backend avec plancher de sécurité critique, 🎙 vocal, ↑ d'envoi.
+- Le mode d'autorisation est un vrai centre de contrôle HITL : auto_allow accélère l'exécution sans jamais contourner les actions critiques.
