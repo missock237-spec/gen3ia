@@ -40,6 +40,7 @@ function DashboardContent() {
   const [tasksLoading, setTasksLoading] = useState(true);
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +78,7 @@ function DashboardContent() {
       return;
     }
     setStarting(true);
+    setStartError(null);
     try {
       const response = await authFetch("/api/workspace/tasks", {
         method: "POST",
@@ -88,7 +90,7 @@ function DashboardContent() {
       router.push("/studio?taskId=" + encodeURIComponent(data.task.id));
     } catch (error) {
       setStarting(false);
-      window.alert(error instanceof Error ? error.message : "Impossible de préparer la tâche.");
+      setStartError(error instanceof Error ? error.message : "Impossible de préparer la tâche.");
     }
   }
 
@@ -113,8 +115,12 @@ function DashboardContent() {
               <div className="g3-home-composer-mark" aria-hidden="true">✦</div>
               <textarea
                 value={objective}
-                onChange={(event) => setObjective(event.target.value)}
+                onChange={(event) => {
+                  setObjective(event.target.value);
+                  if (startError) setStartError(null);
+                }}
                 onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing || event.keyCode === 229) return;
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     event.currentTarget.form?.requestSubmit();
@@ -136,6 +142,11 @@ function DashboardContent() {
                 {starting ? "Préparation..." : "Commencer"} <Arrow />
               </button>
             </div>
+            {startError && (
+              <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-left text-xs text-red-700" role="alert">
+                {startError}
+              </p>
+            )}
           </form>
 
           <div className="mt-3 flex flex-wrap justify-center gap-2">
@@ -206,7 +217,7 @@ function DashboardContent() {
               {tasksLoading ? (
                 <div className="g3-home-recent" aria-live="polite"><span className="g3-home-recent-dot" /><span className="text-xs text-neutral-400">Chargement du workspace...</span></div>
               ) : recentTasks.length ? recentTasks.map((item) => (
-                <Link key={item.id} href={"/studio?task=" + encodeURIComponent(item.objective)} className="g3-home-recent group">
+                <Link key={item.id} href={"/studio?taskId=" + encodeURIComponent(item.id)} className="g3-home-recent group">
                   <span className="g3-home-recent-dot" />
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-2">
