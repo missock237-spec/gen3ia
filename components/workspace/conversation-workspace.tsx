@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApprovalCard } from "./approval-card";
 import { ArtifactPanel } from "./artifact-panel";
-import { Composer } from "./composer/composer";
+import { Composer, readAuthorizationMode, type ComposerSendOptions } from "./composer/composer";
 import { ConversationList } from "./conversation-list";
 import { ContextDrawer } from "./context-drawer";
 import { MessageThread } from "./message-thread";
@@ -21,6 +21,7 @@ import type {
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
 import { streamConversationTurn } from "@/lib/domain/conversations/stream-client";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
+import type { AuthorizationMode } from "@/lib/security/authorization-mode";
 
 /**
  * Orchestrateur de l'espace conversation (layout 3 colonnes) :
@@ -209,8 +210,9 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   );
 
   const sendMessage = useCallback(
-    async (message: string, attachments: MessageAttachment[]) => {
+    async (message: string, attachments: MessageAttachment[], options?: ComposerSendOptions) => {
       if (!conversationId) return;
+      const authorizationMode = options?.authorizationMode ?? readAuthorizationMode();
       setGenerating(true);
       setError("");
       // Affichage immédiat du message utilisateur (optimiste, résilient).
@@ -236,6 +238,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           attachments,
           projectId,
           connectors,
+          authorizationMode,
           onEvent: consumeEvent,
         });
       } catch (streamError) {
@@ -249,6 +252,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               attachments,
               projectId,
               ...(connectors.length > 0 ? { connectors } : {}),
+              ...(authorizationMode ? { authorizationMode } : {}),
             }),
           });
           if (!response.ok) {
@@ -288,8 +292,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
     if (!raw) return;
     sessionStorage.removeItem(key);
     try {
-      const pending = JSON.parse(raw) as { message: string; attachments?: MessageAttachment[] };
-      if (pending.message) void sendMessage(pending.message, pending.attachments ?? []);
+      const pending = JSON.parse(raw) as { message: string; attachments?: MessageAttachment[]; authorizationMode?: AuthorizationMode };
+      if (pending.message) void sendMessage(pending.message, pending.attachments ?? [], { authorizationMode: pending.authorizationMode });
     } catch {
       /* marqueur illisible : ignoré */
     }
@@ -360,7 +364,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               try {
                 sessionStorage.setItem(
                   `${PENDING_MESSAGE_PREFIX}${data.conversation.id}`,
-                  JSON.stringify({ message, attachments }),
+                  JSON.stringify({ message, attachments, authorizationMode: readAuthorizationMode() }),
                 );
               } catch {
                 /* stockage indisponible : le message sera simplement renvoyé */

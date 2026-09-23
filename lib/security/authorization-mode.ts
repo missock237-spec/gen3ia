@@ -62,3 +62,17 @@ export const AUTHORIZATION_MODE_STORAGE_KEY = "g3.authorizationMode";
 
 /** Message d'audit tracé quand une approbation est accordée automatiquement. */
 export const AUTO_APPROVAL_AUDIT_REASON = "Approuvé automatiquement — mode d'autorisation choisi par l'utilisateur (auto_allow).";
+
+/**
+ * Décide si une étape sensible peut s'exécuter SANS approbation humaine
+ * (mode « Autoriser automatiquement » uniquement). Plancher de sécurité
+ * INVARIABLE :  - les outils critiques listés (publicité payante, suppression
+ * de fichiers, appels téléphoniques) exigent toujours une confirmation ;
+ *  - un risque « critical » n'est jamais contourné par le mode auto.
+ * Partagé par /api/agent/chat et le moteur conversationnel (workspace).
+ */
+export function isAutoApprovable(mode: AuthorizationMode | undefined, toolName: string, risk: string): boolean {
+  if (mode !== "auto_allow") return false;
+  if (risk === "critical") return false;
+  return !isNeverAutoApprove(toolName);
+}

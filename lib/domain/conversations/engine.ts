@@ -12,6 +12,11 @@ import type { ToolRisk } from "@/lib/tools/types";
 import { createDefaultToolRegistry } from "@/lib/tools/default-registry";
 import { executeTool } from "@/lib/tools/executor";
 import type { ExecutionPolicy } from "@/lib/security/execution-policy";
+import {
+  AUTO_APPROVAL_AUDIT_REASON,
+  isAutoApprovable,
+  type AuthorizationMode,
+} from "@/lib/security/authorization-mode";
 
 import {
   appendMessage,
@@ -282,6 +287,8 @@ export interface ConversationTurnInput {
   model?: string;
   /** Connecteurs activés explicitement pour ce tour (slugs Composio). */
   connectors?: string[];
+  /** Mode d'autorisation HITL choisi dans le composer (« Toujours demander ▼ »). */
+  authorizationMode?: AuthorizationMode;
   /** Émetteur d'événements de flux (streaming NDJSON) — absent = API classique. */
   onEvent?: StreamEventEmitter;
 }
@@ -712,7 +719,22 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     const risk = toolEntry?.risk ?? "low";
     const sensitive = planned.sensitive === true || (toolName ? stepRequiresApproval(risk) : false);
 
-    if (toolName && sensitive) {
+    // Mode « Autoriser automatiquement » : les actions sensibles NON critiques
+    // s'exécutent directement (piste d'audit), le plancher de sécurité reste
+    // invariant (ads.publish / file.delete / phone.call / risque critical).
+    const autoAllowed = toolName ? isAutoApprovable(ctx.authorizationMode, toolName, risk) : false;
+    if (autoAllowed) {
+      console.log(JSON.stringify({
+        event: "approval.auto_approved",
+        reason: AUTO_APPROVAL_AUDIT_REASON,
+        userId: ctx.userId,
+        conversationId: ctx.conversationId,
+        toolName,
+        risk,
+      }));
+    }
+
+    if (toolName && sensitive && !autoAllowed) {
       // Approbation inline : l'étape reste en attente, un outil de contrôle
       // humain est créé avec impact, périmètre de données et coût estimé.
       const step = makeStep({
@@ -746,7 +768,9 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     const step = makeStep({
       phase: toolName ? "execution" : "result",
       title: planned.title,
-      detail: planned.detail,
+      detail: autoAllowed
+        ? `${planned.detail ?? toolEntry?.description ?? ""}\n(${AUTO_APPROVAL_AUDIT_REASON})`
+        : planned.detail,
       toolName,
       toolInput: planned.toolInput,
       status: "in_progress",

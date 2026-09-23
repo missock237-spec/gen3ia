@@ -6,6 +6,7 @@ import {
   DEFAULT_AUTHORIZATION_MODE,
   authorizationModeLabel,
   isAuthorizationMode,
+  isAutoApprovable,
   isNeverAutoApprove,
 } from "./authorization-mode";
 
@@ -47,5 +48,23 @@ describe("modes d'autorisation (sélecteur « Toujours demander ▼ »)", () => 
   it("trace l'audit des approbations automatiques", () => {
     expect(AUTO_APPROVAL_AUDIT_REASON).toContain("auto_allow");
     expect(AUTO_APPROVAL_AUDIT_REASON.length).toBeGreaterThan(20);
+  });
+
+  describe("isAutoApprovable (moteur conversationnel + agent chat)", () => {
+    it("n'auto-approuve que le mode auto_allow", () => {
+      expect(isAutoApprovable("auto_allow", "composio.execute", "high")).toBe(true);
+      expect(isAutoApprovable("always_ask", "composio.execute", "high")).toBe(false);
+      expect(isAutoApprovable("ask_if_needed", "composio.execute", "high")).toBe(false);
+      expect(isAutoApprovable(undefined, "composio.execute", "high")).toBe(false);
+    });
+
+    it("respecte le plancher : outils critiques et risque critical jamais contournés", () => {
+      expect(isAutoApprovable("auto_allow", "ads.publish", "high")).toBe(false);
+      expect(isAutoApprovable("auto_allow", "file.delete", "high")).toBe(false);
+      expect(isAutoApprovable("auto_allow", "phone.call", "high")).toBe(false);
+      expect(isAutoApprovable("auto_allow", "composio.execute", "critical")).toBe(false);
+      // Outil externe non critique : auto-approuvable.
+      expect(isAutoApprovable("auto_allow", "email.send", "high")).toBe(true);
+    });
   });
 });
