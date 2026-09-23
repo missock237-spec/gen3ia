@@ -5,7 +5,9 @@ import {
   condenseToolOutput,
   conversationToolCatalog,
   dataScopeForTool,
+  detectExplicitToolIntent,
   estimatedCostForTool,
+  extractSearchQuery,
   inferArtifactType,
   stepRequiresApproval,
 } from "./engine";
@@ -94,6 +96,28 @@ describe("moteur conversationnel — lisibilité de la timeline", () => {
     expect(deriveRunStatus([step("done"), step("in_progress")])).toBe("running");
     expect(deriveRunStatus([step("done"), step("failed")])).toBe("failed");
     expect(deriveRunStatus([step("done"), step("done")])).toBe("completed");
+  });
+});
+
+describe("moteur conversationnel — garde-fou d'intention explicite", () => {
+  const catalog = conversationToolCatalog();
+
+  it("détecte une demande explicite de recherche web", () => {
+    expect(detectExplicitToolIntent("Fais une recherche web sur les tendances IA", catalog)?.toolName).toBe("web.search");
+    expect(detectExplicitToolIntent("cherche sur internet les prix concurrents", catalog)?.toolName).toBe("web.search");
+    expect(detectExplicitToolIntent("Search the web for AI news", catalog)?.toolName).toBe("web.search");
+  });
+
+  it("ne déclenche pas le garde-fou pour une simple question", () => {
+    expect(detectExplicitToolIntent("Bonjour, comment vas-tu ?", catalog)).toBeNull();
+    expect(detectExplicitToolIntent("Rédige un e-mail de relance pour un client", catalog)).toBeNull();
+  });
+
+  it("extrait une requête de recherche nettoyée", () => {
+    expect(extractSearchQuery("Fais une recherche web sur les tendances IA en Afrique et résume-moi les trois points clés")).toContain("tendances IA");
+    expect(extractSearchQuery("cherche sur internet voitures électriques")).toContain("voitures électriques");
+    // Toujours une requête non vide, même après nettoyage agressif.
+    expect(extractSearchQuery("recherche web").length).toBeGreaterThan(0);
   });
 });
 

@@ -190,6 +190,38 @@ const IntentSchema = z.object({
 
 export type TurnIntent = z.infer<typeof IntentSchema>;
 
+/**
+ * Garde-fou déterministe : certaines demandes énoncent EXPLICITEMENT l'outil
+ * attendu (« fais une recherche web… »). Si l'IA classe malgré tout la demande
+ * en simple réponse (ou si sa décision est indisponible), cette heuristique
+ * force un plan avec l'outil réel — la demande de l'utilisateur est loi.
+ */
+export function detectExplicitToolIntent(message: string, catalog: ToolCatalogEntry[]): { toolName: string; query: string } | null {
+  const lower = message.toLowerCase();
+  const catalogNames = new Set(catalog.map((t) => t.name));
+  const webMarkers = /(recherche[s]? (web|internet)|cherche[rz]? (sur )?(le |la )?(web|internet)|fais[ez]? une recherche|search (the )?web|web search|sur (le|internet))\b/i;
+  if (webMarkers.test(lower) && catalogNames.has("web.search")) {
+    return { toolName: "web.search", query: message.slice(0, 400) };
+  }
+  const imageMarkers = /\b(g[eé]n[eè]re|cr[eé]e|dessine)\b.*\b(image|illustration|dessin|visuel)\b|\b(image|illustration)\b.*\b(g[eé]n[eè]r)\b/i;
+  if (imageMarkers.test(lower) && catalogNames.has("artifact.create")) {
+    // Les images sont traitées en amont par Agnes ; ici on ne force rien.
+    return null;
+  }
+  return null;
+}
+
+/** Requête condensée pour l'outil de recherche (nettoyage des formules). */
+export function extractSearchQuery(message: string): string {
+  return message
+    .replace(/^(fais[ez]?|peux[- ]tu|pourrais[- ]tu|merci de|stp|s'il te pla[eî]t)\s+/i, "")
+    .replace(/(une |la |de )?(recherche[s]? (web|internet|sur internet)|search)\s*(sur|about|for)?\s*/i, "")
+    .replace(/^(sur |about )+/i, "")
+    .replace(/\s+et r[eé]sume[- ].*$/i, "")
+    .trim()
+    .slice(0, 300) || message.slice(0, 300);
+}
+
 export function buildIntentSystemPrompt(catalog: ToolCatalogEntry[], project?: WorkspaceProject | null): string {
   const toolLines = catalog
     .map((t) => `- ${t.name} (risque ${t.risk}${t.requiresApproval ? ", validation requise" : ""}) : ${t.description}`)
@@ -297,6 +329,25 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     intent = { mode: "chat", understanding: "Réponse directe (planification indisponible)." };
   }
 
+  if (intent.mode === "chat") {
+    // Garde-fou : la demande exige explicitement un outil réel ?
+    const explicit = detectExplicitToolIntent(input.message, catalog);
+    if (explicit) {
+      intent = {
+        mode: "plan",
+        understanding: "Demande explicite d'actions réelles (recherche web).",
+        objective: input.message.slice(0, 400),
+        steps: [
+          {
+            title: "Recherche web",
+            detail: "Recherche réelle sur le web demandée explicitement par l'utilisateur.",
+            toolName: explicit.toolName,
+            toolInput: { query: extractSearchQuery(input.message), maxResults: 8 },
+          },
+        ],
+      };
+    }
+  }
   if (intent.mode === "chat") {
     return runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent });
   }
