@@ -10,6 +10,7 @@ import { assertExecutionInputSize, assertOutputSize } from "./execution-limits";
 import { runSandboxOrSimulation, simulateSandboxJob } from "@/lib/sandbox/simulation";
 import type { SandboxRuntime, SandboxLimits } from "@/lib/sandbox/types";
 import { executeAgentTerminal } from "./agent-terminal";
+import { isTerminalSessionActive, recordTerminalExecution } from "./terminal-sessions";
 import { recall, remember } from "@/lib/memory/user-memory";
 import { requestCameraCapture } from "@/lib/camera/agent-camera";
 import { executeAdsTool, type AdsProvider } from "@/lib/integrations/composio/ads";
@@ -114,7 +115,31 @@ export async function executeToolSecurely(options: SecureToolExecutionOptions): 
     } else if (options.toolName === "terminal.execute") {
       const runtime = options.input.runtime === "python" ? "python" : "node";
       if (typeof options.input.command !== "string") throw new Error("terminal.execute requires command");
-      result = await executeAgentTerminal({ userId: options.userId, executionId: options.executionId, runtime, command: options.input.command, cwd: typeof options.input.cwd === "string" ? options.input.cwd : undefined, timeoutMs: typeof options.input.timeoutMs === "number" ? options.input.timeoutMs : undefined, memoryMb: typeof options.input.memoryMb === "number" ? options.input.memoryMb : undefined });
+      const terminalSessionId = typeof options.input.terminalSessionId === "string" && options.input.terminalSessionId.length <= 128 ? options.input.terminalSessionId : undefined;
+      if (terminalSessionId) {
+        const accepting = await isTerminalSessionActive(options.userId, terminalSessionId);
+        if (!accepting) throw new Error("La session terminal a été arrêtée par l'utilisateur — aucune nouvelle commande n'est acceptée.");
+      }
+      const conversationId = typeof options.input.conversationId === "string" && options.input.conversationId.length <= 128 ? options.input.conversationId : undefined;
+      const terminalResult = await executeAgentTerminal({ userId: options.userId, executionId: options.executionId, runtime, command: options.input.command, cwd: typeof options.input.cwd === "string" ? options.input.cwd : undefined, timeoutMs: typeof options.input.timeoutMs === "number" ? options.input.timeoutMs : undefined, memoryMb: typeof options.input.memoryMb === "number" ? options.input.memoryMb : undefined });
+      result = terminalResult;
+      // Piste d'audit + flux temps réel dans le Workshop IDE — l'agent ne
+      // doit JAMAIS être interrompu par un échec d'enregistrement.
+      await recordTerminalExecution({
+        userId: options.userId,
+        sessionId: terminalSessionId,
+        projectId: options.projectId,
+        conversationId,
+        command: options.input.command,
+        success: terminalResult.success,
+        stdout: terminalResult.stdout,
+        stderr: terminalResult.stderr,
+        exitCode: terminalResult.exitCode ?? undefined,
+        durationMs: terminalResult.durationMs,
+        mode: terminalResult.mode,
+        engine: terminalResult.simulation?.engine ?? null,
+        error: undefined,
+      }).catch(() => undefined);
     } else if (options.toolName === "memory.read") {
       if (typeof options.input.key !== "string") throw new Error("memory.read requires key");
       result = await recall({ userId: options.userId, key: options.input.key });

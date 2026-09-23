@@ -4,13 +4,19 @@ import { useEffect, useState } from "react";
 import { type User } from "firebase/auth";
 import { watchAuth } from "@/lib/firebase/client";
 
-import { ConsoleWorkshop } from "@/components/developer/console-workshop";
+import { IdeWorkspace } from "@/components/developer/ide/ide-workspace";
 import { StudioHeader } from "@/components/studio/studio-header";
 
 /**
- * Console de l'agent de code (/studio/console) :
- *  - Terminal (sandbox isolé si déployé, sinon dry-run simulé, mode annoncé) ;
- *  - Simulation de code (VM V8 restreinte / analyse statique).
+ * Workshop IDE unifié (/studio/console) — remplace les deux panneaux
+ * indépendants (terminal + visualiseur) par un espace de travail intégré :
+ *  - barre d'onglets persistante : Terminal, Code, Logs, Aperçu, Tests ;
+ *  - explorateur de fichiers (recherche, favoris, versions) ;
+ *  - éditeur Monaco (minimap, onglets, annotations d'erreurs) ;
+ *  - panneau droit redimensionnable (exécution, logs, tests, aperçu) ;
+ *  - terminal alimenté EXCLUSIVEMENT par les agents (observation
+ *    utilisateur en lecture seule, arrêt de session, arrêt d'urgence).
+ *
  * Réservé aux propriétaires d'agent de code (garde serveur côté API).
  */
 export default function StudioConsolePage() {
@@ -25,14 +31,14 @@ export default function StudioConsolePage() {
   return (
     <main className="g3-studio-page">
       <StudioHeader
-        eyebrow="STUDIO · CODE"
-        title="Console de code"
-        description="Terminal de l'agent de code et système de simulation. Le mode réel (sandbox Docker ou simulation intégrée) est annoncé sur chaque exécution."
+        eyebrow="STUDIO · WORKSHOP IDE"
+        title="Workshop IDE"
+        description="Workspace de développement unifié : terminal des agents, éditeur de code, logs structurés, aperçu en direct des applications créées et résultats de tests — avec arrêt de session et arrêt d'urgence."
       />
       {ready && user ? (
-        <ConsoleWorkshop />
+        <IdeWorkspace />
       ) : ready ? (
-        <p className="g3-console-empty">Connectez-vous avec un compte possédant un agent de code pour utiliser la console.</p>
+        <p className="g3-console-empty">Connectez-vous avec un compte possédant un agent de code pour utiliser le Workshop IDE.</p>
       ) : null}
     </main>
   );

@@ -6,6 +6,7 @@ import { ApprovalCard } from "./approval-card";
 import { RunTimeline } from "./run-timeline";
 import { MarkdownContent } from "./markdown";
 import { formatBytes } from "./labels";
+import { LiveAppPreviewButton } from "./artifact-preview";
 import type {
   ConversationApproval,
   ConversationArtifact,
@@ -140,6 +141,11 @@ export function MessageThread({
                   ))}
                 </ul>
               )}
+
+              {/* Application créée par l'agent → aperçu en direct dans la conversation */}
+              {messageArtifacts.map((artifact) => (
+                <LiveAppPreviewButton key={`live-${artifact.id}`} artifact={artifact} />
+              ))}
             </article>
 
             {run && <RunTimeline run={run} />}

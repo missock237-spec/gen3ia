@@ -175,6 +175,17 @@ const DEVELOPER_NAV: NavRoute[] = [
     section: "primary",
     keywords: ["monitoring", "revenus", "statistiques"],
   },
+  {
+    id: "dev-ide",
+    href: "/studio/console",
+    label: "Workshop IDE",
+    icon: "❯_",
+    description: "Workspace IDE unifié : terminal agent, éditeur, logs, aperçu, tests",
+    contexts: ["developer"],
+    minRole: "developer",
+    section: "primary",
+    keywords: ["ide", "terminal", "éditeur", "code", "workshop", "console"],
+  },
 ];
 
 const ADMIN_NAV: NavRoute[] = [
