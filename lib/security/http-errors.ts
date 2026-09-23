@@ -114,3 +114,27 @@ export function errorBody(error: unknown, fallbackMessage = "Une erreur inattend
     code: errorCode(error),
   };
 }
+
+/**
+ * Convertit une ZodError en erreur lisible : les dumps Zod bruts exposaient
+ * la structure interne (`origin`, `code`…) en langue machine — illisibles
+ * pour l'utilisateur et pour l'UI (audit 25-a D4). Statut 422 + code
+ * INVALID_REQUEST + un message humain identifiant le champ en cause.
+ */
+export function zodValidationError(error: { issues: ReadonlyArray<{ code: string; path: PropertyKey[] }> }): HttpError {
+  const first = error.issues[0];
+  const field = first && first.path.length > 0 ? String(first.path.join(".")) : "";
+  let detail = "valeur refusée par la validation";
+  if (first) {
+    if (first.code === "too_small") detail = "valeur trop courte (minimum non atteint)";
+    else if (first.code === "too_big") detail = "valeur trop longue (maximum dépassé)";
+    else if (first.code === "invalid_type") detail = "type de valeur inattendu";
+    else if (first.code === "invalid_string" || first.code === "invalid_format") detail = "format invalide";
+    else if (first.code === "unrecognized_keys") detail = "champ inconnu refusé";
+  }
+  return new HttpError(
+    422,
+    `Requête invalide${field ? ` (champ « ${field} »)` : ""} : ${detail}.`,
+    "INVALID_REQUEST",
+  );
+}

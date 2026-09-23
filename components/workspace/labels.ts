@@ -46,12 +46,14 @@ export const APPROVAL_STATUS_LABELS: Record<ApprovalStatus, string> = {
   pending: "En attente de décision",
   approved: "Approuvée",
   rejected: "Rejetée",
+  expired: "Expirée (non décidée à temps)",
 };
 
 export const APPROVAL_STATUS_STYLES: Record<ApprovalStatus, string> = {
   pending: "bg-amber-50 text-amber-800 border-amber-200",
   approved: "bg-emerald-50 text-emerald-800 border-emerald-200",
   rejected: "bg-red-50 text-red-700 border-red-200",
+  expired: "bg-neutral-100 text-neutral-500 border-neutral-200",
 };
 
 export function formatRelative(iso: string): string {

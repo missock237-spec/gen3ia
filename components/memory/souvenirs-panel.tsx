@@ -40,6 +40,9 @@ export function SouvenirsPanel(props: {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [confirmingKey, setConfirmingKey] = useState<string | null>(null);
+  // Conflit de clé (HTTP 409 MEMORY_KEY_EXISTS) : une écriture sur une clé
+  // existante avec une valeur différente exige une confirmation explicite.
+  const [conflict, setConflict] = useState<{ key: string; value: string } | null>(null);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -49,10 +52,12 @@ export function SouvenirsPanel(props: {
     );
   }, [props.memories, search]);
 
+  /** Écriture sans consentement d'écrasement : un 409 MEMORY_KEY_EXISTS ouvre la confirmation ci-dessous. */
   const remember = async () => {
     if (!key.trim() || !value.trim()) return;
     setBusy(true);
     setMessage("");
+    setConflict(null);
     try {
       const response = await authFetch("/api/memory", {
         method: "POST",
@@ -60,6 +65,11 @@ export function SouvenirsPanel(props: {
         body: JSON.stringify({ key: key.trim(), value: value.trim() }),
       });
       const data = await response.json();
+      if (response.status === 409 && data.code === "MEMORY_KEY_EXISTS") {
+        setConflict({ key: key.trim(), value: value.trim() });
+        setMessage(`Un souvenir existe déjà pour « ${key.trim()} » avec une valeur différente. Écraser ?`);
+        return;
+      }
       if (!response.ok) throw new Error(data.error ?? "Enregistrement impossible");
       setKey("");
       setValue("");
@@ -72,6 +82,33 @@ export function SouvenirsPanel(props: {
     }
   };
 
+  /** Confirmation d'écrasement après un 409 : ré-envoi explicite avec overwrite:true. */
+  const overwriteExisting = async () => {
+    if (!conflict) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await authFetch("/api/memory", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ key: conflict.key, value: conflict.value, overwrite: true }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Écrasement impossible");
+      setConflict(null);
+      setKey("");
+      setValue("");
+      setMessage("Souvenir remplacé.");
+      await props.onRefresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Écrasement impossible");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // L'édition d'une entrée existante est un remplacement volontaire (l'ancienne
+  // valeur était visible) : overwrite:true est envoyé d'office, pas de 409 attendu.
   const saveEdit = async (target: string) => {
     if (!editValue.trim()) return;
     setBusy(true);
@@ -80,7 +117,7 @@ export function SouvenirsPanel(props: {
       const response = await authFetch("/api/memory", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ key: target, value: editValue.trim() }),
+        body: JSON.stringify({ key: target, value: editValue.trim(), overwrite: true }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Modification impossible");
@@ -147,7 +184,7 @@ export function SouvenirsPanel(props: {
       <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
         <input
           value={key}
-          onChange={(event) => setKey(event.target.value)}
+          onChange={(event) => { setKey(event.target.value); setConflict(null); }}
           placeholder="clé (ex. projet.nom)"
           aria-label="Clé de mémoire"
           maxLength={160}
@@ -155,7 +192,7 @@ export function SouvenirsPanel(props: {
         />
         <input
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => { setValue(event.target.value); setConflict(null); }}
           placeholder="valeur à mémoriser"
           aria-label="Valeur de mémoire"
           maxLength={2000}
@@ -169,6 +206,17 @@ export function SouvenirsPanel(props: {
           Mémoriser
         </button>
       </div>
+      {conflict && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="alert">
+          <span>Cette clé existe déjà avec une autre valeur. Remplacer l&apos;ancienne valeur ?</span>
+          <button disabled={busy} onClick={overwriteExisting} className="min-h-8 rounded-full bg-amber-600 px-3 font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
+            Écraser et remplacer
+          </button>
+          <button disabled={busy} onClick={() => setConflict(null)} className="min-h-8 rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-3 font-semibold text-neutral-600">
+            Annuler
+          </button>
+        </div>
+      )}
       <p className="mt-2 text-xs text-neutral-400">
         Astuce : préférez des clés structurées (client.acme.contact, projet.gen3ia.deadline…). Secrets, mots de
         passe et données bancaires sont refusés automatiquement.

@@ -190,6 +190,35 @@ describe("moteur conversationnel — garde-fou d'intention explicite", () => {
     // Toujours une requête non vide, même après nettoyage agressif.
     expect(extractSearchQuery("recherche web").length).toBeGreaterThan(0);
   });
+
+  it("route une recherche d'information ACTUELLE sans mention « web » (audit 25-a)", () => {
+    // Reproduction exacte de l'audit : réponse sans sources avant correctif.
+    const intent = detectExplicitToolIntent("Recherche les dernières tendances de mon marché et fais un compte rendu", catalog);
+    expect(intent?.toolName).toBe("web.search");
+    expect(detectExplicitToolIntent("Compare les prix des smartphones pliables", catalog)?.toolName).toBe("web.search");
+    expect(detectExplicitToolIntent("Informe-moi sur la réglementation IA en Europe", catalog)?.toolName).toBe("web.search");
+  });
+
+  it("route une demande explicite de livrable document vers artifact.create (audit 25-d)", () => {
+    const pdf = detectExplicitToolIntent("Crée un PDF \"Rapport T4\" avec les chiffres du trimestre", catalog);
+    expect(pdf?.toolName).toBe("artifact.create");
+    if (pdf?.toolName === "artifact.create") {
+      expect(pdf.document.format).toBe("pdf");
+      expect(pdf.document.title.toLowerCase()).toContain("rapport");
+    }
+    expect(detectExplicitToolIntent("Prépare un rapport de suivi avec les prochaines échéances", catalog)?.toolName).toBe("artifact.create");
+    const slides = detectExplicitToolIntent("Génère une présentation PowerPoint de lancement produit", catalog);
+    if (slides?.toolName === "artifact.create") expect(slides.document.format).toBe("pptx");
+    expect(detectExplicitToolIntent("Fais un tableau Excel des ventes", catalog)?.toolName).toBe("artifact.create");
+  });
+
+  it("force un livrable quand un rapport est demandé, même avec des données internes", () => {
+    // Choix produit (audit 25-d) : « rédige un compte rendu » produit un
+    // VRAI livrable — avant, l'« analyse » était fabriquée de mémoire dans
+    // une simple réponse, sans données réelles ni fichier.
+    expect(detectExplicitToolIntent("Analyse mes ventes du mois et rédige un compte rendu", catalog)?.toolName).toBe("artifact.create");
+    expect(detectExplicitToolIntent("Quel est le ton officiel de notre marque ?", catalog)).toBeNull();
+  });
 });
 
 describe("moteur conversationnel — artefacts standardisés", () => {

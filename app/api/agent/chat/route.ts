@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { errorStatus } from "@/lib/security/http-errors";
+import { errorStatus, HttpError, zodValidationError } from "@/lib/security/http-errors";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody } from "@/lib/security/http-errors";
@@ -292,27 +292,6 @@ export async function POST(request: NextRequest) {
         content: body.message,
       });
 
-      // Génération d'images réelle (Agnes AI) : une demande explicite d'image
-      // est servie directement, quel que soit le type d'agent — c'est une
-      // capacité de la plateforme, pas du LLM conversationnel.
-      if (looksLikeImageRequest(body.message)) {
-        const imageResult = await respondWithImage({
-          userId: user.uid,
-          conversationId,
-          message: body.message,
-          agentId: agent.id,
-        });
-        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: imageResult.reply, mode: "chat" }));
-        return NextResponse.json({
-          mode: "chat",
-          conversationId,
-          agentId: agent.id,
-          classification: { mode: "chat" as const, inScope: true, reason: "Génération d'image" },
-          reply: imageResult.reply,
-          imageUrl: imageResult.imageUrl,
-        });
-      }
-
       const classification = await classifyRequest(agent, body.message);
       const note = contextNoteFor(body.attachmentPath, agent);
 
@@ -356,6 +335,28 @@ export async function POST(request: NextRequest) {
           agentId: agent.id,
           classification,
           reply,
+        });
+      }
+
+      // Génération d'images réelle (Agnes AI) : capacité servie UNIQUEMENT
+      // dans le périmètre de l'agent — l'ancien raccourci court-circuitait la
+      // classification et générait des images hors périmètre (coût non
+      // maîtrisé + classification usurpée, audit 25-b D1).
+      if (looksLikeImageRequest(body.message)) {
+        const imageResult = await respondWithImage({
+          userId: user.uid,
+          conversationId,
+          message: body.message,
+          agentId: agent.id,
+        });
+        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: imageResult.reply, mode: "chat" }));
+        return NextResponse.json({
+          mode: "chat",
+          conversationId,
+          agentId: agent.id,
+          classification: { ...classification, reason: "Génération d'image" },
+          reply: imageResult.reply,
+          imageUrl: imageResult.imageUrl,
         });
       }
 
@@ -701,7 +702,7 @@ export async function POST(request: NextRequest) {
         plan,
         error: error instanceof Error ? error.message : "Agent execution failed.",
         approvals: await listActionApprovals(user.uid, plan.executionId),
-      }, { status: errorStatus(error, 400) });
+      }, { status: errorStatus(error, 500) });
     }
 
     const currentApprovals = await listActionApprovals(user.uid, plan.executionId);
@@ -739,17 +740,29 @@ export async function POST(request: NextRequest) {
       finalText: status === "completed" ? finalText : undefined,
     });
   } catch (error) {
-    // Erreur structurée : un code machine (PROVIDER_UNAVAILABLE, INTERNAL…)
-    // permet à l'UI d'afficher l'état réel (réessayer vs réconnecter) au lieu
-    // de deviner à partir du message.
+    // Validation : 422 lisible — les dumps Zod bruts exposaient la structure
+    // interne et étaient illisibles pour le client (audit 25-a D4).
+    if (error instanceof z.ZodError) {
+      const validation = zodValidationError(error);
+      return NextResponse.json({ error: validation.message, code: validation.code }, { status: validation.status });
+    }
+    // Erreur structurée : le code machine (AUTH_REQUIRED, PROVIDER_UNAVAILABLE,
+    // INTERNAL…) permet à l'UI d'afficher l'état réel — une session expirée
+    // renvoie bien 401, pas un 400 générique (audit 25-b D3).
     const body = errorBody(error, "Agent request failed.");
+    if (error instanceof HttpError) {
+      return NextResponse.json(body, { status: error.status });
+    }
     const upstream = body.code === "PROVIDER_UNAVAILABLE"
       || body.error.includes("provider")
       || body.error.includes("planner")
       || body.error.includes("plan généré");
+    if (upstream) {
+      return NextResponse.json({ error: body.error, code: body.code }, { status: 502 });
+    }
     return NextResponse.json(
-      { error: upstream ? body.error : "Impossible de lancer la mission pour le moment. Réessayez.", code: body.code },
-      { status: upstream ? 502 : 400 },
+      { error: "Impossible de lancer la mission pour le moment. Réessayez.", code: body.code },
+      { status: 500 },
     );
   }
 }

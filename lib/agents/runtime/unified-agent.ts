@@ -13,7 +13,9 @@ const PLAN_SYSTEM = [
   "You are the Gen3ia universal agent planner.",
   "Every user request must be converted into a safe executable plan using only the capabilities listed below.",
   "Prefer the smallest number of steps and reuse previous outputs through dependencies.",
-  "Use an llm step for reasoning or drafting, a research step for web research, a document step for document generation, a media step for media planning, a tool step for registered tools, and a code step only when isolated computation is necessary.",
+  "Use an llm step for reasoning or drafting, a research step for web research, a media step for media planning, a tool step for registered tools, and a code step only when isolated computation is necessary.",
+  "IMPORTANT — downloadable deliverables (report, PDF, Word, Excel, presentation): ALWAYS use a tool step with toolName='artifact.create' and input {title, format, blocks}. The runtime completes empty or missing blocks at execution time. A 'document' type step only drafts text and produces NO file — never use it as the final deliverable step.",
+  "For current-information needs (trends, news, prices, competitors), ALWAYS include a research step (web.search) instead of answering from memory.",
   "Never invent a tool name.",
   "Never claim that an external action was completed unless the corresponding tool step succeeds.",
   "Mark sideEffect=true and requiresApproval=true for destructive, financial, credential, account-security, publication, deletion, external-account or other irreversible actions.",
@@ -108,25 +110,76 @@ function normalizeSteps(rawSteps: unknown): unknown[] {
 }
 
 /**
- * Plan de repli déterministe : une seule étape llm portant l'objectif.
- * Toujours valide par construction — garantit qu'aucun plan invalide (en
- * particulier steps: []) n'atteint jamais le runtime, et que la demande de
- * l'utilisateur aboutit même quand le planificateur LLM déraille.
+ * Plan de repli déterministe CAPABLE : garantit qu'aucun plan invalide
+ * n'atteint le runtime, tout en préservant les intentions de service
+ * explicites. L'ancien repli (une seule étape llm) rendait le HITL
+ * inopérant — aucune étape outil, donc aucune approbation possible, et les
+ * livrables n'étaient jamais générés (audit 25-b D2).
+ *
+ * Les étapes outil injectées ici s'appuient sur la complétion au runtime
+ * (blocs du document rédigés à l'exécution) — toujours valide par construction.
  */
 function fallbackPlan(objective: string): RuntimePlan {
-  return RuntimePlanSchema.parse({
-    executionId: randomUUID(),
-    objective,
-    steps: [{
+  const available = new Set(GEN3IA_TOOLS.map((tool) => tool.name));
+  const lower = objective.toLowerCase();
+  const steps: Array<Record<string, unknown>> = [];
+
+  // Recherche d'information actuelle → étape research réelle (web.search).
+  const researchVerb = /\b(recherch\w*|cherch\w*|trouv\w*|renseign\w*|surveill\w*|compar\w*)\b/i;
+  const currentInfoSubject = /\b(tendances?|actualit[ée]s?|nouveaut[ée]s?|news|derni[èe]res? (informations|nouvelles|tendances|versions?|donn[ée]es)|march[ée]|concurrents?|concurrence|prix|tarifs?|m[ée]t[ée]o|r[ée]glementation)\b/i;
+  if (researchVerb.test(lower) && currentInfoSubject.test(lower) && available.has("web.search")) {
+    steps.push({
+      id: "step-research",
+      type: "research",
+      name: "Recherche web",
+      description: "Recherche d'informations à jour sur le web pour l'objectif demandé.",
+      toolName: "web.search",
+      input: { query: objective.slice(0, 300), maxResults: 8 },
+      dependencies: [],
+    });
+  }
+
+  // Livrable document explicite → étape tool artifact.create (blocs complétés
+  // au runtime), précédée d'une étape de rédaction qui capitalise la recherche.
+  const documentVerb = /\b(fais|pr[ée]par\w*|cr[ée]\w*|g[ée]n[èe]r\w*|r[ée]dig\w*|construis|produis|transforme|exporte)\b/i;
+  const documentObject = /\b(rapport|comptes? rendus?|note de synth[èe]se|pr[ée]sentation|diaporama|slides?|documents?|pdf|docx|word|excel|xlsx|powerpoint|pptx)\b/i;
+  if (documentVerb.test(lower) && documentObject.test(lower) && available.has("artifact.create")) {
+    const researchDone = steps.length > 0;
+    steps.push({
+      id: "step-draft",
+      type: "llm",
+      name: "Rédiger le contenu du livrable",
+      description: `Rédiger intégralement le contenu du document demandé : ${objective.slice(0, 200)}`,
+      input: { objective: objective.slice(0, 300) },
+      dependencies: researchDone ? ["step-research"] : [],
+    });
+    steps.push({
+      id: "step-deliverable",
+      type: "tool",
+      name: "Générer le document téléchargeable",
+      description: "Générer le fichier réel dans les livrables (blocs complétés au runtime si besoin).",
+      toolName: "artifact.create",
+      input: { title: objective.slice(0, 80), format: "pdf", blocks: [] },
+      dependencies: ["step-draft"],
+    });
+  }
+
+  if (steps.length === 0) {
+    steps.push({
       id: "step-1",
       type: "llm",
       name: "Traiter la demande",
       description: `Exécuter l'objectif suivant de façon autonome : ${objective.slice(0, 300)}`,
-      dependencies: [],
       input: { objective: objective.slice(0, 300) },
-    }],
+    });
+  }
+
+  return RuntimePlanSchema.parse({
+    executionId: randomUUID(),
+    objective,
+    steps,
     maxConcurrency: 1,
-    maxIterations: 1,
+    maxIterations: Math.max(steps.length, 1),
   });
 }
 

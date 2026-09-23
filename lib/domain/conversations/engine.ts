@@ -200,25 +200,78 @@ const IntentSchema = z.object({
 
 export type TurnIntent = z.infer<typeof IntentSchema>;
 
+export type ExplicitToolIntent =
+  | { toolName: "web.search"; query: string }
+  | { toolName: "artifact.create"; document: { title: string; format: "pdf" | "docx" | "xlsx" | "pptx" | "md" } };
+
 /**
- * Garde-fou déterministe : certaines demandes énoncent EXPLICITEMENT l'outil
- * attendu (« fais une recherche web… »). Si l'IA classe malgré tout la demande
- * en simple réponse (ou si sa décision est indisponible), cette heuristique
- * force un plan avec l'outil réel — la demande de l'utilisateur est loi.
+ * Garde-fou déterministe : certaines demandes énoncent EXPLICITEMENT le
+ * résultat attendu (recherche web réelle, document téléchargeable). Si l'IA
+ * classe malgré tout la demande en simple réponse (ou si sa décision est
+ * indisponible), cette heuristique force un plan avec l'outil réel — la
+ * demande de l'utilisateur est loi.
+ *
+ * Audits 25-a/25-d : « Recherche les dernières tendances… » produisait une
+ * réponse SANS sources (hallucination possible) et « Crée un PDF… » ne
+ * générait jamais de livrable — ces deux familles sont désormais routées.
  */
-export function detectExplicitToolIntent(message: string, catalog: ToolCatalogEntry[]): { toolName: string; query: string } | null {
+export function detectExplicitToolIntent(message: string, catalog: ToolCatalogEntry[]): ExplicitToolIntent | null {
   const lower = message.toLowerCase();
   const catalogNames = new Set(catalog.map((t) => t.name));
+
+  // 1) Recherche web explicite (« fais une recherche web », « search the web »).
   const webMarkers = /(recherche[s]? (web|internet)|cherche[rz]? (sur )?(le |la )?(web|internet)|fais[ez]? une recherche|search (the )?web|web search|sur (le|internet))\b/i;
   if (webMarkers.test(lower) && catalogNames.has("web.search")) {
-    return { toolName: "web.search", query: message.slice(0, 400) };
+    return { toolName: "web.search", query: extractSearchQuery(message) };
   }
+
+  // 2) Recherche d'information ACTUELLE : verbe d'action + sujet qui exige des
+  //    données à jour (tendances, actualités, prix, marché…) — une réponse de
+  //    mémoire serait une fabrication sans sources.
+  const researchVerb = /\b(recherch\w*|cherch\w*|trouv\w*|renseign\w*|surveill\w*|compar\w*|informe[rz]?)\b/i;
+  const currentInfoSubject = /\b(tendances?|actualit[ée]s?|nouveaut[ée]s?|news|derni[èe]res? (informations|nouvelles|tendances|versions?|donn[ée]es)|march[ée]|concurrents?|concurrence|prix|tarifs?|m[ée]t[ée]o|r[ée]glementation)\b/i;
+  if (researchVerb.test(lower) && currentInfoSubject.test(lower) && catalogNames.has("web.search")) {
+    return { toolName: "web.search", query: extractSearchQuery(message) };
+  }
+
+  // 3) Livrable document explicite (« prépare un rapport », « crée un PDF ») :
+  //    force un plan avec artifact.create — le moteur complète les blocs de
+  //    contenu à l'exécution (voir ensureArtifactInput).
+  const documentVerb = /\b(fais|pr[ée]par\w*|cr[ée]\w*|g[ée]n[èe]r\w*|r[ée]dig\w*|construis|produis|transforme|exporte)\b/i;
+  const documentObject = /\b(rapport|comptes? rendus?|note de synth[èe]se|pr[ée]sentation|diaporama|slides?|documents?|pdf|docx|word|excel|xlsx|powerpoint|pptx|tableau de bord)\b/i;
+  if (documentVerb.test(lower) && documentObject.test(lower) && catalogNames.has("artifact.create")) {
+    return {
+      toolName: "artifact.create",
+      document: { title: extractDocumentTitle(message), format: extractDocumentFormat(message) },
+    };
+  }
+
   const imageMarkers = /\b(g[eé]n[eè]re|cr[eé]e|dessine)\b.*\b(image|illustration|dessin|visuel)\b|\b(image|illustration)\b.*\b(g[eé]n[eè]r)\b/i;
   if (imageMarkers.test(lower) && catalogNames.has("artifact.create")) {
     // Les images sont traitées en amont par Agnes ; ici on ne force rien.
     return null;
   }
   return null;
+}
+
+/** Titre court d'un livrable dérivé de la demande (nettoyage des formules). */
+export function extractDocumentTitle(message: string): string {
+  const cleaned = message
+    .replace(/^(fais[ez]?|peux[- ]tu|pourrais[- ]tu|merci de|stp|s'il (te|vous) pla[eî]t)\s+/i, "")
+    .replace(/^(sur |about )+/i, "")
+    .replace(/^[^\p{L}\p{N}]+/u, "")
+    .trim();
+  return (cleaned || message.trim()).slice(0, 80);
+}
+
+/** Format de document demandé — déduction prudente, PDF par défaut. */
+export function extractDocumentFormat(message: string): "pdf" | "docx" | "xlsx" | "pptx" | "md" {
+  const lower = message.toLowerCase();
+  if (/\b(pr[ée]sentation|diaporama|slides?|powerpoint|pptx)\b/i.test(lower)) return "pptx";
+  if (/\b(excel|xlsx|tableau de bord|feuille de calcul)\b/i.test(lower)) return "xlsx";
+  if (/\b(word|docx)\b/i.test(lower)) return "docx";
+  if (/\b(markdown|\.md)\b/i.test(lower)) return "md";
+  return "pdf";
 }
 
 /** Requête condensée pour l'outil de recherche (nettoyage des formules). */
@@ -404,7 +457,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   if (intent.mode === "chat") {
     // Garde-fou : la demande exige explicitement un outil réel ?
     const explicit = detectExplicitToolIntent(input.message, catalog);
-    if (explicit) {
+    if (explicit?.toolName === "web.search") {
       intent = {
         mode: "plan",
         understanding: "Demande explicite d'actions réelles (recherche web).",
@@ -414,7 +467,28 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
             title: "Recherche web",
             detail: "Recherche réelle sur le web demandée explicitement par l'utilisateur.",
             toolName: explicit.toolName,
-            toolInput: { query: extractSearchQuery(input.message), maxResults: 8 },
+            toolInput: { query: explicit.query, maxResults: 8 },
+          },
+        ],
+      };
+    } else if (explicit?.toolName === "artifact.create") {
+      // Livrable document explicite : plan en deux temps — la rédaction du
+      // contenu est finalisée par le moteur (ensureArtifactInput), puis
+      // artifact.create produit le fichier réel (pdf/docx/xlsx/pptx).
+      intent = {
+        mode: "plan",
+        understanding: "Demande explicite d'un livrable document téléchargeable.",
+        objective: input.message.slice(0, 400),
+        steps: [
+          {
+            title: `Rédaction du contenu (${explicit.document.format})`,
+            detail: "Rédige un contenu structuré et complet pour le document demandé.",
+          },
+          {
+            title: `Création du document « ${explicit.document.title} »`,
+            detail: "Génère le fichier téléchargeable et le range dans les livrables de la conversation.",
+            toolName: "artifact.create",
+            toolInput: { title: explicit.document.title, format: explicit.document.format },
           },
         ],
       };
@@ -606,6 +680,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 /* ------------------------------------------------------------------ */
 
 async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
   try {
     const image = await generateImageWithAgnes({ prompt: extractImagePrompt(ctx.message) });
     const assistantMessage = await appendMessage({
@@ -627,6 +702,11 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       url: image.imageUrl,
       note: `Généré avec ${image.model}`,
     });
+    // Contrat de flux complet : le client doit recevoir la même séquence
+    // d'événements que les autres tours (audit 25-a : message_complete et
+    // artifact_created manquaient sur le tour image).
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    await onEvent({ type: "artifact_created", artifact });
     return {
       conversationId: ctx.conversationId,
       userMessage: ctx.userMessage,
@@ -646,6 +726,7 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       content: message,
       generationStatus: "failed",
     });
+    await onEvent({ type: "message_complete", message: assistantMessage });
     return {
       conversationId: ctx.conversationId,
       userMessage: ctx.userMessage,
@@ -662,6 +743,85 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
 /* ------------------------------------------------------------------ */
 
 const TOOL_OUTPUT_ARTIFACTS: ReadonlySet<string> = new Set(["artifact.create", "file.create", "zip.create"]);
+
+/* ------------------------------------------------------------------ */
+/* Completion du contenu des livrables (artifact.create)               */
+/* ------------------------------------------------------------------ */
+
+const DocumentBlocksSchema = z.object({
+  title: z.string().min(1).max(300),
+  format: z.enum(["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html"]),
+  blocks: z.array(
+    z.object({
+      type: z.enum(["title", "heading", "paragraph", "list", "table", "code", "quote", "pageBreak"]),
+      text: z.string().max(200_000).optional(),
+      level: z.number().int().min(1).max(6).optional(),
+      ordered: z.boolean().optional(),
+      items: z.array(z.string().max(20_000)).max(2_000).optional(),
+      columns: z.array(z.string().max(10_000)).max(1_000).optional(),
+      rows: z.array(z.array(z.string().max(10_000)).max(1_000)).max(2_000).optional(),
+      language: z.string().max(100).optional(),
+    }),
+  ).min(1).max(2_000),
+});
+
+/**
+ * Complète l'entrée d'artifact.create quand le plan ne contient pas les blocs
+ * du document : l'IA d'intention ne peut pas pré-rédiger tout un document dans
+ * son budget de tokens. Un appel de rédaction dédié produit le contenu
+ * intégral, puis l'outil génère le fichier réel (pdf/docx/xlsx/pptx).
+ * Retourne null si la rédaction est impossible — l'étape est alors ignorée
+ * avec une raison claire (jamais de fichier vide ou corrompu).
+ */
+async function ensureArtifactInput(
+  ctx: TurnContext,
+  planned: { title: string; detail?: string },
+  toolInput: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const hasTitle = typeof toolInput.title === "string" && toolInput.title.trim().length > 0;
+  const blocks = Array.isArray(toolInput.blocks) ? (toolInput.blocks as unknown[]) : [];
+  if (hasTitle && blocks.length > 0) return toolInput;
+
+  try {
+    const result = await withTimeout(
+      runAIJSON({
+        userId: ctx.userId,
+        feature: "conversation-turn",
+        task: "chat",
+        system:
+          "Tu rédiges le contenu d'un document professionnel pour l'utilisateur de Gen3ia. " +
+          "Tu produis un objet JSON : title (titre court du document), format, blocks (sections). " +
+          "Blocs disponibles : title (une seule fois, en premier), heading (sections), paragraph (texte rédigé), " +
+          "list (puces {items}), table ({columns, rows}) si des données le justifient, quote, pageBreak. " +
+          "Le contenu doit être rédigé intégralement et de façon professionnelle : jamais de placeholder, " +
+          "jamais de « … », jamais de section vide.",
+        prompt:
+          `Demande de l'utilisateur : ${ctx.message.slice(0, 2000)}\n` +
+          `Objectif du plan : ${ctx.intent.objective ?? "(celui de la demande)"}\n` +
+          `Étape : ${planned.title}${planned.detail ? ` — ${planned.detail}` : ""}\n` +
+          `Format attendu : ${typeof toolInput.format === "string" ? toolInput.format : "pdf"}\n` +
+          `Titre proposé : ${hasTitle ? String(toolInput.title) : "(à déduire de la demande)"}` +
+          `${ctx.priorHistory.length > 0 ? `\n\nContexte récent de la conversation :\n${historyForModel(ctx.priorHistory, 4).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 400)}`).join("\n")}` : ""}`,
+        schema: DocumentBlocksSchema,
+        label: "redaction-livrable",
+        maxTokens: 6000,
+      }),
+      INTENT_BUDGET_MS,
+      "rédaction du livrable",
+    );
+    const generated = result.data;
+    return {
+      ...toolInput,
+      title: hasTitle ? String(toolInput.title) : generated.title,
+      format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
+      blocks: generated.blocks,
+    };
+  } catch {
+    // Rédaction indisponible (timeout, fournisseur saturé) : l'étape sera
+    // ignorée proprement avec un message clair pour l'utilisateur.
+    return null;
+  }
+}
 
 async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
@@ -780,12 +940,26 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 
     if (toolName) {
       const startedAt = new Date().toISOString();
+      let toolInput = (planned.toolInput ?? {}) as Record<string, unknown>;
+      if (toolName === "artifact.create") {
+        // Le contenu du livrable est finalisé juste avant la génération du
+        // fichier : jamais de document vide ni d'échec zod opaque.
+        const completed = await ensureArtifactInput(ctx, planned, toolInput);
+        if (!completed) {
+          step.status = "skipped";
+          step.detail = `${step.detail ? `${step.detail}\n` : ""}Contenu du livrable indisponible (rédaction impossible pour le moment) — aucun fichier créé.`.trim();
+          step.finishedAt = new Date().toISOString();
+          await onEvent({ type: "step_update", runId: run.id, step });
+          continue;
+        }
+        toolInput = completed;
+      }
       const result = await executeTool({
         userId: ctx.userId,
         executionId: run.id,
         projectId: ctx.projectId,
         toolName,
-        input: planned.toolInput ?? {},
+        input: toolInput,
         policy: CONVERSATION_EXECUTION_POLICY,
       });
       step.startedAt = startedAt;

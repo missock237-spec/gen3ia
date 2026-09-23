@@ -18,7 +18,9 @@ interface SearchHit {
   content: string;
   createdAt: string;
   agentId?: string;
+  key?: string;
   score: number;
+  source?: "episodic" | "keyvalue";
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -29,6 +31,8 @@ const TYPE_LABELS: Record<string, string> = {
   execution: "Exécution",
   artifact: "Livrable",
   project: "Projet",
+  // Souvenirs clé/valeur du panneau « Mémoire permanente » (recherche sous-chaîne).
+  keyvalue: "Clé/valeur",
 };
 
 const EXAMPLES = [
@@ -119,6 +123,11 @@ export function SemanticSearchPanel() {
                   <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-700">
                     {TYPE_LABELS[hit.type] ?? hit.type}
                   </span>
+                  {hit.key && (
+                    <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-neutral-600">
+                      {hit.key}
+                    </span>
+                  )}
                   {hit.createdAt ? <span className="text-xs text-neutral-400">{hit.createdAt.slice(0, 10)}</span> : null}
                   <span className="ml-auto text-xs font-semibold text-neutral-400">{Math.round(hit.score * 100)}% de correspondance</span>
                 </div>

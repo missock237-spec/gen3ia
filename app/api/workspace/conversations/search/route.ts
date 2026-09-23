@@ -56,6 +56,14 @@ interface SearchConversationResult {
 
 const MIN_SEMANTIC_QUERY_LENGTH = 3;
 
+/**
+ * Score de similarité minimal (cosinus) pour retenir un hit sémantique :
+ * sans seuil, la recherche renvoyait TOUTES les conversations (scores
+ * ~0,06 !) et noyait la pertinence (audit 25-a). Sous ce plancher, on
+ * bascule sur le repli textuel, plus honnête.
+ */
+const MIN_SEMANTIC_SCORE = 0.25;
+
 const MAX_RESULTS = 10;
 
 async function chargerConversations(
@@ -134,7 +142,11 @@ export async function GET(request: NextRequest) {
       });
 
       if (hits !== null && hits.length > 0) {
-        const best = meilleursHitsParConversation(hits).slice(0, MAX_RESULTS);
+        // Seuil de pertinence : les hits trop éloignés de la requête sont
+        // écartés (le meilleur hit d'une conversation hors sujet à 0,1 ne
+        // doit pas évincer le repli textuel).
+        const relevant = hits.filter((hit) => hit.score >= MIN_SEMANTIC_SCORE);
+        const best = meilleursHitsParConversation(relevant).slice(0, MAX_RESULTS);
         const conversations = await chargerConversations(
           user.uid,
           best.map((h) => h.conversationId),

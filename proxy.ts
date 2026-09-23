@@ -21,6 +21,25 @@ const CONTENT_SECURITY_POLICY = [
 
 const CLIENT_ACCESS_COOKIE = "gen3ia_client_access";
 
+// Identifiant de corrélation de bout en bout (audit 25-a : les réponses
+// /api/* ne portaient aucun trace-id, impossible de relier un log serveur
+// à une requête client). Même grammaire que lib/observability/logger.ts
+// (requestTraceId) mais en logique autonome : le module logger importe
+// "server-only", interdit dans le runtime Edge du proxy.
+const TRACE_HEADER = "x-gen3ia-trace-id";
+const TRACE_ID_RE = /^[a-zA-Z0-9_-]{8,64}$/;
+
+/** Id entrant réutilisé s'il est sain (anti-injection dans les logs), sinon remplacé. */
+function traceIdEntrant(request: NextRequest): string | undefined {
+  const value = request.headers.get(TRACE_HEADER)?.trim();
+  return value && TRACE_ID_RE.test(value) ? value : undefined;
+}
+
+/** Id court unique, même format que requestTraceId (logger serveur). */
+function genererTraceId(): string {
+  return `trc_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function isClientRoute(pathname: string) {
   return /^\/client\/[^/]+$/.test(pathname);
 }
@@ -54,6 +73,15 @@ export function proxy(request: NextRequest) {
   requestHeaders.set("x-gen3ia-device-os", device.os);
   requestHeaders.set("x-gen3ia-device-app", device.isDesktopApp ? "desktop-app" : "web");
 
+  // Corrélation : on réutilise l'id de l'appelant s'il est sain, sinon on
+  // en génère un. Propagé aux routes API via les request headers ET écho
+  // sur TOUTES les réponses /api/* (surveillance externe + support).
+  const isApiRoute = pathname.startsWith("/api/");
+  const traceId = traceIdEntrant(request) ?? genererTraceId();
+  if (isApiRoute) {
+    requestHeaders.set(TRACE_HEADER, traceId);
+  }
+
   const response = NextResponse.next({ request: { headers: requestHeaders } });
 
   if (isClientEntry) {
@@ -65,6 +93,9 @@ export function proxy(request: NextRequest) {
     });
   }
 
+  if (isApiRoute) {
+    response.headers.set(TRACE_HEADER, traceId);
+  }
   response.headers.set("X-Gen3ia-Device", device.type);
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");

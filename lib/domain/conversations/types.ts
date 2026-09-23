@@ -131,7 +131,7 @@ export interface ConversationRun {
 /* Approval — validation inline                                        */
 /* ------------------------------------------------------------------ */
 
-export type ApprovalStatus = "pending" | "approved" | "rejected";
+export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired";
 
 export interface ConversationApproval {
   id: string;
@@ -150,6 +150,8 @@ export interface ConversationApproval {
   estimatedCost: string;
   risk: string;
   status: ApprovalStatus;
+  /** Limite de décision : au-delà, la validation expire (contexte obsolète). */
+  expiresAt?: string;
   decidedAt?: string;
   createdAt: string;
 }

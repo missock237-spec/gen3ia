@@ -5,6 +5,7 @@ import { createDefaultToolRegistry } from "./default-registry";
 import type { ToolCall, ToolContext, ToolResult } from "./types";
 import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/execution-policy";
 import { authorizeTool } from "@/lib/security/tool-permissions";
+import { assertExecutionNotStopped } from "@/lib/security/emergency-stop";
 import { executeSandbox } from "@/lib/sandbox/client";
 import type { SandboxLimits, SandboxRuntime } from "@/lib/sandbox/types";
 
@@ -43,10 +44,50 @@ function parseSandboxInput(input: unknown) {
   return { runtime: value.runtime as SandboxRuntime, code: value.code, input: value.input, limits };
 }
 
+/** Piste d'audit inopérante = ne doit JAMAIS interrompre l'exécution métier. */
+async function auditToolExecutionSafe(params: {
+  userId: string;
+  executionId: string;
+  projectId?: string;
+  toolName: string;
+  input: unknown;
+  status: ToolResult["status"];
+  output?: unknown;
+  error?: string;
+  latencyMs: number;
+}): Promise<void> {
+  try {
+    await recordToolAudit({
+      userId: params.userId,
+      executionId: params.executionId,
+      projectId: params.projectId,
+      toolId: params.toolName,
+      input: params.input,
+      result: {
+        callId: `exec_${params.executionId}_${params.toolName}`,
+        toolId: params.toolName,
+        status: params.status,
+        ...(params.output !== undefined ? { output: params.output } : {}),
+        ...(params.error ? { error: params.error } : {}),
+        latencyMs: params.latencyMs,
+        executedAt: new Date().toISOString(),
+      },
+    });
+  } catch (auditError) {
+    console.warn("[tools] audit non persisté:", auditError instanceof Error ? auditError.message : auditError);
+  }
+}
+
 export async function executeTool(request: ExecuteToolRequest) {
   const policy = request.policy ?? DEFAULT_EXECUTION_POLICY;
+  const startedAt = Date.now();
 
   try {
+    // Kill switch utilisateur : l'arrêt d'urgence s'applique à TOUTES les
+    // surfaces d'exécution (moteur conversationnel, /api/tools/execute…).
+    // Audit 25-c : l'interrupteur n'était branché que sur le runtime agents.
+    await assertExecutionNotStopped({ userId: request.userId, executionId: request.executionId });
+
     authorizeTool(policy, request.toolName);
     if (request.signal?.aborted) throw new Error("Execution cancelled");
 
@@ -61,11 +102,33 @@ export async function executeTool(request: ExecuteToolRequest) {
         limits: sandbox.limits,
         network: "none",
       });
+      await auditToolExecutionSafe({
+        userId: request.userId,
+        executionId: request.executionId,
+        projectId: request.projectId,
+        toolName: request.toolName,
+        input: request.input,
+        status: "success",
+        output: "[sandbox result]",
+        latencyMs: Date.now() - startedAt,
+      });
       return { success: true, output: result };
     }
 
     const tool = toolRegistry.get(request.toolName);
-    if (!tool) return { success: false, error: `Unknown tool: ${request.toolName}` };
+    if (!tool) {
+      await auditToolExecutionSafe({
+        userId: request.userId,
+        executionId: request.executionId,
+        projectId: request.projectId,
+        toolName: request.toolName,
+        input: request.input,
+        status: "failed",
+        error: `Unknown tool: ${request.toolName}`,
+        latencyMs: Date.now() - startedAt,
+      });
+      return { success: false, error: `Unknown tool: ${request.toolName}` };
+    }
     const parsedInput = tool.inputSchema.parse(request.input);
     const output = await tool.execute(parsedInput, {
       userId: request.userId,
@@ -73,9 +136,30 @@ export async function executeTool(request: ExecuteToolRequest) {
       projectId: request.projectId,
       signal: request.signal,
     });
+    await auditToolExecutionSafe({
+      userId: request.userId,
+      executionId: request.executionId,
+      projectId: request.projectId,
+      toolName: request.toolName,
+      input: request.input,
+      status: "success",
+      output: "[tool output]",
+      latencyMs: Date.now() - startedAt,
+    });
     return { success: true, output };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Tool execution failed" };
+    const message = error instanceof Error ? error.message : "Tool execution failed";
+    await auditToolExecutionSafe({
+      userId: request.userId,
+      executionId: request.executionId,
+      projectId: request.projectId,
+      toolName: request.toolName,
+      input: request.input,
+      status: "failed",
+      error: message,
+      latencyMs: Date.now() - startedAt,
+    });
+    return { success: false, error: message };
   }
 }
 

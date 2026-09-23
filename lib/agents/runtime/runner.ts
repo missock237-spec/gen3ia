@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import { generateForUser } from "@/lib/billing/ai-execution";
 import { getWallet, WALLET_CURRENCY } from "@/lib/billing/wallet";
 import { executeToolSecurely } from "./secure-tool-executor";
@@ -8,6 +9,58 @@ import { createCheckpoint, saveCheckpoint } from "./checkpoint";
 import { getReadySteps, validateDAG } from "./dag";
 import { RuntimeScheduler } from "./scheduler";
 import { assertNotPaused } from "./pause";
+
+/* ------------------------------------------------------------------ */
+/* Completion des livrables document (artifact.create)                 */
+/* ------------------------------------------------------------------ */
+
+const ARTIFACT_PLAN_SYSTEM =
+  "Tu rédiges le contenu d'un document professionnel pour l'utilisateur de Gen3ia. " +
+  "Tu produis UNIQUEMENT un objet JSON : { title: string, format: string, blocks: array }. " +
+  "Blocs disponibles : { type: \"title\", text } (une seule fois, en premier), { type: \"heading\", text, level }, " +
+  "{ type: \"paragraph\", text } (contenu rédigé intégralement), { type: \"list\", items: [] }, " +
+  "{ type: \"table\", columns: [], rows: [[]] }, { type: \"quote\", text }, { type: \"code\", text, language }, { type: \"pageBreak\" }. " +
+  "Le contenu doit être complet, professionnel et exploitable : jamais de placeholder, jamais de section vide.";
+
+const ARTIFACT_PLAN_SCHEMA = z.object({
+  title: z.string().min(1).max(300),
+  format: z.enum(["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html"]),
+  blocks: z.array(
+    z.object({
+      type: z.enum(["title", "heading", "paragraph", "list", "table", "code", "quote", "pageBreak"]),
+      text: z.string().max(200_000).optional(),
+      level: z.number().int().min(1).max(6).optional(),
+      ordered: z.boolean().optional(),
+      items: z.array(z.string().max(20_000)).max(2_000).optional(),
+      columns: z.array(z.string().max(10_000)).max(1_000).optional(),
+      rows: z.array(z.array(z.string().max(10_000)).max(1_000)).max(2_000).optional(),
+      language: z.string().max(100).optional(),
+    }),
+  ).min(1).max(2_000),
+});
+
+/** Extrait l'objet JSON d'une réponse modèle (fences markdown tolérées). */
+function extractJsonCandidate(raw: string): unknown {
+  const text = raw.trim();
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidates = [fenced?.[1]?.trim(), text].filter((value): value is string => Boolean(value));
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      const start = candidate.indexOf("{");
+      const end = candidate.lastIndexOf("}");
+      if (start >= 0 && end > start) {
+        try {
+          return JSON.parse(candidate.slice(start, end + 1));
+        } catch {
+          /* candidat suivant */
+        }
+      }
+    }
+  }
+  throw new Error("Le contenu du livrable n'est pas un JSON valide.");
+}
 
 /**
  * Configuration d'un agent personnalise du Studio. Injectee dans chaque step
@@ -205,7 +258,59 @@ export class AgentRuntime {
       if (!input.arguments || typeof input.arguments !== "object" || Array.isArray(input.arguments)) input.arguments = {};
       toolName = "composio.execute";
     }
+    if (toolName === "artifact.create") {
+      // Le contenu du livrable est finalisé juste avant la génération du
+      // fichier — jamais de document vide ni d'échec zod opaque.
+      const completedInput = await this.completeArtifactInput(step, input);
+      return executeToolSecurely({ userId: this.state.userId, projectId: this.projectId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName, input: completedInput, approvalId, policy: this.policy, signal: this.signal });
+    }
     return executeToolSecurely({ userId: this.state.userId, projectId: this.projectId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName, input, approvalId, policy: this.policy, signal: this.signal });
+  }
+
+  /**
+   * Complète les blocs d'un livrable (artifact.create) quand le plan ne les
+   * contient pas : un appel de rédaction dédié produit le contenu intégral
+   * avant la génération du fichier. Audits 25-b/25-d : les plans « 100% llm »
+   * laissaient artifact.create sans entrée valide — le livrable n'était
+   * jamais généré.
+   */
+  private async completeArtifactInput(step: RuntimeStep, input: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const blocks = Array.isArray(input.blocks) ? (input.blocks as unknown[]) : [];
+    if (blocks.length > 0 && typeof input.title === "string" && input.title.trim().length > 0) return input;
+
+    const dependencies = this.getDependencyOutputs(step);
+    const billed = await generateForUser({
+      userId: this.state.userId,
+      executionId: this.state.executionId,
+      complexity: 1,
+      request: {
+        task: "document",
+        ...(AgentRuntime.safeProvider(this.agentConfig?.provider) ? { provider: AgentRuntime.safeProvider(this.agentConfig?.provider) } : {}),
+        ...(this.agentConfig?.model ? { model: this.agentConfig.model } : {}),
+        messages: [
+          { role: "system", content: ARTIFACT_PLAN_SYSTEM },
+          { role: "user", content: JSON.stringify({ objective: this.state.objective, step: { name: step.name, description: step.description, input: step.input }, dependencies, requestedFormat: typeof input.format === "string" ? input.format : "pdf" }) },
+        ],
+        maxTokens: 6000,
+      },
+    });
+    this.state.billing.totalChargeMinor += billed.chargeMinor;
+    this.state.billing.totalProviderCostEur += billed.providerCostEur;
+    this.state.billing.llmInputTokens += billed.response.usage.inputTokens;
+    this.state.billing.llmOutputTokens += billed.response.usage.outputTokens;
+
+    let documentPlan: z.infer<typeof ARTIFACT_PLAN_SCHEMA>;
+    try {
+      documentPlan = ARTIFACT_PLAN_SCHEMA.parse(extractJsonCandidate(billed.response.text));
+    } catch (error) {
+      throw new Error(`Le contenu du livrable n'a pas pu être rédigé : ${error instanceof Error ? error.message.slice(0, 200) : "réponse non structurée"}`);
+    }
+    return {
+      ...input,
+      title: typeof input.title === "string" && input.title.trim().length > 0 ? input.title : documentPlan.title,
+      format: typeof input.format === "string" && input.format.length > 0 ? input.format : documentPlan.format,
+      blocks: documentPlan.blocks,
+    };
   }
 
   private async executeCode(step: RuntimeStep): Promise<unknown> {
