@@ -155,7 +155,7 @@ export default function SettingsNumbersPage() {
       {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
       {message && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{message}</div>}
 
-      <section className="mb-6 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5">
+      <section className="mb-6 rounded-2xl border border-[var(--g3-border)] bg-white p-5">
         <h2 className="mb-3 text-base font-bold">Mes numéros</h2>
         {owned.length === 0 ? (
           <p className="text-sm text-neutral-500">Aucun numéro. Recherchez un numéro disponible ci-dessous.</p>
@@ -181,7 +181,7 @@ export default function SettingsNumbersPage() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5">
+      <section className="rounded-2xl border border-[var(--g3-border)] bg-white p-5">
         <h2 className="mb-3 text-base font-bold">Acheter un numéro</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           <div>

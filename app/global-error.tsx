@@ -19,7 +19,7 @@ export default function GlobalRouteError({
   return (
     <html lang="fr">
       <body style={{ margin: 0, fontFamily: "system-ui, sans-serif" }}>
-        <div style={{ minHeight: "100vh", background: "#f6f4ef", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+        <div style={{ minHeight: "100vh", background: "var(--g3-bg, #fafafa)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
           <div style={{ maxWidth: 480, width: "100%", background: "#fff", borderRadius: 24, padding: 32, textAlign: "center", border: "1px solid rgba(23,23,20,0.09)", boxShadow: "0 14px 40px -18px rgba(28,27,24,0.22)" }}>
             <div style={{ width: 56, height: 56, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 16, background: "#fee2e2", fontSize: 28 }}>⚠️</div>
             <h1 style={{ marginTop: 20, fontSize: 22, fontWeight: 600, color: "#171714" }}>Une erreur inattendue est survenue</h1>

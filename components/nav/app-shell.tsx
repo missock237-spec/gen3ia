@@ -33,7 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             onClick={() => window.dispatchEvent(new Event("gen3ia:open-nav"))}
             className="g3-mobile-menu"
           >
-            <span aria-hidden="true">☰</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10" /></svg>
           </button>
         </>
       )}

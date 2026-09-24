@@ -8,6 +8,8 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { bootstrapBucketCors } from "@/lib/storage/permanent-user-storage";
+import { timingSafeEqualString } from "@/lib/security/edge-guards";
+import { clientIp, enforceRateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,8 +23,17 @@ export const dynamic = "force-dynamic";
  * bucket applicatif et cycle put/get/delete.
  */
 export async function GET(request: NextRequest) {
+  // Anti force brute : 10 tentatives / 15 min / IP, avant toute comparaison.
+  const limit = await enforceRateLimit(`r2-diag:${clientIp(request)}`, { limit: 10, windowMs: 15 * 60 * 1000 });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Trop de tentatives." },
+      { status: 429, headers: { "retry-after": String(Math.ceil(limit.retryAfterMs / 1000)) } },
+    );
+  }
   const expected = process.env.R2_DIAG_SECRET;
-  if (!expected || request.headers.get("x-diag-secret") !== expected) {
+  // Comparaison à temps constant et secret d'au moins 24 caractères exigé.
+  if (!expected || expected.length < 24 || !timingSafeEqualString(request.headers.get("x-diag-secret"), expected)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

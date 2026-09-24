@@ -31,75 +31,78 @@ export function ApprovalCard({ approval, onDecide, disabled = false }: ApprovalC
     }
   };
 
+  const pending = approval.status === "pending";
+  const riskTone = /élev|high|crit/i.test(approval.risk)
+    ? "bg-red-50 text-red-700 border-red-200"
+    : /moy|medium/i.test(approval.risk)
+      ? "bg-amber-50 text-amber-800 border-amber-200"
+      : "bg-emerald-50 text-emerald-700 border-emerald-200";
+
   return (
     <div
-      className={`my-2 rounded-xl border p-3.5 ${approval.status === "pending" ? "border-amber-300 bg-amber-50/60" : "border-neutral-200 bg-white"}`}
+      className={`my-2 overflow-hidden rounded-xl border bg-[var(--g3-surface)] shadow-[var(--g3-shadow-sm)] ${pending ? "border-amber-300 ring-4 ring-amber-100/70" : "border-[var(--g3-border)]"}`}
       data-approval-id={approval.id}
       data-status={approval.status}
-      role={approval.status === "pending" ? "alert" : undefined}
+      role={pending ? "alert" : undefined}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
-          <span aria-hidden className="grid size-6 place-items-center rounded-full bg-amber-100 text-xs text-amber-700">⚖</span>
-          {approval.title}
+      <div className={`flex flex-wrap items-center justify-between gap-2 px-4 py-3 ${pending ? "bg-amber-50/70" : ""}`}>
+        <p className="flex min-w-0 items-center gap-2.5 text-[13.5px] font-semibold text-[var(--g3-ink)]">
+          <span aria-hidden className="grid size-7 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-700">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M12 8v4M12 16h.01" /></svg>
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[11px] font-medium text-amber-700">Validation requise</span>
+            <span className="block truncate">{approval.title}</span>
+          </span>
         </p>
-        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${APPROVAL_STATUS_STYLES[approval.status]}`}>
+        <span className={`rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${APPROVAL_STATUS_STYLES[approval.status]}`}>
           {APPROVAL_STATUS_LABELS[approval.status]}
         </span>
       </div>
 
-      <dl className="mt-2.5 grid grid-cols-1 gap-1.5 text-[11px] leading-relaxed sm:grid-cols-2">
-        <div>
-          <dt className="font-medium text-neutral-500">Outil utilisé</dt>
-          <dd className="font-mono text-neutral-800">{approval.toolName}</dd>
+      <dl className="grid grid-cols-2 gap-px border-y border-[var(--g3-border)] bg-[var(--g3-border)] text-[12px] sm:grid-cols-4">
+        <div className="bg-[var(--g3-surface)] px-4 py-2.5">
+          <dt className="text-[11px] text-[var(--g3-muted)]">Outil</dt>
+          <dd className="mt-0.5 truncate font-mono text-[11.5px] text-[var(--g3-ink)]" title={approval.toolName}>{approval.toolName}</dd>
         </div>
-        <div>
-          <dt className="font-medium text-neutral-500">Coût estimé</dt>
-          <dd className="text-neutral-800">{approval.estimatedCost || "gratuit"}</dd>
+        <div className="bg-[var(--g3-surface)] px-4 py-2.5">
+          <dt className="text-[11px] text-[var(--g3-muted)]">Coût estimé</dt>
+          <dd className="mt-0.5 font-medium tabular-nums text-[var(--g3-ink)]">{approval.estimatedCost || "Gratuit"}</dd>
         </div>
-        <div>
-          <dt className="font-medium text-neutral-500">Données concernées</dt>
-          <dd className="text-neutral-800">{approval.dataScope || "—"}</dd>
+        <div className="bg-[var(--g3-surface)] px-4 py-2.5">
+          <dt className="text-[11px] text-[var(--g3-muted)]">Données</dt>
+          <dd className="mt-0.5 truncate text-[var(--g3-ink)]" title={approval.dataScope}>{approval.dataScope || "—"}</dd>
         </div>
-        <div>
-          <dt className="font-medium text-neutral-500">Niveau de risque</dt>
-          <dd className="text-neutral-800">{approval.risk}</dd>
+        <div className="bg-[var(--g3-surface)] px-4 py-2.5">
+          <dt className="text-[11px] text-[var(--g3-muted)]">Risque</dt>
+          <dd className="mt-0.5"><span className={`rounded-full border px-1.5 py-px text-[10.5px] font-medium ${riskTone}`}>{approval.risk}</span></dd>
         </div>
       </dl>
 
       {approval.impact && (
-        <p className="mt-2 rounded-lg bg-white/80 px-2.5 py-2 text-xs leading-relaxed text-neutral-700">
-          <span className="font-medium">Impact : </span>
+        <p className="px-4 pt-3 text-[13px] leading-relaxed text-[var(--g3-ink-2)]">
+          <span className="font-medium text-[var(--g3-ink)]">Impact : </span>
           {approval.impact}
         </p>
       )}
 
       {!decided && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => decide("approved")}
-            disabled={disabled || busy}
-            className="g3-btn g3-btn-primary text-xs"
-          >
-            {busy ? "Exécution…" : "Approuver l'action"}
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+          <button type="button" onClick={() => decide("approved")} disabled={disabled || busy} className="g3-btn g3-btn-primary !h-8 text-xs">
+            {busy ? "Exécution…" : "Approuver et exécuter"}
           </button>
-          <button
-            type="button"
-            onClick={() => decide("rejected")}
-            disabled={disabled || busy}
-            className="g3-btn g3-btn-danger text-xs"
-          >
+          <button type="button" onClick={() => decide("rejected")} disabled={disabled || busy} className="g3-btn g3-btn-ghost !h-8 text-xs">
             Rejeter
           </button>
+          <span className="ml-auto text-[11px] text-[var(--g3-subtle)]">Rien ne sera exécuté sans votre accord.</span>
         </div>
       )}
 
       {approval.status === "approved" && approval.decidedAt && (
-        <p className="mt-2 text-[11px] text-emerald-700">✓ Approuvée — l&apos;action a été exécutée dans cette conversation.</p>
+        <p className="px-4 py-3 text-[12px] text-emerald-700">Approuvée — l&apos;action a été exécutée dans cette conversation.</p>
       )}
       {approval.status === "rejected" && (
-        <p className="mt-2 text-[11px] text-red-600">✕ Rejetée — aucune donnée n&apos;a été transmise.</p>
+        <p className="px-4 py-3 text-[12px] text-red-600">Rejetée — aucune donnée n&apos;a été transmise.</p>
       )}
     </div>
   );

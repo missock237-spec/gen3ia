@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { commandIndexForRole } from "./nav-items";
+import { NavIcon } from "@/components/ui/nav-icon";
 
 type PaletteItem = {
   href: string;
@@ -83,7 +84,7 @@ export function CommandPalette({
       <button type="button" className="g3-command-backdrop" onClick={onClose} aria-label="Fermer" />
       <div className="g3-command-panel">
         <div className="g3-command-search">
-          <span aria-hidden="true">⌕</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
           <input
             autoFocus
             value={query}
@@ -125,7 +126,7 @@ export function CommandPalette({
               onClick={() => goTo(item.href)}
               className={"g3-command-item " + (index === cursor ? "is-cursor" : "")}
             >
-              <span className="g3-side-icon">{item.icon}</span>
+              <span className="g3-side-icon"><NavIcon glyph={item.icon} href={item.href} /></span>
               <span className="flex-1 text-left">{item.label}</span>
               <span className="g3-command-group">{item.group}</span>
               {active(item.href) && <span className="g3-command-current">Actuel</span>}

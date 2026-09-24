@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function IntegrationsPage() {
   return (
-    <div className="min-h-full bg-[#f6f4ef] text-neutral-900">
+    <div className="min-h-full bg-[var(--g3-bg)] text-neutral-900">
       <IntegrationsWorkspace />
     </div>
   );

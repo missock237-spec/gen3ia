@@ -66,19 +66,19 @@ export function ContextDrawer({
   return (
     <aside className="hidden h-full w-full flex-col gap-3 overflow-hidden lg:flex" aria-label="Contexte de la conversation">
       <div className="flex items-center justify-between gap-2">
-        <p className="g3-eyebrow !text-[10px]">Contexte</p>
+        <p className="text-[13px] font-semibold text-[var(--g3-ink)]">Contexte</p>
         <button
           type="button"
           onClick={onToggle}
-          className="text-xs text-neutral-400 hover:text-neutral-700"
+          className="grid size-7 place-items-center rounded-md text-[var(--g3-muted)] transition-colors hover:bg-[var(--g3-surface-2)] hover:text-[var(--g3-ink)]"
           title="Replier le panneau"
           aria-label="Replier le panneau de contexte"
         >
-          »
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       </div>
 
-      <div className="g3-card !p-3">
+      <div className="rounded-lg border border-[var(--g3-border)] bg-[var(--g3-bg)] p-3">
         <p className="truncate text-xs font-semibold text-neutral-800" title={conversationTitle}>
           {conversationTitle || "Sans titre"}
         </p>
@@ -90,7 +90,7 @@ export function ContextDrawer({
         )}
       </div>
 
-      <div className="g3-tabs" role="tablist">
+      <div className="g3-tabs w-full" role="tablist">
         {(
           [
             { id: "plan", label: `Plan${pending.length > 0 ? ` (${pending.length})` : ""}` },
@@ -120,7 +120,7 @@ export function ContextDrawer({
                 <RunTimeline run={latestRun} />
                 {pending.map((approval) => (
                   <div key={approval.id} className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
-                    <p className="text-xs font-semibold text-neutral-900">⚖ {approval.title}</p>
+                    <p className="text-xs font-semibold text-[var(--g3-ink)]">{approval.title}</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-neutral-600">{approval.impact}</p>
                     <p className="mt-1 font-mono text-[10px] text-neutral-500">{approval.toolName}</p>
                     <button
@@ -161,7 +161,7 @@ export function ContextDrawer({
               ) : (
                 <ul className="mt-1 space-y-1">
                   {runs.map((run) => (
-                    <li key={run.id} className="flex items-center justify-between gap-2 rounded-lg bg-neutral-50 px-2 py-1.5">
+                    <li key={run.id} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--g3-bg)] px-2 py-1.5">
                       <span className="truncate">{run.objective}</span>
                       <span className={`shrink-0 rounded-full border px-1.5 text-[9px] ${RUN_STATUS_STYLES[run.status]}`}>
                         {RUN_STATUS_LABELS[run.status]}
@@ -178,7 +178,7 @@ export function ContextDrawer({
               ) : (
                 <ul className="mt-1 flex flex-wrap gap-1">
                   {usedTools.map((tool) => (
-                    <li key={tool} className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 font-mono text-[10px]">
+                    <li key={tool} className="rounded-md border border-[var(--g3-border)] bg-[var(--g3-bg)] px-1.5 py-0.5 font-mono text-[10.5px]">
                       {tool}
                     </li>
                   ))}
@@ -188,7 +188,7 @@ export function ContextDrawer({
             {project?.privacyRules && (
               <div>
                 <p className="font-medium text-neutral-700">Règles de confidentialité</p>
-                <p className="mt-1 whitespace-pre-wrap rounded-lg bg-neutral-50 px-2 py-1.5">{project.privacyRules}</p>
+                <p className="mt-1 whitespace-pre-wrap rounded-lg bg-[var(--g3-bg)] px-2 py-1.5">{project.privacyRules}</p>
               </div>
             )}
           </div>

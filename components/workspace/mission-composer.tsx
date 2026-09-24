@@ -84,7 +84,7 @@ export function MissionComposer({
   return (
     <section
       aria-label="Composer une mission"
-      className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-5 shadow-[0_14px_40px_-24px_rgba(28,27,24,0.35)] md:p-6"
+      className="rounded-3xl border border-[var(--g3-border)] bg-white p-5 shadow-[0_14px_40px_-24px_rgba(28,27,24,0.35)] md:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-serif text-lg font-semibold text-neutral-900">Nouvelle mission</h2>

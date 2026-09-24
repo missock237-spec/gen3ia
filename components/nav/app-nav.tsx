@@ -7,6 +7,7 @@ import { authFetch, logout, useAuth } from "@/lib/firebase/auth-client";
 
 import { CommandPalette } from "./command-palette";
 import { NAV_GROUPS, type NavItem } from "./nav-items";
+import { NavIcon } from "@/components/ui/nav-icon";
 
 type PlatformRole = "user" | "developer" | "admin";
 
@@ -98,7 +99,7 @@ export function AppNav() {
               "g3-side-link " + (active(item.href) ? "is-active" : "")
             }
           >
-            <span className="g3-side-icon" aria-hidden="true">{item.icon}</span>
+            <span className="g3-side-icon" aria-hidden="true"><NavIcon glyph={item.icon} href={item.href} /></span>
             {!compact && (
               <span className="min-w-0 flex-1">
                 <span className="block truncate">{item.label}</span>
@@ -163,7 +164,7 @@ export function AppNav() {
               className={"g3-nav-search " + (compact ? "is-compact" : "")}
               aria-label="Rechercher une destination"
             >
-              <span aria-hidden="true">⌕</span>
+              <span className="g3-side-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg></span>
               {!compact && <><span className="min-w-0 flex-1 truncate text-left">Rechercher une destination…</span><kbd>⌘K</kbd></>}
             </button>
           </div>
@@ -262,7 +263,7 @@ export function AppNav() {
                     </span>
                   </span>
                 )}
-                <span className="text-neutral-400">•••</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className="text-neutral-400"><path d="m7 15 5 5 5-5M7 9l5-5 5 5" /></svg>
               </button>
             </div>
           </div>

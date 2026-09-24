@@ -126,17 +126,38 @@ export function ConversationList({
 
   const semanticActive = trimmedQuery.length >= 3 && semanticResults.length > 0;
 
+  // Regroupement chronologique (Aujourd'hui, Hier, 7 jours, 30 jours, Plus ancien).
+  const grouped = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const day = 86_400_000;
+    const buckets: Array<{ label: string; items: Conversation[] }> = [
+      { label: "Aujourd'hui", items: [] },
+      { label: "Hier", items: [] },
+      { label: "7 derniers jours", items: [] },
+      { label: "30 derniers jours", items: [] },
+      { label: "Plus ancien", items: [] },
+    ];
+    for (const conversation of filtered) {
+      const t = new Date(conversation.updatedAt).getTime();
+      const diff = startOfToday.getTime() - t;
+      const index = diff <= 0 ? 0 : diff <= day ? 1 : diff <= 7 * day ? 2 : diff <= 30 * day ? 3 : 4;
+      buckets[index].items.push(conversation);
+    }
+    return buckets.filter((bucket) => bucket.items.length > 0);
+  }, [filtered]);
+
   if (collapsed) {
     return (
       <div className="flex h-full flex-col items-center gap-2 py-2">
         <button
           type="button"
           onClick={onToggleCollapsed}
-          className="g3-btn g3-btn-ghost h-9 w-9 justify-center !px-0 text-lg"
+          className="g3-btn g3-btn-ghost h-9 w-9 justify-center !px-0"
           title="Afficher la liste des conversations"
           aria-label="Afficher la liste des conversations"
         >
-          »
+          <PanelIcon />
         </button>
         <button
           type="button"
@@ -145,7 +166,7 @@ export function ConversationList({
           title="Nouvelle conversation"
           aria-label="Nouvelle conversation"
         >
-          +
+          <PlusIcon />
         </button>
       </div>
     );
@@ -155,7 +176,7 @@ export function ConversationList({
     <aside className="flex h-full w-full flex-col gap-3 overflow-hidden">
       <div className="flex items-center gap-2">
         <button type="button" onClick={onNewConversation} className="g3-btn g3-btn-primary flex-1 text-sm">
-          <span aria-hidden>＋</span> Nouvelle conversation
+          <PlusIcon /> Nouvelle conversation
         </button>
         <button
           type="button"
@@ -164,17 +185,18 @@ export function ConversationList({
           title="Replier la liste"
           aria-label="Replier la liste"
         >
-          «
+          <PanelIcon />
         </button>
       </div>
 
       <div className="relative">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--g3-subtle)]"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
         <input
           type="search"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder="Rechercher (titre ou contenu)…"
-          className="g3-input !min-h-0 !py-2 text-sm"
+          className="g3-input !min-h-0 !py-1.5 !pl-8 text-[13px]"
           aria-label="Rechercher une conversation par titre ou par contenu"
         />
         {searching && (
@@ -190,7 +212,7 @@ export function ConversationList({
       <div className="flex-1 space-y-4 overflow-y-auto pr-1">
         {semanticActive && (
           <section>
-            <p className="g3-eyebrow !text-[10px]">
+            <p className="px-2.5 text-[11px] font-semibold text-[var(--g3-ink-2)]">
               {semanticMode === "semantic" ? "Correspondances dans le contenu" : "Titres correspondants"}
             </p>
             <ul className="mt-1.5 space-y-1">
@@ -225,11 +247,11 @@ export function ConversationList({
             <button
               type="button"
               onClick={() => setProjectsOpen((open) => !open)}
-              className="g3-eyebrow flex w-full items-center justify-between !text-[10px]"
+              className="flex w-full items-center justify-between px-2.5 text-[11px] font-semibold text-[var(--g3-ink-2)]"
               aria-expanded={projectsOpen}
             >
               Projets
-              <span aria-hidden className="text-neutral-400">{projectsOpen ? "▾" : "▸"}</span>
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-[var(--g3-subtle)] transition-transform ${projectsOpen ? "" : "-rotate-90"}`}><path d="m6 9 6 6 6-6" /></svg>
             </button>
             {projectsOpen && (
               <ul className="mt-1.5 space-y-0.5">
@@ -240,8 +262,8 @@ export function ConversationList({
                       className="g3-side-link flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-neutral-700"
                       title={project.name}
                     >
-                      <span className="truncate">▦ {project.name}</span>
-                      <span className="ml-2 shrink-0 rounded-full bg-neutral-100 px-1.5 text-[10px] text-neutral-500">
+                      <span className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className="size-2 shrink-0 rounded-[3px] bg-[var(--g3-accent)] opacity-70" /><span className="truncate">{project.name}</span></span>
+                      <span className="ml-2 shrink-0 rounded-full bg-[var(--g3-surface-2)] px-1.5 text-[10px] tabular-nums text-[var(--g3-muted)]">
                         {conversationsByProject.get(project.id) ?? 0}
                       </span>
                     </Link>
@@ -253,11 +275,11 @@ export function ConversationList({
         )}
 
         <section>
-          <p className="g3-eyebrow !text-[10px]">Conversations récentes</p>
+          <p className="px-2.5 text-[11px] font-semibold text-[var(--g3-ink-2)]">Conversations</p>
           {loading && conversations.length === 0 ? (
             <div className="mt-2 space-y-2" aria-busy="true" aria-label="Chargement des conversations">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-9 animate-pulse rounded-lg bg-neutral-200/60" />
+                <div key={i} className="g3-skeleton h-9 rounded-lg" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
@@ -269,38 +291,58 @@ export function ConversationList({
                 : "Aucune conversation pour le moment. Lancez-vous !"}
             </p>
           ) : (
-            <ul className="mt-1.5 space-y-0.5">
-              {filtered.map((conversation) => {
-                const active = conversation.id === activeConversationId;
-                const project = conversation.projectId ? projects.find((p) => p.id === conversation.projectId) : undefined;
-                return (
-                  <li key={conversation.id}>
-                    <Link
-                      href={`/workspace/conversations/${conversation.id}`}
-                      data-active={active}
-                      className={`g3-side-link flex flex-col gap-0.5 rounded-lg px-2.5 py-2 text-xs ${active ? "is-active" : ""}`}
-                      title={conversation.title}
-                    >
-                      <span className="truncate font-medium">{conversation.title || "Sans titre"}</span>
-                      <span className={`flex items-center gap-1 text-[10px] ${active ? "text-neutral-300" : "text-neutral-500"}`}>
-                        {formatRelative(conversation.updatedAt)}
-                        {project ? ` · ${project.name}` : ""}
-                        {conversation.messageCount > 0 ? ` · ${conversation.messageCount} msg` : ""}
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="mt-1 space-y-3">
+              {grouped.map((bucket) => (
+                <div key={bucket.label}>
+                  <p className="px-2.5 pb-1 text-[11px] font-medium text-[var(--g3-subtle)]">{bucket.label}</p>
+                  <ul className="space-y-px">
+                    {bucket.items.map((conversation) => {
+                      const active = conversation.id === activeConversationId;
+                      const project = conversation.projectId ? projects.find((p) => p.id === conversation.projectId) : undefined;
+                      return (
+                        <li key={conversation.id}>
+                          <Link
+                            href={`/workspace/conversations/${conversation.id}`}
+                            data-active={active}
+                            aria-current={active ? "page" : undefined}
+                            className={`g3-side-link flex flex-col !items-start gap-0.5 rounded-lg px-2.5 py-1.5 text-xs ${active ? "is-active" : ""}`}
+                            title={conversation.title}
+                          >
+                            <span className="w-full truncate font-medium">{conversation.title || "Sans titre"}</span>
+                            <span className="flex w-full items-center gap-1 truncate text-[10.5px] font-normal text-[var(--g3-subtle)]">
+                              {formatRelative(conversation.updatedAt)}
+                              {project ? ` · ${project.name}` : ""}
+                              {conversation.messageCount > 0 ? ` · ${conversation.messageCount} msg` : ""}
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
           )}
         </section>
       </div>
 
-      <div className="border-t border-neutral-200 pt-2 text-[11px] leading-relaxed text-neutral-500">
+      <div className="border-t border-[var(--g3-border)] px-2.5 pt-2 text-[12px] leading-relaxed text-[var(--g3-muted)]">
         <Link href="/workspace/projects" className="hover:text-neutral-800">
           Gérer les projets →
         </Link>
       </div>
     </aside>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+  );
+}
+
+function PanelIcon() {
+  return (
+    <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg>
   );
 }

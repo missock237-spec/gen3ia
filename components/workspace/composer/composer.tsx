@@ -46,6 +46,8 @@ interface ComposerProps {
   connectors?: string[];
   onConnectorsChange?: (connectors: string[]) => void;
   suggestions?: string[];
+  /** Pré-remplit la zone de saisie (ex. carte de démarrage) ; `n` force la ré-application. */
+  prefill?: { text: string; n: number };
   placeholder?: string;
   autoFocus?: boolean;
 }
@@ -69,6 +71,7 @@ export function Composer({
   connectors = [],
   onConnectorsChange,
   suggestions,
+  prefill,
   placeholder,
   autoFocus = false,
 }: ComposerProps) {
@@ -85,6 +88,12 @@ export function Composer({
   useEffect(() => {
     if (autoFocus) composerRef.current?.focus();
   }, [autoFocus]);
+
+  useEffect(() => {
+    if (!prefill) return;
+    setValue(prefill.text);
+    composerRef.current?.focus();
+  }, [prefill]);
 
   const uploadFile = async (file: File) => {
     setUploadError("");
@@ -227,7 +236,7 @@ export function Composer({
         <ul className="flex flex-wrap gap-1.5" aria-label="Pièces jointes">
           {attachments.map((attachment, index) => (
             <li key={`${attachment.filename}-${index}`} className="g3-chip !py-1 text-[11px]">
-              <span aria-hidden>📎</span>
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" /></svg>
               <span className="max-w-[220px] truncate">{attachment.filename}</span>
               <button
                 type="button"
@@ -243,8 +252,8 @@ export function Composer({
       )}
 
       {activeProject && (
-        <p className="text-[11px] text-neutral-500">
-          Contexte projet : <span className="font-semibold text-neutral-800">{activeProject.name}</span> — tapez / pour changer de projet.
+        <p className="text-[12px] text-[var(--g3-muted)]">
+          Contexte projet : <span className="font-medium text-[var(--g3-ink)]">{activeProject.name}</span> — tapez / pour changer de projet.
         </p>
       )}
 

@@ -165,7 +165,7 @@ export default function StudioCallsPage() {
       {message && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{message}</div>}
 
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-        <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5">
+        <section className="rounded-2xl border border-[var(--g3-border)] bg-white p-5">
           <h2 className="mb-3 text-base font-bold">Nouvel appel</h2>
           {voiceAgents.length === 0 ? (
             <p className="text-sm text-neutral-500">
@@ -194,7 +194,7 @@ export default function StudioCallsPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5">
+        <section className="rounded-2xl border border-[var(--g3-border)] bg-white p-5">
           <h2 className="mb-3 text-base font-bold">Historique des appels</h2>
           {loading ? (
             <p className="text-sm text-neutral-500">Chargement…</p>

@@ -61,7 +61,7 @@ function TeamsContent() {
   };
 
   return (
-    <div className="min-h-full bg-[#f6f4ef] text-neutral-900">
+    <div className="min-h-full bg-[var(--g3-bg)] text-neutral-900">
       <div className="mx-auto max-w-5xl px-4 py-10 md:px-8 md:py-14">
         {/* En-tête */}
         <header className="anim-fade-up text-center">
@@ -82,7 +82,7 @@ function TeamsContent() {
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
           {/* Colonne principale : mes équipes */}
           <section className="anim-fade-up anim-delay-1 lg:col-span-3" aria-label="Mes équipes">
-            <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] md:p-8">
+            <div className="rounded-3xl border border-[var(--g3-border)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] md:p-8">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="font-serif text-2xl font-semibold">Mes équipes</h2>
                 <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-500">
@@ -120,7 +120,7 @@ function TeamsContent() {
                     <li key={team.id}>
                       <Link
                         href={`/team/${team.id}`}
-                        className="group flex items-center justify-between gap-4 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4 transition hover:border-neutral-300 hover:shadow-[0_10px_30px_-12px_rgba(15,23,42,0.18)]"
+                        className="group flex items-center justify-between gap-4 rounded-2xl border border-[var(--g3-border)] bg-white p-4 transition hover:border-neutral-300 hover:shadow-[0_10px_30px_-12px_rgba(15,23,42,0.18)]"
                       >
                         <span className="flex min-w-0 items-center gap-4">
                           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-sky-100 font-serif text-lg font-semibold text-sky-700">
@@ -151,7 +151,7 @@ function TeamsContent() {
 
           {/* Colonne latérale : créer + rejoindre */}
           <aside className="anim-fade-up anim-delay-2 space-y-6 lg:col-span-2">
-            <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+            <div className="rounded-3xl border border-[var(--g3-border)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
               <h2 className="font-serif text-xl font-semibold">Nouvelle équipe</h2>
               <p className="mt-1.5 text-xs leading-5 text-neutral-500">
                 Vous en devenez le propriétaire et pourrez inviter des membres.
@@ -197,7 +197,7 @@ function TeamsContent() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+            <div className="rounded-3xl border border-[var(--g3-border)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
               <h2 className="font-serif text-xl font-semibold">Rejoindre une équipe</h2>
               <p className="mt-1.5 text-xs leading-5 text-neutral-500">
                 Collez le code reçu dans l&apos;invitation (le lien contient <code className="rounded bg-neutral-100 px-1">?token=…</code>).

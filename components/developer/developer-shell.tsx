@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { navPrimaryFor } from "@/components/shells/nav-registry";
 import { BackToWorkspace } from "@/components/shells/permission-notice";
 import { useDeveloper } from "@/components/developer/developer-context";
+import { NavIcon } from "@/components/ui/nav-icon";
 
 /**
  * DeveloperShell — shell partagé de l'espace développeur (architecture à 3
@@ -43,7 +44,7 @@ export function DeveloperShell({ children }: { children: ReactNode }) {
                     : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
                 }`}
               >
-                <span className="w-5 text-center" aria-hidden="true">{route.icon}</span>
+                <NavIcon glyph={route.icon} size={16} className="w-5 shrink-0" />
                 {route.label}
               </Link>
             ))}

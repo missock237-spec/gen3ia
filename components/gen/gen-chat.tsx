@@ -152,14 +152,14 @@ export function GenChatWidget() {
   return (
     <>
       {open && (
-        <div className="fixed bottom-24 right-4 z-50 flex h-[560px] w-[min(94vw,420px)] flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[#0b0b0d] shadow-[0_30px_80px_-24px_rgba(0,0,0,0.95)] sm:right-6" role="dialog" aria-label="Chat avec Gen">
-          <header className="flex items-center gap-3 border-b border-white/10 bg-[#131315] px-4 py-3 text-white">
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-lg font-black text-neutral-100">G</div>
+        <div className="fixed bottom-24 right-4 z-50 flex h-[560px] w-[min(94vw,420px)] flex-col overflow-hidden rounded-[20px] border border-[var(--g3-border-strong)] bg-[var(--g3-bg)] shadow-[var(--g3-shadow-lg)] anim-scale-in origin-bottom-right sm:right-6" role="dialog" aria-label="Chat avec Gen">
+          <header className="flex items-center gap-3 border-b border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--g3-ink)] text-[11px] font-bold text-white">G3</div>
             <div className="flex-1">
-              <p className="text-sm font-bold text-neutral-100">Gen — assistante Gen3ia</p>
-              <p className="text-[11px] text-neutral-400">Réponses + consultations connecteurs (lecture seule)</p>
+              <p className="text-sm font-semibold text-[var(--g3-ink)]">Gen — assistante Gen3ia</p>
+              <p className="text-[11px] text-[var(--g3-muted)]">Réponses + consultations connecteurs (lecture seule)</p>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Fermer le chat" className="rounded-full px-2 py-1 text-lg leading-none text-neutral-400 hover:bg-white/10 hover:text-white">×</button>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Fermer le chat" className="grid size-8 place-items-center rounded-lg text-lg leading-none text-[var(--g3-muted)] hover:bg-[var(--g3-surface-2)] hover:text-[var(--g3-ink)]">×</button>
           </header>
 
           <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-3">
@@ -168,8 +168,8 @@ export function GenChatWidget() {
                 key={index}
                 className={
                   bubble.role === "user"
-                    ? "ml-auto max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-neutral-100 px-3.5 py-2 text-sm text-neutral-900"
-                    : "mr-auto max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-bl-md border border-white/10 bg-[#1b1b1d] px-3.5 py-2 text-sm text-neutral-100"
+                    ? "ml-auto max-w-[85%] whitespace-pre-wrap rounded-[16px] rounded-br-md bg-[var(--g3-ink)] px-3.5 py-2 text-sm text-white"
+                    : "mr-auto max-w-[88%] whitespace-pre-wrap rounded-[16px] rounded-bl-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3.5 py-2 text-sm text-[var(--g3-ink-2)] shadow-[var(--g3-shadow-xs)]"
                 }
               >
                 {bubble.text}
@@ -211,10 +211,10 @@ export function GenChatWidget() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="fixed bottom-6 right-4 z-50 flex h-14 items-center gap-2 rounded-full border border-white/15 bg-[#141416] px-5 text-sm font-bold text-white shadow-[0_18px_50px_-16px_rgba(0,0,0,0.9)] transition-transform hover:scale-105 sm:right-6"
+        className="fixed bottom-6 right-4 z-50 flex h-14 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-[#09090b] shadow-[0_18px_50px_-16px_rgba(0,0,0,0.6)] ring-1 ring-black/5 transition-transform hover:scale-[1.03] sm:right-6"
         aria-expanded={open}
       >
-        <span className="text-lg" aria-hidden="true">💬</span>
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
         {open ? "Fermer Gen" : "Discuter avec Gen"}
       </button>
     </>

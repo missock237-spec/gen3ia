@@ -40,10 +40,13 @@ export async function GET(request: NextRequest) {
       ),
     );
   } catch (error) {
+    console.error("[ads/callback] échec OAuth", error instanceof Error ? error.name : "unknown");
     return NextResponse.redirect(
       new URL(
         `/studio?ads_error=${encodeURIComponent(
-          error instanceof Error ? error.message : "Ads connection failed",
+          // Code générique : le message interne (fournisseur, jeton) ne doit
+          // jamais transiter dans une URL (historique, logs, Referer).
+          "connection_failed",
         )}`,
         getAppUrl(),
       ),

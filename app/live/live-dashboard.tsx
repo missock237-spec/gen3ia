@@ -531,7 +531,7 @@ export function LiveDashboard() {
 
   if (sessionDisponible === false) {
     return (
-      <div className="mx-auto max-w-md rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+      <div className="mx-auto max-w-md rounded-3xl border border-[var(--g3-border)] bg-white p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
         <h2 className="font-serif text-xl font-semibold">Connexion requise</h2>
         <p className="mt-2 text-sm text-neutral-600">
           Connectez-vous pour créer et piloter des sessions d’agent Live.
@@ -547,7 +547,7 @@ export function LiveDashboard() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-      <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+      <section className="rounded-3xl border border-[var(--g3-border)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
         <h2 className="font-serif text-xl font-semibold">Créer une session d’agent Live</h2>
         <p className="mt-2 text-sm text-neutral-500">
           Décrivez la mission : l’agent observe votre écran depuis le navigateur,
@@ -578,7 +578,7 @@ export function LiveDashboard() {
                 className={`rounded-xl border px-4 py-2.5 text-left text-sm transition ${
                   permissions.includes(permission)
                     ? "border-sky-200 bg-sky-100 text-sky-700"
-                    : "border-[rgba(23,23,20,0.09)] bg-neutral-50 text-neutral-600 hover:bg-neutral-100"
+                    : "border-[var(--g3-border)] bg-neutral-50 text-neutral-600 hover:bg-neutral-100"
                 }`}
               >
                 {PERMISSION_LABELS[permission]}
@@ -590,7 +590,7 @@ export function LiveDashboard() {
             contrôle clavier/souris reste réservé à un client PC.
           </p>
         </div>
-        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-white px-4 py-3 text-sm leading-6 text-neutral-700">
+        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--g3-border)] bg-white px-4 py-3 text-sm leading-6 text-neutral-700">
           <input
             type="checkbox"
             className="mt-1 h-4 w-4 accent-neutral-900"
@@ -636,7 +636,7 @@ export function LiveDashboard() {
       </section>
 
       <div className="space-y-5">
-        <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+        <section className="rounded-3xl border border-[var(--g3-border)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="font-serif text-lg font-semibold">Agent Live — dans le navigateur</h2>
@@ -644,12 +644,12 @@ export function LiveDashboard() {
                 Aucun téléchargement : partage d’écran natif, analyse par l’IA en temps réel.
               </p>
             </div>
-            <span className="rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-2.5 py-1 text-[11px] text-neutral-600">
+            <span className="rounded-full border border-[var(--g3-border)] bg-white px-2.5 py-1 text-[11px] text-neutral-600">
               {liveStatus === "running" ? "LIVE" : liveStatus === "starting" ? "démarrage" : liveStatus === "stopped" ? "arrêté" : "hors ligne"}
             </span>
           </div>
 
-          <div className="relative mt-4 overflow-hidden rounded-2xl border border-[rgba(23,23,20,0.09)] bg-black aspect-video flex items-center justify-center">
+          <div className="relative mt-4 overflow-hidden rounded-2xl border border-[var(--g3-border)] bg-black aspect-video flex items-center justify-center">
             <video ref={videoRef} muted playsInline autoPlay className="h-full w-full object-contain" />
             {liveStatus !== "running" && liveStatus !== "starting" && (
               <span className="absolute text-sm text-neutral-300">Aucun partage d’écran actif</span>
@@ -680,7 +680,7 @@ export function LiveDashboard() {
               </button>
             )}
             {liveStatus === "stopped" && (
-              <button onClick={() => setLiveStatus("idle")} className="rounded-xl border border-[rgba(23,23,20,0.09)] px-4 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100">
+              <button onClick={() => setLiveStatus("idle")} className="rounded-xl border border-[var(--g3-border)] px-4 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100">
                 Réinitialiser
               </button>
             )}
@@ -714,14 +714,14 @@ export function LiveDashboard() {
           </p>
         </section>
 
-        <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+        <section className="rounded-3xl border border-[var(--g3-border)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
           <h2 className="font-serif text-lg font-semibold">Sessions récentes</h2>
           {sessions.length === 0 ? (
             <p className="mt-3 text-sm text-neutral-500">Aucune session pour le moment.</p>
           ) : (
             <ul className="mt-4 space-y-3">
               {sessions.map((session) => (
-                <li key={session.id} className="rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4">
+                <li key={session.id} className="rounded-xl border border-[var(--g3-border)] bg-neutral-50 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="truncate text-sm font-semibold">{session.name}</div>
                     <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] ${STATUS_STYLES[session.status] ?? STATUS_STYLES.paused}`}>
@@ -731,7 +731,7 @@ export function LiveDashboard() {
                   <div className="mt-1 text-xs text-neutral-400">{formatDate(session.createdAt)}</div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {session.permissions.map((permission) => (
-                      <span key={permission} className="rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-2 py-0.5 text-[10px] text-neutral-500">
+                      <span key={permission} className="rounded-md border border-[var(--g3-border)] bg-white px-2 py-0.5 text-[10px] text-neutral-500">
                         {permission}
                       </span>
                     ))}
@@ -749,7 +749,7 @@ export function LiveDashboard() {
                         </button>
                         <button
                           onClick={() => stopSession(session.id)}
-                          className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100"
+                          className="rounded-lg border border-[var(--g3-border)] bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100"
                         >
                           Refuser et arrêter
                         </button>

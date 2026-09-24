@@ -210,7 +210,7 @@ export default function BillingPage() {
 }
 
 const styles: Record<string, CSSProperties> = {
-  main: { minHeight: "100%", display: "grid", placeItems: "center", padding: 24, background: "#f6f4ef", color: "#171717" },
+  main: { minHeight: "100%", display: "grid", placeItems: "center", padding: 24, background: "var(--g3-bg, #fafafa)", color: "#171717" },
   card: { width: "100%", maxWidth: 620, padding: 32, borderRadius: 24, border: "1px solid rgba(23,23,20,0.09)", background: "#ffffff", boxShadow: "0 14px 40px -18px rgba(28,27,24,0.22)" },
   eyebrow: { fontSize: 12, letterSpacing: 2, opacity: .65, marginBottom: 10 },
   welcome: { marginTop: 18, padding: 14, borderRadius: 12, background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#047857", fontSize: 14, lineHeight: 1.5 },

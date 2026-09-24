@@ -134,7 +134,7 @@ export function AdsWorkshop() {
                 disabled={busy}
                 onClick={() => connectAds(provider)}
                 aria-label={connections.includes(provider) ? `${PROVIDER_LABELS[provider]} connecté` : `Connecter ${PROVIDER_LABELS[provider]}`}
-                className="flex w-full items-center justify-between rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4 text-left hover:bg-neutral-100"
+                className="flex w-full items-center justify-between rounded-xl border border-[var(--g3-border)] bg-neutral-50 p-4 text-left hover:bg-neutral-100"
               >
                 <span>{PROVIDER_LABELS[provider]}</span>
                 <span className={connections.includes(provider) ? "text-emerald-600 text-sm" : "text-sky-700 text-sm"}>
@@ -159,10 +159,10 @@ export function AdsWorkshop() {
             <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
               <span className="font-mono text-xs text-amber-800">Approbation en attente : {pendingApprovalId}</span>
               <button disabled={busy} onClick={() => decideApproval("approve")} className="g3-btn g3-btn-primary">Approuver &amp; publier</button>
-              <button disabled={busy} onClick={() => decideApproval("reject")} className="rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-5 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100">Rejeter</button>
+              <button disabled={busy} onClick={() => decideApproval("reject")} className="rounded-full border border-[var(--g3-border)] bg-white px-5 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100">Rejeter</button>
             </div>
           ) : (
-            <p className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4 text-sm text-neutral-400">Aucune publication en attente de validation.</p>
+            <p className="mt-4 rounded-xl border border-[var(--g3-border)] bg-neutral-50 p-4 text-sm text-neutral-400">Aucune publication en attente de validation.</p>
           )}
           {publishResult && <Callout tone="success" className="mt-3">{publishResult}</Callout>}
         </div>

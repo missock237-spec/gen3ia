@@ -23,34 +23,39 @@ export function VitrineHeader() {
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
+
+  const links = [
+    { href: "#produits", label: "Produits" },
+    { href: "#fonctionnement", label: "Fonctionnement" },
+    { href: "#securite", label: "Sécurité" },
+    { href: "#faq", label: "FAQ" },
+  ];
+
   return (
-    <header
-      className={`sticky top-0 z-50 border-b transition-all duration-300 ease-out ${
-        scrolled
-          ? "border-[rgba(23,23,20,0.07)] bg-[#f6f4ef]/90 shadow-[0_10px_30px_-20px_rgba(28,27,24,0.35)] backdrop-blur-md"
-          : "border-transparent bg-transparent"
-      }`}
-    >
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-2.5" aria-label="Gen3ia — accueil">
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-neutral-900 text-sm font-black text-white">
-            G3
-          </span>
-          <span className="text-sm font-bold tracking-tight">Gen3ia</span>
+    <header className="sticky top-0 z-50 px-3 pt-3 sm:px-6">
+      <div
+        className={`mx-auto flex max-w-6xl items-center justify-between gap-4 rounded-2xl border px-3 py-2.5 transition-all duration-300 ease-out sm:px-4 ${
+          scrolled
+            ? "border-white/10 bg-[#0b0c12]/75 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.8)] backdrop-blur-xl"
+            : "border-transparent bg-transparent"
+        }`}
+      >
+        <Link href="/" className="flex items-center gap-2.5">
+          <span className="nx-logo">G3</span>
+          <span className="text-sm font-semibold tracking-tight text-white">Gen3ia</span>
         </Link>
-        <nav aria-label="Navigation vitrine" className="hidden items-center gap-1.5 md:flex">
-          <a href="#produits" className="rounded-full bg-white px-4 py-2 text-sm font-medium text-neutral-800 shadow-[0_1px_2px_rgba(28,27,24,0.08)] transition hover:shadow-[0_4px_14px_-6px_rgba(28,27,24,0.3)]">Produits</a>
-          <a href="#fonctionnement" className="rounded-full bg-white px-4 py-2 text-sm font-medium text-neutral-800 shadow-[0_1px_2px_rgba(28,27,24,0.08)] transition hover:shadow-[0_4px_14px_-6px_rgba(28,27,24,0.3)]">Fonctionnement</a>
-          <a href="#securite" className="rounded-full bg-white px-4 py-2 text-sm font-medium text-neutral-800 shadow-[0_1px_2px_rgba(28,27,24,0.08)] transition hover:shadow-[0_4px_14px_-6px_rgba(28,27,24,0.3)]">Sécurité</a>
+        <nav aria-label="Navigation vitrine" className="hidden items-center gap-1 md:flex">
+          {links.map((link) => (
+            <a key={link.href} href={link.href} className="rounded-full px-3.5 py-2 text-sm text-white/60 transition hover:bg-white/[0.06] hover:text-white">
+              {link.label}
+            </a>
+          ))}
         </nav>
         <div className="flex items-center gap-2">
-          <Link href="/login" className="rounded-full border border-[rgba(23,23,20,0.12)] bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition hover:border-[rgba(23,23,20,0.22)]">
+          <Link href="/login" className="hidden rounded-full px-4 py-2 text-sm text-white/70 transition hover:text-white sm:inline-flex">
             Se connecter
           </Link>
-          <Link
-            href="/signup"
-            className="rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white shadow-[0_8px_20px_-10px_rgba(28,27,24,0.6)] transition hover:-translate-y-0.5 hover:bg-neutral-800"
-          >
+          <Link href="/signup" className="nx-btn-light !px-4 !py-2 text-sm">
             Commencer
           </Link>
         </div>

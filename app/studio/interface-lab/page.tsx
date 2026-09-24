@@ -313,7 +313,7 @@ export default function InterfaceLabPage() {
         description="Recherchez des composants, themes et logos professionnels dans le catalogue 21st.dev, recuperez leur code source, puis faites-les adapter au design system Gen3ia par vos propres agents."
         meta={
           usage && (
-            <span className="rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-600">
+            <span className="rounded-full border border-[var(--g3-border)] bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-600">
               21st.dev · {usage.tier} · {usage.freeRetrievalsRemaining ?? "?"}/{usage.freeRetrievalsPerDay ?? "?"} recuperations aujourd&apos;hui
             </span>
           )
@@ -404,7 +404,7 @@ export default function InterfaceLabPage() {
                       {item.kind === "theme" ? "Voir le theme" : "Voir le code"}
                     </button>
                   ) : (
-                    <span className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-neutral-50 px-3 py-2 text-xs text-neutral-400">Metadata uniquement</span>
+                    <span className="rounded-lg border border-[var(--g3-border)] bg-neutral-50 px-3 py-2 text-xs text-neutral-400">Metadata uniquement</span>
                   )}
                   {item.pageUrl && (
                     <a href={item.pageUrl} target="_blank" rel="noopener noreferrer" className="g3-btn g3-btn-ghost !px-3 !py-2 text-xs">Page</a>
