@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { generateForUser } from "@/lib/billing/ai-execution";
 import { getWallet, WALLET_CURRENCY } from "@/lib/billing/wallet";
+import { getAgentForOwner } from "@/lib/agents/repository";
 import { executeToolSecurely } from "./secure-tool-executor";
 import { ExecutionPolicy, DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
 import { RuntimeExecutionState, RuntimePlan, RuntimeStep } from "./types";
@@ -75,6 +76,13 @@ export interface RuntimeAgentConfig {
   systemPrompt?: string;
   provider?: string;
   model?: string;
+  // Température LLM de l'agent (créativité, 0–2) — injectée dans chaque
+  // appel LLM du runtime (défaut moteur sinon).
+  temperature?: number;
+  // Sous-agents délégables : liste blanche d'ids (étapes type "agent").
+  subAgentIds?: string[];
+  // Plafond de dépense par exécution en centimes (facturation LLM runner).
+  budgetEurMinor?: number;
 }
 
 export interface RuntimeRunnerOptions { userId: string; projectId?: string; objective: string; plan: RuntimePlan; conversationId?: string; signal?: AbortSignal; policy?: ExecutionPolicy; agent?: RuntimeAgentConfig; }
@@ -198,12 +206,61 @@ export class AgentRuntime {
       case "research": return this.executeTool({ ...step, toolName: step.toolName ?? "web.search" });
       case "code": return this.executeCode(step);
       case "condition": return this.evaluateCondition(step);
+      case "agent": return this.executeSubAgent(step);
       default: throw new Error(`Unsupported runtime step: ${step.type}`);
     }
   }
 
   private static readonly SAFETY_CONTRACT =
     "Never invent external results, credentials, customer data, transactions or completed actions. Do not perform side effects unless a separately authorized tool step executes them. Be factual, operational and explicit about uncertainty.";
+
+  /**
+   * Délégation à un sous-agent du Studio (étape type "agent").
+   * Le sous-agent exécute la tâche avec SA propre identité (nom,
+   * instructions du propriétaire, provider/modèle/température) via un
+   * appel LLM facturé au propriétaire. Garde-fous :
+   *  - liste blanche obligatoire (agentConfig.subAgentIds) ;
+   *  - profondeur 1 : un sous-agent ne délègue pas à son tour ;
+   *  - aucun outil direct : les actions sensibles restent des étapes
+   *    approuvées du plan superviseur (jamais de contournement HITL).
+   */
+  private async executeSubAgent(step: RuntimeStep): Promise<unknown> {
+    const supervisorConfig = this.agentConfig;
+    const allowlist = supervisorConfig?.subAgentIds ?? [];
+    if (!step.agentId || !allowlist.includes(step.agentId)) {
+      throw new Error(`Sous-agent non autorisé pour l'étape ${step.id} (absent de la liste des sous-agents de l'agent).`);
+    }
+    const sub = await getAgentForOwner(this.state.userId, step.agentId);
+    if (!sub || sub.status !== "active") {
+      throw new Error(`Sous-agent introuvable ou inactif pour l'étape ${step.id}.`);
+    }
+    const dependencyContext = this.getDependencyOutputs(step);
+    const subSystem = sub.systemPrompt?.trim()
+      ? `You are "${sub.name}", a specialized AI agent of the Gen3ia Studio. You are consulted by a supervisor agent for ONE delegated task.\n\n--- YOUR INSTRUCTIONS (owner-defined) ---\n${sub.systemPrompt.slice(0, 8_000)}\n--- END INSTRUCTIONS ---\n\nAnswer directly and operationally for the delegated task. ${AgentRuntime.SAFETY_CONTRACT}`
+      : `You are "${sub.name}", a specialized Gen3ia agent consulted for one delegated task. Answer directly and operationally. ${AgentRuntime.SAFETY_CONTRACT}`;
+    const subProvider = sub.modelStrategy === "fixed" ? AgentRuntime.safeProvider(sub.preferredProvider) : undefined;
+    const billed = await generateForUser({
+      userId: this.state.userId,
+      executionId: this.state.executionId,
+      complexity: 1,
+      request: {
+        task: "agent",
+        ...(subProvider ? { provider: subProvider } : {}),
+        ...(sub.modelStrategy === "fixed" && sub.preferredModel ? { model: sub.preferredModel } : {}),
+        ...(typeof sub.temperature === "number" && sub.temperature >= 0 && sub.temperature <= 2 ? { temperature: sub.temperature } : {}),
+        messages: [
+          { role: "system", content: subSystem },
+          { role: "user", content: JSON.stringify({ globalObjective: this.state.objective, delegatedTask: { id: step.id, name: step.name, description: step.description }, contextFromPreviousSteps: dependencyContext }) },
+        ],
+        maxTokens: 4096,
+      },
+    });
+    this.state.billing.totalChargeMinor += billed.chargeMinor;
+    this.state.billing.totalProviderCostEur += billed.providerCostEur;
+    this.state.billing.llmInputTokens += billed.response.usage.inputTokens;
+    this.state.billing.llmOutputTokens += billed.response.usage.outputTokens;
+    return `[${sub.name}] ${billed.response.text}`;
+  }
 
   private static readonly VALID_PROVIDERS = new Set(["groq", "openrouter", "anthropic", "openai", "glm", "huggingface"]);
 
@@ -227,6 +284,9 @@ export class AgentRuntime {
         task: step.type === "document" ? "document" : "agent",
         ...(AgentRuntime.safeProvider(this.agentConfig?.provider) ? { provider: AgentRuntime.safeProvider(this.agentConfig?.provider) } : {}),
         ...(this.agentConfig?.model ? { model: this.agentConfig.model } : {}),
+        ...(typeof this.agentConfig?.temperature === "number" && this.agentConfig.temperature >= 0 && this.agentConfig.temperature <= 2
+          ? { temperature: this.agentConfig.temperature }
+          : {}),
         messages: [
           { role: "system", content: systemContent },
           { role: "user", content: JSON.stringify({ objective: this.state.objective, agentRole: role, step: { id: step.id, name: step.name, description: step.description, input: step.input }, dependencies: dependencyContext }) },
@@ -329,6 +389,19 @@ export class AgentRuntime {
   private areAllStepsFinished(): boolean { return this.state.plan.steps.every((step) => ["completed", "skipped", "failed"].includes(step.status)); }
   private async withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> { let timer: ReturnType<typeof setTimeout> | undefined; const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`Step timeout after ${timeoutMs}ms`)), timeoutMs); }); try { return await Promise.race([promise, timeout]); } finally { if (timer) clearTimeout(timer); } }
   private throwIfCancelled(): void { if (this.signal?.aborted) throw new Error("Agent execution cancelled"); }
-  private assertExecutionBudget(): void { if (this.state.iteration > this.policy.maxSteps) throw new Error("Execution step budget exhausted"); if (Date.now() - this.startedAtMs > this.policy.maxExecutionMs) throw new Error("Execution time budget exhausted"); }
+  private assertExecutionBudget(): void { if (this.state.iteration > this.policy.maxSteps) throw new Error("Execution step budget exhausted"); if (Date.now() - this.startedAtMs > this.policy.maxExecutionMs) throw new Error("Execution time budget exhausted"); this.assertAgentBudget(); }
+
+  /**
+   * Plafond de dépense PAR EXÉCUTION défini sur l'agent (budgetEurMinor) :
+   * au-delà, toute nouvelle étape est refusée avec une erreur explicite.
+   * Les frais déjà engagés restent facturés (principe réel des coûts).
+   */
+  private assertAgentBudget(): void {
+    const cap = this.agentConfig?.budgetEurMinor;
+    if (typeof cap !== "number" || cap <= 0) return;
+    if (this.state.billing.totalChargeMinor >= cap) {
+      throw new Error(`Budget de l'agent atteint pour cette exécution (plafond ${(cap / 100).toFixed(2)} EUR). Augmentez le budget dans le Builder ou simplifiez la mission.`);
+    }
+  }
   private finalize(): void { const hasFailures = this.state.plan.steps.some((step) => step.status === "failed"); this.state.status = hasFailures ? "failed" : "completed"; this.state.completedAt = new Date().toISOString(); }
 }

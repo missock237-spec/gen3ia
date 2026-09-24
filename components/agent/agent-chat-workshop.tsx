@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
-import { AgentWizard } from "@/components/agent/agent-wizard";
+import { AgentBuilder } from "@/components/agent/agent-builder";
 import { AgentChatPanel } from "@/components/agent/agent-chat-panel";
 import { VoiceAgentSetup } from "@/components/agent/voice-agent-setup";
 import { Callout } from "@/components/studio/callout";
@@ -193,7 +193,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
           {loading ? (
             <div className="g3-card p-10"><AgentGridSkeleton count={2} /></div>
           ) : view === "wizard" || !activeAgent ? (
-            <AgentWizard
+            <AgentBuilder
               editing={editing}
               onSaved={handleSaved}
               onCancel={() => {

@@ -11,6 +11,7 @@ export const PlannerStepSchema = z.object({
     "media",
     "code",
     "condition",
+    "agent",
   ]),
 
   name: z.string().min(1),
@@ -22,6 +23,11 @@ export const PlannerStepSchema = z.object({
   skillIds: z.array(z.string()).default([]),
 
   toolName: z.string().optional(),
+
+  // Étapes de type "agent" : délégation à un sous-agent du Studio
+  // (id obligatoirement présent dans la liste de sous-agents autorisés
+  // fournie au planner — voir generatePlan).
+  agentId: z.string().optional(),
 
   input: z.record(
     z.string(),

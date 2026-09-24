@@ -302,7 +302,7 @@ export async function POST(request: NextRequest) {
         : undefined;
       // Découverte automatique des outils MCP connectés (si l'agent en
       // dispose) : le planificateur connaît serverId + noms d'outils exacts.
-      const mcpNote = agent.tools.includes("mcp.call")
+      const mcpNote = agent.mcpEnabled !== false && agent.tools.includes("mcp.call")
         ? await describeServersForPrompt(user.uid)
         : undefined;
       // Connecteurs : TOUT ce qui est au statut « connecté » est disponible
@@ -422,8 +422,10 @@ export async function POST(request: NextRequest) {
           return approval;
         }));
 
-        // Mode d'autorisation choisi dans le composer (« Toujours demander ▼ »).
-        const autoOutcome = await applyAutoApprovalPolicy(body.authorizationMode, user.uid, plan, approvals);
+        // Mode d'autorisation : choix du composer (« Toujours demander ▼ »),
+        // sinon défaut de l'agent défini dans le Builder.
+        const effectiveAuthorizationMode = body.authorizationMode ?? agent.authorizationMode;
+        const autoOutcome = await applyAutoApprovalPolicy(effectiveAuthorizationMode, user.uid, plan, approvals);
         if (autoOutcome === "partial") {
           // Actions non critiques auto-approuvées ; seules les critiques
           // (ads.publish, file.delete, phone.call) attendent l'utilisateur.
@@ -491,6 +493,9 @@ export async function POST(request: NextRequest) {
           systemPrompt: agent.systemPrompt,
           provider: agent.modelStrategy === "fixed" ? agent.preferredProvider : undefined,
           model: agent.modelStrategy === "fixed" ? agent.preferredModel : undefined,
+          temperature: agent.temperature,
+          subAgentIds: agent.subAgentIds,
+          budgetEurMinor: agent.budgetEurMinor,
         },
       });
 
@@ -622,8 +627,10 @@ export async function POST(request: NextRequest) {
         return approval;
       }));
 
-      // Mode d'autorisation choisi dans le composer (« Toujours demander ▼ »).
-      const autoOutcome = await applyAutoApprovalPolicy(body.authorizationMode, user.uid, plan, approvals);
+      // Mode d'autorisation : choix du composer, sinon défaut plateforme
+      // (chemin universel — sans agent personnalisé, agent est null ici).
+      const effectiveAuthorizationMode = body.authorizationMode ?? "always_ask";
+      const autoOutcome = await applyAutoApprovalPolicy(effectiveAuthorizationMode, user.uid, plan, approvals);
       if (autoOutcome === "partial") {
         const nowApprovals = await listActionApprovals(user.uid, plan.executionId);
         await appendMessage({

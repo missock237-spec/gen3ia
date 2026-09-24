@@ -190,7 +190,7 @@ export async function planUniversalAgent(
     policy?: ExecutionPolicy;
     signal?: AbortSignal;
     /** Contexte d'un agent personnalisé : charte de périmètre + whitelist d'outils. */
-    agent?: { charter?: string; allowedTools?: string[] };
+    agent?: { charter?: string; allowedTools?: string[]; subAgents?: Array<{ id: string; name: string; description: string; typeLabel?: string }> };
     provider?: AIProvider;
     model?: string;
   },
@@ -200,6 +200,8 @@ export async function planUniversalAgent(
 
   const agentContext = options?.agent;
   const allowedTools = agentContext?.allowedTools;
+  const subAgents = agentContext?.subAgents ?? [];
+  const subAgentAllowlist = new Set(subAgents.map((sub) => sub.id));
   const catalog = allowedTools
     ? GEN3IA_TOOLS.filter((tool) => allowedTools.includes(tool.name))
     : GEN3IA_TOOLS;
@@ -211,7 +213,10 @@ export async function planUniversalAgent(
         "AGENT PERSONNALISÉ — CHARTE OBLIGATOIRE :",
         agentContext.charter,
         "Chaque étape du plan doit respecter strictement cette charte : n'inclus AUCUNE étape qui sortirait du périmètre de l'agent. Si l'objectif sort du périmètre, produis un plan minimal d'une seule étape llm qui le signale et refuse courtoisement.",
-      ].join("\n")
+        subAgents.length > 0
+          ? `SOUS-AGENTS DÉLÉGABLES : ${JSON.stringify(subAgents)} — pour déléguer une sous-tâche autonome à l'un de ces agents, utilise une étape type "agent" avec son id dans agentId (le sous-agent répond avec sa propre expertise, il n'exécute PAS d'outils).`
+          : "",
+      ].filter(Boolean).join("\n")
     : PLAN_SYSTEM;
 
   const buildUserPrompt = (correctiveHint?: string) =>
@@ -256,7 +261,7 @@ export async function planUniversalAgent(
     }
 
     try {
-      return finaliserPlan(userId, RuntimePlanSchema.parse(parsed), trimmed, allowedTools);
+      return finaliserPlan(userId, RuntimePlanSchema.parse(parsed), trimmed, allowedTools, subAgentAllowlist);
     } catch (error) {
       dernierErreur = error instanceof Error ? error.message : "invalid plan";
       console.warn(`[planner] Tentative ${essai}/${tentatives} échouée (plan):`, dernierErreur.slice(0, 300));
@@ -266,7 +271,7 @@ export async function planUniversalAgent(
   // Palier final : repli déterministe — la mission reste exécutable au lieu
   // d'une erreur "Le plan généré par l'agent est incomplet".
   console.warn("[planner] Repli déterministe après échec du planificateur LLM:", dernierErreur.slice(0, 300));
-  return finaliserPlan(userId, fallbackPlan(trimmed), trimmed, allowedTools);
+  return finaliserPlan(userId, fallbackPlan(trimmed), trimmed, allowedTools, subAgentAllowlist);
 }
 
 /**
@@ -275,7 +280,7 @@ export async function planUniversalAgent(
  * runtime. Ne jette QUE sur un vrai problème de DAG (cycle), jamais sur une
  * sortie LLM réparables — un plan invalide n'atteint jamais l'exécuteur.
  */
-function finaliserPlan(userId: string, plan: RuntimePlan, objective: string, allowedTools?: string[]): RuntimePlan {
+function finaliserPlan(userId: string, plan: RuntimePlan, objective: string, allowedTools?: string[], subAgentAllowlist?: Set<string>): RuntimePlan {
   const normalized = RuntimePlanSchema.parse({
     ...plan,
     objective,
@@ -288,6 +293,14 @@ function finaliserPlan(userId: string, plan: RuntimePlan, objective: string, all
       // Étape tool sans cible : inutilisable, dégradée en raisonnement.
       step.type = "llm";
       step.description = `${step.description} (outil non spécifié remplacé par une analyse textuelle)`.slice(0, 600);
+      continue;
+    }
+    if (step.type === "agent" && (!step.agentId || !subAgentAllowlist?.has(step.agentId))) {
+      // Délégation hors liste blanche : dégradée en raisonnement local,
+      // jamais une exécution de sous-agent non autorisé.
+      step.type = "llm";
+      step.agentId = undefined;
+      step.description = `${step.description} (délégation indisponible — traitée par l'agent lui-même)`.slice(0, 600);
       continue;
     }
     if (step.type === "tool" && step.toolName && !GEN3IA_TOOLS.some((tool) => tool.name === step.toolName)) {

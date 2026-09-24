@@ -51,7 +51,14 @@ export async function updateAgentForOwner(ownerId: string, agentId: string, patc
     agentMode: patch.agentMode ?? current.agentMode, memoryFile: patch.memoryFile ?? current.memoryFile,
     projectId: patch.projectId ?? current.projectId, systemPrompt: patch.systemPrompt ?? current.systemPrompt,
     modelStrategy: patch.modelStrategy ?? current.modelStrategy, preferredProvider: patch.preferredProvider ?? current.preferredProvider,
-    preferredModel: patch.preferredModel ?? current.preferredModel, autonomous: patch.autonomous ?? current.autonomous,
+    preferredModel: patch.preferredModel ?? current.preferredModel,
+    temperature: patch.temperature ?? current.temperature,
+    authorizationMode: patch.authorizationMode ?? current.authorizationMode,
+    budgetEurMinor: patch.budgetEurMinor ?? current.budgetEurMinor,
+    subAgentIds: patch.subAgentIds ?? current.subAgentIds,
+    mcpEnabled: patch.mcpEnabled ?? current.mcpEnabled,
+    persona: patch.persona ?? current.persona,
+    autonomous: patch.autonomous ?? current.autonomous,
     maxIterations: patch.maxIterations ?? current.maxIterations, tools: patch.tools ?? current.tools,
     memoryEnabled: patch.memoryEnabled ?? current.memoryEnabled, webResearchEnabled: patch.webResearchEnabled ?? current.webResearchEnabled,
     documentGenerationEnabled: patch.documentGenerationEnabled ?? current.documentGenerationEnabled, voiceEnabled: patch.voiceEnabled ?? current.voiceEnabled,
@@ -74,8 +81,11 @@ export async function countActiveAgentsOfType(ownerId: string, type: string): Pr
 }
 export function toSummary(record: AgentRecord): AgentSummary {
   return { id: record.id, name: record.name, description: record.description, type: record.type, typeLabel: record.typeLabel, skills: record.skills, agentMode: record.agentMode, memoryFile: record.memoryFile, projectId: record.projectId, status: record.status,
-    modelStrategy: record.modelStrategy, preferredProvider: record.preferredProvider, preferredModel: record.preferredModel, autonomous: record.autonomous,
+    modelStrategy: record.modelStrategy, preferredProvider: record.preferredProvider, preferredModel: record.preferredModel,
+    temperature: record.temperature, authorizationMode: record.authorizationMode, budgetEurMinor: record.budgetEurMinor, subAgentIds: record.subAgentIds, mcpEnabled: record.mcpEnabled,
+    autonomous: record.autonomous,
     maxIterations: record.maxIterations, tools: record.tools, memoryEnabled: record.memoryEnabled, webResearchEnabled: record.webResearchEnabled,
     documentGenerationEnabled: record.documentGenerationEnabled, voiceEnabled: record.voiceEnabled, voiceConfig: record.voiceConfig,
+    persona: record.persona,
     createdAt: record.createdAt, updatedAt: record.updatedAt };
 }

@@ -16,6 +16,7 @@ export function validateGeneratedPlan(
   plan: DynamicPlan,
   availableTools: string[],
   availableSkills: string[],
+  availableAgentIds: string[] = [],
 ): PlannerValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -33,6 +34,15 @@ export function validateGeneratedPlan(
     ) {
       errors.push(
         `${step.id}: toolName is required`,
+      );
+    }
+
+    if (
+      step.type === "agent" &&
+      (!step.agentId || !availableAgentIds.includes(step.agentId))
+    ) {
+      errors.push(
+        `${step.id}: delegation to an unauthorized sub-agent${step.agentId ? ` (${step.agentId})` : ""}`,
       );
     }
 

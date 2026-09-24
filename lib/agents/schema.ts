@@ -81,6 +81,21 @@ export const AgentRecordSchema = z.object({
   modelStrategy: z.enum(["automatic", "fixed"]).default("automatic"),
   preferredProvider: z.string().trim().max(60).optional(),
   preferredModel: z.string().trim().max(160).optional(),
+  // Température LLM (créativité) : 0 = déterministe, 2 = très créatif.
+  temperature: z.number().min(0).max(2).default(0.7),
+  // Mode d'autorisation HITL par défaut de l'agent (le composer peut le
+  // surcharger à la volée). Le plancher critiques NE JAMAIS auto-approuver
+  // (ads.publish, file.delete, phone.call, risque critique) reste invariable.
+  authorizationMode: z.enum(["always_ask", "ask_if_needed", "auto_allow"]).default("always_ask"),
+  // Plafond de dépense par exécution, en centimes (optionnel) : au-delà,
+  // l'exécution est interrompue avec une erreur explicite.
+  budgetEurMinor: z.number().int().min(0).max(1_000_000).optional(),
+  // Sous-agents délégables (ids d'agents du même propriétaire, max 5) :
+  // le planner peut émettre des étapes type "agent" qui consultent ces
+  // agents (identité, instructions, modèle propres), facturées à l'owner.
+  subAgentIds: z.array(z.string().trim().min(1).max(128)).max(5).default([]),
+  // Accès aux serveurs MCP configurés par l'utilisateur (outil mcp.call).
+  mcpEnabled: z.boolean().default(true),
   autonomous: z.boolean().default(true),
   maxIterations: z.number().int().min(1).max(20).default(8),
   tools: z.array(z.string().trim().max(160)).max(50).default([]),
@@ -100,7 +115,7 @@ export type AgentRecord = z.infer<typeof AgentRecordSchema> & { id: string; owne
 export type AgentSummary = Pick<AgentRecord,
   "id" | "name" | "description" | "type" | "typeLabel" | "skills" | "agentMode" | "memoryFile" |
   "projectId" | "status" | "modelStrategy" |
-  "preferredProvider" | "preferredModel" | "autonomous" | "maxIterations" | "tools" |
+  "preferredProvider" | "preferredModel" | "temperature" | "authorizationMode" | "budgetEurMinor" | "subAgentIds" | "mcpEnabled" | "autonomous" | "maxIterations" | "tools" |
   "memoryEnabled" | "webResearchEnabled" | "documentGenerationEnabled" | "voiceEnabled" |
   "voiceConfig" | "persona" | "createdAt" | "updatedAt"
 >;

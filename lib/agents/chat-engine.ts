@@ -4,6 +4,7 @@ import { planUniversalAgent } from "./runtime/unified-agent";
 import type { RuntimePlan } from "./runtime/types";
 import { policyForAgent } from "./personalized-plan";
 import { buildAgentCharter, labelForAgent } from "./charter";
+import { getAgentForOwner } from "./repository";
 import type { AgentRecord } from "./schema";
 
 /**
@@ -172,10 +173,18 @@ export async function planAgentTask(userId: string, agent: AgentRecord, objectiv
   const fixedProvider = agent.modelStrategy === "fixed" && agent.preferredProvider
     ? (agent.preferredProvider as AIProvider)
     : undefined;
+  // Sous-agents délégables : résolus depuis la liste blanche du propriétaire,
+  // le planner ne voit que des agents réels, actifs et possédés.
+  const subAgents = (agent.subAgentIds ?? []).length > 0
+    ? (await Promise.all((agent.subAgentIds ?? []).map((id) => getAgentForOwner(userId, id))))
+        .filter((sub): sub is NonNullable<typeof sub> => Boolean(sub && sub.status === "active"))
+        .map((sub) => ({ id: sub.id, name: sub.name, description: sub.description, typeLabel: sub.typeLabel }))
+    : [];
   return planUniversalAgent(userId, objective, {
     agent: {
       charter: buildAgentCharter(agent),
       allowedTools: allowed,
+      subAgents,
     },
     provider: fixedProvider,
     model: agent.modelStrategy === "fixed" ? agent.preferredModel : undefined,
