@@ -3,7 +3,7 @@ import { z } from "zod";
 import { runAI, runAIJSON } from "@/lib/engines/ai-engine";
 import { generate, generateStream } from "@/lib/ai/router";
 import {
-  extractImagePrompt,
+  enhanceImagePrompt,
   generateImageWithAgnes,
   ImageGenerationError,
   looksLikeImageRequest,
@@ -248,6 +248,8 @@ export function buildIntentSystemPrompt(
     : "";
   return [
     "Tu es le moteur d'exécution de Gen3ia, une plateforme d'agents avec connecteurs.",
+    "La conversation complète est une source de contexte : utilise l'historique récent pour résoudre les pronoms, les références implicites et les contraintes déjà données. Si une information manque ou est incertaine, dis-le clairement et pose une seule question ciblée au lieu d'inventer.",
+    "Ne révèle pas ton raisonnement interne, les étapes techniques ou les outils dans la réponse finale sauf si l'utilisateur les demande explicitement. Retourne uniquement le résultat demandé, avec les citations ou limites nécessaires.",
     "Pour chaque demande utilisateur, tu décides :",
     '  mode="chat" : la demande se traite par une simple réponse textuelle (question, explication, rédaction courte). Remplis alors `reply`.',
     '  mode="plan" : la demande exige des actions réelles (recherche, fichiers, applications connectées, publication…). Remplis alors `objective` et 1 à 8 `steps`.',
@@ -296,8 +298,8 @@ export interface ConversationTurnResult {
   intent: TurnIntent;
 }
 
-function historyForModel(history: ChatMessage[], limit = 16) {
-  return history.slice(-limit).map((m) => ({ role: m.role, content: m.content }));
+function historyForModel(history: ChatMessage[], limit = 24) {
+  return history.slice(-limit).map((m) => ({ role: m.role, content: m.content.slice(0, 12000) }));
 }
 
 /**
@@ -352,7 +354,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const history = await listMessages(input.userId, input.conversationId, 100);
   const priorHistory = history.slice(0, -1);
 
-  // 2) Demande d'image : génération réelle (Agnes AI) + artefact image.
+  // 2) Demande d'image : g��nération réelle (Agnes AI) + artefact image.
   if (looksLikeImageRequest(input.message)) {
     await onEvent({ type: "status", phase: "image", label: "Génération de l'image en cours…" });
     const result = await runImageTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
@@ -600,7 +602,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 
 async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
   try {
-    const image = await generateImageWithAgnes({ prompt: extractImagePrompt(ctx.message) });
+    const image = await generateImageWithAgnes({ prompt: enhanceImagePrompt(ctx.message) });
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
       userId: ctx.userId,

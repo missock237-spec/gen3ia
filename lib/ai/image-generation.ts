@@ -79,6 +79,19 @@ export function extractImagePrompt(message: string): string {
   return prompt.trim() || message.trim();
 }
 
+/**
+ * Compétence de génération : transforme une demande courte en brief visuel
+ * exploitable sans changer l'intention. Elle ajoute uniquement des contraintes
+ * neutres de qualité et interdit à l'imageur d'ajouter du texte ou des sujets
+ * non demandés.
+ */
+export function enhanceImagePrompt(message: string): string {
+  const subject = extractImagePrompt(message).replace(/\s+/g, " ").trim();
+  const quality = "rendu réaliste et cohérent, lumière naturelle, détails nets, composition équilibrée, perspective crédible";
+  const constraints = "respecter strictement le sujet demandé, ne rien ajouter d'inutile, aucun texte ni logo lisible sauf demande explicite";
+  return `${subject}. ${quality}. ${constraints}.` .slice(0, 4000);
+}
+
 interface AgnesImageResponse {
   data?: Array<{ url?: string; b64_json?: string }>;
   task_id?: string;

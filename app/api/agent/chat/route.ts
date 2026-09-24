@@ -19,7 +19,7 @@ import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import { describeConnectorsForPrompt, describeConnectedConnectorsForPrompt, type ConnectedConnectorsContext } from "@/lib/integrations/mention";
 import { describeProjectServicesForPrompt, PROJECT_SERVICE_TOOLS } from "@/lib/agents/services/bridge";
 import {
-  extractImagePrompt,
+  enhanceImagePrompt,
   generateImageWithAgnes,
   ImageGenerationError,
   isImageGenerationEnabled,
@@ -158,7 +158,7 @@ async function respondWithImage(params: {
     return { reply, imageUrl: undefined, model: undefined };
   }
   try {
-    const image = await generateImageWithAgnes({ prompt: extractImagePrompt(message) });
+    const image = await generateImageWithAgnes({ prompt: enhanceImagePrompt(message) });
     const reply = "Voici l'image que j'ai générée pour vous.";
     await appendMessage({
       conversationId, userId, role: "assistant", content: reply,

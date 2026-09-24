@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { generate } from "@/lib/ai/router";
 import {
-  extractImagePrompt,
+  enhanceImagePrompt,
   generateImageWithAgnes,
   ImageGenerationError,
   looksLikeImageRequest,
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     // est servie directement — pas de réponse textuelle en guise d'image.
     if (looksLikeImageRequest(body.message)) {
       try {
-        const image = await generateImageWithAgnes({ prompt: extractImagePrompt(body.message) });
+        const image = await generateImageWithAgnes({ prompt: enhanceImagePrompt(body.message) });
         const reply = `Voici l'image que j'ai générée pour vous.`;
         const assistant = await appendMessage({
           conversationId, userId: user.uid, role: "assistant", content: reply,
