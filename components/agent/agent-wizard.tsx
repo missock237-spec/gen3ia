@@ -9,8 +9,8 @@ import { WIZARD_AGENT_TYPES, wizardTypeForKey, type WizardAgentType } from "@/li
 import type { AgentPersona, AgentSummary } from "@/lib/agents/schema";
 
 /**
- * Assistant de personnalisation d'un agent IA (Studio Gen3ia).
- * La personnalisation est OBLIGATOIRE avant toute exécution de tâche :
+ * Assistant de création d'un agent IA (Studio Gen3ia).
+ * La configuration initiale est requise avant toute exécution de tâche :
  * nom, description, compétences, fichier mémoire (optionnel), nature
  * (agent d'appel ou standard) et type d'agent (prédéfini ou personnalisé).
  * Sans prompt système saisi, la charte professionnelle est générée
@@ -214,13 +214,12 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
   }
 
   return (
-    <form onSubmit={submit} className="g3-card anim-slide-up p-5 md:p-7" aria-label="Assistant de personnalisation de l'agent">
+    <form onSubmit={submit} className="g3-card anim-slide-up p-5 md:p-7" aria-label="Assistant de création de l'agent">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold md:text-xl">{editing ? "Personnaliser l'agent" : "Personnalisez votre agent IA"}</h2>
+          <h2 className="text-lg font-bold md:text-xl">{editing ? "Modifier l'agent" : "Créer votre agent IA"}</h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-600">
-            Avant d&apos;exécuter une tâche, configurez votre agent : identité, compétences, mémoire, nature et type.
-            Sa charte professionnelle et son périmètre strict sont générés automatiquement — il ne sortira jamais de son domaine.
+            Définissez uniquement son identité, son type, ses compétences et sa mémoire. Gen3ia génère ensuite automatiquement une charte sûre et un plan d&apos;exécution adapté à chaque demande.
           </p>
         </div>
         <span className="rounded-full border border-sky-200 bg-sky-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-sky-700">Étape obligatoire</span>
