@@ -8,6 +8,7 @@ import {
   ImageGenerationError,
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
+import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import { appendMessage, createConversation, getConversation, listMessages } from "@/lib/chat/repository";
 import { errorStatus } from "@/lib/security/http-errors";
 
@@ -36,7 +37,9 @@ export async function POST(request: NextRequest) {
     // est servie directement — pas de réponse textuelle en guise d'image.
     if (looksLikeImageRequest(body.message)) {
       try {
-        const image = await generateImageWithAgnes({ prompt: extractImagePrompt(body.message) });
+        // Prompt analysé puis amélioré par LLM (sujet intact, rendu optimisé).
+        const { prompt: enhancedPrompt } = await enhanceImagePrompt(extractImagePrompt(body.message));
+        const image = await generateImageWithAgnes({ prompt: enhancedPrompt });
         const reply = `Voici l'image que j'ai générée pour vous.`;
         const assistant = await appendMessage({
           conversationId, userId: user.uid, role: "assistant", content: reply,

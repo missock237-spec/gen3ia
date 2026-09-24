@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
+import { createNotification, markNotificationsForApprovalRead } from "@/lib/notifications/repository";
 import type { ApprovalStatus, ConversationApproval } from "@/lib/domain/conversations/types";
 
 /**
@@ -67,6 +68,18 @@ export async function createApproval(input: {
   const now = new Date();
   const ref = adminDb.collection(COLLECTION).doc(randomUUID());
   await ref.set({ ...input, status: "pending" as const, createdAt: now, expiresAt: new Date(now.getTime() + APPROVAL_TTL_MS) });
+  // Notification in-app VALIDABLE À DISTANCE : l'utilisateur peut approuver
+  // ou rejeter depuis le centre de notifications, même hors conversation.
+  void createNotification({
+    userId: input.userId,
+    type: "approval_requested",
+    title: input.title.slice(0, 200),
+    body: [input.toolName, input.impact, input.estimatedCost].filter(Boolean).join(" · ").slice(0, 400),
+    kind: "conversation",
+    approvalId: ref.id,
+    conversationId: input.conversationId,
+    toolSlug: input.toolName,
+  });
   return { ...input, status: "pending", id: ref.id, createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + APPROVAL_TTL_MS).toISOString() };
 }
 
@@ -102,6 +115,8 @@ export async function decideApproval(
     tx.update(ref, { status: decision, decidedAt: FieldValue.serverTimestamp() });
     return { approval: { ...current, status: decision, decidedAt: new Date().toISOString() }, alreadyDecided: false, approved };
   });
+  // La décision prise : les notifications rattachées ne sont plus actionnables.
+  if (!result.alreadyDecided) void markNotificationsForApprovalRead(userId, approvalId);
   return { approval: result.approval, alreadyDecided: result.alreadyDecided };
 }
 

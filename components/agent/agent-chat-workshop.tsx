@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
-import { AgentBuilder } from "@/components/agent/agent-builder";
+import { AgentQuickCreate } from "@/components/agent/agent-quick-create";
 import { AgentChatPanel } from "@/components/agent/agent-chat-panel";
 import { VoiceAgentSetup } from "@/components/agent/voice-agent-setup";
 import { Callout } from "@/components/studio/callout";
@@ -13,12 +13,11 @@ import type { AgentSummary } from "@/lib/agents/schema";
 
 /**
  * Atelier de chat d'agents IA personnalisés (Studio Gen3ia).
- * Remplace l'ancien couple « formulaire de création » + « chat universel » :
- *  - rail latéral : liste des agents, création, sélection, suppression ;
- *  - assistant de personnalisation OBLIGATOIRE avant toute exécution
- *    (nom, description, compétences, mémoire, nature, type + type libre) ;
- *  - chat agent-scopé : réponses professionnelles, classification des
- *    requêtes (réponse simple ou exécution), périmètre strict.
+ * Rail latéral : liste des agents, création, sélection, suppression.
+ * Création SIMPLIFIÉE (nom + type + fichier optionnel) — plus d'assistant
+ * de personnalisation : l'agent est opérationnel immédiatement.
+ * Chat agent-scopé : réponses professionnelles, classification des requêtes
+ * (réponse simple ou exécution), périmètre strict.
  */
 
 function AgentAvatar({ name }: { name: string }) {
@@ -31,8 +30,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   const [agents, setAgents] = React.useState<AgentSummary[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [activeId, setActiveId] = React.useState<string | null>(null);
-  const [view, setView] = React.useState<"chat" | "wizard">("chat");
-  const [editing, setEditing] = React.useState<AgentSummary | null>(null);
+  const [view, setView] = React.useState<"chat" | "create">("chat");
   const [voiceSetupAgentId, setVoiceSetupAgentId] = React.useState<string | null>(null);
   const [showRailMobile, setShowRailMobile] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -69,10 +67,10 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   // surface de l'appareil. L'assistant de création garde un flux normal.
   const chatMode = view === "chat" && activeAgent !== null;
 
-  // Pas encore d'agent : l'assistant de personnalisation s'ouvre d'office —
+  // Pas encore d'agent : la création simplifiée s'ouvre d'office —
   // uniquement si la liste a été réellement chargée (jamais sur une panne).
   React.useEffect(() => {
-    if (!loading && !loadFailed && agents.length === 0) setView("wizard");
+    if (!loading && !loadFailed && agents.length === 0) setView("create");
     if (!loading && agents.length > 0 && !activeId) setActiveId(agents[0].id);
   }, [loading, loadFailed, agents, activeId]);
 
@@ -94,9 +92,8 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
     });
     setActiveId(agent.id);
     setView("chat");
-    setEditing(null);
     setShowRailMobile(false);
-    if (agent.agentMode === "call" && !editing) setVoiceSetupAgentId(agent.id);
+    if (agent.agentMode === "call") setVoiceSetupAgentId(agent.id);
   }
 
   const rail = (
@@ -109,9 +106,9 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
       <button
         type="button"
         className="g3-btn g3-btn-primary mt-3 w-full text-xs"
-        onClick={() => { setEditing(null); setView("wizard"); setShowRailMobile(false); }}
+        onClick={() => { setView("create"); setShowRailMobile(false); }}
       >
-        + Nouvel agent personnalisé
+        + Créer un agent
       </button>
 
       {/* Liste flexible : remplit la hauteur disponible en chat plein écran
@@ -192,23 +189,19 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
         <div className="min-h-0 min-w-0">
           {loading ? (
             <div className="g3-card p-10"><AgentGridSkeleton count={2} /></div>
-          ) : view === "wizard" || !activeAgent ? (
-            <AgentBuilder
-              editing={editing}
+          ) : view === "create" ? (
+            <AgentQuickCreate
               onSaved={handleSaved}
-              onCancel={() => {
-                setEditing(null);
-                if (activeAgent) setView("chat");
-                else if (agents.length > 0) { setActiveId(agents[0].id); setView("chat"); }
-              }}
+              onCancel={agents.length > 0 ? () => { setView("chat"); } : undefined}
             />
-          ) : (
+          ) : activeAgent ? (
             <AgentChatPanel
               agent={activeAgent}
-              onEdit={() => { setEditing(activeAgent); setView("wizard"); }}
               onAgentsChanged={() => void refresh()}
               initialMessage={initialMessage}
             />
+          ) : (
+            <AgentQuickCreate onSaved={handleSaved} />
           )}
         </div>
       </div>

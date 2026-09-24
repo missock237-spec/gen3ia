@@ -8,6 +8,7 @@ import {
   ImageGenerationError,
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
+import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import type { ToolRisk } from "@/lib/tools/types";
 import { createDefaultToolRegistry } from "@/lib/tools/default-registry";
 import { executeTool } from "@/lib/tools/executor";
@@ -682,7 +683,10 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   try {
-    const image = await generateImageWithAgnes({ prompt: extractImagePrompt(ctx.message) });
+    // Prompt analysé puis amélioré par LLM (compétence image Gen3ia : sujet
+    // intact, rendu optimisé) avant génération réelle via Agnes AI.
+    const { prompt: enhancedPrompt } = await enhanceImagePrompt(extractImagePrompt(ctx.message));
+    const image = await generateImageWithAgnes({ prompt: enhancedPrompt });
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
       userId: ctx.userId,

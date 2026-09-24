@@ -107,12 +107,10 @@ function Avatar({ name, size = "md" }: { name: string; size?: "md" | "lg" }) {
 
 export function AgentChatPanel({
   agent,
-  onEdit,
   onAgentsChanged,
   initialMessage = "",
 }: {
   agent: AgentSummary;
-  onEdit: () => void;
   onAgentsChanged: () => void;
   initialMessage?: string;
 }) {
@@ -125,7 +123,6 @@ export function AgentChatPanel({
   const [attachment, setAttachment] = React.useState<File | null>(null);
   const [attachmentPath, setAttachmentPath] = React.useState<string | null>(null);
   const [uploading, setUploading] = React.useState(false);
-  const [showTrace, setShowTrace] = React.useState(true);
   const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
   const [showHistory, setShowHistory] = React.useState(false);
   const [historyLoading, setHistoryLoading] = React.useState(false);
@@ -153,12 +150,14 @@ export function AgentChatPanel({
   const loadConversations = React.useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const response = await fetch("/api/chat/conversations?limit=20", { cache: "no-store" });
+      // Historique SCOPÉ À L'AGENT courant : chaque agent possède son propre
+      // fil de conversations (conversations créées avec agentId).
+      const response = await fetch(`/api/chat/conversations?limit=20&agentId=${encodeURIComponent(agent.id)}`, { cache: "no-store" });
       if (response.ok) setConversations(((await response.json()).conversations ?? []) as ConversationSummary[]);
     } catch { /* historique indisponible */ } finally {
       setHistoryLoading(false);
     }
-  }, []);
+  }, [agent.id]);
 
   React.useEffect(() => { void loadConversations(); }, [loadConversations]);
 
@@ -355,14 +354,8 @@ export function AgentChatPanel({
     {
       id: "historique",
       label: "Historique",
-      description: "Rouvre une conversation passée avec vos agents.",
+      description: "Rouvre une conversation passée avec cet agent.",
       run: () => { void loadConversations(); setShowHistory(true); },
-    },
-    {
-      id: "personnaliser",
-      label: "Personnaliser cet agent",
-      description: "Compétences, mémoire, nature et type de l'agent.",
-      run: () => onEdit(),
     },
     {
       id: "connecteurs",
@@ -409,7 +402,6 @@ export function AgentChatPanel({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={onEdit} className="rounded-xl border border-white/10 px-3 py-2 text-[11px] text-[var(--g3-faint)] transition hover:bg-[var(--g3-surface)]/5 hover:text-white">Personnaliser</button>
           <button type="button" onClick={() => { void loadConversations(); setShowHistory((current) => !current); }} aria-expanded={showHistory} className="rounded-xl border border-white/10 px-3 py-2 text-[11px] text-[var(--g3-faint)] transition hover:bg-[var(--g3-surface)]/5 hover:text-white">Historique</button>
           <button type="button" onClick={resetConversation} disabled={loading} className="rounded-xl border border-white/10 px-3 py-2 text-[11px] text-[var(--g3-faint)] transition hover:bg-[var(--g3-surface)]/5 hover:text-white disabled:opacity-30">Nouveau</button>
         </div>
@@ -522,14 +514,15 @@ export function AgentChatPanel({
                 )}
 
                 {/* Trace d'exécution + approbations (mode task uniquement) */}
-                {item.result && (
+                {/* Résultat SEUL à l'écran : le détail du plan d'exécution
+                    n'est affiché que lorsqu'il demande une action de
+                    l'utilisateur (validation requise) ou en cas d'échec. */}
+                {item.result && (item.result.status === "waiting_approval" || item.result.status === "failed") && (
                   <div className="mt-2 rounded-2xl border border-white/10 bg-[var(--g3-deep)] p-3">
-                    <button type="button" onClick={() => setShowTrace((current) => !current)} aria-expanded={showTrace} className="flex w-full items-center justify-between text-[11px] font-bold uppercase tracking-wider text-[var(--g3-faint)] hover:text-[var(--g3-text-secondary)]">
+                    <p className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-[var(--g3-faint)]">
                       <span>Plan d&apos;exécution · {statusLabel(item.result.status)}</span>
-                      <span aria-hidden="true">{showTrace ? "−" : "+"}</span>
-                    </button>
-                    {showTrace && (
-                      <ol className="mt-2 space-y-1.5">
+                    </p>
+                    <ol className="mt-2 space-y-1.5">
                         {item.result.plan.steps.map((step) => (
                           <li key={step.id} className="flex items-start gap-2 text-xs">
                             <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${step.status === "completed" ? "bg-emerald-400" : step.status === "failed" ? "bg-red-400" : step.status === "waiting_approval" ? "bg-amber-400" : "bg-neutral-600"}`} aria-hidden="true" />
@@ -540,8 +533,7 @@ export function AgentChatPanel({
                             <span className={`ml-auto shrink-0 text-[10px] font-semibold ${statusClass(step.status)}`}>{statusLabel(step.status)}</span>
                           </li>
                         ))}
-                      </ol>
-                    )}
+                    </ol>
                     {item.result.status === "waiting_approval" && pendingApprovals.length > 0 && (
                       <div className="mt-3 space-y-2">
                         {pendingApprovals.map((approval) => (

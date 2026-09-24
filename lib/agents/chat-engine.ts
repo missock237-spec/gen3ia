@@ -31,11 +31,11 @@ export interface RequestClassification {
 
 const CLASSIFIER_SYSTEM = [
   "Tu es le classificateur de requêtes des agents IA Gen3ia.",
-  "On te donne la charte d'un agent (son domaine, ses compétences) et le message d'un utilisateur.",
-  "Tu décides, en comparant la charte et le message :",
-  "1. mode: \"chat\" si le message appelle une réponse claire et simple (salutation, question, explication, conseil, reformulation, discussion) — l'agent répond directement comme un LLM ;",
-  "mode: \"task\" si le message demande de RÉALISER quelque chose de concret dans le domaine de l'agent (produire un livrable, exécuter, créer, rechercher des données, préparer un document) — l'agent agit alors comme un professionnel qui exécute la tâche pour laquelle il a été créé.",
-  "2. inScope: false si le message relève CLAIREMENT d'un autre domaine que celui de l'agent (exemple : une stratégie marketing pour un agent de code). inScope: true sinon, y compris pour les salutations.",
+  "On te donne la charte d'un agent (son domaine, ses compétences), les derniers échanges de la conversation (pour résoudre les références implicites : pronoms, « ce fichier », « la même chose ») et le message d'un utilisateur.",
+  "Analyse D'ABORD les échanges passés pour comprendre le VRAI besoin de l'utilisateur, puis décide, en comparant la charte et ce besoin :",
+  "1. mode: \"chat\" si le besoin appelle une réponse claire et simple (salutation, question, explication, conseil, reformulation, discussion) — l'agent répond directement comme un LLM ;",
+  "mode: \"task\" si le besoin demande de RÉALISER quelque chose de concret dans le domaine de l'agent (produire un livrable, exécuter, créer, rechercher des données, préparer un document) — l'agent agit alors comme un professionnel qui exécute la tâche pour laquelle il a été créé.",
+  "2. inScope: false si le besoin relève CLAIREMENT d'un autre domaine que celui de l'agent (exemple : une stratégie marketing pour un agent de code). inScope: true sinon, y compris pour les salutations.",
   "3. reason: une courte justification en français.",
   "Réponds STRICTEMENT en JSON : {\"mode\":\"chat|task\",\"inScope\":true|false,\"reason\":\"...\"}",
 ].join(" ");
@@ -58,14 +58,19 @@ function normalizeMode(value: unknown): ChatRequestMode | null {
   return value === "chat" || value === "task" ? value : null;
 }
 
-export async function classifyRequest(agent: Pick<AgentRecord, "name" | "description" | "type" | "typeLabel" | "skills">, message: string): Promise<RequestClassification> {
+export async function classifyRequest(
+  agent: Pick<AgentRecord, "name" | "description" | "type" | "typeLabel" | "skills">,
+  message: string,
+  history: ChatHistoryMessage[] = [],
+): Promise<RequestClassification> {
   const charter = buildAgentCharter(agent);
   try {
+    const recentHistory = history.slice(-8).map((item) => ({ role: item.role, content: item.content.slice(0, 600) }));
     const response = await generate({
       task: "agent",
       messages: [
         { role: "system", content: CLASSIFIER_SYSTEM },
-        { role: "user", content: JSON.stringify({ charte: charter, message }) },
+        { role: "user", content: JSON.stringify({ charte: charter, ...(recentHistory.length > 0 ? { derniersEchanges: recentHistory } : {}), message }) },
       ],
       requiresStructuredOutput: true,
       preferFree: true,
@@ -108,6 +113,21 @@ export async function classifyRequest(agent: Pick<AgentRecord, "name" | "descrip
 }
 
 export type ChatHistoryMessage = { role: "user" | "assistant"; content: string };
+
+/**
+ * Note de contexte construite depuis l'historique de la conversation :
+ * permet au planificateur (mode "task") de comprendre les références
+ * implicites et de s'appuyer sur les échanges passés. Fonction pure.
+ */
+export function historyContextNote(history: ChatHistoryMessage[], limit = 8): string | undefined {
+  const recent = history.slice(-limit);
+  if (recent.length === 0) return undefined;
+  const lines = recent.map((item) => `- ${item.role === "user" ? "Utilisateur" : "Assistant"} : ${item.content.replace(/\s+/g, " ").slice(0, 500)}`);
+  return [
+    "[Contexte de la conversation — échanges précédents. Utilise-les pour résoudre les références implicites et comprendre le VRAI besoin de l'utilisateur :]",
+    ...lines,
+  ].join("\n");
+}
 
 /**
  * Réponse directe (mode "chat") : la charte de l'agent pilote un appel LLM

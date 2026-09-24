@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { FeatureAuthGate } from "@/components/auth/feature-auth-gate";
 import { SettingsAdSpace } from "@/components/settings/settings-ad-space";
 
@@ -20,6 +22,14 @@ function SettingsContent() {
           <p className="mt-2 text-sm leading-6 text-[var(--g3-muted)]">
             Les intégrations et paramètres métier restent accessibles depuis les sections dédiées de votre espace de travail.
           </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href="/settings/ads"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-2.5 text-sm font-semibold text-[var(--g3-text)] transition hover:bg-[var(--g3-elevated)]"
+            >
+              <span aria-hidden="true">📣</span> Publicité — préférences et annonces
+            </Link>
+          </div>
         </section>
 
         <section className="mt-6" aria-labelledby="settings-ad-title">

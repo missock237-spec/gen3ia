@@ -6,11 +6,11 @@ import { Fragment, type ReactNode } from "react";
  * Rendu markdown minimal et sûr pour les messages de conversation :
  * aucun dangerouslySetInnerHTML — tout est transformé en éléments React.
  * Support : titres (#…), gras, italique, code inline, blocs de code,
- * listes à puces/numérotées, citations, liens.
+ * listes à puces/numérotées, citations, liens, images ![alt](url).
  */
 
 const INLINE_PATTERN =
-  /(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`|\[[^\]]+\]\((?:https?:\/\/|\/)[^\s)]+\))/g;
+  /(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`|\[[^\]]+\]\((?:https?:\/\/|\/)[^\s)]+\)|!\[[^\]]*\]\((?:https?:\/\/|\/)[^\s)]+\))/g;
 
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const parts = text.split(INLINE_PATTERN).filter((p) => p !== undefined && p !== "");
@@ -23,6 +23,19 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
         <code key={key} className="rounded bg-[var(--g3-elevated)] px-1.5 py-0.5 font-mono text-[0.85em] text-[var(--g3-text)]">
           {part.slice(1, -1)}
         </code>
+      );
+    }
+    const image = /^!\[([^\]]*)\]\(((?:https?:\/\/|\/)[^\s)]+)\)$/.exec(part);
+    if (image) {
+      return (
+        /* eslint-disable-next-line @next/next/no-img-element -- URL externe (CDN du fournisseur d'images), pas de domaine fixe pour next/image */
+        <img
+          key={key}
+          src={image[2]}
+          alt={image[1] || "Image générée"}
+          loading="lazy"
+          className="max-h-96 w-auto max-w-full rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] object-contain"
+        />
       );
     }
     const link = /^\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)$/.exec(part);

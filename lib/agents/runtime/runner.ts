@@ -10,6 +10,8 @@ import { createCheckpoint, saveCheckpoint } from "./checkpoint";
 import { getReadySteps, validateDAG } from "./dag";
 import { RuntimeScheduler } from "./scheduler";
 import { assertNotPaused } from "./pause";
+import { generateImageWithAgnes, isImageGenerationEnabled } from "@/lib/ai/image-generation";
+import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 
 /* ------------------------------------------------------------------ */
 /* Completion des livrables document (artifact.create)                 */
@@ -224,7 +226,8 @@ export class AgentRuntime {
 
   private async dispatch(step: RuntimeStep): Promise<unknown> {
     switch (step.type) {
-      case "llm": case "document": case "media": return this.executeLLM(step);
+      case "llm": case "document": return this.executeLLM(step);
+      case "media": return this.executeMedia(step);
       case "tool": return this.executeTool(step);
       case "research": return this.executeTool({ ...step, toolName: step.toolName ?? "web.search" });
       case "code": return this.executeCode(step);
@@ -236,6 +239,27 @@ export class AgentRuntime {
 
   private static readonly SAFETY_CONTRACT =
     "Never invent external results, credentials, customer data, transactions or completed actions. Do not perform side effects unless a separately authorized tool step executes them. Be factual, operational and explicit about uncertainty.";
+
+  /**
+   * Compétence image du runtime Gen3ia : une étape `media` génère une VRAIE
+   * image via Agnes AI. Le prompt est analysé puis amélioré par LLM (réalisme,
+   * cadrage, éclairage) sans jamais modifier le sujet demandé. La sortie est
+   * un rendu markdown d'image (affiché directement dans la conversation).
+   * Repli : si Agnes n'est pas configuré, l'étape retombe sur une rédaction
+   * LLM (comportement historique) au lieu de faire échouer la mission.
+   */
+  private async executeMedia(step: RuntimeStep): Promise<unknown> {
+    const rawPrompt = typeof step.input?.prompt === "string" && (step.input.prompt as string).trim()
+      ? String(step.input.prompt).slice(0, 4_000)
+      : step.description;
+    if (!isImageGenerationEnabled()) {
+      return this.executeLLM(step);
+    }
+    const { prompt } = await enhanceImagePrompt(rawPrompt);
+    const image = await generateImageWithAgnes({ prompt });
+    const alt = step.name.replace(/[\[\]()"]/g, "").slice(0, 120) || "Image générée";
+    return `![${alt}](${image.imageUrl})`;
+  }
 
   /**
    * Délégation à un sous-agent du Studio (étape type "agent").

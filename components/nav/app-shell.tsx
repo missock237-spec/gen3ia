@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { AppNav } from "@/components/nav/app-nav";
 import { Breadcrumbs } from "@/components/nav/breadcrumbs";
 import { ScrollTop } from "@/components/nav/scroll-top";
+import { NotificationCenter } from "@/components/notifications/notification-center";
 import { isImmersiveChatRoute } from "@/lib/ui/chat-surface";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -45,6 +46,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {!chrome && !immersiveChat && <Breadcrumbs />}
         <div id="g3-main-content" className={immersiveChat ? "h-full" : undefined}>{children}</div>
       </main>
+      {/* Centre de notifications (validation à distance des actions sensibles) :
+          disponible sur toutes les pages applicatives, même hors des chats. */}
+      {!chrome && <NotificationCenter />}
       <ScrollTop />
     </div>
   );

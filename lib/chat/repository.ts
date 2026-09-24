@@ -19,6 +19,8 @@ export interface ChatConversation {
   title: string;
   /** Projet de rattachement (Conversation-first). */
   projectId?: string;
+  /** Agent IA propriétaire du fil (historique scopé par agent). */
+  agentId?: string;
   model?: string;
   provider?: string;
   status?: ConversationStatus;
@@ -76,19 +78,21 @@ function iso(value: unknown): string {
 export async function createConversation(
   userId: string,
   title = "Nouvelle conversation",
-  options: { projectId?: string } = {},
+  options: { projectId?: string; agentId?: string } = {},
 ) {
   const ref = adminDb.collection("chatConversations").doc();
   const now = new Date();
   await ref.set({
     userId, title: title.slice(0, 120), messageCount: 0,
     ...(options.projectId ? { projectId: options.projectId } : {}),
+    ...(options.agentId ? { agentId: options.agentId } : {}),
     status: "active" as const,
     createdAt: now, updatedAt: now,
   });
   return {
     id: ref.id, userId, title, messageCount: 0,
     ...(options.projectId ? { projectId: options.projectId } : {}),
+    ...(options.agentId ? { agentId: options.agentId } : {}),
     status: "active" as const,
     createdAt: now.toISOString(), updatedAt: now.toISOString(),
   };
@@ -97,10 +101,19 @@ export async function createConversation(
 export async function listConversations(
   userId: string,
   limit = 50,
-  options: { projectId?: string; query?: string } = {},
+  options: { projectId?: string; agentId?: string; query?: string } = {},
 ): Promise<ChatConversation[]> {
   let snap;
-  if (options.projectId) {
+  if (options.agentId) {
+    // Historique scopé à un agent IA : seuls ses fils sont listés.
+    snap = await adminDb
+      .collection("chatConversations")
+      .where("userId", "==", userId)
+      .where("agentId", "==", options.agentId)
+      .orderBy("updatedAt", "desc")
+      .limit(Math.min(limit, 100))
+      .get();
+  } else if (options.projectId) {
     snap = await adminDb
       .collection("chatConversations")
       .where("userId", "==", userId)
@@ -118,6 +131,7 @@ export async function listConversations(
       userId: x.userId,
       title: String(x.title ?? "Nouvelle conversation"),
       projectId: typeof x.projectId === "string" ? x.projectId : undefined,
+      agentId: typeof x.agentId === "string" ? x.agentId : undefined,
       model: x.model,
       provider: x.provider,
       status: x.status === "archived" ? ("archived" as const) : ("active" as const),

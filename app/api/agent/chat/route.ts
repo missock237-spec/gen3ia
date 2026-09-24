@@ -14,7 +14,7 @@ import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage, createConversation, getConversation, listMessages } from "@/lib/chat/repository";
 import { getAgentForOwner } from "@/lib/agents/repository";
 import { policyForAgent } from "@/lib/agents/personalized-plan";
-import { answerAsAgent, classifyRequest, outOfScopeReply, planAgentTask } from "@/lib/agents/chat-engine";
+import { answerAsAgent, classifyRequest, historyContextNote, outOfScopeReply, planAgentTask } from "@/lib/agents/chat-engine";
 import { recallAgentContext, recordExchange, shouldSummarize, summarizeConversation } from "@/lib/memory/episodic";
 import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import { describeConnectorsForPrompt, describeConnectedConnectorsForPrompt, type ConnectedConnectorsContext } from "@/lib/integrations/mention";
@@ -26,6 +26,7 @@ import {
   isImageGenerationEnabled,
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
+import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import type { AgentRecord } from "@/lib/agents/schema";
 
 const Body = z.object({
@@ -225,7 +226,12 @@ async function respondWithImage(params: {
     return { reply, imageUrl: undefined, model: undefined };
   }
   try {
-    const image = await generateImageWithAgnes({ prompt: extractImagePrompt(message) });
+    // Compétence image Gen3ia : le prompt est ANALYSÉ puis AMÉLIORÉ par LLM
+    // (réalisme, cadrage, éclairage) sans jamais modifier le sujet demandé —
+    // ce que l'utilisateur a demandé est ce qui est généré, rien d'autre.
+    const extracted = extractImagePrompt(message);
+    const { prompt: enhancedPrompt } = await enhanceImagePrompt(extracted);
+    const image = await generateImageWithAgnes({ prompt: enhancedPrompt });
     const reply = "Voici l'image que j'ai générée pour vous.";
     await appendMessage({
       conversationId, userId, role: "assistant", content: reply,
@@ -265,7 +271,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Conversation introuvable." }, { status: 404 });
       }
     } else {
-      const conversation = await createConversation(user.uid, body.message.slice(0, 80));
+      const conversation = await createConversation(user.uid, body.message.slice(0, 80), agent ? { agentId: agent.id } : {});
       conversationId = conversation.id;
     }
 
@@ -292,7 +298,11 @@ export async function POST(request: NextRequest) {
         content: body.message,
       });
 
-      const classification = await classifyRequest(agent, body.message);
+      const classification = await classifyRequest(
+        agent,
+        body.message,
+        history.map((item) => ({ role: item.role === "user" ? ("user" as const) : ("assistant" as const), content: item.content })),
+      );
       const note = contextNoteFor(body.attachmentPath, agent);
 
       // Mémoire épisodique : rappel sémantique des échanges passés de cet
@@ -384,7 +394,11 @@ export async function POST(request: NextRequest) {
 
       // Mode task : exécution concrète de la tâche, dans le périmètre de
       // l'agent (charte injectée dans le planificateur, outils restreints).
-      const objectiveNote = fullNote ? `${fullNote}\n\n${body.message}` : body.message;
+      // L'historique accompagne l'objectif : le planificateur comprend les
+      // références implicites et s'appuie sur les échanges passés.
+      const historyNote = historyContextNote(history.map((item) => ({ role: item.role === "user" ? ("user" as const) : ("assistant" as const), content: item.content })));
+      const withHistory = [historyNote, body.message].filter(Boolean).join("\n\n");
+      const objectiveNote = fullNote ? `${fullNote}\n\n${withHistory}` : withHistory;
       const plan = await planAgentTask(user.uid, agent, objectiveNote);
       const approvalSteps = plan.steps.filter((step) =>
         step.type === "tool" && (step.requiresApproval || step.sideEffect),
@@ -586,9 +600,12 @@ export async function POST(request: NextRequest) {
     // Connecteurs connectés : contexte injecté + composio.execute ouvert,
     // comme sur le chemin agent personnalisé.
     const connectedUniversal = await connectedPromise;
-    const universalObjective = connectedUniversal.note
-      ? `${connectedUniversal.note}\n\n${body.message}`
-      : body.message;
+    const historyNoteUniversal = historyContextNote(history.map((item) => ({ role: item.role === "user" ? ("user" as const) : ("assistant" as const), content: item.content })));
+    const universalObjective = [
+      connectedUniversal.note,
+      historyNoteUniversal,
+      body.message,
+    ].filter(Boolean).join("\n\n");
 
     const plan = await planUniversalAgent(user.uid, universalObjective);
     const approvalSteps = plan.steps.filter((step) =>
