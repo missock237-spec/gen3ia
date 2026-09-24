@@ -231,7 +231,7 @@ async function respondWithImage(params: {
     // ce que l'utilisateur a demandé est ce qui est généré, rien d'autre.
     const extracted = extractImagePrompt(message);
     const { prompt: enhancedPrompt } = await enhanceImagePrompt(extracted);
-    const image = await generateImageWithAgnes({ prompt: enhancedPrompt });
+    const image = await generateImageWithAgnes({ prompt: enhancedPrompt, size: "2K", timeoutMs: 45_000 });
     const reply = "Voici l'image que j'ai générée pour vous.";
     await appendMessage({
       conversationId, userId, role: "assistant", content: reply,
@@ -246,6 +246,9 @@ async function respondWithImage(params: {
     return { reply, imageUrl: undefined, model: undefined };
   }
 }
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {

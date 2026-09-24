@@ -31,6 +31,8 @@ interface MessageThreadProps {
   streamingContent?: string;
   /** Libellé de la phase de travail en cours (analyse, exécution…). */
   streamingStatus?: string;
+  /** Image générée pendant le tour en cours (affichée immédiatement). */
+  liveImageUrl?: string;
   /** Run en cours de construction (timeline vivante du tour en cours). */
   liveRun?: ConversationRun | null;
   onDecide: (approvalId: string, decision: "approved" | "rejected") => Promise<void>;
@@ -44,6 +46,7 @@ export function MessageThread({
   generating,
   streamingContent,
   streamingStatus,
+  liveImageUrl,
   liveRun,
   onDecide,
 }: MessageThreadProps) {
@@ -170,6 +173,14 @@ export function MessageThread({
               <span className="g3-dots" aria-hidden>
                 <span /><span /><span />
               </span>
+            )}
+            {liveImageUrl && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={liveImageUrl}
+                alt="Image générée par Gen3ia"
+                className="mt-2.5 max-h-96 w-full rounded-xl border border-[var(--g3-border)] object-contain"
+              />
             )}
           </article>
           {streamingStatus && (

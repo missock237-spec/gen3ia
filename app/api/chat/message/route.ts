@@ -12,6 +12,9 @@ import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import { appendMessage, createConversation, getConversation, listMessages } from "@/lib/chat/repository";
 import { errorStatus } from "@/lib/security/http-errors";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 const Body = z.object({
   conversationId: z.string().min(1).max(128).optional(),
   message: z.string().trim().min(1).max(20000),
@@ -39,7 +42,7 @@ export async function POST(request: NextRequest) {
       try {
         // Prompt analysé puis amélioré par LLM (sujet intact, rendu optimisé).
         const { prompt: enhancedPrompt } = await enhanceImagePrompt(extractImagePrompt(body.message));
-        const image = await generateImageWithAgnes({ prompt: enhancedPrompt });
+        const image = await generateImageWithAgnes({ prompt: enhancedPrompt, size: "2K", timeoutMs: 45_000 });
         const reply = `Voici l'image que j'ai générée pour vous.`;
         const assistant = await appendMessage({
           conversationId, userId: user.uid, role: "assistant", content: reply,

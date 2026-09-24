@@ -3,6 +3,7 @@ import { z } from "zod";
 import { runAI, runAIJSON } from "@/lib/engines/ai-engine";
 import { generate, generateStream } from "@/lib/ai/router";
 import {
+  detectImageRatio,
   extractImagePrompt,
   generateImageWithAgnes,
   ImageGenerationError,
@@ -315,8 +316,13 @@ export function buildIntentSystemPrompt(
     "Les outils marqués « validation requise » ne seront exécutés qu'après approbation explicite de l'utilisateur : décris leur impact précisément dans detail.",
     "Ne propose jamais un outil qui n'est pas dans le catalogue. Ne fabrique pas d'identifiants, de tokens ou de numéros.",
     "",
+    "RÈGLE IMPÉRATIVE — VISUELS : toute demande de CRÉATION d'image, photo, illustration, dessin, logo, affiche, poster, bannière, avatar, icône, fond d'écran ou miniature est routée en mode=plan avec UN SEUL step :",
+    '  { title: "Génération de l\'image", toolName: "image.generate", toolInput: { prompt: "<description visuelle fidèle de CE QUE L\'UTILISATEUR a demandé — le sujet exact, sans rien ajouter ni inventer>" } }.',
+    "Cela vaut quel que soit la formulation (« dessine-moi un chat », « je veux une photo de… », « un logo pour ma boulangerie », « fais-moi une image de… »). Ne réponds JAMAIS une demande de visuel par du texte seul.",
+    "",
     "Catalogue d'outils disponibles :",
     toolLines,
+    "- image.generate (risque low) : génère une image réelle et photoréaliste à partir d'une description visuelle (input { prompt }).",
     "",
     project?.instructions ? `Instructions persistantes du projet « ${project.name} » (à respecter) :\n${project.instructions}` : "",
     project?.privacyRules ? `Règles de confidentialité du projet (impératives) :\n${project.privacyRules}` : "",
@@ -536,6 +542,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   const streaming = Boolean(ctx.onEvent);
   const systemParts = [
     "Tu es Gen3ia, l'assistant de travail qui exécute : tu réponds de façon directe, structurée et actionnable.",
+    "La génération d'images est effectuée par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré, affiché ou décrit un visuel comme s'il était affiché, et n'invente jamais d'URL d'image.",
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
   ].filter(Boolean);
@@ -680,13 +687,41 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 /* Tour « image » — génération réelle + artefact                       */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Compétence image Gen3ia : le prompt de l'utilisateur est analysé puis
+ * amélioré par LLM (sujet INTACT, rendu optimisé ultra réaliste), puis la
+ * génération réelle est déléguée à Agnes AI en 2K (détail supérieur).
+ * L'amélioration n'est JAMAIS bloquante (repli : prompt d'origine) et la
+ * durée totale reste sous le budget de la fonction serverless (60 s).
+ */
+async function produceConversationImage(
+  ctx: Pick<TurnContext, "message">,
+  plannedPrompt?: string,
+): Promise<{ imageUrl: string; model: string }> {
+  const rawPrompt =
+    typeof plannedPrompt === "string" && plannedPrompt.trim().length >= 3
+      ? plannedPrompt.trim().slice(0, 4000)
+      : extractImagePrompt(ctx.message);
+  // Amélioration bornée : si le LLM d'amélioration traîne, la génération
+  // part avec le prompt d'origine plutôt que de dépasser le budget.
+  const enhancement = await withTimeout(
+    enhanceImagePrompt(rawPrompt).catch(() => ({ prompt: rawPrompt, enhanced: false })),
+    12_000,
+    "amélioration du prompt image",
+  ).catch(() => ({ prompt: rawPrompt, enhanced: false }));
+  const image = await generateImageWithAgnes({
+    prompt: enhancement.prompt,
+    size: "2K",
+    ratio: detectImageRatio(ctx.message),
+    timeoutMs: 40_000,
+  });
+  return { imageUrl: image.imageUrl, model: image.model };
+}
+
 async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   try {
-    // Prompt analysé puis amélioré par LLM (compétence image Gen3ia : sujet
-    // intact, rendu optimisé) avant génération réelle via Agnes AI.
-    const { prompt: enhancedPrompt } = await enhanceImagePrompt(extractImagePrompt(ctx.message));
-    const image = await generateImageWithAgnes({ prompt: enhancedPrompt });
+    const image = await produceConversationImage(ctx);
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
       userId: ctx.userId,
@@ -864,8 +899,57 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 
   let executedSomething = false;
   let anyFailure = false;
+  /** Image générée pendant ce tour (affichée sur le message final). */
+  let turnImageUrl: string | undefined;
 
   for (const planned of plannedSteps) {
+    // Compétence image : l'étape image.generate est interceptée AVANT le
+    // catalogue d'outils — la génération réelle (Agnes AI 2K) produit une
+    // image attachée au message final et rangée dans les artefacts.
+    if (planned.toolName === "image.generate") {
+      const step = makeStep({
+        phase: "execution",
+        title: planned.title,
+        detail: planned.detail,
+        toolName: "image.generate",
+        toolInput: planned.toolInput,
+        status: "in_progress",
+      });
+      steps.push(step);
+      await onEvent({ type: "step_update", runId: run.id, step });
+      const startedAt = new Date().toISOString();
+      try {
+        const image = await produceConversationImage(ctx, typeof planned.toolInput?.prompt === "string" ? planned.toolInput.prompt : undefined);
+        step.status = "done";
+        step.startedAt = startedAt;
+        step.finishedAt = new Date().toISOString();
+        step.output = `Image générée avec ${image.model}.`;
+        executedSomething = true;
+        turnImageUrl = image.imageUrl;
+        const artifact = await createArtifact({
+          userId: ctx.userId,
+          conversationId: ctx.conversationId,
+          projectId: ctx.projectId,
+          runId: run.id,
+          type: "image",
+          title: (typeof planned.toolInput?.prompt === "string" && planned.toolInput.prompt.trim() ? planned.toolInput.prompt.trim() : ctx.message).slice(0, 80),
+          url: image.imageUrl,
+          note: `Généré avec ${image.model}`,
+        });
+        artifacts.push(artifact);
+        step.artifactId = artifact.id;
+        await onEvent({ type: "artifact_created", artifact });
+      } catch (error) {
+        step.status = "failed";
+        step.startedAt = startedAt;
+        step.finishedAt = new Date().toISOString();
+        step.output = error instanceof ImageGenerationError ? error.message : "La génération d'image a échoué.";
+        anyFailure = true;
+      }
+      await onEvent({ type: "step_update", runId: run.id, step });
+      continue;
+    }
+
     const toolEntry = planned.toolName ? catalogByName.get(planned.toolName) : undefined;
     if (planned.toolName && !toolEntry) {
       const step = makeStep({
@@ -1038,6 +1122,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     content: summary,
     runId: run.id,
     generationStatus: "complete",
+    ...(turnImageUrl ? { imageUrl: turnImageUrl } : {}),
   });
   await onEvent({ type: "message_complete", message: assistantMessage });
 

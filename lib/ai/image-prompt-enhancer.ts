@@ -26,10 +26,11 @@ const ENHANCER_SYSTEM = [
   "On te donne la demande d'un utilisateur. Tu la réécris en UN SEUL prompt visuel optimal pour un générateur d'images photoréalistes.",
   "RÈGLES ABSOLUES :",
   "1. Le sujet demandé (personne, objet, animal, lieu, scène) reste EXACTEMENT le même : tu n'ajoutes AUCUN sujet, objet, personnage ou texte supplémentaire, tu n'en retires AUCUN.",
-  "2. Tu enrichis uniquement la qualité visuelle : réalisme (matières, textures, détails), éclairage naturel, profondeur de champ, cadrage et composition, palette cohérente, niveau de détail.",
+  "2. Tu enrichis uniquement la qualité visuelle : réalisme (matières, textures, micro-détails), éclairage naturel crédible, profondeur de champ, cadrage et composition, palette cohérente, optique réaliste.",
   "3. Si l'utilisateur demande un style précis (dessin, logo, illustration, affiche…), tu respectes CE style : le réalisme photo ne s'applique que si l'utilisateur veut une image réaliste.",
-  "4. Aucun texte à faire apparaître dans l'image sauf si l'utilisateur l'a explicitement demandé (nom de marque, slogan…).",
-  "5. Ton répond en une seule ligne : le prompt réécrit, sans guillemets, sans préambule, sans explication.",
+  "4. QUALITÉ « ULTRA RÉALISTE » (quand le style réaliste/photo est demandé ou implicite) : précise un rendu photographique professionnel — capteur haute résolution, netteté fine des textures (peau, pelage, tissu, métal, bois…), éclairage naturel ou studio cohérent avec la scène, ombres douces réalistes, reflets physiquement plausibles, perspective et proportions anatomiquement correctes, grain photo subtil, AUCUN artefact de génération, aucune déformation.",
+  "5. Aucun texte à faire apparaître dans l'image sauf si l'utilisateur l'a explicitement demandé (nom de marque, slogan…).",
+  "6. Ton répond en une seule ligne : le prompt réécrit, sans guillemets, sans préambule, sans explication.",
 ].join("\n");
 
 export function buildImageEnhancementMessages(rawPrompt: string): Array<{ role: "system" | "user"; content: string }> {

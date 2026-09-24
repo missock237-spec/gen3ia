@@ -52,6 +52,8 @@ interface ConversationDetail {
 interface LiveTurn {
   status: string;
   content: string;
+  /** URL de l'image générée pendant ce tour (affichée immédiatement). */
+  imageUrl?: string;
   run: ConversationRun | null;
   approvals: ConversationApproval[];
   artifacts: ConversationArtifact[];
@@ -189,7 +191,14 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         break;
       case "message_complete":
         // Le texte final remplace le buffer en cours (source de vérité serveur).
-        setLive((current) => ({ ...(current ?? emptyLive()), content: event.message.content, status: "" }));
+        // L'image générée du tour est affichée immédiatement (sans attendre
+        // le rechargement de l'état serveur).
+        setLive((current) => ({
+          ...(current ?? emptyLive()),
+          content: event.message.content,
+          imageUrl: event.message.imageUrl ?? current?.imageUrl,
+          status: "",
+        }));
         break;
       case "done":
         break;
@@ -465,6 +474,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               generating={generating}
               streamingContent={live ? live.content : undefined}
               streamingStatus={live?.status}
+              liveImageUrl={live?.imageUrl}
               liveRun={live?.run}
               onDecide={decideApproval}
             />
