@@ -13,7 +13,7 @@ import { isImmersiveChatRoute } from "@/lib/ui/chat-surface";
  * Industrialise le fond crème, le conteneur max-w-7xl et les marges.
  *
  * Mode immersif (routes de chat) : sur le chat d'agent IA (/studio/agents),
- * l'interface de discussion occupe TOUTE la hauteur de l'appareil — les
+ * l'interface de discussion occupe TOUTE la surface de l'appareil — les
  * barres de navigation et les marges disparaissent, le fil défile en
  * interne et le composer reste collé en bas.
  */

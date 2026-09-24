@@ -380,11 +380,13 @@ export function AgentChatPanel({
   ]), [agent.id]);
 
   return (
-    // Chat PLEIN ÉCRAN : la section remplit toute la hauteur disponible
-    // (100dvh via la chaîne AppShell → layout → atelier) ; le fil défile
-    // en interne (flex-1 + min-h-0) et le composer reste collé en bas.
+    // Chat PLEIN ÉCRAN : la section remplit toute la surface disponible
+    // (hauteur via la chaîne AppShell → layout → atelier, largeur bord à
+    // bord) ; le fil défile en interne (flex-1 + min-h-0) et le composer
+    // reste collé en bas. Bord à bord sur mobile/tablette, carte arrondie
+    // sur grand écran.
     <section
-      className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[var(--g3-deep)] shadow-[0_24px_70px_-28px_rgba(0,0,0,0.95)]"
+      className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 bg-[var(--g3-deep)] shadow-none lg:rounded-[30px] lg:border lg:border-white/10 lg:shadow-[0_24px_70px_-28px_rgba(0,0,0,0.95)]"
       aria-label={`Chat avec ${agent.name}`}
     >
       <div className="pointer-events-none absolute -left-32 -top-32 h-72 w-72 rounded-full bg-[var(--g3-surface)]/5 blur-3xl" aria-hidden="true" />

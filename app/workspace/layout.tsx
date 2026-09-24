@@ -14,8 +14,8 @@ import { isImmersiveChatRoute } from "@/lib/ui/chat-surface";
  * dans les conversations et la Bibliothèque.
  *
  * Mode immersif (routes de chat) : sur les surfaces de conversation,
- * l'interface de discussion occupe TOUTE la hauteur de l'appareil —
- * les barres de navigation et les marges disparaissent, le fil défile
+ * l'interface de discussion occupe TOUTE la surface de l'appareil — les
+ * barres de navigation et les marges disparaissent, le fil défile
  * en interne et le composer reste collé en bas.
  */
 export default function WorkspaceLayout({ children }: { children: ReactNode }) {

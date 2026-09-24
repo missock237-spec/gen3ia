@@ -24,7 +24,7 @@ Gen3ia (Gen3ia AI Studio) est une plateforme SaaS d'agents IA autonomes. L'utili
 - Environnement contrôlé : sandbox isolée, terminal réservé aux agents de code, permissions granulaires par outil, garde-fous anti-dépenses.
 
 ### 2.3 Génération d'images par IA dans les chats
-- Dans le chat IA et le chat d'agent, une demande explicite (« génère une image de… », « crée un logo… », « dessine… ») déclenche une génération d'image réelle via le modèle Agnes Image 2.5 Flash (text-to-image, éditions, ratios 1:1 à 21:9, jusqu'à 4K).
+- Dans le chat d'un agent, une demande explicite (« génère une image de… », « crée un logo… », « dessine… ») déclenche une génération d'image réelle via le modèle Agnes Image 2.5 Flash (text-to-image, éditions, ratios 1:1 à 21:9, jusqu'à 4K).
 - L'image est affichée directement dans la conversation, cliquable en plein écran ; le même mécanisme est exposé via l'API POST /api/ai/image pour les intégrations.
 
 ### 2.4 Connecteurs et applications (integrations)
@@ -62,7 +62,7 @@ Gen3ia est la plateforme d'agents IA autonomes où l'on décrit un objectif en u
 L'inscription et la création d'agents sont gratuites ; les exécutions d'agents sont facturées à l'usage via un wallet intégré (rechargement Mobile Money ou carte bancaire). Des garde-fous anti-dépenses protègent chaque compte.
 
 **Gen3ia peut-il générer des images ?**
-Oui. Demandez « génère une image de… » dans le chat IA ou le chat d'un agent : l'image est réellement générée (Agnes Image 2.5 Flash) et affichée dans la conversation.
+Oui. Demandez « génère une image de… » dans le chat d'un agent : l'image est réellement générée (Agnes Image 2.5 Flash) et affichée dans la conversation.
 
 **Quelles applications Gen3ia peut-il connecter ?**
 Gmail, Google Calendar, Google Drive, Google Sheets, Slack, Notion, GitHub, HubSpot, Salesforce, Shopify, Stripe, Airtable, LinkedIn, Instagram, Facebook, YouTube, X, WhatsApp, Telegram et des centaines d'autres via le catalogue d'intégrations Composio.

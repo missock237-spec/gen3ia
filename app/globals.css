@@ -131,6 +131,9 @@ body {
 .g3-shell {
   height: 100vh;
   height: 100dvh; /* suit la barre d'adresse mobile (Safari/Chrome) */
+  /* Hauteur réellement visible (clavier virtuel ouvert inclus), posée par
+     ViewportHeightSync — garantit un chat plein écran à tout moment. */
+  height: var(--g3-vvh, 100dvh);
 }
 .g3-scroll {
   scroll-behavior: smooth;

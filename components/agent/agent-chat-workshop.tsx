@@ -66,7 +66,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
 
   const activeAgent = agents.find((agent) => agent.id === activeId) ?? null;
   // Mode chat plein écran : l'interface (rail + panneau) occupe toute la
-  // hauteur de l'appareil. L'assistant de création garde un flux normal.
+  // surface de l'appareil. L'assistant de création garde un flux normal.
   const chatMode = view === "chat" && activeAgent !== null;
 
   // Pas encore d'agent : l'assistant de personnalisation s'ouvre d'office —
@@ -160,7 +160,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   );
 
   return (
-    <div className={chatMode ? "flex h-full min-h-0 flex-col gap-4" : "space-y-5"}>
+    <div className={chatMode ? "flex h-full min-h-0 flex-col gap-2 lg:gap-4" : "space-y-5"}>
       {sessionDisponible === false && <Callout tone="warning" className="rounded-2xl">Session expirée — reconnectez-vous pour discuter avec vos agents.</Callout>}
       {error && <Callout tone="error" className="rounded-2xl"><span className="flex items-center justify-between gap-3"><span>{error}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Réessayer</button></span></Callout>}
 

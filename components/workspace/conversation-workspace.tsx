@@ -400,7 +400,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   );
 
   return (
-    <div className="relative flex h-full min-h-0 gap-2 bg-[var(--g3-surface)] p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-3 sm:p-3">
+    <div className="relative flex h-full min-h-0 gap-2 bg-[var(--g3-surface)] p-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:gap-3 lg:p-3">
       {/* Colonne gauche — conversations récentes, projets, recherche */}
       <div
         className={`shrink-0 transition-all ${listCollapsed ? "w-14" : "w-64"} border-r border-[var(--g3-border)] pr-3 max-lg:hidden`}
@@ -421,7 +421,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
       {/* Colonne centrale — conversation */}
       <div className="flex min-w-0 flex-1 flex-col">
         {detail && (
-          <div className="mb-2 flex items-center justify-between gap-2 border-b border-[var(--g3-border)] pb-2">
+          <div className="mb-2 flex items-center justify-between gap-2 border-b border-[var(--g3-border)] px-3 pt-2 pb-2 lg:px-0 lg:pt-0">
             <div className="min-w-0">
               <h1 className="truncate text-sm font-semibold text-[var(--g3-text)]">{detail.conversation.title || "Sans titre"}</h1>
               <p className="text-[11px] text-[var(--g3-muted)]">
@@ -440,7 +440,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           </div>
         )}
 
-        <div ref={threadScrollRef} className="flex-1 overflow-y-auto pr-1">
+        <div ref={threadScrollRef} className="flex-1 overflow-y-auto pl-3 pr-3 pt-3 lg:pl-0 lg:pr-1 lg:pt-0">
           {loadingDetail ? (
             <div className="space-y-3 py-4" aria-busy>
               {[0, 1, 2].map((i) => (
@@ -472,13 +472,13 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         </div>
 
         {error && detail && (
-          <p className="mt-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+          <p className="mx-3 mt-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 lg:mx-0" role="alert">
             {error}
           </p>
         )}
 
         {detail && (
-          <div className="mt-2 border-t border-[var(--g3-border)] pt-2">
+          <div className="mt-2 border-t border-[var(--g3-border)] px-3 pt-2 lg:px-0">
             <Composer
               onSend={sendMessage}
               disabled={generating}

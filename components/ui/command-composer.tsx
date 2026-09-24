@@ -21,7 +21,7 @@ import {
 
 /**
  * CommandComposer — barre de commande d'agent IA unifiée, identique dans
- * tous les chats Gen3ia (chat IA d'accueil + chat d'agent IA du Studio).
+ * tous les chats Gen3ia (chat d'agent IA du Studio).
  *
  * Réplique fidèle de la maquette validée :
  *  - grande zone de texte anthracite fortement arrondie sur fond sombre ;
