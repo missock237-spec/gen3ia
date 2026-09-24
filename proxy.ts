@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { detectDeviceFromHeaders } from "@/lib/device/detect";
+import { crossSiteMutationVerdict, trustedOriginsFromEnv } from "@/lib/security/edge-guards";
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -18,6 +19,29 @@ const CONTENT_SECURITY_POLICY = [
   "worker-src 'self' blob:",
   "upgrade-insecure-requests",
 ].join('; ');
+
+// Politique cible, plus stricte, déployée en mode « Report-Only » : le
+// navigateur N'APPLIQUE PAS ces règles mais signale chaque violation à
+// /api/security/csp-report. Objectif : mesurer en production si
+// 'unsafe-eval' peut être retiré sans rien casser avant de l'imposer.
+const CONTENT_SECURITY_POLICY_REPORT_ONLY = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data: https:",
+  "media-src 'self' blob: https:",
+  "connect-src 'self' https: wss:",
+  "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.firebaseio.com",
+  "worker-src 'self' blob:",
+  "report-uri /api/security/csp-report",
+].join("; ");
+
+const TRUSTED_ORIGINS = trustedOriginsFromEnv(process.env);
 
 const CLIENT_ACCESS_COOKIE = "gen3ia_client_access";
 
@@ -65,6 +89,26 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(getClientEntry(request) ?? "/client", request.url));
   }
 
+  // Barrière CSRF centrale : aucune mutation /api/* cross-site ne franchit
+  // le proxy, quel que soit le mode d'authentification de la route
+  // (Bearer, cookie de session, signature).
+  const csrf = crossSiteMutationVerdict(
+    {
+      method: request.method,
+      pathname,
+      host: request.headers.get("host"),
+      origin: request.headers.get("origin"),
+      secFetchSite: request.headers.get("sec-fetch-site"),
+    },
+    TRUSTED_ORIGINS,
+  );
+  if (!csrf.allowed) {
+    return NextResponse.json(
+      { error: "Requête cross-origin refusée pour cette action.", code: "forbidden" },
+      { status: 403, headers: { "cache-control": "no-store", "x-gen3ia-block-reason": csrf.reason } },
+    );
+  }
+
   // Detection automatique d'appareils : le resultat est expose aux pages
   // serveur et aux routes API via les en-tetes x-gen3ia-device-*.
   const device = detectDeviceFromHeaders(request.headers);
@@ -104,10 +148,12 @@ export function proxy(request: NextRequest) {
   response.headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
   response.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
   response.headers.set("Cross-Origin-Resource-Policy", "same-origin");
+  response.headers.set("Content-Security-Policy-Report-Only", CONTENT_SECURITY_POLICY_REPORT_ONLY);
   response.headers.set("X-DNS-Prefetch-Control", "off");
+  response.headers.set("X-Permitted-Cross-Domain-Policies", "none");
 
   if (process.env.NODE_ENV === "production") {
-    response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   }
 
   return response;

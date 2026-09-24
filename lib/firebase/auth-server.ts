@@ -3,6 +3,7 @@ import { createPublicKey, createVerify, type KeyObject } from "node:crypto";
 import type { DecodedIdToken } from "firebase-admin/auth";
 
 import { readSessionCookie } from "@/lib/server/session-cookie";
+import { crossSiteMutationVerdict } from "@/lib/security/edge-guards";
 
 /**
  * Vérification serveur des Firebase ID tokens.
@@ -217,6 +218,10 @@ export async function verifyFirebaseAuth(
 
   const session = readSessionCookie(request.headers.get("cookie"));
   if (session) {
+    // Le cookie est envoyé automatiquement par le navigateur : une mutation
+    // authentifiée par cookie doit provenir de la même origine (anti-CSRF),
+    // exactement comme requireUser via validateRequest.
+    assertSameOriginForCookie(request);
     return {
       uid: session.uid,
       sub: session.uid,
@@ -228,4 +233,28 @@ export async function verifyFirebaseAuth(
   }
 
   throw new Error("Missing authorization header.");
+}
+
+function assertSameOriginForCookie(
+  request: Request | { headers: { get(name: string): string | null } },
+): void {
+  const method = "method" in request && typeof request.method === "string" ? request.method : "GET";
+  let pathname = "/api/";
+  if ("url" in request && typeof request.url === "string") {
+    try {
+      pathname = new URL(request.url).pathname;
+    } catch {
+      /* URL relative : on garde le préfixe /api/ par défaut (vérification appliquée). */
+    }
+  }
+  const verdict = crossSiteMutationVerdict({
+    method,
+    pathname: pathname.startsWith("/api/") ? pathname : "/api/",
+    host: request.headers.get("host"),
+    origin: request.headers.get("origin"),
+    secFetchSite: request.headers.get("sec-fetch-site"),
+  });
+  if (!verdict.allowed) {
+    throw new Error("Requête cross-origin refusée pour une session cookie.");
+  }
 }
