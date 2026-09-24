@@ -35,7 +35,10 @@ const CLASSIFIER_SYSTEM = [
   "Analyse D'ABORD les échanges passés pour comprendre le VRAI besoin de l'utilisateur, puis décide, en comparant la charte et ce besoin :",
   "1. mode: \"chat\" si le besoin appelle une réponse claire et simple (salutation, question, explication, conseil, reformulation, discussion) — l'agent répond directement comme un LLM ;",
   "mode: \"task\" si le besoin demande de RÉALISER quelque chose de concret dans le domaine de l'agent (produire un livrable, exécuter, créer, rechercher des données, préparer un document) — l'agent agit alors comme un professionnel qui exécute la tâche pour laquelle il a été créé.",
-  "2. inScope: false si le besoin relève CLAIREMENT d'un autre domaine que celui de l'agent (exemple : une stratégie marketing pour un agent de code). inScope: true sinon, y compris pour les salutations.",
+  "2. RÈGLES DE PÉRIMÈTRE (inScope) :",
+  "   - TOUJOURS inScope: true pour les échanges conversationnels : questions sur la conversation elle-même (ce qui a été dit, qui est l'utilisateur, rappeler un détail déjà évoqué), politesses, questions sur l'agent, tout ce qui mobilise la mémoire du fil.",
+  "   - TOUJOURS inScope: true pour une demande de génération d'image ou de visuel (image, photo, logo, illustration, affiche) : c'est une capacité native de l'agent Gen3ia, ne la bloque JAMAIS, même si le sujet demandé n'est pas métier.",
+  "   - inScope: false UNIQUEMENT si le besoin relève CLAIREMENT d'un AUTRE métier que celui de l'agent (exemple : une stratégie marketing pour un agent de code). En cas de doute, inScope: true.",
   "3. reason: une courte justification en français.",
   "Réponds STRICTEMENT en JSON : {\"mode\":\"chat|task\",\"inScope\":true|false,\"reason\":\"...\"}",
 ].join(" ");
