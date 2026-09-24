@@ -419,3 +419,34 @@ Work Log:
 Stage Summary:
 - Production gen3ia.online = 64b30d5, READY.
 - Les agents analysent l'historique complet de leurs conversations (classification, planification, réponses), hallucinent avec garde-fous explicites, ne montrent que le résultat, génèrent des images dont le prompt est analysé puis amélioré (sujet intact), se créent en 20 secondes (nom + type + fichier optionnel), demandent validation humaine par notification approuvable/rejetable à distance, possèdent un historique par agent, et peuvent déléguer à plusieurs sous-agents ; la page Paramètres › Publicité gère les préférences et affiche les annonces de l'inventaire.
+
+---
+Task ID: 29
+Agent: Super Z (principal)
+Task: « Dans la conversation il est impossible de créer une image : corriger ça, puis tester si la qualité de l'image est ultra réaliste. »
+
+Work Log:
+- DIAGNOSTIC PROD (scripts/diag_image_conversation.mjs + diag_stream_image.mjs) : le chemin nominal « Génère une image de… » fonctionnait déjà (API + stream + artefact). Les vraies failles étaient ailleurs :
+  (1) détection regex trop stricte — « je veux une image… », « Dessine-moi un chat » (sans nom visuel), « un logo pour ma boulangerie » tombaient dans le chat texte qui répondait « je ne peux pas générer d'images » ;
+  (2) le classificateur LLM ne connaissait pas la capacité image (variance : règle ignorée lors du 1er run e2e) ;
+  (3) timeout Agnes 90 s > maxDuration 60 s des routes conversation ;
+  (4) qualité 1K seulement, image affichée seulement après rechargement de l'état.
+- CORRECTIFS (commits 4019af4 + b8bd4b3) :
+  * Détection élargie + garde anti-faux-positifs (questions « comment », verbes d'analyse/édition, noms « dessin » exclus) ;
+  * looksLikeExplicitDrawingRequest : dessine(r/z/es/er)/peins/peindre/draw/paint/sketch déclenchent l'image SANS nom visuel — déterministe, zéro variance LLM ;
+  * Routage classificateur : règle VISUELS impérative + pseudo-outil image.generate intercepté dans runPlanTurn (image + artefact + imageUrl sur le message final) ;
+  * Ultra réalisme : 2K sur toutes les surfaces, ratio déduit (16:9 bannière/fond d'écran, 9:16 story, 3:4 poster/portrait), consigne « rendu photographique professionnel » dans la compétence d'amélioration (sujet jamais modifié) ;
+  * Budgets sûrs : timeoutMs paramétrable (40 s conversation / 45 s routes / 60 s runtime), amélioration bornée 12 s, maxDuration 60 ;
+  * Anti-hallucination : le chat texte ne prétend plus générer/afficher d'image ;
+  * UI : image affichée IMMÉDIATEMENT pendant le tour (message_complete → liveImageUrl).
+- QUALITÉ : typecheck 0, lint 0, 497 tests verts / 68 fichiers (+22 : détection ×8, garde dessin ×3, extraction ×4, ratio ×3, déjà existants), build OK.
+- E2E PRODUCTION (scripts/verify_4019af4_prod.mjs, déploiement b8bd4b3 READY) : 8/8 VERTS :
+  * « Dessine-moi un chat qui dort sur un coussin rouge » (ANCIENNE FAILLE) → image générée via stream, aucun refus texte, artefact créé ;
+  * « Je veux une image ultra réaliste d'un tigre au bord d'une rivière » (ANCIENNE FAILLE) → image générée ;
+  * Les DEUX images téléchargées : 2048×2048 px (2K), 3,7 et 4,3 Mo ;
+  * INSPECTION VISUELLE du réalisme : poils individuels nets, moustailles fines, yeux réalistes avec reflets, éclairage golden hour cohérent (reflets sur l'eau pour le tigre), texture velours + lumière de fenêtre (chat sur coussin ROUGE exactement comme demandé = fidélité du sujet), profondeur de champ correcte, AUCUN artefact de génération.
+- Commits : 4019af4, b8bd4b3.
+
+Stage Summary:
+- Production gen3ia.online = b8bd4b3, READY.
+- La conversation crée des images pour toutes les formulations naturelles (verbe+nom visuel, volonté, dessin explicite, visuel en tête, classificateur en filet), en qualité 2K ultra réaliste vérifiée visuellement, avec artefact rangé et affichage immédiat dans le fil.
