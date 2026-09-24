@@ -82,6 +82,9 @@ export const AgentRecordSchema = z.object({
   preferredProvider: z.string().trim().max(60).optional(),
   preferredModel: z.string().trim().max(160).optional(),
   autonomous: z.boolean().default(true),
+  // Autorise la délégation contrôlée à des sous-agents spécialisés.
+  subagentsEnabled: z.boolean().default(true),
+  maxSubagents: z.number().int().min(1).max(8).default(3),
   maxIterations: z.number().int().min(1).max(20).default(8),
   tools: z.array(z.string().trim().max(160)).max(50).default([]),
   memoryEnabled: z.boolean().default(true),
@@ -100,7 +103,7 @@ export type AgentRecord = z.infer<typeof AgentRecordSchema> & { id: string; owne
 export type AgentSummary = Pick<AgentRecord,
   "id" | "name" | "description" | "type" | "typeLabel" | "skills" | "agentMode" | "memoryFile" |
   "projectId" | "status" | "modelStrategy" |
-  "preferredProvider" | "preferredModel" | "autonomous" | "maxIterations" | "tools" |
+  "preferredProvider" | "preferredModel" | "autonomous" | "subagentsEnabled" | "maxSubagents" | "maxIterations" | "tools" |
   "memoryEnabled" | "webResearchEnabled" | "documentGenerationEnabled" | "voiceEnabled" |
   "voiceConfig" | "persona" | "createdAt" | "updatedAt"
 >;

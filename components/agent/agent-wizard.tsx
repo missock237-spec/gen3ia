@@ -104,6 +104,8 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
   const [agentMode, setAgentMode] = React.useState<"standard" | "call">(editing?.agentMode ?? "standard");
   const [memoryFile, setMemoryFile] = React.useState<{ path: string; name: string } | null>(editing?.memoryFile ?? null);
   const [memoryUploading, setMemoryUploading] = React.useState(false);
+  const [subagentsEnabled, setSubagentsEnabled] = React.useState(editing?.subagentsEnabled ?? true);
+  const [maxSubagents, setMaxSubagents] = React.useState(editing?.maxSubagents ?? 3);
   const [persona, setPersona] = React.useState<AgentPersona>(() => ({ ...DEFAULT_PERSONA, ...(editing?.persona ?? {}) }));
   const [constraintDraft, setConstraintDraft] = React.useState("");
   const [saving, setSaving] = React.useState(false);
@@ -181,6 +183,8 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
         agentMode,
         memoryFile: memoryFile ?? undefined,
         persona: personaPayload,
+        subagentsEnabled,
+        maxSubagents,
         tools: selectedType.declaredTools,
         status: "active" as const,
         voiceEnabled: agentMode === "call",
@@ -517,6 +521,30 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
                   </label>
                 );
               })}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50 p-4">
+          <div className="flex items-start gap-3">
+            <input
+              id="wizard-subagents"
+              type="checkbox"
+              className="mt-1 h-4 w-4 accent-violet-700"
+              checked={subagentsEnabled}
+              onChange={(event) => setSubagentsEnabled(event.target.checked)}
+            />
+            <div className="flex-1">
+              <label htmlFor="wizard-subagents" className="text-sm font-semibold text-violet-950">Autoriser les sous-agents</label>
+              <p className="mt-1 text-xs leading-5 text-violet-900/80">Gen3ia peut répartir une tâche complexe entre plusieurs spécialistes. Les actions sensibles restent soumises à votre accord.</p>
+              {subagentsEnabled && (
+                <label className="mt-3 flex items-center gap-2 text-xs font-medium text-violet-950">
+                  Nombre maximum
+                  <select className="rounded-md border border-violet-200 bg-white px-2 py-1" value={maxSubagents} onChange={(event) => setMaxSubagents(Number(event.target.value))}>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((count) => <option key={count} value={count}>{count}</option>)}
+                  </select>
+                </label>
+              )}
             </div>
           </div>
         </div>
