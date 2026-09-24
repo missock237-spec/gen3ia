@@ -7,6 +7,7 @@ import {
   extractImagePrompt,
   generateImageWithAgnes,
   ImageGenerationError,
+  looksLikeExplicitDrawingRequest,
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
@@ -420,7 +421,9 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const priorHistory = history.slice(0, -1);
 
   // 2) Demande d'image : génération réelle (Agnes AI) + artefact image.
-  if (looksLikeImageRequest(input.message)) {
+  // Deux détections déterministes (aucune variance LLM) : verbe + nom
+  // visuel, ou verbe de dessin explicite (« Dessine-moi un chat »).
+  if (looksLikeImageRequest(input.message) || looksLikeExplicitDrawingRequest(input.message)) {
     await onEvent({ type: "status", phase: "image", label: "Génération de l'image en cours…" });
     const result = await runImageTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
     await onEvent({

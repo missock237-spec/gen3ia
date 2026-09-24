@@ -24,6 +24,7 @@ import {
   generateImageWithAgnes,
   ImageGenerationError,
   isImageGenerationEnabled,
+  looksLikeExplicitDrawingRequest,
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
@@ -355,7 +356,7 @@ export async function POST(request: NextRequest) {
       // dans le périmètre de l'agent — l'ancien raccourci court-circuitait la
       // classification et générait des images hors périmètre (coût non
       // maîtrisé + classification usurpée, audit 25-b D1).
-      if (looksLikeImageRequest(body.message)) {
+      if (looksLikeImageRequest(body.message) || looksLikeExplicitDrawingRequest(body.message)) {
         const imageResult = await respondWithImage({
           userId: user.uid,
           conversationId,
@@ -584,7 +585,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Génération d'images réelle (Agnes AI) sur le chemin universel aussi.
-    if (looksLikeImageRequest(body.message)) {
+    if (looksLikeImageRequest(body.message) || looksLikeExplicitDrawingRequest(body.message)) {
       const imageResult = await respondWithImage({
         userId: user.uid,
         conversationId,

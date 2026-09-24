@@ -104,6 +104,29 @@ export function looksLikeImageRequest(message: string): boolean {
 }
 
 /**
+ * Verbes de dessin/peinture EXPLICITES : ils signifient par eux-mêmes
+ * « produire un visuel », même sans nom visuel dans la phrase
+ * (« Dessine-moi un chat », « Peins la tour Eiffel »). Détection
+ * déterministe — aucune variance LLM possible sur ces formulations.
+ * Seules les formes VERBALES sont reconnues (jamais les noms « dessin »,
+ * « dessins » qui désignent une œuvre existante).
+ */
+const EXPLICIT_DRAWING_VERBS =
+  /\b(dessin(?:e[rz]?|es|er)\b|peins\b|peindre\b|draw\b|paint\b|sketch\b)/i;
+
+/**
+ * Garde complémentaire à looksLikeImageRequest : un verbe de dessin
+ * explicite suffit à déclencher la génération (sujet visuel implicite).
+ * Les questions explicatives restent exclues.
+ */
+export function looksLikeExplicitDrawingRequest(message: string): boolean {
+  const text = message.trim();
+  if (text.length < 8 || text.length > 4000) return false;
+  if (/^(?:comment|pourquoi|c'est quoi|qu'est-ce qu')/i.test(text)) return false;
+  return EXPLICIT_DRAWING_VERBS.test(text);
+}
+
+/**
  * Ratio d'image déduit de la demande (cadrage uniquement — jamais le
  * sujet). Les mots-clés explicites (16:9, story…) priment, sinon les
  * indices de format ; défaut carré.

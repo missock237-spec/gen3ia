@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { detectImageRatio, extractImagePrompt, looksLikeImageRequest } from "./image-generation";
+import {
+  detectImageRatio,
+  extractImagePrompt,
+  looksLikeExplicitDrawingRequest,
+  looksLikeImageRequest,
+} from "./image-generation";
 
 describe("looksLikeImageRequest — détection d'intention image", () => {
   it("détecte les formulations explicites classiques", () => {
@@ -49,6 +54,26 @@ describe("looksLikeImageRequest — détection d'intention image", () => {
   it("reste robuste sur les accents et la ponctuation", () => {
     expect(looksLikeImageRequest("Généré une image pour moi ? non — génère une image d'un loup !")).toBe(true);
     expect(looksLikeImageRequest("crée une image de navire")).toBe(true);
+  });
+});
+
+describe("looksLikeExplicitDrawingRequest — verbes de dessin explicites", () => {
+  it("déclenche SANS nom visuel (ancienne faille : réponse texte au lieu d'une image)", () => {
+    expect(looksLikeExplicitDrawingRequest("Dessine-moi un chat qui dort sur un coussin rouge.")).toBe(true);
+    expect(looksLikeExplicitDrawingRequest("Dessine un dragon cracheur de feu.")).toBe(true);
+    expect(looksLikeExplicitDrawingRequest("Peux-tu dessiner la tour Eiffel ?")).toBe(true);
+    expect(looksLikeExplicitDrawingRequest("Dessinez un paysage de montagne enneigée.")).toBe(true);
+    expect(looksLikeExplicitDrawingRequest("Peins la baie de Somme au crépuscule.")).toBe(true);
+  });
+
+  it("ne déclenche PAS pour le NOM « dessin » (œuvre existante)", () => {
+    expect(looksLikeExplicitDrawingRequest("Ce dessin est très réussi.")).toBe(false);
+    expect(looksLikeExplicitDrawingRequest("Tes dessins sont magnifiques.")).toBe(false);
+    expect(looksLikeExplicitDrawingRequest("Supprime le dessin brouillon.png de mes fichiers.")).toBe(false);
+  });
+
+  it("ne déclenche PAS pour une question explicative", () => {
+    expect(looksLikeExplicitDrawingRequest("Comment dessiner un chat réaliste ?")).toBe(false);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   extractImagePrompt,
   generateImageWithAgnes,
   ImageGenerationError,
+  looksLikeExplicitDrawingRequest,
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     // Génération d'images réelle (Agnes AI) : une demande explicite d'image
     // est servie directement — pas de réponse textuelle en guise d'image.
-    if (looksLikeImageRequest(body.message)) {
+    if (looksLikeImageRequest(body.message) || looksLikeExplicitDrawingRequest(body.message)) {
       try {
         // Prompt analysé puis amélioré par LLM (sujet intact, rendu optimisé).
         const { prompt: enhancedPrompt } = await enhanceImagePrompt(extractImagePrompt(body.message));
