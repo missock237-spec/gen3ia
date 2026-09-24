@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { CommandComposer, type CommandComposerHandle } from "@/components/ui/command-composer";
+import { MarkdownContent } from "@/components/workspace/markdown";
 import type { MentionItem } from "@/lib/ui/command-composer-helpers";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import { Callout } from "@/components/studio/callout";
@@ -489,7 +490,26 @@ export function AgentChatPanel({
                 </div>
                 <div className={item.role === "user"
                   ? "whitespace-pre-wrap rounded-2xl rounded-br-md bg-[var(--g3-elevated)] px-4 py-3.5 text-sm leading-6 text-[var(--g3-text)] shadow-[0_10px_30px_-16px_rgba(255,255,255,0.35)]"
-                  : "whitespace-pre-wrap rounded-2xl rounded-bl-md border border-white/10 bg-[var(--g3-elevated)] px-4 py-3.5 text-sm leading-6 text-[var(--g3-text-secondary)]"}>{item.text}</div>
+                  : "rounded-2xl rounded-bl-md border border-white/10 bg-[var(--g3-elevated)]/60 px-4 py-3.5 text-sm leading-6 text-[var(--g3-text)]"}>
+                  {item.role === "user" ? (
+                    item.text
+                  ) : (
+                    /* Rendu markdown riche (titres, listes, code, liens) — sûr, sans innerHTML. */
+                    <>
+                      <MarkdownContent content={item.text} />
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => { void navigator.clipboard?.writeText(item.text); }}
+                          className="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--g3-faint)] transition-colors hover:border-white/25 hover:text-[var(--g3-text-secondary)]"
+                          aria-label="Copier la réponse"
+                        >
+                          Copier
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 {/* Image générée par l'agent (Agnes AI) — cliquable en plein écran. */}
                 {item.imageUrl && (
