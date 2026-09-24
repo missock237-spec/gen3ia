@@ -166,7 +166,7 @@ export function SouvenirsPanel(props: {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-serif text-xl font-semibold">Souvenirs texte</h2>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="mt-1 text-sm text-[var(--g3-muted)]">
             Informations clés/valeur que vous ou vos agents enregistrez pour les missions futures.
           </p>
         </div>
@@ -212,29 +212,29 @@ export function SouvenirsPanel(props: {
           <button disabled={busy} onClick={overwriteExisting} className="min-h-8 rounded-full bg-amber-600 px-3 font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
             Écraser et remplacer
           </button>
-          <button disabled={busy} onClick={() => setConflict(null)} className="min-h-8 rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-3 font-semibold text-neutral-600">
+          <button disabled={busy} onClick={() => setConflict(null)} className="min-h-8 rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 font-semibold text-[var(--g3-muted)]">
             Annuler
           </button>
         </div>
       )}
-      <p className="mt-2 text-xs text-neutral-400">
+      <p className="mt-2 text-xs text-[var(--g3-faint)]">
         Astuce : préférez des clés structurées (client.acme.contact, projet.gen3ia.deadline…). Secrets, mots de
         passe et données bancaires sont refusés automatiquement.
       </p>
-      {message && <p className="mt-2 text-xs text-neutral-500" role="status">{message}</p>}
+      {message && <p className="mt-2 text-xs text-[var(--g3-muted)]" role="status">{message}</p>}
 
       {props.loaded && filtered.length > 0 && (
         <ul className="mt-4 space-y-2">
           {filtered.map((entry) => (
             <li
               key={entry.key}
-              className="rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 px-4 py-3"
+              className="rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] px-4 py-3"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-mono text-xs font-semibold text-neutral-700">{entry.key}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${entry.source === "agent" ? "bg-sky-100 text-sky-700" : "bg-neutral-200 text-neutral-600"}`}>
+                    <span className="truncate font-mono text-xs font-semibold text-[var(--g3-text-secondary)]">{entry.key}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${entry.source === "agent" ? "bg-sky-100 text-sky-700" : "bg-[var(--g3-elevated)] text-[var(--g3-muted)]"}`}>
                       {entry.source === "agent" ? "agent" : "vous"}
                     </span>
                   </div>
@@ -250,14 +250,14 @@ export function SouvenirsPanel(props: {
                       />
                       <div className="flex gap-2">
                         <button disabled={busy} onClick={() => saveEdit(entry.key)} className="g3-btn g3-btn-primary min-h-9 px-3 text-xs">Enregistrer</button>
-                        <button disabled={busy} onClick={() => { setEditingKey(null); setEditValue(""); }} className="min-h-9 rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-3 text-xs font-semibold text-neutral-600">Annuler</button>
+                        <button disabled={busy} onClick={() => { setEditingKey(null); setEditValue(""); }} className="min-h-9 rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 text-xs font-semibold text-[var(--g3-muted)]">Annuler</button>
                       </div>
                     </div>
                   ) : (
-                    <p className="mt-1 break-words text-sm text-neutral-600">{String(entry.value)}</p>
+                    <p className="mt-1 break-words text-sm text-[var(--g3-muted)]">{String(entry.value)}</p>
                   )}
                   {entry.updatedAt && (
-                    <p className="mt-1 text-[11px] text-neutral-400">Mis à jour le {formatDate(entry.updatedAt)}</p>
+                    <p className="mt-1 text-[11px] text-[var(--g3-faint)]">Mis à jour le {formatDate(entry.updatedAt)}</p>
                   )}
                 </div>
                 {editingKey !== entry.key && (
@@ -266,7 +266,7 @@ export function SouvenirsPanel(props: {
                       disabled={busy}
                       onClick={() => copyValue(entry)}
                       aria-label={`Copier la valeur de ${entry.key}`}
-                      className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-2.5 text-[11px] font-semibold text-neutral-600 hover:bg-neutral-100"
+                      className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
                     >
                       Copier
                     </button>
@@ -274,7 +274,7 @@ export function SouvenirsPanel(props: {
                       disabled={busy}
                       onClick={() => { setEditingKey(entry.key); setEditValue(String(entry.value)); }}
                       aria-label={`Modifier ${entry.key}`}
-                      className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-2.5 text-[11px] font-semibold text-neutral-600 hover:bg-neutral-100"
+                      className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
                     >
                       Modifier
                     </button>
@@ -290,7 +290,7 @@ export function SouvenirsPanel(props: {
                         <button
                           disabled={busy}
                           onClick={() => setConfirmingKey(null)}
-                          className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-2.5 text-[11px] font-semibold text-neutral-500"
+                          className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)]"
                         >
                           Non
                         </button>
@@ -300,7 +300,7 @@ export function SouvenirsPanel(props: {
                         disabled={busy}
                         onClick={() => setConfirmingKey(entry.key)}
                         aria-label={`Oublier ${entry.key}`}
-                        className="min-h-9 rounded-md border border-red-200 bg-white px-2.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
+                        className="min-h-9 rounded-md border border-red-200 bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
                       >
                         Oublier
                       </button>
@@ -313,12 +313,12 @@ export function SouvenirsPanel(props: {
         </ul>
       )}
       {props.loaded && props.memories.length > 0 && filtered.length === 0 && (
-        <p className="mt-4 text-sm text-neutral-400">Aucun souvenir ne correspond à « {search} ».</p>
+        <p className="mt-4 text-sm text-[var(--g3-faint)]">Aucun souvenir ne correspond à « {search} ».</p>
       )}
       {props.loaded && props.memories.length === 0 && (
-        <p className="mt-4 text-sm text-neutral-400">
+        <p className="mt-4 text-sm text-[var(--g3-faint)]">
           Aucun souvenir enregistré pour le moment. Commencez par une clé simple, par exemple
-          <span className="font-mono text-neutral-500"> projet.objectif</span>.
+          <span className="font-mono text-[var(--g3-muted)]"> projet.objectif</span>.
         </p>
       )}
     </section>

@@ -517,9 +517,9 @@ export function IdeWorkspace() {
 
   /* ---------------- Rendu ---------------- */
   return (
-    <section className="flex h-[calc(100vh-190px)] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-[#11120f]" aria-label="Workshop IDE">
+    <section className="flex h-[calc(100vh-190px)] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-deep)]" aria-label="Workshop IDE">
       {/* Barre d'onglets persistante */}
-      <header className="flex items-center gap-1 border-b border-neutral-800 bg-[#181917] px-2 py-1.5">
+      <header className="flex items-center gap-1 border-b border-[var(--g3-border)] bg-[var(--g3-deep)] px-2 py-1.5">
         <div className="flex items-center gap-0.5" role="tablist" aria-label="Sections de l'IDE">
           {MAIN_TABS.map((tab) => (
             <button
@@ -530,7 +530,7 @@ export function IdeWorkspace() {
               onClick={() => setMainTab(tab.id)}
               className={
                 "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition " +
-                (mainTab === tab.id ? "bg-neutral-800 text-white" : "text-neutral-400 hover:bg-neutral-800/60 hover:text-neutral-200")
+                (mainTab === tab.id ? "bg-[var(--g3-deep)] text-white" : "text-[var(--g3-faint)] hover:bg-[var(--g3-deep)]/60 hover:text-[var(--g3-text-secondary)]")
               }
             >
               <span aria-hidden className="text-[10px] opacity-70">{tab.icon}</span>
@@ -548,23 +548,23 @@ export function IdeWorkspace() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {saveNote && <span className="max-w-[320px] truncate text-[10px] text-neutral-400" role="status">{saveNote}</span>}
-          <span className="flex items-center gap-1.5 rounded-full border border-neutral-800 px-2 py-1 text-[9px] text-neutral-500" title="État de la connexion aux sessions">
+          {saveNote && <span className="max-w-[320px] truncate text-[10px] text-[var(--g3-faint)]" role="status">{saveNote}</span>}
+          <span className="flex items-center gap-1.5 rounded-full border border-[var(--g3-border)] px-2 py-1 text-[9px] text-[var(--g3-muted)]" title="État de la connexion aux sessions">
             <span className={"inline-block size-1.5 rounded-full " + (online ? "bg-emerald-500" : "bg-red-500")} aria-hidden />
             {online ? "En ligne" : "Hors ligne"}
           </span>
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-neutral-800 px-2 py-1 text-[10px] text-neutral-500 transition hover:text-neutral-200"
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--g3-border)] px-2 py-1 text-[10px] text-[var(--g3-muted)] transition hover:text-[var(--g3-text-secondary)]"
             aria-label="Ouvrir la palette de commandes"
           >
-            ⌕ <kbd className="rounded bg-neutral-900 px-1 py-0.5">Ctrl/⌘ K</kbd>
+            ⌕ <kbd className="rounded bg-[var(--g3-deep)] px-1 py-0.5">Ctrl/⌘ K</kbd>
           </button>
           <button
             type="button"
             onClick={() => setLeftCollapsed((v) => !v)}
-            className="rounded-lg border border-neutral-800 px-2 py-1 text-[10px] text-neutral-500 hover:text-neutral-200"
+            className="rounded-lg border border-[var(--g3-border)] px-2 py-1 text-[10px] text-[var(--g3-muted)] hover:text-[var(--g3-text-secondary)]"
             aria-pressed={leftCollapsed}
             title={leftCollapsed ? "Afficher l'explorateur" : "Masquer l'explorateur"}
           >
@@ -573,7 +573,7 @@ export function IdeWorkspace() {
           <button
             type="button"
             onClick={() => setRightVisible((v) => !v)}
-            className="rounded-lg border border-neutral-800 px-2 py-1 text-[10px] text-neutral-500 hover:text-neutral-200"
+            className="rounded-lg border border-[var(--g3-border)] px-2 py-1 text-[10px] text-[var(--g3-muted)] hover:text-[var(--g3-text-secondary)]"
             aria-pressed={rightVisible}
             title={rightVisible ? "Masquer le panneau droit" : "Afficher le panneau droit"}
           >
@@ -675,13 +675,13 @@ export function IdeWorkspace() {
               role="separator"
               aria-orientation="vertical"
               aria-label="Redimensionner le panneau droit"
-              className="w-1 cursor-col-resize bg-neutral-800 transition hover:bg-neutral-600"
+              className="w-1 cursor-col-resize bg-[var(--g3-deep)] transition hover:bg-neutral-600"
               onPointerDown={() => {
                 resizingRef.current = true;
               }}
             />
-            <aside style={{ width: rightWidth }} className="flex shrink-0 flex-col bg-[#0d0e0c]">
-              <div className="flex items-center gap-0.5 border-b border-neutral-800 px-1.5 py-1.5" role="tablist" aria-label="Panneau d'inspection">
+            <aside style={{ width: rightWidth }} className="flex shrink-0 flex-col bg-[var(--g3-deep)]">
+              <div className="flex items-center gap-0.5 border-b border-[var(--g3-border)] px-1.5 py-1.5" role="tablist" aria-label="Panneau d'inspection">
                 {RIGHT_TABS.map((tab) => (
                   <button
                     key={tab.id}
@@ -691,7 +691,7 @@ export function IdeWorkspace() {
                     onClick={() => setRightSubTab(tab.id)}
                     className={
                       "rounded-md px-2 py-1 text-[10px] font-medium transition " +
-                      (rightSubTab === tab.id ? "bg-neutral-800 text-white" : "text-neutral-500 hover:text-neutral-300")
+                      (rightSubTab === tab.id ? "bg-[var(--g3-deep)] text-white" : "text-[var(--g3-muted)] hover:text-[var(--g3-faint)]")
                     }
                   >
                     {tab.label}
@@ -700,7 +700,7 @@ export function IdeWorkspace() {
                 <button
                   type="button"
                   onClick={() => setRightVisible(false)}
-                  className="ml-auto rounded px-1.5 text-neutral-600 hover:text-neutral-300"
+                  className="ml-auto rounded px-1.5 text-[var(--g3-muted)] hover:text-[var(--g3-faint)]"
                   aria-label="Masquer le panneau droit"
                 >
                   ×
@@ -768,8 +768,8 @@ export function PreviewFrame({ compact, previewApps, previewAppId, onAppChange, 
       <div className="grid h-full place-items-center px-6 text-center">
         <div className="max-w-xs">
           <p className="text-2xl" aria-hidden>▶</p>
-          <p className="mt-2 text-xs text-neutral-400">Aucune application à prévisualiser</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-neutral-600">
+          <p className="mt-2 text-xs text-[var(--g3-faint)]">Aucune application à prévisualiser</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-[var(--g3-muted)]">
             Demandez à un agent de créer une application (page HTML) : un bouton « Voir le résultat en direct » apparaîtra aussi directement dans la conversation.
           </p>
         </div>
@@ -778,11 +778,11 @@ export function PreviewFrame({ compact, previewApps, previewAppId, onAppChange, 
   }
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-800 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--g3-border)] px-3 py-2">
         <select
           value={previewAppId ?? ""}
           onChange={(event) => onAppChange(event.target.value)}
-          className="max-w-[240px] rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs text-neutral-200 focus:border-neutral-600 focus:outline-none"
+          className="max-w-[240px] rounded-lg border border-[var(--g3-border)] bg-[var(--g3-deep)] px-2 py-1 text-xs text-[var(--g3-text-secondary)] focus:border-neutral-600 focus:outline-none"
           aria-label="Choisir l'application à prévisualiser"
         >
           {previewApps.map((app) => (
@@ -791,13 +791,13 @@ export function PreviewFrame({ compact, previewApps, previewAppId, onAppChange, 
             </option>
           ))}
         </select>
-        <div className="flex overflow-hidden rounded-lg border border-neutral-800" role="group" aria-label="Taille d'aperçu">
+        <div className="flex overflow-hidden rounded-lg border border-[var(--g3-border)]" role="group" aria-label="Taille d'aperçu">
           {(["mobile", "desktop"] as const).map((device) => (
             <button
               key={device}
               type="button"
               onClick={() => onDeviceChange(device)}
-              className={"px-2 py-1 text-[10px] transition " + (previewDevice === device ? "bg-neutral-800 text-white" : "text-neutral-500 hover:text-neutral-300")}
+              className={"px-2 py-1 text-[10px] transition " + (previewDevice === device ? "bg-[var(--g3-deep)] text-white" : "text-[var(--g3-muted)] hover:text-[var(--g3-faint)]")}
             >
               {device === "mobile" ? "Mobile" : "Plein"}
             </button>
@@ -806,7 +806,7 @@ export function PreviewFrame({ compact, previewApps, previewAppId, onAppChange, 
         <button
           type="button"
           onClick={onReload}
-          className="rounded px-1.5 py-1 text-[10px] text-neutral-500 hover:text-neutral-200"
+          className="rounded px-1.5 py-1 text-[10px] text-[var(--g3-muted)] hover:text-[var(--g3-text-secondary)]"
           title="Recharger l'aperçu"
         >
           ⟳
@@ -819,14 +819,14 @@ export function PreviewFrame({ compact, previewApps, previewAppId, onAppChange, 
               const blob = new Blob([content], { type: "text/html" });
               window.open(URL.createObjectURL(blob), "_blank", "noopener");
             }}
-            className="ml-auto rounded border border-neutral-700 px-2 py-1 text-[10px] text-neutral-400 hover:text-white"
+            className="ml-auto rounded border border-[var(--g3-border)] px-2 py-1 text-[10px] text-[var(--g3-faint)] hover:text-white"
           >
             Ouvrir dans un onglet
           </button>
         )}
       </div>
       <div className="grid min-h-0 flex-1 place-items-center overflow-auto bg-neutral-950 p-2">
-        {previewLoading && <p className="text-xs text-neutral-500">Chargement de l&apos;aperçu…</p>}
+        {previewLoading && <p className="text-xs text-[var(--g3-muted)]">Chargement de l&apos;aperçu…</p>}
         {previewError && (
           <div className="rounded-lg border border-amber-900/60 bg-amber-950/40 p-3 text-[11px] text-amber-300" role="alert">
             {previewError}
@@ -841,7 +841,7 @@ export function PreviewFrame({ compact, previewApps, previewAppId, onAppChange, 
             title="Aperçu de l'application"
             sandbox="allow-scripts allow-forms allow-modals allow-popups"
             srcDoc={previewContent}
-            className={"h-full rounded-lg border border-neutral-800 bg-white " + (previewDevice === "mobile" ? "w-[390px] max-w-full" : "w-full")}
+            className={"h-full rounded-lg border border-[var(--g3-border)] bg-[var(--g3-surface)] " + (previewDevice === "mobile" ? "w-[390px] max-w-full" : "w-full")}
           />
         )}
       </div>
@@ -868,42 +868,42 @@ function LogsView({ entries, selected, onSelect, onOpenErrorRef }: { entries: Te
   const selectedEntry = selected !== null ? entries.find((e) => e.index === selected) : null;
 
   return (
-    <div className="flex h-full min-h-0 bg-[#0d0e0c]">
+    <div className="flex h-full min-h-0 bg-[var(--g3-deep)]">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="border-b border-neutral-800 px-3 py-2">
+        <div className="border-b border-[var(--g3-border)] px-3 py-2">
           <input
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
             placeholder="Filtrer les logs (commande ou sortie)…"
             aria-label="Filtrer les logs"
-            className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-600 focus:border-neutral-600 focus:outline-none"
+            className="w-full rounded-lg border border-[var(--g3-border)] bg-[var(--g3-deep)] px-2.5 py-1.5 text-xs text-[var(--g3-text-secondary)] placeholder:text-[var(--g3-muted)] focus:border-neutral-600 focus:outline-none"
           />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2" role="list" aria-label="Logs structurés">
-          {filtered.length === 0 && <p className="py-6 text-center text-xs text-neutral-500">{filter ? "Aucun log ne correspond au filtre." : "Aucun log — les exécutions de vos agents apparaîtront ici."}</p>}
+          {filtered.length === 0 && <p className="py-6 text-center text-xs text-[var(--g3-muted)]">{filter ? "Aucun log ne correspond au filtre." : "Aucun log — les exécutions de vos agents apparaîtront ici."}</p>}
           {filtered.map((entry) => (
             <button
               key={entry.index}
               type="button"
               role="listitem"
               onClick={() => onSelect(entry.index)}
-              className={"flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] transition " + (selected === entry.index ? "bg-neutral-800" : "hover:bg-neutral-800/50")}
+              className={"flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] transition " + (selected === entry.index ? "bg-[var(--g3-deep)]" : "hover:bg-[var(--g3-deep)]/50")}
             >
-              <span className="w-[64px] shrink-0 text-neutral-600">{new Date(entry.createdAt).toLocaleTimeString("fr-FR")}</span>
+              <span className="w-[64px] shrink-0 text-[var(--g3-muted)]">{new Date(entry.createdAt).toLocaleTimeString("fr-FR")}</span>
               {statusBadge(entry.success)}
-              <code className="min-w-0 flex-1 truncate text-neutral-300">{entry.command}</code>
-              {entry.mode && <span className="shrink-0 text-[9px] text-neutral-600">{entry.mode === "sandbox" ? "réel" : entry.engine ?? "simulation"}</span>}
+              <code className="min-w-0 flex-1 truncate text-[var(--g3-faint)]">{entry.command}</code>
+              {entry.mode && <span className="shrink-0 text-[9px] text-[var(--g3-muted)]">{entry.mode === "sandbox" ? "réel" : entry.engine ?? "simulation"}</span>}
               {typeof entry.exitCode === "number" && <span className={"shrink-0 " + (entry.exitCode === 0 ? "text-emerald-600" : "text-red-400")}>exit {entry.exitCode}</span>}
             </button>
           ))}
         </div>
       </div>
       {selectedEntry && (
-        <div className="w-[340px] shrink-0 overflow-y-auto border-l border-neutral-800 p-3">
-          <h3 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-500">Détail · #{selectedEntry.index}</h3>
-          <pre className="mt-2 rounded-lg bg-neutral-900 p-2.5 text-[11px] text-neutral-300">{maskSecrets(selectedEntry.command)}</pre>
-          {selectedEntry.stdout && <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-900 p-2.5 text-[11px] text-neutral-400">{maskSecrets(selectedEntry.stdout)}</pre>}
-          {selectedEntry.stderr && <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-900 p-2.5 text-[11px] text-red-300">{maskSecrets(selectedEntry.stderr)}</pre>}
+        <div className="w-[340px] shrink-0 overflow-y-auto border-l border-[var(--g3-border)] p-3">
+          <h3 className="text-[10px] font-semibold uppercase tracking-widest text-[var(--g3-muted)]">Détail · #{selectedEntry.index}</h3>
+          <pre className="mt-2 rounded-lg bg-[var(--g3-deep)] p-2.5 text-[11px] text-[var(--g3-faint)]">{maskSecrets(selectedEntry.command)}</pre>
+          {selectedEntry.stdout && <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2.5 text-[11px] text-[var(--g3-faint)]">{maskSecrets(selectedEntry.stdout)}</pre>}
+          {selectedEntry.stderr && <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2.5 text-[11px] text-red-300">{maskSecrets(selectedEntry.stderr)}</pre>}
           {(parseErrorRefs(selectedEntry.stderr).length > 0 || parseErrorRefs(selectedEntry.stdout).length > 0) && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {[...parseErrorRefs(selectedEntry.stderr), ...parseErrorRefs(selectedEntry.stdout)].slice(0, 6).map((ref) => (
@@ -927,11 +927,11 @@ function LogsView({ entries, selected, onSelect, onOpenErrorRef }: { entries: Te
 function TestsView({ testRuns, onOpenEntry }: { testRuns: ReturnType<typeof extractTestRuns>; onOpenEntry: (index: number) => void }) {
   if (testRuns.length === 0) {
     return (
-      <div className="grid h-full place-items-center bg-[#0d0e0c] px-6 text-center">
+      <div className="grid h-full place-items-center bg-[var(--g3-deep)] px-6 text-center">
         <div className="max-w-sm">
           <p className="text-2xl" aria-hidden>✓</p>
-          <p className="mt-2 text-sm font-medium text-neutral-300">Aucune commande de test exécutée</p>
-          <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+          <p className="mt-2 text-sm font-medium text-[var(--g3-faint)]">Aucune commande de test exécutée</p>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--g3-muted)]">
             Les résultats (vitest, jest, pytest…) détectés dans les exécutions de vos agents seront résumés ici : réussites, échecs, durée.
           </p>
         </div>
@@ -939,19 +939,19 @@ function TestsView({ testRuns, onOpenEntry }: { testRuns: ReturnType<typeof extr
     );
   }
   return (
-    <div className="h-full overflow-y-auto bg-[#0d0e0c] p-3">
+    <div className="h-full overflow-y-auto bg-[var(--g3-deep)] p-3">
       <ul className="space-y-2" role="list">
         {[...testRuns].reverse().map((run) => (
           <li key={run.entryIndex}>
-            <button type="button" onClick={() => onOpenEntry(run.entryIndex)} className="w-full rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 text-left transition hover:border-neutral-700">
+            <button type="button" onClick={() => onOpenEntry(run.entryIndex)} className="w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-deep)]/60 p-3 text-left transition hover:border-[var(--g3-border)]">
               <div className="flex items-center gap-2">
                 {run.passed === true && <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">RÉUSSI</span>}
                 {run.passed === false && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">ÉCHEC</span>}
-                {run.passed === null && <span className="rounded-full bg-neutral-700/40 px-2 py-0.5 text-[10px] font-semibold text-neutral-400">INDÉTERMINÉ</span>}
-                {run.summary && <span className="text-[11px] text-neutral-300">{run.summary}</span>}
-                <span className="ml-auto text-[9px] text-neutral-600">{new Date(run.createdAt).toLocaleString("fr-FR")}</span>
+                {run.passed === null && <span className="rounded-full bg-[var(--g3-elevated)]/40 px-2 py-0.5 text-[10px] font-semibold text-[var(--g3-faint)]">INDÉTERMINÉ</span>}
+                {run.summary && <span className="text-[11px] text-[var(--g3-faint)]">{run.summary}</span>}
+                <span className="ml-auto text-[9px] text-[var(--g3-muted)]">{new Date(run.createdAt).toLocaleString("fr-FR")}</span>
               </div>
-              <code className="mt-1.5 block truncate text-[11px] text-neutral-400">{run.command}</code>
+              <code className="mt-1.5 block truncate text-[11px] text-[var(--g3-faint)]">{run.command}</code>
             </button>
           </li>
         ))}
@@ -962,7 +962,7 @@ function TestsView({ testRuns, onOpenEntry }: { testRuns: ReturnType<typeof extr
 
 function ExecutionPane({ entry, entries, onSelect, onOpenErrorRef }: { entry: TerminalEntry | null; entries: TerminalEntry[]; onSelect: (index: number) => void; onOpenErrorRef: (ref: ErrorRef) => void }) {
   if (!entry) {
-    return <p className="p-3 text-[11px] leading-relaxed text-neutral-500">Aucune exécution sélectionnée. Le dernier résultat de vos agents apparaîtra ici automatiquement.</p>;
+    return <p className="p-3 text-[11px] leading-relaxed text-[var(--g3-muted)]">Aucune exécution sélectionnée. Le dernier résultat de vos agents apparaîtra ici automatiquement.</p>;
   }
   const refs = [...parseErrorRefs(entry.stderr), ...parseErrorRefs(entry.stdout)];
   return (
@@ -970,17 +970,17 @@ function ExecutionPane({ entry, entries, onSelect, onOpenErrorRef }: { entry: Te
       <div>
         <div className="flex items-center gap-2">
           {statusBadge(entry.success)}
-          <span className="text-[9px] text-neutral-600">#{entry.index} · {new Date(entry.createdAt).toLocaleTimeString("fr-FR")}</span>
+          <span className="text-[9px] text-[var(--g3-muted)]">#{entry.index} · {new Date(entry.createdAt).toLocaleTimeString("fr-FR")}</span>
         </div>
-        <pre className="mt-1.5 whitespace-pre-wrap rounded-lg bg-neutral-900 p-2 text-[11px] text-neutral-300">{maskSecrets(entry.command)}</pre>
+        <pre className="mt-1.5 whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2 text-[11px] text-[var(--g3-faint)]">{maskSecrets(entry.command)}</pre>
       </div>
       {typeof entry.exitCode === "number" && (
-        <p className="text-[10px] text-neutral-500">
+        <p className="text-[10px] text-[var(--g3-muted)]">
           exit <span className={entry.exitCode === 0 ? "text-emerald-500" : "text-red-400"}>{entry.exitCode}</span> · {entry.durationMs} ms · {entry.mode === "sandbox" ? "exécution réelle" : entry.engine ?? "simulation"}
         </p>
       )}
-      {entry.stdout && <pre className="max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-900 p-2 text-[10px] text-neutral-400">{maskSecrets(entry.stdout)}</pre>}
-      {entry.stderr && <pre className="max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-900 p-2 text-[10px] text-red-300">{maskSecrets(entry.stderr)}</pre>}
+      {entry.stdout && <pre className="max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2 text-[10px] text-[var(--g3-faint)]">{maskSecrets(entry.stdout)}</pre>}
+      {entry.stderr && <pre className="max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2 text-[10px] text-red-300">{maskSecrets(entry.stderr)}</pre>}
       {refs.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {refs.slice(0, 5).map((ref) => (
@@ -992,11 +992,11 @@ function ExecutionPane({ entry, entries, onSelect, onOpenErrorRef }: { entry: Te
       )}
       {entries.length > 1 && (
         <div>
-          <h4 className="text-[9px] font-semibold uppercase tracking-widest text-neutral-600">Précédentes</h4>
+          <h4 className="text-[9px] font-semibold uppercase tracking-widest text-[var(--g3-muted)]">Précédentes</h4>
           <ul className="mt-1 space-y-0.5">
             {entries.slice(-8, -1).reverse().map((e) => (
               <li key={e.index}>
-                <button type="button" onClick={() => onSelect(e.index)} className="w-full truncate rounded px-1.5 py-1 text-left text-[10px] text-neutral-500 hover:bg-neutral-800/60 hover:text-neutral-300">
+                <button type="button" onClick={() => onSelect(e.index)} className="w-full truncate rounded px-1.5 py-1 text-left text-[10px] text-[var(--g3-muted)] hover:bg-[var(--g3-deep)]/60 hover:text-[var(--g3-faint)]">
                   <span className={e.success ? "text-emerald-600" : "text-red-400"}>●</span> {e.command}
                 </button>
               </li>
@@ -1009,17 +1009,17 @@ function ExecutionPane({ entry, entries, onSelect, onOpenErrorRef }: { entry: Te
 }
 
 function MiniLogs({ entries, onSelect }: { entries: TerminalEntry[]; onSelect: (index: number) => void }) {
-  if (entries.length === 0) return <p className="p-3 text-[11px] text-neutral-500">Aucun log pour l&apos;instant.</p>;
+  if (entries.length === 0) return <p className="p-3 text-[11px] text-[var(--g3-muted)]">Aucun log pour l&apos;instant.</p>;
   return (
     <ul className="space-y-0.5 p-2" role="list">
       {[...entries].reverse().map((entry) => (
         <li key={entry.index}>
-          <button type="button" onClick={() => onSelect(entry.index)} className="w-full rounded px-2 py-1.5 text-left hover:bg-neutral-800/60">
+          <button type="button" onClick={() => onSelect(entry.index)} className="w-full rounded px-2 py-1.5 text-left hover:bg-[var(--g3-deep)]/60">
             <div className="flex items-center gap-1.5">
               <span className={"text-[8px] " + (entry.success ? "text-emerald-500" : "text-red-400")} aria-hidden>●</span>
-              <code className="min-w-0 flex-1 truncate text-[10px] text-neutral-400">{entry.command}</code>
+              <code className="min-w-0 flex-1 truncate text-[10px] text-[var(--g3-faint)]">{entry.command}</code>
             </div>
-            <span className="pl-3 text-[8px] text-neutral-600">{new Date(entry.createdAt).toLocaleTimeString("fr-FR")}</span>
+            <span className="pl-3 text-[8px] text-[var(--g3-muted)]">{new Date(entry.createdAt).toLocaleTimeString("fr-FR")}</span>
           </button>
         </li>
       ))}
@@ -1028,19 +1028,19 @@ function MiniLogs({ entries, onSelect }: { entries: TerminalEntry[]; onSelect: (
 }
 
 function MiniTests({ testRuns, onOpenEntry }: { testRuns: ReturnType<typeof extractTestRuns>; onOpenEntry: (index: number) => void }) {
-  if (testRuns.length === 0) return <p className="p-3 text-[11px] text-neutral-500">Aucun test détecté dans l&apos;historique.</p>;
+  if (testRuns.length === 0) return <p className="p-3 text-[11px] text-[var(--g3-muted)]">Aucun test détecté dans l&apos;historique.</p>;
   return (
     <ul className="space-y-1.5 p-2" role="list">
       {[...testRuns].reverse().map((run) => (
         <li key={run.entryIndex}>
-          <button type="button" onClick={() => onOpenEntry(run.entryIndex)} className="w-full rounded-lg border border-neutral-800 p-2 text-left hover:border-neutral-700">
+          <button type="button" onClick={() => onOpenEntry(run.entryIndex)} className="w-full rounded-lg border border-[var(--g3-border)] p-2 text-left hover:border-[var(--g3-border)]">
             <div className="flex items-center gap-1.5">
               {run.passed === true && <span className="text-[9px] font-bold text-emerald-400">✓</span>}
               {run.passed === false && <span className="text-[9px] font-bold text-red-400">✗</span>}
-              {run.passed === null && <span className="text-[9px] font-bold text-neutral-500">?</span>}
-              <span className="min-w-0 flex-1 truncate text-[10px] text-neutral-400">{run.command}</span>
+              {run.passed === null && <span className="text-[9px] font-bold text-[var(--g3-muted)]">?</span>}
+              <span className="min-w-0 flex-1 truncate text-[10px] text-[var(--g3-faint)]">{run.command}</span>
             </div>
-            {run.summary && <span className="mt-0.5 block pl-4 text-[9px] text-neutral-500">{run.summary}</span>}
+            {run.summary && <span className="mt-0.5 block pl-4 text-[9px] text-[var(--g3-muted)]">{run.summary}</span>}
           </button>
         </li>
       ))}

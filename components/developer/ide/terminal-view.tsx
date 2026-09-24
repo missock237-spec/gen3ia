@@ -86,20 +86,20 @@ export function TerminalView({
 
   if (sessions.length === 0 && !error && !loadingEntries) {
     return (
-      <div className="grid h-full place-items-center overflow-y-auto bg-[#0d0e0c] px-6 py-10 text-center">
+      <div className="grid h-full place-items-center overflow-y-auto bg-[var(--g3-deep)] px-6 py-10 text-center">
         <div className="max-w-md">
           <p className="text-3xl" aria-hidden>⌘</p>
-          <p className="mt-3 text-sm font-semibold text-neutral-200">Le terminal de vos agents</p>
-          <p className="mt-2 text-xs leading-relaxed text-neutral-500">
+          <p className="mt-3 text-sm font-semibold text-[var(--g3-text-secondary)]">Le terminal de vos agents</p>
+          <p className="mt-2 text-xs leading-relaxed text-[var(--g3-muted)]">
             Aucune session pour le moment. Lancez un agent (de type code) depuis une conversation : chacune de ses commandes apparaîtra ici
             en direct, avec son résultat, son mode d&apos;exécution et sa piste d&apos;audit.
           </p>
-          <ul className="mx-auto mt-4 max-w-xs space-y-1.5 text-left text-[11px] text-neutral-400">
+          <ul className="mx-auto mt-4 max-w-xs space-y-1.5 text-left text-[11px] text-[var(--g3-faint)]">
             <li className="flex gap-2"><span aria-hidden>1.</span> Ouvrez une conversation dans l&apos;espace de travail.</li>
             <li className="flex gap-2"><span aria-hidden>2.</span> Demandez une tâche nécessitant l&apos;exécution de commandes.</li>
             <li className="flex gap-2"><span aria-hidden>3.</span> Observez et contrôlez l&apos;exécution ici.</li>
           </ul>
-          <Link href="/workspace" className="mt-4 inline-block rounded-full bg-white px-4 py-2 text-xs font-semibold text-black transition hover:bg-neutral-200">
+          <Link href="/workspace" className="mt-4 inline-block rounded-full bg-[var(--g3-surface)] px-4 py-2 text-xs font-semibold text-black transition hover:bg-[var(--g3-elevated)]">
             Ouvrir une conversation
           </Link>
         </div>
@@ -108,15 +108,15 @@ export function TerminalView({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#0d0e0c]" aria-label="Terminal des agents">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--g3-deep)]" aria-label="Terminal des agents">
       {/* Barre de contrôle de session */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-800 px-3 py-2">
-        <label className="flex items-center gap-1.5 text-[11px] text-neutral-400">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--g3-border)] px-3 py-2">
+        <label className="flex items-center gap-1.5 text-[11px] text-[var(--g3-faint)]">
           <span className="sr-only">Session terminal</span>
           <select
             value={activeSessionId ?? ""}
             onChange={(event) => onSelectSession(event.target.value)}
-            className="max-w-[280px] rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs text-neutral-200 focus:border-neutral-600 focus:outline-none"
+            className="max-w-[280px] rounded-lg border border-[var(--g3-border)] bg-[var(--g3-deep)] px-2 py-1 text-xs text-[var(--g3-text-secondary)] focus:border-neutral-600 focus:outline-none"
             aria-label="Choisir une session terminal"
           >
             {sessions.map((session) => (
@@ -133,7 +133,7 @@ export function TerminalView({
           aria-pressed={live}
           className={
             "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition " +
-            (live ? "border-emerald-800 bg-emerald-950/50 text-emerald-300" : "border-neutral-700 text-neutral-400 hover:text-neutral-200")
+            (live ? "border-emerald-800 bg-emerald-950/50 text-emerald-300" : "border-[var(--g3-border)] text-[var(--g3-faint)] hover:text-[var(--g3-text-secondary)]")
           }
         >
           {statusDot(connection)}
@@ -165,8 +165,8 @@ export function TerminalView({
       </div>
 
       {/* Bandeau de sécurité : terminal réservé aux agents */}
-      <p className="border-b border-neutral-900 bg-neutral-900/40 px-3 py-1.5 text-[10px] text-neutral-500">
-        <span className="mr-1.5 rounded bg-neutral-800 px-1.5 py-0.5 font-semibold text-neutral-300">Lecture seule</span>
+      <p className="border-b border-[var(--g3-border)] bg-[var(--g3-deep)]/40 px-3 py-1.5 text-[10px] text-[var(--g3-muted)]">
+        <span className="mr-1.5 rounded bg-[var(--g3-deep)] px-1.5 py-0.5 font-semibold text-[var(--g3-faint)]">Lecture seule</span>
         Terminal réservé aux agents — vous ne pouvez pas y saisir de commandes. Sorties masquées automatiquement si elles contiennent des secrets.
       </p>
 
@@ -182,7 +182,7 @@ export function TerminalView({
       {/* Sorties */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2" aria-live="polite">
         {entries.length === 0 && !error && (
-          <p className="py-6 text-center text-xs text-neutral-500">
+          <p className="py-6 text-center text-xs text-[var(--g3-muted)]">
             {loadingEntries ? "Chargement de la session…" : "Session vide — en attente des commandes de vos agents."}
           </p>
         )}
@@ -192,7 +192,7 @@ export function TerminalView({
             <article key={entry.index} className={"g3-console-entry py-1.5 " + (entry.success ? "is-ok" : "is-fail")}>
               <div className="flex flex-wrap items-baseline gap-2">
                 <span className="g3-console-prompt" aria-hidden>$</span>
-                <code className="text-xs text-neutral-200">{entry.command}</code>
+                <code className="text-xs text-[var(--g3-text-secondary)]">{entry.command}</code>
                 {entry.mode && (
                   <small className={"g3-console-mode " + (entry.mode === "sandbox" ? "is-real" : "is-simulated")}>
                     {entry.mode === "sandbox" ? "exécution réelle" : entry.engine ?? "simulation"}
@@ -203,12 +203,12 @@ export function TerminalView({
                     exit {entry.exitCode} · {entry.durationMs} ms
                   </small>
                 )}
-                <small className="ml-auto text-[9px] text-neutral-600">
+                <small className="ml-auto text-[9px] text-[var(--g3-muted)]">
                   {new Date(entry.createdAt).toLocaleTimeString("fr-FR")}
                 </small>
               </div>
               {entry.error && <pre className="mt-1 text-[11px] text-red-400">{maskSecrets(entry.error)}</pre>}
-              {entry.stdout && <pre className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-neutral-400">{maskSecrets(entry.stdout)}</pre>}
+              {entry.stdout && <pre className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--g3-faint)]">{maskSecrets(entry.stdout)}</pre>}
               {entry.stderr && <pre className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-red-300/90">{maskSecrets(entry.stderr)}</pre>}
               {refs.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -233,7 +233,7 @@ export function TerminalView({
       </div>
 
       {/* Suivi de sortie */}
-      <label className="flex items-center justify-between border-t border-neutral-800 px-3 py-1.5 text-[10px] text-neutral-500">
+      <label className="flex items-center justify-between border-t border-[var(--g3-border)] px-3 py-1.5 text-[10px] text-[var(--g3-muted)]">
         <span>
           {entries.length > 0 && `Dernier index : ${entries[entries.length - 1].index}`}
           {activeSession?.status === "stopped" && " · session arrêtée — les agents ne peuvent plus y exécuter de commandes"}

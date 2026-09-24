@@ -16,7 +16,7 @@ import { monacoLanguageFor } from "@/lib/developer/ide";
 const MonacoEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.default), {
   ssr: false,
   loading: () => (
-    <div className="grid h-full place-items-center bg-[#1e1e1e] text-xs text-neutral-500" role="status">
+    <div className="grid h-full place-items-center bg-[var(--g3-elevated)] text-xs text-[var(--g3-muted)]" role="status">
       Chargement de l&apos;éditeur…
     </div>
   ),
@@ -118,12 +118,12 @@ export function CodeEditor({ tabs, activeId, markers, goto, onGotoHandled, onSel
 
   if (tabs.length === 0) {
     return (
-      <div className="grid h-full place-items-center bg-[#141513] px-6 text-center">
+      <div className="grid h-full place-items-center bg-[var(--g3-deep)] px-6 text-center">
         <div className="max-w-sm">
           <p className="text-3xl" aria-hidden>▚</p>
-          <p className="mt-2 text-sm font-medium text-neutral-300">Aucun fichier ouvert</p>
-          <p className="mt-1 text-xs leading-relaxed text-neutral-500">
-            Ouvrez un fichier depuis l&apos;explorateur à gauche ou via la palette <kbd className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px]">Ctrl/⌘ K</kbd>.
+          <p className="mt-2 text-sm font-medium text-[var(--g3-faint)]">Aucun fichier ouvert</p>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--g3-muted)]">
+            Ouvrez un fichier depuis l&apos;explorateur à gauche ou via la palette <kbd className="rounded bg-[var(--g3-deep)] px-1.5 py-0.5 text-[10px]">Ctrl/⌘ K</kbd>.
             Les fichiers sont les artefacts de code créés par vos agents.
           </p>
         </div>
@@ -132,17 +132,17 @@ export function CodeEditor({ tabs, activeId, markers, goto, onGotoHandled, onSel
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#1e1e1e]">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--g3-elevated)]">
       {/* Onglets de fichiers ouverts */}
-      <div className="flex items-stretch overflow-x-auto border-b border-neutral-800 bg-[#181917]" role="tablist" aria-label="Fichiers ouverts">
+      <div className="flex items-stretch overflow-x-auto border-b border-[var(--g3-border)] bg-[var(--g3-deep)]" role="tablist" aria-label="Fichiers ouverts">
         {tabs.map((tab) => (
           <div
             key={tab.artifactId}
             role="tab"
             aria-selected={tab.artifactId === activeId}
             className={
-              "group flex max-w-[220px] shrink-0 items-center gap-1.5 border-r border-neutral-800 px-3 py-2 text-xs transition " +
-              (tab.artifactId === activeId ? "bg-[#1e1e1e] text-white" : "text-neutral-400 hover:bg-[#1e1e1e]/60")
+              "group flex max-w-[220px] shrink-0 items-center gap-1.5 border-r border-[var(--g3-border)] px-3 py-2 text-xs transition " +
+              (tab.artifactId === activeId ? "bg-[var(--g3-elevated)] text-white" : "text-[var(--g3-faint)] hover:bg-[var(--g3-elevated)]/60")
             }
           >
             <button type="button" onClick={() => onSelectTab(tab.artifactId)} className="min-w-0 truncate" title={tab.path}>
@@ -153,7 +153,7 @@ export function CodeEditor({ tabs, activeId, markers, goto, onGotoHandled, onSel
               type="button"
               onClick={() => onCloseTab(tab.artifactId)}
               aria-label={`Fermer ${tab.path}`}
-              className="shrink-0 rounded px-1 text-neutral-500 opacity-0 transition hover:bg-neutral-700 hover:text-white group-hover:opacity-100"
+              className="shrink-0 rounded px-1 text-[var(--g3-muted)] opacity-0 transition hover:bg-[var(--g3-elevated)] hover:text-white group-hover:opacity-100"
             >
               ×
             </button>
@@ -169,7 +169,7 @@ export function CodeEditor({ tabs, activeId, markers, goto, onGotoHandled, onSel
             onChange={(event) => active && onChange(active.artifactId, event.target.value)}
             spellCheck={false}
             aria-label={`Contenu de ${active?.path}`}
-            className="h-full w-full resize-none bg-[#1e1e1e] p-4 font-mono text-[13px] leading-relaxed text-neutral-200 outline-none"
+            className="h-full w-full resize-none bg-[var(--g3-elevated)] p-4 font-mono text-[13px] leading-relaxed text-[var(--g3-text-secondary)] outline-none"
           />
         ) : active ? (
           <MonacoEditor

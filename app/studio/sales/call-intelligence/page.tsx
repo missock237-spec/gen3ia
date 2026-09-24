@@ -82,7 +82,7 @@ export default function SalesCallIntelligencePage() {
       </div>
 
       <div className={cardCls}>
-        <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Analyser un appel terminé</h2>
+        <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Analyser un appel terminé</h2>
         {availableCalls.length === 0 ? (
           <EmptyHint>Aucun appel terminé à analyser. Lancez des appels depuis l&apos;onglet Appels du Studio, puis revenez ici.</EmptyHint>
         ) : (
@@ -107,15 +107,15 @@ export default function SalesCallIntelligencePage() {
       </div>
 
       <ModuleSection title={`Analyses (${insights.length})`}>
-        {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+        {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
         {!loading && insights.length === 0 ? <EmptyHint>Aucune analyse pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-3">
           {insights.map((row) => (
             <article key={row.id} className={cardCls}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h3 className="text-[15px] font-bold text-neutral-900">{row.to}</h3>
-                  <p className="text-[12px] text-neutral-500">{shortDate(row.createdAt)}{row.objective ? ` · ${row.objective.slice(0, 60)}` : ""}</p>
+                  <h3 className="text-[15px] font-bold text-[var(--g3-text)]">{row.to}</h3>
+                  <p className="text-[12px] text-[var(--g3-muted)]">{shortDate(row.createdAt)}{row.objective ? ` · ${row.objective.slice(0, 60)}` : ""}</p>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Pill tone={INTEREST_TONE[row.insight.interestLevel]}>{row.insight.interestLevel}</Pill>
@@ -123,16 +123,16 @@ export default function SalesCallIntelligencePage() {
                   <Pill tone="blue">{row.insight.score}/100</Pill>
                 </div>
               </div>
-              <p className="mt-2 text-[13px] leading-relaxed text-neutral-700">{row.insight.summary}</p>
+              <p className="mt-2 text-[13px] leading-relaxed text-[var(--g3-text-secondary)]">{row.insight.summary}</p>
 
               {openId === row.id ? (
                 <div className="mt-3 space-y-3 text-[13px]">
                   {row.insight.objections.length ? (
                     <div>
-                      <p className="mb-1 font-semibold text-neutral-900">Objections & réponses</p>
+                      <p className="mb-1 font-semibold text-[var(--g3-text)]">Objections & réponses</p>
                       <ul className="space-y-1.5">
                         {row.insight.objections.map((o, i) => (
-                          <li key={i} className="rounded-lg bg-neutral-50 px-3 py-2">
+                          <li key={i} className="rounded-lg bg-[var(--g3-elevated)] px-3 py-2">
                             <strong>Objection :</strong> {o.objection}
                             <br />
                             <strong>Réponse :</strong> {o.response}
@@ -142,14 +142,14 @@ export default function SalesCallIntelligencePage() {
                     </div>
                   ) : null}
                   <div>
-                    <p className="mb-1 font-semibold text-neutral-900">Prochaines actions</p>
-                    <ul className="list-inside list-disc text-neutral-700">
+                    <p className="mb-1 font-semibold text-[var(--g3-text)]">Prochaines actions</p>
+                    <ul className="list-inside list-disc text-[var(--g3-text-secondary)]">
                       {row.insight.nextSteps.map((s, i) => (
                         <li key={i}>{s}</li>
                       ))}
                     </ul>
                   </div>
-                  <p className="text-[12px] text-neutral-500">
+                  <p className="text-[12px] text-[var(--g3-muted)]">
                     Suivi recommandé dans {row.insight.followUpDays} jour(s) — {row.insight.followUpReason}
                     {row.followUpEventId ? " (rendez-vous créé dans votre calendrier)" : ""}
                   </p>

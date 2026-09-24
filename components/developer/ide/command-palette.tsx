@@ -99,11 +99,11 @@ export function CommandPalette({ open, files, actions, searchContents, onPickFil
   return (
     <div className="fixed inset-0 z-[90] flex items-start justify-center bg-black/60 px-4 pt-[12vh]" role="dialog" aria-modal="true" aria-label="Palette de commandes" onClick={onClose}>
       <div
-        className="w-full max-w-xl overflow-hidden rounded-2xl border border-neutral-700 bg-[#141513] shadow-2xl"
+        className="w-full max-w-xl overflow-hidden rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-deep)] shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center gap-2 border-b border-neutral-800 px-4 py-3">
-          <span className="text-neutral-500" aria-hidden>⌕</span>
+        <div className="flex items-center gap-2 border-b border-[var(--g3-border)] px-4 py-3">
+          <span className="text-[var(--g3-muted)]" aria-hidden>⌕</span>
           <input
             ref={inputRef}
             value={query}
@@ -111,47 +111,47 @@ export function CommandPalette({ open, files, actions, searchContents, onPickFil
             onKeyDown={onKeyDown}
             placeholder="Rechercher un fichier, un contenu ou une action…"
             aria-label="Recherche"
-            className="w-full bg-transparent text-sm text-neutral-100 placeholder:text-neutral-600 focus:outline-none"
+            className="w-full bg-transparent text-sm text-[var(--g3-text-secondary)] placeholder:text-[var(--g3-muted)] focus:outline-none"
           />
-          <kbd className="rounded border border-neutral-700 px-1.5 py-0.5 text-[9px] text-neutral-500">Échap</kbd>
+          <kbd className="rounded border border-[var(--g3-border)] px-1.5 py-0.5 text-[9px] text-[var(--g3-muted)]">Échap</kbd>
         </div>
 
         <div ref={listRef} className="max-h-[46vh] overflow-y-auto p-1.5">
-          {items.length === 0 && <p className="px-3 py-6 text-center text-xs text-neutral-500">Aucun résultat. Essayez un autre terme.</p>}
+          {items.length === 0 && <p className="px-3 py-6 text-center text-xs text-[var(--g3-muted)]">Aucun résultat. Essayez un autre terme.</p>}
           {items.map((item, index) => {
             const selected = index === cursor;
-            const common = "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition " + (selected ? "bg-neutral-800 text-white" : "text-neutral-300 hover:bg-neutral-800/60");
+            const common = "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition " + (selected ? "bg-[var(--g3-deep)] text-white" : "text-[var(--g3-faint)] hover:bg-[var(--g3-deep)]/60");
             if (item.kind === "file") {
               return (
                 <button key={`f-${item.file.artifactId}`} type="button" className={common} onMouseEnter={() => setCursor(index)} onClick={() => pick(item)}>
-                  <span aria-hidden className="text-neutral-500">▤</span>
+                  <span aria-hidden className="text-[var(--g3-muted)]">▤</span>
                   <span className="min-w-0 flex-1 truncate">{item.file.path}</span>
-                  <span className="shrink-0 text-[9px] text-neutral-600">{item.file.type} · v{item.file.version}</span>
+                  <span className="shrink-0 text-[9px] text-[var(--g3-muted)]">{item.file.type} · v{item.file.version}</span>
                 </button>
               );
             }
             if (item.kind === "match") {
               return (
                 <button key={`m-${item.file.artifactId}-${item.line}-${index}`} type="button" className={common} onMouseEnter={() => setCursor(index)} onClick={() => pick(item)}>
-                  <span aria-hidden className="text-neutral-500">≡</span>
+                  <span aria-hidden className="text-[var(--g3-muted)]">≡</span>
                   <span className="min-w-0 flex-1 truncate">
                     <span className="font-medium">{item.file.path}</span>
-                    <span className="ml-2 text-neutral-500">ligne {item.line} — {item.excerpt}</span>
+                    <span className="ml-2 text-[var(--g3-muted)]">ligne {item.line} — {item.excerpt}</span>
                   </span>
                 </button>
               );
             }
             return (
               <button key={`c-${item.id}`} type="button" className={common} onMouseEnter={() => setCursor(index)} onClick={() => pick(item)}>
-                <span aria-hidden className="text-neutral-500">▸</span>
+                <span aria-hidden className="text-[var(--g3-muted)]">▸</span>
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                {item.hint && <kbd className="shrink-0 rounded border border-neutral-700 px-1.5 py-0.5 text-[9px] text-neutral-500">{item.hint}</kbd>}
+                {item.hint && <kbd className="shrink-0 rounded border border-[var(--g3-border)] px-1.5 py-0.5 text-[9px] text-[var(--g3-muted)]">{item.hint}</kbd>}
               </button>
             );
           })}
         </div>
 
-        <div className="flex items-center justify-between border-t border-neutral-800 px-4 py-2 text-[9px] text-neutral-600">
+        <div className="flex items-center justify-between border-t border-[var(--g3-border)] px-4 py-2 text-[9px] text-[var(--g3-muted)]">
           <span>↑ ↓ naviguer · Entrée ouvrir</span>
           <span>Ctrl/⌘ P fichiers · Ctrl/⌘ S enregistrer</span>
         </div>

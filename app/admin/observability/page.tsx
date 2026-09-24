@@ -92,13 +92,13 @@ export default function AdminObservabilityPage() {
       </div>
 
       {Object.keys(statusCounts).length > 0 && (
-        <section aria-label="Répartition des statuts" className="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h2 className="text-lg font-bold text-neutral-100">Statuts récents</h2>
+        <section aria-label="Répartition des statuts" className="rounded-3xl border border-white/10 bg-[var(--g3-surface)]/5 p-6">
+          <h2 className="text-lg font-bold text-[var(--g3-text-secondary)]">Statuts récents</h2>
           <div className="mt-4 flex flex-wrap gap-2">
             {Object.entries(statusCounts).map(([status, count]) => (
-              <span key={status} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-neutral-900/50 px-3 py-1.5 text-xs text-neutral-300">
+              <span key={status} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-[var(--g3-deep)]/50 px-3 py-1.5 text-xs text-[var(--g3-faint)]">
                 <StatusBadge status={status} />
-                <span className="font-semibold text-neutral-100">{count}</span>
+                <span className="font-semibold text-[var(--g3-text-secondary)]">{count}</span>
               </span>
             ))}
           </div>
@@ -106,12 +106,12 @@ export default function AdminObservabilityPage() {
       )}
 
       <section aria-label="Exécutions">
-        <h2 className="mb-3 text-lg font-bold text-neutral-100">Exécutions de la plateforme</h2>
+        <h2 className="mb-3 text-lg font-bold text-[var(--g3-text-secondary)]">Exécutions de la plateforme</h2>
         <ResourceList
           rows={rows}
           ariaLabel="Exécutions récentes"
           emptyState={<EmptyState icon="∿" title="Aucune exécution enregistrée" description="Les runs d'agents et d'extensions apparaîtront ici." />}
-          className="[&_li]:border-white/10 [&_li]:bg-white/5 [&_li_*.text-neutral-800]:text-neutral-100"
+          className="[&_li]:border-white/10 [&_li]:bg-[var(--g3-surface)]/5 [&_li_*.text-[var(--g3-text)]]:text-[var(--g3-text-secondary)]"
         />
       </section>
     </div>

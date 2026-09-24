@@ -277,7 +277,7 @@ export default function InterfaceLabPage() {
 
   if (checking) {
     return (
-      <div className="pt-20 text-center text-sm text-neutral-500">
+      <div className="pt-20 text-center text-sm text-[var(--g3-muted)]">
         Verification de votre acces<span className="g3-dots"><span /><span /><span /></span>
       </div>
     );
@@ -292,7 +292,7 @@ export default function InterfaceLabPage() {
           </div>
           <div className="g3-eyebrow mt-6">Acces exclusif</div>
           <h1 className="mt-2 font-serif text-2xl font-semibold md:text-3xl">Atelier reserve aux agents de code</h1>
-          <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-neutral-500">
+          <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[var(--g3-muted)]">
             {accessMessage || "L'Atelier d'Interfaces est une fonctionnalite premium reservee aux agents de type « code ». Creez un agent de code dans le Studio, activez-le, puis revenez : l'atelier se deverrouillera automatiquement."}
           </p>
           <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
@@ -313,7 +313,7 @@ export default function InterfaceLabPage() {
         description="Recherchez des composants, themes et logos professionnels dans le catalogue 21st.dev, recuperez leur code source, puis faites-les adapter au design system Gen3ia par vos propres agents."
         meta={
           usage && (
-            <span className="rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-600">
+            <span className="rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--g3-muted)]">
               21st.dev · {usage.tier} · {usage.freeRetrievalsRemaining ?? "?"}/{usage.freeRetrievalsPerDay ?? "?"} recuperations aujourd&apos;hui
             </span>
           )
@@ -344,8 +344,8 @@ export default function InterfaceLabPage() {
             {loading ? <>Recherche<span className="g3-dots"><span /><span /><span /></span></> : "Rechercher"}
           </button>
         </form>
-        {tab === "logos" && <p className="mt-2 text-xs text-neutral-400">Recherche de logos SVG de marque (gratuite et illimitee via svgl.app).</p>}
-        {tab !== "logos" && <p className="mt-2 text-xs text-neutral-400">Recherche illimitee. La recuperation du code complet est quantifiee (les resultats deja recuperees sont servis depuis le cache sans consommer de quota).</p>}
+        {tab === "logos" && <p className="mt-2 text-xs text-[var(--g3-faint)]">Recherche de logos SVG de marque (gratuite et illimitee via svgl.app).</p>}
+        {tab !== "logos" && <p className="mt-2 text-xs text-[var(--g3-faint)]">Recherche illimitee. La recuperation du code complet est quantifiee (les resultats deja recuperees sont servis depuis le cache sans consommer de quota).</p>}
       </div>
 
       {note && <Callout tone="neutral" className="mt-4">{note}</Callout>}
@@ -376,7 +376,7 @@ export default function InterfaceLabPage() {
       )}
 
       {tab === "logos" && !loading && logos.length === 0 && query.trim().length >= 2 && !error && (
-        <div className="anim-fade-in mt-8 text-center text-sm text-neutral-400">Aucun logo trouve pour cette recherche — le service de logos (svgl.app) est peut-etre momentanement indisponible.</div>
+        <div className="anim-fade-in mt-8 text-center text-sm text-[var(--g3-faint)]">Aucun logo trouve pour cette recherche — le service de logos (svgl.app) est peut-etre momentanement indisponible.</div>
       )}
 
       {/* Composants et themes */}
@@ -384,27 +384,27 @@ export default function InterfaceLabPage() {
         <div className="anim-fade-up mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {results.map((item, index) => (
             <article key={`${item.kind}-${item.id}`} className="g3-card card-glow overflow-hidden" style={{ animationDelay: `${index * 0.05}s` }}>
-              <div className="relative aspect-video bg-neutral-100">
+              <div className="relative aspect-video bg-[var(--g3-elevated)]">
                 {item.previewUrl ? (
                   <Image src={item.previewUrl} alt={item.name} width={640} height={360} unoptimized className="h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-xs text-neutral-400">Apercu indisponible</div>
+                  <div className="flex h-full items-center justify-center text-xs text-[var(--g3-faint)]">Apercu indisponible</div>
                 )}
-                <span className="absolute left-2 top-2 rounded-full border border-neutral-200 bg-white/85 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-neutral-700 backdrop-blur">
+                <span className="absolute left-2 top-2 rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)]/85 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--g3-text-secondary)] backdrop-blur">
                   {KIND_LABELS[item.kind] ?? item.kind}
                 </span>
               </div>
               <div className="p-4">
                 <h3 className="truncate text-sm font-bold">{item.name}</h3>
                 <p className="text-xs text-sky-700">par {item.author}</p>
-                {item.description && <p className="mt-2 line-clamp-2 text-xs leading-5 text-neutral-500">{item.description}</p>}
+                {item.description && <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--g3-muted)]">{item.description}</p>}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {item.kind === "theme" || item.kind === "component" ? (
                     <button type="button" className="g3-btn g3-btn-primary !px-3 !py-2 text-xs" onClick={() => void openDetail(item.kind === "theme" ? "theme" : "component", item.id, item.name, item.description, item.author)}>
                       {item.kind === "theme" ? "Voir le theme" : "Voir le code"}
                     </button>
                   ) : (
-                    <span className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-neutral-50 px-3 py-2 text-xs text-neutral-400">Metadata uniquement</span>
+                    <span className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] px-3 py-2 text-xs text-[var(--g3-faint)]">Metadata uniquement</span>
                   )}
                   {item.pageUrl && (
                     <a href={item.pageUrl} target="_blank" rel="noopener noreferrer" className="g3-btn g3-btn-ghost !px-3 !py-2 text-xs">Page</a>
@@ -417,7 +417,7 @@ export default function InterfaceLabPage() {
       )}
 
       {tab !== "logos" && !loading && results.length === 0 && query.trim().length >= 2 && !error && !note && (
-        <div className="mt-8 text-center text-sm text-neutral-400">Aucun resultat. Essayez d&apos;autres mots-cles.</div>
+        <div className="mt-8 text-center text-sm text-[var(--g3-faint)]">Aucun resultat. Essayez d&apos;autres mots-cles.</div>
       )}
 
       {/* Drawer de detail — accessible (Echap, scroll-lock, focus) */}
@@ -426,7 +426,7 @@ export default function InterfaceLabPage() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 id="lab-detail-title" className="font-serif text-xl font-semibold">{detail.name}</h2>
-              <p className="mt-1 text-xs text-neutral-500">
+              <p className="mt-1 text-xs text-[var(--g3-muted)]">
                 {detail.kind === "theme" ? "Tokens CSS du theme" : "Code source du composant"}
                 {cached && " · servi depuis le cache (0 quota consomme)"}
               </p>
@@ -439,7 +439,7 @@ export default function InterfaceLabPage() {
               {component && (
                 <div className="flex flex-wrap gap-2">
                   {component.code && <button type="button" className="g3-btn g3-btn-ghost text-xs" onClick={() => void copy(component.code ?? "", "code")}>{copied === "code" ? "Copie ✓" : "Copier le code"}</button>}
-                  {component.installCommand && <code className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-[11px] text-neutral-300">{component.installCommand}</code>}
+                  {component.installCommand && <code className="rounded-lg border border-[var(--g3-border)] bg-[var(--g3-deep)] px-3 py-2 text-[11px] text-[var(--g3-faint)]">{component.installCommand}</code>}
                 </div>
               )}
               <button type="button" className="g3-btn g3-btn-primary" disabled={adapting || (!component?.code && !quotaBlocked)} onClick={() => void adaptForGen3ia()}>
@@ -457,7 +457,7 @@ export default function InterfaceLabPage() {
               {component?.code && <pre className="g3-code">{component.code}</pre>}
               {component?.demo && (
                 <div>
-                  <h3 className="mb-2 text-sm font-bold text-neutral-600">Exemple d&apos;utilisation</h3>
+                  <h3 className="mb-2 text-sm font-bold text-[var(--g3-muted)]">Exemple d&apos;utilisation</h3>
                   <pre className="g3-code">{component.demo}</pre>
                 </div>
               )}
@@ -484,7 +484,7 @@ export default function InterfaceLabPage() {
           )}
 
           {!component && !theme && !quotaBlocked && (
-            <div className="mt-10 text-center text-sm text-neutral-500">
+            <div className="mt-10 text-center text-sm text-[var(--g3-muted)]">
               Recuperation du code via 21st.dev<span className="g3-dots"><span /><span /><span /></span>
               <div className="g3-progress mt-4" />
             </div>

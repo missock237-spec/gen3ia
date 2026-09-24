@@ -71,19 +71,19 @@ export default function AdminPlatformPage() {
         ))}
       </div>
 
-      <section aria-label="Missions par statut" className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <h2 className="text-lg font-bold text-neutral-100">Missions par statut</h2>
-        <p className="mt-1 text-xs text-neutral-400">Répartition des 500 missions les plus récentes.</p>
+      <section aria-label="Missions par statut" className="rounded-3xl border border-white/10 bg-[var(--g3-surface)]/5 p-6">
+        <h2 className="text-lg font-bold text-[var(--g3-text-secondary)]">Missions par statut</h2>
+        <p className="mt-1 text-xs text-[var(--g3-faint)]">Répartition des 500 missions les plus récentes.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {data && Object.entries(data.taskStatusCounts).length > 0 ? (
             Object.entries(data.taskStatusCounts).map(([status, count]) => (
-              <span key={status} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-neutral-900/50 px-3 py-1.5 text-xs text-neutral-300">
+              <span key={status} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-[var(--g3-deep)]/50 px-3 py-1.5 text-xs text-[var(--g3-faint)]">
                 <StatusBadge status={status} />
-                <span className="font-semibold text-neutral-100">{count}</span>
+                <span className="font-semibold text-[var(--g3-text-secondary)]">{count}</span>
               </span>
             ))
           ) : (
-            <span className="text-sm text-neutral-400">Aucune mission enregistrée.</span>
+            <span className="text-sm text-[var(--g3-faint)]">Aucune mission enregistrée.</span>
           )}
         </div>
       </section>

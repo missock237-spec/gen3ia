@@ -256,8 +256,8 @@ export default function StudioClientsPage() {
     setTimeout(() => setCopied(false), 2_000);
   }
 
-  const inputClass = "w-full rounded-xl border border-[rgba(23,23,20,0.12)] bg-white px-3 py-2 text-sm";
-  const labelClass = "block text-xs font-semibold text-neutral-500 mb-1";
+  const inputClass = "w-full rounded-xl border border-[rgba(23,23,20,0.12)] bg-[var(--g3-surface)] px-3 py-2 text-sm";
+  const labelClass = "block text-xs font-semibold text-[var(--g3-muted)] mb-1";
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8">
@@ -271,23 +271,23 @@ export default function StudioClientsPage() {
       {message && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{message}</div>}
 
       {loading ? (
-        <p className="text-sm text-neutral-500">Chargement…</p>
+        <p className="text-sm text-[var(--g3-muted)]">Chargement…</p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
           <aside className="flex flex-col gap-3">
-            <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4">
+            <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-4">
               <h2 className="mb-2 text-sm font-bold">Mes agents commerciaux</h2>
-              {configs.length === 0 && <p className="text-xs text-neutral-500">Aucun agent commercial. Créez-en un ci-contre.</p>}
+              {configs.length === 0 && <p className="text-xs text-[var(--g3-muted)]">Aucun agent commercial. Créez-en un ci-contre.</p>}
               <div className="flex flex-col gap-2">
                 {configs.map((config) => (
                   <button
                     key={config.id}
                     type="button"
                     onClick={() => void selectConfig(config)}
-                    className={"rounded-xl border px-3 py-2 text-left text-sm " + (selectedId === config.id ? "border-neutral-900 bg-neutral-900 text-white" : "border-[rgba(23,23,20,0.1)] bg-[#fafaf8]")}
+                    className={"rounded-xl border px-3 py-2 text-left text-sm " + (selectedId === config.id ? "border-[var(--g3-border)] bg-[var(--g3-deep)] text-white" : "border-[rgba(23,23,20,0.1)] bg-[var(--g3-elevated)]")}
                   >
                     <span className="block font-semibold">{config.companyName}</span>
-                    <span className={"text-xs " + (selectedId === config.id ? "text-neutral-300" : "text-neutral-500")}>{config.active ? "actif" : "désactivé"}</span>
+                    <span className={"text-xs " + (selectedId === config.id ? "text-[var(--g3-faint)]" : "text-[var(--g3-muted)]")}>{config.active ? "actif" : "désactivé"}</span>
                   </button>
                 ))}
               </div>
@@ -296,19 +296,19 @@ export default function StudioClientsPage() {
             {selectedConfig && (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                 <h3 className="text-sm font-bold text-emerald-800">Lien client</h3>
-                <code className="mt-2 block break-all rounded-lg bg-white px-2 py-2 text-[11px] text-emerald-900">{clientLink}</code>
+                <code className="mt-2 block break-all rounded-lg bg-[var(--g3-surface)] px-2 py-2 text-[11px] text-emerald-900">{clientLink}</code>
                 <div className="mt-2 flex gap-2">
                   <button type="button" onClick={copyLink} className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white">{copied ? "Copié !" : "Copier le lien"}</button>
-                  <a href={clientLink} target="_blank" rel="noreferrer" className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Ouvrir</a>
+                  <a href={clientLink} target="_blank" rel="noreferrer" className="rounded-xl border border-emerald-300 bg-[var(--g3-surface)] px-3 py-2 text-xs font-bold text-emerald-800">Ouvrir</a>
                 </div>
-                <button type="button" onClick={() => void rotateSlug()} disabled={busy} className="mt-2 w-full rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-800">
+                <button type="button" onClick={() => void rotateSlug()} disabled={busy} className="mt-2 w-full rounded-xl border border-emerald-300 bg-[var(--g3-surface)] px-3 py-2 text-xs font-semibold text-emerald-800">
                   Régénérer le lien
                 </button>
               </div>
             )}
           </aside>
 
-          <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5">
+          <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5">
             {configs.length === 0 ? (
               <div className="flex flex-col gap-4">
                 <h2 className="text-base font-bold">Nouvel agent commercial</h2>
@@ -320,7 +320,7 @@ export default function StudioClientsPage() {
                   {agents.length === 0 && <p className="mt-1 text-xs text-red-600">Créez d&apos;abord un agent dans le Studio.</p>}
                 </div>
                 {sharedFields()}
-                <button type="button" onClick={() => void createConfig()} disabled={busy || !form.companyName.trim() || !form.agentId} className="self-start rounded-xl bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">
+                <button type="button" onClick={() => void createConfig()} disabled={busy || !form.companyName.trim() || !form.agentId} className="self-start rounded-xl bg-[var(--g3-deep)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">
                   {busy ? "Création…" : "Créer l'agent commercial"}
                 </button>
               </div>
@@ -329,7 +329,7 @@ export default function StudioClientsPage() {
                 <h2 className="text-base font-bold">Fiche entreprise — {selectedConfig?.companyName}</h2>
                 {sharedFields()}
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => void saveConfig()} disabled={busy} className="rounded-xl bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">
+                  <button type="button" onClick={() => void saveConfig()} disabled={busy} className="rounded-xl bg-[var(--g3-deep)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">
                     {busy ? "Enregistrement…" : "Enregistrer la fiche"}
                   </button>
                   <label className="flex items-center gap-2 text-sm">
@@ -343,13 +343,13 @@ export default function StudioClientsPage() {
                     <h3 className="mb-2 text-sm font-bold">Conversations clients récentes</h3>
                     <div className="flex flex-col gap-2">
                       {chats.map((chat) => (
-                        <details key={chat.id} className="rounded-xl border border-[rgba(23,23,20,0.1)] bg-[#fafaf8] px-3 py-2">
+                        <details key={chat.id} className="rounded-xl border border-[rgba(23,23,20,0.1)] bg-[var(--g3-elevated)] px-3 py-2">
                           <summary className="cursor-pointer text-sm font-semibold">
                             {chat.clientName || "Client"} {chat.clientContact ? `· ${chat.clientContact}` : ""} — {new Date(chat.updatedAt).toLocaleString("fr-FR")}
                           </summary>
                           <div className="mt-2 flex max-h-56 flex-col gap-1 overflow-auto text-xs">
                             {chat.messages.slice(-12).map((entry, index) => (
-                              <p key={index} className={entry.role === "client" ? "text-neutral-800" : "text-emerald-800"}>
+                              <p key={index} className={entry.role === "client" ? "text-[var(--g3-text)]" : "text-emerald-800"}>
                                 <strong>{entry.role === "client" ? "Client" : "Agent"} :</strong> {entry.content.slice(0, 400)}
                               </p>
                             ))}

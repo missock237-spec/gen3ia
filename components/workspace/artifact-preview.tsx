@@ -23,7 +23,7 @@ export function LiveAppPreviewButton({ artifact }: { artifact: ConversationArtif
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-2 inline-flex items-center gap-2 rounded-full bg-neutral-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-neutral-700"
+        className="mt-2 inline-flex items-center gap-2 rounded-full bg-[var(--g3-deep)] px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[var(--g3-elevated)]"
         title="Prévisualiser l'application créée par l'agent"
       >
         <span aria-hidden>▶</span>
@@ -58,20 +58,20 @@ export function ArtifactLivePreviewModal({ artifact, onClose }: { artifact: Conv
 
   return (
     <div className="fixed inset-0 z-[80] flex flex-col bg-black/70 p-3 md:p-6" role="dialog" aria-modal="true" aria-label={`Aperçu en direct — ${artifact.title}`} onClick={onClose}>
-      <div className="mx-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-neutral-700 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-        <header className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-neutral-50 px-4 py-2.5">
-          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-800">
+      <div className="mx-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex flex-wrap items-center gap-2 border-b border-[var(--g3-border)] bg-[var(--g3-elevated)] px-4 py-2.5">
+          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--g3-text)]">
             ▶ {artifact.title}
-            <span className="ml-2 rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] font-medium text-neutral-600">v{latest?.version ?? 1} · temps réel</span>
+            <span className="ml-2 rounded-full bg-[var(--g3-elevated)] px-2 py-0.5 text-[10px] font-medium text-[var(--g3-muted)]">v{latest?.version ?? 1} · temps réel</span>
           </p>
-          <div className="flex overflow-hidden rounded-lg border border-neutral-300" role="group" aria-label="Taille d'aperçu">
+          <div className="flex overflow-hidden rounded-lg border border-[var(--g3-border-strong)]" role="group" aria-label="Taille d'aperçu">
             {(["mobile", "desktop"] as const).map((mode) => (
               <button
                 key={mode}
                 type="button"
                 onClick={() => setDevice(mode)}
                 aria-pressed={device === mode}
-                className={"px-2.5 py-1 text-[11px] transition " + (device === mode ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 hover:bg-neutral-100")}
+                className={"px-2.5 py-1 text-[11px] transition " + (device === mode ? "bg-[var(--g3-deep)] text-white" : "bg-[var(--g3-surface)] text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]")}
               >
                 {mode === "mobile" ? "Mobile" : "Plein écran"}
               </button>
@@ -80,7 +80,7 @@ export function ArtifactLivePreviewModal({ artifact, onClose }: { artifact: Conv
           <button
             type="button"
             onClick={() => setReloadKey((k) => k + 1)}
-            className="rounded-lg border border-neutral-300 px-2.5 py-1 text-[11px] text-neutral-600 hover:bg-neutral-100"
+            className="rounded-lg border border-[var(--g3-border-strong)] px-2.5 py-1 text-[11px] text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
             title="Recharger l'aperçu"
           >
             ⟳
@@ -91,30 +91,30 @@ export function ArtifactLivePreviewModal({ artifact, onClose }: { artifact: Conv
               const blob = new Blob([content], { type: "text/html" });
               window.open(URL.createObjectURL(blob), "_blank", "noopener");
             }}
-            className="rounded-lg border border-neutral-300 px-2.5 py-1 text-[11px] text-neutral-600 hover:bg-neutral-100"
+            className="rounded-lg border border-[var(--g3-border-strong)] px-2.5 py-1 text-[11px] text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
           >
             Ouvrir dans un onglet
           </button>
-          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-neutral-700" aria-label="Fermer l'aperçu">
+          <button type="button" onClick={onClose} className="rounded-lg bg-[var(--g3-deep)] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[var(--g3-elevated)]" aria-label="Fermer l'aperçu">
             Fermer
           </button>
         </header>
 
         {content ? (
-          <div className="grid min-h-0 flex-1 place-items-start justify-center overflow-auto bg-neutral-200/60 p-3">
+          <div className="grid min-h-0 flex-1 place-items-start justify-center overflow-auto bg-[var(--g3-elevated)]/60 p-3">
             <iframe
               key={versionKey + ":" + reloadKey}
               title={`Aperçu — ${artifact.title}`}
               sandbox="allow-scripts allow-forms allow-modals allow-popups"
               srcDoc={content}
-              className={"h-full min-h-[420px] rounded-xl border border-neutral-300 bg-white shadow-inner " + (device === "mobile" ? "w-[390px] max-w-full" : "w-full")}
+              className={"h-full min-h-[420px] rounded-xl border border-[var(--g3-border-strong)] bg-[var(--g3-surface)] shadow-inner " + (device === "mobile" ? "w-[390px] max-w-full" : "w-full")}
             />
           </div>
         ) : (
-          <div className="grid flex-1 place-items-center p-6 text-center text-sm text-neutral-500">
+          <div className="grid flex-1 place-items-center p-6 text-center text-sm text-[var(--g3-muted)]">
             <div>
               <p>Le contenu de cette application n&apos;est pas encore disponible.</p>
-              <p className="mt-1 text-xs text-neutral-400">Attendez la fin de la génération par l&apos;agent, puis rouvrez l&apos;aperçu.</p>
+              <p className="mt-1 text-xs text-[var(--g3-faint)]">Attendez la fin de la génération par l&apos;agent, puis rouvrez l&apos;aperçu.</p>
             </div>
           </div>
         )}

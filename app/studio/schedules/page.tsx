@@ -177,7 +177,7 @@ export default function AgentSchedulesPage() {
 
         <div className="g3-card p-6">
           <h2 className="font-serif text-xl font-semibold">Vos planifications</h2>
-          <p className="mt-2 text-sm text-neutral-500">La planification est stockée dans Firestore et traitée côté serveur.</p>
+          <p className="mt-2 text-sm text-[var(--g3-muted)]">La planification est stockée dans Firestore et traitée côté serveur.</p>
 
           <div className="mt-5 space-y-3">
             {loading ? (

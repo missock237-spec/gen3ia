@@ -73,7 +73,7 @@ export default function MarketingWebinarPage() {
       {notice ? <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700">{notice}</p> : null}
 
       <div className={cardCls}>
-        <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Nouveau kit de contenus</h2>
+        <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Nouveau kit de contenus</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Titre du webinar">
             <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Automatiser sa prospection avec l'IA" />
@@ -95,15 +95,15 @@ export default function MarketingWebinarPage() {
       </div>
 
       <ModuleSection title={`Kits générés (${assets.length})`}>
-        {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+        {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
         {!loading && assets.length === 0 ? <EmptyHint>Aucun kit pour l&apos;instant. Générez le premier depuis une transcription.</EmptyHint> : null}
         <div className="space-y-3">
           {assets.map((asset) => (
             <article key={asset.id} className={cardCls}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-[15px] font-bold text-neutral-900">{asset.title}</h3>
-                  <p className="text-[12px] text-neutral-500">{shortDate(asset.createdAt)}{asset.audience ? ` · ${asset.audience}` : ""}</p>
+                  <h3 className="text-[15px] font-bold text-[var(--g3-text)]">{asset.title}</h3>
+                  <p className="text-[12px] text-[var(--g3-muted)]">{shortDate(asset.createdAt)}{asset.audience ? ` · ${asset.audience}` : ""}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button className={btnGhostCls} onClick={() => setOpenId(openId === asset.id ? null : asset.id)}>
@@ -125,25 +125,25 @@ export default function MarketingWebinarPage() {
                       <button
                         key={t.key}
                         onClick={() => setTab(t.key)}
-                        className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold ${tab === t.key ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}
+                        className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold ${tab === t.key ? "bg-[var(--g3-deep)] text-white" : "bg-[var(--g3-elevated)] text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"}`}
                       >
                         {t.label}
                       </button>
                     ))}
                   </div>
                   {tab === "xThread" ? (
-                    <ol className="space-y-1.5 text-[13px] text-neutral-700">
+                    <ol className="space-y-1.5 text-[13px] text-[var(--g3-text-secondary)]">
                       {asset.outputs.xThread.map((tweet, i) => (
-                        <li key={i} className="rounded-lg bg-neutral-50 px-3 py-2">{i + 1}. {tweet}</li>
+                        <li key={i} className="rounded-lg bg-[var(--g3-elevated)] px-3 py-2">{i + 1}. {tweet}</li>
                       ))}
                     </ol>
                   ) : (
-                    <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-50 p-3.5 font-sans text-[13px] leading-relaxed text-neutral-700">
+                    <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-elevated)] p-3.5 font-sans text-[13px] leading-relaxed text-[var(--g3-text-secondary)]">
                       {asset.outputs[tab]}
                     </pre>
                   )}
                   {asset.outputs.keyQuotes.length ? (
-                    <p className="mt-3 text-[12px] text-neutral-500">Citations clés : {asset.outputs.keyQuotes.slice(0, 3).join(" · ")}</p>
+                    <p className="mt-3 text-[12px] text-[var(--g3-muted)]">Citations clés : {asset.outputs.keyQuotes.slice(0, 3).join(" · ")}</p>
                   ) : null}
                 </div>
               ) : null}

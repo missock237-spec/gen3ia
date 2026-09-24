@@ -21,11 +21,11 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   if (isImmersiveChatRoute(pathname)) {
-    return <div className="h-full min-h-0 bg-[#f6f4ef] text-neutral-900">{children}</div>;
+    return <div className="h-full min-h-0 bg-[var(--g3-bg)] text-[var(--g3-text)]">{children}</div>;
   }
 
   return (
-    <div className="min-h-full bg-[#f6f4ef] text-neutral-900">
+    <div className="min-h-full bg-[var(--g3-bg)] text-[var(--g3-text)]">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-8">
         <WorkspaceShell />
         {children}

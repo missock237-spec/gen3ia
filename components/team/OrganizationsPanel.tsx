@@ -143,15 +143,15 @@ export function OrganizationsPanel() {
   const canManage = (org: Organization) => org.myRole === "owner" || org.myRole === "admin";
 
   return (
-    <section className="anim-fade-up rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] md:p-8" aria-label="Organisations">
+    <section className="anim-fade-up rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] md:p-8" aria-label="Organisations">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-serif text-2xl font-semibold">Organisations</h2>
-          <p className="mt-1 text-xs leading-5 text-neutral-500">
+          <p className="mt-1 text-xs leading-5 text-[var(--g3-muted)]">
             Espace multi-tenant : isolez agents, projets et membres par organisation, avec quotas par plan.
           </p>
         </div>
-        <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-500">
+        <span className="rounded-full bg-[var(--g3-elevated)] px-3 py-1 text-xs font-semibold text-[var(--g3-muted)]">
           {organizations ? `${organizations.length} organisation${organizations.length > 1 ? "s" : ""}` : "…"}
         </span>
       </div>
@@ -160,7 +160,7 @@ export function OrganizationsPanel() {
 
       {pendingInvitations.length > 0 && (
         <div className="mt-5 space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-neutral-400">Invitations en attente</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">Invitations en attente</p>
           {pendingInvitations.map((invitation) => (
             <div key={invitation.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
               <span className="min-w-0 flex-1 text-xs text-sky-900">
@@ -181,9 +181,9 @@ export function OrganizationsPanel() {
       )}
 
       {organizations === null ? (
-        <div className="mt-6 h-16 animate-pulse rounded-2xl bg-neutral-100" aria-hidden="true" />
+        <div className="mt-6 h-16 animate-pulse rounded-2xl bg-[var(--g3-elevated)]" aria-hidden="true" />
       ) : organizations.length === 0 ? (
-        <p className="mt-5 rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/60 p-5 text-sm leading-6 text-neutral-500">
+        <p className="mt-5 rounded-2xl border border-dashed border-[var(--g3-border-strong)] bg-[var(--g3-elevated)]/60 p-5 text-sm leading-6 text-[var(--g3-muted)]">
           Aucune organisation. Créez-en une pour structurer votre entreprise : isolation des données, rôles et quotas par plan.
         </p>
       ) : (
@@ -194,43 +194,43 @@ export function OrganizationsPanel() {
                 type="button"
                 onClick={() => toggleExpand(org)}
                 aria-expanded={expanded === org.id}
-                className="flex w-full items-center gap-4 p-4 text-left transition hover:bg-neutral-50"
+                className="flex w-full items-center gap-4 p-4 text-left transition hover:bg-[var(--g3-elevated)]"
               >
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-100 font-serif text-lg font-semibold text-violet-700">
                   {org.name.charAt(0).toUpperCase()}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-semibold text-neutral-900">{org.name}</span>
+                    <span className="truncate text-sm font-semibold text-[var(--g3-text)]">{org.name}</span>
                     <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-violet-700">{org.plan}</span>
-                    <span className="rounded-full border border-neutral-200 bg-neutral-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-neutral-600">{ROLE_LABEL[org.myRole]}</span>
+                    <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--g3-muted)]">{ROLE_LABEL[org.myRole]}</span>
                   </span>
-                  <span className="mt-0.5 block text-xs text-neutral-500">{org.memberCount} membre{org.memberCount > 1 ? "s" : ""} · isolation {org.isolation === "silo" ? "silo (dédiée)" : "pool (partagée)"}</span>
+                  <span className="mt-0.5 block text-xs text-[var(--g3-muted)]">{org.memberCount} membre{org.memberCount > 1 ? "s" : ""} · isolation {org.isolation === "silo" ? "silo (dédiée)" : "pool (partagée)"}</span>
                 </span>
-                <span aria-hidden="true" className="text-neutral-300">{expanded === org.id ? "−" : "+"}</span>
+                <span aria-hidden="true" className="text-[var(--g3-faint)]">{expanded === org.id ? "−" : "+"}</span>
               </button>
 
               {expanded === org.id && (
                 <div className="border-t border-[rgba(23,23,20,0.09)] p-4">
                   {detailLoading || !detail ? (
-                    <p className="text-xs text-neutral-400">Chargement des membres…</p>
+                    <p className="text-xs text-[var(--g3-faint)]">Chargement des membres…</p>
                   ) : (
                     <>
-                      <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-600 sm:grid-cols-4">
-                        <span className="rounded-xl bg-neutral-50 px-3 py-2">Membres : <strong>{detail.members.length}/{detail.quotas.maxMembers}</strong></span>
-                        <span className="rounded-xl bg-neutral-50 px-3 py-2">Agents : <strong>{detail.quotas.maxAgents}</strong></span>
-                        <span className="rounded-xl bg-neutral-50 px-3 py-2">Crédits/mois : <strong>{detail.quotas.monthlyCredits.toLocaleString("fr-FR")}</strong></span>
-                        <span className="rounded-xl bg-neutral-50 px-3 py-2">Stockage : <strong>{detail.quotas.storageGb} Go</strong></span>
+                      <div className="grid grid-cols-2 gap-2 text-[11px] text-[var(--g3-muted)] sm:grid-cols-4">
+                        <span className="rounded-xl bg-[var(--g3-elevated)] px-3 py-2">Membres : <strong>{detail.members.length}/{detail.quotas.maxMembers}</strong></span>
+                        <span className="rounded-xl bg-[var(--g3-elevated)] px-3 py-2">Agents : <strong>{detail.quotas.maxAgents}</strong></span>
+                        <span className="rounded-xl bg-[var(--g3-elevated)] px-3 py-2">Crédits/mois : <strong>{detail.quotas.monthlyCredits.toLocaleString("fr-FR")}</strong></span>
+                        <span className="rounded-xl bg-[var(--g3-elevated)] px-3 py-2">Stockage : <strong>{detail.quotas.storageGb} Go</strong></span>
                       </div>
 
                       <ul className="mt-4 space-y-2">
                         {detail.members.map((member) => (
-                          <li key={member.userId} className="flex flex-wrap items-center gap-2 rounded-xl bg-neutral-50 px-3 py-2">
+                          <li key={member.userId} className="flex flex-wrap items-center gap-2 rounded-xl bg-[var(--g3-elevated)] px-3 py-2">
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-xs font-semibold text-neutral-800">{member.displayName || member.email}</span>
-                              <span className="block truncate text-[10px] text-neutral-400">{member.email}</span>
+                              <span className="block truncate text-xs font-semibold text-[var(--g3-text)]">{member.displayName || member.email}</span>
+                              <span className="block truncate text-[10px] text-[var(--g3-faint)]">{member.email}</span>
                             </span>
-                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${member.role === "owner" ? "bg-violet-100 text-violet-700" : member.role === "admin" ? "bg-sky-100 text-sky-700" : "bg-neutral-200 text-neutral-600"}`}>
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${member.role === "owner" ? "bg-violet-100 text-violet-700" : member.role === "admin" ? "bg-sky-100 text-sky-700" : "bg-[var(--g3-elevated)] text-[var(--g3-muted)]"}`}>
                               {ROLE_LABEL[member.role]}
                             </span>
                             {canManage(org) && member.role !== "owner" && (
@@ -240,7 +240,7 @@ export function OrganizationsPanel() {
                                   value={member.role}
                                   disabled={busy}
                                   onChange={(event) => void memberAction(org.id, { action: "role", memberId: member.userId, role: event.target.value })}
-                                  className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-[10px]"
+                                  className="rounded-lg border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2 py-1 text-[10px]"
                                 >
                                   <option value="member">Membre</option>
                                   <option value="admin">Admin</option>
@@ -249,7 +249,7 @@ export function OrganizationsPanel() {
                                   type="button"
                                   disabled={busy}
                                   onClick={() => void memberAction(org.id, { action: "remove", memberId: member.userId })}
-                                  className="rounded-lg border border-red-200 bg-white px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
+                                  className="rounded-lg border border-red-200 bg-[var(--g3-surface)] px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
                                 >
                                   Retirer
                                 </button>
@@ -261,16 +261,16 @@ export function OrganizationsPanel() {
 
                       {detail.invitations.length > 0 && canManage(org) && (
                         <div className="mt-3">
-                          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-neutral-400">Invitations en attente</p>
+                          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">Invitations en attente</p>
                           <ul className="mt-2 space-y-1.5">
                             {detail.invitations.map((invitation) => (
-                              <li key={invitation.id} className="flex items-center gap-2 text-xs text-neutral-600">
+                              <li key={invitation.id} className="flex items-center gap-2 text-xs text-[var(--g3-muted)]">
                                 <span className="min-w-0 flex-1 truncate">{invitation.email} · {ROLE_LABEL[invitation.role]}</span>
                                 <button
                                   type="button"
                                   disabled={busy}
                                   onClick={() => void memberAction(org.id, { action: "revoke", invitationId: invitation.id })}
-                                  className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-[10px] font-semibold text-neutral-600 hover:bg-neutral-100 disabled:opacity-40"
+                                  className="rounded-lg border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2 py-1 text-[10px] font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)] disabled:opacity-40"
                                 >
                                   Révoquer
                                 </button>

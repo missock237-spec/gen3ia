@@ -33,13 +33,13 @@ export function ApprovalCard({ approval, onDecide, disabled = false }: ApprovalC
 
   return (
     <div
-      className={`my-2 rounded-xl border p-3.5 ${approval.status === "pending" ? "border-amber-300 bg-amber-50/60" : "border-neutral-200 bg-white"}`}
+      className={`my-2 rounded-xl border p-3.5 ${approval.status === "pending" ? "border-amber-300 bg-amber-50/60" : "border-[var(--g3-border)] bg-[var(--g3-surface)]"}`}
       data-approval-id={approval.id}
       data-status={approval.status}
       role={approval.status === "pending" ? "alert" : undefined}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
+        <p className="flex items-center gap-2 text-sm font-semibold text-[var(--g3-text)]">
           <span aria-hidden className="grid size-6 place-items-center rounded-full bg-amber-100 text-xs text-amber-700">⚖</span>
           {approval.title}
         </p>
@@ -50,25 +50,25 @@ export function ApprovalCard({ approval, onDecide, disabled = false }: ApprovalC
 
       <dl className="mt-2.5 grid grid-cols-1 gap-1.5 text-[11px] leading-relaxed sm:grid-cols-2">
         <div>
-          <dt className="font-medium text-neutral-500">Outil utilisé</dt>
-          <dd className="font-mono text-neutral-800">{approval.toolName}</dd>
+          <dt className="font-medium text-[var(--g3-muted)]">Outil utilisé</dt>
+          <dd className="font-mono text-[var(--g3-text)]">{approval.toolName}</dd>
         </div>
         <div>
-          <dt className="font-medium text-neutral-500">Coût estimé</dt>
-          <dd className="text-neutral-800">{approval.estimatedCost || "gratuit"}</dd>
+          <dt className="font-medium text-[var(--g3-muted)]">Coût estimé</dt>
+          <dd className="text-[var(--g3-text)]">{approval.estimatedCost || "gratuit"}</dd>
         </div>
         <div>
-          <dt className="font-medium text-neutral-500">Données concernées</dt>
-          <dd className="text-neutral-800">{approval.dataScope || "—"}</dd>
+          <dt className="font-medium text-[var(--g3-muted)]">Données concernées</dt>
+          <dd className="text-[var(--g3-text)]">{approval.dataScope || "—"}</dd>
         </div>
         <div>
-          <dt className="font-medium text-neutral-500">Niveau de risque</dt>
-          <dd className="text-neutral-800">{approval.risk}</dd>
+          <dt className="font-medium text-[var(--g3-muted)]">Niveau de risque</dt>
+          <dd className="text-[var(--g3-text)]">{approval.risk}</dd>
         </div>
       </dl>
 
       {approval.impact && (
-        <p className="mt-2 rounded-lg bg-white/80 px-2.5 py-2 text-xs leading-relaxed text-neutral-700">
+        <p className="mt-2 rounded-lg bg-[var(--g3-surface)]/80 px-2.5 py-2 text-xs leading-relaxed text-[var(--g3-text-secondary)]">
           <span className="font-medium">Impact : </span>
           {approval.impact}
         </p>

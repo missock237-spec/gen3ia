@@ -72,7 +72,7 @@ export function ConnectorsPanel() {
             </span>
           ))}
         </div>
-        <div className="mt-5 rounded-2xl border bg-neutral-50 p-4">
+        <div className="mt-5 rounded-2xl border bg-[var(--g3-elevated)] p-4">
           <div className="font-semibold text-sm">Outils disponibles pour le projet</div>
           <div className="mt-2 flex gap-2">
             <input
@@ -82,17 +82,17 @@ export function ConnectorsPanel() {
                 if (event.key === "Enter") void loadProjectTools(event.currentTarget.value);
               }}
               placeholder="Rechercher une action..."
-              className="flex-1 rounded-xl border bg-white p-2.5 text-xs"
+              className="flex-1 rounded-xl border bg-[var(--g3-surface)] p-2.5 text-xs"
             />
-            <button type="button" onClick={() => void loadProjectTools(toolSearch)} className="rounded-xl border bg-white px-3 text-xs">
+            <button type="button" onClick={() => void loadProjectTools(toolSearch)} className="rounded-xl border bg-[var(--g3-surface)] px-3 text-xs">
               Rechercher
             </button>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {projectTools.slice(0, 40).map((tool, index) => (
-              <div key={tool.slug + index} className="rounded-xl border bg-white p-3">
+              <div key={tool.slug + index} className="rounded-xl border bg-[var(--g3-surface)] p-3">
                 <div className="font-mono text-[11px]">{tool.slug}</div>
-                <div className="mt-1 text-xs text-neutral-500">{tool.name || tool.toolkit || "Composio tool"}</div>
+                <div className="mt-1 text-xs text-[var(--g3-muted)]">{tool.name || tool.toolkit || "Composio tool"}</div>
               </div>
             ))}
           </div>
@@ -107,14 +107,14 @@ export function ConnectorsPanel() {
                     /* eslint-disable-next-line @next/next/no-img-element -- Composio sert des logos de centaines de domaines imprévisibles ; next/image exige une allowlist statique impossible pour 800+ apps. */
                     <img src={connector.logo} alt="" className="h-8 w-8 rounded-lg" />
                   ) : (
-                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-neutral-100 text-xs font-bold">{connector.label.slice(0, 1)}</div>
+                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--g3-elevated)] text-xs font-bold">{connector.label.slice(0, 1)}</div>
                   )}
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{connector.label}</div>
-                    <div className="text-[10px] text-neutral-400">{connector.toolkit}</div>
+                    <div className="text-[10px] text-[var(--g3-faint)]">{connector.toolkit}</div>
                   </div>
                 </div>
-                <p className="mt-3 line-clamp-2 text-xs text-neutral-500">{connector.description || "Application Composio"}</p>
+                <p className="mt-3 line-clamp-2 text-xs text-[var(--g3-muted)]">{connector.description || "Application Composio"}</p>
                 <button
                   type="button"
                   disabled={busy || connected}

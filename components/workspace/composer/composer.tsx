@@ -232,7 +232,7 @@ export function Composer({
               <button
                 type="button"
                 onClick={() => setAttachments((current) => current.filter((_, i) => i !== index))}
-                className="text-neutral-400 hover:text-red-500"
+                className="text-[var(--g3-faint)] hover:text-red-500"
                 aria-label={`Retirer ${attachment.filename}`}
               >
                 ✕
@@ -243,8 +243,8 @@ export function Composer({
       )}
 
       {activeProject && (
-        <p className="text-[11px] text-neutral-500">
-          Contexte projet : <span className="font-semibold text-neutral-800">{activeProject.name}</span> — tapez / pour changer de projet.
+        <p className="text-[11px] text-[var(--g3-muted)]">
+          Contexte projet : <span className="font-semibold text-[var(--g3-text)]">{activeProject.name}</span> — tapez / pour changer de projet.
         </p>
       )}
 

@@ -20,7 +20,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     if (/^\*[^*\n]+\*$/.test(part)) return <em key={key}>{part.slice(1, -1)}</em>;
     if (/^`[^`]+`$/.test(part)) {
       return (
-        <code key={key} className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[0.85em] text-neutral-800">
+        <code key={key} className="rounded bg-[var(--g3-elevated)] px-1.5 py-0.5 font-mono text-[0.85em] text-[var(--g3-text)]">
           {part.slice(1, -1)}
         </code>
       );
@@ -138,10 +138,10 @@ export function MarkdownContent({ content }: { content: string }) {
           case "heading": {
             const className =
               block.level === 1
-                ? "text-base font-semibold text-neutral-900"
+                ? "text-base font-semibold text-[var(--g3-text)]"
                 : block.level === 2
-                  ? "text-[15px] font-semibold text-neutral-900"
-                  : "text-sm font-semibold text-neutral-800";
+                  ? "text-[15px] font-semibold text-[var(--g3-text)]"
+                  : "text-sm font-semibold text-[var(--g3-text)]";
             return (
               <p key={key} className={className}>
                 {renderInline(block.lines[0], key)}
@@ -172,7 +172,7 @@ export function MarkdownContent({ content }: { content: string }) {
             );
           case "quote":
             return (
-              <blockquote key={key} className="border-l-2 border-neutral-300 pl-3 text-sm italic text-neutral-600">
+              <blockquote key={key} className="border-l-2 border-[var(--g3-border-strong)] pl-3 text-sm italic text-[var(--g3-muted)]">
                 {renderInline(block.lines[0], key)}
               </blockquote>
             );

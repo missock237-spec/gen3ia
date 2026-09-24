@@ -113,7 +113,7 @@ export function AdsWorkshop() {
             <h2 className="font-serif text-xl font-semibold">Générateur publicitaire</h2>
             <span className="rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-xs text-emerald-600">Sécurité active</span>
           </div>
-          <p className="mt-2 text-sm text-neutral-500">Décrivez le résultat attendu. L&apos;orchestrateur sélectionne les compétences et outils nécessaires.</p>
+          <p className="mt-2 text-sm text-[var(--g3-muted)]">Décrivez le résultat attendu. L&apos;orchestrateur sélectionne les compétences et outils nécessaires.</p>
           <textarea
             value={objective}
             onChange={(e) => setObjective(e.target.value)}
@@ -126,7 +126,7 @@ export function AdsWorkshop() {
         </div>
         <div className="g3-card p-6">
           <h2 className="font-serif text-xl font-semibold">Connexions Ads</h2>
-          <p className="mt-2 text-sm text-neutral-500">Les jetons sont stockés chiffrés côté serveur. Une publication externe exige une validation humaine.</p>
+          <p className="mt-2 text-sm text-[var(--g3-muted)]">Les jetons sont stockés chiffrés côté serveur. Une publication externe exige une validation humaine.</p>
           <div className="mt-5 space-y-3">
             {(Object.keys(PROVIDER_LABELS) as Provider[]).map((provider) => (
               <button
@@ -134,7 +134,7 @@ export function AdsWorkshop() {
                 disabled={busy}
                 onClick={() => connectAds(provider)}
                 aria-label={connections.includes(provider) ? `${PROVIDER_LABELS[provider]} connecté` : `Connecter ${PROVIDER_LABELS[provider]}`}
-                className="flex w-full items-center justify-between rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4 text-left hover:bg-neutral-100"
+                className="flex w-full items-center justify-between rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] p-4 text-left hover:bg-[var(--g3-elevated)]"
               >
                 <span>{PROVIDER_LABELS[provider]}</span>
                 <span className={connections.includes(provider) ? "text-emerald-600 text-sm" : "text-sky-700 text-sm"}>
@@ -144,7 +144,7 @@ export function AdsWorkshop() {
             ))}
           </div>
           {loaded && (memoryCount > 0 || fileCount > 0) && (
-            <p className="mt-4 text-xs text-neutral-400">
+            <p className="mt-4 text-xs text-[var(--g3-faint)]">
               Ressources disponibles : {memoryCount} souvenir{memoryCount > 1 ? "s" : ""} · {fileCount} fichier{fileCount > 1 ? "s" : ""} permanent{fileCount > 1 ? "s" : ""}.
             </p>
           )}
@@ -154,15 +154,15 @@ export function AdsWorkshop() {
       <section className="grid grid-cols-1 gap-5 md:grid-cols-3">
         <div className="g3-card p-5 md:col-span-3">
           <h3 className="font-serif text-lg font-semibold">Validation humaine</h3>
-          <p className="mt-2 text-sm text-neutral-500">Aucune publication ne part sans votre décision explicite. Le coût de publication est débité du portefeuille après exécution.</p>
+          <p className="mt-2 text-sm text-[var(--g3-muted)]">Aucune publication ne part sans votre décision explicite. Le coût de publication est débité du portefeuille après exécution.</p>
           {pendingApprovalId ? (
             <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
               <span className="font-mono text-xs text-amber-800">Approbation en attente : {pendingApprovalId}</span>
               <button disabled={busy} onClick={() => decideApproval("approve")} className="g3-btn g3-btn-primary">Approuver &amp; publier</button>
-              <button disabled={busy} onClick={() => decideApproval("reject")} className="rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-5 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100">Rejeter</button>
+              <button disabled={busy} onClick={() => decideApproval("reject")} className="rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-5 py-2.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:bg-[var(--g3-elevated)]">Rejeter</button>
             </div>
           ) : (
-            <p className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4 text-sm text-neutral-400">Aucune publication en attente de validation.</p>
+            <p className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] p-4 text-sm text-[var(--g3-faint)]">Aucune publication en attente de validation.</p>
           )}
           {publishResult && <Callout tone="success" className="mt-3">{publishResult}</Callout>}
         </div>

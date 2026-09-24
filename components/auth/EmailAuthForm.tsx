@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { signInWithEmail, signUpWithEmail, resetPassword, traduireErreurAuth, establishSession, readNextRedirect, type SignupProfile } from "@/lib/firebase/auth-client";
 
-const inputClasses = "w-full rounded-xl border px-4 py-3 text-sm outline-none transition focus:border-neutral-900 bg-transparent";
-const buttonClasses = "w-full rounded-xl bg-neutral-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50";
+const inputClasses = "w-full rounded-xl border px-4 py-3 text-sm outline-none transition focus:border-[var(--g3-border)] bg-transparent";
+const buttonClasses = "w-full rounded-xl bg-[var(--g3-deep)] px-4 py-3 text-sm font-medium text-white transition hover:bg-[var(--g3-elevated)] disabled:cursor-not-allowed disabled:opacity-50";
 
 type Mode = "connexion" | "inscription";
 
@@ -64,8 +64,8 @@ export default function EmailAuthForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="grid grid-cols-2 rounded-xl border p-1 text-sm">
-        <button type="button" onClick={() => { setMode("connexion"); setError(null); }} className={mode === "connexion" ? "rounded-lg bg-neutral-900 px-3 py-2 font-medium text-white" : "rounded-lg px-3 py-2 font-medium opacity-70"}>Se connecter</button>
-        <button type="button" onClick={() => { setMode("inscription"); setError(null); }} className={mode === "inscription" ? "rounded-lg bg-neutral-900 px-3 py-2 font-medium text-white" : "rounded-lg px-3 py-2 font-medium opacity-70"}>S&apos;inscrire</button>
+        <button type="button" onClick={() => { setMode("connexion"); setError(null); }} className={mode === "connexion" ? "rounded-lg bg-[var(--g3-deep)] px-3 py-2 font-medium text-white" : "rounded-lg px-3 py-2 font-medium opacity-70"}>Se connecter</button>
+        <button type="button" onClick={() => { setMode("inscription"); setError(null); }} className={mode === "inscription" ? "rounded-lg bg-[var(--g3-deep)] px-3 py-2 font-medium text-white" : "rounded-lg px-3 py-2 font-medium opacity-70"}>S&apos;inscrire</button>
       </div>
 
       {mode === "inscription" && (

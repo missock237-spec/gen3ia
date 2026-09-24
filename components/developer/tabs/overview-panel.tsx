@@ -33,7 +33,7 @@ export function OverviewPanel() {
             {QUICK_LINKS.map(([label, description, href]) => (
               <Link key={href} href={href} className="rounded-2xl border p-4 text-left transition hover:border-neutral-400">
                 <div className="font-semibold">{label}</div>
-                <div className="mt-1 text-xs text-neutral-500">{description}</div>
+                <div className="mt-1 text-xs text-[var(--g3-muted)]">{description}</div>
               </Link>
             ))}
           </div>

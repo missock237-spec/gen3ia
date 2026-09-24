@@ -39,7 +39,7 @@ const HUMOR_OPTIONS: Array<{ value: NonNullable<AgentPersona["humor"]>; label: s
 ];
 type AvatarColor = NonNullable<AgentPersona["avatar"]>["color"];
 const AVATAR_COLORS: Array<{ value: AvatarColor; label: string; className: string }> = [
-  { value: "neutral", label: "Ardoise", className: "bg-neutral-900" },
+  { value: "neutral", label: "Ardoise", className: "bg-[var(--g3-deep)]" },
   { value: "emerald", label: "Émeraude", className: "bg-emerald-600" },
   { value: "sky", label: "Ciel", className: "bg-sky-600" },
   { value: "amber", label: "Ambre", className: "bg-amber-500" },
@@ -218,7 +218,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold md:text-xl">{editing ? "Personnaliser l'agent" : "Personnalisez votre agent IA"}</h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-600">
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--g3-muted)]">
             Avant d&apos;exécuter une tâche, configurez votre agent : identité, compétences, mémoire, nature et type.
             Sa charte professionnelle et son périmètre strict sont générés automatiquement — il ne sortira jamais de son domaine.
           </p>
@@ -239,11 +239,11 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
           <div>
             <label className="g3-label" htmlFor="wizard-desc">Description (mission) *</label>
             <textarea id="wizard-desc" className="g3-textarea min-h-24" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex. Agent développeur senior spécialisé en applications web React et Next.js. Il écrit, corrige et documente du code." maxLength={500} required minLength={10} />
-            <p className="mt-1 text-xs text-neutral-400">{description.trim().length} / 500 caractères — cette description ancre l&apos;agent dans sa mission.</p>
+            <p className="mt-1 text-xs text-[var(--g3-faint)]">{description.trim().length} / 500 caractères — cette description ancre l&apos;agent dans sa mission.</p>
           </div>
 
           <div>
-            <label className="g3-label" htmlFor="wizard-skill">Compétences * <span className="font-normal text-neutral-400">(une ou plusieurs, 12 maximum)</span></label>
+            <label className="g3-label" htmlFor="wizard-skill">Compétences * <span className="font-normal text-[var(--g3-faint)]">(une ou plusieurs, 12 maximum)</span></label>
             <div className="flex gap-2">
               <input
                 id="wizard-skill"
@@ -265,7 +265,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
             </div>
             {suggestions.length > 0 && (
               <div className="mt-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Suggestions {selectedType.label}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--g3-faint)]">Suggestions {selectedType.label}</p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {suggestions.slice(0, 6).map((skill) => (
                     <Chip key={skill} label={`+ ${skill}`} onClick={() => addSkill(skill)} />
@@ -286,7 +286,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
           </div>
 
           <div>
-            <span className="g3-label">Fichier mémoire <span className="font-normal text-neutral-400">(optionnel)</span></span>
+            <span className="g3-label">Fichier mémoire <span className="font-normal text-[var(--g3-faint)]">(optionnel)</span></span>
             {memoryFile ? (
               <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                 <div className="min-w-0">
@@ -300,7 +300,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
                 <input
                   type="file"
                   accept={MEMORY_FILE_ACCEPT}
-                  className="block w-full cursor-pointer rounded-xl border border-[rgba(23,23,20,0.09)] bg-white px-3 py-2.5 text-sm text-neutral-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-neutral-900 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-neutral-800"
+                  className="block w-full cursor-pointer rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 py-2.5 text-sm text-[var(--g3-muted)] file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[var(--g3-deep)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-[var(--g3-deep)]"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     e.target.value = "";
@@ -308,7 +308,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
                   }}
                   aria-label="Fichier mémoire de l'agent"
                 />
-                <p className="mt-1 text-xs text-neutral-400">{memoryUploading ? "Téléversement en cours…" : "Documents, notes de contexte, bases de connaissances (20 Mo max). L'agent le consultera automatiquement."}</p>
+                <p className="mt-1 text-xs text-[var(--g3-faint)]">{memoryUploading ? "Téléversement en cours…" : "Documents, notes de contexte, bases de connaissances (20 Mo max). L'agent le consultera automatiquement."}</p>
               </>
             )}
           </div>
@@ -330,10 +330,10 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
                     type="button"
                     onClick={() => setAgentMode(option.key)}
                     aria-pressed={selected}
-                    className={`rounded-xl border p-3.5 text-left transition-all duration-300 ${selected ? "border-neutral-900 bg-neutral-50 shadow-[0_8px_24px_-12px_rgba(28,27,24,0.35)]" : "border-[rgba(23,23,20,0.09)] bg-white hover:border-neutral-300 hover:bg-neutral-50"}`}
+                    className={`rounded-xl border p-3.5 text-left transition-all duration-300 ${selected ? "border-[var(--g3-border)] bg-[var(--g3-elevated)] shadow-[0_8px_24px_-12px_rgba(28,27,24,0.35)]" : "border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] hover:border-[var(--g3-border-strong)] hover:bg-[var(--g3-elevated)]"}`}
                   >
                     <span className="block text-sm font-bold">{option.title}</span>
-                    <span className="mt-1 block text-xs leading-5 text-neutral-500">{option.detail}</span>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--g3-muted)]">{option.detail}</span>
                   </button>
                 );
               })}
@@ -351,10 +351,10 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
                     type="button"
                     onClick={() => setWizardKey(entry.key)}
                     aria-pressed={selected}
-                    className={`rounded-xl border p-3 text-left transition-all duration-300 ${selected ? "border-neutral-900 bg-neutral-50 shadow-[0_8px_24px_-12px_rgba(28,27,24,0.35)]" : "border-[rgba(23,23,20,0.09)] bg-white hover:border-neutral-300 hover:bg-neutral-50"}`}
+                    className={`rounded-xl border p-3 text-left transition-all duration-300 ${selected ? "border-[var(--g3-border)] bg-[var(--g3-elevated)] shadow-[0_8px_24px_-12px_rgba(28,27,24,0.35)]" : "border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] hover:border-[var(--g3-border-strong)] hover:bg-[var(--g3-elevated)]"}`}
                   >
                     <span className="block text-sm font-semibold">{entry.label}</span>
-                    <span className="mt-1 block text-xs leading-5 text-neutral-500">{entry.description}</span>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--g3-muted)]">{entry.description}</span>
                   </button>
                 );
               })}
@@ -363,7 +363,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
               <div className="anim-fade-in mt-3">
                 <label className="g3-label" htmlFor="wizard-custom-type">Précisez votre type d&apos;agent *</label>
                 <input id="wizard-custom-type" className="g3-input" value={customType} onChange={(e) => setCustomType(e.target.value)} placeholder="Ex. Juridique, Immobilier, RH, Finance…" maxLength={80} />
-                <p className="mt-1 text-xs text-neutral-400">Votre libellé devient le périmètre strict de l&apos;agent : il n&apos;interviendra que dans ce domaine.</p>
+                <p className="mt-1 text-xs text-[var(--g3-faint)]">Votre libellé devient le périmètre strict de l&apos;agent : il n&apos;interviendra que dans ce domaine.</p>
               </div>
             )}
           </div>
@@ -380,15 +380,15 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
       </div>
 
       {/* ── Personnalité & style (personnalisation avancée, optionnelle) ── */}
-      <div className="mt-8 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-neutral-50/60 p-5 md:p-6">
+      <div className="mt-8 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)]/60 p-5 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-bold">Personnalité &amp; style</h3>
-            <p className="mt-0.5 text-sm text-neutral-500">
+            <p className="mt-0.5 text-sm text-[var(--g3-muted)]">
               Affinez la voix de votre agent : ton, format, humour, langue, interdictions et capacités. Des valeurs par défaut professionnelles s&apos;appliquent si vous ne touchez à rien.
             </p>
           </div>
-          <span className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500">Optionnel</span>
+          <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--g3-muted)]">Optionnel</span>
         </div>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-3">
@@ -431,7 +431,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
             />
           </div>
           <div>
-            <span className="g3-label">Avatar <span className="font-normal text-neutral-400">(affiché dans le Studio)</span></span>
+            <span className="g3-label">Avatar <span className="font-normal text-[var(--g3-faint)]">(affiché dans le Studio)</span></span>
             <div className="flex flex-wrap items-center gap-1.5">
               {AVATAR_EMOJIS.map((emoji) => (
                 <button
@@ -439,7 +439,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
                   type="button"
                   aria-pressed={persona.avatar?.emoji === emoji}
                   onClick={() => setPersona((c) => ({ ...c, avatar: { emoji, color: c.avatar?.color ?? "neutral" } }))}
-                  className={`h-9 w-9 rounded-lg border text-lg transition-all ${persona.avatar?.emoji === emoji ? "border-neutral-900 bg-white shadow-sm" : "border-[rgba(23,23,20,0.09)] bg-white hover:border-neutral-300"}`}
+                  className={`h-9 w-9 rounded-lg border text-lg transition-all ${persona.avatar?.emoji === emoji ? "border-[var(--g3-border)] bg-[var(--g3-surface)] shadow-sm" : "border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] hover:border-[var(--g3-border-strong)]"}`}
                 >
                   {emoji}
                 </button>
@@ -467,7 +467,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
 
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <div>
-            <label className="g3-label" htmlFor="wizard-constraint">Interdictions <span className="font-normal text-neutral-400">(ce que l&apos;agent ne doit JAMAIS faire, 10 max)</span></label>
+            <label className="g3-label" htmlFor="wizard-constraint">Interdictions <span className="font-normal text-[var(--g3-faint)]">(ce que l&apos;agent ne doit JAMAIS faire, 10 max)</span></label>
             <div className="flex gap-2">
               <input
                 id="wizard-constraint"
@@ -504,7 +504,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
               {CAPABILITY_OPTIONS.map((option) => {
                 const enabled = persona.capabilities[option.key];
                 return (
-                  <label key={option.key} className="flex cursor-pointer items-start gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-white px-3.5 py-2.5">
+                  <label key={option.key} className="flex cursor-pointer items-start gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3.5 py-2.5">
                     <input
                       type="checkbox"
                       className="mt-0.5 h-4 w-4 accent-neutral-900"
@@ -513,7 +513,7 @@ export function AgentWizard({ editing = null, onSaved, onCancel }: AgentWizardPr
                     />
                     <span>
                       <span className="block text-sm font-semibold">{option.label}</span>
-                      <span className="mt-0.5 block text-xs leading-5 text-neutral-500">{option.detail}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-[var(--g3-muted)]">{option.detail}</span>
                     </span>
                   </label>
                 );

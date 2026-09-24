@@ -95,7 +95,7 @@ export default function FinanceCashflowPage() {
       ) : null}
 
       <div className={cardCls}>
-        <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Nouveau flux</h2>
+        <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Nouveau flux</h2>
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="Sens">
             <select className={inputCls} value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value })}>
@@ -131,11 +131,11 @@ export default function FinanceCashflowPage() {
       </div>
 
       <ModuleSection title={`Flux (${entries.length})`}>
-        {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+        {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
         {!loading && entries.length === 0 ? <EmptyHint>Aucun flux pour l&apos;instant. Ajoutez vos encaissements et décaissements prévus.</EmptyHint> : null}
-        <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+        <div className="overflow-hidden rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)]">
           <table className="w-full text-left text-[13px]">
-            <thead className="bg-neutral-50 text-[11.5px] uppercase tracking-wide text-neutral-500">
+            <thead className="bg-[var(--g3-elevated)] text-[11.5px] uppercase tracking-wide text-[var(--g3-muted)]">
               <tr>
                 <th className="px-4 py-2.5">Libellé</th>
                 <th className="px-4 py-2.5">Catégorie</th>
@@ -147,10 +147,10 @@ export default function FinanceCashflowPage() {
             </thead>
             <tbody>
               {entries.map((entry) => (
-                <tr key={entry.id} className="border-t border-neutral-100">
-                  <td className="px-4 py-2.5 font-semibold text-neutral-900">{entry.label}</td>
-                  <td className="px-4 py-2.5 text-neutral-500">{entry.category}</td>
-                  <td className="px-4 py-2.5 text-neutral-500">{shortDate(entry.dueDate)}</td>
+                <tr key={entry.id} className="border-t border-[var(--g3-border)]">
+                  <td className="px-4 py-2.5 font-semibold text-[var(--g3-text)]">{entry.label}</td>
+                  <td className="px-4 py-2.5 text-[var(--g3-muted)]">{entry.category}</td>
+                  <td className="px-4 py-2.5 text-[var(--g3-muted)]">{shortDate(entry.dueDate)}</td>
                   <td className={`px-4 py-2.5 text-right font-bold ${entry.direction === "in" ? "text-emerald-600" : "text-red-600"}`}>
                     {entry.direction === "in" ? "+" : "−"}{entry.amount.toLocaleString("fr-FR")} {entry.currency}
                   </td>

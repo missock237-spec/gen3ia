@@ -58,7 +58,7 @@ export function MemoryWorkspace() {
         <div className="g3-card w-full p-10">
           <div className="g3-eyebrow">GEN3IA · MÉMOIRE PERMANENTE</div>
           <h1 className="mt-3 font-serif text-2xl font-semibold">Connectez-vous pour accéder à votre mémoire</h1>
-          <p className="mt-3 text-sm leading-6 text-neutral-500">
+          <p className="mt-3 text-sm leading-6 text-[var(--g3-muted)]">
             Votre mémoire permanente conserve les informations clés et les documents que vos agents
             réutilisent à chaque mission. Elle est strictement personnelle et protégée.
           </p>
@@ -77,7 +77,7 @@ export function MemoryWorkspace() {
           <div>
             <div className="g3-eyebrow">GEN3IA AI STUDIO</div>
             <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight md:text-4xl">Mémoire permanente</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500 md:text-base">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--g3-muted)] md:text-base">
               Tout ce que vos agents doivent retenir : informations clés et documents réellement stockés
               jusqu&apos;à <strong>100 Mo par fichier</strong>, par lots de <strong>10 fichiers</strong>. Secrets et
               mots de passe y restent interdits.
@@ -89,24 +89,24 @@ export function MemoryWorkspace() {
         {/* Bandeau statistiques + quota */}
         <section aria-label="Vue d'ensemble de la mémoire" className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div className="g3-card p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Souvenirs texte</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--g3-faint)]">Souvenirs texte</p>
             <p className="mt-1 font-serif text-3xl font-semibold">{memories.length}</p>
-            <p className="mt-1 text-xs text-neutral-400">clé/valeur réutilisables par vos agents</p>
+            <p className="mt-1 text-xs text-[var(--g3-faint)]">clé/valeur réutilisables par vos agents</p>
           </div>
           <div className="g3-card p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Documents stockés</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--g3-faint)]">Documents stockés</p>
             <p className="mt-1 font-serif text-3xl font-semibold">{usage?.fileCount ?? files.length}</p>
-            <p className="mt-1 text-xs text-neutral-400">{usage ? formatBytes(usage.usedBytes) : "…"} occupés sur votre espace</p>
+            <p className="mt-1 text-xs text-[var(--g3-faint)]">{usage ? formatBytes(usage.usedBytes) : "…"} occupés sur votre espace</p>
           </div>
           <div className="g3-card p-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Quota de stockage</p>
-              <p className="text-xs font-semibold text-neutral-600">{quotaPercent}%</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--g3-faint)]">Quota de stockage</p>
+              <p className="text-xs font-semibold text-[var(--g3-muted)]">{quotaPercent}%</p>
             </div>
-            <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-neutral-200" role="progressbar" aria-valuenow={quotaPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Quota de stockage utilisé">
+            <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-[var(--g3-elevated)]" role="progressbar" aria-valuenow={quotaPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Quota de stockage utilisé">
               <div className={`h-full rounded-full transition-all ${quotaPercent > 90 ? "bg-red-500" : quotaPercent > 70 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${Math.max(quotaPercent, 2)}%` }} />
             </div>
-            <p className="mt-2 text-xs text-neutral-400">{usage ? `${formatBytes(usage.usedBytes)} sur ${formatBytes(usage.quotaBytes)}` : "Chargement…"}</p>
+            <p className="mt-2 text-xs text-[var(--g3-faint)]">{usage ? `${formatBytes(usage.usedBytes)} sur ${formatBytes(usage.quotaBytes)}` : "Chargement…"}</p>
           </div>
         </section>
 
@@ -162,7 +162,7 @@ export function MemoryWorkspace() {
           </AnimatedTabsSection>
         )}
 
-        <footer className="mt-8 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4 text-xs leading-5 text-neutral-400">
+        <footer className="mt-8 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-4 text-xs leading-5 text-[var(--g3-faint)]">
           Vos données restent associées à votre compte : les agents n&apos;y accèdent qu&apos;avec les permissions
           que vous leur accordez. Aucune publication externe n&apos;est possible depuis la mémoire permanente.
         </footer>

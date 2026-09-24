@@ -14,7 +14,7 @@ export function MonitoringPanel() {
       <Card title="Transactions" value={revenue?.entries ?? 0} />
       <div className="md:col-span-3">
         <Panel title="Projet actif" subtitle={project?.name || "Aucun projet sélectionné"}>
-          <div className="text-sm text-neutral-600">
+          <div className="text-sm text-[var(--g3-muted)]">
             {project ? `ID: ${project.id} · ${project.framework} · ${project.environment}` : "Sélectionne un projet pour voir ses ressources."}
           </div>
           {resourceSummary && (
@@ -28,8 +28,8 @@ export function MonitoringPanel() {
                   ["Brouillons", resourceSummary.draftExtensions],
                 ] as Array<[string, number]>
               ).map(([label, value]) => (
-                <div key={label} className="rounded-xl bg-neutral-50 p-3">
-                  <div className="text-[10px] text-neutral-400">{label}</div>
+                <div key={label} className="rounded-xl bg-[var(--g3-elevated)] p-3">
+                  <div className="text-[10px] text-[var(--g3-faint)]">{label}</div>
                   <div className="mt-1 font-bold">{value}</div>
                 </div>
               ))}

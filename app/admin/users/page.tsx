@@ -85,17 +85,17 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-7">
       <section aria-label="Utilisateurs">
-        <h2 className="mb-3 text-lg font-bold text-neutral-100">Comptes ({users.length} plus récents)</h2>
+        <h2 className="mb-3 text-lg font-bold text-[var(--g3-text-secondary)]">Comptes ({users.length} plus récents)</h2>
         <ResourceList
           rows={userRows}
           ariaLabel="Comptes utilisateurs"
           emptyState={<EmptyState icon="◎" title="Aucun compte" description="Les comptes apparaîtront ici dès la première inscription." />}
-          className="[&_li]:border-white/10 [&_li]:bg-white/5 [&_li_*.text-neutral-800]:text-neutral-100"
+          className="[&_li]:border-white/10 [&_li]:bg-[var(--g3-surface)]/5 [&_li_*.text-[var(--g3-text)]]:text-[var(--g3-text-secondary)]"
         />
       </section>
 
       <section aria-label="Équipes">
-        <h2 className="mb-3 text-lg font-bold text-neutral-100">Équipes</h2>
+        <h2 className="mb-3 text-lg font-bold text-[var(--g3-text-secondary)]">Équipes</h2>
         <ResourceList
           rows={teamRows}
           ariaLabel="Équipes"

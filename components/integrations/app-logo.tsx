@@ -38,7 +38,7 @@ export function AppLogo({
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
-      className="shrink-0 rounded-lg bg-white object-contain"
+      className="shrink-0 rounded-lg bg-[var(--g3-surface)] object-contain"
       style={{ width: size, height: size }}
     />
   );

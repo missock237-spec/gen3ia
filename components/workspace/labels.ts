@@ -16,12 +16,12 @@ export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
 };
 
 export const RUN_STATUS_STYLES: Record<RunStatus, string> = {
-  planning: "bg-neutral-100 text-neutral-700 border-neutral-200",
+  planning: "bg-[var(--g3-elevated)] text-[var(--g3-text-secondary)] border-[var(--g3-border)]",
   awaiting_approval: "bg-amber-50 text-amber-800 border-amber-200",
   running: "bg-sky-50 text-sky-800 border-sky-200",
   completed: "bg-emerald-50 text-emerald-800 border-emerald-200",
   failed: "bg-red-50 text-red-800 border-red-200",
-  cancelled: "bg-neutral-100 text-neutral-500 border-neutral-200",
+  cancelled: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
 };
 
 export const STEP_STATUS_LABELS: Record<RunStepStatus, string> = {
@@ -53,7 +53,7 @@ export const APPROVAL_STATUS_STYLES: Record<ApprovalStatus, string> = {
   pending: "bg-amber-50 text-amber-800 border-amber-200",
   approved: "bg-emerald-50 text-emerald-800 border-emerald-200",
   rejected: "bg-red-50 text-red-700 border-red-200",
-  expired: "bg-neutral-100 text-neutral-500 border-neutral-200",
+  expired: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
 };
 
 export function formatRelative(iso: string): string {

@@ -152,14 +152,14 @@ export function GenChatWidget() {
   return (
     <>
       {open && (
-        <div className="fixed bottom-24 right-4 z-50 flex h-[560px] w-[min(94vw,420px)] flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[#0b0b0d] shadow-[0_30px_80px_-24px_rgba(0,0,0,0.95)] sm:right-6" role="dialog" aria-label="Chat avec Gen">
-          <header className="flex items-center gap-3 border-b border-white/10 bg-[#131315] px-4 py-3 text-white">
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-lg font-black text-neutral-100">G</div>
+        <div className="fixed bottom-24 right-4 z-50 flex h-[560px] w-[min(94vw,420px)] flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[var(--g3-deep)] shadow-[0_30px_80px_-24px_rgba(0,0,0,0.95)] sm:right-6" role="dialog" aria-label="Chat avec Gen">
+          <header className="flex items-center gap-3 border-b border-white/10 bg-[var(--g3-deep)] px-4 py-3 text-white">
+            <div className="grid h-9 w-9 place-items-center rounded-full bg-[var(--g3-surface)]/10 text-lg font-black text-[var(--g3-text-secondary)]">G</div>
             <div className="flex-1">
-              <p className="text-sm font-bold text-neutral-100">Gen — assistante Gen3ia</p>
-              <p className="text-[11px] text-neutral-400">Réponses + consultations connecteurs (lecture seule)</p>
+              <p className="text-sm font-bold text-[var(--g3-text-secondary)]">Gen — assistante Gen3ia</p>
+              <p className="text-[11px] text-[var(--g3-faint)]">Réponses + consultations connecteurs (lecture seule)</p>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Fermer le chat" className="rounded-full px-2 py-1 text-lg leading-none text-neutral-400 hover:bg-white/10 hover:text-white">×</button>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Fermer le chat" className="rounded-full px-2 py-1 text-lg leading-none text-[var(--g3-faint)] hover:bg-[var(--g3-surface)]/10 hover:text-white">×</button>
           </header>
 
           <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-3">
@@ -168,18 +168,18 @@ export function GenChatWidget() {
                 key={index}
                 className={
                   bubble.role === "user"
-                    ? "ml-auto max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-neutral-100 px-3.5 py-2 text-sm text-neutral-900"
-                    : "mr-auto max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-bl-md border border-white/10 bg-[#1b1b1d] px-3.5 py-2 text-sm text-neutral-100"
+                    ? "ml-auto max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[var(--g3-elevated)] px-3.5 py-2 text-sm text-[var(--g3-text)]"
+                    : "mr-auto max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-bl-md border border-white/10 bg-[var(--g3-elevated)] px-3.5 py-2 text-sm text-[var(--g3-text-secondary)]"
                 }
               >
                 {bubble.text}
               </article>
             ))}
             {sending && (
-              <p className="mr-auto flex items-center gap-2 text-xs text-neutral-500">
+              <p className="mr-auto flex items-center gap-2 text-xs text-[var(--g3-muted)]">
                 <span className="flex gap-1" aria-hidden="true">
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-500 [animation-delay:120ms]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-elevated)]0 [animation-delay:120ms]" />
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 [animation-delay:240ms]" />
                 </span>
                 Gen écrit…
@@ -211,7 +211,7 @@ export function GenChatWidget() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="fixed bottom-6 right-4 z-50 flex h-14 items-center gap-2 rounded-full border border-white/15 bg-[#141416] px-5 text-sm font-bold text-white shadow-[0_18px_50px_-16px_rgba(0,0,0,0.9)] transition-transform hover:scale-105 sm:right-6"
+        className="fixed bottom-6 right-4 z-50 flex h-14 items-center gap-2 rounded-full border border-white/15 bg-[var(--g3-deep)] px-5 text-sm font-bold text-white shadow-[0_18px_50px_-16px_rgba(0,0,0,0.9)] transition-transform hover:scale-105 sm:right-6"
         aria-expanded={open}
       >
         <span className="text-lg" aria-hidden="true">💬</span>

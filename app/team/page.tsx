@@ -61,7 +61,7 @@ function TeamsContent() {
   };
 
   return (
-    <div className="min-h-full bg-[#f6f4ef] text-neutral-900">
+    <div className="min-h-full bg-[var(--g3-bg)] text-[var(--g3-text)]">
       <div className="mx-auto max-w-5xl px-4 py-10 md:px-8 md:py-14">
         {/* En-tête */}
         <header className="anim-fade-up text-center">
@@ -69,7 +69,7 @@ function TeamsContent() {
           <h1 className="mt-3 font-serif text-4xl font-semibold tracking-tight md:text-5xl">
             Vos équipes, au même endroit.
           </h1>
-          <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-neutral-500 md:text-base">
+          <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[var(--g3-muted)] md:text-base">
             Créez un espace partagé, invitez vos collaborateurs et gardez vos agents,
             documents et sessions accessibles à toute l&apos;équipe.
           </p>
@@ -82,10 +82,10 @@ function TeamsContent() {
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
           {/* Colonne principale : mes équipes */}
           <section className="anim-fade-up anim-delay-1 lg:col-span-3" aria-label="Mes équipes">
-            <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] md:p-8">
+            <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] md:p-8">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="font-serif text-2xl font-semibold">Mes équipes</h2>
-                <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-500">
+                <span className="rounded-full bg-[var(--g3-elevated)] px-3 py-1 text-xs font-semibold text-[var(--g3-muted)]">
                   {teams ? `${teams.length} équipe${teams.length > 1 ? "s" : ""}` : "…"}
                 </span>
               </div>
@@ -99,15 +99,15 @@ function TeamsContent() {
               {teams === null && !loadError && (
                 <div className="mt-6 space-y-3" aria-hidden="true">
                   {[0, 1].map((index) => (
-                    <div key={index} className="h-20 animate-pulse rounded-2xl bg-neutral-100" />
+                    <div key={index} className="h-20 animate-pulse rounded-2xl bg-[var(--g3-elevated)]" />
                   ))}
                 </div>
               )}
 
               {teams?.length === 0 && (
-                <div className="mt-6 rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/60 p-8 text-center">
-                  <p className="font-serif text-lg font-semibold text-neutral-800">Aucune équipe pour l&apos;instant</p>
-                  <p className="mt-2 text-sm leading-6 text-neutral-500">
+                <div className="mt-6 rounded-2xl border border-dashed border-[var(--g3-border-strong)] bg-[var(--g3-elevated)]/60 p-8 text-center">
+                  <p className="font-serif text-lg font-semibold text-[var(--g3-text)]">Aucune équipe pour l&apos;instant</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--g3-muted)]">
                     Créez votre premier espace d&apos;équipe avec le formulaire « Nouvelle équipe »,
                     ou rejoignez-en une grâce au code d&apos;invitation reçu par email.
                   </p>
@@ -120,15 +120,15 @@ function TeamsContent() {
                     <li key={team.id}>
                       <Link
                         href={`/team/${team.id}`}
-                        className="group flex items-center justify-between gap-4 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4 transition hover:border-neutral-300 hover:shadow-[0_10px_30px_-12px_rgba(15,23,42,0.18)]"
+                        className="group flex items-center justify-between gap-4 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-4 transition hover:border-[var(--g3-border-strong)] hover:shadow-[0_10px_30px_-12px_rgba(15,23,42,0.18)]"
                       >
                         <span className="flex min-w-0 items-center gap-4">
                           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-sky-100 font-serif text-lg font-semibold text-sky-700">
                             {team.name.charAt(0).toUpperCase()}
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold text-neutral-900">{team.name}</span>
-                            <span className="mt-0.5 block truncate text-xs text-neutral-500">
+                            <span className="block truncate text-sm font-semibold text-[var(--g3-text)]">{team.name}</span>
+                            <span className="mt-0.5 block truncate text-xs text-[var(--g3-muted)]">
                               {Number(team.memberCount ?? 1)} membre{Number(team.memberCount ?? 1) > 1 ? "s" : ""}
                               {team.description ? ` · ${team.description}` : ""}
                             </span>
@@ -137,7 +137,7 @@ function TeamsContent() {
                         <svg
                           width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                           strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-                          className="shrink-0 text-neutral-300 transition group-hover:translate-x-1 group-hover:text-neutral-500"
+                          className="shrink-0 text-[var(--g3-faint)] transition group-hover:translate-x-1 group-hover:text-[var(--g3-muted)]"
                         >
                           <path d="M5 12h14M13 6l6 6-6 6" />
                         </svg>
@@ -151,9 +151,9 @@ function TeamsContent() {
 
           {/* Colonne latérale : créer + rejoindre */}
           <aside className="anim-fade-up anim-delay-2 space-y-6 lg:col-span-2">
-            <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+            <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
               <h2 className="font-serif text-xl font-semibold">Nouvelle équipe</h2>
-              <p className="mt-1.5 text-xs leading-5 text-neutral-500">
+              <p className="mt-1.5 text-xs leading-5 text-[var(--g3-muted)]">
                 Vous en devenez le propriétaire et pourrez inviter des membres.
               </p>
               <div className="mt-4 space-y-3">
@@ -197,10 +197,10 @@ function TeamsContent() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+            <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
               <h2 className="font-serif text-xl font-semibold">Rejoindre une équipe</h2>
-              <p className="mt-1.5 text-xs leading-5 text-neutral-500">
-                Collez le code reçu dans l&apos;invitation (le lien contient <code className="rounded bg-neutral-100 px-1">?token=…</code>).
+              <p className="mt-1.5 text-xs leading-5 text-[var(--g3-muted)]">
+                Collez le code reçu dans l&apos;invitation (le lien contient <code className="rounded bg-[var(--g3-elevated)] px-1">?token=…</code>).
               </p>
               <div className="mt-4 space-y-3">
                 <input

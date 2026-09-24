@@ -97,7 +97,7 @@ export default function MarketingLandingPage() {
       ) : null}
 
       <div className={cardCls}>
-        <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Nouveau brief de landing page</h2>
+        <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Nouveau brief de landing page</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Nom du projet">
             <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Lancement GenSales" />
@@ -135,15 +135,15 @@ export default function MarketingLandingPage() {
       </div>
 
       <ModuleSection title={`Landing pages (${pages.length})`}>
-        {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+        {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
         {!loading && pages.length === 0 ? <EmptyHint>Aucune landing page pour l&apos;instant. Créez votre premier brief ci-dessus.</EmptyHint> : null}
         <div className="grid gap-4 lg:grid-cols-2">
           {pages.map((page) => (
             <article key={page.id} className={cardCls}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-[15px] font-bold text-neutral-900">{page.name}</h3>
-                  <p className="mt-0.5 text-[12.5px] text-neutral-500">
+                  <h3 className="text-[15px] font-bold text-[var(--g3-text)]">{page.name}</h3>
+                  <p className="mt-0.5 text-[12.5px] text-[var(--g3-muted)]">
                     {page.audience} · {page.tone} · {page.language.toUpperCase()}
                   </p>
                 </div>
@@ -151,20 +151,20 @@ export default function MarketingLandingPage() {
               </div>
 
               {page.content ? (
-                <div className="mt-3 rounded-xl bg-neutral-50 p-3.5">
-                  <p className="text-[14px] font-bold text-neutral-900">{page.content.headline}</p>
-                  <p className="mt-1 text-[12.5px] text-neutral-600">{page.content.subheadline}</p>
-                  <ul className="mt-2 list-inside list-disc space-y-0.5 text-[12.5px] text-neutral-600">
+                <div className="mt-3 rounded-xl bg-[var(--g3-elevated)] p-3.5">
+                  <p className="text-[14px] font-bold text-[var(--g3-text)]">{page.content.headline}</p>
+                  <p className="mt-1 text-[12.5px] text-[var(--g3-muted)]">{page.content.subheadline}</p>
+                  <ul className="mt-2 list-inside list-disc space-y-0.5 text-[12.5px] text-[var(--g3-muted)]">
                     {page.content.benefits.slice(0, 3).map((b, i) => (
                       <li key={i}>
                         <strong>{b.title}</strong> — {b.body.slice(0, 90)}{b.body.length > 90 ? "…" : ""}
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-2 text-[12px] font-semibold text-neutral-800">CTA : {page.content.cta}</p>
+                  <p className="mt-2 text-[12px] font-semibold text-[var(--g3-text)]">CTA : {page.content.cta}</p>
                 </div>
               ) : (
-                <p className="mt-3 rounded-xl border border-dashed border-neutral-300 px-3 py-2 text-[12.5px] text-neutral-500">Contenu non encore généré.</p>
+                <p className="mt-3 rounded-xl border border-dashed border-[var(--g3-border-strong)] px-3 py-2 text-[12.5px] text-[var(--g3-muted)]">Contenu non encore généré.</p>
               )}
 
               <div className="mt-3 flex flex-wrap gap-2">

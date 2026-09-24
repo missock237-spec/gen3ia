@@ -84,7 +84,7 @@ export default function HrLeavesPage() {
       </div>
 
       <div className={cardCls}>
-        <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Nouvelle demande</h2>
+        <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Nouvelle demande</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Employé">
             <input className={inputCls} value={form.employeeName} onChange={(e) => setForm({ ...form, employeeName: e.target.value })} placeholder="Marie Dupont" />
@@ -130,17 +130,17 @@ export default function HrLeavesPage() {
       ) : null}
 
       <ModuleSection title={`Demandes (${leaves.length})`}>
-        {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+        {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
         {!loading && leaves.length === 0 ? <EmptyHint>Aucune demande pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2.5">
           {leaves.map((leave) => (
             <article key={leave.id} className={cardCls}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-[14px] font-bold text-neutral-900">
-                    {leave.employeeName} <span className="font-normal text-neutral-500">· {TYPE_LABELS[leave.type] ?? leave.type}</span>
+                  <h3 className="text-[14px] font-bold text-[var(--g3-text)]">
+                    {leave.employeeName} <span className="font-normal text-[var(--g3-muted)]">· {TYPE_LABELS[leave.type] ?? leave.type}</span>
                   </h3>
-                  <p className="text-[12.5px] text-neutral-500">
+                  <p className="text-[12.5px] text-[var(--g3-muted)]">
                     {shortDate(leave.startAt)} → {shortDate(leave.endAt)} · {leave.days} jour(s) ouvré(s){leave.reason ? ` · ${leave.reason}` : ""}
                   </p>
                 </div>

@@ -129,7 +129,7 @@ export default function ResultsPage() {
             type="button"
             onClick={() => void download(file.path)}
             disabled={busyPath === file.path}
-            className="rounded-full border border-neutral-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-neutral-900 hover:text-neutral-900 disabled:opacity-50"
+            className="rounded-full border border-[var(--g3-border-strong)] bg-[var(--g3-surface)] px-3.5 py-1.5 text-xs font-semibold text-[var(--g3-text-secondary)] transition hover:border-[var(--g3-border)] hover:text-[var(--g3-text)] disabled:opacity-50"
           >
             {busyPath === file.path ? "…" : "Télécharger"}
           </button>
@@ -173,7 +173,7 @@ export default function ResultsPage() {
           title="Chargement impossible"
           description={error}
           actions={
-            <button type="button" onClick={() => void load()} className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-semibold">
+            <button type="button" onClick={() => void load()} className="rounded-full border border-[var(--g3-border-strong)] bg-[var(--g3-surface)] px-4 py-2 text-xs font-semibold">
               Réessayer
             </button>
           }
@@ -185,7 +185,7 @@ export default function ResultsPage() {
           tone="info"
           title="Connectez-vous pour retrouver vos livrables"
           actions={
-            <Link href="/login" className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-semibold text-white">
+            <Link href="/login" className="rounded-full bg-[var(--g3-deep)] px-4 py-2 text-xs font-semibold text-white">
               Se connecter
             </Link>
           }
@@ -197,7 +197,7 @@ export default function ResultsPage() {
       {!loading && (
         <>
           <section aria-label="Fichiers et livrables">
-            <h2 className="mb-3 font-serif text-lg font-semibold text-neutral-900">Fichiers & livrables</h2>
+            <h2 className="mb-3 font-serif text-lg font-semibold text-[var(--g3-text)]">Fichiers & livrables</h2>
             <ResourceList
               rows={fileRows}
               ariaLabel="Fichiers générés"
@@ -217,7 +217,7 @@ export default function ResultsPage() {
           </section>
 
           <section aria-label="Missions terminées">
-            <h2 className="mb-3 font-serif text-lg font-semibold text-neutral-900">Missions closes</h2>
+            <h2 className="mb-3 font-serif text-lg font-semibold text-[var(--g3-text)]">Missions closes</h2>
             <ResourceList
               rows={missionRows}
               ariaLabel="Missions terminées"

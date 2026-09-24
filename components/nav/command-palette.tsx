@@ -131,7 +131,7 @@ export function CommandPalette({
               {active(item.href) && <span className="g3-command-current">Actuel</span>}
             </button>
           )) : (
-            <div className="px-4 py-8 text-center text-xs text-neutral-400">Aucune destination trouvée.</div>
+            <div className="px-4 py-8 text-center text-xs text-[var(--g3-faint)]">Aucune destination trouvée.</div>
           )}
         </div>
         <div className="g3-command-footer">

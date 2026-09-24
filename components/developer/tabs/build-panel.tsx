@@ -82,7 +82,7 @@ export function BuildPanel() {
         <textarea
           value={manifest}
           onChange={(event) => setManifest(event.target.value)}
-          className="min-h-[520px] w-full rounded-2xl border bg-[#fbfbf9] p-4 font-mono text-xs"
+          className="min-h-[520px] w-full rounded-2xl border bg-[var(--g3-elevated)] p-4 font-mono text-xs"
           spellCheck={false}
         />
         <button
@@ -99,7 +99,7 @@ export function BuildPanel() {
           {surfaces.map(([label, state]) => (
             <div key={label} className="flex items-center justify-between rounded-xl border p-3 text-sm">
               <span>{label}</span>
-              <span className="text-xs text-neutral-400">{state}</span>
+              <span className="text-xs text-[var(--g3-faint)]">{state}</span>
             </div>
           ))}
         </div>

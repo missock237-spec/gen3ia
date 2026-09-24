@@ -316,7 +316,7 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
     return (
       <form
         onSubmit={onSubmit}
-        className={"relative rounded-[28px] border border-white/10 bg-[#1b1b1d] p-2.5 shadow-[0_18px_50px_-20px_rgba(0,0,0,0.85)] transition-colors duration-300 focus-within:border-white/20 " + className}
+        className={"relative rounded-[28px] border border-white/10 bg-[var(--g3-elevated)] p-2.5 shadow-[0_18px_50px_-20px_rgba(0,0,0,0.85)] transition-colors duration-300 focus-within:border-white/20 " + className}
         aria-label="Barre de commande IA"
       >
         <input ref={fileRef} type="file" className="hidden" accept={fileAccept} onChange={handleFile} />
@@ -325,21 +325,21 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
         {(attachmentName || activatedMentions.length > 0) && (
           <div className="mb-1.5 flex flex-wrap items-center gap-1.5 px-1 pt-1" aria-label="Contextes actifs">
             {attachmentName && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-neutral-200">
-                <FileIcon className="h-3.5 w-3.5 text-neutral-400" aria-hidden="true" />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[var(--g3-surface)]/5 px-2.5 py-1 text-[11px] text-[var(--g3-text-secondary)]">
+                <FileIcon className="h-3.5 w-3.5 text-[var(--g3-faint)]" aria-hidden="true" />
                 <span className="max-w-[180px] truncate">{attachmentUploading ? "Téléversement…" : attachmentName}</span>
                 {onRemoveAttachment && (
-                  <button type="button" onClick={onRemoveAttachment} className="rounded-full p-0.5 text-neutral-500 hover:bg-white/10 hover:text-neutral-200" aria-label="Retirer la pièce jointe">
+                  <button type="button" onClick={onRemoveAttachment} className="rounded-full p-0.5 text-[var(--g3-muted)] hover:bg-[var(--g3-surface)]/10 hover:text-[var(--g3-text-secondary)]" aria-label="Retirer la pièce jointe">
                     <XIcon className="h-3 w-3" />
                   </button>
                 )}
               </span>
             )}
             {activatedMentions.map((item) => (
-              <span key={item.toolkit} className={"inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] " + (item.connected === false ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-white/10 bg-white/5 text-neutral-200")}>
-                <span aria-hidden="true" className="font-semibold text-neutral-400">@</span>
+              <span key={item.toolkit} className={"inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] " + (item.connected === false ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-white/10 bg-[var(--g3-surface)]/5 text-[var(--g3-text-secondary)]")}>
+                <span aria-hidden="true" className="font-semibold text-[var(--g3-faint)]">@</span>
                 {item.label}
-                <button type="button" onClick={() => onDeactivateMention?.(item.toolkit)} className="rounded-full p-0.5 text-neutral-500 hover:bg-white/10 hover:text-neutral-200" aria-label={`Retirer ${item.label}`}>
+                <button type="button" onClick={() => onDeactivateMention?.(item.toolkit)} className="rounded-full p-0.5 text-[var(--g3-muted)] hover:bg-[var(--g3-surface)]/10 hover:text-[var(--g3-text-secondary)]" aria-label={`Retirer ${item.label}`}>
                   <XIcon className="h-3 w-3" />
                 </button>
               </span>
@@ -358,7 +358,7 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
           onChange={(event) => onValueChange(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="min-h-16 w-full resize-none border-0 bg-transparent px-3 pb-1 pt-2 text-[15px] leading-6 text-neutral-100 outline-none placeholder:text-neutral-500 disabled:opacity-50"
+          className="min-h-16 w-full resize-none border-0 bg-transparent px-3 pb-1 pt-2 text-[15px] leading-6 text-[var(--g3-text-secondary)] outline-none placeholder:text-[var(--g3-faint)] disabled:opacity-50"
           aria-label="Message pour l'IA"
         />
 
@@ -368,7 +368,7 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
             type="button"
             disabled={disabled}
             onClick={() => (plusAction === "mentions" ? (setCommandMenuOpen(false), setMentionMenuOpen(true), setMentionQuery("")) : fileRef.current?.click())}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-neutral-300 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[var(--g3-faint)] transition hover:bg-[var(--g3-surface)]/10 hover:text-white disabled:opacity-30"
             aria-label={plusAction === "mentions" ? "Ajouter une source connectée" : "Joindre un fichier"}
           >
             <PlusIcon className="h-5 w-5" />
@@ -382,13 +382,13 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
               onClick={() => setModeMenuOpen((current) => !current)}
               aria-expanded={showModeMenu}
               aria-haspopup="listbox"
-              className="flex h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3.5 text-xs font-medium text-neutral-300 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
+              className="flex h-9 items-center gap-1.5 rounded-full border border-white/10 bg-[var(--g3-surface)]/5 px-3.5 text-xs font-medium text-[var(--g3-faint)] transition hover:bg-[var(--g3-surface)]/10 hover:text-white disabled:opacity-30"
             >
               {authorizationModeLabel(activeMode)}
               <ChevronDownIcon className={"h-3.5 w-3.5 transition-transform " + (showModeMenu ? "rotate-180" : "")} />
             </button>
             {showModeMenu && (
-              <div className="absolute bottom-11 left-1/2 z-50 w-[300px] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/10 bg-[#232326] p-1.5 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)]" role="listbox" aria-label="Mode d'autorisation des actions de l'agent">
+              <div className="absolute bottom-11 left-1/2 z-50 w-[300px] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/10 bg-[var(--g3-elevated)] p-1.5 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)]" role="listbox" aria-label="Mode d'autorisation des actions de l'agent">
                 {AUTHORIZATION_MODES.map((option) => {
                   const selected = option.id === activeMode;
                   return (
@@ -398,12 +398,12 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
                       role="option"
                       aria-selected={selected}
                       onClick={() => { applyMode(option.id); setModeMenuOpen(false); }}
-                      className={"flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition " + (selected ? "bg-white/10" : "hover:bg-white/5")}
+                      className={"flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition " + (selected ? "bg-[var(--g3-surface)]/10" : "hover:bg-[var(--g3-surface)]/5")}
                     >
-                      <span className={"mt-1 h-2 w-2 shrink-0 rounded-full " + (selected ? "bg-white" : "bg-neutral-600")} aria-hidden="true" />
+                      <span className={"mt-1 h-2 w-2 shrink-0 rounded-full " + (selected ? "bg-[var(--g3-surface)]" : "bg-neutral-600")} aria-hidden="true" />
                       <span>
-                        <span className="block text-xs font-semibold text-neutral-100">{option.label}</span>
-                        <span className="mt-0.5 block text-[10px] leading-4 text-neutral-400">{option.description}</span>
+                        <span className="block text-xs font-semibold text-[var(--g3-text-secondary)]">{option.label}</span>
+                        <span className="mt-0.5 block text-[10px] leading-4 text-[var(--g3-faint)]">{option.description}</span>
                       </span>
                     </button>
                   );
@@ -412,13 +412,13 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
             )}
           </div>
 
-          {voiceError && <span className="absolute -top-8 right-2 rounded-full border border-white/10 bg-[#232326] px-3 py-1 text-[10px] text-neutral-300" role="status">{voiceError}</span>}
+          {voiceError && <span className="absolute -top-8 right-2 rounded-full border border-white/10 bg-[var(--g3-elevated)] px-3 py-1 text-[10px] text-[var(--g3-faint)]" role="status">{voiceError}</span>}
 
           <button
             type="button"
             disabled={disabled}
             onClick={startVoice}
-            className={"grid h-10 w-10 shrink-0 place-items-center rounded-full transition disabled:opacity-30 " + (isListening ? "bg-white/15 text-white" : "text-neutral-300 hover:bg-white/10 hover:text-white")}
+            className={"grid h-10 w-10 shrink-0 place-items-center rounded-full transition disabled:opacity-30 " + (isListening ? "bg-[var(--g3-surface)]/15 text-white" : "text-[var(--g3-faint)] hover:bg-[var(--g3-surface)]/10 hover:text-white")}
             aria-label={isListening ? "Saisie vocale en cours" : "Saisie vocale"}
             aria-pressed={isListening}
           >
@@ -428,7 +428,7 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
           <button
             type="submit"
             disabled={!canSend}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-neutral-900 shadow-[0_6px_18px_-6px_rgba(255,255,255,0.35)] transition hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed disabled:bg-[#2a2a2c] disabled:text-neutral-500 disabled:shadow-none"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--g3-surface)] text-[var(--g3-text)] shadow-[0_6px_18px_-6px_rgba(255,255,255,0.35)] transition hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed disabled:bg-[var(--g3-elevated)] disabled:text-[var(--g3-muted)] disabled:shadow-none"
             aria-label="Envoyer"
           >
             <ArrowUpIcon className="h-5 w-5" />
@@ -437,10 +437,10 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
 
         {/* Menu « / » — commandes rapides */}
         {commandMenuOpen && (
-          <div className="absolute bottom-full left-0 z-50 mb-2 w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#232326] p-1.5 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)]" role="listbox" aria-label="Commandes rapides">
-            <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[.2em] text-neutral-500">Commandes</p>
+          <div className="absolute bottom-full left-0 z-50 mb-2 w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[var(--g3-elevated)] p-1.5 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)]" role="listbox" aria-label="Commandes rapides">
+            <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[.2em] text-[var(--g3-muted)]">Commandes</p>
             {visibleCommands.length === 0 ? (
-              <p className="px-3 py-3 text-xs text-neutral-400">Aucune commande ne correspond.</p>
+              <p className="px-3 py-3 text-xs text-[var(--g3-faint)]">Aucune commande ne correspond.</p>
             ) : (
               visibleCommands.map((command, index) => (
                 <button
@@ -450,12 +450,12 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
                   aria-selected={index === commandHighlight}
                   onClick={() => chooseCommand(command)}
                   onMouseEnter={() => setCommandHighlight(index)}
-                  className={"flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition " + (index === commandHighlight ? "bg-white/10" : "hover:bg-white/5")}
+                  className={"flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition " + (index === commandHighlight ? "bg-[var(--g3-surface)]/10" : "hover:bg-[var(--g3-surface)]/5")}
                 >
-                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/5 text-xs font-bold text-neutral-300" aria-hidden="true">/</span>
+                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[var(--g3-surface)]/5 text-xs font-bold text-[var(--g3-faint)]" aria-hidden="true">/</span>
                   <span>
-                    <span className="block text-xs font-semibold text-neutral-100">{command.label}</span>
-                    {command.description && <span className="mt-0.5 block text-[10px] leading-4 text-neutral-400">{command.description}</span>}
+                    <span className="block text-xs font-semibold text-[var(--g3-text-secondary)]">{command.label}</span>
+                    {command.description && <span className="mt-0.5 block text-[10px] leading-4 text-[var(--g3-faint)]">{command.description}</span>}
                   </span>
                 </button>
               ))
@@ -465,18 +465,18 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
 
         {/* Menu « @ » — compétences et connecteurs */}
         {mentionMenuOpen && loadMentions && (
-          <div className="absolute bottom-full left-0 z-50 mb-2 w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#232326] p-1.5 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)]" role="listbox" aria-label="Mentionner une compétence ou un connecteur">
+          <div className="absolute bottom-full left-0 z-50 mb-2 w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[var(--g3-elevated)] p-1.5 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)]" role="listbox" aria-label="Mentionner une compétence ou un connecteur">
             <div className="flex items-center justify-between px-2.5 py-1.5">
-              <p className="text-[10px] font-bold uppercase tracking-[.2em] text-neutral-500">Compétences &amp; connecteurs</p>
-              <button type="button" onClick={closeMenus} className="rounded-full p-1 text-neutral-500 hover:bg-white/10 hover:text-neutral-200" aria-label="Fermer le sélecteur">
+              <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[var(--g3-muted)]">Compétences &amp; connecteurs</p>
+              <button type="button" onClick={closeMenus} className="rounded-full p-1 text-[var(--g3-muted)] hover:bg-[var(--g3-surface)]/10 hover:text-[var(--g3-text-secondary)]" aria-label="Fermer le sélecteur">
                 <XIcon className="h-3.5 w-3.5" />
               </button>
             </div>
             <div className="max-h-64 overflow-y-auto">
               {mentionLoading && mentionItems.length === 0 ? (
-                <p className="px-3 py-3 text-xs text-neutral-400">Chargement…</p>
+                <p className="px-3 py-3 text-xs text-[var(--g3-faint)]">Chargement…</p>
               ) : mentionItems.length === 0 ? (
-                <p className="px-3 py-3 text-xs text-neutral-400">Aucune compétence ou connecteur ne correspond.</p>
+                <p className="px-3 py-3 text-xs text-[var(--g3-faint)]">Aucune compétence ou connecteur ne correspond.</p>
               ) : (
                 mentionItems.map((item, index) => {
                   const alreadyActive = activatedMentions.some((active) => active.toolkit === item.toolkit);
@@ -489,15 +489,15 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
                       disabled={alreadyActive}
                       onClick={() => chooseMention(item)}
                       onMouseEnter={() => setMentionHighlight(index)}
-                      className={"flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition disabled:opacity-40 " + (index === mentionHighlight && !alreadyActive ? "bg-white/10" : "hover:bg-white/5")}
+                      className={"flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition disabled:opacity-40 " + (index === mentionHighlight && !alreadyActive ? "bg-[var(--g3-surface)]/10" : "hover:bg-[var(--g3-surface)]/5")}
                     >
-                      <span className={"mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs font-bold " + (item.connected === false ? "bg-amber-500/10 text-amber-300" : "bg-white/5 text-neutral-300")} aria-hidden="true">@</span>
+                      <span className={"mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs font-bold " + (item.connected === false ? "bg-amber-500/10 text-amber-300" : "bg-[var(--g3-surface)]/5 text-[var(--g3-faint)]")} aria-hidden="true">@</span>
                       <span className="min-w-0">
-                        <span className="flex items-center gap-1.5 text-xs font-semibold text-neutral-100">
+                        <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--g3-text-secondary)]">
                           {item.label}
                           {item.connected === false && <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-300">à connecter</span>}
                         </span>
-                        <span className="mt-0.5 block truncate text-[10px] leading-4 text-neutral-400">{item.description}</span>
+                        <span className="mt-0.5 block truncate text-[10px] leading-4 text-[var(--g3-faint)]">{item.description}</span>
                       </span>
                     </button>
                   );

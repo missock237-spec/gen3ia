@@ -333,12 +333,12 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   const welcome = useMemo(
     () => (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 text-center">
-        <div className="grid size-14 place-items-center rounded-2xl bg-neutral-900 text-2xl text-white" aria-hidden>
+        <div className="grid size-14 place-items-center rounded-2xl bg-[var(--g3-deep)] text-2xl text-white" aria-hidden>
           ✦
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-neutral-900">Que voulez-vous accomplir ?</h1>
-          <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-neutral-500">
+          <h1 className="text-lg font-semibold text-[var(--g3-text)]">Que voulez-vous accomplir ?</h1>
+          <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-[var(--g3-muted)]">
             Décrivez un objectif : Gen3ia propose un plan lisible, utilise vos applications connectées
             avec votre validation, et range les livrables (documents, images, rapports, fichiers) dans la conversation.
           </p>
@@ -400,10 +400,10 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   );
 
   return (
-    <div className="relative flex h-full min-h-0 gap-2 bg-white p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-3 sm:p-3">
+    <div className="relative flex h-full min-h-0 gap-2 bg-[var(--g3-surface)] p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-3 sm:p-3">
       {/* Colonne gauche — conversations récentes, projets, recherche */}
       <div
-        className={`shrink-0 transition-all ${listCollapsed ? "w-14" : "w-64"} border-r border-neutral-100 pr-3 max-lg:hidden`}
+        className={`shrink-0 transition-all ${listCollapsed ? "w-14" : "w-64"} border-r border-[var(--g3-border)] pr-3 max-lg:hidden`}
       >
         <ConversationList
           conversations={conversations}
@@ -421,10 +421,10 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
       {/* Colonne centrale — conversation */}
       <div className="flex min-w-0 flex-1 flex-col">
         {detail && (
-          <div className="mb-2 flex items-center justify-between gap-2 border-b border-neutral-100 pb-2">
+          <div className="mb-2 flex items-center justify-between gap-2 border-b border-[var(--g3-border)] pb-2">
             <div className="min-w-0">
-              <h1 className="truncate text-sm font-semibold text-neutral-900">{detail.conversation.title || "Sans titre"}</h1>
-              <p className="text-[11px] text-neutral-500">
+              <h1 className="truncate text-sm font-semibold text-[var(--g3-text)]">{detail.conversation.title || "Sans titre"}</h1>
+              <p className="text-[11px] text-[var(--g3-muted)]">
                 {detail.project ? `Projet : ${detail.project.name}` : "Sans projet"}
                 {detail.messages.length > 0 ? ` · ${detail.messages.length} messages` : ""}
               </p>
@@ -444,14 +444,14 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           {loadingDetail ? (
             <div className="space-y-3 py-4" aria-busy>
               {[0, 1, 2].map((i) => (
-                <div key={i} className={`h-16 animate-pulse rounded-2xl bg-neutral-100 ${i % 2 ? "ml-auto w-2/3" : "w-3/4"}`} />
+                <div key={i} className={`h-16 animate-pulse rounded-2xl bg-[var(--g3-elevated)] ${i % 2 ? "ml-auto w-2/3" : "w-3/4"}`} />
               ))}
             </div>
           ) : error && !detail ? (
             <div className="flex flex-1 items-center justify-center">
               <div className="g3-card max-w-md text-center">
-                <p className="text-sm font-semibold text-neutral-900">{error}</p>
-                <p className="mt-1 text-xs text-neutral-500">Choisissez une conversation dans la liste ou créez-en une nouvelle.</p>
+                <p className="text-sm font-semibold text-[var(--g3-text)]">{error}</p>
+                <p className="mt-1 text-xs text-[var(--g3-muted)]">Choisissez une conversation dans la liste ou créez-en une nouvelle.</p>
               </div>
             </div>
           ) : centerEmpty ? (
@@ -478,7 +478,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         )}
 
         {detail && (
-          <div className="mt-2 border-t border-neutral-100 pt-2">
+          <div className="mt-2 border-t border-[var(--g3-border)] pt-2">
             <Composer
               onSend={sendMessage}
               disabled={generating}
@@ -495,7 +495,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
 
       {/* Panneau droit optionnel — plan, outils, validations, livrables
           (desktop uniquement : sur mobile le fil occupe toute la largeur) */}
-      <div className={`shrink-0 transition-all max-lg:hidden ${drawerOpen ? "w-80 border-l border-neutral-100 pl-3" : "w-10"}`}>
+      <div className={`shrink-0 transition-all max-lg:hidden ${drawerOpen ? "w-80 border-l border-[var(--g3-border)] pl-3" : "w-10"}`}>
         {detail && (
           <ContextDrawer
             open={drawerOpen}
@@ -526,8 +526,8 @@ export function ArtifactsSection({
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-sm font-semibold text-neutral-900">{title}</h2>
-        {description && <p className="mt-0.5 text-xs text-neutral-500">{description}</p>}
+        <h2 className="text-sm font-semibold text-[var(--g3-text)]">{title}</h2>
+        {description && <p className="mt-0.5 text-xs text-[var(--g3-muted)]">{description}</p>}
       </div>
       <ArtifactPanel artifacts={artifacts} />
     </section>

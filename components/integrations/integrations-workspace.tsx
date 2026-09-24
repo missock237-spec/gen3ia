@@ -125,9 +125,9 @@ const VISIBLE_STEP = 240;
 
 function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
+    <section className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-5 shadow-sm sm:p-6">
       <h2 className="text-lg font-semibold">{title}</h2>
-      {subtitle ? <p className="mt-1 text-sm text-neutral-500">{subtitle}</p> : null}
+      {subtitle ? <p className="mt-1 text-sm text-[var(--g3-muted)]">{subtitle}</p> : null}
       <div className="mt-4">{children}</div>
     </section>
   );
@@ -419,7 +419,7 @@ export function IntegrationsWorkspace() {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
         <h1 className="text-xl font-semibold">Connectez-vous pour gérer vos intégrations</h1>
-        <a href="/login" className="mt-4 inline-block rounded-xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white">Se connecter</a>
+        <a href="/login" className="mt-4 inline-block rounded-xl bg-[var(--g3-deep)] px-5 py-3 text-sm font-semibold text-white">Se connecter</a>
       </div>
     );
   }
@@ -453,9 +453,9 @@ export function IntegrationsWorkspace() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pb-20 pt-6 sm:px-6 sm:pt-10">
       <header>
-        <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Plateforme</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-[var(--g3-muted)]">Plateforme</p>
         <h1 className="mt-1 text-2xl font-semibold sm:text-3xl">Intégrations</h1>
-        <p className="mt-2 max-w-2xl text-sm text-neutral-600">
+        <p className="mt-2 max-w-2xl text-sm text-[var(--g3-muted)]">
           Connectez vos services externes à vos agents : messagerie, réseaux sociaux, email, calendrier, CRM, paiements. Chaque action externe sensible reste soumise à votre approbation — même depuis votre téléphone.
         </p>
       </header>
@@ -464,7 +464,7 @@ export function IntegrationsWorkspace() {
       {notice ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</div> : null}
 
       {loading ? (
-        <p className="mt-10 text-sm text-neutral-500">Chargement des intégrations…</p>
+        <p className="mt-10 text-sm text-[var(--g3-muted)]">Chargement des intégrations…</p>
       ) : (
         <div className="mt-6 grid gap-5">
           {/* Statut plateforme */}
@@ -480,9 +480,9 @@ export function IntegrationsWorkspace() {
                 { label: "Recherche web", ok: status?.search?.configured === true },
                 { label: "Voix (ElevenLabs)", ok: status?.voice?.elevenlabs === true },
               ].map((item) => (
-                <div key={item.label} className="rounded-xl border border-neutral-200 px-4 py-3">
+                <div key={item.label} className="rounded-xl border border-[var(--g3-border)] px-4 py-3">
                   <p className="text-sm font-medium">{item.label}</p>
-                  <p className={`mt-1 text-xs font-semibold ${item.ok ? "text-emerald-600" : "text-neutral-400"}`}>{item.ok ? "● Actif" : "○ Non configuré"}</p>
+                  <p className={`mt-1 text-xs font-semibold ${item.ok ? "text-emerald-600" : "text-[var(--g3-faint)]"}`}>{item.ok ? "● Actif" : "○ Non configuré"}</p>
                 </div>
               ))}
             </div>
@@ -491,19 +491,19 @@ export function IntegrationsWorkspace() {
           {/* Connexions actives */}
           <SectionCard title={`Connexions vérifiées (${connections.filter((connection) => connection.verified).length})`} subtitle="Seuls les comptes réellement actifs et vérifiés sont utilisables par les agents. Vous pouvez révoquer une connexion à tout moment.">
             {connections.length === 0 ? (
-              <p className="text-sm text-neutral-500">Aucune connexion pour le moment. Choisissez un service dans le catalogue ci-dessous.</p>
+              <p className="text-sm text-[var(--g3-muted)]">Aucune connexion pour le moment. Choisissez un service dans le catalogue ci-dessous.</p>
             ) : (
               <ul className="grid gap-3 sm:grid-cols-2">
                 {connections.map((connection) => (
-                  <li key={connection.id} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 px-4 py-3">
+                  <li key={connection.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--g3-border)] px-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <AppLogo entry={{ toolkit: connection.toolkit, label: connection.label, logo: catalogLogoByToolkit.get(connection.toolkit) ?? null }} size={32} />
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{connection.label}</p>
-                        <p className="text-xs text-neutral-500">{CATEGORY_LABELS[connection.category] ?? connection.category} · {connection.status} · {connection.verified ? "vérifiée" : "non vérifiée"}</p>
+                        <p className="text-xs text-[var(--g3-muted)]">{CATEGORY_LABELS[connection.category] ?? connection.category} · {connection.status} · {connection.verified ? "vérifiée" : "non vérifiée"}</p>
                       </div>
                     </div>
-                    <button type="button" onClick={() => revoke(connection.id)} className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-100">
+                    <button type="button" onClick={() => revoke(connection.id)} className="shrink-0 rounded-lg border border-[var(--g3-border-strong)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--g3-elevated)]">
                       Révoquer
                     </button>
                   </li>
@@ -518,7 +518,7 @@ export function IntegrationsWorkspace() {
             subtitle="Applications externes prêtes à être connectées à vos agents. Après OAuth, Gen3ia vérifie le compte avant de le considérer comme utilisable."
           >
             {catalogueVide ? (
-              <p className="text-sm text-neutral-500">Le catalogue est momentanément indisponible. Réessayez dans quelques instants.</p>
+              <p className="text-sm text-[var(--g3-muted)]">Le catalogue est momentanément indisponible. Réessayez dans quelques instants.</p>
             ) : (
               <>
             <form
@@ -533,12 +533,12 @@ export function IntegrationsWorkspace() {
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 placeholder="Rechercher une application (ex. gmail, notion, stripe…)"
-                className="w-full rounded-xl border border-neutral-300 px-4 py-2.5 text-sm"
+                className="w-full rounded-xl border border-[var(--g3-border-strong)] px-4 py-2.5 text-sm"
                 type="search"
               />
             </form>
             {resultatsVides ? (
-              <p className="text-sm text-neutral-500">
+              <p className="text-sm text-[var(--g3-muted)]">
                 Aucune application ne correspond à «&nbsp;{appliedSearch}&nbsp;». Essayez un autre mot-clé.
               </p>
             ) : (
@@ -550,7 +550,7 @@ export function IntegrationsWorkspace() {
                   setStatusFilter("all");
                   setVisibleCount(VISIBLE_STEP);
                 }}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusFilter === "all" ? "bg-neutral-900 text-white" : "border border-neutral-300"}`}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusFilter === "all" ? "bg-[var(--g3-deep)] text-white" : "border border-[var(--g3-border-strong)]"}`}
               >
                 Tous ({searchedCatalog.length})
               </button>
@@ -562,7 +562,7 @@ export function IntegrationsWorkspace() {
                     setStatusFilter(category);
                     setVisibleCount(VISIBLE_STEP);
                   }}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusFilter === category ? "bg-neutral-900 text-white" : "border border-neutral-300"}`}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusFilter === category ? "bg-[var(--g3-deep)] text-white" : "border border-[var(--g3-border-strong)]"}`}
                 >
                   {CATEGORY_LABELS[category] ?? category} ({(catalogByCategory.get(category) ?? []).length})
                 </button>
@@ -571,12 +571,12 @@ export function IntegrationsWorkspace() {
             <div className="grid gap-5">
               {categoriesVisibles.map(({ category, entries }) => (
                 <div key={category}>
-                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--g3-muted)]">
                     {CATEGORY_LABELS[category] ?? category} ({(catalogByCategory.get(category) ?? []).length})
                   </h3>
                   <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {entries.map((entry) => (
-                      <li key={entry.toolkit} className="flex flex-col justify-between rounded-xl border border-neutral-200 p-4">
+                      <li key={entry.toolkit} className="flex flex-col justify-between rounded-xl border border-[var(--g3-border)] p-4">
                         <div>
                           <div className="flex items-center gap-3">
                             <AppLogo entry={entry} />
@@ -585,16 +585,16 @@ export function IntegrationsWorkspace() {
                                 <p className="truncate text-sm font-semibold">{entry.label}</p>
                                 {connectedToolkits.has(entry.toolkit) ? <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Connecté</span> : null}
                               </div>
-                              <p className="text-xs text-neutral-400">{entry.toolkit}</p>
+                              <p className="text-xs text-[var(--g3-faint)]">{entry.toolkit}</p>
                             </div>
                           </div>
-                          <p className="mt-2 text-xs text-neutral-500">{entry.description}</p>
+                          <p className="mt-2 text-xs text-[var(--g3-muted)]">{entry.description}</p>
                         </div>
                         <button
                           type="button"
                           disabled={connecting === entry.toolkit}
                           onClick={() => connect(entry.toolkit)}
-                          className="mt-3 w-full rounded-lg bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-700 disabled:opacity-50"
+                          className="mt-3 w-full rounded-lg bg-[var(--g3-deep)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--g3-elevated)] disabled:opacity-50"
                         >
                           {connecting === entry.toolkit ? "Connexion…" : connectedToolkits.has(entry.toolkit) ? "Connecter un autre compte" : "Connecter"}
                         </button>
@@ -608,7 +608,7 @@ export function IntegrationsWorkspace() {
               <button
                 type="button"
                 onClick={() => setVisibleCount((previous) => previous + VISIBLE_STEP)}
-                className="mt-5 w-full rounded-xl border border-neutral-300 px-4 py-2.5 text-sm font-semibold hover:bg-neutral-100"
+                className="mt-5 w-full rounded-xl border border-[var(--g3-border-strong)] px-4 py-2.5 text-sm font-semibold hover:bg-[var(--g3-elevated)]"
               >
                 Afficher plus ({resteAAfficher} applications restantes)
               </button>
@@ -625,12 +625,12 @@ export function IntegrationsWorkspace() {
           {/* Notifications & approbation distante */}
           <SectionCard title="Notifications & approbation depuis votre messagerie" subtitle="Recevez les demandes d'approbation d'actions sensibles sur WhatsApp, Telegram ou Slack, et approuvez-les d'un clic depuis votre téléphone.">
             {status && !status.messaging.whatsapp && !status.messaging.telegram && !status.messaging.slack ? (
-              <p className="text-sm text-neutral-500">Aucun canal de messagerie n&apos;est encore activé sur la plateforme. Les connexions OAuth du catalogue restent disponibles.</p>
+              <p className="text-sm text-[var(--g3-muted)]">Aucun canal de messagerie n&apos;est encore activé sur la plateforme. Les connexions OAuth du catalogue restent disponibles.</p>
             ) : (
               <div className="grid gap-3 sm:grid-cols-3">
                 <label className="text-sm">
                   <span className="mb-1 block font-medium">Canal</span>
-                  <select value={prefChannel} onChange={(event) => setPrefChannel(event.target.value as typeof prefChannel)} className="w-full rounded-xl border border-neutral-300 px-3 py-2">
+                  <select value={prefChannel} onChange={(event) => setPrefChannel(event.target.value as typeof prefChannel)} className="w-full rounded-xl border border-[var(--g3-border-strong)] px-3 py-2">
                     {status?.messaging.whatsapp ? <option value="whatsapp">WhatsApp</option> : null}
                     {status?.messaging.telegram ? <option value="telegram">Telegram</option> : null}
                     {status?.messaging.slack ? <option value="slack">Slack</option> : null}
@@ -638,17 +638,17 @@ export function IntegrationsWorkspace() {
                 </label>
                 <label className="text-sm sm:col-span-2">
                   <span className="mb-1 block font-medium">Destinataire</span>
-                  <input value={prefRecipient} onChange={(event) => setPrefRecipient(event.target.value)} placeholder={CHANNEL_HINTS[prefChannel]} className="w-full rounded-xl border border-neutral-300 px-3 py-2" />
+                  <input value={prefRecipient} onChange={(event) => setPrefRecipient(event.target.value)} placeholder={CHANNEL_HINTS[prefChannel]} className="w-full rounded-xl border border-[var(--g3-border-strong)] px-3 py-2" />
                 </label>
                 <label className="flex items-center gap-2 text-sm sm:col-span-3">
                   <input type="checkbox" checked={prefApprovals} onChange={(event) => setPrefApprovals(event.target.checked)} className="h-4 w-4" />
                   <span>Recevoir les demandes d&apos;approbation par message (liens signés, expirent automatiquement)</span>
                 </label>
                 <div className="sm:col-span-3">
-                  <button type="button" onClick={savePreferences} className="rounded-xl bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-neutral-700">
+                  <button type="button" onClick={savePreferences} className="rounded-xl bg-[var(--g3-deep)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--g3-elevated)]">
                     Enregistrer
                   </button>
-                  {prefMessage ? <span className="ml-3 text-sm text-neutral-600">{prefMessage}</span> : null}
+                  {prefMessage ? <span className="ml-3 text-sm text-[var(--g3-muted)]">{prefMessage}</span> : null}
                 </div>
               </div>
             )}
@@ -657,8 +657,8 @@ export function IntegrationsWorkspace() {
           {/* Webhooks sortants */}
           <SectionCard title="Webhooks sortants" subtitle="Émettez les événements Gen3ia (approbation, exécution, échec) vers n8n, Make, Zapier ou votre API. Livraisons signées HMAC-SHA256.">
             <div className="grid gap-3 sm:grid-cols-2">
-              <input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://votre-api.example.com/hook" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <input value={webhookDescription} onChange={(event) => setWebhookDescription(event.target.value)} placeholder="Description (optionnel)" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+              <input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://votre-api.example.com/hook" className="w-full rounded-xl border border-[var(--g3-border-strong)] px-3 py-2 text-sm" />
+              <input value={webhookDescription} onChange={(event) => setWebhookDescription(event.target.value)} placeholder="Description (optionnel)" className="w-full rounded-xl border border-[var(--g3-border-strong)] px-3 py-2 text-sm" />
             </div>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
               {availableEvents.map((event) => (
@@ -675,7 +675,7 @@ export function IntegrationsWorkspace() {
                 </label>
               ))}
             </div>
-            <button type="button" onClick={createWebhook} disabled={!webhookUrl.trim() || webhookEvents.length === 0} className="mt-3 rounded-xl bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-neutral-700 disabled:opacity-50">
+            <button type="button" onClick={createWebhook} disabled={!webhookUrl.trim() || webhookEvents.length === 0} className="mt-3 rounded-xl bg-[var(--g3-deep)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--g3-elevated)] disabled:opacity-50">
               Ajouter l&apos;endpoint
             </button>
             {webhookError ? <p className="mt-2 text-sm text-red-600">{webhookError}</p> : null}
@@ -688,14 +688,14 @@ export function IntegrationsWorkspace() {
 
             <ul className="mt-4 grid gap-3">
               {webhooks.map((webhook) => (
-                <li key={webhook.id} className="rounded-xl border border-neutral-200 px-4 py-3">
+                <li key={webhook.id} className="rounded-xl border border-[var(--g3-border)] px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{webhook.url}</p>
-                      <p className="mt-0.5 truncate text-xs text-neutral-500">{webhook.events.map((event) => EVENT_LABELS[event] ?? event).join(" · ")}</p>
+                      <p className="mt-0.5 truncate text-xs text-[var(--g3-muted)]">{webhook.events.map((event) => EVENT_LABELS[event] ?? event).join(" · ")}</p>
                     </div>
                     <div className="flex shrink-0 gap-2">
-                      <button type="button" onClick={() => toggleWebhook(webhook)} className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-100">
+                      <button type="button" onClick={() => toggleWebhook(webhook)} className="rounded-lg border border-[var(--g3-border-strong)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--g3-elevated)]">
                         {webhook.disabled ? "Activer" : "Désactiver"}
                       </button>
                       <button type="button" onClick={() => deleteWebhook(webhook.id)} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50">

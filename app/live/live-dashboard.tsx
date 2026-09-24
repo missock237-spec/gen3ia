@@ -85,16 +85,16 @@ const STATUS_STYLES: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
   connected: "bg-sky-100 text-sky-700 border-sky-200",
   running: "bg-emerald-100 text-emerald-600 border-emerald-200",
-  paused: "bg-neutral-100 text-neutral-600 border-neutral-200",
-  disconnected: "bg-neutral-100 text-neutral-600 border-neutral-200",
-  stopped: "bg-neutral-100 text-neutral-600 border-neutral-200",
+  paused: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
+  disconnected: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
+  stopped: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
   failed: "bg-red-50 text-red-600 border-red-200",
 };
 
 const KIND_STYLES: Record<ObservationKind, string> = {
-  observation: "text-neutral-700",
+  observation: "text-[var(--g3-text-secondary)]",
   action: "text-sky-700 font-medium",
-  result: "text-neutral-500",
+  result: "text-[var(--g3-muted)]",
   pause: "text-amber-700",
   info: "text-emerald-700",
   error: "text-red-600",
@@ -526,14 +526,14 @@ export function LiveDashboard() {
   }, [authReady, loadSessions]);
 
   if (!authReady || sessionDisponible === null) {
-    return <div className="p-10 text-center text-neutral-500">Chargement…</div>;
+    return <div className="p-10 text-center text-[var(--g3-muted)]">Chargement…</div>;
   }
 
   if (sessionDisponible === false) {
     return (
-      <div className="mx-auto max-w-md rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+      <div className="mx-auto max-w-md rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
         <h2 className="font-serif text-xl font-semibold">Connexion requise</h2>
-        <p className="mt-2 text-sm text-neutral-600">
+        <p className="mt-2 text-sm text-[var(--g3-muted)]">
           Connectez-vous pour créer et piloter des sessions d’agent Live.
         </p>
         <Link href="/login" className="g3-btn g3-btn-primary mt-6">
@@ -547,13 +547,13 @@ export function LiveDashboard() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-      <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+      <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
         <h2 className="font-serif text-xl font-semibold">Créer une session d’agent Live</h2>
-        <p className="mt-2 text-sm text-neutral-500">
+        <p className="mt-2 text-sm text-[var(--g3-muted)]">
           Décrivez la mission : l’agent observe votre écran depuis le navigateur,
           analyse chaque étape et vous guide. Aucun téléchargement requis.
         </p>
-        <label className="mt-5 block text-xs uppercase tracking-widest text-neutral-500">Nom de la session</label>
+        <label className="mt-5 block text-xs uppercase tracking-widest text-[var(--g3-muted)]">Nom de la session</label>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -561,7 +561,7 @@ export function LiveDashboard() {
           maxLength={120}
           className="g3-input mt-2"
         />
-        <label className="mt-4 block text-xs uppercase tracking-widest text-neutral-500">Objectif</label>
+        <label className="mt-4 block text-xs uppercase tracking-widest text-[var(--g3-muted)]">Objectif</label>
         <textarea
           value={objective}
           onChange={(e) => setObjective(e.target.value)}
@@ -569,7 +569,7 @@ export function LiveDashboard() {
           className="g3-textarea mt-2 min-h-32"
         />
         <div className="mt-4">
-          <div className="text-xs uppercase tracking-widest text-neutral-500">Permissions accordées</div>
+          <div className="text-xs uppercase tracking-widest text-[var(--g3-muted)]">Permissions accordées</div>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {(Object.keys(PERMISSION_LABELS) as Permission[]).map((permission) => (
               <button
@@ -578,19 +578,19 @@ export function LiveDashboard() {
                 className={`rounded-xl border px-4 py-2.5 text-left text-sm transition ${
                   permissions.includes(permission)
                     ? "border-sky-200 bg-sky-100 text-sky-700"
-                    : "border-[rgba(23,23,20,0.09)] bg-neutral-50 text-neutral-600 hover:bg-neutral-100"
+                    : "border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
                 }`}
               >
                 {PERMISSION_LABELS[permission]}
               </button>
             ))}
           </div>
-          <p className="mt-2 text-xs leading-5 text-neutral-400">
+          <p className="mt-2 text-xs leading-5 text-[var(--g3-faint)]">
             En mode navigateur, l’agent observe l’écran et décrit les étapes ; le
             contrôle clavier/souris reste réservé à un client PC.
           </p>
         </div>
-        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-white px-4 py-3 text-sm leading-6 text-neutral-700">
+        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-4 py-3 text-sm leading-6 text-[var(--g3-text-secondary)]">
           <input
             type="checkbox"
             className="mt-1 h-4 w-4 accent-neutral-900"
@@ -616,7 +616,7 @@ export function LiveDashboard() {
         {created && (
           <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
             <div className="text-sm font-semibold text-emerald-600">Session créée — {created.session.name}</div>
-            <div className="mt-1 text-xs text-neutral-500">ID : {created.session.id}</div>
+            <div className="mt-1 text-xs text-[var(--g3-muted)]">ID : {created.session.id}</div>
             <button
               onClick={() => {
                 setObservations([]);
@@ -627,7 +627,7 @@ export function LiveDashboard() {
             >
               {liveStatus === "starting" ? "Démarrage…" : liveStatus === "running" ? "Agent actif" : "Tester dans ce navigateur"}
             </button>
-            <p className="mt-3 text-xs leading-5 text-neutral-500">
+            <p className="mt-3 text-xs leading-5 text-[var(--g3-muted)]">
               Votre navigateur vous demandera quel écran partager. La session
               expire au bout de 24 h si elle reste inactive.
             </p>
@@ -636,15 +636,15 @@ export function LiveDashboard() {
       </section>
 
       <div className="space-y-5">
-        <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+        <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="font-serif text-lg font-semibold">Agent Live — dans le navigateur</h2>
-              <p className="mt-1 text-xs text-neutral-500">
+              <p className="mt-1 text-xs text-[var(--g3-muted)]">
                 Aucun téléchargement : partage d’écran natif, analyse par l’IA en temps réel.
               </p>
             </div>
-            <span className="rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-2.5 py-1 text-[11px] text-neutral-600">
+            <span className="rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 py-1 text-[11px] text-[var(--g3-muted)]">
               {liveStatus === "running" ? "LIVE" : liveStatus === "starting" ? "démarrage" : liveStatus === "stopped" ? "arrêté" : "hors ligne"}
             </span>
           </div>
@@ -652,7 +652,7 @@ export function LiveDashboard() {
           <div className="relative mt-4 overflow-hidden rounded-2xl border border-[rgba(23,23,20,0.09)] bg-black aspect-video flex items-center justify-center">
             <video ref={videoRef} muted playsInline autoPlay className="h-full w-full object-contain" />
             {liveStatus !== "running" && liveStatus !== "starting" && (
-              <span className="absolute text-sm text-neutral-300">Aucun partage d’écran actif</span>
+              <span className="absolute text-sm text-[var(--g3-faint)]">Aucun partage d’écran actif</span>
             )}
           </div>
 
@@ -680,7 +680,7 @@ export function LiveDashboard() {
               </button>
             )}
             {liveStatus === "stopped" && (
-              <button onClick={() => setLiveStatus("idle")} className="rounded-xl border border-[rgba(23,23,20,0.09)] px-4 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100">
+              <button onClick={() => setLiveStatus("idle")} className="rounded-xl border border-[rgba(23,23,20,0.09)] px-4 py-2 text-xs font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]">
                 Réinitialiser
               </button>
             )}
@@ -690,16 +690,16 @@ export function LiveDashboard() {
           )}
 
           <div className="mt-4">
-            <div className="text-xs uppercase tracking-widest text-neutral-500">Journal de l’agent</div>
-            <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto rounded-2xl border border-[rgba(23,23,20,0.08)] bg-neutral-50 p-3">
+            <div className="text-xs uppercase tracking-widest text-[var(--g3-muted)]">Journal de l’agent</div>
+            <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto rounded-2xl border border-[rgba(23,23,20,0.08)] bg-[var(--g3-elevated)] p-3">
               {observations.length === 0 ? (
-                <p className="text-xs text-neutral-400">
+                <p className="text-xs text-[var(--g3-faint)]">
                   Les observations de l’agent apparaîtront ici dès qu’une session est active.
                 </p>
               ) : (
                 observations.map((entry) => (
                   <p key={entry.id} className={`text-xs leading-5 ${KIND_STYLES[entry.kind]}`}>
-                    <span className="mr-2 font-mono text-[10px] text-neutral-400">{formatTime(entry.at)}</span>
+                    <span className="mr-2 font-mono text-[10px] text-[var(--g3-faint)]">{formatTime(entry.at)}</span>
                     {entry.text}
                   </p>
                 ))
@@ -714,24 +714,24 @@ export function LiveDashboard() {
           </p>
         </section>
 
-        <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+        <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
           <h2 className="font-serif text-lg font-semibold">Sessions récentes</h2>
           {sessions.length === 0 ? (
-            <p className="mt-3 text-sm text-neutral-500">Aucune session pour le moment.</p>
+            <p className="mt-3 text-sm text-[var(--g3-muted)]">Aucune session pour le moment.</p>
           ) : (
             <ul className="mt-4 space-y-3">
               {sessions.map((session) => (
-                <li key={session.id} className="rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-4">
+                <li key={session.id} className="rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="truncate text-sm font-semibold">{session.name}</div>
                     <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] ${STATUS_STYLES[session.status] ?? STATUS_STYLES.paused}`}>
                       {session.status}
                     </span>
                   </div>
-                  <div className="mt-1 text-xs text-neutral-400">{formatDate(session.createdAt)}</div>
+                  <div className="mt-1 text-xs text-[var(--g3-faint)]">{formatDate(session.createdAt)}</div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {session.permissions.map((permission) => (
-                      <span key={permission} className="rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-2 py-0.5 text-[10px] text-neutral-500">
+                      <span key={permission} className="rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2 py-0.5 text-[10px] text-[var(--g3-muted)]">
                         {permission}
                       </span>
                     ))}
@@ -749,7 +749,7 @@ export function LiveDashboard() {
                         </button>
                         <button
                           onClick={() => stopSession(session.id)}
-                          className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100"
+                          className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
                         >
                           Refuser et arrêter
                         </button>
@@ -762,7 +762,7 @@ export function LiveDashboard() {
                       <div className="mt-1 truncate font-mono text-[10px] text-sky-600">{actionLabel(session.inFlightAction.action)}</div>
                       <button
                         onClick={() => retryAction(session.id, session.inFlightAction!.actionId)}
-                        className="mt-2 rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-100"
+                        className="mt-2 rounded-lg border border-sky-300 bg-[var(--g3-surface)] px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-100"
                       >
                         Réessayer
                       </button>

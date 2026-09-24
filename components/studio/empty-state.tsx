@@ -33,7 +33,7 @@ export function EmptyState({
         {icon}
       </div>
       <h3 className="mt-4 font-bold">{title}</h3>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-neutral-500">{description}</p>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--g3-muted)]">{description}</p>
       {action && <div className="mt-5 flex justify-center">{action}</div>}
     </div>
   );

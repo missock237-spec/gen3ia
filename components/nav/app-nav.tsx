@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authFetch, logout, useAuth } from "@/lib/firebase/auth-client";
 
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+
 import { CommandPalette } from "./command-palette";
 import { NAV_GROUPS, type NavItem } from "./nav-items";
 
@@ -175,6 +177,9 @@ export function AppNav() {
           </nav>
 
           <div className="g3-nav-footer">
+            <div className={"mb-2 flex " + (compact ? "justify-center" : "justify-start px-1")}>
+              <ThemeToggle compact={compact} />
+            </div>
             <div className="relative">
               {accountOpen && (
                 <div className={"g3-account-menu " + (compact ? "is-compact" : "")}>
@@ -257,12 +262,12 @@ export function AppNav() {
                 {!compact && (
                   <span className="min-w-0 flex-1 text-left">
                     <span className="block truncate text-xs font-semibold">{name}</span>
-                    <span className="block truncate text-[10px] text-neutral-400">
+                    <span className="block truncate text-[10px] text-[var(--g3-faint)]">
                       {user?.email || "Session Gen3ia"}
                     </span>
                   </span>
                 )}
-                <span className="text-neutral-400">•••</span>
+                <span className="text-[var(--g3-faint)]">•••</span>
               </button>
             </div>
           </div>

@@ -21,7 +21,7 @@ export default function MarketplacePage() {
   }
 
   return (
-    <div className="min-h-full bg-[#f6f4ef]">
+    <div className="min-h-full bg-[var(--g3-bg)]">
       <div className="mx-auto max-w-[1480px] px-3 pt-3 sm:px-5 lg:px-7">
       </div>
       <MarketplaceHub />

@@ -45,7 +45,7 @@ const STATUS_DEFINITIONS: Record<string, StatusDefinition> = {
 };
 
 const TONE_CLASSES: Record<BadgeTone, string> = {
-  neutral: "border-neutral-200 bg-neutral-100 text-neutral-600",
+  neutral: "border-[var(--g3-border)] bg-[var(--g3-elevated)] text-[var(--g3-muted)]",
   info: "border-sky-200 bg-sky-50 text-sky-700",
   success: "border-emerald-200 bg-emerald-50 text-emerald-700",
   warning: "border-amber-200 bg-amber-50 text-amber-700",

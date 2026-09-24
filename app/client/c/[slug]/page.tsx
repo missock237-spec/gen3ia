@@ -119,26 +119,26 @@ export default function ClientCommercialPage() {
         </div>
         <div className="min-w-0">
           <h1 className="truncate text-base font-bold">{greeting?.companyName ?? "Chargement…"}</h1>
-          <p className="truncate text-xs text-neutral-300">{greeting ? `Assistant ${greeting.agentName}` : ""}</p>
+          <p className="truncate text-xs text-[var(--g3-faint)]">{greeting ? `Assistant ${greeting.agentName}` : ""}</p>
         </div>
       </header>
 
-      <section className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-t-3xl bg-neutral-50 px-4 py-4" aria-live="polite">
-        {loading && <p className="mx-auto text-sm text-neutral-500">Connexion à l&apos;assistant…</p>}
+      <section className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-t-3xl bg-[var(--g3-elevated)] px-4 py-4" aria-live="polite">
+        {loading && <p className="mx-auto text-sm text-[var(--g3-muted)]">Connexion à l&apos;assistant…</p>}
         {error && !greeting && <p className="mx-auto rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         {bubbles.map((bubble, index) => (
           <article
             key={index}
             className={
               bubble.role === "client"
-                ? "ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-neutral-900 px-4 py-2.5 text-sm text-white"
-                : "mr-auto max-w-[85%] rounded-2xl rounded-bl-md border border-neutral-200 bg-white px-4 py-2.5 text-sm text-neutral-800"
+                ? "ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-[var(--g3-deep)] px-4 py-2.5 text-sm text-white"
+                : "mr-auto max-w-[85%] rounded-2xl rounded-bl-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-2.5 text-sm text-[var(--g3-text)]"
             }
           >
             {bubble.text}
           </article>
         ))}
-        {sending && <p className="mr-auto text-xs text-neutral-500">L&apos;assistant écrit…</p>}
+        {sending && <p className="mr-auto text-xs text-[var(--g3-muted)]">L&apos;assistant écrit…</p>}
 
         {showLead && (
           <div className="mr-auto max-w-[90%] rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
@@ -163,7 +163,7 @@ export default function ClientCommercialPage() {
             rows={1}
             placeholder="Votre message…"
             maxLength={2_000}
-            className="max-h-32 flex-1 resize-none rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm"
+            className="max-h-32 flex-1 resize-none rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3 text-sm"
             disabled={sending}
             aria-label="Votre message"
           />
