@@ -84,6 +84,16 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     section: "primary",
     keywords: ["bibliothèque", "modèles", "capacités", "marketing", "sales", "rh", "finance", "missions", "créer"],
   },
+  {
+    id: "knowledge",
+    href: "/workspace/knowledge",
+    label: "Knowledge",
+    icon: "▤",
+    description: "Bases de connaissances RAG : documents, pages web, recherche",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["knowledge", "connaissances", "documents", "rag", "recherche", "embeddings", "wiki"],
+  },
 ];
 
 const WORKSPACE_SECONDARY: NavRoute[] = [

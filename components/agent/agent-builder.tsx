@@ -8,6 +8,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import type { AgentSummary } from "@/lib/agents/schema";
+import { AgentEvalsPanel } from "./agent-evals-panel";
 import { AgentWizard } from "./agent-wizard";
 
 /**
@@ -19,7 +20,7 @@ import { AgentWizard } from "./agent-wizard";
  *   réellement via PATCH /api/agents/[id] (aucun réglage décoratif).
  */
 
-type BuilderTab = "general" | "model" | "tools" | "subagents" | "permissions" | "deployment";
+type BuilderTab = "general" | "model" | "tools" | "subagents" | "permissions" | "evals" | "deployment";
 
 const TAB_ITEMS: Array<{ id: BuilderTab; label: string }> = [
   { id: "general", label: "Général" },
@@ -27,6 +28,7 @@ const TAB_ITEMS: Array<{ id: BuilderTab; label: string }> = [
   { id: "tools", label: "Outils & MCP" },
   { id: "subagents", label: "Sous-agents" },
   { id: "permissions", label: "Permissions" },
+  { id: "evals", label: "Évaluation" },
   { id: "deployment", label: "Déploiement" },
 ];
 
@@ -666,6 +668,7 @@ export function AgentBuilder({ editing = null, onSaved, onCancel }: AgentBuilder
         {activeTab === "tools" && <ToolsSection agent={agent} onSaved={handleSectionSaved} />}
         {activeTab === "subagents" && <SubAgentsSection agent={agent} onSaved={handleSectionSaved} />}
         {activeTab === "permissions" && <PermissionsSection agent={agent} onSaved={handleSectionSaved} />}
+        {activeTab === "evals" && <AgentEvalsPanel agentId={agent.id} />}
         {activeTab === "deployment" && <DeploymentSection agent={agent} onSaved={handleSectionSaved} />}
       </div>
     </div>

@@ -95,6 +95,8 @@ export class AgentRuntime {
   private readonly startedAtMs: number;
   private readonly agentConfig?: RuntimeAgentConfig;
   private readonly projectId?: string;
+  private criticRounds = 0;
+  private static readonly CRITIC_MAX_ROUNDS = 1;
 
   constructor(options: RuntimeRunnerOptions) {
     const validation = validateDAG(options.plan);
@@ -136,19 +138,40 @@ export class AgentRuntime {
     if (wallet.availableMinor <= 0) throw new Error(`Insufficient wallet balance. Add funds before starting an AI execution.`);
     await createCheckpoint(this.state);
     try {
-      while (this.state.iteration < this.state.plan.maxIterations) {
-        this.throwIfCancelled();
-        await this.throwIfPaused();
-        this.assertExecutionBudget();
-        this.state.iteration++;
-        const completed = this.getCompletedSteps();
-        const running = new Set(this.scheduler.getRunning());
-        const ready = getReadySteps(this.state.plan, completed, running);
-        if (ready.length === 0 && this.scheduler.getRunning().length === 0) break;
-        const executable = ready.slice(0, this.scheduler.capacity);
-        await Promise.all(executable.map((step) => this.executeStep(step)));
-        await this.persistCheckpoint();
-        if (this.areAllStepsFinished()) break;
+      // Boucle externe = tours de critic. Après une exécution en échec, le
+      // critic (déterministe d'abord, LLM ensuite si nécessaire) identifie
+      // les étapes à rejouer ; au plus 1 tour de réparation automatique.
+      while (true) {
+        while (this.state.iteration < this.state.plan.maxIterations) {
+          this.throwIfCancelled();
+          await this.throwIfPaused();
+          this.assertExecutionBudget();
+          this.state.iteration++;
+          const completed = this.getCompletedSteps();
+          const running = new Set(this.scheduler.getRunning());
+          const ready = getReadySteps(this.state.plan, completed, running);
+          if (ready.length === 0 && this.scheduler.getRunning().length === 0) break;
+          const executable = ready.slice(0, this.scheduler.capacity);
+          await Promise.all(executable.map((step) => this.executeStep(step)));
+          await this.persistCheckpoint();
+          if (this.areAllStepsFinished()) break;
+        }
+        this.finalize();
+        const hasFailedSteps = () => this.state.plan.steps.some((step) => step.status === "failed");
+        if (hasFailedSteps() && this.criticRounds < AgentRuntime.CRITIC_MAX_ROUNDS && !this.signal?.aborted) {
+          this.criticRounds++;
+          const retryStepIds = await this.requestCriticRetry();
+          if (retryStepIds && retryStepIds.length > 0) {
+            for (const step of this.state.plan.steps) {
+              if (step.status === "failed" && retryStepIds.includes(step.id)) step.status = "pending";
+            }
+            this.state.status = "running";
+            delete this.state.error;
+            await this.persistCheckpoint();
+            continue; // reprend la boucle interne avec les étapes réinitialisées
+          }
+        }
+        break;
       }
       this.finalize();
       await this.persistCheckpoint();
@@ -401,6 +424,34 @@ export class AgentRuntime {
     if (typeof cap !== "number" || cap <= 0) return;
     if (this.state.billing.totalChargeMinor >= cap) {
       throw new Error(`Budget de l'agent atteint pour cette exécution (plafond ${(cap / 100).toFixed(2)} EUR). Augmentez le budget dans le Builder ou simplifiez la mission.`);
+    }
+  }
+
+  /**
+   * Demande au critic les étapes à rejouer après un échec. Import dynamique
+   * pour éviter le cycle statique runner <-> critic (le critic importe le
+   * barrel du runtime). Fail-soft : un crash du critic ne doit JAMAIS
+   * transformer un échec partiel en crash de mission — on renvoie null
+   * (pas de retry) et l'échec initial est conservé tel quel.
+   */
+  private async requestCriticRetry(): Promise<string[] | null> {
+    try {
+      const { critiqueExecution } = await import("@/lib/agents/critic/service");
+      const result = await critiqueExecution(this.state);
+      this.state.evaluations.push({
+        stepId: "critic",
+        success: result.passed,
+        score: result.score,
+        feedback: result.summary.slice(0, 500),
+        shouldRetry: result.retry,
+        ...(result.corrections.length > 0 ? { correction: result.corrections.map((correction) => correction.action).join(" | ").slice(0, 500) } : {}),
+      });
+      if (!result.retry) return null;
+      const ids = result.retrySteps.filter((id) => this.state.plan.steps.some((step) => step.id === id && step.status === "failed"));
+      return ids;
+    } catch (error) {
+      console.error("[runtime] Critic indisponible (réparation ignorée):", error instanceof Error ? error.message : error);
+      return null;
     }
   }
   private finalize(): void { const hasFailures = this.state.plan.steps.some((step) => step.status === "failed"); this.state.status = hasFailures ? "failed" : "completed"; this.state.completedAt = new Date().toISOString(); }
