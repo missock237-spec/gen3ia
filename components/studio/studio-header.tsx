@@ -34,7 +34,7 @@ export function StudioHeader({
           {highlight ? <span className="gradient-text"> {highlight}</span> : null}
         </h1>
         {description && (
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500 md:text-base">{description}</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--g3-muted)] md:text-base">{description}</p>
         )}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}

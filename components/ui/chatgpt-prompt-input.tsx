@@ -82,13 +82,13 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
     const canSend = !disabled && (current.trim().length > 0 || Boolean(preview));
 
     return (
-      <form onSubmit={onSubmit} className={`relative rounded-[26px] border border-[rgba(23,23,20,0.09)] bg-white p-2 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)] transition-all duration-300 focus-within:border-neutral-300 focus-within:shadow-[0_14px_40px_-18px_rgba(28,27,24,0.28)] ${className}`}>
+      <form onSubmit={onSubmit} className={`relative rounded-[26px] border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-2 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)] transition-all duration-300 focus-within:border-[var(--g3-border-strong)] focus-within:shadow-[0_14px_40px_-18px_rgba(28,27,24,0.28)] ${className}`}>
         <input ref={fileRef} type="file" className="hidden" accept="image/*,.pdf,.zip" onChange={handleFile} />
         {preview && (
-          <div className="mb-1 flex items-center gap-2 rounded-2xl bg-neutral-50 p-2">
+          <div className="mb-1 flex items-center gap-2 rounded-2xl bg-[var(--g3-elevated)] p-2">
             <Image src={preview} alt="Aperçu de la pièce jointe" width={48} height={48} unoptimized className="h-12 w-12 rounded-xl object-cover" />
-            <span className="text-xs text-neutral-500">Image jointe</span>
-            <button type="button" onClick={() => setPreview(null)} className="ml-auto rounded-full p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900" aria-label="Retirer la pièce jointe"><XIcon className="h-4 w-4"/></button>
+            <span className="text-xs text-[var(--g3-muted)]">Image jointe</span>
+            <button type="button" onClick={() => setPreview(null)} className="ml-auto rounded-full p-1.5 text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]" aria-label="Retirer la pièce jointe"><XIcon className="h-4 w-4"/></button>
           </div>
         )}
 
@@ -97,7 +97,7 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
             <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[11px] text-sky-700">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-500" />{active.name}
             </span>
-            <button type="button" onClick={() => onToolChange?.(null)} className="text-neutral-400 hover:text-neutral-900" aria-label="Retirer l'outil"><XIcon className="h-3.5 w-3.5"/></button>
+            <button type="button" onClick={() => onToolChange?.(null)} className="text-[var(--g3-faint)] hover:text-[var(--g3-text)]" aria-label="Retirer l'outil"><XIcon className="h-3.5 w-3.5"/></button>
           </div>
         )}
 
@@ -116,30 +116,30 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
             }
           }}
           placeholder={placeholder}
-          className="max-h-[220px] min-h-14 w-full resize-none border-0 bg-transparent px-3 py-3 text-[15px] leading-6 text-neutral-900 outline-none placeholder:text-neutral-400 disabled:opacity-50"
+          className="max-h-[220px] min-h-14 w-full resize-none border-0 bg-transparent px-3 py-3 text-[15px] leading-6 text-[var(--g3-text)] outline-none placeholder:text-[var(--g3-faint)] disabled:opacity-50"
         />
 
         <div className="flex items-center gap-1.5 px-1 pb-1">
-          <button type="button" disabled={disabled} onClick={() => fileRef.current?.click()} className="grid h-9 w-9 place-items-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-30" aria-label="Joindre un fichier"><PlusIcon className="h-5 w-5"/></button>
+          <button type="button" disabled={disabled} onClick={() => fileRef.current?.click()} className="grid h-9 w-9 place-items-center rounded-full text-[var(--g3-muted)] transition hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)] disabled:opacity-30" aria-label="Joindre un fichier"><PlusIcon className="h-5 w-5"/></button>
           <div className="relative">
-            <button type="button" disabled={disabled} onClick={() => setOpen((v) => !v)} className="flex h-9 items-center gap-2 rounded-full px-3 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900" aria-expanded={open}><SlidersIcon className="h-4 w-4"/><span className="hidden sm:inline">Capacités</span></button>
+            <button type="button" disabled={disabled} onClick={() => setOpen((v) => !v)} className="flex h-9 items-center gap-2 rounded-full px-3 text-xs font-medium text-[var(--g3-muted)] transition hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]" aria-expanded={open}><SlidersIcon className="h-4 w-4"/><span className="hidden sm:inline">Capacités</span></button>
             {open && (
-              <div className="absolute bottom-11 left-0 z-50 w-[280px] overflow-hidden rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-2 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)] anim-scale-in">
-                <div className="px-2 py-2 text-[10px] font-bold uppercase tracking-[.2em] text-neutral-400">Outil prioritaire</div>
+              <div className="absolute bottom-11 left-0 z-50 w-[280px] overflow-hidden rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-2 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)] anim-scale-in">
+                <div className="px-2 py-2 text-[10px] font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">Outil prioritaire</div>
                 {AGENT_TOOLS.map((tool) => (
-                  <button key={tool.id} type="button" onClick={() => { onToolChange?.(tool.id); setOpen(false); }} className="flex w-full items-start gap-3 rounded-xl p-2.5 text-left transition hover:bg-neutral-100">
+                  <button key={tool.id} type="button" onClick={() => { onToolChange?.(tool.id); setOpen(false); }} className="flex w-full items-start gap-3 rounded-xl p-2.5 text-left transition hover:bg-[var(--g3-elevated)]">
                     <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-sky-100 text-sky-700">•</span>
-                    <span><span className="block text-xs font-semibold text-neutral-800">{tool.name}</span><span className="mt-0.5 block text-[10px] leading-4 text-neutral-400">{tool.description}</span></span>
+                    <span><span className="block text-xs font-semibold text-[var(--g3-text)]">{tool.name}</span><span className="mt-0.5 block text-[10px] leading-4 text-[var(--g3-faint)]">{tool.description}</span></span>
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          <span className="hidden text-[10px] text-neutral-400 md:block">Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne</span>
+          <span className="hidden text-[10px] text-[var(--g3-faint)] md:block">Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne</span>
           <div className="ml-auto flex items-center gap-1.5">
-            <button type="button" disabled={disabled} onClick={onVoice} className="grid h-9 w-9 place-items-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-30" aria-label="Voix"><MicIcon className="h-4.5 w-4.5"/></button>
-            <button type="submit" disabled={!canSend} className="grid h-9 w-9 place-items-center rounded-full bg-neutral-900 text-white shadow-lg shadow-neutral-900/15 transition hover:scale-105 hover:bg-neutral-800 disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-30" aria-label="Envoyer"><SendIcon className="h-4.5 w-4.5"/></button>
+            <button type="button" disabled={disabled} onClick={onVoice} className="grid h-9 w-9 place-items-center rounded-full text-[var(--g3-muted)] transition hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)] disabled:opacity-30" aria-label="Voix"><MicIcon className="h-4.5 w-4.5"/></button>
+            <button type="submit" disabled={!canSend} className="grid h-9 w-9 place-items-center rounded-full bg-[var(--g3-deep)] text-white shadow-lg shadow-neutral-900/15 transition hover:scale-105 hover:bg-[var(--g3-deep)] disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-30" aria-label="Envoyer"><SendIcon className="h-4.5 w-4.5"/></button>
           </div>
         </div>
       </form>

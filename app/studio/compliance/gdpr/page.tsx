@@ -121,7 +121,7 @@ export default function ComplianceGdprPage() {
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`rounded-xl px-4 py-2 text-[13px] font-semibold ${tab === key ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 ring-1 ring-neutral-200 hover:text-neutral-900"}`}
+            className={`rounded-xl px-4 py-2 text-[13px] font-semibold ${tab === key ? "bg-[var(--g3-deep)] text-white" : "bg-[var(--g3-surface)] text-[var(--g3-muted)] ring-1 ring-neutral-200 hover:text-[var(--g3-text)]"}`}
           >
             {key === "processing" ? "Registre des traitements" : "Demandes des personnes"}
           </button>
@@ -131,7 +131,7 @@ export default function ComplianceGdprPage() {
       {tab === "processing" ? (
         <>
           <div className={cardCls}>
-            <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Inscrire un traitement</h2>
+            <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Inscrire un traitement</h2>
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Nom du traitement">
                 <input className={inputCls} value={proc.processingName} onChange={(e) => setProc({ ...proc, processingName: e.target.value })} placeholder="Newsletter clients" />
@@ -157,7 +157,7 @@ export default function ComplianceGdprPage() {
               </Field>
             </div>
             <div className="mt-4 flex items-center justify-between">
-              <label className="flex items-center gap-2 text-[13px] text-neutral-700">
+              <label className="flex items-center gap-2 text-[13px] text-[var(--g3-text-secondary)]">
                 <input type="checkbox" checked={proc.secured} onChange={(e) => setProc({ ...proc, secured: e.target.checked })} />
                 Données sécurisées (chiffrement, accès restreint)
               </label>
@@ -168,16 +168,16 @@ export default function ComplianceGdprPage() {
           </div>
 
           <ModuleSection title={`Traitements (${processing.length})`}>
-            {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+            {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
             {!loading && processing.length === 0 ? <EmptyHint>Registre vide — inscrivez votre premier traitement.</EmptyHint> : null}
             <div className="space-y-2.5">
               {processing.map((entry) => (
                 <article key={entry.id} className={cardCls}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <h3 className="text-[14px] font-bold text-neutral-900">{entry.processingName}</h3>
-                      <p className="text-[12.5px] text-neutral-500">{entry.purpose}</p>
-                      <p className="mt-1 text-[12px] text-neutral-400">
+                      <h3 className="text-[14px] font-bold text-[var(--g3-text)]">{entry.processingName}</h3>
+                      <p className="text-[12.5px] text-[var(--g3-muted)]">{entry.purpose}</p>
+                      <p className="mt-1 text-[12px] text-[var(--g3-faint)]">
                         {LEGAL_BASES[entry.legalBasis] ?? entry.legalBasis} · conservation {entry.retentionDays} j · {entry.dataCategories.join(", ")}
                         {entry.recipients ? ` · destinataires : ${entry.recipients}` : ""}
                       </p>
@@ -197,7 +197,7 @@ export default function ComplianceGdprPage() {
       ) : (
         <>
           <div className={cardCls}>
-            <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Enregistrer une demande</h2>
+            <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Enregistrer une demande</h2>
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Nom de la personne">
                 <input className={inputCls} value={req.subjectName} onChange={(e) => setReq({ ...req, subjectName: e.target.value })} placeholder="Jean Martin" />
@@ -232,10 +232,10 @@ export default function ComplianceGdprPage() {
                 <article key={request.id} className={cardCls}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <h3 className="text-[14px] font-bold text-neutral-900">
+                      <h3 className="text-[14px] font-bold text-[var(--g3-text)]">
                         {request.typeLabel ?? request.type} — {request.subjectName}
                       </h3>
-                      <p className="text-[12.5px] text-neutral-500">
+                      <p className="text-[12.5px] text-[var(--g3-muted)]">
                         {request.subjectEmail} · reçue le {shortDate(request.receivedAt)} · échéance {shortDate(request.deadlineAt)}
                       </p>
                     </div>

@@ -20,11 +20,11 @@ export function ExtensionsPanel() {
                   <b>{extension.name}</b>
                   <span className="text-xs">{extension.status}</span>
                 </div>
-                <div className="mt-2 text-xs text-neutral-500">{`${extension.id} · v${extension.latestVersion || "—"}`}</div>
+                <div className="mt-2 text-xs text-[var(--g3-muted)]">{`${extension.id} · v${extension.latestVersion || "—"}`}</div>
                 <div className="mt-3 text-xs">{`${extension.stats.installs} installations · ${extension.stats.executions} exécutions`}</div>
                 <div className="mt-3 flex flex-wrap gap-1">
                   {extension.permissions.map((permission) => (
-                    <span key={permission} className="rounded bg-neutral-100 px-2 py-1 font-mono text-[10px]">
+                    <span key={permission} className="rounded bg-[var(--g3-elevated)] px-2 py-1 font-mono text-[10px]">
                       {permission}
                     </span>
                   ))}

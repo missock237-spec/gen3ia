@@ -16,7 +16,7 @@ const TONE_STYLES: Record<CalloutTone, { box: string; iconColor: string }> = {
   success: { box: "border-emerald-200 bg-emerald-50 text-emerald-700", iconColor: "text-emerald-600" },
   warning: { box: "border-amber-200 bg-amber-50 text-amber-800", iconColor: "text-amber-600" },
   error: { box: "border-red-200 bg-red-50 text-red-700", iconColor: "text-red-600" },
-  neutral: { box: "border-[rgba(23,23,20,0.09)] bg-neutral-50 text-neutral-600", iconColor: "text-neutral-500" },
+  neutral: { box: "border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] text-[var(--g3-muted)]", iconColor: "text-[var(--g3-muted)]" },
 };
 
 function ToneIcon({ tone }: { tone: CalloutTone }) {

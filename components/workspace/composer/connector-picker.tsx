@@ -121,14 +121,14 @@ export function ConnectorPicker({ selected, onChange, disabled = false }: Connec
         type="button"
         onClick={() => setOpen((value) => !value)}
         disabled={disabled}
-        className={`g3-btn g3-btn-ghost !min-h-0 !px-2 !py-1.5 text-sm ${selected.length > 0 ? "!bg-neutral-900 !text-white hover:!bg-neutral-700" : ""}`}
+        className={`g3-btn g3-btn-ghost !min-h-0 !px-2 !py-1.5 text-sm ${selected.length > 0 ? "!bg-[var(--g3-deep)] !text-white hover:!bg-[var(--g3-elevated)]" : ""}`}
         title="Activer des connecteurs pour ce message"
         aria-expanded={open}
         aria-haspopup="listbox"
       >
         <span aria-hidden>⧉</span>
         {selected.length > 0 && (
-          <span className="grid size-4 place-items-center rounded-full bg-white text-[10px] font-bold text-neutral-900" aria-hidden>
+          <span className="grid size-4 place-items-center rounded-full bg-[var(--g3-surface)] text-[10px] font-bold text-[var(--g3-text)]" aria-hidden>
             {selected.length}
           </span>
         )}
@@ -140,18 +140,18 @@ export function ConnectorPicker({ selected, onChange, disabled = false }: Connec
           aria-label="Connecteurs à activer pour ce message"
           className="g3-card absolute bottom-full left-0 z-50 mb-2 w-72 !p-2 shadow-xl"
         >
-          <p className="px-1.5 pb-1.5 text-[11px] font-semibold text-neutral-700">
+          <p className="px-1.5 pb-1.5 text-[11px] font-semibold text-[var(--g3-text-secondary)]">
             Connecteurs pour ce message
           </p>
 
           {loading && (
-            <p className="px-1.5 py-3 text-[11px] text-neutral-500">Chargement de vos connexions…</p>
+            <p className="px-1.5 py-3 text-[11px] text-[var(--g3-muted)]">Chargement de vos connexions…</p>
           )}
 
           {!loading && activeConnections.length === 0 && (
-            <div className="px-1.5 py-2 text-[11px] leading-relaxed text-neutral-500">
+            <div className="px-1.5 py-2 text-[11px] leading-relaxed text-[var(--g3-muted)]">
               {loadError ? "Connexions indisponibles pour l'instant." : "Aucune application connectée."}
-              <a href="/integrations" className="ml-1 font-semibold text-neutral-900 underline underline-offset-2">
+              <a href="/integrations" className="ml-1 font-semibold text-[var(--g3-text)] underline underline-offset-2">
                 Connecter une app
               </a>
             </div>
@@ -164,7 +164,7 @@ export function ConnectorPicker({ selected, onChange, disabled = false }: Connec
                 return (
                   <li key={connection.id}>
                     <label
-                      className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-[12px] transition-colors hover:bg-neutral-50 ${checked ? "bg-neutral-100" : ""}`}
+                      className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-[12px] transition-colors hover:bg-[var(--g3-elevated)] ${checked ? "bg-[var(--g3-elevated)]" : ""}`}
                     >
                       <input
                         type="checkbox"
@@ -177,8 +177,8 @@ export function ConnectorPicker({ selected, onChange, disabled = false }: Connec
                         entry={{ toolkit: connection.toolkit, label: connection.label, logo: logos.get(connection.toolkit) ?? null }}
                         size={22}
                       />
-                      <span className="min-w-0 flex-1 truncate font-medium text-neutral-800">{connection.label}</span>
-                      {checked && <span aria-hidden className="text-[10px] font-bold text-neutral-900">✓</span>}
+                      <span className="min-w-0 flex-1 truncate font-medium text-[var(--g3-text)]">{connection.label}</span>
+                      {checked && <span aria-hidden className="text-[10px] font-bold text-[var(--g3-text)]">✓</span>}
                     </label>
                   </li>
                 );
@@ -190,16 +190,16 @@ export function ConnectorPicker({ selected, onChange, disabled = false }: Connec
             <button
               type="button"
               onClick={() => onChange([])}
-              className="mt-1.5 w-full rounded-lg px-1.5 py-1.5 text-left text-[11px] text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-neutral-800"
+              className="mt-1.5 w-full rounded-lg px-1.5 py-1.5 text-left text-[11px] text-[var(--g3-muted)] transition-colors hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]"
             >
               Tout désélectionner ({selected.length})
             </button>
           )}
 
-          <div className="mt-1 border-t border-neutral-100 pt-1.5">
+          <div className="mt-1 border-t border-[var(--g3-border)] pt-1.5">
             <a
               href="/integrations"
-              className="block rounded-lg px-1.5 py-1 text-[11px] text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-neutral-900"
+              className="block rounded-lg px-1.5 py-1 text-[11px] text-[var(--g3-muted)] transition-colors hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]"
             >
               Gérer toutes les connexions →
             </a>

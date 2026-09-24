@@ -31,37 +31,37 @@ export function SectionHeader({
   return (
     <header className="mb-7">
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav aria-label="Fil d'Ariane" className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-neutral-400">
+        <nav aria-label="Fil d'Ariane" className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-[var(--g3-faint)]">
           {breadcrumbs.map((crumb, index) => (
             <span key={`${crumb.label}-${index}`} className="flex items-center gap-1.5">
               {index > 0 && <span aria-hidden="true">/</span>}
               {crumb.href ? (
-                <Link href={crumb.href} className="transition hover:text-neutral-700">
+                <Link href={crumb.href} className="transition hover:text-[var(--g3-text-secondary)]">
                   {crumb.label}
                 </Link>
               ) : (
-                <span className="font-medium text-neutral-600">{crumb.label}</span>
+                <span className="font-medium text-[var(--g3-muted)]">{crumb.label}</span>
               )}
             </span>
           ))}
         </nav>
       )}
       {eyebrow && (
-        <div className="text-[11px] font-semibold uppercase tracking-[.28em] text-neutral-400">{eyebrow}</div>
+        <div className="text-[11px] font-semibold uppercase tracking-[.28em] text-[var(--g3-faint)]">{eyebrow}</div>
       )}
       <div className="mt-1.5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-neutral-900 md:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--g3-text)] md:text-3xl">
           {title}
           {highlight && (
             <>
               {" "}
-              <em className="font-serif font-medium text-neutral-500">{highlight}</em>
+              <em className="font-serif font-medium text-[var(--g3-muted)]">{highlight}</em>
             </>
           )}
         </h1>
         {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}
       </div>
-      {description && <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-500">{description}</p>}
+      {description && <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--g3-muted)]">{description}</p>}
     </header>
   );
 }

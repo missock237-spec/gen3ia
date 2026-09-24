@@ -2,7 +2,6 @@ import Link from "next/link";
 
 import { AppDownloads } from "@/components/home/app-downloads";
 import { VitrineHeader } from "@/components/home/vitrine-header";
-import { GenChatWidget } from "@/components/gen/gen-chat";
 
 /**
  * Vitrine SaaS de Gen3ia — page d'accueil publique.
@@ -798,8 +797,6 @@ export default function HomePage() {
         </div>
       </footer>
 
-      {/* ---------- Chat Gen (isolé des outils d'agents) ---------- */}
-      <GenChatWidget />
     </div>
   );
 }

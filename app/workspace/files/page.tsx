@@ -91,15 +91,15 @@ export default function WorkspaceFilesPage() {
       ) : (
         <>
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-neutral-900">
-              Artefacts de conversation <span className="text-xs font-normal text-neutral-500">({artifacts.length})</span>
+            <h2 className="text-sm font-semibold text-[var(--g3-text)]">
+              Artefacts de conversation <span className="text-xs font-normal text-[var(--g3-muted)]">({artifacts.length})</span>
             </h2>
             <ArtifactPanel artifacts={artifacts} resolveFileUrl={resolveFileUrl} />
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-neutral-900">
-              Stockage permanent <span className="text-xs font-normal text-neutral-500">({files.length} fichiers)</span>
+            <h2 className="text-sm font-semibold text-[var(--g3-text)]">
+              Stockage permanent <span className="text-xs font-normal text-[var(--g3-muted)]">({files.length} fichiers)</span>
             </h2>
             {files.length === 0 ? (
               <EmptyState
@@ -112,10 +112,10 @@ export default function WorkspaceFilesPage() {
                 {files.map((file) => (
                   <li key={file.path} className="g3-card flex items-center justify-between gap-3 !p-3">
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-neutral-800" title={file.filename}>
+                      <p className="truncate text-xs font-semibold text-[var(--g3-text)]" title={file.filename}>
                         □ {file.filename}
                       </p>
-                      <p className="text-[10px] text-neutral-500">
+                      <p className="text-[10px] text-[var(--g3-muted)]">
                         {file.contentType ?? "fichier"}
                         {file.sizeBytes ? ` · ${file.sizeBytes} o` : ""}
                         {file.uploadedAt ? ` · ${formatRelative(file.uploadedAt)}` : ""}
@@ -128,7 +128,7 @@ export default function WorkspaceFilesPage() {
                 ))}
               </ul>
             )}
-            <p className="text-[11px] text-neutral-500">
+            <p className="text-[11px] text-[var(--g3-muted)]">
               Besoin de stockage structuré ? <Link href="/storage" className="underline underline-offset-2">Ouvrir le stockage complet →</Link>
             </p>
           </section>

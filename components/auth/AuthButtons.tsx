@@ -81,7 +81,7 @@ export default function AuthButtons() {
       <button
         type="button"
         onClick={() => authenticate("google")}
-        className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#dadce0] bg-white px-4 py-3 text-sm font-medium text-[#3c4043] transition hover:bg-[#f8f9fa] hover:shadow-sm"
+        className="flex w-full items-center justify-center gap-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3 text-sm font-medium text-[var(--g3-text-secondary)] transition hover:bg-[var(--g3-elevated)] hover:shadow-sm"
       >
         <GoogleLogo />
         Continuer avec Google
@@ -92,7 +92,7 @@ export default function AuthButtons() {
       <button
         type="button"
         onClick={() => authenticate("github")}
-        className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#24292f] bg-[#24292f] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#32383f]"
+        className="flex w-full items-center justify-center gap-3 rounded-xl border border-[var(--g3-border)] bg-[#24292f] px-4 py-3 text-sm font-medium text-white transition hover:bg-[var(--g3-elevated)]"
       >
         <GitHubLogo />
         Continuer avec GitHub

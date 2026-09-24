@@ -93,7 +93,7 @@ export default function HrTrainingPage() {
       </div>
 
       <div className={cardCls}>
-        <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Ajouter une formation</h2>
+        <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Ajouter une formation</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Intitulé">
             <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Maîtrise du CRM" />
@@ -126,15 +126,15 @@ export default function HrTrainingPage() {
       </div>
 
       <ModuleSection title={`Plan de formation (${trainings.length})`}>
-        {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+        {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
         {!loading && trainings.length === 0 ? <EmptyHint>Aucune formation pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2.5">
           {trainings.map((training) => (
             <article key={training.id} className={cardCls}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h3 className="text-[14px] font-bold text-neutral-900">{training.title}</h3>
-                  <p className="text-[12.5px] text-neutral-500">
+                  <h3 className="text-[14px] font-bold text-[var(--g3-text)]">{training.title}</h3>
+                  <p className="text-[12.5px] text-[var(--g3-muted)]">
                     {training.employeeName} · {CATEGORIES[training.category] ?? training.category} · {training.durationHours} h
                     {training.dueAt ? ` · échéance ${shortDate(training.dueAt)}` : ""}{training.provider ? ` · ${training.provider}` : ""}
                   </p>
@@ -143,10 +143,10 @@ export default function HrTrainingPage() {
               </div>
 
               <div className="mt-3 flex items-center gap-3">
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-neutral-100">
-                  <div className={`h-full rounded-full ${training.progress >= 100 ? "bg-emerald-500" : "bg-neutral-900"}`} style={{ width: `${training.progress}%` }} />
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--g3-elevated)]">
+                  <div className={`h-full rounded-full ${training.progress >= 100 ? "bg-emerald-500" : "bg-[var(--g3-deep)]"}`} style={{ width: `${training.progress}%` }} />
                 </div>
-                <span className="w-12 text-right text-[12.5px] font-bold text-neutral-700">{training.progress} %</span>
+                <span className="w-12 text-right text-[12.5px] font-bold text-[var(--g3-text-secondary)]">{training.progress} %</span>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">

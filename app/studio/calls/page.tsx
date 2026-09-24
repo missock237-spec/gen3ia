@@ -37,14 +37,14 @@ interface AgentOption {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  queued: "bg-neutral-100 text-neutral-600",
+  queued: "bg-[var(--g3-elevated)] text-[var(--g3-muted)]",
   ringing: "bg-amber-50 text-amber-700",
   "in-progress": "bg-sky-50 text-sky-700",
   completed: "bg-emerald-50 text-emerald-700",
   failed: "bg-red-50 text-red-700",
-  "no-answer": "bg-neutral-100 text-neutral-500",
+  "no-answer": "bg-[var(--g3-elevated)] text-[var(--g3-muted)]",
   busy: "bg-amber-50 text-amber-700",
-  canceled: "bg-neutral-100 text-neutral-500",
+  canceled: "bg-[var(--g3-elevated)] text-[var(--g3-muted)]",
 };
 
 const LIVE_STATUSES = new Set(["queued", "ringing", "in-progress"]);
@@ -149,8 +149,8 @@ export default function StudioCallsPage() {
     }
   }
 
-  const inputClass = "w-full rounded-xl border border-[rgba(23,23,20,0.12)] bg-white px-3 py-2 text-sm";
-  const labelClass = "block text-xs font-semibold text-neutral-500 mb-1";
+  const inputClass = "w-full rounded-xl border border-[rgba(23,23,20,0.12)] bg-[var(--g3-surface)] px-3 py-2 text-sm";
+  const labelClass = "block text-xs font-semibold text-[var(--g3-muted)] mb-1";
   const voiceAgents = agents.filter((agent) => agent.voiceEnabled);
 
   return (
@@ -165,10 +165,10 @@ export default function StudioCallsPage() {
       {message && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{message}</div>}
 
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-        <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5">
+        <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5">
           <h2 className="mb-3 text-base font-bold">Nouvel appel</h2>
           {voiceAgents.length === 0 ? (
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-[var(--g3-muted)]">
               Aucun agent vocal. Activez la voix sur un agent et attribuez-lui un numéro (Paramètres · Numéros virtuels).
             </p>
           ) : (
@@ -187,57 +187,57 @@ export default function StudioCallsPage() {
                 <label className={labelClass}>Objectif de l&apos;appel</label>
                 <textarea className={inputClass} rows={3} value={objective} onChange={(e) => setObjective(e.target.value)} maxLength={4_000} placeholder="Confirmer le rendez-vous de demain à 15h…" />
               </div>
-              <button type="button" onClick={() => void startCall()} disabled={busy || !selectedAgent || !to.trim()} className="rounded-xl bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">
+              <button type="button" onClick={() => void startCall()} disabled={busy || !selectedAgent || !to.trim()} className="rounded-xl bg-[var(--g3-deep)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">
                 {busy ? "Lancement…" : "Lancer l'appel"}
               </button>
             </div>
           )}
         </section>
 
-        <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5">
+        <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5">
           <h2 className="mb-3 text-base font-bold">Historique des appels</h2>
           {loading ? (
-            <p className="text-sm text-neutral-500">Chargement…</p>
+            <p className="text-sm text-[var(--g3-muted)]">Chargement…</p>
           ) : sessions.length === 0 ? (
-            <p className="text-sm text-neutral-500">Aucun appel pour le moment.</p>
+            <p className="text-sm text-[var(--g3-muted)]">Aucun appel pour le moment.</p>
           ) : (
             <ul className="grid gap-2">
               {sessions.map((session) => (
-                <li key={session.id} className="rounded-xl border border-[rgba(23,23,20,0.1)] bg-[#fafaf8] px-4 py-3">
+                <li key={session.id} className="rounded-xl border border-[rgba(23,23,20,0.1)] bg-[var(--g3-elevated)] px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{session.to}</p>
-                      <p className="text-xs text-neutral-500">
+                      <p className="text-xs text-[var(--g3-muted)]">
                         {new Date(session.createdAt).toLocaleString("fr-FR")} · {session.objective.slice(0, 60)}{session.objective.length > 60 ? "…" : ""}
                       </p>
                     </div>
-                    <span className={"shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold " + (STATUS_STYLES[session.status] ?? "bg-neutral-100")}>
+                    <span className={"shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold " + (STATUS_STYLES[session.status] ?? "bg-[var(--g3-elevated)]")}>
                       {session.status}
                     </span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => { setOpenId(openId === session.id ? null : session.id); setSummary(session.resume ?? null); }} className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold">
+                    <button type="button" onClick={() => { setOpenId(openId === session.id ? null : session.id); setSummary(session.resume ?? null); }} className="rounded-lg border border-[var(--g3-border-strong)] px-3 py-1.5 text-xs font-semibold">
                       {openId === session.id ? "Fermer" : LIVE_STATUSES.has(session.status) ? "Suivre en direct" : "Transcript"}
                     </button>
                     {!LIVE_STATUSES.has(session.status) && session.status === "completed" && (
-                      <button type="button" onClick={() => void requestSummary(session.id)} disabled={summaryBusy} className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+                      <button type="button" onClick={() => void requestSummary(session.id)} disabled={summaryBusy} className="rounded-lg bg-[var(--g3-deep)] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
                         {summaryBusy ? "…" : session.resume ? "Voir le résumé" : "Résumé IA"}
                       </button>
                     )}
                   </div>
 
                   {openId === session.id && (
-                    <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-3">
+                    <div className="mt-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-3">
                       {liveSession && LIVE_STATUSES.has(liveSession.status) && (
                         <p className="mb-2 text-xs font-bold text-sky-700">● Appel {liveSession.status} — transcript en direct</p>
                       )}
                       {liveSession?.lastError && <p className="mb-2 text-xs text-red-600">Erreur : {liveSession.lastError}</p>}
                       <div className="max-h-64 space-y-1.5 overflow-y-auto">
                         {(liveSession?.history ?? session.history ?? []).length === 0 && (
-                          <p className="text-xs text-neutral-500">Aucun échange enregistré pour l&apos;instant.</p>
+                          <p className="text-xs text-[var(--g3-muted)]">Aucun échange enregistré pour l&apos;instant.</p>
                         )}
                         {(liveSession?.history ?? session.history ?? []).map((item, index) => (
-                          <p key={index} className={"text-xs " + (item.role === "assistant" ? "text-emerald-800" : "text-neutral-800")}>
+                          <p key={index} className={"text-xs " + (item.role === "assistant" ? "text-emerald-800" : "text-[var(--g3-text)]")}>
                             <strong>{item.role === "assistant" ? "Agent" : "Correspondant"} :</strong> {item.text}
                           </p>
                         ))}

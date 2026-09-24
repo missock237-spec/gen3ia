@@ -40,6 +40,14 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     if (!conversation) return NextResponse.json({ error: "Conversation introuvable." }, { status: 404 });
 
     if (alreadyDecided) {
+      // Validation expirée : décision refusée clairement (409) — l'utilisateur
+      // relance une demande fraîche au lieu de valider un contexte obsolète.
+      if (approval.status === "expired") {
+        return NextResponse.json(
+          { error: "Cette validation a expiré (non décidée dans les 24 h). Relancez la demande pour un contexte à jour.", code: "CONFLICT", approval },
+          { status: 409 },
+        );
+      }
       return NextResponse.json({ approval, alreadyDecided: true });
     }
 
@@ -53,11 +61,16 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         run,
         approval,
       });
+      // Honnêteté : « approuvée et exécutée » uniquement si l'exécution a
+      // réellement réussi — un échec est affiché comme tel (audit 25-c).
+      const succeeded = outcome.step.status === "done";
       const message = await appendMessage({
         conversationId: approval.conversationId,
         userId: user.uid,
         role: "assistant",
-        content: `✓ Action approuvée et exécutée.\n\n${outcome.summary}`,
+        content: succeeded
+          ? `✓ Action approuvée et exécutée.\n\n${outcome.summary}`
+          : `⚠ Action approuvée mais l'exécution a échoué.\n\n${outcome.summary}`,
         runId: run.id,
         generationStatus: "complete",
       });

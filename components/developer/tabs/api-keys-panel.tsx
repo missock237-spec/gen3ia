@@ -85,7 +85,7 @@ export function ApiKeysPanel() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b text-xs text-neutral-400">
+                <tr className="border-b text-xs text-[var(--g3-faint)]">
                   <th className="p-3">Clé</th>
                   <th className="p-3">Projet</th>
                   <th className="p-3">Statut</th>
@@ -113,7 +113,7 @@ export function ApiKeysPanel() {
         )}
       </Panel>
       <Panel title="Contrat SDK" subtitle="Les deux éléments sont obligatoires pour une requête authentifiée par clé.">
-        <pre className="overflow-x-auto rounded-2xl bg-neutral-950 p-4 text-xs text-neutral-200">
+        <pre className="overflow-x-auto rounded-2xl bg-neutral-950 p-4 text-xs text-[var(--g3-text-secondary)]">
           {"Authorization: Bearer g3x_...\nX-Gen3ia-Project-Id: <project_id>"}
         </pre>
       </Panel>

@@ -25,6 +25,18 @@ export interface PlanGenerationInput {
     description: string;
     capabilities: string[];
   }>;
+
+  /**
+   * Sous-agents délégables (identité + spécialité du propriétaire).
+   * Une étape type "agent" avec agentId = id du sous-agent délègue la
+   * tâche à cet agent (réponse LLM avec ses propres instructions).
+   */
+  subAgents?: Array<{
+    id: string;
+    name: string;
+    description: string;
+    typeLabel?: string;
+  }>;
 }
 
 const SYSTEM_PROMPT = "You are Gen3ia Planner. Output valid JSON only.";
@@ -53,6 +65,11 @@ ${JSON.stringify(
   2,
 )}
 
+AVAILABLE SUB-AGENTS (delegation):
+${input.subAgents && input.subAgents.length > 0
+  ? JSON.stringify(input.subAgents, null, 2)
+  : "none — do NOT use step type \"agent\""}
+
 RULES:
 
 1. Produce only executable steps.
@@ -69,8 +86,9 @@ RULES:
 12. Keep the plan as small as possible.
 13. Use dependencies to transfer outputs between steps.
 14. Prefer deterministic tool execution over hallucinated tool results.
-15. maxConcurrency must be between 1 and 8.
-16. maxIterations must be between 1 and 20.
+15. Use step type "agent" (with agentId) ONLY to delegate a self-contained sub-task to one of the AVAILABLE SUB-AGENTS listed above. Never delegate to an agent not in the list. A sub-agent answers with its expertise; it cannot execute tools itself.
+16. maxConcurrency must be between 1 and 8.
+17. maxIterations must be between 1 and 20.
 
 Return ONLY valid JSON.
 ${correctiveHint ? `\nIMPORTANT — your previous response was rejected:\n${correctiveHint}\nFix it and return valid JSON again.\n` : ""}`;

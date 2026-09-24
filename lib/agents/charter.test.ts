@@ -130,10 +130,10 @@ describe("persona avancée dans la charte", () => {
 });
 
 describe("catalogue des types du wizard", () => {
-  it("expose les 7 options dont un type personnalisé", () => {
-    expect(WIZARD_AGENT_TYPES).toHaveLength(7);
+  it("expose les 10 options dont un type personnalisé (création simplifiée : code, marketing, enseignement, commercial, vocal…)", () => {
+    expect(WIZARD_AGENT_TYPES).toHaveLength(10);
     const keys = WIZARD_AGENT_TYPES.map((entry) => entry.key);
-    expect(keys).toEqual(["code", "marketing", "research", "content", "automation", "universal", "custom"]);
+    expect(keys).toEqual(["code", "marketing", "teaching", "sales", "voice", "research", "content", "automation", "universal", "custom"]);
   });
 
   it("couvre les types métier demandés (code, marketing, recherche, contenu)", () => {

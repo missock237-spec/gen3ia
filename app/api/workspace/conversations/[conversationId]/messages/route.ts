@@ -33,6 +33,7 @@ const BodySchema = z.object({
   provider: z.string().trim().max(60).optional(),
   model: z.string().trim().max(200).optional(),
   connectors: z.array(ConnectorSchema).max(8).optional(),
+  authorizationMode: z.enum(["always_ask", "ask_if_needed", "auto_allow"]).optional(),
 });
 
 /**
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       provider: body.provider,
       model: body.model,
       connectors: body.connectors,
+      authorizationMode: body.authorizationMode,
     });
     return NextResponse.json(result);
   } catch (error) {

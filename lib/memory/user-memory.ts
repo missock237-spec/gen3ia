@@ -1,24 +1,16 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
+import { assertSafeMemoryValue } from "./keyvalue";
 
 const COLLECTION = "userMemories";
-const MAX_VALUE_BYTES = 50_000;
 const MAX_ENTRIES = 200;
-const SECRET_PATTERNS = [/sk-[A-Za-z0-9_-]{20,}/i, /AIza[0-9A-Za-z_-]{20,}/, /gh[pousr]_[A-Za-z0-9_]{20,}/, /xox[baprs]-[A-Za-z0-9-]{20,}/i, /bearer\s+[A-Za-z0-9._-]{20,}/i, /password\s*[:=]/i, /api[_ -]?key\s*[:=]/i, /secret\s*[:=]/i];
 
 function ref(userId: string, key: string) { return adminDb.collection(COLLECTION).doc(`${userId}_${encodeURIComponent(key)}`); }
-function safeText(value: unknown): string {
-  const text = typeof value === "string" ? value : JSON.stringify(value);
-  if (!text) throw new Error("Memory value cannot be empty.");
-  if (Buffer.byteLength(text, "utf8") > MAX_VALUE_BYTES) throw new Error("Memory value exceeds the allowed size.");
-  if (SECRET_PATTERNS.some((pattern) => pattern.test(text))) throw new Error("Memory rejected because it appears to contain credentials or secrets.");
-  return text;
-}
 
 export async function remember(params: { userId: string; key: string; value: unknown; source?: "user" | "agent"; }): Promise<void> {
   if (!params.userId?.trim()) throw new Error("Memory requires userId.");
   if (!/^[\p{L}\p{N}._:-]{1,160}$/u.test(params.key)) throw new Error("Invalid memory key.");
-  const value = safeText(params.value);
+  const value = assertSafeMemoryValue(params.value);
   const docRef = ref(params.userId, params.key);
   const existing = await docRef.get();
   if (!existing.exists) {
@@ -32,6 +24,23 @@ export async function recall(params: { userId: string; key: string; }): Promise<
   const snap = await ref(params.userId, params.key).get();
   if (!snap.exists) return null;
   return String(snap.get("value") ?? "");
+}
+
+/**
+ * Lecture unitaire d'un souvenir clé/valeur (sert au contrat anti-écrasement
+ * de POST /api/memory : comparer la valeur entrante à l'existante avant
+ * d'autoriser l'écriture). Retourne null si la clé est inconnue.
+ */
+export async function getMemoryEntry(userId: string, key: string): Promise<{ key: string; value: string; source: string; updatedAt?: string } | null> {
+  const snap = await ref(userId, key).get();
+  if (!snap.exists) return null;
+  const updatedAt = snap.get("updatedAt");
+  return {
+    key: String(snap.get("key") ?? key),
+    value: String(snap.get("value") ?? ""),
+    source: String(snap.get("source") ?? "user"),
+    updatedAt: typeof updatedAt?.toMillis === "function" ? new Date(updatedAt.toMillis()).toISOString() : undefined,
+  };
 }
 
 export async function listMemories(userId: string, limit = 100) {

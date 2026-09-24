@@ -40,6 +40,9 @@ export function SouvenirsPanel(props: {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [confirmingKey, setConfirmingKey] = useState<string | null>(null);
+  // Conflit de clé (HTTP 409 MEMORY_KEY_EXISTS) : une écriture sur une clé
+  // existante avec une valeur différente exige une confirmation explicite.
+  const [conflict, setConflict] = useState<{ key: string; value: string } | null>(null);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -49,10 +52,12 @@ export function SouvenirsPanel(props: {
     );
   }, [props.memories, search]);
 
+  /** Écriture sans consentement d'écrasement : un 409 MEMORY_KEY_EXISTS ouvre la confirmation ci-dessous. */
   const remember = async () => {
     if (!key.trim() || !value.trim()) return;
     setBusy(true);
     setMessage("");
+    setConflict(null);
     try {
       const response = await authFetch("/api/memory", {
         method: "POST",
@@ -60,6 +65,11 @@ export function SouvenirsPanel(props: {
         body: JSON.stringify({ key: key.trim(), value: value.trim() }),
       });
       const data = await response.json();
+      if (response.status === 409 && data.code === "MEMORY_KEY_EXISTS") {
+        setConflict({ key: key.trim(), value: value.trim() });
+        setMessage(`Un souvenir existe déjà pour « ${key.trim()} » avec une valeur différente. Écraser ?`);
+        return;
+      }
       if (!response.ok) throw new Error(data.error ?? "Enregistrement impossible");
       setKey("");
       setValue("");
@@ -72,6 +82,33 @@ export function SouvenirsPanel(props: {
     }
   };
 
+  /** Confirmation d'écrasement après un 409 : ré-envoi explicite avec overwrite:true. */
+  const overwriteExisting = async () => {
+    if (!conflict) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await authFetch("/api/memory", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ key: conflict.key, value: conflict.value, overwrite: true }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Écrasement impossible");
+      setConflict(null);
+      setKey("");
+      setValue("");
+      setMessage("Souvenir remplacé.");
+      await props.onRefresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Écrasement impossible");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // L'édition d'une entrée existante est un remplacement volontaire (l'ancienne
+  // valeur était visible) : overwrite:true est envoyé d'office, pas de 409 attendu.
   const saveEdit = async (target: string) => {
     if (!editValue.trim()) return;
     setBusy(true);
@@ -80,7 +117,7 @@ export function SouvenirsPanel(props: {
       const response = await authFetch("/api/memory", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ key: target, value: editValue.trim() }),
+        body: JSON.stringify({ key: target, value: editValue.trim(), overwrite: true }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Modification impossible");
@@ -129,7 +166,7 @@ export function SouvenirsPanel(props: {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-serif text-xl font-semibold">Souvenirs texte</h2>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="mt-1 text-sm text-[var(--g3-muted)]">
             Informations clés/valeur que vous ou vos agents enregistrez pour les missions futures.
           </p>
         </div>
@@ -147,7 +184,7 @@ export function SouvenirsPanel(props: {
       <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
         <input
           value={key}
-          onChange={(event) => setKey(event.target.value)}
+          onChange={(event) => { setKey(event.target.value); setConflict(null); }}
           placeholder="clé (ex. projet.nom)"
           aria-label="Clé de mémoire"
           maxLength={160}
@@ -155,7 +192,7 @@ export function SouvenirsPanel(props: {
         />
         <input
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => { setValue(event.target.value); setConflict(null); }}
           placeholder="valeur à mémoriser"
           aria-label="Valeur de mémoire"
           maxLength={2000}
@@ -169,24 +206,35 @@ export function SouvenirsPanel(props: {
           Mémoriser
         </button>
       </div>
-      <p className="mt-2 text-xs text-neutral-400">
+      {conflict && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="alert">
+          <span>Cette clé existe déjà avec une autre valeur. Remplacer l&apos;ancienne valeur ?</span>
+          <button disabled={busy} onClick={overwriteExisting} className="min-h-8 rounded-full bg-amber-600 px-3 font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
+            Écraser et remplacer
+          </button>
+          <button disabled={busy} onClick={() => setConflict(null)} className="min-h-8 rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 font-semibold text-[var(--g3-muted)]">
+            Annuler
+          </button>
+        </div>
+      )}
+      <p className="mt-2 text-xs text-[var(--g3-faint)]">
         Astuce : préférez des clés structurées (client.acme.contact, projet.gen3ia.deadline…). Secrets, mots de
         passe et données bancaires sont refusés automatiquement.
       </p>
-      {message && <p className="mt-2 text-xs text-neutral-500" role="status">{message}</p>}
+      {message && <p className="mt-2 text-xs text-[var(--g3-muted)]" role="status">{message}</p>}
 
       {props.loaded && filtered.length > 0 && (
         <ul className="mt-4 space-y-2">
           {filtered.map((entry) => (
             <li
               key={entry.key}
-              className="rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 px-4 py-3"
+              className="rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] px-4 py-3"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-mono text-xs font-semibold text-neutral-700">{entry.key}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${entry.source === "agent" ? "bg-sky-100 text-sky-700" : "bg-neutral-200 text-neutral-600"}`}>
+                    <span className="truncate font-mono text-xs font-semibold text-[var(--g3-text-secondary)]">{entry.key}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${entry.source === "agent" ? "bg-sky-100 text-sky-700" : "bg-[var(--g3-elevated)] text-[var(--g3-muted)]"}`}>
                       {entry.source === "agent" ? "agent" : "vous"}
                     </span>
                   </div>
@@ -202,14 +250,14 @@ export function SouvenirsPanel(props: {
                       />
                       <div className="flex gap-2">
                         <button disabled={busy} onClick={() => saveEdit(entry.key)} className="g3-btn g3-btn-primary min-h-9 px-3 text-xs">Enregistrer</button>
-                        <button disabled={busy} onClick={() => { setEditingKey(null); setEditValue(""); }} className="min-h-9 rounded-full border border-[rgba(23,23,20,0.09)] bg-white px-3 text-xs font-semibold text-neutral-600">Annuler</button>
+                        <button disabled={busy} onClick={() => { setEditingKey(null); setEditValue(""); }} className="min-h-9 rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 text-xs font-semibold text-[var(--g3-muted)]">Annuler</button>
                       </div>
                     </div>
                   ) : (
-                    <p className="mt-1 break-words text-sm text-neutral-600">{String(entry.value)}</p>
+                    <p className="mt-1 break-words text-sm text-[var(--g3-muted)]">{String(entry.value)}</p>
                   )}
                   {entry.updatedAt && (
-                    <p className="mt-1 text-[11px] text-neutral-400">Mis à jour le {formatDate(entry.updatedAt)}</p>
+                    <p className="mt-1 text-[11px] text-[var(--g3-faint)]">Mis à jour le {formatDate(entry.updatedAt)}</p>
                   )}
                 </div>
                 {editingKey !== entry.key && (
@@ -218,7 +266,7 @@ export function SouvenirsPanel(props: {
                       disabled={busy}
                       onClick={() => copyValue(entry)}
                       aria-label={`Copier la valeur de ${entry.key}`}
-                      className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-2.5 text-[11px] font-semibold text-neutral-600 hover:bg-neutral-100"
+                      className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
                     >
                       Copier
                     </button>
@@ -226,7 +274,7 @@ export function SouvenirsPanel(props: {
                       disabled={busy}
                       onClick={() => { setEditingKey(entry.key); setEditValue(String(entry.value)); }}
                       aria-label={`Modifier ${entry.key}`}
-                      className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-2.5 text-[11px] font-semibold text-neutral-600 hover:bg-neutral-100"
+                      className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
                     >
                       Modifier
                     </button>
@@ -242,7 +290,7 @@ export function SouvenirsPanel(props: {
                         <button
                           disabled={busy}
                           onClick={() => setConfirmingKey(null)}
-                          className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-2.5 text-[11px] font-semibold text-neutral-500"
+                          className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)]"
                         >
                           Non
                         </button>
@@ -252,7 +300,7 @@ export function SouvenirsPanel(props: {
                         disabled={busy}
                         onClick={() => setConfirmingKey(entry.key)}
                         aria-label={`Oublier ${entry.key}`}
-                        className="min-h-9 rounded-md border border-red-200 bg-white px-2.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
+                        className="min-h-9 rounded-md border border-red-200 bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
                       >
                         Oublier
                       </button>
@@ -265,12 +313,12 @@ export function SouvenirsPanel(props: {
         </ul>
       )}
       {props.loaded && props.memories.length > 0 && filtered.length === 0 && (
-        <p className="mt-4 text-sm text-neutral-400">Aucun souvenir ne correspond à « {search} ».</p>
+        <p className="mt-4 text-sm text-[var(--g3-faint)]">Aucun souvenir ne correspond à « {search} ».</p>
       )}
       {props.loaded && props.memories.length === 0 && (
-        <p className="mt-4 text-sm text-neutral-400">
+        <p className="mt-4 text-sm text-[var(--g3-faint)]">
           Aucun souvenir enregistré pour le moment. Commencez par une clé simple, par exemple
-          <span className="font-mono text-neutral-500"> projet.objectif</span>.
+          <span className="font-mono text-[var(--g3-muted)]"> projet.objectif</span>.
         </p>
       )}
     </section>

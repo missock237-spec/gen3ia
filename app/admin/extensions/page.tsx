@@ -89,10 +89,10 @@ export default function AdminReviewPage() {
 
   if (sessionDisponible === false) {
     return (
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
+      <div className="rounded-3xl border border-white/10 bg-[var(--g3-surface)]/5 p-8 text-center">
         <h1 className="font-serif text-xl font-bold">Modération Marketplace</h1>
-        <p className="mt-2 text-sm text-neutral-400">Connectez-vous avec un compte administrateur.</p>
-        <Link href="/login" className="mt-4 inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-neutral-900">Se connecter</Link>
+        <p className="mt-2 text-sm text-[var(--g3-faint)]">Connectez-vous avec un compte administrateur.</p>
+        <Link href="/login" className="mt-4 inline-flex rounded-full bg-[var(--g3-surface)] px-5 py-2.5 text-sm font-semibold text-[var(--g3-text)]">Se connecter</Link>
       </div>
     );
   }
@@ -103,19 +103,19 @@ export default function AdminReviewPage() {
       {error && <div className="mb-5 rounded-xl border border-red-300/30 bg-red-300/10 p-4 text-sm text-red-300" role="alert">{error}</div>}
 
         {loading ? (
-          <p className="text-sm text-neutral-400">Chargement de la file…</p>
+          <p className="text-sm text-[var(--g3-faint)]">Chargement de la file…</p>
         ) : pending.length === 0 ? (
-          <p className="text-sm text-neutral-400">Aucune version en attente de modération.</p>
+          <p className="text-sm text-[var(--g3-faint)]">Aucune version en attente de modération.</p>
         ) : (
           <ul className="space-y-4">
             {pending.map((item) => {
               const noteKey = `${item.extensionId}@${item.version}`;
               return (
-                <li key={noteKey} className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <li key={noteKey} className="rounded-2xl border border-white/10 bg-[var(--g3-surface)]/5 p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <h2 className="font-semibold text-neutral-100">{item.extensionId} <span className="font-mono text-xs text-neutral-400">v{item.version}</span></h2>
-                      <p className="mt-1 text-xs text-neutral-400">
+                      <h2 className="font-semibold text-[var(--g3-text-secondary)]">{item.extensionId} <span className="font-mono text-xs text-[var(--g3-faint)]">v{item.version}</span></h2>
+                      <p className="mt-1 text-xs text-[var(--g3-faint)]">
                         {item.author ? `Par ${item.author} · ` : ""}{item.pricing?.model ?? "free"}{item.submittedAt ? ` · soumis le ${new Date(item.submittedAt).toLocaleString("fr-FR")}` : ""}
                       </p>
                     </div>
@@ -125,18 +125,18 @@ export default function AdminReviewPage() {
                       <button disabled={busy} onClick={() => suspend(item.extensionId)} className="rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-400/20 disabled:opacity-40">Suspendre</button>
                     </div>
                   </div>
-                  {item.changelog && <p className="mt-3 text-sm text-neutral-300">{item.changelog}</p>}
+                  {item.changelog && <p className="mt-3 text-sm text-[var(--g3-faint)]">{item.changelog}</p>}
                   <div className="mt-3 flex flex-wrap gap-1.5">
-                    {item.permissions.map((permission) => <span key={permission} className="rounded-md bg-white/10 px-2 py-0.5 font-mono text-[10px] text-neutral-300">{permission}</span>)}
+                    {item.permissions.map((permission) => <span key={permission} className="rounded-md bg-[var(--g3-surface)]/10 px-2 py-0.5 font-mono text-[10px] text-[var(--g3-faint)]">{permission}</span>)}
                   </div>
-                  {item.tools.length > 0 && <p className="mt-2 text-[11px] text-neutral-400">Tools : {item.tools.join(", ")}</p>}
+                  {item.tools.length > 0 && <p className="mt-2 text-[11px] text-[var(--g3-faint)]">Tools : {item.tools.join(", ")}</p>}
                   <input
                     value={notes[noteKey] ?? ""}
                     onChange={(event) => setNotes((current) => ({ ...current, [noteKey]: event.target.value }))}
                     placeholder="Note de modération (facultatif)"
                     aria-label={`Note pour ${noteKey}`}
                     maxLength={500}
-                    className="mt-3 w-full rounded-lg border border-white/10 bg-neutral-900/60 px-3 py-2 text-xs text-neutral-100 outline-none focus:border-sky-400/60"
+                    className="mt-3 w-full rounded-lg border border-white/10 bg-[var(--g3-deep)]/60 px-3 py-2 text-xs text-[var(--g3-text-secondary)] outline-none focus:border-sky-400/60"
                   />
                 </li>
               );

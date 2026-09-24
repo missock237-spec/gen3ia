@@ -12,27 +12,27 @@ import { authFetch } from "@/lib/firebase/auth-client";
  */
 
 export const inputCls =
-  "w-full rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 text-[14px] text-neutral-900 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 disabled:opacity-50";
-export const labelCls = "mb-1.5 block text-[12px] font-semibold uppercase tracking-wide text-neutral-500";
+  "w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3.5 py-2.5 text-[14px] text-[var(--g3-text)] placeholder:text-[var(--g3-faint)] outline-none transition focus:border-[var(--g3-border)] focus:ring-2 focus:ring-neutral-900/10 disabled:opacity-50";
+export const labelCls = "mb-1.5 block text-[12px] font-semibold uppercase tracking-wide text-[var(--g3-muted)]";
 export const btnPrimaryCls =
-  "inline-flex items-center justify-center gap-2 rounded-xl bg-neutral-900 px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--g3-deep)] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[var(--g3-elevated)] disabled:cursor-not-allowed disabled:opacity-40";
 export const btnGhostCls =
-  "inline-flex items-center justify-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-[12.5px] font-semibold text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-900 disabled:opacity-40";
-export const cardCls = "rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]";
+  "inline-flex items-center justify-center gap-1.5 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3 py-2 text-[12.5px] font-semibold text-[var(--g3-text-secondary)] transition hover:border-neutral-400 hover:text-[var(--g3-text)] disabled:opacity-40";
+export const cardCls = "rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]";
 
 export function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <label className="block">
       <span className={labelCls}>{label}</span>
       {children}
-      {hint ? <span className="mt-1 block text-[11.5px] text-neutral-400">{hint}</span> : null}
+      {hint ? <span className="mt-1 block text-[11.5px] text-[var(--g3-faint)]">{hint}</span> : null}
     </label>
   );
 }
 
 type PillTone = "neutral" | "green" | "amber" | "red" | "blue";
 const TONE_CLS: Record<PillTone, string> = {
-  neutral: "bg-neutral-100 text-neutral-600",
+  neutral: "bg-[var(--g3-elevated)] text-[var(--g3-muted)]",
   green: "bg-emerald-50 text-emerald-700",
   amber: "bg-amber-50 text-amber-700",
   red: "bg-red-50 text-red-700",
@@ -46,10 +46,10 @@ export function Pill({ tone = "neutral", children }: { tone?: PillTone; children
 export function StatCard({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: PillTone }) {
   return (
     <div className={cardCls}>
-      <p className="text-[11.5px] font-semibold uppercase tracking-wide text-neutral-400">{label}</p>
-      <p className="mt-1.5 text-[22px] font-bold leading-tight text-neutral-900">{value}</p>
+      <p className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--g3-faint)]">{label}</p>
+      <p className="mt-1.5 text-[22px] font-bold leading-tight text-[var(--g3-text)]">{value}</p>
       {hint ? (
-        <p className="mt-1 text-[12px] text-neutral-500">
+        <p className="mt-1 text-[12px] text-[var(--g3-muted)]">
           {tone ? <Pill tone={tone}>{hint}</Pill> : hint}
         </p>
       ) : null}
@@ -58,14 +58,14 @@ export function StatCard({ label, value, hint, tone }: { label: string; value: s
 }
 
 export function EmptyHint({ children }: { children: React.ReactNode }) {
-  return <p className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-4 py-6 text-center text-[13px] text-neutral-500">{children}</p>;
+  return <p className="rounded-xl border border-dashed border-[var(--g3-border-strong)] bg-[var(--g3-elevated)] px-4 py-6 text-center text-[13px] text-[var(--g3-muted)]">{children}</p>;
 }
 
 export function ModuleSection({ title, children, actions }: { title: string; children: React.ReactNode; actions?: React.ReactNode }) {
   return (
     <section className="mt-8">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[15px] font-bold text-neutral-900">{title}</h2>
+        <h2 className="text-[15px] font-bold text-[var(--g3-text)]">{title}</h2>
         {actions}
       </div>
       {children}

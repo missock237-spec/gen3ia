@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApprovalCard } from "./approval-card";
 import { ArtifactPanel } from "./artifact-panel";
-import { Composer } from "./composer/composer";
+import { Composer, readAuthorizationMode, type ComposerSendOptions } from "./composer/composer";
 import { ConversationList } from "./conversation-list";
 import { ContextDrawer } from "./context-drawer";
 import { MessageThread } from "./message-thread";
@@ -21,6 +21,7 @@ import type {
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
 import { streamConversationTurn } from "@/lib/domain/conversations/stream-client";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
+import type { AuthorizationMode } from "@/lib/security/authorization-mode";
 
 /**
  * Orchestrateur de l'espace conversation (layout 3 colonnes) :
@@ -51,6 +52,8 @@ interface ConversationDetail {
 interface LiveTurn {
   status: string;
   content: string;
+  /** URL de l'image générée pendant ce tour (affichée immédiatement). */
+  imageUrl?: string;
   run: ConversationRun | null;
   approvals: ConversationApproval[];
   artifacts: ConversationArtifact[];
@@ -188,7 +191,14 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         break;
       case "message_complete":
         // Le texte final remplace le buffer en cours (source de vérité serveur).
-        setLive((current) => ({ ...(current ?? emptyLive()), content: event.message.content, status: "" }));
+        // L'image générée du tour est affichée immédiatement (sans attendre
+        // le rechargement de l'état serveur).
+        setLive((current) => ({
+          ...(current ?? emptyLive()),
+          content: event.message.content,
+          imageUrl: event.message.imageUrl ?? current?.imageUrl,
+          status: "",
+        }));
         break;
       case "done":
         break;
@@ -209,8 +219,9 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   );
 
   const sendMessage = useCallback(
-    async (message: string, attachments: MessageAttachment[]) => {
+    async (message: string, attachments: MessageAttachment[], options?: ComposerSendOptions) => {
       if (!conversationId) return;
+      const authorizationMode = options?.authorizationMode ?? readAuthorizationMode();
       setGenerating(true);
       setError("");
       // Affichage immédiat du message utilisateur (optimiste, résilient).
@@ -236,6 +247,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           attachments,
           projectId,
           connectors,
+          authorizationMode,
           onEvent: consumeEvent,
         });
       } catch (streamError) {
@@ -249,6 +261,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               attachments,
               projectId,
               ...(connectors.length > 0 ? { connectors } : {}),
+              ...(authorizationMode ? { authorizationMode } : {}),
             }),
           });
           if (!response.ok) {
@@ -288,8 +301,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
     if (!raw) return;
     sessionStorage.removeItem(key);
     try {
-      const pending = JSON.parse(raw) as { message: string; attachments?: MessageAttachment[] };
-      if (pending.message) void sendMessage(pending.message, pending.attachments ?? []);
+      const pending = JSON.parse(raw) as { message: string; attachments?: MessageAttachment[]; authorizationMode?: AuthorizationMode };
+      if (pending.message) void sendMessage(pending.message, pending.attachments ?? [], { authorizationMode: pending.authorizationMode });
     } catch {
       /* marqueur illisible : ignoré */
     }
@@ -329,12 +342,12 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   const welcome = useMemo(
     () => (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 text-center">
-        <div className="grid size-14 place-items-center rounded-2xl bg-neutral-900 text-2xl text-white" aria-hidden>
+        <div className="grid size-14 place-items-center rounded-2xl bg-[var(--g3-deep)] text-2xl text-white" aria-hidden>
           ✦
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-neutral-900">Que voulez-vous accomplir ?</h1>
-          <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-neutral-500">
+          <h1 className="text-lg font-semibold text-[var(--g3-text)]">Que voulez-vous accomplir ?</h1>
+          <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-[var(--g3-muted)]">
             Décrivez un objectif : Gen3ia propose un plan lisible, utilise vos applications connectées
             avec votre validation, et range les livrables (documents, images, rapports, fichiers) dans la conversation.
           </p>
@@ -360,7 +373,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               try {
                 sessionStorage.setItem(
                   `${PENDING_MESSAGE_PREFIX}${data.conversation.id}`,
-                  JSON.stringify({ message, attachments }),
+                  JSON.stringify({ message, attachments, authorizationMode: readAuthorizationMode() }),
                 );
               } catch {
                 /* stockage indisponible : le message sera simplement renvoyé */
@@ -396,10 +409,10 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   );
 
   return (
-    <div className="g3-card flex h-[calc(100dvh-9.5rem)] min-h-[520px] gap-3 !p-3">
+    <div className="relative flex h-full min-h-0 gap-2 bg-[var(--g3-surface)] p-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:gap-3 lg:p-3">
       {/* Colonne gauche — conversations récentes, projets, recherche */}
       <div
-        className={`shrink-0 transition-all ${listCollapsed ? "w-14" : "w-64"} border-r border-neutral-100 pr-3 max-lg:hidden`}
+        className={`shrink-0 transition-all ${listCollapsed ? "w-14" : "w-64"} border-r border-[var(--g3-border)] pr-3 max-lg:hidden`}
       >
         <ConversationList
           conversations={conversations}
@@ -417,10 +430,10 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
       {/* Colonne centrale — conversation */}
       <div className="flex min-w-0 flex-1 flex-col">
         {detail && (
-          <div className="mb-2 flex items-center justify-between gap-2 border-b border-neutral-100 pb-2">
+          <div className="mb-2 flex items-center justify-between gap-2 border-b border-[var(--g3-border)] px-3 pt-2 pb-2 lg:px-0 lg:pt-0">
             <div className="min-w-0">
-              <h1 className="truncate text-sm font-semibold text-neutral-900">{detail.conversation.title || "Sans titre"}</h1>
-              <p className="text-[11px] text-neutral-500">
+              <h1 className="truncate text-sm font-semibold text-[var(--g3-text)]">{detail.conversation.title || "Sans titre"}</h1>
+              <p className="text-[11px] text-[var(--g3-muted)]">
                 {detail.project ? `Projet : ${detail.project.name}` : "Sans projet"}
                 {detail.messages.length > 0 ? ` · ${detail.messages.length} messages` : ""}
               </p>
@@ -436,18 +449,18 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           </div>
         )}
 
-        <div ref={threadScrollRef} className="flex-1 overflow-y-auto pr-1">
+        <div ref={threadScrollRef} className="flex-1 overflow-y-auto pl-3 pr-3 pt-3 lg:pl-0 lg:pr-1 lg:pt-0">
           {loadingDetail ? (
             <div className="space-y-3 py-4" aria-busy>
               {[0, 1, 2].map((i) => (
-                <div key={i} className={`h-16 animate-pulse rounded-2xl bg-neutral-100 ${i % 2 ? "ml-auto w-2/3" : "w-3/4"}`} />
+                <div key={i} className={`h-16 animate-pulse rounded-2xl bg-[var(--g3-elevated)] ${i % 2 ? "ml-auto w-2/3" : "w-3/4"}`} />
               ))}
             </div>
           ) : error && !detail ? (
             <div className="flex flex-1 items-center justify-center">
               <div className="g3-card max-w-md text-center">
-                <p className="text-sm font-semibold text-neutral-900">{error}</p>
-                <p className="mt-1 text-xs text-neutral-500">Choisissez une conversation dans la liste ou créez-en une nouvelle.</p>
+                <p className="text-sm font-semibold text-[var(--g3-text)]">{error}</p>
+                <p className="mt-1 text-xs text-[var(--g3-muted)]">Choisissez une conversation dans la liste ou créez-en une nouvelle.</p>
               </div>
             </div>
           ) : centerEmpty ? (
@@ -461,6 +474,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               generating={generating}
               streamingContent={live ? live.content : undefined}
               streamingStatus={live?.status}
+              liveImageUrl={live?.imageUrl}
               liveRun={live?.run}
               onDecide={decideApproval}
             />
@@ -468,13 +482,13 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         </div>
 
         {error && detail && (
-          <p className="mt-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+          <p className="mx-3 mt-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 lg:mx-0" role="alert">
             {error}
           </p>
         )}
 
         {detail && (
-          <div className="mt-2 border-t border-neutral-100 pt-2">
+          <div className="mt-2 border-t border-[var(--g3-border)] px-3 pt-2 lg:px-0">
             <Composer
               onSend={sendMessage}
               disabled={generating}
@@ -489,8 +503,9 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         )}
       </div>
 
-      {/* Panneau droit optionnel — plan, outils, validations, livrables */}
-      <div className={`shrink-0 transition-all ${drawerOpen ? "w-80 border-l border-neutral-100 pl-3" : "w-10"}`}>
+      {/* Panneau droit optionnel — plan, outils, validations, livrables
+          (desktop uniquement : sur mobile le fil occupe toute la largeur) */}
+      <div className={`shrink-0 transition-all max-lg:hidden ${drawerOpen ? "w-80 border-l border-[var(--g3-border)] pl-3" : "w-10"}`}>
         {detail && (
           <ContextDrawer
             open={drawerOpen}
@@ -521,8 +536,8 @@ export function ArtifactsSection({
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-sm font-semibold text-neutral-900">{title}</h2>
-        {description && <p className="mt-0.5 text-xs text-neutral-500">{description}</p>}
+        <h2 className="text-sm font-semibold text-[var(--g3-text)]">{title}</h2>
+        {description && <p className="mt-0.5 text-xs text-[var(--g3-muted)]">{description}</p>}
       </div>
       <ArtifactPanel artifacts={artifacts} />
     </section>

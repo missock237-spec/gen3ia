@@ -119,7 +119,7 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
 
   if (artifacts.length === 0) {
     return (
-      <div className={`rounded-xl border border-dashed border-neutral-300 p-4 text-center text-xs text-neutral-500 ${className}`}>
+      <div className={`rounded-xl border border-dashed border-[var(--g3-border-strong)] p-4 text-center text-xs text-[var(--g3-muted)] ${className}`}>
         <p className="text-2xl" aria-hidden>▣</p>
         <p className="mt-1">Aucun livrable pour le moment. Les documents, images, rapports et fichiers produits par l&apos;agent apparaîtront ici.</p>
       </div>
@@ -157,15 +157,15 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
                 <button
                   type="button"
                   onClick={() => select(artifact)}
-                  className="group w-full rounded-xl border border-neutral-200 bg-white p-3 text-left transition-all hover:border-neutral-400 hover:shadow-sm"
+                  className="group w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-3 text-left transition-all hover:border-neutral-400 hover:shadow-sm"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-neutral-100 text-sm text-neutral-600" aria-hidden>
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--g3-elevated)] text-sm text-[var(--g3-muted)]" aria-hidden>
                       {ARTIFACT_TYPE_ICONS[artifact.type] ?? "□"}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-neutral-800">{artifact.title}</p>
-                      <p className="text-[10px] text-neutral-500">
+                      <p className="truncate text-xs font-semibold text-[var(--g3-text)]">{artifact.title}</p>
+                      <p className="text-[10px] text-[var(--g3-muted)]">
                         {ARTIFACT_TYPE_LABELS[artifact.type] ?? artifact.type}
                         {artifact.versions.length > 1 ? ` · v${artifact.versions[0].version}` : ""}
                         {artifact.storagePath ? " · fichier" : ""}
@@ -180,12 +180,12 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
       )}
 
       {selected && currentVersion && (
-        <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 bg-neutral-50/70 px-3 py-2">
+        <div className="overflow-hidden rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--g3-border)] bg-[var(--g3-elevated)]/70 px-3 py-2">
             <button
               type="button"
               onClick={() => setSelectedId(null)}
-              className="text-xs font-medium text-neutral-600 hover:text-neutral-900"
+              className="text-xs font-medium text-[var(--g3-muted)] hover:text-[var(--g3-text)]"
               aria-label="Retour à la liste des livrables"
             >
               ← {ARTIFACT_TYPE_LABELS[selected.type] ?? selected.type}
@@ -205,9 +205,9 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
 
           <div className="px-3 py-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-neutral-900">{selected.title}</p>
+              <p className="text-sm font-semibold text-[var(--g3-text)]">{selected.title}</p>
               {selected.versions.length > 1 && (
-                <label className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+                <label className="flex items-center gap-1.5 text-[11px] text-[var(--g3-muted)]">
                   Version
                   <select
                     value={versionIndex}
@@ -225,7 +225,7 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
                 </label>
               )}
             </div>
-            {currentVersion.note && <p className="mt-0.5 text-[11px] text-neutral-500">{currentVersion.note}</p>}
+            {currentVersion.note && <p className="mt-0.5 text-[11px] text-[var(--g3-muted)]">{currentVersion.note}</p>}
 
             {/* Prévisualisation selon le type d'artefact */}
             {selected.type === "image" && (previewUrl ?? currentVersion.url) && (
@@ -233,7 +233,7 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
               <img
                 src={previewUrl ?? currentVersion.url}
                 alt={selected.title}
-                className="mt-2 max-h-96 w-full rounded-lg border border-neutral-200 object-contain"
+                className="mt-2 max-h-96 w-full rounded-lg border border-[var(--g3-border)] object-contain"
               />
             )}
 
@@ -246,14 +246,14 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
             {selected.type === "table" && currentVersion.content && <TableView content={currentVersion.content} />}
 
             {(selected.type === "document" || selected.type === "report") && currentVersion.content && (
-              <div className="mt-2 max-h-96 overflow-y-auto rounded-lg border border-neutral-100 p-3">
+              <div className="mt-2 max-h-96 overflow-y-auto rounded-lg border border-[var(--g3-border)] p-3">
                 <MarkdownContent content={currentVersion.content} />
               </div>
             )}
 
             {selected.type === "file" && selected.storagePath && (
-              <div className="mt-2 flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2.5">
-                <p className="truncate text-xs text-neutral-700">
+              <div className="mt-2 flex items-center justify-between rounded-lg border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2.5">
+                <p className="truncate text-xs text-[var(--g3-text-secondary)]">
                   □ {selected.filename ?? selected.storagePath.split("/").pop()}
                 </p>
                 <button
@@ -268,7 +268,7 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
             )}
 
             {selected.storagePath && selected.type !== "file" && (
-              <p className="mt-1.5 text-[10px] text-neutral-400">
+              <p className="mt-1.5 text-[10px] text-[var(--g3-faint)]">
                 Fichier permanent · {selected.filename ?? selected.storagePath.split("/").pop()}
               </p>
             )}
@@ -295,12 +295,12 @@ export function TableView({ content }: { content: string }) {
   const [head, ...body] = rows;
 
   return (
-    <div className="mt-2 max-h-96 overflow-auto rounded-lg border border-neutral-100">
+    <div className="mt-2 max-h-96 overflow-auto rounded-lg border border-[var(--g3-border)]">
       <table className="w-full text-left text-xs">
-        <thead className="bg-neutral-50">
+        <thead className="bg-[var(--g3-elevated)]">
           <tr>
             {head.map((cell, index) => (
-              <th key={index} className="px-2.5 py-1.5 font-semibold text-neutral-700">
+              <th key={index} className="px-2.5 py-1.5 font-semibold text-[var(--g3-text-secondary)]">
                 {cell}
               </th>
             ))}
@@ -310,7 +310,7 @@ export function TableView({ content }: { content: string }) {
           {body.slice(0, 200).map((row, rowIndex) => (
             <tr key={rowIndex}>
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} className="px-2.5 py-1.5 text-neutral-700">
+                <td key={cellIndex} className="px-2.5 py-1.5 text-[var(--g3-text-secondary)]">
                   {cell}
                 </td>
               ))}
@@ -318,7 +318,7 @@ export function TableView({ content }: { content: string }) {
           ))}
         </tbody>
       </table>
-      {body.length > 200 && <p className="px-2.5 py-1.5 text-[10px] text-neutral-400">200 premières lignes affichées sur {body.length}.</p>}
+      {body.length > 200 && <p className="px-2.5 py-1.5 text-[10px] text-[var(--g3-faint)]">200 premières lignes affichées sur {body.length}.</p>}
     </div>
   );
 }
@@ -332,7 +332,7 @@ export function ArtifactAttachmentsBadges({
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5">
       {artifacts.map((artifact) => (
-        <span key={artifact.id} className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[10px] text-neutral-600">
+        <span key={artifact.id} className="inline-flex items-center gap-1 rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2 py-0.5 text-[10px] text-[var(--g3-muted)]">
           <span aria-hidden>{ARTIFACT_TYPE_ICONS[artifact.type] ?? "□"}</span>
           {artifact.title.slice(0, 40)}
         </span>

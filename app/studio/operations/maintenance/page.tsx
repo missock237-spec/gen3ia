@@ -100,7 +100,7 @@ export default function OperationsMaintenancePage() {
       </div>
 
       <div className={cardCls}>
-        <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Nouvel actif à maintenir</h2>
+        <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Nouvel actif à maintenir</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Nom de l'actif">
             <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Climatiseur bureau 2" />
@@ -123,15 +123,15 @@ export default function OperationsMaintenancePage() {
       </div>
 
       <ModuleSection title={`Actifs (${assets.length})`}>
-        {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+        {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
         {!loading && assets.length === 0 ? <EmptyHint>Aucun actif pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2.5">
           {assets.map((asset) => (
             <article key={asset.id} className={cardCls}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h3 className="text-[14px] font-bold text-neutral-900">{asset.name}</h3>
-                  <p className="text-[12.5px] text-neutral-500">
+                  <h3 className="text-[14px] font-bold text-[var(--g3-text)]">{asset.name}</h3>
+                  <p className="text-[12.5px] text-[var(--g3-muted)]">
                     {asset.location ? `${asset.location} · ` : ""}tous les {asset.intervalDays} j · dernière {shortDate(asset.lastDoneAt)} · prochaine {shortDate(asset.nextDueAt)} · {asset.maintenanceCount} intervention(s)
                   </p>
                 </div>
@@ -141,7 +141,7 @@ export default function OperationsMaintenancePage() {
               </div>
 
               {recordingId === asset.id ? (
-                <div className="mt-3 rounded-xl bg-neutral-50 p-3.5">
+                <div className="mt-3 rounded-xl bg-[var(--g3-elevated)] p-3.5">
                   <div className="grid gap-3 md:grid-cols-3">
                     <Field label="Intervenant">
                       <input className={inputCls} value={record.technician} onChange={(e) => setRecord({ ...record, technician: e.target.value })} placeholder="Tech. Dupont" />

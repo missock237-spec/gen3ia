@@ -335,3 +335,118 @@ Stage Summary:
 - Production gen3ia.online = commit f8ae1fe (+ d0be45e script e2e), READY (auto-deploy Git).
 - Gen3ia dispose d'un Workshop IDE unifié façon VS Code/Cursor : le terminal n'est plus un panneau isolé mais le flux des exécutions de ses agents (lecture seule, audit complet, contrôle arrêt session/arrêt d'urgence), l'éditeur Monaco est relié au terminal (une erreur cliquée ouvre le fichier à la ligne), et toute app HTML créée par un agent affiche un bouton d'aperçu en direct directement dans la conversation.
 - Rappel permanent : rotation des clés transmises en clair (Upstash, Qdrant, GitHub, Vercel, Agnes).
+
+---
+Task ID: 21 (préparation — capture manquante)
+Agent: Super Z (principal)
+Task: « Analyser la capture Screenshot_20260923_141348.jpg puis la reproduire à l'identique dans le chat IA et le chat d'agent IA de tout l'ensemble du projet ».
+
+Work Log:
+- Sandbox réinitialisé (gen3ia absent du disque) → re-clonage GitHub OK (remote missock237-spec/gen3ia, HEAD 176e6b1 = Task 20 déjà poussé).
+- npm install OK (587 paquets, NEXT OK) ; vercel link recréé (.env.local OK).
+- Sync git : clone frais = HEAD distant → AUCUNE modification non poussée (rien à pusher, conformité « push les directement » vérifiée).
+- Cibles localisées et lues intégralement : components/gen/gen-chat.tsx (chat IA page d'accueil, widget flottant Gen) ; components/agent/agent-chat-workshop.tsx (rail agents) + agent-chat-panel.tsx 654 lignes (chat d'agent IA Studio).
+- RECHERCHE EXHAUSTIVE de la capture (find global, tous montages, /home /tmp /var/tmp, tout fichier image du 22-23 sept) : LE FICHIER N'EST PAS ARRIVÉ SUR LE SERVEUR (upload perdu — reset sandbox simultané). Aucune image du jour n'existe nulle part.
+- Décision d'intégrité : ne JAMAIS fabriquer une reproduction d'une image non vue. Blocage signalé à l'utilisateur → nouvelle demande d'upload. Terrain 100% prêt pour agir dès réception.
+
+Stage Summary:
+- Environnement restauré et synchronisé (production gen3ia.online = 176e6b1, IDE unifié Task 20 en ligne).
+- Capture manquante : utilisateur doit re-envoyer Screenshot_20260923_141348.jpg. Dès réception : analyse → reproduction à l'identique dans gen-chat.tsx ET agent-chat-panel/workshop.tsx (+ tout autre chat du projet si la capture s'y applique).
+
+---
+Task ID: 22
+Agent: Super Z (principal)
+Task: « Analyser la capture puis la reproduire à l'identique dans le chat IA et le chat d'agent IA de tout l'ensemble du projet » (capture non parvenue au serveur → reproduction pilotée par l'analyse détaillée fournie par l'utilisateur).
+
+Work Log:
+- COMPOSER UNIFIÉ (components/ui/command-composer.tsx) : réplique fidèle de la maquette — grande zone de texte anthracite (#1b1b1d) fortement arrondie (28px) sur fond sombre, placeholder exact « Posez n'importe quelle question… Tapez @ pour mentionner des compétences ou connecteurs, ou / pour les commandes », bouton « + » à gauche (pièce jointe réelle ou sources connectées), sélecteur « Toujours demander ▼ » centré (3 modes HITL : Toujours demander / Demander si nécessaire / Autoriser automatiquement, persisté localStorage), 🎙 (Web Speech API fr-FR) puis bouton circulaire ↑ à droite (sombre désactivé, blanc actif — état exact de la capture).
+- Menus sombres « @ » (compétences/connecteurs via /api/integrations/mention, debounce 180ms, puces activées) et « / » (commandes rapides filtrées) avec navigation clavier ↑↓/Entrée/Tab/Échap.
+- BUG CORRIGÉ en test navigateur : les matchs vides ("@" ou "/" nus) renvoient "" (falsy) — conditions changées pour des comparaisons explicites à null sinon les menus ne s'ouvraient jamais.
+- CHAT IA (gen-chat.tsx) : panneau entièrement thématisé sombre (en-tête, bulles, launcher), CommandComposer branché — @ wired sur les connecteurs (sélection → selectedConnectors envoyés à /api/gen/chat), commandes réelles (Choisir des connecteurs, Effacer la conversation), bouton « + » ouvre les sources connectées (pas de faux upload : Gen est lecture seule).
+- CHAT D'AGENT IA (agent-chat-panel.tsx) : thème sombre complet (en-tête, compétences, historique, bulles, plan d'exécution, cartes d'approbation), PromptBox remplacé par le CommandComposer (même design que le chat IA), fichiers réels conservés (uploadPermanentFiles), commandes (Nouvelle conversation / Historique / Personnaliser / Connecteurs / Joindre un fichier).
+- BACKEND HITL : lib/security/authorization-mode.ts (3 modes + plancher de sécurité — ads.publish, file.delete, phone.call JAMAIS auto-approuvés) ; /api/agent/chat accepte authorizationMode (zod) et applyAutoApprovalPolicy : en auto_allow, approuve automatiquement les actions non critiques avec piste d'audit (log approval.auto_approved + événement broadcast), gère le cas partiel (critiques en attente) et le cas exécuté (claim + patch plan + runtime immédiat) ; chemins agent personnalisé ET universel ; always_ask/ask_if_needed = flux d'approbation historique inchangé.
+- LOGIQUE PURE testable : lib/ui/command-composer-helpers.ts (détection @//, filtrage, navigation) — déplacée de components/ vers lib/ car vitest ne collecte que lib/** et app/**.
+- QUALITÉ : typecheck 0 erreur, lint 0 erreur, 358 tests verts (21 nouveaux : helpers @-/-navigation ×11, modes d'autorisation ×5, correctif assertion filtre description), build OK (173 pages).
+- VÉRIFICATION NAVIGATEUR (dev puis production) : design conforme à la capture, menus / et @ ouverts, sélecteur mode avec les 3 options + descriptions, bouton ↑ passe au blanc dès saisie.
+- E2E PRODUCTION : déploiement 91642fb READY (auto-deploy Git), accueil 200, /studio/agents 200, widget Gen de gen3ia.online testé au navigateur — composer sombre + menu commandes fonctionnels en production.
+
+Stage Summary:
+- Production gen3ia.online = commit 91642fb, READY.
+- Le chat IA (accueil) et le chat d'agent IA (Studio) partagent désormais le MÊME composer sombre, réplique de la capture validée : @ compétences/connecteurs, / commandes, + fichiers, « Toujours demander ▼ » branché au backend avec plancher de sécurité critique, 🎙 vocal, ↑ d'envoi.
+- Le mode d'autorisation est un vrai centre de contrôle HITL : auto_allow accélère l'exécution sans jamais contourner les actions critiques.
+
+---
+Task ID: 27
+Agent: Super Z (principal)
+Task: « Supprime le chat ia du projet, puis fait en sorte que l'interface conversation et chat d'agent ia utilise tout l'écran de l'appareil à tout moment ».
+
+Work Log:
+- Sandbox réinitialisé → re-clonage du dépôt (HEAD da7f70f, LOT 2 partiel) ; npm ci OK.
+- SUPPRESSION DU CHAT IA (Gen) : widget retiré de app/page.tsx (import + <GenChatWidget/>) ; suppression de components/gen/gen-chat.tsx, app/api/gen/chat/route.ts et lib/gen/ (chat.ts + 2 fichiers de tests) — vérifié au préalable qu'aucune autre importation n'existe (sanitizeClientHistory/runGenTurn/checkGenQuota/genIsolationGuarantees utilisés uniquement par la route supprimée). Docs publiques mises à jour (llms.txt, llms-full.txt : la génération d'images est décrite uniquement dans le chat d'agent) + commentaires (command-composer.tsx, api/ai/image). Scripts e2e historiques (waves 02/03/14/15/18/19) laissés intacts : artefacts d'audit de leurs vagues respectives, leurs contrôles Gen sont obsolètes.
+- PLEIN ÉCRAN À TOUT MOMENT (les 2 surfaces restantes) :
+  * app/layout.tsx : interactiveWidget "resizes-content" dans l'export viewport — sur Android le clavier réduit le viewport de mise en page, le composer reste visible au-dessus du clavier ;
+  * components/nav/viewport-height-sync.tsx (nouveau, sans rendu) : pose --g3-vvh = visualViewport.height sur <html> (iOS/Safari où le clavier ne réduit ni 100vh ni 100dvh), garde anti pinch-zoom (scale > 1.05 ignoré), nettoyage complet des listeners ;
+  * globals.css : .g3-shell consomme var(--g3-vvh, 100dvh) ;
+  * /studio/agents : page p-0 lg:p-3 (bord à bord mobile/tablette) ; panneau agent-chat-panel : rounded-none/border-0/shadow-none sur mobile, carte arrondie conservée sur lg ;
+  * agent-chat-workshop : gap réduit gap-2 lg:gap-4 en mode chat ;
+  * ConversationWorkspace : racine p-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:p-3 + insets internes par section (en-tête px-3 pt-2, fil pl-3 pr-3 pt-3, bandeau erreur mx-3, composer px-3) — tout repris à lg.
+- QUALITÉ : typecheck 0 erreur ; lint 0 erreur ; 455 tests vitest verts / 63 fichiers (les 2 fichiers de tests lib/gen supprimés avec la fonctionnalité) ; build OK ; route /api/gen absente du routes-manifest ; meta interactive-widget=resizes-content vérifiée dans le HTML construit.
+- E2E PRODUCTION (scripts/verify_17ce75e_prod.mjs) : déploiement 17ce75e READY — 11/11 VERTS : accueil 200 sans aucune trace du widget Gen, meta viewport plein écran présente, POST /api/gen/chat → 404, health 200, signUp+session réels, /workspace/conversations 200, /studio/agents 200, /api/agents 200, CSS servie avec --g3-vvh consommée par .g3-shell.
+
+Stage Summary:
+- Production gen3ia.online = commit 17ce75e, READY.
+- Le chat IA vitrin (Gen) n'existe plus : l'accueil est purement vitrine, les deux surfaces de discussion restantes sont la conversation (/workspace/conversations[/id]) et le chat d'agent IA (/studio/agents).
+- Ces deux surfaces occupent désormais TOUTE la surface de l'appareil À TOUT MOMENT : hauteur 100dvh synchronisée sur le visualViewport (clavier virtuel ouvert inclus), largeur bord à bord sur mobile/tablette, composer collé en bas au-dessus des zones sûres.
+
+---
+Task ID: 28
+Agent: Super Z (principal)
+Task: « Pendant une conversation, analyser les anciens messages + anti-hallucination + résultat seul à l'écran + image intelligente (prompt analysé/amélioré, compétence) + création d'agent simplifiée (nom, type, fichier) + outils sensibles avec notification d'accord valable depuis la notification + historique des conversations + page Publicité dans les paramètres + plusieurs sous-agents si besoin » puis test production.
+
+Work Log:
+- ANALYSE DES ANCIENS MESSAGES : historique passé au classificateur (8 derniers, classifyRequest(agent, message, history)) et au planificateur en mode task (historyContextNote, 8 derniers, chemins agent + universel) ; réponses directes avaient déjà les 12 derniers.
+- ANTI-HALLUCINATION : charte renforcée (COMPRÉHENSION OBLIGATOIRE — analyse de tous les messages précédents, résolution des références implicites ; INTERDICTION ABSOLUE D'HALLUCINER — faits/chiffres/sources/résultats, tout info externe doit venir d'un outil réellement exécuté ; jamais prédire le résultat d'une action) ; PLAN_SYSTEM : STEP 0 compréhension du vrai besoin + livrer EXACTEMENT ce qui est demandé + ne jamais sauter un outil nécessaire.
+- RÉSULTAT SEUL À L'ÉCRAN : le détail du plan d'exécution du chat d'agent n'apparaît que si validation requise ou échec (l'utilisateur voit le résultat final).
+- IMAGE INTELLIGENTE : lib/ai/image-prompt-enhancer (réécriture LLM du prompt : réalisme/cadrage/éclairage, sujet EXACTEMENT intact, garde-fou isSaneEnhancement anti-dérive + repli sûr) branché sur les 3 chemins (agent chat, chat/message, workspace engine) ; COMPÉTENCE RUNTIME : étape media → VRAIE image Agnes (executeMedia dans runner, repli rédaction si non configuré) ; rendu markdown ![alt](url) ajouté à MarkdownContent.
+- CRÉATION SIMPLIFIÉE : lib/agents/quick-create.ts (payload déduit du type : description, compétences, outils, mode call+voiceConfig pour vocal) + agent-quick-create.tsx (nom + 6 types : code, marketing, ENSEIGNEMENT, COMMERCIAL, VOCAL, personnalisé + fichier mémoire optionnel) ; workshop branché ; agent-builder/wizard/evals-panel SUPPRIMÉS ; bouton Personnaliser retiré ; 3 nouveaux types au catalogue charter (10 au total).
+- NOTIFICATIONS : lib/notifications/repository.ts (collection notifications, best-effort jamais bloquant) ; HOOKS sur les deux systèmes d'approbation (createActionApproval agent + createApproval conversation) ; marque lu à la décision (markNotificationsForApprovalRead) ; GET/POST /api/notifications ; NotificationCenter (cloche globale dans AppShell, polling 25 s, boutons Approuver/Rejeter actionnables depuis la notification via les routes métier existantes, notification native navigateur si permission) ; HITL DURCI : forceSensitiveToolFlags force sideEffect/requiresApproval pour tout outil destructive/external planifié (métadonnées du registre = source de vérité) ; file.delete réellement exécutable (handler workspace avec anti-traversée) ; règle planner « les actions externes sont des étapes outil, jamais llm ».
+- HISTORIQUE PAR AGENT : agentId sur chatConversations (createConversation + interface + mapping), filtre ?agentId= sur GET /api/chat/conversations, panel scopé à l'agent courant.
+- PAGE PUBLICITÉ : /settings/ads (préférence adsEnabled persistée Firestore userSettings/{uid} via GET/POST /api/settings/preferences, annonce active affichée via l'inventaire existant platformAds, désactivation masque les pubs) ; lien depuis la page Paramètres.
+- SOUS-AGENTS : consigne PLAN_SYSTEM multi-délégation (une étape agent par sous-agent, étapes indépendantes en parallèle) — l'infrastructure DAG parallèle existante (maxConcurrency 4) les exécute.
+- QUALITÉ : typecheck 0, lint 0, 479 tests verts / 67 fichiers (+21 : enhancer ×8, quick-create ×6, charter/historique ×4, forceSensitiveToolFlags ×3), build OK (179 pages).
+- E2E PRODUCTION (scripts/verify_8e5a879_prod.mjs, déploiement 64b30d5 READY) : 13/13 VERTS + 1 warning non bloquant — création simplifiée OK, agent vocal OK, analyse des anciens messages PROUVÉE (« Vous vous appelez Marc et vous gérez une boutique de vélos »), image réelle générée, historique par agent OK, sous-agents OK, API notifications OK (contrat GET/POST), préférences pub OK, page Publicité OK, accueil OK. Warning : le planificateur LLM n'a pas produit d'étape sensible lors du run (variance) — le contrat notification→décision reste couvert par le wiring serveur + tests unitaires ; lors de tout passage par une approval réelle, la notification est créée et valable à distance.
+
+Stage Summary:
+- Production gen3ia.online = 64b30d5, READY.
+- Les agents analysent l'historique complet de leurs conversations (classification, planification, réponses), hallucinent avec garde-fous explicites, ne montrent que le résultat, génèrent des images dont le prompt est analysé puis amélioré (sujet intact), se créent en 20 secondes (nom + type + fichier optionnel), demandent validation humaine par notification approuvable/rejetable à distance, possèdent un historique par agent, et peuvent déléguer à plusieurs sous-agents ; la page Paramètres › Publicité gère les préférences et affiche les annonces de l'inventaire.
+
+---
+Task ID: 29
+Agent: Super Z (principal)
+Task: « Dans la conversation il est impossible de créer une image : corriger ça, puis tester si la qualité de l'image est ultra réaliste. »
+
+Work Log:
+- DIAGNOSTIC PROD (scripts/diag_image_conversation.mjs + diag_stream_image.mjs) : le chemin nominal « Génère une image de… » fonctionnait déjà (API + stream + artefact). Les vraies failles étaient ailleurs :
+  (1) détection regex trop stricte — « je veux une image… », « Dessine-moi un chat » (sans nom visuel), « un logo pour ma boulangerie » tombaient dans le chat texte qui répondait « je ne peux pas générer d'images » ;
+  (2) le classificateur LLM ne connaissait pas la capacité image (variance : règle ignorée lors du 1er run e2e) ;
+  (3) timeout Agnes 90 s > maxDuration 60 s des routes conversation ;
+  (4) qualité 1K seulement, image affichée seulement après rechargement de l'état.
+- CORRECTIFS (commits 4019af4 + b8bd4b3) :
+  * Détection élargie + garde anti-faux-positifs (questions « comment », verbes d'analyse/édition, noms « dessin » exclus) ;
+  * looksLikeExplicitDrawingRequest : dessine(r/z/es/er)/peins/peindre/draw/paint/sketch déclenchent l'image SANS nom visuel — déterministe, zéro variance LLM ;
+  * Routage classificateur : règle VISUELS impérative + pseudo-outil image.generate intercepté dans runPlanTurn (image + artefact + imageUrl sur le message final) ;
+  * Ultra réalisme : 2K sur toutes les surfaces, ratio déduit (16:9 bannière/fond d'écran, 9:16 story, 3:4 poster/portrait), consigne « rendu photographique professionnel » dans la compétence d'amélioration (sujet jamais modifié) ;
+  * Budgets sûrs : timeoutMs paramétrable (40 s conversation / 45 s routes / 60 s runtime), amélioration bornée 12 s, maxDuration 60 ;
+  * Anti-hallucination : le chat texte ne prétend plus générer/afficher d'image ;
+  * UI : image affichée IMMÉDIATEMENT pendant le tour (message_complete → liveImageUrl).
+- QUALITÉ : typecheck 0, lint 0, 497 tests verts / 68 fichiers (+22 : détection ×8, garde dessin ×3, extraction ×4, ratio ×3, déjà existants), build OK.
+- E2E PRODUCTION (scripts/verify_4019af4_prod.mjs, déploiement b8bd4b3 READY) : 8/8 VERTS :
+  * « Dessine-moi un chat qui dort sur un coussin rouge » (ANCIENNE FAILLE) → image générée via stream, aucun refus texte, artefact créé ;
+  * « Je veux une image ultra réaliste d'un tigre au bord d'une rivière » (ANCIENNE FAILLE) → image générée ;
+  * Les DEUX images téléchargées : 2048×2048 px (2K), 3,7 et 4,3 Mo ;
+  * INSPECTION VISUELLE du réalisme : poils individuels nets, moustailles fines, yeux réalistes avec reflets, éclairage golden hour cohérent (reflets sur l'eau pour le tigre), texture velours + lumière de fenêtre (chat sur coussin ROUGE exactement comme demandé = fidélité du sujet), profondeur de champ correcte, AUCUN artefact de génération.
+- Commits : 4019af4, b8bd4b3.
+
+Stage Summary:
+- Production gen3ia.online = b8bd4b3, READY.
+- La conversation crée des images pour toutes les formulations naturelles (verbe+nom visuel, volonté, dessin explicite, visuel en tête, classificateur en filet), en qualité 2K ultra réaliste vérifiée visuellement, avec artefact rangé et affichage immédiat dans le fil.

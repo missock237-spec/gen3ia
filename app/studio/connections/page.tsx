@@ -161,7 +161,7 @@ export default function ConnectionsPage() {
           title="Chargement impossible"
           description={error}
           actions={
-            <button type="button" onClick={() => void load()} className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-semibold">
+            <button type="button" onClick={() => void load()} className="rounded-full border border-[var(--g3-border-strong)] bg-[var(--g3-surface)] px-4 py-2 text-xs font-semibold">
               Réessayer
             </button>
           }
@@ -173,7 +173,7 @@ export default function ConnectionsPage() {
           tone="info"
           title="Connectez-vous pour gérer vos connexions"
           actions={
-            <Link href="/login" className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-semibold text-white">
+            <Link href="/login" className="rounded-full bg-[var(--g3-deep)] px-4 py-2 text-xs font-semibold text-white">
               Se connecter
             </Link>
           }
@@ -185,7 +185,7 @@ export default function ConnectionsPage() {
       {!loading && !unauthenticated && (
         <>
           <section aria-label="Applications connectées">
-            <h2 className="mb-3 font-serif text-lg font-semibold text-neutral-900">Applications connectées</h2>
+            <h2 className="mb-3 font-serif text-lg font-semibold text-[var(--g3-text)]">Applications connectées</h2>
             <ResourceList
               rows={connectionRows}
               ariaLabel="Applications connectées"
@@ -206,7 +206,7 @@ export default function ConnectionsPage() {
 
           {serviceRows.length > 0 && (
             <section aria-label="Services de la plateforme">
-              <h2 className="mb-3 font-serif text-lg font-semibold text-neutral-900">Services de la plateforme</h2>
+              <h2 className="mb-3 font-serif text-lg font-semibold text-[var(--g3-text)]">Services de la plateforme</h2>
               <ResourceList rows={serviceRows} ariaLabel="Services de la plateforme" />
             </section>
           )}

@@ -141,8 +141,8 @@ export default function SettingsNumbersPage() {
     }
   }
 
-  const inputClass = "w-full rounded-xl border border-[rgba(23,23,20,0.12)] bg-white px-3 py-2 text-sm";
-  const labelClass = "block text-xs font-semibold text-neutral-500 mb-1";
+  const inputClass = "w-full rounded-xl border border-[rgba(23,23,20,0.12)] bg-[var(--g3-surface)] px-3 py-2 text-sm";
+  const labelClass = "block text-xs font-semibold text-[var(--g3-muted)] mb-1";
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-8">
@@ -155,17 +155,17 @@ export default function SettingsNumbersPage() {
       {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
       {message && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{message}</div>}
 
-      <section className="mb-6 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5">
+      <section className="mb-6 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5">
         <h2 className="mb-3 text-base font-bold">Mes numéros</h2>
         {owned.length === 0 ? (
-          <p className="text-sm text-neutral-500">Aucun numéro. Recherchez un numéro disponible ci-dessous.</p>
+          <p className="text-sm text-[var(--g3-muted)]">Aucun numéro. Recherchez un numéro disponible ci-dessous.</p>
         ) : (
           <ul className="grid gap-2">
             {owned.map((number) => (
-              <li key={number.id} className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(23,23,20,0.1)] bg-[#fafaf8] px-4 py-3">
+              <li key={number.id} className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(23,23,20,0.1)] bg-[var(--g3-elevated)] px-4 py-3">
                 <div>
                   <p className="text-sm font-semibold">{number.phoneNumber}</p>
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-[var(--g3-muted)]">
                     agent {number.agentId.slice(0, 8)} · {number.status}
                     {number.sellPriceUsdMinor ? ` · ${usd(number.sellPriceUsdMinor)}/mois` : ""}
                     {number.nextRenewalAt ? ` · renouvellement le ${new Date(number.nextRenewalAt).toLocaleDateString("fr-FR")}` : ""}
@@ -181,7 +181,7 @@ export default function SettingsNumbersPage() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5">
+      <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5">
         <h2 className="mb-3 text-base font-bold">Acheter un numéro</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
@@ -199,7 +199,7 @@ export default function SettingsNumbersPage() {
             </select>
           </div>
         </div>
-        <button type="button" onClick={() => void search()} disabled={loading || country.length !== 2} className="mt-3 rounded-xl bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">
+        <button type="button" onClick={() => void search()} disabled={loading || country.length !== 2} className="mt-3 rounded-xl bg-[var(--g3-deep)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">
           {loading ? "Recherche…" : "Rechercher les numéros disponibles"}
         </button>
 
@@ -214,16 +214,16 @@ export default function SettingsNumbersPage() {
           </div>
         )}
 
-        {searched && available.length === 0 && !loading && <p className="mt-3 text-sm text-neutral-500">Aucun numéro disponible pour cette recherche. Essayez un autre pays/indicatif.</p>}
+        {searched && available.length === 0 && !loading && <p className="mt-3 text-sm text-[var(--g3-muted)]">Aucun numéro disponible pour cette recherche. Essayez un autre pays/indicatif.</p>}
         {available.length > 0 && (
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
             {available.slice(0, 20).map((number) => (
-              <li key={number.phoneNumber} className={"flex items-center justify-between gap-2 rounded-xl border px-3 py-2 " + (selectedNumber === number.phoneNumber ? "border-neutral-900 bg-neutral-50" : "border-[rgba(23,23,20,0.1)]")}>
+              <li key={number.phoneNumber} className={"flex items-center justify-between gap-2 rounded-xl border px-3 py-2 " + (selectedNumber === number.phoneNumber ? "border-[var(--g3-border)] bg-[var(--g3-elevated)]" : "border-[rgba(23,23,20,0.1)]")}>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">{number.friendlyName || number.phoneNumber}</p>
-                  <p className="text-xs text-neutral-500">{[number.locality, number.region].filter(Boolean).join(", ") || number.isoCountry}</p>
+                  <p className="text-xs text-[var(--g3-muted)]">{[number.locality, number.region].filter(Boolean).join(", ") || number.isoCountry}</p>
                 </div>
-                <button type="button" onClick={() => void buy(number.phoneNumber)} disabled={busy || !selectedAgent} className="shrink-0 rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
+                <button type="button" onClick={() => void buy(number.phoneNumber)} disabled={busy || !selectedAgent} className="shrink-0 rounded-lg bg-[var(--g3-deep)] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
                   {busy ? "…" : "Acheter"}
                 </button>
               </li>

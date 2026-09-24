@@ -7,8 +7,12 @@ import { errorStatus } from "@/lib/security/http-errors";
 export async function GET(request: NextRequest) {
   try {
     const user = await requireUser(request);
-    const limit = Number(new URL(request.url).searchParams.get("limit") ?? 50);
-    return NextResponse.json({ conversations: await listConversations(user.uid, Number.isFinite(limit) ? limit : 50) });
+    const params = new URL(request.url).searchParams;
+    const limit = Number(params.get("limit") ?? 50);
+    // Historique scopé à un agent IA (?agentId=…) : l'atelier n'affiche que
+    // les conversations de l'agent sélectionné.
+    const agentId = params.get("agentId")?.trim() || undefined;
+    return NextResponse.json({ conversations: await listConversations(user.uid, Number.isFinite(limit) ? limit : 50, { agentId }) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur." }, { status: errorStatus(error, 401) });
   }

@@ -52,6 +52,9 @@ export async function POST(
     );
 
   if (!limit.allowed) {
+    // Audit 25-c : le 429 n'exposait pas Retry-After (le délai n'était
+    // lisible que dans le corps JSON, ignoré par les clients HTTP et les
+    // monitors). L'en-tête est exprimé en secondes entières (au moins 1).
     return NextResponse.json(
       {
         success: false,
@@ -64,6 +67,18 @@ export async function POST(
       },
       {
         status: 429,
+
+        headers: {
+          "retry-after": String(
+            Math.max(
+              1,
+
+              Math.ceil(
+                limit.retryAfterMs / 1000,
+              ),
+            ),
+          ),
+        },
       },
     );
   }

@@ -41,6 +41,7 @@ const STEP_TYPE_ALIASES: Record<string, string> = {
   media: "media", image: "media", video: "media", audio: "media",
   code: "code", compute: "code", script: "code",
   condition: "condition", branch: "condition",
+  agent: "agent", subagent: "agent", delegation: "agent", delegate: "agent",
 };
 
 /**
@@ -65,6 +66,10 @@ export function normalizePlanSteps(rawSteps: unknown): unknown[] {
     record.type = STEP_TYPE_ALIASES[typeRaw] ?? "llm";
     if (record.type === "tool" && (typeof record.toolName !== "string" || !record.toolName.trim())) {
       // Étape outil sans cible : inutilisable, dégradation en raisonnement.
+      record.type = "llm";
+    }
+    if (record.type === "agent" && (typeof record.agentId !== "string" || !record.agentId.trim())) {
+      // Étape de délégation sans cible : dégradation en raisonnement.
       record.type = "llm";
     }
     const nameSource = [record.name, record.title, record.toolName, record.description].find(

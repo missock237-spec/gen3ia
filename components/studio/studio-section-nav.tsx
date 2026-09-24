@@ -66,7 +66,7 @@ export function StudioSectionNav() {
 
   return (
     <nav aria-label="Sections du Studio" className="no-scrollbar mb-6 max-w-full overflow-x-auto md:mb-7">
-      <ul className="inline-flex min-w-full items-center gap-1.5 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-1.5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+      <ul className="inline-flex min-w-full items-center gap-1.5 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-1.5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
         {STUDIO_SECTIONS.map((section) => {
           const active = pathname === section.href;
           return (
@@ -76,8 +76,8 @@ export function StudioSectionNav() {
                 aria-current={active ? "page" : undefined}
                 className={`flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 text-[13px] font-semibold transition-colors ${
                   active
-                    ? "bg-neutral-900 text-white shadow-[0_6px_18px_-8px_rgba(28,27,24,0.5)]"
-                    : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                    ? "bg-[var(--g3-deep)] text-white shadow-[0_6px_18px_-8px_rgba(28,27,24,0.5)]"
+                    : "text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]"
                 }`}
               >
                 {section.icon}

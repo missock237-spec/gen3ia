@@ -2,6 +2,7 @@
 
 import type { MessageAttachment } from "./types";
 import type { ConversationStreamEvent } from "./stream-events";
+import type { AuthorizationMode } from "@/lib/security/authorization-mode";
 
 /**
  * Client de consommation du flux conversationnel (NDJSON) : envoie le
@@ -18,6 +19,8 @@ export interface StreamTurnPayload {
   attachments?: MessageAttachment[];
   projectId?: string;
   connectors?: string[];
+  /** Mode d'autorisation HITL choisi dans le composer. */
+  authorizationMode?: AuthorizationMode;
   signal?: AbortSignal;
   onEvent: (event: ConversationStreamEvent) => void;
 }
@@ -31,6 +34,7 @@ export async function streamConversationTurn(payload: StreamTurnPayload): Promis
       ...(payload.attachments && payload.attachments.length > 0 ? { attachments: payload.attachments } : {}),
       ...(payload.projectId ? { projectId: payload.projectId } : {}),
       ...(payload.connectors && payload.connectors.length > 0 ? { connectors: payload.connectors } : {}),
+      ...(payload.authorizationMode ? { authorizationMode: payload.authorizationMode } : {}),
     }),
     signal: payload.signal,
     cache: "no-store",

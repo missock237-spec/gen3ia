@@ -146,7 +146,7 @@ export default function AutomationsPage() {
       </div>
 
       <div className={cardCls}>
-        <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Nouvelle automatisation</h2>
+        <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Nouvelle automatisation</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Nom">
             <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Alerter quand une facture est créée" />
@@ -197,15 +197,15 @@ export default function AutomationsPage() {
       </div>
 
       <ModuleSection title={`Automatisations (${workflows.length})`}>
-        {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+        {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
         {!loading && workflows.length === 0 ? <EmptyHint>Aucune automatisation pour l&apos;instant. Créez la première ci-dessus.</EmptyHint> : null}
         <div className="space-y-2.5">
           {workflows.map((workflow) => (
             <article key={workflow.id} className={cardCls}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h3 className="text-[14px] font-bold text-neutral-900">{workflow.name}</h3>
-                  <p className="text-[12.5px] text-neutral-500">
+                  <h3 className="text-[14px] font-bold text-[var(--g3-text)]">{workflow.name}</h3>
+                  <p className="text-[12.5px] text-[var(--g3-muted)]">
                     {workflow.trigger.type === "event"
                       ? `Déclencheur : ${EVENT_TYPES.find((e) => e.value === workflow.trigger.eventType)?.label ?? workflow.trigger.eventType}`
                       : "Déclencheur : manuel"}{" "}
@@ -234,10 +234,10 @@ export default function AutomationsPage() {
         {!loading && notifications.length === 0 ? <EmptyHint>Aucune notification générée par vos automatisations.</EmptyHint> : null}
         <div className="space-y-2">
           {notifications.map((notification) => (
-            <div key={notification.id} className="rounded-xl border border-neutral-200 bg-white px-4 py-3">
-              <p className="text-[13px] font-bold text-neutral-900">{notification.title}</p>
-              <p className="text-[12.5px] text-neutral-600">{notification.body}</p>
-              <p className="mt-1 text-[11px] text-neutral-400">
+            <div key={notification.id} className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3">
+              <p className="text-[13px] font-bold text-[var(--g3-text)]">{notification.title}</p>
+              <p className="text-[12.5px] text-[var(--g3-muted)]">{notification.body}</p>
+              <p className="mt-1 text-[11px] text-[var(--g3-faint)]">
                 {notification.workflowName ?? "Automatisation"} · {shortDate(notification.createdAt)}
               </p>
             </div>
@@ -249,11 +249,11 @@ export default function AutomationsPage() {
         {!loading && runs.length === 0 ? <EmptyHint>Aucune exécution pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2">
           {runs.map((run) => (
-            <div key={run.id} className="rounded-xl border border-neutral-200 bg-white px-4 py-3">
+            <div key={run.id} className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="text-[13px] font-bold text-neutral-900">{run.workflowName}</p>
-                  <p className="text-[11.5px] text-neutral-500">
+                  <p className="text-[13px] font-bold text-[var(--g3-text)]">{run.workflowName}</p>
+                  <p className="text-[11.5px] text-[var(--g3-muted)]">
                     {run.trigger === "manual" ? "Manuel" : "Événement"} · {shortDate(run.startedAt)}
                   </p>
                 </div>
@@ -267,7 +267,7 @@ export default function AutomationsPage() {
               {openRun === run.id ? (
                 <ol className="mt-2 space-y-1 text-[12.5px]">
                   {run.steps.map((step, i) => (
-                    <li key={step.stepId + i} className="rounded-lg bg-neutral-50 px-3 py-1.5">
+                    <li key={step.stepId + i} className="rounded-lg bg-[var(--g3-elevated)] px-3 py-1.5">
                       <Pill tone={step.status === "success" ? "green" : "red"}>{step.status === "success" ? "OK" : "Échec"}</Pill>{" "}
                       <strong>{step.name}</strong> — {step.output ?? step.error}
                     </li>

@@ -121,7 +121,7 @@ export default function FinanceUnpaidPage() {
       ) : null}
 
       <div className={cardCls}>
-        <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Nouvelle facture à suivre</h2>
+        <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Nouvelle facture à suivre</h2>
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="Numéro">
             <input className={inputCls} value={form.invoiceNumber} onChange={(e) => setForm({ ...form, invoiceNumber: e.target.value })} placeholder="F-2026-042" />
@@ -152,14 +152,14 @@ export default function FinanceUnpaidPage() {
       {lastEmail ? (
         <ModuleSection title="Dernière relance générée">
           <div className={cardCls}>
-            <p className="text-[13px] font-bold text-neutral-900">{lastEmail.subject}</p>
-            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-50 p-3.5 font-sans text-[12.5px] leading-relaxed text-neutral-700">{lastEmail.body}</pre>
+            <p className="text-[13px] font-bold text-[var(--g3-text)]">{lastEmail.subject}</p>
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-elevated)] p-3.5 font-sans text-[12.5px] leading-relaxed text-[var(--g3-text-secondary)]">{lastEmail.body}</pre>
           </div>
         </ModuleSection>
       ) : null}
 
       <ModuleSection title={`Factures (${invoices.length})`}>
-        {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+        {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
         {!loading && invoices.length === 0 ? <EmptyHint>Aucune facture pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2.5">
           {invoices.map((invoice) => {
@@ -168,10 +168,10 @@ export default function FinanceUnpaidPage() {
               <article key={invoice.id} className={cardCls}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <h3 className="text-[14px] font-bold text-neutral-900">
-                      {invoice.invoiceNumber} <span className="font-normal text-neutral-500">· {invoice.clientName}</span>
+                    <h3 className="text-[14px] font-bold text-[var(--g3-text)]">
+                      {invoice.invoiceNumber} <span className="font-normal text-[var(--g3-muted)]">· {invoice.clientName}</span>
                     </h3>
-                    <p className="text-[12.5px] text-neutral-500">
+                    <p className="text-[12.5px] text-[var(--g3-muted)]">
                       {invoice.amount.toLocaleString("fr-FR")} {invoice.currency} · émise {shortDate(invoice.issuedAt)} · échéance {shortDate(invoice.dueDate)}
                       {invoice.reminders?.length ? ` · ${invoice.reminders.length} relance(s)` : ""}
                     </p>

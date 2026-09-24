@@ -139,7 +139,7 @@ export function DocumentsPanel(props: {
         className={`g3-card flex flex-col items-center justify-center border-2 border-dashed p-8 text-center transition ${dragging ? "border-sky-400 bg-sky-50" : "border-[rgba(23,23,20,0.14)]"}`}
       >
         <p className="font-serif text-lg font-semibold">Déposez vos documents ici</p>
-        <p className="mt-1 max-w-md text-sm text-neutral-500">
+        <p className="mt-1 max-w-md text-sm text-[var(--g3-muted)]">
           Jusqu&apos;à <strong>{MAX_FILES_PER_BATCH} fichiers par lot</strong>, <strong>100 Mo par fichier</strong>.
           PDF, Word, Excel, images, audio, vidéo, archives et textes.
         </p>
@@ -169,13 +169,13 @@ export function DocumentsPanel(props: {
       {/* File d'attente de téléversement */}
       {queue.length > 0 && (
         <div className="g3-card p-5" aria-live="polite">
-          <h3 className="text-sm font-semibold text-neutral-700">Téléversement</h3>
+          <h3 className="text-sm font-semibold text-[var(--g3-text-secondary)]">Téléversement</h3>
           <ul className="mt-3 space-y-3">
             {queue.map((item) => (
               <li key={item.id} className="min-w-0">
                 <div className="flex items-center justify-between gap-3 text-xs">
-                  <span className="min-w-0 flex-1 truncate font-medium text-neutral-700">{item.filename}</span>
-                  <span className={`shrink-0 font-semibold ${item.status === "error" ? "text-red-600" : item.status === "done" ? "text-emerald-600" : "text-neutral-500"}`}>
+                  <span className="min-w-0 flex-1 truncate font-medium text-[var(--g3-text-secondary)]">{item.filename}</span>
+                  <span className={`shrink-0 font-semibold ${item.status === "error" ? "text-red-600" : item.status === "done" ? "text-emerald-600" : "text-[var(--g3-muted)]"}`}>
                     {item.status === "pending" && "en attente"}
                     {item.status === "uploading" && `${Math.round(item.progress * 100)}%`}
                     {item.status === "done" && "stocké ✓"}
@@ -183,13 +183,13 @@ export function DocumentsPanel(props: {
                     {item.status === "cancelled" && "annulé"}
                   </span>
                 </div>
-                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--g3-elevated)]">
                   <div
                     className={`h-full rounded-full transition-all ${item.status === "error" ? "bg-red-500" : item.status === "done" ? "bg-emerald-500" : "bg-sky-500"}`}
                     style={{ width: `${Math.max(Math.round(item.progress * 100), item.status === "pending" ? 0 : 4)}%` }}
                   />
                 </div>
-                <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-neutral-400">
+                <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[var(--g3-faint)]">
                   <span>{formatBytes(item.sizeBytes)}</span>
                   {item.error && <span className="truncate text-red-500">{item.error}</span>}
                 </div>
@@ -204,7 +204,7 @@ export function DocumentsPanel(props: {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-serif text-xl font-semibold">Vos documents</h2>
-            <p className="mt-1 text-sm text-neutral-500">Téléchargeables à tout moment via des liens signés de 10 minutes.</p>
+            <p className="mt-1 text-sm text-[var(--g3-muted)]">Téléchargeables à tout moment via des liens signés de 10 minutes.</p>
           </div>
           {props.files.length > 5 && (
             <input
@@ -220,14 +220,14 @@ export function DocumentsPanel(props: {
         {props.loaded && filtered.length > 0 && (
           <ul className="mt-4 space-y-2">
             {filtered.map((file) => (
-              <li key={file.path} className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 px-4 py-3">
+              <li key={file.path} className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] px-4 py-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-900 font-mono text-[10px] font-bold text-white" aria-hidden="true">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--g3-deep)] font-mono text-[10px] font-bold text-white" aria-hidden="true">
                     {fileBadge(file)}
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-neutral-800" title={file.filename}>{file.filename}</p>
-                    <p className="text-xs text-neutral-400">
+                    <p className="truncate text-sm font-semibold text-[var(--g3-text)]" title={file.filename}>{file.filename}</p>
+                    <p className="text-xs text-[var(--g3-faint)]">
                       {formatBytes(file.sizeBytes)}
                       {file.uploadedAt && file.uploadedAt !== "1970-01-01T00:00:00.000Z" && ` · ${formatDate(file.uploadedAt)}`}
                       {file.source === "legacy" && " · dépôt direct"}
@@ -238,7 +238,7 @@ export function DocumentsPanel(props: {
                   <button
                     disabled={busyFile === file.path}
                     onClick={() => download(file)}
-                    className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-3 text-[11px] font-semibold text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
+                    className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 text-[11px] font-semibold text-[var(--g3-text-secondary)] hover:bg-[var(--g3-elevated)] disabled:opacity-40"
                   >
                     Télécharger
                   </button>
@@ -253,7 +253,7 @@ export function DocumentsPanel(props: {
                       </button>
                       <button
                         onClick={() => setConfirmingPath(null)}
-                        className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-white px-2.5 text-[11px] font-semibold text-neutral-500"
+                        className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)]"
                       >
                         Annuler
                       </button>
@@ -263,7 +263,7 @@ export function DocumentsPanel(props: {
                       disabled={busyFile === file.path}
                       onClick={() => setConfirmingPath(file.path)}
                       aria-label={`Supprimer ${file.filename}`}
-                      className="min-h-9 rounded-md border border-red-200 bg-white px-2.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
+                      className="min-h-9 rounded-md border border-red-200 bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
                     >
                       Supprimer
                     </button>
@@ -274,10 +274,10 @@ export function DocumentsPanel(props: {
           </ul>
         )}
         {props.loaded && props.files.length > 0 && filtered.length === 0 && (
-          <p className="mt-4 text-sm text-neutral-400">Aucun document ne correspond à « {search} ».</p>
+          <p className="mt-4 text-sm text-[var(--g3-faint)]">Aucun document ne correspond à « {search} ».</p>
         )}
         {props.loaded && props.files.length === 0 && (
-          <p className="mt-4 text-sm text-neutral-400">
+          <p className="mt-4 text-sm text-[var(--g3-faint)]">
             Aucun document pour le moment. Déposez vos premiers fichiers ci-dessus : ils seront disponibles pour
             vous et vos agents à chaque session.
           </p>

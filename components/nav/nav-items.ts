@@ -38,7 +38,7 @@ function groupByIds(ids: string[], extras: Record<string, Partial<NavItem>> = {}
 }
 
 /** Espace de travail — centre de gravité « Conversations ». */
-export const WORKSPACE: NavItem[] = groupByIds(["conversations", "projects", "files", "connectors", "library", "missions", "team"], {
+export const WORKSPACE: NavItem[] = groupByIds(["conversations", "projects", "workflows", "files", "knowledge", "connectors", "library", "missions", "team"], {
   conversations: { shortcut: "C" },
 });
 

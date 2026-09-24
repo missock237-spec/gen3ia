@@ -45,9 +45,26 @@ type SessionView = {
 function extractError(body: unknown, fallback: string): string {
   if (body && typeof body === "object" && "error" in body) {
     const message = String((body as { error?: unknown }).error ?? "");
-    if (message) return message;
+    if (message) return humanizeStorageError(message);
   }
   return fallback;
+}
+
+/**
+ * Traduit une panne d'infrastructure de stockage en message ACTIONNABLE :
+ * « R2 configuration is incomplete » (env serveur manquante) était renvoyé
+ * tel quel — l'utilisateur ne savait ni ce qui cassait, ni que le reste de
+ * la plateforme fonctionnait (audits 25-a/25-d : pièces jointes en panne
+ * pour 100 % des comptes sans explication lisible).
+ */
+function humanizeStorageError(message: string): string {
+  if (/R2 configuration|not configured|storage.*(incomplete|unavailable)/i.test(message)) {
+    return (
+      "Le stockage de fichiers est momentanément indisponible côté serveur. " +
+      "Vos messages sans pièce jointe fonctionnent normalement — réessayez de joindre votre fichier plus tard."
+    );
+  }
+  return message;
 }
 
 async function jsonError(response: Response, fallback: string): Promise<string> {

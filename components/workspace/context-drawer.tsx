@@ -70,7 +70,7 @@ export function ContextDrawer({
         <button
           type="button"
           onClick={onToggle}
-          className="text-xs text-neutral-400 hover:text-neutral-700"
+          className="text-xs text-[var(--g3-faint)] hover:text-[var(--g3-text-secondary)]"
           title="Replier le panneau"
           aria-label="Replier le panneau de contexte"
         >
@@ -79,11 +79,11 @@ export function ContextDrawer({
       </div>
 
       <div className="g3-card !p-3">
-        <p className="truncate text-xs font-semibold text-neutral-800" title={conversationTitle}>
+        <p className="truncate text-xs font-semibold text-[var(--g3-text)]" title={conversationTitle}>
           {conversationTitle || "Sans titre"}
         </p>
         {project && (
-          <p className="mt-1 truncate text-[11px] text-neutral-500" title={project.instructions ?? undefined}>
+          <p className="mt-1 truncate text-[11px] text-[var(--g3-muted)]" title={project.instructions ?? undefined}>
             ▦ {project.name}
             {project.instructions ? " · instructions actives" : ""}
           </p>
@@ -120,9 +120,9 @@ export function ContextDrawer({
                 <RunTimeline run={latestRun} />
                 {pending.map((approval) => (
                   <div key={approval.id} className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
-                    <p className="text-xs font-semibold text-neutral-900">⚖ {approval.title}</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-neutral-600">{approval.impact}</p>
-                    <p className="mt-1 font-mono text-[10px] text-neutral-500">{approval.toolName}</p>
+                    <p className="text-xs font-semibold text-[var(--g3-text)]">⚖ {approval.title}</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-[var(--g3-muted)]">{approval.impact}</p>
+                    <p className="mt-1 font-mono text-[10px] text-[var(--g3-muted)]">{approval.toolName}</p>
                     <button
                       type="button"
                       onClick={() => void onDecide(approval.id, "approved")}
@@ -141,7 +141,7 @@ export function ContextDrawer({
                 ))}
               </>
             ) : (
-              <p className="text-[11px] leading-relaxed text-neutral-500">
+              <p className="text-[11px] leading-relaxed text-[var(--g3-muted)]">
                 Aucune exécution pour l&apos;instant. Décrivez un objectif : Gen3ia proposera un plan lisible avec ses étapes, outils et validations.
               </p>
             )}
@@ -153,15 +153,15 @@ export function ContextDrawer({
         )}
 
         {section === "info" && (
-          <div className="space-y-3 text-[11px] leading-relaxed text-neutral-600">
+          <div className="space-y-3 text-[11px] leading-relaxed text-[var(--g3-muted)]">
             <div>
-              <p className="font-medium text-neutral-700">Runs de la conversation</p>
+              <p className="font-medium text-[var(--g3-text-secondary)]">Runs de la conversation</p>
               {runs.length === 0 ? (
-                <p className="text-neutral-500">Aucun run.</p>
+                <p className="text-[var(--g3-muted)]">Aucun run.</p>
               ) : (
                 <ul className="mt-1 space-y-1">
                   {runs.map((run) => (
-                    <li key={run.id} className="flex items-center justify-between gap-2 rounded-lg bg-neutral-50 px-2 py-1.5">
+                    <li key={run.id} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--g3-elevated)] px-2 py-1.5">
                       <span className="truncate">{run.objective}</span>
                       <span className={`shrink-0 rounded-full border px-1.5 text-[9px] ${RUN_STATUS_STYLES[run.status]}`}>
                         {RUN_STATUS_LABELS[run.status]}
@@ -172,13 +172,13 @@ export function ContextDrawer({
               )}
             </div>
             <div>
-              <p className="font-medium text-neutral-700">Outils utilisés</p>
+              <p className="font-medium text-[var(--g3-text-secondary)]">Outils utilisés</p>
               {usedTools.length === 0 ? (
-                <p className="text-neutral-500">Aucun outil pour le moment.</p>
+                <p className="text-[var(--g3-muted)]">Aucun outil pour le moment.</p>
               ) : (
                 <ul className="mt-1 flex flex-wrap gap-1">
                   {usedTools.map((tool) => (
-                    <li key={tool} className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 font-mono text-[10px]">
+                    <li key={tool} className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2 py-0.5 font-mono text-[10px]">
                       {tool}
                     </li>
                   ))}
@@ -187,8 +187,8 @@ export function ContextDrawer({
             </div>
             {project?.privacyRules && (
               <div>
-                <p className="font-medium text-neutral-700">Règles de confidentialité</p>
-                <p className="mt-1 whitespace-pre-wrap rounded-lg bg-neutral-50 px-2 py-1.5">{project.privacyRules}</p>
+                <p className="font-medium text-[var(--g3-text-secondary)]">Règles de confidentialité</p>
+                <p className="mt-1 whitespace-pre-wrap rounded-lg bg-[var(--g3-elevated)] px-2 py-1.5">{project.privacyRules}</p>
               </div>
             )}
           </div>

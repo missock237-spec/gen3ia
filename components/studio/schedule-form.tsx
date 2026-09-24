@@ -119,10 +119,10 @@ export function ScheduleForm({
                 type="button"
                 onClick={() => setTriggerMode(option.key)}
                 aria-pressed={triggerMode === option.key}
-                className={`rounded-xl border p-3 text-left transition-colors ${triggerMode === option.key ? "border-sky-200 bg-sky-100 text-sky-800" : "border-[rgba(23,23,20,0.09)] bg-neutral-50 hover:bg-neutral-100"}`}
+                className={`rounded-xl border p-3 text-left transition-colors ${triggerMode === option.key ? "border-sky-200 bg-sky-100 text-sky-800" : "border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] hover:bg-[var(--g3-elevated)]"}`}
               >
                 <span className="block text-sm font-semibold">{option.title}</span>
-                <span className="mt-0.5 block text-xs text-neutral-500">{option.detail}</span>
+                <span className="mt-0.5 block text-xs text-[var(--g3-muted)]">{option.detail}</span>
               </button>
             ))}
           </div>
@@ -160,7 +160,7 @@ export function ScheduleForm({
                     aria-label={`Libellé de la source ${index + 1}`}
                     maxLength={120}
                   />
-                  <button type="button" onClick={() => setWatchSources((current) => current.filter((_, i) => i !== index))} className="rounded-xl border border-neutral-300 text-neutral-400 hover:bg-neutral-100" aria-label={`Retirer la source ${index + 1}`}>×</button>
+                  <button type="button" onClick={() => setWatchSources((current) => current.filter((_, i) => i !== index))} className="rounded-xl border border-[var(--g3-border-strong)] text-[var(--g3-faint)] hover:bg-[var(--g3-elevated)]" aria-label={`Retirer la source ${index + 1}`}>×</button>
                 </div>
               ))}
               {watchSources.length < 5 ? (
@@ -168,7 +168,7 @@ export function ScheduleForm({
                   + Ajouter une source ({watchSources.length}/5)
                 </button>
               ) : null}
-              <p className="text-xs text-neutral-400">À la première vérification, la baseline est enregistrée sans déclencher l&apos;agent. Ensuite, tout changement de contenu lance la mission.</p>
+              <p className="text-xs text-[var(--g3-faint)]">À la première vérification, la baseline est enregistrée sans déclencher l&apos;agent. Ensuite, tout changement de contenu lance la mission.</p>
             </div>
           ) : null}
         </fieldset>
@@ -184,7 +184,7 @@ export function ScheduleForm({
                 key={value}
                 onClick={() => toggleDay(value)}
                 aria-pressed={selectedDays.includes(value)}
-                className={`rounded-xl border px-3 py-2 text-sm transition-colors ${selectedDays.includes(value) ? "border-sky-200 bg-sky-100 text-sky-700" : "border-[rgba(23,23,20,0.09)] bg-neutral-50 text-neutral-500 hover:bg-neutral-100"}`}
+                className={`rounded-xl border px-3 py-2 text-sm transition-colors ${selectedDays.includes(value) ? "border-sky-200 bg-sky-100 text-sky-700" : "border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"}`}
               >
                 {label}
               </button>
@@ -204,7 +204,7 @@ export function ScheduleForm({
           <div>
             <label className="g3-label" htmlFor="schedule-interval">Répétition (min)</label>
             <input id="schedule-interval" type="number" min={0} max={1440} value={intervalMinutes} onChange={(e) => setIntervalMinutes(Math.max(0, Math.min(1440, Number(e.target.value) || 0)))} className="g3-input" aria-describedby="schedule-interval-hint" />
-            <span id="schedule-interval-hint" className="mt-1 block text-xs text-neutral-400">0 = une activation au début de la fenêtre</span>
+            <span id="schedule-interval-hint" className="mt-1 block text-xs text-[var(--g3-faint)]">0 = une activation au début de la fenêtre</span>
           </div>
         </div>
 
@@ -240,11 +240,11 @@ export function ScheduleForm({
         </div>
 
         {triggerMode === "cron" ? (
-          <div className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-3 text-sm text-neutral-600" aria-live="polite">
+          <div className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] p-3 text-sm text-[var(--g3-muted)]" aria-live="polite">
             {summary} · {timezone}
           </div>
         ) : (
-          <div className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-neutral-50 p-3 text-sm text-neutral-600" aria-live="polite">
+          <div className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] p-3 text-sm text-[var(--g3-muted)]" aria-live="polite">
             {triggerMode === "webhook" ? "Déclenchement par événement externe (webhook)" : `Veille active sur ${watchSources.filter((source) => source.url.trim().length > 8).length} source(s)`} · {timezone}
           </div>
         )}

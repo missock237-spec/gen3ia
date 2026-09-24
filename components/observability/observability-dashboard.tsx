@@ -54,7 +54,7 @@ const STATUS_STYLES: Record<string, string> = {
   running: "bg-sky-50 text-sky-700 border-sky-200",
   pending: "bg-sky-50 text-sky-700 border-sky-200",
   waiting_approval: "bg-amber-50 text-amber-700 border-amber-200",
-  cancelled: "bg-neutral-100 text-neutral-500 border-neutral-200",
+  cancelled: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -84,10 +84,10 @@ function formatDate(value: string): string {
 
 function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{label}</p>
-      <p className="mt-1 font-serif text-2xl font-semibold text-neutral-900">{value}</p>
-      {hint ? <p className="mt-0.5 text-xs text-neutral-400">{hint}</p> : null}
+    <div className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-4 shadow-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--g3-faint)]">{label}</p>
+      <p className="mt-1 font-serif text-2xl font-semibold text-[var(--g3-text)]">{value}</p>
+      {hint ? <p className="mt-0.5 text-xs text-[var(--g3-faint)]">{hint}</p> : null}
     </div>
   );
 }
@@ -128,22 +128,22 @@ export function ObservabilityDashboard({ overview }: { overview: ObservabilityOv
       </section>
 
       {/* Tendance quotidienne */}
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <section className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-5 shadow-sm">
         <h2 className="text-sm font-semibold sm:text-base">Activité quotidienne ({overview.windowDays} jours)</h2>
         {daily.length === 0 ? (
-          <p className="mt-3 text-sm text-neutral-500">Aucune exécution sur la fenêtre. Lancez une mission depuis le Studio pour alimenter les traces.</p>
+          <p className="mt-3 text-sm text-[var(--g3-muted)]">Aucune exécution sur la fenêtre. Lancez une mission depuis le Studio pour alimenter les traces.</p>
         ) : (
           <div className="mt-4 flex items-end gap-1.5" aria-hidden="true">
             {daily.map((bucket) => (
               <div key={bucket.date} className="group relative flex-1">
                 <div className="flex h-24 items-end">
                   <div
-                    className={`w-full rounded-t-md ${bucket.failed > 0 ? "bg-red-400" : "bg-neutral-300"} transition-colors group-hover:bg-neutral-900`}
+                    className={`w-full rounded-t-md ${bucket.failed > 0 ? "bg-red-400" : "bg-neutral-300"} transition-colors group-hover:bg-[var(--g3-deep)]`}
                     style={{ height: `${Math.max(6, (bucket.count / maxDaily) * 100)}%` }}
                   />
                 </div>
-                <p className="mt-1 truncate text-center text-[9px] text-neutral-400">{bucket.date.slice(5)}</p>
-                <span className="pointer-events-none absolute -top-7 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                <p className="mt-1 truncate text-center text-[9px] text-[var(--g3-faint)]">{bucket.date.slice(5)}</p>
+                <span className="pointer-events-none absolute -top-7 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-[var(--g3-deep)] px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
                   {bucket.count} exéc. · {bucket.failed} échec(s)
                 </span>
               </div>
@@ -154,16 +154,16 @@ export function ObservabilityDashboard({ overview }: { overview: ObservabilityOv
 
       {/* Usage des outils */}
       {tools.length > 0 && (
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-5 shadow-sm">
           <h2 className="text-sm font-semibold sm:text-base">Outils les plus utilisés</h2>
           <ul className="mt-4 space-y-2.5">
             {tools.map((tool) => (
               <li key={tool.name} className="flex items-center gap-3">
-                <span className="w-40 shrink-0 truncate text-xs font-semibold text-neutral-700" title={tool.name}>{tool.name}</span>
-                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-neutral-100">
-                  <div className={`h-full rounded-full ${tool.failed > 0 ? "bg-amber-500" : "bg-neutral-900"}`} style={{ width: `${Math.max(4, (tool.count / maxTool) * 100)}%` }} />
+                <span className="w-40 shrink-0 truncate text-xs font-semibold text-[var(--g3-text-secondary)]" title={tool.name}>{tool.name}</span>
+                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[var(--g3-elevated)]">
+                  <div className={`h-full rounded-full ${tool.failed > 0 ? "bg-amber-500" : "bg-[var(--g3-deep)]"}`} style={{ width: `${Math.max(4, (tool.count / maxTool) * 100)}%` }} />
                 </div>
-                <span className="w-24 shrink-0 text-right text-xs text-neutral-500">
+                <span className="w-24 shrink-0 text-right text-xs text-[var(--g3-muted)]">
                   {tool.count} appel{tool.count > 1 ? "s" : ""}{tool.failed > 0 ? ` · ${tool.failed} échec(s)` : ""}
                 </span>
               </li>
@@ -173,17 +173,17 @@ export function ObservabilityDashboard({ overview }: { overview: ObservabilityOv
       )}
 
       {/* Journal des traces */}
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <section className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-5 shadow-sm">
         <h2 className="text-sm font-semibold sm:text-base">Journal des exécutions</h2>
-        <p className="mt-1 text-xs text-neutral-400">Chaque ligne est dépliable : objectif, statut, coût, tokens, étapes et erreurs — le journal des décisions de vos agents.</p>
+        <p className="mt-1 text-xs text-[var(--g3-faint)]">Chaque ligne est dépliable : objectif, statut, coût, tokens, étapes et erreurs — le journal des décisions de vos agents.</p>
         {executions.length === 0 ? (
-          <p className="mt-3 text-sm text-neutral-500">Aucune exécution enregistrée sur la fenêtre.</p>
+          <p className="mt-3 text-sm text-[var(--g3-muted)]">Aucune exécution enregistrée sur la fenêtre.</p>
         ) : (
           <ul className="mt-4 space-y-2">
             {executions.map((execution) => {
               const expanded = expandedId === execution.id;
               return (
-                <li key={execution.id} className="rounded-xl border border-neutral-200">
+                <li key={execution.id} className="rounded-xl border border-[var(--g3-border)]">
                   <button
                     type="button"
                     onClick={() => setExpandedId(expanded ? null : execution.id)}
@@ -193,24 +193,24 @@ export function ObservabilityDashboard({ overview }: { overview: ObservabilityOv
                     <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${STATUS_STYLES[execution.status] ?? STATUS_STYLES.cancelled}`}>
                       {STATUS_LABELS[execution.status] ?? execution.status}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm text-neutral-700">{execution.objective}</span>
-                    <span className="text-xs text-neutral-400">{formatDate(execution.createdAt)}</span>
-                    <span aria-hidden="true" className="text-xs text-neutral-400">{expanded ? "▲" : "▼"}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-[var(--g3-text-secondary)]">{execution.objective}</span>
+                    <span className="text-xs text-[var(--g3-faint)]">{formatDate(execution.createdAt)}</span>
+                    <span aria-hidden="true" className="text-xs text-[var(--g3-faint)]">{expanded ? "▲" : "▼"}</span>
                   </button>
                   {expanded && (
-                    <div className="anim-fade-in border-t border-neutral-100 px-4 py-3 text-sm">
-                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-neutral-600 sm:grid-cols-4">
-                        <div><dt className="text-neutral-400">Coût facturé</dt><dd className="font-semibold">{formatCharge(execution.chargeMinor, execution.currency)}</dd></div>
-                        <div><dt className="text-neutral-400">Coût fournisseurs</dt><dd className="font-semibold">€{execution.providerCostEur.toFixed(4)}</dd></div>
-                        <div><dt className="text-neutral-400">Tokens</dt><dd className="font-semibold">{execution.inputTokens} → {execution.outputTokens}</dd></div>
-                        <div><dt className="text-neutral-400">Durée</dt><dd className="font-semibold">{formatDuration(execution.durationMs)}</dd></div>
-                        <div><dt className="text-neutral-400">Étapes du plan</dt><dd className="font-semibold">{execution.stepCount}{execution.failedSteps > 0 ? ` (${execution.failedSteps} en échec)` : ""}</dd></div>
-                        <div className="col-span-2 sm:col-span-3"><dt className="text-neutral-400">Outils appelés</dt><dd className="font-semibold">{Object.keys(execution.toolCounts).length > 0 ? Object.entries(execution.toolCounts).map(([name, count]) => `${name} ×${count}`).join(", ") : "aucun"}</dd></div>
+                    <div className="anim-fade-in border-t border-[var(--g3-border)] px-4 py-3 text-sm">
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-[var(--g3-muted)] sm:grid-cols-4">
+                        <div><dt className="text-[var(--g3-faint)]">Coût facturé</dt><dd className="font-semibold">{formatCharge(execution.chargeMinor, execution.currency)}</dd></div>
+                        <div><dt className="text-[var(--g3-faint)]">Coût fournisseurs</dt><dd className="font-semibold">€{execution.providerCostEur.toFixed(4)}</dd></div>
+                        <div><dt className="text-[var(--g3-faint)]">Tokens</dt><dd className="font-semibold">{execution.inputTokens} → {execution.outputTokens}</dd></div>
+                        <div><dt className="text-[var(--g3-faint)]">Durée</dt><dd className="font-semibold">{formatDuration(execution.durationMs)}</dd></div>
+                        <div><dt className="text-[var(--g3-faint)]">Étapes du plan</dt><dd className="font-semibold">{execution.stepCount}{execution.failedSteps > 0 ? ` (${execution.failedSteps} en échec)` : ""}</dd></div>
+                        <div className="col-span-2 sm:col-span-3"><dt className="text-[var(--g3-faint)]">Outils appelés</dt><dd className="font-semibold">{Object.keys(execution.toolCounts).length > 0 ? Object.entries(execution.toolCounts).map(([name, count]) => `${name} ×${count}`).join(", ") : "aucun"}</dd></div>
                       </dl>
                       {execution.error ? (
                         <p className="mt-2.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">Erreur : {execution.error}</p>
                       ) : null}
-                      <p className="mt-2.5 text-[11px] text-neutral-400">Trace {execution.id} · fin {formatDate(execution.completedAt ?? "")}</p>
+                      <p className="mt-2.5 text-[11px] text-[var(--g3-faint)]">Trace {execution.id} · fin {formatDate(execution.completedAt ?? "")}</p>
                     </div>
                   )}
                 </li>

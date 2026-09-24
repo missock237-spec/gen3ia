@@ -164,7 +164,7 @@ export default function ProjectDetailPage() {
         <div className="g3-card space-y-4 !p-4">
           <div>
             <label htmlFor="project-instructions" className="g3-label">Instructions persistantes</label>
-            <p className="mb-1.5 text-[11px] text-neutral-500">
+            <p className="mb-1.5 text-[11px] text-[var(--g3-muted)]">
               Injectées dans chaque conversation du projet : ton, contexte, format attendu, contraintes.
             </p>
             <textarea
@@ -179,7 +179,7 @@ export default function ProjectDetailPage() {
           </div>
           <div>
             <label htmlFor="project-privacy" className="g3-label">Règles de confidentialité</label>
-            <p className="mb-1.5 text-[11px] text-neutral-500">
+            <p className="mb-1.5 text-[11px] text-[var(--g3-muted)]">
               Impératives pour l&apos;agent dans ce projet : données à ne jamais citer, périmètre autorisé.
             </p>
             <textarea
@@ -215,8 +215,8 @@ export default function ProjectDetailPage() {
             {conversations.map((conversation) => (
               <li key={conversation.id}>
                 <Link href={`/workspace/conversations/${conversation.id}`} className="g3-card block !p-3 transition-colors hover:border-neutral-400">
-                  <p className="truncate text-xs font-semibold text-neutral-800">{conversation.title || "Sans titre"}</p>
-                  <p className="mt-0.5 text-[10px] text-neutral-500">
+                  <p className="truncate text-xs font-semibold text-[var(--g3-text)]">{conversation.title || "Sans titre"}</p>
+                  <p className="mt-0.5 text-[10px] text-[var(--g3-muted)]">
                     {conversation.messageCount} message(s) · {formatRelative(conversation.updatedAt)}
                   </p>
                 </Link>
@@ -240,7 +240,7 @@ export default function ProjectDetailPage() {
           </div>
           <div>
             <label htmlFor="project-connectors" className="g3-label">Connecteurs autorisés</label>
-            <p className="mb-1.5 text-[11px] text-neutral-500">
+            <p className="mb-1.5 text-[11px] text-[var(--g3-muted)]">
               Slugs séparés par des virgules (ex. : gmail, googledrive, notion). L&apos;agent ne mobilisera dans ce projet que ces connecteurs.
             </p>
             <input id="project-connectors" value={connectorsText} onChange={(event) => setConnectorsText(event.target.value)} className="g3-input text-sm" placeholder="gmail, googledrive, notion" />
@@ -251,11 +251,11 @@ export default function ProjectDetailPage() {
             </button>
             {savedNote && <span className="text-xs text-emerald-700">{savedNote}</span>}
           </div>
-          <div className="border-t border-neutral-100 pt-3">
+          <div className="border-t border-[var(--g3-border)] pt-3">
             <button type="button" onClick={() => void remove()} className="g3-btn g3-btn-danger text-xs">
               Supprimer le projet
             </button>
-            <p className="mt-1.5 text-[10px] text-neutral-500">Les conversations rattachées sont conservées (détachées), aucun contenu n&apos;est détruit.</p>
+            <p className="mt-1.5 text-[10px] text-[var(--g3-muted)]">Les conversations rattachées sont conservées (détachées), aucun contenu n&apos;est détruit.</p>
           </div>
         </div>
       )}

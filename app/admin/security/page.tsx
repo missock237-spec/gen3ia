@@ -99,19 +99,19 @@ export default function AdminSecurityPage() {
       </div>
 
       <section aria-label="Journal d'audit">
-        <h2 className="mb-3 text-lg font-bold text-neutral-100">Exécutions d&apos;outils des agents</h2>
+        <h2 className="mb-3 text-lg font-bold text-[var(--g3-text-secondary)]">Exécutions d&apos;outils des agents</h2>
         <ResourceList
           rows={auditRows}
           ariaLabel="Journal d'audit"
           emptyState={<EmptyState icon="⚖" title="Aucune entrée d'audit" description="Les exécutions d'outils sensibles apparaîtront ici." />}
-          className="[&_li]:border-white/10 [&_li]:bg-white/5 [&_li_*.text-neutral-800]:text-neutral-100"
+          className="[&_li]:border-white/10 [&_li]:bg-[var(--g3-surface)]/5 [&_li_*.text-[var(--g3-text)]]:text-[var(--g3-text-secondary)]"
         />
       </section>
 
       {cameraRows.length > 0 && (
         <section aria-label="Demandes caméra">
-          <h2 className="mb-3 text-lg font-bold text-neutral-100">Demandes d&apos;accès caméra</h2>
-          <ResourceList rows={cameraRows} ariaLabel="Demandes caméra" className="[&_li]:border-white/10 [&_li]:bg-white/5 [&_li_*.text-neutral-800]:text-neutral-100" />
+          <h2 className="mb-3 text-lg font-bold text-[var(--g3-text-secondary)]">Demandes d&apos;accès caméra</h2>
+          <ResourceList rows={cameraRows} ariaLabel="Demandes caméra" className="[&_li]:border-white/10 [&_li]:bg-[var(--g3-surface)]/5 [&_li_*.text-[var(--g3-text)]]:text-[var(--g3-text-secondary)]" />
         </section>
       )}
     </div>

@@ -87,7 +87,7 @@ export default function DocumentsOnboardingPage() {
       </div>
 
       <div className={cardCls}>
-        <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Nouveau parcours</h2>
+        <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Nouveau parcours</h2>
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="Nom du parcours">
             <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Arrivée septembre 2026" />
@@ -111,7 +111,7 @@ export default function DocumentsOnboardingPage() {
       </div>
 
       <ModuleSection title={`Parcours (${flows.length})`}>
-        {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+        {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
         {!loading && flows.length === 0 ? <EmptyHint>Aucun parcours pour l&apos;instant.</EmptyHint> : null}
         <div className="grid gap-4 lg:grid-cols-2">
           {flows.map((flow) => {
@@ -121,8 +121,8 @@ export default function DocumentsOnboardingPage() {
               <article key={flow.id} className={cardCls}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h3 className="text-[14px] font-bold text-neutral-900">{flow.name}</h3>
-                    <p className="text-[12.5px] text-neutral-500">
+                    <h3 className="text-[14px] font-bold text-[var(--g3-text)]">{flow.name}</h3>
+                    <p className="text-[12.5px] text-[var(--g3-muted)]">
                       {flow.targetName} · {ROLE_LABELS[flow.role] ?? flow.role} · {done}/{total} étapes
                     </p>
                   </div>
@@ -133,15 +133,15 @@ export default function DocumentsOnboardingPage() {
                   {(flow.steps ?? []).map((step, index) => (
                     <li key={index}>
                       <button
-                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12.5px] transition ${step.done ? "bg-emerald-50 text-emerald-800" : "bg-neutral-50 text-neutral-700 hover:bg-neutral-100"}`}
+                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12.5px] transition ${step.done ? "bg-emerald-50 text-emerald-800" : "bg-[var(--g3-elevated)] text-[var(--g3-text-secondary)] hover:bg-[var(--g3-elevated)]"}`}
                         onClick={() => toggleStep(flow, index)}
                         disabled={busy}
                       >
-                        <span className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${step.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-neutral-300 bg-white text-neutral-400"}`}>
+                        <span className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${step.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-[var(--g3-border-strong)] bg-[var(--g3-surface)] text-[var(--g3-faint)]"}`}>
                           {step.done ? "✓" : index + 1}
                         </span>
                         <span className="flex-1">{step.title}</span>
-                        <span className="text-[11px] text-neutral-400">J+{step.dueInDays}</span>
+                        <span className="text-[11px] text-[var(--g3-faint)]">J+{step.dueInDays}</span>
                       </button>
                     </li>
                   ))}

@@ -27,7 +27,25 @@ const PatchSchema = z.object({
     inboundEnabled: z.boolean().optional(), outboundEnabled: z.boolean().optional(), voiceEnabled: z.boolean().optional(),
   }).optional(),
   status: z.enum(["draft", "active", "paused", "archived"]).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  authorizationMode: z.enum(["always_ask", "ask_if_needed", "auto_allow"]).optional(),
+  budgetEurMinor: z.number().int().min(0).max(1_000_000).optional(),
+  subAgentIds: z.array(z.string().trim().min(1).max(128)).max(5).optional(),
+  mcpEnabled: z.boolean().optional(),
+  persona: z.record(z.string(), z.unknown()).optional(),
 });
+
+/**
+ * Valide la liste blanche de sous-agents : ids réels, possédés par
+ * l'utilisateur, actifs, et sans auto-référence.
+ */
+async function validateSubAgentIds(ownerId: string, agentId: string, subAgentIds: string[] | undefined): Promise<string | null> {
+  if (!subAgentIds) return null;
+  if (subAgentIds.includes(agentId)) return "Un agent ne peut pas se déléguer à lui-même.";
+  const resolved = await Promise.all(subAgentIds.map((subId) => getAgentForOwner(ownerId, subId)));
+  const missing = subAgentIds.filter((_, index) => !resolved[index] || resolved[index]!.status !== "active");
+  return missing.length > 0 ? `Sous-agents introuvables ou inactifs : ${missing.join(", ")}` : null;
+}
 
 export async function GET(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
@@ -46,6 +64,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const parsed = PatchSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Mise a jour invalide", issues: parsed.error.flatten(), requestId }, { status: 400 });
     if (parsed.data.projectId && !(await getDeveloperProject(user.uid, parsed.data.projectId))) return NextResponse.json({ error: "Projet introuvable ou inaccessible", requestId }, { status: 403 });
+    const subAgentError = await validateSubAgentIds(user.uid, id, parsed.data.subAgentIds);
+    if (subAgentError) return NextResponse.json({ error: subAgentError, requestId }, { status: 422 });
     const record = await updateAgentForOwner(user.uid, id, parsed.data);
     if (!record) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
     return NextResponse.json({ agent: toSummary(record), requestId }, { headers: { "x-request-id": requestId } });

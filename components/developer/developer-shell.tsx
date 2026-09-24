@@ -23,13 +23,13 @@ export function DeveloperShell({ children }: { children: ReactNode }) {
   const current = nav.find((route) => active(route.href));
 
   return (
-    <div className="min-h-full bg-[#f5f5f2] text-neutral-950">
+    <div className="min-h-full bg-[var(--g3-elevated)] text-neutral-950">
       <div className="mx-auto flex min-h-full max-w-[1500px] flex-col lg:flex-row">
-        <aside className="w-full border-b bg-[#11120f] p-4 text-white lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r lg:p-5">
+        <aside className="w-full border-b bg-[var(--g3-deep)] p-4 text-white lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r lg:p-5">
           <Link href="/studio" className="flex items-center gap-2 text-lg font-bold">
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-white text-black">G</span> Gen3ia
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--g3-surface)] text-black">G</span> Gen3ia
           </Link>
-          <div className="mt-1 text-[10px] uppercase tracking-[.25em] text-neutral-500">Developer Studio</div>
+          <div className="mt-1 text-[10px] uppercase tracking-[.25em] text-[var(--g3-muted)]">Developer Studio</div>
 
           <nav aria-label="Espace développeur" className="mt-8 space-y-1">
             {nav.map((route) => (
@@ -39,8 +39,8 @@ export function DeveloperShell({ children }: { children: ReactNode }) {
                 aria-current={active(route.href) ? "page" : undefined}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
                   active(route.href)
-                    ? "bg-white text-black"
-                    : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                    ? "bg-[var(--g3-surface)] text-black"
+                    : "text-[var(--g3-faint)] hover:bg-[var(--g3-deep)] hover:text-white"
                 }`}
               >
                 <span className="w-5 text-center" aria-hidden="true">{route.icon}</span>
@@ -49,15 +49,15 @@ export function DeveloperShell({ children }: { children: ReactNode }) {
             ))}
           </nav>
 
-          <div className="mt-8 border-t border-neutral-800 pt-5">
-            <label htmlFor="developer-project" className="text-[10px] uppercase tracking-widest text-neutral-600">
+          <div className="mt-8 border-t border-[var(--g3-border)] pt-5">
+            <label htmlFor="developer-project" className="text-[10px] uppercase tracking-widest text-[var(--g3-muted)]">
               Projet actif
             </label>
             <select
               id="developer-project"
               value={selectedProject}
               onChange={(event) => setSelectedProject(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-white"
+              className="mt-2 w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-deep)] px-3 py-2 text-xs text-white"
             >
               <option value="">Sélectionner</option>
               {projects.map((candidate) => (
@@ -68,29 +68,29 @@ export function DeveloperShell({ children }: { children: ReactNode }) {
             </select>
           </div>
 
-          <div className="mt-8 space-y-3 text-xs text-neutral-500">
-            <div className="rounded-2xl border border-neutral-800 p-3">Compte développeur</div>
+          <div className="mt-8 space-y-3 text-xs text-[var(--g3-muted)]">
+            <div className="rounded-2xl border border-[var(--g3-border)] p-3">Compte développeur</div>
             <BackToWorkspace label="Retour au Workspace" />
           </div>
         </aside>
 
         <main className="min-w-0 flex-1 p-5 md:p-8">
           <header className="mb-7">
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-400">
-              <Link href="/studio" className="transition hover:text-neutral-700">Espace de travail</Link>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--g3-faint)]">
+              <Link href="/studio" className="transition hover:text-[var(--g3-text-secondary)]">Espace de travail</Link>
               <span aria-hidden="true">/</span>
               <span className="font-medium text-sky-700">Développeur</span>
               {current && current.href !== "/developer" && (
                 <>
                   <span aria-hidden="true">/</span>
-                  <span className="font-medium text-neutral-600">{current.label}</span>
+                  <span className="font-medium text-[var(--g3-muted)]">{current.label}</span>
                 </>
               )}
             </div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">{current?.label ?? "Vue d'ensemble"}</h1>
-            <p className="mt-1 max-w-3xl text-sm text-neutral-500">
+            <p className="mt-1 max-w-3xl text-sm text-[var(--g3-muted)]">
               {current?.description ?? "Construis, connecte, teste et déploie tes applications Gen3ia."}
-              {project && <span className="ml-1.5 rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold text-white">{project.name}</span>}
+              {project && <span className="ml-1.5 rounded-full bg-[var(--g3-deep)] px-2 py-0.5 text-[10px] font-semibold text-white">{project.name}</span>}
             </p>
           </header>
 

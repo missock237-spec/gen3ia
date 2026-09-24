@@ -216,7 +216,7 @@ export default function LibraryPage() {
       />
 
       <div className="g3-card flex flex-wrap items-center gap-3 !p-3">
-        <label className="flex items-center gap-2 text-xs text-neutral-600">
+        <label className="flex items-center gap-2 text-xs text-[var(--g3-muted)]">
           Démarrer dans
           <select
             value={projectId}
@@ -256,15 +256,15 @@ export default function LibraryPage() {
           {visible.map((capability) => (
             <li key={capability.id} className="g3-card flex flex-col !p-4">
               <div className="flex items-center gap-2.5">
-                <span className="grid size-9 place-items-center rounded-xl bg-neutral-900 text-sm text-white" aria-hidden>
+                <span className="grid size-9 place-items-center rounded-xl bg-[var(--g3-deep)] text-sm text-white" aria-hidden>
                   {capability.icon}
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-neutral-900">{capability.label}</p>
-                  <p className="text-[10px] uppercase tracking-wide text-neutral-400">{capability.category}</p>
+                  <p className="text-sm font-semibold text-[var(--g3-text)]">{capability.label}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-[var(--g3-faint)]">{capability.category}</p>
                 </div>
               </div>
-              <p className="mt-2.5 flex-1 text-xs leading-relaxed text-neutral-600">{capability.description}</p>
+              <p className="mt-2.5 flex-1 text-xs leading-relaxed text-[var(--g3-muted)]">{capability.description}</p>
               <button
                 type="button"
                 onClick={() => void startConversation(capability)}
@@ -278,7 +278,7 @@ export default function LibraryPage() {
         </ul>
       )}
 
-      <p className="text-[11px] leading-relaxed text-neutral-500">
+      <p className="text-[11px] leading-relaxed text-[var(--g3-muted)]">
         Ces capacités s&apos;appuient sur les six moteurs communs de la plateforme (IA, documents, workflow,
         planification, analytique, données) et sur vos connecteurs. Les agents spécialisés restent disponibles
         dans <Link href="/studio/agents" className="underline underline-offset-2">l&apos;espace Agents</Link>.

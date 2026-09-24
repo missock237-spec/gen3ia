@@ -92,7 +92,7 @@ export default function DocumentsContractsPage() {
       {notice ? <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700">{notice}</p> : null}
 
       <div className={cardCls}>
-        <h2 className="mb-4 text-[15px] font-bold text-neutral-900">Nouveau contrat</h2>
+        <h2 className="mb-4 text-[15px] font-bold text-[var(--g3-text)]">Nouveau contrat</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Titre">
             <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Contrat de prestation — refonte site web" />
@@ -140,15 +140,15 @@ export default function DocumentsContractsPage() {
       </div>
 
       <ModuleSection title={`Contrats (${contracts.length})`}>
-        {loading ? <p className="text-[13px] text-neutral-500">Chargement…</p> : null}
+        {loading ? <p className="text-[13px] text-[var(--g3-muted)]">Chargement…</p> : null}
         {!loading && contracts.length === 0 ? <EmptyHint>Aucun contrat pour l&apos;instant.</EmptyHint> : null}
         <div className="space-y-2.5">
           {contracts.map((contract) => (
             <article key={contract.id} className={cardCls}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h3 className="text-[14px] font-bold text-neutral-900">{contract.title}</h3>
-                  <p className="text-[12.5px] text-neutral-500">
+                  <h3 className="text-[14px] font-bold text-[var(--g3-text)]">{contract.title}</h3>
+                  <p className="text-[12.5px] text-[var(--g3-muted)]">
                     {contract.clientName} · {TYPE_LABELS[contract.type] ?? contract.type}
                     {contract.amount ? ` · ${contract.amount} ${contract.currency ?? "EUR"}` : ""} · créé le {shortDate(contract.createdAt)}
                   </p>
@@ -157,7 +157,7 @@ export default function DocumentsContractsPage() {
               </div>
 
               {openId === contract.id && (contract as Contract & { body?: string }).body ? (
-                <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-50 p-3.5 font-sans text-[12.5px] leading-relaxed text-neutral-700">
+                <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-elevated)] p-3.5 font-sans text-[12.5px] leading-relaxed text-[var(--g3-text-secondary)]">
                   {(contract as Contract & { body?: string }).body}
                 </pre>
               ) : null}

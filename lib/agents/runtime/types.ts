@@ -3,7 +3,7 @@ import { z } from "zod";
 export const RuntimeStepStatusSchema = z.enum(["pending","ready","running","completed","failed","cancelled","waiting_approval","skipped"]);
 export type RuntimeStepStatus = z.infer<typeof RuntimeStepStatusSchema>;
 
-export const RuntimeStepTypeSchema = z.enum(["llm","tool","research","document","media","code","condition"]);
+export const RuntimeStepTypeSchema = z.enum(["llm","tool","research","document","media","code","condition","agent"]);
 export type RuntimeStepType = z.infer<typeof RuntimeStepTypeSchema>;
 
 export const RuntimeStepSchema = z.object({
@@ -11,6 +11,9 @@ export const RuntimeStepSchema = z.object({
   dependencies: z.array(z.string()).default([]), status: RuntimeStepStatusSchema.default("pending"), input: z.record(z.string(), z.unknown()).default({}), output: z.unknown().optional(),
   toolName: z.string().optional(), skillIds: z.array(z.string()).default([]), maxRetries: z.number().int().min(0).max(10).default(2), timeoutMs: z.number().int().positive().max(120_000).default(120_000),
   sideEffect: z.boolean().default(false), requiresApproval: z.boolean().default(false), agentRole: z.string().min(1).optional(),
+  // Étapes "agent" : identifiant du sous-agent délégué (doit figurer dans la
+  // liste autorisée transmise au runtime — voir RuntimeAgentConfig.subAgentIds).
+  agentId: z.string().optional(),
 });
 export type RuntimeStep = z.infer<typeof RuntimeStepSchema>;
 

@@ -27,12 +27,12 @@ export function PermissionNotice({
   return (
     <section className={`rounded-3xl border p-5 ${tones[tone]}`} role="alert">
       <div className="flex items-start gap-3.5">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/70 text-base" aria-hidden="true">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--g3-surface)]/70 text-base" aria-hidden="true">
           {icons[tone]}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-bold text-neutral-800">{title}</h2>
-          {description && <p className="mt-1 text-sm leading-6 text-neutral-600">{description}</p>}
+          <h2 className="text-sm font-bold text-[var(--g3-text)]">{title}</h2>
+          {description && <p className="mt-1 text-sm leading-6 text-[var(--g3-muted)]">{description}</p>}
           {actions && <div className="mt-3.5 flex flex-wrap items-center gap-2">{actions}</div>}
         </div>
       </div>
@@ -45,7 +45,7 @@ export function BackToWorkspace({ label = "Retour à l'espace de travail", href 
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-2 rounded-full bg-neutral-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-neutral-700"
+      className="inline-flex items-center gap-2 rounded-full bg-[var(--g3-deep)] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[var(--g3-elevated)]"
     >
       <span aria-hidden="true">←</span> {label}
     </Link>

@@ -49,7 +49,7 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 const VARIANT_STYLES: Record<ToastVariant, { border: string; icon: string; bar: string }> = {
   success: { border: "border-l-emerald-500", icon: "✓", bar: "bg-emerald-500" },
   error: { border: "border-l-red-500", icon: "!", bar: "bg-red-500" },
-  info: { border: "border-l-neutral-900", icon: "✦", bar: "bg-neutral-900" },
+  info: { border: "border-l-neutral-900", icon: "✦", bar: "bg-[var(--g3-deep)]" },
 };
 
 const ARIA_LIVE: Record<ToastVariant, "polite" | "assertive"> = {
@@ -122,11 +122,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 >
                   {styles.icon}
                 </span>
-                <p className="min-w-0 flex-1 text-[13px] leading-snug text-neutral-800">{item.message}</p>
+                <p className="min-w-0 flex-1 text-[13px] leading-snug text-[var(--g3-text)]">{item.message}</p>
                 <button
                   type="button"
                   onClick={() => dismiss(item.id)}
-                  className="shrink-0 rounded p-0.5 text-neutral-400 transition-colors hover:text-neutral-700"
+                  className="shrink-0 rounded p-0.5 text-[var(--g3-faint)] transition-colors hover:text-[var(--g3-text-secondary)]"
                   aria-label="Fermer la notification"
                 >
                   ✕

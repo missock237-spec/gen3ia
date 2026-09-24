@@ -148,7 +148,7 @@ export default function MissionsPage() {
           title="Connectez-vous pour retrouver vos missions"
           description="Vos missions, validations et livrables sont associés à votre compte Gen3ia."
           actions={
-            <Link href="/login" className="rounded-full bg-neutral-900 px-4 py-2 text-xs font-semibold text-white">
+            <Link href="/login" className="rounded-full bg-[var(--g3-deep)] px-4 py-2 text-xs font-semibold text-white">
               Se connecter
             </Link>
           }
@@ -161,7 +161,7 @@ export default function MissionsPage() {
           title="Chargement impossible"
           description={error}
           actions={
-            <button type="button" onClick={() => void load()} className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-semibold">
+            <button type="button" onClick={() => void load()} className="rounded-full border border-[var(--g3-border-strong)] bg-[var(--g3-surface)] px-4 py-2 text-xs font-semibold">
               Réessayer
             </button>
           }
@@ -178,11 +178,11 @@ export default function MissionsPage() {
             return (
               <section key={group.id} aria-label={group.title}>
                 <div className="mb-3 flex items-baseline justify-between gap-3">
-                  <h2 className="font-serif text-lg font-semibold text-neutral-900">
+                  <h2 className="font-serif text-lg font-semibold text-[var(--g3-text)]">
                     {group.title}
-                    <span className="ml-2 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-500">{items.length}</span>
+                    <span className="ml-2 rounded-full bg-[var(--g3-elevated)] px-2 py-0.5 text-xs font-semibold text-[var(--g3-muted)]">{items.length}</span>
                   </h2>
-                  <p className="hidden text-xs text-neutral-400 md:block">{group.description}</p>
+                  <p className="hidden text-xs text-[var(--g3-faint)] md:block">{group.description}</p>
                 </div>
                 {loading ? (
                   <LoadingState rows={2} />

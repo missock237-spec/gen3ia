@@ -105,7 +105,7 @@ export function TeamMembersPanel({ teamId }: { teamId: string }) {
       </div>
 
       {!canManage && (
-        <p className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs leading-5 text-neutral-500">
+        <p className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-4 py-3 text-xs leading-5 text-[var(--g3-muted)]">
           Seuls les propriétaires et admins de l&apos;équipe peuvent inviter et gérer les membres.
         </p>
       )}
@@ -121,7 +121,7 @@ export function TeamMembersPanel({ teamId }: { teamId: string }) {
         >
           <p>{feedback.text}</p>
           {feedback.kind === 'ok' && lastToken && (
-            <code className="mt-2 block truncate rounded-lg bg-white/80 px-2 py-1 text-xs text-emerald-900">
+            <code className="mt-2 block truncate rounded-lg bg-[var(--g3-surface)]/80 px-2 py-1 text-xs text-emerald-900">
               {`${typeof window !== 'undefined' ? window.location.origin : ''}/team/join?token=${lastToken}`}
             </code>
           )}
@@ -133,20 +133,20 @@ export function TeamMembersPanel({ teamId }: { teamId: string }) {
         {members.map((member) => (
           <li
             key={member.userId}
-            className="flex flex-col gap-3 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-4 transition hover:border-neutral-300 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-3 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-4 transition hover:border-[var(--g3-border-strong)] sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex min-w-0 items-center gap-3">
               {member.photoURL ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={member.photoURL} alt="" className="h-10 w-10 shrink-0 rounded-full border border-neutral-200" />
+                <img src={member.photoURL} alt="" className="h-10 w-10 shrink-0 rounded-full border border-[var(--g3-border)]" />
               ) : (
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-neutral-100 text-sm font-semibold text-neutral-500">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--g3-elevated)] text-sm font-semibold text-[var(--g3-muted)]">
                   {(member.displayName || member.email || '?').charAt(0).toUpperCase()}
                 </span>
               )}
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-neutral-900">{member.displayName || 'Membre'}</p>
-                <p className="truncate text-xs text-neutral-500">{member.email}</p>
+                <p className="truncate text-sm font-semibold text-[var(--g3-text)]">{member.displayName || 'Membre'}</p>
+                <p className="truncate text-xs text-[var(--g3-muted)]">{member.email}</p>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -175,7 +175,7 @@ export function TeamMembersPanel({ teamId }: { teamId: string }) {
           </li>
         ))}
         {members.length === 0 && (
-          <li className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/60 p-6 text-center text-sm text-neutral-500">
+          <li className="rounded-2xl border border-dashed border-[var(--g3-border-strong)] bg-[var(--g3-elevated)]/60 p-6 text-center text-sm text-[var(--g3-muted)]">
             Aucun membre affiché pour le moment.
           </li>
         )}

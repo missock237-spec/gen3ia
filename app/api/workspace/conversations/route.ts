@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { createConversation, listConversations } from "@/lib/chat/repository";
 import { getProject } from "@/lib/domain/projects/repository";
 
@@ -33,6 +34,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser(request);
+
+    // Audit 25-c : la création de conversations n'était pas limitée
+    // (créations illimitées = risque d'abus Firestore + spam). Même
+    // pattern que messages/stream : limiter RENFORCÉ (local + Redis
+    // distribué), 20 créations/minute/utilisateur, 429 avec Retry-After.
+    const limit = await enforceRateLimit(`ws-conv-create:${user.uid}`, {
+      limit: 20,
+      windowMs: 60_000,
+    });
+    if (!limit.allowed) {
+      return Response.json(
+        { error: "Trop de conversations créées. Réessayez dans un instant." },
+        { status: 429, headers: { "retry-after": String(Math.max(1, Math.ceil(limit.retryAfterMs / 1000))) } },
+      );
+    }
+
     const body = CreateSchema.parse(await request.json().catch(() => ({})));
     if (body.projectId) {
       const project = await getProject(user.uid, body.projectId);

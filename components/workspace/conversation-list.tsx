@@ -180,9 +180,9 @@ export function ConversationList({
         {searching && (
           <span
             aria-hidden
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-400"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-[var(--g3-faint)]"
           >
-            <span className="inline-block h-3 w-3 animate-spin rounded-full border border-neutral-300 border-t-neutral-600" />
+            <span className="inline-block h-3 w-3 animate-spin rounded-full border border-[var(--g3-border-strong)] border-t-neutral-600" />
           </span>
         )}
       </div>
@@ -204,11 +204,11 @@ export function ConversationList({
                   >
                     <span className="truncate font-medium">{result.title || "Sans titre"}</span>
                     {result.excerpt && (
-                      <span className="line-clamp-2 text-[10px] leading-snug text-neutral-500">
+                      <span className="line-clamp-2 text-[10px] leading-snug text-[var(--g3-muted)]">
                         « {result.excerpt} »
                       </span>
                     )}
-                    <span className="flex items-center gap-1 text-[10px] text-neutral-500">
+                    <span className="flex items-center gap-1 text-[10px] text-[var(--g3-muted)]">
                       {formatRelative(result.updatedAt)}
                       {typeof result.score === "number" ? ` · pertinence ${Math.round(result.score * 100)}%` : ""}
                       {result.messageCount > 0 ? ` · ${result.messageCount} msg` : ""}
@@ -229,7 +229,7 @@ export function ConversationList({
               aria-expanded={projectsOpen}
             >
               Projets
-              <span aria-hidden className="text-neutral-400">{projectsOpen ? "▾" : "▸"}</span>
+              <span aria-hidden className="text-[var(--g3-faint)]">{projectsOpen ? "▾" : "▸"}</span>
             </button>
             {projectsOpen && (
               <ul className="mt-1.5 space-y-0.5">
@@ -237,11 +237,11 @@ export function ConversationList({
                   <li key={project.id}>
                     <Link
                       href={`/workspace/projects/${project.id}`}
-                      className="g3-side-link flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-neutral-700"
+                      className="g3-side-link flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-[var(--g3-text-secondary)]"
                       title={project.name}
                     >
                       <span className="truncate">▦ {project.name}</span>
-                      <span className="ml-2 shrink-0 rounded-full bg-neutral-100 px-1.5 text-[10px] text-neutral-500">
+                      <span className="ml-2 shrink-0 rounded-full bg-[var(--g3-elevated)] px-1.5 text-[10px] text-[var(--g3-muted)]">
                         {conversationsByProject.get(project.id) ?? 0}
                       </span>
                     </Link>
@@ -257,11 +257,11 @@ export function ConversationList({
           {loading && conversations.length === 0 ? (
             <div className="mt-2 space-y-2" aria-busy="true" aria-label="Chargement des conversations">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-9 animate-pulse rounded-lg bg-neutral-200/60" />
+                <div key={i} className="h-9 animate-pulse rounded-lg bg-[var(--g3-elevated)]/60" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="mt-2 text-xs leading-relaxed text-neutral-500">
+            <p className="mt-2 text-xs leading-relaxed text-[var(--g3-muted)]">
               {query
                 ? semanticActive
                   ? "Les conversations listées ci-dessus correspondent à votre recherche."
@@ -282,7 +282,7 @@ export function ConversationList({
                       title={conversation.title}
                     >
                       <span className="truncate font-medium">{conversation.title || "Sans titre"}</span>
-                      <span className={`flex items-center gap-1 text-[10px] ${active ? "text-neutral-300" : "text-neutral-500"}`}>
+                      <span className={`flex items-center gap-1 text-[10px] ${active ? "text-[var(--g3-faint)]" : "text-[var(--g3-muted)]"}`}>
                         {formatRelative(conversation.updatedAt)}
                         {project ? ` · ${project.name}` : ""}
                         {conversation.messageCount > 0 ? ` · ${conversation.messageCount} msg` : ""}
@@ -296,8 +296,8 @@ export function ConversationList({
         </section>
       </div>
 
-      <div className="border-t border-neutral-200 pt-2 text-[11px] leading-relaxed text-neutral-500">
-        <Link href="/workspace/projects" className="hover:text-neutral-800">
+      <div className="border-t border-[var(--g3-border)] pt-2 text-[11px] leading-relaxed text-[var(--g3-muted)]">
+        <Link href="/workspace/projects" className="hover:text-[var(--g3-text)]">
           Gérer les projets →
         </Link>
       </div>

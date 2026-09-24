@@ -73,7 +73,7 @@ export default function ProjectsPage() {
       />
 
       <div className="g3-card space-y-3 !p-4">
-        <h2 className="text-sm font-semibold text-neutral-900">Nouveau projet</h2>
+        <h2 className="text-sm font-semibold text-[var(--g3-text)]">Nouveau projet</h2>
         <div className="grid gap-2 md:grid-cols-2">
           <input
             value={name}
@@ -112,15 +112,15 @@ export default function ProjectsPage() {
             <li key={project.id} className="g3-card flex flex-col !p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-neutral-900">▦ {project.name}</p>
-                  <p className="mt-0.5 text-[10px] text-neutral-400">Mis à jour {formatRelative(project.updatedAt)}</p>
+                  <p className="truncate text-sm font-semibold text-[var(--g3-text)]">▦ {project.name}</p>
+                  <p className="mt-0.5 text-[10px] text-[var(--g3-faint)]">Mis à jour {formatRelative(project.updatedAt)}</p>
                 </div>
                 {project.status === "archived" && (
-                  <span className="shrink-0 rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] text-neutral-500">Archivé</span>
+                  <span className="shrink-0 rounded-full border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-2 py-0.5 text-[10px] text-[var(--g3-muted)]">Archivé</span>
                 )}
               </div>
-              {project.description && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-neutral-600">{project.description}</p>}
-              <div className="mt-2.5 flex flex-wrap gap-1.5 text-[10px] text-neutral-500">
+              {project.description && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[var(--g3-muted)]">{project.description}</p>}
+              <div className="mt-2.5 flex flex-wrap gap-1.5 text-[10px] text-[var(--g3-muted)]">
                 {project.instructions && (
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">instructions actives</span>
                 )}
@@ -128,7 +128,7 @@ export default function ProjectsPage() {
                   <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-700">confidentialité</span>
                 )}
                 {project.authorizedConnectors.length > 0 && (
-                  <span className="rounded-full bg-neutral-100 px-2 py-0.5">
+                  <span className="rounded-full bg-[var(--g3-elevated)] px-2 py-0.5">
                     {project.authorizedConnectors.length} connecteur(s)
                   </span>
                 )}

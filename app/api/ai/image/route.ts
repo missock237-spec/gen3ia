@@ -15,7 +15,7 @@ import {
 /**
  * Génération d'images réelle (Agnes AI) — endpoint dédié.
  *
- * Utilisé par le chat IA et le chat d'agent IA : l'utilisateur demande une
+ * Utilisé par le chat d'agent IA : l'utilisateur demande une
  * image en langage naturel, le serveur détecte l'intention et/ou l'UI appelle
  * directement cet endpoint. Authentification obligatoire + quota par
  * utilisateur (la clé Agnes est partagée par toute la plateforme).

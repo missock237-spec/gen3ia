@@ -56,9 +56,15 @@ function planDeRepli(userId: string, objective: string): RuntimePlan {
   throw new Error("Generated plan rejected and fallback plan failed.");
 }
 
+export interface CreateAgentPlanOptions {
+  /** Sous-agents délégables (liste blanche, injectée au planner). */
+  subAgents?: Array<{ id: string; name: string; description: string; typeLabel?: string }>;
+}
+
 export async function createAgentPlan(
   userId: string,
   objective: string,
+  options: CreateAgentPlanOptions = {},
 ): Promise<RuntimePlan> {
   const tools =
     buildPlannerToolContext();
@@ -86,6 +92,7 @@ export async function createAgentPlan(
             ),
         }),
       ),
+      subAgents: options.subAgents,
     });
 
   const validation =
@@ -96,6 +103,9 @@ export async function createAgentPlan(
       ),
       skills.map(
         (skill) => skill.id,
+      ),
+      (options.subAgents ?? []).map(
+        (subAgent) => subAgent.id,
       ),
     );
 

@@ -169,3 +169,53 @@ export async function ensureBucketCors(allowedOrigins: string[]): Promise<{ appl
   }));
   return { applied: true };
 }
+
+/* ------------------------------------------------------------------ */
+/* Sonde de santé R2 (healthcheck infra)                               */
+/* ------------------------------------------------------------------ */
+
+export interface R2HealthStatus {
+  ok: boolean;
+  /** Raison stable de l'indisponibilité : "not_configured" | "timeout" | "error". */
+  reason?: string;
+}
+
+/** Indique si les variables d'environnement R2 sont complètes, sans lever d'exception. */
+export function isR2Configured(): boolean {
+  return Boolean(
+    process.env.R2_ACCOUNT_ID &&
+    process.env.R2_ACCESS_KEY_ID &&
+    process.env.R2_SECRET_ACCESS_KEY &&
+    process.env.R2_BUCKET,
+  );
+}
+
+/**
+ * Sonde légère du stockage R2 : une seule requête ListObjects (MaxKeys=1)
+ * bornée par un timeout court. Objectif : rendre visible une panne
+ * autrement invisible (audit 25-d : /api/health/infra renvoyait ok:true
+ * sans jamais vérifier R2).
+ *
+ * Cette sonde ne lève JAMAIS d'exception : un healthcheck doit rester
+ * consommable même quand le stockage est hors service. Les env absentes
+ * sont un état explicite ({ ok: false, reason: "not_configured" }), pas
+ * une erreur.
+ */
+export async function pingR2(timeoutMs = 3_000): Promise<R2HealthStatus> {
+  if (!isR2Configured()) return { ok: false, reason: "not_configured" };
+  try {
+    const { bucket } = getConfig();
+    await getClient().send(
+      new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 }),
+      { abortSignal: AbortSignal.timeout(timeoutMs) },
+    );
+    return { ok: true };
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    const message = error instanceof Error ? error.message : String(error);
+    if (name === "AbortError" || name === "TimeoutError" || /timeout|timed out|abort/i.test(message)) {
+      return { ok: false, reason: "timeout" };
+    }
+    return { ok: false, reason: "error" };
+  }
+}

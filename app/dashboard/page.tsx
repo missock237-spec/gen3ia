@@ -85,10 +85,10 @@ export default function DashboardPage() {
     <div className="mx-auto w-full max-w-3xl space-y-8 px-4 py-12 md:py-16">
       <header className="text-center">
         <p className="g3-eyebrow">GEN3IA</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-neutral-900 md:text-3xl">
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--g3-text)] md:text-3xl">
           Bon retour.
         </h1>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-neutral-500">
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--g3-muted)]">
           Vos conversations persistent : reprenez exactement là où vous vous êtes arrêté, ou lancez un nouvel objectif.
         </p>
       </header>
@@ -103,11 +103,11 @@ export default function DashboardPage() {
           <span aria-hidden>✦</span> {creating ? "Ouverture…" : "Nouvelle conversation"}
         </button>
         {unauthenticated ? (
-          <Link href="/" className="text-xs text-neutral-500 underline underline-offset-2">
+          <Link href="/" className="text-xs text-[var(--g3-muted)] underline underline-offset-2">
             Connectez-vous pour retrouver vos conversations
           </Link>
         ) : (
-          <Link href="/workspace" className="text-xs text-neutral-500 underline underline-offset-2">
+          <Link href="/workspace" className="text-xs text-[var(--g3-muted)] underline underline-offset-2">
             Ouvrir l&apos;espace conversationnel complet
           </Link>
         )}
@@ -119,11 +119,11 @@ export default function DashboardPage() {
           {loading ? (
             <div className="space-y-2" aria-busy>
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-14 animate-pulse rounded-xl bg-neutral-200/50" />
+                <div key={i} className="h-14 animate-pulse rounded-xl bg-[var(--g3-elevated)]/50" />
               ))}
             </div>
           ) : conversations.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-neutral-300 p-4 text-center text-xs text-neutral-500">
+            <p className="rounded-xl border border-dashed border-[var(--g3-border-strong)] p-4 text-center text-xs text-[var(--g3-muted)]">
               Aucune conversation pour l&apos;instant. Lancez votre premier objectif ci-dessus.
             </p>
           ) : (
@@ -135,12 +135,12 @@ export default function DashboardPage() {
                     className="g3-card flex items-center justify-between gap-3 !p-3.5 transition-colors hover:border-neutral-400"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-neutral-800">{conversation.title || "Sans titre"}</p>
-                      <p className="text-[11px] text-neutral-500">
+                      <p className="truncate text-sm font-medium text-[var(--g3-text)]">{conversation.title || "Sans titre"}</p>
+                      <p className="text-[11px] text-[var(--g3-muted)]">
                         {conversation.messageCount} message(s) · {formatRelative(conversation.updatedAt)}
                       </p>
                     </div>
-                    <span className="shrink-0 text-neutral-400" aria-hidden>→</span>
+                    <span className="shrink-0 text-[var(--g3-faint)]" aria-hidden>→</span>
                   </Link>
                 </li>
               ))}
@@ -170,11 +170,11 @@ export default function DashboardPage() {
           {quickLinks.map((link) => (
             <li key={link.href}>
               <Link href={link.href} className="g3-card flex flex-col gap-0.5 !p-3 transition-colors hover:border-neutral-400">
-                <span className="text-sm font-medium text-neutral-800">
+                <span className="text-sm font-medium text-[var(--g3-text)]">
                   <span aria-hidden className="mr-1.5">{link.icon}</span>
                   {link.label}
                 </span>
-                <span className="text-[10px] text-neutral-500">{link.description}</span>
+                <span className="text-[10px] text-[var(--g3-muted)]">{link.description}</span>
               </Link>
             </li>
           ))}

@@ -18,7 +18,9 @@ interface SearchHit {
   content: string;
   createdAt: string;
   agentId?: string;
+  key?: string;
   score: number;
+  source?: "episodic" | "keyvalue";
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -29,6 +31,8 @@ const TYPE_LABELS: Record<string, string> = {
   execution: "Exécution",
   artifact: "Livrable",
   project: "Projet",
+  // Souvenirs clé/valeur du panneau « Mémoire permanente » (recherche sous-chaîne).
+  keyvalue: "Clé/valeur",
 };
 
 const EXAMPLES = [
@@ -71,7 +75,7 @@ export function SemanticSearchPanel() {
     <div className="space-y-4">
       <div className="g3-card p-5">
         <h2 className="text-base font-bold">Recherche sémantique</h2>
-        <p className="mt-1 text-sm leading-6 text-neutral-500">
+        <p className="mt-1 text-sm leading-6 text-[var(--g3-muted)]">
           Posez une question en langage naturel : la mémoire retrouve les échanges, décisions et
           préférences pertinents par similarité de sens — pas seulement par mots-clés.
         </p>
@@ -103,12 +107,12 @@ export function SemanticSearchPanel() {
 
       {results !== null && (
         <div className="space-y-3" aria-live="polite">
-          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--g3-faint)]">
             {results.length} souvenir{results.length > 1 ? "s" : ""} pertinent{results.length > 1 ? "s" : ""} trouvé{results.length > 1 ? "s" : ""}
             {scope === "global" ? " · portée globale" : ""}
           </p>
           {results.length === 0 ? (
-            <div className="g3-card p-6 text-sm text-neutral-500">
+            <div className="g3-card p-6 text-sm text-[var(--g3-muted)]">
               Aucun souvenir ne correspond à cette recherche. Plus vous dialoguez avec vos agents, plus la
               mémoire épisodique s&apos;enrichit.
             </div>
@@ -119,10 +123,15 @@ export function SemanticSearchPanel() {
                   <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-700">
                     {TYPE_LABELS[hit.type] ?? hit.type}
                   </span>
-                  {hit.createdAt ? <span className="text-xs text-neutral-400">{hit.createdAt.slice(0, 10)}</span> : null}
-                  <span className="ml-auto text-xs font-semibold text-neutral-400">{Math.round(hit.score * 100)}% de correspondance</span>
+                  {hit.key && (
+                    <span className="rounded-full bg-[var(--g3-elevated)] px-2.5 py-0.5 font-mono text-[10px] font-semibold text-[var(--g3-muted)]">
+                      {hit.key}
+                    </span>
+                  )}
+                  {hit.createdAt ? <span className="text-xs text-[var(--g3-faint)]">{hit.createdAt.slice(0, 10)}</span> : null}
+                  <span className="ml-auto text-xs font-semibold text-[var(--g3-faint)]">{Math.round(hit.score * 100)}% de correspondance</span>
                 </div>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-neutral-700">{hit.content}</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--g3-text-secondary)]">{hit.content}</p>
               </article>
             ))
           )}

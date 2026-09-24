@@ -5,6 +5,7 @@ import { knowledgeSearchTool } from "./knowledge/search";
 import { getArtifactTool } from "./files/get-artifact";
 import { createArtifactTool } from "./files/create-artifact";
 import { createFileTool } from "./files/create";
+import { deleteFileTool } from "./files/delete";
 import { createZipTool } from "./files/create-zip";
 import { analyzeZipTool } from "./files/analyze-zip";
 import { extractZipTool } from "./files/extract-zip";
@@ -47,6 +48,7 @@ export function createDefaultToolRegistry(): ToolRegistry {
     getArtifactTool,
     createArtifactTool,
     createFileTool,
+    deleteFileTool,
     createZipTool,
     analyzeZipTool,
     extractZipTool,

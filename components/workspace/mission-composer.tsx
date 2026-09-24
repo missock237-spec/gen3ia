@@ -84,10 +84,10 @@ export function MissionComposer({
   return (
     <section
       aria-label="Composer une mission"
-      className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-5 shadow-[0_14px_40px_-24px_rgba(28,27,24,0.35)] md:p-6"
+      className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_14px_40px_-24px_rgba(28,27,24,0.35)] md:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-serif text-lg font-semibold text-neutral-900">Nouvelle mission</h2>
+        <h2 className="font-serif text-lg font-semibold text-[var(--g3-text)]">Nouvelle mission</h2>
         <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
           plan + validations automatiques
         </span>
@@ -105,8 +105,8 @@ export function MissionComposer({
                 aria-pressed={category === item}
                 className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                   category === item
-                    ? "border-neutral-900 bg-neutral-900 text-white"
-                    : "border-[rgba(23,23,20,0.12)] bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-900"
+                    ? "border-[var(--g3-border)] bg-[var(--g3-deep)] text-white"
+                    : "border-[rgba(23,23,20,0.12)] bg-[var(--g3-surface)] text-[var(--g3-muted)] hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
                 }`}
               >
                 {item}
@@ -127,18 +127,18 @@ export function MissionComposer({
                   onClick={() => selectTemplate(candidate)}
                   className={`rounded-2xl border p-3.5 text-left transition ${
                     selected
-                      ? "border-neutral-900 bg-neutral-900 text-white shadow-[0_10px_26px_-14px_rgba(28,27,24,0.55)]"
-                      : "border-[rgba(23,23,20,0.1)] bg-white text-neutral-700 hover:border-neutral-300"
+                      ? "border-[var(--g3-border)] bg-[var(--g3-deep)] text-white shadow-[0_10px_26px_-14px_rgba(28,27,24,0.55)]"
+                      : "border-[rgba(23,23,20,0.1)] bg-[var(--g3-surface)] text-[var(--g3-text-secondary)] hover:border-[var(--g3-border-strong)]"
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span aria-hidden="true">{candidate.icon}</span>
                     <span className="text-sm font-semibold">{candidate.label}</span>
                   </div>
-                  <p className={`mt-1.5 line-clamp-2 text-xs leading-5 ${selected ? "text-neutral-300" : "text-neutral-500"}`}>
+                  <p className={`mt-1.5 line-clamp-2 text-xs leading-5 ${selected ? "text-[var(--g3-faint)]" : "text-[var(--g3-muted)]"}`}>
                     {candidate.description}
                   </p>
-                  <div className={`mt-2 flex flex-wrap gap-1 ${selected ? "text-neutral-400" : "text-neutral-400"}`}>
+                  <div className={`mt-2 flex flex-wrap gap-1 ${selected ? "text-[var(--g3-faint)]" : "text-[var(--g3-faint)]"}`}>
                     {candidate.engines.map((engine) => (
                       <span key={engine} className="rounded-md bg-black/5 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide">
                         {engine}
@@ -164,8 +164,8 @@ export function MissionComposer({
                 aria-pressed={templateId === candidate.id}
                 className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                   templateId === candidate.id
-                    ? "border-neutral-900 bg-neutral-900 text-white"
-                    : "border-[rgba(23,23,20,0.12)] bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-900"
+                    ? "border-[var(--g3-border)] bg-[var(--g3-deep)] text-white"
+                    : "border-[rgba(23,23,20,0.12)] bg-[var(--g3-surface)] text-[var(--g3-muted)] hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
                 }`}
               >
                 <span aria-hidden="true" className="mr-1">{candidate.icon}</span>
@@ -174,7 +174,7 @@ export function MissionComposer({
             ))}
           <a
             href="/studio/create"
-            className="rounded-full border border-dashed border-[rgba(23,23,20,0.2)] px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:text-neutral-900"
+            className="rounded-full border border-dashed border-[rgba(23,23,20,0.2)] px-3 py-1.5 text-xs font-medium text-[var(--g3-muted)] transition hover:text-[var(--g3-text)]"
           >
             Tous les modèles →
           </a>
@@ -195,17 +195,17 @@ export function MissionComposer({
           placeholder={template.placeholder}
           rows={compact ? 3 : 4}
           autoFocus={autoFocus}
-          className="w-full resize-y rounded-2xl border border-[rgba(23,23,20,0.12)] bg-[#fbfaf7] p-4 text-sm leading-6 text-neutral-800 outline-none transition placeholder:text-neutral-400 focus:border-neutral-500 focus:bg-white"
+          className="w-full resize-y rounded-2xl border border-[rgba(23,23,20,0.12)] bg-[var(--g3-elevated)] p-4 text-sm leading-6 text-[var(--g3-text)] outline-none transition placeholder:text-[var(--g3-faint)] focus:border-neutral-500 focus:bg-[var(--g3-surface)]"
         />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-neutral-400">
+          <p className="text-xs text-[var(--g3-faint)]">
             Gen3ia crée un plan en étapes et vous demande les validations nécessaires. ⌘+Entrée pour lancer.
           </p>
           <button
             type="button"
             onClick={() => void submit()}
             disabled={busy}
-            className="inline-flex items-center gap-2 rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-full bg-[var(--g3-deep)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--g3-elevated)] disabled:opacity-50"
           >
             {busy ? "Création…" : "Lancer la mission"}
             <span aria-hidden="true">→</span>

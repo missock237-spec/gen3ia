@@ -67,12 +67,12 @@ export default function ObservabilityPage() {
             type="button"
             aria-pressed={days === option}
             onClick={() => setDays(option)}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${days === option ? "bg-neutral-900 text-white" : "border border-neutral-300 text-neutral-600 hover:bg-neutral-100"}`}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${days === option ? "bg-[var(--g3-deep)] text-white" : "border border-[var(--g3-border-strong)] text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"}`}
           >
             {option} jours
           </button>
         ))}
-        <button type="button" onClick={() => void load(days)} className="rounded-full border border-neutral-300 px-3.5 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100">
+        <button type="button" onClick={() => void load(days)} className="rounded-full border border-[var(--g3-border-strong)] px-3.5 py-1.5 text-xs font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]">
           Rafraîchir
         </button>
       </div>
@@ -82,15 +82,15 @@ export default function ObservabilityPage() {
       {sessionDisponible === false ? (
         <div className="g3-card p-10 text-center">
           <h2 className="font-serif text-xl font-semibold">Connectez-vous pour voir vos traces</h2>
-          <p className="mt-2 text-sm text-neutral-500">L&apos;observabilité est strictement personnelle : chaque compte ne voit que ses propres exécutions.</p>
+          <p className="mt-2 text-sm text-[var(--g3-muted)]">L&apos;observabilité est strictement personnelle : chaque compte ne voit que ses propres exécutions.</p>
           <Link href="/login?next=/observability" className="g3-btn g3-btn-primary mt-5 inline-flex">Se connecter</Link>
         </div>
       ) : loading ? (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-busy="true">
           {[0, 1, 2, 3, 4].map((index) => (
-            <div key={index} className="h-24 animate-pulse rounded-2xl border border-neutral-200 bg-white" />
+            <div key={index} className="h-24 animate-pulse rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)]" />
           ))}
-          <div className="col-span-2 h-48 animate-pulse rounded-2xl border border-neutral-200 bg-white lg:col-span-4" />
+          <div className="col-span-2 h-48 animate-pulse rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] lg:col-span-4" />
         </div>
       ) : overview ? (
         <ObservabilityDashboard overview={overview} />

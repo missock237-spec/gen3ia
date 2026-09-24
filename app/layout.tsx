@@ -5,6 +5,7 @@ import { AppShell } from "@/components/nav/app-shell";
 import { ToastProvider } from "@/components/ui/toast";
 import { PwaRegister } from "@/components/pwa-register";
 import { ScrollReveal } from "@/components/nav/scroll-reveal";
+import { ViewportHeightSync } from "@/components/nav/viewport-height-sync";
 
 import "./globals.css";
 
@@ -24,8 +25,22 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f6f4ef",
+  // Sur Android, le clavier virtuel réduit le viewport de MISE EN PAGE (et
+  // non seulement le viewport visuel) : les surfaces de chat plein écran
+  // rétrécissent avec lui et le composer reste visible au-dessus du clavier.
+  interactiveWidget: "resizes-content",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#080A0F" },
+    { media: "(prefers-color-scheme: light)", color: "#F6F4EF" },
+  ],
 };
+
+/**
+ * Bootstrap anti-FOUC du thème : appliqué AVANT la première peinture.
+ * Défaut : sombre (identité plateforme) ; la vitrine (accueil/auth/privacy)
+ * reste claire tant que l'utilisateur n'a pas choisi explicitement.
+ */
+const THEME_BOOTSTRAP = `(function(){try{var s=localStorage.getItem("gen3ia-theme");var p=location.pathname;var v=p==="/"||p.indexOf("/login")===0||p.indexOf("/signup")===0||p.indexOf("/privacy")===0;var t=s||(v?"light":"dark");document.documentElement.setAttribute("data-theme",t);}catch(e){document.documentElement.setAttribute("data-theme","dark");}})();`;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://gen3ia.online";
 
@@ -111,13 +126,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={`${inter.variable} ${sourceSerif.variable}`}>
+    <html
+      lang="fr"
+      className={`${inter.variable} ${sourceSerif.variable}`}
+      data-theme="dark"
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
+      </head>
       <body className="antialiased font-sans">
         <ToastProvider>
           <AppShell>{children}</AppShell>
         </ToastProvider>
         <ScrollReveal />
         <PwaRegister />
+        <ViewportHeightSync />
       </body>
     </html>
   );

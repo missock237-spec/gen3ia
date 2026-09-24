@@ -75,14 +75,14 @@ export function ProjectsPanel() {
                 type="button"
                 onClick={() => setSelectedProject(project.id)}
                 className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left ${
-                  selectedProject === project.id ? "border-sky-400 bg-sky-50" : "bg-white"
+                  selectedProject === project.id ? "border-sky-400 bg-sky-50" : "bg-[var(--g3-surface)]"
                 }`}
               >
                 <div>
                   <div className="font-semibold">{project.name}</div>
-                  <div className="mt-1 text-xs text-neutral-500">{`${project.framework} · ${project.environment} · ${project.slug}`}</div>
+                  <div className="mt-1 text-xs text-[var(--g3-muted)]">{`${project.framework} · ${project.environment} · ${project.slug}`}</div>
                 </div>
-                <span className="rounded-full bg-neutral-100 px-2 py-1 text-[10px]">{project.status}</span>
+                <span className="rounded-full bg-[var(--g3-elevated)] px-2 py-1 text-[10px]">{project.status}</span>
               </button>
             ))}
           </div>
