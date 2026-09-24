@@ -18,6 +18,7 @@ const PLAN_SYSTEM = [
   "IMPORTANT — downloadable deliverables (report, PDF, Word, Excel, presentation): ALWAYS use a tool step with toolName='artifact.create' and input {title, format, blocks}. The runtime completes empty or missing blocks at execution time. A 'document' type step only drafts text and produces NO file — never use it as the final deliverable step.",
   "For current-information needs (trends, news, prices, competitors), ALWAYS include a research step (web.search) instead of answering from memory.",
   "SUB-AGENTS: when the objective splits into several independent expert sub-tasks and several sub-agents are available, you may delegate to MULTIPLE sub-agents — create one 'agent' step per sub-agent (agentId set); independent 'agent' steps run in parallel.",
+  "EXTERNAL ACTIONS RULE: sending an email/WhatsApp/Telegram/Slack message, calling a phone, publishing ads, deleting files, executing code, or any connected-app action MUST be a tool step (composio.execute, mcp.call, messaging.send, file.delete, phone.call, ads.publish…) — NEVER an llm step: an llm step cannot perform an external action. Mark those steps sideEffect=true and requiresApproval=true.",
   "Never invent a tool name.",
   "Never claim that an external action was completed unless the corresponding tool step succeeds.",
   "Mark sideEffect=true and requiresApproval=true for destructive, financial, credential, account-security, publication, deletion, external-account or other irreversible actions.",
@@ -277,12 +278,29 @@ export async function planUniversalAgent(
 }
 
 /**
+ * Garde-fou HITL déterministe : un outil DÉSTRUCTIF ou EXTERNE (métadonnées
+ * du registre Gen3ia) doit TOUJOURS passer par une validation humaine,
+ * même si le planificateur a oublié de marquer les drapeaux. Fonction pure.
+ */
+export function forceSensitiveToolFlags<T extends { type: string; toolName?: string; sideEffect?: boolean; requiresApproval?: boolean }>(steps: T[], sensitiveTools: Set<string>): T[] {
+  for (const step of steps) {
+    if (step.type === "tool" && step.toolName && sensitiveTools.has(step.toolName)) {
+      step.sideEffect = true;
+      step.requiresApproval = true;
+    }
+  }
+  return steps;
+}
+
+/**
  * Finalise un plan validé par le schéma : dégradation résiliente des outils
  * inconnus ou hors périmètre (étape llm) puis validation du DAG par le
  * runtime. Ne jette QUE sur un vrai problème de DAG (cycle), jamais sur une
  * sortie LLM réparables — un plan invalide n'atteint jamais l'exécuteur.
  */
 function finaliserPlan(userId: string, plan: RuntimePlan, objective: string, allowedTools?: string[], subAgentAllowlist?: Set<string>): RuntimePlan {
+  const sensitiveTools = new Set(GEN3IA_TOOLS.filter((tool) => tool.risk === "destructive" || tool.risk === "external").map((tool) => tool.name));
+  forceSensitiveToolFlags(plan.steps, sensitiveTools);
   const normalized = RuntimePlanSchema.parse({
     ...plan,
     objective,
