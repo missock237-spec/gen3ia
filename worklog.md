@@ -374,3 +374,26 @@ Stage Summary:
 - Production gen3ia.online = commit 91642fb, READY.
 - Le chat IA (accueil) et le chat d'agent IA (Studio) partagent désormais le MÊME composer sombre, réplique de la capture validée : @ compétences/connecteurs, / commandes, + fichiers, « Toujours demander ▼ » branché au backend avec plancher de sécurité critique, 🎙 vocal, ↑ d'envoi.
 - Le mode d'autorisation est un vrai centre de contrôle HITL : auto_allow accélère l'exécution sans jamais contourner les actions critiques.
+
+---
+Task ID: 27
+Agent: Super Z (principal)
+Task: « Supprime le chat ia du projet, puis fait en sorte que l'interface conversation et chat d'agent ia utilise tout l'écran de l'appareil à tout moment ».
+
+Work Log:
+- Sandbox réinitialisé → re-clonage du dépôt (HEAD da7f70f, LOT 2 partiel) ; npm ci OK.
+- SUPPRESSION DU CHAT IA (Gen) : widget retiré de app/page.tsx (import + <GenChatWidget/>) ; suppression de components/gen/gen-chat.tsx, app/api/gen/chat/route.ts et lib/gen/ (chat.ts + 2 fichiers de tests) — vérifié au préalable qu'aucune autre importation n'existe (sanitizeClientHistory/runGenTurn/checkGenQuota/genIsolationGuarantees utilisés uniquement par la route supprimée). Docs publiques mises à jour (llms.txt, llms-full.txt : la génération d'images est décrite uniquement dans le chat d'agent) + commentaires (command-composer.tsx, api/ai/image). Scripts e2e historiques (waves 02/03/14/15/18/19) laissés intacts : artefacts d'audit de leurs vagues respectives, leurs contrôles Gen sont obsolètes.
+- PLEIN ÉCRAN À TOUT MOMENT (les 2 surfaces restantes) :
+  * app/layout.tsx : interactiveWidget "resizes-content" dans l'export viewport — sur Android le clavier réduit le viewport de mise en page, le composer reste visible au-dessus du clavier ;
+  * components/nav/viewport-height-sync.tsx (nouveau, sans rendu) : pose --g3-vvh = visualViewport.height sur <html> (iOS/Safari où le clavier ne réduit ni 100vh ni 100dvh), garde anti pinch-zoom (scale > 1.05 ignoré), nettoyage complet des listeners ;
+  * globals.css : .g3-shell consomme var(--g3-vvh, 100dvh) ;
+  * /studio/agents : page p-0 lg:p-3 (bord à bord mobile/tablette) ; panneau agent-chat-panel : rounded-none/border-0/shadow-none sur mobile, carte arrondie conservée sur lg ;
+  * agent-chat-workshop : gap réduit gap-2 lg:gap-4 en mode chat ;
+  * ConversationWorkspace : racine p-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:p-3 + insets internes par section (en-tête px-3 pt-2, fil pl-3 pr-3 pt-3, bandeau erreur mx-3, composer px-3) — tout repris à lg.
+- QUALITÉ : typecheck 0 erreur ; lint 0 erreur ; 455 tests vitest verts / 63 fichiers (les 2 fichiers de tests lib/gen supprimés avec la fonctionnalité) ; build OK ; route /api/gen absente du routes-manifest ; meta interactive-widget=resizes-content vérifiée dans le HTML construit.
+- E2E PRODUCTION (scripts/verify_17ce75e_prod.mjs) : déploiement 17ce75e READY — 11/11 VERTS : accueil 200 sans aucune trace du widget Gen, meta viewport plein écran présente, POST /api/gen/chat → 404, health 200, signUp+session réels, /workspace/conversations 200, /studio/agents 200, /api/agents 200, CSS servie avec --g3-vvh consommée par .g3-shell.
+
+Stage Summary:
+- Production gen3ia.online = commit 17ce75e, READY.
+- Le chat IA vitrin (Gen) n'existe plus : l'accueil est purement vitrine, les deux surfaces de discussion restantes sont la conversation (/workspace/conversations[/id]) et le chat d'agent IA (/studio/agents).
+- Ces deux surfaces occupent désormais TOUTE la surface de l'appareil À TOUT MOMENT : hauteur 100dvh synchronisée sur le visualViewport (clavier virtuel ouvert inclus), largeur bord à bord sur mobile/tablette, composer collé en bas au-dessus des zones sûres.
