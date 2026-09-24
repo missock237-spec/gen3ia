@@ -94,6 +94,16 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     section: "primary",
     keywords: ["knowledge", "connaissances", "documents", "rag", "recherche", "embeddings", "wiki"],
   },
+  {
+    id: "workflows",
+    href: "/workspace/workflows",
+    label: "Workflows",
+    icon: "⎇",
+    description: "Graphes d'automatisation exécutables : agents, outils, conditions",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["workflow", "automatisation", "graphe", "nœuds", "scénarios", "workflows"],
+  },
 ];
 
 const WORKSPACE_SECONDARY: NavRoute[] = [
