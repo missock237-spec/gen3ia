@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Source_Serif_4 } from "next/font/google";
+import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 
 import { AppShell } from "@/components/nav/app-shell";
 import { ToastProvider } from "@/components/ui/toast";
@@ -15,10 +15,18 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
-const sourceSerif = Source_Serif_4({
+/** V2 « Aurora OS » : display techy-premium pour titres et marque. */
+const display = Space_Grotesk({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-source-serif",
+  variable: "--font-display",
+});
+
+/** V2 : mono dédiée pour le code, la console et les métadonnées techniques. */
+const jet = JetBrains_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-jet",
 });
 
 export const viewport: Viewport = {
@@ -30,17 +38,18 @@ export const viewport: Viewport = {
   // rétrécissent avec lui et le composer reste visible au-dessus du clavier.
   interactiveWidget: "resizes-content",
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#080A0F" },
-    { media: "(prefers-color-scheme: light)", color: "#F6F4EF" },
+    { media: "(prefers-color-scheme: dark)", color: "#05060C" },
+    { media: "(prefers-color-scheme: light)", color: "#F1F2F8" },
   ],
 };
 
 /**
  * Bootstrap anti-FOUC du thème : appliqué AVANT la première peinture.
- * Défaut : sombre (identité plateforme) ; la vitrine (accueil/auth/privacy)
- * reste claire tant que l'utilisateur n'a pas choisi explicitement.
+ * V2 « Aurora OS » : le thème sombre est l'identité de TOUTE l'interface
+ * (vitrine incluse) — le thème clair « porcelaine » reste disponible via
+ * le sélecteur, choisi explicitement par l'utilisateur.
  */
-const THEME_BOOTSTRAP = `(function(){try{var s=localStorage.getItem("gen3ia-theme");var p=location.pathname;var v=p==="/"||p.indexOf("/login")===0||p.indexOf("/signup")===0||p.indexOf("/privacy")===0;var t=s||(v?"light":"dark");document.documentElement.setAttribute("data-theme",t);}catch(e){document.documentElement.setAttribute("data-theme","dark");}})();`;
+const THEME_BOOTSTRAP = `(function(){try{var s=localStorage.getItem("gen3ia-theme");var t=s||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){document.documentElement.setAttribute("data-theme","dark");}})();`;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://gen3ia.online";
 
@@ -128,7 +137,7 @@ export default function RootLayout({
   return (
     <html
       lang="fr"
-      className={`${inter.variable} ${sourceSerif.variable}`}
+      className={`${inter.variable} ${display.variable} ${jet.variable}`}
       data-theme="dark"
       suppressHydrationWarning
     >

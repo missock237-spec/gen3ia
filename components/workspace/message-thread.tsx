@@ -185,7 +185,7 @@ export function MessageThread({
           </article>
           {streamingStatus && (
             <p className="mt-1.5 flex items-center gap-1.5 pl-1 text-[11px] text-[var(--g3-muted)]">
-              <span className="inline-block size-1.5 animate-pulse rounded-full bg-neutral-400" aria-hidden />
+              <span className="inline-block size-1.5 animate-pulse rounded-full bg-[var(--g3-primary-strong)]" aria-hidden />
               {streamingStatus}
             </p>
           )}

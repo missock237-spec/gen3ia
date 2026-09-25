@@ -4,13 +4,13 @@ import { AppDownloads } from "@/components/home/app-downloads";
 import { VitrineHeader } from "@/components/home/vitrine-header";
 
 /**
- * Vitrine SaaS de Gen3ia — page d'accueil publique.
+ * Vitrine Gen3ia — VERSION 2 « Aurora OS ».
  *
- * Design « Runable » : dégradé ciel bleu, typographie serif éditoriale,
- * cartes blanches très arrondies, boîte de prompt centrale, section
- * storytelling crème, pied de page brun avec ligne arc-en-ciel.
- * Animations : entrées en cascade au chargement, révélation au scroll
- * (ScrollReveal), halos pulsants — désactivées si prefers-reduced-motion.
+ * Identité nouvelle née de zéro : espace profond, halos aurora animés,
+ * verre dépoli, frontière lumineuse dégradée (violet → fuchsia → cyan),
+ * typographie display Space Grotesk. Le contenu référencable (FAQ,
+ * données structurées schema.org, liens) est préservé intégralement :
+ * la V2 change la peau, pas le fond GEO/SEO.
  */
 
 const PRODUCT_LINKS = [
@@ -163,7 +163,7 @@ const PRODUCTS = [
   {
     href: "/studio",
     eyebrow: "Gen3ia Studio",
-    title: "Studio d’agents IA",
+    title: "Studio d'agents IA",
     description:
       "Créez, équipez et déployez des agents autonomes en quelques minutes. Objectifs en langage naturel, orchestration automatique des compétences, mémoire permanente et environnement contrôlé.",
     points: ["Orchestration multi-compétences", "Mémoire persistante par agent", "Terminal sandboxé réservé aux agents"],
@@ -185,7 +185,7 @@ const PRODUCTS = [
   {
     href: "/marketplace",
     eyebrow: "Gen3ia Marketplace",
-    title: "Marketplace d’extensions",
+    title: "Marketplace d'extensions",
     description:
       "Étendez vos agents avec des tools, skills et workflows créés par la communauté. Chaque extension est versionnée, notée, sandboxée et contrôlée par des permissions explicites.",
     points: ["Installation en un clic", "Permissions vérifiables avant achat", "Revenus développeur intégrés"],
@@ -199,11 +199,11 @@ const STORY_CARDS = [
   {
     title: "Aïcha décrit son objectif en une phrase.",
     body: (
-      <div className="rounded-2xl bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.06)]" aria-hidden="true">
-        <p className="rounded-xl bg-neutral-900 px-4 py-2.5 text-xs font-medium text-white">
+      <div className="rounded-2xl border border-[rgba(148,153,255,0.14)] bg-[var(--g3-deep)]/80 p-4" aria-hidden="true">
+        <p className="rounded-xl bg-[var(--g3-gradient)] bg-[length:160%_100%] px-4 py-2.5 text-xs font-medium text-white shadow-[0_8px_24px_-10px_rgba(124,92,255,0.7)]">
           « Lance une veille concurrentielle chaque matin et prépare-moi un résumé. »
         </p>
-        <p className="mt-2.5 rounded-xl border border-neutral-200 px-3.5 py-2 text-xs text-neutral-500">
+        <p className="mt-2.5 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)]/70 px-3.5 py-2 text-xs text-[var(--g3-muted)]">
           Très bien — je planifie la recherche, les sources et le rapport.
         </p>
       </div>
@@ -212,26 +212,26 @@ const STORY_CARDS = [
   {
     title: "Son agent travaille, valide et exécute.",
     body: (
-      <div className="rounded-2xl bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.06)]" aria-hidden="true">
-        <div className="flex items-center justify-between border-b border-neutral-100 pb-2.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Exécution</span>
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Validée</span>
+      <div className="rounded-2xl border border-[rgba(148,153,255,0.14)] bg-[var(--g3-deep)]/80 p-4" aria-hidden="true">
+        <div className="flex items-center justify-between border-b border-[var(--g3-border)] pb-2.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--g3-faint)]">Exécution</span>
+          <span className="rounded-full bg-[var(--g3-success-soft)] px-2 py-0.5 text-[10px] font-bold text-[var(--g3-success-strong)]">Validée</span>
         </div>
         <div className="mt-3 space-y-2">
-          <div className="h-2 w-3/4 rounded-full bg-neutral-100" />
-          <div className="h-2 w-1/2 rounded-full bg-neutral-100" />
-          <div className="h-2 w-2/3 rounded-full bg-sky-100" />
+          <div className="h-2 w-3/4 rounded-full bg-[var(--g3-elevated)]" />
+          <div className="h-2 w-1/2 rounded-full bg-[var(--g3-elevated)]" />
+          <div className="h-2 w-2/3 rounded-full bg-[var(--g3-gradient)] bg-[length:200%_100%]" />
         </div>
       </div>
     ),
   },
   {
-    title: "Le rapport l’attend, chaque matin.",
+    title: "Le rapport l'attend, chaque matin.",
     body: (
-      <div className="rounded-2xl bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.06)]" aria-hidden="true">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Résumés</p>
-        <p className="mt-1.5 font-serif text-3xl font-semibold text-neutral-900">+38 %</p>
-        <p className="mt-1.5 text-xs text-neutral-500">Temps gagné sur la veille le premier mois.</p>
+      <div className="rounded-2xl border border-[rgba(148,153,255,0.14)] bg-[var(--g3-deep)]/80 p-4" aria-hidden="true">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--g3-faint)]">Résumés</p>
+        <p className="gradient-text mt-1.5 font-[family-name:var(--font-display)] text-3xl font-semibold">+38 %</p>
+        <p className="mt-1.5 text-xs text-[var(--g3-muted)]">Temps gagné sur la veille le premier mois.</p>
       </div>
     ),
   },
@@ -262,53 +262,58 @@ const SECURITY_POINTS = [
   "Jetons OAuth stockés chiffrés côté serveur, sessions signées et expirables",
 ];
 
+/* __V2_JSX__ */
 export default function HomePage() {
   // Vitrine publique servie à la racine : indispensable au référencement
   // (Google/Bing) ET à la recommandation par les LLM (ChatGPT, Perplexity,
   // Claude…) qui doivent lire FAQ + données structurées. Les utilisateurs
   // connectés continuent via le lien « Tableau de bord » (header).
   return (
-    <div className="flex min-h-full flex-col bg-[#f6f4ef] text-neutral-900">
-      {/* ---------- Navigation (style Runable : pilules blanches flottantes) ---------- */}
+    <div className="g3-noise flex min-h-full flex-col bg-[var(--g3-bg)] text-[var(--g3-text)]">
+      {/* ---------- Navigation (verre Aurora, sticky) ---------- */}
       <VitrineHeader />
 
       <div className="flex-1">
-        {/* ---------- Héros ciel + prompt box (façon Runable) ---------- */}
+        {/* ---------- Héros Aurora : espace profond + prompt verre ---------- */}
         <section className="sky-hero relative overflow-hidden">
           <div className="aurora" aria-hidden="true" />
-          <div className="relative mx-auto max-w-6xl px-4 pb-24 pt-16 sm:px-6 sm:pt-24">
+          <div className="aurora-glow" aria-hidden="true" />
+          <div className="grid-bg absolute inset-0" aria-hidden="true" />
+          <div className="relative mx-auto max-w-6xl px-4 pb-24 pt-20 sm:px-6 sm:pt-28">
             <div className="mx-auto max-w-3xl text-center">
-              <h1 className="anim-fade-up font-serif text-5xl font-semibold leading-[1.05] tracking-tight text-neutral-900 sm:text-7xl">
-                Créez-le. Exécutez-le.
+              {/* Badge V2 */}
+              <p className="anim-fade-up mx-auto inline-flex items-center gap-2 rounded-full border border-[rgba(124,92,255,0.4)] bg-[var(--g3-primary-soft)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--g3-primary-strong)] shadow-[0_0_24px_-6px_rgba(124,92,255,0.6)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--g3-gradient)]" aria-hidden />
+                Interface V2 · Aurora
+              </p>
+
+              <h1 className="anim-fade-up anim-delay-1 mt-7 font-[family-name:var(--font-display)] text-5xl font-bold leading-[1.02] tracking-tight sm:text-7xl">
+                Décrivez-le.
                 <br />
-                Grandissez-le avec Gen3ia.
+                <span className="gradient-text">L&apos;agent l&apos;exécute.</span>
               </h1>
-              <p className="anim-fade-up anim-delay-1 mx-auto mt-6 max-w-xl text-base leading-8 text-neutral-600 sm:text-lg">
+              <p className="anim-fade-up anim-delay-2 mx-auto mt-6 max-w-xl text-base leading-8 text-[var(--g3-text-secondary)] sm:text-lg">
                 Un seul agent IA pour transformer une idée en projet qui tourne :
                 il crée, exécute le travail et continue de grandir pour vous.
               </p>
 
-              {/* Boîte de prompt */}
-              <form action="/signup" className="anim-fade-up anim-delay-2 mx-auto mt-12 max-w-2xl text-left">
-                <div className="flex w-fit rounded-t-2xl" role="tablist" aria-label="Mode de l'agent">
-                  <span className="rounded-t-2xl rounded-br-none bg-white px-5 py-2.5 text-sm font-semibold text-neutral-900 shadow-[0_-4px_14px_-8px_rgba(28,27,24,0.2)]">Créer</span>
-                  <span className="rounded-t-2xl px-5 py-2.5 text-sm font-medium text-neutral-500">Automatiser</span>
-                </div>
-                <div className="rounded-b-3xl rounded-tr-3xl bg-white p-4 shadow-[0_24px_60px_-24px_rgba(28,27,24,0.35)]">
+              {/* Boîte de prompt — verre, frontière lumineuse */}
+              <form action="/signup" className="anim-fade-up anim-delay-3 mx-auto mt-12 max-w-2xl text-left">
+                <div className="g3-gradient-border p-4 shadow-[0_30px_90px_-30px_rgba(124,92,255,0.5)]">
                   <label htmlFor="hero-intent" className="sr-only">Décrivez votre idée</label>
                   <textarea
                     id="hero-intent"
                     name="intent"
                     rows={3}
                     placeholder="Décrivez ce que votre agent doit faire pour vous…"
-                    className="w-full resize-none bg-transparent px-2 py-1.5 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 sm:text-base"
+                    className="w-full resize-none bg-transparent px-2 py-1.5 text-sm text-[var(--g3-text)] outline-none placeholder:text-[var(--g3-faint)] sm:text-base"
                   />
                   <div className="flex items-center justify-between px-2 pb-1">
-                    <span className="text-xs text-neutral-400">Gen3ia s&apos;occupe du reste</span>
+                    <span className="text-xs text-[var(--g3-faint)]">Gen3ia s&apos;occupe du reste</span>
                     <button
                       type="submit"
                       aria-label="Commencer avec cette idée"
-                      className="grid h-11 w-11 place-items-center rounded-full bg-neutral-900 text-white shadow-[0_8px_20px_-8px_rgba(28,27,24,0.6)] transition hover:scale-105 hover:bg-neutral-800"
+                      className="grid h-11 w-11 place-items-center rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] text-white shadow-[0_10px_30px_-8px_rgba(124,92,255,0.8)] transition hover:scale-105 hover:brightness-110"
                     >
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M5 12h14M13 6l6 6-6 6" />
@@ -319,14 +324,14 @@ export default function HomePage() {
               </form>
 
               {/* Grille de capacités */}
-              <ul className="anim-fade-up anim-delay-3 mx-auto mt-8 grid max-w-2xl grid-cols-2 gap-2.5 sm:grid-cols-3">
+              <ul className="anim-fade-up anim-delay-4 mx-auto mt-8 grid max-w-2xl grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {CAPABILITIES.map((capability) => (
                   <li key={capability.label}>
                     <Link
                       href={capability.href}
-                      className="flex items-center justify-center gap-2 rounded-2xl border border-white/70 bg-white/80 px-3 py-3 text-sm font-medium text-neutral-700 shadow-[0_1px_2px_rgba(28,27,24,0.06)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_10px_26px_-14px_rgba(28,27,24,0.35)]"
+                      className="flex items-center justify-center gap-2 rounded-2xl border border-[rgba(148,153,255,0.16)] bg-white/[0.04] px-3 py-3 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:-translate-y-0.5 hover:border-[rgba(124,92,255,0.5)] hover:bg-white/[0.07] hover:text-white hover:shadow-[0_12px_34px_-16px_rgba(124,92,255,0.6)]"
                     >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-sky-600">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-[var(--g3-secondary)]">
                         <path d={capability.icon} />
                       </svg>
                       {capability.label}
@@ -335,43 +340,56 @@ export default function HomePage() {
                 ))}
               </ul>
 
-              <p className="anim-fade-up anim-delay-4 mt-6 text-xs text-neutral-400">
+              <p className="anim-fade-up anim-delay-5 mt-6 text-xs text-[var(--g3-faint)]">
                 Web (Android &amp; iOS — installable depuis le navigateur) · Desktop Windows &amp; Linux
               </p>
             </div>
           </div>
         </section>
 
-        {/* ---------- Storytelling crème (façon Runable) ---------- */}
-        <section aria-label="Histoire d'utilisation" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+        {/* ---------- Storytelling (verre + halo) ---------- */}
+        <section aria-label="Histoire d'utilisation" className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
           <div className="grid gap-5 md:grid-cols-3">
             {STORY_CARDS.map((card, index) => (
               <article
                 key={card.title}
-                className="cream-card reveal rounded-3xl p-6"
+                className="cream-card card-glow reveal rounded-3xl p-6"
                 style={{ ["--reveal-delay" as string]: `${index * 0.12}s` }}
               >
-                <h2 className="font-serif text-xl font-semibold leading-snug text-neutral-900">{card.title}</h2>
+                <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold leading-snug text-[var(--g3-text)]">{card.title}</h2>
                 <div className="mt-5">{card.body}</div>
               </article>
             ))}
           </div>
-          <figure className="reveal mx-auto mt-10 max-w-3xl rounded-3xl border border-[rgba(23,23,20,0.07)] bg-white p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-            <blockquote className="font-serif text-xl font-medium leading-relaxed text-neutral-900 sm:text-2xl">
+          <figure className="reveal relative mx-auto mt-10 max-w-3xl overflow-hidden rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-8 text-center backdrop-blur">
+            <div className="rainbow-line absolute inset-x-0 top-0" aria-hidden="true" />
+            <blockquote className="font-[family-name:var(--font-display)] text-xl font-medium leading-relaxed text-[var(--g3-text)] sm:text-2xl">
               « C’est le premier outil qui travaille vraiment pendant que je dors. »
             </blockquote>
-            <figcaption className="mt-4 text-sm text-neutral-500">— Aïcha, fondatrice d’une boutique en ligne</figcaption>
+            <figcaption className="mt-4 text-sm text-[var(--g3-muted)]">— Aïcha, fondatrice d’une boutique en ligne</figcaption>
           </figure>
         </section>
 
-        {/* ---------- Solutions (façon Runable : publics cibles) ---------- */}
-        <section aria-label="Pour qui" className="mx-auto max-w-6xl px-4 pb-16 sm:px-6 sm:pb-20">
+        {/* ---------- Statistiques ---------- */}
+        <section aria-label="Chiffres clés" className="mx-auto max-w-6xl px-4 pb-4 sm:px-6">
+          <dl className="reveal grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {STATS.map((stat) => (
+              <div key={stat.label} className="rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/70 p-5 text-center backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]">
+                <dd className="order-1 gradient-text font-[family-name:var(--font-display)] text-2xl font-bold">{stat.value}</dd>
+                <dt className="order-2 mt-1.5 text-[11px] leading-4 text-[var(--g3-faint)]">{stat.label}</dt>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        {/* ---------- Solutions (publics cibles) ---------- */}
+        <section aria-label="Pour qui" className="mx-auto max-w-6xl px-4 pb-16 pt-14 sm:px-6 sm:pb-20">
           <div className="reveal mx-auto max-w-2xl text-center">
             <p className="g3-eyebrow">Pour qui</p>
-            <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight sm:text-5xl">
-              Une idée, menée jusqu&apos;au bout
+            <h2 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-5xl">
+              Une idée, menée <span className="gradient-text">jusqu&apos;au bout</span>
             </h2>
-            <p className="mt-4 text-sm leading-7 text-neutral-500 sm:text-base">
+            <p className="mt-4 text-sm leading-7 text-[var(--g3-muted)] sm:text-base">
               Choisissez un profil et regardez le travail avancer — le même
               agent s&apos;adapte à votre façon de travailler.
             </p>
@@ -383,16 +401,16 @@ export default function HomePage() {
                 className="cream-card card-glow reveal flex flex-col rounded-3xl p-7"
                 style={{ ["--reveal-delay" as string]: `${index * 0.12}s` }}
               >
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-sky-700 shadow-[0_1px_2px_rgba(28,27,24,0.1)]">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl border border-[rgba(124,92,255,0.35)] bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)] shadow-[0_0_20px_-6px_rgba(124,92,255,0.6)]">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d={solution.icon} />
                   </svg>
                 </span>
-                <h3 className="mt-5 font-serif text-xl font-semibold text-neutral-900">{solution.title}</h3>
-                <p className="mt-2.5 flex-1 text-sm leading-6 text-neutral-600">{solution.text}</p>
+                <h3 className="mt-5 font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--g3-text)]">{solution.title}</h3>
+                <p className="mt-2.5 flex-1 text-sm leading-6 text-[var(--g3-muted)]">{solution.text}</p>
                 <Link
                   href={solution.href}
-                  className="group mt-6 inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-sky-700 transition hover:text-sky-900"
+                  className="group mt-6 inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-[var(--g3-secondary)] transition hover:text-white"
                 >
                   {solution.cta}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">
@@ -404,26 +422,14 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ---------- Statistiques ---------- */}
-        <section aria-label="Chiffres clés" className="mx-auto max-w-6xl px-4 pb-4 sm:px-6">
-          <dl className="reveal grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {STATS.map((stat) => (
-              <div key={stat.label} className="flex flex-col rounded-3xl border border-[rgba(23,23,20,0.08)] bg-white p-5 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-                <dd className="order-1 font-serif text-xl font-semibold text-neutral-900">{stat.value}</dd>
-                <dt className="order-2 mt-1.5 text-[11px] leading-4 text-neutral-400">{stat.label}</dt>
-              </div>
-            ))}
-          </dl>
-        </section>
-
         {/* ---------- Produits ---------- */}
         <section id="produits" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20">
           <div className="reveal mx-auto max-w-2xl text-center">
             <p className="g3-eyebrow">Trois espaces, une plateforme</p>
-            <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight sm:text-5xl">
-              Tout ce qu’il faut pour mettre les agents au travail
+            <h2 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-5xl">
+              Tout ce qu’il faut pour mettre <span className="gradient-text">les agents au travail</span>
             </h2>
-            <p className="mt-4 text-sm leading-7 text-neutral-500 sm:text-base">
+            <p className="mt-4 text-sm leading-7 text-[var(--g3-muted)] sm:text-base">
               Chaque espace est accessible en un clic depuis votre tableau de
               bord — et vos agents, extensions et sessions restent synchronisés
               à votre compte.
@@ -434,26 +440,26 @@ export default function HomePage() {
             {PRODUCTS.map((product, index) => (
               <article
                 key={product.href}
-                className="card-glow reveal flex flex-col rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-7 shadow-[0_2px_10px_rgba(15,23,42,0.05)]"
+                className="card-glow reveal flex flex-col rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-7 backdrop-blur"
                 style={{ ["--reveal-delay" as string]: `${index * 0.12}s` }}
               >
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--g3-gradient)] bg-[length:160%_100%] text-white shadow-[0_10px_28px_-10px_rgba(124,92,255,0.8)]">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d={product.icon} />
                   </svg>
                 </div>
-                <p className="mt-5 text-[11px] font-bold uppercase tracking-[.25em] text-neutral-400">
+                <p className="mt-5 text-[11px] font-bold uppercase tracking-[.25em] text-[var(--g3-faint)]">
                   {product.eyebrow}
                   {product.badge && (
-                    <span className="ml-2 rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">{product.badge}</span>
+                    <span className="ml-2 rounded-md bg-[var(--g3-warning-soft)] px-1.5 py-0.5 text-[9px] font-bold text-[var(--g3-warning-strong)]">{product.badge}</span>
                   )}
                 </p>
-                <h3 className="mt-2.5 font-serif text-2xl font-semibold">{product.title}</h3>
-                <p className="mt-3 flex-1 text-sm leading-6 text-neutral-500">{product.description}</p>
+                <h3 className="mt-2.5 font-[family-name:var(--font-display)] text-2xl font-semibold text-[var(--g3-text)]">{product.title}</h3>
+                <p className="mt-3 flex-1 text-sm leading-6 text-[var(--g3-muted)]">{product.description}</p>
                 <ul className="mt-5 space-y-2.5">
                   {product.points.map((point) => (
-                    <li key={point} className="flex items-start gap-2.5 text-sm text-neutral-600">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0 text-emerald-500">
+                    <li key={point} className="flex items-start gap-2.5 text-sm text-[var(--g3-text-secondary)]">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--g3-success)]">
                         <path d="m5 12 5 5L20 7" />
                       </svg>
                       {point}
@@ -462,7 +468,7 @@ export default function HomePage() {
                 </ul>
                 <Link
                   href={product.href}
-                  className="group mt-7 inline-flex w-fit items-center gap-1.5 rounded-full border border-[rgba(23,23,20,0.14)] bg-white px-5 py-2.5 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-900 hover:text-white"
+                  className="group mt-7 inline-flex w-fit items-center gap-1.5 rounded-full border border-[rgba(148,153,255,0.25)] bg-white/[0.04] px-5 py-2.5 text-sm font-semibold text-[var(--g3-text)] transition hover:border-transparent hover:bg-[var(--g3-gradient)] hover:bg-[length:160%_100%] hover:text-white hover:shadow-[0_10px_30px_-10px_rgba(124,92,255,0.7)]"
                 >
                   {product.cta}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">
@@ -474,126 +480,126 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ---------- Bento capacités (cartes crème + blanches) ---------- */}
+        {/* ---------- Bento capacités ---------- */}
         <section aria-label="Capacités détaillées" className="mx-auto max-w-6xl px-4 pb-16 sm:px-6 sm:pb-20">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {/* Memoire permanente — grande tuile crème */}
-            <article className="cream-card card-glow reveal relative flex flex-col overflow-hidden rounded-3xl p-7 sm:col-span-2">
+            {/* Mémoire permanente — grande tuile vedette */}
+            <article className="g3-gradient-border card-glow reveal relative flex flex-col overflow-hidden p-7 sm:col-span-2">
               <div className="flex items-start gap-4">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-sky-700 shadow-[0_1px_2px_rgba(28,27,24,0.1)]">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
                   </svg>
                 </span>
                 <div>
-                  <h3 className="font-serif text-lg font-semibold">Mémoire permanente</h3>
-                  <p className="mt-1.5 max-w-sm text-sm leading-6 text-neutral-600">
+                  <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold">Mémoire permanente</h3>
+                  <p className="mt-1.5 max-w-sm text-sm leading-6 text-[var(--g3-muted)]">
                     Vos agents se souviennent du contexte utile de vos projets, avec protection des secrets et contrôle propriétaire.
                   </p>
                 </div>
               </div>
               <div className="mt-6 space-y-2" aria-hidden="true">
-                <div className="anim-fade-in max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-xs text-neutral-600 shadow-[0_1px_2px_rgba(28,27,24,0.08)]">Retiens la charte graphique du projet Nebula.</div>
-                <div className="anim-fade-in ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-neutral-900 px-4 py-2.5 text-xs text-white" style={{ animationDelay: "0.3s", animationFillMode: "both" }}>Mémorisé — 3 souvenirs liés à ce projet.</div>
+                <div className="anim-fade-in max-w-[85%] rounded-2xl rounded-bl-md border border-[var(--g3-border)] bg-[var(--g3-elevated)]/80 px-4 py-2.5 text-xs text-[var(--g3-text-secondary)]">Retiens la charte graphique du projet Nebula.</div>
+                <div className="anim-fade-in ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-[var(--g3-gradient)] bg-[length:160%_100%] px-4 py-2.5 text-xs text-white shadow-[0_8px_24px_-10px_rgba(124,92,255,0.7)]" style={{ animationDelay: "0.3s", animationFillMode: "both" }}>Mémorisé — 3 souvenirs liés à ce projet.</div>
               </div>
             </article>
 
-            {/* Securite */}
-            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-600">
+            {/* Sécurité */}
+            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
                 </svg>
               </span>
               <div>
                 <h3 className="text-sm font-bold">Sécurité par conception</h3>
-                <p className="mt-1.5 text-xs leading-5 text-neutral-500">Sandbox isolée, permissions granulaires, garde-fous anti-dépenses et validation humaine.</p>
+                <p className="mt-1.5 text-xs leading-5 text-[var(--g3-muted)]">Sandbox isolée, permissions granulaires, garde-fous anti-dépenses et validation humaine.</p>
               </div>
             </article>
 
             {/* Atelier 21st.dev — tuile vedette */}
-            <article className="card-glow reveal relative flex flex-col overflow-hidden rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-              <span className="absolute right-4 top-4 rounded-full bg-sky-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700">Nouveau</span>
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-sky-100 text-sky-700">
+            <article className="card-glow reveal relative flex flex-col overflow-hidden rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+              <span className="absolute right-4 top-4 rounded-full bg-[var(--g3-primary-soft)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--g3-primary-strong)]">Nouveau</span>
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--g3-secondary-soft)] text-[var(--g3-secondary)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m8 6-6 6 6 6M16 6l6 6-6 6" />
                 </svg>
               </span>
               <h3 className="mt-4 text-sm font-bold">Atelier d&apos;Interfaces 21st.dev</h3>
-              <p className="mt-1.5 text-xs leading-5 text-neutral-500">Composants et thèmes professionnels récupérés et adaptés par vos agents de code.</p>
+              <p className="mt-1.5 text-xs leading-5 text-[var(--g3-muted)]">Composants et thèmes professionnels récupérés et adaptés par vos agents de code.</p>
               <pre className="g3-code mt-4 !max-h-24 !p-3 !text-[10px]" aria-hidden="true">{`<Hero variant="aurora" />\n<StatsGrid cols={4} />\n<BentoFeature />`}</pre>
             </article>
 
             {/* Facturation */}
-            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-600">
+            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--g3-magenta-soft)] text-[var(--g3-magenta)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                 </svg>
               </span>
               <div>
                 <h3 className="text-sm font-bold">Facturation à l&apos;usage</h3>
-                <p className="mt-1.5 text-xs leading-5 text-neutral-500">Wallet intégré, rechargement Mobile Money ou carte. Vous ne payez que ce que vos agents exécutent.</p>
+                <p className="mt-1.5 text-xs leading-5 text-[var(--g3-muted)]">Wallet intégré, rechargement Mobile Money ou carte. Vous ne payez que ce que vos agents exécutent.</p>
               </div>
             </article>
 
             {/* Planification */}
-            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-600">
+            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
               </span>
               <div>
                 <h3 className="text-sm font-bold">Planification automatique</h3>
-                <p className="mt-1.5 text-xs leading-5 text-neutral-500">Fenêtres horaires d&apos;activation : le serveur applique le planning même application fermée.</p>
+                <p className="mt-1.5 text-xs leading-5 text-[var(--g3-muted)]">Fenêtres horaires d&apos;activation : le serveur applique le planning même application fermée.</p>
               </div>
             </article>
 
-            {/* Multi-appareils — grande tuile crème */}
+            {/* Multi-appareils — grande tuile */}
             <article className="cream-card card-glow reveal relative flex flex-col overflow-hidden rounded-3xl p-7 sm:col-span-2">
               <div className="flex items-start gap-4">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-sky-700 shadow-[0_1px_2px_rgba(28,27,24,0.1)]">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--g3-secondary-soft)] text-[var(--g3-secondary)]">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M2 3h20v14H2zM8 21h8M12 17v4" />
                   </svg>
                 </span>
                 <div>
-                  <h3 className="font-serif text-lg font-semibold">Multi-appareils</h3>
-                  <p className="mt-1.5 max-w-sm text-sm leading-6 text-neutral-600">
+                  <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold">Multi-appareils</h3>
+                  <p className="mt-1.5 max-w-sm text-sm leading-6 text-[var(--g3-muted)]">
                     Web app installable sur Android et iOS, application Desktop pour Windows et Linux. Vos données vous suivent partout.
                   </p>
                 </div>
               </div>
               <div className="mt-5 flex flex-wrap gap-2" aria-hidden="true">
                 {["Android", "iOS", "Windows", "Linux", "Web PWA"].map((device) => (
-                  <span key={device} className="rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-neutral-600 shadow-[0_1px_2px_rgba(28,27,24,0.08)]">{device}</span>
+                  <span key={device} className="rounded-full border border-[rgba(148,153,255,0.18)] bg-white/[0.05] px-3.5 py-1.5 text-xs font-semibold text-[var(--g3-text-secondary)]">{device}</span>
                 ))}
               </div>
             </article>
 
-            {/* Espace developpeur */}
-            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-neutral-100 text-neutral-700">
+            {/* Espace développeur */}
+            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+              <span className="grid h-10 w-10 place-items-center rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] text-[var(--g3-text-secondary)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m8 6-6 6 6 6M16 6l6 6-6 6" />
                 </svg>
               </span>
               <div>
                 <h3 className="text-sm font-bold">Espace développeur</h3>
-                <p className="mt-1.5 text-xs leading-5 text-neutral-500">Créez vos extensions avec le SDK Gen3ia, publiez-les et suivez vos revenus.</p>
+                <p className="mt-1.5 text-xs leading-5 text-[var(--g3-muted)]">Créez vos extensions avec le SDK Gen3ia, publiez-les et suivez vos revenus.</p>
               </div>
             </article>
           </div>
         </section>
 
         {/* ---------- Fonctionnement ---------- */}
-        <section id="fonctionnement" className="scroll-mt-24 border-y border-[rgba(23,23,20,0.06)] bg-white py-16 sm:py-20">
+        <section id="fonctionnement" className="scroll-mt-24 border-y border-[var(--g3-border)] bg-[var(--g3-deep)]/60 py-16 sm:py-20">
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <div className="reveal mx-auto max-w-2xl text-center">
               <p className="g3-eyebrow">Fonctionnement</p>
-              <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight sm:text-5xl">Opérationnel en trois étapes</h2>
-              <p className="mt-4 text-sm leading-7 text-neutral-500 sm:text-base">
+              <h2 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-5xl">Opérationnel en trois étapes</h2>
+              <p className="mt-4 text-sm leading-7 text-[var(--g3-muted)] sm:text-base">
                 Pas de configuration complexe : un compte, un objectif, une
                 validation — puis vos agents travaillent pour vous.
               </p>
@@ -602,14 +608,14 @@ export default function HomePage() {
               {STEPS.map((step, index) => (
                 <li
                   key={step.number}
-                  className="card-glow reveal relative rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[#f6f4ef] p-7"
+                  className="card-glow reveal relative rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/70 p-7 backdrop-blur"
                   style={{ ["--reveal-delay" as string]: `${index * 0.12}s` }}
                 >
-                  <span className="font-serif text-4xl font-semibold text-sky-600">{step.number}</span>
-                  <h3 className="mt-4 font-serif text-xl font-semibold">{step.title}</h3>
-                  <p className="mt-2.5 text-sm leading-6 text-neutral-500">{step.text}</p>
+                  <span className="gradient-text font-[family-name:var(--font-display)] text-4xl font-bold">{step.number}</span>
+                  <h3 className="mt-4 font-[family-name:var(--font-display)] text-xl font-semibold">{step.title}</h3>
+                  <p className="mt-2.5 text-sm leading-6 text-[var(--g3-muted)]">{step.text}</p>
                   {index < STEPS.length - 1 && (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="absolute -right-3.5 top-1/2 hidden -translate-y-1/2 text-neutral-300 md:block">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="absolute -right-3.5 top-1/2 hidden -translate-y-1/2 text-[var(--g3-primary)] md:block">
                       <path d="M5 12h14M13 6l6 6-6 6" />
                     </svg>
                   )}
@@ -624,10 +630,10 @@ export default function HomePage() {
           <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
             <div className="reveal">
               <p className="g3-eyebrow">Sécurité &amp; contrôle</p>
-              <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight sm:text-5xl">
-                Des agents puissants, jamais incontrôlés
+              <h2 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-5xl">
+                Des agents puissants, <span className="gradient-text">jamais incontrôlés</span>
               </h2>
-              <p className="mt-4 text-sm leading-7 text-neutral-500 sm:text-base">
+              <p className="mt-4 text-sm leading-7 text-[var(--g3-muted)] sm:text-base">
                 Chaque capacité dangereuse est encadrée : permissions
                 explicites, sandbox isolée, double validation humaine et
                 journalisation. Vous gardez le contrôle permanent sur ce que
@@ -635,9 +641,9 @@ export default function HomePage() {
               </p>
               <ul className="mt-8 space-y-3.5">
                 {SECURITY_POINTS.map((point) => (
-                  <li key={point} className="flex items-start gap-3 text-sm leading-6 text-neutral-600">
-                    <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-100">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-emerald-600">
+                  <li key={point} className="flex items-start gap-3 text-sm leading-6 text-[var(--g3-text-secondary)]">
+                    <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[var(--g3-success-soft)]">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-[var(--g3-success-strong)]">
                         <path d="m5 12 5 5L20 7" />
                       </svg>
                     </span>
@@ -646,29 +652,29 @@ export default function HomePage() {
                 ))}
               </ul>
             </div>
-            <div className="reveal card-glow rounded-3xl border border-[rgba(23,23,20,0.09)] bg-white p-7 shadow-[0_2px_10px_rgba(15,23,42,0.05)]" style={{ ["--reveal-delay" as string]: "0.15s" }}>
+            <div className="reveal card-glow rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-7 backdrop-blur" style={{ ["--reveal-delay" as string]: "0.15s" }}>
               <div className="flex items-center justify-between">
                 <p className="text-sm font-bold">Journal d’activité (extrait)</p>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-bold uppercase text-emerald-700">Contrôle actif</span>
+                <span className="rounded-full bg-[var(--g3-success-soft)] px-3 py-1 text-[10px] font-bold uppercase text-[var(--g3-success-strong)]">Contrôle actif</span>
               </div>
-              <div className="mt-5 space-y-3 font-mono text-xs">
+              <div className="mt-5 space-y-3 font-[family-name:var(--font-mono)] text-xs">
                 {[
-                  { tone: "text-sky-600", label: "agent.recherche", text: "Analyse concurrents — 12 sources" },
-                  { tone: "text-amber-600", label: "permission.demandee", text: "Écriture fichier /rapports/q3.xlsx" },
-                  { tone: "text-emerald-600", label: "humain.valide", text: "Publication campagne — approuvée" },
-                  { tone: "text-violet-600", label: "wallet.execution", text: "Coût exécution : 12,50 XAF" },
+                  { tone: "text-[var(--g3-secondary)]", label: "agent.recherche", text: "Analyse concurrents — 12 sources" },
+                  { tone: "text-[var(--g3-warning-strong)]", label: "permission.demandee", text: "Écriture fichier /rapports/q3.xlsx" },
+                  { tone: "text-[var(--g3-success-strong)]", label: "humain.valide", text: "Publication campagne — approuvée" },
+                  { tone: "text-[var(--g3-magenta)]", label: "wallet.execution", text: "Coût exécution : 12,50 XAF" },
                 ].map((row, index) => (
                   <div
                     key={row.label}
-                    className="anim-fade-in flex items-center gap-3 rounded-xl border border-[rgba(23,23,20,0.07)] bg-neutral-50 px-4 py-3"
+                    className="anim-fade-in flex items-center gap-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-deep)]/80 px-4 py-3"
                     style={{ animationDelay: `${0.4 + index * 0.25}s`, animationFillMode: "both" }}
                   >
                     <span className={`shrink-0 font-bold ${row.tone}`}>{row.label}</span>
-                    <span className="truncate text-neutral-500">{row.text}</span>
+                    <span className="truncate text-[var(--g3-muted)]">{row.text}</span>
                   </div>
                 ))}
               </div>
-              <p className="mt-5 text-xs leading-5 text-neutral-400">
+              <p className="mt-5 text-xs leading-5 text-[var(--g3-faint)]">
                 Toutes les opérations sensibles sont traçables, révocables et
                 jamais silencieuses.
               </p>
@@ -676,24 +682,24 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ---------- Téléchargez les apps (façon Runable) ---------- */}
+        {/* ---------- Téléchargez les apps ---------- */}
         <AppDownloads />
 
-        {/* ---------- CTA final (carte sombre façon footer Runable) ---------- */}
+        {/* ---------- CTA final (frontière lumineuse + halo) ---------- */}
         <section className="px-4 pb-20 sm:px-6">
-          <div className="reveal relative mx-auto max-w-5xl overflow-hidden rounded-[32px] bg-[#211d19] p-10 text-center text-white sm:p-14">
-            <div className="anim-pulse-glow pointer-events-none absolute -top-24 left-1/2 h-64 w-[420px] -translate-x-1/2 rounded-full bg-sky-400/20 blur-3xl" aria-hidden="true" />
-            <h2 className="relative font-serif text-3xl font-semibold tracking-tight sm:text-5xl">
-              Prêt à mettre vos agents au travail ?
+          <div className="g3-gradient-border reveal relative mx-auto max-w-5xl overflow-hidden p-10 text-center sm:p-14">
+            <div className="aurora-glow" aria-hidden="true" />
+            <h2 className="relative font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-5xl">
+              Prêt à mettre <span className="gradient-text">vos agents au travail</span> ?
             </h2>
-            <p className="relative mx-auto mt-4 max-w-xl text-sm leading-7 text-white/60 sm:text-base">
+            <p className="relative mx-auto mt-4 max-w-xl text-sm leading-7 text-[var(--g3-muted)] sm:text-base">
               Créez votre compte en une minute, recevez votre solde de
               démonstration et ouvrez votre premier agent dès aujourd’hui.
             </p>
             <div className="relative mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-neutral-900 shadow-[0_10px_30px_-12px_rgba(255,255,255,0.4)] transition hover:-translate-y-0.5 hover:bg-neutral-100"
+                className="inline-flex items-center gap-2 rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-8 py-3.5 text-sm font-bold text-white shadow-[0_14px_40px_-12px_rgba(124,92,255,0.8)] transition hover:-translate-y-0.5 hover:brightness-110"
               >
                 Commencer gratuitement
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -702,13 +708,13 @@ export default function HomePage() {
               </Link>
               <Link
                 href="/login"
-                className="inline-flex items-center rounded-full border border-white/20 px-8 py-3.5 text-sm font-semibold text-white/85 transition hover:bg-white/10 hover:text-white"
+                className="inline-flex items-center rounded-full border border-[rgba(148,153,255,0.3)] px-8 py-3.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.6)] hover:bg-white/[0.05] hover:text-white"
               >
                 J’ai déjà un compte
               </Link>
             </div>
             <div className="rainbow-line relative mx-auto mt-10 w-full max-w-md" aria-hidden="true" />
-            <p className="relative mt-4 font-serif text-lg text-white/70">Créer — Exécuter — Grandir</p>
+            <p className="relative mt-4 font-[family-name:var(--font-display)] text-lg text-[var(--g3-text-secondary)]">Créer — Exécuter — Grandir</p>
           </div>
         </section>
 
@@ -716,21 +722,21 @@ export default function HomePage() {
         <section id="faq" aria-label="Questions fréquentes" className="mx-auto max-w-4xl scroll-mt-24 px-4 pb-20 sm:px-6">
           <div className="mx-auto max-w-2xl text-center">
             <p className="g3-eyebrow">FAQ</p>
-            <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h2 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-4xl">
               Questions fréquentes sur Gen3ia
             </h2>
-            <p className="mt-4 text-sm leading-7 text-neutral-500">
+            <p className="mt-4 text-sm leading-7 text-[var(--g3-muted)]">
               Tout ce qu&apos;il faut savoir avant de confier vos premières
               tâches à un agent.
             </p>
           </div>
           <div className="mt-10 space-y-3">
             {FAQ_ITEMS.map((item) => (
-              <details key={item.question} className="group rounded-2xl border border-[rgba(23,23,20,0.09)] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
-                <summary className="cursor-pointer list-none font-serif text-lg font-semibold text-neutral-900 marker:hidden">
+              <details key={item.question} className="group rounded-2xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]">
+                <summary className="cursor-pointer list-none font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--g3-text)] marker:hidden">
                   {item.question}
                 </summary>
-                <p className="mt-3 text-sm leading-7 text-neutral-600">{item.answer}</p>
+                <p className="mt-3 text-sm leading-7 text-[var(--g3-muted)]">{item.answer}</p>
               </details>
             ))}
           </div>
@@ -743,56 +749,56 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
       />
 
-      {/* ---------- Pied de page brun (façon Runable) ---------- */}
-      <footer className="mt-auto bg-[#211d19] text-white">
+      {/* ---------- Pied de page profond + ligne Aurora ---------- */}
+      <footer className="mt-auto border-t border-[var(--g3-border)] bg-[var(--g3-deep)]">
+        <div className="rainbow-line" aria-hidden="true" />
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
           <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <Link href="/" className="flex items-center gap-2.5">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-sm font-black text-neutral-900">G3</span>
-                <span className="text-sm font-bold">Gen3ia</span>
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--g3-gradient)] bg-[length:160%_100%] text-sm font-black text-white shadow-[0_6px_20px_-6px_rgba(124,92,255,0.8)]">G3</span>
+                <span className="font-[family-name:var(--font-display)] text-sm font-bold">Gen3ia</span>
               </Link>
-              <p className="mt-3 font-serif text-xl font-medium text-white/90">La meilleure façon de travailler avec l’IA</p>
-              <p className="mt-4 max-w-xs text-xs leading-5 text-white/40">
+              <p className="mt-3 font-[family-name:var(--font-display)] text-xl font-medium text-[var(--g3-text)]">La meilleure façon de travailler avec l’IA</p>
+              <p className="mt-4 max-w-xs text-xs leading-5 text-[var(--g3-faint)]">
                 La plateforme d’agents IA autonomes : Studio, Agent Live et
                 Marketplace, avec la sécurité et le contrôle humain au centre.
               </p>
             </div>
             <nav aria-label="Capacités">
-              <p className="text-xs font-bold uppercase tracking-[.2em] text-white/35">Capacités</p>
+              <p className="text-xs font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">Capacités</p>
               <ul className="mt-4 space-y-2.5 text-sm">
                 {PRODUCT_LINKS.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href} className="text-white/60 transition hover:text-white">{link.label}</Link>
+                    <Link href={link.href} className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">{link.label}</Link>
                   </li>
                 ))}
-                <li><Link href="/studio/interface-lab" className="text-white/60 transition hover:text-white">Atelier d&apos;Interfaces</Link></li>
-                <li><Link href="/studio/schedules" className="text-white/60 transition hover:text-white">Planification</Link></li>
+                <li><Link href="/studio/interface-lab" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Atelier d&apos;Interfaces</Link></li>
+                <li><Link href="/studio/schedules" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Planification</Link></li>
               </ul>
             </nav>
             <nav aria-label="Espaces">
-              <p className="text-xs font-bold uppercase tracking-[.2em] text-white/35">Votre espace</p>
+              <p className="text-xs font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">Votre espace</p>
               <ul className="mt-4 space-y-2.5 text-sm">
-                <li><Link href="/dashboard" className="text-white/60 transition hover:text-white">Tableau de bord</Link></li>
-                <li><Link href="/team" className="text-white/60 transition hover:text-white">Équipes</Link></li>
-                <li><Link href="/billing" className="text-white/60 transition hover:text-white">Facturation</Link></li>
-                <li><Link href="/storage" className="text-white/60 transition hover:text-white">Stockage permanent</Link></li>
-                <li><Link href="/developer" className="text-white/60 transition hover:text-white">Espace développeur</Link></li>
+                <li><Link href="/dashboard" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Tableau de bord</Link></li>
+                <li><Link href="/team" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Équipes</Link></li>
+                <li><Link href="/billing" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Facturation</Link></li>
+                <li><Link href="/storage" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Stockage permanent</Link></li>
+                <li><Link href="/developer" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Espace développeur</Link></li>
               </ul>
             </nav>
             <nav aria-label="Compte">
-              <p className="text-xs font-bold uppercase tracking-[.2em] text-white/35">Compte</p>
+              <p className="text-xs font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">Compte</p>
               <ul className="mt-4 space-y-2.5 text-sm">
-                <li><Link href="/signup" className="text-white/60 transition hover:text-white">Créer un compte</Link></li>
-                <li><Link href="/login" className="text-white/60 transition hover:text-white">Se connecter</Link></li>
+                <li><Link href="/signup" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Créer un compte</Link></li>
+                <li><Link href="/login" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Se connecter</Link></li>
               </ul>
             </nav>
           </div>
-          <div className="rainbow-line mt-12" aria-hidden="true" />
-          <div className="mt-6 flex flex-col items-center justify-between gap-3 font-serif text-sm text-white/45 sm:flex-row">
-            <p className="font-sans text-xs">© {new Date().getFullYear()} Gen3ia AI Studio. Tous droits réservés.</p>
-            <p>Créer <span className="mx-2 text-white/25">·</span> Exécuter <span className="mx-2 text-white/25">·</span> Grandir</p>
-            <p className="font-sans text-xs">Conçu pour Android, iOS, Windows et Linux.</p>
+          <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-[var(--g3-border)] pt-6 text-sm text-[var(--g3-faint)] sm:flex-row">
+            <p className="text-xs">© {new Date().getFullYear()} Gen3ia AI Studio. Tous droits réservés.</p>
+            <p className="font-[family-name:var(--font-display)]">Créer <span className="mx-2 text-[var(--g3-border-strong)]">·</span> Exécuter <span className="mx-2 text-[var(--g3-border-strong)]">·</span> Grandir</p>
+            <p className="text-xs">Conçu pour Android, iOS, Windows et Linux.</p>
           </div>
         </div>
       </footer>

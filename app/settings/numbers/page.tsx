@@ -152,7 +152,7 @@ export default function SettingsNumbersPage() {
         description="Choisissez un numéro disponible, attribuez-le à un agent vocal et payez avec votre wallet. Le renouvellement mensuel est automatique (fournisseur + marge Gen3ia de 20 %)."
       />
 
-      {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
+      {error && <div className="mb-4 rounded-xl border border-[rgba(246,98,110,0.35)] bg-[var(--g3-danger-soft)] px-4 py-3 text-sm text-[var(--g3-danger-strong)]" role="alert">{error}</div>}
       {message && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{message}</div>}
 
       <section className="mb-6 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5">

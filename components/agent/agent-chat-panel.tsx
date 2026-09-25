@@ -525,7 +525,7 @@ export function AgentChatPanel({
                     <ol className="mt-2 space-y-1.5">
                         {item.result.plan.steps.map((step) => (
                           <li key={step.id} className="flex items-start gap-2 text-xs">
-                            <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${step.status === "completed" ? "bg-emerald-400" : step.status === "failed" ? "bg-red-400" : step.status === "waiting_approval" ? "bg-amber-400" : "bg-neutral-600"}`} aria-hidden="true" />
+                            <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${step.status === "completed" ? "bg-[var(--g3-success)]" : step.status === "failed" ? "bg-[var(--g3-danger)]" : step.status === "waiting_approval" ? "bg-[var(--g3-warning)]" : "bg-[var(--g3-faint)]"}`} aria-hidden="true" />
                             <span className="min-w-0">
                               <span className="block truncate font-medium text-[var(--g3-text-secondary)]">{step.name || step.id}</span>
                               {step.toolName && <span className="block text-[10px] text-[var(--g3-muted)]">Outil : {step.toolName}</span>}
@@ -555,7 +555,7 @@ export function AgentChatPanel({
 
             {loading && (
               <div className="mr-auto flex items-center gap-3 rounded-2xl border border-white/10 bg-[var(--g3-elevated)] px-4 py-3 text-xs text-[var(--g3-faint)]">
-                <span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-300" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-300 [animation-delay:240ms]" /></span>
+                <span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-primary-strong)]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-magenta)] [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-secondary)] [animation-delay:240ms]" /></span>
                 J&apos;analyse votre demande — réponse ou exécution selon le besoin…
               </div>
             )}

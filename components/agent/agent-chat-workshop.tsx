@@ -159,7 +159,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   return (
     <div className={chatMode ? "flex h-full min-h-0 flex-col gap-2 lg:gap-4" : "space-y-5"}>
       {sessionDisponible === false && <Callout tone="warning" className="rounded-2xl">Session expirée — reconnectez-vous pour discuter avec vos agents.</Callout>}
-      {error && <Callout tone="error" className="rounded-2xl"><span className="flex items-center justify-between gap-3"><span>{error}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Réessayer</button></span></Callout>}
+      {error && <Callout tone="error" className="rounded-2xl"><span className="flex items-center justify-between gap-3"><span>{error}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full border border-[rgba(246,98,110,0.45)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]">Réessayer</button></span></Callout>}
 
       {/* Sélecteur mobile : le rail se replie sous lg */}
       <button

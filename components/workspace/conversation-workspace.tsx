@@ -482,7 +482,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         </div>
 
         {error && detail && (
-          <p className="mx-3 mt-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 lg:mx-0" role="alert">
+          <p className="mx-3 mt-1.5 rounded-lg border border-[rgba(246,98,110,0.35)] bg-[var(--g3-danger-soft)] px-3 py-2 text-xs text-[var(--g3-danger-strong)] lg:mx-0" role="alert">
             {error}
           </p>
         )}

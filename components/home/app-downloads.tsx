@@ -36,7 +36,7 @@ function PwaInstallButton() {
   }, []);
 
   if (installed) {
-    return <span className="text-xs font-semibold text-emerald-600">Application installée ✓</span>;
+    return <span className="text-xs font-semibold text-[var(--g3-success-strong)]">Application installée ✓</span>;
   }
 
   return (
@@ -54,17 +54,17 @@ function PwaInstallButton() {
           const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
           setGuide(isIos ? "ios" : "generique");
         }}
-        className="rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white shadow-[0_6px_16px_-8px_rgba(28,27,24,0.55)] transition hover:bg-neutral-800"
+        className="rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-4 py-2 text-sm font-semibold text-white shadow-[0_8px_22px_-8px_rgba(124,92,255,0.7)] transition hover:brightness-110"
       >
         Installer
       </button>
       {guide === "ios" && (
-        <span className="max-w-[220px] text-right text-[11px] leading-4 text-neutral-500">
+        <span className="max-w-[220px] text-right text-[11px] leading-4 text-[var(--g3-muted)]">
           Dans Safari : bouton Partager puis « Sur l&apos;écran d&apos;accueil ».
         </span>
       )}
       {guide === "generique" && (
-        <span className="max-w-[220px] text-right text-[11px] leading-4 text-neutral-500">
+        <span className="max-w-[220px] text-right text-[11px] leading-4 text-[var(--g3-muted)]">
           Menu du navigateur puis « Installer l&apos;application » ou « Ajouter à l&apos;écran d&apos;accueil ».
         </span>
       )}
@@ -105,19 +105,19 @@ export function AppDownloads() {
         className="mx-auto max-w-6xl rounded-[36px] p-4 sm:p-6"
         style={{
           background:
-            "linear-gradient(135deg, #fdeef0 0%, #f3ecfb 34%, #e3f1fb 68%, #eaf7f1 100%)",
+            "linear-gradient(135deg, rgba(124,92,255,0.16) 0%, rgba(225,79,234,0.12) 34%, rgba(42,212,232,0.12) 68%, rgba(47,212,138,0.10) 100%)",
         }}
       >
-        <div className="reveal rounded-[28px] border border-[rgba(23,23,20,0.06)] bg-[#f9f7f2] p-7 sm:p-10">
+        <div className="reveal rounded-[28px] border border-[var(--g3-border)] bg-[var(--g3-surface)]/90 p-7 backdrop-blur sm:p-10">
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-center">
             <div className="min-w-0">
               <p className="g3-eyebrow">Applications</p>
-              <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h2 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight sm:text-4xl">
                 Chaque appareil.
                 <br />
                 Un seul Gen3ia.
               </h2>
-              <p className="mt-4 max-w-md text-sm leading-7 text-neutral-500">
+              <p className="mt-4 max-w-md text-sm leading-7 text-[var(--g3-muted)]">
                 Installez l&apos;application web sur votre téléphone, et sur PC
                 utilisez l&apos;Agent Live directement dans votre navigateur :
                 rien à télécharger, rien à installer.
@@ -127,23 +127,23 @@ export function AppDownloads() {
               {PLATFORMS.map((platform) => (
                 <li
                   key={platform.key}
-                  className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-[rgba(23,23,20,0.08)] bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.05)]"
+                  className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)]/70 p-4"
                 >
                   <span className="flex min-w-0 items-center gap-3">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-neutral-900 text-white">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--g3-gradient)] bg-[length:160%_100%] text-white shadow-[0_8px_22px_-8px_rgba(124,92,255,0.7)]">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                         <path d={platform.icon} />
                       </svg>
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-sm font-bold text-neutral-900">{platform.name}</span>
-                      <span className="mt-0.5 block truncate text-[11px] leading-4 text-neutral-400">{platform.note}</span>
+                      <span className="block text-sm font-bold text-[var(--g3-text)]">{platform.name}</span>
+                      <span className="mt-0.5 block truncate text-[11px] leading-4 text-[var(--g3-faint)]">{platform.note}</span>
                     </span>
                   </span>
                   {platform.key === "pc" ? (
                     <a
                       href="/live"
-                      className="shrink-0 rounded-full border border-[rgba(23,23,20,0.14)] bg-white px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-900 hover:text-white"
+                      className="shrink-0 rounded-full border border-[rgba(148,153,255,0.3)] bg-white/[0.05] px-4 py-2 text-sm font-semibold text-[var(--g3-text)] transition hover:border-[rgba(124,92,255,0.6)] hover:text-white"
                     >
                       Ouvrir
                     </a>

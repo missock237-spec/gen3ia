@@ -204,7 +204,7 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
       </div>
 
       {message && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div>}
-      {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {error && <div className="mt-4 rounded-xl border border-[rgba(246,98,110,0.35)] bg-[var(--g3-danger-soft)] p-3 text-sm text-[var(--g3-danger-strong)]">{error}</div>}
       <div className="mt-5 flex justify-end"><button type="button" className="g3-btn g3-btn-ghost" onClick={() => void onDone()}>Terminer</button></div>
     </section>
   );

@@ -212,7 +212,7 @@ export function MissionComposer({
           </button>
         </div>
         {error && (
-          <p className="mt-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700" role="alert">
+          <p className="mt-2.5 rounded-xl border border-[rgba(246,98,110,0.35)] bg-[var(--g3-danger-soft)] px-3.5 py-2.5 text-sm text-[var(--g3-danger-strong)]" role="alert">
             {error}
           </p>
         )}
