@@ -140,3 +140,14 @@ export function extractApiUsageName(message: string): string | null {
   const after = message.match(/(?:api|connecteur)\s+(?:personnelle\s+)?(?!(?:pour|afin|et|via|de|du|des|la|le|les|sur|dans|me|m')\b)([\p{L}0-9][\p{L}0-9 ._-]{1,59}?)(?=\s+pour\s|\s+afin\s|\s+et\s|[,.;:!?]|$)/iu);
   return after?.[1]?.trim() ?? null;
 }
+
+/** Extrait un chemin d'endpoint plausible (« /users/1 ») énoncé dans le message. */
+export function extractApiPathFromMessage(message: string): string | null {
+  const matches = [...message.matchAll(/(?:^|[\s(«"'])((?:\/[A-Za-z0-9._~-]+){1,8})(?=[\s)»"'.!,;:?]|$)/g)];
+  for (const match of matches) {
+    const candidate = match[1].replace(/[.,;:!?)»"']+$/, "");
+    // Un segment seul comme « /e » ou « /s » est rarement un endpoint utile.
+    if (candidate.length >= 3 && /\/[A-Za-z]/.test(candidate)) return candidate;
+  }
+  return null;
+}

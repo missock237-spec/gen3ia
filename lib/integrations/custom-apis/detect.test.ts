@@ -3,10 +3,26 @@ import { describe, expect, it } from "vitest";
 import {
   detectApiProvisioning,
   extractApiName,
+  extractApiPathFromMessage,
   extractApiUrl,
   extractApiUsageName,
   looksLikeApiUsageRequest,
 } from "./detect";
+
+describe("extractApiPathFromMessage — chemin d'endpoint énoncé", () => {
+  it("extrait le chemin mentionné entre parenthèses", () => {
+    expect(extractApiPathFromMessage("Donne-moi l'utilisateur 1 (endpoint /users/1).")).toBe("/users/1");
+  });
+  it("extrait un chemin à la fin du message", () => {
+    expect(extractApiPathFromMessage("Interroge /posts/12")).toBe("/posts/12");
+  });
+  it("ignore les morceaux d'URL complètes", () => {
+    expect(extractApiPathFromMessage("appelle https://api.exemple.com/v1/users/2")).toBeNull();
+  });
+  it("renvoie null sans chemin", () => {
+    expect(extractApiPathFromMessage("Utilise l'API pour les clients")).toBeNull();
+  });
+});
 
 describe("detectApiProvisioning — fourniture d'API dans le chat", () => {
   it("détecte « connecte cette API : url avec la clé »", () => {

@@ -20,7 +20,7 @@ import {
   isAutoApprovable,
   type AuthorizationMode,
 } from "@/lib/security/authorization-mode";
-import { detectApiProvisioning, extractApiUsageName, looksLikeApiUsageRequest } from "@/lib/integrations/custom-apis/detect";
+import { detectApiProvisioning, extractApiPathFromMessage, extractApiUsageName, looksLikeApiUsageRequest } from "@/lib/integrations/custom-apis/detect";
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
 import { loadImportedFilesContext } from "@/lib/files/import";
 
@@ -562,7 +562,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
               title: `Appel de l'API « ${selectedApi.name} »`,
               detail: "Appel HTTP réel vers l'API personnelle activée par l'utilisateur (exécution serveur).",
               toolName: "custom_api.call",
-              toolInput: { apiName: selectedApi.name, path: "" },
+              toolInput: { apiName: selectedApi.name, path: extractApiPathFromMessage(input.message) ?? "" },
             },
           ],
         };
@@ -592,7 +592,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
             title: "Appel de votre API",
             detail: "Appel HTTP réel vers l'API personnelle de l'utilisateur (exécution serveur).",
             toolName: "custom_api.call",
-            toolInput: { apiName: extractApiUsageName(input.message) ?? undefined, path: "" },
+            toolInput: { apiName: extractApiUsageName(input.message) ?? undefined, path: extractApiPathFromMessage(input.message) ?? "" },
           },
         ],
       };
