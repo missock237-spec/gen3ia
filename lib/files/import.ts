@@ -352,7 +352,10 @@ const MAX_TOTAL_CHARS = 36_000;
 export async function loadImportedFilesContext(
   userId: string,
   attachments?: Array<{ fileId?: string; filename?: string }>,
+  budget: { perFile?: number; total?: number } = {},
 ): Promise<string> {
+  const perFile = budget.perFile ?? 12_000;
+  const maxTotal = budget.total ?? 36_000;
   if (!attachments || attachments.length === 0) return "";
   const fileIds = attachments.map((a) => a.fileId).filter((id): id is string => Boolean(id)).slice(0, 8);
   if (fileIds.length === 0) return "";
@@ -367,10 +370,10 @@ export async function loadImportedFilesContext(
         ? `${record.charCount.toLocaleString("fr-FR")} caractères convertis`
         : "métadonnées seulement";
     const header = `Fichier importé « ${record.filename} » (${record.kind}, ${label}${record.rowCount !== undefined ? `, ${record.rowCount} lignes` : ""}) :`;
-    const body = record.textContent ? record.textContent.slice(0, Math.min(MAX_CHARS_PER_FILE, MAX_TOTAL_CHARS - total)) : record.note ?? "(aucun contenu texte)";
+    const body = record.textContent ? record.textContent.slice(0, Math.min(perFile, maxTotal - total)) : record.note ?? "(aucun contenu texte)";
     parts.push(`${header}\n${body}`);
     total += header.length + body.length;
-    if (total >= MAX_TOTAL_CHARS) break;
+    if (total >= maxTotal) break;
   }
   return parts.length > 0 ? `\n\nContenu RÉEL des fichiers importés (stockés en base de données) :\n${parts.join("\n\n---\n\n")}` : "";
 }

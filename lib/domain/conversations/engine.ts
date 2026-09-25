@@ -500,7 +500,10 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const hasSelectedApis = (input.connectors ?? []).some((slug) => slug.startsWith("api-"));
 
   // 1 quater) Contenu RÉEL des fichiers importés (conversion stockée en base).
+  // Deux budgets : raccourci pour la classification (latence), complet pour
+  // la réponse (le modèle répond sur la pleine teneur).
   const filesContext = await loadImportedFilesContext(input.userId, input.attachments).catch(() => "");
+  const filesContextShort = await loadImportedFilesContext(input.userId, input.attachments, { perFile: 2_500, total: 6_000 }).catch(() => "");
 
   // 2) Demande d'image : génération réelle (Agnes AI) + artefact image.
   // Deux détections déterministes (aucune variance LLM) : verbe + nom
@@ -532,7 +535,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
         system: buildIntentSystemPrompt(catalog, project, composioConnectors, customApis),
         prompt:
           `Historique récent :\n${priorHistory.slice(-6).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 500)}`).join("\n") || "(vide)"}` +
-          `\n\nNouvelle demande : ${input.message.slice(0, 4000)}${attachmentsContext(input.attachments)}${filesContext}`,
+          `\n\nNouvelle demande : ${input.message.slice(0, 4000)}${attachmentsContext(input.attachments)}${filesContextShort}`,
         schema: IntentSchema,
         label: "intention-conversation",
         maxTokens: 2500,
@@ -782,6 +785,16 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     }
   }
 
+  // Garde : une réponse vide (fournisseur défaillant) ne doit jamais être
+  // persistée telle quelle — l'utilisateur verrait une bulle fantôme.
+  if (!content || !content.trim()) {
+    content =
+      "Je n'ai pas réussi à produire une réponse dans le délai imparti (le fournisseur IA est surchargé). " +
+      "Réessayez en renvoyant votre message — il reste dans la conversation.";
+    provider = "gen3ia";
+    generationStatus = "failed";
+  }
+
   const assistantMessage = await appendMessage({
     conversationId: ctx.conversationId,
     userId: ctx.userId,
@@ -805,7 +818,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 }
 
 /* ------------------------------------------------------------------ */
-/* Tour « image » — génération réelle + artefact                       */
+/* Tour « image » — génération réelle (Agnes AI) + artefact            */
 /* ------------------------------------------------------------------ */
 
 /**
