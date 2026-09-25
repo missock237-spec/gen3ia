@@ -91,19 +91,29 @@ export function Composer({
     setUploading(true);
     setUploadingName(file.name);
     try {
+      // Import RÉEL : le fichier est réellement converti (CSV → lignes, JSON →
+      // structure, XLSX, DOCX, HTML, PDF natif, texte) puis stocké dans la base
+      // de données du projet (Firestore). Le contenu converti accompagne ensuite
+      // le message — le modèle travaille sur le contenu réel, pas sur un nom.
       const form = new FormData();
       form.append("file", file);
-      const response = await fetch("/api/storage/permanent", { method: "POST", body: form });
+      if (projectId) form.append("projectId", projectId);
+      const response = await fetch("/api/files/import", { method: "POST", body: form });
       if (!response.ok) {
         const data = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? "Envoi du fichier impossible.");
       }
-      const data = (await response.json()) as { file: { path: string; filename: string; contentType?: string; sizeBytes?: number } };
+      const data = (await response.json()) as {
+        file: { id: string; filename: string; kind: string; charCount: number; rowCount?: number; contentType: string; sizeBytes: number; conversion: string };
+      };
       setAttachments((current) => [
         ...current.slice(0, 7),
         {
           filename: data.file.filename,
-          path: data.file.path,
+          fileId: data.file.id,
+          fileKind: data.file.kind,
+          charCount: data.file.charCount,
+          ...(data.file.rowCount !== undefined ? { rowCount: data.file.rowCount } : {}),
           contentType: data.file.contentType,
           sizeBytes: data.file.sizeBytes,
         },
@@ -181,7 +191,7 @@ export function Composer({
     {
       id: "fichier",
       label: "Joindre un fichier",
-      description: "Image, PDF, archive ou document — stockage permanent Gen3ia.",
+      description: "CSV, JSON, XLSX, DOCX, PDF, TXT… — réellement converti et stocké en base de données.",
       run: () => composerRef.current?.openFilePicker(),
     },
     ...(onConnectorsChange

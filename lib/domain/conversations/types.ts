@@ -48,6 +48,14 @@ export interface MessageAttachment {
   url?: string;
   contentType?: string;
   sizeBytes?: number;
+  /** Identifiant du fichier importé réellement converti et stocké en base. */
+  fileId?: string;
+  /** Type de conversion réelle effectuée (csv, json, docx, pdf…). */
+  fileKind?: string;
+  /** Nombre de caractères réellement convertis et stockés en base. */
+  charCount?: number;
+  /** Nombre de lignes (CSV/XLSX) réellement stockées. */
+  rowCount?: number;
 }
 
 /** Citation renvoyant vers une source utilisée pour produire la réponse. */

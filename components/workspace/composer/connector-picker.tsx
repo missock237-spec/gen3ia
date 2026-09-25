@@ -30,6 +30,14 @@ interface CatalogEntry {
   logo: string | null;
 }
 
+/** API personnelle déclarée par l'utilisateur (appel réel via custom_api.*). */
+interface PersonalApi {
+  id: string;
+  name: string;
+  baseUrl: string;
+  enabled: boolean;
+}
+
 interface ConnectorPickerProps {
   selected: string[];
   onChange: (connectors: string[]) => void;
@@ -39,21 +47,23 @@ interface ConnectorPickerProps {
 export function ConnectorPicker({ selected, onChange, disabled = false }: ConnectorPickerProps) {
   const [open, setOpen] = useState(false);
   const [connections, setConnections] = useState<ActiveConnection[] | null>(null);
+  const [personalApis, setPersonalApis] = useState<PersonalApi[]>([]);
   const [logos, setLogos] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Chargement à la première ouverture (connexions actives + logos catalogue).
+  // Chargement à la première ouverture (connexions actives + API personnelles + logos).
   useEffect(() => {
     if (!open || connections !== null) return;
     let cancelled = false;
     setLoading(true);
     void (async () => {
       try {
-        const [connectionsRes, catalogRes] = await Promise.all([
+        const [connectionsRes, catalogRes, apisRes] = await Promise.all([
           authFetch("/api/integrations/composio/connections", { cache: "no-store" }),
           authFetch("/api/integrations/catalog", { cache: "default" }),
+          authFetch("/api/custom-apis", { cache: "no-store" }),
         ]);
         if (cancelled) return;
         if (connectionsRes.ok) {
@@ -71,6 +81,10 @@ export function ConnectorPicker({ selected, onChange, disabled = false }: Connec
             if (entry?.toolkit && entry.logo) map.set(entry.toolkit, entry.logo);
           }
           setLogos(map);
+        }
+        if (apisRes.ok) {
+          const data = (await apisRes.json()) as { apis?: PersonalApi[] };
+          setPersonalApis(Array.isArray(data.apis) ? data.apis.filter((api) => api.enabled) : []);
         }
       } catch {
         if (!cancelled) {
@@ -184,6 +198,43 @@ export function ConnectorPicker({ selected, onChange, disabled = false }: Connec
                 );
               })}
             </ul>
+          )}
+
+          {!loading && personalApis.length > 0 && (
+            <>
+              <p className="mt-2 border-t border-[var(--g3-border)] px-1.5 pb-1 pt-2 text-[11px] font-semibold text-[var(--g3-text-secondary)]">
+                Mes API personnelles (appels réels)
+              </p>
+              <ul className="max-h-40 space-y-0.5 overflow-y-auto">
+                {personalApis.map((api) => {
+                  const slug = `api-${api.id}`;
+                  const checked = selected.includes(slug);
+                  return (
+                    <li key={api.id}>
+                      <label
+                        className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-[12px] transition-colors hover:bg-[var(--g3-elevated)] ${checked ? "bg-[var(--g3-elevated)]" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggle(slug)}
+                          className="accent-neutral-900"
+                          aria-label={`Activer l'API ${api.name}`}
+                        />
+                        <span aria-hidden className="grid size-[22px] shrink-0 place-items-center rounded-md bg-[var(--g3-deep)] text-[10px] font-bold text-white">
+                          API
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium text-[var(--g3-text)]">{api.name}</span>
+                          <span className="block truncate text-[10px] text-[var(--g3-muted)]">{api.baseUrl}</span>
+                        </span>
+                        {checked && <span aria-hidden className="text-[10px] font-bold text-[var(--g3-text)]">✓</span>}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
           )}
 
           {selected.length > 0 && (

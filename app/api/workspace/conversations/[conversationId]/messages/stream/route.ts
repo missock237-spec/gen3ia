@@ -17,7 +17,7 @@ const ConnectorSchema = z
   .string()
   .trim()
   .toLowerCase()
-  .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/, "Slug de connecteur invalide.");
+  .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/, "Slug de connecteur invalide.");
 
 const AttachmentSchema = z.object({
   filename: z.string().trim().min(1).max(200),
@@ -25,6 +25,10 @@ const AttachmentSchema = z.object({
   url: z.string().trim().max(2000).optional(),
   contentType: z.string().trim().max(120).optional(),
   sizeBytes: z.number().int().nonnegative().max(200 * 1024 * 1024).optional(),
+  fileId: z.string().trim().max(128).optional(),
+  fileKind: z.string().trim().max(40).optional(),
+  charCount: z.number().int().nonnegative().max(100_000_000).optional(),
+  rowCount: z.number().int().nonnegative().max(10_000_000).optional(),
 });
 
 const BodySchema = z.object({

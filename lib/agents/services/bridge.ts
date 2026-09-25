@@ -33,6 +33,10 @@ export const PROJECT_SERVICE_TOOLS: string[] = [
   "memory.write",
   "code.simulate",
   "knowledge.search",
+  // API personnelles : lecture directe (GET) des API déclarées par
+  // l'utilisateur — l'écriture (custom_api.write) reste gated par activation
+  // + validation humaine.
+  "custom_api.call",
 ];
 
 export interface ProjectServiceDescriptor {

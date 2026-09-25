@@ -38,6 +38,7 @@ import {
   cloudflareDnsListTool,
   cloudflareZonesListTool,
 } from "@/lib/integrations/cloudflare/tools";
+import { customApiCallTool, customApiWriteTool } from "@/lib/integrations/custom-apis/tool";
 
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -68,6 +69,10 @@ export function createDefaultToolRegistry(): ToolRegistry {
   // MCP : l'outil est toujours enregistré — l'exécution échoue proprement
   // (« serveur introuvable ») si l'utilisateur n'a connecté aucun serveur.
   registry.register(mcpCallTool);
+  // API personnelles : toujours enregistrés — l'exécution échoue proprement
+  // (« aucune API personnelle ») tant que l'utilisateur n'en a pas fourni.
+  registry.register(customApiCallTool);
+  registry.register(customApiWriteTool);
   if (process.env.GITHUB_TOKEN) registry.register(githubCreateRepositoryTool);
   if (process.env.ELEVENLABS_API_KEY) {
     registry.register(voiceSpeakTool);

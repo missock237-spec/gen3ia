@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { McpServersPanel } from "@/components/integrations/mcp-servers-panel";
+import { CustomApisPanel } from "@/components/integrations/custom-apis-panel";
 import { AppLogo } from "@/components/integrations/app-logo";
 
 interface CatalogEntry {
@@ -620,6 +621,7 @@ export function IntegrationsWorkspace() {
           </SectionCard>
 
           {/* Serveurs MCP */}
+          <CustomApisPanel />
           <McpServersPanel />
 
           {/* Notifications & approbation distante */}

@@ -3,15 +3,26 @@ import { z } from "zod";
 import { runAI, runAIJSON } from "@/lib/engines/ai-engine";
 import { generate, generateStream } from "@/lib/ai/router";
 import {
-  enhanceImagePrompt,
+  detectImageRatio,
+  extractImagePrompt,
   generateImageWithAgnes,
   ImageGenerationError,
+  looksLikeExplicitDrawingRequest,
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
+import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import type { ToolRisk } from "@/lib/tools/types";
 import { createDefaultToolRegistry } from "@/lib/tools/default-registry";
 import { executeTool } from "@/lib/tools/executor";
 import type { ExecutionPolicy } from "@/lib/security/execution-policy";
+import {
+  AUTO_APPROVAL_AUDIT_REASON,
+  isAutoApprovable,
+  type AuthorizationMode,
+} from "@/lib/security/authorization-mode";
+import { detectApiProvisioning, extractApiUsageName, looksLikeApiUsageRequest } from "@/lib/integrations/custom-apis/detect";
+import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
+import { loadImportedFilesContext } from "@/lib/files/import";
 
 import {
   appendMessage,
@@ -128,6 +139,7 @@ export function estimatedCostForTool(toolName: string): string {
   if (toolName.startsWith("voice.")) return "~0,02 € / génération";
   if (toolName === "phone.call") return "selon destination (~0,02 €/min)";
   if (toolName.startsWith("composio.") || toolName.startsWith("mcp.")) return "inclus (application connectée)";
+  if (toolName.startsWith("custom_api.")) return "gratuit (votre API — quota du fournisseur)";
   return "gratuit";
 }
 
@@ -137,6 +149,12 @@ export function dataScopeForTool(toolName: string, input: unknown): string {
     input && typeof input === "object" && "toolkit" in (input as Record<string, unknown>)
       ? String((input as Record<string, unknown>).toolkit)
       : undefined;
+  const apiName =
+    input && typeof input === "object" && "apiName" in (input as Record<string, unknown>)
+      ? String((input as Record<string, unknown>).apiName)
+      : undefined;
+  if (toolName === "custom_api.call") return `Appel en lecture vers votre API${apiName ? ` « ${apiName} »` : " personnelle"}`;
+  if (toolName === "custom_api.write") return `Modification de données dans votre API${apiName ? ` « ${apiName} »` : " personnelle"}`;
   if (toolName === "composio.execute") return `Application connectée${target ? ` « ${target} »` : ""} — action externe`;
   if (toolName === "mcp.call") return "Serveurs MCP connectés (Drive, GitHub, bases de données…)";
   if (toolName === "email.send") return "Destinataire du message + signature plateforme";
@@ -195,25 +213,95 @@ const IntentSchema = z.object({
 
 export type TurnIntent = z.infer<typeof IntentSchema>;
 
+export type ExplicitToolIntent =
+  | { toolName: "web.search"; query: string }
+  | { toolName: "custom_api.call"; query: string }
+  | { toolName: "artifact.create"; document: { title: string; format: "pdf" | "docx" | "xlsx" | "pptx" | "md" } };
+
 /**
- * Garde-fou déterministe : certaines demandes énoncent EXPLICITEMENT l'outil
- * attendu (« fais une recherche web… »). Si l'IA classe malgré tout la demande
- * en simple réponse (ou si sa décision est indisponible), cette heuristique
- * force un plan avec l'outil réel — la demande de l'utilisateur est loi.
+ * Garde-fou déterministe : certaines demandes énoncent EXPLICITEMENT le
+ * résultat attendu (recherche web réelle, document téléchargeable). Si l'IA
+ * classe malgré tout la demande en simple réponse (ou si sa décision est
+ * indisponible), cette heuristique force un plan avec l'outil réel — la
+ * demande de l'utilisateur est loi.
+ *
+ * Audits 25-a/25-d : « Recherche les dernières tendances… » produisait une
+ * réponse SANS sources (hallucination possible) et « Crée un PDF… » ne
+ * générait jamais de livrable — ces deux familles sont désormais routées.
  */
-export function detectExplicitToolIntent(message: string, catalog: ToolCatalogEntry[]): { toolName: string; query: string } | null {
+export function detectExplicitToolIntent(message: string, catalog: ToolCatalogEntry[], customApis: CustomApiRecord[] = []): ExplicitToolIntent | null {
   const lower = message.toLowerCase();
   const catalogNames = new Set(catalog.map((t) => t.name));
+
+  // 1) Recherche web explicite (« fais une recherche web », « search the web »).
   const webMarkers = /(recherche[s]? (web|internet)|cherche[rz]? (sur )?(le |la )?(web|internet)|fais[ez]? une recherche|search (the )?web|web search|sur (le|internet))\b/i;
   if (webMarkers.test(lower) && catalogNames.has("web.search")) {
-    return { toolName: "web.search", query: message.slice(0, 400) };
+    return { toolName: "web.search", query: extractSearchQuery(message) };
   }
+
+  // 1 bis) Demande explicite d'UTILISATION d'une API personnelle connue :
+  // l'appel réel est la demande de l'utilisateur, jamais un simple « chat ».
+  if (
+    customApis.length > 0 &&
+    catalogNames.has("custom_api.call") &&
+    looksLikeApiUsageRequest(message)
+  ) {
+    const wanted = extractApiUsageName(message);
+    const api = wanted
+      ? customApis.find((candidate) => candidate.name.toLowerCase().includes(wanted.toLowerCase()) || wanted.toLowerCase().includes(candidate.name.toLowerCase()))
+      : customApis.length === 1
+        ? customApis[0]
+        : undefined;
+    if (api) return { toolName: "custom_api.call", query: message.slice(0, 400) };
+  }
+
+  // 2) Recherche d'information ACTUELLE : verbe d'action + sujet qui exige des
+  //    données à jour (tendances, actualités, prix, marché…) — une réponse de
+  //    mémoire serait une fabrication sans sources.
+  const researchVerb = /\b(recherch\w*|cherch\w*|trouv\w*|renseign\w*|surveill\w*|compar\w*|informe[rz]?)\b/i;
+  const currentInfoSubject = /\b(tendances?|actualit[ée]s?|nouveaut[ée]s?|news|derni[èe]res? (informations|nouvelles|tendances|versions?|donn[ée]es)|march[ée]|concurrents?|concurrence|prix|tarifs?|m[ée]t[ée]o|r[ée]glementation)\b/i;
+  if (researchVerb.test(lower) && currentInfoSubject.test(lower) && catalogNames.has("web.search")) {
+    return { toolName: "web.search", query: extractSearchQuery(message) };
+  }
+
+  // 3) Livrable document explicite (« prépare un rapport », « crée un PDF ») :
+  //    force un plan avec artifact.create — le moteur complète les blocs de
+  //    contenu à l'exécution (voir ensureArtifactInput).
+  const documentVerb = /\b(fais|pr[ée]par\w*|cr[ée]\w*|g[ée]n[èe]r\w*|r[ée]dig\w*|construis|produis|transforme|exporte)\b/i;
+  const documentObject = /\b(rapport|comptes? rendus?|note de synth[èe]se|pr[ée]sentation|diaporama|slides?|documents?|pdf|docx|word|excel|xlsx|powerpoint|pptx|tableau de bord)\b/i;
+  if (documentVerb.test(lower) && documentObject.test(lower) && catalogNames.has("artifact.create")) {
+    return {
+      toolName: "artifact.create",
+      document: { title: extractDocumentTitle(message), format: extractDocumentFormat(message) },
+    };
+  }
+
   const imageMarkers = /\b(g[eé]n[eè]re|cr[eé]e|dessine)\b.*\b(image|illustration|dessin|visuel)\b|\b(image|illustration)\b.*\b(g[eé]n[eè]r)\b/i;
   if (imageMarkers.test(lower) && catalogNames.has("artifact.create")) {
     // Les images sont traitées en amont par Agnes ; ici on ne force rien.
     return null;
   }
   return null;
+}
+
+/** Titre court d'un livrable dérivé de la demande (nettoyage des formules). */
+export function extractDocumentTitle(message: string): string {
+  const cleaned = message
+    .replace(/^(fais[ez]?|peux[- ]tu|pourrais[- ]tu|merci de|stp|s'il (te|vous) pla[eî]t)\s+/i, "")
+    .replace(/^(sur |about )+/i, "")
+    .replace(/^[^\p{L}\p{N}]+/u, "")
+    .trim();
+  return (cleaned || message.trim()).slice(0, 80);
+}
+
+/** Format de document demandé — déduction prudente, PDF par défaut. */
+export function extractDocumentFormat(message: string): "pdf" | "docx" | "xlsx" | "pptx" | "md" {
+  const lower = message.toLowerCase();
+  if (/\b(pr[ée]sentation|diaporama|slides?|powerpoint|pptx)\b/i.test(lower)) return "pptx";
+  if (/\b(excel|xlsx|tableau de bord|feuille de calcul)\b/i.test(lower)) return "xlsx";
+  if (/\b(word|docx)\b/i.test(lower)) return "docx";
+  if (/\b(markdown|\.md)\b/i.test(lower)) return "md";
+  return "pdf";
 }
 
 /** Requête condensée pour l'outil de recherche (nettoyage des formules). */
@@ -234,6 +322,7 @@ export function buildIntentSystemPrompt(
   catalog: ToolCatalogEntry[],
   project?: WorkspaceProject | null,
   connectors?: string[],
+  customApis?: CustomApiRecord[],
 ): string {
   const toolLines = catalog
     .map((t) => `- ${t.name} (risque ${t.risk}${t.requiresApproval ? ", validation requise" : ""}) : ${t.description}`)
@@ -246,10 +335,21 @@ export function buildIntentSystemPrompt(
         "Les actions externes (envoi, publication, modification) sont sensibles : décris leur impact précisément, la validation humaine sera demandée.",
       ].join("\n")
     : "";
+  const customApiSection = customApis && customApis.length > 0
+    ? [
+        "",
+        "API personnelles de l'utilisateur (RÉELLES, appelées par le serveur via custom_api.call / custom_api.write) :",
+        ...customApis.map((api) => {
+          const selected = connectors?.some((slug) => slug === `api-${api.id}`);
+          return `- « ${api.name} » — base : ${api.baseUrl}${api.description ? ` — ${api.description.slice(0, 200)}` : ""}${selected ? " [ACTIVÉE pour ce message]" : ""} ; auth : ${api.authType}`;
+        }),
+        "Pour interroger une de ces API : étape avec toolName=\"custom_api.call\" et toolInput { apiName: \"<nom exact>\", path: \"/chemin\", query?: {…} } — l'appel HTTP réel est exécuté par le serveur et le résultat réel te sera renvoyé.",
+        "Pour modifier des données via ces API : toolName=\"custom_api.write\" (POST/PUT/PATCH/DELETE, validation humaine requise).",
+        "Utilise ces API uniquement si la demande s'y prête ; ne devine jamais un chemin : si le chemin est inconnu, commence par un appel GET sur la racine ou un chemin probable, et restitue le résultat réel.",
+      ].join("\n")
+    : "";
   return [
     "Tu es le moteur d'exécution de Gen3ia, une plateforme d'agents avec connecteurs.",
-    "La conversation complète est une source de contexte : utilise l'historique récent pour résoudre les pronoms, les références implicites et les contraintes déjà données. Si une information manque ou est incertaine, dis-le clairement et pose une seule question ciblée au lieu d'inventer.",
-    "Ne révèle pas ton raisonnement interne, les étapes techniques ou les outils dans la réponse finale sauf si l'utilisateur les demande explicitement. Retourne uniquement le résultat demandé, avec les citations ou limites nécessaires.",
     "Pour chaque demande utilisateur, tu décides :",
     '  mode="chat" : la demande se traite par une simple réponse textuelle (question, explication, rédaction courte). Remplis alors `reply`.',
     '  mode="plan" : la demande exige des actions réelles (recherche, fichiers, applications connectées, publication…). Remplis alors `objective` et 1 à 8 `steps`.',
@@ -258,12 +358,18 @@ export function buildIntentSystemPrompt(
     "Les outils marqués « validation requise » ne seront exécutés qu'après approbation explicite de l'utilisateur : décris leur impact précisément dans detail.",
     "Ne propose jamais un outil qui n'est pas dans le catalogue. Ne fabrique pas d'identifiants, de tokens ou de numéros.",
     "",
+    "RÈGLE IMPÉRATIVE — VISUELS : toute demande de CRÉATION d'image, photo, illustration, dessin, logo, affiche, poster, bannière, avatar, icône, fond d'écran ou miniature est routée en mode=plan avec UN SEUL step :",
+    '  { title: "Génération de l\'image", toolName: "image.generate", toolInput: { prompt: "<description visuelle fidèle de CE QUE L\'UTILISATEUR a demandé — le sujet exact, sans rien ajouter ni inventer>" } }.',
+    "Cela vaut quel que soit la formulation (« dessine-moi un chat », « je veux une photo de… », « un logo pour ma boulangerie », « fais-moi une image de… »). Ne réponds JAMAIS une demande de visuel par du texte seul.",
+    "",
     "Catalogue d'outils disponibles :",
     toolLines,
+    "- image.generate (risque low) : génère une image réelle et photoréaliste à partir d'une description visuelle (input { prompt }).",
     "",
     project?.instructions ? `Instructions persistantes du projet « ${project.name} » (à respecter) :\n${project.instructions}` : "",
     project?.privacyRules ? `Règles de confidentialité du projet (impératives) :\n${project.privacyRules}` : "",
     connectorSection,
+    customApiSection,
     "Réponds UNIQUEMENT avec l'objet JSON conforme au schéma.",
   ]
     .filter(Boolean)
@@ -284,6 +390,8 @@ export interface ConversationTurnInput {
   model?: string;
   /** Connecteurs activés explicitement pour ce tour (slugs Composio). */
   connectors?: string[];
+  /** Mode d'autorisation HITL choisi dans le composer (« Toujours demander ▼ »). */
+  authorizationMode?: AuthorizationMode;
   /** Émetteur d'événements de flux (streaming NDJSON) — absent = API classique. */
   onEvent?: StreamEventEmitter;
 }
@@ -298,8 +406,8 @@ export interface ConversationTurnResult {
   intent: TurnIntent;
 }
 
-function historyForModel(history: ChatMessage[], limit = 24) {
-  return history.slice(-limit).map((m) => ({ role: m.role, content: m.content.slice(0, 12000) }));
+function historyForModel(history: ChatMessage[], limit = 16) {
+  return history.slice(-limit).map((m) => ({ role: m.role, content: m.content }));
 }
 
 /**
@@ -321,10 +429,20 @@ const INTENT_BUDGET_MS = 25_000;
 const CHAT_BUDGET_MS = 35_000;
 const SUMMARY_BUDGET_MS = 15_000;
 
-/** Contexte des pièces jointes injecté au modèle. */
+/** Contexte des pièces jointes injecté au modèle (liste) + détails de conversion réelle. */
 function attachmentsContext(attachments?: MessageAttachment[]): string {
   if (!attachments || attachments.length === 0) return "";
-  const lines = attachments.map((a) => `- ${a.filename}${a.contentType ? ` (${a.contentType})` : ""}`);
+  const lines = attachments.map((a) => {
+    const details = [
+      a.contentType ? `(${a.contentType})` : "",
+      a.fileKind ? `conversion réelle : ${a.fileKind}` : "",
+      a.rowCount !== undefined ? `${a.rowCount} lignes` : "",
+      a.charCount !== undefined ? `${a.charCount} caractères stockés en base` : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
+    return `- ${a.filename}${details ? ` — ${details}` : ""}`;
+  });
   return `\n\nPièces jointes de l'utilisateur :\n${lines.join("\n")}`;
 }
 
@@ -354,8 +472,40 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const history = await listMessages(input.userId, input.conversationId, 100);
   const priorHistory = history.slice(0, -1);
 
-  // 2) Demande d'image : g��nération réelle (Agnes AI) + artefact image.
-  if (looksLikeImageRequest(input.message)) {
+  // 1 bis) Fourniture d'une API personnelle dans le chat : le connecteur est
+  // RÉELLEMENT créé (Firestore) et confirmé — la configuration reprend
+  // exactement ce que l'utilisateur a écrit, rien n'est inventé.
+  const provisioning = detectApiProvisioning(input.message);
+  if (provisioning) {
+    const result = await runApiProvisioningTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, provisioning });
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+
+  // 1 ter) API personnelles activées (base du planificateur + gardes).
+  let customApis: CustomApiRecord[] = [];
+  try {
+    customApis = await listEnabledCustomApis(input.userId, 12);
+  } catch {
+    customApis = [];
+  }
+  // Les sélecteurs « api-<id> » activent une API personnelle — ils ne sont
+  // PAS des toolkits Composio et ne doivent pas rejoindre cette section.
+  const composioConnectors = (input.connectors ?? []).filter((slug) => !slug.startsWith("api-"));
+  const hasSelectedApis = (input.connectors ?? []).some((slug) => slug.startsWith("api-"));
+
+  // 1 quater) Contenu RÉEL des fichiers importés (conversion stockée en base).
+  const filesContext = await loadImportedFilesContext(input.userId, input.attachments).catch(() => "");
+
+  // 2) Demande d'image : génération réelle (Agnes AI) + artefact image.
+  // Deux détections déterministes (aucune variance LLM) : verbe + nom
+  // visuel, ou verbe de dessin explicite (« Dessine-moi un chat »).
+  if (looksLikeImageRequest(input.message) || looksLikeExplicitDrawingRequest(input.message)) {
     await onEvent({ type: "status", phase: "image", label: "Génération de l'image en cours…" });
     const result = await runImageTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
     await onEvent({
@@ -379,10 +529,10 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
         userId: input.userId,
         feature: "conversation-turn",
         task: "chat",
-        system: buildIntentSystemPrompt(catalog, project, input.connectors),
+        system: buildIntentSystemPrompt(catalog, project, composioConnectors, customApis),
         prompt:
           `Historique récent :\n${priorHistory.slice(-6).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 500)}`).join("\n") || "(vide)"}` +
-          `\n\nNouvelle demande : ${input.message.slice(0, 4000)}${attachmentsContext(input.attachments)}`,
+          `\n\nNouvelle demande : ${input.message.slice(0, 4000)}${attachmentsContext(input.attachments)}${filesContext}`,
         schema: IntentSchema,
         label: "intention-conversation",
         maxTokens: 2500,
@@ -398,8 +548,27 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
 
   if (intent.mode === "chat") {
     // Garde-fou : la demande exige explicitement un outil réel ?
-    const explicit = detectExplicitToolIntent(input.message, catalog);
-    if (explicit) {
+    const explicit = detectExplicitToolIntent(input.message, catalog, customApis);
+    if (!explicit && hasSelectedApis) {
+      // API personnelle activée via le sélecteur pour CE message : appel réel attendu.
+      const selectedApi = customApis.find((api) => (input.connectors ?? []).includes(`api-${api.id}`));
+      if (selectedApi) {
+        intent = {
+          mode: "plan",
+          understanding: "API personnelle activée pour ce message : appel réel attendu.",
+          objective: input.message.slice(0, 400),
+          steps: [
+            {
+              title: `Appel de l'API « ${selectedApi.name} »`,
+              detail: "Appel HTTP réel vers l'API personnelle activée par l'utilisateur (exécution serveur).",
+              toolName: "custom_api.call",
+              toolInput: { apiName: selectedApi.name, path: "" },
+            },
+          ],
+        };
+      }
+    }
+    if (explicit?.toolName === "web.search") {
       intent = {
         mode: "plan",
         understanding: "Demande explicite d'actions réelles (recherche web).",
@@ -409,14 +578,49 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
             title: "Recherche web",
             detail: "Recherche réelle sur le web demandée explicitement par l'utilisateur.",
             toolName: explicit.toolName,
-            toolInput: { query: extractSearchQuery(input.message), maxResults: 8 },
+            toolInput: { query: explicit.query, maxResults: 8 },
+          },
+        ],
+      };
+    } else if (explicit?.toolName === "custom_api.call") {
+      intent = {
+        mode: "plan",
+        understanding: "Appel réel d'une API personnelle demandé explicitement.",
+        objective: input.message.slice(0, 400),
+        steps: [
+          {
+            title: "Appel de votre API",
+            detail: "Appel HTTP réel vers l'API personnelle de l'utilisateur (exécution serveur).",
+            toolName: "custom_api.call",
+            toolInput: { apiName: extractApiUsageName(input.message) ?? undefined, path: "" },
+          },
+        ],
+      };
+    } else if (explicit?.toolName === "artifact.create") {
+      // Livrable document explicite : plan en deux temps — la rédaction du
+      // contenu est finalisée par le moteur (ensureArtifactInput), puis
+      // artifact.create produit le fichier réel (pdf/docx/xlsx/pptx).
+      intent = {
+        mode: "plan",
+        understanding: "Demande explicite d'un livrable document téléchargeable.",
+        objective: input.message.slice(0, 400),
+        steps: [
+          {
+            title: `Rédaction du contenu (${explicit.document.format})`,
+            detail: "Rédige un contenu structuré et complet pour le document demandé.",
+          },
+          {
+            title: `Création du document « ${explicit.document.title} »`,
+            detail: "Génère le fichier téléchargeable et le range dans les livrables de la conversation.",
+            toolName: "artifact.create",
+            toolInput: { title: explicit.document.title, format: explicit.document.format },
           },
         ],
       };
     }
   }
   if (intent.mode === "chat") {
-    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent });
+    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,
@@ -425,7 +629,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     });
     return result;
   }
-  const result = await runPlanTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent });
+  const result = await runPlanTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext });
   await onEvent({
     type: "done",
     assistantMessage: result.assistantMessage,
@@ -445,6 +649,8 @@ interface TurnBase extends ConversationTurnInput {
   project: WorkspaceProject | null;
   userMessage: ConversationMessage;
   priorHistory: ChatMessage[];
+  /** Contenu réel des fichiers importés (convertis + stockés en base). */
+  filesContext?: string;
 }
 
 interface TurnContext extends TurnBase {
@@ -456,8 +662,10 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   const streaming = Boolean(ctx.onEvent);
   const systemParts = [
     "Tu es Gen3ia, l'assistant de travail qui exécute : tu réponds de façon directe, structurée et actionnable.",
+    "La génération d'images est effectuée par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré, affiché ou décrit un visuel comme s'il était affiché, et n'invente jamais d'URL d'image.",
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
+    ctx.filesContext ? `Ces contenus proviennent de fichiers importés par l'utilisateur (conversion réelle stockée en base de données) — appuie-toi EXCLUSIVEMENT sur eux pour toute question les concernant, sans jamais inventer de données :${ctx.filesContext}` : "",
   ].filter(Boolean);
 
   const requestMessages = [
@@ -600,9 +808,41 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 /* Tour « image » — génération réelle + artefact                       */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Compétence image Gen3ia : le prompt de l'utilisateur est analysé puis
+ * amélioré par LLM (sujet INTACT, rendu optimisé ultra réaliste), puis la
+ * génération réelle est déléguée à Agnes AI en 2K (détail supérieur).
+ * L'amélioration n'est JAMAIS bloquante (repli : prompt d'origine) et la
+ * durée totale reste sous le budget de la fonction serverless (60 s).
+ */
+async function produceConversationImage(
+  ctx: Pick<TurnContext, "message">,
+  plannedPrompt?: string,
+): Promise<{ imageUrl: string; model: string }> {
+  const rawPrompt =
+    typeof plannedPrompt === "string" && plannedPrompt.trim().length >= 3
+      ? plannedPrompt.trim().slice(0, 4000)
+      : extractImagePrompt(ctx.message);
+  // Amélioration bornée : si le LLM d'amélioration traîne, la génération
+  // part avec le prompt d'origine plutôt que de dépasser le budget.
+  const enhancement = await withTimeout(
+    enhanceImagePrompt(rawPrompt).catch(() => ({ prompt: rawPrompt, enhanced: false })),
+    12_000,
+    "amélioration du prompt image",
+  ).catch(() => ({ prompt: rawPrompt, enhanced: false }));
+  const image = await generateImageWithAgnes({
+    prompt: enhancement.prompt,
+    size: "2K",
+    ratio: detectImageRatio(ctx.message),
+    timeoutMs: 40_000,
+  });
+  return { imageUrl: image.imageUrl, model: image.model };
+}
+
 async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
   try {
-    const image = await generateImageWithAgnes({ prompt: enhanceImagePrompt(ctx.message) });
+    const image = await produceConversationImage(ctx);
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
       userId: ctx.userId,
@@ -622,6 +862,11 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       url: image.imageUrl,
       note: `Généré avec ${image.model}`,
     });
+    // Contrat de flux complet : le client doit recevoir la même séquence
+    // d'événements que les autres tours (audit 25-a : message_complete et
+    // artifact_created manquaient sur le tour image).
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    await onEvent({ type: "artifact_created", artifact });
     return {
       conversationId: ctx.conversationId,
       userMessage: ctx.userMessage,
@@ -641,6 +886,7 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       content: message,
       generationStatus: "failed",
     });
+    await onEvent({ type: "message_complete", message: assistantMessage });
     return {
       conversationId: ctx.conversationId,
       userMessage: ctx.userMessage,
@@ -653,10 +899,160 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
 }
 
 /* ------------------------------------------------------------------ */
+/* Tour « fourniture d'API » — création réelle du connecteur           */
+/* ------------------------------------------------------------------ */
+
+interface ApiProvisioningTurnContext extends TurnBase {
+  provisioning: NonNullable<ReturnType<typeof detectApiProvisioning>>;
+}
+
+async function runApiProvisioningTurn(ctx: ApiProvisioningTurnContext): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  await onEvent({ type: "status", phase: "execution", label: "Enregistrement de votre API…" });
+
+  let record: CustomApiRecord | null = null;
+  let failure: string | undefined;
+  try {
+    record = await createCustomApi({
+      userId: ctx.userId,
+      name: ctx.provisioning.name,
+      baseUrl: ctx.provisioning.baseUrl,
+      description: ctx.provisioning.description,
+      authType: ctx.provisioning.authType,
+      authHeader: ctx.provisioning.authHeader,
+      authValue: ctx.provisioning.authValue,
+      queryKey: ctx.provisioning.queryKey,
+      enabled: true,
+      source: "chat",
+    });
+  } catch (error) {
+    failure = error instanceof Error ? error.message : "Création du connecteur impossible.";
+  }
+
+  const authLabel =
+    ctx.provisioning.authType === "bearer"
+      ? "Bearer (clé détectée)"
+      : ctx.provisioning.authType === "header"
+        ? `en-tête ${ctx.provisioning.authHeader ?? "Authorization"} (clé détectée)`
+        : ctx.provisioning.authType === "query"
+          ? "paramètre d'URL (clé détectée)"
+          : "aucune (API publique)";
+
+  const content = failure
+    ? `Je n'ai pas pu enregistrer votre API : ${failure}`
+    : [
+        `Connecteur créé et activé : « ${record!.name} »`,
+        `- URL de base : ${record!.baseUrl}`,
+        `- Authentification : ${authLabel}`,
+        "",
+        "Je peux maintenant appeler cette API pour de vrai — par exemple :",
+        `« Utilise l'API ${record!.name} pour … ».`,
+        "Les lectures (GET) s'exécutent directement ; toute modification de données (POST/PUT/PATCH/DELETE) attendra votre validation. Vous pouvez gérer ou désactiver ce connecteur depuis Intégrations.",
+      ].join("\n");
+
+  const assistantMessage = await appendMessage({
+    conversationId: ctx.conversationId,
+    userId: ctx.userId,
+    role: "assistant",
+    content,
+    generationStatus: "complete",
+  });
+  await onEvent({ type: "message_complete", message: assistantMessage });
+
+  return {
+    conversationId: ctx.conversationId,
+    userMessage: ctx.userMessage,
+    assistantMessage,
+    artifacts: [],
+    approvals: [],
+    intent: { mode: "chat", understanding: "Fourniture d'une API personnelle (connecteur créé)." },
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* Tour « plan » — timeline, outils, approbations, artefacts           */
 /* ------------------------------------------------------------------ */
 
 const TOOL_OUTPUT_ARTIFACTS: ReadonlySet<string> = new Set(["artifact.create", "file.create", "zip.create"]);
+
+/* ------------------------------------------------------------------ */
+/* Completion du contenu des livrables (artifact.create)               */
+/* ------------------------------------------------------------------ */
+
+const DocumentBlocksSchema = z.object({
+  title: z.string().min(1).max(300),
+  format: z.enum(["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html"]),
+  blocks: z.array(
+    z.object({
+      type: z.enum(["title", "heading", "paragraph", "list", "table", "code", "quote", "pageBreak"]),
+      text: z.string().max(200_000).optional(),
+      level: z.number().int().min(1).max(6).optional(),
+      ordered: z.boolean().optional(),
+      items: z.array(z.string().max(20_000)).max(2_000).optional(),
+      columns: z.array(z.string().max(10_000)).max(1_000).optional(),
+      rows: z.array(z.array(z.string().max(10_000)).max(1_000)).max(2_000).optional(),
+      language: z.string().max(100).optional(),
+    }),
+  ).min(1).max(2_000),
+});
+
+/**
+ * Complète l'entrée d'artifact.create quand le plan ne contient pas les blocs
+ * du document : l'IA d'intention ne peut pas pré-rédiger tout un document dans
+ * son budget de tokens. Un appel de rédaction dédié produit le contenu
+ * intégral, puis l'outil génère le fichier réel (pdf/docx/xlsx/pptx).
+ * Retourne null si la rédaction est impossible — l'étape est alors ignorée
+ * avec une raison claire (jamais de fichier vide ou corrompu).
+ */
+async function ensureArtifactInput(
+  ctx: TurnContext,
+  planned: { title: string; detail?: string },
+  toolInput: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const hasTitle = typeof toolInput.title === "string" && toolInput.title.trim().length > 0;
+  const blocks = Array.isArray(toolInput.blocks) ? (toolInput.blocks as unknown[]) : [];
+  if (hasTitle && blocks.length > 0) return toolInput;
+
+  try {
+    const result = await withTimeout(
+      runAIJSON({
+        userId: ctx.userId,
+        feature: "conversation-turn",
+        task: "chat",
+        system:
+          "Tu rédiges le contenu d'un document professionnel pour l'utilisateur de Gen3ia. " +
+          "Tu produis un objet JSON : title (titre court du document), format, blocks (sections). " +
+          "Blocs disponibles : title (une seule fois, en premier), heading (sections), paragraph (texte rédigé), " +
+          "list (puces {items}), table ({columns, rows}) si des données le justifient, quote, pageBreak. " +
+          "Le contenu doit être rédigé intégralement et de façon professionnelle : jamais de placeholder, " +
+          "jamais de « … », jamais de section vide.",
+        prompt:
+          `Demande de l'utilisateur : ${ctx.message.slice(0, 2000)}\n` +
+          `Objectif du plan : ${ctx.intent.objective ?? "(celui de la demande)"}\n` +
+          `Étape : ${planned.title}${planned.detail ? ` — ${planned.detail}` : ""}\n` +
+          `Format attendu : ${typeof toolInput.format === "string" ? toolInput.format : "pdf"}\n` +
+          `Titre proposé : ${hasTitle ? String(toolInput.title) : "(à déduire de la demande)"}` +
+          `${ctx.priorHistory.length > 0 ? `\n\nContexte récent de la conversation :\n${historyForModel(ctx.priorHistory, 4).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 400)}`).join("\n")}` : ""}`,
+        schema: DocumentBlocksSchema,
+        label: "redaction-livrable",
+        maxTokens: 6000,
+      }),
+      INTENT_BUDGET_MS,
+      "rédaction du livrable",
+    );
+    const generated = result.data;
+    return {
+      ...toolInput,
+      title: hasTitle ? String(toolInput.title) : generated.title,
+      format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
+      blocks: generated.blocks,
+    };
+  } catch {
+    // Rédaction indisponible (timeout, fournisseur saturé) : l'étape sera
+    // ignorée proprement avec un message clair pour l'utilisateur.
+    return null;
+  }
+}
 
 async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
@@ -695,8 +1091,57 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 
   let executedSomething = false;
   let anyFailure = false;
+  /** Image générée pendant ce tour (affichée sur le message final). */
+  let turnImageUrl: string | undefined;
 
   for (const planned of plannedSteps) {
+    // Compétence image : l'étape image.generate est interceptée AVANT le
+    // catalogue d'outils — la génération réelle (Agnes AI 2K) produit une
+    // image attachée au message final et rangée dans les artefacts.
+    if (planned.toolName === "image.generate") {
+      const step = makeStep({
+        phase: "execution",
+        title: planned.title,
+        detail: planned.detail,
+        toolName: "image.generate",
+        toolInput: planned.toolInput,
+        status: "in_progress",
+      });
+      steps.push(step);
+      await onEvent({ type: "step_update", runId: run.id, step });
+      const startedAt = new Date().toISOString();
+      try {
+        const image = await produceConversationImage(ctx, typeof planned.toolInput?.prompt === "string" ? planned.toolInput.prompt : undefined);
+        step.status = "done";
+        step.startedAt = startedAt;
+        step.finishedAt = new Date().toISOString();
+        step.output = `Image générée avec ${image.model}.`;
+        executedSomething = true;
+        turnImageUrl = image.imageUrl;
+        const artifact = await createArtifact({
+          userId: ctx.userId,
+          conversationId: ctx.conversationId,
+          projectId: ctx.projectId,
+          runId: run.id,
+          type: "image",
+          title: (typeof planned.toolInput?.prompt === "string" && planned.toolInput.prompt.trim() ? planned.toolInput.prompt.trim() : ctx.message).slice(0, 80),
+          url: image.imageUrl,
+          note: `Généré avec ${image.model}`,
+        });
+        artifacts.push(artifact);
+        step.artifactId = artifact.id;
+        await onEvent({ type: "artifact_created", artifact });
+      } catch (error) {
+        step.status = "failed";
+        step.startedAt = startedAt;
+        step.finishedAt = new Date().toISOString();
+        step.output = error instanceof ImageGenerationError ? error.message : "La génération d'image a échoué.";
+        anyFailure = true;
+      }
+      await onEvent({ type: "step_update", runId: run.id, step });
+      continue;
+    }
+
     const toolEntry = planned.toolName ? catalogByName.get(planned.toolName) : undefined;
     if (planned.toolName && !toolEntry) {
       const step = makeStep({
@@ -714,7 +1159,22 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     const risk = toolEntry?.risk ?? "low";
     const sensitive = planned.sensitive === true || (toolName ? stepRequiresApproval(risk) : false);
 
-    if (toolName && sensitive) {
+    // Mode « Autoriser automatiquement » : les actions sensibles NON critiques
+    // s'exécutent directement (piste d'audit), le plancher de sécurité reste
+    // invariant (ads.publish / file.delete / phone.call / risque critical).
+    const autoAllowed = toolName ? isAutoApprovable(ctx.authorizationMode, toolName, risk) : false;
+    if (autoAllowed) {
+      console.log(JSON.stringify({
+        event: "approval.auto_approved",
+        reason: AUTO_APPROVAL_AUDIT_REASON,
+        userId: ctx.userId,
+        conversationId: ctx.conversationId,
+        toolName,
+        risk,
+      }));
+    }
+
+    if (toolName && sensitive && !autoAllowed) {
       // Approbation inline : l'étape reste en attente, un outil de contrôle
       // humain est créé avec impact, périmètre de données et coût estimé.
       const step = makeStep({
@@ -748,7 +1208,9 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     const step = makeStep({
       phase: toolName ? "execution" : "result",
       title: planned.title,
-      detail: planned.detail,
+      detail: autoAllowed
+        ? `${planned.detail ?? toolEntry?.description ?? ""}\n(${AUTO_APPROVAL_AUDIT_REASON})`
+        : planned.detail,
       toolName,
       toolInput: planned.toolInput,
       status: "in_progress",
@@ -758,12 +1220,26 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 
     if (toolName) {
       const startedAt = new Date().toISOString();
+      let toolInput = (planned.toolInput ?? {}) as Record<string, unknown>;
+      if (toolName === "artifact.create") {
+        // Le contenu du livrable est finalisé juste avant la génération du
+        // fichier : jamais de document vide ni d'échec zod opaque.
+        const completed = await ensureArtifactInput(ctx, planned, toolInput);
+        if (!completed) {
+          step.status = "skipped";
+          step.detail = `${step.detail ? `${step.detail}\n` : ""}Contenu du livrable indisponible (rédaction impossible pour le moment) — aucun fichier créé.`.trim();
+          step.finishedAt = new Date().toISOString();
+          await onEvent({ type: "step_update", runId: run.id, step });
+          continue;
+        }
+        toolInput = completed;
+      }
       const result = await executeTool({
         userId: ctx.userId,
         executionId: run.id,
         projectId: ctx.projectId,
         toolName,
-        input: planned.toolInput ?? {},
+        input: toolInput,
         policy: CONVERSATION_EXECUTION_POLICY,
       });
       step.startedAt = startedAt;
@@ -838,6 +1314,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     content: summary,
     runId: run.id,
     generationStatus: "complete",
+    ...(turnImageUrl ? { imageUrl: turnImageUrl } : {}),
   });
   await onEvent({ type: "message_complete", message: assistantMessage });
 
@@ -895,7 +1372,8 @@ async function summarizePlanTurn(
             `Demande : ${ctx.message.slice(0, 1000)}\nObjectif du plan : ${run.objective}\n` +
             `Étapes :\n${steps.map((s) => `- [${s.status}] ${s.title}${s.output ? ` : ${s.output.slice(0, 400)}` : ""}`).join("\n")}\n` +
             `Artefacts : ${artifacts.map((a) => `${a.title} (${a.type})`).join(", ") || "aucun"}\n` +
-            `Validations en attente : ${approvals.map((a) => `${a.title} — impact : ${a.impact}`).join(" ; ") || "aucune"}`,
+            `Validations en attente : ${approvals.map((a) => `${a.title} — impact : ${a.impact}`).join(" ; ") || "aucune"}` +
+            (ctx.filesContext ? `\n\nContenu réel des fichiers importés :${ctx.filesContext}` : ""),
         },
       ],
       preferFree: true,

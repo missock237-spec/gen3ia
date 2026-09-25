@@ -13,7 +13,7 @@ export interface MentionConnector {
   toolkit: string;
   label: string;
   description: string;
-  category: ConnectionCategory | "other";
+  category: ConnectionCategory | "other" | "api";
   /** true si l'utilisateur possède déjà une connexion active pour ce toolkit. */
   connected: boolean;
 }
@@ -48,8 +48,26 @@ export async function listMentionConnectors(userId: string, search?: string): Pr
   // réellement connectées et vérifiées. Une app du catalogue non connectée
   // doit d'abord être autorisée depuis /integrations.
   const pool = connected.filter((item) => item.connected);
-  if (!query) return pool.slice(0, MAX_LIST);
-  return pool
+
+  // API personnelles de l'utilisateur : activables via @ comme les
+  // applications — l'agent/la conversation appellera RÉELLEMENT l'API.
+  let personalApis: MentionConnector[] = [];
+  try {
+    const { listEnabledCustomApis } = await import("@/lib/integrations/custom-apis/repository");
+    personalApis = (await listEnabledCustomApis(userId, 12)).map((api) => ({
+      toolkit: `api-${api.id}`,
+      label: api.name,
+      description: `API personnelle — appels réels vers ${api.baseUrl}`,
+      category: "api" as const,
+      connected: true,
+    }));
+  } catch {
+    // API personnelles indisponibles : le sélecteur reste utilisable.
+  }
+
+  const fullPool = [...pool, ...personalApis];
+  if (!query) return fullPool.slice(0, MAX_LIST);
+  return fullPool
     .filter((item) =>
       item.label.toLowerCase().includes(query) ||
       item.toolkit.includes(query) ||

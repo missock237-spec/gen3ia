@@ -35,6 +35,8 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "cloudflare.zones.list": { name: "cloudflare.zones.list", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "cloudflare.dns.list": { name: "cloudflare.dns.list", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "cloudflare.dns.create": { name: "cloudflare.dns.create", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  "custom_api.call": { name: "custom_api.call", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  "custom_api.write": { name: "custom_api.write", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
 };
 
 export function getToolSecurityDefinition(toolName: string): ToolSecurityDefinition { const definition = TOOL_SECURITY[toolName]; if (!definition) throw new Error(`Unknown tool security definition: ${toolName}`); return definition; }

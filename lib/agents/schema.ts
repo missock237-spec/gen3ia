@@ -85,6 +85,16 @@ export const AgentRecordSchema = z.object({
   // Autorise la délégation contrôlée à des sous-agents spécialisés.
   subagentsEnabled: z.boolean().default(true),
   maxSubagents: z.number().int().min(1).max(8).default(3),
+  // Liste blanche des sous-agents délégables (ids possédés, vérifiés à la création).
+  subAgentIds: z.array(z.string().trim().min(1).max(128)).max(5).default([]),
+  // Température optionnelle du modèle (0 = déterministe, 2 = très créatif).
+  temperature: z.number().min(0).max(2).default(0.7),
+  // MCP : découverte automatique des serveurs connectés (désactivable).
+  mcpEnabled: z.boolean().default(true),
+  // Mode d'autorisation HITL des actions sensibles (« Toujours demander ▼ »).
+  authorizationMode: z.enum(["always_ask", "ask_if_needed", "auto_allow"]).default("always_ask"),
+  // Budget par mission en centimes d'euro (undefined = pas de plafond).
+  budgetEurMinor: z.number().int().min(0).max(1_000_000).optional(),
   maxIterations: z.number().int().min(1).max(20).default(8),
   tools: z.array(z.string().trim().max(160)).max(50).default([]),
   memoryEnabled: z.boolean().default(true),

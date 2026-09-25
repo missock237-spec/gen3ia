@@ -103,20 +103,36 @@ function planPolicyForAgent(agent: AgentRecord, plan: RuntimePlan): ExecutionPol
  *  - activés via « @ » lorsqu'ils sont déjà connectés et vérifiés ;
  *  - OU détectés automatiquement au statut « connecté » sur le compte.
  * Une sélection client d'un toolkit non connecté est systématiquement ignorée.
- * Reste soumis aux approvals pour les actions à effet externe.
+ * Les API personnelles (api-*) activées ouvrent l'écriture via
+ * custom_api.write (validation humaine conservée). Reste soumis aux
+ * approvals pour les actions à effet externe.
  */
-function policyForAgentMission(agent: AgentRecord, plan: RuntimePlan, activatedConnectors: string[], connectedToolkits: string[] = []): ExecutionPolicy {
+function policyForAgentMission(
+  agent: AgentRecord,
+  plan: RuntimePlan,
+  activatedConnectors: string[],
+  connectedToolkits: string[] = [],
+  options: { customApiAccess?: boolean } = {},
+): ExecutionPolicy {
   const policy = planPolicyForAgent(agent, plan);
   // Les agents accèdent par défaut aux services du projet (documents,
   // fichiers, archives, recherche, mémoire, knowledge base, simulation) :
   // c'est ce qui leur permet d'EXÉCUTER les tâches, pas seulement répondre.
   const withServices = [...new Set([...(policy.allowedTools ?? []), ...PROJECT_SERVICE_TOOLS])];
+  const permissions = [...policy.permissions];
+  if (options.customApiAccess) {
+    // L'utilisateur a explicitement activé (ou possède) des API personnelles :
+    // l'écriture reste soumise à la validation humaine (risque external).
+    withServices.push("custom_api.write");
+    permissions.push("tool.external", "network.write");
+  }
   if (activatedConnectors.length === 0 && connectedToolkits.length === 0) {
-    return { ...policy, allowedTools: withServices };
+    return { ...policy, allowedTools: withServices, permissions };
   }
   return {
     ...policy,
     allowedTools: [...new Set([...withServices, "composio.execute"])],
+    permissions,
   };
 }
 
@@ -265,13 +281,39 @@ export async function POST(request: NextRequest) {
       const connected = await connectedPromise;
       // Défense serveur : une sélection envoyée par le client n'accorde aucun
       // accès. Seuls les toolkits déjà vérifiés/connectés sont retenus.
+      // Exception : les API personnelles (api-*) — elles appartiennent à
+      // l'utilisateur ; les outils custom_api.* ne peuvent de toute façon
+      // résoudre QUE les API de cet utilisateur.
       const requestedConnectors = body.activatedConnectors ?? [];
-      const activatedConnectors = requestedConnectors.filter((toolkit) => connected.toolkits.includes(toolkit));
-      const rejectedConnectors = requestedConnectors.filter((toolkit) => !connected.toolkits.includes(toolkit));
+      const requestedApis = requestedConnectors.filter((slug) => slug.startsWith("api-"));
+      const requestedComposio = requestedConnectors.filter((slug) => !slug.startsWith("api-"));
+      const activatedConnectors = requestedComposio.filter((toolkit) => connected.toolkits.includes(toolkit));
+      const rejectedConnectors = requestedComposio.filter((toolkit) => !connected.toolkits.includes(toolkit));
+      // API personnelles sélectionnées : vérifiées réellement en base.
+      let selectedApiNote: string | undefined;
+      let hasCustomApiAccess = false;
+      try {
+        const { listEnabledCustomApis } = await import("@/lib/integrations/custom-apis/repository");
+        const enabledApis = await listEnabledCustomApis(user.uid, 12);
+        hasCustomApiAccess = enabledApis.length > 0;
+        const selected = requestedApis
+          .map((slug) => enabledApis.find((api) => slug === `api-${api.id}`))
+          .filter((api): api is NonNullable<typeof api> => Boolean(api));
+        if (selected.length > 0) {
+          hasCustomApiAccess = true;
+          selectedApiNote = [
+            "API personnelles ACTIVÉES pour ce message (appels HTTP réels) :",
+            ...selected.map((api) => `- « ${api.name} » — base : ${api.baseUrl} (auth : ${api.authType})`),
+            "Interrogez-les avec des étapes tool toolName=\"custom_api.call\" (input { apiName, path }) ; modifications via \"custom_api.write\" (validation requise).",
+          ].join("\n");
+        }
+      } catch {
+        // API personnelles indisponibles : le reste du chat fonctionne.
+      }
       const selectedNote = activatedConnectors.length > 0
         ? await describeConnectorsForPrompt(user.uid, activatedConnectors)
         : undefined;
-      const connectorsNote = [connected.note, selectedNote].filter(Boolean).join("\n\n") || undefined;
+      const connectorsNote = [connected.note, selectedNote, selectedApiNote].filter(Boolean).join("\n\n") || undefined;
       // Services du projet : catalogue injecté pour que le planificateur
       // sache quels services (documents, fichiers, recherche, mémoire…)
       // sont utilisables et comment les nommer.
@@ -382,7 +424,7 @@ export async function POST(request: NextRequest) {
         projectId: agent.projectId,
         objective: body.message,
         plan,
-        policy: policyForAgentMission(agent, plan, activatedConnectors, connected.toolkits),
+        policy: policyForAgentMission(agent, plan, activatedConnectors, connected.toolkits, { customApiAccess: hasCustomApiAccess }),
         signal: request.signal,
         agent: {
           agentId: agent.id,
@@ -481,6 +523,15 @@ export async function POST(request: NextRequest) {
     // Connecteurs connectés : contexte injecté + composio.execute ouvert,
     // comme sur le chemin agent personnalisé.
     const connectedUniversal = await connectedPromise;
+    // API personnelles de l'utilisateur : lecture réelle toujours possible,
+    // écriture uniquement s'il en possède (validation humaine conservée).
+    let hasUniversalCustomApis = false;
+    try {
+      const { listEnabledCustomApis } = await import("@/lib/integrations/custom-apis/repository");
+      hasUniversalCustomApis = (await listEnabledCustomApis(user.uid, 12)).length > 0;
+    } catch {
+      hasUniversalCustomApis = false;
+    }
     const universalObjective = connectedUniversal.note
       ? `${connectedUniversal.note}\n\n${body.message}`
       : body.message;
@@ -553,9 +604,20 @@ export async function POST(request: NextRequest) {
       plan,
       policy: {
         ...buildPolicy(plan),
-        allowedTools: connectedUniversal.toolkits.length > 0
-          ? [...new Set([...(buildPolicy(plan).allowedTools ?? []), "composio.execute"])]
-          : buildPolicy(plan).allowedTools,
+        allowedTools: [
+          ...new Set([
+            ...(buildPolicy(plan).allowedTools ?? []),
+            ...(connectedUniversal.toolkits.length > 0 ? ["composio.execute"] : []),
+            // API personnelles : lecture directe + écriture (validation humaine).
+            ...(hasUniversalCustomApis ? ["custom_api.call", "custom_api.write"] : ["custom_api.call"]),
+          ]),
+        ],
+        permissions: [
+          ...new Set([
+            ...buildPolicy(plan).permissions,
+            ...(hasUniversalCustomApis ? ["tool.external" as const, "network.write" as const] : []),
+          ]),
+        ],
       },
     });
 

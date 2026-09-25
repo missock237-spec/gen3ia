@@ -222,6 +222,25 @@ export async function planUniversalAgent(
       ].filter(Boolean).join("\n")
     : PLAN_SYSTEM;
 
+  // API personnelles de l'utilisateur : le planificateur doit connaître leurs
+  // noms/URLs pour planifier des appels RÉELS (custom_api.call / .write).
+  let customApiSection = "";
+  try {
+    const { listEnabledCustomApis } = await import("@/lib/integrations/custom-apis/repository");
+    const apis = await listEnabledCustomApis(userId, 12);
+    if (apis.length > 0) {
+      customApiSection = [
+        "",
+        "API PERSONNELLES DE L'UTILISATEUR (appels HTTP RÉELS exécutés par le serveur) :",
+        ...apis.map((api) => `- « ${api.name} » — base : ${api.baseUrl} (auth : ${api.authType})${api.description ? ` — ${api.description.slice(0, 150)}` : ""}`),
+        "Pour interroger une de ces API : étape type \"tool\" avec toolName=\"custom_api.call\" et input { apiName: \"<nom exact>\", path: \"/chemin\", query?: {…} }. Pour modifier des données : toolName=\"custom_api.write\" (POST/PUT/PATCH/DELETE). Ne devine jamais un chemin : utilise la racine ou un chemin plausible et le résultat réel sera renvoyé.",
+      ].join("\n");
+    }
+  } catch {
+    // API personnelles indisponibles : le plan reste possible sans elles.
+  }
+  const finalSystemPrompt = customApiSection ? `${systemPrompt}\n${customApiSection}` : systemPrompt;
+
   const buildUserPrompt = (correctiveHint?: string) =>
     [
       JSON.stringify({ objective: trimmed, availableCapabilities: toolCatalog(catalog) }),
@@ -239,7 +258,7 @@ export async function planUniversalAgent(
     const response = await generate({
       task: "agent",
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: finalSystemPrompt },
         { role: "user", content: buildUserPrompt(essai > 1 ? dernierErreur : undefined) },
       ],
       requiresStructuredOutput: true,
