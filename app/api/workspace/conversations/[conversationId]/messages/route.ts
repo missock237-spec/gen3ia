@@ -8,7 +8,9 @@ import { rateLimitDistributed } from "@/lib/cache/redis";
 import { runConversationTurn } from "@/lib/domain/conversations/engine";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Conversation turns may orchestrate multiple providers/tools; 5 minutes avoids
+// terminating legitimate long-running runs while keeping a bounded request lifetime.
+export const maxDuration = 300;
 
 type RouteContext = { params: Promise<{ conversationId: string }> };
 
