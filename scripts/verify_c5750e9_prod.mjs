@@ -42,7 +42,7 @@ async function waitStatus(cookie, id, wanted, maxMs = 60_000) {
   const t0 = Date.now();
   while (Date.now() - t0 < maxMs) {
     const { task } = await getTask(cookie, id);
-    if (task && task.status === wanted) return task;
+    if (task && (Array.isArray(wanted) ? wanted.includes(task.status) : task.status === wanted)) return task;
     if (task && ["completed", "failed", "cancelled"].includes(task.status) && !wanted.includes(task.status)) return task;
     await sleep(3000);
   }
