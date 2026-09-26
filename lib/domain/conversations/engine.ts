@@ -23,7 +23,7 @@ import {
 import { detectApiProvisioning, extractApiPathFromMessage, extractApiUsageName, looksLikeApiUsageRequest } from "@/lib/integrations/custom-apis/detect";
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
 import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
-import { loadImportedFilesContext } from "@/lib/files/import";
+import { getImportedFileContent, listImportedFiles, loadImportedFilesContext } from "@/lib/files/import";
 import {
   detectScheduleIntent,
   detectServiceControlIntent,
@@ -32,6 +32,19 @@ import {
   type ServiceControlIntent,
   type WorkflowIntent,
 } from "./service-intents";
+import {
+  APP_SYSTEM_PROMPT,
+  appendPreviewLinks,
+  buildAppUserRequest,
+  buildChartHtml,
+  chartDataFromTable,
+  detectAppCreationIntent,
+  detectChartIntent,
+  extractHtmlDocument,
+  extractInlineData,
+  type AppCreationIntent,
+  type ChartIntent,
+} from "./artefact-apps";
 
 import {
   appendMessage,
@@ -419,6 +432,14 @@ export function buildIntentSystemPrompt(
     "Si l'utilisateur décrit un enchaînement d'automatisation : mode=plan avec UN step toolName=\"workflow.create\" et toolInput { name, steps: [{ name, description }] (les étapes EXACTES énoncées), runNow?: true seulement s'il demande l'exécution immédiate }.",
     "Si l'utilisateur veut consulter/piloter ses tâches planifiées ou workflows existants : schedule.list / schedule.update (enable: true|false) / workflow.list / workflow.run.",
   ].join("\n");
+  const artefactsSection = [
+    "",
+    "ARTEFACTS GEN3IA (natifs, gérés par le moteur avant toi) :",
+    "- APPLICATIONS WEB : toute demande de création d'une page web, d'un site, d'une interface ou d'une petite application (« crée une page web de liste de tâches en mode sombre, écrite en React ») est générée AUTOMATIQUEMENT par le moteur : artefact exécutable + lien d'aperçu en direct dans la réponse. Si la demande lui a déjà été transmise, réponds mode=chat avec un reply court.",
+    "- ANALYSE DE DONNÉES : « génère un graphique / analyse ces données » est pris en charge automatiquement (graphique réel à partir des fichiers importés ou des valeurs énoncées, export PNG/JPG, conclusions). Demande un fichier ou des valeurs si l'utilisateur n'en fournit pas — n'invente JAMAIS de données.",
+    "- RÉDACTION / DOCUMENTS : rapports et textes longs → artifact.create avec format pdf ou docx (export direct prêt à diffuser).",
+    "- AI SLIDES : « crée une présentation / un PowerPoint » → artifact.create avec format pptx (modèles professionnels appliqués automatiquement).",
+  ].join("\n");
   const emailSection = catalogNames.has("email.send")
     ? [
         "",
@@ -450,6 +471,7 @@ export function buildIntentSystemPrompt(
     connectorSection,
     customApiSection,
     sousServicesSection,
+    artefactsSection,
     emailSection,
     "Réponds UNIQUEMENT avec l'objet JSON conforme au schéma.",
   ]
@@ -635,6 +657,38 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   if (looksLikeImageRequest(input.message) || looksLikeExplicitDrawingRequest(input.message)) {
     await onEvent({ type: "status", phase: "image", label: "Génération de l'image en cours…" });
     const result = await runImageTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+
+  // 2 bis) ARTEFACTS — création d'une page web / petite application :
+  // le moteur produit un artefact HTML complet + un LIEN WEB (/preview/<id>)
+  // qui rend le résultat directement dans le navigateur du client.
+  const appIntent = detectAppCreationIntent(input.message);
+  if (appIntent) {
+    await onEvent({ type: "status", phase: "execution", label: "Génération de votre application…" });
+    const result = await runAppTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, filesContext }, appIntent);
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+
+  // 2 ter) ARTEFACTS — graphique d'analyse de données : données réelles
+  // (fichier importé ou énoncées dans le message) → artefact graphique
+  // exécutable (export PNG/JPG intégré) + conclusions.
+  const chartIntent = detectChartIntent(input.message);
+  if (chartIntent) {
+    await onEvent({ type: "status", phase: "execution", label: "Analyse de vos données…" });
+    const result = await runChartTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, filesContext }, chartIntent);
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,
@@ -1047,6 +1101,254 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       artifacts: [],
       approvals: [],
       intent: { mode: "chat", understanding: "Demande de génération d'image." },
+    };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Tour « artefact application » — page web exécutable + lien d'aperçu */
+/* ------------------------------------------------------------------ */
+
+async function runAppTurn(ctx: TurnBase, appIntent: AppCreationIntent): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  const streaming = Boolean(ctx.onEvent);
+  try {
+    await onEvent({ type: "status", phase: "execution", label: "Conception de l'application…" });
+    const requestMessages = [
+      { role: "system" as const, content: APP_SYSTEM_PROMPT },
+      { role: "user" as const, content: buildAppUserRequest(ctx.message, appIntent) },
+    ];
+    const response = await withTimeout(
+      streaming
+        ? generateStream(
+            {
+              task: "chat",
+              messages: requestMessages,
+              provider: ctx.provider as never,
+              model: ctx.model,
+              preferFree: true,
+              maxTokens: 12_000,
+              metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
+            },
+            {
+              // Le flux d'une application n'est pas affiché token par token :
+              // l'utilisateur voit la progression, puis l'aperçu complet.
+              onDelta: () => undefined,
+            },
+          )
+        : generate({
+            task: "chat",
+            messages: requestMessages,
+            provider: ctx.provider as never,
+            model: ctx.model,
+            preferFree: true,
+            maxTokens: 12_000,
+            metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
+          }),
+      90_000,
+      "génération de l'application",
+    );
+    const html = extractHtmlDocument(response.text);
+    if (!html) {
+      throw new Error("Le modèle n'a pas produit un document HTML complet — réessayez dans un instant.");
+    }
+
+    const artifact = await createArtifact({
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      projectId: ctx.projectId,
+      type: "code",
+      title: appIntent.title,
+      language: "html",
+      filename: `${appIntent.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "application"}.html`,
+      content: html,
+      note: "Application web exécutable — aperçu en direct disponible",
+    });
+    await onEvent({ type: "artifact_created", artifact });
+
+    const content = appendPreviewLinks(
+      [
+        `Votre application **${appIntent.title}** est prête et enregistrée dans les artefacts de la conversation.`,
+        "Elle s'exécute telle quelle : cliquez sur le lien ci-dessous pour voir le rendu dans votre navigateur, ou utilisez le bouton « Voir le résultat en direct » dans le fil. Pour toute modification (« ajoute un filtre », « change les couleurs »), redemandez-le simplement : une nouvelle version sera publiée.",
+      ].join("\n\n"),
+      [artifact],
+    );
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content,
+      generationStatus: "complete",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [artifact],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Création d'une application web (artefact + aperçu en direct)." },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "La génération de l'application a échoué.";
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content: `Je n'ai pas réussi à générer l'application demandée (${message}). Réessayez en renvoyant votre message — rien n'a été perdu.`,
+      generationStatus: "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Création d'une application web (échec de génération)." },
+    };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Tour « analyse de données » — graphique réel + conclusions          */
+/* ------------------------------------------------------------------ */
+
+async function loadChartData(ctx: TurnBase): Promise<{ labels: string[]; values: number[]; source: string } | null> {
+  // 1) Fichiers importés explicitement joints à CE message (conversion réelle).
+  const fileIds = (ctx.attachments ?? []).map((a) => a.fileId).filter((id): id is string => Boolean(id));
+  for (const fileId of fileIds) {
+    const record = await getImportedFileContent(ctx.userId, fileId).catch(() => null);
+    const structured = record?.structuredPreview;
+    if (structured?.headers && structured?.rows) {
+      const data = chartDataFromTable(structured.headers, structured.rows, `fichier importé « ${record?.filename ?? fileId} »`);
+      if (data) return data;
+    }
+  }
+  // 2) Derniers fichiers importés structurés de l'utilisateur (CSV/XLSX).
+  const recent = await listImportedFiles(ctx.userId, 8).catch(() => []);
+  for (const record of recent) {
+    const full = await getImportedFileContent(ctx.userId, record.id).catch(() => null);
+    const structured = full?.structuredPreview;
+    if (structured?.headers && structured?.rows) {
+      const data = chartDataFromTable(structured.headers, structured.rows, `fichier importé « ${full?.filename ?? record.filename} »`);
+      if (data) return data;
+    }
+  }
+  // 3) Données énoncées directement dans le message (« Ventes : 120, … »).
+  return extractInlineData(ctx.message);
+}
+
+async function runChartTurn(ctx: TurnBase, chartIntent: ChartIntent): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  const data = await loadChartData(ctx);
+  if (!data) {
+    // Aucune donnée : réponse honnête, JAMAIS de données inventées.
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content: [
+        "Pour générer un graphique, j'ai besoin de données réelles. Deux façons de me les donner :",
+        "1. **Importez un fichier** CSV ou Excel dans la conversation (je le convertis réellement puis je le visualise) ;",
+        "2. **Écrivez les valeurs dans votre message**, par exemple : `Ventes : 120, Marketing : 80, Développement : 150`.",
+      ].join("\n"),
+      generationStatus: "complete",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Graphique demandé sans aucune donnée disponible." },
+    };
+  }
+
+  try {
+    await onEvent({ type: "status", phase: "execution", label: "Construction du graphique…" });
+    // Conclusions réelles : analyse du modèle sur les données (repli déterministe).
+    let conclusion = `Total : ${data.values.reduce((a, b) => a + b, 0).toLocaleString("fr-FR")} · Maximum : ${data.labels[data.values.indexOf(Math.max(...data.values))]} (${Math.max(...data.values).toLocaleString("fr-FR")}) · Minimum : ${data.labels[data.values.indexOf(Math.min(...data.values))]} (${Math.min(...data.values).toLocaleString("fr-FR")}) sur ${data.labels.length} catégorie(s).`;
+    try {
+      const analysis = await withTimeout(
+        runAI({
+          userId: ctx.userId,
+          feature: "conversation-turn",
+          task: "chat",
+          system: "Tu es analyste de données. À partir du tableau fourni, rédige 2 à 4 phrases factuelles en français : tendance générale, valeurs remarquables (max/min), anomalies éventuelles. Aucune donnée non présente dans le tableau.",
+          prompt: `Graphique ${chartIntent.chartType === "pie" ? "de répartition" : chartIntent.chartType === "line" ? "d'évolution" : "comparatif"}.\nDonnées : ${data.labels.map((l, i) => `${l}=${data.values[i]}`).join(", ")}`,
+        }),
+        20_000,
+        "analyse des données",
+      );
+      if (analysis?.text && analysis.text.trim().length > 20) conclusion = analysis.text.trim();
+    } catch {
+      // Repli : statistiques déterministes ci-dessus, jamais de silence.
+    }
+
+    const html = buildChartHtml({
+      title: chartIntent.title,
+      chartType: chartIntent.chartType,
+      labels: data.labels,
+      values: data.values,
+      source: data.source,
+      conclusion,
+    });
+    const artifact = await createArtifact({
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      projectId: ctx.projectId,
+      type: "code",
+      title: chartIntent.title,
+      language: "html",
+      filename: `graphique-${chartIntent.chartType}.html`,
+      content: html,
+      note: `Graphique interactif — export PNG/JPG intégré (${data.source})`,
+    });
+    await onEvent({ type: "artifact_created", artifact });
+
+    const content = appendPreviewLinks(
+      [
+        `**${chartIntent.title}** — ${data.labels.length} catégorie(s) depuis ${data.source}.`,
+        `Analyse : ${conclusion}`,
+        "Dans l'aperçu, les boutons **Télécharger PNG / JPG** exportent le graphique en image ; demandez « exporte ces données en xlsx » pour un fichier Excel.",
+      ].join("\n\n"),
+      [artifact],
+    );
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content,
+      generationStatus: "complete",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [artifact],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Analyse de données réelle (graphique + conclusions)." },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "La construction du graphique a échoué.";
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content: `Je n'ai pas réussi à construire le graphique (${message}). Vos données sont intactes : réessayez en renvoyant votre message.`,
+      generationStatus: "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Analyse de données (échec de construction)." },
     };
   }
 }
@@ -1778,7 +2080,9 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     conversationId: ctx.conversationId,
     userId: ctx.userId,
     role: "assistant",
-    content: summary,
+    // Contrat ARTEFACTS : tout artefact « app » produit par le plan reçoit
+    // son lien web d'aperçu dans le message final.
+    content: appendPreviewLinks(summary, artifacts),
     runId: run.id,
     generationStatus: "complete",
     ...(turnImageUrl ? { imageUrl: turnImageUrl } : {}),

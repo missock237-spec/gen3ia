@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateDocument } from "./index";
+import { pickPptxTemplate } from "./pptx";
 import type { DocumentPlan } from "../types";
 
 describe("Document Generators Integration", () => {
@@ -59,5 +60,35 @@ describe("Document Generators Integration", () => {
     await expect(
       generateDocument({ ...samplePlan, format: "zip" }),
     ).rejects.toThrow("ZIP must be created through the ZIP engine.");
+  });
+});
+
+describe("AI Slides — modèles professionnels", () => {
+  it("choisit le modèle corporate pour les sujets d'entreprise", () => {
+    expect(pickPptxTemplate("Résultats financiers du trimestre")).toBe("corporate");
+    expect(pickPptxTemplate("Présentation des ventes — bilan")).toBe("corporate");
+  });
+
+  it("choisit le modèle éducatif pour la formation", () => {
+    expect(pickPptxTemplate("Formation introduction à l'IA")).toBe("edu");
+    expect(pickPptxTemplate("Atelier pédagogique — module 2")).toBe("edu");
+  });
+
+  it("choisit le modèle premium Aurora par défaut", () => {
+    expect(pickPptxTemplate("Lancement produit Nova")).toBe("aurora");
+    expect(pickPptxTemplate("")).toBe("aurora");
+  });
+
+  it("génère un PPTX réel avec le modèle choisi", async () => {
+    const buffer = await generateDocument({
+      title: "Résultats financiers 2026",
+      format: "pptx",
+      blocks: [
+        { type: "heading", level: 1, text: "Chiffres clés" },
+        { type: "list", ordered: false, items: ["CA en hausse", "Marge stable"] },
+      ],
+    });
+    expect(buffer).toBeInstanceOf(Buffer);
+    expect(buffer.length).toBeGreaterThan(0);
   });
 });

@@ -85,16 +85,17 @@ export function ArtifactLivePreviewModal({ artifact, onClose }: { artifact: Conv
           >
             ⟳
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              const blob = new Blob([content], { type: "text/html" });
-              window.open(URL.createObjectURL(blob), "_blank", "noopener");
-            }}
+          {/* Contrat ARTEFACTS : le lien WEB réel (/preview/<id>) — rendu
+              direct dans le navigateur, ouvrable dans un onglet dédié. */}
+          <a
+            href={`/preview/${artifact.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
             className="rounded-lg border border-[var(--g3-border-strong)] px-2.5 py-1 text-[11px] text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
+            title="Ouvrir le rendu dans un onglet dédié (lien web Gen3ia)"
           >
             Ouvrir dans un onglet
-          </button>
+          </a>
           <button type="button" onClick={onClose} className="rounded-lg bg-[var(--g3-deep)] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[var(--g3-elevated)]" aria-label="Fermer l'aperçu">
             Fermer
           </button>
@@ -105,7 +106,7 @@ export function ArtifactLivePreviewModal({ artifact, onClose }: { artifact: Conv
             <iframe
               key={versionKey + ":" + reloadKey}
               title={`Aperçu — ${artifact.title}`}
-              sandbox="allow-scripts allow-forms allow-modals allow-popups"
+              sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads"
               srcDoc={content}
               className={"h-full min-h-[420px] rounded-xl border border-[var(--g3-border-strong)] bg-[var(--g3-surface)] shadow-inner " + (device === "mobile" ? "w-[390px] max-w-full" : "w-full")}
             />
