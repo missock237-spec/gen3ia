@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   buildIntentSystemPrompt,
@@ -7,6 +7,7 @@ import {
   dataScopeForTool,
   detectExplicitToolIntent,
   estimatedCostForTool,
+  extractEmailSubject,
   extractSearchQuery,
   inferArtifactType,
   stepRequiresApproval,
@@ -181,7 +182,56 @@ describe("moteur conversationnel — garde-fou d'intention explicite", () => {
 
   it("ne déclenche pas le garde-fou pour une simple question", () => {
     expect(detectExplicitToolIntent("Bonjour, comment vas-tu ?", catalog)).toBeNull();
+    // Rédiger un email (brouillon, sans envoi ni adresse) n'est PAS un envoi réel.
     expect(detectExplicitToolIntent("Rédige un e-mail de relance pour un client", catalog)).toBeNull();
+  });
+
+  it("route un envoi d'email explicite vers email.send quand le fournisseur est configuré", async () => {
+    // Le catalogue inclut email.send UNIQUEMENT si le fournisseur d'emails est
+    // configuré (évalué au chargement du module) : on recharge le moteur avec
+    // l'environnement en place pour tester la chaîne complète.
+    process.env.RESEND_API_KEY = "test-key-e2e";
+    process.env.EMAIL_FROM_ADDRESS = "agent@gen3ia.online";
+    vi.resetModules();
+    try {
+      const engine = await import("./engine");
+      const catalogWithEmail = engine.conversationToolCatalog();
+      expect(catalogWithEmail.some((t) => t.name === "email.send")).toBe(true);
+
+      const intent = engine.detectExplicitToolIntent(
+        "Envoie un email à delivered@resend.dev avec le sujet « Test Gen3ia » et le texte « Ceci est un test réel du service email. Rien d'autre. »",
+        catalogWithEmail,
+      );
+      expect(intent?.toolName).toBe("email.send");
+      if (intent?.toolName === "email.send") {
+        expect(intent.to).toBe("delivered@resend.dev");
+        expect(intent.subject).toBe("Test Gen3ia");
+        expect(intent.text).toContain("Ceci est un test réel du service email");
+      }
+
+      const relance = engine.detectExplicitToolIntent(
+        "Envoie un email de relance à client@exemple.com pour la facture échue depuis 30 jours",
+        catalogWithEmail,
+      );
+      expect(relance?.toolName).toBe("email.send");
+      if (relance?.toolName === "email.send") {
+        expect(relance.to).toBe("client@exemple.com");
+        expect(relance.subject.length).toBeGreaterThan(0);
+        expect(relance.text.length).toBeGreaterThan(0);
+      }
+      // Sans adresse énoncée : pas d'envoi forcé (jamais d'invention de destinataire).
+      expect(engine.detectExplicitToolIntent("Envoie un email au responsable du projet", catalogWithEmail)).toBeNull();
+    } finally {
+      delete process.env.RESEND_API_KEY;
+      delete process.env.EMAIL_FROM_ADDRESS;
+      vi.resetModules();
+    }
+  });
+
+  it("extrait le sujet d'un email en repli honnête", () => {
+    expect(extractEmailSubject("Envoie un email à a@b.co avec le sujet « Rapport hebdo » merci")).toBe("Rapport hebdo");
+    expect(extractEmailSubject("Envoie un email à a@b.co, sujet: points clés")).toBe("points clés");
+    expect(extractEmailSubject("Envoie un email à a@b.co")).toBe("[Gen3ia] Message de votre agent");
   });
 
   it("extrait une requête de recherche nettoyée", () => {

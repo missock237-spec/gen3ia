@@ -22,6 +22,7 @@ import {
 } from "@/lib/security/authorization-mode";
 import { detectApiProvisioning, extractApiPathFromMessage, extractApiUsageName, looksLikeApiUsageRequest } from "@/lib/integrations/custom-apis/detect";
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
+import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
 import { loadImportedFilesContext } from "@/lib/files/import";
 import {
   detectScheduleIntent,
@@ -90,6 +91,10 @@ export function conversationToolCatalog(): ToolCatalogEntry[] {
   return registry
     .list()
     .filter((tool) => !EXCLUDED_TOOLS.has(tool.id ?? tool.name))
+    // email.send n'est proposé QUE si le fournisseur d'emails est configuré
+    // (vérifié dynamiquement : l'environnement peut changer entre le chargement
+    // du module et l'exécution d'un tour).
+    .filter((tool) => (tool.id ?? tool.name) !== "email.send" || isEmailProviderConfigured())
     .map((tool) => ({
       name: tool.id ?? tool.name,
       description: tool.description,
@@ -231,7 +236,30 @@ export type TurnIntent = z.infer<typeof IntentSchema>;
 export type ExplicitToolIntent =
   | { toolName: "web.search"; query: string }
   | { toolName: "custom_api.call"; query: string }
-  | { toolName: "artifact.create"; document: { title: string; format: "pdf" | "docx" | "xlsx" | "pptx" | "md" } };
+  | { toolName: "artifact.create"; document: { title: string; format: "pdf" | "docx" | "xlsx" | "pptx" | "md" } }
+  | { toolName: "email.send"; to: string; subject: string; text: string };
+
+const EMAIL_ADDRESS_RE = /[\w.+-]+@[\w-]+\.[\w.-]{2,}/;
+
+/**
+ * Extrait le sujet énoncé (« avec le sujet « … » », « sujet : … ») ou un repli honnête.
+ */
+export function extractEmailSubject(message: string): string {
+  const quoted = message.match(/(?:sujet|subject|objet)\s*[:：]?\s*[«“"']([^»”"']{1,160})[»”"']/i);
+  if (quoted?.[1]?.trim()) return quoted[1].trim();
+  const plain = message.match(/(?:sujet|subject|objet)\s*[:：]\s*([^«»“”"'\n]{3,160})/i);
+  if (plain?.[1]?.trim()) return plain[1].trim();
+  return "[Gen3ia] Message de votre agent";
+}
+
+/**
+ * Extrait le corps énoncé (« et le texte « … » », « message : … ») ou repli sur la demande elle-même.
+ */
+export function extractEmailText(message: string): string {
+  const quoted = message.match(/(?:texte|message|contenu|corps|dis que|dis-lui que)\s*[:：]?\s*[«“"]([^»”"]{1,2000})[»”"]?/i);
+  if (quoted?.[1]?.trim()) return quoted[1].trim();
+  return message.replace(EMAIL_ADDRESS_RE, "").replace(/\s{2,}/g, " ").trim().slice(0, 1000) || message.slice(0, 1000);
+}
 
 /**
  * Garde-fou déterministe : certaines demandes énoncent EXPLICITEMENT le
@@ -268,6 +296,24 @@ export function detectExplicitToolIntent(message: string, catalog: ToolCatalogEn
         ? customApis[0]
         : undefined;
     if (api) return { toolName: "custom_api.call", query: message.slice(0, 400) };
+  }
+
+  // 2 bis) Envoi d'email EXPLICITE : verbe d'envoi + mot email + adresse
+  // destinataire réellement énoncée. L'envoi réel (Resend) est la demande de
+  // l'utilisateur — jamais une réponse « je ne peux pas envoyer d'emails ».
+  // Attention : rédiger/brouiller un email (sans envoi ni adresse) ne déclenche PAS le garde.
+  const emailSendVerb = /\b(envoi[ez]|envoie|envoyer|exp[ée]di\w*|transmets?|transmets|send)\b/i;
+  const emailWord = /\b(e-?mails?|courriels?)\b/i;
+  if (catalogNames.has("email.send") && emailSendVerb.test(lower) && emailWord.test(lower)) {
+    const address = message.match(EMAIL_ADDRESS_RE)?.[0];
+    if (address) {
+      return {
+        toolName: "email.send",
+        to: address,
+        subject: extractEmailSubject(message),
+        text: extractEmailText(message),
+      };
+    }
   }
 
   // 2) Recherche d'information ACTUELLE : verbe d'action + sujet qui exige des
@@ -342,6 +388,7 @@ export function buildIntentSystemPrompt(
   const toolLines = catalog
     .map((t) => `- ${t.name} (risque ${t.risk}${t.requiresApproval ? ", validation requise" : ""}) : ${t.description}`)
     .join("\n");
+  const catalogNames = new Set(catalog.map((t) => t.name));
   const connectorSection = connectors && connectors.length > 0
     ? [
         "",
@@ -372,6 +419,14 @@ export function buildIntentSystemPrompt(
     "Si l'utilisateur décrit un enchaînement d'automatisation : mode=plan avec UN step toolName=\"workflow.create\" et toolInput { name, steps: [{ name, description }] (les étapes EXACTES énoncées), runNow?: true seulement s'il demande l'exécution immédiate }.",
     "Si l'utilisateur veut consulter/piloter ses tâches planifiées ou workflows existants : schedule.list / schedule.update (enable: true|false) / workflow.list / workflow.run.",
   ].join("\n");
+  const emailSection = catalogNames.has("email.send")
+    ? [
+        "",
+        "EMAIL — l'envoi d'emails réels est DISPONIBLE via l'outil email.send (service Resend configuré côté serveur) :",
+        "Si l'utilisateur demande d'envoyer/expédier un email (relance, notification, rapport, message à une adresse) : mode=plan avec UN step toolName=\"email.send\" et toolInput { to: \"<adresse exacte énoncée>\", subject: \"<sujet énoncé ou fidèle à la demande>\", text: \"<contenu énoncé ou reformulé fidèlement>\" }.",
+        "Ne réponds JAMAIS que tu ne peux pas envoyer d'emails : tu le peux, l'envoi est exécuté par le serveur. N'invente jamais une adresse : utilise uniquement celle que l'utilisateur a énoncée.",
+      ].join("\n")
+    : "";
   return [
     "Tu es le moteur d'exécution de Gen3ia, une plateforme d'agents avec connecteurs.",
     "Pour chaque demande utilisateur, tu décides :",
@@ -395,6 +450,7 @@ export function buildIntentSystemPrompt(
     connectorSection,
     customApiSection,
     sousServicesSection,
+    emailSection,
     "Réponds UNIQUEMENT avec l'objet JSON conforme au schéma.",
   ]
     .filter(Boolean)
@@ -664,6 +720,22 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
             detail: "Appel HTTP réel vers l'API personnelle de l'utilisateur (exécution serveur).",
             toolName: "custom_api.call",
             toolInput: { apiName: extractApiUsageName(input.message) ?? undefined, path: extractApiPathFromMessage(input.message) ?? "" },
+          },
+        ],
+      };
+    } else if (explicit?.toolName === "email.send") {
+      // Envoi d'email explicite : un seul step — l'envoi réel est exécuté par
+      // le serveur via le service email de la plateforme (Resend).
+      intent = {
+        mode: "plan",
+        understanding: "Demande explicite d'envoi d'un email réel.",
+        objective: input.message.slice(0, 400),
+        steps: [
+          {
+            title: `Envoi de l'email à ${explicit.to}`,
+            detail: "Envoi réel du message via le service email de la plateforme (Resend).",
+            toolName: "email.send",
+            toolInput: { to: explicit.to, subject: explicit.subject, text: explicit.text },
           },
         ],
       };
