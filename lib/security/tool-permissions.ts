@@ -37,6 +37,11 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "cloudflare.dns.create": { name: "cloudflare.dns.create", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   "custom_api.call": { name: "custom_api.call", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "custom_api.write": { name: "custom_api.write", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  // Envoi d'email réel (Resend, côté serveur) : appel réseau externe au nom de
+  // la plateforme. Le risque HITL (medium → exécution directe) est porté par
+  // la définition de l'outil dans lib/tools, la définition de sécurité ici ne
+  // décrit que la capacité.
+  "email.send": { name: "email.send", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true },
   // Sous-services du projet (tâches planifiées, workflows) : opérations
   // INTERNES (Firestore, aucun réseau ni fichier) — le risque HITL (high →
   // carte de validation) est porté par la définition de l'outil dans
