@@ -176,6 +176,38 @@ async function main() {
       ? `étape artifact.create(pptx)=${docStep?.status ?? "ABSENTE"} · artefacts=${artifacts7.length} · sortie=${String(docStep?.output ?? "").slice(0, 90).replace(/\s+/g, " ")}`
       : `HTTP ${r7.status}`);
 
+  // 7 b. TÉLÉCHARGEMENT RÉEL du livrable (repli inline sans R2) : l'URL
+  // signée/inline est obtenue puis le fichier pptx réel est servi.
+  if (docStep?.status === "done") {
+    const output = String(docStep.output ?? "");
+    let downloadOk = false;
+    let downloadExtra = "";
+    // Chemin fiable : extraire l'artifactId de stockage depuis la sortie de
+    // l'étape, obtenir l'URL de service (signée R2 ou inline sans R2), puis
+    // télécharger le fichier réel et vérifier sa signature ZIP (pptx).
+    const storageArtifactId = output.match(/"artifactId"\s*:\s*"([^"]+)"/)?.[1];
+    if (storageArtifactId) {
+      const signedRes = await fetch(`${BASE}/api/files/artifacts/${storageArtifactId}`, { headers: { cookie } });
+      const signedData = await signedRes.json().catch(() => ({}));
+      const signedUrl = signedData?.url;
+      if (typeof signedUrl === "string" && signedUrl.length > 0) {
+        const fileRes = await fetch(signedUrl.startsWith("http") ? signedUrl : `${BASE}${signedUrl}`, { headers: { cookie } });
+        const contentType = fileRes.headers.get("content-type") ?? "";
+        const buf = Buffer.from(await fileRes.arrayBuffer());
+        const isPptx = buf.length > 1000 && (buf[0] === 0x50 && buf[1] === 0x4b); // ZIP signature (pptx = zip)
+        downloadOk = fileRes.ok && isPptx;
+        downloadExtra = `HTTP ${fileRes.status} · ${buf.length} octets · type=${contentType || "?"} · signatureZIP=${isPptx}`;
+      } else {
+        downloadExtra = `URL signée absente (${signedRes.status})`;
+      }
+    } else {
+      downloadExtra = "artifactId introuvable dans la sortie de l'étape";
+    }
+    check("7b/livrable-telechargeable", downloadOk, downloadExtra);
+  } else {
+    check("7b/livrable-telechargeable", false, "étape artifact.create non done");
+  }
+
   // 8. Non-régression délimitations : aucun style "dashed" servi
   for (const path of ["/", "/login"]) {
     const res = await fetch(`${BASE}${path}`, { cache: "no-store" });
