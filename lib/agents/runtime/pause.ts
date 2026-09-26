@@ -73,6 +73,7 @@ export async function requestExecutionPause(request: PauseRequest): Promise<void
     {
       userId: request.userId,
       executionId: request.executionId,
+      mode: "pause",
       ...(request.taskId ? { taskId: request.taskId } : {}),
       ...(request.agentId ? { agentId: request.agentId } : {}),
       ...(request.reason ? { reason: request.reason.slice(0, 500) } : {}),
@@ -123,7 +124,9 @@ export async function clearExecutionPause(userId: string, executionId: string): 
 export async function isExecutionPauseRequested(executionId: string): Promise<boolean> {
   try {
     const snapshot = await controlRef(executionId).get();
-    return snapshot.exists && snapshot.get("requested") === true;
+    // mode="stop" = un ARRÊT (jamais une pause) : les deux demandes sont
+    // exclusives, la dernière écriture gagne (mode "pause" vs "stop").
+    return snapshot.exists && snapshot.get("requested") === true && snapshot.get("mode") !== "stop";
   } catch {
     return false;
   }

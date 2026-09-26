@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
+import { isExecutionStopRequested } from "@/lib/agents/runtime/pause";
 import { DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
 import { getWorkspaceTask } from "@/lib/agents/workspace";
 import { adminDb } from "@/lib/firebase/admin";
@@ -49,16 +50,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       // reprise après pause ré-exécute le même plan et saute le terminé.
       // L'arrêt utilisateur (contrôle "stop" ou déconnexion du client)
       // aboutit à l'état "cancelled" — terminal, distinct de "failed".
+      // Garde anti-course : si un stop est posé entre la dernière lecture du
+      // runtime et cette écriture, l'ARRÊT gagne (jamais "completed" après
+      // un arrêt demandé par l'utilisateur).
+      const stopWasRequested = await isExecutionStopRequested(state.executionId);
+      const finalStatus = stopWasRequested ? "cancelled" : state.status;
       await taskRef.update({
         plan: state.plan,
-        status: state.status === "completed" ? "completed" : state.status === "paused" ? "paused" : state.status === "cancelled" ? "cancelled" : "failed",
-        ...(state.status === "paused" ? {} : { completedAt: FieldValue.serverTimestamp() }),
+        status: finalStatus === "completed" ? "completed" : finalStatus === "paused" ? "paused" : finalStatus === "cancelled" ? "cancelled" : "failed",
+        ...(finalStatus === "paused" ? {} : { completedAt: FieldValue.serverTimestamp() }),
         updatedAt: FieldValue.serverTimestamp(),
       });
       return NextResponse.json({
-        success: state.status === "completed",
+        success: finalStatus === "completed",
         executionId: state.executionId,
-        status: state.status,
+        status: finalStatus,
         outputs: state.outputs,
         observations: state.observations,
         billing: state.billing,

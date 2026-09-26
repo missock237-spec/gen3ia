@@ -159,6 +159,10 @@ export class AgentRuntime {
           await this.persistCheckpoint();
           if (this.areAllStepsFinished()) break;
         }
+        // Un arrêt demandé pendant le DERNIER lot d'étapes prévaut sur la
+        // complétion : l'utilisateur a demandé l'arrêt, l'exécution se
+        // termine à l'état cancelled (jamais "completed" après un stop).
+        await this.throwIfStopped();
         this.finalize();
         const hasFailedSteps = () => this.state.plan.steps.some((step) => step.status === "failed");
         if (hasFailedSteps() && this.criticRounds < AgentRuntime.CRITIC_MAX_ROUNDS && !this.signal?.aborted) {
