@@ -77,6 +77,20 @@ describe("détection de tâche planifiée", () => {
   it("ne détecte PAS une création quand c'est un pilotage (désactivation)", () => {
     expect(detectScheduleIntent("désactive ma tâche planifiée rapport IA")).toBeNull();
   });
+
+  it("ignore la récurrence CONTENUE DANS LE NOM CITÉ (bug e2e prod 5/desactivation)", () => {
+    // Le nom cité « Chaque lundi à 9h, prépare-moi un rapport… » contient lui
+    // même des marqueurs de création : le pilotage doit gagner.
+    const controle = detectServiceControlIntent(
+      'désactive la tâche planifiée « Chaque lundi à 9h, prépare-moi un rapport des actualités IA »',
+    );
+    expect(controle).toEqual({
+      target: "schedule",
+      action: "disable",
+      name: "Chaque lundi à 9h, prépare-moi un rapport des actualités IA",
+    });
+    expect(detectScheduleIntent('désactive la tâche planifiée « Chaque lundi à 9h, prépare-moi un rapport »')).toBeNull();
+  });
 });
 
 describe("détection de workflow", () => {

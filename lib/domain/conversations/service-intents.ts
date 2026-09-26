@@ -38,6 +38,19 @@ export type ServiceControlIntent =
   | { target: "workflow"; action: "list" | "run" | "delete"; name?: string };
 
 /* ------------------------------------------------------------------ */
+/* Utilitaires                                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Retire les segments cités (« … », "…", '…') du message : le contenu d'une
+ * citation est une RÉFÉRENCE (nom d'une tâche existante), pas une demande —
+ * il ne doit pas déclencher les détecteurs de création.
+ */
+export function sansCitations(message: string): string {
+  return message.replace(/[«"']([^»"']*)[»"']/g, " ");
+}
+
+/* ------------------------------------------------------------------ */
 /* Parsing : jours, heures, intervalles                                */
 /* ------------------------------------------------------------------ */
 
@@ -141,10 +154,14 @@ const PREMIERE_PERSONNE_RE = /\b(?:je|j'|nous|on)\s+(?:me\s+|nous\s+)?(?:pr[eé]
  * pas une planification claire (recurrence + verbe d'automatisation).
  */
 export function detectScheduleIntent(message: string): ScheduleIntent | null {
-  const lower = message.toLowerCase();
+  // Les citations sont des références (noms), jamais des demandes : un
+  // message « désactive la tâche « chaque lundi… » » ne doit pas créer
+  // une NOUVELLE tâche planifiée.
+  const messageNettoyé = sansCitations(message);
+  const lower = messageNettoyé.toLowerCase();
 
   // Intention de contrôle (désactive/supprime/liste…) : ce n'est pas une création.
-  if (detectServiceControlIntent(message)) return null;
+  if (detectServiceControlIntent(messageNettoyé)) return null;
 
   // Constat à la première personne : pas une demande d'automatisation.
   if (PREMIERE_PERSONNE_RE.test(lower)) return null;
@@ -152,10 +169,10 @@ export function detectScheduleIntent(message: string): ScheduleIntent | null {
   if (!RECURRENCE_RE.test(lower)) return null;
   if (!SCHEDULE_VERB_RE.test(lower) && !SCHEDULE_ACTION_RE.test(lower)) return null;
 
-  const intervalMinutes = extraireIntervalle(message);
-  const jours = extraireJours(message) ?? [0, 1, 2, 3, 4, 5, 6];
-  const heureExplicite = extraireHeure(message);
-  const moment = extraireMoment(message);
+  const intervalMinutes = extraireIntervalle(messageNettoyé);
+  const jours = extraireJours(messageNettoyé) ?? [0, 1, 2, 3, 4, 5, 6];
+  const heureExplicite = extraireHeure(messageNettoyé);
+  const moment = extraireMoment(messageNettoyé);
   const startTime = heureExplicite ?? moment ?? (intervalMinutes ? "00:00" : "08:00");
   // Fenêtre par défaut honnête : toute la journée, affichée dans la
   // confirmation — l'utilisateur peut la resserrer (schedule.update).
@@ -240,29 +257,53 @@ export function extraireEtapesWorkflow(message: string): Array<{ name: string; d
  * reprenant la demande exacte est créée (aucun contenu inventé).
  */
 export function detectWorkflowIntent(message: string): WorkflowIntent | null {
-  const lower = message.toLowerCase();
+  const messageNettoyé = sansCitations(message);
+  const lower = messageNettoyé.toLowerCase();
 
   // Contrôle d'un workflow existant : ce n'est pas une création.
-  if (detectServiceControlIntent(message)) return null;
+  if (detectServiceControlIntent(messageNettoyé)) return null;
 
   if (!WORKFLOW_OBJECT_RE.test(lower) || !WORKFLOW_VERB_RE.test(lower)) return null;
 
   const runNow =
     /\b(ex[eé]cute-?le|lance-?le|d[eé]marre-?le|ex[eé]cute-?la|lance-?la|et ex[eé]cute|et lance|et d[eé]marre|run it|ex[eé]cute-?le imm[eé]diatement|tout de suite|imm[eé]diatement apr[eè]s)\b/.test(lower);
 
-  const steps = extraireEtapesWorkflow(message) ?? [
+  const steps = extraireEtapesWorkflow(messageNettoyé) ?? [
     {
-      name: `Étape 1 — ${message.trim().slice(0, 60)}`,
-      description: message.trim().slice(0, 2000),
+      name: `Étape 1 — ${messageNettoyé.trim().slice(0, 60)}`,
+      description: messageNettoyé.trim().slice(0, 2000),
     },
   ];
 
   return {
-    name: nomDepuisMessage(message.replace(/workflow|workflows/gi, "").trim(), "Workflow"),
-    objective: message.trim().slice(0, 2000),
+    name: nomWorkflowDepuisMessage(messageNettoyé, steps),
+    objective: messageNettoyé.trim().slice(0, 2000),
     steps,
     runNow,
   };
+}
+
+/**
+ * Nom de workflow lisible : l'introduction énoncée (avant l'énumération des
+ * étapes), nettoyée des verbes de création ; si l'introduction est vide
+ * (« crée un workflow : étape 1… »), on reprend le libellé de la première
+ * étape — toujours un texte réellement énoncé par l'utilisateur.
+ */
+export function nomWorkflowDepuisMessage(
+  message: string,
+  steps: Array<{ name: string; description: string }>,
+): string {
+  const intro = message.split(/(?:étape|etape|step)\s*\d+|\s*[:：]\s*/i)[0] ?? "";
+  const nettoyé = intro
+    .replace(/^\s*(?:cr[eé]e[rz]?|construis(?:re)?|g[eé]n[eè]re[rz]?|mets? en place|met en place|configure[rz]?|d[eé]finis|fabriqu[eerz]?|create|build|set up)\s*/i, "")
+    .replace(/\b(un|une|le|la|les|des|mon|ma|mes|de|du|d')\s*/gi, " ")
+    .replace(/\b(workflows?|flux de travail|cha[iî]ne de traitement|pipeline|s[eé]quence automatis[eé]e|automatisation en [eé]tapes)\b/gi, "")
+    .replace(/[\s:，,;.-]+$/g, "")
+    .replace(/^\s+/, "")
+    .trim();
+  if (nettoyé.length >= 4) return nettoyé.slice(0, 80);
+  const premiereEtape = steps[0]?.name.replace(/^Étape\s*\d+\s*[—-]\s*/, "").trim() ?? "Workflow";
+  return (premiereEtape.length >= 4 ? premiereEtape : "Workflow").slice(0, 80);
 }
 
 /* ------------------------------------------------------------------ */
@@ -302,8 +343,11 @@ export function extraireNomCible(message: string): string | undefined {
  * lister, exécuter, supprimer (workflows). Null si aucun pilotage clair.
  */
 export function detectServiceControlIntent(message: string): ServiceControlIntent | null {
-  const lower = message.toLowerCase();
+  // Le nom cité est extrait du message ORIGINAL (avec guillemets) ; les
+  // marqueurs d'intention s'évaluent SANS les citations pour qu'une tâche
+  // nommée « chaque lundi à 9h… » ne fasse pas croire à une création.
   const nom = extraireNomCible(message);
+  const lower = sansCitations(message).toLowerCase();
 
   // PRIORITÉ À LA CRÉATION : « crée un workflow et exécute-le » ou
   // « chaque lundi, planifie-moi … » sont des demandes de CRÉATION, pas
