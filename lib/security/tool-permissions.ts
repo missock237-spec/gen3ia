@@ -37,6 +37,18 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "cloudflare.dns.create": { name: "cloudflare.dns.create", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   "custom_api.call": { name: "custom_api.call", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "custom_api.write": { name: "custom_api.write", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  // Sous-services du projet (tâches planifiées, workflows) : opérations
+  // INTERNES (Firestore, aucun réseau ni fichier) — le risque HITL (high →
+  // carte de validation) est porté par la définition de l'outil dans
+  // lib/tools, la définition de sécurité ici ne décrit que la capacité.
+  "schedule.create": { name: "schedule.create", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  "schedule.list": { name: "schedule.list", risk: "read", requiredPermissions: ["tool.read"] },
+  "schedule.update": { name: "schedule.update", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  "schedule.delete": { name: "schedule.delete", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  "workflow.create": { name: "workflow.create", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  "workflow.list": { name: "workflow.list", risk: "read", requiredPermissions: ["tool.read"] },
+  "workflow.run": { name: "workflow.run", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  "workflow.delete": { name: "workflow.delete", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
 };
 
 export function getToolSecurityDefinition(toolName: string): ToolSecurityDefinition { const definition = TOOL_SECURITY[toolName]; if (!definition) throw new Error(`Unknown tool security definition: ${toolName}`); return definition; }
