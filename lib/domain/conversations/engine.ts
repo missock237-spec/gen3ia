@@ -2244,7 +2244,17 @@ async function artifactFromToolOutput(params: {
           ? outputRecord.markdown
           : undefined;
   const url = typeof outputRecord.url === "string" ? outputRecord.url : undefined;
-  const storagePath = typeof outputRecord.path === "string" ? outputRecord.path : typeof outputRecord.key === "string" ? outputRecord.key : undefined;
+  // Les livrables de documents (artifact.create) exposent `storageKey` —
+  // même contrat que path/key : le fichier reste téléchargeable depuis le
+  // panneau des artefacts (service signé ou repli inline sans R2).
+  const storagePath =
+    typeof outputRecord.path === "string"
+      ? outputRecord.path
+      : typeof outputRecord.key === "string"
+        ? outputRecord.key
+        : typeof outputRecord.storageKey === "string"
+          ? outputRecord.storageKey
+          : undefined;
   if (!content && !url && !storagePath) return null;
 
   const inputTitle = typeof params.toolInput.title === "string" ? params.toolInput.title : undefined;
