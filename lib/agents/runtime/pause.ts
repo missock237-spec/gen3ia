@@ -15,6 +15,15 @@
  *
  * Pause ≠ annulation : la pause préserve le travail payé (facturation LLM
  * déjà consommée) et permet la reprise ; l'annulation stoppe définitivement.
+ *
+ * ARRÊT (stop) : le même document de contrôle porte un `mode`. Sans mode
+ * (ou mode "pause"), la demande est une pause — le runtime met l'état à
+ * "paused" et la reprise est possible. Avec mode "stop", la demande est un
+ * ARRÊT DÉFINITIF demandé par l'utilisateur à tout moment : le runtime
+ * lève StopRequestedError dès sa prochaine consultation (entre les lots
+ * d'étapes ET avant chaque étape), conserve le travail déjà payé dans le
+ * checkpoint et termine l'exécution à l'état "cancelled" — aucune reprise
+ * possible sur la même exécution.
  */
 
 import { FieldValue } from "firebase-admin/firestore";
@@ -27,6 +36,14 @@ export class PauseRequestedError extends Error {
   constructor(executionId: string) {
     super(`Pause demandée pour l'exécution ${executionId}.`);
     this.name = "PauseRequestedError";
+  }
+}
+
+/** Arrêt définitif demandé par l'utilisateur pendant une exécution. */
+export class StopRequestedError extends Error {
+  constructor(executionId: string) {
+    super(`Arrêt demandé pour l'exécution ${executionId}.`);
+    this.name = "StopRequestedError";
   }
 }
 
@@ -66,6 +83,29 @@ export async function requestExecutionPause(request: PauseRequest): Promise<void
   );
 }
 
+/**
+ * Demande l'ARRÊT définitif d'une exécution (mode "stop" sur le doc de
+ * contrôle). Idempotent. Le runtime consulte ce contrôle entre les lots
+ * d'étapes ET avant chaque étape : l'arrêt prend effet au plus près de
+ * l'étape en cours, sans jamais interrompre un appel LLM/outil à moitié
+ * (le résultat partiels n'est pas persisté comme "completed").
+ */
+export async function requestExecutionStop(request: PauseRequest): Promise<void> {
+  await controlRef(request.executionId).set(
+    {
+      userId: request.userId,
+      executionId: request.executionId,
+      mode: "stop",
+      ...(request.taskId ? { taskId: request.taskId } : {}),
+      ...(request.agentId ? { agentId: request.agentId } : {}),
+      ...(request.reason ? { reason: request.reason.slice(0, 500) } : {}),
+      requested: true,
+      requestedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 /** Lève la pause (reprise ou annulation de la demande). */
 export async function clearExecutionPause(userId: string, executionId: string): Promise<void> {
   const ref = controlRef(executionId);
@@ -93,6 +133,27 @@ export async function isExecutionPauseRequested(executionId: string): Promise<bo
 export async function assertNotPaused(executionId: string): Promise<void> {
   if (await isExecutionPauseRequested(executionId)) {
     throw new PauseRequestedError(executionId);
+  }
+}
+
+/**
+ * Lit la demande d'arrêt. Retourne false en cas d'incident Firestore : le
+ * runtime ne doit JAMAIS être bloqué par une panne du contrôle (les budgets
+ * restent la garantie de sécurité).
+ */
+export async function isExecutionStopRequested(executionId: string): Promise<boolean> {
+  try {
+    const snapshot = await controlRef(executionId).get();
+    return snapshot.exists && snapshot.get("requested") === true && snapshot.get("mode") === "stop";
+  } catch {
+    return false;
+  }
+}
+
+/** Vérifie l'arrêt et lève StopRequestedError si demandé. */
+export async function assertNotStopped(executionId: string): Promise<void> {
+  if (await isExecutionStopRequested(executionId)) {
+    throw new StopRequestedError(executionId);
   }
 }
 

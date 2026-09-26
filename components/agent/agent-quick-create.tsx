@@ -161,7 +161,7 @@ export function AgentQuickCreate({
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={importing}
-              className="w-full rounded-2xl border border-dashed border-[var(--g3-border-strong)] bg-[var(--g3-surface)] px-4 py-4 text-sm font-semibold text-[var(--g3-muted)] transition hover:border-[var(--g3-primary)] hover:text-[var(--g3-text)] disabled:opacity-60"
+              className="w-full rounded-2xl border border-[rgba(23,23,20,0.12)] bg-[var(--g3-surface)] px-4 py-4 text-sm font-semibold text-[var(--g3-muted)] transition hover:border-[var(--g3-primary)] hover:text-[var(--g3-text)] disabled:opacity-60"
             >
               {importing ? "Import en cours…" : "＋ Importer un fichier (PDF, DOCX, TXT, CSV, MD)"}
             </button>

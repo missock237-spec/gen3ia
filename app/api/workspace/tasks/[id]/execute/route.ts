@@ -47,9 +47,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const state = await runtime.run();
       // Le plan (avec les statuts d'étapes mis à jour) est re-persisté : une
       // reprise après pause ré-exécute le même plan et saute le terminé.
+      // L'arrêt utilisateur (contrôle "stop" ou déconnexion du client)
+      // aboutit à l'état "cancelled" — terminal, distinct de "failed".
       await taskRef.update({
         plan: state.plan,
-        status: state.status === "completed" ? "completed" : state.status === "paused" ? "paused" : "failed",
+        status: state.status === "completed" ? "completed" : state.status === "paused" ? "paused" : state.status === "cancelled" ? "cancelled" : "failed",
         ...(state.status === "paused" ? {} : { completedAt: FieldValue.serverTimestamp() }),
         updatedAt: FieldValue.serverTimestamp(),
       });
@@ -62,6 +64,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         billing: state.billing,
       });
     } catch (error) {
+      // Déconnexion du client pendant l'exécution = volonté d'arrêter :
+      // la tâche est marquée "cancelled" (travail déjà payé conservé dans
+      // le checkpoint) au lieu d'un "failed" trompeur.
+      if (request.signal.aborted) {
+        await taskRef.update({ status: "cancelled", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+        return NextResponse.json({ success: false, status: "cancelled" });
+      }
       await taskRef.update({ status: "failed", updatedAt: FieldValue.serverTimestamp() });
       throw error;
     }

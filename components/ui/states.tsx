@@ -27,10 +27,10 @@ export function EmptyState({
   return (
     <div
       className={cx(
-        "flex flex-col items-center justify-center gap-3 rounded-3xl border border-dashed px-6 py-14 text-center",
+        "flex flex-col items-center justify-center gap-3 px-6 py-10 text-center",
         className,
       )}
-      style={{ borderColor: "var(--g3-border)", background: "var(--g3-surface)" }}
+      style={{ color: "var(--g3-muted)" }}
     >
       {icon && (
         <div

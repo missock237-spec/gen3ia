@@ -133,6 +133,11 @@ export function AgentChatPanel({
   const [authorizationMode, setAuthorizationMode] = React.useState<AuthorizationMode>("always_ask");
   const composerRef = React.useRef<CommandComposerHandle | null>(null);
   const logRef = React.useRef<HTMLDivElement | null>(null);
+  // Arrêt à tout moment : l'AbortController de la requête en cours. Le
+  // serveur transmet déjà request.signal au runtime : l'abort client
+  // interrompt donc RÉELLEMENT la mission côté serveur aussi.
+  const requestAbortRef = React.useRef<AbortController | null>(null);
+  React.useEffect(() => () => requestAbortRef.current?.abort(), []);
 
   const typeLabel = labelForAgent(agent);
   const quickPrompts = QUICK_PROMPTS[agent.type] ?? QUICK_PROMPTS.custom;
@@ -249,10 +254,13 @@ export function AgentChatPanel({
   async function sendMessage(objective: string) {
     setLoading(true);
     setError("");
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
     try {
       const response = await fetch("/api/agent/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           message: objective,
           agentId: agent.id,
@@ -294,10 +302,29 @@ export function AgentChatPanel({
       }
       void loadConversations();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur de l'agent.");
+      // Arrêt demandé par l'utilisateur (bouton « Arrêter ») : message
+      // d'interruption propre — jamais une erreur d'agent trompeuse.
+      if (controller.signal.aborted) {
+        setMessages((items) => [...items, {
+          id: crypto.randomUUID(),
+          role: "agent",
+          text: "Arrêt demandé — l'exécution a été interrompue. Le travail déjà réalisé est conservé ; relancez-moi quand vous voulez reprendre.",
+          mode: "chat",
+        }]);
+        setActive(null);
+      } else {
+        setError(e instanceof Error ? e.message : "Erreur de l'agent.");
+      }
     } finally {
+      requestAbortRef.current = null;
       setLoading(false);
     }
+  }
+
+  /** Arrête l'agent à tout moment pendant une exécution en cours. */
+  function stopAgent() {
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -557,6 +584,15 @@ export function AgentChatPanel({
               <div className="mr-auto flex items-center gap-3 rounded-2xl border border-white/10 bg-[var(--g3-elevated)] px-4 py-3 text-xs text-[var(--g3-faint)]">
                 <span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-primary-strong)]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-magenta)] [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-secondary)] [animation-delay:240ms]" /></span>
                 J&apos;analyse votre demande — réponse ou exécution selon le besoin…
+                <button
+                  type="button"
+                  onClick={stopAgent}
+                  className="ml-1 flex items-center gap-1.5 rounded-full border border-[rgba(239,68,68,0.45)] bg-[rgba(239,68,68,0.12)] px-3 py-1 text-[11px] font-semibold text-[#f87171] transition hover:bg-[rgba(239,68,68,0.22)]"
+                  aria-label="Arrêter l'agent"
+                >
+                  <span className="inline-block h-1.5 w-1.5 rounded-[2px] bg-[#f87171]" aria-hidden="true" />
+                  Arrêter
+                </button>
               </div>
             )}
           </div>

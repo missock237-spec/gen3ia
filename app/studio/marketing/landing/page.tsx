@@ -164,7 +164,7 @@ export default function MarketingLandingPage() {
                   <p className="mt-2 text-[12px] font-semibold text-[var(--g3-text)]">CTA : {page.content.cta}</p>
                 </div>
               ) : (
-                <p className="mt-3 rounded-xl border border-dashed border-[var(--g3-border-strong)] px-3 py-2 text-[12.5px] text-[var(--g3-muted)]">Contenu non encore généré.</p>
+                <p className="mt-3 px-3 py-2 text-[12.5px] text-[var(--g3-muted)]">Contenu non encore généré.</p>
               )}
 
               <div className="mt-3 flex flex-wrap gap-2">

@@ -89,6 +89,9 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   const [connectors, setConnectors] = useState<string[]>([]);
   const [live, setLive] = useState<LiveTurn | null>(null);
   const threadScrollRef = useRef<HTMLDivElement>(null);
+  // Arrêt à tout moment : l'AbortController du tour en cours — le bouton
+  // « Arrêter » interrompt le flux et l'agent cesse de travailler.
+  const turnAbortRef = useRef<AbortController | null>(null);
 
   const loadLists = useCallback(async () => {
     try {
@@ -239,6 +242,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         current ? { ...current, messages: [...current.messages, optimistic] } : current,
       );
       setLive(emptyLive());
+      const controller = new AbortController();
+      turnAbortRef.current = controller;
       try {
         // 1) Streaming NDJSON — rendu en direct du tour complet.
         await streamConversationTurn({
@@ -249,9 +254,20 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           connectors,
           authorizationMode,
           timezone: safeClientTimezone(),
+          signal: controller.signal,
           onEvent: consumeEvent,
         });
       } catch (streamError) {
+        // Arrêt demandé par l'utilisateur (bouton « Arrêter ») : PAS de
+        // repli vers la route classique — l'agent doit rester interrompu.
+        // Le travail déjà produit et persisté est rechargé tel quel.
+        if (controller.signal.aborted) {
+          setLive(null);
+          setGenerating(false);
+          turnAbortRef.current = null;
+          await finishTurn(conversationId);
+          return;
+        }
         // 2) Repli : route classique (résultat complet, même persistance).
         try {
           const response = await fetch(`/api/workspace/conversations/${conversationId}/messages`, {
@@ -277,11 +293,18 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           return;
         }
       }
+      turnAbortRef.current = null;
       await finishTurn(conversationId);
       setGenerating(false);
     },
     [conversationId, connectors, consumeEvent, finishTurn, projectId],
   );
+
+  /** Arrête l'agent à tout moment pendant un tour en cours. */
+  const stopCurrentTurn = useCallback(() => {
+    turnAbortRef.current?.abort();
+    turnAbortRef.current = null;
+  }, []);
 
   const createConversation = useCallback(async () => {
     const response = await fetch("/api/workspace/conversations", {
@@ -491,6 +514,19 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
 
         {detail && (
           <div className="mt-2 border-t border-[var(--g3-border)] px-3 pt-2 lg:px-0">
+            {generating && (
+              <div className="mb-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={stopCurrentTurn}
+                  className="flex items-center gap-2 rounded-full border border-[rgba(239,68,68,0.45)] bg-[rgba(239,68,68,0.12)] px-4 py-1.5 text-xs font-semibold text-[#f87171] transition hover:bg-[rgba(239,68,68,0.22)]"
+                  aria-label="Arrêter l'agent"
+                >
+                  <span className="inline-block h-2 w-2 rounded-[2px] bg-[#f87171]" aria-hidden="true" />
+                  Arrêter l&apos;agent
+                </button>
+              </div>
+            )}
             <Composer
               onSend={sendMessage}
               disabled={generating}

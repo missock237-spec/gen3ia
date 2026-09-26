@@ -289,6 +289,24 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
     finally { setBusy(false); }
   }
 
+  // ARRÊT DÉFINITIF à tout moment : disponible pendant l'exécution ET la
+  // pause. La tâche passe à « Annulée » immédiatement ; le runtime termine
+  // proprement au prochain point de consultation (travail déjà payé gardé).
+  async function stopTask() {
+    if (!task || busy || (task.status !== "running" && task.status !== "paused")) return;
+    setBusy(true); setError("");
+    try {
+      const response = await authFetch("/api/workspace/tasks/" + encodeURIComponent(task.id) + "/stop", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason: "Arrêt demandé depuis le workspace" }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Arrêt impossible.");
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : "Arrêt impossible."); await load(); }
+    finally { setBusy(false); }
+  }
+
   async function resumeTask() {
     if (!task || busy || task.status !== "paused") return;
     setBusy(true); setError(""); setExecutionResult(null);
@@ -344,6 +362,11 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
               {busy ? "Pause..." : "Mettre en pause"}
             </button>
           )}
+          {(task.status === "running" || task.status === "paused") && (
+            <button type="button" disabled={busy} onClick={() => void stopTask()} className="g3-workspace-task-stop">
+              {busy ? "Arrêt..." : "Arrêter"}
+            </button>
+          )}
           {task.status === "paused" && (
             <button type="button" disabled={busy} onClick={() => void resumeTask()} className="g3-workspace-task-approve">
               {busy ? "Reprise..." : "Reprendre l'exécution"}
@@ -380,7 +403,7 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
       <div className="g3-workspace-task-flow">
         <span className="is-active">1. Plan</span><span>→</span>
         <span className={task.status !== "awaiting_approval" && task.status !== "draft" ? "is-active" : ""}>2. Autorisation</span><span>→</span>
-        <span className={task.status === "running" || task.status === "completed" || task.status === "paused" ? "is-active" : ""}>3. Exécution</span><span>→</span>
+        <span className={task.status === "running" || task.status === "completed" || task.status === "paused" || task.status === "cancelled" ? "is-active" : ""}>3. Exécution</span><span>→</span>
         <span className={task.status === "completed" ? "is-active" : ""}>4. Vérification</span>
       </div>
 
@@ -454,8 +477,8 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
 
       {task.status === "awaiting_approval" && <p className="g3-workspace-task-note">Le plan est visible avant toute exécution. Les actions sensibles restent protégées par les politiques d’autorisation.</p>}
       {task.status === "approved" && <p className="g3-workspace-task-note">Plan approuvé. L’exécution utilise le runtime sécurisé Gen3ia et ses politiques d’outils.</p>}
-      {task.status === "running" && <p className="g3-workspace-task-note">Exécution en cours. La pause prend effet entre deux étapes — le travail déjà réalisé est conservé.</p>}
-      {task.status === "paused" && <p className="g3-workspace-task-note">Tâche en pause. La reprise continue aux étapes restantes, sans re-payer les étapes terminées.</p>}
+      {task.status === "running" && <p className="g3-workspace-task-note">Exécution en cours. Vous pouvez mettre en pause ou ARRÊTER l&apos;agent à tout moment — l&apos;arrêt prend effet entre deux étapes, le travail déjà réalisé est conservé.</p>}
+      {task.status === "paused" && <p className="g3-workspace-task-note">Tâche en pause. Reprenez l&apos;exécution ou arrêtez définitivement l&apos;agent — les étapes terminées ne sont jamais re-payées.</p>}
       {executionResult && (
         <div className="g3-workspace-task-execution-result">
           <strong>Résultat d’exécution · {executionResult.status}</strong>

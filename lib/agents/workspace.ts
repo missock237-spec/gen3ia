@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import { createAgentPlan } from "@/lib/agents/planner/service";
 import type { RuntimePlan } from "@/lib/agents/runtime";
-import { clearExecutionPause, requestExecutionPause } from "@/lib/agents/runtime/pause";
+import { clearExecutionPause, requestExecutionPause, requestExecutionStop } from "@/lib/agents/runtime/pause";
 
 export type WorkspaceTaskStatus = "draft"|"awaiting_approval"|"approved"|"running"|"completed"|"failed"|"cancelled"|"paused";
 export interface WorkspaceTask { id:string; ownerId:string; objective:string; status:WorkspaceTaskStatus; plan?:RuntimePlan; parentTaskId?:string; activeBranchId:string; createdAt:number; updatedAt:number; approvedAt?:number; completedAt?:number; }
@@ -70,6 +70,33 @@ export async function pauseWorkspaceTask(ownerId:string,taskId:string,reason?:st
   if(!executionId) throw new Error("Aucune exécution active identifiable pour cette tâche.");
   await requestExecutionPause({userId:ownerId,executionId,taskId,reason});
   await adminDb.collection(TASKS).doc(taskId).update({pauseRequested:true,...(reason?{pauseReason:reason.slice(0,500)}:{}),updatedAt:FieldValue.serverTimestamp()});
+  return getWorkspaceTask(ownerId,taskId);
+}
+
+/**
+ * ARRÊT DÉFINITIF d'une tâche demandé par l'utilisateur à tout moment.
+ *
+ * Accepté depuis les statuts "running" (exécution en cours) ET "paused"
+ * (une tâche mise en pause peut être abandonnée). La tâche passe
+ * immédiatement à "cancelled" (l'interface reflète l'arrêt sans attendre
+ * le prochain contrôle du runtime) et le contrôle d'arrêt est posé pour
+ * que le runtime en cours termine proprement à son prochain point de
+ * consultation (entre les lots d'étapes / avant chaque étape). Si la tâche
+ * était en pause, le contrôle de pause est simplement supprimé — aucune
+ * exécution ne tourne.
+ */
+export async function stopWorkspaceTask(ownerId:string,taskId:string,reason?:string){
+  const task=await getWorkspaceTask(ownerId,taskId);
+  if(task.status!=="running"&&task.status!=="paused") throw new Error("Seule une tâche en cours d'exécution ou en pause peut être arrêtée.");
+  const executionId=task.plan?.executionId;
+  if(task.status==="running"){
+    if(!executionId) throw new Error("Aucune exécution active identifiable pour cette tâche.");
+    await requestExecutionStop({userId:ownerId,executionId,taskId,reason});
+  } else if(executionId){
+    try { await clearExecutionPause(ownerId,executionId); } catch { /* contrôle déjà absent : rien à lever */ }
+  }
+  await adminDb.collection(TASKS).doc(taskId).update({status:"cancelled",completedAt:FieldValue.serverTimestamp(),...(task.status==="running"?{stopRequested:true}:{}),...(reason?{stopReason:reason.slice(0,500)}:{stopReason:FieldValue.delete()}),pauseRequested:FieldValue.delete(),pauseReason:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp()});
+  await snapshotWorkspaceTask(ownerId,taskId,{plan:task.plan,status:"cancelled",reason:reason?"task_stopped":"task_stopped"});
   return getWorkspaceTask(ownerId,taskId);
 }
 

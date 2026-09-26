@@ -954,7 +954,7 @@ body {
   min-height: 38px;
   margin-top: 8px;
   padding: .5rem .65rem;
-  border: 1px dashed var(--g3-border-strong);
+  border: 1px solid var(--g3-border);
   border-radius: 11px;
   background: transparent;
   color: var(--g3-muted);
@@ -1722,6 +1722,22 @@ textarea:focus-visible, [tabindex]:focus-visible {
   cursor: pointer;
 }
 .g3-workspace-task-pause:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Arrêt définitif d'une exécution d'agent — action destructrice distincte
+   de la pause : rouge danger, halo au survol pour un repérage immédiat. */
+.g3-workspace-task-stop {
+  border: 1px solid rgba(239, 68, 68, .45);
+  background: rgba(239, 68, 68, .12);
+  color: #f87171;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.g3-workspace-task-stop:hover:not(:disabled) { background: rgba(239, 68, 68, .22); box-shadow: 0 0 12px rgba(239, 68, 68, .25); }
+.g3-workspace-task-stop:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ============================================================
    12. CONSOLE (terminal + simulation)

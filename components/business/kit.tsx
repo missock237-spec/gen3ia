@@ -58,7 +58,7 @@ export function StatCard({ label, value, hint, tone }: { label: string; value: s
 }
 
 export function EmptyHint({ children }: { children: React.ReactNode }) {
-  return <p className="rounded-xl border border-dashed border-[var(--g3-border-strong)] bg-[var(--g3-elevated)] px-4 py-6 text-center text-[13px] text-[var(--g3-muted)]">{children}</p>;
+  return <p className="px-4 py-5 text-center text-[13px] text-[var(--g3-muted)]">{children}</p>;
 }
 
 export function ModuleSection({ title, children, actions }: { title: string; children: React.ReactNode; actions?: React.ReactNode }) {

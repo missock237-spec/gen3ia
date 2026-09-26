@@ -175,7 +175,7 @@ export function TeamMembersPanel({ teamId }: { teamId: string }) {
           </li>
         ))}
         {members.length === 0 && (
-          <li className="rounded-2xl border border-dashed border-[var(--g3-border-strong)] bg-[var(--g3-elevated)]/60 p-6 text-center text-sm text-[var(--g3-muted)]">
+          <li className="p-6 text-center text-sm text-[var(--g3-muted)]">
             Aucun membre affiché pour le moment.
           </li>
         )}

@@ -105,7 +105,7 @@ function TeamsContent() {
               )}
 
               {teams?.length === 0 && (
-                <div className="mt-6 rounded-2xl border border-dashed border-[var(--g3-border-strong)] bg-[var(--g3-elevated)]/60 p-8 text-center">
+                <div className="mt-6 p-8 text-center">
                   <p className="font-serif text-lg font-semibold text-[var(--g3-text)]">Aucune équipe pour l&apos;instant</p>
                   <p className="mt-2 text-sm leading-6 text-[var(--g3-muted)]">
                     Créez votre premier espace d&apos;équipe avec le formulaire « Nouvelle équipe »,

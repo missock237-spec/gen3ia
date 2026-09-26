@@ -136,7 +136,7 @@ export function DocumentsPanel(props: {
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         data-dragging={dragging || undefined}
-        className={`g3-card flex flex-col items-center justify-center border-2 border-dashed p-8 text-center transition ${dragging ? "border-sky-400 bg-sky-50" : "border-[rgba(23,23,20,0.14)]"}`}
+        className={`g3-card flex flex-col items-center justify-center border p-8 text-center transition ${dragging ? "border-sky-400 bg-sky-50" : "border-[rgba(23,23,20,0.09)]"}`}
       >
         <p className="font-serif text-lg font-semibold">Déposez vos documents ici</p>
         <p className="mt-1 max-w-md text-sm text-[var(--g3-muted)]">

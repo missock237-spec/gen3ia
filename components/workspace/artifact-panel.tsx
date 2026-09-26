@@ -119,7 +119,7 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
 
   if (artifacts.length === 0) {
     return (
-      <div className={`rounded-xl border border-dashed border-[var(--g3-border-strong)] p-4 text-center text-xs text-[var(--g3-muted)] ${className}`}>
+      <div className={`p-4 text-center text-xs text-[var(--g3-muted)] ${className}`}>
         <p className="text-2xl" aria-hidden>▣</p>
         <p className="mt-1">Aucun livrable pour le moment. Les documents, images, rapports et fichiers produits par l&apos;agent apparaîtront ici.</p>
       </div>

@@ -174,7 +174,7 @@ export function MissionComposer({
             ))}
           <a
             href="/studio/create"
-            className="rounded-full border border-dashed border-[rgba(23,23,20,0.2)] px-3 py-1.5 text-xs font-medium text-[var(--g3-muted)] transition hover:text-[var(--g3-text)]"
+            className="rounded-full border border-[rgba(23,23,20,0.14)] px-3 py-1.5 text-xs font-medium text-[var(--g3-muted)] transition hover:text-[var(--g3-text)]"
           >
             Tous les modèles →
           </a>

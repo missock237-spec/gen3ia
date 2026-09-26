@@ -9,7 +9,7 @@ import { RuntimeExecutionState, RuntimePlan, RuntimeStep } from "./types";
 import { createCheckpoint, saveCheckpoint } from "./checkpoint";
 import { getReadySteps, validateDAG } from "./dag";
 import { RuntimeScheduler } from "./scheduler";
-import { assertNotPaused } from "./pause";
+import { assertNotPaused, assertNotStopped, StopRequestedError } from "./pause";
 import { generateImageWithAgnes, isImageGenerationEnabled } from "@/lib/ai/image-generation";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 
@@ -147,6 +147,7 @@ export class AgentRuntime {
         while (this.state.iteration < this.state.plan.maxIterations) {
           this.throwIfCancelled();
           await this.throwIfPaused();
+          await this.throwIfStopped();
           this.assertExecutionBudget();
           this.state.iteration++;
           const completed = this.getCompletedSteps();
@@ -187,6 +188,15 @@ export class AgentRuntime {
         await this.persistCheckpoint();
         return this.state;
       }
+      if (error instanceof Error && error.name === "StopRequestedError") {
+        // ARRÊT définitif demandé par l'utilisateur à tout moment : le
+        // travail déjà payé reste dans le checkpoint, l'exécution se
+        // termine à l'état "cancelled" — la reprise n'est plus possible.
+        this.state.status = "cancelled";
+        this.state.completedAt = new Date().toISOString();
+        await this.persistCheckpoint();
+        return this.state;
+      }
       this.state.status = this.signal?.aborted ? "cancelled" : "failed";
       this.state.error = error instanceof Error ? error.message : String(error);
       this.state.completedAt = new Date().toISOString();
@@ -200,18 +210,33 @@ export class AgentRuntime {
     await assertNotPaused(this.state.executionId);
   }
 
+  /** Consulte le contrôle d'arrêt définitif (tolérant aux pannes Firestore). */
+  private async throwIfStopped(): Promise<void> {
+    await assertNotStopped(this.state.executionId);
+  }
+
   private async executeStep(step: RuntimeStep): Promise<void> {
     this.scheduler.start(step);
     step.status = "running";
     const startedAt = Date.now();
     try {
       this.assertExecutionBudget();
+      // L'arrêt utilisateur est consulté AVANT chaque étape : une demande
+      // posée pendant le lot courant prend effet au plus vite, sans lancer
+      // une nouvelle unité de travail payante.
+      await this.throwIfStopped();
       const output = await this.withTimeout(this.dispatch(step), step.timeoutMs);
       step.output = output;
       step.status = "completed";
       this.state.outputs[step.id] = output;
       this.state.observations.push({ stepId: step.id, success: true, output, latencyMs: Date.now() - startedAt, timestamp: new Date().toISOString() });
     } catch (error) {
+      // Un arrêt utilisateur n'est JAMAIS une erreur d'étape : il se
+      // propage immédiatement (pas de retry, pas de marquage "failed").
+      if (error instanceof Error && error.name === "StopRequestedError") {
+        step.status = "pending";
+        throw error;
+      }
       const message = error instanceof Error ? error.message : String(error);
       this.state.observations.push({ stepId: step.id, success: false, error: message, latencyMs: Date.now() - startedAt, timestamp: new Date().toISOString() });
       if (step.sideEffect || step.maxRetries <= 0 || this.state.totalRetries >= this.state.maxTotalRetries) { step.status = "failed"; throw error; }

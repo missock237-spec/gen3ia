@@ -127,7 +127,7 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : conversations.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-[var(--g3-border-strong)] p-4 text-center text-xs text-[var(--g3-muted)]">
+            <p className="p-4 text-center text-xs text-[var(--g3-muted)]">
               Aucune conversation pour l&apos;instant. Lancez votre premier objectif ci-dessus.
             </p>
           ) : (

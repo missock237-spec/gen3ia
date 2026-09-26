@@ -183,7 +183,7 @@ export function OrganizationsPanel() {
       {organizations === null ? (
         <div className="mt-6 h-16 animate-pulse rounded-2xl bg-[var(--g3-elevated)]" aria-hidden="true" />
       ) : organizations.length === 0 ? (
-        <p className="mt-5 rounded-2xl border border-dashed border-[var(--g3-border-strong)] bg-[var(--g3-elevated)]/60 p-5 text-sm leading-6 text-[var(--g3-muted)]">
+        <p className="mt-5 p-5 text-sm leading-6 text-[var(--g3-muted)]">
           Aucune organisation. Créez-en une pour structurer votre entreprise : isolation des données, rôles et quotas par plan.
         </p>
       ) : (
