@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { runAI, runAIJSON } from "@/lib/engines/ai-engine";
+import { extractJsonObject, runAI, runAIJSON } from "@/lib/engines/ai-engine";
 import { generate, generateStream } from "@/lib/ai/router";
 import {
   detectImageRatio,
@@ -1782,50 +1782,74 @@ async function ensureArtifactInput(
   const blocks = Array.isArray(toolInput.blocks) ? (toolInput.blocks as unknown[]) : [];
   if (hasTitle && blocks.length > 0) return toolInput;
 
-  const draft = async (maxTokens: number, budgetMs: number) =>
-    withTimeout(
-      runAIJSON({
-        userId: ctx.userId,
-        feature: "conversation-turn",
-        task: "chat",
-        system:
-          "Tu rédiges le contenu d'un document professionnel pour l'utilisateur de Gen3ia. " +
-          "Tu produis un objet JSON : title (titre court du document), format, blocks (sections). " +
-          "Blocs disponibles : title (une seule fois, en premier), heading (sections), paragraph (texte rédigé), " +
-          "list (puces {items}), table ({columns, rows}) si des données le justifient, quote, pageBreak. " +
-          "Le contenu doit être rédigé intégralement et de façon professionnelle : jamais de placeholder, " +
-          "jamais de « … », jamais de section vide.",
-        prompt:
-          `Demande de l'utilisateur : ${ctx.message.slice(0, 2000)}\n` +
-          `Objectif du plan : ${ctx.intent.objective ?? "(celui de la demande)"}\n` +
-          `Étape : ${planned.title}${planned.detail ? ` — ${planned.detail}` : ""}\n` +
-          `Format attendu : ${typeof toolInput.format === "string" ? toolInput.format : "pdf"}\n` +
-          `Titre proposé : ${hasTitle ? String(toolInput.title) : "(à déduire de la demande)"}` +
-          `${ctx.priorHistory.length > 0 ? `\n\nContexte récent de la conversation :\n${historyForModel(ctx.priorHistory, 4).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 400)}`).join("\n")}` : ""}`,
-        schema: DocumentBlocksSchema,
-        label: "redaction-livrable",
-        maxTokens,
-      }),
+  /**
+   * Rédaction via le chemin STREAMING (le même qui produit les applications
+   * web en ~35 s) : les fournisseurs « chat » livrent leurs tokens au fil de
+   * l'eau et complètent bien avant les appels non-streamés, qui dépassaient
+   * le budget sur un JSON de plusieurs milliers de tokens. Le texte collecté
+   * est ensuite parsé en JSON (extractJsonObject) et validé par le schéma.
+   */
+  const draft = async (maxTokens: number, budgetMs: number) => {
+    const request = {
+      task: "chat" as const,
+      messages: [
+        {
+          role: "system" as const,
+          content:
+            "Tu rédiges le contenu d'un document professionnel pour l'utilisateur de Gen3ia. " +
+            "Tu produis UNIQUEMENT un objet JSON valide (sans texte autour, sans bloc de code) : " +
+            '{ "title": "<titre court>", "format": "<format>", "blocks": [...] }. ' +
+            "Blocs disponibles : title (une seule fois, en premier), heading (sections), paragraph (texte rédigé), " +
+            "list (puces {items}), table ({columns, rows}) si des données le justifient, quote, pageBreak. " +
+            "Le contenu doit être rédigé intégralement et de façon professionnelle : jamais de placeholder, " +
+            "jamais de « … », jamais de section vide.",
+        },
+        {
+          role: "user" as const,
+          content:
+            `Demande de l'utilisateur : ${ctx.message.slice(0, 2000)}\n` +
+            `Objectif du plan : ${ctx.intent.objective ?? "(celui de la demande)"}\n` +
+            `Étape : ${planned.title}${planned.detail ? ` — ${planned.detail}` : ""}\n` +
+            `Format attendu : ${typeof toolInput.format === "string" ? toolInput.format : "pdf"}\n` +
+            `Titre proposé : ${hasTitle ? String(toolInput.title) : "(à déduire de la demande)"}` +
+            `${ctx.priorHistory.length > 0 ? `\n\nContexte récent de la conversation :\n${historyForModel(ctx.priorHistory, 4).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 400)}`).join("\n")}` : ""}`,
+        },
+      ],
+      provider: ctx.provider as never,
+      model: ctx.model,
+      preferFree: true,
+      maxTokens,
+      metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
+    };
+    const response = await withTimeout(
+      generateStream(request, { onDelta: () => undefined }).catch(() =>
+        generate(request),
+      ),
       budgetMs,
       "rédaction du livrable",
     );
+    return DocumentBlocksSchema.parse(extractJsonObject(response.text));
+  };
 
   try {
-    // Première tentative : budget complet (le moteur de flux autorise 300 s).
-    const result = await draft(6000, 45_000);
-    const generated = result.data;
+    // Première tentative : budget généreux, sortie complète.
+    const generated = await draft(6000, 60_000);
     return {
       ...toolInput,
       title: hasTitle ? String(toolInput.title) : generated.title,
       format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
       blocks: generated.blocks,
     };
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: "artifact.redaction_fallback",
+      reason: error instanceof Error ? error.message : String(error),
+      format: toolInput.format ?? "pdf",
+    }));
     // Seconde tentative, plus resserrée : un fournisseur lent ne doit pas
     // priver l'utilisateur de son livrable (pptx/pdf/docx demandé).
     try {
-      const retry = await draft(3500, 30_000);
-      const generated = retry.data;
+      const generated = await draft(3500, 45_000);
       return {
         ...toolInput,
         title: hasTitle ? String(toolInput.title) : generated.title,
