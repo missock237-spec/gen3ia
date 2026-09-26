@@ -1782,8 +1782,8 @@ async function ensureArtifactInput(
   const blocks = Array.isArray(toolInput.blocks) ? (toolInput.blocks as unknown[]) : [];
   if (hasTitle && blocks.length > 0) return toolInput;
 
-  try {
-    const result = await withTimeout(
+  const draft = async (maxTokens: number, budgetMs: number) =>
+    withTimeout(
       runAIJSON({
         userId: ctx.userId,
         feature: "conversation-turn",
@@ -1804,11 +1804,15 @@ async function ensureArtifactInput(
           `${ctx.priorHistory.length > 0 ? `\n\nContexte récent de la conversation :\n${historyForModel(ctx.priorHistory, 4).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 400)}`).join("\n")}` : ""}`,
         schema: DocumentBlocksSchema,
         label: "redaction-livrable",
-        maxTokens: 6000,
+        maxTokens,
       }),
-      INTENT_BUDGET_MS,
+      budgetMs,
       "rédaction du livrable",
     );
+
+  try {
+    // Première tentative : budget complet (le moteur de flux autorise 300 s).
+    const result = await draft(6000, 45_000);
     const generated = result.data;
     return {
       ...toolInput,
@@ -1817,9 +1821,22 @@ async function ensureArtifactInput(
       blocks: generated.blocks,
     };
   } catch {
-    // Rédaction indisponible (timeout, fournisseur saturé) : l'étape sera
-    // ignorée proprement avec un message clair pour l'utilisateur.
-    return null;
+    // Seconde tentative, plus resserrée : un fournisseur lent ne doit pas
+    // priver l'utilisateur de son livrable (pptx/pdf/docx demandé).
+    try {
+      const retry = await draft(3500, 30_000);
+      const generated = retry.data;
+      return {
+        ...toolInput,
+        title: hasTitle ? String(toolInput.title) : generated.title,
+        format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
+        blocks: generated.blocks,
+      };
+    } catch {
+      // Rédaction indisponible (timeout, fournisseur saturé) : l'étape sera
+      // ignorée proprement avec un message clair pour l'utilisateur.
+      return null;
+    }
   }
 }
 
