@@ -60,16 +60,29 @@ export function detectAppCreationIntent(message: string): AppCreationIntent | nu
   return { title: extractAppTitle(message), wantsReact, theme };
 }
 
-/** Titre lisible : supprime les formules d'introduction, garde l'essentiel. */
+/** Titre lisible : garde le cœur de la demande, sans formules ni suffixes techniques. */
 export function extractAppTitle(message: string): string {
+  // 1) Cœur de la demande : ce qui suit l'objet web (« page web de liste de
+  //    tâches… » → « liste de tâches »), sans le thème ni le framework.
+  const objectMatch = message.match(
+    /((?:page\s+web|application\s+web|application|app\s+web|web\s*app|site\s+web|site|tableau\s+de\s+bord|dashboard|portfolio|landing\s*page|page\s+d['']accueil))\s*(?:de|du|d'|pour|sur|avec)?\s*([^,.;\n]{3,60})/i,
+  );
+  const core = objectMatch?.[2]
+    ?.replace(/\s+\b(?:en\s+mode\s+(?:sombre|clair)|[ée]crite\s+en\s+react(?:\.?js)?|en\s+react(?:\.?js)?|en\s+jsx|en\s+html|en\s+css|en\s+javascript|en\s+js|en\s+fran[çc]ais)\b.*$/i, "")
+    .trim();
+  const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+  if (core && core.length >= 4) {
+    // Complément riche (« liste de tâches ») : prioritaire.
+    if (core.split(/\s+/).length >= 2) return capitalize(core);
+    // Complément d'un seul mot (« moderne ») : l'objet porte le titre.
+    if (objectMatch?.[1]) return capitalize(objectMatch[1].toLowerCase());
+  }
+
+  // 2) Repli : nettoyage des formules d'introduction.
   const cleaned = message
     .replace(/\b(?:agent\s+ia|assistant|stp|s'il\s+te\s+pla[îi]t|merci)\b/gi, "")
     .replace(/\b(?:aide(?:z)?[- ]moi\s+(?:a|à)|peux[- ]tu|pourrais[- ]tu|je\s+voudrais|je\s+veux|fais[- ]moi|faites[- ]moi)\b/gi, "")
     .replace(/\b(?:crée[rz]?|créer|génère[rz]?|générer|développe[rz]?|construis|construire|code[rz]?|écris|conçois|imagine|réalise[rz]?)\b/gi, "")
-    .replace(/\b(?:une?|le|la|les|de|du|des|d'|pour\s+moi|moi)\b\s*/gi, (match, offset, full) =>
-      // « de liste de tâches » : on garde les « de » internes, on coupe seulement en tête.
-      offset === 0 || full.slice(0, offset).trim().length === 0 ? "" : match,
-    )
     .replace(/\s{2,}/g, " ")
     .replace(/^[,\s-]+|[,\s-]+$/g, "")
     .trim();
@@ -120,7 +133,7 @@ export interface ChartData {
   source: string;
 }
 
-const INLINE_PAIR_RE = /([A-Za-zÀ-ÿ0-9][^:=\n]{0,40}?)\s*[:=]\s*(-?\d+(?:[.,]\d+)?)\s*(?:%|€|\$|k\b|K\b)?(?=\s*(?:,|;|\n|$))/g;
+const INLINE_PAIR_RE = /([A-Za-zÀ-ÿ0-9][^:=\n]{0,40}?)\s*[:=]\s*(-?\d+(?:[.,]\d+)?)\s*(?:%|€|\$|k\b|K\b)?(?=\s*(?:,|;|\n|\.|!|\?|$))/g;
 
 /** Paires « Label: 12 » énoncées directement dans le message (≥ 3 paires). */
 export function extractInlineData(message: string): ChartData | null {

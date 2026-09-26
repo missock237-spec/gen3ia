@@ -11,6 +11,12 @@ export interface ArtifactRecord {
   checksum: string;
   createdAt: number;
   expiresAt?: number;
+  /**
+   * Repli SANS R2 : contenu stocké directement en base (base64, ≤ 700 Ko).
+   * Utilisé tant que les credentials R2 ne sont pas configurés — les
+   * livrables (pptx, pdf, docx…) restent générés et téléchargeables.
+   */
+  inlineData?: string;
 }
 
 const COLLECTION = "artifacts";
