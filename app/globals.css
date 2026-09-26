@@ -804,20 +804,43 @@ body {
   flex: 1;
   color: var(--g3-text);
 }
-/* Marque V2 : tuile dégradée Aurora avec halo */
+/* Marque V2 : logo officiel Gen3ia (icône réseau neuronal générée).
+   `.g3-brand-mark` conserve son rôle de conteneur de taille fixe. */
 .g3-brand-mark {
   display: grid;
   place-items: center;
   width: 31px;
   height: 31px;
   border-radius: 10px;
-  background: var(--g3-gradient);
-  background-size: 160% 100%;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: -.04em;
+  overflow: hidden;
   box-shadow: 0 6px 20px -6px rgba(124, 92, 255, 0.75), inset 0 1px 0 rgba(255,255,255,.35);
+}
+/* Logo officiel — ressource partagée partout (nav, vitrine, auth, exécution) */
+.g3-logo {
+  display: inline-block;
+  object-fit: cover;
+  border-radius: 24%;
+  user-select: none;
+  flex: none;
+}
+/* Pendant l'exécution d'une tâche d'agent : halo pulsé magenta-cyan */
+.g3-logo--working {
+  animation: g3-logo-working 1.5s ease-in-out infinite;
+}
+@keyframes g3-logo-working {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.45);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 7px rgba(34, 211, 238, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .g3-logo--working {
+    animation: none;
+  }
 }
 .g3-brand-name {
   font-family: var(--font-display), var(--font-sans);

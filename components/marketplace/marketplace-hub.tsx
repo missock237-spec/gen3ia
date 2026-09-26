@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth, authFetch } from "@/lib/firebase/auth-client";
+import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 
 type Extension = {
   id: string;
@@ -112,7 +113,7 @@ export function MarketplaceHub() {
     <div className="min-h-full bg-[var(--g3-bg)] text-[var(--g3-text)]">
       <div className="mx-auto flex max-w-[1480px] gap-0 px-3 py-3 sm:px-5 lg:px-7">
         <aside className="sticky top-3 hidden h-[calc(100dvh-88px)] w-[248px] shrink-0 flex-col rounded-[28px] border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] shadow-[0_2px_10px_rgba(15,23,42,0.05)] p-4 lg:flex">
-          <Link href="/marketplace" className="mb-7 flex items-center gap-3 px-2 py-2"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-[var(--g3-deep)] text-white text-sm font-black">G3</span><span><b className="block text-sm">Gen3ia</b><small className="text-[var(--g3-faint)]">Marketplace</small></span></Link>
+          <Link href="/marketplace" className="mb-7 flex items-center gap-3 px-2 py-2"><Gen3iaLogo size={40} alt="" /><span><b className="block text-sm">Gen3ia</b><small className="text-[var(--g3-faint)]">Marketplace</small></span></Link>
           <p className="px-2 text-[10px] font-semibold uppercase tracking-[.22em] text-[var(--g3-faint)]">Espace marketplace</p>
           <nav className="mt-3 space-y-1">{tabs.map(([id, label, desc]) => <button key={id} onClick={() => setTab(id)} className={`w-full rounded-2xl px-3 py-3 text-left transition ${tab === id ? "bg-sky-100 text-sky-700" : "text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]"}`}><span className="text-sm font-medium">{label}</span><span className="mt-0.5 block text-[11px] text-[var(--g3-faint)]">{desc}</span></button>)}</nav>
           <div className="my-5 h-px bg-[var(--g3-elevated)]" />

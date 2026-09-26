@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
+
 /**
  * En-tête de la vitrine — V2 « Aurora OS ».
  * - transparent en haut de page (le héros aurora passe derrière) ;
@@ -33,9 +35,7 @@ export function VitrineHeader() {
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5" aria-label="Gen3ia — accueil">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--g3-gradient)] bg-[length:160%_100%] text-sm font-black text-white shadow-[0_6px_20px_-6px_rgba(124,92,255,0.8)]">
-            G3
-          </span>
+          <Gen3iaLogo size={36} alt="" />
           <span className="font-[family-name:var(--font-display)] text-sm font-bold tracking-tight text-[var(--g3-text)]">Gen3ia</span>
         </Link>
         <nav aria-label="Navigation vitrine" className="hidden items-center gap-1.5 md:flex">

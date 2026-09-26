@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/firebase/auth-client";
 import { RuntimePlanSchema, validateDAG, type RuntimePlan, type RuntimeStep } from "@/lib/agents/runtime/types-and-dag";
+import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 
 type WorkspaceTask = {
   id: string;
@@ -336,7 +337,10 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
     <section className="g3-workspace-task" aria-label="Workspace task">
       <div className="g3-workspace-task-head">
         <div>
-          <div className="g3-eyebrow">WORKSPACE TASK</div>
+          <div className="g3-eyebrow flex items-center gap-2">
+            <Gen3iaLogo size={22} working={task.status === "running"} alt="" />
+            WORKSPACE TASK
+          </div>
           <h2>{task.objective}</h2>
           <p>Plan préparé par Gen3ia · {STATUS[task.status] ?? task.status}</p>
         </div>

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authFetch, logout, useAuth } from "@/lib/firebase/auth-client";
 
+import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 import { CommandPalette } from "./command-palette";
@@ -135,7 +136,7 @@ export function AppNav() {
         <div className="flex h-full flex-col">
           <div className="g3-nav-header">
             <Link href="/studio" className="g3-brand" onClick={() => setOpen(false)}>
-              <span className="g3-brand-mark">G3</span>
+              <span className="g3-brand-mark"><Gen3iaLogo size={31} alt="" /></span>
               {!compact && <span className="g3-brand-name">Gen3ia</span>}
             </Link>
             <button

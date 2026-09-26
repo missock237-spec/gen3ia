@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { AppDownloads } from "@/components/home/app-downloads";
 import { VitrineHeader } from "@/components/home/vitrine-header";
+import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 
 /**
  * Vitrine Gen3ia — VERSION 2 « Aurora OS ».
@@ -756,7 +757,7 @@ export default function HomePage() {
           <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <Link href="/" className="flex items-center gap-2.5">
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--g3-gradient)] bg-[length:160%_100%] text-sm font-black text-white shadow-[0_6px_20px_-6px_rgba(124,92,255,0.8)]">G3</span>
+                <Gen3iaLogo size={36} alt="" />
                 <span className="font-[family-name:var(--font-display)] text-sm font-bold">Gen3ia</span>
               </Link>
               <p className="mt-3 font-[family-name:var(--font-display)] text-xl font-medium text-[var(--g3-text)]">La meilleure façon de travailler avec l’IA</p>

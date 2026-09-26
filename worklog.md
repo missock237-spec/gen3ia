@@ -585,3 +585,20 @@ Stage Summary:
 - Production gen3ia.online = commit 40c83f8, READY — 12/12 e2e verts.
 - La fonctionnalité ARTEFACTS demandée est réelle : « agent ia, crée une page web de liste de tâches en mode sombre, écrite en React » produit une application complète + un LIEN WEB cliquable qui rend le code directement dans le navigateur (aperçu privé, sandboxé, partageable au propriétaire). L'analyse de données génère de vrais graphiques (export PNG/JPG intégré, conclusions) à partir des fichiers importés ou des valeurs énoncées ; la rédaction exporte en pdf/docx ; AI Slides produit des pptx à modèles professionnels téléchargeables — le tout déclenché en langage naturel depuis la conversation, avec l'arrêt des agents à tout moment déjà en place (tâche précédente) et les délimitations d'espace toujours absentes.
 - EN ATTENTE : les 3 images du logo ne sont toujours pas parvenues au serveur — re-upload nécessaire pour l'intégration du logo officiel.
+
+---
+Task ID: 34-G
+Agent: Super Z (principal)
+Task: « Futuristic AI SaaS app icon, black rounded-square background, abstract neural network symbol, central circular ring with purple-magenta-cyan gradient, small white dot in the center, three colored nodes... » — Créer ce logo, en faire le logo officiel de gen3ia, et l'afficher pendant l'exécution d'une tâche dans le projet.
+
+Work Log:
+- CRÉATION DU LOGO : les images jointes n'étant jamais parvenues au serveur, l'utilisateur a fourni un PROMPT TEXTE décrivant précisément le logo. Génération IA (1024×1024) conforme à la description : fond noir arrondi, anneau central dégradé magenta-cyan, point blanc au centre, nœuds colorés reliés par des lignes épaisses, orbite pointillée indigo, symétrique, sans texte. Master sauvegardé : public/gen3ia-logo.png.
+- DÉCLINAISONS (scripts/gen3ia_make_icons.py, PIL/Lanczos) : favicon-16/32, icon-192/512, apple-touch-icon 180, maskable-512 (logo 80 % centré sur fond #05060C, zone de sûreté PWA), + app/favicon.ico multi-tailles 16/32/48 (convention Next.js app/, absent auparavant).
+- COMPOSANT PARTAGÉ components/brand/gen3ia-logo.tsx — source unique de vérité : <Gen3iaLogo size working /> ; prop `working` = halo pulsé magenta-cyan (animation CSS 1,5 s, prefers-reduced-motion respecté).
+- REMPLACEMENT DES 6 PLACEHOLDERS « G3 »/« G » : navigation latérale (app-nav .g3-brand-mark), en-tête vitrine (vitrine-header), pages d'authentification (auth-aurora-aside), marketplace (marketplace-hub), espace développeur (developer-shell), pied de page vitrine (app/page.tsx). Le JSON-LD schema.org (page.tsx:74 /icons/icon-192.png) pointe automatiquement vers le nouveau visuel.
+- LOGO PENDANT L'EXÉCUTION (demande explicite) : bulle streaming + bulle « Gen3ia travaille… » (message-thread), en-tête de timeline d'exécution quand run.status === "running" (run-timeline), panneau WORKSPACE TASK avec halo quand la tâche est running (workspace-task-panel), bulle d'analyse du chat d'agent (agent-chat-panel) — partout où un agent travaille, le logo s'affiche et pulse.
+- CACHE-BUSTING : ?v=g3-logo-1 sur les icônes de metadata.icons (layout.tsx) et du manifest PWA (icônes + raccourcis) pour que les visiteurs existants reçoivent le nouveau logo.
+- QUALITÉ : typecheck 0 ; lint 0 ; vitest 608 verts / 76 fichiers ; build OK.
+
+Stage Summary:
+- Le logo officiel Gen3ia existe (généré depuis la description de l'utilisateur), décliné en favicon.ico + 6 icônes PWA/Apple, intégré dans les 6 emplacements de marque de l'interface, et affiché avec halo pulsé pendant l'exécution des tâches d'agents (conversations, timelines, tâches workspace, chats d'agents).

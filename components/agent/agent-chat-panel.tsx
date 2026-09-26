@@ -8,6 +8,7 @@ import type { MentionItem } from "@/lib/ui/command-composer-helpers";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import { Callout } from "@/components/studio/callout";
 import { labelForAgent } from "@/lib/agents/charter";
+import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import type { AgentSummary } from "@/lib/agents/schema";
 import type { AuthorizationMode } from "@/lib/security/authorization-mode";
 
@@ -582,6 +583,7 @@ export function AgentChatPanel({
 
             {loading && (
               <div className="mr-auto flex items-center gap-3 rounded-2xl border border-white/10 bg-[var(--g3-elevated)] px-4 py-3 text-xs text-[var(--g3-faint)]">
+                <Gen3iaLogo size={26} working alt="" />
                 <span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-primary-strong)]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-magenta)] [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-secondary)] [animation-delay:240ms]" /></span>
                 J&apos;analyse votre demande — réponse ou exécution selon le besoin…
                 <button

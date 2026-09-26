@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { RUN_STATUS_LABELS, RUN_STATUS_STYLES, STEP_STATUS_LABELS, STEP_STATUS_MARKS } from "./labels";
 import type { ConversationRun, RunStep } from "@/lib/domain/conversations/types";
+import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 
 /**
  * Timeline d'exécution — blocs repliables affichés dans la conversation :
@@ -68,7 +69,11 @@ export function RunTimeline({ run, compact = false }: RunTimelineProps) {
     <div className="my-2 overflow-hidden rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)]/70" data-run-id={run.id}>
       <div className="flex items-center justify-between gap-2 border-b border-[var(--g3-border)] bg-[var(--g3-elevated)]/70 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="g3-side-icon shrink-0" aria-hidden>◷</span>
+          {run.status === "running" ? (
+            <Gen3iaLogo size={18} working alt="" />
+          ) : (
+            <span className="g3-side-icon shrink-0" aria-hidden>◷</span>
+          )}
           <p className="truncate text-xs font-medium text-[var(--g3-text-secondary)]">{run.objective}</p>
         </div>
         <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${RUN_STATUS_STYLES[run.status]}`}>

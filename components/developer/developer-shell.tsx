@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { navPrimaryFor } from "@/components/shells/nav-registry";
 import { BackToWorkspace } from "@/components/shells/permission-notice";
 import { useDeveloper } from "@/components/developer/developer-context";
+import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 
 /**
  * DeveloperShell — shell partagé de l'espace développeur (architecture à 3
@@ -27,7 +28,7 @@ export function DeveloperShell({ children }: { children: ReactNode }) {
       <div className="mx-auto flex min-h-full max-w-[1500px] flex-col lg:flex-row">
         <aside className="w-full border-b bg-[var(--g3-deep)] p-4 text-white lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r lg:p-5">
           <Link href="/studio" className="flex items-center gap-2 text-lg font-bold">
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--g3-surface)] text-black">G</span> Gen3ia
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--g3-surface)] overflow-hidden"><Gen3iaLogo size={32} alt="" /></span> Gen3ia
           </Link>
           <div className="mt-1 text-[10px] uppercase tracking-[.25em] text-[var(--g3-muted)]">Developer Studio</div>
 

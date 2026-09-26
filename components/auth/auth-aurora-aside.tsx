@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
+
 /**
  * Panneau Aurora des pages d'authentification V2 : moitié gauche décorative
  * (espace profond, halos animés, promesse produit) — masquée sur mobile.
@@ -16,9 +18,7 @@ export function AuthAuroraAside() {
 
       {/* Marque */}
       <Link href="/" className="relative flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--g3-gradient)] bg-[length:160%_100%] text-sm font-black text-white shadow-[0_8px_24px_-8px_rgba(124,92,255,0.8)]">
-          G3
-        </span>
+        <Gen3iaLogo size={40} alt="" />
         <span className="font-[family-name:var(--font-display)] text-lg font-bold text-[var(--g3-text)]">Gen3ia</span>
       </Link>
 

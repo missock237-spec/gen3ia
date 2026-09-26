@@ -7,6 +7,7 @@ import { RunTimeline } from "./run-timeline";
 import { MarkdownContent } from "./markdown";
 import { formatBytes } from "./labels";
 import { LiveAppPreviewButton } from "./artifact-preview";
+import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import type {
   ConversationApproval,
   ConversationArtifact,
@@ -162,8 +163,10 @@ export function MessageThread({
       {liveRun && <RunTimeline run={liveRun} />}
 
       {streaming && (
-        <div aria-live="polite">
-          <article className="mr-auto max-w-[92%] rounded-2xl rounded-bl-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3 text-sm text-[var(--g3-text)]">
+        <div aria-live="polite" className="mr-auto flex items-start gap-2">
+          <Gen3iaLogo size={28} working alt="" className="mt-1" />
+          <div className="min-w-0 max-w-[92%]">
+            <article className="rounded-2xl rounded-bl-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3 text-sm text-[var(--g3-text)]">
             {streamingContent.length > 0 ? (
               <div className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                 <MarkdownContent content={streamingContent} />
@@ -189,11 +192,13 @@ export function MessageThread({
               {streamingStatus}
             </p>
           )}
+          </div>
         </div>
       )}
 
       {generating && !streaming && (
         <div className="mr-auto flex items-center gap-2 rounded-2xl rounded-bl-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3" aria-live="polite">
+          <Gen3iaLogo size={26} working alt="" />
           <span className="g3-dots" aria-hidden>
             <span /><span /><span />
           </span>
