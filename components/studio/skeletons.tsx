@@ -32,28 +32,6 @@ export function AgentGridSkeleton({ count = 4 }: { count?: number }) {
     </div>
   );
 }
-
-export function ScheduleCardSkeleton() {
-  return (
-    <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] p-4" aria-hidden="true">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="h-4.5 w-1/2 animate-pulse rounded bg-[var(--g3-elevated)]/80" />
-          <div className="h-3 w-1/3 animate-pulse rounded bg-[var(--g3-elevated)]/60" />
-        </div>
-        <div className="h-6 w-16 animate-pulse rounded-full bg-[var(--g3-elevated)]/60" />
-      </div>
-      <div className="mt-3 h-3.5 w-full animate-pulse rounded bg-[var(--g3-elevated)]/50" />
-      <div className="mt-2 h-3.5 w-2/3 animate-pulse rounded bg-[var(--g3-elevated)]/50" />
-      <div className="mt-4 flex gap-2">
-        <div className="h-8 w-28 animate-pulse rounded-lg bg-[var(--g3-surface)]" />
-        <div className="h-8 w-24 animate-pulse rounded-lg bg-[var(--g3-surface)]" />
-        <div className="h-8 w-24 animate-pulse rounded-lg bg-[var(--g3-surface)]" />
-      </div>
-    </div>
-  );
-}
-
 export function ResultCardSkeleton() {
   return (
     <div className="g3-card overflow-hidden" aria-hidden="true">

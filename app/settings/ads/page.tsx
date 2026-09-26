@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { FeatureAuthGate } from "@/components/auth/feature-auth-gate";
-import { SettingsAdSpace } from "@/components/settings/settings-ad-space";
+import { SettingsAdsGallery } from "@/components/settings/settings-ads-gallery";
 import { authFetch } from "@/lib/firebase/auth-client";
 
 /**
@@ -68,8 +68,8 @@ function AdsSettingsContent() {
           </Link>
           <h1 className="mt-3 font-serif text-3xl font-semibold tracking-tight md:text-4xl">Publicité</h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--g3-muted)]">
-            Visualisez les annonces diffusées sur Gen3ia et choisissez de les afficher ou non. Les campagnes sont gérées
-            depuis l&apos;espace administrateur : dès qu&apos;une publicité est mise en place, elle apparaît ici.
+            Visualisez toutes les annonces diffusées sur Gen3ia et choisissez de les afficher ou non. Chaque campagne
+            active apparaît ici pour tous les utilisateurs, avec un contrôle par compte.
           </p>
         </header>
 
@@ -96,13 +96,13 @@ function AdsSettingsContent() {
         </section>
 
         <section className="mt-6" aria-labelledby="ads-current-title">
-          <h2 id="ads-current-title" className="mb-3 text-sm font-bold uppercase tracking-wider text-[var(--g3-muted)]">Annonce en cours de diffusion</h2>
+          <h2 id="ads-current-title" className="mb-3 text-sm font-bold uppercase tracking-wider text-[var(--g3-muted)]">Annonces en cours de diffusion</h2>
           {adsEnabled === false ? (
             <p className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-5 py-6 text-sm text-[var(--g3-muted)]">
               La publicité est désactivée sur votre compte. Réactivez-la ci-dessus pour voir les annonces.
             </p>
           ) : (
-            <SettingsAdSpace />
+            <SettingsAdsGallery />
           )}
         </section>
       </main>

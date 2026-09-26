@@ -14,6 +14,17 @@ const withBundleAnalyzer =
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Les sous-services (tâches planifiées, workflows, automatisations) sont
+  // exécutés par les agents IA : l'utilisateur décrit son besoin en langage
+  // naturel dans la conversation. Les anciennes pages redirigent donc vers
+  // l'espace de conversation, point d'entrée unique de l'exécution.
+  async redirects() {
+    return [
+      { source: "/studio/schedules", destination: "/workspace/conversations", permanent: false },
+      { source: "/studio/automations", destination: "/workspace/conversations", permanent: false },
+      { source: "/workspace/workflows", destination: "/workspace/conversations", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

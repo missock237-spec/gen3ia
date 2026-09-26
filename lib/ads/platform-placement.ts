@@ -83,6 +83,11 @@ export async function listPlatformAds(placement?: string): Promise<PlatformAd[]>
     .sort((a, b) => b.priority - a.priority || b.updatedAtMs - a.updatedAtMs);
 }
 
+/** Annonces réellement diffusables : activées et dans leur fenêtre de diffusion. */
+export async function listEligiblePlatformAds(placement: string, nowMs = Date.now()): Promise<PlatformAd[]> {
+  return (await listPlatformAds(placement)).filter((ad) => isCurrentlyEligible(ad, nowMs));
+}
+
 function isCurrentlyEligible(ad: PlatformAd, nowMs: number): boolean {
   return ad.enabled && (!ad.startsAtMs || ad.startsAtMs <= nowMs) && (!ad.endsAtMs || ad.endsAtMs > nowMs);
 }

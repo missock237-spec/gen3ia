@@ -21,8 +21,6 @@ const STUDIO_TOOLS = [
   { href: "/studio/calls", label: "Appels" },
   { href: "/studio/console", label: "Console" },
   { href: "/studio/interface-lab", label: "Atelier d'Interfaces" },
-  { href: "/studio/schedules", label: "Planifications" },
-  { href: "/studio/automations", label: "Automatisations" },
 ] as const;
 
 export function WorkspaceShell() {

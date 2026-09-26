@@ -94,16 +94,6 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     section: "primary",
     keywords: ["knowledge", "connaissances", "documents", "rag", "recherche", "embeddings", "wiki"],
   },
-  {
-    id: "workflows",
-    href: "/workspace/workflows",
-    label: "Workflows",
-    icon: "⎇",
-    description: "Graphes d'automatisation exécutables : agents, outils, conditions",
-    contexts: ["workspace"],
-    section: "primary",
-    keywords: ["workflow", "automatisation", "graphe", "nœuds", "scénarios", "workflows"],
-  },
 ];
 
 const WORKSPACE_SECONDARY: NavRoute[] = [
@@ -111,7 +101,6 @@ const WORKSPACE_SECONDARY: NavRoute[] = [
   { id: "team", href: "/team", label: "Équipe", icon: "◎", description: "Membres, rôles et activité partagée", contexts: ["workspace"], section: "secondary", keywords: ["équipe", "membres", "rôles"] },
   { id: "live", href: "/live", label: "Agent Live", icon: "◉", description: "Contrôler un poste de travail", contexts: ["workspace"], section: "secondary", keywords: ["live", "pc"] },
   { id: "marketplace", href: "/marketplace", label: "Marketplace", icon: "◇", description: "Ajouter des capacités à vos agents", contexts: ["workspace"], section: "secondary", keywords: ["marketplace", "extensions"] },
-  { id: "schedules", href: "/studio/schedules", label: "Tâches planifiées", icon: "◷", description: "Exécutions récurrentes de vos agents", contexts: ["workspace"], section: "secondary", keywords: ["planifiées", "cron"] },
   { id: "memory", href: "/memory", label: "Mémoire permanente", icon: "◆", description: "Souvenirs et connaissances des agents", contexts: ["workspace"], section: "secondary", keywords: ["mémoire", "knowledge"] },
   { id: "billing", href: "/billing", label: "Facturation", icon: "₣", description: "Abonnements et consommation", contexts: ["workspace"], section: "secondary", keywords: ["facturation", "abonnement"] },
   { id: "settings", href: "/settings", label: "Paramètres", icon: "⚙", description: "Compte, sécurité, numéros et préférences", contexts: ["workspace"], section: "secondary", keywords: ["paramètres", "compte"] },

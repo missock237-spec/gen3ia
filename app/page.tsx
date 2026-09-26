@@ -128,7 +128,7 @@ const CAPABILITIES = [
   { href: "/live", label: "Agent Live", icon: "M2 3h20v14H2zM8 21h8M12 17v4" },
   { href: "/marketplace", label: "Marketplace", icon: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4H6Z" },
   { href: "/studio/interface-lab", label: "Interfaces pro", icon: "m8 6-6 6 6 6M16 6l6 6-6 6" },
-  { href: "/studio/schedules", label: "Planification", icon: "M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" },
+  { href: "/workspace/conversations", label: "Planification", icon: "M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" },
   { href: "/storage", label: "Stockage", icon: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2Z" },
   { href: "/team", label: "Équipes", icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" },
   { href: "/developer", label: "Développeurs", icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
@@ -145,8 +145,8 @@ const SOLUTIONS = [
   },
   {
     title: "Créateurs de contenu",
-    text: "Scripts, visages de marque, carrousels et publications planifiées : décrivez une idée, l'agent produit, vous validez, tout part au bon moment.",
-    href: "/studio/schedules",
+    text: "Scripts, visages de marque, carrousels et publications planifiées : décrivez une idée en langage naturel, l'agent produit, planifie et publie, vous validez.",
+    href: "/workspace/conversations",
     cta: "Planifier du contenu",
     icon: "M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z",
   },
@@ -774,7 +774,7 @@ export default function HomePage() {
                   </li>
                 ))}
                 <li><Link href="/studio/interface-lab" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Atelier d&apos;Interfaces</Link></li>
-                <li><Link href="/studio/schedules" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Planification</Link></li>
+                <li><Link href="/workspace/conversations" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Planification</Link></li>
               </ul>
             </nav>
             <nav aria-label="Espaces">

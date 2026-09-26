@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
-import { choosePlatformAd, recordPlatformAdEvent } from "@/lib/ads/platform-placement";
+import { choosePlatformAd, listEligiblePlatformAds, recordPlatformAdEvent } from "@/lib/ads/platform-placement";
 import { errorStatus } from "@/lib/security/http-errors";
 
 const Query = z.object({
   placement: z.string().trim().min(1).max(80).default("settings"),
+  /** mode=all : renvoie TOUTES les annonces éligibles (galerie de l'espace publicitaire). */
+  mode: z.enum(["single", "all"]).default("single"),
 });
 
 const EventSchema = z.object({
@@ -20,15 +22,29 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     const user = await requireUser(request);
+    const url = new URL(request.url);
     const parsed = Query.safeParse({
-      placement: new URL(request.url).searchParams.get("placement") ?? "settings",
+      placement: url.searchParams.get("placement") ?? "settings",
+      mode: url.searchParams.get("mode") ?? "single",
     });
     if (!parsed.success) return NextResponse.json({ error: "Placement invalide." }, { status: 400 });
+    const { placement, mode } = parsed.data;
 
-    const ad = await choosePlatformAd(parsed.data.placement);
+    if (mode === "all") {
+      const ads = await listEligiblePlatformAds(placement);
+      const list = ads.length > 0 ? ads : [await choosePlatformAd(placement)];
+      await Promise.all(
+        list.map((ad) =>
+          recordPlatformAdEvent({ adId: ad.id, placement, type: "impression", userId: user.uid }).catch(() => undefined),
+        ),
+      );
+      return NextResponse.json({ ads: list }, { headers: { "cache-control": "no-store" } });
+    }
+
+    const ad = await choosePlatformAd(placement);
     void recordPlatformAdEvent({
       adId: ad.id,
-      placement: parsed.data.placement,
+      placement,
       type: "impression",
       userId: user.uid,
     }).catch(() => undefined);

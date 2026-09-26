@@ -26,6 +26,18 @@ export function SettingsAdSpace() {
     let cancelled = false;
     void (async () => {
       try {
+        // Préférence utilisateur : adsEnabled === false masque les espaces publicitaires.
+        const prefsRes = await authFetch("/api/settings/preferences", { cache: "no-store" });
+        if (prefsRes.ok) {
+          const prefs = await prefsRes.json();
+          if (prefs.adsEnabled === false) {
+            if (!cancelled) {
+              setAd(null);
+              setLoading(false);
+            }
+            return;
+          }
+        }
         const response = await authFetch("/api/ads/placement?placement=settings", { cache: "no-store" });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Publicité indisponible.");
