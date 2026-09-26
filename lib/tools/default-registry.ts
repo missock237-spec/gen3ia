@@ -39,6 +39,18 @@ import {
   cloudflareZonesListTool,
 } from "@/lib/integrations/cloudflare/tools";
 import { customApiCallTool, customApiWriteTool } from "@/lib/integrations/custom-apis/tool";
+import {
+  scheduleCreateTool,
+  scheduleListTool,
+  scheduleUpdateTool,
+  scheduleDeleteTool,
+} from "@/lib/tools/schedules";
+import {
+  workflowCreateTool,
+  workflowListTool,
+  workflowRunTool,
+  workflowDeleteTool,
+} from "@/lib/tools/workflows";
 
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -73,6 +85,18 @@ export function createDefaultToolRegistry(): ToolRegistry {
   // (« aucune API personnelle ») tant que l'utilisateur n'en a pas fourni.
   registry.register(customApiCallTool);
   registry.register(customApiWriteTool);
+  // Tâches planifiées & workflows : toujours enregistrés — la conversation et
+  // les agents peuvent créer, lister, modifier, exécuter ou supprimer ces
+  // automatisations RÉELLES en langage naturel (échec propre si la cible
+  // n'existe pas encore).
+  registry.register(scheduleCreateTool);
+  registry.register(scheduleListTool);
+  registry.register(scheduleUpdateTool);
+  registry.register(scheduleDeleteTool);
+  registry.register(workflowCreateTool);
+  registry.register(workflowListTool);
+  registry.register(workflowRunTool);
+  registry.register(workflowDeleteTool);
   if (process.env.GITHUB_TOKEN) registry.register(githubCreateRepositoryTool);
   if (process.env.ELEVENLABS_API_KEY) {
     registry.register(voiceSpeakTool);

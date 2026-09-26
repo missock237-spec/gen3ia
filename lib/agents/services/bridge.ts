@@ -37,6 +37,15 @@ export const PROJECT_SERVICE_TOOLS: string[] = [
   // l'utilisateur — l'écriture (custom_api.write) reste gated par activation
   // + validation humaine.
   "custom_api.call",
+  // Sous-services du projet sous autorité des agents : les agents peuvent
+  // créer/lister/modifier les tâches planifiées et les workflows de leur
+  // propriétaire (suppressions = risque high → validation humaine).
+  "schedule.create",
+  "schedule.list",
+  "schedule.update",
+  "workflow.create",
+  "workflow.list",
+  "workflow.run",
 ];
 
 export interface ProjectServiceDescriptor {
@@ -109,6 +118,16 @@ export const PROJECT_SERVICES: ProjectServiceDescriptor[] = [
     tools: ["email.send"],
     service: "Email",
     usage: "Envoyer un email transactionnel au nom de la plateforme.",
+  },
+  {
+    tools: ["schedule.create", "schedule.list", "schedule.update"],
+    service: "Tâches planifiées",
+    usage: "Créer une automatisation récurrente RÉELLE (l'agent s'exécutera selon la récurrence demandée : jours + fenêtre horaire, webhook ou veille). Exemple : l'utilisateur dit « chaque lundi à 9h… » → étape toolName='schedule.create' avec daysOfWeek/startTime/objective repris EXACTEMENT de sa demande.",
+  },
+  {
+    tools: ["workflow.create", "workflow.list", "workflow.run"],
+    service: "Workflows",
+    usage: "Créer et exécuter des automatisations multi-étapes RÉELLES (graphe d'agents enchaînés). Exemple : « crée un workflow en 3 étapes… » → étape toolName='workflow.create' avec steps repris de la demande.",
   },
 ];
 

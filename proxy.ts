@@ -8,13 +8,19 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  // Firebase Auth (connexion Google/GitHub) : l'iframe d'événements
+  // (authDomain/__/auth/iframe, usegapi=1) charge gapi depuis
+  // apis.google.com DANS le contexte héritant cette politique — un
+  // script-src restreint produisait auth/internal-error sur TOUS les
+  // logins OAuth (bug 07-2025). gstatic + googleapis : Google Identity
+  // Services et reCAPTCHA (téléphonie).
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://www.googleapis.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
   "media-src 'self' blob: https:",
   "connect-src 'self' https: wss:",
-  "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.firebaseio.com",
+  "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.firebaseio.com https://content.googleapis.com",
   "worker-src 'self' blob:",
   "upgrade-insecure-requests",
 ].join('; ');

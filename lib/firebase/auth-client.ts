@@ -73,12 +73,45 @@ function doitUtiliserRedirection(): boolean {
   return estMobile;
 }
 
+/**
+ * Codes d'erreur qui imposent le repli automatique vers la connexion par
+ * redirection : la fenêtre popup n'est pas disponible (bloquée, webview,
+ * stockage tiers refusé). Firebase recommande ce fallback officiel.
+ */
+const POPUP_FALLBACK_CODES = new Set([
+  "auth/popup-blocked",
+  "auth/operation-not-supported-in-this-environment",
+  "auth/popup-unsupported",
+]);
+
+function codeDe(error: unknown): string {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code: unknown }).code)
+    : "";
+}
+
+/**
+ * Connexion OAuth avec stratégie complète :
+ *  1. Popup (desktop) — rapide, sans quitter la page ;
+ *  2. Repli AUTOMATIQUE en redirection si la popup est indisponible ;
+ *  3. Redirection directe sur mobile (doitUtiliserRedirection).
+ * Le résultat de redirection est traité par completerConnexionRedirect
+ * au retour sur /login.
+ */
 export async function signInWithGoogle(): Promise<User> {
   if (doitUtiliserRedirection()) {
     await signInWithRedirect(auth, googleProvider);
     throw new Error("REDIRECTION_EN_COURS");
   }
-  return (await signInWithPopup(auth, googleProvider)).user;
+  try {
+    return (await signInWithPopup(auth, googleProvider)).user;
+  } catch (error) {
+    if (POPUP_FALLBACK_CODES.has(codeDe(error))) {
+      await signInWithRedirect(auth, googleProvider);
+      throw new Error("REDIRECTION_EN_COURS");
+    }
+    throw error;
+  }
 }
 
 export async function signInWithGitHub(): Promise<User> {
@@ -86,7 +119,15 @@ export async function signInWithGitHub(): Promise<User> {
     await signInWithRedirect(auth, githubProvider);
     throw new Error("REDIRECTION_EN_COURS");
   }
-  return (await signInWithPopup(auth, githubProvider)).user;
+  try {
+    return (await signInWithPopup(auth, githubProvider)).user;
+  } catch (error) {
+    if (POPUP_FALLBACK_CODES.has(codeDe(error))) {
+      await signInWithRedirect(auth, githubProvider);
+      throw new Error("REDIRECTION_EN_COURS");
+    }
+    throw error;
+  }
 }
 
 /**
@@ -121,10 +162,18 @@ export function traduireErreurAuth(error: unknown): string {
     case "auth/invalid-login-credentials": return "Email ou mot de passe incorrect.";
     case "auth/too-many-requests": return "Trop de tentatives. Veuillez reessayer dans quelques minutes.";
     case "auth/unauthorized-domain": return "Ce domaine n'est pas autorise pour l'authentification. Ajoutez gen3ia.online (et www.gen3ia.online) dans la console Firebase (Authentication -> Settings -> Authorized domains).";
-    case "auth/internal-error": return "Erreur interne Firebase. Verifiez que gen3ia.online est bien autorise dans la console Firebase (domaines autorises), puis reessayez.";
-    case "auth/popup-blocked": return "Le navigateur a bloque la fenetre de connexion. Autorisez les popups ou reessayez.";
-    case "auth/popup-closed-by-user": return "Fenetre de connexion fermee avant la fin. Veuillez reessayer.";
-    case "auth/cancelled-popup-request": return "Une seule fenetre de connexion peut etre ouverte a la fois. Veuillez reessayer.";
+    case "auth/internal-error": {
+      // Le message brut Firebase est affiché en complément : il contient la
+      // cause réelle (domaine non autorisé, fournisseur désactivé…) et
+      // évite les diagnostics à l'aveugle côté support.
+      const brut = error instanceof Error && error.message && error.message !== code
+        ? ` (${error.message.slice(0, 300)})`
+        : "";
+      return `Erreur interne Firebase pendant la connexion. Verifiez que gen3ia.online est bien autorise dans la console Firebase, puis reessayez.${brut}`;
+    }
+    case "auth/popup-blocked": return "Le navigateur a bloqué la fenêtre de connexion. Autorisez les popups ou reessayez — la connexion par redirection est tentée automatiquement.";
+    case "auth/popup-closed-by-user": return "Fenêtre de connexion fermée avant la fin. Veuillez reessayer.";
+    case "auth/cancelled-popup-request": return "Une seule fenêtre de connexion peut etre ouverte a la fois. Veuillez reessayer.";
     case "auth/user-disabled": return "Ce compte a ete desactive.";
     case "auth/network-request-failed": return "Erreur reseau : verifiez votre connexion internet.";
     case "auth/operation-not-allowed": return "La connexion par email/mot de passe n'est pas encore activee sur ce projet.";

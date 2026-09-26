@@ -23,6 +23,14 @@ import {
 import { detectApiProvisioning, extractApiPathFromMessage, extractApiUsageName, looksLikeApiUsageRequest } from "@/lib/integrations/custom-apis/detect";
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
 import { loadImportedFilesContext } from "@/lib/files/import";
+import {
+  detectScheduleIntent,
+  detectServiceControlIntent,
+  detectWorkflowIntent,
+  type ScheduleIntent,
+  type ServiceControlIntent,
+  type WorkflowIntent,
+} from "./service-intents";
 
 import {
   appendMessage,
@@ -140,6 +148,8 @@ export function estimatedCostForTool(toolName: string): string {
   if (toolName === "phone.call") return "selon destination (~0,02 €/min)";
   if (toolName.startsWith("composio.") || toolName.startsWith("mcp.")) return "inclus (application connectée)";
   if (toolName.startsWith("custom_api.")) return "gratuit (votre API — quota du fournisseur)";
+  if (toolName === "workflow.run" || (toolName === "workflow.create")) return "gratuit à la création ; exécution facturée selon les modèles";
+  if (toolName.startsWith("schedule.") || toolName.startsWith("workflow.")) return "gratuit";
   return "gratuit";
 }
 
@@ -155,6 +165,11 @@ export function dataScopeForTool(toolName: string, input: unknown): string {
       : undefined;
   if (toolName === "custom_api.call") return `Appel en lecture vers votre API${apiName ? ` « ${apiName} »` : " personnelle"}`;
   if (toolName === "custom_api.write") return `Modification de données dans votre API${apiName ? ` « ${apiName} »` : " personnelle"}`;
+  if (toolName === "schedule.create" || toolName === "schedule.update") return "Vos tâches planifiées (automatisations d'agents)";
+  if (toolName === "schedule.delete") return "Suppression définitive d'une automatisation récurrente";
+  if (toolName === "workflow.create") return "Vos workflows (automatisations multi-étapes)";
+  if (toolName === "workflow.run") return "Exécution complète du workflow (modèles facturés)";
+  if (toolName === "workflow.delete") return "Suppression définitive d'un workflow";
   if (toolName === "composio.execute") return `Application connectée${target ? ` « ${target} »` : ""} — action externe`;
   if (toolName === "mcp.call") return "Serveurs MCP connectés (Drive, GitHub, bases de données…)";
   if (toolName === "email.send") return "Destinataire du message + signature plateforme";
@@ -348,6 +363,15 @@ export function buildIntentSystemPrompt(
         "Utilise ces API uniquement si la demande s'y prête ; ne devine jamais un chemin : si le chemin est inconnu, commence par un appel GET sur la racine ou un chemin probable, et restitue le résultat réel.",
       ].join("\n")
     : "";
+  const sousServicesSection = [
+    "",
+    "SOUS-SERVICES DU PROJET (tous pilotables en langage naturel par l'utilisateur) :",
+    "- Tâches planifiées : schedule.create (récurrence hebdomadaire/webhook/veille), schedule.list, schedule.update (activer/désactiver/modifier), schedule.delete (validation requise).",
+    "- Workflows : workflow.create (graphe multi-étapes réel), workflow.list, workflow.run (exécution réelle), workflow.delete (validation requise).",
+    "Si l'utilisateur demande de planifier/automatiser une tâche récurrente : mode=plan avec UN step toolName=\"schedule.create\" et toolInput { objective: \"<exactement ce que l'agent fera>\", daysOfWeek: [1] (0=dimanche…6=samedi déduits de la demande), startTime: \"09:00\", endTime: \"23:59\", name? } — reprends UNIQUEMENT ce qui est énoncé.",
+    "Si l'utilisateur décrit un enchaînement d'automatisation : mode=plan avec UN step toolName=\"workflow.create\" et toolInput { name, steps: [{ name, description }] (les étapes EXACTES énoncées), runNow?: true seulement s'il demande l'exécution immédiate }.",
+    "Si l'utilisateur veut consulter/piloter ses tâches planifiées ou workflows existants : schedule.list / schedule.update (enable: true|false) / workflow.list / workflow.run.",
+  ].join("\n");
   return [
     "Tu es le moteur d'exécution de Gen3ia, une plateforme d'agents avec connecteurs.",
     "Pour chaque demande utilisateur, tu décides :",
@@ -370,6 +394,7 @@ export function buildIntentSystemPrompt(
     project?.privacyRules ? `Règles de confidentialité du projet (impératives) :\n${project.privacyRules}` : "",
     connectorSection,
     customApiSection,
+    sousServicesSection,
     "Réponds UNIQUEMENT avec l'objet JSON conforme au schéma.",
   ]
     .filter(Boolean)
@@ -392,6 +417,8 @@ export interface ConversationTurnInput {
   connectors?: string[];
   /** Mode d'autorisation HITL choisi dans le composer (« Toujours demander ▼ »). */
   authorizationMode?: AuthorizationMode;
+  /** Fuseau horaire du client (IANA) pour les tâches planifiées créées en langage naturel. */
+  timezone?: string;
   /** Émetteur d'événements de flux (streaming NDJSON) — absent = API classique. */
   onEvent?: StreamEventEmitter;
 }
@@ -478,6 +505,47 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const provisioning = detectApiProvisioning(input.message);
   if (provisioning) {
     const result = await runApiProvisioningTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, provisioning });
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+
+  // 1 bis-2) Sous-services sous autorité de l'agent IA : tâches planifiées,
+  // workflows et pilotage (lister, activer, exécuter, supprimer) — détectés
+  // DÉTERMINISTEMENT dans le langage naturel, exécutés via les outils RÉELS
+  // (mêmes services que le Studio). Aucune invention : ce qui est créé en
+  // base reprend exactement la demande.
+  const baseCtx: TurnBase = { ...input, conversation, project, projectId, userMessage, priorHistory };
+  const controle = detectServiceControlIntent(input.message);
+  if (controle) {
+    const result = await runServiceControlTurn(baseCtx, controle);
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+      ...(result.run ? { run: result.run } : {}),
+    });
+    return result;
+  }
+  const scheduleIntent = detectScheduleIntent(input.message);
+  if (scheduleIntent) {
+    const result = await runScheduleIntentTurn(baseCtx, scheduleIntent);
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+  const workflowIntent = detectWorkflowIntent(input.message);
+  if (workflowIntent) {
+    const result = await runWorkflowIntentTurn(baseCtx, workflowIntent);
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,
@@ -980,6 +1048,320 @@ async function runApiProvisioningTurn(ctx: ApiProvisioningTurnContext): Promise<
     approvals: [],
     intent: { mode: "chat", understanding: "Fourniture d'une API personnelle (connecteur créé)." },
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Tours « sous-services sous autorité de l'agent » — tâches planifiées */
+/* et workflows : créés/pilotés RÉELLEMENT depuis le langage naturel.   */
+/* ------------------------------------------------------------------ */
+
+const TZ_FALLBACK = "UTC";
+
+interface ServiceTurnContext extends TurnBase {
+  timezone?: string;
+}
+
+/** Exécute un outil via l'exécuteur standard (politique, audit, quotas). */
+async function executerOutilService(
+  ctx: TurnBase,
+  toolName: string,
+  input: Record<string, unknown>,
+): Promise<{ ok: true; output: unknown } | { ok: false; error: string }> {
+  try {
+    const result = await executeTool({
+      userId: ctx.userId,
+      executionId: `conv_${ctx.conversationId}`,
+      projectId: ctx.projectId,
+      toolName,
+      input,
+      policy: CONVERSATION_EXECUTION_POLICY,
+    });
+    if (!result.success) {
+      return { ok: false, error: result.error ?? "Exécution impossible." };
+    }
+    return { ok: true, output: result.output };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Exécution impossible." };
+  }
+}
+
+function labelJoursFr(days: number[]): string {
+  const tri = [...new Set(days)].sort((a, b) => a - b);
+  if (tri.length === 7) return "tous les jours";
+  if (tri.join(",") === "1,2,3,4,5") return "du lundi au vendredi";
+  if (tri.join(",") === "0,6") return "le week-end";
+  const noms = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+  return tri.map((d) => noms[d] ?? String(d)).join(", ");
+}
+
+async function runScheduleIntentTurn(
+  ctx: ServiceTurnContext,
+  intent: ScheduleIntent,
+): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  await onEvent({ type: "status", phase: "execution", label: "Mise en place de votre tâche planifiée…" });
+
+  const resultat = await executerOutilService(ctx, "schedule.create", {
+    name: intent.name,
+    objective: intent.objective,
+    daysOfWeek: intent.daysOfWeek,
+    startTime: intent.startTime,
+    endTime: intent.endTime,
+    ...(intent.intervalMinutes !== undefined ? { intervalMinutes: intent.intervalMinutes } : {}),
+    timezone: ctx.timezone?.trim() || TZ_FALLBACK,
+  });
+
+  const tz = ctx.timezone?.trim() || TZ_FALLBACK;
+  const content = resultat.ok
+    ? (() => {
+        const output = resultat.output as {
+          schedule?: { id: string; name: string };
+          agent?: { name: string };
+          recurrence?: string;
+        };
+        const schedule = output.schedule;
+        const recurrence = output.recurrence ?? labelJoursFr(intent.daysOfWeek);
+        return [
+          `Tâche planifiée créée : « ${schedule?.name ?? intent.name} »`,
+          `- Récurrence : ${recurrence}${intent.startTime ? ` (fenêtre ${intent.startTime} → ${intent.endTime})` : ""}${intent.intervalMinutes ? `, rappel toutes les ${intent.intervalMinutes} minutes` : ""}`,
+          `- Fuseau : ${tz}`,
+          `- Agent d'exécution : ${output.agent?.name ?? "résolu automatiquement"}`,
+          `- Objectif : ${intent.objective.slice(0, 200)}`,
+          "",
+          "L'agent s'exécutera automatiquement selon cette récurrence (moteur de planification réel). Pour ajuster : « change l'heure de ma tâche planifiée… », « désactive ma tâche… » ou « supprime la tâche planifiée… ».",
+        ].join("\n");
+      })()
+    : `Je n'ai pas pu créer la tâche planifiée : ${resultat.error}`;
+
+  const assistantMessage = await appendMessage({
+    conversationId: ctx.conversationId,
+    userId: ctx.userId,
+    role: "assistant",
+    content,
+    generationStatus: resultat.ok ? "complete" : "failed",
+  });
+  await onEvent({ type: "message_complete", message: assistantMessage });
+  return {
+    conversationId: ctx.conversationId,
+    userMessage: ctx.userMessage,
+    assistantMessage,
+    artifacts: [],
+    approvals: [],
+    intent: { mode: "chat", understanding: "Création réelle d'une tâche planifiée (langage naturel)." },
+  };
+}
+
+async function runWorkflowIntentTurn(
+  ctx: ServiceTurnContext,
+  intent: WorkflowIntent,
+): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  await onEvent({ type: "status", phase: "execution", label: "Construction de votre workflow…" });
+
+  const resultat = await executerOutilService(ctx, "workflow.create", {
+    name: intent.name,
+    objective: intent.objective,
+    steps: intent.steps,
+    ...(intent.runNow ? { runNow: true } : {}),
+  });
+
+  const content = resultat.ok
+    ? (() => {
+        const output = resultat.output as {
+          id: string;
+          name: string;
+          nodeCount: number;
+          steps?: string[];
+          run?: { runId: string; status: string; result?: unknown; error?: string };
+        };
+        const lignes = [
+          `Workflow créé : « ${output.name} » (${output.nodeCount} nœuds, exécutable)`,
+          ...intent.steps.map((step, index) => `- Étape ${index + 1} : ${step.name}`),
+          "",
+          "Il est enregistré dans votre espace : lancez-le depuis la conversation (« exécute le workflow … »), ou modifiez-le dans le Studio.",
+        ];
+        if (output.run) {
+          lignes.push("", `Exécution immédiate : statut ${output.run.status}${output.run.result !== undefined ? ` — résultat : ${JSON.stringify(output.run.result).slice(0, 600)}` : ""}${output.run.error ? ` — erreur : ${output.run.error.slice(0, 300)}` : ""}`);
+        }
+        return lignes.join("\n");
+      })()
+    : `Je n'ai pas pu créer le workflow : ${resultat.error}`;
+
+  const assistantMessage = await appendMessage({
+    conversationId: ctx.conversationId,
+    userId: ctx.userId,
+    role: "assistant",
+    content,
+    generationStatus: resultat.ok ? "complete" : "failed",
+  });
+  await onEvent({ type: "message_complete", message: assistantMessage });
+  return {
+    conversationId: ctx.conversationId,
+    userMessage: ctx.userMessage,
+    assistantMessage,
+    artifacts: [],
+    approvals: [],
+    intent: { mode: "chat", understanding: "Création réelle d'un workflow (langage naturel)." },
+  };
+}
+
+async function runServiceControlTurn(
+  ctx: ServiceTurnContext,
+  controle: ServiceControlIntent,
+): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  const tz = ctx.timezone?.trim() || TZ_FALLBACK;
+
+  // Suppression : action définitive → plan avec validation humaine (HITL).
+  if (controle.action === "delete") {
+    const toolName = controle.target === "schedule" ? "schedule.delete" : "workflow.delete";
+    const intent: TurnIntent = {
+      mode: "plan",
+      understanding:
+        controle.target === "schedule"
+          ? "Suppression d'une tâche planifiée (validation humaine requise)."
+          : "Suppression d'un workflow (validation humaine requise).",
+      objective: `Supprimer ${controle.name ? `« ${controle.name} »` : "l'élément ciblé"}`,
+      steps: [
+        {
+          title: `Supprimer ${controle.target === "schedule" ? "la tâche planifiée" : "le workflow"}${controle.name ? ` « ${controle.name} »` : ""}`,
+          detail: "Action définitive — arrête l'automatisation récurrente correspondante.",
+          toolName,
+          toolInput: controle.name ? { name: controle.name } : {},
+          sensitive: true,
+        },
+      ],
+    };
+    return runPlanTurn({ ...ctx, intent });
+  }
+
+  // Liste des tâches planifiées.
+  if (controle.target === "schedule" && controle.action === "list") {
+    await onEvent({ type: "status", phase: "execution", label: "Consultation de vos tâches planifiées…" });
+    const resultat = await executerOutilService(ctx, "schedule.list", {});
+    const content = !resultat.ok
+      ? `Impossible de consulter vos tâches planifiées : ${resultat.error}`
+      : (() => {
+          const output = resultat.output as {
+            count: number;
+            schedules: Array<{
+              name: string; enabled: boolean; daysOfWeek: number[] | null;
+              startTime: string | null; endTime: string | null; intervalMinutes: number;
+              lastExecutionStatus: string | null;
+            }>;
+          };
+          if (output.count === 0) {
+            return "Vous n'avez aucune tâche planifiée pour le moment. Dites-moi par exemple : « chaque lundi à 9h, prépare-moi un rapport des actualités IA » et je la mets en place.";
+          }
+          return [
+            `Vos tâches planifiées (${output.count}) :`,
+            ...output.schedules.map((s) => {
+              const recurrence = s.daysOfWeek?.length ? labelJoursFr(s.daysOfWeek) : "tous les jours";
+              const fenetre = s.startTime ? ` (${s.startTime} → ${s.endTime ?? "23:59"}${s.intervalMinutes ? `, toutes les ${s.intervalMinutes} min` : ""})` : "";
+              const dernier = s.lastExecutionStatus ? ` — dernière exécution : ${s.lastExecutionStatus}` : "";
+              return `- ${s.enabled ? "●" : "○"} « ${s.name} » — ${recurrence}${fenetre}${dernier}`;
+            }),
+          ].join("\n");
+        })();
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId, userId: ctx.userId, role: "assistant", content,
+      generationStatus: resultat.ok ? "complete" : "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId, userMessage: ctx.userMessage, assistantMessage,
+      artifacts: [], approvals: [],
+      intent: { mode: "chat", understanding: "Liste des tâches planifiées." },
+    };
+  }
+
+  // Liste des workflows.
+  if (controle.target === "workflow" && controle.action === "list") {
+    await onEvent({ type: "status", phase: "execution", label: "Consultation de vos workflows…" });
+    const resultat = await executerOutilService(ctx, "workflow.list", {});
+    const content = !resultat.ok
+      ? `Impossible de consulter vos workflows : ${resultat.error}`
+      : (() => {
+          const output = resultat.output as { count: number; workflows: Array<{ name: string; nodeCount: number }> };
+          if (output.count === 0) {
+            return "Vous n'avez aucun workflow pour le moment. Dites-moi par exemple : « crée un workflow : étape 1 : recherche les tendances, étape 2 : rédige un résumé » et je le construis.";
+          }
+          return [
+            `Vos workflows (${output.count}) :`,
+            ...output.workflows.map((w) => `- « ${w.name} » (${w.nodeCount} nœuds)`),
+            "",
+            "Pour en exécuter un : « exécute le workflow … ».",
+          ].join("\n");
+        })();
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId, userId: ctx.userId, role: "assistant", content,
+      generationStatus: resultat.ok ? "complete" : "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId, userMessage: ctx.userMessage, assistantMessage,
+      artifacts: [], approvals: [],
+      intent: { mode: "chat", understanding: "Liste des workflows." },
+    };
+  }
+
+  // Activation / désactivation d'une tâche planifiée.
+  if (controle.target === "schedule" && (controle.action === "enable" || controle.action === "disable")) {
+    await onEvent({
+      type: "status", phase: "execution",
+      label: controle.action === "enable" ? "Activation de la tâche planifiée…" : "Désactivation de la tâche planifiée…",
+    });
+    const input: Record<string, unknown> = { enable: controle.action === "enable" };
+    if (controle.name) input.name = controle.name;
+    const resultat = await executerOutilService(ctx, "schedule.update", input);
+    const content = resultat.ok
+      ? (() => {
+          const output = resultat.output as { schedule?: { name: string; enabled: boolean } };
+          return `Tâche planifiée « ${output.schedule?.name ?? controle.name ?? ""} » ${output.schedule?.enabled ? "réactivée" : "désactivée"} — ${output.schedule?.enabled ? "elle reprendra sa récurrence" : "elle ne s'exécutera plus"} (fuseau ${tz}).`;
+        })()
+      : `Je n'ai pas pu modifier la tâche planifiée : ${resultat.error}`;
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId, userId: ctx.userId, role: "assistant", content,
+      generationStatus: resultat.ok ? "complete" : "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId, userMessage: ctx.userMessage, assistantMessage,
+      artifacts: [], approvals: [],
+      intent: { mode: "chat", understanding: "Pilotage d'une tâche planifiée." },
+    };
+  }
+
+  // Exécution d'un workflow existant.
+  if (controle.target === "workflow" && controle.action === "run") {
+    await onEvent({ type: "status", phase: "execution", label: "Exécution du workflow…" });
+    const input: Record<string, unknown> = {};
+    if (controle.name) input.name = controle.name;
+    const resultat = await executerOutilService(ctx, "workflow.run", input);
+    const content = resultat.ok
+      ? (() => {
+          const output = resultat.output as { runId: string; status: string; workflow?: { name: string }; result?: unknown; error?: string };
+          return [
+            `Workflow « ${output.workflow?.name ?? controle.name ?? ""} » exécuté — statut : ${output.status}.`,
+            output.result !== undefined ? `Résultat : ${JSON.stringify(output.result).slice(0, 1200)}` : "",
+            output.error ? `Erreur : ${output.error.slice(0, 500)}` : "",
+          ].filter(Boolean).join("\n");
+        })()
+      : `Je n'ai pas pu exécuter le workflow : ${resultat.error}`;
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId, userId: ctx.userId, role: "assistant", content,
+      generationStatus: resultat.ok ? "complete" : "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId, userMessage: ctx.userMessage, assistantMessage,
+      artifacts: [], approvals: [],
+      intent: { mode: "chat", understanding: "Exécution réelle d'un workflow." },
+    };
+  }
+
+  // Repli : le cas n'est pas géré en conversation → tour normal.
+  return runChatTurn({ ...ctx, intent: { mode: "chat", understanding: "Demande générique." } });
 }
 
 /* ------------------------------------------------------------------ */

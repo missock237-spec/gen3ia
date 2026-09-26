@@ -19,7 +19,7 @@ import type {
   MessageAttachment,
 } from "@/lib/domain/conversations/types";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
-import { streamConversationTurn } from "@/lib/domain/conversations/stream-client";
+import { safeClientTimezone, streamConversationTurn } from "@/lib/domain/conversations/stream-client";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 import type { AuthorizationMode } from "@/lib/security/authorization-mode";
 
@@ -248,6 +248,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           projectId,
           connectors,
           authorizationMode,
+          timezone: safeClientTimezone(),
           onEvent: consumeEvent,
         });
       } catch (streamError) {
@@ -262,6 +263,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               projectId,
               ...(connectors.length > 0 ? { connectors } : {}),
               ...(authorizationMode ? { authorizationMode } : {}),
+              ...(safeClientTimezone() ? { timezone: safeClientTimezone() } : {}),
             }),
           });
           if (!response.ok) {

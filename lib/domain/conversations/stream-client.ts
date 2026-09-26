@@ -21,8 +21,24 @@ export interface StreamTurnPayload {
   connectors?: string[];
   /** Mode d'autorisation HITL choisi dans le composer. */
   authorizationMode?: AuthorizationMode;
+  /** Fuseau horaire du client (IANA) pour les sous-services pilotés en langage naturel. */
+  timezone?: string;
   signal?: AbortSignal;
   onEvent: (event: ConversationStreamEvent) => void;
+}
+
+/**
+ * Fuseau horaire IANA du client (usage : tâches planifiées créées en
+ * langage naturel). Jamais une exception : en cas d'environnement exotique,
+ * on renvoie null et le serveur utilisera UTC.
+ */
+export function safeClientTimezone(): string | undefined {
+  try {
+    if (typeof Intl === "undefined") return undefined;
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function streamConversationTurn(payload: StreamTurnPayload): Promise<boolean> {
@@ -35,6 +51,7 @@ export async function streamConversationTurn(payload: StreamTurnPayload): Promis
       ...(payload.projectId ? { projectId: payload.projectId } : {}),
       ...(payload.connectors && payload.connectors.length > 0 ? { connectors: payload.connectors } : {}),
       ...(payload.authorizationMode ? { authorizationMode: payload.authorizationMode } : {}),
+      ...(payload.timezone ? { timezone: payload.timezone } : {}),
     }),
     signal: payload.signal,
     cache: "no-store",
