@@ -72,4 +72,6 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "cloudflare.dns.create", description: "Create a DNS record in an authorized Cloudflare zone.", risk: "external", permission: "tool.external", sideEffect: true },
   { name: "custom_api.call", description: "Appelle RÉELLEMENT (GET) une API personnelle fournie par l'utilisateur et retourne la réponse réelle.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "custom_api.write", description: "Modifie RÉELLEMENT des données via une API personnelle de l'utilisateur (POST/PUT/PATCH/DELETE).", risk: "external", permission: "tool.external", sideEffect: true },
+  { name: "web.api", description: "Appelle RÉELLEMENT (GET) une API publique désignée par URL et retourne la réponse réelle.", risk: "read", permission: "network.read", sideEffect: false },
+  { name: "web.api.write", description: "Modifie RÉELLEMENT des données via une API publique désignée par URL (POST/PUT/PATCH/DELETE).", risk: "external", permission: "tool.external", sideEffect: true },
 ];

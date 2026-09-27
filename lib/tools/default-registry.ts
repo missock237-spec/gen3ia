@@ -39,6 +39,7 @@ import {
   cloudflareZonesListTool,
 } from "@/lib/integrations/cloudflare/tools";
 import { customApiCallTool, customApiWriteTool } from "@/lib/integrations/custom-apis/tool";
+import { webApiTool, webApiWriteTool } from "@/lib/tools/web/api";
 import {
   scheduleCreateTool,
   scheduleListTool,
@@ -85,6 +86,11 @@ export function createDefaultToolRegistry(): ToolRegistry {
   // (« aucune API personnelle ») tant que l'utilisateur n'en a pas fourni.
   registry.register(customApiCallTool);
   registry.register(customApiWriteTool);
+  // API directe par URL : toujours enregistrés — les agents peuvent appeler
+  // n'importe quelle API publique désignée par URL, sans connecteur préalable
+  // (lecture directe, écriture gated par validation humaine).
+  registry.register(webApiTool);
+  registry.register(webApiWriteTool);
   // Tâches planifiées & workflows : toujours enregistrés — la conversation et
   // les agents peuvent créer, lister, modifier, exécuter ou supprimer ces
   // automatisations RÉELLES en langage naturel (échec propre si la cible

@@ -610,6 +610,9 @@ export async function POST(request: NextRequest) {
             ...(connectedUniversal.toolkits.length > 0 ? ["composio.execute"] : []),
             // API personnelles : lecture directe + écriture (validation humaine).
             ...(hasUniversalCustomApis ? ["custom_api.call", "custom_api.write"] : ["custom_api.call"]),
+            // API directe par URL : lecture directe + écriture (validation humaine).
+            "web.api",
+            "web.api.write",
           ]),
         ],
         permissions: [

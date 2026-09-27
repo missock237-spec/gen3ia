@@ -183,6 +183,14 @@ export function dataScopeForTool(toolName: string, input: unknown): string {
       : undefined;
   if (toolName === "custom_api.call") return `Appel en lecture vers votre API${apiName ? ` « ${apiName} »` : " personnelle"}`;
   if (toolName === "custom_api.write") return `Modification de données dans votre API${apiName ? ` « ${apiName} »` : " personnelle"}`;
+  if (toolName === "web.api") {
+    const url = input && typeof input === "object" && "url" in (input as Record<string, unknown>) ? String((input as Record<string, unknown>).url) : undefined;
+    return `Appel en lecture vers l'API${url ? ` ${url}` : " désignée par URL"}`;
+  }
+  if (toolName === "web.api.write") {
+    const url = input && typeof input === "object" && "url" in (input as Record<string, unknown>) ? String((input as Record<string, unknown>).url) : undefined;
+    return `Modification de données via l'API${url ? ` ${url}` : " désignée par URL"}`;
+  }
   if (toolName === "schedule.create" || toolName === "schedule.update") return "Vos tâches planifiées (automatisations d'agents)";
   if (toolName === "schedule.delete") return "Suppression définitive d'une automatisation récurrente";
   if (toolName === "workflow.create") return "Vos workflows (automatisations multi-étapes)";
@@ -249,6 +257,7 @@ export type TurnIntent = z.infer<typeof IntentSchema>;
 export type ExplicitToolIntent =
   | { toolName: "web.search"; query: string }
   | { toolName: "custom_api.call"; query: string }
+  | { toolName: "web.api"; url: string }
   | { toolName: "artifact.create"; document: { title: string; format: "pdf" | "docx" | "xlsx" | "pptx" | "md" } }
   | { toolName: "email.send"; to: string; subject: string; text: string };
 
@@ -309,6 +318,14 @@ export function detectExplicitToolIntent(message: string, catalog: ToolCatalogEn
         ? customApis[0]
         : undefined;
     if (api) return { toolName: "custom_api.call", query: message.slice(0, 400) };
+  }
+
+  // 1 ter) Appel d'API DIRECT par URL : l'utilisateur désigne l'URL d'une API
+  // (avec un verbe d'appel, le mot « API » ou une hôte api.*) — l'agent
+  // appelle RÉELLEMENT cette API, sans connecteur préalable.
+  const directUrl = extractApiUrlFromMessage(message);
+  if (directUrl && catalogNames.has("web.api") && looksLikeDirectApiCall(message, directUrl)) {
+    return { toolName: "web.api", url: directUrl };
   }
 
   // 2 bis) Envoi d'email EXPLICITE : verbe d'envoi + mot email + adresse
@@ -376,6 +393,28 @@ export function extractDocumentFormat(message: string): "pdf" | "docx" | "xlsx" 
   if (/\b(word|docx)\b/i.test(lower)) return "docx";
   if (/\b(markdown|\.md)\b/i.test(lower)) return "md";
   return "pdf";
+}
+
+/**
+ * Extrait la première URL http(s) énoncée (ponctuation finale exclue).
+ * Utilisée par le garde d'appel d'API directe par URL (web.api).
+ */
+export function extractApiUrlFromMessage(message: string): string | null {
+  const match = message.match(/https?:\/\/[^\s<>"'»“”')\]]+/i);
+  if (!match) return null;
+  return match[0].replace(/[.,;:!?]+$/, "");
+}
+
+/**
+ * L'appel d'API direct est-il explicitement demandé ? L'utilisateur désigne
+ * une URL d'API avec un verbe d'appel, le mot « API », ou une hôte de type
+ * api.*. Un simple lien collé sans intention d'appel ne déclenche PAS l'outil.
+ */
+export function looksLikeDirectApiCall(message: string, url: string): boolean {
+  const callVerb = /\b(appell\w*|interrog\w*|consult\w*|requ[eê]t\w*|call|request|fetch|r[ée]cup[ée]r\w*|utilise|tester?|essaie)\b/i;
+  const apiWord = /\bapi\b/i;
+  const apiHost = /(^|\/\/|\.)api\./i.test(url);
+  return apiWord.test(message) || apiHost || callVerb.test(message);
 }
 
 /** Requête condensée pour l'outil de recherche (nettoyage des formules). */
@@ -448,6 +487,15 @@ export function buildIntentSystemPrompt(
         "Ne réponds JAMAIS que tu ne peux pas envoyer d'emails : tu le peux, l'envoi est exécuté par le serveur. N'invente jamais une adresse : utilise uniquement celle que l'utilisateur a énoncée.",
       ].join("\n")
     : "";
+  const directApiSection = catalogNames.has("web.api")
+    ? [
+        "",
+        "API DIRECTES PAR URL (sans connecteur préalable) :",
+        "Si l'utilisateur désigne l'URL d'une API (ou colle une URL d'API) et demande de l'appeler, l'interroger ou l'utiliser : étape toolName=\"web.api\" avec toolInput { url: \"<URL exacte énoncée>\" } — l'appel HTTP réel est exécuté par le serveur et le résultat réel te sera renvoyé.",
+        "Pour modifier des données via une URL d'API : toolName=\"web.api.write\" (POST/PUT/PATCH/DELETE, validation humaine requise).",
+        "N'invente JAMAIS une URL ni une clé : utilise uniquement ce que l'utilisateur a énoncé.",
+      ].join("\n")
+    : "";
   return [
     "Tu es le moteur d'exécution de Gen3ia, une plateforme d'agents avec connecteurs.",
     "Pour chaque demande utilisateur, tu décides :",
@@ -470,6 +518,7 @@ export function buildIntentSystemPrompt(
     project?.privacyRules ? `Règles de confidentialité du projet (impératives) :\n${project.privacyRules}` : "",
     connectorSection,
     customApiSection,
+    directApiSection,
     sousServicesSection,
     artefactsSection,
     emailSection,
@@ -774,6 +823,20 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
             detail: "Appel HTTP réel vers l'API personnelle de l'utilisateur (exécution serveur).",
             toolName: "custom_api.call",
             toolInput: { apiName: extractApiUsageName(input.message) ?? undefined, path: extractApiPathFromMessage(input.message) ?? "" },
+          },
+        ],
+      };
+    } else if (explicit?.toolName === "web.api") {
+      intent = {
+        mode: "plan",
+        understanding: "Appel réel d'une API désignée par URL demandé explicitement.",
+        objective: input.message.slice(0, 400),
+        steps: [
+          {
+            title: "Appel de l'API",
+            detail: "Appel HTTP réel vers l'API publique désignée par l'utilisateur (exécution serveur).",
+            toolName: "web.api",
+            toolInput: { url: explicit.url },
           },
         ],
       };

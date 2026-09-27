@@ -37,6 +37,10 @@ export const PROJECT_SERVICE_TOOLS: string[] = [
   // l'utilisateur — l'écriture (custom_api.write) reste gated par activation
   // + validation humaine.
   "custom_api.call",
+  // API directe par URL : lecture directe (GET) de n'importe quelle API
+  // publique désignée par URL — l'écriture (web.api.write) reste gated par
+  // validation humaine.
+  "web.api",
   // Sous-services du projet sous autorité des agents : les agents peuvent
   // créer/lister/modifier les tâches planifiées et les workflows de leur
   // propriétaire (suppressions = risque high → validation humaine).
@@ -98,6 +102,11 @@ export const PROJECT_SERVICES: ProjectServiceDescriptor[] = [
     tools: ["knowledge.search"],
     service: "Base de connaissances",
     usage: "Chercher dans les documents indexés du projet (recherche vectorielle Qdrant, repli Firestore).",
+  },
+  {
+    tools: ["web.api"],
+    service: "API directe par URL",
+    usage: "Appeler RÉELLEMENT n'importe quelle API publique désignée par URL, sans connecteur préalable. Exemple : l'utilisateur donne https://api.exemple.com/users → étape toolName='web.api' avec input { url }. La réponse réelle (statut + corps, JSON parsé) est restituée.",
   },
   {
     tools: ["composio.execute"],

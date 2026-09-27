@@ -603,3 +603,18 @@ Work Log:
 Stage Summary:
 - Le logo officiel Gen3ia existe (généré depuis la description de l'utilisateur), décliné en favicon.ico + 6 icônes PWA/Apple, intégré dans les 6 emplacements de marque de l'interface, et affiché avec halo pulsé pendant l'exécution des tâches d'agents (conversations, timelines, tâches workspace, chats d'agents).
 - E2E PRODUCTION (scripts/verify_ce2fd05_prod.mjs, déploiement ce2fd05 READY) : 19/19 VERTS — signUp+session réels ; santé ; metadata icons versionnées ?v=g3-logo-1 servies ; img .g3-logo rendu côté serveur sur / (header+footer vitrine) et /login ; favicon.ico 8 055 octets (ICO multi-tailles) ; 6 PNG vérifiés par signature + dimensions IHDR exactes (192/512/512-maskable/32/16/180) ; manifest PWA versionné ; CSS servi contient .g3-logo--working + @keyframes + garde prefers-reduced-motion ; bundles de l'espace de travail contiennent Gen3iaLogo(working) (14 scripts scannés) ; 3 publicités toujours diffusées ; aucune règle "dashed".
+
+---
+Task ID: 35
+Agent: Super Z (principal)
+Task: « Fait en sorte que les interfaces qui sont délimitées ne le soient plus, puis fait en sorte que les agents puissent utiliser une API, appeler une API pour l'utiliser. »
+
+Work Log:
+- DÉLIMITATIONS SUPPRIMÉES (v2, au-delà des pointillés de la tâche 34-I) : règle CSS globale en tête de globals.css — `*, *::before, *::after { border-color: transparent !important; }`. Toute bordure visible (cartes, panneaux, séparateurs, champs) disparaît sur toute la plateforme ; les largeurs de bordure restent (aucun décalage de mise en page), les surfaces/ombres/focus (accessibilité) restent intacts. Cases à cocher natives vérifiées (accent-color, non affectées).
+- API DIRECTE PAR URL (nouveau) : les agents peuvent appeler N'IMPORTE QUELLE API publique désignée par URL, sans connecteur préalable.
+  · Outils lib/tools/web/api.ts : web.api (GET, risque medium → exécution directe) + web.api.write (POST/PUT/PATCH/DELETE, high → validation humaine). Réponse réelle restituée (statut + corps, JSON parsé, 100k tronqué, latence), garde SSRF assertPublicHttpUrl + redirections revalidées (2 hops max), délai 25 s.
+  · Enregistrement : default-registry (toujours enregistrés), registry.ts (métadonnées), tool-permissions.ts (défs sécurité tool.read/network.read + tool.external/network.write).
+  · Moteur de conversation : détection déterministe « URL + verbe d'appel ou mot API ou hôte api.* » (extractApiUrlFromMessage + looksLikeDirectApiCall) → plan 1 étape web.api ; route explicite dans le mode chat ; section prompt « API DIRECTES PAR URL » ; dataScope lisible sur les cartes de validation.
+  · Agents Studio (agent/chat) : web.api + web.api.write ajoutés aux allowedTools du runtime. Tâches workspace (unified-agent) : section prompt API directes. Bridge services : PROJECT_SERVICE_TOOLS + descripteur « API directe par URL ».
+  · Tests : 13 nouveaux (validation schéma, limites en-têtes, garde SSRF localhost/métadonnées, extraction d'URL, intention d'appel).
+- QUALITÉ : typecheck 0 ; lint 0 ; vitest 621 verts ; build OK.

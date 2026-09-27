@@ -1,6 +1,20 @@
 @import "tailwindcss";
 
 /* ============================================================
+   AUCUNE DÉLIMITATION D'INTERFACE (demande explicite utilisateur)
+   Toute bordure visible est neutralisée sur TOUTE la plateforme :
+   cadres de cartes, panneaux, séparateurs, champs — les interfaces
+   ne sont plus délimitées. Le design repose uniquement sur les
+   surfaces (fonds), les ombres douces et l'espacement. Les largeurs
+   de bordure sont conservées (aucun décalage de mise en page), seul
+   le trait visible disparaît. Les états de focus (outline/box-shadow),
+   indispensables à l'accessibilité, restent intacts.
+   ============================================================ */
+*, *::before, *::after {
+  border-color: transparent !important;
+}
+
+/* ============================================================
    GEN3IA — DESIGN SYSTEM V5 « AURORA OS »
    Version 2 de toute l'interface : identité premium née de zéro.
    ------------------------------------------------------------

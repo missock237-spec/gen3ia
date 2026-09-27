@@ -241,6 +241,15 @@ export async function planUniversalAgent(
   }
   const finalSystemPrompt = customApiSection ? `${systemPrompt}\n${customApiSection}` : systemPrompt;
 
+  // API directes par URL : les agents peuvent aussi appeler n'importe quelle
+  // API publique désignée par URL, sans connecteur préalable (web.api /
+  // web.api.write — écriture gated par validation humaine).
+  const directApiSection = [
+    "",
+    "API DIRECTES PAR URL : si l'objectif désigne l'URL d'une API publique à appeler, utilise une étape type \"tool\" avec toolName=\"web.api\" et input { url: \"<URL exacte énoncée>\" } — l'appel HTTP réel est exécuté par le serveur et le résultat réel sera renvoyé. Pour modifier des données via une URL d'API : toolName=\"web.api.write\" (POST/PUT/PATCH/DELETE, validation humaine requise). N'invente jamais une URL.",
+  ].join("\n");
+  const finalSystemPromptWithDirectApi = `${finalSystemPrompt}${directApiSection}`;
+
   const buildUserPrompt = (correctiveHint?: string) =>
     [
       JSON.stringify({ objective: trimmed, availableCapabilities: toolCatalog(catalog) }),
@@ -258,7 +267,7 @@ export async function planUniversalAgent(
     const response = await generate({
       task: "agent",
       messages: [
-        { role: "system", content: finalSystemPrompt },
+        { role: "system", content: finalSystemPromptWithDirectApi },
         { role: "user", content: buildUserPrompt(essai > 1 ? dernierErreur : undefined) },
       ],
       requiresStructuredOutput: true,

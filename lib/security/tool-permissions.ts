@@ -37,6 +37,12 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "cloudflare.dns.create": { name: "cloudflare.dns.create", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   "custom_api.call": { name: "custom_api.call", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "custom_api.write": { name: "custom_api.write", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  // API directe par URL : l'agent appelle n'importe quelle API publique
+  // désignée par URL (garde SSRF côté outil). Lecture directe ; l'écriture
+  // est une action externe gated par validation humaine (risque high porté
+  // par la définition de l'outil dans lib/tools).
+  "web.api": { name: "web.api", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  "web.api.write": { name: "web.api.write", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   // Envoi d'email réel (Resend, côté serveur) : appel réseau externe au nom de
   // la plateforme. Le risque HITL (medium → exécution directe) est porté par
   // la définition de l'outil dans lib/tools, la définition de sécurité ici ne
