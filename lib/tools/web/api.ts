@@ -11,11 +11,11 @@ import type { ToolDefinition } from "../types";
  * (POST/PUT/PATCH/DELETE) est sensible et passe par la validation humaine.
  *
  * Sécurité : garde SSRF (aucune adresse interne/privée), redirections
- * revalidées, délai 25 s, corps tronqué, réponse non-2xx restituée telle
+ * revalidées, délai 60 s, corps tronqué, réponse non-2xx restituée telle
  * quelle (jamais de donnée inventée).
  */
 
-const WEB_API_TIMEOUT_MS = 25_000;
+const WEB_API_TIMEOUT_MS = 60_000;
 /** Corps restitué au modèle (les réponses API peuvent être énormes). */
 export const WEB_API_MAX_BODY_CHARS = 100_000;
 const MAX_REDIRECTS = 2;

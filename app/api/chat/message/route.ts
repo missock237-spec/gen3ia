@@ -13,7 +13,7 @@ import { errorStatus } from "@/lib/security/http-errors";
 
 const Body = z.object({
   conversationId: z.string().min(1).max(128).optional(),
-  message: z.string().trim().min(1).max(20000),
+  message: z.string().trim().min(1).max(200_000),
   provider: z.enum(["groq","openrouter","anthropic","openai","glm","agnes","huggingface"]).optional(),
   model: z.string().trim().max(200).optional(),
   temperature: z.number().min(0).max(2).optional(),

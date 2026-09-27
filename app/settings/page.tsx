@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { FeatureAuthGate } from "@/components/auth/feature-auth-gate";
 import { SettingsAdSpace } from "@/components/settings/settings-ad-space";
+import { ThemeChoice } from "@/components/ui/theme-choice";
 
 function SettingsContent() {
   return (
@@ -31,6 +32,16 @@ function SettingsContent() {
             >
               <span aria-hidden="true">📣</span> Publicité — préférences et annonces
             </Link>
+          </div>
+        </section>
+
+        <section className="g3-gradient-border mt-6 p-6" aria-labelledby="settings-theme-title">
+          <h2 id="settings-theme-title" className="font-[family-name:var(--font-display)] text-2xl font-semibold">Apparence</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--g3-muted)]">
+            Choisissez le thème de TOUTE l&apos;application : clair ou sombre, l&apos;apparence entière de Gen3ia change instantanément et reste mémorisée sur cet appareil.
+          </p>
+          <div className="mt-4">
+            <ThemeChoice />
           </div>
         </section>
 

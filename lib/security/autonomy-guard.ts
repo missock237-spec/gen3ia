@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { getActionApproval } from "@/lib/agents/action-approvals";
+import { isExternalAppConnected, NEVER_BYPASSED_TOOLS } from "@/lib/security/connected-apps";
 import { getToolSecurityDefinition, isExtensionToolName } from "./tool-permissions";
 
 export type AutonomyRisk = "low" | "medium" | "high" | "critical";
@@ -45,6 +46,19 @@ export async function assertAutonomousActionAllowed(params: {
 }): Promise<void> {
   const risk = getAutonomyRisk(params.toolName);
   if (risk === "low" || (risk === "medium" && !requiresPersistedApproval(params.toolName))) return;
+
+  // APPROBATION CONDITIONNELLE (demande utilisateur) : l'app externe ciblée
+  // est DÉJÀ CONNECTÉE par l'utilisateur → l'agent agit directement, sans
+  // validation humaine. Le plancher de sécurité reste invariant (risque
+  // critical, ads.publish, file.delete, phone.call).
+  if (risk !== "critical" && !NEVER_BYPASSED_TOOLS.has(params.toolName)) {
+    try {
+      if (await isExternalAppConnected(params.userId, params.toolName, params.input)) return;
+    } catch {
+      // Dans le doute : la règle historique (approbation) s'applique.
+    }
+  }
+
   if (!requiresPersistedApproval(params.toolName)) throw new Error("Human approval is required for high-risk tool: " + params.toolName);
   if (!params.approvalId) throw new Error("Human approval is required before executing " + params.toolName + ".");
 

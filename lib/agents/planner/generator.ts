@@ -88,7 +88,7 @@ RULES:
 14. Prefer deterministic tool execution over hallucinated tool results.
 15. Use step type "agent" (with agentId) ONLY to delegate a self-contained sub-task to one of the AVAILABLE SUB-AGENTS listed above. Never delegate to an agent not in the list. A sub-agent answers with its expertise; it cannot execute tools itself.
 16. maxConcurrency must be between 1 and 8.
-17. maxIterations must be between 1 and 20.
+17. maxIterations must be between 1 and 40.
 
 Return ONLY valid JSON.
 ${correctiveHint ? `\nIMPORTANT — your previous response was rejected:\n${correctiveHint}\nFix it and return valid JSON again.\n` : ""}`;

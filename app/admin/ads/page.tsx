@@ -6,6 +6,7 @@ import { authFetch } from "@/lib/firebase/auth-client";
 import { ResourceList, type ResourceRow } from "@/components/shells/resource-list";
 import { EmptyState, LoadingState } from "@/components/shells/states";
 import { StatusBadge } from "@/components/shells/status-badge";
+import { CampaignsManager } from "@/components/admin/campaigns-manager";
 
 /**
  * /admin/ads — inventaire publicitaire de la plateforme (admin uniquement).
@@ -241,6 +242,8 @@ export default function AdminAdsPage() {
               className="[&_li]:border-white/10 [&_li]:bg-[var(--g3-surface)]/5 [&_li_*.text-[var(--g3-text)]]:text-[var(--g3-text-secondary)]"
             />
           </section>
+
+          <CampaignsManager />
         </>
       )}
     </div>

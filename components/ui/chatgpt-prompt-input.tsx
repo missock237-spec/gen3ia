@@ -106,7 +106,7 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
           name="message"
           value={current}
           rows={1}
-          maxLength={20000}
+          
           disabled={disabled}
           onChange={(event) => update(event.target.value)}
           onKeyDown={(event) => {

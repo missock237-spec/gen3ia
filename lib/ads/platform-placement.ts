@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { FieldValue, type DocumentData } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
+import { countImpressionsToday, passesTargeting, scoreAdCandidate, type AdSelectionContext } from "@/lib/ads/campaigns";
 
 export type PlatformAdFormat = "image" | "video" | "link";
 
@@ -22,6 +23,8 @@ export interface PlatformAd {
   startsAtMs?: number;
   endsAtMs?: number;
   priority: number;
+  /** Campagne PRO rattachée (système publicitaire professionnel). */
+  campaignId?: string;
   createdAtMs: number;
   updatedAtMs: number;
 }
@@ -65,6 +68,7 @@ export function validatePlatformAdInput(input: PlatformAdInput): PlatformAdInput
     startsAtMs: input.startsAtMs && Number.isFinite(input.startsAtMs) ? input.startsAtMs : undefined,
     endsAtMs: input.endsAtMs && Number.isFinite(input.endsAtMs) ? input.endsAtMs : undefined,
     priority: Math.round(input.priority),
+    ...(typeof input.campaignId === "string" && input.campaignId.trim() ? { campaignId: input.campaignId.trim().slice(0, 160) } : {}),
   };
 
   if (normalized.format === "image" && !normalized.imageUrl) throw new Error("Une publicité image doit définir imageUrl.");
@@ -112,12 +116,76 @@ function fallbackAd(placement: string): PlatformAd {
   };
 }
 
-export async function choosePlatformAd(placement: string): Promise<PlatformAd> {
-  const eligible = (await listPlatformAds(placement)).filter((ad) => isCurrentlyEligible(ad, Date.now()));
-  if (eligible.length === 0) return fallbackAd(placement);
-  const highestPriority = eligible[0].priority;
-  const candidates = eligible.filter((ad) => ad.priority === highestPriority);
-  return candidates[Math.floor(Math.random() * candidates.length)] ?? eligible[0];
+/**
+ * Diffusion PRO (système publicitaire professionnel) : rotation pondérée
+ * (priorité + CTR réel × stratégie d'enchère), ciblage de campagnes
+ * (placements/langues/appareils), plafond de fréquence par utilisateur et
+ * par jour. Repli : annonces éligibles classiques, puis annonce de secours.
+ */
+export async function choosePlatformAd(placement: string, context: AdSelectionContext = {}): Promise<PlatformAd> {
+  const all = (await listPlatformAds(placement)).filter((ad) => isCurrentlyEligible(ad, Date.now()));
+  if (all.length === 0) return fallbackAd(placement);
+
+  // Campagnes PRO rattachées : ciblage + plafond de fréquence + scoring.
+  const campaignLinked = all.filter((ad) => ad.campaignId);
+  if (campaignLinked.length > 0) {
+    const scored: Array<{ ad: PlatformAd; score: number }> = [];
+    for (const ad of campaignLinked) {
+      // La campagne est relue depuis le document rattaché à l'annonce :
+      // ciblage et plafond de fréquence appliqués (échec → annonce ignorée).
+      const eligible = await (async () => {
+        try {
+          const { getCampaignById } = await import("@/lib/ads/campaigns");
+          const campaign = await getCampaignById(ad.campaignId!);
+          if (!passesTargeting({ campaign, placement, context })) return false;
+          if (context.userId && campaign.frequencyCapPerDay) {
+            const shown = await countImpressionsToday({ adId: ad.id, userId: context.userId });
+            if (shown >= campaign.frequencyCapPerDay) return false;
+          }
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+      if (eligible) {
+        const ctr = await adCtr(ad.id);
+        scored.push({ ad, score: scoreAdCandidate({ priority: ad.priority, ctr, bidStrategy: "balanced" }) });
+      }
+    }
+    if (scored.length > 0) return weightedPick(scored);
+  }
+
+  // Diffusion classique : priorité maximale, choix aléatoire à égalité.
+  const highestPriority = all[0].priority;
+  const candidates = all.filter((ad) => ad.priority === highestPriority);
+  return candidates[Math.floor(Math.random() * candidates.length)] ?? all[0];
+}
+
+/** CTR réel de l'annonce (impressions/clics réellement enregistrés). */
+async function adCtr(adId: string): Promise<number> {
+  try {
+    const snapshot = await adminDb.collection(EVENTS_COLLECTION).where("adId", "==", adId).limit(2000).get();
+    let impressions = 0;
+    let clicks = 0;
+    for (const doc of snapshot.docs) {
+      if (doc.get("type") === "impression") impressions += 1;
+      if (doc.get("type") === "click") clicks += 1;
+    }
+    return impressions > 0 ? (clicks / impressions) * 100 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Tirage pondéré par score (rotation pro, pas de favori systématique). */
+function weightedPick(candidates: Array<{ ad: PlatformAd; score: number }>): PlatformAd {
+  const total = candidates.reduce((sum, candidate) => sum + candidate.score, 0);
+  let draw = Math.random() * total;
+  for (const candidate of candidates) {
+    draw -= candidate.score;
+    if (draw <= 0) return candidate.ad;
+  }
+  return candidates[candidates.length - 1].ad;
 }
 
 export async function recordPlatformAdEvent(params: {
@@ -164,6 +232,7 @@ export async function updatePlatformAd(id: string, patch: Partial<PlatformAdInpu
     startsAtMs: patch.startsAtMs ?? current.startsAtMs,
     endsAtMs: patch.endsAtMs ?? current.endsAtMs,
     priority: patch.priority ?? current.priority,
+    campaignId: patch.campaignId ?? current.campaignId,
   });
   const updatedAtMs = Date.now();
   await ref.update({ ...merged, updatedAtMs });
@@ -193,6 +262,7 @@ function serializeAd(id: string, data: DocumentData): PlatformAd {
     startsAtMs: Number.isFinite(Number(data.startsAtMs)) ? Number(data.startsAtMs) : undefined,
     endsAtMs: Number.isFinite(Number(data.endsAtMs)) ? Number(data.endsAtMs) : undefined,
     priority: Number.isFinite(Number(data.priority)) ? Number(data.priority) : 0,
+    ...(typeof data.campaignId === "string" && data.campaignId ? { campaignId: data.campaignId } : {}),
     createdAtMs: Number.isFinite(Number(data.createdAtMs)) ? Number(data.createdAtMs) : Date.now(),
     updatedAtMs: Number.isFinite(Number(data.updatedAtMs)) ? Number(data.updatedAtMs) : Date.now(),
   };

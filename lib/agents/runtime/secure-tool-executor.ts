@@ -32,7 +32,7 @@ export interface SecureToolExecutionOptions {
   approvalId?: string;
 }
 
-const DEFAULT_SANDBOX_LIMITS: SandboxLimits = { timeoutMs: 30_000, memoryMb: 512, cpu: 1, maxOutputBytes: 1_000_000 };
+const DEFAULT_SANDBOX_LIMITS: SandboxLimits = { timeoutMs: 120_000, memoryMb: 1024, cpu: 2, maxOutputBytes: 4_000_000 };
 const ADS_TOOL_PREFIXES = [/^GOOGLEADS_/i, /^METAADS_/i, /^TIKTOK_ADS_/i];
 
 function isAdsComposioTool(input: Record<string, unknown>): boolean {
@@ -47,7 +47,7 @@ function parseSandboxInput(input: Record<string, unknown>) {
   if (typeof code !== "string" || code.length === 0 || code.length > 500_000) throw new Error("code.execute requires code between 1 and 500000 characters");
   if (providedLimits !== undefined && (typeof providedLimits !== "object" || providedLimits === null)) throw new Error("code.execute limits must be an object");
   const limits = { ...DEFAULT_SANDBOX_LIMITS, ...(providedLimits as Partial<SandboxLimits> | undefined) };
-  if (!Number.isInteger(limits.timeoutMs) || limits.timeoutMs < 100 || limits.timeoutMs > 120_000 || !Number.isInteger(limits.memoryMb) || limits.memoryMb < 64 || limits.memoryMb > 2_048 || typeof limits.cpu !== "number" || limits.cpu < 0.1 || limits.cpu > 2 || !Number.isInteger(limits.maxOutputBytes) || limits.maxOutputBytes < 1_024 || limits.maxOutputBytes > 10_000_000) throw new Error("code.execute limits are outside the allowed sandbox bounds");
+  if (!Number.isInteger(limits.timeoutMs) || limits.timeoutMs < 100 || limits.timeoutMs > 300_000 || !Number.isInteger(limits.memoryMb) || limits.memoryMb < 64 || limits.memoryMb > 2_048 || typeof limits.cpu !== "number" || limits.cpu < 0.1 || limits.cpu > 2 || !Number.isInteger(limits.maxOutputBytes) || limits.maxOutputBytes < 1_024 || limits.maxOutputBytes > 10_000_000) throw new Error("code.execute limits are outside the allowed sandbox bounds");
   return { runtime: runtime as SandboxRuntime, code, input: input.input, limits };
 }
 

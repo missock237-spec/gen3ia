@@ -9,6 +9,7 @@ import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/execution-policy";
 import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
 import { createActionApproval, listActionApprovals } from "@/lib/agents/action-approvals";
+import { selectApprovalRequiredSteps } from "@/lib/agents/approval-policy";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage, createConversation, getConversation, listMessages } from "@/lib/chat/repository";
 import { getAgentForOwner } from "@/lib/agents/repository";
@@ -28,7 +29,7 @@ import {
 import type { AgentRecord } from "@/lib/agents/schema";
 
 const Body = z.object({
-  message: z.string().trim().min(1).max(20_000),
+  message: z.string().trim().min(1).max(200_000),
   conversationId: z.string().trim().min(1).max(256).optional(),
   // Chat scopé à un agent personnalisé du Studio : classification,
   // périmètre strict et outils restreints.
@@ -360,9 +361,10 @@ export async function POST(request: NextRequest) {
       // l'agent (charte injectée dans le planificateur, outils restreints).
       const objectiveNote = fullNote ? `${fullNote}\n\n${body.message}` : body.message;
       const plan = await planAgentTask(user.uid, agent, objectiveNote);
-      const approvalSteps = plan.steps.filter((step) =>
-        step.type === "tool" && (step.requiresApproval || step.sideEffect),
-      );
+      // APPROBATION CONDITIONNELLE : app externe connectée = exécution directe ;
+      // approbation seulement si l'app est non connectée (plancher de sécurité
+      // invariant conservé : ads.publish, file.delete, phone.call).
+      const approvalSteps = await selectApprovalRequiredSteps(user.uid, plan.steps);
 
       if (approvalSteps.length > 0) {
         const checkpoint = {
@@ -537,9 +539,9 @@ export async function POST(request: NextRequest) {
       : body.message;
 
     const plan = await planUniversalAgent(user.uid, universalObjective);
-    const approvalSteps = plan.steps.filter((step) =>
-      step.type === "tool" && (step.requiresApproval || step.sideEffect),
-    );
+    // APPROBATION CONDITIONNELLE (identique au mode agent scopé) : une app
+    // externe déjà connectée s'exécute directement, sans validation.
+    const approvalSteps = await selectApprovalRequiredSteps(user.uid, plan.steps);
 
     if (approvalSteps.length > 0) {
       const checkpoint = {

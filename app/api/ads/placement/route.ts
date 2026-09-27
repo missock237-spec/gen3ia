@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     if (mode === "all") {
       const ads = await listEligiblePlatformAds(placement);
-      const list = ads.length > 0 ? ads : [await choosePlatformAd(placement)];
+      const list = ads.length > 0 ? ads : [await choosePlatformAd(placement, { userId: user.uid })];
       await Promise.all(
         list.map((ad) =>
           recordPlatformAdEvent({ adId: ad.id, placement, type: "impression", userId: user.uid }).catch(() => undefined),
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ads: list }, { headers: { "cache-control": "no-store" } });
     }
 
-    const ad = await choosePlatformAd(placement);
+    const ad = await choosePlatformAd(placement, { userId: user.uid });
     void recordPlatformAdEvent({
       adId: ad.id,
       placement,

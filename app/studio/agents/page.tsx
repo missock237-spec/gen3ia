@@ -5,13 +5,13 @@ import { useEffect, useState } from "react";
 import { AgentChatWorkshop } from "@/components/agent/agent-chat-workshop";
 
 /**
- * /studio/agents — chat agent-scopé PLEIN ÉCRAN : l'interface de discussion
- * occupe TOUTE la surface de l'appareil (rail des agents à gauche, fil +
- * composer à droite). Sur mobile et tablette le chat est bord à bord (aucune
- * marge extérieure, pas d'arrondi) ; sur grand écran un cadre léger est
- * conservé. La personnalisation (assistant obligatoire avant toute
- * exécution) s'affiche dans la même surface, en défilement normal.
- * L'identité de l'agent est portée par l'en-tête du panneau de chat.
+ * /studio/agents — CHAT D'AGENT IA « GEN IA » PLEIN ÉCRAN (demande
+ * utilisateur : la création d'agents est supprimée). L'utilisateur donne
+ * n'importe quel prompt, Gen IA — agent IA universel provisionné
+ * automatiquement — résout le problème de bout en bout. L'historique des
+ * chats est disponible dans le rail latéral (ouvertures, suppressions).
+ * Sur mobile et tablette le chat est bord à bord ; l'identité de l'agent
+ * est portée par le rail (logo Gen3ia + « Gen IA »).
  */
 export default function AgentsPage() {
   const [task, setTask] = useState("");

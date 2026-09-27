@@ -264,7 +264,7 @@ export function Composer({
         onValueChange={setValue}
         onSubmit={submit}
         disabled={disabled}
-        maxLength={20_000}
+        
         placeholder={placeholder}
         plusAction="file"
         onFile={(file) => void uploadFile(file)}

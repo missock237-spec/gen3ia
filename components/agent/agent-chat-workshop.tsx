@@ -3,148 +3,194 @@
 import * as React from "react";
 
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
-import { AgentQuickCreate } from "@/components/agent/agent-quick-create";
 import { AgentChatPanel } from "@/components/agent/agent-chat-panel";
 import { VoiceAgentSetup } from "@/components/agent/voice-agent-setup";
 import { Callout } from "@/components/studio/callout";
-import { AgentGridSkeleton } from "@/components/studio/skeletons";
-import { labelForAgent } from "@/lib/agents/charter";
+import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import type { AgentSummary } from "@/lib/agents/schema";
 
 /**
- * Atelier de chat d'agents IA personnalisés (Studio Gen3ia).
- * Rail latéral : liste des agents, création, sélection, suppression.
- * Création SIMPLIFIÉE (nom + type + fichier optionnel) — plus d'assistant
- * de personnalisation : l'agent est opérationnel immédiatement.
- * Chat agent-scopé : réponses professionnelles, classification des requêtes
- * (réponse simple ou exécution), périmètre strict.
+ * Chat d'agent IA « Gen IA » (Studio Gen3ia) — DEMANDE UTILISATEUR :
+ * la création d'agents IA est supprimée. L'utilisateur donne N'IMPORTE QUEL
+ * prompt et Gen IA (agent IA universel, créé automatiquement une seule fois)
+ * résout le problème. Le rail affiche l'HISTORIQUE des chats (conversations
+ * réelles persistées), avec ouverture et suppression.
  */
 
-function AgentAvatar({ name }: { name: string }) {
-  const initial = name.trim().charAt(0).toUpperCase() || "A";
-  return <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-violet-200 bg-gradient-to-br from-violet-100 to-sky-100 font-serif text-sm font-bold text-violet-700">{initial}</span>;
+type ConversationSummary = {
+  id: string;
+  title: string;
+  messageCount: number;
+  updatedAt: string;
+};
+
+const GEN_IA_PAYLOAD = {
+  name: "Gen IA",
+  description:
+    "Agent IA universel de Gen3ia : donnez-lui n'importe quel prompt (code, rédaction, analyse, recherche, automatisation, données, présentations…) et il résout le problème de bout en bout. Capable de déployer jusqu'à 10 sous-agents spécialisés pour une tâche complexe.",
+  type: "universal" as const,
+  typeLabel: "Agent IA universel",
+  skills: [
+    "Résolution de problèmes",
+    "Développement & code",
+    "Rédaction professionnelle",
+    "Analyse de données",
+    "Recherche web",
+    "Automatisations & API",
+  ],
+  agentMode: "standard" as const,
+  tools: ["web.search", "web.api", "web.api.write", "artifact.create", "file.create", "code.execute"],
+  status: "active" as const,
+  voiceEnabled: false,
+};
+
+function formatRelativeDate(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const diffMs = Date.now() - then;
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return "à l'instant";
+  if (minutes < 60) return `il y a ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `il y a ${hours} h`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `il y a ${days} j`;
+  return new Date(then).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
 export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: string }) {
   const sessionDisponible = useSessionAvailable();
-  const [agents, setAgents] = React.useState<AgentSummary[]>([]);
+  const [agent, setAgent] = React.useState<AgentSummary | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [activeId, setActiveId] = React.useState<string | null>(null);
-  const [view, setView] = React.useState<"chat" | "create">("chat");
-  const [voiceSetupAgentId, setVoiceSetupAgentId] = React.useState<string | null>(null);
+  const [bootstrapping, setBootstrapping] = React.useState(false);
+  const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
+  const [pendingConversationId, setPendingConversationId] = React.useState<string | null>(null);
   const [showRailMobile, setShowRailMobile] = React.useState(false);
   const [error, setError] = React.useState("");
   const [loadFailed, setLoadFailed] = React.useState(false);
+  const [voiceSetupAgentId, setVoiceSetupAgentId] = React.useState<string | null>(null);
 
+  const refreshConversations = React.useCallback(async () => {
+    if (!agent) return;
+    try {
+      const response = await authFetch(`/api/chat/conversations?limit=30&agentId=${encodeURIComponent(agent.id)}`, { cache: "no-store" });
+      if (response.ok) {
+        const data = await response.json();
+        setConversations((data.conversations ?? []) as ConversationSummary[]);
+      }
+    } catch { /* historique indisponible */ }
+  }, [agent]);
+
+  // Charge l'agent « Gen IA » (créé automatiquement au premier usage —
+  // aucune interface de création d'agent : l'utilisateur discute directement).
   const refresh = React.useCallback(async () => {
     setLoading(true);
     try {
       const response = await authFetch("/api/agents", { cache: "no-store" });
       if (response.ok) {
         const data = await response.json();
-        setAgents((data.agents ?? []) as AgentSummary[]);
-        setError("");
-        setLoadFailed(false);
+        const agents = (data.agents ?? []) as AgentSummary[];
+        const genIa = agents.find((item) => item.name?.toLowerCase() === "gen ia") ?? agents[0] ?? null;
+        if (genIa) {
+          setAgent(genIa);
+          setLoadFailed(false);
+          setError("");
+        } else {
+          // Provisionnement automatique de « Gen IA » (une seule fois).
+          setBootstrapping(true);
+          const created = await authFetch("/api/agents", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(GEN_IA_PAYLOAD),
+          });
+          if (created.ok) {
+            const payload = await created.json();
+            setAgent((payload.agent ?? null) as AgentSummary | null);
+            setLoadFailed(false);
+            setError("");
+          } else if (created.status === 429) {
+            setError("Préparation de Gen IA momentanément indisponible (limite de création). Réessayez dans un instant.");
+          } else {
+            setLoadFailed(true);
+            setError("Impossible de préparer Gen IA. Vérifiez votre connexion puis réessayez.");
+          }
+          setBootstrapping(false);
+        }
       } else {
-        // 401/500/panne : on ne vide PAS la liste (données potentiellement
-        // déjà chargées) et on N'OUVRE PAS l'assistant de création — un
-        // échec réseau ne doit pas ressembler à "aucun agent".
         setLoadFailed(true);
-        if (response.status !== 401) setError("Impossible de charger vos agents. Vérifiez votre connexion puis réessayez.");
+        if (response.status !== 401) setError("Impossible de charger Gen IA. Vérifiez votre connexion puis réessayez.");
       }
     } catch {
       setLoadFailed(true);
-      setError("Connexion au serveur impossible. Vos agents réapparaîtront au réessai.");
+      setError("Connexion au serveur impossible. Gen IA réapparaîtra au réessai.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   React.useEffect(() => { void refresh(); }, [refresh]);
+  React.useEffect(() => { void refreshConversations(); }, [refreshConversations]);
 
-  const activeAgent = agents.find((agent) => agent.id === activeId) ?? null;
-  // Mode chat plein écran : l'interface (rail + panneau) occupe toute la
-  // surface de l'appareil. L'assistant de création garde un flux normal.
-  const chatMode = view === "chat" && activeAgent !== null;
-
-  // Pas encore d'agent : la création simplifiée s'ouvre d'office —
-  // uniquement si la liste a été réellement chargée (jamais sur une panne).
-  React.useEffect(() => {
-    if (!loading && !loadFailed && agents.length === 0) setView("create");
-    if (!loading && agents.length > 0 && !activeId) setActiveId(agents[0].id);
-  }, [loading, loadFailed, agents, activeId]);
-
-  async function deleteAgent(agent: AgentSummary) {
-    if (!window.confirm(`Supprimer définitivement l'agent « ${agent.name} » ?`)) return;
-    const response = await authFetch(`/api/agents/${agent.id}`, { method: "DELETE" });
+  async function deleteConversation(id: string) {
+    if (!window.confirm("Supprimer définitivement ce chat de l'historique ?")) return;
+    const response = await authFetch(`/api/chat/conversations/${id}`, { method: "DELETE" });
     if (response.ok) {
-      setAgents((current) => current.filter((item) => item.id !== agent.id));
-      if (agent.id === activeId) setActiveId(null);
-    } else {
-      setError("Suppression impossible.");
+      setConversations((current) => current.filter((item) => item.id !== id));
+      if (id === pendingConversationId) setPendingConversationId(null);
     }
   }
 
-  function handleSaved(agent: AgentSummary) {
-    setAgents((current) => {
-      const exists = current.some((item) => item.id === agent.id);
-      return exists ? current.map((item) => (item.id === agent.id ? agent : item)) : [agent, ...current];
-    });
-    setActiveId(agent.id);
-    setView("chat");
-    setShowRailMobile(false);
-    if (agent.agentMode === "call") setVoiceSetupAgentId(agent.id);
-  }
-
   const rail = (
-    <aside className="flex h-full min-h-0 flex-col rounded-[26px] border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-4 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.18)]" aria-label="Mes agents IA">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-xs font-black uppercase tracking-[.24em] text-[var(--g3-muted)]">Mes agents</h2>
-        <span className="rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] px-2 py-0.5 text-[10px] font-bold text-[var(--g3-muted)]">{agents.length}</span>
+    <aside className="flex h-full min-h-0 flex-col rounded-[26px] bg-[var(--g3-surface)] p-4 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.18)]" aria-label="Chats de Gen IA">
+      <div className="flex items-center gap-3">
+        <span className="g3-brand-mark" aria-hidden="true"><Gen3iaLogo size={31} /></span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-black text-[var(--g3-text)]">Gen IA</span>
+          <span className="block truncate text-[10px] font-semibold uppercase tracking-[.18em] text-violet-600">Agent IA universel</span>
+        </span>
       </div>
 
       <button
         type="button"
         className="g3-btn g3-btn-primary mt-3 w-full text-xs"
-        onClick={() => { setView("create"); setShowRailMobile(false); }}
+        onClick={() => { setPendingConversationId(null); setShowRailMobile(false); }}
       >
-        + Créer un agent
+        + Nouveau chat
       </button>
 
-      {/* Liste flexible : remplit la hauteur disponible en chat plein écran
-          (desktop) et reste plafonnée en flux normal / mobile. */}
-      <div className="mt-3 max-h-[420px] min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5 lg:max-h-none">
-        {loading ? (
-          <AgentGridSkeleton count={2} />
-        ) : agents.length === 0 ? (
-          <p className="rounded-xl bg-[var(--g3-elevated)] px-3 py-4 text-center text-xs leading-5 text-[var(--g3-faint)]">Aucun agent pour l&apos;instant. Personnalisez le premier : cela prend moins d&apos;une minute.</p>
+      <p className="mt-4 text-[10px] font-black uppercase tracking-[.24em] text-[var(--g3-muted)]">Historique des chats</p>
+      <div className="mt-2 max-h-[420px] min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5 lg:max-h-none">
+        {conversations.length === 0 ? (
+          <p className="rounded-xl bg-[var(--g3-elevated)] px-3 py-4 text-center text-xs leading-5 text-[var(--g3-faint)]">
+            Aucun chat pour l&apos;instant. Donnez votre premier prompt à Gen IA : il résout le problème de bout en bout.
+          </p>
         ) : (
-          agents.map((agent) => {
-            const selected = agent.id === activeId && view === "chat";
+          conversations.map((conversation) => {
+            const selected = conversation.id === pendingConversationId;
             return (
-              <div key={agent.id} className={`group relative rounded-2xl border p-3 transition ${selected ? "border-[var(--g3-border)] bg-[var(--g3-elevated)] shadow-[0_8px_24px_-12px_rgba(28,27,24,0.35)]" : "border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] hover:border-[var(--g3-border-strong)]"}`}>
+              <div
+                key={conversation.id}
+                className={`group relative rounded-2xl transition ${selected ? "bg-[var(--g3-elevated)] shadow-[0_8px_24px_-12px_rgba(28,27,24,0.35)]" : "bg-transparent hover:bg-[var(--g3-elevated)]"}`}
+              >
                 <button
                   type="button"
-                  onClick={() => { setActiveId(agent.id); setView("chat"); setShowRailMobile(false); }}
-                  className="flex w-full items-start gap-2.5 text-left"
+                  onClick={() => { setPendingConversationId(conversation.id); setShowRailMobile(false); }}
+                  className="flex w-full items-start gap-2 p-3 text-left"
                   aria-pressed={selected}
                 >
-                  <AgentAvatar name={agent.name} />
+                  <span aria-hidden="true" className="mt-0.5 text-sm">💬</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-bold text-[var(--g3-text)]">{agent.name}</span>
-                    <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-wide text-violet-600">{labelForAgent(agent)}</span>
-                    <span className="mt-1 flex flex-wrap items-center gap-1 text-[9px] text-[var(--g3-faint)]">
-                      <span className="rounded border border-[rgba(23,23,20,0.09)] px-1 py-0.5">{agent.agentMode === "call" ? "Appel" : "Standard"}</span>
-                      <span className="rounded border border-[rgba(23,23,20,0.09)] px-1 py-0.5">{agent.skills.length} compétence{agent.skills.length > 1 ? "s" : ""}</span>
-                      {agent.memoryFile && <span className="rounded border border-emerald-200 bg-emerald-50 px-1 py-0.5 text-emerald-600">Mémoire</span>}
+                    <span className="block truncate text-xs font-bold text-[var(--g3-text)]">{conversation.title || "Nouveau chat"}</span>
+                    <span className="mt-0.5 block truncate text-[10px] text-[var(--g3-faint)]">
+                      {formatRelativeDate(conversation.updatedAt)} · {conversation.messageCount} message{conversation.messageCount > 1 ? "s" : ""}
                     </span>
                   </span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => void deleteAgent(agent)}
-                  aria-label={`Supprimer ${agent.name}`}
-                  className="absolute right-2 top-2 hidden rounded-lg border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-1.5 py-1 text-[9px] text-[var(--g3-faint)] transition hover:border-red-200 hover:text-red-600 group-hover:block"
+                  onClick={() => void deleteConversation(conversation.id)}
+                  aria-label={`Supprimer le chat ${conversation.title || ""}`}
+                  className="absolute right-2 top-2 hidden rounded-lg bg-[var(--g3-surface)] px-1.5 py-1 text-[9px] text-[var(--g3-faint)] transition hover:text-red-600 group-hover:block"
                 >
                   Suppr.
                 </button>
@@ -156,9 +202,20 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
     </aside>
   );
 
+  if (loading || bootstrapping) {
+    return (
+      <div className="g3-card grid place-items-center p-16 text-sm text-[var(--g3-muted)]" role="status">
+        <span className="flex items-center gap-3">
+          <Gen3iaLogo size={30} working />
+          {bootstrapping ? "Préparation de Gen IA…" : "Chargement…"}
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <div className={chatMode ? "flex h-full min-h-0 flex-col gap-2 lg:gap-4" : "space-y-5"}>
-      {sessionDisponible === false && <Callout tone="warning" className="rounded-2xl">Session expirée — reconnectez-vous pour discuter avec vos agents.</Callout>}
+    <div className="flex h-full min-h-0 flex-col gap-2 lg:gap-4">
+      {sessionDisponible === false && <Callout tone="warning" className="rounded-2xl">Session expirée — reconnectez-vous pour discuter avec Gen IA.</Callout>}
       {error && <Callout tone="error" className="rounded-2xl"><span className="flex items-center justify-between gap-3"><span>{error}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full border border-[rgba(246,98,110,0.45)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]">Réessayer</button></span></Callout>}
 
       {/* Sélecteur mobile : le rail se replie sous lg */}
@@ -166,42 +223,31 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
         type="button"
         onClick={() => setShowRailMobile((current) => !current)}
         aria-expanded={showRailMobile}
-        className="flex w-full items-center justify-between rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-4 py-3 text-sm lg:hidden"
+        className="flex w-full items-center justify-between rounded-2xl bg-[var(--g3-surface)] px-4 py-3 text-sm lg:hidden"
       >
         <span className="flex items-center gap-2">
-          {activeAgent ? (
-            <>
-              <AgentAvatar name={activeAgent.name} />
-              <span className="font-bold">{activeAgent.name}</span>
-              <span className="text-xs text-violet-600">{labelForAgent(activeAgent)}</span>
-            </>
-          ) : (
-            <span className="text-[var(--g3-muted)]">Mes agents IA</span>
-          )}
+          <Gen3iaLogo size={28} />
+          <span className="font-bold">Gen IA</span>
+          <span className="text-xs text-violet-600">Agent IA universel</span>
         </span>
-        <span className="text-xs text-[var(--g3-faint)]">{showRailMobile ? "Fermer" : "Changer d'agent"}</span>
+        <span className="text-xs text-[var(--g3-faint)]">{showRailMobile ? "Fermer" : "Historique"}</span>
       </button>
       {showRailMobile && <div className="lg:hidden">{rail}</div>}
 
-      <div className={chatMode ? "grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 lg:grid-cols-[290px_minmax(0,1fr)]" : "grid gap-5 lg:grid-cols-[290px_minmax(0,1fr)]"}>
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 lg:grid-cols-[290px_minmax(0,1fr)]">
         <div className="hidden min-h-0 lg:block">{rail}</div>
-
         <div className="min-h-0 min-w-0">
-          {loading ? (
-            <div className="g3-card p-10"><AgentGridSkeleton count={2} /></div>
-          ) : view === "create" ? (
-            <AgentQuickCreate
-              onSaved={handleSaved}
-              onCancel={agents.length > 0 ? () => { setView("chat"); } : undefined}
-            />
-          ) : activeAgent ? (
+          {agent ? (
             <AgentChatPanel
-              agent={activeAgent}
+              agent={agent}
               onAgentsChanged={() => void refresh()}
               initialMessage={initialMessage}
+              pendingConversationId={pendingConversationId}
+              onPendingConversationConsumed={() => setPendingConversationId(null)}
+              onConversationsChanged={() => void refreshConversations()}
             />
           ) : (
-            <AgentQuickCreate onSaved={handleSaved} />
+            <div className="g3-card grid place-items-center p-10 text-sm text-[var(--g3-muted)]">Gen IA est indisponible pour le moment.</div>
           )}
         </div>
       </div>

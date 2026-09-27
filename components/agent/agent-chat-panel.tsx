@@ -110,10 +110,18 @@ export function AgentChatPanel({
   agent,
   onAgentsChanged,
   initialMessage = "",
+  pendingConversationId = null,
+  onPendingConversationConsumed,
+  onConversationsChanged,
 }: {
   agent: AgentSummary;
   onAgentsChanged: () => void;
   initialMessage?: string;
+  /** Conversation à rouvrir depuis l'historique du rail (chat Gen IA). */
+  pendingConversationId?: string | null;
+  onPendingConversationConsumed?: () => void;
+  /** Notifie le rail que l'historique a changé (nouveau chat, envoi…). */
+  onConversationsChanged?: () => void;
 }) {
   const [message, setMessage] = React.useState("");
   const [conversationId, setConversationId] = React.useState<string | null>(null);
@@ -138,6 +146,9 @@ export function AgentChatPanel({
   // serveur transmet déjà request.signal au runtime : l'abort client
   // interrompt donc RÉELLEMENT la mission côté serveur aussi.
   const requestAbortRef = React.useRef<AbortController | null>(null);
+  // Référence stable vers openConversation (déclarée plus bas) pour les
+  // effets montés avant sa déclaration.
+  const openConversationRef = React.useRef<((id: string) => Promise<void>) | null>(null);
   React.useEffect(() => () => requestAbortRef.current?.abort(), []);
 
   const typeLabel = labelForAgent(agent);
@@ -162,10 +173,33 @@ export function AgentChatPanel({
       if (response.ok) setConversations(((await response.json()).conversations ?? []) as ConversationSummary[]);
     } catch { /* historique indisponible */ } finally {
       setHistoryLoading(false);
+      onConversationsChanged?.();
     }
-  }, [agent.id]);
+  }, [agent.id, onConversationsChanged]);
 
   React.useEffect(() => { void loadConversations(); }, [loadConversations]);
+
+  // Ouverture demandée depuis le rail « Historique des chats » (extérieur).
+  React.useEffect(() => {
+    if (!pendingConversationId || loading) return;
+    void (async () => {
+      await openConversationRef.current?.(pendingConversationId);
+      onPendingConversationConsumed?.();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingConversationId]);
+
+  // Reprise hors-ligne : une tâche envoyée hors connexion vient d'être
+  // rejouée en arrière-plan (Background Sync) — rafraîchit la conversation
+  // ouverte et l'historique (exécution même hors ligne, demande utilisateur).
+  React.useEffect(() => {
+    const handler = () => {
+      void loadConversations();
+      if (conversationId) void openConversationRef.current?.(conversationId);
+    };
+    window.addEventListener("gen3ia:outbox-flushed", handler);
+    return () => window.removeEventListener("gen3ia:outbox-flushed", handler);
+  }, [conversationId, loadConversations]);
 
   // Nouvelle conversation à chaque changement d'agent : le contexte du chat
   // appartient à l'agent sélectionné.
@@ -220,6 +254,11 @@ export function AgentChatPanel({
       setError(e instanceof Error ? e.message : "Conversation introuvable.");
     } finally { setHistoryLoading(false); }
   }
+
+  // Référence tenue à jour après montage (jamais pendant le rendu).
+  React.useEffect(() => {
+    openConversationRef.current = openConversation;
+  });
 
   function resetConversation() {
     if (loading) return;
@@ -610,7 +649,7 @@ export function AgentChatPanel({
             onValueChange={setMessage}
             onSubmit={submit}
             disabled={loading || uploading}
-            maxLength={20_000}
+            
             placeholder="Posez n'importe quelle question… Tapez @ pour mentionner des compétences ou connecteurs, ou / pour les commandes"
             loadMentions={loadMentions}
             activatedMentions={activated}

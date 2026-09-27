@@ -87,7 +87,7 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
     onValueChange,
     onSubmit,
     disabled = false,
-    maxLength = 20_000,
+    maxLength = undefined,
     placeholder = "Posez n'importe quelle question… Tapez @ pour mentionner des compétences ou connecteurs, ou / pour les commandes",
     loadMentions,
     activatedMentions = [],
@@ -149,12 +149,15 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
       openFilePicker: () => fileRef.current?.click(),
     }));
 
-    // Croissance automatique de la zone de texte.
+    // Croissance automatique de la zone de texte — AUCUNE limite de
+    // caractères ni de hauteur réductrice (demande utilisateur) : la zone
+    // grandit librement jusqu'à la moitié de l'écran.
     React.useEffect(() => {
       const node = textareaRef.current;
       if (!node) return;
+      const viewportCap = typeof window !== "undefined" ? Math.round(window.innerHeight * 0.5) : 480;
       node.style.height = "0px";
-      node.style.height = Math.min(Math.max(node.scrollHeight, 64), 220) + "px";
+      node.style.height = Math.min(Math.max(node.scrollHeight, 64), Math.max(220, viewportCap)) + "px";
     }, [value]);
 
     // Détection des déclencheurs en fin de saisie.
@@ -353,7 +356,7 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
           name="message"
           value={value}
           rows={2}
-          maxLength={maxLength}
+          {...(maxLength !== undefined ? { maxLength } : {})}
           disabled={disabled}
           onChange={(event) => onValueChange(event.target.value)}
           onKeyDown={handleKeyDown}

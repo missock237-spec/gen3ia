@@ -7,7 +7,7 @@ import { RuntimePlanSchema, type RuntimePlan } from "./types";
 import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/execution-policy";
 
 const MAX_OBJECTIVE_LENGTH = 20_000;
-const MAX_PLAN_STEPS = 20;
+const MAX_PLAN_STEPS = 40;
 
 const PLAN_SYSTEM = [
   "You are the Gen3ia universal agent planner.",
@@ -217,7 +217,7 @@ export async function planUniversalAgent(
         agentContext.charter,
         "Chaque étape du plan doit respecter strictement cette charte : n'inclus AUCUNE étape qui sortirait du périmètre de l'agent. Si l'objectif sort du périmètre, produis un plan minimal d'une seule étape llm qui le signale et refuse courtoisement.",
         subAgents.length > 0
-          ? `SOUS-AGENTS DÉLÉGABLES : ${JSON.stringify(subAgents)} — pour déléguer une sous-tâche autonome à l'un de ces agents, utilise une étape type "agent" avec son id dans agentId (le sous-agent répond avec sa propre expertise, il n'exécute PAS d'outils).`
+          ? `SOUS-AGENTS DÉLÉGABLES : ${JSON.stringify(subAgents)} — pour déléguer une sous-tâche autonome à l'un de ces agents — ou pour une tâche très complexe exigeant une équipe — utilise une étape type "agent" avec son id dans agentId (jusqu'à 10 sous-agents déployables en parallèle pour une même mission ; le sous-agent répond avec sa propre expertise, il n'exécute PAS d'outils).`
           : "",
       ].filter(Boolean).join("\n")
     : PLAN_SYSTEM;
@@ -333,8 +333,8 @@ function finaliserPlan(userId: string, plan: RuntimePlan, objective: string, all
     ...plan,
     objective,
     steps: plan.steps.slice(0, MAX_PLAN_STEPS),
-    maxConcurrency: Math.min(plan.maxConcurrency ?? 4, 4),
-    maxIterations: Math.min(plan.maxIterations ?? 10, 20),
+    maxConcurrency: Math.min(plan.maxConcurrency ?? 10, 10),
+    maxIterations: Math.min(plan.maxIterations ?? 20, 40),
   });
   for (const step of normalized.steps) {
     if (step.type === "tool" && !step.toolName) {

@@ -146,6 +146,17 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
     }
   }, [conversationId, loadDetail]);
 
+  // Reprise hors-ligne (Background Sync) : une requête envoyée hors connexion
+  // vient d'être exécutée en arrière-plan — la conversation ouverte se
+  // rafraîchit automatiquement pour afficher le résultat réel.
+  useEffect(() => {
+    const handler = () => {
+      if (conversationId) void loadDetail(conversationId);
+    };
+    window.addEventListener("gen3ia:outbox-flushed", handler);
+    return () => window.removeEventListener("gen3ia:outbox-flushed", handler);
+  }, [conversationId, loadDetail]);
+
   // Défilement automatique pendant l'écriture en direct (et à l'arrivée
   // de nouveaux messages) — l'utilisateur garde la dernière ligne en vue.
   useEffect(() => {

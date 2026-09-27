@@ -202,7 +202,7 @@ export function MessageThread({
           <span className="g3-dots" aria-hidden>
             <span /><span /><span />
           </span>
-          <span className="text-xs text-[var(--g3-muted)]">{streamingStatus || "Gen3ia travaille…"}</span>
+          <span className="text-xs text-[var(--g3-muted)]">{streamingStatus || "Gen IA travaille…"}</span>
         </div>
       )}
     </div>

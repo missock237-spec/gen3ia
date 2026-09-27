@@ -21,6 +21,15 @@ import {
   type AuthorizationMode,
 } from "@/lib/security/authorization-mode";
 import { detectApiProvisioning, extractApiPathFromMessage, extractApiUsageName, looksLikeApiUsageRequest } from "@/lib/integrations/custom-apis/detect";
+import { isExternalAppConnected } from "@/lib/security/connected-apps";
+import {
+  assessComplexity,
+  buildEvolutionContext,
+  buildRunHistoryContext,
+  recordRunOutcome,
+  type ComplexityAssessment,
+} from "@/lib/ai/auto-improvement";
+import { enhancePromptForExecution } from "@/lib/ai/prompt-enhancer";
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
 import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
 import { getImportedFileContent, listImportedFiles, loadImportedFilesContext } from "@/lib/files/import";
@@ -431,11 +440,21 @@ export function extractSearchQuery(message: string): string {
   return cleaned || message.replace(/^[^\p{L}\p{N}]+/u, "").trim().slice(0, 300) || message.slice(0, 300);
 }
 
+export interface IntentPromptMeta {
+  /** Contexte d'auto-amélioration (leçons + progression réelle). */
+  evolutionContext?: string;
+  /** Historique réel des runs de la conversation. */
+  runHistoryContext?: string;
+  /** Évaluation de complexité de la demande. */
+  complexity?: ComplexityAssessment;
+}
+
 export function buildIntentSystemPrompt(
   catalog: ToolCatalogEntry[],
   project?: WorkspaceProject | null,
   connectors?: string[],
   customApis?: CustomApiRecord[],
+  meta?: IntentPromptMeta,
 ): string {
   const toolLines = catalog
     .map((t) => `- ${t.name} (risque ${t.risk}${t.requiresApproval ? ", validation requise" : ""}) : ${t.description}`)
@@ -492,11 +511,11 @@ export function buildIntentSystemPrompt(
         "",
         "API DIRECTES PAR URL (sans connecteur préalable) :",
         "Si l'utilisateur désigne l'URL d'une API (ou colle une URL d'API) et demande de l'appeler, l'interroger ou l'utiliser : étape toolName=\"web.api\" avec toolInput { url: \"<URL exacte énoncée>\" } — l'appel HTTP réel est exécuté par le serveur et le résultat réel te sera renvoyé.",
-        "Pour modifier des données via une URL d'API : toolName=\"web.api.write\" (POST/PUT/PATCH/DELETE, validation humaine requise).",
+        "Pour modifier des données via une URL d'API : toolName=\"web.api.write\" (POST/PUT/PATCH/DELETE — validation humaine requise UNIQUEMENT si l'app cible n'est pas déjà connectée ; app connectée = exécution directe).",
         "N'invente JAMAIS une URL ni une clé : utilise uniquement ce que l'utilisateur a énoncé.",
       ].join("\n")
     : "";
-  return [
+  const base = [
     "Tu es le moteur d'exécution de Gen3ia, une plateforme d'agents avec connecteurs.",
     "Pour chaque demande utilisateur, tu décides :",
     '  mode="chat" : la demande se traite par une simple réponse textuelle (question, explication, rédaction courte). Remplis alors `reply`.',
@@ -526,6 +545,16 @@ export function buildIntentSystemPrompt(
   ]
     .filter(Boolean)
     .join("\n");
+  const metaSections = [
+    meta?.evolutionContext,
+    meta?.runHistoryContext,
+    meta?.complexity
+      ? `COMPLEXITÉ DE LA DEMANDE : score ${meta.complexity.score}/100 (niveau ${meta.complexity.level})${meta.complexity.beyondMastered ? " — au-delà du niveau déjà maîtrisé : MODE ÉVOLUTION activé, planifie plus finement, vérifie chaque étape, utilise de vrais outils et délègue à des sous-agents si nécessaire." : " — planifie en conséquence, sans étapes superflues."}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return metaSections ? `${base}\n${metaSections}` : base;
 }
 
 /* ------------------------------------------------------------------ */
@@ -751,6 +780,18 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   // routée sur les modèles "chat" (rapides) pour rester sous le budget de
   // latence de la fonction serverless.
   const catalog = conversationToolCatalog();
+
+  // AUTO-AMÉLIORATION + AMÉLIORATION DU PROMPT (demandes utilisateur) :
+  // historique d'exécution réel, leçons apprises, évaluation de complexité,
+  // puis optimisation du prompt (intention d'origine intangible, repli
+  // silencieux — jamais bloquant ni lent).
+  const [evolution, runHistory] = await Promise.all([
+    buildEvolutionContext(input.userId).catch(() => ({ context: "", masteredMaxScore: 0 })),
+    buildRunHistoryContext(input.userId, conversation.id).catch(() => ""),
+  ]);
+  const complexity = assessComplexity(input.message, evolution.masteredMaxScore);
+  const enhancement = await enhancePromptForExecution({ userId: input.userId, message: input.message }).catch(() => ({ original: input.message, enhanced: input.message, improved: false, reason: "repli" }));
+
   await onEvent({ type: "status", phase: "intention", label: "Analyse de votre demande…" });
   let intent: TurnIntent;
   try {
@@ -759,10 +800,14 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
         userId: input.userId,
         feature: "conversation-turn",
         task: "chat",
-        system: buildIntentSystemPrompt(catalog, project, composioConnectors, customApis),
+        system: buildIntentSystemPrompt(catalog, project, composioConnectors, customApis, {
+          evolutionContext: evolution.context,
+          runHistoryContext: runHistory,
+          complexity,
+        }),
         prompt:
           `Historique récent :\n${priorHistory.slice(-6).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 500)}`).join("\n") || "(vide)"}` +
-          `\n\nNouvelle demande : ${input.message.slice(0, 4000)}${attachmentsContext(input.attachments)}${filesContextShort}`,
+          `\n\nNouvelle demande (optimisée par le système d'amélioration de prompts — demande d'origine intangible : « ${enhancement.original.slice(0, 400)} ») : ${enhancement.enhanced.slice(0, 4000)}${attachmentsContext(input.attachments)}${filesContextShort}`,
         schema: IntentSchema,
         label: "intention-conversation",
         maxTokens: 2500,
@@ -889,7 +934,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     });
     return result;
   }
-  const result = await runPlanTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext });
+  const result = await runPlanTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, complexityScore: complexity.score });
   await onEvent({
     type: "done",
     assistantMessage: result.assistantMessage,
@@ -911,6 +956,8 @@ interface TurnBase extends ConversationTurnInput {
   priorHistory: ChatMessage[];
   /** Contenu réel des fichiers importés (convertis + stockés en base). */
   filesContext?: string;
+  /** Score de complexité évalué par le système d'auto-amélioration. */
+  complexityScore?: number;
 }
 
 interface TurnContext extends TurnBase {
@@ -921,7 +968,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   const streaming = Boolean(ctx.onEvent);
   const systemParts = [
-    "Tu es Gen3ia, l'assistant de travail qui exécute : tu réponds de façon directe, structurée et actionnable.",
+    "Tu es Gen IA, l'agent IA universel de Gen3ia, capable de tout réaliser : tu réponds de façon directe, structurée et actionnable. Pour une tâche très complexe, tu peux déployer jusqu'à 10 sous-agents spécialisés (orchestration).",
     "La génération d'images est effectuée par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré, affiché ou décrit un visuel comme s'il était affiché, et n'invente jamais d'URL d'image.",
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
@@ -1097,7 +1144,7 @@ async function produceConversationImage(
   // part avec le prompt d'origine plutôt que de dépasser le budget.
   const enhancement = await withTimeout(
     enhanceImagePrompt(rawPrompt).catch(() => ({ prompt: rawPrompt, enhanced: false })),
-    12_000,
+    32_000,
     "amélioration du prompt image",
   ).catch(() => ({ prompt: rawPrompt, enhanced: false }));
   const image = await generateImageWithAgnes({
@@ -1190,7 +1237,7 @@ async function runAppTurn(ctx: TurnBase, appIntent: AppCreationIntent): Promise<
               provider: ctx.provider as never,
               model: ctx.model,
               preferFree: true,
-              maxTokens: 12_000,
+              maxTokens: 32_000,
               metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
             },
             {
@@ -1205,7 +1252,7 @@ async function runAppTurn(ctx: TurnBase, appIntent: AppCreationIntent): Promise<
             provider: ctx.provider as never,
             model: ctx.model,
             preferFree: true,
-            maxTokens: 12_000,
+            maxTokens: 32_000,
             metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
           }),
       90_000,
@@ -2030,7 +2077,36 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 
     const toolName = planned.toolName ?? undefined;
     const risk = toolEntry?.risk ?? "low";
-    const sensitive = planned.sensitive === true || (toolName ? stepRequiresApproval(risk) : false);
+    let sensitive = planned.sensitive === true || (toolName ? stepRequiresApproval(risk) : false);
+
+    // APPROBATION CONDITIONNELLE (demande utilisateur) : quand l'app externe
+    // ciblée est DÉJÀ CONNECTÉE par l'utilisateur (statut actif), l'agent
+    // agit directement — aucune carte de validation. L'approbation ne reste
+    // requise que si l'app est non connectée (ou inconnue) et pour le
+    // plancher de sécurité invariant (risque critical / ads.publish /
+    // file.delete / phone.call).
+    let connectedBypass = false;
+    if (toolName && sensitive && risk !== "critical") {
+      try {
+        connectedBypass = await isExternalAppConnected(
+          ctx.userId,
+          toolName,
+          (planned.toolInput ?? {}) as Record<string, unknown>,
+        );
+      } catch {
+        connectedBypass = false;
+      }
+      if (connectedBypass) {
+        sensitive = false;
+        console.log(JSON.stringify({
+          event: "approval.bypassed_connected_app",
+          userId: ctx.userId,
+          conversationId: ctx.conversationId,
+          toolName,
+          risk,
+        }));
+      }
+    }
 
     // Mode « Autoriser automatiquement » : les actions sensibles NON critiques
     // s'exécutent directement (piste d'audit), le plancher de sécurité reste
@@ -2179,6 +2255,18 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   } else {
     await finalizeRun(ctx.userId, run.id, runStatus, steps);
   }
+  // AUTO-AMÉLIORATION : issue réelle de l'exécution enregistrée (leçons des
+  // échecs + progression de complexité) — le système évolue à chaque run.
+  void recordRunOutcome({
+    userId: ctx.userId,
+    objective: run.objective || ctx.message,
+    status: runStatus,
+    complexityScore: ctx.complexityScore,
+    failedSteps: steps
+      .filter((s) => s.status === "failed")
+      .slice(0, 3)
+      .map((s) => ({ title: s.title, detail: s.detail })),
+  }).catch(() => undefined);
 
   const assistantMessage = await appendMessage({
     conversationId: ctx.conversationId,
@@ -2419,6 +2507,13 @@ export async function executeApprovedStep(params: {
   } else {
     await updateRunSteps(params.userId, run.id, steps);
   }
+  // AUTO-AMÉLIORATION : issue de l'action validée enregistrée.
+  void recordRunOutcome({
+    userId: params.userId,
+    objective: approval.title,
+    status,
+    failedSteps: result.success ? [] : [{ title: approval.title, detail: result.error }],
+  }).catch(() => undefined);
 
   const summary = result.success
     ? `Action exécutée : ${approval.title}${step.output ? `\n\n${step.output.slice(0, 600)}` : ""}`
