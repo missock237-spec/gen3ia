@@ -618,3 +618,9 @@ Work Log:
   · Agents Studio (agent/chat) : web.api + web.api.write ajoutés aux allowedTools du runtime. Tâches workspace (unified-agent) : section prompt API directes. Bridge services : PROJECT_SERVICE_TOOLS + descripteur « API directe par URL ».
   · Tests : 13 nouveaux (validation schéma, limites en-têtes, garde SSRF localhost/métadonnées, extraction d'URL, intention d'appel).
 - QUALITÉ : typecheck 0 ; lint 0 ; vitest 621 verts ; build OK.
+- E2E PRODUCTION (scripts/verify_07b5b85_prod.mjs, déploiement 07b5b85 READY) : 6/6 VERTS — signUp+session réels ; santé ; règle `*,:before,:after{border-color:#0000!important}` servie (Lightning CSS sérialise transparent→#0000) + zéro "dashed" ; APPEL API RÉEL PAR URL dans une conversation (« Appelle cette API… jsonplaceholder /users/1 ») → étape web.api « done » + VRAIES données (Leanne Graham) restituées en 10-14 s ; logo officiel toujours servi (192×192) ; 3 publicités toujours diffusées.
+
+Stage Summary:
+- Production gen3ia.online = commit 07b5b85, READY — 6/6 e2e verts.
+- AUCUNE interface délimitée : toutes les bordures visibles sont neutralisées globalement (design fluide par surfaces/ombres, focus a11y conservé, zéro décalage de mise en page).
+- Les agents appellent RÉELLEMENT une API désignée par URL, en langage naturel, sans connecteur préalable : « Appelle cette API : https://… » → outil web.api exécuté serveur, réponse réelle restituée. Écritures (POST/PUT/PATCH/DELETE) via web.api.write avec validation humaine. Disponible dans les conversations universelles, les chats d'agents Studio et les tâches workspace.
