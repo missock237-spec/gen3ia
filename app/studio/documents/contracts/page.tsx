@@ -74,8 +74,6 @@ export default function DocumentsContractsPage() {
     if (await mutate("PATCH", { id, status })) setNotice(status === "signed" ? "Signature enregistrée — preuve horodatée PDF générée." : "Statut mis à jour.");
   }
 
-  const open = contracts.find((c) => c.id === openId && (c as Contract & { body?: string }).body);
-
   return (
     <main className="mx-auto w-full max-w-6xl px-0 py-2">
       <StudioHeader

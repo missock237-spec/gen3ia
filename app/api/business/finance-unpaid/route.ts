@@ -20,8 +20,6 @@ export const maxDuration = 120;
 
 const COLLECTION = "financeInvoices";
 
-const InvoiceStatusSchema = z.enum(["open", "reminded_1", "reminded_2", "escalated", "paid", "written_off"]);
-
 const CreateSchema = z.object({
   action: z.literal("create"),
   invoiceNumber: z.string().trim().min(1).max(40),

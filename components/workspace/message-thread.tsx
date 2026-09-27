@@ -60,9 +60,6 @@ export function MessageThread({
       {messages.map((message) => {
         const run = message.runId ? runsById.get(message.runId) : undefined;
         const runApprovals = run ? approvals.filter((a) => a.runId === run.id) : [];
-        const runArtifacts = run
-          ? artifacts.filter((a) => a.runId === run.id || a.conversationId === message.conversationId && run.steps.some((s) => s.artifactId === a.id))
-          : artifacts.filter((a) => a.conversationId === message.conversationId);
         const messageArtifacts = run
           ? run.steps.map((s) => (s.artifactId ? artifactsById.get(s.artifactId) : undefined)).filter((a): a is ConversationArtifact => !!a)
           : [];

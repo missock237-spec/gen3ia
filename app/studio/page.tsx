@@ -6,7 +6,6 @@ import Link from "next/link";
 import { MissionComposer } from "@/components/workspace/mission-composer";
 import { SectionHeader } from "@/components/shells/section-header";
 import { ResourceList, type ResourceRow } from "@/components/shells/resource-list";
-import { StatusBadge } from "@/components/shells/status-badge";
 import { EmptyState, LoadingState } from "@/components/shells/states";
 import { PermissionNotice } from "@/components/shells/permission-notice";
 import { authFetch } from "@/lib/firebase/auth-client";

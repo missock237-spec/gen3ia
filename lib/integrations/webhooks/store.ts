@@ -26,8 +26,6 @@ export const OUTGOING_WEBHOOK_EVENTS = [
 
 export type OutgoingWebhookEvent = (typeof OUTGOING_WEBHOOK_EVENTS)[number];
 
-const EVENTS_SET = new Set<string>(OUTGOING_WEBHOOK_EVENTS);
-
 export const WebhookEventsSchema = z
   .array(z.enum(OUTGOING_WEBHOOK_EVENTS))
   .min(1)

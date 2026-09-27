@@ -141,7 +141,7 @@ export function IntegrationsWorkspace() {
   const [webhooks, setWebhooks] = useState<OutgoingWebhook[]>([]);
   const [availableEvents, setAvailableEvents] = useState<string[]>([]);
   const [status, setStatus] = useState<PlatformStatus | null>(null);
-  const [preferences, setPreferences] = useState<MessagingPreferences | null>(null);
+  const [_preferences, setPreferences] = useState<MessagingPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");

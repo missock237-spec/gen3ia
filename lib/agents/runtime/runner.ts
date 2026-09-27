@@ -9,7 +9,7 @@ import { RuntimeExecutionState, RuntimePlan, RuntimeStep } from "./types";
 import { createCheckpoint, saveCheckpoint } from "./checkpoint";
 import { getReadySteps, validateDAG } from "./dag";
 import { RuntimeScheduler } from "./scheduler";
-import { assertNotPaused, assertNotStopped, StopRequestedError } from "./pause";
+import { assertNotPaused, assertNotStopped } from "./pause";
 import { generateImageWithAgnes, isImageGenerationEnabled } from "@/lib/ai/image-generation";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 

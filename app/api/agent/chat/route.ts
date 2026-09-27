@@ -289,7 +289,6 @@ export async function POST(request: NextRequest) {
       const requestedApis = requestedConnectors.filter((slug) => slug.startsWith("api-"));
       const requestedComposio = requestedConnectors.filter((slug) => !slug.startsWith("api-"));
       const activatedConnectors = requestedComposio.filter((toolkit) => connected.toolkits.includes(toolkit));
-      const rejectedConnectors = requestedComposio.filter((toolkit) => !connected.toolkits.includes(toolkit));
       // API personnelles sélectionnées : vérifiées réellement en base.
       let selectedApiNote: string | undefined;
       let hasCustomApiAccess = false;

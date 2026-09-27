@@ -151,7 +151,7 @@ function sleep(ms: number) {
 }
 
 export function LiveDashboard() {
-  const [user, setUser] = useState<User | null>(null);
+  const [_user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [sessions, setSessions] = useState<LiveSessionPublic[]>([]);
   const [created, setCreated] = useState<CreatedSession | null>(null);

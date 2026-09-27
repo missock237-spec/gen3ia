@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
-import { assertLiveSessionOwner, getLiveSession, updateLiveSessionStatus } from "@/lib/live/repository";
+import { assertLiveSessionOwner, updateLiveSessionStatus } from "@/lib/live/repository";
 import { errorStatus } from "@/lib/security/http-errors";
 
 const ActionSchema = z.object({ action: z.enum(["pause", "resume", "stop"]) });

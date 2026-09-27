@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hashSourceContent, normalizeSourceContent, createWatchSource, checkWatchSource } from "./watch-sources";
+import { hashSourceContent, normalizeSourceContent, createWatchSource } from "./watch-sources";
 
 describe("normalisation des sources de veille", () => {
   it("retire les dates volatiles d'un flux RSS", () => {

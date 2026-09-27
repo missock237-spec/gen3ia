@@ -67,7 +67,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   const [pendingConversationId, setPendingConversationId] = React.useState<string | null>(null);
   const [showRailMobile, setShowRailMobile] = React.useState(false);
   const [error, setError] = React.useState("");
-  const [loadFailed, setLoadFailed] = React.useState(false);
+  const [_loadFailed, setLoadFailed] = React.useState(false);
   const [voiceSetupAgentId, setVoiceSetupAgentId] = React.useState<string | null>(null);
 
   const refreshConversations = React.useCallback(async () => {

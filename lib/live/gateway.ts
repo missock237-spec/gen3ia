@@ -19,7 +19,6 @@ import { assertActionAllowed, assertFreshLiveTimestamp, constantTimeEqual, hashP
 import { actionRequiresConfirmation, decideLiveAction } from "./vision-decider";
 import { LiveActionSchema, LiveClientMessageSchema, type LiveClientMessage, type LiveServerMessage } from "./types";
 
-const MAX_FRAME_BYTES = 1_500_000;
 const MAX_FRAME_INTERVAL_MS = 900;
 const HEARTBEAT_MS = 15_000;
 const SESSION_POLL_MS = 2_000;

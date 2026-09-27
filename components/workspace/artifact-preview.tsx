@@ -103,11 +103,18 @@ export function ArtifactLivePreviewModal({ artifact, onClose }: { artifact: Conv
 
         {content ? (
           <div className="grid min-h-0 flex-1 place-items-start justify-center overflow-auto bg-[var(--g3-elevated)]/60 p-3">
+            {/* Rendu via /preview/<id> (réponse HTTP dédiée, CSP « artefact » :
+                CDN ECharts/React/Babel autorisés + eval confiné au sandbox).
+                Un iframe srcDoc hériterait de la CSP stricte de la page
+                conversation et BLOQUERAIT les CDN — audit 09-2026. Repli
+                srcDoc uniquement si l'artefact n'a pas encore d'identifiant
+                (artefact en cours de persistance). */}
             <iframe
               key={versionKey + ":" + reloadKey}
               title={`Aperçu — ${artifact.title}`}
               sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads"
-              srcDoc={content}
+              src={artifact.id ? `/preview/${artifact.id}?modal=1` : undefined}
+              srcDoc={artifact.id ? undefined : content}
               className={"h-full min-h-[420px] rounded-xl border border-[var(--g3-border-strong)] bg-[var(--g3-surface)] shadow-inner " + (device === "mobile" ? "w-[390px] max-w-full" : "w-full")}
             />
           </div>

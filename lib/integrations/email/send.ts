@@ -17,7 +17,9 @@ const MAX_RECIPIENTS = 10;
 
 const EMAIL_ADDRESS_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-const EmailInputSchema = z.object({
+// Utilisé uniquement pour la dérivation de type (z.infer) — préfixe _ :
+// convention « valeur jamais consommée à l'exécution ».
+const _EmailInputSchema = z.object({
   to: z.union([z.string().trim().max(320), z.array(z.string().trim().max(320)).min(1).max(MAX_RECIPIENTS)]),
   subject: z.string().trim().min(1).max(MAX_SUBJECT_LENGTH),
   text: z.string().max(MAX_TEXT_LENGTH).optional(),
@@ -25,7 +27,7 @@ const EmailInputSchema = z.object({
   replyTo: z.string().trim().max(320).optional(),
 });
 
-export type AgentEmailInput = z.infer<typeof EmailInputSchema>;
+export type AgentEmailInput = z.infer<typeof _EmailInputSchema>;
 
 export interface AgentEmailResult {
   id: string;

@@ -11,10 +11,8 @@ import { useEffect } from "react";
 export function PwaRegister() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
-    let registration: ServiceWorkerRegistration | null = null;
 
     void navigator.serviceWorker.register("/sw.js", { scope: "/" }).then((reg) => {
-      registration = reg;
       // Au retour de la connexion : demande de reprise immédiate (navigateurs
       // sans Background Sync) puis signal du retour en ligne à la page.
       window.addEventListener("online", () => {
@@ -42,7 +40,6 @@ export function PwaRegister() {
 
     return () => {
       navigator.serviceWorker.removeEventListener("message", onMessage);
-      registration = null;
     };
   }, []);
 

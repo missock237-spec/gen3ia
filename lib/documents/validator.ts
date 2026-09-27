@@ -74,7 +74,7 @@ export function validateArtifact(
   return {
     valid: errors.length === 0,
 
-    format: format as any,
+    format,
 
     sizeBytes: data.length,
 

@@ -366,13 +366,6 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
     [conversationId, loadDetail, loadLists],
   );
 
-  const resolveFileUrl = useCallback(async (path: string) => {
-    const response = await fetch(`/api/storage/permanent?path=${encodeURIComponent(path)}`);
-    if (!response.ok) throw new Error("Lien de téléchargement indisponible.");
-    const data = (await response.json()) as { url: string };
-    return data.url;
-  }, []);
-
   const centerEmpty = !loadingDetail && !detail && !error;
 
   const welcome = useMemo(

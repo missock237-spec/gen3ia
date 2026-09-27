@@ -39,7 +39,6 @@ const ChevronDownIcon = (props: React.SVGProps<SVGSVGElement>) => <svg viewBox="
 const MicIcon = (props: React.SVGProps<SVGSVGElement>) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v4M9 22h6" strokeLinecap="round" /></svg>;
 const FileIcon = (props: React.SVGProps<SVGSVGElement>) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" {...props}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" strokeLinejoin="round" /><path d="M14 2v6h6" strokeLinejoin="round" /></svg>;
 const XIcon = (props: React.SVGProps<SVGSVGElement>) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...props}><path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" /></svg>;
-const StopIcon = (props: React.SVGProps<SVGSVGElement>) => <svg viewBox="0 0 24 24" fill="currentColor" {...props}><rect x="7" y="7" width="10" height="10" rx="2" /></svg>;
 
 export interface CommandComposerHandle {
   focus: () => void;

@@ -117,24 +117,49 @@ export interface ToolkitCatalogItem {
  * (wrapper SDK camelCase) vers la forme du catalogue Gen3ia.
  * Exporté pour les tests unitaires.
  */
-export function mapRawToolkitItem(item: any): ToolkitCatalogItem {
-  const categories = Array.isArray(item?.meta?.categories)
-    ? item.meta.categories
-    : Array.isArray(item?.categories)
-      ? item.categories
-      : [];
+// Item toolkit brut renvoyé par le client HTTP Composio (snake_case) ou
+// transformé par le wrapper SDK (camelCase) — tous les champs optionnels.
+type RawToolkitItem = {
+  slug?: string;
+  name?: string;
+  description?: string;
+  logo?: string | null;
+  logo_url?: string | null;
+  logoUrl?: string | null;
+  meta?: { categories?: unknown; description?: string; logo?: string | null } | null;
+  categories?: unknown;
+  composio_managed_auth_schemes?: unknown;
+  composioManagedAuthSchemes?: unknown;
+  auth_schemes?: unknown;
+  authSchemes?: unknown;
+  managed_by?: string;
+  managedBy?: string;
+  no_auth?: unknown;
+  noAuth?: unknown;
+};
+
+export function mapRawToolkitItem(item?: RawToolkitItem | null): ToolkitCatalogItem {
+  const rawCategories = item?.meta?.categories ?? item?.categories;
+  const categories = Array.isArray(rawCategories) ? rawCategories : [];
   return {
     toolkit: String(item?.slug ?? ""),
     label: String(item?.name ?? item?.slug ?? ""),
     description: String(item?.meta?.description ?? item?.description ?? ""),
     logo: item?.meta?.logo ?? item?.logo ?? item?.logo_url ?? null,
     categories: categories
-      .map((category: any) =>
-        typeof category === "string" ? category : category?.slug ?? category?.id ?? category?.name,
-      )
-      .filter(Boolean),
-    authSchemes:
-      item?.composio_managed_auth_schemes ?? item?.composioManagedAuthSchemes ?? item?.auth_schemes ?? item?.authSchemes ?? [],
+      .map((category) => {
+        if (typeof category === "string") return category;
+        const entry = category as { slug?: string; id?: string; name?: string } | null;
+        return entry?.slug ?? entry?.id ?? entry?.name;
+      })
+      .filter((value): value is string => typeof value === "string"),
+    authSchemes: (
+      item?.composio_managed_auth_schemes ??
+      item?.composioManagedAuthSchemes ??
+      item?.auth_schemes ??
+      item?.authSchemes ??
+      []
+    ) as string[],
     managedBy: item?.managed_by ?? item?.managedBy ?? "composio",
     noAuth: Boolean(item?.no_auth ?? item?.noAuth ?? false),
   };
@@ -161,7 +186,7 @@ export async function listComposioToolkits(options?: { category?: string; search
   const composio = getComposio();
   const rawClient = (
     composio as unknown as {
-      client: { toolkits: { list: (query: Record<string, unknown>) => Promise<any> } };
+      client: { toolkits: { list: (query: Record<string, unknown>) => Promise<unknown> } };
     }
   ).client.toolkits;
   if (!rawClient?.list) throw new Error("Composio raw toolkits client unavailable.");
@@ -171,7 +196,7 @@ export async function listComposioToolkits(options?: { category?: string; search
   const pageLimit = Math.min(TOOLKITS_PAGE_LIMIT, Math.max(1, options?.limit ?? TOOLKITS_PAGE_LIMIT));
 
   let cursor: string | null = options?.cursor ?? null;
-  const collected: any[] = [];
+  const collected: RawToolkitItem[] = [];
   let totalItems = 0;
 
   for (let page = 0; page < maxPages; page++) {
@@ -185,11 +210,16 @@ export async function listComposioToolkits(options?: { category?: string; search
       include_deprecated: false,
     }), `toolkits.list page ${page + 1}`);
 
-    const items = Array.isArray(result?.items) ? result.items : Array.isArray(result) ? result : [];
-    collected.push(...items);
-    totalItems = Number(result?.total_items ?? 0) || collected.length;
+    // Le client brut renvoie soit { items, total_items, next_cursor }, soit
+    // directement un tableau (versions du SDK) — normalisé une seule fois.
+    const pageData = (
+      Array.isArray(result) ? { items: result } : result
+    ) as { items?: unknown[]; total_items?: unknown; next_cursor?: unknown } | null;
+    const items = Array.isArray(pageData?.items) ? pageData.items : [];
+    collected.push(...(items as RawToolkitItem[]));
+    totalItems = Number(pageData?.total_items ?? 0) || collected.length;
 
-    const next = typeof result?.next_cursor === "string" && result.next_cursor ? result.next_cursor : null;
+    const next = typeof pageData?.next_cursor === "string" && pageData.next_cursor ? pageData.next_cursor : null;
     if (!next || collected.length >= totalItems) {
       cursor = null;
       break;

@@ -18,10 +18,12 @@ export const maxDuration = 60;
  */
 
 const COLLECTION = "hrLeaves";
-export const DEFAULT_ANNUAL_ALLOWANCE_DAYS = 25;
+const DEFAULT_ANNUAL_ALLOWANCE_DAYS = 25;
 
 const LeaveTypeSchema = z.enum(["paid", "sick", "unpaid", "remote"]);
-const StatusSchema = z.enum(["pending", "approved", "rejected"]);
+// Utilisé uniquement pour la dérivation de type (z.infer) — préfixe _ :
+// convention « valeur jamais consommée à l'exécution ».
+const _StatusSchema = z.enum(["pending", "approved", "rejected"]);
 
 const CreateSchema = z.object({
   employeeName: z.string().trim().min(2).max(120),
@@ -42,7 +44,7 @@ export interface LeaveData {
   reason?: string;
   days: number;
   allowance: number;
-  status: z.infer<typeof StatusSchema>;
+  status: z.infer<typeof _StatusSchema>;
   decidedAt?: string;
 }
 

@@ -16,14 +16,28 @@ function verifySignature(raw: string, received: string | null): boolean {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-function isTopupSale(payload: any): boolean {
+// Charge utile du webhook Chariow (successful.sale) — lue défensivement
+// (String(...), Number.isFinite, != null) aux points d'usage.
+type ChariowWebhookPayload = {
+  event?: string | null;
+  customer?: { email?: unknown } | null;
+  product?: { id?: unknown } | null;
+  sale?: {
+    id?: unknown;
+    status?: unknown;
+    amount?: { value?: unknown; currency?: unknown } | null;
+    custom_metadata?: Record<string, unknown> | null;
+  } | null;
+};
+
+function isTopupSale(payload: ChariowWebhookPayload): boolean {
   const configuredProductId = process.env.CHARIOW_TOPUP_PRODUCT_ID?.trim();
   if (configuredProductId && String(payload?.product?.id ?? "") === configuredProductId) return true;
   return String(payload?.sale?.custom_metadata?.gen3ia_product ?? "") === "wallet_topup";
 }
 
-function extensionSaleMetadata(payload: any) {
-  const metadata = payload?.sale?.custom_metadata ?? {};
+function extensionSaleMetadata(payload: ChariowWebhookPayload) {
+  const metadata: Record<string, unknown> = payload?.sale?.custom_metadata ?? {};
   return {
     product: String(metadata.gen3ia_product ?? ""),
     purchaseId: String(metadata.purchaseId ?? ""),
@@ -42,9 +56,9 @@ export async function POST(request: Request) {
   const event = request.headers.get("x-pulse-event");
   if (!deliveryId) return new Response("Missing delivery id", { status: 400 });
 
-  let payload: any;
+  let payload: ChariowWebhookPayload;
   try {
-    payload = JSON.parse(raw);
+    payload = JSON.parse(raw) as ChariowWebhookPayload;
   } catch {
     return new Response("Invalid JSON", { status: 400 });
   }

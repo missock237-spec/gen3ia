@@ -189,18 +189,6 @@ async function executeNode(ctx: ExecuteContext, node: WorkflowNode): Promise<unk
   }
 }
 
-/** Successeurs activables d'un nœud selon les conditions des arêtes. */
-function nextNodeIds(workflow: Workflow, nodeId: string, nodeOutputs: Record<string, unknown>): string[] {
-  const outgoing = workflow.edges.filter((edge) => edge.source === nodeId);
-  const conditionNode = workflow.nodes.find((node) => node.id === nodeId && node.type === "condition");
-  if (conditionNode) {
-    const passed = evaluateCondition(conditionNode.config as { expression?: string; op?: string; value?: string; target?: string }, nodeOutputs);
-    const branch = passed ? "true" : "false";
-    const matched = outgoing.filter((edge) => (edge.condition ?? "true").toLowerCase() === branch);
-    return (matched.length > 0 ? matched : outgoing.filter((edge) => !edge.condition)).map((edge) => edge.target);
-  }
-  return outgoing.map((edge) => edge.target);
-}
 
 /**
  * Exécute (ou reprend) un workflow : vagues de nœuds prêts en parallèle,

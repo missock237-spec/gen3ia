@@ -9,7 +9,10 @@ export type WorkspaceTaskStatus = "draft"|"awaiting_approval"|"approved"|"runnin
 export interface WorkspaceTask { id:string; ownerId:string; objective:string; status:WorkspaceTaskStatus; plan?:RuntimePlan; parentTaskId?:string; activeBranchId:string; createdAt:number; updatedAt:number; approvedAt?:number; completedAt?:number; }
 function assertOwner(ownerId:string){if(!ownerId?.trim()) throw new Error("ownerId is required.");}
 function ms(v:unknown){return v instanceof Timestamp?v.toMillis():typeof v==="number"?v:Date.now();}
-function taskFrom(id:string,d:any):WorkspaceTask{return {id,ownerId:d.ownerId,objective:d.objective,status:d.status,plan:d.plan,parentTaskId:d.parentTaskId,activeBranchId:d.activeBranchId,createdAt:ms(d.createdAt),updatedAt:ms(d.updatedAt),approvedAt:d.approvedAt?ms(d.approvedAt):undefined,completedAt:d.completedAt?ms(d.completedAt):undefined};}
+// Document Firestore agentWorkspaceTasks tel que stocké (champs requis par
+// createWorkspaceTask — assertions non-null justifiées à la lecture).
+type WorkspaceTaskDoc = { ownerId?:string; objective?:string; status?:string; plan?:RuntimePlan; parentTaskId?:string; activeBranchId?:string; createdAt?:Timestamp|number; updatedAt?:Timestamp|number; approvedAt?:Timestamp|number; completedAt?:Timestamp|number; };
+function taskFrom(id:string,d:WorkspaceTaskDoc):WorkspaceTask{return {id,ownerId:d.ownerId!,objective:d.objective!,status:d.status as WorkspaceTaskStatus,plan:d.plan,parentTaskId:d.parentTaskId,activeBranchId:d.activeBranchId!,createdAt:ms(d.createdAt),updatedAt:ms(d.updatedAt),approvedAt:d.approvedAt?ms(d.approvedAt):undefined,completedAt:d.completedAt?ms(d.completedAt):undefined};}
 const TASKS="agentWorkspaceTasks", BRANCHES="agentWorkspaceBranches", SNAPSHOTS="agentWorkspaceSnapshots";
 export async function createWorkspaceTask(ownerId:string,objective:string){assertOwner(ownerId);const plan=await createAgentPlan(ownerId,objective);const id=randomUUID(),branchId=randomUUID(),snapshotId=randomUUID(),now=Date.now();await adminDb.runTransaction(async tx=>{tx.create(adminDb.collection(TASKS).doc(id),{ownerId,objective,status:"awaiting_approval",plan,activeBranchId:branchId,createdAt:Timestamp.fromMillis(now),updatedAt:Timestamp.fromMillis(now)});tx.create(adminDb.collection(BRANCHES).doc(branchId),{ownerId,taskId:id,name:"main",snapshotId,active:true,createdAt:Timestamp.fromMillis(now)});tx.create(adminDb.collection(SNAPSHOTS).doc(snapshotId),{ownerId,taskId:id,branchId,state:{plan,status:"awaiting_approval"},createdAt:Timestamp.fromMillis(now)});});return getWorkspaceTask(ownerId,id);}
 export async function listWorkspaceTasks(ownerId:string,limitCount=12){
@@ -25,12 +28,12 @@ export async function approveWorkspaceTask(ownerId:string,id:string){const task=
 export async function listWorkspaceBranches(ownerId:string,taskId:string){
   const task=await getWorkspaceTask(ownerId,taskId);
   const snap=await adminDb.collection(BRANCHES).where("ownerId","==",ownerId).where("taskId","==",task.id).get();
-  return snap.docs.map(doc=>({id:doc.id,...doc.data()})).sort((a:any,b:any)=>ms(b.createdAt)-ms(a.createdAt));
+  return snap.docs.map(doc=>({id:doc.id,...doc.data()} as {id:string;createdAt?:Timestamp|number;[key:string]:unknown})).sort((a,b)=>ms(b.createdAt)-ms(a.createdAt));
 }
 export async function listWorkspaceSnapshots(ownerId:string,taskId:string){
   const task=await getWorkspaceTask(ownerId,taskId);
   const snap=await adminDb.collection(SNAPSHOTS).where("ownerId","==",ownerId).where("taskId","==",task.id).get();
-  return snap.docs.map(doc=>({id:doc.id,...doc.data()})).sort((a:any,b:any)=>ms(b.createdAt)-ms(a.createdAt));
+  return snap.docs.map(doc=>({id:doc.id,...doc.data()} as {id:string;createdAt?:Timestamp|number;[key:string]:unknown})).sort((a,b)=>ms(b.createdAt)-ms(a.createdAt));
 }
 
 export async function createBranch(ownerId:string,taskId:string,name:string){const task=await getWorkspaceTask(ownerId,taskId);const branchId=randomUUID(),snapshotId=randomUUID(),now=Date.now();await adminDb.collection(SNAPSHOTS).doc(snapshotId).create({ownerId,taskId,branchId,state:{plan:task.plan,status:task.status},createdAt:Timestamp.fromMillis(now)});await adminDb.collection(BRANCHES).doc(branchId).create({ownerId,taskId,name:name.trim().slice(0,80),parentBranchId:task.activeBranchId,snapshotId,active:false,createdAt:Timestamp.fromMillis(now)});return {id:branchId,taskId,ownerId,name:name.trim().slice(0,80),parentBranchId:task.activeBranchId,snapshotId,createdAt:now,active:false};}

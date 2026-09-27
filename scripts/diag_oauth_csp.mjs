@@ -1,6 +1,6 @@
 /* Prouve la cause racine : relâche la CSP côté client (interception de route)
    puis relance le clic Google — si le popup s'ouvre vers accounts.google.com,
-   la CSP de proxy.ts était bien le bloqueur. */
+   la CSP du middleware (ex proxy.ts) était bien le bloqueur. */
 import { chromium } from "playwright";
 
 const BASE = process.env.BASE_URL || "https://gen3ia.online";

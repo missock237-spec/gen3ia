@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { authFetch } from "@/lib/firebase/auth-client";
 import { formatRelative } from "@/components/workspace/labels";
-import type { Conversation, ConversationRun } from "@/lib/domain/conversations/types";
+import type { Conversation } from "@/lib/domain/conversations/types";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 
 /**

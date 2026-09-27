@@ -134,7 +134,7 @@ export function describeRecurrence(schedule: {
 export async function resolveScheduleAgent(
   userId: string,
   agentId: string | undefined,
-  objective: string,
+  _objective: string,
 ): Promise<{ agent: AgentRecord; created: boolean }> {
   const { listAgentsByOwner, createAgentRecord } = await chargerRepository();
   if (agentId) {

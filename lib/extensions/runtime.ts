@@ -11,7 +11,6 @@ import {
   getExtension,
   getExtensionSecrets,
   getInstallation,
-  getLatestApprovedVersion,
   getVersion,
   recordExtensionExecution,
 } from "./repository";

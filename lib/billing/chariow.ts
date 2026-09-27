@@ -40,10 +40,16 @@ interface ChariowApiEnvelope {
   errors?: unknown;
 }
 
+// Réponse JSON brute de l'API Chariow (structure non contractuelle, lue
+// défensivement aux points d'usage : String(...), Number.isFinite, != null).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- frontière JSON externe unique et centralisée
+type ChariowApiData = Record<string, any>;
+
 async function chariowFetch(
   path: string,
   init?: { method?: string; body?: string },
-): Promise<{ status: number; data: any }> {
+):
+  Promise<{ status: number; data: ChariowApiData }> {
   const apiKey = required("CHARIOW_API_KEY");
   const response = await fetch(`${CHARIOW_BASE_URL}${path}`, {
     method: init?.method ?? "GET",
@@ -62,7 +68,7 @@ async function chariowFetch(
       (payload?.errors ? JSON.stringify(payload.errors) : `HTTP ${response.status}`);
     throw new Error(`Chariow API error (${response.status}): ${detail}`);
   }
-  return { status: response.status, data: payload?.data ?? payload };
+  return { status: response.status, data: payload?.data ?? payload ?? {} };
 }
 
 /**

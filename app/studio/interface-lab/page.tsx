@@ -85,7 +85,7 @@ export default function InterfaceLabPage() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<CatalogResult[]>([]);
   const [logos, setLogos] = useState<LogoResult[]>([]);
-  const [themes, setThemes] = useState<CatalogResult[]>([]);
+  const [_themes, setThemes] = useState<CatalogResult[]>([]);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");

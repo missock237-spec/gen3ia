@@ -18,7 +18,7 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/firebase/admin";
-import { reserveFunds, settleReservation, releaseReservation } from "@/lib/billing/wallet";
+import { reserveFunds, settleReservation } from "@/lib/billing/wallet";
 import { releaseAgentPhoneNumber } from "@/lib/integrations/twilio/numbers";
 
 const COLLECTION = "agentPhoneNumbers";

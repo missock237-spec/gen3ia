@@ -8,7 +8,7 @@ type PermanentFile = { path: string; filename: string; sizeBytes: number };
 type CameraRequest = { id: string; reason: string; facingMode: string };
 
 export default function StoragePage() {
-  const [user, setUser] = useState<User | null>(null); const [files, setFiles] = useState<PermanentFile[]>([]); const [requests, setRequests] = useState<CameraRequest[]>([]); const [busy, setBusy] = useState(false); const videoRef = useRef<HTMLVideoElement>(null);
+  const [_user, setUser] = useState<User | null>(null); const [files, setFiles] = useState<PermanentFile[]>([]); const [requests, setRequests] = useState<CameraRequest[]>([]); const [busy, setBusy] = useState(false); const videoRef = useRef<HTMLVideoElement>(null);
   const [loaded, setLoaded] = useState(false); const [loadError, setLoadError] = useState<string | null>(null); const [actionError, setActionError] = useState<string | null>(null);
   const sessionDisponible = useSessionAvailable();
 

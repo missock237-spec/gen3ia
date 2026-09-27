@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { verifyFirebaseAuth, verifyFirebaseToken } from "@/lib/firebase/auth-server";
+import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 import { getPlatformRole } from "@/lib/access/platform";
 import { verifyDeveloperProjectAccess, createDeveloperApiKey, getDeveloperApiKey } from "./repository";
 

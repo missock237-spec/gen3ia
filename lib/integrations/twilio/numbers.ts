@@ -5,7 +5,6 @@ import { reserveFunds, releaseReservation, settleReservation } from "@/lib/billi
 import { getNumberPricing, usdMinorToWalletMinor } from "@/lib/voice/pricing";
 
 const COLLECTION = "agentPhoneNumbers";
-const DEFAULT_PRICE_MINOR = 5000;
 
 function authHeader(accountSid: string, authToken: string) {
   return "Basic " + Buffer.from(accountSid + ":" + authToken).toString("base64");
@@ -13,11 +12,6 @@ function authHeader(accountSid: string, authToken: string) {
 
 function apiBase(accountSid: string) {
   return `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}`;
-}
-
-function configuredPriceMinor() {
-  const value = Number(process.env.GEN3IA_PHONE_NUMBER_PRICE_MINOR ?? DEFAULT_PRICE_MINOR);
-  return Number.isSafeInteger(value) && value > 0 ? value : DEFAULT_PRICE_MINOR;
 }
 
 async function twilioRequest(path: string, init: RequestInit = {}) {

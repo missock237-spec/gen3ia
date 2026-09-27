@@ -8,7 +8,6 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   const url = new URL(request.url);
   let sessionId = url.searchParams.get("sessionId");
-  const numberId = url.searchParams.get("numberId");
 
   const form = await request.formData();
   const params = Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)]));

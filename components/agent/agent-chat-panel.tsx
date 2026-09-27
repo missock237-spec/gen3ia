@@ -108,7 +108,6 @@ function Avatar({ name, size = "md" }: { name: string; size?: "md" | "lg" }) {
 
 export function AgentChatPanel({
   agent,
-  onAgentsChanged,
   initialMessage = "",
   pendingConversationId = null,
   onPendingConversationConsumed,

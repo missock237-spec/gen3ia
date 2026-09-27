@@ -112,7 +112,6 @@ export function linearForecast(points: ForecastPoint[], horizon: number): Linear
   const sumY = points.reduce((acc, p) => acc + p.y, 0);
   const sumXY = points.reduce((acc, p) => acc + p.x * p.y, 0);
   const sumX2 = points.reduce((acc, p) => acc + p.x * p.x, 0);
-  const sumY2 = points.reduce((acc, p) => acc + p.y * p.y, 0);
   const denom = n * sumX2 - sumX * sumX;
   const slope = denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
   const intercept = (sumY - slope * sumX) / n;

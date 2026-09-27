@@ -345,9 +345,6 @@ export async function getImportedFileContent(userId: string, id: string): Promis
 /* Contexte modèle — contenu RÉEL injecté dans le tour                 */
 /* ------------------------------------------------------------------ */
 
-const MAX_CHARS_PER_FILE = 12_000;
-const MAX_TOTAL_CHARS = 36_000;
-
 /** Charge le contenu converti des fichiers joints (référencés par fileId). */
 export async function loadImportedFilesContext(
   userId: string,

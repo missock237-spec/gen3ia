@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 const MAX_SCAN_CHARS = 200_000;
 const SECRET_PATTERNS: RegExp[] = [
   /(?:api[_-]?key|access[_-]?token|secret|password|passwd|private[_-]?key)\s*[:=]\s*[^\s,;]{8,}/gi,

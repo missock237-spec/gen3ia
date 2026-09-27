@@ -22,7 +22,7 @@ export const maxDuration = 60;
 const PROCESSING_COLLECTION = "gdprProcessingRecords";
 const REQUESTS_COLLECTION = "gdprRequests";
 
-export const DSR_SLA_DAYS = 30;
+const DSR_SLA_DAYS = 30;
 
 const LegalBasisSchema = z.enum(["consent", "contract", "legal_obligation", "legitimate_interest", "vital_interest", "public_task"]);
 

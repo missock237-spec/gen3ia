@@ -14,7 +14,7 @@ Les couches demandées sont désormais présentes et déployées :
 | Multi-tenant | Organisations, membres (owner/admin/member), invitations expirables, index user→org, quotas par plan (free/pro/enterprise) | `lib/tenants/organizations.ts`, `app/api/organizations/**` |
 | Isolation données | Règles Firestore : accès conditionné à `members/{uid}`, mutations sensibles via Admin SDK uniquement | `firestore.rules` |
 | Connecteurs conversationnels | Sélecteur `@` dans le chat agent : connexions actives + catalogue, contexte d'actions Composio injecté au planificateur, `composio.execute` ouvert dans la politique (approbations conservées) | `lib/integrations/mention.ts`, `app/api/integrations/mention`, `components/agent/agent-chat-panel.tsx`, `app/api/agent/chat/route.ts` |
-| Sécurité | CSP centralisée middleware + `upgrade-insecure-requests`, `X-Frame-Options: DENY`, 401 corrélés, rate limiting, guardrails | `proxy.ts`, `next.config.ts`, `lib/security/*` |
+| Sécurité | CSP centralisée middleware + `upgrade-insecure-requests`, `X-Frame-Options: DENY`, 401 corrélés, rate limiting, guardrails | `middleware.ts`, `next.config.ts`, `lib/security/*` |
 | Observabilité | `traceId` par requête (réutilisé de `x-gen3ia-trace-id`/`x-request-id`), logs pino enfants avec userId/route, événements `request.authorized`/`request.rate_limited` | `lib/observability/logger.ts`, `lib/security/route-guard.ts` |
 | Découvrabilité | Page `/features` (portail client, approbations à distance, API publique, webhooks, voix, orchestrateur, MCP, PWA/desktop) + entrée de navigation | `app/features/page.tsx`, `components/nav/nav-items.ts` |
 | Documentation | README complet + feuille de route SaaS avec état d'implémentation honnête | `README.md`, `docs/saas-roadmap.md` |

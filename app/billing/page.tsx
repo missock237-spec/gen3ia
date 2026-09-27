@@ -37,21 +37,6 @@ interface WalletTransaction {
   createdAt: number;
 }
 
-const TRANSACTION_LABELS: Record<string, string> = {
-  topup: "Recharge",
-  charge: "Consommation",
-  charge_confirmed: "Consommation confirmée",
-  reserve: "Réservation",
-  release: "Réservation annulée",
-  refund: "Remboursement",
-  welcome_credit: "Crédit de bienvenue",
-  adjustment: "Ajustement",
-};
-
-function formatTransactionDate(ts: number) {
-  return new Date(ts).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" });
-}
-
 export default function BillingPage() {
   const [user, setUser] = useState<User | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -62,7 +47,8 @@ export default function BillingPage() {
   const [phase, setPhase] = useState<TopupPhase>("idle");
   const [countryCode, setCountryCode] = useState("CM");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  // Historique chargé pour les métriques ; rendu à venir (valeur non affichée).
+  const [_transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const sessionDisponible = useSessionAvailable();
 
   const loadWallet = useCallback(async () => {

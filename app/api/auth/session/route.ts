@@ -75,14 +75,13 @@ async function provisionnerUtilisateur(token: {
 }
 
 export async function POST(request: NextRequest) {
-  let rateLimitResponse: NextResponse | null = null;
   try {
     const ipLimit = await enforceRateLimit(`auth-session:${clientIp(request)}`, { limit: 30, windowMs: 5 * 60 * 1000 });
     if (!ipLimit.allowed) {
       return NextResponse.json({ authenticated: false, error: "Trop de tentatives de session. Reessayez plus tard." }, { status: 429, headers: { "retry-after": String(Math.max(1, Math.ceil(ipLimit.retryAfterMs / 1000))) } });
     }
   } catch {
-    rateLimitResponse = null; // le limiteur ne doit jamais bloquer la connexion
+    // le limiteur ne doit jamais bloquer la connexion
   }
 
   try {

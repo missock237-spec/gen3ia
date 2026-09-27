@@ -54,8 +54,6 @@ export default function MarketingWebinarPage() {
     if (result?.artifactId) setNotice(`Kit exporté (${String(result.filename)}) — téléchargeable depuis vos fichiers.`);
   }
 
-  const open = assets.find((a) => a.id === openId) ?? null;
-
   return (
     <main className="mx-auto w-full max-w-6xl px-0 py-2">
       <StudioHeader

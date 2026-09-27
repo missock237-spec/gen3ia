@@ -508,7 +508,6 @@ export function IdeWorkspace() {
   }, [rightWidth]);
 
   /* ---------------- Dérivés ---------------- */
-  const activeTab = openTabs.find((t) => t.artifactId === activeTabId) ?? null;
   const lastEntry = entries.length > 0 ? entries[entries.length - 1] : null;
   const selectedEntry = selectedEntryIndex !== null ? entries.find((e) => e.index === selectedEntryIndex) ?? lastEntry : lastEntry;
   const dirtyCount = openTabs.filter((t) => t.dirty).length;
@@ -762,7 +761,7 @@ interface PreviewFrameProps {
   onOpenInTab: () => void;
 }
 
-export function PreviewFrame({ compact, previewApps, previewAppId, onAppChange, previewDevice, onDeviceChange, previewContent, previewLoading, previewError, onReload, onOpenInTab }: PreviewFrameProps) {
+export function PreviewFrame({ compact: _compact, previewApps, previewAppId, onAppChange, previewDevice, onDeviceChange, previewContent, previewLoading, previewError, onReload, onOpenInTab: _onOpenInTab }: PreviewFrameProps) {
   if (previewApps.length === 0) {
     return (
       <div className="grid h-full place-items-center px-6 text-center">

@@ -77,7 +77,7 @@ export async function docxToText(buffer: Buffer): Promise<string> {
         reject(err);
       };
 
-      zipFile.on("error", (err: Error) => fail(new Error("DOCX illisible : archive corrompue.")));
+      zipFile.on("error", () => fail(new Error("DOCX illisible : archive corrompue.")));
       zipFile.on("end", () => fail(new Error("DOCX sans contenu texte (word/document.xml absent).")));
       zipFile.on("entry", (entry: yauzl.Entry) => {
         if (entry.fileName !== "word/document.xml") {

@@ -1,7 +1,6 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
-import type { MessagingChannel } from "./index";
 
 /**
  * Préférences de notification par utilisateur (collection messagingPreferences).

@@ -25,14 +25,16 @@ const POSTING_TOOL_RE = /(POST|TWEET|SHARE|PUBLISH|SEND|UPLOAD)/i;
 const TEXT_FIELD_RE = /^(text|content|message|post|caption|body|title|tweet_text|text_content)/i;
 const MEDIA_FIELD_RE = /(media|image|video|file|attachment|url)/i;
 
-const InputSchema = z.object({
+// Utilisé uniquement pour la dérivation de type (z.infer) — préfixe _ :
+// convention « valeur jamais consommée à l'exécution ».
+const _InputSchema = z.object({
   platform: z.enum(["linkedin", "x", "instagram", "facebook", "reddit", "youtube", "tiktok"]),
   content: z.string().trim().min(1).max(5000),
   mediaUrl: z.string().url().max(2048).optional().describe("URL publique d'un média (image/vidéo) à joindre, si le toolkit connecté le supporte."),
   connectedAccountId: z.string().min(1).max(256).optional().describe("Connexion Composio à utiliser (défaut : la première connexion active pour cette plateforme)."),
 });
 
-export type SocialPublishInput = z.infer<typeof InputSchema>;
+export type SocialPublishInput = z.infer<typeof _InputSchema>;
 
 interface ComposioToolShape {
   slug?: string;

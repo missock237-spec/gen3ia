@@ -7,7 +7,7 @@ import { SectionHeader } from "@/components/shells/section-header";
 import { LoadingState, EmptyState } from "@/components/shells/states";
 import { authFetch } from "@/lib/firebase/auth-client";
 import { ArtifactPanel } from "@/components/workspace/artifact-panel";
-import { ARTIFACT_TYPE_LABELS, formatRelative } from "@/components/workspace/labels";
+import { formatRelative } from "@/components/workspace/labels";
 import type { ConversationArtifact } from "@/lib/domain/conversations/types";
 
 /**

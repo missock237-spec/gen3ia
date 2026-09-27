@@ -140,7 +140,6 @@ function nextOccurrence(schedule: AgentSchedule, now = new Date()) {
     if (!schedule.daysOfWeek.includes(local.weekday)) continue;
     const start = minutes(schedule.startTime);
     const end = minutes(schedule.endTime);
-    const first = new Date(probe);
     const localDate = toDateKey(local.year, local.month, local.day);
     if (schedule.intervalMinutes <= 0) {
       const candidate = new Date(`${localDate}T${schedule.startTime}:00`);

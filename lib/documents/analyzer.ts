@@ -12,6 +12,7 @@ import {
 
 import type {
   ArtifactAnalysis,
+  ArtifactFormat,
 } from "./types";
 
 export async function analyzeArtifact(
@@ -108,11 +109,7 @@ export async function analyzeArtifact(
 }
 
 function getMimeType(
-  format: Parameters<
-    typeof formatFromFilename
-  > extends never
-    ? never
-    : any,
+  format: ArtifactFormat,
 ): string {
   const mimeTypes: Record<
     string,

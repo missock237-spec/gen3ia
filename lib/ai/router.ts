@@ -8,7 +8,6 @@ import type {
   AIMessage,
   AIRequest,
   AIResponse,
-  TaskType,
 } from "./models";
 
 import {

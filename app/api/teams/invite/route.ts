@@ -10,7 +10,8 @@ import { createTeamInvitation, getInvitationByToken, type TeamRole } from "@/lib
 export async function GET(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireUser(request);
+    // Appel conservé pour son effet : authentification obligatoire (401 sinon).
+    await requireUser(request);
     const token = request.nextUrl.searchParams.get("token")?.trim() || "";
     if (!token) {
       return NextResponse.json({ error: "Token manquant", requestId }, { status: 400 });

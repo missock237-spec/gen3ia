@@ -36,7 +36,7 @@ const URL_BODY_SCHEMA = z.object({
 });
 
 async function listDocuments(userId: string, projectId?: string) {
-  let query = adminDb.collection("knowledgeDocuments").where("userId", "==", userId).limit(200);
+  const query = adminDb.collection("knowledgeDocuments").where("userId", "==", userId).limit(200);
   const snapshot = await query.get();
   const documents = snapshot.docs
     .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<KnowledgeDocumentRecord, "id">) }))

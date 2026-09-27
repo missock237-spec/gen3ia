@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import z from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
-import { errorBody, errorStatus } from "@/lib/security/http-errors";
+import { errorStatus } from "@/lib/security/http-errors";
 import { adminDb } from "@/lib/firebase/admin";
 import { runWorkflowGraph } from "@/lib/workflows/executor";
 import type { Workflow } from "@/lib/workflows/types";

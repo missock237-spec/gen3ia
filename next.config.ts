@@ -8,8 +8,16 @@ const withBundleAnalyzer =
     : (config: NextConfig): NextConfig => config;
 
 // Content-Security-Policy : posée de manière centralisée par le middleware
-// (proxy.ts), qui couvre toutes les réponses y compris les routes API.
-// Ne pas redéclarer ici : deux en-têtes CSP = l'intersection s'applique.
+// (middleware.ts), qui couvre toutes les réponses y compris les routes API —
+// SAUF /preview/* qui reçoit une CSP « artefact » dédiée (les apps générées
+// par l'agent chargent des CDN dans un iframe sandboxé).
+// Ne pas redéclarer la CSP ici : deux en-têtes CSP = l'intersection s'applique.
+//
+// ⚠️ Cohérence des en-têtes : les valeurs posées ici DOIVENT rester
+// strictement identiques à celles du middleware (middleware.ts). Un écart
+// entre les deux sources produit deux en-têtes contradictoires et le
+// navigateur applique l'intersection (ex. Permissions-Policy camera=() vs
+// camera=(self) = micro/caméra cassés).
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -32,9 +40,17 @@ const nextConfig: NextConfig = {
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Strict-Transport-Security", value: "max-age=63072000" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-          { key: "X-Frame-Options", value: "DENY" },
+          // Identique au middleware (audit 09-2026 : HSTS unifié, éligible
+          // preload : 2 ans + sous-domaines + preload).
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+          // Identique au middleware — Live Voice (micro/caméra) autorisé en
+          // same-origin, géolocalisation refusée. NE JAMAIS diverger du
+          // middleware : deux valeurs différentes = intersection navigateur.
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(self), display-capture=(self), geolocation=()" },
+          // SAMEORIGIN (et non DENY) : la modale d'aperçu d'artefacts intègre
+          // /preview/<id> dans un iframe same-origin. Les tiers restent
+          // bloqués (double verrou avec CSP frame-ancestors).
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
           // Isolation cross-origin : les onglets tiers ne peuvent pas référencer
           // la fenêtre Gen3ia (mitigation Spectre / XS-Leaks). « allow-popups »
           // conserve le flux OAuth Google (popup + postMessage).
@@ -48,19 +64,46 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  images: {
+    // Sources distantes légitimes du produit (next/image refuse tout le
+    // reste) : stockage Firebase (deux domaines selon l'âge du bucket),
+    // S3 (documents importés), avatars Google/GitHub des comptes OAuth,
+    // qdrant.io réservé (intégrations futures, demandé par l'audit).
+    remotePatterns: [
+      { protocol: "https", hostname: "firebasestorage.googleapis.com" },
+      { protocol: "https", hostname: "*.firebasestorage.app" },
+      { protocol: "https", hostname: "*.s3.amazonaws.com" },
+      { protocol: "https", hostname: "**.qdrant.io" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "avatars.githubusercontent.com" },
+    ],
+  },
+  // Tree-shaking agressif des imports en barrel (index.ts réexportant tout) :
+  // seuls les modules réellement utilisés entrent dans le bundle client.
+  experimental: {
+    optimizePackageImports: ["@monaco-editor/react", "openai", "@vercel/analytics"],
+  },
   // La config web Firebase est fournie directement via les variables
   // NEXT_PUBLIC_FIREBASE_* (inlinees par Next.js a build time).
   // ⚠️ Ne PAS remapper FIREBASE_* (projet ADMIN "gen3ia") vers NEXT_PUBLIC_*
   // : cela inlinerait le mauvais projectId et casserait la verification des
   // ID tokens (mismatch iss/aud) en production.
-  // Firebase Admin, AWS SDK and pino rely on Node.js APIs and must stay external
-  // to the server bundle for correct behaviour on Vercel.
+  // Packages reposant sur des API Node.js et/ou lourds : ils restent
+  // EXTERNES au bundle serveur (sinon Next tente de les bundler et les
+  // fonctions dépassent la taille maximale / cassent à l'exécution).
+  // Audit 09-2026 : générateurs de documents + zip + client Qdrant ajoutés.
   serverExternalPackages: [
     "firebase-admin",
     "@aws-sdk/client-s3",
     "@aws-sdk/s3-request-presigner",
+    "@qdrant/js-client-rest",
     "pino",
     "exceljs",
+    "docx",
+    "pptxgenjs",
+    "pdf-lib",
+    "archiver",
+    "yauzl",
   ],
 };
 

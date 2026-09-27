@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import path from "node:path";
 import archiver from "archiver";
 
 export async function buildWorkspaceZip(

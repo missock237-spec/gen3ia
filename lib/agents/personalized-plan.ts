@@ -20,23 +20,6 @@ const ROLE_BY_TYPE: Record<string, string> = {
   automation: "planner",
 };
 
-const BASE_TOOLS_BY_LEVEL: Record<AgentSecurityLevel, string[]> = {
-  safe: [],
-  standard: ["web.search", "file.read", "file.create"],
-  power: [
-    "web.search",
-    "file.read",
-    "file.create",
-    "file.modify",
-    "zip.analyze",
-    "zip.create",
-    "zip.extract",
-    "artifact.create",
-    "code.execute",
-  ],
-  admin: ["*"],
-};
-
 /**
  * Outils d'exécution exclusifs aux agents de type "code" : terminal isolé,
  * exécution sandbox et simulation de code. Ajoutés à la whitelist du niveau

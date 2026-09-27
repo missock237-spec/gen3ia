@@ -59,13 +59,6 @@ export interface TestRunResult {
 }
 
 const TEST_COMMAND_PATTERN = /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test|\bvitest\b|\bjest\b|\bpytest\b|\bgo\s+test\b|\bcargo\s+test\b|\bnode\s+--test\b/i;
-const SUMMARY_PATTERNS = [
-  /(\d+)\s+(?:test[s]?\s+)?passed/i,
-  /Tests?:\s*(\d+)\s*passed(?:,\s*(\d+)\s*failed)?/i,
-  /(\d+)\s*(?:tests?)\s*(?:passed|réussis)/i,
-  /(\d+)\s+failed/i,
-];
-
 /** Dérive les résultats de tests depuis l'historique terminal (commandes de test). */
 export function extractTestRuns(entries: TerminalEntry[]): TestRunResult[] {
   const results: TestRunResult[] = [];

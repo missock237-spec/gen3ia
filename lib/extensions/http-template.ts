@@ -1,5 +1,4 @@
 import { assertPermissionsGranted, isPrivateHost } from "./permissions";
-import type { ExtensionManifest } from "./manifest";
 
 /**
  * Safe request builder for declarative extension tools (pure).

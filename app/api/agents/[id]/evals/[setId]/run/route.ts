@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
-import { errorBody, errorStatus } from "@/lib/security/http-errors";
+import { errorStatus } from "@/lib/security/http-errors";
 import { runTestSet } from "@/lib/agents/evals";
 
 export const runtime = "nodejs";
