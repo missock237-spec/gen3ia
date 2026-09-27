@@ -650,3 +650,21 @@ Work Log:
 Stage Summary:
 - Production gen3ia.online = commit bf7e812, READY — 10/10 e2e verts, 661 tests verts.
 - Les 11 points sont implémentés et vérifiés en production : approbation uniquement pour les apps NON connectées (plancher critique conservé), champ prompt sans limite de caractères, thème clair/sombre réellement global, chat « Gen IA » avec historique persistant à la place de la création d'agents, publicité PRO (campagnes + métriques réelles), exécution élargie, Gen IA 10 sous-agents + file hors-ligne Background Sync, lecture de l'historique réel des runs, amélioration automatique des prompts, auto-amélioration évolutive avec leçons.
+
+---
+Task ID: 36-suite
+Agent: Super Z (principal)
+Task: « Continu ou tu t'ai arrêté » — reprise après reset de l'environnement : vérifier l'état, reconfirmer Task 36 en production, statuer sur le bug OAuth hérité.
+
+Work Log:
+- ENVIRONNEMENT RESTAURÉ : le sandbox avait été réinitialisé (dépôt absent) → re-clonage gen3ia (main, HEAD 26ca409 = worklog Task 36, synchronisé origin), npm install.
+- VERCEL : production READY sur 26ca409 (dpl_BEvHkDxF) — le commit worklog est bien déployé.
+- OAuth Google/GitHub : le bug historique (CSP bloquant apis.google.com) avait DÉJÀ été corrigé lors d'une tâche antérieure (proxy.ts script-src + frame-src, repli popup→redirection). Re-diagnostic du jour (Playwright production + sondes HTTP) : popup Google OUVERTE (accounts.google.com, provider activé), popup GitHub OUVERTE (github.com/login?client_id=Ov23liU92SNs1qV0Y7EW), redirect_uri = https://gen3ia-b5a92.firebaseapp.com/__/auth/handler (correct), COOP = same-origin-allow-popups (correct), POST /api/auth/session provisionne profil+wallet des nouveaux utilisateurs OAuth. Scripts ajoutés : scripts/diag_oauth_github.mjs, scripts/diag_oauth_redirect.mjs. STATUT : RÉSOLU et vérifié au maximum vérifiable sans comptes Google/GitHub réels (le retour final passe par l'infrastructure Firebase, prouvée saine puisque les popups atteignent les fournisseurs avec state/redirect corrects).
+- SANTÉ PRODUCTION (session réelle) : /api/health 200 ; /api/health/infra → Redis configuré (ping OK), Qdrant configuré (43 mémoires, 320 conversations), sandbox en mode simulation-intégrée (par conception), STORAGE R2 = not_configured (SEUL point d'infrastructure restant — nécessite R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY côté Vercel, action utilisateur).
+- E2E COMPLÈTE RE-PASSÉE en production sur 26ca409 (scripts/verify_ea627f3_prod.mjs) : 10/10 VERTS — signUp+session, santé, thème clair global servi, zéro maxLength résiduel, chat Gen IA + historique + auto-provisionnement, approbation conditionnelle RÉELLE (web.api.write non connectée → carte awaiting, 21,3 s), publicité PRO (403 protégé + 3 annonces), sw.js file hors-ligne + Background Sync, logo officiel 192×192.
+
+Stage Summary:
+- Production gen3ia.online = 26ca409, READY — e2e Task 36 re-passée 10/10 VERTS après restauration de l'environnement.
+- Task 36 (les 11 points) CONFIRMÉE livrée et vérifiée en production une seconde fois.
+- OAuth Google/GitHub : résolu depuis longtemps, re-diagnostiqué et reconfirmé aujourd'hui (popups réelles, handler correct, COOP correct, provisioning OK) — plus aucun blocage côté code.
+- SEUL RESTE (bloqué côté utilisateur) : credentials R2 dans Vercel (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) pour le stockage d'images/fichiers à grande échelle (repli base-données actif en attendant).
