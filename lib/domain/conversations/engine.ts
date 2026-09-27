@@ -267,6 +267,7 @@ export type ExplicitToolIntent =
   | { toolName: "web.search"; query: string }
   | { toolName: "custom_api.call"; query: string }
   | { toolName: "web.api"; url: string }
+  | { toolName: "web.api.write"; url: string; method: "POST" | "PUT" | "PATCH" | "DELETE"; body?: string }
   | { toolName: "artifact.create"; document: { title: string; format: "pdf" | "docx" | "xlsx" | "pptx" | "md" } }
   | { toolName: "email.send"; to: string; subject: string; text: string };
 
@@ -334,6 +335,13 @@ export function detectExplicitToolIntent(message: string, catalog: ToolCatalogEn
   // appelle RÉELLEMENT cette API, sans connecteur préalable.
   const directUrl = extractApiUrlFromMessage(message);
   if (directUrl && catalogNames.has("web.api") && looksLikeDirectApiCall(message, directUrl)) {
+    // Garde déterministe ÉCRITURE : un verbe/méthode d'écriture (POST, PUT,
+    // PATCH, DELETE, création, modification) route vers web.api.write —
+    // JAMAIS web.api (lecture seule) pour une écriture.
+    const writeIntent = detectApiWriteIntent(message);
+    if (writeIntent && catalogNames.has("web.api.write")) {
+      return { toolName: "web.api.write", url: directUrl, method: writeIntent.method, ...(writeIntent.body ? { body: writeIntent.body } : {}) };
+    }
     return { toolName: "web.api", url: directUrl };
   }
 
@@ -426,6 +434,24 @@ export function looksLikeDirectApiCall(message: string, url: string): boolean {
   return apiWord.test(message) || apiHost || callVerb.test(message);
 }
 
+/**
+ * Détecte une ÉCRITURE API énoncée : méthode explicite (POST/PUT/PATCH/
+ * DELETE) ou verbe de modification. Retourne la méthode et, si présente,
+ * le corps JSON énoncé (extrait tel quel — jamais inventé).
+ */
+export function detectApiWriteIntent(message: string): { method: "POST" | "PUT" | "PATCH" | "DELETE"; body?: string } | null {
+  const methodMatch = message.match(/\b(POST|PUT|PATCH|DELETE)\b/i);
+  const writeVerb = /\b(cr[ée]er?|cr[ée]ez|cr[ée]e\s|ajout\w*|envoi\w*|publi\w*|modifi\w*|supprim\w*|mets?\s+à\s+jour|met[s]?\s+à\s+jour|mise\s+à\s+jour|create|send|update|delete)\b/i;
+  const jsonMatch = message.match(/(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})/);
+  if (!methodMatch) {
+    // Verbe d'écriture + corps JSON explicite + URL : écriture probable (POST par défaut).
+    if (writeVerb.test(message) && jsonMatch) return { method: "POST", body: jsonMatch[1] };
+    return null;
+  }
+  const method = methodMatch[1].toUpperCase() as "POST" | "PUT" | "PATCH" | "DELETE";
+  return { method, ...(jsonMatch ? { body: jsonMatch[1] } : {}) };
+}
+
 /** Requête condensée pour l'outil de recherche (nettoyage des formules). */
 export function extractSearchQuery(message: string): string {
   const cleaned = message
@@ -511,7 +537,7 @@ export function buildIntentSystemPrompt(
         "",
         "API DIRECTES PAR URL (sans connecteur préalable) :",
         "Si l'utilisateur désigne l'URL d'une API (ou colle une URL d'API) et demande de l'appeler, l'interroger ou l'utiliser : étape toolName=\"web.api\" avec toolInput { url: \"<URL exacte énoncée>\" } — l'appel HTTP réel est exécuté par le serveur et le résultat réel te sera renvoyé.",
-        "Pour modifier des données via une URL d'API : toolName=\"web.api.write\" (POST/PUT/PATCH/DELETE — validation humaine requise UNIQUEMENT si l'app cible n'est pas déjà connectée ; app connectée = exécution directe).",
+        "Pour modifier des données via une URL d'API (POST/PUT/PATCH/DELETE, création, envoi, mise à jour) : toolName=\"web.api.write\" avec toolInput { url, method, body? } — JAMAIS web.api pour une écriture (web.api est en lecture seule GET). Validation humaine requise UNIQUEMENT si l'app cible n'est pas déjà connectée ; app connectée = exécution directe.",
         "N'invente JAMAIS une URL ni une clé : utilise uniquement ce que l'utilisateur a énoncé.",
       ].join("\n")
     : "";
@@ -868,6 +894,22 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
             detail: "Appel HTTP réel vers l'API personnelle de l'utilisateur (exécution serveur).",
             toolName: "custom_api.call",
             toolInput: { apiName: extractApiUsageName(input.message) ?? undefined, path: extractApiPathFromMessage(input.message) ?? "" },
+          },
+        ],
+      };
+    } else if (explicit?.toolName === "web.api.write") {
+      // ÉCRITURE API explicite : méthode + corps énoncés, routés vers
+      // web.api.write (validation humaine si l'app n'est pas connectée).
+      intent = {
+        mode: "plan",
+        understanding: "Modification de données via une API désignée par URL (écriture réelle).",
+        objective: input.message.slice(0, 400),
+        steps: [
+          {
+            title: `Écriture via l'API (${explicit.method})`,
+            detail: `Requête ${explicit.method} réelle vers l'API publique désignée par l'utilisateur (exécution serveur).`,
+            toolName: "web.api.write",
+            toolInput: { url: explicit.url, method: explicit.method, ...(explicit.body ? { body: explicit.body } : {}) },
           },
         ],
       };
@@ -2075,7 +2117,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
       continue;
     }
 
-    const toolName = planned.toolName ?? undefined;
+    let toolName = planned.toolName ?? undefined;
     const risk = toolEntry?.risk ?? "low";
     let sensitive = planned.sensitive === true || (toolName ? stepRequiresApproval(risk) : false);
 
@@ -2170,6 +2212,21 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     if (toolName) {
       const startedAt = new Date().toISOString();
       let toolInput = (planned.toolInput ?? {}) as Record<string, unknown>;
+      // GARDE ANTI-ERREUR : une écriture (méthode/corps énoncés) ne doit
+      // JAMAIS passer par web.api (lecture seule) — réécrite en web.api.write.
+      if (toolName === "web.api" && catalogByName.get("web.api.write")) {
+        const writeIntent = detectApiWriteIntent(ctx.message);
+        const hasWriteShape = typeof toolInput.method === "string" || toolInput.body !== undefined;
+        if (hasWriteShape || writeIntent) {
+          toolName = "web.api.write";
+          toolInput = {
+            ...toolInput,
+            method: (toolInput.method as string) ?? writeIntent?.method ?? "POST",
+            ...(toolInput.body !== undefined ? {} : writeIntent?.body ? { body: writeIntent.body } : {}),
+          };
+          console.log(JSON.stringify({ event: "tool_route_corrected", from: "web.api", to: "web.api.write", conversationId: ctx.conversationId }));
+        }
+      }
       if (toolName === "artifact.create") {
         // Le contenu du livrable est finalisé juste avant la génération du
         // fichier : jamais de document vide ni d'échec zod opaque.

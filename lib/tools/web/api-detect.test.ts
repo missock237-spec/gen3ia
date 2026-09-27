@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { extractApiUrlFromMessage, looksLikeDirectApiCall } from "@/lib/domain/conversations/engine";
+import { detectApiWriteIntent, extractApiUrlFromMessage, looksLikeDirectApiCall } from "@/lib/domain/conversations/engine";
 
 describe("web.api — extraction d'URL d'API énoncée", () => {
   it("extrait l'URL d'une demande d'appel d'API", () => {
@@ -30,5 +30,31 @@ describe("web.api — intention d'appel direct", () => {
 
   it("ne déclenche PAS pour un simple lien collé sans intention d'appel", () => {
     expect(looksLikeDirectApiCall("voici mon site https://exemple.com/page", "https://exemple.com/page")).toBe(false);
+  });
+});
+
+describe("detectApiWriteIntent — routage déterministe écriture vs lecture", () => {
+  it("méthode POST énoncée + corps JSON → écriture avec corps extrait tel quel", () => {
+    const result = detectApiWriteIntent(
+      'Crée un article : envoie une requête POST avec le corps {"title":"Gen IA test","body":"validation","userId":1} sur https://jsonplaceholder.typicode.com/posts',
+    );
+    expect(result).not.toBeNull();
+    expect(result?.method).toBe("POST");
+    expect(result?.body).toContain('"title":"Gen IA test"');
+  });
+
+  it("PUT/PATCH/DELETE énoncés sont reconnus", () => {
+    expect(detectApiWriteIntent("mets à jour via PUT https://api.exemple.com/items/1")?.method).toBe("PUT");
+    expect(detectApiWriteIntent("supprime via DELETE https://api.exemple.com/items/1")?.method).toBe("DELETE");
+  });
+
+  it("une simple lecture (GET implicite) n'est PAS une écriture", () => {
+    expect(detectApiWriteIntent("Appelle cette API et dis-moi ce qu'elle contient : https://jsonplaceholder.typicode.com/users/1")).toBeNull();
+  });
+
+  it("verbe de création + corps JSON sans méthode explicite → POST par défaut", () => {
+    const result = detectApiWriteIntent('crée un utilisateur {"name":"Ada"} sur https://api.exemple.com/users');
+    expect(result?.method).toBe("POST");
+    expect(result?.body).toContain('"name":"Ada"');
   });
 });
