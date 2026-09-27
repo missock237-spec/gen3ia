@@ -129,7 +129,7 @@ async function main() {
   let settingsChoice = false;
   for (const href of settingsScripts) {
     const body = await fetch(`${BASE}${href}`, { cache: "no-store" }).then((r) => r.text());
-    if (body.includes("theme-choice-light") && body.includes("theme-choice-dark")) { settingsChoice = true; break; }
+    if (body.includes("theme-choice-") && (body.includes("Porcelaine lumineuse") || body.includes("Th\u00e8me sombre"))) { settingsChoice = true; break; }
   }
   check("3/theme-clair-global", lightCompat && bootstrapTheme && settingsChoice,
     `compat CSS=${lightCompat} · bootstrap=${bootstrapTheme} · choix Paramètres=${settingsChoice} (${settingsScripts.length} chunks)`);
