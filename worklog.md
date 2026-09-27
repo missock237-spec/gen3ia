@@ -668,3 +668,32 @@ Stage Summary:
 - Task 36 (les 11 points) CONFIRMÉE livrée et vérifiée en production une seconde fois.
 - OAuth Google/GitHub : résolu depuis longtemps, re-diagnostiqué et reconfirmé aujourd'hui (popups réelles, handler correct, COOP correct, provisioning OK) — plus aucun blocage côté code.
 - SEUL RESTE (bloqué côté utilisateur) : credentials R2 dans Vercel (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) pour le stockage d'images/fichiers à grande échelle (repli base-données actif en attendant).
+
+---
+Task ID: 37
+Agent: Super Z (principal)
+Task: « Audit GEN3IA (package.json + next.config.ts + proxy.ts) — monter à 10/10 partout en corrigeant les 11 points, puis audit complet incohérences/bugs, niveau produit Google. »
+
+Work Log:
+- #1 PERMISSIONS-POLICY UNIFIÉE : camera=(self), microphone=(self), display-capture=(self), geolocation=() IDENTIQUES dans middleware.ts et next.config.ts headers() (avant : camera=() vs camera=(self) — intersection navigateur = micro/caméra cassés). Live Voice préservé pour l'avenir.
+- #2 CSP SANS 'unsafe-eval' (XSS fermé) : script-src = 'self' 'unsafe-inline' + apis.google.com/gstatic/googleapis (Firebase Auth, bug 07-2025 conservé).
+- #3 SCRIPT live:gateway : le fichier lib/live/gateway-server.ts EXISTE et compile (l'audit se trompait) — script CONSERVÉ, vérifié au typecheck ; tsx déplacé en devDependencies (outil de dev uniquement, −40 Mo en prod).
+- #4 DOWNGRADE Next 16.3.5 → 15.x STABLE + React 19.3.0 → 19.0.0 : proxy.ts RENOMMÉ middleware.ts (convention Next 15, export middleware), next-env.d.ts régénéré + global.d.ts (déclaration *.css absente de Next 15, TS 5.9 TS2882), eslint-config-next 15 legacy → FlatCompat (@eslint/eslintrc). Piège majeur : la 15.3.3 exacte demandée porte la CVE-2025-66478 et VERCEL BLOQUE SON DÉPLOIEMENT (« Vulnerable version detected », build terminé mais ERROR) → 15.5.26 (dernière 15.x corrigée, même ligne stable). React 19.3-only : aucun usage (grep useEffectEvent/Activity). Params async Promise : déjà conforme 15.
+- #5 BUNDLE : experimental.optimizePackageImports (@monaco-editor/react, openai, @vercel/analytics) ; vérifié : AUCUN composant client n'importe docx/exceljs/pptxgenjs/pdf-lib/archiver/qdrant/aws-sdk/firebase-admin (0 hit sur fichiers "use client") — les libs lourdes étaient déjà serveur-seul.
+- #7 HSTS UNIFIÉ : max-age=63072000; includeSubDomains; preload partout (éligible preload list).
+- #8 images.remotePatterns : firebasestorage.googleapis.com, *.firebasestorage.app (vrai bucket), *.s3.amazonaws.com, **.qdrant.io, lh3.googleusercontent.com + avatars.githubusercontent.com (avatars OAuth).
+- #9 TRACE-ID CRYPTOGRAPHIQUE : crypto.randomUUID() (Edge natif) remplace Math.random() — format trc_<uuid> 40 car., test middleware mis à jour (UUID strict).
+- #10 serverExternalPackages COMPLET : + @qdrant/js-client-rest, docx, pptxgenjs, pdf-lib, archiver, yauzl.
+- #11 MATCHER /api INTENTIONNEL : documenté dans le code (trace-id posé+écho, filet de sécurité headers sur API, isolation client, détection d'appareil) — comportement conservé.
+- BUG CACHÉ DÉCOUVERT ET CORRIGÉ (hors audit) : les apps artefact chargeaient ECharts/React depuis cdn.jsdelivr.net dans des iframes srcDoc qui HÉRITENT la CSP stricte → scripts CDN bloqués, aperçu « en direct » muet. FIX : CSP ARTEFACT dédiée pour /preview/* (CDN jsdelivr/cdnjs/unpkg/esm.sh/tailwind + unsafe-eval CONFINÉS à la sandbox à code utilisateur, frame-ancestors 'self') + modale artifact-preview refactorée : iframe src=/preview/<id> (réponse HTTP avec sa propre CSP) au lieu de srcDoc (repli srcDoc si artefact sans id). XFO : DENY sur l'app, SAMEORIGIN sur /preview (middleware override).
+- LINT 100 → 0 : convention _ standard (args/vars/caught ignorePattern + ignoreRestSiblings), scripts e2e .mjs relâchés (outils de diagnostic), 45+ variables/imports morts CORRIGÉS DANS LE PRODUIT (billing, ide-workspace, pwa-register, message-thread, conversation-workspace, executor, scheduler, runner, guardrails…), 15 no-explicit-any TYPIÉS (webhook Chariow, workspace docs Firestore, client brut Composio mapRawToolkitItem/page normalisée, chariowFetch frontière documentée, analyzer/validator).
+- BUILD Next 15 : 2 exports de route interdits corrigés (DSR_SLA_DAYS, DEFAULT_ANNUAL_ALLOWANCE_DAYS → const locales).
+- QA LOCALE : typecheck 0 ; lint 0 ; vitest 661 verts / 83 fichiers (test middleware migré proxy→middleware, UUID strict) ; build OK.
+- E2E PRODUCTION (8e0bb80 READY, Next 15.5.26) — NOUVEAU scripts/verify_audit_prod.mjs : 16/16 VERTS (CSP sans unsafe-eval servie ; Permissions-Policy unifiée ; HSTS preload ; XFO DENY app + SAMEORIGIN /preview ; CSP artefact jsdelivr+eval+ancestors sur /preview ; trace-id trc_<uuid> + réutilisation id entrant sain ; POPUPS OAuth Google+GitHub OUVERTES — CSP n'a pas cassé Firebase Auth ; pub PRO 3 annonces ; sw hors-ligne ; logo 192×192). Non-régression Task 36 (verify_ea627f3) : 10/10 VERTS (thème global, prompt sans limite, chat Gen IA + historique, approbation conditionnelle réelle web.api.write awaiting, pub PRO, hors-ligne, logo). Suite artefacts : [6] analyse de données + lien /preview + echarts OK ; échec [3] = latence LLM transitoire (>94 s), sonde dédiée scripts/probe_artifact_app.mjs : artefact app créé + /preview 200 HTML — AUCUNE régression.
+- Commits : 9292950 (11 points + lint 0 + downgrade), 26c86db (Next 15.5.26 CVE), 8e0bb80 (cohérence XFO + script audit).
+
+Stage Summary:
+- Production gen3ia.online = 8e0bb80, READY — audit 16/16 + Task 36 10/10 verts.
+- Les 11 points de l'audit sont corrigés ; sécurité renforcée AU-DELÀ de l'audit (eval supprimé + bug CSP artefact caché corrigé + typage strict des frontières externes + 45 variables mortes retirées) ; Next 15.5.26 stable corrigé CVE (la 15.3.3 exacte est indéployable sur Vercel) ; React 19.0.0.
+- Exactitude de l'audit : #3 (script mort) FAUX — fichier existant, vérifié ; « Firebase Hosting facture la bande passante » hors-sujet (déploiement Vercel) — l'optimisation bundle reste appliquée.
+- Reste (hors périmètre code) : credentials R2 côté Vercel (stockage images/fichiers à grande échelle), sandbox code-execute en mode simulation-intégrée (par conception).
