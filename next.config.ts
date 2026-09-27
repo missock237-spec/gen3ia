@@ -47,10 +47,11 @@ const nextConfig: NextConfig = {
           // same-origin, géolocalisation refusée. NE JAMAIS diverger du
           // middleware : deux valeurs différentes = intersection navigateur.
           { key: "Permissions-Policy", value: "camera=(self), microphone=(self), display-capture=(self), geolocation=()" },
-          // SAMEORIGIN (et non DENY) : la modale d'aperçu d'artefacts intègre
-          // /preview/<id> dans un iframe same-origin. Les tiers restent
-          // bloqués (double verrou avec CSP frame-ancestors).
-          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          // DENY sur l'application (double verrou avec CSP frame-ancestors
+          // 'none') ; seule la surface /preview reçoit SAMEORIGIN via le
+          // middleware — la modale d'aperçu d'artefacts l'y intègre en
+          // iframe same-origin.
+          { key: "X-Frame-Options", value: "DENY" },
           // Isolation cross-origin : les onglets tiers ne peuvent pas référencer
           // la fenêtre Gen3ia (mitigation Spectre / XS-Leaks). « allow-popups »
           // conserve le flux OAuth Google (popup + postMessage).
