@@ -8,7 +8,9 @@ import {
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  notificationsCacheKey,
 } from "@/lib/notifications/repository";
+import { cacheWrap } from "@/lib/cache/redis";
 
 /**
  * Centre de notifications in-app.
@@ -36,10 +38,22 @@ export async function GET(request: NextRequest) {
     const params = request.nextUrl.searchParams;
     const limit = Math.min(Math.max(Number(params.get("limit") ?? 30) || 30, 1), 50);
     const unreadOnly = params.get("unread") === "1";
-    const [notifications, unread] = await Promise.all([
-      listNotifications(user.uid, limit, unreadOnly),
-      countUnreadNotifications(user.uid),
-    ]);
+
+    // Micro-cache sur la SEULE forme canonique du produit (polling sonnette
+    // limit=30, sans filtre) : invalidé par événement à chaque mutation
+    // (voir repository.ts) — latence réelle inchangée, charge Firestore
+    // réduite d'un ordre de grandeur. Toute autre forme bypass le cache.
+    const chargeur = async () => {
+      const [notifications, unread] = await Promise.all([
+        listNotifications(user.uid, limit, unreadOnly),
+        countUnreadNotifications(user.uid),
+      ]);
+      return { notifications, unread };
+    };
+    const { notifications, unread } =
+      limit === 30 && !unreadOnly
+        ? (await cacheWrap(notificationsCacheKey(user.uid, 30, false), 20, chargeur)).value
+        : await chargeur();
     return NextResponse.json({ notifications, unread });
   } catch (error) {
     return NextResponse.json(errorBody(error), { status: errorStatus(error), headers: { "x-gen3ia-error-code": errorCode(error) } });

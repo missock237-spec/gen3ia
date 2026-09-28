@@ -7,8 +7,13 @@ import {
   type Auth,
   type User
 } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
+// NOTE PERFORMANCE (audit 09-2026) : les imports statiques de
+// firebase/firestore et firebase/storage ont été RETIRÉS de ce module. Ils
+// entraînaient le SDK Firestore complet + son moteur regex re2js + le
+// transport webchannel (~110 kB gzip) dans le bundle client de CHAQUE page,
+// alors qu'aucun code client n'utilisait db/storage (vérifié : seuls `auth`
+// et `watchAuth` sont consommés). Les accès Firestore/Storage se font côté
+// serveur via firebase-admin — aucun usage client réel n'a été supprimé.
 
 /**
  * Assainit une variable NEXT_PUBLIC_* lue STATIQUEMENT.
@@ -93,10 +98,6 @@ function lazyService<T extends object>(create: () => T): T {
 }
 
 export const auth: Auth = lazyService(() => getAuth(getFirebaseApp()));
-export const db: Firestore = lazyService(() => getFirestore(getFirebaseApp()));
-export const storage: FirebaseStorage = lazyService(() =>
-  getStorage(getFirebaseApp())
-);
 
 /**
  * Abonnement a l'etat d'authentification qui ne leve JAMAIS d'exception.

@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
+import { cacheDelete } from "@/lib/cache/redis";
 
 /**
  * Centre de notifications persistantes Gen3ia (collection `notifications`).
@@ -78,6 +79,10 @@ export async function createNotification(input: CreateNotificationInput): Promis
       ...(notification.toolSlug ? { toolSlug: notification.toolSlug } : {}),
       createdAt: Timestamp.fromMillis(now),
     });
+    // La sonnette est servie depuis un micro-cache (polling 25 s) : une
+    // notification NOUVELLE invalide la clé pour que le prochain poll la
+    // voie immédiatement (latence réelle inchangée, charge Firestore −90 %).
+    invalidateNotificationsCache(notification.userId);
     return notification;
   } catch (error) {
     console.warn("[notifications] création impossible (non bloquant):", error instanceof Error ? error.message : error);
@@ -102,6 +107,33 @@ function docToNotification(id: string, data: FirebaseFirestore.DocumentData): Ge
     createdAtMs: createdAt instanceof Timestamp ? createdAt.toMillis() : typeof createdAt === "number" ? createdAt : Date.now(),
   });
   return parsed.success ? parsed.data : null;
+}
+
+/**
+ * MICRO-CACHE SONNETTE (performance & capacité, audit 09-2026).
+ *
+ * Le centre de notifications interroge GET /api/notifications?limit=30
+ * toutes les 25 s par client ouvert. Sans cache, chaque poll déclenche
+ * DEUX requêtes Firestore (liste + compteur) : à 10 000 clients ouverts,
+ * cela représente ~800 lectures Firestore/s pour afficher une cloche.
+ *
+ * Stratégie : cache Redis court (TTL 20 s = filet de sécurité) invalidé
+ * PAR ÉVÉNEMENT à chaque mutation (création, lecture, tout-lu). Une
+ * notification nouvelle apparaît donc au poll suivant SANS latence
+ * ajoutée, et le cas nominal (rien de neuf) est servi par Redis.
+ * La clé canonique est celle du seul appelant réel du produit
+ * (NotificationCenter : limit=30, sans filtre unread) — toute autre
+ * forme de requête contourne le cache côté route.
+ */
+export function notificationsCacheKey(userId: string, limit: number, unreadOnly: boolean): string {
+  return `g3:notif:${userId}:${limit}:${unreadOnly ? 1 : 0}`;
+}
+
+/** Invalidation best-effort — jamais bloquante pour le flux métier. */
+export function invalidateNotificationsCache(userId: string): void {
+  cacheDelete(notificationsCacheKey(userId, 30, false)).catch(() => {
+    /* Redis indisponible : le TTL de sécurité fait foi */
+  });
 }
 
 export async function listNotifications(userId: string, limit = 30, unreadOnly = false): Promise<Gen3iaNotification[]> {
@@ -129,6 +161,7 @@ export async function markNotificationRead(userId: string, id: string): Promise<
     if (!snapshot.exists || snapshot.get("userId") !== userId) return;
     tx.update(ref, { read: true });
   });
+  invalidateNotificationsCache(userId);
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {
@@ -137,6 +170,7 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
   const batch = adminDb.batch();
   for (const doc of snapshot.docs) batch.update(doc.ref, { read: true });
   await batch.commit();
+  invalidateNotificationsCache(userId);
 }
 
 /**
@@ -157,6 +191,7 @@ export async function markNotificationsForApprovalRead(userId: string, approvalI
     const batch = adminDb.batch();
     for (const doc of snapshot.docs) batch.update(doc.ref, { read: true });
     await batch.commit();
+    invalidateNotificationsCache(userId);
   } catch (error) {
     console.warn("[notifications] marquage lu par approbation impossible (non bloquant):", error instanceof Error ? error.message : error);
   }

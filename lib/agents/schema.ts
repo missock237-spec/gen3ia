@@ -1,8 +1,10 @@
 import { z } from "zod";
 
-export const AGENT_TYPES = ["universal", "code", "content", "research", "automation"] as const;
-export const VOICE_LANGUAGES = ["fr-FR", "en-US", "en-GB", "es-ES", "de-DE"] as const;
-export type VoiceLanguage = (typeof VOICE_LANGUAGES)[number];
+// Types & métadonnées pures déplacés dans le module feuille sans zod
+// (performance bundle client) — ré-exportés pour compatibilité totale.
+import { AGENT_TYPES, VOICE_LANGUAGES } from "./agent-types";
+export { AGENT_TYPES, AGENT_TYPE_META, VOICE_LANGUAGES } from "./agent-types";
+export type { AgentType, VoiceLanguage } from "./agent-types";
 
 export const VoiceConfigSchema = z.object({
   language: z.enum(VOICE_LANGUAGES).default("fr-FR"),
@@ -14,15 +16,6 @@ export const VoiceConfigSchema = z.object({
   voiceEnabled: z.boolean().default(true),
 });
 export type VoiceConfig = z.infer<typeof VoiceConfigSchema>;
-export type AgentType = (typeof AGENT_TYPES)[number];
-
-export const AGENT_TYPE_META: Record<AgentType, { label: string; description: string; securityLevel: "safe" | "standard" | "power" }> = {
-  universal: { label: "Universel", description: "Agent polyvalent : raisonnement, recherche web et production de documents.", securityLevel: "standard" },
-  code: { label: "Agent de code", description: "Agent developpeur : execution de code sandboxee + Atelier d'Interfaces (21st.dev) exclusif.", securityLevel: "power" },
-  content: { label: "Contenu", description: "Redaction, marketing, generation de documents et publications.", securityLevel: "standard" },
-  research: { label: "Recherche", description: "Veille, analyse de marche et synthese documentaire via recherche web.", securityLevel: "standard" },
-  automation: { label: "Automatisation", description: "Workflows repetitifs, planification et orchestration d'outils.", securityLevel: "standard" },
-};
 
 // ─── Personnalité & style (personnalisation avancée) ────────────────────────
 // Piliers optionnels configurés dans le wizard : ton, verbosité, humour,

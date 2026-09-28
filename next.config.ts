@@ -66,6 +66,13 @@ const nextConfig: NextConfig = {
     ];
   },
   images: {
+    // Formats modernes servis par l'optimiseur : AVIF (-50 % vs JPEG à
+    // qualité égale) puis WebP en repli — LCP des visuels amélioré.
+    formats: ["image/avif", "image/webp"],
+    // Durée de cache des images optimisées (31 jours) : les visuels du
+    // produit changent rarement, l'optimiseur n'est pas ré-invoqué à chaque
+    // requête (capacité edge, latence P75 des images en baisse).
+    minimumCacheTTL: 2_678_400,
     // Sources distantes légitimes du produit (next/image refuse tout le
     // reste) : stockage Firebase (deux domaines selon l'âge du bucket),
     // S3 (documents importés), avatars Google/GitHub des comptes OAuth,

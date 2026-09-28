@@ -1,4 +1,7 @@
-import { AGENT_TYPE_META, type AgentType } from "./schema";
+// Import depuis le module feuille PUR (pas schema.ts) : le client (AgentChatPanel)
+// consomme labelForAgent — importer schema.ts ici tirerait zod dans le bundle
+// navigateur (performance, audit 09-2026).
+import { AGENT_TYPE_META, type AgentType } from "./agent-types";
 import type { AgentPersona } from "./schema";
 
 /**

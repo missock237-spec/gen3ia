@@ -143,6 +143,15 @@ export default function RootLayout({
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
+        {/* Performance : pré-établissement des connexions TLS vers les
+            endpoints Firebase Auth consultés par CHAQUE page au démarrage
+            (onAuthStateChanged → identitytoolkit / securetoken ; popup OAuth
+            → apis.google.com). crossOrigin=anonymous : les SDK passent par
+            fetch (mode CORS) — sans cet attribut la connexion préétablie
+            ne serait pas réutilisée. */}
+        <link rel="preconnect" href="https://apis.google.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://securetoken.googleapis.com" crossOrigin="anonymous" />
       </head>
       <body className="antialiased font-sans">
         <ToastProvider>
