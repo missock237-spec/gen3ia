@@ -1,6 +1,5 @@
 "use client";
 
-import Script from "next/script";
 import { useEffect, useRef } from "react";
 
 /**
@@ -21,6 +20,12 @@ import { useEffect, useRef } from "react";
  * Config : NEXT_PUBLIC_ADSENSE_CLIENT (ca-pub-…, public par conception) +
  * slot par emplacement (NEXT_PUBLIC_ADSENSE_SLOT_HOME pour la vitrine).
  * Sans configuration, le composant ne rend RIEN (aucune régression locale).
+ *
+ * Loader (Task 41) : la bibliothèque adsbygoogle.js est chargée UNE SEULE
+ * fois, SSR, dans le <head> du layout racine (snippet officiel de vérification
+ * + Auto Ads). Ce composant n'embarque PAS de <Script> propre — le push dans
+ * la file window.adsbygoogle est consommé par le loader head, quel que soit
+ * l'ordre d'arrivée (file officielle, sûre dans les deux sens).
  */
 
 declare global {
@@ -82,12 +87,6 @@ export function AdSenseAd({
         data-ad-slot={effectiveSlot}
         data-ad-format={format}
         data-full-width-responsive="true"
-      />
-      <Script
-        id="gen3ia-adsense"
-        src={LOADER_SRC}
-        strategy="lazyOnload"
-        crossOrigin="anonymous"
       />
     </aside>
   );

@@ -159,6 +159,20 @@ export default function RootLayout({
             repli pour les navigateurs sans support preconnect. */}
         <link rel="preconnect" href="https://pagead2.googlesyndication.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
+        {/* Connexion Google AdSense (Task 41) — snippet officiel de
+            vérification de site + Auto Ads, servi SSR dans le head de
+            CHAQUE page : c'est ce marqueur que le robot AdSense vient
+            lire pour valider gen3ia.online (avec /ads.txt). Conditionné
+            à NEXT_PUBLIC_ADSENSE_CLIENT (public par conception) : sans
+            variable, rien n'est rendu — aucune régression locale. Le
+            composant AdSenseAd n'embarque PAS son propre loader (dédup). */}
+        {process.env.NEXT_PUBLIC_ADSENSE_CLIENT?.trim() ? (
+          <script
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_CLIENT.trim()}`}
+            crossOrigin="anonymous"
+          />
+        ) : null}
       </head>
       <body className="antialiased font-sans">
         <ToastProvider>
