@@ -72,12 +72,18 @@ jobs:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-${{ runner.os }}-v1
 
+      # firebase-tools exige un JDK >= 21 pour l'émulateur Firestore.
+      - name: Setup JDK 21 (émulateur Firestore)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      # Java (JRE) est pré-installé sur ubuntu-latest : requis par
-      # l'émulateur Firestore. Les tests e2e ne touchent JAMAIS la
-      # production (émulateurs locaux uniquement, projet demo-gen3ia).
+      # Les tests e2e ne touchent JAMAIS la production (émulateurs
+      # locaux uniquement, projet demo-gen3ia).
       - name: E2E contre émulateurs (auth + wallet, équipes/agents/facturation, règles Firestore)
         run: npm run test:e2e
 
