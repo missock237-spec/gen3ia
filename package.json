@@ -21,6 +21,12 @@
     "test:coverage": "vitest run --coverage",
     "analyze": "ANALYZE=true next build",
     "test:e2e": "npx firebase-tools emulators:exec --project demo-gen3ia \"vitest run --config vitest.e2e.config.mts\"",
+    "supabase:start": "npx supabase start",
+    "supabase:stop": "npx supabase stop",
+    "supabase:reset": "npx supabase db reset",
+    "supabase:push": "npx supabase db push",
+    "supabase:types": "npx supabase gen types typescript --local > lib/supabase/database.types.ts",
+    "check:prod": "node scripts/verify_task40_prod.mjs",
     "check:bundle": "node scripts/check_bundle_budget.mjs",
     "setup:hooks": "cp scripts/git-hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit",
     "seed": "tsx scripts/seed.ts",
@@ -33,6 +39,9 @@
     "@huggingface/inference": "4.13.28",
     "@monaco-editor/react": "^4.7.0",
     "@qdrant/js-client-rest": "^1.19.0",
+    "@sentry/nextjs": "^10.75.3",
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.117.2",
     "@tailwindcss/postcss": "^4.3.3",
     "@upstash/redis": "^1.39.0",
     "@vercel/analytics": "^2.0.1",
@@ -77,5 +86,8 @@
     "uuid": "^11.1.1",
     "image-size": "2.0.4",
     "postcss": "^8.5.23"
+  },
+  "allowScripts": {
+    "@sentry/cli@2.58.6": true
   }
 }

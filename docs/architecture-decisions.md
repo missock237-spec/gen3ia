@@ -125,3 +125,110 @@ distinction visuelle des étapes, coûts ou artefacts.
 
 La mise en œuvre est réalisée avec la refonte du chat universel
 (`components/agent/universal-agent-chat.tsx`).
+
+---
+
+## ADR-005 — Observabilité Sentry native (erreurs, traces, replay)
+
+**Statut :** Acceptée · **Date :** 2026-09-29
+
+### Contexte
+
+La supervision reposait sur les logs structurés pino + les trace-id
+middleware. Les erreurs côté NAVIGATEUR n'arrivaient jamais aux équipes
+(la console de l'utilisateur n'est pas observable), et aucune carte de
+latence serveur n'était disponible. Rec 4 du plan enterprise exigeait le
+niveau « observabilité configurée ».
+
+### Décision
+
+1. SDK **@sentry/nextjs** complet : `instrumentation.ts` (runtimes nodejs
+   + edge), `instrumentation-client.ts` (navigateur), hook
+   `onRequestError` (routes API/RSC), capture dans les boundaries
+   `error.tsx` et `global-error.tsx`.
+2. **Tunnel `/monitoring`** (route dédiée, liste blanche stricte des
+   hôtes d'ingestion) : les événements traversent les bloqueurs de
+   publicités ; le tunnel ne peut pas devenir un proxy ouvert.
+3. **Confidentialité** : `sendDefaultPii: false`, scrubbing `beforeSend`
+   (Authorization/cookies/query retirés), replay masqué par défaut,
+   erreurs tiers (AdSense, OAuth) ignorées. Le DSN est public par
+   conception ; le SENTRY_AUTH_TOKEN est un secret de build (source maps).
+4. `lib/observability/sentry.ts` reste le point d'entrée canonique du
+   code serveur (API inchangée, repli pino systématique).
+
+### Conséquences
+
+- Traces 15 % côté serveur / 10 % côté client ; replay 2 % (100 % si erreur).
+- Build sans `SENTRY_AUTH_TOKEN` = vert, stacks minifiés (dégradation assumée).
+- `config-report` expose le groupe `observability-sentry` (présence, jamais de valeurs).
+
+---
+
+## ADR-006 — Migration des données vers Supabase (PostgreSQL), Firebase Auth conservé
+
+**Statut :** Acceptée · **Date :** 2026-09-29
+
+### Contexte
+
+Firestore impose le modèle documentaire (pas de jointures, agrégats
+limités, coûts par lecture), le repli vectoriel est artisanal, et la
+roadmap enterprise (Rec 7) requiert PostgreSQL. Le décisionnaire demande
+explicitement Supabase comme cible.
+
+### Décision
+
+1. **Supabase = base de données** (PostgreSQL 15 + RLS + Storage +
+   Realtime + pgvector). Schéma complet livré en migrations SQL
+   (`supabase/migrations/`), transposant firestore.rules en politiques
+   RLS (deny-all par défaut).
+2. **Firebase Auth reste l'IdP** en phases 1-2 : OAuth Google/GitHub
+   opérationnels et vérifiés RS256 en production ne sont pas rejoués.
+   Le pont `lib/supabase/auth-bridge.ts` résout uid → `profiles`
+   (upsert idempotent, cache 5 min). Bascule IdP optionnelle en phase 3.
+3. **Accès données toujours serveur-seul** (service-role + scoping
+   explicite par owner), identique au modèle firebase-admin : la RLS
+   gouverne la clé anon (présente/future), pas la surface service-role.
+4. **Migration progressive pilotée** : `DATA_BACKEND=firebase|supabase`
+   (garde anti-oubli : flag sans config = repli), pilote notifications
+   livré et testé, double-écriture puis cutover par domaine (P2/P3),
+   rollback = repasser le flag. Table `migration_mapping` pour la
+   traçabilité Firestore ⇄ Postgres.
+
+### Conséquences
+
+- Zéro big-bang : chaque domaine migre seul, vérifiable ligne à ligne.
+- Jointures, contraintes CHECK, index partiels et pgvector deviennent
+  disponibles aux moteurs d'agents (mémoires, connaissances, audit).
+- 28 tables nouvelles : `supabase gen types` régénèrera les types en P2.
+- Guide opérationnel complet : `docs/migration-supabase.md`.
+
+---
+
+## ADR-007 — Monétisation publicitaire : AdSense confiné aux surfaces publiques
+
+**Statut :** Acceptée · **Date :** 2026-09-29
+
+### Contexte
+
+La vitrine publique (SEO/GEO) génère du trafic non monétisé. Le modèle
+SaaS existant (abonnements, crédits, marketplace) est complété par la
+demande explicite d'intégrer Google AdSense (client `ca-pub-716856…`).
+
+### Décision
+
+1. **Périmètre strict** : le composant `AdSenseAd` n'est monté que sur
+   les pages de contenu public (vitrine). Jamais dans le workspace ni
+   les routes applicatives — zéro poids bundle sur les surfaces
+   d'exécution, conformité produit (expérience agent non dégradée).
+2. **CSP augmentée au minimum** : script-src + frame-src ciblent les
+   domaines AdSense/DoubleClick ; `unsafe-eval` reste interdit.
+3. `public/ads.txt` servi à la racine (autorisations DIRECT officielles).
+4. **Performance** : preconnect TLS pagead2 dans le layout, loader
+   `lazyOnload` (dès que le navigateur est inactif), file
+   `window.adsbygoogle` officielle (push avant chargement = sûr).
+
+### Conséquences
+
+- Revenus publicitaires actifs sans toucher au cœur SaaS.
+- Sans `NEXT_PUBLIC_ADSENSE_CLIENT`, le composant ne rend rien (aucune
+  régression locale/test).

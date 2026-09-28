@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import bundleAnalyzer from "@next/bundle-analyzer";
+import { withSentryConfig } from "@sentry/nextjs";
 
 // Analyse du poids des bundles : ANALYZE=true npm run analyze
 const withBundleAnalyzer =
@@ -112,7 +113,31 @@ const nextConfig: NextConfig = {
     "pdf-lib",
     "archiver",
     "yauzl",
+    "@supabase/supabase-js",
   ],
 };
 
-export default withBundleAnalyzer(nextConfig);
+/**
+ * Sentry (Task 40) : upload des source maps au build + sourceBundleFiles.
+ * L'AUTH TOKEN est un secret de build (Vercel) — sans lui, le build reste
+ * vert et seuls les stacks minifiés sont remontés (dégradation assumée).
+ * `silent` : l'upload n'inonde pas les logs Vercel ; `disableLogger` :
+ * aucun console.log injecté en production ; `widenClientFileUpload` :
+ * inclut les chunks partagés (stacks client complets).
+ * Note : pas de tunnelRoute ici — le tunnel est un route handler dédié
+ * (app/monitoring/route.ts) branché côté client (instrumentation-client.ts).
+ */
+export default withSentryConfig(withBundleAnalyzer(nextConfig), {
+  org: process.env.SENTRY_ORG || "gen3ia",
+  project: process.env.SENTRY_PROJECT || "javascript-nextjs",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  release: { name: process.env.SENTRY_RELEASE || process.env.VERCEL_GIT_COMMIT_SHA },
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN,
+    deleteSourcemapsAfterUpload: true,
+  },
+  widenClientFileUpload: true,
+  disableLogger: true,
+  silent: !process.env.CI,
+  telemetry: false,
+});

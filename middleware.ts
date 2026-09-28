@@ -18,13 +18,20 @@ const CONTENT_SECURITY_POLICY = [
   // besoin (unsafe-inline suffit) et eval ouvre une faille XSS. Les seules
   // surfaces exécutant du code utilisateur (apps artefact : ECharts, React
   // CDN, Babel) reçoivent la CSP ARTEFACT dédiée ci-dessous.
-  "script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com https://www.googleapis.com",
+  // Google AdSense (Task 40) : loader pagead2 + sous-scripts dynamiques
+  // (tpc.googlesyndication.com via *.googlesyndication.com), suivi de clic
+  // doubleclick/googleadservices. Le rendu réel passe par des iframes
+  // (frame-src ci-dessous) ; le push window.adsbygoogle est inline (déjà
+  // couvert par 'unsafe-inline').
+  "script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com https://www.googleapis.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
   "media-src 'self' blob: https:",
   "connect-src 'self' https: wss:",
-  "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.firebaseio.com https://content.googleapis.com",
+  // Google AdSense (Task 40) : les annonces se rendent dans des iframes
+  // servies par googleads.g.doubleclick.net et tpc.googlesyndication.com.
+  "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.firebaseio.com https://content.googleapis.com https://googleads.g.doubleclick.net https://*.googlesyndication.com https://*.doubleclick.net",
   "worker-src 'self' blob:",
   "upgrade-insecure-requests",
 ].join('; ');

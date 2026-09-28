@@ -134,6 +134,13 @@ npm run build
 | `firebase:deploy` | `firebase deploy` | Déploie les règles, index et Cloud Functions sur Firebase |
 | `live:gateway` | `tsx lib/live/gateway-server.ts` | Lance le serveur Gateway WebSocket pour les sessions Live |
 | `analyze` | `ANALYZE=true next build` | Analyse la taille du bundle d'optimisation de build |
+| `check:bundle` | `node scripts/...` | Vérifie le budget First Load JS gzip par route (CI) |
+| `check:prod` | `node scripts/...` | Vérification production Task 40 (Sentry/AdSense/CSP/ads.txt) |
+| `supabase:start` / `stop` / `reset` | `npx supabase ...` | Environnement PostgreSQL local (migrations supabase/) |
+| `supabase:push` | `npx supabase db push` | Applique les migrations SQL au projet Supabase distant |
+| `supabase:types` | `npx supabase gen types ...` | Régénère les types TypeScript des tables (phase 2) |
+| `setup:hooks` | `cp scripts/git-hooks/...` | Installe le pre-commit gitleaks (scan des secrets) |
+| `seed` / `db:reset` | `tsx scripts/seed.ts` | Peuple les émulateurs Firebase (dev local) |
 
 ---
 
@@ -143,8 +150,20 @@ Pour en savoir plus sur l'architecture, la roadmap et les spécifications techni
 
 - 📖 **[Guide Technique & Référence API](docs/guide-technique.md)** : Cartographie complète des modules `lib/`, endpoints API, variables d'environnement et stack.
 - 🎯 **[Analyse du Projet](docs/analyse-projet.md)** : Rapport d'analyse d'architecture, forces de la plateforme et leviers d'amélioration.
-- 📐 **[Décisions d'Architecture (ADR)](docs/architecture-decisions.md)** : Journal des choix techniques structurants (Next.js API routes, state management, etc.).
+- 📐 **[Décisions d'Architecture (ADR)](docs/architecture-decisions.md)** : Journal des choix techniques structurants (Next.js API routes, state management, ADR-005 Sentry, ADR-006 Supabase, ADR-007 AdSense).
 - 🗺️ **[Feuille de Route SaaS (Roadmap)](docs/saas-roadmap.md)** : État d'implémentation de la couverture entreprise (Multi-tenant, Sécurité, Observabilité, Billing).
+- 🐘 **[Migration Supabase](docs/migration-supabase.md)** : Plan progressif Firestore → PostgreSQL (schéma, RLS, pont d'identité, phases, rollback).
+
+### Observabilité & données (Task 40)
+
+- **Sentry** : erreurs + traces (serveur 15 % / client 10 %) via le pont
+  asynchrone (zéro coût First Load), tunnel anti-bloqueurs `/monitoring`,
+  source maps au build (`SENTRY_AUTH_TOKEN`). Voir ADR-005.
+- **Supabase/PostgreSQL** : backend de données piloté (`DATA_BACKEND`),
+  schéma complet + RLS dans `supabase/migrations/`, Firebase Auth
+  conservé (pont d'identité). Voir ADR-006 et le guide de migration.
+- **Google AdSense** : emplacements publicitaires confinés aux pages
+  publiques (`AdSenseAd`), `ads.txt` à la racine, CSP étendue. Voir ADR-007.
 
 ## Système d'Auto-Amélioration (Self-Improvement)
 

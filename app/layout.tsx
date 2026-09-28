@@ -152,6 +152,13 @@ export default function RootLayout({
         <link rel="preconnect" href="https://apis.google.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://securetoken.googleapis.com" crossOrigin="anonymous" />
+        {/* Monétisation (Task 40) : DNS+TLS AdSense préétablis — le loader
+            ne se charge que sur les pages vitrine (AdSenseAd), la connexion
+            ne coûte rien aux surfaces applicatives et élimine ~100 ms de
+            handshake sur le premier rendu publicitaire. dns-prefetch en
+            repli pour les navigateurs sans support preconnect. */}
+        <link rel="preconnect" href="https://pagead2.googlesyndication.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
       </head>
       <body className="antialiased font-sans">
         <ToastProvider>

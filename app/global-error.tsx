@@ -1,10 +1,17 @@
 "use client";
 
+import { captureClientException } from "@/lib/telemetry/sentry-bridge-client";
+
 /**
  * Boundary d'erreur global (App Router) : une exception de rendu sur une page
  * ne doit JAMAIS laisser l'utilisateur sur l'écran de crash brut de Next.js.
  * Le bouton Réessayer remonte l'erreur côté client ; le bouton Tableau de bord
  * offre une issue quand la page elle-même est cassée.
+ *
+ * Sentry (Task 40) : capture via le pont asynchrone (file synchrone +
+ * SDK au repos) — importer @sentry/nextjs ici remettrait +54 kB gzip sur
+ * le chemin critique de chaque page (mesure ADR-005). Le digest Next est
+ * conservé comme tag pour corréler avec les erreurs serveur.
  */
 
 export default function GlobalRouteError({
@@ -14,6 +21,10 @@ export default function GlobalRouteError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // useEffect ici est impossible (cette boundary rend <html> entier) :
+  // capture au rendu, file bornée côté pont (dédupliquée par le SDK).
+  captureClientException(error, { surface: "global-error", digest: error?.digest ?? "none" });
+
   const digest = error?.digest ? String(error.digest).slice(0, 16) : null;
 
   return (

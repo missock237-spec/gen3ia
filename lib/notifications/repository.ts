@@ -2,6 +2,15 @@ import { Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { cacheDelete } from "@/lib/cache/redis";
+import { isSupabaseBackend, resolveProfileId } from "@/lib/db/driver";
+import {
+  createNotificationSupabase,
+  listNotificationsSupabase,
+  countUnreadSupabase,
+  markReadSupabase,
+  markAllReadSupabase,
+  markForApprovalReadSupabase,
+} from "./supabase-repository";
 
 /**
  * Centre de notifications persistantes Gen3ia (collection `notifications`).
@@ -50,6 +59,18 @@ export interface CreateNotificationInput {
 export async function createNotification(input: CreateNotificationInput): Promise<Gen3iaNotification | null> {
   try {
     if (!input.userId?.trim()) return null;
+
+    // Backend piloté (ADR-006) : DATA_BACKEND=supabase → écriture Postgres,
+    // sémantique identique (best-effort, forme zod, invalidation cache).
+    if (isSupabaseBackend()) {
+      const created = await createNotificationSupabase(input, {
+        uid: input.userId,
+        provider: "firebase-bridge",
+      });
+      if (created) invalidateNotificationsCache(created.userId);
+      return created;
+    }
+
     const now = Date.now();
     const ref = adminDb.collection(COLLECTION).doc();
     const notification = NotificationSchema.parse({
@@ -137,6 +158,10 @@ export function invalidateNotificationsCache(userId: string): void {
 }
 
 export async function listNotifications(userId: string, limit = 30, unreadOnly = false): Promise<Gen3iaNotification[]> {
+  if (isSupabaseBackend()) {
+    const profileId = await resolveProfileId({ uid: userId });
+    if (profileId) return listNotificationsSupabase(profileId, limit, unreadOnly);
+  }
   let query = adminDb
     .collection(COLLECTION)
     .where("userId", "==", userId)
@@ -150,11 +175,23 @@ export async function listNotifications(userId: string, limit = 30, unreadOnly =
 }
 
 export async function countUnreadNotifications(userId: string): Promise<number> {
+  if (isSupabaseBackend()) {
+    const profileId = await resolveProfileId({ uid: userId });
+    if (profileId) return countUnreadSupabase(profileId);
+  }
   const snapshot = await adminDb.collection(COLLECTION).where("userId", "==", userId).where("read", "==", false).count().get();
   return Number(snapshot.data().count ?? 0);
 }
 
 export async function markNotificationRead(userId: string, id: string): Promise<void> {
+  if (isSupabaseBackend()) {
+    const profileId = await resolveProfileId({ uid: userId });
+    if (profileId) {
+      await markReadSupabase(profileId, id);
+      invalidateNotificationsCache(userId);
+      return;
+    }
+  }
   const ref = adminDb.collection(COLLECTION).doc(id);
   await adminDb.runTransaction(async (tx) => {
     const snapshot = await tx.get(ref);
@@ -165,6 +202,14 @@ export async function markNotificationRead(userId: string, id: string): Promise<
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {
+  if (isSupabaseBackend()) {
+    const profileId = await resolveProfileId({ uid: userId });
+    if (profileId) {
+      await markAllReadSupabase(profileId);
+      invalidateNotificationsCache(userId);
+      return;
+    }
+  }
   const snapshot = await adminDb.collection(COLLECTION).where("userId", "==", userId).where("read", "==", false).limit(100).get();
   if (snapshot.empty) return;
   const batch = adminDb.batch();
@@ -180,6 +225,14 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
  */
 export async function markNotificationsForApprovalRead(userId: string, approvalId: string): Promise<void> {
   try {
+    if (isSupabaseBackend()) {
+      const profileId = await resolveProfileId({ uid: userId });
+      if (profileId) {
+        await markForApprovalReadSupabase(profileId, approvalId);
+        invalidateNotificationsCache(userId);
+        return;
+      }
+    }
     const snapshot = await adminDb
       .collection(COLLECTION)
       .where("userId", "==", userId)

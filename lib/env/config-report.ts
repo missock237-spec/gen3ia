@@ -119,6 +119,18 @@ const GROUPS: GroupSpec[] = [
     required: ["SANDBOX_URL", "SANDBOX_SHARED_SECRET"],
     fallback: "simulation intégrée (par conception)",
   },
+  {
+    group: "observability-sentry",
+    role: "Sentry (erreurs + traces + replay, tunnel /monitoring)",
+    required: ["SENTRY_DSN", "NEXT_PUBLIC_SENTRY_DSN"],
+    fallback: "logs structurés pino seuls (aucune perte applicative)",
+  },
+  {
+    group: "data-supabase",
+    role: "Supabase/PostgreSQL (backend de données piloté, ADR-006)",
+    required: ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"],
+    fallback: "Firestore (DATA_BACKEND=firebase) — état stable et supporté",
+  },
 ];
 
 /** Variables optionnelles reconnues mais jamais exigées (noms à part). */
@@ -136,6 +148,18 @@ const OPTIONAL_RECOGNIZED = [
   "LINKEDIN_ADS_ACCESS_TOKEN",
   "GITHUB_TOKEN",
   "SENTRY_DSN",
+  "NEXT_PUBLIC_SENTRY_DSN",
+  "SENTRY_AUTH_TOKEN",
+  "SENTRY_ORG",
+  "SENTRY_PROJECT",
+  "SENTRY_ENVIRONMENT",
+  "SENTRY_RELEASE",
+  "NEXT_PUBLIC_ADSENSE_CLIENT",
+  "NEXT_PUBLIC_ADSENSE_SLOT_HOME",
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "DATA_BACKEND",
   "FIRESTORE_EMULATOR_HOST",
   "FIREBASE_AUTH_EMULATOR_HOST",
 ];

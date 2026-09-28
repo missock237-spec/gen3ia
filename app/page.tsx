@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AdSenseAd } from "@/components/ads/adsense-ad";
 import { AppDownloads } from "@/components/home/app-downloads";
 import { VitrineHeader } from "@/components/home/vitrine-header";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
@@ -742,6 +743,12 @@ export default function HomePage() {
             ))}
           </div>
         </section>
+
+        {/* ---------- Emplacement publicitaire AdSense (Task 40) ----------
+            Sur contenu public uniquement, entre la FAQ et le footer :
+            visibilité maximale sans dégrader la lecture ni les surfaces
+            applicatives. Rend null sans NEXT_PUBLIC_ADSENSE_*. */}
+        <AdSenseAd className="pb-12" />
       </div>
 
       {/* ---------- Données structurées (SEO + moteurs de réponse IA) ---------- */}

@@ -3,11 +3,17 @@
 import Link from "next/link";
 import { useEffect } from "react";
 
+import { captureClientException } from "@/lib/telemetry/sentry-bridge-client";
+
 /**
  * Boundary d'erreur des routes (App Router) : intercepte toute exception de
  * rendu d'une page ou d'un composant serveur/client et affiche une page
  * d'erreur soignée en français, avec réessai — au lieu de l'écran de crash
  * brut du framework. Les erreurs sont loguées en console pour le diagnostic.
+ *
+ * Sentry (Task 40) : capture via le pont asynchrone (zéro kB au chemin
+ * critique, voir instrumentation-client.ts). Le digest Next est conservé
+ * comme tag pour corréler avec les erreurs serveur.
  */
 export default function RouteError({
   error,
@@ -18,6 +24,7 @@ export default function RouteError({
 }) {
   useEffect(() => {
     console.error("[gen3ia] Erreur de rendu de page :", error);
+    captureClientException(error, { surface: "route-error", digest: error?.digest ?? "none" });
   }, [error]);
 
   return (
