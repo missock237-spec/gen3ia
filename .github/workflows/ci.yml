@@ -54,7 +54,7 @@ jobs:
         run: npm run check:bundle
 
   e2e:
-    name: E2E Firebase (émulateurs : auth · firestore · règles)
+    name: "E2E Firebase (émulateurs : auth · firestore · règles)"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
