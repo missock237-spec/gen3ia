@@ -1,0 +1,33 @@
+# Gitleaks — détection de fuites de secrets (Task 39, Rec 3.1).
+#
+# Règles par défaut de gitleaks (clés AWS/GCP/OpenAI/Slack, tokens
+# GitHub/Google, PEM privés…) + exceptions Gen3ia : les fichiers de test
+# contiennent des placeholders ÉVIDENTS (jamais de vraie clé) et des
+# identités factices cryptographiques générées à la volée (vitest).
+# Lancer : gitleaks detect --source . --config .gitleaks.toml
+# CI : job "secrets" (gitleaks/gitleaks-action).
+
+title = "Gen3ia — politique de détection de secrets"
+
+[extend]
+# Jeu de règles par défaut de gitleaks (≈150 détecteurs de fournisseurs).
+useDefault = true
+
+[allowlist]
+description = "Placeholders de tests, clés publiques du SDK Firebase Web (non secrètes par conception), fixtures générées"
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)vitest/stubs/''',
+  '''(^|/)e2e/''',
+  '''(^|/)docs/''',
+  '''package-lock\.json$''',
+  '''pnpm-lock\.yaml$''',
+]
+# Clés d'API Web Firebase NEXT_PUBLIC_* : par conception publiques
+# (identifient le projet, ne donnent aucun accès sans règles de sécurité).
+regexes = [
+  '''AIzaSyCWeyTdWPj0HjIfo0EyLPldAeRrSIyBJbQ''',
+  '''gen3ia-b5a92\.firebaseapp\.com''',
+]
+# Exemples / documents explicatifs contenant des tokens factices.
+commits = []

@@ -6,6 +6,7 @@ import { countVectorPoints, isVectorStoreConfigured, VECTOR_COLLECTION_KNOWLEDGE
 import { CONVERSATION_VECTOR_COLLECTION } from "@/lib/chat/vector-index";
 import { isSandboxConfigured } from "@/lib/sandbox/simulation";
 import { pingR2, type R2HealthStatus } from "@/lib/storage/r2";
+import { summarizeEnv } from "@/lib/env/config-report";
 
 export const runtime = "nodejs";
 
@@ -23,6 +24,12 @@ export const runtime = "nodejs";
  * crasher la route (audit 25-d : la sonde renvoyait ok:true en ignorant
  * totalement R2, alors qu'une config manquante cassait TOUTES les pièces
  * jointes). Env absentes = { ok: false, reason: "not_configured" }.
+ *
+ * Section `config` (Task 39) : présence par GROUPE de variables (noms
+ * manquants uniquement, jamais de valeur) — la supervision voit QUOI est
+ * câblé (LLM, téléphonie, voix, ads, facturation, e-mail, stockage) sans
+ * exposer le moindre secret. Seul firebase-admin est vital : tout le
+ * reste dégrade avec repli assumé.
  */
 export async function GET(request: NextRequest) {
   const guard = await protectRoute(request, { rateLimit: { limit: 30, windowMs: 60_000 } });
@@ -62,6 +69,9 @@ export async function GET(request: NextRequest) {
     // La route reste 200 : le champ reflète la vérité du stockage,
     // c'est lui que la supervision doit surveiller.
     storage,
+    // Présence par groupe de capacités (booléens + noms manquants, JAMAIS
+    // de valeur) : supervision des fournisseurs sans exposition de secret.
+    config: summarizeEnv(),
     timestamp: new Date().toISOString(),
   });
 }

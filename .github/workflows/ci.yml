@@ -7,12 +7,12 @@ on:
     branches: [main]
 
 concurrency:
-  group: ci-\${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   ci:
-    name: Typecheck · Lint · Tests · Audit · Build
+    name: Typecheck · Lint · Tests · Audit · Build · Budget
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -50,12 +50,12 @@ jobs:
           NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ci-placeholder
           NEXT_PUBLIC_FIREBASE_APP_ID: ci-placeholder
 
-  deploy:
-    name: Deploy production (Vercel)
+      - name: Budget bundle (First Load JS par route, gzip)
+        run: npm run check:bundle
+
+  e2e:
+    name: E2E Firebase (émulateurs : auth · firestore · règles)
     runs-on: ubuntu-latest
-    needs: ci
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.ci.result == 'success'
-    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,26 +66,31 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
+      - name: Cache émulateurs Firebase
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-v1
 
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: \${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: \${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
 
-      - name: Build with Vercel environment
-        run: vercel build --prod --token "$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: \${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: \${{ secrets.VERCEL_PROJECT_ID }}
+      # Java (JRE) est pré-installé sur ubuntu-latest : requis par
+      # l'émulateur Firestore. Les tests e2e ne touchent JAMAIS la
+      # production (émulateurs locaux uniquement, projet demo-gen3ia).
+      - name: E2E contre émulateurs (auth + wallet, équipes/agents/facturation, règles Firestore)
+        run: npm run test:e2e
 
-      - name: Deploy to production
-        run: vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
+  secrets:
+    name: Secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (historique complet pour le scan)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks — détection de fuites
+        uses: gitleaks/gitleaks-action@v2
         env:
-          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: \${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: \${{ secrets.VERCEL_PROJECT_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

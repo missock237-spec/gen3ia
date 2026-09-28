@@ -46,3 +46,4 @@ ui-debug.log
 *.swp
 .env*
 scripts/push_github.sh
+firestore-debug.log

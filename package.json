@@ -13,13 +13,18 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e:firebase": "npx firebase-tools emulators:exec --project demo-gen3ia \"vitest run e2e/firebase-auth-wallet.e2e.test.ts\"",
+    "test:e2e:firebase": "npx firebase-tools emulators:exec --project demo-gen3ia \"vitest run --config vitest.e2e.config.mts\"",
     "format": "prettier --write .",
     "firebase:emulators": "firebase emulators:start",
     "firebase:deploy": "firebase deploy",
     "live:gateway": "tsx lib/live/gateway-server.ts",
     "test:coverage": "vitest run --coverage",
-    "analyze": "ANALYZE=true next build"
+    "analyze": "ANALYZE=true next build",
+    "test:e2e": "npx firebase-tools emulators:exec --project demo-gen3ia \"vitest run --config vitest.e2e.config.mts\"",
+    "check:bundle": "node scripts/check_bundle_budget.mjs",
+    "setup:hooks": "cp scripts/git-hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit",
+    "seed": "tsx scripts/seed.ts",
+    "db:reset": "npx firebase-tools emulators:exec --project demo-gen3ia --only auth,firestore \"tsx scripts/seed.ts\""
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1133.0",
@@ -53,6 +58,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@next/bundle-analyzer": "15.5.26",
     "@types/archiver": "^6.0.4",
     "@types/node": "^24.13.6",

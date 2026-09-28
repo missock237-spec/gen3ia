@@ -1,0 +1,37 @@
+#!/bin/sh
+# Pre-commit Gen3ia — barrière anti-fuite de secrets (Task 39, Rec 3.1).
+#
+# Installation : npm run setup:hooks
+# 1) gitleaks (si installé) scanne les fichiers stagés ;
+# 2) les clés privées PEM et les motifs de secrets évidents sont refusés
+#    même sans gitleaks (filet minimal, dépendance zéro).
+#
+# Contournement d'urgence (à éviter) : git commit --no-verify.
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$STAGED_FILES" ] && exit 0
+
+# 1) Gitleaks si disponible.
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks protect --staged --config=.gitleaks.toml --redact -v; then
+    echo ""
+    echo "✖ Commit bloqué : gitleaks a détecté un secret stagé."
+    echo "  Retirez le secret, ou s'il est factice, autorisez-le dans .gitleaks.toml."
+    exit 1
+  fi
+else
+  echo "ℹ gitleaks absent — scan minimal de secours (installez gitleaks pour une couverture complète)."
+fi
+
+# 2) Filet minimal sans dépendance : PEM privés + motifs de tokens réels.
+PATTERN='-----BEGIN (RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY-----|sk-(ant-|proj-)?[A-Za-z0-9_-]{40,}|ghp_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}'
+if echo "$STAGED_FILES" | xargs -r cat 2>/dev/null | grep -Eqn "$PATTERN"; then
+  echo ""
+  echo "✖ Commit bloqué : motif de clé privée / token détecté dans les fichiers stagés."
+  echo "  Fichiers concernés :"
+  echo "$STAGED_FILES" | tr ' ' '\n'
+  echo "  Si le contenu est une fixture factice, ajoutez-la à l'allowlist .gitleaks.toml."
+  exit 1
+fi
+
+exit 0

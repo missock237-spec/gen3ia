@@ -48,6 +48,25 @@
 
 ---
 
+## 🚀 Démarrage en 5 Minutes
+
+```bash
+make setup          # npm install + .env.local + hooks git anti-secrets
+make emulators      # émulateurs Firebase (auth :9099, firestore :8080, UI :4000)
+make seed           # 5 utilisateurs, 2 équipes, 3 agents, 10 conversations (émulateurs)
+npm run dev         # http://localhost:3000
+```
+
+> Sans Make : `npm install && npm run setup:hooks && npm run firebase:emulators` puis `npm run seed` (autre terminal) et `npm run dev`.
+
+**Variables OBLIGATOIRES** (développement comme production) : `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (identités factices acceptées en local — le seed en génère).
+
+**Variables OPTIONNELLES** (chaque absence dégrade avec repli, jamais de panne) : `OPENAI_API_KEY`/`GROQ_API_KEY`/`GLM_API_KEY`/`AGNES_API_KEY` (LLM), `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` (cache), `QDRANT_URL`/`QDRANT_API_KEY` (recherche vectorielle), `R2_*` (stockage fichiers), `RESEND_API_KEY` (e-mail), `TWILIO_*` (téléphonie), `ELEVENLABS_API_KEY` (voix), `COMPOSIO_API_KEY` (connecteurs), `CHARIOW_*` (facturation), `SANDBOX_URL`/`SANDBOX_SHARED_SECRET` (exécution de code). La sonde `/api/health/infra` (auth requise) liste les groupes présents/absents par nom — jamais de valeur.
+
+**Qualité** : `make qa` = lint + typecheck + tests unitaires + build + budget bundle. Tests e2e contre émulateurs : `make test:e2e` (ne touche JAMAIS la production).
+
+---
+
 ## 🏛️ Architecture du Projet
 
 | Dossier / Fichier | Rôle dans l'application |
