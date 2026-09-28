@@ -81,7 +81,7 @@ jobs:
       - name: E2E contre émulateurs (auth + wallet, équipes/agents/facturation, règles Firestore)
         run: npm run test:e2e
 
-  secrets:
+  secrets-scan:
     name: Secrets (gitleaks)
     runs-on: ubuntu-latest
     steps:
