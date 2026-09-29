@@ -242,7 +242,17 @@ export class AgentRuntime {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);
+      // Anomalie A2 (Task 45) : un TIMEOUT n'est jamais retryable — le
+      // dispatch sous-jacent peut encore tourner (appel LLM payant en
+      // cours). Retenter créerait une double exécution + une double
+      // facturation. L'étape est donc marquée échouée, comme une étape à
+      // effet de bord.
+      const isTimeout = /^Step timeout after \d+ms$/.test(message);
       this.state.observations.push({ stepId: step.id, success: false, error: message, latencyMs: Date.now() - startedAt, timestamp: new Date().toISOString() });
+      if (isTimeout) {
+        step.status = "failed";
+        throw error;
+      }
       if (step.sideEffect || step.maxRetries <= 0 || this.state.totalRetries >= this.state.maxTotalRetries) { step.status = "failed"; throw error; }
       this.state.totalRetries++;
       step.maxRetries--;

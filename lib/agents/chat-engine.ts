@@ -111,8 +111,12 @@ export async function classifyRequest(
         };
       }
     }
+    // Anomalie A3 (Task 45) : le repli n'est plus silencieux — observable
+    // dans les logs pour distinguer une panne du classificateur d'un choix.
+    console.warn("[agent-chat] classificateur: réponse non exploitable, repli heuristique", { reason: typeof parsed === "object" ? (parsed as Record<string, unknown>).mode : parsed });
     return heuristicClassification(message);
-  } catch {
+  } catch (error) {
+    console.warn("[agent-chat] classificateur indisponible, repli heuristique", error instanceof Error ? error.message : error);
     return heuristicClassification(message);
   }
 }

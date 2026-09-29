@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { createAutonomousPlan } from "@/lib/agents/autonomous/planner";
 import { MultiAgentOrchestrator } from "@/lib/agents/orchestrator/orchestrator";
 import type { AgentNode } from "@/lib/agents/orchestrator/types";
-import { generate } from "@/lib/ai/router";
+import { generateForUser } from "@/lib/billing/ai-execution";
 import { errorStatus } from "@/lib/security/http-errors";
 
 const RequestSchema = z.object({
@@ -38,29 +39,37 @@ export async function POST(request: NextRequest) {
           throw new Error(`Approval required before executing agent ${agent.id}`);
         }
 
-        const response = await generate({
-          task: roleTask(agent.role),
-          preferFree: true,
-          messages: [
-            {
-              role: "system",
-              content: `You are the ${agent.role} agent inside Gen3ia. Work only on the assigned objective. Do not claim that a file, deployment, external action, test, or web result was completed unless the corresponding tool actually produced that result. Return concrete, machine-usable output.`,
-            },
-            {
-              role: "user",
-              content: JSON.stringify({
-                objective: context.objective,
-                agentObjective: agent.objective,
-                requiredSkills: agent.requiredSkills,
-                requiredTools: agent.requiredTools,
-                dependencyResults: context.dependencyResults,
-                context: parsed.data.context,
-                constraints: parsed.data.constraints,
-                iterationBudget: Math.min(agent.maxIterations, parsed.data.maxIterations),
-              }),
-            },
-          ],
-          maxTokens: 8_000,
+        // Anomalie A4 (Task 45) : l'exécution autonome est FACTURÉE au
+        // wallet de l'utilisateur (réserve + règlement), comme toutes les
+        // autres voies d'exécution — plus aucun appel sur les clés
+        // plateforme sans facturation.
+        const { response } = await generateForUser({
+          userId: user.uid,
+          executionId: `autonomous_${randomUUID()}`,
+          request: {
+            task: roleTask(agent.role),
+            preferFree: true,
+            messages: [
+              {
+                role: "system",
+                content: `You are the ${agent.role} agent inside Gen3ia. Work only on the assigned objective. Do not claim that a file, deployment, external action, test, or web result was completed unless the corresponding tool actually produced that result. Return concrete, machine-usable output.`,
+              },
+              {
+                role: "user",
+                content: JSON.stringify({
+                  objective: context.objective,
+                  agentObjective: agent.objective,
+                  requiredSkills: agent.requiredSkills,
+                  requiredTools: agent.requiredTools,
+                  dependencyResults: context.dependencyResults,
+                  context: parsed.data.context,
+                  constraints: parsed.data.constraints,
+                  iterationBudget: Math.min(agent.maxIterations, parsed.data.maxIterations),
+                }),
+              },
+            ],
+            maxTokens: 8_000,
+          },
         });
 
         return {

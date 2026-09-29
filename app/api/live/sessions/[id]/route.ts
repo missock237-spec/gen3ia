@@ -13,7 +13,9 @@ export async function GET(request: Request, { params }: Params) {
     const token = await verifyFirebaseAuth(request);
     const { id } = await params;
     const session = await assertLiveSessionOwner(id, token.uid);
-    const { pairingTokenHash: _pairingTokenHash, ...publicSession } = session;
+    // Aucun hash de token ne quitte le serveur (Task 45 : la fuite du hash
+    // du viewer token est corrigée en même temps que celle du pairing).
+    const { pairingTokenHash: _p, viewerTokenHash: _v, ...publicSession } = session;
     return NextResponse.json({ session: publicSession });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unauthorized";

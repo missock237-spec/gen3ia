@@ -274,6 +274,13 @@ export async function generateStream(
   }> = [];
 
   for (const candidate of candidates) {
+    // Coupe-circuit (Task 45) : même résilience que generate — un fournisseur
+    // en incident rafale est sauté sur le chemin streamé aussi. Si TOUS sont
+    // ouverts, le meilleur est tenté quand même.
+    if (!isProviderAvailable(candidate.provider) && failures.length < candidates.length - 1) {
+      failures.push({ provider: candidate.provider, error: "circuit ouvert (incident récent)" });
+      continue;
+    }
     let providerAccepted = false;
     try {
       const response = await callProviderStream(
@@ -300,8 +307,10 @@ export async function generateStream(
       );
       // Le premier fragment passe par onProviderSelected : transmettons-le
       // aussi à onDelta pour que le texte émis soit complet.
+      recordProviderSuccess(candidate.provider);
       return response;
     } catch (error) {
+      recordProviderFailure(candidate.provider);
       // Aucun fragment n'a été émis pour ce fournisseur : on peut tenter le
       // suivant sans risque de dupliquer du texte côté client.
       if (!providerAccepted) {

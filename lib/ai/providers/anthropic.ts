@@ -76,6 +76,11 @@ export async function callAnthropic(
   const startedAt =
     Date.now();
 
+  // Garde de résilience (Task 45) : sans timeout, un hang d'Anthropic
+  // bloque l'appel jusqu'au kill serverless — même contrat que le provider
+  // OpenAI-compatible (55 s).
+  const TIMEOUT_MS = 55_000;
+
   const response =
     await fetch(
       "https://api.anthropic.com/v1/messages",
@@ -92,6 +97,8 @@ export async function callAnthropic(
           "anthropic-version":
             "2023-06-01",
         },
+
+        signal: AbortSignal.timeout(TIMEOUT_MS),
 
         body: JSON.stringify({
           model:
