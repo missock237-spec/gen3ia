@@ -1,5 +1,6 @@
 import screenshot from "screenshot-desktop";
 import { imageSize } from "image-size";
+import { decode as decodeJpeg, encode as encodeJpeg } from "jpeg-js";
 import { Button, Key, Point, keyboard, mouse } from "@nut-tree/nut-js";
 import WebSocket from "ws";
 import { z } from "zod";
@@ -115,12 +116,50 @@ function startCapture() { if (stopped || paused || captureTimer) return; capture
 async function captureAndSend() {
   if (stopped || paused || socket?.readyState !== WebSocket.OPEN) return;
   try {
-    const jpeg = await screenshot({ format: "jpg" });
-    if (jpeg.length > MAX_FRAME_BYTES) return;
+    let jpeg = await screenshot({ format: "jpg" });
+    // Task 45 : sur écran 4K, le JPEG natif dépasse souvent la limite — au
+    // lieu de perdre la frame EN SILENCE (l'agent ne voyait plus rien), elle
+    // est réduite (downscale 1/2 + qualité 70, jusqu'à 3 passes).
+    let shrunk = false;
+    if (jpeg.length > MAX_FRAME_BYTES) {
+      const reduced = shrinkJpeg(jpeg);
+      if (!reduced) {
+        console.warn("Gen3ia Live: frame trop lourde même après réduction — ignorée.");
+        return;
+      }
+      jpeg = reduced;
+      shrunk = true;
+    }
     const dimensions = imageSize(jpeg);
     if (!dimensions.width || !dimensions.height) return;
+    if (shrunk) console.log(`Gen3ia Live: frame réduite à ${Math.round(jpeg.length / 1024)} Ko pour respecter la limite du gateway.`);
     send({ type: "frame", sessionId, deviceId, timestamp: Date.now(), width: dimensions.width, height: dimensions.height, jpegBase64: jpeg.toString("base64") });
   } catch (error) { console.error("screen capture failed", error); }
+}
+
+/** Downscale 1/2 par passes successives (rééchantillonnage 2x2 moyen) + réencodage JPEG qualité 70. */
+function shrinkJpeg(input: Buffer): Buffer | null {
+  let current = input;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const decoded = decodeJpeg(new Uint8Array(current), { useTArray: true });
+    const halfWidth = Math.max(1, Math.floor(decoded.width / 2));
+    const halfHeight = Math.max(1, Math.floor(decoded.height / 2));
+    const out = new Uint8Array(halfWidth * halfHeight * 4);
+    for (let y = 0; y < halfHeight; y += 1) {
+      for (let x = 0; x < halfWidth; x += 1) {
+        const srcIdx = (y * 2 * decoded.width + x * 2) * 4;
+        const dstIdx = (y * halfWidth + x) * 4;
+        out[dstIdx] = decoded.data[srcIdx];
+        out[dstIdx + 1] = decoded.data[srcIdx + 1];
+        out[dstIdx + 2] = decoded.data[srcIdx + 2];
+        out[dstIdx + 3] = 255;
+      }
+    }
+    const encoded = encodeJpeg(out, halfWidth, halfHeight, { quality: 70 });
+    current = Buffer.from(encoded.data);
+    if (current.length <= MAX_FRAME_BYTES) return current;
+  }
+  return null;
 }
 
 function activateEmergencyStop(reason: string) {

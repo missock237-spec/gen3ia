@@ -17,19 +17,32 @@ interface VisionProvider {
   model: string;
 }
 
+/** Garde de latence (Task 45) : une décision vision ne traîne jamais. */
+const VISION_TIMEOUT_MS = 12_000;
+
 /**
- * Fournisseurs de vision, par priorité. Tous sont compatibles OpenAI
- * (chat.completions avec image_url) ; le premier qui répond gagne, les
- * erreurs du précédent déclenchent le repli sur le suivant.
+ * Fournisseurs de vision, par priorité, avec CACHE (Task 45) : les clients
+ * OpenAI ne sont plus recréés à chaque frame (chaque construction re-créait
+ * le pool de connexions — latence et mémoire gaspillées). Le cache est
+ * invalidé si la signature des variables d'environnement change.
  */
+let providerCache: { signature: string; providers: VisionProvider[] } | null = null;
+
+function visionEnvSignature(): string {
+  return [process.env.OPENAI_API_KEY, process.env.GROQ_API_KEY, process.env.AGNES_API_KEY, process.env.LIVE_AGENT_VISION_MODEL].join("|");
+}
+
 function getVisionProviders(): VisionProvider[] {
+  const signature = visionEnvSignature();
+  if (providerCache && providerCache.signature === signature) return providerCache.providers;
+
   const providers: VisionProvider[] = [];
   const modelOverride = process.env.LIVE_AGENT_VISION_MODEL;
 
   if (process.env.OPENAI_API_KEY) {
     providers.push({
       name: "openai",
-      client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+      client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: VISION_TIMEOUT_MS, maxRetries: 1 }),
       model: modelOverride || "gpt-4.1-mini",
     });
   }
@@ -39,6 +52,8 @@ function getVisionProviders(): VisionProvider[] {
       client: new OpenAI({
         apiKey: process.env.GROQ_API_KEY,
         baseURL: "https://api.groq.com/openai/v1",
+        timeout: VISION_TIMEOUT_MS,
+        maxRetries: 1,
       }),
       model: modelOverride || "meta-llama/llama-4-scout-17b-16e-instruct",
     });
@@ -49,6 +64,8 @@ function getVisionProviders(): VisionProvider[] {
       client: new OpenAI({
         apiKey: process.env.AGNES_API_KEY,
         baseURL: "https://apihub.agnes-ai.com/v1",
+        timeout: VISION_TIMEOUT_MS,
+        maxRetries: 1,
       }),
       model: modelOverride || "agnes-3.0-flash",
     });
@@ -57,7 +74,39 @@ function getVisionProviders(): VisionProvider[] {
   if (providers.length === 0) {
     throw new Error("Aucun fournisseur de vision configuré (OPENAI_API_KEY, GROQ_API_KEY ou AGNES_API_KEY requis)");
   }
+  providerCache = { signature, providers };
   return providers;
+}
+
+/**
+ * Extraction JSON tolérante (Task 45) : certains modèles enferment leur
+ * décision dans une fence markdown ou la bordent de texte — on tente le
+ * JSON brut, la fence, puis le premier objet trouvé.
+ */
+function parseDecisionJson(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch {
+    // candidats suivants
+  }
+  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    try {
+      return JSON.parse(fenced[1].trim());
+    } catch {
+      // candidat suivant
+    }
+  }
+  const start = content.indexOf("{");
+  const end = content.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    try {
+      return JSON.parse(content.slice(start, end + 1));
+    } catch {
+      // échec final
+    }
+  }
+  throw new Error("Live vision model returned an unparseable decision");
 }
 
 export interface LiveActionFeedback {
@@ -143,7 +192,7 @@ async function runVisionDecision(
 
   const content = response.choices[0]?.message?.content;
   if (!content) throw new Error("Live vision model returned no decision");
-  const parsed = DecisionSchema.parse(JSON.parse(content));
+  const parsed = DecisionSchema.parse(parseDecisionJson(content));
   if (parsed.action) LiveActionSchema.parse(parsed.action);
   // Garde dure : en mode navigateur, aucune action hors `wait` ne peut être
   // renvoyée au client (le navigateur ne contrôle ni le clavier, ni la souris,

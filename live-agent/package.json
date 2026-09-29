@@ -9,6 +9,7 @@
   "dependencies": {
     "@nut-tree/nut-js": "^4.2.1",
     "image-size": "^2.0.2",
+    "jpeg-js": "^0.4.4",
     "screenshot-desktop": "^1.15.1",
     "ws": "^8.18.3",
     "zod": "^4.0.0"

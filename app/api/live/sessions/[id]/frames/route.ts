@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
@@ -27,6 +27,28 @@ const PC_ONLY_MESSAGE =
 export const maxDuration = 60;
 
 const ACTION_RESULT_MAX_AGE_MS = 5 * 60_000;
+/**
+ * Verrous serveur (Task 45) : une seule décision vision en vol par session
+ * (la décision LLM dure 2-5 s ; le client peut renvoyer une frame entre-temps)
+ * et dédup des frames identiques (écran inchangé = pas d'appel LLM).
+ */
+const decisionsInFlight = new Map<string, number>();
+const DECISION_LOCK_MS = 30_000;
+const lastFramePrints = new Map<string, { hash: string; feedbackAt: number }>();
+const FRAME_PRINT_TTL_MS = 10 * 60_000;
+
+function isDecisionInFlight(id: string): boolean {
+  const at = decisionsInFlight.get(id);
+  return typeof at === "number" && Date.now() - at < DECISION_LOCK_MS;
+}
+
+/** Empêche la croissance illimitée du cache de dédup (processus longue durée). */
+function purgeFramePrints(): void {
+  const now = Date.now();
+  for (const [key, print] of lastFramePrints) {
+    if (!print || now - (print.feedbackAt || 0) > FRAME_PRINT_TTL_MS) lastFramePrints.delete(key);
+  }
+}
 
 const FrameSchema = z.object({
   deviceId: z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9._-]+$/, "deviceId invalide"),
@@ -111,51 +133,72 @@ export async function POST(request: Request, { params }: Params) {
       session.runtime?.lastActionResult && Date.now() - session.runtime.lastActionResult.at <= ACTION_RESULT_MAX_AGE_MS
         ? { ...session.runtime.lastActionResult }
         : undefined;
-    const decision = await decideLiveAction(session, jpeg, body.width, body.height, feedback);
-    const action = decision.action ? LiveActionSchema.parse(decision.action) : undefined;
-    const actionId = action ? randomUUID() : undefined;
 
-    await recordLiveObservation(id, {
-      deviceId: body.deviceId,
-      decisionMessage: decision.message,
-      done: decision.done,
-      actionId,
-    });
-    await recordLiveEvent(id, {
-      type: "vision.decision",
-      message: decision.message,
-      done: decision.done,
-      action: action ?? null,
-    });
-
-    if (decision.done) {
-      await updateLiveSessionStatus(id, "connected", body.deviceId);
-      await recordLiveEvent(id, { type: "completed", message: decision.message });
-      return NextResponse.json({ decision: { done: true, message: decision.message }, paused: true, pauseReason: "Objectif atteint — session en pause." });
+    // Dédup (Task 45) : frame identique à la précédente ET aucun nouveau
+    // résultat d'action → écran inchangé, réponse immédiate sans LLM.
+    const frameHash = createHash("sha256").update(body.jpegBase64).digest("hex");
+    const feedbackAt = feedback ? feedback.at : 0;
+    const previousPrint = lastFramePrints.get(id);
+    if (previousPrint && previousPrint.hash === frameHash && previousPrint.feedbackAt === feedbackAt && !isDecisionInFlight(id)) {
+      return NextResponse.json({ decision: { done: false, message: "Écran inchangé depuis la dernière analyse — en attente d'évolution." }, unchanged: true });
     }
 
-    if (!action || !actionId) {
-      return NextResponse.json({ decision: { done: false, message: decision.message } });
+    if (isDecisionInFlight(id)) {
+      return fail(409, "Une décision de vision est déjà en cours pour cette session — réenvoyez la frame dans un instant.", "LIVE_DECISION_IN_FLIGHT");
     }
+    decisionsInFlight.set(id, Date.now());
+    try {
+      const decision = await decideLiveAction(session, jpeg, body.width, body.height, feedback);
+      const action = decision.action ? LiveActionSchema.parse(decision.action) : undefined;
+      const actionId = action ? randomUUID() : undefined;
 
-    assertActionAllowed(action, session.permissions);
+      lastFramePrints.set(id, { hash: frameHash, feedbackAt });
+      purgeFramePrints();
 
-    // 3) Action sensible : mise en attente d'approbation humaine (page Live).
-    if (actionRequiresConfirmation(action)) {
-      await setPendingLiveAction(id, { actionId, action, createdAt: Date.now() });
-      await recordLiveEvent(id, { type: "action.blocked", reason: "confirmation_required", actionId, action });
-      return NextResponse.json({
-        decision: { done: false, message: decision.message },
-        pendingApproval: { actionId, action },
-        paused: true,
-        pauseReason: "Une action sensible requiert votre validation explicite.",
+      await recordLiveObservation(id, {
+        deviceId: body.deviceId,
+        decisionMessage: decision.message,
+        done: decision.done,
+        actionId,
       });
-    }
+      await recordLiveEvent(id, {
+        type: "vision.decision",
+        message: decision.message,
+        done: decision.done,
+        action: action ?? null,
+      });
 
-    // 4) Action directe : confiée au navigateur pour exécution + résultat.
-    await beginLiveAction(id, actionId, action, body.deviceId);
-    await recordLiveEvent(id, { type: "action.requested", actionId, action });
-    return NextResponse.json({ decision: { done: false, message: decision.message }, action: { actionId, action } });
+      if (decision.done) {
+        await updateLiveSessionStatus(id, "connected", body.deviceId);
+        await recordLiveEvent(id, { type: "completed", message: decision.message });
+        return NextResponse.json({ decision: { done: true, message: decision.message }, paused: true, pauseReason: "Objectif atteint — session en pause." });
+      }
+
+      if (!action || !actionId) {
+        return NextResponse.json({ decision: { done: false, message: decision.message } });
+      }
+
+      assertActionAllowed(action, session.permissions);
+
+      // 3) Action sensible : mise en attente d'approbation humaine (page Live).
+      if (actionRequiresConfirmation(action)) {
+        await setPendingLiveAction(id, { actionId, action, createdAt: Date.now() });
+        await recordLiveEvent(id, { type: "action.blocked", reason: "confirmation_required", actionId, action });
+        return NextResponse.json({
+          decision: { done: false, message: decision.message },
+          pendingApproval: { actionId, action },
+          paused: true,
+          pauseReason: "Une action sensible requiert votre validation explicite.",
+        });
+      }
+
+      // 4) Action directe : confiée au navigateur pour exécution + résultat.
+      await beginLiveAction(id, actionId, action, body.deviceId);
+      await recordLiveEvent(id, { type: "action.requested", actionId, action });
+      return NextResponse.json({ decision: { done: false, message: decision.message }, action: { actionId, action } });
+    } finally {
+      decisionsInFlight.delete(id);
+    }
   } catch (error) {
     captureServerException(error, { route: "live.sessions.browser.frames" });
     const message = error instanceof Error ? error.message : "Invalid request";

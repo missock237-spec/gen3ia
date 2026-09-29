@@ -70,6 +70,8 @@ interface FrameResponse {
   pauseReason?: string;
   error?: string;
   code?: string;
+  /** Écran inchangé : le serveur a répondu sans appel LLM (dédup Task 45). */
+  unchanged?: boolean;
 }
 
 type ObservationKind = "observation" | "action" | "result" | "pause" | "info" | "error";
@@ -176,6 +178,8 @@ export function LiveDashboard() {
   const streamRef = useRef<MediaStream | null>(null);
   const loopRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sendingRef = useRef(false);
+  /** Compteur d'échecs réseau consécutifs — visibles dans le journal (Task 45). */
+  const frameFailuresRef = useRef(0);
   const runtimeRef = useRef<{ sessionId: string; deviceId: string } | null>(null);
   const loggedPauseRef = useRef<string | null>(null);
   const observationIdRef = useRef(0);
@@ -330,6 +334,10 @@ export function LiveDashboard() {
       if (!response.ok) return;
 
       const data = (await response.json()) as FrameResponse;
+      frameFailuresRef.current = 0;
+      // Écran inchangé (dédup serveur) : rien de nouveau à journaliser —
+      // éviter de spammer le journal toutes les 3 secondes.
+      if (data.unchanged) return;
       if (data.decision?.message) {
         log(data.decision.done ? "info" : "observation", data.decision.message);
       }
@@ -347,7 +355,13 @@ export function LiveDashboard() {
         await executeBrowserAction(data.action);
       }
     } catch {
-      // Frame perdue (réseau, onglet) : la boucle suivante réessaie.
+      // Frame perdue (réseau, onglet) : la boucle suivante réessaie — mais
+      // l'utilisateur est informé dès 2 échecs consécutifs (Task 45 : plus
+      // aucun échec silencieux).
+      frameFailuresRef.current += 1;
+      if (frameFailuresRef.current === 2) {
+        log("error", "Connexion instable : plusieurs images n'ont pas pu être envoyées. La session continue de réessayer.");
+      }
     } finally {
       sendingRef.current = false;
     }

@@ -1,5 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   beginLiveAction,
   claimApprovedLiveAction,
@@ -24,6 +24,8 @@ const HEARTBEAT_MS = 15_000;
 const SESSION_POLL_MS = 2_000;
 const ACTION_RESULT_MAX_AGE_MS = 5 * 60_000;
 const MAX_VIEWERS_PER_SESSION = 3;
+/** Watchdog (Task 45) : un client muet (ni frame ni heartbeat) est mis en pause. */
+const CLIENT_ZOMBIE_MS = 45_000;
 
 interface ConnectionState {
   sessionId: string;
@@ -31,6 +33,13 @@ interface ConnectionState {
   socket: WebSocket;
   pausedByServer: boolean;
   lastFrameAt: number;
+  lastHeartbeatAt: number;
+  /** Verrou : une seule décision vision en vol par session (Task 45). */
+  decisionInFlight: boolean;
+  /** Hash de la dernière frame — dédup des écrans inchangés (Task 45). */
+  lastFrameHash?: string;
+  /** Timestamp du feedback utilisé par la dernière décision (dédup). */
+  lastDecisionFeedbackAt: number;
   lastActionId?: string;
   lastActionResult?: { ok: boolean; error?: string; at: number };
 }
@@ -158,7 +167,7 @@ export function startLiveGateway(port = Number(process.env.LIVE_GATEWAY_PORT || 
             existing.socket.close(4009, "Replaced");
           }
           const initiallyPaused = session.status === "paused" || Boolean(session.inFlightAction);
-          state = { sessionId: session.id, deviceId: message.deviceId, socket, pausedByServer: initiallyPaused, lastFrameAt: 0 };
+          state = { sessionId: session.id, deviceId: message.deviceId, socket, pausedByServer: initiallyPaused, lastFrameAt: 0, lastHeartbeatAt: Date.now(), decisionInFlight: false, lastDecisionFeedbackAt: 0 };
           clients.set(session.id, state);
 
           if (!initiallyPaused) {
@@ -187,6 +196,7 @@ export function startLiveGateway(port = Number(process.env.LIVE_GATEWAY_PORT || 
 
         if (message.type === "heartbeat") {
           assertFreshLiveTimestamp(message.timestamp);
+          state.lastHeartbeatAt = Date.now();
           await heartbeatLiveSession(state.sessionId, state.deviceId);
           return;
         }
@@ -206,6 +216,7 @@ export function startLiveGateway(port = Number(process.env.LIVE_GATEWAY_PORT || 
             jpegBase64: message.jpegBase64,
           });
           state.lastFrameAt = now;
+          state.lastHeartbeatAt = now;
 
           const session = await getLiveSession(state.sessionId);
           if (!session) throw new Error("Live session not found");
@@ -214,48 +225,69 @@ export function startLiveGateway(port = Number(process.env.LIVE_GATEWAY_PORT || 
           const feedback = state.lastActionResult && now - state.lastActionResult.at <= ACTION_RESULT_MAX_AGE_MS
             ? state.lastActionResult
             : undefined;
-          const decision = await decideLiveAction(session, jpeg, message.width, message.height, feedback);
-          const action = decision.action ? LiveActionSchema.parse(decision.action) : undefined;
-          const actionId = action ? randomUUID() : undefined;
 
-          await recordLiveObservation(state.sessionId, {
-            deviceId: state.deviceId,
-            decisionMessage: decision.message,
-            done: decision.done,
-            actionId,
-          });
-          await recordLiveEvent(state.sessionId, {
-            type: "vision.decision",
-            message: decision.message,
-            done: decision.done,
-            action: action ?? null,
-          });
+          // Dédup (Task 45) : frame identique à la précédente ET aucun
+          // nouveau résultat d'action → l'écran n'a pas changé, la décision
+          // précédente reste valable. On économise un appel LLM payant et
+          // 2 écritures Firestore par frame (boucles sans évolution).
+          const frameHash = createHash("sha256").update(message.jpegBase64).digest("hex");
+          const unchanged = frameHash === state.lastFrameHash
+            && (feedback ? feedback.at : 0) === state.lastDecisionFeedbackAt;
+          state.lastFrameHash = frameHash;
+          if (unchanged || state.decisionInFlight) return;
 
-          if (decision.done) {
-            state.pausedByServer = true;
-            await updateLiveSessionStatus(state.sessionId, "connected", state.deviceId);
-            send(socket, { type: "pause", reason: "Live objective completed" });
-            await recordLiveEvent(state.sessionId, { type: "completed", message: decision.message });
+          // Verrou (Task 45) : une décision vision dure 2-5 s — la frame
+          // suivante ne relance PAS l'appel LLM pendant ce temps (la course
+          // antérieure produisait deux actions et une pause spontanée).
+          state.decisionInFlight = true;
+          try {
+            const decision = await decideLiveAction(session, jpeg, message.width, message.height, feedback);
+            const action = decision.action ? LiveActionSchema.parse(decision.action) : undefined;
+            const actionId = action ? randomUUID() : undefined;
+
+            state.lastDecisionFeedbackAt = feedback ? feedback.at : 0;
+
+            await recordLiveObservation(state.sessionId, {
+              deviceId: state.deviceId,
+              decisionMessage: decision.message,
+              done: decision.done,
+              actionId,
+            });
+            await recordLiveEvent(state.sessionId, {
+              type: "vision.decision",
+              message: decision.message,
+              done: decision.done,
+              action: action ?? null,
+            });
+
+            if (decision.done) {
+              state.pausedByServer = true;
+              await updateLiveSessionStatus(state.sessionId, "connected", state.deviceId);
+              send(socket, { type: "pause", reason: "Live objective completed" });
+              await recordLiveEvent(state.sessionId, { type: "completed", message: decision.message });
+              return;
+            }
+
+            if (!action || !actionId) return;
+            assertActionAllowed(action, session.permissions);
+
+            if (actionRequiresConfirmation(action)) {
+              await setPendingLiveAction(state.sessionId, { actionId, action, createdAt: Date.now() });
+              await recordLiveEvent(state.sessionId, { type: "action.blocked", reason: "confirmation_required", actionId, action });
+              state.pausedByServer = true;
+              send(socket, { type: "pause", reason: "A sensitive action requires explicit confirmation" });
+              return;
+            }
+
+            await beginLiveAction(state.sessionId, actionId, action, state.deviceId);
+            state.lastActionId = actionId;
+            state.lastActionResult = undefined;
+            await recordLiveEvent(state.sessionId, { type: "action.requested", actionId, action });
+            send(socket, { type: "action", actionId, action });
             return;
+          } finally {
+            state.decisionInFlight = false;
           }
-
-          if (!action || !actionId) return;
-          assertActionAllowed(action, session.permissions);
-
-          if (actionRequiresConfirmation(action)) {
-            await setPendingLiveAction(state.sessionId, { actionId, action, createdAt: Date.now() });
-            await recordLiveEvent(state.sessionId, { type: "action.blocked", reason: "confirmation_required", actionId, action });
-            state.pausedByServer = true;
-            send(socket, { type: "pause", reason: "A sensitive action requires explicit confirmation" });
-            return;
-          }
-
-          await beginLiveAction(state.sessionId, actionId, action, state.deviceId);
-          state.lastActionId = actionId;
-          state.lastActionResult = undefined;
-          await recordLiveEvent(state.sessionId, { type: "action.requested", actionId, action });
-          send(socket, { type: "action", actionId, action });
-          return;
         }
 
         if (message.type === "action.result") {
@@ -306,7 +338,18 @@ export function startLiveGateway(port = Number(process.env.LIVE_GATEWAY_PORT || 
   });
 
   const poller = setInterval(() => {
+    const now = Date.now();
     for (const state of clients.values()) {
+      // Watchdog (Task 45) : un client sans frame ni heartbeat depuis 45 s
+      // est mis en pause — la session ne reste plus « running » des heures
+      // avec un client zombie (TTL précédent : 24 h).
+      if (!state.pausedByServer && now - Math.max(state.lastFrameAt, state.lastHeartbeatAt) > CLIENT_ZOMBIE_MS) {
+        state.pausedByServer = true;
+        send(state.socket, { type: "pause", reason: "Aucun signal du client (frames/heartbeat) — session mise en pause automatiquement." });
+        void updateLiveSessionStatus(state.sessionId, "paused", state.deviceId).catch(() => undefined);
+        void recordLiveEvent(state.sessionId, { type: "protocol.error", reason: "watchdog: client muet" }).catch(() => undefined);
+        continue;
+      }
       void synchronizeConnection(state).catch((error) =>
         send(state.socket, {
           type: "pause",

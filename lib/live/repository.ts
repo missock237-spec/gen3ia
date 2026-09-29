@@ -3,7 +3,11 @@ import type { LiveAction, LivePermission, LivePendingAction, LiveRuntimeState, L
 
 const COLLECTION = "liveAgentSessions";
 const PENDING_ACTION_MAX_AGE_MS = 10 * 60_000;
-const DEFAULT_MAX_ITERATIONS = 10_000;
+// Plafond réaliste (Task 45) : une itération ≈ 1 décision vision LLM. 300
+// itérations couvrent largement les objectifs légitimes ; l'ancien plafond
+// (10 000) laissait tourner des heures d'appels payants sur un objectif
+// jamais atteignable.
+const DEFAULT_MAX_ITERATIONS = 300;
 
 function ref(id: string) {
   return adminDb.collection(COLLECTION).doc(id);
