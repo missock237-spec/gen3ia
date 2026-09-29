@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { extractJsonObject, runAI, runAIJSON } from "@/lib/engines/ai-engine";
 import { generate, generateStream } from "@/lib/ai/router";
+import { stripThinkTags, ThinkTagStreamFilter } from "@/lib/ai/think-filter";
 import {
   detectImageRatio,
   extractImagePrompt,
@@ -1034,6 +1035,9 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   if (streaming) {
     // Streaming réel : chaque fragment est transmis au client au fil de
     // l'arrivée ; le texte complet est ensuite persisté d'un bloc.
+    // Filtrage anti-balises de raisonnement (<think>…) : le client ne voit
+    // JAMAIS la balise, même coupée entre deux fragments (machine à états).
+    const thinkFilter = new ThinkTagStreamFilter();
     await onEvent({ type: "status", phase: "synthesis", label: "L'assistant rédige sa réponse…" });
     let streamedText = "";
     try {
@@ -1049,15 +1053,17 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
           },
           {
             onDelta: (delta) => {
-              streamedText += delta;
-              return onEvent({ type: "message_delta", delta });
+              const visible = thinkFilter.push(delta);
+              if (!visible) return;
+              streamedText += visible;
+              return onEvent({ type: "message_delta", delta: visible });
             },
           },
         ),
         CHAT_BUDGET_MS,
         "réponse conversationnelle",
       );
-      content = response.text;
+      content = stripThinkTags(response.text);
       provider = response.provider;
       model = response.model;
       usage = response.usage;
@@ -1086,7 +1092,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
             CHAT_BUDGET_MS,
             "réponse conversationnelle",
           );
-          content = response.text;
+          content = stripThinkTags(response.text);
           provider = response.provider;
           model = response.model;
           usage = response.usage;
@@ -1115,7 +1121,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         CHAT_BUDGET_MS,
         "réponse conversationnelle",
       );
-      content = response.text;
+      content = stripThinkTags(response.text);
       provider = response.provider;
       model = response.model;
       usage = response.usage;

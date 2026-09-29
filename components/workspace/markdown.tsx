@@ -2,6 +2,8 @@
 
 import { Fragment, type ReactNode } from "react";
 
+import { stripThinkTags } from "@/lib/ai/think-filter";
+
 /**
  * Rendu markdown minimal et sûr pour les messages de conversation :
  * aucun dangerouslySetInnerHTML — tout est transformé en éléments React.
@@ -142,7 +144,10 @@ export function parseMarkdownBlocks(markdown: string): Block[] {
 }
 
 export function MarkdownContent({ content }: { content: string }) {
-  const blocks = parseMarkdownBlocks(content);
+  // Défense en profondeur : les balises de raisonnement de certains modèles
+  // (<think>…) ne doivent jamais être rendues, même sur des messages anciens
+  // persistés avant le filtrage à la source.
+  const blocks = parseMarkdownBlocks(stripThinkTags(content));
   return (
     <div className="space-y-2.5">
       {blocks.map((block, index) => {

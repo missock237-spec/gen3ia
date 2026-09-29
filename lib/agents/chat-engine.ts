@@ -1,4 +1,5 @@
 import { generate } from "../ai/router";
+import { stripThinkTags } from "../ai/think-filter";
 import type { AIProvider } from "../ai/models";
 import { assembleMessages } from "../ai/context-window";
 import { planUniversalAgent } from "./runtime/unified-agent";
@@ -166,7 +167,9 @@ export async function answerAsAgent(
     maxTokens: 3000,
     metadata: { purpose: "agent-chat-answer" },
   });
-  return response.text.trim();
+  // Anti-balises : le raisonnement interne de certains modèles (<think>…)
+  // ne doit jamais atteindre l'utilisateur.
+  return stripThinkTags(response.text.trim());
 }
 
 /**
