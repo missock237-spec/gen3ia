@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { RUN_STATUS_LABELS, RUN_STATUS_STYLES, STEP_STATUS_LABELS, STEP_STATUS_MARKS } from "./labels";
+import { toolLabel } from "@/lib/tools/labels";
 import type { ConversationRun, RunStep } from "@/lib/domain/conversations/types";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 
@@ -124,8 +125,8 @@ export function RunTimeline({ run, compact = false }: RunTimelineProps) {
                           <span className="shrink-0 text-[10px] font-normal text-[var(--g3-muted)]">{STEP_STATUS_LABELS[step.status]}</span>
                         </p>
                         {step.toolName && (
-                          <p className="mt-1 pl-5 font-mono text-[10px] text-[var(--g3-muted)]">
-                            outil : {step.toolName}
+                          <p className="mt-1 pl-5 text-[10px] text-[var(--g3-muted)]">
+                            Outil : {toolLabel(step.toolName)}
                           </p>
                         )}
                         {step.detail && <p className="mt-1 whitespace-pre-wrap pl-5 text-[11px] leading-relaxed text-[var(--g3-muted)]">{step.detail}</p>}

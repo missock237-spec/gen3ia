@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ArtifactPanel } from "./artifact-panel";
 import { RunTimeline } from "./run-timeline";
 import { RUN_STATUS_LABELS, RUN_STATUS_STYLES } from "./labels";
+import { approvalToolLabel, toolLabel } from "@/lib/tools/labels";
 import type {
   ConversationApproval,
   ConversationArtifact,
@@ -122,7 +123,7 @@ export function ContextDrawer({
                   <div key={approval.id} className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
                     <p className="text-xs font-semibold text-[var(--g3-text)]">⚖ {approval.title}</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-[var(--g3-muted)]">{approval.impact}</p>
-                    <p className="mt-1 font-mono text-[10px] text-[var(--g3-muted)]">{approval.toolName}</p>
+                    <p className="mt-1 text-[10px] text-[var(--g3-muted)]">{approvalToolLabel(approval.toolName)}</p>
                     <button
                       type="button"
                       onClick={() => void onDecide(approval.id, "approved")}
@@ -178,8 +179,8 @@ export function ContextDrawer({
               ) : (
                 <ul className="mt-1 flex flex-wrap gap-1">
                   {usedTools.map((tool) => (
-                    <li key={tool} className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2 py-0.5 font-mono text-[10px]">
-                      {tool}
+                    <li key={tool} className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2 py-0.5 text-[10px]">
+                      {toolLabel(tool)}
                     </li>
                   ))}
                 </ul>

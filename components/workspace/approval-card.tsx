@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { APPROVAL_STATUS_LABELS, APPROVAL_STATUS_STYLES } from "./labels";
+import { approvalToolLabel } from "@/lib/tools/labels";
 import type { ConversationApproval } from "@/lib/domain/conversations/types";
 
 /**
@@ -51,7 +52,7 @@ export function ApprovalCard({ approval, onDecide, disabled = false }: ApprovalC
       <dl className="mt-2.5 grid grid-cols-1 gap-1.5 text-[11px] leading-relaxed sm:grid-cols-2">
         <div>
           <dt className="font-medium text-[var(--g3-muted)]">Outil utilisé</dt>
-          <dd className="font-mono text-[var(--g3-text)]">{approval.toolName}</dd>
+          <dd className="text-[var(--g3-text)]">{approvalToolLabel(approval.toolName)}</dd>
         </div>
         <div>
           <dt className="font-medium text-[var(--g3-muted)]">Coût estimé</dt>

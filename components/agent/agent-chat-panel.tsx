@@ -8,6 +8,7 @@ import type { MentionItem } from "@/lib/ui/command-composer-helpers";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import { Callout } from "@/components/studio/callout";
 import { labelForAgent } from "@/lib/agents/charter";
+import { approvalToolLabel, toolLabel } from "@/lib/tools/labels";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import type { AgentSummary } from "@/lib/agents/schema";
 import type { AuthorizationMode } from "@/lib/security/authorization-mode";
@@ -33,6 +34,7 @@ type PlanStep = {
 
 type Approval = {
   id: string;
+  toolName?: string;
   toolSlug: string;
   reason: string;
   status: string;
@@ -594,7 +596,7 @@ export function AgentChatPanel({
                             <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${step.status === "completed" ? "bg-[var(--g3-success)]" : step.status === "failed" ? "bg-[var(--g3-danger)]" : step.status === "waiting_approval" ? "bg-[var(--g3-warning)]" : "bg-[var(--g3-faint)]"}`} aria-hidden="true" />
                             <span className="min-w-0">
                               <span className="block truncate font-medium text-[var(--g3-text-secondary)]">{step.name || step.id}</span>
-                              {step.toolName && <span className="block text-[10px] text-[var(--g3-muted)]">Outil : {step.toolName}</span>}
+                              {step.toolName && <span className="block text-[10px] text-[var(--g3-muted)]">Outil : {toolLabel(step.toolName)}</span>}
                             </span>
                             <span className={`ml-auto shrink-0 text-[10px] font-semibold ${statusClass(step.status)}`}>{statusLabel(step.status)}</span>
                           </li>
@@ -604,7 +606,7 @@ export function AgentChatPanel({
                       <div className="mt-3 space-y-2">
                         {pendingApprovals.map((approval) => (
                           <div key={approval.id} className="rounded-xl border border-amber-400/25 bg-amber-400/10 p-3">
-                            <p className="text-xs font-semibold text-amber-200">Action sensible : {approval.toolSlug}</p>
+                            <p className="text-xs font-semibold text-amber-200">Action sensible : {approvalToolLabel(approval.toolName, approval.toolSlug)}</p>
                             {approval.reason && <p className="mt-0.5 text-[11px] leading-5 text-amber-200/80">{approval.reason}</p>}
                             <div className="mt-2 flex gap-2">
                               <button type="button" onClick={() => void decideApproval(approval.id, "approve")} disabled={loading} className="rounded-lg bg-[var(--g3-surface)] px-3 py-1.5 text-[11px] font-semibold text-[var(--g3-text)] transition hover:bg-[var(--g3-elevated)] disabled:opacity-40">Approuver</button>

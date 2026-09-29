@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { toolLabel } from "@/lib/tools/labels";
+
 /**
  * Tableau de bord d'observabilité des agents :
  *  - KPI : exécutions, taux de succès, coûts, tokens, durée moyenne ;
@@ -159,7 +161,7 @@ export function ObservabilityDashboard({ overview }: { overview: ObservabilityOv
           <ul className="mt-4 space-y-2.5">
             {tools.map((tool) => (
               <li key={tool.name} className="flex items-center gap-3">
-                <span className="w-40 shrink-0 truncate text-xs font-semibold text-[var(--g3-text-secondary)]" title={tool.name}>{tool.name}</span>
+                <span className="w-40 shrink-0 truncate text-xs font-semibold text-[var(--g3-text-secondary)]" title={toolLabel(tool.name)}>{toolLabel(tool.name)}</span>
                 <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[var(--g3-elevated)]">
                   <div className={`h-full rounded-full ${tool.failed > 0 ? "bg-amber-500" : "bg-[var(--g3-deep)]"}`} style={{ width: `${Math.max(4, (tool.count / maxTool) * 100)}%` }} />
                 </div>
