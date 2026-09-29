@@ -81,3 +81,49 @@ Stage Summary:
   (dashboard → Settings → API) ; ③ application des migrations Supabase
   (dashboard SQL editor avec supabase/migrations/0001+0002, ou access
   token pour supabase db push) ; ④ slot AdSense vitrine (optionnel).
+
+---
+Task ID: 41-bis
+Agent: Super Z (principal)
+Task: « Voici un token Vercel — mets [les variables] dans les env Vercel. »
+
+Work Log:
+- SANDBOX RÉINITIALISÉ en cours de session (gen3ia/ disparu) : repo re-cloné
+  (missock237-spec/gen3ia, public) à d24808b + npm ci. Tous les travaux
+  distants intacts (GitHub + Vercel + Sentry). .env.local restauré.
+- TOKEN VERCEL VALIDÉ : GET /v2/user → missock237-spec ; projet gen3ia
+  trouvé (prj_1S2nU43JatLWyGTs87Dr4TZ7Tf0j) ; 136 variables existantes
+  listées — SENTRY_AUTH_TOKEN déjà présent (non touché).
+- UPSERT 9 VARIABLES (API v10, upsert=true, target production+preview,
+  script scripts/vercel_env_upsert.mjs, token JAMAIS écrit dans un fichier) :
+  NEXT_PUBLIC_ADSENSE_CLIENT=ca-pub-7168568074147796 ; SENTRY_DSN +
+  NEXT_PUBLIC_SENTRY_DSN (DSN de.sentry.io) ; SENTRY_ORG=gen3ia ;
+  SENTRY_PROJECT=javascript-nextjs ; SENTRY_ENVIRONMENT=production ;
+  NEXT_PUBLIC_SUPABASE_URL=https://teuxdanucpcurbokcomv.supabase.co ;
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_… ; DATA_BACKEND=firebase.
+  Types "plain" (publics par conception, même modèle que les clés Firebase).
+- REDÉPLOIEMENT API : POST /v13/deployments (gitSource main) →
+  dpl_Hzst93NcAs2R4WFXPtH13oR4hfoq, BUILDING → READY (~6 min).
+- VÉRIFICATION PRODUCTION FINALE : snippet officiel AdSense SERVI SSR dans
+  le head de gen3ia.online (exact script utilisateur) ; ads.txt 200 ;
+  tunnel /monitoring 200/400/403 ; CSP pagead2 sans unsafe-eval ;
+  verify_task40_prod → 11/12 (seul ❌ = conteneur unité manuelle, attend
+  NEXT_PUBLIC_ADSENSE_SLOT_HOME — slot à créer dans la console AdSense).
+- SENTRY E2E CONFIRMÉ : lag d'indexation levé (~30 min) — l'événement test
+  apparaît dans events ET issues ; 4 releases enregistrées (e0079b8,
+  cb63d50, d24808b, gen3ia@d24808b) = preuve SENTRY_AUTH_TOKEN + upload
+  source maps opérationnels ; SDK runtime armé (server + client + tunnel).
+- Non créés (non fournis) : SUPABASE_SERVICE_ROLE_KEY (dashboard Supabase
+  → Settings → API), NEXT_PUBLIC_ADSENSE_SLOT_HOME (console AdSense).
+
+Stage Summary:
+- Toutes les API fournies par l'utilisateur sont CONFIGURÉES DANS VERCEL
+  ET FONCTIONNELLES EN PRODUCTION : AdSense (snippet live + ads.txt),
+  Sentry (releases + source maps + DSN armé), Supabase (URL + clé posées).
+- La connexion AdSense est ÉTABLIE : Google peut valider gen3ia.online
+  (head + ads.txt) — clic « Vérifier »/« Demander un examen » côté console
+  AdSense pour finaliser l'approbation du site.
+- Restant (actions utilisateur) : ① SUPABASE_SERVICE_ROLE_KEY + migrations
+  SQL (0001+0002) pour activer le backend Supabase ; ② slot AdSense
+  (optionnel, unité manuelle vitrine) ; ③ quota Sentry à vérifier si le
+  plan gratuit plafonne l'ingestion.
