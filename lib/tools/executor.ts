@@ -5,6 +5,7 @@ import { createDefaultToolRegistry } from "./default-registry";
 import type { ToolCall, ToolContext, ToolResult } from "./types";
 import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/execution-policy";
 import { authorizeTool } from "@/lib/security/tool-permissions";
+import { decideConsent, getToolConsents } from "@/lib/security/tool-consents";
 import { assertExecutionNotStopped } from "@/lib/security/emergency-stop";
 import { executeSandbox } from "@/lib/sandbox/client";
 import type { SandboxLimits, SandboxRuntime } from "@/lib/sandbox/types";
@@ -89,6 +90,26 @@ export async function executeTool(request: ExecuteToolRequest) {
     await assertExecutionNotStopped({ userId: request.userId, executionId: request.executionId });
 
     authorizeTool(policy, request.toolName);
+
+    // Consentement utilisateur PAR CATÉGORIE (Task 42, axe 3) : troisième
+    // couche d'autorisation, au-dessus des permissions de politique. Un
+    // réglage « deny » bloque l'appel AVANT toute exécution, y compris les
+    // surfaces HITL (« always » ne pré-approuve JAMAIS une écriture — voir
+    // decideConsent : pré-approbation limitée aux lectures externes).
+    try {
+      const consents = await getToolConsents(request.userId);
+      const consent = decideConsent(request.toolName, consents);
+      if (!consent.allowed) {
+        throw new Error(
+          `Outil « ${request.toolName} » bloqué : la catégorie « ${consent.category} » est refusée dans vos consentements (Paramètres → Outils).`,
+        );
+      }
+    } catch (consentError) {
+      if (consentError instanceof Error && consentError.message.includes("consentements")) throw consentError;
+      // Échec de lecture des consentements : ne JAMAIS bloquer l'exécution
+      // pour une panne d'infrastructure (comportement par défaut = ask).
+    }
+
     if (request.signal?.aborted) throw new Error("Execution cancelled");
 
     if (request.toolName === "code.execute") {

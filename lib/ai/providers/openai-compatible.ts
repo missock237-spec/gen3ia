@@ -1,14 +1,42 @@
 import OpenAI from "openai";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 import type {
   AIProvider,
   AIRequest,
   AIResponse,
+  AIMessage,
 } from "../models";
+
+import { clampOutputTokens } from "../context-window";
 
 import {
   getProvider,
 } from "../config";
+
+/**
+ * Message OpenAI-compatible : texte simple, ou parts multiples quand le
+ * message porte des images (vision, Task 42 axe 4) — format officiel
+ * `image_url` (data URI pour le base64, URL directe sinon). Le retour est
+ * typé via le SDK (ChatCompletionMessageParam) : la structure parts est
+ * celle de la spec vision officielle d'OpenAI.
+ */
+function toOpenAIMessage(message: AIMessage): ChatCompletionMessageParam {
+  const images = message.images ?? [];
+  if (images.length === 0) return { role: message.role, content: message.content };
+  const parts: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> = [];
+  if (message.content.trim()) {
+    parts.push({ type: "text", text: message.content });
+  }
+  for (const image of images) {
+    const url =
+      image.source.type === "base64"
+        ? `data:${image.mediaType};base64,${image.source.data}`
+        : image.source.url;
+    parts.push({ type: "image_url", image_url: { url } });
+  }
+  return { role: message.role, content: parts } as ChatCompletionMessageParam;
+}
 
 export async function callOpenAICompatible(
   request: AIRequest,
@@ -69,10 +97,7 @@ export async function callOpenAICompatible(
       : []),
 
     ...request.messages.map(
-      (message) => ({
-        role: message.role,
-        content: message.content,
-      }),
+      (message) => toOpenAIMessage(message),
     ),
   ];
 
@@ -87,7 +112,7 @@ export async function callOpenAICompatible(
           request.temperature ?? 0.2,
 
         max_tokens:
-          request.maxTokens ?? 8192,
+          clampOutputTokens(model, request.maxTokens),
 
         ...(request.requiresStructuredOutput
           ? { response_format: { type: "json_object" as const } }
@@ -221,10 +246,7 @@ export async function callOpenAICompatibleStream(
       : []),
 
     ...request.messages.map(
-      (message) => ({
-        role: message.role,
-        content: message.content,
-      }),
+      (message) => toOpenAIMessage(message),
     ),
   ];
 

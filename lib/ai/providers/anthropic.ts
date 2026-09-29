@@ -2,6 +2,9 @@ import type {
   AIRequest,
   AIResponse,
 } from "../models";
+import type { AIMessage } from "../models";
+
+import { clampOutputTokens } from "../context-window";
 
 import {
   getProvider,
@@ -23,6 +26,30 @@ interface AnthropicResponse {
   };
 
   stop_reason?: string;
+}
+
+/**
+ * Contenu de message Anthropic : texte simple, ou parts multiples quand le
+ * message porte des images (vision, Task 42 axe 4). Les images base64 sont
+ * envoyées en source base64 ; les URLs en source url (support natif).
+ */
+function toAnthropicContent(message: AIMessage): string | Array<Record<string, unknown>> {
+  const images = message.images ?? [];
+  if (images.length === 0) return message.content;
+  const parts: Array<Record<string, unknown>> = [];
+  if (message.content.trim()) {
+    parts.push({ type: "text", text: message.content });
+  }
+  for (const image of images) {
+    parts.push({
+      type: "image",
+      source:
+        image.source.type === "base64"
+          ? { type: "base64", media_type: image.mediaType, data: image.source.data }
+          : { type: "url", url: image.source.url },
+    });
+  }
+  return parts;
 }
 
 export async function callAnthropic(
@@ -72,7 +99,7 @@ export async function callAnthropic(
             config.defaultModel,
 
           max_tokens:
-            request.maxTokens ?? 8192,
+            clampOutputTokens(request.model || config.defaultModel, request.maxTokens),
 
           system:
             request.system,
@@ -93,7 +120,7 @@ export async function callAnthropic(
                       : "user",
 
                   content:
-                    message.content,
+                    toAnthropicContent(message),
                 }),
               ),
         }),

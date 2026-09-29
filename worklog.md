@@ -127,3 +127,89 @@ Stage Summary:
   SQL (0001+0002) pour activer le backend Supabase ; ② slot AdSense
   (optionnel, unité manuelle vitrine) ; ③ quota Sentry à vérifier si le
   plan gratuit plafonne l'ingestion.
+
+---
+Task ID: 42
+Agent: Super Z (principal)
+Task: « 8 axes d'évolution IA (fenêtre de contexte, apprentissage continu
+sûr, outils externes contrôlés, multimodal, raisonnement/planification,
+mémoire long terme privée, alignement/anti-hallucination, élasticité) —
+dans le cadre sécurité/confidentialité/politique Gen3ia. »
+
+Work Log:
+- AUDIT PRÉALABLE : inventaire des capacités EXISTANTES (auto-improvement
+  run-leçons, tool-permissions + HITL, user-memory, RAG Qdrant, planner +
+  critique d'actions, sandbox, micro-caches) — les 8 axes sont traités par
+  EXTENSION ciblée des gaps réels, pas par reconstruction.
+- AXE 1 (CONTEXTE) : lib/ai/context-window.ts — registre de fenêtres par
+  modèle (Claude 200k, GPT-4.1 1M, GPT-4o/Llama3/GLM 128k, Gemini 1M,
+  fallback 32k conservateur) ; clampOutputTokens dans les DEUX providers
+  (jamais plus de sortie que fenêtre/2) ; compressHistory PUR et
+  DÉTERMINISTE (récents verbatim + digest EXTRACTIF des anciens — zéro
+  invention) ; assembleMessages branché dans chat-engine.answerAsAgent
+  (remplace la troncature brutale aux 12 messages : l'historique ENTIER
+  tient dans la fenêtre du modèle).
+- AXE 2 (CONTINUAL LEARNING SÛR) : lib/ai/feedback.ts + POST
+  /api/ai/feedback — retours 👍/👎 par (conversation, message) avec
+  catégorie (hallucination/incorrect/incomplet/hors-sujet/style) ;
+  PIPELINE DE VALIDATION : leçon « proposée » au 1er signal négatif →
+  « active » au 2e (LESSON_ACTIVATION_THRESHOLD=2) — formulation
+  DÉTERMINISTE (jamais générée par LLM) ; leçons actives injectées dans
+  buildEvolutionContext (auto-amélioration Gen IA) ; rate-limit 60/h +
+  garde anti-abus ; export/purge RGPD inclus.
+- AXE 3 (OUTILS CONTRÔLÉS) : lib/security/tool-consents.ts + GET/PUT
+  /api/settings/tool-consents — 4 catégories (external_apps,
+  code_execution, camera, destructive) × modes ask|always|deny ; TROISIÈME
+  couche d'autorisation branchée dans lib/tools/executor.executeTool
+  (au-dessus des permissions, en dessous du HITL) ; « deny » bloque AVANT
+  exécution ; « always » ne pré-approuve JAMAIS une écriture (garde
+  permanente) ; cache TTL 30 s (0 latence ajoutée au chemin chaud) ;
+  échec de lecture = jamais bloquant.
+- AXE 4 (MULTIMODAL) : AIMessage.images (base64|URL) ; providers
+  openai-compatible (parts image_url/data-URI, chemins normal + STREAMING)
+  et anthropic (source base64|url) ; lib/ai/content-filter.ts — max 4
+  images, 5 Mo binaire réel (décodage), formats png/jpeg/webp/gif, URLs
+  https uniquement (anti-SSRF) ; validation centralisée dans router
+  generate + generateStream (rejet uniforme avant sélection provider).
+- AXE 5 (RAISONNEMENT) : lib/ai/planning.ts — boucle createPlan →
+  critiquePlan (rôle LLM distinct, exigeant) → revisePlan (coût borné,
+  maxRevisions≤2) ; schémas zod stricts côté code (le LLM ne décide pas
+  de la forme) ; critique FINALE toujours renvoyée ; renderPlanForExecution
+  pour injection orchestrateur (point d'extension documenté).
+- AXE 6 (MÉMOIRE PRIVÉE) : lib/memory/privacy.ts + 3 routes — GET
+  /api/memory/export (JSON portable en pièce jointe), POST /api/memory/purge
+  (428 sans confirm:true ; double validation applicative), GET|POST
+  /api/memory/consent (drapeau révocable ; défaut = comportement
+  historique) ; purge = souvenirs + feedback + leçons + consentements +
+  reset du drapeau.
+- AXE 7 (ALIGNEMENT) : lib/ai/grounding.ts — buildGroundedContext (sources
+  numérotées + consigne de citation), extractCitations, groundingReport
+  (heuristique DÉTERMINISTE : phrases factuelles sans citation, citations
+  hors plage, couverture), groundingWarning prêt à afficher — non bloquant,
+  sans LLM, sans coût.
+- AXE 8 (ÉLASTICITÉ) : lib/ai/resilience.ts — coupe-circuit par fournisseur
+  (3 échecs → open, cooldown exponentiel 30 s→5 min, half-open à sonde
+  unique) branché dans router.generate (skip des circuits ouverts SAUF si
+  tous ouverts) ; getBreakerSnapshot pour l'observabilité ; cache
+  d'embeddings LRU 500 entrées dans lib/memory/embeddings.ts (fonction
+  déterministe — réindexations ne re-paient plus le réseau).
+- QA : typecheck 0 ; lint 0 ; vitest 741 verts / 95 fichiers (+52 nouveaux
+  : context-window 12, content-filter 7, grounding 9, resilience 7,
+  planning 6, tool-consents 9, feedback 2) ; build OK (compiler, typecheck
+  intégré OOM sandbox — tsc standalone vert, config restaurée) ; budget
+  bundle pire route 180 kB gzip INCHANGÉ (0 ajout au chemin client — tout
+  est serveur-seul).
+- Commit : à suivre. Push → déploiement Vercel.
+
+Stage Summary:
+- Les 8 axes sont livrés en capacités RÉELLES et testées : fenêtre de
+  contexte gérée par modèle avec compression sans invention ; boucle de
+  feedback validée injectée dans l'auto-amélioration ; consentements
+  outils par catégorie appliqués à l'exécution ; vision entrante avec
+  filtre de contenu ; planification avec critique adversariale ; coffre
+  mémoire RGPD (export/purge/consentement) ; ancrage anti-hallucination
+  mesuré ; résilience multi-fournisseurs + cache embeddings.
+- Conformité : zéro ajout au bundle client, tout serveur-seul ; aucune
+  donnée conversationnelle persistée par les nouveaux modules ; HITL
+  jamais contourné ; défauts = comportement historique (ask, consentement
+  consenti, circuits fermés).

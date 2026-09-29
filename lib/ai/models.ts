@@ -24,9 +24,27 @@ export type AIMessageRole =
   | "user"
   | "assistant";
 
+export interface AIImageAttachment {
+  /** Type MIME supporté par les modèles vision servis par Gen3ia. */
+  mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+
+  /** Soit des octets encodés base64 (sans préfixe data:), soit une URL. */
+  source:
+    | { type: "base64"; data: string }
+    | { type: "url"; url: string };
+}
+
 export interface AIMessage {
   role: AIMessageRole;
   content: string;
+
+  /**
+   * Pièces jointes image (capacité vision, Task 42 axe 4) : validées par
+   * lib/ai/content-filter.ts (nombre, taille, format) AVANT l'appel
+   * provider. Ignorées par les modèles sans capacité vision (le routeur
+   * sélectionne alors un modèle vision selon `requiresVision`).
+   */
+  images?: AIImageAttachment[];
 }
 
 export interface AIRequest {

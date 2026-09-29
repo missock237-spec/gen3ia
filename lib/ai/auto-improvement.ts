@@ -134,6 +134,10 @@ export async function buildEvolutionContext(userId: string): Promise<{ context: 
   try {
     const doc = await readEvolutionDoc(userId);
     const lessons = (doc.lessons ?? []).slice(-6).map((lesson) => `- ${lesson.text.slice(0, 220)}`);
+    // Leçons dérivées des retours utilisateurs CONFIRMÉS (Task 42, axe 2) :
+    // pipeline proposée → active (2 signaux concordants) — voir feedback.ts.
+    const { buildFeedbackLessonsContext } = await import("./feedback");
+    const feedbackSection = await buildFeedbackLessonsContext(userId);
     const successRate = doc.totalRuns ? Math.round(((doc.successes ?? 0) / doc.totalRuns) * 100) : null;
     const sections: string[] = [
       "",
@@ -144,6 +148,7 @@ export async function buildEvolutionContext(userId: string): Promise<{ context: 
     if (lessons.length > 0) {
       sections.push("- Leçons retenues des exécutions passées (RESPECTE-LES) :", ...lessons);
     }
+    if (feedbackSection) sections.push(feedbackSection);
     return { context: sections.join("\n"), masteredMaxScore: doc.maxComplexityHandled ?? 0 };
   } catch {
     return { context: "", masteredMaxScore: 0 };

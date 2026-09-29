@@ -1,5 +1,6 @@
 import { generate } from "../ai/router";
 import type { AIProvider } from "../ai/models";
+import { assembleMessages } from "../ai/context-window";
 import { planUniversalAgent } from "./runtime/unified-agent";
 import type { RuntimePlan } from "./runtime/types";
 import { policyForAgent } from "./personalized-plan";
@@ -139,20 +140,28 @@ export function historyContextNote(history: ChatHistoryMessage[], limit = 8): st
  * utilisé après une classification inScope=true.
  */
 export async function answerAsAgent(
-  agent: Pick<AgentRecord, "name" | "description" | "type" | "typeLabel" | "skills" | "agentMode" | "memoryFile">,
+  agent: Pick<AgentRecord, "name" | "description" | "type" | "typeLabel" | "skills" | "agentMode" | "memoryFile" | "preferredModel">,
   history: ChatHistoryMessage[],
   message: string,
   contextNote?: string,
 ): Promise<string> {
   const charter = buildAgentCharter(agent);
   const userContent = contextNote ? `${contextNote}\n\n${message}` : message;
+  // Fenêtre de contexte (Task 42, axe 1) : au lieu d'une troncature brutale
+  // aux 12 derniers messages (qui perdait le fil des longues conversations),
+  // l'historique ENTIER est tenu dans la fenêtre du modèle — récents
+  // verbatim + condensé extractif des plus anciens (aucune invention).
+  const { messages } = assembleMessages({
+    system: charter,
+    history: history.map((item) => ({ role: item.role, content: item.content })),
+    message: userContent,
+    model: agent.preferredModel ?? null,
+    reservedOutputTokens: 3_000,
+    keepRecent: 12,
+  });
   const response = await generate({
     task: "chat",
-    messages: [
-      { role: "system", content: charter },
-      ...history.slice(-12).map((item) => ({ role: item.role, content: item.content })),
-      { role: "user", content: userContent },
-    ],
+    messages,
     preferFree: true,
     maxTokens: 3000,
     metadata: { purpose: "agent-chat-answer" },

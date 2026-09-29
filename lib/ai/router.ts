@@ -10,10 +10,27 @@ import type {
   AIResponse,
 } from "./models";
 
+import { validateImageAttachments } from "./content-filter";
+import { isProviderAvailable, recordProviderFailure, recordProviderSuccess } from "./resilience";
+
 import {
   callProvider,
   callProviderStream,
 } from "./providers";
+
+/**
+ * Garde vision (Task 42, axe 4) : toute image jointe est validée (nombre,
+ * taille réelle après base64, format, URLs https) AVANT la sélection du
+ * fournisseur — rejet immédiat et uniforme pour tous les providers.
+ */
+function assertImagesAllowed(request: AIRequest): void {
+  const images = request.messages.flatMap((message) => message.images ?? []);
+  if (images.length === 0) return;
+  const filter = validateImageAttachments(images);
+  if (!filter.ok) {
+    throw new Error(`Images refusées par le filtre de contenu : ${filter.errors.join(" ")}`);
+  }
+}
 
 export interface RoutingDecision {
   provider: AIProvider;
@@ -164,6 +181,8 @@ export function selectModel(
 export async function generate(
   request: AIRequest,
 ): Promise<AIResponse> {
+  assertImagesAllowed(request);
+
   const candidates =
     selectProvider(request);
 
@@ -179,8 +198,15 @@ export async function generate(
   }> = [];
 
   for (const candidate of candidates) {
+    // Coupe-circuit (Task 42, axe 8) : un fournisseur en incident rafale
+    // est sauté (latence préservée). Si TOUS sont ouverts, le meilleur est
+    // tenté quand même — mieux vaut un essai qu'une erreur immédiate.
+    if (!isProviderAvailable(candidate.provider) && failures.length < candidates.length - 1) {
+      failures.push({ provider: candidate.provider, error: "circuit ouvert (incident récent)" });
+      continue;
+    }
     try {
-      return await callProvider(
+      const response = await callProvider(
         candidate.provider,
         {
           ...request,
@@ -192,7 +218,10 @@ export async function generate(
             candidate.model,
         },
       );
+      recordProviderSuccess(candidate.provider);
+      return response;
     } catch (error) {
+      recordProviderFailure(candidate.provider);
       failures.push({
         provider:
           candidate.provider,
@@ -228,6 +257,8 @@ export async function generateStream(
     onProviderSelected?: (provider: AIProvider, model: string) => void | Promise<void>;
   },
 ): Promise<AIResponse> {
+  assertImagesAllowed(request);
+
   const candidates =
     selectProvider(request);
 
