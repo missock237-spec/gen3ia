@@ -102,10 +102,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div
-        className="pointer-events-none fixed right-3 top-3 z-[120] flex w-[min(24rem,calc(100vw-1.5rem))] flex-col gap-2"
-        aria-label="Notifications"
-      >
+      {/* a11y (axe aria-prohibited-attr) : le conteneur SANS role (role
+          générique) ne peut pas porter aria-label. L'annonce passe par les
+          toasts eux-mêmes (role="alert"/"status" + aria-live) — le conteneur
+          est purement positionnel. */}
+      <div className="pointer-events-none fixed right-3 top-3 z-[120] flex w-[min(24rem,calc(100vw-1.5rem))] flex-col gap-2">
         {toasts.map((item) => {
           const styles = VARIANT_STYLES[item.variant];
           return (

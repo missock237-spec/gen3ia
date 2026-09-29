@@ -7,6 +7,7 @@ import { CONVERSATION_VECTOR_COLLECTION } from "@/lib/chat/vector-index";
 import { isSandboxConfigured } from "@/lib/sandbox/simulation";
 import { pingR2, type R2HealthStatus } from "@/lib/storage/r2";
 import { summarizeEnv } from "@/lib/env/config-report";
+import { getDualWriteDomains, getDualWriteStats } from "@/lib/db/dual-write";
 
 export const runtime = "nodejs";
 
@@ -72,6 +73,13 @@ export async function GET(request: NextRequest) {
     // Présence par groupe de capacités (booléens + noms manquants, JAMAIS
     // de valeur) : supervision des fournisseurs sans exposition de secret.
     config: summarizeEnv(),
+    // P2 migration Supabase (ADR-006) : domaines en double-écriture et
+    // compteurs de miroir (tentatives/succès/échecs) — supervision de la
+    // santé de la réplication avant le cutover P3. Aucune donnée sensible.
+    dualWrite: {
+      domains: getDualWriteDomains(),
+      stats: getDualWriteStats(),
+    },
     timestamp: new Date().toISOString(),
   });
 }

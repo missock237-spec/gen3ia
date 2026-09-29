@@ -14,6 +14,8 @@ export interface ExecutionSummary {
   id: string;
   objective: string;
   status: string;
+  /** Agent impliqué (dimension d'agrégation organisationnelle, Task 43). */
+  agentId?: string;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
@@ -98,6 +100,7 @@ function summarizeExecution(id: string, data: Record<string, unknown>): Executio
     id,
     objective: String(data.objective ?? "Mission sans objectif explicite").slice(0, 300),
     status: String(data.status ?? "pending"),
+    agentId: typeof data.agentId === "string" && data.agentId ? data.agentId : undefined,
     createdAt: isoDate(data.createdAt) || startedAt,
     startedAt: startedAt || undefined,
     completedAt: completedAt || undefined,
@@ -227,4 +230,4 @@ export async function buildObservabilityOverview(userId: string, options?: { day
   };
 }
 
-export { STATUS_LABELS };
+export { STATUS_LABELS, summarizeExecution };

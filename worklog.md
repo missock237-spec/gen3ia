@@ -213,3 +213,66 @@ Stage Summary:
   donnée conversationnelle persistée par les nouveaux modules ; HITL
   jamais contourné ; défauts = comportement historique (ask, consentement
   consenti, circuits fermés).
+
+---
+Task ID: 43
+Agent: Super Z (principal)
+Task: « Applique tes suggestions » — recommandations restantes applicables
+au code : Rec 8a (accessibilité automatisée axe-core), Rec 7 P2
+(double-écriture Firestore⇄Supabase), §3 observabilité (métriques par
+organisation) ; vérification du déploiement production de la Task 42.
+
+Work Log:
+- DÉPLOIEMENT TASK 42 VÉRIFIÉ : dpl_Bjn7GaYZ94FyftmtEFGWGQyuixAK READY sur
+  d8b27cd (production) ; sonde live health 200 / home 200 / tunnel 400
+  (attendu, route vivante).
+- REC 8a (A11Y) : scripts/a11y_prod.mjs — sonde Playwright + axe-core
+  (WCAG 2.1 A/AA) sur les pages publiques (/ , /login), échec exit 1 sur
+  toute violation critical/serious non allowlistée (allowlist vide et
+  documentée). Premier scan production : 4 violations réelles trouvées.
+  CORRECTIONS UI : ① toast.tsx — aria-label interdit sur conteneur sans
+  role (axe aria-prohibited-attr) → suppression, l'annonce passe par les
+  role="alert"/"status" enfants ; ② auth-aurora-aside.tsx — aside plus
+  aria-hidden (axe aria-hidden-focus : contenait le lien retour accueil) ;
+  ③ signature du panneau passée g3-faint→g3-muted (axe color-contrast :
+  3,0:1 → 6,1:1 sur sky-hero, calcul WCAG vérifié scripté) ;
+  ④ login/signup — textes discrets g3-faint→g3-muted (AA 4.5:1 atteint).
+  Re-scan local : 0 violation sur / et /login. CI : nouveau job `a11y`
+  hermétique (build + next start localhost + scan, fail sur critical/
+  serious) ; script npm `check:a11y` (scan production à la demande).
+- REC 7 P2 (DUAL-WRITE) : lib/db/dual-write.ts — miroir best-effort par
+  DOMAINE (DUAL_WRITE_DOMAINS CSV, défaut vide = OFF), gardes triples
+  (Supabase non configuré → OFF ; DATA_BACKEND=supabase → OFF ; domaine
+  inconnu filtré), stats par domaine (attempted/ok/failed/lastError) pour
+  /api/health/infra. lib/notifications/mirror.ts — réplication des 4
+  écritures primales (create, markRead, markAllRead, markForApprovalRead)
+  avec id Postgres DÉRIVÉ de l'id Firestore (uuid v5, espace de noms
+  dédié) → miroir ET backfill IDEMPOTENTS sans migration_mapping (réservé
+  aux domaines à uuid frais). Firestore reste la VÉRITÉ ; un échec de
+  miroir ne bloque jamais le flux. scripts/backfill_supabase.ts — backfill
+  notifications par lots (dry-run par défaut, --apply), reprise sûre,
+  audit migration_mapping, checksums par utilisateur ; échec rapide avec
+  instructions si SUPABASE_SERVICE_ROLE_KEY absente ; script npm
+  `backfill:supabase` (NODE_OPTIONS --conditions=react-server pour tsx).
+- OBSERVABILITÉ (§3 RESTE) : lib/observability/org-queries.ts — vue d'usage
+  PAR ORGANISATION : membres → exécutions (requêtes `in` paginées par
+  chunks de 30) → agrégation PURE (totaux, par agent/outils/jour) ;
+  ExecutionSummary étendu agentId ; summarizeExecution exporté (zéro
+  duplication). Route GET /api/observability/org?orgId= — requireUser +
+  requireOrgContext (404 uniforme anti-énumération).
+- QA : typecheck 0 ; lint 0 ; vitest 767 verts / 98 fichiers (+26) ;
+  build production OK en sandbox (exit 0, sans OOM) ; budget bundle
+  client inchangé (tout est serveur-seul).
+
+Stage Summary:
+- Accessibilité : 4 violations WCAG réelles corrigées dans l'UI et
+  régression désormais impossible (scan axe-core bloquant en CI).
+- Migration Supabase : la phase P2 est CODE-READY — inscrire
+  DUAL_WRITE_DOMAINS=notifications dans Vercel (après application des
+  migrations 0001/0002 et pose de SUPABASE_SERVICE_ROLE_KEY) active le
+  miroir ; le backfill s'exécute avec `npm run backfill:supabase`.
+- Observabilité : la dimension entreprise (usage par organisation) est
+  disponible via /api/observability/org — base du dashboard Usage (LOT 12).
+- Restant (actions utilisateur) : ① SUPABASE_SERVICE_ROLE_KEY + migrations
+  SQL 0001/0002 → puis DUAL_WRITE_DOMAINS + backfill ; ② slot AdSense
+  (optionnel) ; ③ Sentry Alerts (console) ; ④ i18n FR/EN (Rec 8b, chantier).

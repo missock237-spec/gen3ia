@@ -87,6 +87,47 @@ jobs:
       - name: E2E contre émulateurs (auth + wallet, équipes/agents/facturation, règles Firestore)
         run: npm run test:e2e
 
+  a11y:
+    name: "Accessibilité (axe-core · WCAG 2.1 AA)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Navigateur Chromium (Playwright)
+        run: npx playwright install --with-deps chromium
+
+      - name: Build production
+        run: npm run build
+
+      # Scan hermétique : serveur Next local (aucune dépendance à la
+      # production ni aux services externes). L'app rend ses pages
+      # publiques sans env (init Firebase défensive côté client).
+      - name: Démarre le serveur (localhost hermétique)
+        run: |
+          npm run start &
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3000/; then
+              echo "Serveur prêt"; break
+            fi
+            sleep 2
+          done
+          curl -sf -o /dev/null http://localhost:3000/ || (echo "Serveur non prêt après 120 s" && exit 1)
+
+      - name: Scan axe-core (échec sur violations critical/serious)
+        env:
+          BASE_URL: http://localhost:3000
+        run: node scripts/a11y_prod.mjs
+
   secrets-scan:
     name: Secrets (gitleaks)
     runs-on: ubuntu-latest

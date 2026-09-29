@@ -30,7 +30,9 @@
     "check:bundle": "node scripts/check_bundle_budget.mjs",
     "setup:hooks": "cp scripts/git-hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit",
     "seed": "tsx scripts/seed.ts",
-    "db:reset": "npx firebase-tools emulators:exec --project demo-gen3ia --only auth,firestore \"tsx scripts/seed.ts\""
+    "db:reset": "npx firebase-tools emulators:exec --project demo-gen3ia --only auth,firestore \"tsx scripts/seed.ts\"",
+    "check:a11y": "node scripts/a11y_prod.mjs",
+    "backfill:supabase": "NODE_OPTIONS=--conditions=react-server tsx scripts/backfill_supabase.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1133.0",
@@ -66,6 +68,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/eslintrc": "^3.3.7",
     "@firebase/rules-unit-testing": "^5.0.2",
     "@next/bundle-analyzer": "15.5.26",
@@ -78,6 +81,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9.0.0",
     "eslint-config-next": "15.5.26",
+    "playwright": "^1.63.0",
     "prettier": "^3.6.0",
     "tsx": "^4.20.3",
     "vitest": "^4.1.11"

@@ -5,13 +5,15 @@ import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 /**
  * Panneau Aurora des pages d'authentification V2 : moitié gauche décorative
  * (espace profond, halos animés, promesse produit) — masquée sur mobile.
+ *
+ * a11y (axe aria-hidden-focus) : ce panneau contient un lien (retour accueil)
+ * et du contenu produit réel — il ne doit PAS porter aria-hidden. Les
+ * décorations (halos, grille) sont des divs vides : rien à masquer. Le
+ * masquage mobile est naturel (hidden lg:flex).
  */
 export function AuthAuroraAside() {
   return (
-    <aside
-      aria-hidden="true"
-      className="sky-hero relative hidden overflow-hidden border-r border-[var(--g3-border)] lg:flex lg:flex-col lg:justify-between lg:p-12"
-    >
+    <aside className="sky-hero relative hidden overflow-hidden border-r border-[var(--g3-border)] lg:flex lg:flex-col lg:justify-between lg:p-12">
       <div className="aurora" />
       <div className="aurora-glow" />
       <div className="grid-bg absolute inset-0" />
@@ -53,9 +55,10 @@ export function AuthAuroraAside() {
         </ul>
       </div>
 
-      {/* Signature */}
-      <p className="relative font-[family-name:var(--font-display)] text-sm text-[var(--g3-faint)]">
-        Créer <span className="mx-2 text-[var(--g3-border-strong)]">·</span> Exécuter <span className="mx-2 text-[var(--g3-border-strong)]">·</span> Grandir
+      {/* Signature — a11y (axe color-contrast) : g3-faint échoue AA 4.5:1 sur
+          le dégradé sky-hero ; g3-muted passe (≥ 5:1) tout en restant discret. */}
+      <p className="relative font-[family-name:var(--font-display)] text-sm text-[var(--g3-muted)]">
+        Créer <span className="mx-2 text-[var(--g3-muted)]">·</span> Exécuter <span className="mx-2 text-[var(--g3-muted)]">·</span> Grandir
       </p>
     </aside>
   );

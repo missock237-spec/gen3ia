@@ -29,7 +29,7 @@ export default function LoginPage() {
           <div className="g3-gradient-border p-6 shadow-[0_30px_90px_-40px_rgba(124,92,255,0.55)]">
             <EmailAuthForm />
 
-            <div className="my-6 flex items-center gap-3 text-xs text-[var(--g3-faint)]">
+            <div className="my-6 flex items-center gap-3 text-xs text-[var(--g3-muted)]">
               <span className="h-px flex-1 bg-[var(--g3-border)]" />
               ou continuer avec
               <span className="h-px flex-1 bg-[var(--g3-border)]" />
@@ -38,7 +38,7 @@ export default function LoginPage() {
             <AuthButtons />
           </div>
 
-          <p className="mt-6 text-center text-xs text-[var(--g3-faint)]">
+          <p className="mt-6 text-center text-xs text-[var(--g3-muted)]">
             En continuant, vous acceptez que vos agents exécutent des actions
             validées par un humain — jamais à l&apos;insu de votre part.
           </p>

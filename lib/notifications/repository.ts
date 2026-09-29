@@ -4,6 +4,12 @@ import { adminDb } from "@/lib/firebase/admin";
 import { cacheDelete } from "@/lib/cache/redis";
 import { isSupabaseBackend, resolveProfileId } from "@/lib/db/driver";
 import {
+  mirrorAllNotificationsRead,
+  mirrorNotificationCreated,
+  mirrorNotificationRead,
+  mirrorNotificationsForApprovalRead,
+} from "./mirror";
+import {
   createNotificationSupabase,
   listNotificationsSupabase,
   countUnreadSupabase,
@@ -104,6 +110,9 @@ export async function createNotification(input: CreateNotificationInput): Promis
     // notification NOUVELLE invalide la clé pour que le prochain poll la
     // voie immédiatement (latence réelle inchangée, charge Firestore −90 %).
     invalidateNotificationsCache(notification.userId);
+    // P2 (ADR-006) : miroir Supabase best-effort si le domaine est inscrit
+    // (DUAL_WRITE_DOMAINS). Firestore reste la vérité — voir mirror.ts.
+    mirrorNotificationCreated(notification);
     return notification;
   } catch (error) {
     console.warn("[notifications] création impossible (non bloquant):", error instanceof Error ? error.message : error);
@@ -199,6 +208,7 @@ export async function markNotificationRead(userId: string, id: string): Promise<
     tx.update(ref, { read: true });
   });
   invalidateNotificationsCache(userId);
+  mirrorNotificationRead(userId, id);
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {
@@ -216,6 +226,7 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
   for (const doc of snapshot.docs) batch.update(doc.ref, { read: true });
   await batch.commit();
   invalidateNotificationsCache(userId);
+  mirrorAllNotificationsRead(userId);
 }
 
 /**
@@ -245,6 +256,7 @@ export async function markNotificationsForApprovalRead(userId: string, approvalI
     for (const doc of snapshot.docs) batch.update(doc.ref, { read: true });
     await batch.commit();
     invalidateNotificationsCache(userId);
+    mirrorNotificationsForApprovalRead(userId, approvalId);
   } catch (error) {
     console.warn("[notifications] marquage lu par approbation impossible (non bloquant):", error instanceof Error ? error.message : error);
   }
