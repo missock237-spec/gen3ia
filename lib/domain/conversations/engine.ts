@@ -12,6 +12,8 @@ import {
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
+import { isR2Configured, uploadToR2 } from "@/lib/storage/r2";
+import { randomUUID } from "node:crypto";
 import type { ToolRisk } from "@/lib/tools/types";
 import { createDefaultToolRegistry } from "@/lib/tools/default-registry";
 import { executeTool } from "@/lib/tools/executor";
@@ -1179,11 +1181,17 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
  * génération réelle est déléguée à Agnes AI en 2K (détail supérieur).
  * L'amélioration n'est JAMAIS bloquante (repli : prompt d'origine) et la
  * durée totale reste sous le budget de la fonction serverless (60 s).
+ *
+ * Persistance (Task 45) : l'URL d'Agnes est TEMPORAIRE — l'image est donc
+ * copiée dans le stockage de l'utilisateur (R2, chemin « permanent »
+ * compatible avec /api/storage/permanent) ou, sans R2 et si la taille le
+ * permet, inline en data URI. Le téléchargement reste possible après
+ * expiration de l'URL d'origine.
  */
 async function produceConversationImage(
-  ctx: Pick<TurnContext, "message">,
+  ctx: Pick<TurnContext, "message" | "userId">,
   plannedPrompt?: string,
-): Promise<{ imageUrl: string; model: string }> {
+): Promise<{ imageUrl: string; model: string; storagePath?: string; inlineDataUrl?: string }> {
   const rawPrompt =
     typeof plannedPrompt === "string" && plannedPrompt.trim().length >= 3
       ? plannedPrompt.trim().slice(0, 4000)
@@ -1201,7 +1209,37 @@ async function produceConversationImage(
     ratio: detectImageRatio(ctx.message),
     timeoutMs: 40_000,
   });
-  return { imageUrl: image.imageUrl, model: image.model };
+  const persisted = await persistGeneratedImage(ctx.userId, image.imageUrl).catch(() => ({}));
+  return { imageUrl: image.imageUrl, model: image.model, ...persisted };
+}
+
+/** Taille max d'une image inline en data URI (limite des documents). */
+const IMAGE_INLINE_MAX_BYTES = 380_000;
+
+/**
+ * Copie l'image générée dans le stockage personnel de l'utilisateur.
+ * Ne lève JAMAIS : en cas d'échec, l'URL d'origine reste utilisable.
+ */
+async function persistGeneratedImage(
+  userId: string,
+  imageUrl: string,
+): Promise<{ storagePath?: string; inlineDataUrl?: string }> {
+  if (!imageUrl.startsWith("http")) return {};
+  const response = await fetch(imageUrl, { signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) return {};
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.length === 0) return {};
+  const contentType = (response.headers.get("content-type") || "image/png").split(";")[0].trim();
+  const ext = contentType.includes("jpeg") ? "jpg" : contentType.includes("webp") ? "webp" : "png";
+  if (isR2Configured()) {
+    const key = `users/${userId}/permanent/ai-images/${Date.now()}-${randomUUID()}.${ext}`;
+    await uploadToR2(key, buffer, contentType);
+    return { storagePath: key };
+  }
+  if (buffer.length <= IMAGE_INLINE_MAX_BYTES) {
+    return { inlineDataUrl: `data:${contentType};base64,${buffer.toString("base64")}` };
+  }
+  return {};
 }
 
 async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
@@ -1213,7 +1251,7 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       userId: ctx.userId,
       role: "assistant",
       content: "Voici l'image que j'ai générée pour vous. Elle est également enregistrée dans les artefacts de la conversation.",
-      imageUrl: image.imageUrl,
+      imageUrl: image.inlineDataUrl ?? image.imageUrl,
       provider: "agnes",
       model: image.model,
       generationStatus: "complete",
@@ -1224,7 +1262,8 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       projectId: ctx.projectId,
       type: "image",
       title: ctx.message.slice(0, 80),
-      url: image.imageUrl,
+      url: image.inlineDataUrl ?? image.imageUrl,
+      storagePath: image.storagePath,
       note: `Généré avec ${image.model}`,
     });
     // Contrat de flux complet : le client doit recevoir la même séquence
@@ -1900,7 +1939,7 @@ async function runServiceControlTurn(
 /* Tour « plan » — timeline, outils, approbations, artefacts           */
 /* ------------------------------------------------------------------ */
 
-const TOOL_OUTPUT_ARTIFACTS: ReadonlySet<string> = new Set(["artifact.create", "file.create", "zip.create"]);
+const TOOL_OUTPUT_ARTIFACTS: ReadonlySet<string> = new Set(["artifact.create", "file.create", "zip.create", "voice.speak"]);
 
 /* ------------------------------------------------------------------ */
 /* Completion du contenu des livrables (artifact.create)               */
@@ -2085,7 +2124,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         step.finishedAt = new Date().toISOString();
         step.output = `Image générée avec ${image.model}.`;
         executedSomething = true;
-        turnImageUrl = image.imageUrl;
+        turnImageUrl = image.inlineDataUrl ?? image.imageUrl;
         const artifact = await createArtifact({
           userId: ctx.userId,
           conversationId: ctx.conversationId,
@@ -2093,7 +2132,8 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
           runId: run.id,
           type: "image",
           title: (typeof planned.toolInput?.prompt === "string" && planned.toolInput.prompt.trim() ? planned.toolInput.prompt.trim() : ctx.message).slice(0, 80),
-          url: image.imageUrl,
+          url: image.inlineDataUrl ?? image.imageUrl,
+          storagePath: image.storagePath,
           note: `Généré avec ${image.model}`,
         });
         artifacts.push(artifact);
@@ -2430,8 +2470,9 @@ async function summarizePlanTurn(
 /* ------------------------------------------------------------------ */
 
 /** Détecte le type d'artefact adapté à la sortie d'un outil de création. */
-export function inferArtifactType(toolName: string, output: unknown): "code" | "document" | "table" | "image" | "report" | "file" {
+export function inferArtifactType(toolName: string, output: unknown): "code" | "document" | "table" | "image" | "report" | "file" | "audio" {
   const outputStr = typeof output === "string" ? output : JSON.stringify(output ?? {});
+  if (/data:audio|audio\/|voice\.speak/i.test(outputStr) || toolName.includes("voice")) return "audio";
   if (/image|png|jpe?g|webp/i.test(outputStr)) return "image";
   if (toolName.includes("zip")) return "file";
   if (/```|function |const |class |import /.test(outputStr)) return "code";
@@ -2458,6 +2499,32 @@ async function artifactFromToolOutput(params: {
           ? outputRecord.markdown
           : undefined;
   const url = typeof outputRecord.url === "string" ? outputRecord.url : undefined;
+  // Voix générée (voice.speak) : l'audio arrive en data URI. Il est copié
+  // dans le stockage permanent quand R2 est configuré, sinon conservé en
+  // data URI (bornée) — l'utilisateur obtient un artefact AUDIO lisible et
+  // téléchargeable au lieu d'un base64 tronqué dans la timeline.
+  const audioDataUri = typeof outputRecord.audioDataUri === "string" && outputRecord.audioDataUri.startsWith("data:audio/")
+    ? outputRecord.audioDataUri
+    : undefined;
+  let audioStoragePath: string | undefined;
+  let audioInlineContent: string | undefined;
+  if (audioDataUri) {
+    try {
+      const [header, base64] = audioDataUri.split(",");
+      const mime = header.slice(5).replace(/;base64$/, "") || "audio/mpeg";
+      const buffer = Buffer.from(base64 ?? "", "base64");
+      if (buffer.length > 0 && isR2Configured()) {
+        const ext = mime.includes("wav") ? "wav" : mime.includes("ogg") ? "ogg" : "mp3";
+        const key = `users/${params.userId}/permanent/ai-audio/${Date.now()}-${randomUUID()}.${ext}`;
+        await uploadToR2(key, buffer, mime);
+        audioStoragePath = key;
+      } else if (buffer.length > 0 && audioDataUri.length <= 600_000) {
+        audioInlineContent = audioDataUri;
+      }
+    } catch {
+      // Audio non persistable : on ne crée pas d'artefact vide.
+    }
+  }
   // Les livrables de documents (artifact.create) exposent `storageKey` —
   // même contrat que path/key : le fichier reste téléchargeable depuis le
   // panneau des artefacts (service signé ou repli inline sans R2).
@@ -2469,11 +2536,16 @@ async function artifactFromToolOutput(params: {
         : typeof outputRecord.storageKey === "string"
           ? outputRecord.storageKey
           : undefined;
-  if (!content && !url && !storagePath) return null;
+  if (!content && !url && !storagePath && !audioStoragePath && !audioInlineContent) return null;
 
   const inputTitle = typeof params.toolInput.title === "string" ? params.toolInput.title : undefined;
   const inputFilename = typeof params.toolInput.filename === "string" ? params.toolInput.filename : typeof params.toolInput.name === "string" ? params.toolInput.name : undefined;
-  const type = inferArtifactType(params.toolName, params.output ?? "");
+  const type = audioStoragePath || audioInlineContent
+    ? "audio"
+    : inferArtifactType(params.toolName, params.output ?? "");
+  const note = audioStoragePath || audioInlineContent
+    ? "Audio généré par la voix IA"
+    : `Produit par l'outil ${params.toolName}`;
   return createArtifact({
     userId: params.userId,
     conversationId: params.conversationId,
@@ -2482,11 +2554,11 @@ async function artifactFromToolOutput(params: {
     type,
     title: (inputTitle || inputFilename || `Artefact — ${params.toolName}`).slice(0, 200),
     language: typeof params.toolInput.language === "string" ? params.toolInput.language : undefined,
-    filename: inputFilename,
-    content,
-    storagePath,
+    filename: inputFilename ?? (type === "audio" ? `voix-${Date.now()}.mp3` : undefined),
+    content: audioInlineContent ?? content,
+    storagePath: audioStoragePath ?? storagePath,
     url,
-    note: `Produit par l'outil ${params.toolName}`,
+    note,
   });
 }
 

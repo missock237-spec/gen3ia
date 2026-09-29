@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { ARTIFACT_TYPE_ICONS, ARTIFACT_TYPE_LABELS, formatBytes } from "./labels";
 import { MarkdownContent } from "./markdown";
+import { downloadDataUri, downloadUrl } from "@/lib/client/download";
 import type { ArtifactType, ArtifactVersion, ConversationArtifact } from "@/lib/domain/conversations/types";
 
 /**
@@ -35,9 +36,40 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: "code", label: "Code" },
   { id: "table", label: "Tableaux" },
   { id: "image", label: "Images" },
+  { id: "audio", label: "Audio" },
   { id: "report", label: "Rapports" },
   { id: "file", label: "Fichiers" },
 ];
+
+/**
+ * Résolveur par défaut des fichiers stockés : les chemins « permanent »
+ * sont servibles par /api/storage/permanent (URL signée 600 s). Permet le
+ * téléchargement même quand la page hôte ne fournit pas resolveFileUrl.
+ */
+async function defaultResolveFileUrl(path: string): Promise<string> {
+  const response = await fetch(`/api/storage/permanent?path=${encodeURIComponent(path)}`, {
+    credentials: "same-origin",
+  });
+  if (!response.ok) throw new Error("Lien indisponible.");
+  const data = (await response.json()) as { url: string };
+  return data.url;
+}
+
+/** Extension déduite du type d'artefact pour nommer le fichier téléchargé. */
+function defaultFilename(artifact: ConversationArtifact): string {
+  if (artifact.filename) return artifact.filename;
+  const extByType: Record<ArtifactType, string> = {
+    code: "txt",
+    document: "md",
+    table: "csv",
+    image: "png",
+    audio: "mp3",
+    report: "md",
+    file: "bin",
+  };
+  const base = (artifact.title || "artefact").toLowerCase().replace(/[^a-z0-9\-]+/g, "-").replace(/^-+|-+$/g, "") || "artefact";
+  return `${base.slice(0, 60)}.${extByType[artifact.type] ?? "bin"}`;
+}
 
 export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", variant = "full" }: ArtifactPanelProps) {
   const [tab, setTab] = useState<TabId>("all");
@@ -76,11 +108,17 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
     if (!version) return;
     setBusy(true);
     try {
-      if (artifact.storagePath && resolveFileUrl) {
-        const url = await resolveFileUrl(artifact.storagePath);
-        window.open(url, "_blank", "noopener");
+      const filename = defaultFilename(artifact);
+      // Audio inline (data URI) : toujours téléchargeable côté navigateur.
+      if (version.content?.startsWith("data:")) {
+        downloadDataUri(version.content, filename);
+        return;
+      }
+      if (artifact.storagePath) {
+        const url = await (resolveFileUrl ?? defaultResolveFileUrl)(artifact.storagePath);
+        await downloadUrl(url, filename);
       } else if (version.url) {
-        window.open(version.url, "_blank", "noopener");
+        await downloadUrl(version.url, filename);
       } else if (version.content) {
         const blob = new Blob([version.content], { type: "text/plain;charset=utf-8" });
         const url = URL.createObjectURL(blob);
@@ -234,6 +272,15 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
                 src={previewUrl ?? currentVersion.url}
                 alt={selected.title}
                 className="mt-2 max-h-96 w-full rounded-lg border border-[var(--g3-border)] object-contain"
+              />
+            )}
+
+            {selected.type === "audio" && (
+              <audio
+                controls
+                preload="metadata"
+                src={currentVersion.content?.startsWith("data:") ? currentVersion.content : previewUrl ?? currentVersion.url}
+                className="mt-2 w-full"
               />
             )}
 

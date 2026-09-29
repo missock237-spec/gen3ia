@@ -84,6 +84,7 @@ export const ARTIFACT_TYPE_LABELS: Record<string, string> = {
   image: "Image",
   report: "Rapport",
   file: "Fichier",
+  audio: "Audio",
 };
 
 export const ARTIFACT_TYPE_ICONS: Record<string, string> = {
@@ -93,4 +94,5 @@ export const ARTIFACT_TYPE_ICONS: Record<string, string> = {
   image: "▣",
   report: "▤",
   file: "□",
+  audio: "♪",
 };

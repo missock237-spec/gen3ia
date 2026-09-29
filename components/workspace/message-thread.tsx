@@ -6,6 +6,7 @@ import { ApprovalCard } from "./approval-card";
 import { RunTimeline } from "./run-timeline";
 import { MarkdownContent } from "./markdown";
 import { formatBytes } from "./labels";
+import { downloadUrl } from "@/lib/client/download";
 import { LiveAppPreviewButton } from "./artifact-preview";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import type {
@@ -83,13 +84,24 @@ export function MessageThread({
               )}
 
               {message.imageUrl && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={message.imageUrl}
-                  alt="Image générée par Gen3ia"
-                  className="mt-2.5 max-h-96 w-full rounded-xl border border-[var(--g3-border)] object-contain"
-                  loading="lazy"
-                />
+                <figure className="mt-2.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={message.imageUrl}
+                    alt="Image générée par Gen3ia"
+                    className="max-h-96 w-full rounded-xl border border-[var(--g3-border)] object-contain"
+                    loading="lazy"
+                  />
+                  <figcaption className="mt-1 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => void downloadUrl(message.imageUrl as string, `image-gen3ia-${Date.now()}.png`)}
+                      className="inline-flex items-center gap-1 rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2.5 py-1 text-[10px] font-medium text-[var(--g3-muted)] transition hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
+                    >
+                      <span aria-hidden>⬇</span> Télécharger l&apos;image
+                    </button>
+                  </figcaption>
+                </figure>
               )}
 
               {message.attachments && message.attachments.length > 0 && (

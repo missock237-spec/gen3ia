@@ -9,6 +9,7 @@ import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import { Callout } from "@/components/studio/callout";
 import { labelForAgent } from "@/lib/agents/charter";
 import { approvalToolLabel, toolLabel } from "@/lib/tools/labels";
+import { downloadUrl } from "@/lib/client/download";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import type { AgentSummary } from "@/lib/agents/schema";
 import type { AuthorizationMode } from "@/lib/security/authorization-mode";
@@ -573,12 +574,23 @@ export function AgentChatPanel({
                   )}
                 </div>
 
-                {/* Image générée par l'agent (Agnes AI) — cliquable en plein écran. */}
+                {/* Image générée par l'agent (Agnes AI) — cliquable en plein écran + téléchargement. */}
                 {item.imageUrl && (
-                  <a href={item.imageUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block overflow-hidden rounded-2xl border border-white/10 shadow-[0_10px_30px_-16px_rgba(0,0,0,0.8)]" aria-label="Ouvrir l'image générée en plein écran">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- URL externe (CDN Agnes) signée par le provider, pas de domaine fixe pour next/image */}
-                    <img src={item.imageUrl} alt="Image générée par IA" loading="lazy" className="max-h-96 w-auto max-w-full bg-[var(--g3-elevated)] object-contain" />
-                  </a>
+                  <div className="mt-2">
+                    <a href={item.imageUrl} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-white/10 shadow-[0_10px_30px_-16px_rgba(0,0,0,0.8)]" aria-label="Ouvrir l'image générée en plein écran">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- URL externe (CDN Agnes) signée par le provider, pas de domaine fixe pour next/image */}
+                      <img src={item.imageUrl} alt="Image générée par IA" loading="lazy" className="max-h-96 w-auto max-w-full bg-[var(--g3-elevated)] object-contain" />
+                    </a>
+                    <div className="mt-1 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => void downloadUrl(item.imageUrl as string, `image-gen3ia-${Date.now()}.png`)}
+                        className="rounded-full border border-[rgba(148,153,255,0.25)] px-2.5 py-1 text-[10px] font-medium text-[var(--g3-muted)] transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"
+                      >
+                        <span aria-hidden>⬇</span> Télécharger
+                      </button>
+                    </div>
+                  </div>
                 )}
 
                 {/* Trace d'exécution + approbations (mode task uniquement) */}

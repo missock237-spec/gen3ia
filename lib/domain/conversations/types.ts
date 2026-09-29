@@ -168,7 +168,7 @@ export interface ConversationApproval {
 /* Artifact — livrable standardisé                                     */
 /* ------------------------------------------------------------------ */
 
-export type ArtifactType = "code" | "document" | "table" | "image" | "report" | "file";
+export type ArtifactType = "code" | "document" | "table" | "image" | "report" | "file" | "audio";
 
 export interface ArtifactVersion {
   version: number;
