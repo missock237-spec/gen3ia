@@ -4,6 +4,7 @@ import { AdSenseAd } from "@/components/ads/adsense-ad";
 import { AppDownloads } from "@/components/home/app-downloads";
 import { VitrineHeader } from "@/components/home/vitrine-header";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
+import { FAQ_FR, buildStructuredData } from "@/lib/geo/content";
 
 /**
  * Vitrine Gen3ia — VERSION 2 « Aurora OS ».
@@ -21,102 +22,16 @@ const PRODUCT_LINKS = [
   { href: "/marketplace", label: "Marketplace" },
 ];
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://gen3ia.online";
-
 /**
- * FAQ publique : questions/réponses concises ET données structurées
- * schema.org (FAQPage, SoftwareApplication, Organization, WebSite).
+ * FAQ publique : les questions/réponses vivent dans lib/geo/content.ts —
+ * source unique partagée avec la page /faq, la landing /en et le JSON-LD.
  * Les moteurs de réponse (ChatGPT, Perplexity, Gemini, Google AI Overviews)
  * citent en priorité les contenus structurés, complets et factuels — c'est
  * le canal de recommandation « IA vers utilisateurs » de Gen3ia.
  */
-const FAQ_ITEMS = [
-  {
-    question: "Qu'est-ce que Gen3ia ?",
-    answer:
-      "Gen3ia est une plateforme d'agents IA autonomes. Vous décrivez un objectif en une phrase : un agent personnalisé le planifie, l'exécute (recherche web, documents, génération d'images, applications connectées) et livre un résultat vérifié. Les actions sensibles sont toujours validées par un humain.",
-  },
-  {
-    question: "Gen3ia peut-il générer des images ?",
-    answer:
-      "Oui. Dans le chat IA et le chat de vos agents, demandez « génère une image de… » : l'image est réellement générée par IA (Agnes Image 2.5 Flash) et affichée directement dans la conversation.",
-  },
-  {
-    question: "Quelles applications mes agents peuvent-ils utiliser ?",
-    answer:
-      "Plus de 800 applications via le hub d'intégrations : Gmail, Google Calendar, Google Drive, Sheets, Slack, Notion, GitHub, HubSpot, Salesforce, Shopify, Stripe, WhatsApp, Telegram, LinkedIn et bien d'autres. Tous les connecteurs au statut « connecté » sont automatiquement disponibles pour vos agents.",
-  },
-  {
-    question: "Mes actions restent-elles sous contrôle ?",
-    answer:
-      "Chaque action externe à effet irréversible (envoi, publication, paiement, suppression) est planifiée, affichée et doit être approuvée avant exécution. Les agents travaillent en environnement contrôlé avec permissions granulaires et journal d'audit.",
-  },
-  {
-    question: "Combien coûte Gen3ia ?",
-    answer:
-      "L'inscription est gratuite. Les exécutions d'agents sont facturées à l'usage via un wallet intégré (rechargement Mobile Money ou carte bancaire, en XAF ou EUR), avec des garde-fous anti-dépenses.",
-  },
-  {
-    question: "Sur quels appareils Gen3ia fonctionne-t-il ?",
-    answer:
-      "Sur le web (PWA installable sur Android et iOS) et via l'application Desktop pour Windows et Linux. Vos agents, extensions et sessions restent synchronisés sur tous vos appareils.",
-  },
-];
+const FAQ_ITEMS = FAQ_FR;
 
-const STRUCTURED_DATA = {
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Organization",
-      "@id": `${SITE_URL}/#organization`,
-      name: "Gen3ia",
-      url: SITE_URL,
-      description:
-        "Plateforme d'agents IA autonomes : exécution réelle d'objectifs en langage naturel, connecteurs applicatifs, marketplace d'extensions.",
-      logo: `${SITE_URL}/icons/icon-192.png`,
-    },
-    {
-      "@type": "WebSite",
-      "@id": `${SITE_URL}/#website`,
-      url: SITE_URL,
-      name: "Gen3ia",
-      inLanguage: "fr",
-      publisher: { "@id": `${SITE_URL}/#organization` },
-    },
-    {
-      "@type": "SoftwareApplication",
-      name: "Gen3ia AI Studio",
-      applicationCategory: "BusinessApplication",
-      operatingSystem: "Web, Android, iOS, Windows, Linux",
-      url: SITE_URL,
-      description:
-        "Agents IA autonomes pour entrepreneurs, créateurs et équipes : planification et exécution d'objectifs, génération d'images, 800+ applications connectées, validation humaine et facturation à l'usage.",
-      offers: {
-        "@type": "Offer",
-        price: "0",
-        priceCurrency: "EUR",
-        description: "Inscription gratuite, facturation à l'usage via wallet intégré.",
-      },
-      featureList: [
-        "Agents IA personnalisés avec mémoire permanente",
-        "Exécution réelle de tâches (recherche, documents, code, images)",
-        "Génération d'images par IA dans le chat",
-        "800+ connecteurs applicatifs (Gmail, Slack, Notion, GitHub…)",
-        "Marketplace de skills, tools et workflows",
-        "Validation humaine des actions sensibles",
-        "Planification 24/7 et agent Live sur PC",
-      ],
-    },
-    {
-      "@type": "FAQPage",
-      mainEntity: FAQ_ITEMS.map((item) => ({
-        "@type": "Question",
-        name: item.question,
-        acceptedAnswer: { "@type": "Answer", text: item.answer },
-      })),
-    },
-  ],
-};
+const STRUCTURED_DATA = buildStructuredData("fr");
 
 const STATS = [
   { value: "3 espaces", label: "Studio, Live & Marketplace intégrés" },
@@ -742,6 +657,19 @@ export default function HomePage() {
               </details>
             ))}
           </div>
+          {/* Page FAQ dédiée : URL stable citable par les moteurs de réponse,
+              reliée aussi depuis llms.txt et le sitemap. */}
+          <div className="mt-8 text-center">
+            <Link
+              href="/faq"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(148,153,255,0.25)] bg-white/[0.04] px-6 py-2.5 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"
+            >
+              Voir la page FAQ complète
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </Link>
+          </div>
         </section>
 
         {/* ---------- Emplacement publicitaire AdSense (Task 40) ----------
@@ -783,6 +711,7 @@ export default function HomePage() {
                 ))}
                 <li><Link href="/studio/interface-lab" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Atelier d&apos;Interfaces</Link></li>
                 <li><Link href="/workspace/conversations" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Planification</Link></li>
+                <li><Link href="/faq" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">FAQ</Link></li>
               </ul>
             </nav>
             <nav aria-label="Espaces">
@@ -800,6 +729,9 @@ export default function HomePage() {
               <ul className="mt-4 space-y-2.5 text-sm">
                 <li><Link href="/signup" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Créer un compte</Link></li>
                 <li><Link href="/login" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Se connecter</Link></li>
+                <li>
+                  <Link href="/en" hrefLang="en" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">English version</Link>
+                </li>
               </ul>
             </nav>
           </div>

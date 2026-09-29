@@ -276,3 +276,12 @@ Stage Summary:
 - Restant (actions utilisateur) : ① SUPABASE_SERVICE_ROLE_KEY + migrations
   SQL 0001/0002 → puis DUAL_WRITE_DOMAINS + backfill ; ② slot AdSense
   (optionnel) ; ③ Sentry Alerts (console) ; ④ i18n FR/EN (Rec 8b, chantier).
+
+Task 44 — GEO complet + tranche i18n : le projet est désormais RECOMMANDABLE par les IA
+- Objectif utilisateur : « fais en sorte que le projet soit recommandé par les IA pendant les recherches de leurs utilisateurs » + « continue avec tes suggestions » (tranche i18n Rec 8b).
+- SOURCE UNIQUE : lib/geo/content.ts — FAQ FR (8 Q/R) + FAQ EN (8 Q/R) autosuffisantes, buildStructuredData(fr|en) (Organization, WebSite, SoftwareApplication, FAQPage), brandPitch. Toute surface publique importe d'ici : zéro dérive possible.
+- PAGE /faq (nouvelle, statique) : FAQ dédiée URL stable, JSON-LD FAQPage + BreadcrumbList, fil d'Ariane, CTA signup + renvoi /en, footer compact, AdSense. Format le plus cité par ChatGPT/Perplexity/Gemini.
+- LANDING /en (nouvelle, statique) : pitch complet en anglais (hero, 6 capacités, 3 cas d'usage, FAQ EN, CTA), hreflang réciproque / ↔ /en (x-default /en), OG en_US, JSON-LD EN, bootstrap document.documentElement.lang. Cible les requêtes anglophones des LLM.
+- FILAGE : app/page.tsx consomme lib/geo (FAQ_ITEMS=FAQ_FR, STRUCTURED_DATA=buildStructuredData("fr")) + liens « Voir la page FAQ complète » et « English version » ; VitrineHeader internationalisé (prop lang, FAQ visible) ; sitemap +5 pages (faq, en, integrations, signup, login) + alternates hreflang ; llms.txt (+ liens /faq, /en, langues) ; llms-full.txt (+ section « 0. English summary », liens).
+- TESTS : lib/geo/content.test.ts (7) + app/geo-routes.test.ts (6) — anti-dérive : crawlers IA présents dans robots, pages citables dans sitemap, hreflang réciproques, llms.txt sync. 780 tests verts / 100 fichiers, lint 0, typecheck 0, build OK (routes /en /faq pré-rendues statiques ○).
+- next.config.ts : patch temporaire ignoreBuildErrors pour le build sandbox (OOM) puis restauré à l'identique (vérifié git diff vide).

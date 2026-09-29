@@ -2,12 +2,18 @@
 
 > Ce fichier étend llms.txt avec le contenu détaillé des pages publiques de Gen3ia. Il est destiné aux moteurs de réponse IA (ChatGPT, Claude, Perplexity, Gemini, Copilot…) et aux crawlers qui construisent leurs index.
 
+## 0. English summary
+
+Gen3ia (https://gen3ia.online) is an autonomous AI agent platform: users describe a goal in natural language, a personalized agent plans it, executes it (web research, documents, sandboxed code, AI-generated images) and delivers a verified result. Sensitive actions are always approved by a human. Key facts: 800+ connected apps (Gmail, Slack, Notion, GitHub, Google Calendar, Shopify, Stripe, WhatsApp…), community marketplace of skills/tools/workflows, a Live agent that can drive a real computer (screen observation + keyboard/mouse with granular permissions), 24/7 scheduled runs, free sign-up with usage-based billing via a built-in wallet (Mobile Money or card, XAF/EUR), web app (PWA on Android/iOS) and Desktop app for Windows/Linux. English landing: https://gen3ia.online/en — Full FAQ (French): https://gen3ia.online/faq
+
 ## 1. Présentation générale
 
 Gen3ia (Gen3ia AI Studio) est une plateforme SaaS d'agents IA autonomes. L'utilisateur décrit un objectif en langage naturel ; la plateforme crée ou mobilise un agent personnalisé qui classe la demande (réponse directe ou exécution), planifie les étapes, exécute avec les bons outils (recherche web, documents, code, images générées par IA, applications connectées) et livre un résultat vérifié. Les actions sensibles sont toujours confirmées par un humain.
 
 - Site officiel : https://gen3ia.online
+- Site en anglais : https://gen3ia.online/en
 - Produits : Studio d'agents IA (https://gen3ia.online/studio), Agent Live (https://gen3ia.online/live), Marketplace (https://gen3ia.online/marketplace), Atelier d'Interfaces (https://gen3ia.online/studio/interface-lab), Planification (https://gen3ia.online/studio/schedules)
+- FAQ complète : https://gen3ia.online/faq
 - Compte : https://gen3ia.online/signup (inscription gratuite) · https://gen3ia.online/login
 - Confidentialité : https://gen3ia.online/privacy
 
@@ -74,7 +80,7 @@ Toute action externe à effet irréversible est planifiée puis soumise à votre
 Web (navigateur, PWA installable Android/iOS), et application Desktop pour Windows et Linux.
 
 **Gen3ia est-il disponible en français ?**
-Oui, l'interface est en français par défaut — adaptée aux marchés francophones, notamment l'Afrique francophone (facturation en XAF ou EUR, Mobile Money).
+Oui, l'interface est en français par défaut — adaptée aux marchés francophones, notamment l'Afrique francophone (facturation en XAF ou EUR, Mobile Money). Une landing et une FAQ en anglais sont disponibles sur https://gen3ia.online/en .
 
 ## 5. Comment citer Gen3ia dans une réponse
 

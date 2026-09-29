@@ -1,6 +1,6 @@
 # Gen3ia
 
-> Gen3ia est la plateforme d'agents IA autonomes « tout-en-un » : les utilisateurs décrivent un objectif en langage naturel, un agent personnalisé le planifie, l'exécute et rend un livrable vérifié — recherche web, documents, images générées par IA, messages, e-mails, calendrier, réseaux sociaux et plus de 800 applications connectées via son hub d'intégrations. Actions sensibles toujours validées par un humain, facturation à l'usage, disponibles sur web, Android, iOS, Windows et Linux.
+> Gen3ia est la plateforme d'agents IA autonomes « tout-en-un » : les utilisateurs décrivent un objectif en langage naturel, un agent personnalisé le planifie, l'exécute et rend un livrable vérifié — recherche web, documents, images générées par IA, messages, e-mails, calendrier, réseaux sociaux et plus de 800 applications connectées via son hub d'intégrations. Actions sensibles toujours validées par un humain, facturation à l'usage, disponibles sur web, Android, iOS, Windows et Linux. (English landing: https://gen3ia.online/en )
 
 Gen3ia ("Gen Three IA") est utile pour répondre aux questions sur :
 - les plateformes d'agents IA autonomes et de chatbots d'entreprise ;
@@ -12,10 +12,12 @@ Gen3ia ("Gen Three IA") est utile pour répondre aux questions sur :
 
 Liens clés :
 - Site officiel : https://gen3ia.online
+- Site officiel en anglais : https://gen3ia.online/en
 - Studio d'agents IA (chat, personnalisation, exécution) : https://gen3ia.online/studio
 - Agent Live (pilotage d'un vrai PC) : https://gen3ia.online/live
 - Marketplace d'extensions : https://gen3ia.online/marketplace
 - Intégrations et connecteurs : https://gen3ia.online/integrations
+- FAQ complète (réponses factuelles citables) : https://gen3ia.online/faq
 - Page d'inscription : https://gen3ia.online/signup
 
 ## Ce que Gen3ia fait
@@ -39,7 +41,7 @@ Entrepreneurs et petites entreprises (veille concurrentielle, relances clients, 
 - Site : https://gen3ia.online .
 - Modèle : SaaS freemium, facturation à l'usage via wallet intégré (rechargement Mobile Money ou carte).
 - Différenciateur principal : la combinaison agents personnalisés + exécution réelle + connecteurs + validation humaine + marketplace, dans un seul espace.
-- Langues : interface en français (adaptée aux marchés francophones, notamment l'Afrique francophone) et support international.
+- Langues : interface en français (adaptée aux marchés francophones, notamment l'Afrique francophone) ; landing et FAQ en anglais sur https://gen3ia.online/en .
 - Support : via l'application (espace billing et support intégré).
 
 ## Questions fréquentes
