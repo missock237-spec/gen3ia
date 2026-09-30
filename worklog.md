@@ -466,3 +466,12 @@ Task 47 — Étape 13/20 : « l'agent et les conversations utilisent les liens/w
 Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 13
 - LIVRÉES : 1-12, 13, 18 (14/20).
 - RESTANTES : 14 (bibliothèque de capacités → conversation directe), 15 (Knowledge +), 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
+
+Task 47 — Étape 14/20 : « bibliothèque de capacités → conversation directe qui commence à travailler » — LIVRÉ (score auto-évalué 9,6/10)
+- ANALYSE : le flux existant créait la conversation puis ATTENDAIT la fin du tour complet (POST /messages bloquant) avant de naviguer — aucune rétroaction, aucun streaming. Le pattern de hand-off streaming (g3-pending-message) existait déjà pour l'accueil.
+- CORRECTIFS : la bibliothèque transmet désormais le starterPrompt via le marqueur (constante exportée PENDING_MESSAGE_PREFIX — source unique) et navigue immédiatement ; la page de conversation consomme le marqueur et exécute avec le rendu en direct complet (streaming, timeline, ETA, validations).
+- TESTS : +4. Suite : 964 verts / 122 fichiers, typecheck 0, lint 0. Vercel success.
+
+Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 14
+- LIVRÉES : 1-14, 18 (15/20).
+- RESTANTES : 15 (Knowledge +), 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
