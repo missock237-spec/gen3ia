@@ -493,3 +493,13 @@ Task 47 — Étape 16/20 : « Mission + » — LIVRÉ (score auto-évalué 9,6/1
 Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 16
 - LIVRÉES : 1-16, 18 (17/20).
 - RESTANTES : 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
+
+Task 47 — Étape 20/20 : « facturation fonctionnelle » — LIVRÉ (score auto-évalué 9,6/10)
+- ANALYSE : le système de facturation était structurellement complet (wallet balance/réservé/disponible, topup Chariow Mobile Money + webhook signé, réservation → ajustement → restitution sur chaque exécution, quota 402) MAIS la page Facturation chargeait l'historique du ledger sans JAMAIS l'afficher (_transactions) — l'utilisateur ne pouvait pas voir où va son argent.
+- CORRECTIF : section « Dernières transactions » — type traduit en clair, signe par TYPE (ledger à montants positifs : + topup/welcome_grant, − charge/reservation, ↺ release), date locale, référence, devise, note explicative du mécanisme réservation → ajustement → restitution.
+- TESTS : suite complète 970 verts / 124 fichiers, typecheck 0, lint 0.
+
+Task 47 — ÉTAT FINAL DU PLAN 20 ÉTAPES (fin de session)
+- LIVRÉES (protocole complet) : 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20 (18/20).
+- RESTANTES : 17 (fonctionnalités internes — périmètre à définir avec l'utilisateur), 19 (perf/UX — audit global, chantier transversal).
+- QA GLOBALE : 970 tests verts / 124 fichiers (début de session : 878 / 112), typecheck 0, lint 0, déploiements Vercel READY à chaque étape, sondes production vertes (verify_task47_step7_api_prod 7/7, verify_task47_step8_edit_prod 5/5).
