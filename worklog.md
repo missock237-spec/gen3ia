@@ -320,3 +320,15 @@ Task 46 — Étape 1 : CLÔTURE VALIDÉE
 - Déploiements : 63633fa (dpl_d1PBquM8…) READY puis a8d99b1 (correctifs auth) READY.
 - Sondes production verify_task46_step1_prod.mjs : 6/6 vertes (vitrine 200, health 200, 401 structurés sur les 3 routes modifiées, build vivant).
 - Auto-évaluation finale règle 3 : 9,7/10 ≥ 9,5 → appliqué. Aucune régression : 829 tests verts / 107 fichiers, typecheck 0, lint 0.
+
+Task 46 — Étape 2/20 : « le système d'agent IA ne traite pas les tâches longues » — CORRIGÉ (score auto-évalué 9,6/10)
+- ANALYSE : 12 causes racines (3 modèles de temps contradictoires 60 s/120 s/30 min ; checkpoint persisté mais lisible UNIQUEMENT par la route d'approbation ; reprise amnésique (outputs: {} dans le constructeur) ; timeline conversationnelle persistée seulement en fin de tour ; bug `status` hors scope dans executeApprovedStep (chaque approbation workspace « échouait » après avoir agi) ; cron quotidien vs dispatch documenté 5 min (limite plan Vercel Hobby : crons 1×/jour)).
+- CORRECTIFS :
+  ① Reprise NON-AMNÉSIQUE : RuntimeRunnerOptions.initialOutputs — le constructeur restaure les sorties des étapes complétées (les étapes dépendantes reprennent avec leur contexte).
+  ② NOUVELLE ROUTE POST /api/agent/chat/continue : reprise réelle d'une mission interrompue — garde-fous complets (401 structuré, 404, 409 completed/cancelled/running-frais/waiting_approval→HITL), reprend un `running` STALE > 10 min (kill plateforme), réinitialise failed/running→pending sur demande EXPLICITE, saute les complétées, persiste le message final dans le fil + réconcilie le run, répond resumable:true si ré-échec (jamais de blocage définitif). Rate limit dédié.
+  ③ agent/chat : réponses d'échec (2 chemins) portent resumable:true — le checkpoint (travail partiel + coût) est conservé.
+  ④ UI agent-chat-panel : bouton « Continuer la mission » sur les missions échouées reprenables (bloc bleu explicatif, reprise n'exécute que le reste).
+  ⑤ engine.ts executeApprovedStep : bug `status` hors scope corrigé (hoist) — les approbations workspace se terminent enfin proprement.
+  ⑥ runPlanTurn : timeline persistée APRÈS CHAQUE ÉTAPE (persistSteps fail-soft) — un kill ne laisse plus de run fantôme vide ; les étapes réussies restent visibles dans le fil.
+- LIMITE PLATEFORME DOCUMENTÉE : vercel.json cron reste 1×/jour (Hobby = crons quotidiens uniquement ; */5 serait ignoré) — la veille RSS dispose d'un throttle 10 min intégré prêt pour un passage en fréquence dès un plan Pro.
+- QA : typecheck 0, lint 0, 839 tests verts / 108 fichiers (+10 : continue.history 10 — reprise, garde-fous, stale-running, HITL, 401).

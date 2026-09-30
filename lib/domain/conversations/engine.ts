@@ -80,6 +80,7 @@ import type {
   ConversationMessage,
   ConversationRun,
   MessageAttachment,
+  RunStatus,
   RunStep,
 } from "./types";
 import { safeEmitter, type StreamEventEmitter } from "./stream-events";
@@ -2096,6 +2097,18 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     objective: ctx.intent.objective || ctx.message.slice(0, 500),
     steps,
   });
+  // Timeline persistée APRÈS CHAQUE ÉTAPE (et pas seulement à la fin du
+  // plan) : si la fonction est tuée par le budget plateforme en cours de
+  // route, les étapes déjà réussies restent visibles dans le fil et le run
+  // n'est plus un fantôme « running » sans contenu.
+  const persistSteps = async () => {
+    try {
+      await updateRunSteps(ctx.userId, run.id, steps);
+    } catch {
+      // Timeline best-effort : un incident Firestore ne doit jamais faire
+      // échouer une étape dont le travail a réussi.
+    }
+  };
   await onEvent({ type: "run_created", run: { ...run, status: "running", steps } });
   await onEvent({ type: "status", phase: "execution", label: "Exécution du plan en cours…" });
 
@@ -2119,6 +2132,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
       });
       steps.push(step);
       await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
       const startedAt = new Date().toISOString();
       try {
         const image = await produceConversationImage(ctx, typeof planned.toolInput?.prompt === "string" ? planned.toolInput.prompt : undefined);
@@ -2150,6 +2164,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         anyFailure = true;
       }
       await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
       continue;
     }
 
@@ -2163,6 +2178,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
       });
       steps.push(step);
       await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
       continue;
     }
 
@@ -2227,6 +2243,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
       });
       steps.push(step);
       await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
       const approval = await createApproval({
         userId: ctx.userId,
         conversationId: ctx.conversationId,
@@ -2257,6 +2274,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     });
     steps.push(step);
     await onEvent({ type: "step_update", runId: run.id, step });
+    await persistSteps();
 
     if (toolName) {
       const startedAt = new Date().toISOString();
@@ -2285,6 +2303,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
           step.detail = `${step.detail ? `${step.detail}\n` : ""}Contenu du livrable indisponible (rédaction impossible pour le moment) — aucun fichier créé.`.trim();
           step.finishedAt = new Date().toISOString();
           await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
           continue;
         }
         toolInput = completed;
@@ -2325,11 +2344,13 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         anyFailure = true;
       }
       await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
     } else {
       // Étape de rédaction : traitée par le modèle à la synthèse finale.
       step.status = "done";
       step.finishedAt = new Date().toISOString();
       await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
     }
   }
 
@@ -2631,8 +2652,12 @@ export async function executeApprovedStep(params: {
   // Toutes les validations traitées ? On clôture le run.
   const remaining = steps.filter((s) => s.status === "awaiting");
   const hasFailure = steps.some((s) => s.status === "failed");
+  // Statut HOISTÉ : il est utilisé par finalizeRun ET par recordRunOutcome
+  // (bug historique : `const status` déclaré dans le bloc `if` puis lu
+  // hors du bloc — ReferenceError à l'exécution, l'action s'exécutait mais
+  // l'approbation « échouait » après coup : « Décision impossible. »).
+  const status: RunStatus = hasFailure ? "failed" : "completed";
   if (remaining.length === 0) {
-    const status = hasFailure ? "failed" : "completed";
     steps.push(
       makeStep({
         phase: "result",

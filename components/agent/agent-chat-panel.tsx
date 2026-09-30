@@ -53,6 +53,8 @@ type AgentResult = {
   approvals?: Approval[];
   error?: string;
   finalText?: string;
+  /** Le checkpoint est reprenable (travail partiel conservé) : « Continuer la mission » proposé. */
+  resumable?: boolean;
 };
 
 type Message = {
@@ -400,6 +402,45 @@ export function AgentChatPanel({
     requestAbortRef.current = null;
   }
 
+  /**
+   * Reprise d'une mission interrompue (timeout, kill serveur) : le
+   * checkpoint conserve les étapes réussies et leurs sorties — la reprise
+   * n'exécute QUE le reste. Le travail payé n'est jamais perdu.
+   */
+  async function continueMission(executionId: string) {
+    if (loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/agent/chat/continue", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ executionId, ...(conversationId ? { conversationId } : {}) }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "La reprise de la mission a échoué.");
+      const result = data as AgentResult;
+      setActive(result);
+      setMessages((items) => [...items, {
+        id: crypto.randomUUID(),
+        role: "agent",
+        text: result.finalText
+          || (result.status === "waiting_approval"
+            ? "La reprise est prête : une action nécessite votre confirmation."
+            : result.status === "completed"
+              ? "Mission terminée après reprise. Les résultats affichés correspondent aux étapes réellement exécutées."
+              : "La reprise a encore été interrompue — les étapes réussies sont conservées, vous pouvez continuer."),
+        mode: "task",
+        result,
+      }]);
+      void loadConversations();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "La reprise a échoué.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const objective = message.trim();
@@ -657,6 +698,21 @@ export function AgentChatPanel({
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+                    {item.result.status === "failed" && item.result.resumable && item.result.executionId && (
+                      <div className="mt-3 rounded-xl border border-sky-400/25 bg-sky-400/10 p-3">
+                        <p className="text-[11px] leading-5 text-sky-200/90">
+                          Le travail déjà réalisé est conservé (étapes réussies et leurs résultats). La reprise n&apos;exécute que les étapes restantes.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void continueMission(item.result!.executionId)}
+                          disabled={loading}
+                          className="mt-2 rounded-lg bg-[var(--g3-surface)] px-3 py-1.5 text-[11px] font-semibold text-[var(--g3-text)] transition hover:bg-[var(--g3-elevated)] disabled:opacity-40"
+                        >
+                          Continuer la mission
+                        </button>
                       </div>
                     )}
                   </div>

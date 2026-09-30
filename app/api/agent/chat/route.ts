@@ -499,6 +499,9 @@ export async function POST(request: NextRequest) {
           objective: body.message,
           plan,
           error: error instanceof Error ? error.message : "Agent execution failed.",
+          // Le checkpoint est persisté (travail partiel conservé) : l'UI
+          // propose « Continuer la mission » au lieu d'un simple « réessayez ».
+          resumable: true,
           approvals: await listActionApprovals(user.uid, plan.executionId),
         }, { status: errorStatus(error, 400) });
       }
@@ -711,6 +714,7 @@ export async function POST(request: NextRequest) {
         objective: body.message,
         plan,
         error: error instanceof Error ? error.message : "Agent execution failed.",
+        resumable: true,
         approvals: await listActionApprovals(user.uid, plan.executionId),
       }, { status: errorStatus(error, 400) });
     }

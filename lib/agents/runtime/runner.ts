@@ -87,7 +87,7 @@ export interface RuntimeAgentConfig {
   budgetEurMinor?: number;
 }
 
-export interface RuntimeRunnerOptions { userId: string; projectId?: string; objective: string; plan: RuntimePlan; conversationId?: string; signal?: AbortSignal; policy?: ExecutionPolicy; agent?: RuntimeAgentConfig; }
+export interface RuntimeRunnerOptions { userId: string; projectId?: string; objective: string; plan: RuntimePlan; conversationId?: string; signal?: AbortSignal; policy?: ExecutionPolicy; agent?: RuntimeAgentConfig; /** Reprise : sorties des étapes déjà complétées (checkpoint) — sans elles, les étapes dépendantes reprendraient à vide. */ initialOutputs?: Record<string, unknown>; }
 
 export class AgentRuntime {
   private state: RuntimeExecutionState;
@@ -111,7 +111,7 @@ export class AgentRuntime {
     this.startedAtMs = Date.now();
     this.state = {
       executionId: options.plan.executionId || randomUUID(), userId: options.userId, objective: options.objective, ...(options.conversationId !== undefined ? { conversationId: options.conversationId } : {}),
-      status: "pending", plan: options.plan, observations: [], evaluations: [], outputs: {}, iteration: 0,
+      status: "pending", plan: options.plan, observations: [], evaluations: [], outputs: options.initialOutputs ? { ...options.initialOutputs } : {}, iteration: 0,
       totalRetries: 0, maxTotalRetries: 15,
       billing: { currency: WALLET_CURRENCY, totalChargeMinor: 0, totalProviderCostEur: 0, llmInputTokens: 0, llmOutputTokens: 0 },
     };
