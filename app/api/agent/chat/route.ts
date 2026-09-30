@@ -754,6 +754,11 @@ export async function POST(request: NextRequest) {
     // permet à l'UI d'afficher l'état réel (réessayer vs réconnecter) au lieu
     // de deviner à partir du message.
     const body = errorBody(error, "Agent request failed.");
+    // Session absente/expirée : 401 explicite (l'UI propose la reconnexion
+    // au lieu d'un « réessayez » sans fin).
+    if (body.code === "AUTH_REQUIRED") {
+      return NextResponse.json({ error: body.error, code: body.code }, { status: 401 });
+    }
     const upstream = body.code === "PROVIDER_UNAVAILABLE"
       || body.error.includes("provider")
       || body.error.includes("planner")

@@ -312,3 +312,15 @@ describe("Index Firestore du scoping par agent", () => {
     expect(scoped).toBeTruthy();
   });
 });
+
+describe("POST /api/agent/chat — session absente/expirée", () => {
+  it("renvoie 401 structuré (code AUTH_REQUIRED), pas un 400 trompeur", async () => {
+    mockedRequireUser.mockRejectedValue(
+      Object.assign(new Error("Authentification requise : jeton manquant ou session expirée."), { status: 401, code: "AUTH_REQUIRED" }),
+    );
+    const response = await POST(postRequest({ message: "probe", agentId: "agent-1" }));
+    expect(response.status).toBe(401);
+    const body = await response.json();
+    expect(body.code).toBe("AUTH_REQUIRED");
+  });
+});

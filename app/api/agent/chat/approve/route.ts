@@ -15,7 +15,7 @@ import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage } from "@/lib/chat/repository";
 import { reconcileAgentRun } from "@/lib/agents/conversation-run";
-import { errorStatus } from "@/lib/security/http-errors";
+import { errorCode, errorStatus } from "@/lib/security/http-errors";
 
 const Body = z.object({ approvalId: z.string().min(1).max(256), action: z.enum(["approve", "reject"]).default("approve") });
 
@@ -77,10 +77,13 @@ function buildPolicy(plan: RuntimePlan): ExecutionPolicy {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await requireUser(request);
-  const { approvalId, action } = Body.parse(await request.json());
-
   try {
+    // Auth + validation DANS le try : une session absente doit produire un
+    // 401 structuré (errorStatus), jamais un 500 opaque — l'UI traite sinon
+    // une déconnexion comme une panne système.
+    const user = await requireUser(request);
+    const { approvalId, action } = Body.parse(await request.json());
+
     if (action === "reject") {
       const rejected = await rejectAction(user.uid, approvalId);
       // Trace de conversation : le refus fait partie de l'historique.
@@ -210,8 +213,10 @@ export async function POST(request: NextRequest) {
       throw error;
     }
   } catch (error) {
+    // Convention contract-first : le code machine (AUTH_REQUIRED…) voyage
+    // avec le message — l'UI distingue déconnexion et panne réelle.
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Approval/execution failed." },
+      { error: error instanceof Error ? error.message : "Approval/execution failed.", code: errorCode(error) },
       { status: errorStatus(error, 400) },
     );
   }

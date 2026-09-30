@@ -158,3 +158,15 @@ describe("POST /api/agent/chat/approve — le résultat final rejoint l'historiq
     expect(mockedClaim).toHaveBeenCalledWith("user-1", "appr-1");
   });
 });
+
+describe("POST /api/agent/chat/approve — session absente/expirée", () => {
+  it("renvoie 401 structuré (jamais un 500 opaque)", async () => {
+    mockedRequireUser.mockRejectedValue(
+      Object.assign(new Error("Authentification requise : jeton manquant ou session expirée."), { status: 401, code: "AUTH_REQUIRED" }),
+    );
+    const response = await POST(postRequest({ approvalId: "appr-1", action: "approve" }));
+    expect(response.status).toBe(401);
+    const body = await response.json();
+    expect(body.code).toBe("AUTH_REQUIRED");
+  });
+});
