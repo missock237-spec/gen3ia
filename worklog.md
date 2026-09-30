@@ -475,3 +475,12 @@ Task 47 — Étape 14/20 : « bibliothèque de capacités → conversation direc
 Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 14
 - LIVRÉES : 1-14, 18 (15/20).
 - RESTANTES : 15 (Knowledge +), 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
+
+Task 47 — Étape 15/20 : « Knowledge + » — LIVRÉ (score auto-évalué 9,6/10)
+- ANALYSE : knowledge.search existait (vectoriel + repli Firestore) mais n'était accessible qu'en mode PLANIFIÉ — en chat, les questions sur les documents du projet ne consultaient jamais la base.
+- CORRECTIFS : lib/knowledge/chat-context.ts (pur) — garde (projet requis), seuil de pertinence 0.3 (bruit écarté), tri/plafond (6 fragments × 700 car.), formatage citable ; moteur — recherche automatique sur le message quand la conversation a un projet (budget 4 s fail-soft), injection dans le system prompt avec consigne de fidélité stricte.
+- TESTS : +4. Suite : 968 verts / 123 fichiers, typecheck 0, lint 0. Vercel success.
+
+Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 15
+- LIVRÉES : 1-15, 18 (16/20).
+- RESTANTES : 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
