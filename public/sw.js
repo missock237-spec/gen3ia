@@ -238,6 +238,29 @@ self.addEventListener("sync", (event) => {
   if (event.tag === SYNC_TAG) event.waitUntil(flushOutbox());
 });
 
+/* --------------------- Notifications natives (clic) -------------------- */
+
+// Clic sur une notification native montrée par le SW (Android + app
+// installée) : retour dans l'app, sur le chemin associé — fenêtre
+// existante réutilisée, sinon ouverte.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url ?? "/dashboard";
+  event.waitUntil(
+    (async () => {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of clients) {
+        if ("focus" in client) {
+          await client.focus();
+          if ("navigate" in client) await client.navigate(targetUrl).catch(() => undefined);
+          return;
+        }
+      }
+      await self.clients.openWindow(targetUrl);
+    })(),
+  );
+});
+
 // Reprise également au démarrage du SW (navigateurs sans Background Sync).
 self.addEventListener("message", (event) => {
   if (event.data === "gen3ia-flush") event.waitUntil(flushOutbox());

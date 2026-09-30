@@ -4,6 +4,14 @@ import * as React from "react";
 
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { useToast } from "@/components/ui/toast";
+import {
+  alreadyShownThisSession,
+  isNativeNotificationsEnabled,
+  markShownThisSession,
+  nativePermissionState,
+  shouldShowNativeNotification,
+  showNativeNotification,
+} from "@/lib/notifications/native";
 
 /**
  * Centre de notifications Gen3ia (cloche globale).
@@ -66,17 +74,31 @@ export function NotificationCenter() {
       const list = (Array.isArray(data.notifications) ? data.notifications : []) as Gen3iaNotification[];
       setItems(list);
       setUnread(Number(data.unread ?? 0));
-      // Notification native du navigateur pour les NOUVELLES validations
-      // (jamais au premier chargement : on ne rejoue pas l'historique).
+      // Notifications NATIVES de l'appareil (étape 18) : TOUTE nouvelle
+      // notification non lue part sur l'appareil si l'utilisateur a activé
+      // le service et accordé la permission — avec déduplication stricte,
+      // repli service worker (Android / app installée) et jamais pendant le
+      // premier chargement (on ne rejoue pas l'historique).
       for (const item of list) {
-        if (item.type !== "approval_requested" || !item.approvalId) continue;
-        const isNew = !seenApprovalIds.current.has(item.approvalId);
-        seenApprovalIds.current.add(item.approvalId);
-        if (firstLoadDone.current && isNew && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted" && document.hidden) {
-          try {
-            new Notification("Gen3ia — validation requise", { body: item.title + (item.body ? `\n${item.body}` : ""), tag: item.approvalId });
-          } catch { /* notification native indisponible */ }
-        }
+        if (item.read) continue;
+        const dedupId = item.approvalId ?? item.id;
+        const isNew = !seenApprovalIds.current.has(dedupId);
+        seenApprovalIds.current.add(dedupId);
+        if (!firstLoadDone.current || !isNew) continue;
+        const eligible = shouldShowNativeNotification({
+          permission: nativePermissionState(),
+          enabled: isNativeNotificationsEnabled(),
+          isHidden: document.hidden,
+          alreadyShown: alreadyShownThisSession(dedupId),
+        });
+        if (!eligible) continue;
+        markShownThisSession(dedupId);
+        void showNativeNotification({
+          title: item.type === "approval_requested" ? "Gen3ia — validation requise" : `Gen3ia — ${item.title}`,
+          body: item.body ? item.body.slice(0, 300) : undefined,
+          tag: dedupId,
+          url: item.conversationId ? `/workspace?c=${encodeURIComponent(item.conversationId)}` : item.executionId ? `/studio?taskId=${encodeURIComponent(item.executionId)}` : "/dashboard",
+        });
       }
       firstLoadDone.current = true;
     } catch {

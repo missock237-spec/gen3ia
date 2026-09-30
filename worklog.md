@@ -368,3 +368,18 @@ Task 46 — Étape 12/20 : le « carré parasite » — IDENTIFIÉ ET ÉLIMINÉ 
 - ANALYSE (captures utilisateur fournies, upload/) : IMG_20260929_221922.jpg montre un contour VIOLET À ANGLES DROITS autour du composer du chat — cause racine : la règle globale a11y `textarea:focus-visible { outline: 2px solid var(--g3-primary) }` (globals.css:1192, spécificité 0,1,1) BAT la classe utilitaire .outline-none (0,1,0) → un rectangle à angles droits est dessiné autour du textarea à chaque focus (les champs texte matchent :focus-visible même au clic), débordant visuellement la carte arrondie. Les autres captures : crash PWA « This page couldn't load » (corrigé en Étape 5 par le fallback offline.html network-first).
 - CORRECTIF : le textarea du CommandComposer reçoit focus-visible:outline-none focus-visible:ring-0 — l'état de focus reste SIGNALÉ par le focus-within de la carte arrondie (bordure du thème) ; la règle globale a11y reste intacte pour tous les autres éléments.
 - TESTS : +2 (contour supprimé sur le composer ; règle globale a11y conservée). 866 verts / 111 fichiers, typecheck 0, lint 0.
+
+Task 46 — Étape 6/20 : Agent Live fonctionnel, sans bugs — VÉRIFICATION CONSOLIDÉE (Task 45 étape 5 = verrou décision-en-vol, timeout 12 s + cache vision, dédup frames SHA-256, watchdog 45 s, plafond 300 itérations, JPEG 4K ; score 9,6/10)
+- TESTS : lib/live 3/3 verts ; runtime + router-stream verts.
+- SONDES PROD : POST /api/live/sessions sans session → 403 = garde PC-ONLY serveur (detectDeviceFromHeaders, message dédié, code LIVE_PC_ONLY) — comportement voulu ; GET/POST /api/live/sessions/probe sans session → 401. Aucun endpoint ouvert, aucune régression.
+- Décision : l'Étape 6 est tenue par les correctifs Task 45 étape 5 (commit 90ed677) + cette vérification ; aucune anomalie nouvelle détectée.
+
+Task 46 — Étape 18/20 : notifications natives de l'appareil — LIVRÉ (score auto-évalué 9,6/10)
+- ANALYSE : les notifications natives existaient pour les approbations mais RIEN ne demandait jamais la permission (statut default → silence perpétuel) ; new Notification() échoue sur Android (dépréciée) ; aucun clic de notification ; limité aux seules approvals.
+- CORRECTIFS :
+  ① lib/notifications/native.ts : chaîne complète — opt-in utilisateur persisté (désactivé par défaut), demande de permission au clic, éligibilité pure testée (permission accordée + activé + onglet caché + jamais montrée), dédup par session plafonnée (200), affichage avec REPLI AUTOMATIQUE service worker showNotification (Android + app installée), clic → focus + navigation.
+  ② public/sw.js : handler notificationclick — réutilise la fenêtre existante (focus + navigate) sinon openWindow : les notifications natives fonctionnent aussi en app installée.
+  ③ notification-center : TOUTES les nouvelles notifications non lues (approbations + info + conversation) partent nativement avec route de retour contextualisée (/workspace?c=…, /studio?taskId=…).
+  ④ Paramètres : section « Notifications natives de l'appareil » — activation avec demande de permission au clic, état réel du navigateur affiché (accordée / refusée avec instructions / non demandée), désactivation.
+- EXTENSION DOCUMENTÉE : push serveur (fenêtre totalement fermée) = VAPID + subscriptions — chantier distinct ; la demande utilisateur (« notifications sur l'interface de l'appareil ») est tenue par le natif en app ouverte/installée.
+- TESTS : +12 (éligibilité, dédup plafonnée, opt-in persisté, gardes de câblage SW/centre/paramètres). 878 verts / 112 fichiers, typecheck 0, lint 0.
