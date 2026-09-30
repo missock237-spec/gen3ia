@@ -81,3 +81,19 @@ describe("Composants critiques — plus de pastels cassant le thème", () => {
     expect(layout).toContain('t==="light"');
   });
 });
+
+describe("Artéfact « carré parasite » (étape 12)", () => {
+  it("le textarea du composer n'a plus le contour rectangulaire violet au focus (le focus-within de la carte signale l'état)", () => {
+    const composer = read("components/ui/command-composer.tsx");
+    // La règle globale textarea:focus-visible { outline: 2px solid var(--g3-primary) }
+    // battait .outline-none (spécificité) et dessinait un rectangle à angles
+    // droits autour du composer — capture utilisateur IMG_20260929.
+    expect(composer).toContain("focus-visible:outline-none focus-visible:ring-0");
+  });
+
+  it("la règle globale de focus reste en place pour l'accessibilité des autres éléments", () => {
+    const css = read("app/globals.css");
+    expect(css).toContain("textarea:focus-visible");
+    expect(css).toContain("outline: 2px solid var(--g3-primary)");
+  });
+});

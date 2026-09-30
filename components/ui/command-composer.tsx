@@ -360,7 +360,7 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
           onChange={(event) => onValueChange(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="min-h-16 w-full resize-none border-0 bg-transparent px-3 pb-1 pt-2 text-[15px] leading-6 text-[var(--g3-text-secondary)] outline-none placeholder:text-[var(--g3-faint)] disabled:opacity-50"
+          className="min-h-16 w-full resize-none border-0 bg-transparent px-3 pb-1 pt-2 text-[15px] leading-6 text-[var(--g3-text-secondary)] outline-none focus-visible:outline-none focus-visible:ring-0 placeholder:text-[var(--g3-faint)] disabled:opacity-50"
           aria-label="Message pour l'IA"
         />
 
