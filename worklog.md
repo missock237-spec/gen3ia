@@ -484,3 +484,12 @@ Task 47 — Étape 15/20 : « Knowledge + » — LIVRÉ (score auto-évalué 9,6
 Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 15
 - LIVRÉES : 1-15, 18 (16/20).
 - RESTANTES : 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
+
+Task 47 — Étape 16/20 : « Mission + » — LIVRÉ (score auto-évalué 9,6/10)
+- ANALYSE : les runs étaient listables UNIQUEMENT par conversation — aucune vue globale de l'activité d'exécution.
+- CORRECTIFS : listRecentRuns (sans index composite, tri mémoire — actif immédiatement), GET /api/workspace/missions (propriété stricte, statut + avancement + conversation d'origine), onglet « Missions » dans le panneau de contexte avec saut vers la conversation d'origine (statuts/labels réutilisés).
+- TESTS : +2 (contrats). Suite : 970 verts / 124 fichiers, typecheck 0, lint 0.
+
+Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 16
+- LIVRÉES : 1-16, 18 (17/20).
+- RESTANTES : 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
