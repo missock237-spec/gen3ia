@@ -447,3 +447,13 @@ Task 47 — Étape 10/20 : « adaptateur d'écran (expérience cohérente tous a
 Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 10
 - LIVRÉES : 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 18 (12/20).
 - RESTANTES : 11 (mises à jour multi-appareils), 13 (liens/web pour agent), 14 (bibliothèque de capacités → conversation directe), 15 (Knowledge +), 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
+
+Task 47 — Étape 11/20 : « chaque mise à jour disponible sur tous les appareils » — LIVRÉ (score auto-évalué 9,6/10)
+- ANALYSE : skipWaiting activait le nouveau SW mais AUCUNE page ouverte ne rechargeait — l'utilisateur restait sur l'ancien build (PWA mobile sans bouton refresh = jours de retard) ; update() appelé une seule fois au montage.
+- CORRECTIFS (pwa-register refondu) : détection reg.waiting → application ; controllerchange ≠ première installation (pageWasControlled) → application ; moment sûr (onglet caché = reload, onglet visible = signal gen3ia:new-version sans couper une mission) ; garde anti-boucle sessionStorage ; poll 30 min + visibilitychange pour les sessions longues.
+- TESTS : +3 (câblage complet). Suite : 952 verts / 120 fichiers, typecheck 0, lint 0. Vercel success.
+- LIMITE DOCUMENTÉE : le signal gen3ia:new-version est prêt pour une bannière UI dédiée (prochain chantier UX si souhaité).
+
+Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 11
+- LIVRÉES : 1-12, 18 sauf 13/14/15/16/17/19/20 → précisément : 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18 (13/20).
+- RESTANTES : 13 (liens/web pour agent), 14 (bibliothèque de capacités → conversation directe), 15 (Knowledge +), 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
