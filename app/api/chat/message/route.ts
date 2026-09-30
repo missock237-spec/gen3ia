@@ -29,7 +29,9 @@ export async function POST(request: NextRequest) {
     if (conversationId && !(await getConversation(user.uid, conversationId))) return NextResponse.json({ error: "Conversation introuvable." }, { status: 404 });
     if (!conversationId) conversationId = (await createConversation(user.uid, body.message.slice(0, 60))).id;
 
-    const history = await listMessages(user.uid, conversationId, 100);
+    // Historique AVANT l'ajout du message courant — les PLUS RÉCENTS
+    // (ordre chronologique) : une conversation longue garde sa fin.
+    const history = await listMessages(user.uid, conversationId, 100, { order: "recent" });
     await appendMessage({ conversationId, userId: user.uid, role: "user", content: body.message });
 
     // Génération d'images réelle (Agnes AI) : une demande explicite d'image

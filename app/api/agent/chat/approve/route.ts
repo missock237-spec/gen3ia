@@ -14,6 +14,7 @@ import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/e
 import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage } from "@/lib/chat/repository";
+import { reconcileAgentRun } from "@/lib/agents/conversation-run";
 import { errorStatus } from "@/lib/security/http-errors";
 
 const Body = z.object({ approvalId: z.string().min(1).max(256), action: z.enum(["approve", "reject"]).default("approve") });
@@ -164,11 +165,40 @@ export async function POST(request: NextRequest) {
           : import("@/lib/agents/action-approvals").then(({ failAction: markFailed }) => markFailed(user.uid, id, result.error ?? "Agent execution failed.")));
       }
 
+      // Historique complet : le résultat FINAL de la mission (après
+      // approbation et reprise) est persisté dans le fil — jusqu'ici le
+      // refus était journalisé mais pas la fin réelle de l'exécution.
+      const approvedFinalText = finalResponseText(result.plan, result.outputs);
+      if (state.conversationId) {
+        const closingText = result.status === "completed"
+          ? approvedFinalText
+          : `L'exécution a été interrompue : ${result.error ?? "erreur inconnue"}. Les étapes déjà approuvées restent conservées dans l'historique.`;
+        await appendMessage({
+          conversationId: state.conversationId,
+          userId: user.uid,
+          role: "assistant",
+          content: closingText,
+        }).catch(() => undefined);
+      }
+      // Réconciliation du run lié à la conversation (statut final, timeline,
+      // payload runtime) — fail-soft, jamais bloquant pour la réponse.
+      await reconcileAgentRun({
+        userId: user.uid,
+        conversationId: state.conversationId ?? "",
+        plan: result.plan,
+        status: result.status,
+        outputs: result.outputs,
+        observations: result.observations,
+        billing: result.billing,
+        finalText: result.status === "completed" ? approvedFinalText : undefined,
+        error: result.error,
+      }).catch(() => undefined);
+
       return NextResponse.json({
         status: result.status,
         executionId: result.executionId,
         conversationId: state.conversationId,
-        finalText: finalResponseText(result.plan, result.outputs),
+        finalText: approvedFinalText,
         objective: result.objective,
         plan: result.plan,
         observations: result.observations,

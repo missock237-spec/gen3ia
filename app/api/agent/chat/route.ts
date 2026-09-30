@@ -11,10 +11,11 @@ import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
 import { createActionApproval, listActionApprovals } from "@/lib/agents/action-approvals";
 import { selectApprovalRequiredSteps } from "@/lib/agents/approval-policy";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
-import { appendMessage, createConversation, getConversation, listMessages } from "@/lib/chat/repository";
+import { appendMessage, createConversation, getConversation, listMessages, updateConversation, type ChatConversation } from "@/lib/chat/repository";
 import { getAgentForOwner } from "@/lib/agents/repository";
 import { policyForAgent } from "@/lib/agents/personalized-plan";
-import { answerAsAgent, classifyRequest, outOfScopeReply, planAgentTask } from "@/lib/agents/chat-engine";
+import { answerAsAgent, classifyRequest, historyContextNote, outOfScopeReply, planAgentTask } from "@/lib/agents/chat-engine";
+import { recordAgentRun } from "@/lib/agents/conversation-run";
 import { recallAgentContext, recordExchange, shouldSummarize, summarizeConversation } from "@/lib/memory/episodic";
 import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import { describeConnectorsForPrompt, describeConnectedConnectorsForPrompt, type ConnectedConnectorsContext } from "@/lib/integrations/mention";
@@ -209,19 +210,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    let conversationId = body.conversationId;
-    if (conversationId) {
-      if (!(await getConversation(user.uid, conversationId))) {
-        return NextResponse.json({ error: "Conversation introuvable." }, { status: 404 });
+    const existing = body.conversationId ? await getConversation(user.uid, body.conversationId) : null;
+    if (body.conversationId && !existing) {
+      return NextResponse.json({ error: "Conversation introuvable." }, { status: 404 });
+    }
+    let conversation: ChatConversation;
+    let conversationId: string;
+    if (existing) {
+      conversationId = body.conversationId!;
+      if (agent && !existing.agentId) {
+        // Fils legacy créés sans agentId : rattachement rétroactif à l'agent
+        // courant pour que l'historique scopé les retrouve.
+        await updateConversation(user.uid, conversationId, { agentId: agent.id });
+        conversation = { ...existing, agentId: agent.id };
+      } else {
+        conversation = existing;
       }
     } else {
-      const conversation = await createConversation(user.uid, body.message.slice(0, 80));
+      // Historique mémorisé : un fil ouvert depuis le chat d'un agent est
+      // créé AVEC son agentId — le rail « Historique des chats » de l'agent
+      // liste ainsi ses propres fils (scoping par agentId côté repository).
+      conversation = await createConversation(user.uid, body.message.slice(0, 80), agent ? { agentId: agent.id } : {});
       conversationId = conversation.id;
     }
+    // Nombre réel de messages du fil (au-delà de la fenêtre chargée) : pilote
+    // la cadence de résumé épisodique même sur les conversations longues.
+    const priorMessageCount = conversation.messageCount ?? 0;
 
     // Historique AVANT l'ajout du message courant (contexte de classification
-    // et de réponse en mode chat).
-    const history = await listMessages(user.uid, conversationId, 20);
+    // et de réponse en mode chat) — les PLUS RÉCENTS, ordre chronologique :
+    // une conversation longue ne doit jamais amputer le contexte de sa fin.
+    const history = await listMessages(user.uid, conversationId, 30, { order: "recent" });
 
     // Connecteurs connectés découverts AUTOMATIQUEMENT (statut « connecté ») :
     // les agents peuvent agir sur toutes les applications déjà autorisées,
@@ -263,7 +282,14 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      const classification = await classifyRequest(agent, body.message);
+      // Classification AVEC l'historique récent : le classificateur résout
+      // les références implicites (« ce fichier », « la même chose ») au lieu
+      // de décider sur un message isolé hors de son contexte.
+      const classification = await classifyRequest(
+        agent,
+        body.message,
+        history.map((item) => ({ role: item.role, content: item.content })),
+      );
       const note = contextNoteFor(body.attachmentPath, agent);
 
       // Mémoire épisodique : rappel sémantique des échanges passés de cet
@@ -339,7 +365,7 @@ export async function POST(request: NextRequest) {
         const reply = await answerAsAgent(agent, history.map((item) => ({ role: item.role, content: item.content })), body.message, fullNote);
         await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
         after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: reply, mode: "chat" }));
-        if (agent.memoryEnabled && shouldSummarize(history.length + 2)) {
+        if (agent.memoryEnabled && shouldSummarize(priorMessageCount + 2)) {
           after(() => summarizeConversation({
             userId: user.uid,
             agentId: agent.id,
@@ -358,7 +384,11 @@ export async function POST(request: NextRequest) {
 
       // Mode task : exécution concrète de la tâche, dans le périmètre de
       // l'agent (charte injectée dans le planificateur, outils restreints).
-      const objectiveNote = fullNote ? `${fullNote}\n\n${body.message}` : body.message;
+      // Note de contexte conversationnelle : le planificateur reçoit les
+      // échanges récents pour comprendre le VRAI besoin (références
+      // implicites : « le PDF dont on parlait », « le même format »).
+      const historyNote = historyContextNote(history.map((item) => ({ role: item.role, content: item.content })));
+      const objectiveNote = [fullNote, historyNote, body.message].filter(Boolean).join("\n\n");
       const plan = await planAgentTask(user.uid, agent, objectiveNote);
       // APPROBATION CONDITIONNELLE : app externe connectée = exécution directe ;
       // approbation seulement si l'app est non connectée (plancher de sécurité
@@ -384,6 +414,24 @@ export async function POST(request: NextRequest) {
         const { createCheckpoint } = await import("@/lib/agents/runtime/checkpoint");
         await createCheckpoint(checkpoint);
 
+        // Timeline persistée sur le fil : la mission en attente d'approbation
+        // reste visible à la réouverture (plan + étapes en attente).
+        let waitingRunId: string | undefined;
+        try {
+          waitingRunId = await recordAgentRun({
+            userId: user.uid,
+            conversationId,
+            projectId: agent.projectId,
+            plan,
+            status: "waiting_approval",
+            outputs: {},
+            observations: [],
+            billing: checkpoint.billing,
+          });
+        } catch (runError) {
+          console.warn("[agent-chat] run waiting_approval non enregistré", runError instanceof Error ? runError.message : runError);
+        }
+
         const approvals = await Promise.all(approvalSteps.map(async (step) => {
           const approval = await createActionApproval({
             ownerId: user.uid,
@@ -398,7 +446,7 @@ export async function POST(request: NextRequest) {
         }));
 
         const waitingText = `J'ai préparé le plan d'exécution dans mon domaine (${classification.reason || "tâche confirmée"}). Une ou plusieurs actions externes nécessitent votre confirmation avant exécution.`;
-        await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: waitingText });
+        await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: waitingText, ...(waitingRunId ? { runId: waitingRunId } : {}) });
 
         return NextResponse.json({
           mode: "agent",
@@ -462,11 +510,32 @@ export async function POST(request: NextRequest) {
       const taskReply = status === "waiting_approval"
         ? "J'ai exécuté les étapes autorisées. Une ou plusieurs actions nécessitent maintenant votre confirmation."
         : finalText;
+      // Historique complet : le run de la mission (plan, étapes, sorties,
+      // coût) est persisté sur le fil et lié au message final — la
+      // réouverture ré-affiche la mission intégrale.
+      let runId: string | undefined;
+      try {
+        runId = await recordAgentRun({
+          userId: user.uid,
+          conversationId,
+          projectId: agent.projectId,
+          plan: result.plan,
+          status,
+          outputs: result.outputs,
+          observations: result.observations,
+          billing: result.billing,
+          finalText: status === "completed" ? finalText : undefined,
+          error: result.error,
+        });
+      } catch (runError) {
+        console.warn("[agent-chat] run non enregistré", runError instanceof Error ? runError.message : runError);
+      }
       await appendMessage({
         conversationId,
         userId: user.uid,
         role: "assistant",
         content: taskReply,
+        ...(runId ? { runId } : {}),
       });
       after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: taskReply, mode: "task" }));
 
@@ -533,9 +602,14 @@ export async function POST(request: NextRequest) {
     } catch {
       hasUniversalCustomApis = false;
     }
-    const universalObjective = connectedUniversal.note
-      ? `${connectedUniversal.note}\n\n${body.message}`
-      : body.message;
+    // Contexte conversationnel : le planificateur universel reçoit aussi les
+    // échanges récents du fil (références implicites comprises).
+    const universalHistoryNote = historyContextNote(history.map((item) => ({ role: item.role, content: item.content })));
+    const universalObjective = [
+      connectedUniversal.note,
+      universalHistoryNote,
+      body.message,
+    ].filter(Boolean).join("\n\n");
 
     const plan = await planUniversalAgent(user.uid, universalObjective);
     // APPROBATION CONDITIONNELLE (identique au mode agent scopé) : une app

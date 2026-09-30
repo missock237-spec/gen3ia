@@ -39,9 +39,11 @@ function docFrom(id: string, data: FirebaseFirestore.DocumentData): Conversation
     userId: String(data.userId ?? ""),
     conversationId: String(data.conversationId ?? ""),
     projectId: typeof data.projectId === "string" ? data.projectId : undefined,
+    executionId: typeof data.executionId === "string" ? data.executionId : undefined,
     objective: String(data.objective ?? ""),
     status: (data.status ?? "planning") as RunStatus,
     steps: steps.map((s) => ({ ...s, id: String(s.id), phase: s.phase, title: String(s.title), status: s.status })),
+    runtime: data.runtime && typeof data.runtime === "object" ? (data.runtime as Record<string, unknown>) : undefined,
     createdAt: data.createdAt instanceof Date ? data.createdAt.toISOString() : new Date().toISOString(),
     updatedAt: data.updatedAt instanceof Date ? data.updatedAt.toISOString() : new Date().toISOString(),
     finishedAt: data.finishedAt instanceof Date ? data.finishedAt.toISOString() : undefined,
@@ -52,8 +54,12 @@ export async function createRun(input: {
   userId: string;
   conversationId: string;
   projectId?: string;
+  /** Identifiant d'exécution runtime (mode agent : réconciliation après approbation). */
+  executionId?: string;
   objective: string;
   steps: RunStep[];
+  /** Payload runtime compact (plan, sorties, observations) pour ré-affichage fidèle. */
+  runtime?: Record<string, unknown>;
 }): Promise<ConversationRun> {
   const now = new Date();
   const ref = adminDb.collection(COLLECTION).doc(randomUUID());
@@ -61,6 +67,8 @@ export async function createRun(input: {
     userId: input.userId,
     conversationId: input.conversationId,
     ...(input.projectId ? { projectId: input.projectId } : {}),
+    ...(input.executionId ? { executionId: input.executionId } : {}),
+    ...(input.runtime ? { runtime: input.runtime } : {}),
     objective: input.objective.slice(0, 2000),
     status: "planning" as const,
     steps: input.steps,
@@ -72,12 +80,48 @@ export async function createRun(input: {
     userId: input.userId,
     conversationId: input.conversationId,
     projectId: input.projectId,
+    executionId: input.executionId,
     objective: input.objective,
     status: "planning",
     steps: input.steps,
+    runtime: input.runtime,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
   };
+}
+
+/** Retrouve le run d'une conversation lié à une exécution runtime (mode agent). */
+export async function findRunByExecution(userId: string, executionId: string): Promise<ConversationRun | null> {
+  const snap = await adminDb
+    .collection(COLLECTION)
+    .where("userId", "==", userId)
+    .where("executionId", "==", executionId)
+    .limit(1)
+    .get();
+  const doc = snap.docs[0];
+  if (!doc) return null;
+  return docFrom(doc.id, doc.data());
+}
+
+/**
+ * Met à jour (upsert limité) le run lié à une exécution : statut final,
+ * timeline et payload runtime. Fail-soft : l'absence de run (fils créés
+ * avant la fonctionnalité) n'est pas une erreur.
+ */
+export async function updateRunByExecution(
+  userId: string,
+  executionId: string,
+  patch: { status?: RunStatus; steps?: RunStep[]; runtime?: Record<string, unknown> },
+): Promise<ConversationRun | null> {
+  const existing = await findRunByExecution(userId, executionId);
+  if (!existing) return null;
+  const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
+  if (patch.status) update.status = patch.status;
+  if (patch.steps) update.steps = patch.steps;
+  if (patch.runtime) update.runtime = patch.runtime;
+  if (patch.status) update.finishedAt = FieldValue.serverTimestamp();
+  await adminDb.collection(COLLECTION).doc(existing.id).update(update);
+  return { ...existing, ...patch };
 }
 
 export async function getRun(userId: string, runId: string): Promise<ConversationRun | null> {

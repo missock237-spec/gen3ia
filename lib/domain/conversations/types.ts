@@ -127,9 +127,17 @@ export interface ConversationRun {
   userId: string;
   conversationId: string;
   projectId?: string;
+  /** Identifiant d'exécution runtime (mode agent : réconciliation après approbation). */
+  executionId?: string;
   objective: string;
   status: RunStatus;
   steps: RunStep[];
+  /**
+   * Payload runtime compact (plan, sorties, observations, coût) enregistré
+   * par le chemin agent : permet au chat du Studio de ré-afficher la mission
+   * à l'ouverture du fil, exactement comme pendant son exécution.
+   */
+  runtime?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
   finishedAt?: string;

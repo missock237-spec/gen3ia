@@ -681,7 +681,10 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   });
   await onEvent({ type: "turn_started", conversationId: input.conversationId, userMessage });
 
-  const history = await listMessages(input.userId, input.conversationId, 100);
+  // Ordre "recent" : les PLUS RÉCENTS d'abord (puis réordonnés chrono).
+  // Sur une conversation longue, l'ordre "asc" livrait au modèle les tout
+  // premiers échanges et tronquait la fin du fil — l'agent « oubliait ».
+  const history = await listMessages(input.userId, input.conversationId, 100, { order: "recent" });
   const priorHistory = history.slice(0, -1);
 
   // 1 bis) Fourniture d'une API personnelle dans le chat : le connecteur est

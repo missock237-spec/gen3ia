@@ -295,3 +295,22 @@ Task 45 — 5 améliorations demandées (agents, balises, Live, outils internes,
 - QA : typecheck 0, lint 0, 800 tests verts / 102 fichiers, build OK. Commits 13d905d, 2b03c52, c18e1e0, 809886c, 90ed677.
 
 Task 45-bis — correctif CI : le job couverture échouait (68,49 % lignes < 70 %) car le nouveau coupe-circuit generateStream n'était pas testé (router.ts dans la liste de couverture). lib/ai/router-stream.test.ts : 3 tests avec mock de ./providers (saut circuit ouvert, ouverture après seuil de 3 échecs, enregistrement du succès) → 80,13 % lignes. 803 tests verts.
+
+Task 46 — Étape 1/20 : « le système d'agent IA ne mémorise pas les historiques de conversation des agents » — CORRIGÉ (score auto-évalué 9,7/10)
+- ANALYSE (protocole règle 1) : 6 causes racines identifiées et vérifiées dans le code.
+  RC1 : conversations créées SANS agentId (route agent/chat) → rail « Historique des chats » d'un agent toujours vide, réouverture impossible.
+  RC2 : index Firestore composite (userId, agentId, updatedAt DESC) absent → FAILED_PRECONDITION avalé silencieusement par l'UI.
+  RC3 : listMessages orderBy asc+limit renvoyait les N PLUS ANCIENS → le LLM recevait le début du fil et « oubliait » la fin (agent/chat, engine, chat/message).
+  RC4 : classificateur et planificateur mode task appelés SANS historique → références implicites cassées, plans hors-contexte (historyContextNote jamais appelée).
+  RC5 : résultat FINAL post-approbation jamais persisté dans le fil (seul le refus l'était).
+  RC6 : missions du chat agent liées à aucun run → réouverture = texte seul, plan/étapes/livrables perdus.
+- CORRECTIFS (protocole règle 2, zéro code de démonstration) :
+  ① lib/chat/repository.ts : listMessages option order:"recent" (N plus récents renvoyés chronologiques) ; getConversation/findLatestConversation exposent agentId ; updateConversation accepte agentId (rattachement rétroactif) ; replis SANS INDEX pour listConversations scopé agent (filtre mémoire) et listMessages (tri mémoire, même contrat).
+  ② firestore.indexes.json : + index chatConversations(userId,agentId,updatedAt DESC) et chatMessages(conversationId,userId,createdAt DESC).
+  ③ lib/agents/conversation-run.ts (nouveau) : pont mission↔conversation — mapPlanStepsToRunSteps (timeline lisible), compactRuntimePayload (borné 220 Ko, troncature explicite), recordAgentRun, reconcileAgentRun (créé si absent).
+  ④ app/api/agent/chat/route.ts : création de fil AVEC agentId + backfill legacy ; historique récent (30) ; classifyRequest avec historique ; historyContextNote injectée en mode task ET chemin universel ; run enregistré (waiting_approval ET final) + runId sur le message final ; cadence de résumé sur messageCount réel (plus limitée à la fenêtre).
+  ⑤ approve/route.ts : résultat FINAL persisté (succès OU échec explicite) + reconcileAgentRun (statut final, timeline, payload).
+  ⑥ GET /api/chat/conversations/[id] : renvoie les runs du fil.
+  ⑦ agent-chat-panel : la réouverture restaure la mission (panneau plan/étapes/sorties) depuis le run persisté — plus aucune mission perdue.
+  ⑧ engine.ts + chat/message : contexte LLM sur les PLUS RÉCENTS (order recent).
+- TESTS RÉELS (protocole règle 5) : 24 nouveaux tests (chat.history 10, approve.history 4, repository.recent 4, conversation-run 6) — scoping agentId, backfill, ordre récent, repli sans index, historique au classificateur/planificateur, run lié + fail-soft, persistance post-approbation succès/échec, mapping/condensation/statuts, index déclaré. Suite complète : 827 verts / 107 fichiers, typecheck 0, lint 0, build compilé (OOM sandbox sur la phase types — tsc standalone vert = garde réelle, limitation documentée).

@@ -249,7 +249,38 @@ export function AgentChatPanel({
         imageUrl: item.imageUrl,
       }));
       setConversationId(id);
-      setActive(null);
+      // Historique complet : le DERNIER run de mission enregistré sur le fil
+      // restaure le panneau de mission (plan, étapes, sorties, coût) tel
+      // qu'affiché pendant l'exécution — plus aucune mission perdue à la
+      // réouverture.
+      const runs = ((data.runs ?? []) as Array<{
+        id: string;
+        status: string;
+        runtime?: {
+          status?: string;
+          executionId?: string;
+          plan?: AgentResult["plan"];
+          outputs?: Record<string, unknown>;
+          finalText?: string;
+          error?: string;
+        };
+      }>).filter((run) => run.runtime?.plan);
+      const lastRun = runs[0];
+      if (lastRun?.runtime) {
+        setActive({
+          mode: "agent",
+          status: lastRun.runtime.status ?? lastRun.status,
+          executionId: lastRun.runtime.executionId ?? lastRun.id,
+          conversationId: id,
+          plan: lastRun.runtime.plan!,
+          ...(lastRun.runtime.outputs ? { outputs: lastRun.runtime.outputs } : {}),
+          approvals: [],
+          ...(lastRun.runtime.finalText ? { finalText: lastRun.runtime.finalText } : {}),
+          ...(lastRun.runtime.error ? { error: lastRun.runtime.error } : {}),
+        });
+      } else {
+        setActive(null);
+      }
       setMessages(items);
       setShowHistory(false);
     } catch (e) {

@@ -103,28 +103,8 @@ export async function listConversations(
   limit = 50,
   options: { projectId?: string; agentId?: string; query?: string } = {},
 ): Promise<ChatConversation[]> {
-  let snap;
-  if (options.agentId) {
-    // Historique scopé à un agent IA : seuls ses fils sont listés.
-    snap = await adminDb
-      .collection("chatConversations")
-      .where("userId", "==", userId)
-      .where("agentId", "==", options.agentId)
-      .orderBy("updatedAt", "desc")
-      .limit(Math.min(limit, 100))
-      .get();
-  } else if (options.projectId) {
-    snap = await adminDb
-      .collection("chatConversations")
-      .where("userId", "==", userId)
-      .where("projectId", "==", options.projectId)
-      .orderBy("updatedAt", "desc")
-      .limit(Math.min(limit, 100))
-      .get();
-  } else {
-    snap = await adminDb.collection("chatConversations").where("userId", "==", userId).orderBy("updatedAt", "desc").limit(Math.min(limit, 100)).get();
-  }
-  let conversations = snap.docs.map(d => {
+  const capped = Math.min(limit, 100);
+  const mapConversation = (d: FirebaseFirestore.QueryDocumentSnapshot): ChatConversation => {
     const x = d.data();
     return {
       id: d.id,
@@ -139,7 +119,44 @@ export async function listConversations(
       createdAt: iso(x.createdAt),
       updatedAt: iso(x.updatedAt),
     };
-  });
+  };
+  let conversations: ChatConversation[];
+  if (options.agentId) {
+    // Historique scopé à un agent IA : seuls ses fils sont listés.
+    try {
+      const snap = await adminDb
+        .collection("chatConversations")
+        .where("userId", "==", userId)
+        .where("agentId", "==", options.agentId)
+        .orderBy("updatedAt", "desc")
+        .limit(capped)
+        .get();
+      conversations = snap.docs.map(mapConversation);
+    } catch {
+      // Repli SANS index composite (déploiement d'index en attente) : requête
+      // simple (userId + updatedAt) puis filtre agentId en mémoire. Garantit
+      // que le rail « Historique des chats » fonctionne en toute circonstance.
+      const snap = await adminDb
+        .collection("chatConversations")
+        .where("userId", "==", userId)
+        .orderBy("updatedAt", "desc")
+        .limit(200)
+        .get();
+      conversations = snap.docs.map(mapConversation).filter((c) => c.agentId === options.agentId).slice(0, capped);
+    }
+  } else if (options.projectId) {
+    const snap = await adminDb
+      .collection("chatConversations")
+      .where("userId", "==", userId)
+      .where("projectId", "==", options.projectId)
+      .orderBy("updatedAt", "desc")
+      .limit(capped)
+      .get();
+    conversations = snap.docs.map(mapConversation);
+  } else {
+    const snap = await adminDb.collection("chatConversations").where("userId", "==", userId).orderBy("updatedAt", "desc").limit(capped).get();
+    conversations = snap.docs.map(mapConversation);
+  }
   const query = options.query?.trim().toLowerCase();
   if (query) {
     conversations = conversations.filter((c) => c.title.toLowerCase().includes(query));
@@ -163,6 +180,7 @@ export async function findLatestConversation(userId: string): Promise<ChatConver
     userId: x.userId,
     title: String(x.title ?? "Nouvelle conversation"),
     projectId: typeof x.projectId === "string" ? x.projectId : undefined,
+    agentId: typeof x.agentId === "string" ? x.agentId : undefined,
     status: x.status === "archived" ? "archived" : "active",
     messageCount: Number(x.messageCount ?? 0),
     createdAt: iso(x.createdAt),
@@ -179,6 +197,7 @@ export async function getConversation(userId: string, id: string) {
     userId: x.userId,
     title: String(x.title ?? "Nouvelle conversation"),
     projectId: typeof x.projectId === "string" ? x.projectId : undefined,
+    agentId: typeof x.agentId === "string" ? x.agentId : undefined,
     model: x.model,
     provider: x.provider,
     status: x.status === "archived" ? ("archived" as const) : ("active" as const),
@@ -188,10 +207,43 @@ export async function getConversation(userId: string, id: string) {
   } as ChatConversation;
 }
 
-export async function listMessages(userId: string, conversationId: string, limit = 100): Promise<ChatMessage[]> {
+/**
+ * Ordre de lecture des messages.
+ *  - "asc"    : les N PLUS ANCIENS, ordre chronologique (affichage du fil).
+ *  - "recent" : les N PLUS RÉCENTS, renvoyés en ordre chronologique
+ *    (contexte LLM) — sans cette option, une conversation longue tronquait
+ *    le contexte aux tout premiers échanges et l'agent « oubliait » la fin.
+ */
+export type ListMessagesOrder = "asc" | "recent";
+
+export async function listMessages(
+  userId: string,
+  conversationId: string,
+  limit = 100,
+  options: { order?: ListMessagesOrder } = {},
+): Promise<ChatMessage[]> {
   if (!(await getConversation(userId, conversationId))) throw new Error("Conversation introuvable.");
-  const snap = await adminDb.collection("chatMessages").where("conversationId", "==", conversationId).where("userId", "==", userId).orderBy("createdAt", "asc").limit(Math.min(limit, 200)).get();
-  return snap.docs.map(d => {
+  const capped = Math.min(limit, 200);
+  let docs;
+  try {
+    if (options.order === "recent") {
+      const snap = await adminDb.collection("chatMessages").where("conversationId", "==", conversationId).where("userId", "==", userId).orderBy("createdAt", "desc").limit(capped).get();
+      docs = snap.docs;
+    } else {
+      const snap = await adminDb.collection("chatMessages").where("conversationId", "==", conversationId).where("userId", "==", userId).orderBy("createdAt", "asc").limit(capped).get();
+      docs = snap.docs;
+    }
+  } catch {
+    // Repli SANS index (déploiement d'index en attente) : tri en mémoire —
+    // le contexte LLM ne casse jamais. Même contrat que les requêtes :
+    // "recent" → docs du plus récent au plus ancien ; "asc" → chronologique.
+    const snap = await adminDb.collection("chatMessages").where("conversationId", "==", conversationId).where("userId", "==", userId).limit(capped * 2).get();
+    const sortedAsc = snap.docs.sort((a, b) => iso(a.data().createdAt).localeCompare(iso(b.data().createdAt)));
+    docs = options.order === "recent"
+      ? sortedAsc.slice(-capped).reverse()
+      : sortedAsc.slice(0, capped);
+  }
+  const messages = docs.map(d => {
     const x = d.data();
     return {
       id: d.id,
@@ -213,6 +265,10 @@ export async function listMessages(userId: string, conversationId: string, limit
       createdAt: iso(x.createdAt),
     };
   });
+  // Ordre "recent" : la requête Firestore renvoie du plus récent au plus
+  // ancien — on rétablit l'ordre chronologique pour nourrir le modèle.
+  if (options.order === "recent") messages.reverse();
+  return messages;
 }
 
 export async function appendMessage(input: Omit<ChatMessage, "id" | "createdAt">) {
@@ -269,17 +325,22 @@ export async function renameConversation(userId: string, id: string, title: stri
   await conversationRef(id).update({ title: title.trim().slice(0, 120), updatedAt: FieldValue.serverTimestamp() });
 }
 
-/** Mise à jour partielle (projet, statut, modèle) d'une conversation. */
+/** Mise à jour partielle (projet, agent, statut, modèle) d'une conversation. */
 export async function updateConversation(
   userId: string,
   id: string,
-  patch: { projectId?: string | null; status?: ConversationStatus; model?: string; provider?: string },
+  patch: { projectId?: string | null; agentId?: string; status?: ConversationStatus; model?: string; provider?: string },
 ) {
   if (!(await getConversation(userId, id))) throw new Error("Conversation introuvable.");
   const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
   if (patch.projectId !== undefined) {
     // null détache le projet ; une chaîne non vide le rattache.
     update.projectId = patch.projectId || FieldValue.delete();
+  }
+  if (patch.agentId) {
+    // Rattachement d'un fil à un agent IA : le backfill des fils legacy
+    // créés sans agentId rend l'historique scopé par agent complet.
+    update.agentId = patch.agentId;
   }
   if (patch.status) update.status = patch.status;
   if (patch.model) update.model = patch.model;
