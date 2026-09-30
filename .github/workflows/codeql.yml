@@ -1,0 +1,45 @@
+name: CodeQL
+
+# SAST (audit de production §4) : analyse statique de sécurité du code
+# JavaScript/TypeScript. Complète le scan de secrets (gitleaks dans ci.yml)
+# en détectant les vulnérabilités de flux de données (injection, XSS,
+# chemins non vérifiés, exposition d'infos sensibles…) directement dans la
+# UI Security de GitHub. Hebdomadaire (lundi 03:00 UTC) + chaque push/PR.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  analyze:
+    name: Analyse SAST (javascript-typescript)
+    runs-on: ubuntu-latest
+    permissions:
+      # Nécessaire pour publier les résultats dans l'onglet Security
+      # (code scanning alerts) — principe du moindre privilège : rien d'autre.
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialisation CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # security-extended : couvre davantage de règles que la suite par
+          # défaut, sans le bruit « quality » (maintenabilité) qui n'est pas
+          # bloquant en CI.
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"

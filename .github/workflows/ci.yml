@@ -24,6 +24,17 @@ jobs:
           node-version: 22
           cache: npm
 
+      # Cache du build Next.js (audit de production §7) : les chunks
+      # webpack compilés sont réutilisés entre les runs — le build gagne
+      # plusieurs minutes sur les PR et les pushes successifs.
+      - name: Cache build Next.js (.next/cache)
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
@@ -65,6 +76,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      # Même cache de build pour le job a11y (il lance son propre build).
+      - name: Cache build Next.js (.next/cache)
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-
 
       - name: Cache émulateurs Firebase
         uses: actions/cache@v4
