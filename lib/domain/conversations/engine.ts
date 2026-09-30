@@ -16,6 +16,8 @@ import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import { attachmentImageCandidates, resolveEditableImageSources } from "@/lib/files/image-source";
 import { hasImageAttachment, shouldRouteImageEdit } from "@/lib/domain/conversations/image-intent";
 import { loadWebPageContext } from "@/lib/domain/conversations/web-context";
+import { buildKnowledgeContext, shouldSearchKnowledge } from "@/lib/knowledge/chat-context";
+import { searchKnowledge } from "@/lib/knowledge/search";
 import { isR2Configured, uploadToR2 } from "@/lib/storage/r2";
 import { randomUUID } from "node:crypto";
 import type { ToolRisk } from "@/lib/tools/types";
@@ -779,6 +781,21 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   }).catch(() => "");
   const webContextShort = webContext.slice(0, 6_000);
 
+  // 1 sexies) Knowledge du projet (étape 15) : quand la conversation porte
+  // sur un projet, les fragments les plus pertinents des documents indexés
+  // sont recherchés AUTOMATIQUEMENT sur le message — plus besoin de planifier
+  // knowledge.search pour que l'agent connaisse ses documents. Budget temps
+  // serré : la recherche ne doit jamais ralentir un tour simple.
+  const knowledgeContext = await (async () => {
+    if (!input.projectId || !shouldSearchKnowledge({ projectId: input.projectId, message: input.message })) return "";
+    try {
+      const results = await withTimeout(searchKnowledge(input.userId, input.projectId, input.message, 6), 4_000, "recherche knowledge");
+      return buildKnowledgeContext(results);
+    } catch {
+      return ""; // knowledge indisponible : le tour continue sans (jamais bloquant)
+    }
+  })();
+
   // 2) Demande d'image : ÉDITION d'une image existante (jointe ou générée
   // plus tôt) d'abord — sinon GÉNÉRATION réelle (Agnes AI) + artefact image.
   // Deux détections déterministes (aucune variance LLM) : verbe + nom
@@ -1007,7 +1024,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     }
   }
   if (intent.mode === "chat") {
-    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, webContext });
+    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, webContext, knowledgeContext });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,
@@ -1040,6 +1057,8 @@ interface TurnBase extends ConversationTurnInput {
   filesContext?: string;
   /** Contenu réel des liens fournis par l'utilisateur (pages récupérées). */
   webContext?: string;
+  /** Fragments pertinents de la base de connaissances du projet. */
+  knowledgeContext?: string;
   /** Score de complexité évalué par le système d'auto-amélioration. */
   complexityScore?: number;
 }
@@ -1058,6 +1077,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
     ctx.filesContext ? `Ces contenus proviennent de fichiers importés par l'utilisateur (conversion réelle stockée en base de données) — appuie-toi EXCLUSIVEMENT sur eux pour toute question les concernant, sans jamais inventer de données :${ctx.filesContext}` : "",
     ctx.webContext ? `Ces contenus proviennent de liens fournis par l'utilisateur — pages RÉELLEMENT récupérées par la plateforme au moment de la demande. Appuie-toi sur eux pour toute question les concernant, cite-les fidèlement, et ne complète JAMAIS par une invention de leur contenu :${ctx.webContext}` : "",
+    ctx.knowledgeContext ? `Ces extraits proviennent de la BASE DE CONNAISSANCES du projet (documents indexés par l'utilisateur) — cite-les fidèlement quand ils répondent à la demande et ne complète JAMAIS par une invention de leur contenu :${ctx.knowledgeContext}` : "",
   ].filter(Boolean);
 
   const requestMessages = [
