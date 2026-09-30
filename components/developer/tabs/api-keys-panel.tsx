@@ -117,6 +117,24 @@ export function ApiKeysPanel() {
           {"Authorization: Bearer g3x_...\nX-Gen3ia-Project-Id: <project_id>"}
         </pre>
       </Panel>
+      <Panel
+        title="Exécuter un agent par API"
+        subtitle="Tout agent actif dont vous êtes propriétaire est appelable depuis n8n, un script ou votre application."
+      >
+        <pre className="overflow-x-auto rounded-2xl bg-neutral-950 p-4 text-xs text-[var(--g3-text-secondary)]">
+{`POST /api/v1/agents/<agentId>/run
+Authorization: Bearer g3x_...
+X-Gen3ia-Project-Id: <project_id>
+Content-Type: application/json
+
+{"objective": "Surveille la concurrence et rédige un rapport"}`}
+        </pre>
+        <ul className="mt-3 space-y-1 text-xs text-[var(--g3-faint)]">
+          <li>• La réponse contient <code>status</code>, <code>outputs</code>, <code>observations</code> et <code>billing</code>.</li>
+          <li>• Les actions sensibles restent soumises à la validation humaine configurée sur l&apos;agent.</li>
+          <li>• Limite : 30 exécutions par 5 minutes par clé ; le solde du portefeuille est facturé réellement.</li>
+        </ul>
+      </Panel>
     </section>
   );
 }

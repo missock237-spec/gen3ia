@@ -5,6 +5,7 @@ import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { createAgentRecord, getAgentForOwner, listAgentsByOwner, toSummary } from "@/lib/agents/repository";
 import { AgentRecordSchema } from "@/lib/agents/schema";
+import { resolveAndHarden } from "@/lib/agents/tool-resolver";
 import { getDeveloperProject } from "@/lib/developer/projects";
 
 export async function GET(request: NextRequest) {
@@ -36,8 +37,20 @@ export async function POST(request: NextRequest) {
       const invalid = subIds.filter((subId, index) => !resolved[index] || resolved[index]!.status !== "active");
       if (invalid.length > 0) return NextResponse.json({ error: `Sous-agents introuvables ou inactifs : ${invalid.join(", ")}`, requestId }, { status: 422 });
     }
-    const record = await createAgentRecord(user.uid, parsed.data);
-    return NextResponse.json({ agent: toSummary(record), requestId }, { status: 201, headers: { "x-request-id": requestId } });
+    // Étape 7 — les outils déclarés sont résolus vers le registre réel AVANT
+    // persistance : alias en clair traduits, inconnus retirés avec raison,
+    // auto_allow durci si action sensible. Aucun outil fantôme n'atteint la
+    // base — l'agent n'annonce que des capacités qu'il possède vraiment.
+    const { resolution, hardening, report } = resolveAndHarden(
+      parsed.data.tools,
+      parsed.data.authorizationMode,
+    );
+    const record = await createAgentRecord(user.uid, { ...parsed.data, tools: resolution.resolved, authorizationMode: hardening.mode });
+    const changed = resolution.unknown.length > 0 || resolution.mapping.some((entry) => entry.status === "mapped") || hardening.hardened;
+    return NextResponse.json(
+      { agent: toSummary(record), ...(changed ? { toolReport: report } : {}), requestId },
+      { status: 201, headers: { "x-request-id": requestId } },
+    );
   } catch (error) {
     return NextResponse.json({ ...errorBody(error, "Creation d'agent impossible"), requestId }, { status: errorStatus(error) });
   }

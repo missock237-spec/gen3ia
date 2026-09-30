@@ -64,6 +64,14 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
 
 export function getToolSecurityDefinition(toolName: string): ToolSecurityDefinition { const definition = TOOL_SECURITY[toolName]; if (!definition) throw new Error(`Unknown tool security definition: ${toolName}`); return definition; }
 
+/**
+ * Ensemble des noms d'outils possédant une définition de sécurité réelle
+ * (étape 7) : GEN3IA_TOOLS ne couvre pas les sous-services internes
+ * (schedule.*, workflow.*) pourtant exécutables légitimement — toute
+ * validation d'existence d'outil doit considérer l'UNION des deux sources.
+ */
+export const KNOWN_TOOL_SECURITY_NAMES: ReadonlySet<string> = new Set(Object.keys(TOOL_SECURITY));
+
 /** Extension tools follow the `ext.<extensionId>.<toolId>` naming convention. */
 export function isExtensionToolName(toolName: string): boolean {
   return toolName.startsWith("ext.") && /^[a-z0-9-]+\.[a-z0-9_-]+$/i.test(toolName.slice(4));

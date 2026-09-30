@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { deleteAgentForOwner, getAgentForOwner, toSummary, updateAgentForOwner } from "@/lib/agents/repository";
 import { AGENT_TYPES } from "@/lib/agents/schema";
+import { resolveAndHarden } from "@/lib/agents/tool-resolver";
 import { getDeveloperProject } from "@/lib/developer/projects";
 
 interface RouteContext { params: Promise<{ id: string }> }
@@ -66,9 +67,24 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (parsed.data.projectId && !(await getDeveloperProject(user.uid, parsed.data.projectId))) return NextResponse.json({ error: "Projet introuvable ou inaccessible", requestId }, { status: 403 });
     const subAgentError = await validateSubAgentIds(user.uid, id, parsed.data.subAgentIds);
     if (subAgentError) return NextResponse.json({ error: subAgentError, requestId }, { status: 422 });
-    const record = await updateAgentForOwner(user.uid, id, parsed.data);
+    // Étape 7 — même contrat que la création : les outils du patch sont
+    // résolus vers le registre réel (alias traduits, inconnus retirés avec
+    // raison, auto_allow durci si action sensible) avant la fusion.
+    let patch = parsed.data;
+    let toolReport: ReturnType<typeof resolveAndHarden>["report"] | undefined;
+    if (patch.tools !== undefined || patch.authorizationMode !== undefined) {
+      const current = await getAgentForOwner(user.uid, id);
+      if (!current) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
+      const tools = patch.tools ?? current.tools;
+      const mode = patch.authorizationMode ?? current.authorizationMode;
+      const { resolution, hardening, report } = resolveAndHarden(tools, mode);
+      patch = { ...patch, tools: resolution.resolved, authorizationMode: hardening.mode };
+      const changed = resolution.unknown.length > 0 || resolution.mapping.some((entry) => entry.status === "mapped") || hardening.hardened;
+      if (changed) toolReport = report;
+    }
+    const record = await updateAgentForOwner(user.uid, id, patch);
     if (!record) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
-    return NextResponse.json({ agent: toSummary(record), requestId }, { headers: { "x-request-id": requestId } });
+    return NextResponse.json({ agent: toSummary(record), ...(toolReport ? { toolReport } : {}), requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Mise a jour impossible", requestId }, { status: errorStatus(error, 500) }); }
 }
 

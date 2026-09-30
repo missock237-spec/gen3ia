@@ -5,6 +5,8 @@ import type { ExecutionPolicy } from "@/lib/security/execution-policy";
 import type { RuntimePlan, RuntimeStep } from "@/lib/agents/runtime/types";
 
 import { AGENT_TYPE_META, type AgentRecord } from "./schema";
+import { GEN3IA_TOOLS } from "@/lib/tools/registry";
+import { KNOWN_TOOL_SECURITY_NAMES } from "@/lib/security/tool-permissions";
 
 /**
  * Traduit un agent personnalise (record Firestore) en plan d'execution concret
@@ -36,7 +38,16 @@ export function securityLevelForAgent(agent: AgentRecord): AgentSecurityLevel {
 export function policyForAgent(agent: AgentRecord): ExecutionPolicy {
   const level = securityLevelForAgent(agent);
   const base = createAgentPolicy(level);
-  const declaredTools = agent.tools.filter((tool) => /^[a-z0-9_.]+$/.test(tool) && tool.length <= 80);
+  // Étape 7 (défense en profondeur) : seuls les outils RÉELLEMENT présents
+  // au registre Gen3ia rejoignent la whitelist — les records legacy contenant
+  // des outils fantômes (« gmail », « jira »…) ne déclenchent plus de
+  // whitelist morte, et les noms « en clair » (espaces, majuscules) ne sont
+  // plus silencieusement jetés sans traçabilité (résolus à la création par
+  // lib/agents/tool-resolver).
+  const REGISTRY_SET = new Set([...GEN3IA_TOOLS.map((tool) => tool.name), ...KNOWN_TOOL_SECURITY_NAMES]);
+  const declaredTools = agent.tools.filter(
+    (tool) => /^[a-z0-9_.]+$/.test(tool) && tool.length <= 80 && REGISTRY_SET.has(tool),
+  );
   // Capacités activables de la persona : désactiver une capacité retire les
   // outils correspondants de la whitelist, même s'ils étaient déclarés.
   const caps = agent.persona?.capabilities;

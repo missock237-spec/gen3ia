@@ -8,6 +8,7 @@ import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { AGENT_TYPES, AGENT_TONES, AGENT_VERBOSITY_LEVELS } from "@/lib/agents/schema";
 import { generate } from "@/lib/ai/router";
 import { extractJsonObject } from "@/lib/agents/planner/normalize";
+import { resolveAndHarden } from "@/lib/agents/tool-resolver";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -110,7 +111,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ proposal: parsed.data, requestId }, { headers: { "x-request-id": requestId } });
+    // Étape 7 — les outils « en clair » proposés par le LLM sont résolus vers
+    // les vrais outils du registre (alias reconnus, inconnus retirés AVEC
+    // raison) et le mode d'autorisation est durci si des actions sensibles
+    // étaient combinées à auto_allow. La proposal retournée ne contient que
+    // des outils RÉELS — plus jamais d'outils fantômes silencieux.
+    const { resolution, hardening, report } = resolveAndHarden(
+      parsed.data.tools,
+      parsed.data.authorizationMode,
+    );
+    const proposal = { ...parsed.data, tools: resolution.resolved, authorizationMode: hardening.mode };
+
+    return NextResponse.json(
+      { proposal, toolReport: report, requestId },
+      { headers: { "x-request-id": requestId } },
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Décrivez l'agent souhaité en 15 à 2000 caractères.", requestId }, { status: 422 });
