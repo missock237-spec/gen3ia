@@ -64,6 +64,36 @@ const nextConfig: NextConfig = {
           { key: "X-DNS-Prefetch-Control", value: "off" },
         ],
       },
+      // Politique de cache statique (étape 19 — perf) : les icônes et
+      // l'image Open Graph sont versionnées (?v=g3-logo-1 / fichier
+      // remplacé au déploiement) → cache navigateur long + stale-while-
+      // revalidate : revisites instantanées, périmé de quelques heures
+      // maximum auto-corrigé en arrière-plan. Le manifeste (méta
+      // d'installabilité) reste frais 1 h puis revalidé périmé.
+      {
+        source: "/icons/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      },
+      {
+        source: "/og-image.png",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      },
+      {
+        source: "/manifest.webmanifest",
+        headers: [{ key: "Cache-Control", value: "public, max-age=3600, stale-while-revalidate=86400" }],
+      },
+      // Justesse des mises à jour PWA (étape 11) : le service worker et la
+      // page hors-ligne DOIVENT être revalidés à chaque visite — un sw.js
+      // servi depuis un cache navigateur ferait rater toutes les mises à
+      // jour suivantes (le navigateur plafonne sinon sa vérification à 24 h).
+      {
+        source: "/sw.js",
+        headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }],
+      },
+      {
+        source: "/offline.html",
+        headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }],
+      },
     ];
   },
   images: {

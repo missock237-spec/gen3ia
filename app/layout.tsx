@@ -4,6 +4,7 @@ import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import { AppShell } from "@/components/nav/app-shell";
 import { ToastProvider } from "@/components/ui/toast";
 import { PwaRegister } from "@/components/pwa-register";
+import { UpdateBanner } from "@/components/nav/update-banner";
 import { ScrollReveal } from "@/components/nav/scroll-reveal";
 import { ViewportHeightSync } from "@/components/nav/viewport-height-sync";
 
@@ -182,6 +183,10 @@ export default function RootLayout({
         </ToastProvider>
         <ScrollReveal />
         <PwaRegister />
+        {/* Étape 19 : consomme le signal "gen3ia:new-version" émis par
+            PwaRegister (onglet visible) — l'utilisateur voit enfin qu'une
+            mise à jour est prête et l'applique par un geste explicite. */}
+        <UpdateBanner />
         <ViewportHeightSync />
       </body>
     </html>

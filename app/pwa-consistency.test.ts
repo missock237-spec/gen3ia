@@ -113,3 +113,43 @@ describe("Mises à jour multi-appareils — le nouveau build atteint les pages o
     expect(register).toContain("update()");
   });
 });
+
+describe("Bannière « nouvelle version » — le signal visible-tab atteint l'UI (étape 19)", () => {
+  const banner = read("components/nav/update-banner.tsx");
+  const layout = read("app/layout.tsx");
+
+  it("la bannière consomme le signal gen3ia:new-version (chaînon manquant de l'étape 11)", () => {
+    expect(banner).toContain('"gen3ia:new-version"');
+    expect(banner).toContain("addEventListener");
+    // Le listener est retiré au démontage : aucune fuite sur les navigations.
+    expect(banner).toContain("removeEventListener");
+  });
+
+  it("aucun rendu sans détection : zéro impact initial, pas de bannière fantôme", () => {
+    expect(banner).toContain("useState(false)");
+    expect(banner).toContain("if (!available || dismissed) return null");
+  });
+
+  it("appliquer = rechargement explicite ; la bannière ne recharge JAMAIS d'elle-même", () => {
+    expect(banner).toContain("window.location.reload()");
+    // Garde structurel : aucun timer automatique ne doit déclencher le
+    // rechargement (une mission visible ne peut pas être coupée sans geste).
+    expect(banner).not.toMatch(/setTimeout\([^)]*reload/);
+    expect(banner).not.toMatch(/setInterval\([^)]*reload/);
+  });
+
+  it("« Plus tard » masque sans recharger (l'annonce réapparaît à la prochaine détection)", () => {
+    expect(banner).toContain("setDismissed(true)");
+    expect(banner).toContain('aria-label="Masquer cette annonce"');
+  });
+
+  it("annoncée aux lecteurs d'écran (role=status, aria-live=polite)", () => {
+    expect(banner).toContain('role="status"');
+    expect(banner).toContain('aria-live="polite"');
+  });
+
+  it("montée dans le layout racine, à côté de PwaRegister : présente sur toutes les pages", () => {
+    expect(layout).toContain("@/components/nav/update-banner");
+    expect(layout).toContain("<UpdateBanner />");
+  });
+});
