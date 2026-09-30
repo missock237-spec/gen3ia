@@ -83,5 +83,21 @@ export async function register(): Promise<void> {
   }
 }
 
-/** Capture les erreurs de requête Next (routes API, RSC, server actions). */
-export const onRequestError = Sentry.captureRequestError;
+/**
+ * Les 401 AUTH_REQUIRED sont des réponses métier attendues (session absente,
+ * expirée ou cookie non disponible), pas des incidents applicatifs. Next.js
+ * transmet néanmoins les erreurs levées par les route handlers à
+ * `onRequestError`, ce qui polluait Sentry et les clusters runtime Vercel.
+ * On les filtre ici tout en conservant la capture de toutes les autres erreurs.
+ */
+export function onRequestError(error: unknown, request: Parameters<typeof Sentry.captureRequestError>[1], context: Parameters<typeof Sentry.captureRequestError>[2]): void {
+  const candidate = error as { status?: unknown; code?: unknown } | null;
+  const status = candidate?.status;
+  const code = candidate?.code;
+
+  if (status === 401 || code === "AUTH_REQUIRED") {
+    return;
+  }
+
+  Sentry.captureRequestError(error, request, context);
+}
