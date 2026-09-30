@@ -88,6 +88,9 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   const [projectId, setProjectId] = useState<string | undefined>(undefined);
   const [connectors, setConnectors] = useState<string[]>([]);
   const [live, setLive] = useState<LiveTurn | null>(null);
+  // Étape 8 — image à éditer injectée dans le composer (bouton « Éditer »
+  // d'une image du fil) : attachment réel + préfixe d'instruction.
+  const [injectedEdit, setInjectedEdit] = useState<{ attachment: MessageAttachment; text: string } | null>(null);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   // Arrêt à tout moment : l'AbortController du tour en cours — le bouton
   // « Arrêter » interrompt le flux et l'agent cesse de travailler.
@@ -506,6 +509,15 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               liveImageUrl={live?.imageUrl}
               liveRun={live?.run}
               onDecide={decideApproval}
+              onEditImage={(image) => setInjectedEdit({
+                attachment: {
+                  filename: image.filename ?? "image-gen3ia.png",
+                  contentType: "image/png",
+                  ...(image.path ? { path: image.path } : {}),
+                  ...(image.url ? { url: image.url } : {}),
+                },
+                text: "Édite cette image : ",
+              })}
             />
           ) : null}
         </div>
@@ -540,6 +552,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               connectors={connectors}
               onConnectorsChange={setConnectors}
               autoFocus
+              injected={injectedEdit}
+              onInjectedConsumed={() => setInjectedEdit(null)}
             />
           </div>
         )}

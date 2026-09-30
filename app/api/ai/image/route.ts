@@ -5,11 +5,13 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import {
+  editImageWithAgnes,
   generateImageWithAgnes,
   IMAGE_RATIOS,
   IMAGE_SIZES,
   ImageGenerationError,
   isImageGenerationEnabled,
+  MAX_EDIT_IMAGES,
 } from "@/lib/ai/image-generation";
 
 /**
@@ -28,6 +30,11 @@ const Body = z.object({
   prompt: z.string().trim().min(3).max(4000),
   size: z.enum(IMAGE_SIZES).default("1K"),
   ratio: z.enum(IMAGE_RATIOS).default("1:1"),
+  /**
+   * Étape 8 — images sources d'ÉDITION (Data URI Base64 ou URL https
+   * publique). Présentes → image-to-image ; absentes → génération.
+   */
+  images: z.array(z.string().trim().min(8)).max(MAX_EDIT_IMAGES).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -52,13 +59,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = Body.parse(await request.json());
-    const image = await generateImageWithAgnes(body);
+    const image = body.images && body.images.length > 0
+      ? await editImageWithAgnes({ prompt: body.prompt, images: body.images, size: body.size, ratio: body.ratio })
+      : await generateImageWithAgnes(body);
 
     return NextResponse.json({
       imageUrl: image.imageUrl,
       model: image.model,
       taskId: image.taskId,
       latencyMs: image.latencyMs,
+      ...(body.images && body.images.length > 0 ? { edited: true, sourceCount: body.images.length } : {}),
     });
   } catch (error) {
     if (error instanceof ImageGenerationError) {

@@ -5,6 +5,7 @@ import { generate, generateStream } from "@/lib/ai/router";
 import { stripThinkTags, ThinkTagStreamFilter } from "@/lib/ai/think-filter";
 import {
   detectImageRatio,
+  editImageWithAgnes,
   extractImagePrompt,
   generateImageWithAgnes,
   ImageGenerationError,
@@ -12,6 +13,8 @@ import {
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
+import { attachmentImageCandidates, resolveEditableImageSources } from "@/lib/files/image-source";
+import { hasImageAttachment, shouldRouteImageEdit } from "@/lib/domain/conversations/image-intent";
 import { isR2Configured, uploadToR2 } from "@/lib/storage/r2";
 import { randomUUID } from "node:crypto";
 import type { ToolRisk } from "@/lib/tools/types";
@@ -762,9 +765,25 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const filesContext = await loadImportedFilesContext(input.userId, input.attachments).catch(() => "");
   const filesContextShort = await loadImportedFilesContext(input.userId, input.attachments, { perFile: 2_500, total: 6_000 }).catch(() => "");
 
-  // 2) Demande d'image : génération réelle (Agnes AI) + artefact image.
+  // 2) Demande d'image : ÉDITION d'une image existante (jointe ou générée
+  // plus tôt) d'abord — sinon GÉNÉRATION réelle (Agnes AI) + artefact image.
   // Deux détections déterministes (aucune variance LLM) : verbe + nom
   // visuel, ou verbe de dessin explicite (« Dessine-moi un chat »).
+  const lastConversationImage = findLastConversationImage(priorHistory);
+  if (shouldRouteImageEdit(input.message, {
+    hasImageAttachment: hasImageAttachment(input.attachments),
+    hasConversationImage: Boolean(lastConversationImage),
+  })) {
+    await onEvent({ type: "status", phase: "image", label: "Édition de l'image en cours…" });
+    const result = await runImageEditTurn({ ...input, conversation, project, projectId, userMessage, priorHistory }, lastConversationImage);
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
   if (looksLikeImageRequest(input.message) || looksLikeExplicitDrawingRequest(input.message)) {
     await onEvent({ type: "status", phase: "image", label: "Génération de l'image en cours…" });
     const result = await runImageTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
@@ -1244,6 +1263,108 @@ async function persistGeneratedImage(
     return { inlineDataUrl: `data:${contentType};base64,${buffer.toString("base64")}` };
   }
   return {};
+}
+
+/**
+ * Dernière image exploitable de la conversation (édition sans pièce
+ * jointe) : on scanne l'historique depuis la fin — un message assistant
+ * portant une imageUrl (image générée) ou un message avec attachment image
+ * pourvu d'une ressource (path R2 ou URL). Retourne null si aucune.
+ */
+function findLastConversationImage(history: ChatMessage[]): string | null {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index];
+    if (!message) continue;
+    if (message.imageUrl && (message.imageUrl.startsWith("data:image/") || /^https?:\/\//i.test(message.imageUrl))) {
+      return message.imageUrl;
+    }
+    for (const attachment of message.attachments ?? []) {
+      const candidates = attachmentImageCandidates(attachment);
+      if (candidates.length > 0) return candidates[0] as string;
+    }
+  }
+  return null;
+}
+
+/**
+ * Tour « ÉDITION d'image » (étape 8) : une image EXISTANTE — jointe au
+ * message (import utilisateur) ou générée plus tôt dans la conversation —
+ * est réellement modifiée via Agnes image-to-image. La source est résolue
+ * en Data URI côté serveur (fiable), le résultat est persisté comme les
+ * autres images (R2 / inline) et joint à un artefact. Échec = message
+ * honnête dans le fil, jamais de faux succès.
+ */
+async function runImageEditTurn(ctx: TurnBase, lastConversationImage: string | null): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  try {
+    const attachmentSources = (ctx.attachments ?? []).flatMap((attachment) => attachmentImageCandidates(attachment));
+    const rawSources = attachmentSources.length > 0 ? attachmentSources : lastConversationImage ? [lastConversationImage] : [];
+    if (rawSources.length === 0) {
+      throw new ImageGenerationError(
+        "INVALID_IMAGE",
+        "Aucune image à éditer n'a été trouvée. Joignez l'image à votre message (📎) ou générez-en une d'abord, puis redemandez la modification.",
+      );
+    }
+    const sources = await resolveEditableImageSources(rawSources);
+    const image = await editImageWithAgnes({
+      prompt: ctx.message.trim().slice(0, 4000),
+      images: sources.map((source) => source.dataUri),
+      ratio: detectImageRatio(ctx.message),
+    });
+    const persisted = await persistGeneratedImage(ctx.userId, image.imageUrl).catch(
+      (): { storagePath?: string; inlineDataUrl?: string } => ({}),
+    );
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content: "Voici votre image modifiée. L'original reste disponible dans les artefacts de la conversation.",
+      imageUrl: persisted.inlineDataUrl ?? image.imageUrl,
+      provider: "agnes",
+      model: image.model,
+      generationStatus: "complete",
+    });
+    const artifact = await createArtifact({
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      projectId: ctx.projectId,
+      type: "image",
+      title: ctx.message.slice(0, 80),
+      url: persisted.inlineDataUrl ?? image.imageUrl,
+      storagePath: persisted.storagePath,
+      note: `Édité avec ${image.model} — ${sources.length} image(s) source(s)`,
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    await onEvent({ type: "artifact_created", artifact });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [artifact],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Demande d'édition d'une image existante." },
+    };
+  } catch (error) {
+    const message = error instanceof ImageGenerationError
+      ? error.message
+      : "L'édition d'image a échoué. Réessayez dans un instant.";
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content: message,
+      generationStatus: "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Demande d'édition d'une image existante." },
+    };
+  }
 }
 
 async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {

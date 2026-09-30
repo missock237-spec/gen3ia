@@ -5,6 +5,7 @@ import { inflateSync, inflateRawSync } from "zlib";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { docxToText, htmlToText } from "@/lib/knowledge/ingestion";
+import { isR2Configured, uploadToR2 } from "@/lib/storage/r2";
 
 /**
  * Import de fichiers RÉELLEMENT converti et stocké en base de données :
@@ -36,6 +37,8 @@ export interface ImportedFileRecord {
   sheetCount?: number;
   pageCount?: number;
   conversion: "full" | "metadata-only";
+  /** Clé R2 du binaire persisté (images : rend l'image éditable/affichable). */
+  path?: string;
   conversationId?: string;
   projectId?: string;
   createdAt: string;
@@ -287,6 +290,25 @@ export async function persistImportedFile(input: {
   const { conversion } = input;
   const id = randomUUID();
   const now = new Date().toISOString();
+  // Étape 8 — le binaire des images importées est réellement persisté dans
+  // le stockage permanent de l'utilisateur : l'image devient une source
+  // exploitable par l'édition image-to-image (résolue côté serveur) au lieu
+  // d'être jetée (« metadata-only » sans ressource).
+  let imagePath: string | undefined;
+  if (conversion.kind === "image" && isR2Configured()) {
+    try {
+      const buffer = Buffer.from(await input.file.arrayBuffer());
+      if (buffer.length > 0 && buffer.length <= IMPORT_MAX_FILE_BYTES) {
+        const contentType = (input.file.type || "image/png").split(";")[0].trim();
+        const ext = contentType.includes("jpeg") ? "jpg" : contentType.includes("webp") ? "webp" : contentType.includes("gif") ? "gif" : contentType.includes("svg") ? "svg" : "png";
+        const key = `users/${input.userId}/permanent/imported-images/${Date.now()}-${id}.${ext}`;
+        await uploadToR2(key, buffer, contentType);
+        imagePath = key;
+      }
+    } catch (error) {
+      console.warn("[import] persistance R2 de l'image impossible (l'import continue sans la ressource):", error instanceof Error ? error.message : error);
+    }
+  }
   const record: StoredImportedFile = {
     id,
     userId: input.userId,
@@ -299,6 +321,7 @@ export async function persistImportedFile(input: {
     ...(conversion.rowCount !== undefined ? { rowCount: conversion.rowCount } : {}),
     ...(conversion.sheetCount !== undefined ? { sheetCount: conversion.sheetCount } : {}),
     ...(conversion.pageCount !== undefined ? { pageCount: conversion.pageCount } : {}),
+    ...(imagePath ? { path: imagePath } : {}),
     ...(conversion.note ? { note: conversion.note.slice(0, 500) } : {}),
     ...(input.conversationId ? { conversationId: input.conversationId.slice(0, 128) } : {}),
     ...(input.projectId ? { projectId: input.projectId.slice(0, 128) } : {}),

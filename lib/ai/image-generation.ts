@@ -37,7 +37,7 @@ export interface GeneratedImage {
 }
 
 export class ImageGenerationError extends Error {
-  code: "NOT_CONFIGURED" | "UPSTREAM_ERROR" | "TIMEOUT" | "INVALID_PROMPT";
+  code: "NOT_CONFIGURED" | "UPSTREAM_ERROR" | "TIMEOUT" | "INVALID_PROMPT" | "INVALID_IMAGE";
 
   constructor(code: ImageGenerationError["code"], message: string) {
     super(message);
@@ -269,6 +269,137 @@ export async function generateImageWithAgnes(options: {
     throw new ImageGenerationError(
       "UPSTREAM_ERROR",
       error instanceof Error ? error.message : "La génération d'image a échoué.",
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Sources d'édition : Data URI Base64 (`data:image/...;base64,...`). */
+export const MAX_EDIT_IMAGES = 4;
+
+function parseEditImage(images: readonly string[]): string[] {
+  const cleaned = images.map((image) => image.trim()).filter((image) => image.length > 0);
+  if (cleaned.length === 0) {
+    throw new ImageGenerationError("INVALID_IMAGE", "Aucune image source fournie pour l'édition.");
+  }
+  if (cleaned.length > MAX_EDIT_IMAGES) {
+    throw new ImageGenerationError("INVALID_IMAGE", `Au maximum ${MAX_EDIT_IMAGES} images sources par édition.`);
+  }
+  for (const image of cleaned) {
+    const isDataUri = image.startsWith("data:image/") && image.includes(";base64,");
+    const isHttp = /^https?:\/\//i.test(image);
+    if (!isDataUri && !isHttp) {
+      throw new ImageGenerationError("INVALID_IMAGE", "Les images sources doivent être des Data URI Base64 ou des URLs https publiques.");
+    }
+    if (image.length > 12_000_000) {
+      throw new ImageGenerationError("INVALID_IMAGE", "Une des images sources est trop volumineuse (limite 12 Mo encodés).");
+    }
+  }
+  return cleaned;
+}
+
+/**
+ * Édition d'image RÉELLE via Agnes AI (étape 8) — image-to-image et
+ * composition multi-images. Même endpoint que la génération
+ * (`POST /v1/images/generations`) : les sources passent dans
+ * `extra_body.image` (URLs publiques ou Data URI Base64 — voie privilégiée,
+ * garantie par la doc), le `prompt` porte l'instruction d'édition.
+ *
+ * Le modèle préserve la composition d'origine : retouche, changement de
+ * fond, recolorisation, stylisation, ajout/retrait d'éléments.
+ */
+export async function editImageWithAgnes(options: {
+  prompt: string;
+  /** Images sources : Data URI Base64 (voie robuste) ou URLs https publiques. */
+  images: string[];
+  size?: ImageSize;
+  ratio?: ImageRatio;
+  timeoutMs?: number;
+}): Promise<GeneratedImage> {
+  const apiKey = process.env.AGNES_API_KEY;
+  if (!apiKey) {
+    throw new ImageGenerationError(
+      "NOT_CONFIGURED",
+      "L'édition d'images n'est pas configurée sur cette plateforme (AGNES_API_KEY manquante).",
+    );
+  }
+
+  const prompt = options.prompt?.trim();
+  if (!prompt || prompt.length < 3) {
+    throw new ImageGenerationError("INVALID_PROMPT", "Décrivez la modification souhaitée en quelques mots.");
+  }
+  if (prompt.length > 4000) {
+    throw new ImageGenerationError("INVALID_PROMPT", "La description de la modification est trop longue (4000 caractères maximum).");
+  }
+  const images = parseEditImage(options.images);
+
+  const size = options.size ?? "1K";
+  const ratio = options.ratio ?? "1:1";
+  const timeoutMs = options.timeoutMs ?? IMAGE_TIMEOUT_MS;
+
+  const started = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${AGNES_API_BASE}/images/generations`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: AGNES_IMAGE_MODEL,
+        prompt,
+        size,
+        ratio,
+        extra_body: {
+          image: images,
+          response_format: "url",
+        },
+      }),
+      signal: controller.signal,
+      cache: "no-store",
+    });
+
+    const latencyMs = Date.now() - started;
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      let message = `Agnes AI a renvoyé une erreur HTTP ${response.status}.`;
+      try {
+        const parsed = JSON.parse(detail) as AgnesImageResponse;
+        const upstream = typeof parsed.error === "string" ? parsed.error : parsed.error?.message;
+        if (upstream) message = `Agnes AI : ${upstream}`;
+      } catch {
+        if (detail) message = `Agnes AI : ${detail.slice(0, 200)}`;
+      }
+      console.error(`[agnes-image-edit] HTTP ${response.status} après ${latencyMs}ms:`, message);
+      throw new ImageGenerationError("UPSTREAM_ERROR", message);
+    }
+
+    const payload = (await response.json()) as AgnesImageResponse;
+    const url = payload.data?.[0]?.url;
+    if (!url || typeof url !== "string" || !/^https?:\/\//.test(url)) {
+      console.error("[agnes-image-edit] réponse sans URL d'image:", JSON.stringify(payload).slice(0, 300));
+      throw new ImageGenerationError("UPSTREAM_ERROR", "Agnes AI n'a pas renvoyé d'image éditée exploitable. Réessayez.");
+    }
+
+    return {
+      imageUrl: url,
+      model: AGNES_IMAGE_MODEL,
+      taskId: payload.task_id,
+      latencyMs,
+    };
+  } catch (error) {
+    if (error instanceof ImageGenerationError) throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ImageGenerationError("TIMEOUT", "L'édition d'image a pris trop de temps. Réessayez.");
+    }
+    throw new ImageGenerationError(
+      "UPSTREAM_ERROR",
+      error instanceof Error ? error.message : "L'édition d'image a échoué.",
     );
   } finally {
     clearTimeout(timer);

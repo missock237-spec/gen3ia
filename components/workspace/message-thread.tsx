@@ -38,6 +38,11 @@ interface MessageThreadProps {
   /** Run en cours de construction (timeline vivante du tour en cours). */
   liveRun?: ConversationRun | null;
   onDecide: (approvalId: string, decision: "approved" | "rejected") => Promise<void>;
+  /**
+   * Étape 8 — demande d'édition d'une image affichée dans le fil : le
+   * parent injecte l'image comme attachment réel du composer.
+   */
+  onEditImage?: (image: { url?: string; path?: string; filename?: string }) => void;
 }
 
 export function MessageThread({
@@ -51,6 +56,7 @@ export function MessageThread({
   liveImageUrl,
   liveRun,
   onDecide,
+  onEditImage,
 }: MessageThreadProps) {
   const runsById = new Map(runs.map((run) => [run.id, run]));
   const artifactsById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
@@ -92,7 +98,16 @@ export function MessageThread({
                     className="max-h-96 w-full rounded-xl border border-[var(--g3-border)] object-contain"
                     loading="lazy"
                   />
-                  <figcaption className="mt-1 flex justify-end">
+                  <figcaption className="mt-1 flex justify-end gap-1.5">
+                    {onEditImage && (
+                      <button
+                        type="button"
+                        onClick={() => onEditImage({ url: message.imageUrl, filename: `image-gen3ia-${Date.now()}.png` })}
+                        className="inline-flex items-center gap-1 rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2.5 py-1 text-[10px] font-medium text-[var(--g3-muted)] transition hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
+                      >
+                        <span aria-hidden>✎</span> Éditer l&apos;image
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => void downloadUrl(message.imageUrl as string, `image-gen3ia-${Date.now()}.png`)}

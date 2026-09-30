@@ -48,6 +48,13 @@ interface ComposerProps {
   suggestions?: string[];
   placeholder?: string;
   autoFocus?: boolean;
+  /**
+   * Étape 8 — pièce jointe injectée de l'extérieur (bouton « Éditer » d'une
+   * image du fil) : l'image devient un attachment réel du prochain message,
+   * avec un préfixe de texte optionnel (instruction d'édition).
+   */
+  injected?: { attachment: MessageAttachment; text?: string } | null;
+  onInjectedConsumed?: () => void;
 }
 
 /** Lit la préférence de mode d'autorisation (partagée avec tous les chats). */
@@ -71,6 +78,8 @@ export function Composer({
   suggestions,
   placeholder,
   autoFocus = false,
+  injected = null,
+  onInjectedConsumed,
 }: ComposerProps) {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
@@ -85,6 +94,24 @@ export function Composer({
   useEffect(() => {
     if (autoFocus) composerRef.current?.focus();
   }, [autoFocus]);
+
+  // Étape 8 — consommation de l'injection externe (bouton « Éditer » d'une
+  // image du fil) : l'image rejoint les attachments réels du prochain
+  // message ; le préfixe d'édition pré-remplit le champ si vide.
+  const injectedKey = injected ? `${injected.attachment.path ?? injected.attachment.url ?? ""}|${injected.text ?? ""}` : "";
+  useEffect(() => {
+    if (!injected) return;
+    setAttachments((current) => {
+      const key = injected.attachment.path ?? injected.attachment.url ?? injected.attachment.filename;
+      const already = current.some((item) => (item.path ?? item.url ?? item.filename) === key);
+      if (already) return current;
+      return [...current.slice(0, 7), injected.attachment];
+    });
+    if (injected.text) setValue((current) => (current.trim().length === 0 ? injected.text as string : current));
+    onInjectedConsumed?.();
+    composerRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [injectedKey]);
 
   const uploadFile = async (file: File) => {
     setUploadError("");
@@ -104,7 +131,7 @@ export function Composer({
         throw new Error(data.error ?? "Envoi du fichier impossible.");
       }
       const data = (await response.json()) as {
-        file: { id: string; filename: string; kind: string; charCount: number; rowCount?: number; contentType: string; sizeBytes: number; conversion: string };
+        file: { id: string; filename: string; kind: string; charCount: number; rowCount?: number; contentType: string; sizeBytes: number; conversion: string; path?: string };
       };
       setAttachments((current) => [
         ...current.slice(0, 7),
@@ -113,6 +140,9 @@ export function Composer({
           fileId: data.file.id,
           fileKind: data.file.kind,
           charCount: data.file.charCount,
+          // Étape 8 — les images importées portent leur clé R2 permanente :
+          // elles deviennent une source réelle pour l'édition image-to-image.
+          ...(data.file.path ? { path: data.file.path } : {}),
           ...(data.file.rowCount !== undefined ? { rowCount: data.file.rowCount } : {}),
           contentType: data.file.contentType,
           sizeBytes: data.file.sizeBytes,

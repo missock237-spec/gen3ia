@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   detectImageRatio,
@@ -121,5 +121,57 @@ describe("extractImagePrompt — nettoyage des formules d'introduction", () => {
 
   it("ne renvoie jamais de prompt vide", () => {
     expect(extractImagePrompt("génère une image")).toBeTruthy();
+  });
+});
+
+describe("editImageWithAgnes — édition image-to-image (étape 8)", () => {
+  const PNG_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
+
+  it("envoie extra_body.image au bon endpoint et retourne l'URL éditée", async () => {
+    process.env.AGNES_API_KEY = "test-key";
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.model).toBe("agnes-image-2.5-flash");
+      expect(body.extra_body.image).toEqual([PNG_DATA_URI]);
+      expect(body.extra_body.response_format).toBe("url");
+      return new Response(JSON.stringify({ data: [{ url: "https://cdn.exemple.com/edited.png" }], task_id: "t1" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const { editImageWithAgnes } = await import("./image-generation");
+      const result = await editImageWithAgnes({ prompt: "Rends le fond bleu", images: [PNG_DATA_URI] });
+      expect(result.imageUrl).toBe("https://cdn.exemple.com/edited.png");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/v1/images/generations");
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.AGNES_API_KEY;
+    }
+  });
+
+  it("refuse les sources invalides (vide, non image, trop nombreuses)", async () => {
+    process.env.AGNES_API_KEY = "test-key";
+    try {
+      const { editImageWithAgnes, MAX_EDIT_IMAGES } = await import("./image-generation");
+      await expect(editImageWithAgnes({ prompt: "Édite", images: [] })).rejects.toThrow(/Aucune image source/);
+      await expect(editImageWithAgnes({ prompt: "Édite", images: ["fichier-local.png"] })).rejects.toThrow(/Data URI|https/);
+      const tooMany = Array.from({ length: MAX_EDIT_IMAGES + 1 }, () => PNG_DATA_URI);
+      await expect(editImageWithAgnes({ prompt: "Édite", images: tooMany })).rejects.toThrow(/Au maximum/);
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.AGNES_API_KEY;
+    }
+  });
+
+  it("propage l'erreur upstream avec un message lisible", async () => {
+    process.env.AGNES_API_KEY = "test-key";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: { message: "prompt flagged" } }), { status: 422 })));
+    try {
+      const { editImageWithAgnes } = await import("./image-generation");
+      await expect(editImageWithAgnes({ prompt: "Édite cette image", images: [PNG_DATA_URI] })).rejects.toThrow(/Agnes AI : prompt flagged/);
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.AGNES_API_KEY;
+    }
   });
 });
