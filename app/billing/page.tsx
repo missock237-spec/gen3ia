@@ -47,8 +47,9 @@ export default function BillingPage() {
   const [phase, setPhase] = useState<TopupPhase>("idle");
   const [countryCode, setCountryCode] = useState("CM");
   const [phoneNumber, setPhoneNumber] = useState("");
-  // Historique chargé pour les métriques ; rendu à venir (valeur non affichée).
-  const [_transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  // Étape 20 — historique des transactions RÉELLEMENT affiché : le solde
+  // seul ne dit pas où va l'argent (recharges, consommations, réservations).
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const sessionDisponible = useSessionAvailable();
 
   const loadWallet = useCallback(async () => {
@@ -163,6 +164,23 @@ export default function BillingPage() {
   const welcome = wallet ? (wallet.welcomeAmountMinor / 100).toLocaleString("fr-FR") : "0";
   const busy = phase === "creating" || phase === "redirecting";
 
+  const transactionLabel = (type: string): string =>
+    ({
+      topup: "Recharge",
+      welcome_grant: "Solde de bienvenue",
+      charge: "Consommation",
+      reservation: "Réservation (mission en cours)",
+      release: "Restitution de réservation",
+    })[type] ?? type;
+
+  // Signe par TYPE (le ledger stocke toujours un montant positif) :
+  // + recharge et bienvenue ; − consommation et réservation ; ↺ restitution.
+  const transactionSign = (type: string): string =>
+    type === "topup" || type === "welcome_grant" ? "+" : type === "charge" || type === "reservation" ? "−" : "↺";
+
+  const formatAmount = (minor: number): string =>
+    (Math.abs(minor) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
   return <div style={styles.main}>
     <div style={{ gridColumn: "1 / -1", width: "100%", maxWidth: 980, margin: "0 auto", justifySelf: "center" }}>
     </div>
@@ -191,6 +209,34 @@ export default function BillingPage() {
       <p style={styles.note}>Le paiement s&apos;effectue via la boutique Chariow (Mobile Money, carte ou wallet selon votre pays). Le solde est crédité après confirmation du paiement par Chariow — automatiquement via le webhook signé, ou à votre retour sur cette page.</p>
       <p style={styles.note}>Le solde de démonstration est accordé une seule fois. Après épuisement, vous devez recharger votre portefeuille. Les exécutions sont facturées selon l&apos;utilisation réelle et aucune nouvelle allocation gratuite n&apos;est créée automatiquement.</p>
       {error && <p style={styles.error}>{error}</p>}
+    </section>
+
+    {/* Étape 20 — historique réel des mouvements du portefeuille */}
+    <section style={styles.card}>
+      <div style={styles.eyebrow}>HISTORIQUE</div>
+      <h2 className="font-serif" style={{ fontSize: 22, margin: "4px 0 12px" }}>Dernières transactions</h2>
+      {transactions.length === 0 ? (
+        <p style={styles.note}>Aucune transaction pour le moment. Les recharges et les consommations d&apos;agents apparaîtront ici.</p>
+      ) : (
+        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+          {transactions.map((transaction) => (
+            <li key={transaction.id} style={{ display: "flex", alignItems: "baseline", gap: 12, padding: "10px 12px", borderRadius: 12, border: "1px solid rgba(23,23,20,0.08)", background: "#faf9f6" }}>
+              <span style={{ fontWeight: 800, minWidth: 28, color: transactionSign(transaction.type) === "+" ? "#047857" : transactionSign(transaction.type) === "−" ? "#b91c1c" : "#0f766e" }}>
+                {transactionSign(transaction.type)}{formatAmount(transaction.amountMinor)}
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 14 }}>{transactionLabel(transaction.type)}</span>
+                <span style={{ display: "block", fontSize: 12, opacity: .6 }}>
+                  {new Date(transaction.createdAt).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  {transaction.reference ? ` · ${transaction.reference.slice(0, 40)}` : ""}
+                </span>
+              </span>
+              <span style={{ fontSize: 12, opacity: .6 }}>{transaction.currency}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p style={styles.note}>Chaque exécution d&apos;outil ou de mission est facturée selon l&apos;utilisation réelle — une réservation est prise au démarrage puis ajustée au coût final (restitution visible en ↺).</p>
     </section>
   </div>;
 }
