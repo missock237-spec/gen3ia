@@ -15,23 +15,10 @@ import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage } from "@/lib/chat/repository";
 import { reconcileAgentRun } from "@/lib/agents/conversation-run";
+import { buildFinalResponse } from "@/lib/agents/final-response";
 import { errorCode, errorStatus } from "@/lib/security/http-errors";
 
 const Body = z.object({ approvalId: z.string().min(1).max(256), action: z.enum(["approve", "reject"]).default("approve") });
-
-/**
- * Reconstruit le texte final affiché a l'utilisateur après une exécution
- * approuvée : dernier résultat textuel utile (llm, document, media, research)
- * produit par le runtime, avec message de repli.
- */
-function finalResponseText(plan: RuntimePlan, outputs: Record<string, unknown>): string {
-  const candidates = [...plan.steps].reverse().filter((step) => ["llm", "document", "media", "research"].includes(step.type));
-  for (const step of candidates) {
-    const value = outputs[step.id];
-    if (typeof value === "string" && value.trim()) return value;
-  }
-  return "L’exécution de l’agent est terminée. Consultez les étapes et résultats affichés dans l’espace Agent.";
-}
 
 function buildPolicy(plan: RuntimePlan): ExecutionPolicy {
   const tools = [...new Set(plan.steps
@@ -171,7 +158,7 @@ export async function POST(request: NextRequest) {
       // Historique complet : le résultat FINAL de la mission (après
       // approbation et reprise) est persisté dans le fil — jusqu'ici le
       // refus était journalisé mais pas la fin réelle de l'exécution.
-      const approvedFinalText = finalResponseText(result.plan, result.outputs);
+      const approvedFinalText = buildFinalResponse(result.plan, result.outputs).text;
       if (state.conversationId) {
         const closingText = result.status === "completed"
           ? approvedFinalText

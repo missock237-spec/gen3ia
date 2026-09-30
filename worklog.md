@@ -332,3 +332,10 @@ Task 46 — Étape 2/20 : « le système d'agent IA ne traite pas les tâches lo
   ⑥ runPlanTurn : timeline persistée APRÈS CHAQUE ÉTAPE (persistSteps fail-soft) — un kill ne laisse plus de run fantôme vide ; les étapes réussies restent visibles dans le fil.
 - LIMITE PLATEFORME DOCUMENTÉE : vercel.json cron reste 1×/jour (Hobby = crons quotidiens uniquement ; */5 serait ignoré) — la veille RSS dispose d'un throttle 10 min intégré prêt pour un passage en fréquence dès un plan Pro.
 - QA : typecheck 0, lint 0, 839 tests verts / 108 fichiers (+10 : continue.history 10 — reprise, garde-fous, stale-running, HITL, 401).
+
+Task 46 — Étape 3/20 : fausses confirmations « résultat livré » — SUPPRIMÉES (score auto-évalué 9,7/10)
+- CORRECTIFS :
+  ① lib/agents/final-response.ts (nouveau) : buildFinalResponse — texte final construit depuis les STATUTS RÉELS du plan, règle unique sur les 3 chemins runtime (agent/chat, approve, continue) : livrable réel si tout est réussi ; « Mission incomplète : N étape(s) en échec — non livrée(s) » + liste explicite + « Aucun livrable produit » sinon + invitation à « Continuer la mission » (travail conservé). Les 3 fonctions locales finalResponseText sont supprimées.
+  ② engine.ts summarizePlanTurn : RÈGLE ABSOLUE D'HONNÊTETÉ injectée dans le prompt de synthèse (une étape [failed] n'est PAS livrée ; seules [done] sont annoncées réalisées) + planFailureAppendix — annexe DÉTERMINISTE ajoutée au texte final dès qu'une étape échoue, même si le LLM omet ou minimise les échecs (flux, non-flux et repli couverts). Pure, exportée, testée.
+  ③ route continue : le message persisté après reprise en échec combine l'annexe honnête + la cause réelle de l'interruption.
+- TESTS : +7 (final-response 6, honnêteté via continue 1) — contrat : un échec n'expose JAMAIS de finalText de livraison ; l'honnêteté passe par le message du fil. 846 verts / 109 fichiers, typecheck 0, lint 0.

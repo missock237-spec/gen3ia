@@ -48,6 +48,18 @@ const BASE_PLAN = {
   maxIterations: 5,
 };
 
+const COMPLETED_PLAN = {
+  executionId: "exec-long",
+  objective: "Rapport long multi-étapes",
+  steps: [
+    { id: "s1", type: "llm" as const, name: "Recherche", description: "Chercher", dependencies: [], status: "completed" as const, input: {}, skillIds: [] as string[], maxRetries: 2, timeoutMs: 120_000, sideEffect: false, requiresApproval: false },
+    { id: "s2", type: "llm" as const, name: "Analyse", description: "Analyser", dependencies: ["s1"], status: "completed" as const, input: {}, skillIds: [] as string[], maxRetries: 2, timeoutMs: 120_000, sideEffect: false, requiresApproval: false },
+    { id: "s3", type: "llm" as const, name: "Rédaction", description: "Rédiger", dependencies: ["s2"], status: "completed" as const, input: {}, skillIds: [] as string[], maxRetries: 2, timeoutMs: 120_000, sideEffect: false, requiresApproval: false },
+  ],
+  maxConcurrency: 1,
+  maxIterations: 5,
+};
+
 function checkpoint(overrides: Record<string, unknown> = {}) {
   return {
     executionId: "exec-long",
@@ -88,7 +100,7 @@ beforeEach(() => {
     status: "completed",
     executionId: "exec-long",
     objective: "Rapport long multi-étapes",
-    plan: BASE_PLAN,
+    plan: COMPLETED_PLAN,
     observations: [],
     outputs: { s1: "Résultats de la recherche conservés.", s2: "Analyse refaite.", s3: "Rapport final complet." },
     billing: { currency: "XAF", totalChargeMinor: 20, totalProviderCostEur: 0.03, llmInputTokens: 1500, llmOutputTokens: 800 },
@@ -137,6 +149,28 @@ describe("POST /api/agent/chat/continue — reprise des missions longues", () =>
     expect(body.status).toBe("failed");
     expect(body.resumable).toBe(true);
     expect(body.executionId).toBe("exec-long");
+  });
+
+  it("HONNÊTETÉ : une reprise avec échec résiduel annonce « Mission incomplète », jamais « livré »", async () => {
+    mockRun.mockResolvedValue({
+      status: "failed",
+      executionId: "exec-long",
+      objective: "Rapport long multi-étapes",
+      plan: { ...COMPLETED_PLAN, steps: COMPLETED_PLAN.steps.map((s) => (s.id === "s3" ? { ...s, status: "failed" as const } : s)) },
+      observations: [],
+      outputs: { s1: "Recherche OK.", s2: "Analyse OK." },
+      error: "étape rédaction échouée",
+      billing: { currency: "XAF", totalChargeMinor: 20, totalProviderCostEur: 0.03, llmInputTokens: 1500, llmOutputTokens: 800 },
+    });
+    const response = await POST(postRequest({ executionId: "exec-long" }));
+    const body = await response.json();
+    expect(body.status).toBe("failed");
+    // Contrat : un échec n'expose PAS de finalText (pas de texte de livraison)
+    // — l'honnêteté passe par le message persisté dans le fil.
+    expect(body.finalText).toBeUndefined();
+    expect(mockedAppend).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringContaining("Mission incomplète"),
+    }));
   });
 
   it("404 sur une mission inconnue ou appartenant à un autre utilisateur", async () => {

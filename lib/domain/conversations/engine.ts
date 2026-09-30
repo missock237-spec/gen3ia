@@ -2454,7 +2454,11 @@ async function summarizePlanTurn(
           content:
             "Tu synthétises le résultat d'un plan d'exécution pour l'utilisateur de Gen3ia. " +
             "Style : concis, factuel, orienté résultat. Mentionne les artefacts créés et, s'il y en a, " +
-            "les actions sensibles qui attendent sa validation. Pas de markdown de titre (#).",
+            "les actions sensibles qui attendent sa validation. Pas de markdown de titre (#). " +
+            "RÈGLE ABSOLUE D'HONNÊTETÉ : une étape marquée [failed] n'est PAS livrée — ne dis JAMAIS " +
+            "qu'un résultat est livré/terminé/produit si l'étape correspondante est en échec ; cite " +
+            "explicitement chaque échec et ce qui reste à faire. Les étapes [done] seules peuvent " +
+            "être annoncées comme réalisées, avec leur sortie réelle.",
         },
         {
           role: "user" as const,
@@ -2477,16 +2481,40 @@ async function summarizePlanTurn(
         SUMMARY_BUDGET_MS,
         "synthèse du plan",
       );
-      return response.text || deterministic;
+      return appendFailureAppendix(response.text || deterministic, steps);
     }
     const response = await withTimeout(generate(request), SUMMARY_BUDGET_MS, "synthèse du plan");
-    return response.text || deterministic;
+    return appendFailureAppendix(response.text || deterministic, steps);
   } catch {
     // Synthèse indisponible (ou flux interrompu) : le repli déterministe est
     // renvoyé d'un bloc — le client remplace le texte en cours par la version
     // finale au moment de message_complete.
-    return deterministic;
+    return appendFailureAppendix(deterministic, steps);
   }
+}
+
+/**
+ * HONNÊTETÉ DE LIVRAISON (étape 3) : annexe DÉTERMINISTE ajoutée au texte
+ * final dès qu'une étape est en échec — même si la synthèse LLM omet ou
+ * minimise les échecs, l'utilisateur voit la liste exacte de ce qui n'est
+ * PAS livré. Pure, testée sans LLM.
+ */
+export function planFailureAppendix(steps: RunStep[]): string | undefined {
+  const failed = steps.filter((s) => s.status === "failed");
+  if (failed.length === 0) return undefined;
+  const lines = failed.slice(0, 5).map((s) => `- ${s.title}${s.output ? ` — ${s.output.slice(0, 200)}` : ""}`);
+  return [
+    "",
+    "⚠️ Mission incomplète — les éléments suivants ne sont PAS livrés :",
+    ...lines,
+    failed.length > 5 ? `- … et ${failed.length - 5} autre(s)` : "",
+    "Relancez ou demandez-moi de reprendre la mission pour compléter ces étapes.",
+  ].filter(Boolean).join("\n");
+}
+
+function appendFailureAppendix(text: string, steps: RunStep[]): string {
+  const appendix = planFailureAppendix(steps);
+  return appendix ? `${text}${appendix}` : text;
 }
 
 /* ------------------------------------------------------------------ */

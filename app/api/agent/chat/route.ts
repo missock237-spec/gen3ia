@@ -16,6 +16,7 @@ import { getAgentForOwner } from "@/lib/agents/repository";
 import { policyForAgent } from "@/lib/agents/personalized-plan";
 import { answerAsAgent, classifyRequest, historyContextNote, outOfScopeReply, planAgentTask } from "@/lib/agents/chat-engine";
 import { recordAgentRun } from "@/lib/agents/conversation-run";
+import { buildFinalResponse } from "@/lib/agents/final-response";
 import { recallAgentContext, recordExchange, shouldSummarize, summarizeConversation } from "@/lib/memory/episodic";
 import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import { describeConnectorsForPrompt, describeConnectedConnectorsForPrompt, type ConnectedConnectorsContext } from "@/lib/integrations/mention";
@@ -136,15 +137,6 @@ function policyForAgentMission(
     allowedTools: [...new Set([...withServices, "composio.execute"])],
     permissions,
   };
-}
-
-function finalResponseText(plan: RuntimePlan, outputs: Record<string, unknown>): string {
-  const candidates = [...plan.steps].reverse().filter((step) => ["llm", "document", "media", "research"].includes(step.type));
-  for (const step of candidates) {
-    const value = outputs[step.id];
-    if (typeof value === "string" && value.trim()) return value;
-  }
-  return "Le plan de l'agent a été exécuté. Consultez les étapes et résultats ci-dessous.";
 }
 
 /** Note de contexte (pièce jointe ou fichier mémoire) ajoutée au message. */
@@ -509,7 +501,8 @@ export async function POST(request: NextRequest) {
       const currentApprovals = await listActionApprovals(user.uid, plan.executionId);
       const pending = currentApprovals.filter((item) => item.status === "pending");
       const status = pending.length > 0 ? "waiting_approval" : result.status;
-      const finalText = finalResponseText(result.plan, result.outputs);
+      const finalResponse = buildFinalResponse(result.plan, result.outputs);
+      const finalText = finalResponse.text;
       const taskReply = status === "waiting_approval"
         ? "J'ai exécuté les étapes autorisées. Une ou plusieurs actions nécessitent maintenant votre confirmation."
         : finalText;
@@ -723,7 +716,7 @@ export async function POST(request: NextRequest) {
     const pending = currentApprovals.filter((item) => item.status === "pending");
 
     const status = pending.length > 0 ? "waiting_approval" : result.status;
-    const finalText = finalResponseText(result.plan, result.outputs);
+    const finalText = buildFinalResponse(result.plan, result.outputs).text;
     await appendMessage({
       conversationId,
       userId: user.uid,

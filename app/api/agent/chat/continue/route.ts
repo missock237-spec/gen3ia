@@ -9,6 +9,7 @@ import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
 import type { RuntimePlan, RuntimeStep } from "@/lib/agents/runtime/types";
 import { appendMessage } from "@/lib/chat/repository";
 import { reconcileAgentRun } from "@/lib/agents/conversation-run";
+import { buildFinalResponse } from "@/lib/agents/final-response";
 import { errorStatus, errorBody } from "@/lib/security/http-errors";
 
 const Body = z.object({
@@ -60,15 +61,6 @@ function buildPolicy(plan: RuntimePlan): ExecutionPolicy {
     allowCamera,
     allowExternalApps,
   };
-}
-
-function finalResponseText(plan: RuntimePlan, outputs: Record<string, unknown>): string {
-  const candidates = [...plan.steps].reverse().filter((step) => ["llm", "document", "media", "research"].includes(step.type));
-  for (const step of candidates) {
-    const value = outputs[step.id];
-    if (typeof value === "string" && value.trim()) return value;
-  }
-  return "La reprise de la mission s'est terminée. Consultez les étapes et résultats affichés.";
 }
 
 export async function POST(request: NextRequest) {
@@ -141,13 +133,15 @@ export async function POST(request: NextRequest) {
 
     const conversationId = state.conversationId ?? body.conversationId;
     const resultStatus: string = result.status;
-    const resumedFinalText = finalResponseText(result.plan, result.outputs);
+    const resumedFinalText = buildFinalResponse(result.plan, result.outputs).text;
     if (conversationId) {
       const closingText = resultStatus === "completed"
         ? resumedFinalText
         : resultStatus === "waiting_approval"
           ? "La reprise est prête : une ou plusieurs actions nécessitent votre confirmation pour continuer."
-          : `La reprise a de nouveau été interrompue : ${result.error ?? "erreur inconnue"}. Les étapes déjà réussies sont conservées — vous pouvez continuer encore.`;
+          // HONNÊTETÉ : le texte persisté nomme les étapes NON livrées
+          // (annexe déterministe de buildFinalResponse) + la cause réelle.
+          : `${resumedFinalText}\n\nCause de l'interruption : ${result.error ?? "erreur inconnue"}.`;
       await appendMessage({
         conversationId,
         userId: user.uid,
