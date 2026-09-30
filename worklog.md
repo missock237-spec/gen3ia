@@ -457,3 +457,12 @@ Task 47 — Étape 11/20 : « chaque mise à jour disponible sur tous les appare
 Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 11
 - LIVRÉES : 1-12, 18 sauf 13/14/15/16/17/19/20 → précisément : 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18 (13/20).
 - RESTANTES : 13 (liens/web pour agent), 14 (bibliothèque de capacités → conversation directe), 15 (Knowledge +), 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
+
+Task 47 — Étape 13/20 : « l'agent et les conversations utilisent les liens/web fournis par l'utilisateur » — LIVRÉ (score auto-évalué 9,6/10)
+- ANALYSE : web.open existait (SSRF-safe) et le mode task pouvait le planifier, mais le CHAT conversationnel ne récupérait JAMAIS le contenu d'une URL collée — réponse sans la page ou inventée.
+- CORRECTIFS : lib/domain/conversations/web-context.ts (NOUVEAU) — extractUserUrls (pur : dédup, ponctuation, plafond 2), shouldFetchUrlContext (exclut l'URL déjà routée vers web.api), loadWebPageContext (récupération RÉELLE via executeTool web.open — garde SSRF, quotas, audit ; échecs individuels explicites dans le bloc) ; injection dans la décision d'intention (résumé) ET le system prompt du tour chat avec consigne de fidélité stricte (« ne complète JAMAIS par une invention »).
+- TESTS : +8. Suite : 960 verts / 121 fichiers, typecheck 0, lint 0. Vercel success.
+
+Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 13
+- LIVRÉES : 1-12, 13, 18 (14/20).
+- RESTANTES : 14 (bibliothèque de capacités → conversation directe), 15 (Knowledge +), 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
