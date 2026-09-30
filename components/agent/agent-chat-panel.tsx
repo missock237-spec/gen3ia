@@ -202,7 +202,22 @@ export function AgentChatPanel({
       if (conversationId) void openConversationRef.current?.(conversationId);
     };
     window.addEventListener("gen3ia:outbox-flushed", handler);
-    return () => window.removeEventListener("gen3ia:outbox-flushed", handler);
+    // Une demande mise en file hors-ligne n'a jamais pu être délivrée
+    // (session expirée, plafond de tentatives) : l'utilisateur est informé —
+    // jamais de perte silencieuse.
+    const failureHandler = (event: Event) => {
+      const detail = (event as CustomEvent<{ status?: number }>).detail;
+      const reason = detail?.status === 401
+        ? "votre session a expiré : reconnectez-vous puis renvoyez votre demande"
+        : "la demande n'a pas pu être délivrée après plusieurs tentatives";
+      setError(`Synchronisation hors-ligne interrompue : ${reason}.`);
+      void loadConversations();
+    };
+    window.addEventListener("gen3ia:outbox-failed", failureHandler);
+    return () => {
+      window.removeEventListener("gen3ia:outbox-flushed", handler);
+      window.removeEventListener("gen3ia:outbox-failed", failureHandler);
+    };
   }, [conversationId, loadConversations]);
 
   // Nouvelle conversation à chaque changement d'agent : le contexte du chat
@@ -348,6 +363,20 @@ export function AgentChatPanel({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "L'agent n'a pas pu répondre.");
 
+      // File hors-ligne (SW 202) : la mission PARTIRA au retour du réseau —
+      // on l'annonce honnêtement au lieu d'un faux « en cours d'exécution ».
+      if (data.queued && data.offline) {
+        setMessages((items) => [...items, {
+          id: crypto.randomUUID(),
+          role: "agent",
+          text: "Vous êtes hors ligne : votre demande est enregistrée et sera envoyée automatiquement au retour du réseau.",
+          mode: "chat",
+        }]);
+        setLoading(false);
+        requestAbortRef.current = null;
+        return;
+      }
+
       if (data.conversationId) setConversationId(data.conversationId);
 
       if (data.mode === "chat") {
@@ -419,6 +448,10 @@ export function AgentChatPanel({
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "La reprise de la mission a échoué.");
+      if (data.queued && data.offline) {
+        setError("Vous êtes hors ligne : la reprise exige le réseau. Reconnectez-vous puis continuez à nouveau.");
+        return;
+      }
       const result = data as AgentResult;
       setActive(result);
       setMessages((items) => [...items, {
@@ -462,6 +495,10 @@ export function AgentChatPanel({
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Approbation impossible.");
+      if (data.queued && data.offline) {
+        setError("Vous êtes hors ligne : cette décision exige le réseau. Reconnectez-vous puis validez à nouveau.");
+        return;
+      }
       if (data.conversationId) setConversationId(data.conversationId);
       const result = data as AgentResult;
       setActive(result);
@@ -675,7 +712,7 @@ export function AgentChatPanel({
                       <span>Plan d&apos;exécution · {statusLabel(item.result.status)}</span>
                     </p>
                     <ol className="mt-2 space-y-1.5">
-                        {item.result.plan.steps.map((step) => (
+                        {item.result.plan?.steps?.map((step) => (
                           <li key={step.id} className="flex items-start gap-2 text-xs">
                             <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${step.status === "completed" ? "bg-[var(--g3-success)]" : step.status === "failed" ? "bg-[var(--g3-danger)]" : step.status === "waiting_approval" ? "bg-[var(--g3-warning)]" : "bg-[var(--g3-faint)]"}`} aria-hidden="true" />
                             <span className="min-w-0">

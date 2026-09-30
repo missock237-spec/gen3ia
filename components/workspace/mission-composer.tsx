@@ -30,6 +30,9 @@ export function MissionComposer({
   const [category, setCategory] = useState<string>("Toutes");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // File hors-ligne : la demande a été mise en file par le service worker et
+  // partira au retour du réseau (jamais présentée comme « créée »).
+  const [queuedNotice, setQueuedNotice] = useState(false);
 
   const template = useMemo(() => templateById(templateId) ?? MISSION_TEMPLATES[0], [templateId]);
   const categories = useMemo(() => templateCategories(), []);
@@ -69,14 +72,26 @@ export function MissionComposer({
       });
       const data = (await response.json().catch(() => ({}))) as {
         task?: { id?: string };
+        queued?: boolean;
+        offline?: boolean;
         error?: string;
       };
       if (!response.ok) throw new Error(data.error ?? "Création impossible pour le moment.");
+      if (data.queued && data.offline) {
+        // File hors-ligne (SW 202) : la demande PARTIRA au retour du réseau —
+        // on l'annonce honnêtement au lieu d'un faux « créé ».
+        setError("");
+        setQueuedNotice(true);
+        return;
+      }
       if (data.task?.id) {
         router.push(`/studio?taskId=${encodeURIComponent(data.task.id)}`);
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Création impossible pour le moment.");
+    } finally {
+      // LE bouton n'est plus jamais bloqué (le setBusy(false) n'existait
+      // que dans le catch — un succès laissait « Création… » à vie).
       setBusy(false);
     }
   };
@@ -211,6 +226,11 @@ export function MissionComposer({
             <span aria-hidden="true">→</span>
           </button>
         </div>
+        {queuedNotice && (
+          <p className="mt-2.5 rounded-xl border border-[var(--g3-primary-soft)] bg-[var(--g3-primary-soft)] px-3.5 py-2.5 text-sm text-[var(--g3-text)]" role="status">
+            Vous êtes hors ligne : votre demande est enregistrée et sera envoyée automatiquement au retour du réseau.
+          </p>
+        )}
         {error && (
           <p className="mt-2.5 rounded-xl border border-[rgba(246,98,110,0.35)] bg-[var(--g3-danger-soft)] px-3.5 py-2.5 text-sm text-[var(--g3-danger-strong)]" role="alert">
             {error}
