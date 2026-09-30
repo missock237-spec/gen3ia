@@ -18,6 +18,11 @@ import type {
   ConversationRun,
   MessageAttachment,
 } from "@/lib/domain/conversations/types";
+import {
+  backdropClass,
+  MOBILE_HEADER_BUTTON_CLASS,
+  overlaySheetClass,
+} from "@/lib/ui/screen-adapter";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
 import { safeClientTimezone, streamConversationTurn } from "@/lib/domain/conversations/stream-client";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
@@ -91,6 +96,10 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   // Étape 8 — image à éditer injectée dans le composer (bouton « Éditer »
   // d'une image du fil) : attachment réel + préfixe d'instruction.
   const [injectedEdit, setInjectedEdit] = useState<{ attachment: MessageAttachment; text: string } | null>(null);
+  // Étape 10 — adaptateur d'écran : sous 1024 px les panneaux inline (liste
+  // des conversations, tiroir de contexte) deviennent des feuilles
+  // superposées OUVRABLES — le même contenu, jamais une version amputée.
+  const [mobileListOpen, setMobileListOpen] = useState(false);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   // Arrêt à tout moment : l'AbortController du tour en cours — le bouton
   // « Arrêter » interrompt le flux et l'agent cesse de travailler.
@@ -430,8 +439,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   const mergedRuns = useMemo(
     () => (live?.run && detail ? [...detail.runs.filter((r) => r.id !== live.run?.id), live.run] : detail?.runs ?? []),
     [detail, live],
-  );
-  const mergedApprovals = useMemo(
+  );  const mergedApprovals = useMemo(
     () => (live && live.approvals.length > 0 && detail ? [...detail.approvals, ...live.approvals] : detail?.approvals ?? []),
     [detail, live],
   );
@@ -442,7 +450,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
 
   return (
     <div className="relative flex h-full min-h-0 gap-2 bg-[var(--g3-surface)] p-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:gap-3 lg:p-3">
-      {/* Colonne gauche — conversations récentes, projets, recherche */}
+      {/* Colonne gauche — conversations récentes, projets, recherche
+          (≥ lg : colonne inline ; < lg : feuille superposée via l'en-tête) */}
       <div
         className={`shrink-0 transition-all ${listCollapsed ? "w-14" : "w-64"} border-r border-[var(--g3-border)] pr-3 max-lg:hidden`}
       >
@@ -459,13 +468,40 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         />
       </div>
 
+      {/* Feuille mobile — le MÊME ConversationList, en superposition */}
+      <div
+        className={overlaySheetClass(mobileListOpen, "left")}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Liste des conversations"
+      >
+        <ConversationList
+          conversations={conversations}
+          projects={projects}
+          activeConversationId={conversationId}
+          loading={loadingList}
+          onNewConversation={() => void createConversation()}
+          query={query}
+          onQueryChange={setQuery}
+        />
+      </div>
+      <div className={backdropClass(mobileListOpen)} onClick={() => setMobileListOpen(false)} aria-hidden="true" />
+
       {/* Colonne centrale — conversation */}
       <div className="flex min-w-0 flex-1 flex-col">
         {detail && (
           <div className="mb-2 flex items-center justify-between gap-2 border-b border-[var(--g3-border)] px-3 pt-2 pb-2 lg:px-0 lg:pt-0">
-            <div className="min-w-0">
+            <div className="min-w-0 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMobileListOpen(true)}
+                className={`${MOBILE_HEADER_BUTTON_CLASS} g3-btn g3-btn-ghost !min-h-0 !px-2.5 !py-1.5 text-xs`}
+                title="Conversations récentes"
+              >
+                <span aria-hidden>◧</span> Conversations
+              </button>
               <h1 className="truncate text-sm font-semibold text-[var(--g3-text)]">{detail.conversation.title || "Sans titre"}</h1>
-              <p className="text-[11px] text-[var(--g3-muted)]">
+              <p className="truncate text-[11px] text-[var(--g3-muted)]">
                 {detail.project ? `Projet : ${detail.project.name}` : "Sans projet"}
                 {detail.messages.length > 0 ? ` · ${detail.messages.length} messages` : ""}
               </p>
@@ -560,7 +596,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
       </div>
 
       {/* Panneau droit optionnel — plan, outils, validations, livrables
-          (desktop uniquement : sur mobile le fil occupe toute la largeur) */}
+          (≥ lg : colonne inline ; < lg : feuille superposée via le bouton
+          « Contexte » de l'en-tête — le même ContextDrawer) */}
       <div className={`shrink-0 transition-all max-lg:hidden ${drawerOpen ? "w-80 border-l border-[var(--g3-border)] pl-3" : "w-10"}`}>
         {detail && (
           <ContextDrawer
@@ -575,6 +612,28 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           />
         )}
       </div>
+
+      {/* Feuille mobile — le MÊME ContextDrawer, en superposition */}
+      <div
+        className={overlaySheetClass(drawerOpen, "right")}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Contexte de la conversation"
+      >
+        {detail && (
+          <ContextDrawer
+            open={drawerOpen}
+            onToggle={() => setDrawerOpen((open) => !open)}
+            conversationTitle={detail.conversation.title}
+            project={detail.project}
+            runs={mergedRuns}
+            approvals={mergedApprovals}
+            artifacts={mergedArtifacts}
+            onDecide={decideApproval}
+          />
+        )}
+      </div>
+      <div className={backdropClass(drawerOpen)} onClick={() => setDrawerOpen(false)} aria-hidden="true" />
     </div>
   );
 }
