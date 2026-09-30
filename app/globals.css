@@ -2054,17 +2054,21 @@ textarea:focus-visible, [tabindex]:focus-visible {
   [class*="g3-btn"],
   [class*="--g3-deep"],
   [class*="--g3-primary"],
-  [class*="g3-primary-surface"],
+  [class*="--g3-gradient"],
   [class*="bg-gradient"],
   [class*="g3-keep-white"],
   [class*="g3-keep-white"] *,
   [class*="g3-btn"] *,
   [class*="bg-gradient"] *,
+  [class*="--g3-gradient"] *,
   [class*="--g3-deep"] *,
   [class*="--g3-primary"] *
 )) {
   color: var(--g3-text) !important;
 }
+
+/* hover:text-white (surfaces neutres) → texte du thème en clair. */
+[data-theme="light"] .hover\:text-white:hover { color: var(--g3-text) !important; }
 
 /* Textes pastel clairs conçus pour fond sombre → teintes foncées lisibles. */
 [data-theme="light"] :where(.text-emerald-200, .text-emerald-300, .text-emerald-400) { color: #15803d !important; }
@@ -2088,3 +2092,39 @@ textarea:focus-visible, [tabindex]:focus-visible {
 
 /* Le sélecteur de thème est aussi accessible depuis Paramètres. */
 [data-theme="light"] ::selection { background: rgba(108, 72, 255, 0.18); }
+/* ============================================================
+   THÈME SOMBRE — COUCHE DE COMPATIBILITÉ (pastels clairs en dur)
+   « Si l'utilisateur choisit le thème sombre, TOUTE l'interface doit
+   devenir sombre — sans exception. » Les composants historiques écrits
+   avec des pastels Tailwind clairs (bg-emerald-50, text-sky-700…) sont
+   remappés vers les tokens sémantiques sombres --g3-*-soft/strong.
+   ============================================================ */
+/* Succès (emerald, green, lime, teal) */
+[data-theme="dark"] :where(.bg-emerald-50, .bg-emerald-100, .bg-emerald-200, .bg-green-50, .bg-green-100, .bg-green-200, .bg-lime-50, .bg-lime-100, .bg-teal-50, .bg-teal-100) { background-color: var(--g3-success-soft) !important; }
+[data-theme="dark"] :where(.text-emerald-700, .text-emerald-800, .text-emerald-900, .text-green-700, .text-green-800, .text-green-900, .text-lime-700, .text-teal-700) { color: var(--g3-success-strong) !important; }
+[data-theme="dark"] :where(.border-emerald-200, .border-emerald-300, .border-green-200, .border-green-300) { border-color: var(--g3-success-soft) !important; }
+/* Avertissement (amber, yellow, orange) */
+[data-theme="dark"] :where(.bg-amber-50, .bg-amber-100, .bg-amber-200, .bg-yellow-50, .bg-yellow-100, .bg-orange-50, .bg-orange-100) { background-color: var(--g3-warning-soft) !important; }
+[data-theme="dark"] :where(.text-amber-700, .text-amber-800, .text-yellow-700, .text-orange-700) { color: var(--g3-warning-strong) !important; }
+[data-theme="dark"] :where(.border-amber-200, .border-amber-300, .border-yellow-200, .border-orange-200) { border-color: var(--g3-warning-soft) !important; }
+/* Danger (red, rose, pink) */
+[data-theme="dark"] :where(.bg-red-50, .bg-red-100, .bg-red-200, .bg-rose-50, .bg-rose-100, .bg-pink-50, .bg-pink-100) { background-color: var(--g3-danger-soft) !important; }
+[data-theme="dark"] :where(.text-red-700, .text-red-800, .text-rose-700, .text-pink-700) { color: var(--g3-danger-strong) !important; }
+[data-theme="dark"] :where(.border-red-200, .border-red-300, .border-rose-200, .border-pink-200) { border-color: var(--g3-danger-soft) !important; }
+/* Information / primaire (sky, blue, cyan, indigo) */
+[data-theme="dark"] :where(.bg-sky-50, .bg-sky-100, .bg-sky-200, .bg-blue-50, .bg-blue-100, .bg-blue-200, .bg-cyan-50, .bg-cyan-100, .bg-indigo-50, .bg-indigo-100) { background-color: var(--g3-primary-soft) !important; }
+[data-theme="dark"] :where(.text-sky-700, .text-sky-800, .text-blue-700, .text-blue-800, .text-cyan-700, .text-indigo-700) { color: var(--g3-primary-strong) !important; }
+[data-theme="dark"] :where(.border-sky-200, .border-sky-300, .border-blue-200, .border-cyan-200, .border-indigo-200) { border-color: var(--g3-primary-soft) !important; }
+/* Accent (violet, purple, fuchsia) */
+[data-theme="dark"] :where(.bg-violet-50, .bg-violet-100, .bg-purple-50, .bg-purple-100, .bg-fuchsia-50, .bg-fuchsia-100) { background-color: var(--g3-magenta-soft) !important; }
+[data-theme="dark"] :where(.text-violet-700, .text-purple-700, .text-fuchsia-700) { color: var(--g3-primary-strong) !important; }
+[data-theme="dark"] :where(.border-violet-200, .border-purple-200, .border-fuchsia-200) { border-color: var(--g3-magenta-soft) !important; }
+/* Neutres clairs (gray/zinc/slate 50-200) → surface du thème sombre. */
+[data-theme="dark"] :where(.bg-gray-50, .bg-gray-100, .bg-gray-200, .bg-zinc-50, .bg-zinc-100, .bg-slate-50, .bg-slate-100, .bg-slate-200, .bg-neutral-50, .bg-neutral-100) { background-color: var(--g3-surface) !important; }
+[data-theme="dark"] :where(.text-gray-500, .text-gray-600, .text-zinc-500, .text-zinc-600, .text-slate-500, .text-slate-600) { color: var(--g3-muted) !important; }
+[data-theme="dark"] :where(.text-gray-700, .text-gray-800, .text-gray-900, .text-zinc-700, .text-zinc-800, .text-slate-700, .text-slate-800, .text-neutral-600, .text-neutral-700) { color: var(--g3-text-secondary) !important; }
+/* Alphas blancs : affordances conçues sur fond sombre — en sombre elles
+   restent natives (aucune règle nécessaire) ; en clair on les neutralise
+   pour l'affordance (bordures invisibles → bordure du thème). */
+[data-theme="light"] :where(.border-white\/10, .border-white\/20, .border-white\/30) { border-color: var(--g3-border) !important; }
+

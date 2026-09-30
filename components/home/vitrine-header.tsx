@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 /** Libellés du header selon la langue de la surface vitrine (FR par défaut). */
 const LABELS = {
@@ -93,6 +94,11 @@ export function VitrineHeader({ lang = "fr" }: { lang?: "fr" | "en" }) {
           </Link>
         </nav>
         <div className="flex items-center gap-2">
+          {/* Bascule de thème accessible depuis la vitrine (étape 4 : le
+              choix clair/sombre est disponible sur TOUTES les surfaces). */}
+          <div className="hidden sm:block">
+            <ThemeToggle compact />
+          </div>
           <Link
             href="/login"
             className="rounded-full border border-[rgba(148,153,255,0.25)] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"

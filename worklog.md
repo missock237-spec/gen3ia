@@ -339,3 +339,14 @@ Task 46 — Étape 3/20 : fausses confirmations « résultat livré » — SUPPR
   ② engine.ts summarizePlanTurn : RÈGLE ABSOLUE D'HONNÊTETÉ injectée dans le prompt de synthèse (une étape [failed] n'est PAS livrée ; seules [done] sont annoncées réalisées) + planFailureAppendix — annexe DÉTERMINISTE ajoutée au texte final dès qu'une étape échoue, même si le LLM omet ou minimise les échecs (flux, non-flux et repli couverts). Pure, exportée, testée.
   ③ route continue : le message persisté après reprise en échec combine l'annexe honnête + la cause réelle de l'interruption.
 - TESTS : +7 (final-response 6, honnêteté via continue 1) — contrat : un échec n'expose JAMAIS de finalText de livraison ; l'honnêteté passe par le message du fil. 846 verts / 109 fichiers, typecheck 0, lint 0.
+
+Task 46 — Étape 4/20 : cohérence stricte thème sombre/clair — CORRIGÉ (score auto-évalué 9,6/10)
+- ANALYSE : 10 causes racines (couche compat clair incomplète : dégradés --g3-gradient non exemptés, g3-primary-surface morte, hover:text-white non couvert ; 179 pastels clairs en dur dans 63 fichiers cassant le SOMBRE ; îlots sombres involontaires (admin/ads illisible en clair) ; aucun toggle sur vitrine/auth ; global-error 100 % clair hors thème ; theme-color sur le système au lieu du choix).
+- CORRECTIFS :
+  ① globals.css : exemption de .text-white étendue aux dégradés de marque ([class*="--g3-gradient"], exemption morte supprimée) ; hover:text-white converti en clair ; NOUVELLE COUCHE SYMÉTRIQUE pour le thème SOMBRE — les pastels Tailwind clairs (bg-{emerald,amber,red,sky,violet,...}-50/100/200, text-*700/800, border-*200) remappés vers les tokens sémantiques --g3-{success,warning,danger,primary,magenta}-soft/strong : 63 fichiers assainis d'un coup, sans toucher aux composants ; bordures white/10-30 → bordure du thème en clair ; neutres gray/zinc/slate → surface/muted du thème.
+  ② components/shells/status-badge.tsx (déployé sur ~40 pages) : TONE_CLASSES convertis en tokens bithème — plus AUCUN pastel en dur.
+  ③ app/admin/ads : 7 champs bg-[--g3-deep] (illisibles en clair) → classe g3-input bithème.
+  ④ app/global-error.tsx : bootstrap data-theme (même convention localStorage) + couleurs 100 % variables --g3-* avec replis — l'écran d'erreur suit le thème.
+  ⑤ app/layout.tsx : le meta theme-color SUIT le choix utilisateur (barre navigateur mobile).
+  ⑥ vitrine-header : ThemeToggle compact sur la vitrine (le choix est désormais accessible sur TOUTES les surfaces, sidebar + vitrine + paramètres).
+- TESTS : +7 app/theme-consistency.test.ts (couche sombre présente, exemptions clair corrigées, tokens définis dans les 2 blocs, status-badge sans pastel, toggle vitrine, global-error thémé, theme-color). 853 verts / 110 fichiers, typecheck 0, lint 0.

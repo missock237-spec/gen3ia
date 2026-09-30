@@ -180,30 +180,30 @@ export default function AdminAdsPage() {
                 value={form.placement}
                 onChange={(event) => setForm({ ...form, placement: event.target.value })}
                 placeholder="Emplacement (ex. sidebar-workspace)"
-                className="rounded-xl border border-white/10 bg-[var(--g3-deep)]/60 px-3 py-2.5 text-sm text-[var(--g3-text-secondary)] outline-none focus:border-sky-400/60"
+                className="g3-input rounded-xl px-3 py-2.5 text-sm"
               />
               <input
                 value={form.title}
                 onChange={(event) => setForm({ ...form, title: event.target.value })}
                 placeholder="Titre"
-                className="rounded-xl border border-white/10 bg-[var(--g3-deep)]/60 px-3 py-2.5 text-sm text-[var(--g3-text-secondary)] outline-none focus:border-sky-400/60"
+                className="g3-input rounded-xl px-3 py-2.5 text-sm"
               />
               <input
                 value={form.advertiser}
                 onChange={(event) => setForm({ ...form, advertiser: event.target.value })}
                 placeholder="Annonceur"
-                className="rounded-xl border border-white/10 bg-[var(--g3-deep)]/60 px-3 py-2.5 text-sm text-[var(--g3-text-secondary)] outline-none focus:border-sky-400/60"
+                className="g3-input rounded-xl px-3 py-2.5 text-sm"
               />
               <input
                 value={form.targetUrl}
                 onChange={(event) => setForm({ ...form, targetUrl: event.target.value })}
                 placeholder="URL de destination (https://…)"
-                className="rounded-xl border border-white/10 bg-[var(--g3-deep)]/60 px-3 py-2.5 text-sm text-[var(--g3-text-secondary)] outline-none focus:border-sky-400/60"
+                className="g3-input rounded-xl px-3 py-2.5 text-sm"
               />
               <select
                 value={form.format}
                 onChange={(event) => setForm({ ...form, format: event.target.value as PlatformAd["format"] })}
-                className="rounded-xl border border-white/10 bg-[var(--g3-deep)]/60 px-3 py-2.5 text-sm text-[var(--g3-text-secondary)] outline-none focus:border-sky-400/60"
+                className="g3-input rounded-xl px-3 py-2.5 text-sm"
               >
                 <option value="link">Lien</option>
                 <option value="image">Image</option>
@@ -214,13 +214,13 @@ export default function AdminAdsPage() {
                 value={form.priority}
                 onChange={(event) => setForm({ ...form, priority: Number(event.target.value) })}
                 placeholder="Priorité"
-                className="rounded-xl border border-white/10 bg-[var(--g3-deep)]/60 px-3 py-2.5 text-sm text-[var(--g3-text-secondary)] outline-none focus:border-sky-400/60"
+                className="g3-input rounded-xl px-3 py-2.5 text-sm"
               />
               <input
                 value={form.description}
                 onChange={(event) => setForm({ ...form, description: event.target.value })}
                 placeholder="Description (facultatif)"
-                className="rounded-xl border border-white/10 bg-[var(--g3-deep)]/60 px-3 py-2.5 text-sm text-[var(--g3-text-secondary)] outline-none focus:border-sky-400/60 sm:col-span-2 lg:col-span-2"
+                className="g3-input rounded-xl px-3 py-2.5 text-sm sm:col-span-2 lg:col-span-2"
               />
             </div>
             <button

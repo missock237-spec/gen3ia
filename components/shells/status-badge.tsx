@@ -44,21 +44,23 @@ const STATUS_DEFINITIONS: Record<string, StatusDefinition> = {
   degraded: { label: "Dégradé", tone: "warning" },
 };
 
+// Tokens sémantiques bithème (étape 4) : plus aucun pastel clair en dur —
+// le badge suit le thème sombre ET clair sans couche de compatibilité.
 const TONE_CLASSES: Record<BadgeTone, string> = {
   neutral: "border-[var(--g3-border)] bg-[var(--g3-elevated)] text-[var(--g3-muted)]",
-  info: "border-sky-200 bg-sky-50 text-sky-700",
-  success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  warning: "border-amber-200 bg-amber-50 text-amber-700",
-  danger: "border-red-200 bg-red-50 text-red-700",
-  progress: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  info: "border-[var(--g3-primary-soft)] bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]",
+  success: "border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]",
+  warning: "border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]",
+  danger: "border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]",
+  progress: "border-[var(--g3-primary-soft)] bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]",
 };
 
 /** Point animé pour les statuts « en cours » (signe de vie visible). */
 function PulseDot() {
   return (
     <span className="relative inline-flex h-1.5 w-1.5">
-      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
-      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-indigo-500" />
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--g3-primary-strong)] opacity-60" />
+      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--g3-primary-strong)]" />
     </span>
   );
 }
