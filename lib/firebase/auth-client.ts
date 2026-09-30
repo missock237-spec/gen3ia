@@ -317,10 +317,22 @@ export async function establishSession(user: User, redirectTo?: string | null): 
   );
 }
 
-/** N'accepte qu'un chemin interne relatif ("(("/")…") — bloque les URL externes. */
+/** N'accepte qu'un chemin interne relatif (« /… ») — bloque les URL externes. */
 export function sanitizeRedirect(target?: string | null): string | null {
   if (!target) return null;
   if (!target.startsWith("/") || target.startsWith("//")) return null;
+  // Validation PARSE (CodeQL js/client-side-unvalidated-url-redirection) :
+  // le parseur WHATWG convertit "\" en "/" — "/\evil.com" serait sinon
+  // interprété comme "//evil.com" (redirection protocol-relative vers un
+  // domaine tiers). On résout la cible contre une base fictive et on
+  // exige que l'origine résolue soit celle de la base : seules les
+  // redirections réellement same-origin survivent.
+  try {
+    const base = "https://gen3ia.internal";
+    if (new URL(target, base).origin !== base) return null;
+  } catch {
+    return null;
+  }
   return target;
 }
 
