@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Vérification PRODUCTION Task 46 — Étape 1 : historique des conversations
- * d'agents mémorisé.
+ * Vérification PRODUCTION Task 46 — Étapes 1+2 : historique des conversations
+ * d'agents mémorisé + reprise des missions longues.
  *
  * Contrôles (gen3ia.online) :
  *  1. Disponibilité : / 200, /api/health 200.
@@ -49,6 +49,14 @@ async function main() {
   // ---- 3. Détail conversation : authentification requise -------------------
   const detail = await fetch(`${BASE}/api/chat/conversations/0000000000000000probe`, { redirect: "manual" });
   record("GET /api/chat/conversations/[id] sans session → 401", detail.status === 401, `status ${detail.status}`);
+
+  // ---- 3 bis. Étape 2 : route de reprise des missions longues -------------
+  const cont = await fetch(`${BASE}/api/agent/chat/continue`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ executionId: "probe-inexistant" }),
+  });
+  record("POST /api/agent/chat/continue sans session → 401", cont.status === 401, `status ${cont.status}`);
 
   // ---- 4. Build vivant -----------------------------------------------------
   const vercelId = home.headers.get("x-vercel-id");
