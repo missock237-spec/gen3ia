@@ -86,3 +86,30 @@ describe("Manifest & UI — app installable cohérente", () => {
     expect(register).toContain('"gen3ia:outbox-pending"');
   });
 });
+
+describe("Mises à jour multi-appareils — le nouveau build atteint les pages ouvertes", () => {
+  it("le SW prend le contrôle immédiatement (skipWaiting) à l'installation", () => {
+    const sw = read("public/sw.js");
+    expect(sw).toContain("skipWaiting");
+  });
+
+  it("pwa-register : applique la nouvelle version au moment sûr (reload gardé, signal sinon)", () => {
+    const register = read("components/pwa-register.tsx");
+    // Détection d'un SW prêt à prendre le contrôle (update disponible).
+    expect(register).toContain("reg.waiting");
+    // Reprise de contrôle par un SW plus récent → application (garde anti-boucle session).
+    expect(register).toContain("controllerchange");
+    expect(register).toContain("pageWasControlled");
+    expect(register).toContain("gen3ia-sw-reloaded");
+    // Onglet caché = moment sûr ; onglet visible = signal doux (jamais de coupure d'une mission).
+    expect(register).toContain("visibilityState");
+    expect(register).toContain('"gen3ia:new-version"');
+  });
+
+  it("pwa-register : les sessions longues re-vérifient (poll 30 min + retour d'onglet)", () => {
+    const register = read("components/pwa-register.tsx");
+    expect(register).toContain("setInterval(checkForUpdate");
+    expect(register).toContain("visibilitychange");
+    expect(register).toContain("update()");
+  });
+});
