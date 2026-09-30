@@ -350,3 +350,4 @@ Task 46 — Étape 4/20 : cohérence stricte thème sombre/clair — CORRIGÉ (s
   ⑤ app/layout.tsx : le meta theme-color SUIT le choix utilisateur (barre navigateur mobile).
   ⑥ vitrine-header : ThemeToggle compact sur la vitrine (le choix est désormais accessible sur TOUTES les surfaces, sidebar + vitrine + paramètres).
 - TESTS : +7 app/theme-consistency.test.ts (couche sombre présente, exemptions clair corrigées, tokens définis dans les 2 blocs, status-badge sans pastel, toggle vitrine, global-error thémé, theme-color). 853 verts / 110 fichiers, typecheck 0, lint 0.
+- SONDES PROD (post-déploiement 1ad2504 READY) : scripts/verify_task46_step4_theme_prod.mjs — la CSS servie en production contient la couche sombre (.bg-emerald-50→tokens), les tokens soft/strong, l'exemption dégradés (forme minifiée [class*=--g3-gradient]), la conversion hover:text-white. Probes globales 7/7.
