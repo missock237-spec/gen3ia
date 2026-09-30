@@ -435,3 +435,15 @@ Task 47 — Étape 9/20 : « temps de livraison estimé (ETA) affiché pendant l
 Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 9
 - LIVRÉES : 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 18 (11/20).
 - RESTANTES : 10 (adaptateur d'écran), 11 (mises à jour multi-appareils), 13 (liens/web pour agent), 14 (bibliothèque de capacités → conversation directe), 15 (Knowledge +), 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
+
+Task 47 — Étape 10/20 : « adaptateur d'écran (expérience cohérente tous appareils) » — LIVRÉ (score auto-évalué 9,5/10)
+- ANALYSE : détection d'appareils déjà solide (lib/device/detect + use-device + headers middleware, viewport interactiveWidget) — mais un DÉFAUT MAJEUR de cohérence : la liste des conversations et le tiroir contextuel du workspace étaient `max-lg:hidden` SANS aucune alternative — sous 1024 px (mobile + tablette), impossible d'accéder à ses conversations, et le bouton « ⧉ Contexte » de l'en-tête ne faisait RIEN de visible.
+- CORRECTIFS :
+  ① lib/ui/screen-adapter.ts (NOUVEAU, pur) : SOURCE UNIQUE des classes « même contenu, deux habillages » — panneaux inline ≥ lg (comportement historique), feuilles superposées < lg (w-72, max-w-[85vw], z-50, fond cliquable z-40, fermées sous lg) ; boutons d'en-tête mobiles masqués ≥ lg. Zéro dérive de classes possible.
+  ② conversation-workspace : feuille mobile GAUCHE réutilisant le MÊME ConversationList (fermeture automatique à la sélection via effet sur conversationId) ; feuille mobile DROITE réutilisant le MÊME ContextDrawer — le bouton « ⧉ Contexte » fonctionne désormais sur tous les écrans ; bouton « ◧ Conversations » dans l'en-tête mobile ; aria-modal + aria-label ; fonds d'obstruction cliquables.
+- TESTS : +6 (inline/caché selon breakpoint, feuille ouverte vs fermée par token, côté gauche/droite, largeur bornée, fond seulement si ouverte, boutons mobiles). Suite : 949 verts / 120 fichiers, typecheck 0, lint 0.
+- SONDES PROD : Vercel « success » sur le commit.
+
+Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 10
+- LIVRÉES : 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 18 (12/20).
+- RESTANTES : 11 (mises à jour multi-appareils), 13 (liens/web pour agent), 14 (bibliothèque de capacités → conversation directe), 15 (Knowledge +), 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
