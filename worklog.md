@@ -362,3 +362,4 @@ Task 46 — Étape 5/20 : version app (PWA) fonctionnelle, sans blocage, synchro
   ⑤ manifest : theme_color/background_color alignés sur le thème sombre de boot (#05060C/#0B0D1A).
 - LIMITE DOCUMENTÉE : le chat workspace en streaming NDJSON reste hors file (reprise complexe, décision produit dédiée) — hors-ligne, l'erreur est explicite ; live-agent : packaging natif requis (nut-js) — chantier séparé ; notifications natives push = Étape 18.
 - TESTS : +11 app/pwa-consistency.test.ts (file stricte, verrou, idempotence, network-first, 503, notifications, plafond, manifest, composer, panel, pwa-register). 864 verts / 111 fichiers, typecheck 0, lint 0.
+- SONDES PROD (post-déploiement e80e2ba READY) : scripts/verify_task46_step5_pwa_prod.mjs 8/8 (SW strict/idempotent/plafonné/offline-first/notifications, manifest sombre, installable, offline.html 200) + probes globales 7/7.
