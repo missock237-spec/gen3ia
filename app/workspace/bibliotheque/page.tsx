@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { SectionHeader } from "@/components/shells/section-header";
 import { EmptyState, LoadingState } from "@/components/shells/states";
+import { PENDING_MESSAGE_PREFIX } from "@/components/workspace/conversation-workspace";
 import { authFetch } from "@/lib/firebase/auth-client";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 
@@ -188,12 +189,16 @@ export default function LibraryPage() {
       });
       if (!response.ok) throw new Error("Création de la conversation impossible.");
       const data = (await response.json()) as { conversation: { id: string } };
-      // Premier message : la capacité devient un prompt de départ réel.
-      await authFetch(`/api/workspace/conversations/${data.conversation.id}/messages`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message: capability.starterPrompt, ...(projectId ? { projectId } : {}) }),
-      });
+      // Étape 14 — la conversation s'ouvre DIRECTEMENT et commence à
+      // travailler : le prompt de la capacité est transmis via le marqueur
+      // de hand-off consommé par la page de conversation (même rendu en
+      // direct que l'envoi manuel : streaming, timeline, ETA, validations).
+      // L'ancien comportement attendait la FIN du tour ici avant de
+      // naviguer — l'utilisateur fixait un bouton pendant toute l'exécution.
+      sessionStorage.setItem(
+        `${PENDING_MESSAGE_PREFIX}${data.conversation.id}`,
+        JSON.stringify({ message: capability.starterPrompt }),
+      );
       router.push(`/workspace/conversations/${data.conversation.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Démarrage impossible.");

@@ -72,7 +72,7 @@ const STARTER_SUGGESTIONS = [
 ];
 
 /** Message en attente après création depuis l'accueil (hand-off entre pages). */
-const PENDING_MESSAGE_PREFIX = "g3-pending-message:";
+export const PENDING_MESSAGE_PREFIX = "g3-pending-message:";
 
 function emptyLive(): LiveTurn {
   return { status: "", content: "", run: null, approvals: [], artifacts: [] };
