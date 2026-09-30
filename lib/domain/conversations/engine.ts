@@ -15,6 +15,7 @@ import {
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import { attachmentImageCandidates, resolveEditableImageSources } from "@/lib/files/image-source";
 import { hasImageAttachment, shouldRouteImageEdit } from "@/lib/domain/conversations/image-intent";
+import { loadWebPageContext } from "@/lib/domain/conversations/web-context";
 import { isR2Configured, uploadToR2 } from "@/lib/storage/r2";
 import { randomUUID } from "node:crypto";
 import type { ToolRisk } from "@/lib/tools/types";
@@ -765,6 +766,19 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const filesContext = await loadImportedFilesContext(input.userId, input.attachments).catch(() => "");
   const filesContextShort = await loadImportedFilesContext(input.userId, input.attachments, { perFile: 2_500, total: 6_000 }).catch(() => "");
 
+  // 1 quinquies) Contenu RÉEL des liens fournis par l'utilisateur (étape 13) :
+  // une URL collée dans la conversation est RÉELLEMENT récupérée (web.open,
+  // pipeline sécurisé) et injectée — le modèle lit la page au lieu d'inventer.
+  // L'URL déjà routée vers l'appel d'API direct (web.api) est exclue : ce
+  // chemin la traite lui-même.
+  const directUrl = extractApiUrlFromMessage(input.message);
+  const webContext = await loadWebPageContext(input.message, {
+    userId: input.userId,
+    projectId: input.projectId,
+    skipUrls: directUrl ? [directUrl] : [],
+  }).catch(() => "");
+  const webContextShort = webContext.slice(0, 6_000);
+
   // 2) Demande d'image : ÉDITION d'une image existante (jointe ou générée
   // plus tôt) d'abord — sinon GÉNÉRATION réelle (Agnes AI) + artefact image.
   // Deux détections déterministes (aucune variance LLM) : verbe + nom
@@ -859,7 +873,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
         }),
         prompt:
           `Historique récent :\n${priorHistory.slice(-6).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 500)}`).join("\n") || "(vide)"}` +
-          `\n\nNouvelle demande (optimisée par le système d'amélioration de prompts — demande d'origine intangible : « ${enhancement.original.slice(0, 400)} ») : ${enhancement.enhanced.slice(0, 4000)}${attachmentsContext(input.attachments)}${filesContextShort}`,
+          `\n\nNouvelle demande (optimisée par le système d'amélioration de prompts — demande d'origine intangible : « ${enhancement.original.slice(0, 400)} ») : ${enhancement.enhanced.slice(0, 4000)}${attachmentsContext(input.attachments)}${filesContextShort}${webContext ? `\n\nContenu réel des liens fournis (résumé) :${webContextShort}` : ""}`,
         schema: IntentSchema,
         label: "intention-conversation",
         maxTokens: 2500,
@@ -993,7 +1007,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     }
   }
   if (intent.mode === "chat") {
-    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext });
+    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, webContext });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,
@@ -1024,6 +1038,8 @@ interface TurnBase extends ConversationTurnInput {
   priorHistory: ChatMessage[];
   /** Contenu réel des fichiers importés (convertis + stockés en base). */
   filesContext?: string;
+  /** Contenu réel des liens fournis par l'utilisateur (pages récupérées). */
+  webContext?: string;
   /** Score de complexité évalué par le système d'auto-amélioration. */
   complexityScore?: number;
 }
@@ -1041,6 +1057,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
     ctx.filesContext ? `Ces contenus proviennent de fichiers importés par l'utilisateur (conversion réelle stockée en base de données) — appuie-toi EXCLUSIVEMENT sur eux pour toute question les concernant, sans jamais inventer de données :${ctx.filesContext}` : "",
+    ctx.webContext ? `Ces contenus proviennent de liens fournis par l'utilisateur — pages RÉELLEMENT récupérées par la plateforme au moment de la demande. Appuie-toi sur eux pour toute question les concernant, cite-les fidèlement, et ne complète JAMAIS par une invention de leur contenu :${ctx.webContext}` : "",
   ].filter(Boolean);
 
   const requestMessages = [
