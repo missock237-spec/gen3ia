@@ -147,6 +147,28 @@ export async function listRunsForConversation(userId: string, conversationId: st
   return snap.docs.map((d) => docFrom(d.id, d.data()));
 }
 
+/**
+ * Missions récentes TOUTES conversations confondues (étape 16) : la vue
+ * globale de l'activité d'exécution de l'utilisateur. Requête volontairement
+ * SANS index composite (filtre userId seul + tri en mémoire) : fonctionne
+ * dès la première mission, aucune migration d'index à déployer.
+ */
+export async function listRecentRuns(userId: string, limit = 8): Promise<ConversationRun[]> {
+  const snap = await adminDb
+    .collection(COLLECTION)
+    .where("userId", "==", userId)
+    .limit(80)
+    .get();
+  return snap.docs
+    .map((d) => docFrom(d.id, d.data()))
+    .sort((a, b) => {
+      const aTime = Date.parse(a.updatedAt ?? a.createdAt ?? "") || 0;
+      const bTime = Date.parse(b.updatedAt ?? b.createdAt ?? "") || 0;
+      return bTime - aTime;
+    })
+    .slice(0, Math.min(limit, 20));
+}
+
 export async function updateRunSteps(userId: string, runId: string, steps: RunStep[]): Promise<void> {
   await adminDb.collection(COLLECTION).doc(runId).update({
     steps,

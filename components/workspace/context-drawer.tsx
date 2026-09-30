@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { ArtifactPanel } from "./artifact-panel";
 import { RunTimeline } from "./run-timeline";
@@ -12,6 +13,18 @@ import type {
   ConversationRun,
 } from "@/lib/domain/conversations/types";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
+
+/** Mission récente (toutes conversations) affichée dans l'onglet Missions. */
+export interface RecentMission {
+  id: string;
+  conversationId: string;
+  objective: string;
+  status: string;
+  stepsDone: number;
+  stepsTotal: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /**
  * Panneau droit optionnel de la conversation : plan d'exécution en cours,
@@ -30,7 +43,7 @@ interface ContextDrawerProps {
   onDecide: (approvalId: string, decision: "approved" | "rejected") => Promise<void>;
 }
 
-type Section = "plan" | "artifacts" | "info";
+type Section = "plan" | "artifacts" | "info" | "missions";
 
 export function ContextDrawer({
   open,
@@ -43,6 +56,27 @@ export function ContextDrawer({
   onDecide,
 }: ContextDrawerProps) {
   const [section, setSection] = useState<Section>("plan");
+  // Étape 16 — missions récentes TOUTES conversations confondues : chargées
+  // à l'ouverture de l'onglet, avec saut vers la conversation d'origine.
+  const router = useRouter();
+  const [missions, setMissions] = useState<RecentMission[] | null>(null);
+  useEffect(() => {
+    if (!open || section !== "missions" || missions !== null) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/workspace/missions?limit=10", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as { missions: RecentMission[] };
+        if (!cancelled) setMissions(Array.isArray(data.missions) ? data.missions : []);
+      } catch {
+        /* chargement impossible : la section reste vide, sans crash */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, section, missions]);
 
   if (!open) {
     return (
@@ -96,6 +130,7 @@ export function ContextDrawer({
           [
             { id: "plan", label: `Plan${pending.length > 0 ? ` (${pending.length})` : ""}` },
             { id: "artifacts", label: `Livrables (${artifacts.length})` },
+            { id: "missions", label: "Missions" },
             { id: "info", label: "Détails" },
           ] as Array<{ id: Section; label: string }>
         ).map((tab) => (
@@ -151,6 +186,43 @@ export function ContextDrawer({
 
         {section === "artifacts" && (
           <ArtifactPanel artifacts={artifacts} variant="sidebar" className="text-xs" />
+        )}
+
+        {section === "missions" && (
+          <div className="space-y-2">
+            <p className="text-[11px] leading-relaxed text-[var(--g3-muted)]">
+              Vos missions récentes, toutes conversations confondues. Cliquez pour rouvrir celle d&apos;origine.
+            </p>
+            {missions === null ? (
+              <p className="text-[11px] text-[var(--g3-muted)]" aria-busy>Chargement…</p>
+            ) : missions.length === 0 ? (
+              <p className="text-[11px] text-[var(--g3-muted)]">Aucune mission pour le moment.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {missions.map((mission) => (
+                  <li key={mission.id}>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/workspace/conversations/${mission.conversationId}`)}
+                      className="w-full rounded-lg bg-[var(--g3-elevated)] px-2.5 py-2 text-left transition hover:border hover:border-[var(--g3-border-strong)]"
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate text-xs font-medium text-[var(--g3-text)]">{mission.objective || "Mission"}</span>
+                        <span className={`shrink-0 rounded-full border px-1.5 text-[9px] ${RUN_STATUS_STYLES[mission.status as keyof typeof RUN_STATUS_STYLES] ?? ""}`}>
+                          {RUN_STATUS_LABELS[mission.status as keyof typeof RUN_STATUS_LABELS] ?? mission.status}
+                        </span>
+                      </span>
+                      {mission.stepsTotal > 0 && (
+                        <span className="mt-0.5 block text-[10px] text-[var(--g3-muted)]">
+                          {mission.stepsDone}/{mission.stepsTotal} étapes · {new Date(mission.updatedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
 
         {section === "info" && (
