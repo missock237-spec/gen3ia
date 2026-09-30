@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { RUN_STATUS_LABELS, RUN_STATUS_STYLES, STEP_STATUS_LABELS, STEP_STATUS_MARKS } from "./labels";
 import { toolLabel } from "@/lib/tools/labels";
 import type { ConversationRun, RunStep } from "@/lib/domain/conversations/types";
+import { estimateRunEta, formatRunEta, isRunActive } from "@/lib/agents/eta";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 
 /**
@@ -53,6 +54,14 @@ interface RunTimelineProps {
 
 export function RunTimeline({ run, compact = false }: RunTimelineProps) {
   const [openPhases, setOpenPhases] = useState<Set<Phase>>(() => new Set(["result"]));
+  // Étape 9 — horloge légère (10 s) : l'ETA reste vivante pendant l'exécution
+  // sans re-rendu par seconde.
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isRunActive(run.status)) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 10_000);
+    return () => window.clearInterval(timer);
+  }, [run.status]);
 
   const toggle = (phase: Phase) => {
     setOpenPhases((current) => {
@@ -65,6 +74,9 @@ export function RunTimeline({ run, compact = false }: RunTimelineProps) {
 
   const groups = groupSteps(run.steps);
   const pendingCount = run.steps.filter((s) => s.status === "awaiting").length;
+  // Étape 9 — estimation de livraison honnête (mesures réelles d'abord,
+  // durées typiques en repli ; validations humaines exclues et annoncées).
+  const etaText = isRunActive(run.status) ? formatRunEta(estimateRunEta(run.steps, clock), clock) : "";
 
   return (
     <div className="my-2 overflow-hidden rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)]/70" data-run-id={run.id}>
@@ -81,6 +93,13 @@ export function RunTimeline({ run, compact = false }: RunTimelineProps) {
           {RUN_STATUS_LABELS[run.status]}
         </span>
       </div>
+
+      {etaText && (
+        <p className="flex items-center gap-1.5 border-b border-[var(--g3-border)] bg-[var(--g3-elevated)]/40 px-3 py-1.5 text-[11px] text-[var(--g3-muted)]">
+          <span aria-hidden>◷</span>
+          <span>{etaText}</span>
+        </p>
+      )}
 
       {compact ? (
         <div className="px-3 py-2">
