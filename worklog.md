@@ -423,3 +423,15 @@ Task 47 — Étape 8/20 : « édition d'images (import utilisateur OU image gén
 Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 8
 - LIVRÉES : 1, 2, 3, 4, 5, 6, 7, 8, 12, 18 (10/20).
 - RESTANTES : 9 (ETA affiché), 10 (adaptateur d'écran), 11 (mises à jour multi-appareils), 13 (liens/web pour agent), 14 (bibliothèque de capacités → conversation directe), 15 (Knowledge +), 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
+
+Task 47 — Étape 9/20 : « temps de livraison estimé (ETA) affiché pendant l'exécution » — LIVRÉ (score auto-évalué 9,6/10)
+- ANALYSE : les RunStep portaient déjà startedAt/finishedAt (durées réelles) mais AUCUNE estimation ni affichage : pendant une mission en cours, l'utilisateur n'avait aucun signal du délai de livraison.
+- CORRECTIFS :
+  ① lib/agents/eta.ts (NOUVEAU, pur, 11 tests) : estimateRunEta — médiane des durées RÉELLES mesurées par phase (les mesures du run priment sur les typiques), repli TYPICAL_PHASE_MS (understanding 8 s, plan 12 s, execution 30 s…), étape in_progress créditée du temps écoulé (plancher 1 s), validations humaines (awaiting) EXCLUES de l'estimation machine et comptées à part — l'UI les annonce explicitement ; formatRunEta honnête (moins d'une minute / ~N min (HH:MM) / plus de 30 min + mention « hors N validations en attente de votre accord ») ; chaîne vide quand rien à estimer.
+  ② RunTimeline : ligne ETA vivante sous l'en-tête du run (tick 10 s, pas de re-rendu par seconde), affichée dans le fil de conversation ET le tiroir contextuel (context-drawer) tant que le run est actif.
+- TESTS : +11 (mesures réelles vs typiques, crédit du temps écoulé, exclusion/comptage des awaiting, ignore skipped, formats honnêtes, chaîne vide). Suite complète : 943 verts / 119 fichiers, typecheck 0, lint 0.
+- SONDES PROD : Vercel « success » (API GitHub) sur le commit de l'étape.
+
+Task 47 — ÉTAT DU PLAN 20 ÉTAPES après l'étape 9
+- LIVRÉES : 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 18 (11/20).
+- RESTANTES : 10 (adaptateur d'écran), 11 (mises à jour multi-appareils), 13 (liens/web pour agent), 14 (bibliothèque de capacités → conversation directe), 15 (Knowledge +), 16 (Mission +), 17 (fonctionnalités internes), 19 (perf/UX), 20 (facturation).
