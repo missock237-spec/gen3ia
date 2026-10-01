@@ -3,6 +3,7 @@ import { z } from "zod";
 import { extractJsonObject, runAI, runAIJSON } from "@/lib/engines/ai-engine";
 import { generate, generateStream } from "@/lib/ai/router";
 import { stripThinkTags, ThinkTagStreamFilter } from "@/lib/ai/think-filter";
+import { RESPONSE_FORMAT_RULES, preferFreeForVisibleAnswers } from "@/lib/ai/response-quality";
 import {
   detectImageRatio,
   editImageWithAgnes,
@@ -1072,6 +1073,10 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   const streaming = Boolean(ctx.onEvent);
   const systemParts = [
     "Tu es Gen IA, l'agent IA universel de Gen3ia, capable de tout réaliser : tu réponds de façon directe, structurée et actionnable. Pour une tâche très complexe, tu peux déployer jusqu'à 10 sous-agents spécialisés (orchestration).",
+    // Task 52 : contrat de présentation visible (clarté, précision selon le
+    // sujet saisi, structure markdown, zéro invention) — aligné sur l'exigence
+    // « qualité ChatGPT à chaque requête ».
+    RESPONSE_FORMAT_RULES,
     "La génération d'images est effectuée par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré, affiché ou décrit un visuel comme s'il était affiché, et n'invente jamais d'URL d'image.",
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
@@ -1110,7 +1115,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
             messages: requestMessages,
             provider: ctx.provider as never,
             model: ctx.model,
-            preferFree: true,
+            preferFree: preferFreeForVisibleAnswers(),
             metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
           },
           {
@@ -1148,7 +1153,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
               messages: requestMessages,
               provider: ctx.provider as never,
               model: ctx.model,
-              preferFree: true,
+              preferFree: preferFreeForVisibleAnswers(),
               metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
             }),
             CHAT_BUDGET_MS,
@@ -1177,7 +1182,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
           messages: requestMessages,
           provider: ctx.provider as never,
           model: ctx.model,
-          preferFree: true,
+          preferFree: preferFreeForVisibleAnswers(),
           metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
         }),
         CHAT_BUDGET_MS,
@@ -1485,7 +1490,7 @@ async function runAppTurn(ctx: TurnBase, appIntent: AppCreationIntent): Promise<
               messages: requestMessages,
               provider: ctx.provider as never,
               model: ctx.model,
-              preferFree: true,
+              preferFree: preferFreeForVisibleAnswers(),
               maxTokens: 32_000,
               metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
             },
@@ -1500,7 +1505,7 @@ async function runAppTurn(ctx: TurnBase, appIntent: AppCreationIntent): Promise<
             messages: requestMessages,
             provider: ctx.provider as never,
             model: ctx.model,
-            preferFree: true,
+            preferFree: preferFreeForVisibleAnswers(),
             maxTokens: 32_000,
             metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
           }),
@@ -2176,7 +2181,7 @@ async function ensureArtifactInput(
       ],
       provider: ctx.provider as never,
       model: ctx.model,
-      preferFree: true,
+      preferFree: preferFreeForVisibleAnswers(),
       maxTokens,
       metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
     };
@@ -2628,8 +2633,8 @@ async function summarizePlanTurn(
             (ctx.filesContext ? `\n\nContenu réel des fichiers importés :${ctx.filesContext}` : ""),
         },
       ],
-      preferFree: true,
-      maxTokens: 700,
+      preferFree: preferFreeForVisibleAnswers(),
+      maxTokens: 1200,
       metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
     };
     if (onDelta) {

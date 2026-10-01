@@ -3,12 +3,16 @@
 import { Fragment, type ReactNode } from "react";
 
 import { stripThinkTags } from "@/lib/ai/think-filter";
+import { parseMarkdownBlocks } from "@/lib/ui/markdown-blocks";
 
 /**
  * Rendu markdown minimal et sûr pour les messages de conversation :
  * aucun dangerouslySetInnerHTML — tout est transformé en éléments React.
  * Support : titres (#…), gras, italique, code inline, blocs de code,
- * listes à puces/numérotées, citations, liens, images ![alt](url).
+ * listes à puces/numérotées, citations, liens, images ![alt](url),
+ * tableaux (| a | b | avec ligne de séparation) et séparateurs (---).
+ * Task 52 : le support des tableaux et séparateurs aligne le rendu sur les
+ * réponses « qualité ChatGPT » demandées aux modèles (comparaisons lisibles).
  */
 
 const INLINE_PATTERN =
@@ -52,96 +56,9 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
   });
 }
 
-interface Block {
-  kind: "heading" | "paragraph" | "code" | "ul" | "ol" | "quote";
-  level?: number;
-  language?: string;
-  lines: string[];
-}
-
-export function parseMarkdownBlocks(markdown: string): Block[] {
-  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
-  const blocks: Block[] = [];
-  let paragraph: string[] = [];
-  let list: { kind: "ul" | "ol"; lines: string[] } | null = null;
-  let code: { language: string; lines: string[] } | null = null;
-
-  const flushParagraph = () => {
-    if (paragraph.length > 0) {
-      blocks.push({ kind: "paragraph", lines: paragraph });
-      paragraph = [];
-    }
-  };
-  const flushList = () => {
-    if (list) {
-      blocks.push({ kind: list.kind, lines: list.lines });
-      list = null;
-    }
-  };
-
-  for (const line of lines) {
-    const fence = /^\s*```(\w*)\s*$/.exec(line);
-    if (fence) {
-      if (code) {
-        blocks.push({ kind: "code", language: code.language || undefined, lines: code.lines });
-        code = null;
-      } else {
-        flushParagraph();
-        flushList();
-        code = { language: fence[1], lines: [] };
-      }
-      continue;
-    }
-    if (code) {
-      code.lines.push(line);
-      continue;
-    }
-    const heading = /^(#{1,4})\s+(.*)$/.exec(line);
-    if (heading) {
-      flushParagraph();
-      flushList();
-      blocks.push({ kind: "heading", level: heading[1].length, lines: [heading[2]] });
-      continue;
-    }
-    const bullet = /^\s*[-•*]\s+(.*)$/.exec(line);
-    if (bullet) {
-      flushParagraph();
-      if (!list || list.kind !== "ul") {
-        flushList();
-        list = { kind: "ul", lines: [] };
-      }
-      list.lines.push(bullet[1]);
-      continue;
-    }
-    const ordered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
-    if (ordered) {
-      flushParagraph();
-      if (!list || list.kind !== "ol") {
-        flushList();
-        list = { kind: "ol", lines: [] };
-      }
-      list.lines.push(ordered[1]);
-      continue;
-    }
-    const quote = /^\s*>\s?(.*)$/.exec(line);
-    if (quote) {
-      flushParagraph();
-      flushList();
-      blocks.push({ kind: "quote", lines: [quote[1]] });
-      continue;
-    }
-    if (line.trim() === "") {
-      flushParagraph();
-      flushList();
-      continue;
-    }
-    paragraph.push(line);
-  }
-  if (code) blocks.push({ kind: "code", language: code.language || undefined, lines: code.lines });
-  flushParagraph();
-  flushList();
-  return blocks;
-}
+// Parser extrait dans un module feuille PUR (Task 52) : testable sous Node
+// (vitest, environnement node) et réutilisable sans React. Le rendu sûr
+// (éléments React, jamais de dangerouslySetInnerHTML) reste ici.
 
 export function MarkdownContent({ content }: { content: string }) {
   // Défense en profondeur : les balises de raisonnement de certains modèles
@@ -193,6 +110,41 @@ export function MarkdownContent({ content }: { content: string }) {
               <blockquote key={key} className="border-l-2 border-[var(--g3-border-strong)] pl-3 text-sm italic text-[var(--g3-muted)]">
                 {renderInline(block.lines[0], key)}
               </blockquote>
+            );
+          case "hr":
+            return <hr key={key} className="border-0 border-t border-[var(--g3-border)]" />;
+          case "table":
+            return (
+              <div key={key} className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr>
+                      {(block.header ?? []).map((cell, i) => (
+                        <th
+                          key={`th-${key}-${i}`}
+                          className="border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-2.5 py-1.5 text-left font-semibold text-[var(--g3-text)]"
+                        >
+                          {renderInline(cell, `th-${key}-${i}`)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(block.rows ?? []).map((row, r) => (
+                      <tr key={`tr-${key}-${r}`}>
+                        {row.map((cell, c) => (
+                          <td
+                            key={`td-${key}-${r}-${c}`}
+                            className="border border-[var(--g3-border)] px-2.5 py-1.5 align-top text-[var(--g3-text)]"
+                          >
+                            {renderInline(cell, `td-${key}-${r}-${c}`)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             );
           default:
             return (

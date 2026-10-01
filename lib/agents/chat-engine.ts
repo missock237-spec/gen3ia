@@ -1,5 +1,6 @@
 import { generate } from "../ai/router";
 import { stripThinkTags } from "../ai/think-filter";
+import { preferFreeForVisibleAnswers, withResponseStyle } from "../ai/response-quality";
 import type { AIProvider } from "../ai/models";
 import { assembleMessages } from "../ai/context-window";
 import { planUniversalAgent } from "./runtime/unified-agent";
@@ -157,18 +158,22 @@ export async function answerAsAgent(
   // l'historique ENTIER est tenu dans la fenêtre du modèle — récents
   // verbatim + condensé extractif des plus anciens (aucune invention).
   const { messages } = assembleMessages({
-    system: charter,
+    // Task 52 : la charte est complétée par le contrat de présentation
+    // (structure markdown, précision selon le sujet, zéro invention).
+    system: withResponseStyle(charter),
     history: history.map((item) => ({ role: item.role, content: item.content })),
     message: userContent,
     model: agent.preferredModel ?? null,
-    reservedOutputTokens: 3_000,
+    reservedOutputTokens: 4_096,
     keepRecent: 12,
   });
   const response = await generate({
     task: "chat",
     messages,
-    preferFree: true,
-    maxTokens: 3000,
+    // Task 52 : réponse VISIBLE → routage qualité (meilleur fournisseur
+    // configuré en mode premium, comportement gratuit en mode free).
+    preferFree: preferFreeForVisibleAnswers(),
+    maxTokens: 4096,
     metadata: { purpose: "agent-chat-answer" },
   });
   // Anti-balises : le raisonnement interne de certains modèles (<think>…)

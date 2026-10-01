@@ -12,6 +12,7 @@ import { RuntimeScheduler } from "./scheduler";
 import { assertNotPaused, assertNotStopped } from "./pause";
 import { generateImageWithAgnes, isImageGenerationEnabled } from "@/lib/ai/image-generation";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
+import { RESPONSE_FORMAT_RULES } from "@/lib/ai/response-quality";
 
 /* ------------------------------------------------------------------ */
 /* Completion des livrables document (artifact.create)                 */
@@ -326,6 +327,9 @@ export class AgentRuntime {
     const subSystem = sub.systemPrompt?.trim()
       ? `You are "${sub.name}", a specialized AI agent of the Gen3ia Studio. You are consulted by a supervisor agent for ONE delegated task.\n\n--- YOUR INSTRUCTIONS (owner-defined) ---\n${sub.systemPrompt.slice(0, 8_000)}\n--- END INSTRUCTIONS ---\n\nAnswer directly and operationally for the delegated task. ${AgentRuntime.SAFETY_CONTRACT}`
       : `You are "${sub.name}", a specialized Gen3ia agent consulted for one delegated task. Answer directly and operationally. ${AgentRuntime.SAFETY_CONTRACT}`;
+    // Task 52 : la réponse du sous-agent est visible dans le livrable de la
+    // mission — le contrat de présentation s'applique aussi ici.
+    const subSystemWithStyle = `${subSystem}\n\n${RESPONSE_FORMAT_RULES}`;
     const subProvider = sub.modelStrategy === "fixed" ? AgentRuntime.safeProvider(sub.preferredProvider) : undefined;
     const billed = await generateForUser({
       userId: this.state.userId,
@@ -337,7 +341,7 @@ export class AgentRuntime {
         ...(sub.modelStrategy === "fixed" && sub.preferredModel ? { model: sub.preferredModel } : {}),
         ...(typeof sub.temperature === "number" && sub.temperature >= 0 && sub.temperature <= 2 ? { temperature: sub.temperature } : {}),
         messages: [
-          { role: "system", content: subSystem },
+          { role: "system", content: subSystemWithStyle },
           { role: "user", content: JSON.stringify({ globalObjective: this.state.objective, delegatedTask: { id: step.id, name: step.name, description: step.description }, contextFromPreviousSteps: dependencyContext }) },
         ],
         maxTokens: 4096,
@@ -364,6 +368,10 @@ export class AgentRuntime {
     const systemContent = personalPrompt
       ? `You are "${this.agentConfig?.name ?? "Agent"}", a personalized AI agent created in the Gen3ia Studio${this.agentConfig?.type ? ` (specialty: ${this.agentConfig.type})` : ""}.\n\n--- OWNER INSTRUCTIONS (personnalite et mission de l'agent) ---\n${personalPrompt.slice(0, 12_000)}\n--- END OWNER INSTRUCTIONS ---\n\nYou are executing one step of a mission inside the Gen3ia multi-agent runtime. Work only on your assigned responsibility. ${AgentRuntime.SAFETY_CONTRACT}`
       : `You are the ${role} agent inside the Gen3ia multi-agent runtime. Work only on your assigned responsibility. Be factual, operational and explicit about uncertainty. ${AgentRuntime.SAFETY_CONTRACT}`;
+    // Task 52 : le texte produit par une étape llm devient la réponse/livrable
+    // visible de la mission — il respecte le contrat de présentation (clarté,
+    // précision, structure markdown, langue de l'utilisateur).
+    const systemWithStyle = `${systemContent}\n\n${RESPONSE_FORMAT_RULES}`;
     const billed = await generateForUser({
       userId: this.state.userId,
       executionId: this.state.executionId,
@@ -376,7 +384,7 @@ export class AgentRuntime {
           ? { temperature: this.agentConfig.temperature }
           : {}),
         messages: [
-          { role: "system", content: systemContent },
+          { role: "system", content: systemWithStyle },
           { role: "user", content: JSON.stringify({ objective: this.state.objective, agentRole: role, step: { id: step.id, name: step.name, description: step.description, input: step.input }, dependencies: dependencyContext }) },
         ],
         maxTokens: 4096,
