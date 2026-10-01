@@ -58,15 +58,18 @@ if (deployInfo && deployInfo.ok) {
   check("/api/deploy-info joignable", false, deployInfo ? `status=${deployInfo.status}` : "échec réseau");
 }
 
-// 4) Empreinte STABLE sur deux requêtes successives (sémantique de référence
+// 4) Empreinte STABLE sur deux requêtes fraîches (sémantique de référence
 //    côté client : un onglet ne doit jamais voir l'empreinte osciller).
-const second = await fetch(`${BASE}/api/deploy-info`, { cache: "no-store" }).catch(() => null);
-if (deployInfo && second && deployInfo.ok && second.ok) {
-  const a = (await deployInfo.json().catch(() => null))?.deploymentId;
-  const b = (await second.json().catch(() => null))?.deploymentId;
+//    NB : deux NOUVELLES requêtes — un corps de Response n'est lisible
+//    qu'une fois (celle du point 3 est déjà consommée).
+const s1 = await fetch(`${BASE}/api/deploy-info`, { cache: "no-store" }).catch(() => null);
+const s2 = await fetch(`${BASE}/api/deploy-info`, { cache: "no-store" }).catch(() => null);
+if (s1?.ok && s2?.ok) {
+  const a = (await s1.json().catch(() => null))?.deploymentId;
+  const b = (await s2.json().catch(() => null))?.deploymentId;
   check("empreinte stable (2 requêtes)", Boolean(a && b && a === b), `a=${a} b=${b}`);
 } else {
-  check("empreinte stable (2 requêtes)", false, "second appel indisponible");
+  check("empreinte stable (2 requêtes)", false, "appel(s) indisponible(s)");
 }
 
 // 5) Régressions : sw.js toujours revalidé à chaque visite + vivant (skipWaiting).
