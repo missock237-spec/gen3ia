@@ -4,6 +4,7 @@ import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import { AppShell } from "@/components/nav/app-shell";
 import { ToastProvider } from "@/components/ui/toast";
 import { PwaRegister } from "@/components/pwa-register";
+import { DeployWatcher } from "@/components/deploy-watcher";
 import { UpdateBanner } from "@/components/nav/update-banner";
 import { ScrollReveal } from "@/components/nav/scroll-reveal";
 import { ViewportHeightSync } from "@/components/nav/viewport-height-sync";
@@ -183,9 +184,13 @@ export default function RootLayout({
         </ToastProvider>
         <ScrollReveal />
         <PwaRegister />
-        {/* Étape 19 : consomme le signal "gen3ia:new-version" émis par
-            PwaRegister (onglet visible) — l'utilisateur voit enfin qu'une
-            mise à jour est prête et l'applique par un geste explicite. */}
+        {/* Task 51 : le nouveau build Vercel atteint les onglets ouverts
+            SANS navigation — DeployWatcher sonde /api/deploy-info (empreinte
+            du déploiement actif, jamais cachée) et détecte tout écart avec
+            le relevé du chargement ; UpdateBanner applique AUTOMATIQUEMENT
+            la nouvelle version au terme d'un compte à rebours annulable,
+            sans jamais couper une saisie en cours. */}
+        <DeployWatcher />
         <UpdateBanner />
         <ViewportHeightSync />
       </body>

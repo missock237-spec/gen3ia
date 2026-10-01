@@ -114,7 +114,7 @@ describe("Mises à jour multi-appareils — le nouveau build atteint les pages o
   });
 });
 
-describe("Bannière « nouvelle version » — le signal visible-tab atteint l'UI (étape 19)", () => {
+describe("Bannière « nouvelle version » — le signal visible-tab atteint l'UI (étape 19, auto-application Task 51)", () => {
   const banner = read("components/nav/update-banner.tsx");
   const layout = read("app/layout.tsx");
 
@@ -130,17 +130,22 @@ describe("Bannière « nouvelle version » — le signal visible-tab atteint l'U
     expect(banner).toContain("if (!available || dismissed) return null");
   });
 
-  it("appliquer = rechargement explicite ; la bannière ne recharge JAMAIS d'elle-même", () => {
+  it("Task 51 — application AUTOMATIQUE demandée : compte à rebours lisible, retenu pendant une saisie, annulable", () => {
+    // Évolution de contrat (demande utilisateur explicite) : l'ancien
+    // « rechargement par geste explicite uniquement » est remplacé par une
+    // application automatique encadrée — compte à rebours VISIBLE de 10 s,
+    // RETENUE si l'utilisateur écrit/clique (jamais de coupure à la
+    // frappe), annulation « Plus tard ». Voir app/deploy-auto-update.test.ts
+    // pour les gardes complets de la chaîne deploy-info → watcher → bannière.
+    expect(banner).toContain("AUTO_RELOAD_SECONDS = 10");
+    expect(banner).toContain("ACTIVE_GRACE_MS = 4_000");
+    expect(banner).toContain("setHolding(true)");
     expect(banner).toContain("window.location.reload()");
-    // Garde structurel : aucun timer automatique ne doit déclencher le
-    // rechargement (une mission visible ne peut pas être coupée sans geste).
-    expect(banner).not.toMatch(/setTimeout\([^)]*reload/);
-    expect(banner).not.toMatch(/setInterval\([^)]*reload/);
   });
 
-  it("« Plus tard » masque sans recharger (l'annonce réapparaît à la prochaine détection)", () => {
+  it("« Plus tard » annule le rechargement automatique (l'annonce réapparaît à la prochaine détection)", () => {
     expect(banner).toContain("setDismissed(true)");
-    expect(banner).toContain('aria-label="Masquer cette annonce"');
+    expect(banner).toContain('aria-label="Annuler le rechargement automatique"');
   });
 
   it("annoncée aux lecteurs d'écran (role=status, aria-live=polite)", () => {
