@@ -21,7 +21,14 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts", "lib/__tests__/**/*.test.ts", "app/**/*.test.ts"],
+    include: [
+      "lib/**/*.test.ts",
+      "lib/__tests__/**/*.test.ts",
+      "app/**/*.test.ts",
+      // Services annexes (logique pure + comportemental inject) — Tâche 56.
+      "live-agent/src/**/*.test.ts",
+      "sandbox/src/**/*.test.ts",
+    ],
     env: {
       // Dummy Firebase Admin credentials so server modules that initialize
       // Firestore at import time can be loaded without network access.

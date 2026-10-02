@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SandboxJob } from "./job-schema";
+import type { SandboxJob } from "./job-schema.js";
 interface SandboxResult { success: boolean; stdout: string; stderr: string; exitCode: number | null; durationMs: number; }
 function runtimeConfig(runtime: SandboxJob["runtime"]) {
   if (runtime === "python") return { image: "gen3ia-sandbox-python:latest", filename: "main.py", command: ["python", "/workspace/main.py"] };

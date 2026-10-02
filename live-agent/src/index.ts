@@ -4,8 +4,14 @@ import { decode as decodeJpeg, encode as encodeJpeg } from "jpeg-js";
 import { Button, Key, Point, keyboard, mouse } from "@nut-tree/nut-js";
 import WebSocket from "ws";
 import { z } from "zod";
-import { readFile, rename, stat, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile, rename, writeFile } from "node:fs/promises";
+import { createFileCapsule } from "./file-capsule.js";
+import {
+  FRAME_INTERVAL_BUCKETS_MS,
+  HEARTBEAT_INTERVAL_BUCKETS_MS,
+  nextIntervalBucket,
+  sanitizeLogText,
+} from "./limits.js";
 
 const gatewayUrl = process.env.GEN3IA_LIVE_GATEWAY_URL;
 const sessionId = process.env.GEN3IA_LIVE_SESSION_ID;
@@ -24,6 +30,8 @@ if (pairingToken.length < 32 || deviceId.length > 256 || sessionId.length > 128)
 
 const MAX_FRAME_BYTES = 1_500_000;
 const MAX_FILE_BYTES = 2_000_000;
+/** Accès fichiers jailé au root autorisé (descripteurs vérifiés, zéro TOCTOU). */
+const fileCapsule = createFileCapsule(fileRoot, MAX_FILE_BYTES);
 const DEFAULT_FRAME_INTERVAL_MS = 900;
 const MAX_COMPLETED_ACTIONS = 1000;
 const EMERGENCY_STOP_POLL_MS = 500;
@@ -39,15 +47,6 @@ const ActionSchema = z.discriminatedUnion("type", [
 ]);
 type CompletedAction = { actionId: string; ok: true; completedAt: number };
 let completedActions = new Map<string, CompletedAction>();
-
-function safeFilePath(requestedPath: string): string {
-  if (!requestedPath || requestedPath.includes("\0") || requestedPath.includes("\\") || requestedPath.split("/").includes("..")) throw new Error("Unsafe live file path.");
-  const root = path.resolve(fileRoot!);
-  const resolved = path.resolve(root, requestedPath);
-  const relative = path.relative(root, resolved);
-  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error("Live file path escapes the authorized root.");
-  return resolved;
-}
 
 async function loadActionJournal() {
   try {
@@ -86,15 +85,12 @@ async function executeAction(rawAction: unknown): Promise<unknown> {
     }
     case "wait": await new Promise((resolve) => setTimeout(resolve, action.ms)); return;
     case "file.read": {
-      const target = safeFilePath(action.path);
-      const metadata = await stat(target);
-      if (!metadata.isFile() || metadata.size > MAX_FILE_BYTES) throw new Error("Live file is missing, not regular, or exceeds the size limit.");
-      return { path: action.path, content: await readFile(target, "utf8") };
+      const content = await fileCapsule.read(action.path);
+      return { path: action.path, content };
     }
     case "file.write": {
-      const target = safeFilePath(action.path);
-      await writeFile(target, action.content, { encoding: "utf8", flag: "w" });
-      return { path: action.path, bytes: Buffer.byteLength(action.content, "utf8") };
+      const bytes = await fileCapsule.write(action.path, action.content);
+      return { path: action.path, bytes };
     }
   }
 }
@@ -109,12 +105,15 @@ let stopped = false;
 let paused = false;
 let frameIntervalMs = DEFAULT_FRAME_INTERVAL_MS;
 
-function send(message: unknown) { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); }
+function send(message: unknown) { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); } // codeql[js/file-access-to-http] — flux MÉTIER assumé : les résultats file.read (contenu jailé par file-capsule, plafonné 2 Mo, refus de symlink) partent vers le SEUL pair autorisé — le gateway appairé, wss:// obligatoire hors loopback (vérifié au démarrage), authentifié par pairingToken ≥ 32 car. Envoyer ce contenu est le but du produit, pas une fuite.
 function stopCapture() { if (captureTimer) clearInterval(captureTimer); captureTimer = undefined; }
 function startCapture() { if (stopped || paused || captureTimer) return; captureTimer = setInterval(() => void captureAndSend(), frameIntervalMs); void captureAndSend(); }
 
+let captureInFlight = false;
+
 async function captureAndSend() {
-  if (stopped || paused || socket?.readyState !== WebSocket.OPEN) return;
+  if (captureInFlight || stopped || paused || socket?.readyState !== WebSocket.OPEN) return;
+  captureInFlight = true;
   try {
     let jpeg = await screenshot({ format: "jpg" });
     // Task 45 : sur écran 4K, le JPEG natif dépasse souvent la limite — au
@@ -134,7 +133,7 @@ async function captureAndSend() {
     if (!dimensions.width || !dimensions.height) return;
     if (shrunk) console.log(`Gen3ia Live: frame réduite à ${Math.round(jpeg.length / 1024)} Ko pour respecter la limite du gateway.`);
     send({ type: "frame", sessionId, deviceId, timestamp: Date.now(), width: dimensions.width, height: dimensions.height, jpegBase64: jpeg.toString("base64") });
-  } catch (error) { console.error("screen capture failed", error); }
+  } catch (error) { console.error("screen capture failed", error); } finally { captureInFlight = false; }
 }
 
 /** Downscale 1/2 par passes successives (rééchantillonnage 2x2 moyen) + réencodage JPEG qualité 70. */
@@ -169,7 +168,10 @@ function activateEmergencyStop(reason: string) {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   heartbeatTimer = undefined; reconnectTimer = undefined;
   socket?.close(4000, "Emergency stop"); socket = null;
-  console.warn(`Gen3ia Live Agent emergency stopped: ${reason}`);
+  // Le motif d'arrêt provient du gateway (donnée distante) : les caractères de
+  // contrôle sont purgés AVANT journalisation pour qu'aucune ligne ne puisse
+  // être forgée, et la longueur est plafonnée.
+  console.warn(`Gen3ia Live Agent emergency stopped: ${sanitizeLogText(reason)}`); // codeql[js/log-injection] — raison purge des caractères de contrôle C0/C1 par sanitizeLogText (sanitizeur local non modélisé par CodeQL) et longueur plafonnée.
 }
 
 function scheduleReconnect() {
@@ -186,10 +188,13 @@ function connect() {
     try {
       const message = JSON.parse(raw.toString()) as Record<string, unknown>;
       if (message.type === "hello.ack") {
-        const heartbeatInterval = Number(message.heartbeatIntervalMs);
-        frameIntervalMs = Math.max(DEFAULT_FRAME_INTERVAL_MS, Number(message.frameIntervalMs) || DEFAULT_FRAME_INTERVAL_MS);
+        // Intervalles distants boulonnés sur des BARILLETS constants : aucune
+        // valeur réseau ne pilote directement un setInterval (bornes garanties,
+        // cadence jamais plus lente que demandée).
+        const heartbeatInterval = nextIntervalBucket(message.heartbeatIntervalMs, HEARTBEAT_INTERVAL_BUCKETS_MS, 15_000);
+        frameIntervalMs = nextIntervalBucket(message.frameIntervalMs, FRAME_INTERVAL_BUCKETS_MS, DEFAULT_FRAME_INTERVAL_MS);
         if (heartbeatTimer) clearInterval(heartbeatTimer);
-        heartbeatTimer = setInterval(() => send({ type: "heartbeat", sessionId, deviceId, timestamp: Date.now() }), Number.isFinite(heartbeatInterval) && heartbeatInterval >= 5000 ? heartbeatInterval : 15000);
+        heartbeatTimer = setInterval(() => send({ type: "heartbeat", sessionId, deviceId, timestamp: Date.now() }), heartbeatInterval);
         paused = false; startCapture(); return;
       }
       if (message.type === "action") {
