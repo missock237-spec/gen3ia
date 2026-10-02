@@ -646,3 +646,8 @@ Stage Summary:
 Task 54 — RÉSIDUS (vérification post-analyse CodeQL du push a5c053a)
 - CodeQL 42 → 22 alertes ouvertes : 9 HTML/XML fermées (machine à états), 10 normalizer fermées (hosts exacts), sw.js fermée (origin-check), ancre twentyfirst fermée. Deux résidus lib/ analysés et corrigés : ① create-zip #43 — CodeQL signalait la PAIRE lstat→open résiduelle : le type vient désormais de readdir avecFileTypes (getdents, pas d'appel de course), double barrière symlink (dirent + O_NOFOLLOW) + fstat descripteur conservées ; ② auth-client #14 — la suppression documentée doit être sur la MÊME ligne que l'assignation (syntaxe CodeQL), repositionnée.
 - Restant (triage inchangé) : outils dev P3 (scripts/ ×14), services annexes P2 (live-agent ×5, sandbox ×1).
+
+Task 54 — SONDES PROD (vérification réelle après déploiement)
+- Vercel (commits a5c053a + e671b21) : success. CI complète verte (Typecheck·Lint·Tests·Audit·Build·Budget, E2E émulateurs, Accessibilité axe, gitleaks, SAST CodeQL success).
+- Sonde prod : déploiement ACTIF = build e671b21 (dpl_5JHMQ452u6M8d8x5bmEmzPvgcT7W ↔ /api/deploy-info) ; sw.js servi en production CONTIENT le origin-check (event.origin !== self.location.origin) avec cache-control max-age=0 intact ; site vivant 200. Note sonde : premier passage 2/3 — le ROUGE venait de la sonde (token GitHub absent de l'environnement heredoc → dpl vide), corrigé, 3/3.
+- ANALYSE CODEQL POST-SCAN (push a5c053a) : 42 → 22 alertes ouvertes ; les 20 alertes lib/+sw.js ciblées par ce lot sont fermées sauf 2 résidus analysés puis corrigés dans e671b21 (create-zip : plus aucune paire lstat→open ; auth-client : suppression sur la ligne exacte) — leur fermeture sera visible à la prochaine analyse hebdo/push.
