@@ -36,7 +36,7 @@ vi.mock("@/lib/chat/repository", () => ({
   listMessages: vi.fn(),
   updateConversation: vi.fn(),
 }));
-vi.mock("@/lib/agents/repository", () => ({ getAgentForOwner: vi.fn() }));
+vi.mock("@/lib/agents/repository", () => ({ getAgentForUser: vi.fn() }));
 vi.mock("@/lib/agents/personalized-plan", () => ({
   policyForAgent: vi.fn(() => ({ allowedTools: ["web.search"] })),
 }));
@@ -98,7 +98,7 @@ import {
   listMessages,
   updateConversation,
 } from "@/lib/chat/repository";
-import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser } from "@/lib/agents/repository";
 import { answerAsAgent, classifyRequest, planAgentTask } from "@/lib/agents/chat-engine";
 import { recordAgentRun } from "@/lib/agents/conversation-run";
 import { POST } from "./chat/route";
@@ -110,7 +110,7 @@ const mockedGet = vi.mocked(getConversation);
 const mockedList = vi.mocked(listMessages);
 const mockedUpdate = vi.mocked(updateConversation);
 const mockedAppend = vi.mocked(appendMessage);
-const mockedGetAgent = vi.mocked(getAgentForOwner);
+const mockedGetAgent = vi.mocked(getAgentForUser);
 const mockedClassify = vi.mocked(classifyRequest);
 const mockedAnswer = vi.mocked(answerAsAgent);
 const mockedPlanTask = vi.mocked(planAgentTask);

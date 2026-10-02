@@ -3,6 +3,7 @@ import {
 } from "@/lib/memory/search";
 
 import {
+  resolveKnowledgeScope,
   searchKnowledge,
 } from "@/lib/knowledge/search";
 
@@ -31,12 +32,14 @@ export async function buildAgentContext(
 
   const knowledgePromise =
     input.projectId
-      ? searchKnowledge(
-          input.userId,
-          input.projectId,
-          input.query,
-          8,
-        )
+      ? resolveKnowledgeScope(input.userId).then((orgIds) =>
+          searchKnowledge(
+            input.userId,
+            input.projectId!,
+            input.query,
+            8,
+            orgIds,
+          ))
       : Promise.resolve([]);
 
   const [

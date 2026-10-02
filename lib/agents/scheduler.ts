@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { AgentRuntime, RuntimePlanSchema } from "@/lib/agents/runtime";
-import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser } from "@/lib/agents/repository";
 import { checkWatchSource, type WatchSource } from "@/lib/agents/watch-sources";
 import { notifyScheduleRunCompleted } from "@/lib/integrations/messaging/notify";
 
@@ -217,7 +217,7 @@ export async function createSchedule(userId: string, input: unknown) {
     throw new Error("A schedule requires daysOfWeek/startTime/endTime, a webhook trigger, or watch sources");
   }
 
-  const agent = await getAgentForOwner(userId, parsed.agentId);
+  const agent = await getAgentForUser(userId, parsed.agentId);
   if (!agent) throw new Error("Agent not found or not owned by this account");
   if (agent.status !== "active") throw new Error("Only active agents can be scheduled");
 
@@ -282,7 +282,7 @@ export async function updateSchedule(userId: string, id: string, input: unknown)
   if (!current.exists || current.data()?.userId !== userId) return null;
 
   if (parsed.agentId) {
-    const agent = await getAgentForOwner(userId, parsed.agentId);
+    const agent = await getAgentForUser(userId, parsed.agentId);
     if (!agent || agent.status !== "active") throw new Error("Agent not found, not owned, or inactive");
   }
 

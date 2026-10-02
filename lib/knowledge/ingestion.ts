@@ -4,6 +4,7 @@ import yauzl from "yauzl";
 
 import { assertPublicHttpUrl } from "@/lib/security/url-safety";
 import { adminDb } from "@/lib/firebase/admin";
+import { assertResourceWrite } from "@/lib/tenants/resource-access";
 import { indexKnowledgeDocument } from "./indexer";
 import { markupToText } from "@/lib/content/html-text";
 
@@ -25,6 +26,8 @@ const TEXT_EXTENSIONS = new Set(["txt", "md", "markdown", "csv", "tsv", "json", 
 export interface KnowledgeDocumentRecord {
   id: string;
   projectId: string;
+  /** Rattachement organisationnel optionnel (recommandation C). */
+  orgId?: string;
   name: string;
   mimeType: string;
   source: "upload" | "url";
@@ -175,6 +178,9 @@ export async function extractTextFromUrl(rawUrl: string): Promise<{ text: string
 export async function ingestKnowledgeDocument(input: {
   userId: string;
   projectId: string;
+  /** Org cible — la validation d'appartenance est faite par la ROUTE via
+   * la politique centralisée ; ce dépôt fait confiance au préalable établi. */
+  orgId?: string;
   name: string;
   mimeType: string;
   text: string;
@@ -193,6 +199,7 @@ export async function ingestKnowledgeDocument(input: {
   await ref.set({
     userId: input.userId,
     projectId: input.projectId,
+    ...(input.orgId ? { orgId: input.orgId } : {}),
     name: input.name.slice(0, 300),
     mimeType: input.mimeType.slice(0, 160),
     source: input.source,
@@ -210,10 +217,11 @@ export async function ingestKnowledgeDocument(input: {
       projectId: input.projectId,
       documentId: id,
       text,
+      orgId: input.orgId,
     });
     await ref.update({ chunkCount, status: chunkCount > 0 ? "indexed" : "empty", updatedAt: new Date().toISOString() });
     return {
-      id, projectId: input.projectId, name: input.name.slice(0, 300), mimeType: input.mimeType.slice(0, 160),
+      id, projectId: input.projectId, ...(input.orgId ? { orgId: input.orgId } : {}), name: input.name.slice(0, 300), mimeType: input.mimeType.slice(0, 160),
       source: input.source, ...(input.storagePath ? { storagePath: input.storagePath } : {}),
       charCount: text.length, chunkCount, status: chunkCount > 0 ? "indexed" : "empty", createdAt: now,
     };
@@ -224,14 +232,25 @@ export async function ingestKnowledgeDocument(input: {
   }
 }
 
-/** Supprime un document et tous ses fragments (Firestore + Qdrant best-effort). */
+/**
+ * Supprime un document et tous ses fragments (Firestore + Qdrant
+ * best-effort). Sémantique org-aware (recommandation C) : accès en
+ * écriture = propriétaire OU owner/admin de l'organisation du document ;
+ * la politique centralisée tranche, la dénégation reste indiscernable
+ * d'un document absent (false → 404 côté route).
+ */
 export async function deleteKnowledgeDocument(userId: string, documentId: string): Promise<boolean> {
   const ref = adminDb.collection("knowledgeDocuments").doc(documentId);
   const doc = await ref.get();
-  if (!doc.exists || (doc.data() as { userId?: string } | undefined)?.userId !== userId) return false;
+  if (!doc.exists) return false;
+  const data = (doc.data() ?? {}) as { userId?: string; orgId?: string };
+  try {
+    await assertResourceWrite(userId, { ownerId: String(data.userId ?? ""), orgId: typeof data.orgId === "string" ? data.orgId : null });
+  } catch {
+    return false;
+  }
 
   const chunks = await adminDb.collection("knowledgeChunks")
-    .where("userId", "==", userId)
     .where("documentId", "==", documentId)
     .limit(2000)
     .get();

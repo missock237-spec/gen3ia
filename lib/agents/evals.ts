@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 
 import { adminDb } from "@/lib/firebase/admin";
-import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser } from "@/lib/agents/repository";
 import type { AgentRecord } from "@/lib/agents/schema";
 import { buildAgentCharter } from "@/lib/agents/charter";
 import { generateForUser } from "@/lib/billing/ai-execution";
@@ -76,7 +76,7 @@ function buildJudgePrompt(input: { question: string; answer: string; expected: s
 }
 
 async function loadAgentForEval(userId: string, agentId: string): Promise<AgentRecord> {
-  const agent = await getAgentForOwner(userId, agentId);
+  const agent = await getAgentForUser(userId, agentId);
   if (!agent) throw new Error("Agent introuvable.");
   if (agent.status !== "active") throw new Error(`L'agent est ${agent.status}. Activez-le avant de lancer une évaluation.`);
   return agent;

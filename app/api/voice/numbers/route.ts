@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
-import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser } from "@/lib/agents/repository";
 import {
   attachExistingTwilioNumber,
   listAgentPhoneNumbers,
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const user = await requireUser(request);
     const body = await request.json();
     const agentId = typeof body?.agentId === "string" ? body.agentId : "";
-    if (!agentId || !(await getAgentForOwner(user.uid, agentId))) return NextResponse.json({ error: "Agent introuvable." }, { status: 404 });
+    if (!agentId || !(await getAgentForUser(user.uid, agentId))) return NextResponse.json({ error: "Agent introuvable." }, { status: 404 });
     if (body?.source === "own") {
       const parsed = AttachSchema.safeParse(body);
       if (!parsed.success) return NextResponse.json({ error: "Invalid phone number data." }, { status: 400 });

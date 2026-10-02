@@ -82,8 +82,8 @@ describe("vector store — avec Qdrant", () => {
     expect(mockedQdrantInstance.createCollection).toHaveBeenCalledWith("col", {
       vectors: { size: 384, distance: "Cosine" },
     });
-    // userId, projectId, agentId, documentId — index multi-tenant obligatoires.
-    expect(mockedQdrantInstance.createPayloadIndex).toHaveBeenCalledTimes(4);
+    // userId, projectId, agentId, documentId, orgId — index multi-tenant obligatoires.
+    expect(mockedQdrantInstance.createPayloadIndex).toHaveBeenCalledTimes(5);
     expect(mockedQdrantInstance.createPayloadIndex).toHaveBeenCalledWith("col", {
       field_name: "userId",
       field_schema: "keyword",
@@ -139,6 +139,52 @@ describe("vector store — avec Qdrant", () => {
       { key: "userId", match: { value: "u1" } },
       { key: "projectId", match: { value: "p1" } },
     ]);
+  });
+
+  it("recherche org : userId OU orgs de l'appelant (should + min_should 1) + projet en must", async () => {
+    activerQdrantSimule();
+    mockedQdrantInstance.collectionExists.mockResolvedValue({ exists: true });
+    mockedQdrantInstance.createPayloadIndex.mockResolvedValue(true);
+    mockedQdrantInstance.query.mockResolvedValue({ points: [] });
+
+    await searchVectorPoints("col", [0.4], {
+      limit: 4,
+      filter: { userId: "u1", projectId: "p1", orgIds: ["org-1", "org-2"] },
+    });
+
+    const filter = mockedQdrantInstance.query.mock.calls[0][1].filter;
+    // Le projet reste un filtre ET ; le périmètre utilisateur/org est un OU.
+    expect(filter.must).toHaveLength(2);
+    const scope = filter.must[0];
+    expect(scope.min_should).toBe(1);
+    expect(scope.should).toEqual([
+      { key: "userId", match: { value: "u1" } },
+      { key: "orgId", match: { value: "org-1" } },
+      { key: "orgId", match: { value: "org-2" } },
+    ]);
+    expect(filter.must[1]).toEqual({ key: "projectId", match: { value: "p1" } });
+  });
+
+  it("recherche org : orgIds vides → retour au filtre userId strict (aucun should)", async () => {
+    activerQdrantSimule();
+    mockedQdrantInstance.collectionExists.mockResolvedValue({ exists: true });
+    mockedQdrantInstance.createPayloadIndex.mockResolvedValue(true);
+    mockedQdrantInstance.query.mockResolvedValue({ points: [] });
+
+    await searchVectorPoints("col", [0.4], { limit: 2, filter: { userId: "u1", orgIds: ["", "  "] } });
+
+    const filter = mockedQdrantInstance.query.mock.calls[0][1].filter;
+    expect(filter.must).toEqual([{ key: "userId", match: { value: "u1" } }]);
+    expect(filter.should).toBeUndefined();
+  });
+
+  it("index de payload inclut orgId (recommandation C)", async () => {
+    activerQdrantSimule();
+    mockedQdrantInstance.collectionExists.mockResolvedValue({ exists: true });
+    mockedQdrantInstance.createPayloadIndex.mockResolvedValue(true);
+    await ensureVectorCollection("col-nouveau");
+    const indexedFields = mockedQdrantInstance.createPayloadIndex.mock.calls.map((c) => c[1].field_name);
+    expect(indexedFields).toContain("orgId");
   });
 
   it("recherche : erreur réseau → null (repli Firestore)", async () => {

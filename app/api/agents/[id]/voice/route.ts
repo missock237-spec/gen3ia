@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
-import { getAgentForOwner, updateAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser, updateAgentForUser } from "@/lib/agents/repository";
 import { listAgentPhoneNumbers } from "@/lib/integrations/twilio/numbers";
 import { errorStatus } from "@/lib/security/http-errors";
 
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   try {
     const user = await requireUser(request);
     const { id } = await context.params;
-    const agent = await getAgentForOwner(user.uid, id);
+    const agent = await getAgentForUser(user.uid, id);
     if (!agent) return NextResponse.json({ error: "Agent introuvable." }, { status: 404 });
     const numbers = await listAgentPhoneNumbers(user.uid, id);
     return NextResponse.json({ voice: agent.voiceConfig ?? null, numbers });
@@ -34,7 +34,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const { id } = await context.params;
     const parsed = VoicePatchSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Configuration vocale invalide.", issues: parsed.error.flatten() }, { status: 400 });
-    const agent = await getAgentForOwner(user.uid, id);
+    const agent = await getAgentForUser(user.uid, id);
     if (!agent) return NextResponse.json({ error: "Agent introuvable." }, { status: 404 });
 
     const current = agent.voiceConfig ?? {
@@ -46,8 +46,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       outboundEnabled: true,
     };
     const voiceConfig = { ...current, ...parsed.data };
-    const updated = await updateAgentForOwner(user.uid, id, { voiceEnabled: voiceConfig.voiceEnabled ?? true, voiceConfig });
-    return NextResponse.json({ voice: updated?.voiceConfig ?? voiceConfig });
+    const updated = await updateAgentForUser(user.uid, id, { voiceEnabled: voiceConfig.voiceEnabled ?? true, voiceConfig });
+    // Lecture ok mais écriture refusée (membre d'org en lecture seule) :
+    // dénégation honnête plutôt qu'un 200 qui ferait croire au succès.
+    if (!updated) return NextResponse.json({ error: "Action réservée au propriétaire ou aux administrateurs." }, { status: 403 });
+    return NextResponse.json({ voice: updated.voiceConfig ?? voiceConfig });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Voice update failed." }, { status: errorStatus(error, 400) });
   }

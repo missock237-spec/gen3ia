@@ -13,19 +13,19 @@ import { NextRequest } from "next/server";
 
 vi.mock("@/lib/security/authenticated-request", () => ({ requireUser: vi.fn() }));
 vi.mock("@/lib/agents/repository", () => ({
-  deleteAgentForOwner: vi.fn(),
-  getAgentForOwner: vi.fn(),
+  deleteAgentForUser: vi.fn(),
+  getAgentForUser: vi.fn(),
   toSummary: vi.fn((record: Record<string, unknown>) => ({ id: record.id, name: record.name, tools: record.tools })),
-  updateAgentForOwner: vi.fn(),
+  updateAgentForUser: vi.fn(),
 }));
 vi.mock("@/lib/developer/projects", () => ({ getDeveloperProject: vi.fn() }));
 
 import { requireUser } from "@/lib/security/authenticated-request";
-import { getAgentForOwner, updateAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser, updateAgentForUser } from "@/lib/agents/repository";
 
 const mockUser = vi.mocked(requireUser);
-const mockGetAgent = vi.mocked(getAgentForOwner);
-const mockUpdate = vi.mocked(updateAgentForOwner);
+const mockGetAgent = vi.mocked(getAgentForUser);
+const mockUpdate = vi.mocked(updateAgentForUser);
 
 const CURRENT_AGENT = {
   id: "agent_1", ownerId: "user_1", name: "A", description: "", type: "universal" as const,
@@ -38,7 +38,7 @@ const CURRENT_AGENT = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockUser.mockResolvedValue({ uid: "user_1" } as Awaited<ReturnType<typeof requireUser>>);
-  mockGetAgent.mockResolvedValue(CURRENT_AGENT as Awaited<ReturnType<typeof getAgentForOwner>>);
+  mockGetAgent.mockResolvedValue(CURRENT_AGENT as Awaited<ReturnType<typeof getAgentForUser>>);
   mockUpdate.mockImplementation(async (_uid, _id, patch) => ({
     ...CURRENT_AGENT,
     tools: patch.tools ?? CURRENT_AGENT.tools,

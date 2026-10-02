@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 
 import { adminDb } from "@/lib/firebase/admin";
-import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser } from "@/lib/agents/repository";
 import { buildAgentCharter } from "@/lib/agents/charter";
 import { generateForUser } from "@/lib/billing/ai-execution";
 import { executeToolSecurely } from "@/lib/agents/runtime/secure-tool-executor";
@@ -109,7 +109,7 @@ async function executeNode(ctx: ExecuteContext, node: WorkflowNode): Promise<unk
       let model: string | undefined;
       let temperature: number | undefined;
       if (agentId) {
-        const agent = await getAgentForOwner(ctx.userId, agentId);
+        const agent = await getAgentForUser(ctx.userId, agentId);
         if (!agent || agent.status !== "active") throw new Error(`Nœud agent « ${node.name} » : agent introuvable ou inactif.`);
         // Identité réelle de l'agent : prompt système (ou charte générée),
         // modèle et température configurés dans le Builder.

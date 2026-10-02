@@ -7,6 +7,7 @@ import { errorStatus } from "@/lib/security/http-errors";
 import { adminDb } from "@/lib/firebase/admin";
 import { runWorkflowGraph } from "@/lib/workflows/executor";
 import type { Workflow } from "@/lib/workflows/types";
+import { assertResourceRead } from "@/lib/tenants/resource-access";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -32,10 +33,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const user = await requireUser(request);
     const { id } = await context.params;
     const doc = await adminDb.collection("workflows").doc(id).get();
-    if (!doc.exists || (doc.data() as { userId?: string } | undefined)?.userId !== user.uid) {
+    if (!doc.exists) {
       return NextResponse.json({ error: "Workflow introuvable.", requestId }, { status: 404 });
     }
-    const workflow = doc.data() as unknown as Workflow;
+    // Exécution = usage (recommandation C) : le propriétaire ET les membres
+    // de l'org peuvent lancer le workflow (lecture suffit) ; l'initiateur
+    // est l'userId facturé, identique à la règle des agents.
+    const wfData = doc.data() as { userId?: string; orgId?: string };
+    try {
+      await assertResourceRead(user.uid, { ownerId: String(wfData.userId ?? ""), orgId: typeof wfData.orgId === "string" ? wfData.orgId : null });
+    } catch {
+      return NextResponse.json({ error: "Workflow introuvable.", requestId }, { status: 404 });
+    }
+    const workflow = wfData as unknown as Workflow;
 
     const body = BODY_SCHEMA.parse(await request.json().catch(() => ({})));
     const state = await runWorkflowGraph({

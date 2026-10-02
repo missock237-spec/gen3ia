@@ -18,7 +18,7 @@ import { attachmentImageCandidates, resolveEditableImageSources } from "@/lib/fi
 import { hasImageAttachment, shouldRouteImageEdit } from "@/lib/domain/conversations/image-intent";
 import { loadWebPageContext } from "@/lib/domain/conversations/web-context";
 import { buildKnowledgeContext, shouldSearchKnowledge } from "@/lib/knowledge/chat-context";
-import { searchKnowledge } from "@/lib/knowledge/search";
+import { resolveKnowledgeScope, searchKnowledge } from "@/lib/knowledge/search";
 import { isR2Configured, uploadToR2 } from "@/lib/storage/r2";
 import { randomUUID } from "node:crypto";
 import type { ToolRisk } from "@/lib/tools/types";
@@ -790,7 +790,8 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const knowledgeContext = await (async () => {
     if (!input.projectId || !shouldSearchKnowledge({ projectId: input.projectId, message: input.message })) return "";
     try {
-      const results = await withTimeout(searchKnowledge(input.userId, input.projectId, input.message, 6), 4_000, "recherche knowledge");
+      const orgIds = await withTimeout(resolveKnowledgeScope(input.userId), 4_000, "scope knowledge").catch(() => [] as string[]);
+      const results = await withTimeout(searchKnowledge(input.userId, input.projectId, input.message, 6, orgIds), 4_000, "recherche knowledge");
       return buildKnowledgeContext(results);
     } catch {
       return ""; // knowledge indisponible : le tour continue sans (jamais bloquant)

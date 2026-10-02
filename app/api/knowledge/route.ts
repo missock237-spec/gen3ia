@@ -5,6 +5,8 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { clientIp, enforceRateLimit } from "@/lib/security/rate-limit";
 import { adminDb } from "@/lib/firebase/admin";
+import { assertOrgAttach } from "@/lib/tenants/resource-access";
+import { listUserOrgIds } from "@/lib/tenants/resource-access";
 import {
   deleteKnowledgeDocument,
   extractTextFromUpload,
@@ -33,16 +35,31 @@ const URL_BODY_SCHEMA = z.object({
   url: z.string().trim().min(8).max(2000),
   projectId: z.string().trim().min(1).max(128),
   name: z.string().trim().min(1).max(300).optional(),
+  // Rattachement org optionnel (recommandation C) : validé par la politique.
+  orgId: z.string().trim().max(128).optional(),
 });
 
 async function listDocuments(userId: string, projectId?: string) {
-  const query = adminDb.collection("knowledgeDocuments").where("userId", "==", userId).limit(200);
-  const snapshot = await query.get();
-  const documents = snapshot.docs
-    .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<KnowledgeDocumentRecord, "id">) }))
+  // Union org-aware (recommandation C) : documents personnels + documents
+  // des organisations de l'utilisateur (orgIds résolus SERVEUR, requêtes
+  // `in` chunkées ≤30). Fusion dédupliquée, tri createdAt desc.
+  const orgIds = await listUserOrgIds(userId);
+  const chunks: string[][] = [];
+  for (let i = 0; i < orgIds.length; i += 30) chunks.push(orgIds.slice(i, i + 30));
+  const snapshots = await Promise.all([
+    adminDb.collection("knowledgeDocuments").where("userId", "==", userId).limit(200).get(),
+    ...chunks.map((ids) =>
+      adminDb.collection("knowledgeDocuments").where("orgId", "in", ids).limit(200).get()),
+  ]);
+  const byId = new Map<string, { id: string; projectId?: string; createdAt?: string }>();
+  for (const snapshot of snapshots) {
+    for (const doc of snapshot.docs) {
+      if (!byId.has(doc.id)) byId.set(doc.id, { id: doc.id, ...(doc.data() as Omit<KnowledgeDocumentRecord, "id">) });
+    }
+  }
+  return [...byId.values()]
     .filter((document) => !projectId || document.projectId === projectId)
     .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
-  return documents;
 }
 
 export async function GET(request: NextRequest) {
@@ -69,10 +86,12 @@ export async function POST(request: NextRequest) {
     // ── Ingestion par URL ────────────────────────────────────────────────
     if (contentType.includes("application/json")) {
       const body = URL_BODY_SCHEMA.parse(await request.json());
+      if (body.orgId) await assertOrgAttach(user.uid, body.orgId);
       const extracted = await extractTextFromUrl(body.url);
       const document = await ingestKnowledgeDocument({
         userId: user.uid,
         projectId: body.projectId,
+        orgId: body.orgId,
         name: body.name || new URL(extracted.finalUrl).hostname + new URL(extracted.finalUrl).pathname.replace(/\/$/, "").slice(0, 120),
         mimeType: extracted.mimeType,
         text: extracted.text,
@@ -86,6 +105,8 @@ export async function POST(request: NextRequest) {
       const form = await request.formData();
       const projectId = String(form.get("projectId") ?? "").trim();
       if (!projectId) return NextResponse.json({ error: "Projet manquant : sélectionnez un projet pour ce document." }, { status: 422 });
+      const orgId = String(form.get("orgId") ?? "").trim() || undefined;
+      if (orgId) await assertOrgAttach(user.uid, orgId);
 
       const files = form.getAll("files").filter((entry): entry is File => entry instanceof File);
       if (files.length === 0) return NextResponse.json({ error: "Aucun fichier reçu." }, { status: 422 });
@@ -98,6 +119,7 @@ export async function POST(request: NextRequest) {
           const document = await ingestKnowledgeDocument({
             userId: user.uid,
             projectId,
+            orgId,
             name: file.name,
             mimeType: extracted.mimeType,
             text: extracted.text,

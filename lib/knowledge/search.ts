@@ -36,11 +36,25 @@ export interface KnowledgeSearchResult {
  * Chemin de repli : parcours Firestore (≤ 500 fragments) + cosinus en
  * mémoire — comportement historique, conservé pour la résilience.
  */
+/**
+ * Périmètre de recherche d'un utilisateur : ses organisations membres
+ * (index user→org, résolu SERVEUR). Les appelants (outil agent, moteur de
+ * conversation, builder de contexte) le passent tel quel à searchKnowledge
+ * — aucun identifiant d'org n'est jamais accepté depuis l'entrée de l'agent.
+ */
+export async function resolveKnowledgeScope(
+  userId: string,
+): Promise<string[]> {
+  const { listUserOrgIds } = await import("@/lib/tenants/resource-access");
+  return listUserOrgIds(userId);
+}
+
 export async function searchKnowledge(
   userId: string,
   projectId: string,
   query: string,
   limit = 8,
+  orgIds: string[] = [],
 ): Promise<KnowledgeSearchResult[]> {
   const queryEmbedding =
     await createMemoryEmbedding(
@@ -53,7 +67,7 @@ export async function searchKnowledge(
       queryEmbedding,
       {
         limit,
-        filter: { userId, projectId },
+        filter: { userId, projectId, orgIds },
       },
     );
 
@@ -67,55 +81,49 @@ export async function searchKnowledge(
     }));
   }
 
-  const snapshot =
-    await adminDb
-      .collection(
-        "knowledgeChunks",
-      )
-      .where(
-        "userId",
-        "==",
-        userId,
-      )
-      .where(
-        "projectId",
-        "==",
-        projectId,
-      )
-      .limit(500)
-      .get();
+  // Repli Firestore : union personnel + organisations (recommandation C),
+  // plafonnée comme le chemin historique (500 fragments par portée).
+  // Frontière de sécurité : orgIds est résolu SERVEUR depuis l'index
+  // user→org de l'appelant ; les requêtes org filtrent par orgId (+ projet)
+  // sans filtre userId — les fragments d'une org portent l'userId de leur
+  // ingesteur, pas celui du membre qui cherche.
+  const scopeOrgs = (orgIds ?? []).filter((orgId) => typeof orgId === "string" && orgId.length > 0);
+  const orgChunks: string[][] = [];
+  for (let i = 0; i < scopeOrgs.length; i += 30) orgChunks.push(scopeOrgs.slice(i, i + 30));
 
-  if (snapshot.empty) {
-    return [];
+  const snapshots = await Promise.all([
+    adminDb
+      .collection("knowledgeChunks")
+      .where("userId", "==", userId)
+      .where("projectId", "==", projectId)
+      .limit(500)
+      .get(),
+    ...orgChunks.map((ids) =>
+      adminDb
+        .collection("knowledgeChunks")
+        .where("orgId", "in", ids)
+        .where("projectId", "==", projectId)
+        .limit(500)
+        .get(),
+    ),
+  ]);
+
+  const byId = new Map<string, KnowledgeSearchResult>();
+  for (const snapshot of snapshots) {
+    for (const doc of snapshot.docs) {
+      if (byId.has(doc.id)) continue;
+      const data = doc.data();
+      byId.set(doc.id, {
+        id: doc.id,
+        documentId: data.documentId,
+        text: data.text,
+        chunkIndex: data.chunkIndex,
+        score: cosineSimilarity(queryEmbedding, data.embedding ?? []),
+      });
+    }
   }
 
-  return snapshot.docs
-    .map((doc) => {
-      const data =
-        doc.data();
-
-      return {
-        id: doc.id,
-
-        documentId:
-          data.documentId,
-
-        text:
-          data.text,
-
-        chunkIndex:
-          data.chunkIndex,
-
-        score:
-          cosineSimilarity(
-            queryEmbedding,
-            data.embedding ?? [],
-          ),
-      };
-    })
-    .sort(
-      (a, b) =>
-        b.score - a.score,
-    )
+  return [...byId.values()]
+    .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 }

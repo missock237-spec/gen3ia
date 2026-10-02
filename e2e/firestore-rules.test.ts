@@ -66,6 +66,11 @@ async function seedFixtures(): Promise<{ alice: string; bob: string; teamId: str
     await db.doc(`teams/${teamId}/members/${bob}`).set({ role: "viewer", userId: bob });
     await db.doc(`organizations/org-1`).set({ ownerId: alice, name: "Org A" });
     await db.doc(`organizations/org-1/members/${alice}`).set({ role: "owner" });
+    await db.doc(`organizations/org-1/members/${bob}`).set({ role: "member" });
+    await db.doc(`organizations/org-2`).set({ ownerId: alice, name: "Org B" });
+    await db.doc(`organizations/org-2/members/${alice}`).set({ role: "owner" });
+    await db.doc(`agents/agent-org-1`).set({ ownerId: alice, orgId: "org-1", name: "Agent Org" });
+    await db.doc(`knowledgeDocuments/kdoc-org-1`).set({ userId: alice, orgId: "org-1", name: "Doc org" });
   });
   return { alice, bob, teamId, agentId };
 }
@@ -157,6 +162,68 @@ describe("Règles Firestore : isolation multi-tenant", () => {
     await assertFails(
       aliceDb.doc("organizations/org-1/members/outsider-uid").set({ role: "owner" }),
     );
+  });
+
+  it("agents org (rec C) — membre lit, ne gère pas ; owner/org écrit ; étranger rien", async () => {
+    await seedFixtures();
+    const aliceDb = testEnv.authenticatedContext("alice-uid").firestore();
+    const bobDb = testEnv.authenticatedContext("bob-uid").firestore();
+    const outsiderDb = testEnv.authenticatedContext("outsider-uid").firestore();
+
+    // bob (member org-1) LIT l'agent d'org mais ne peut ni le modifier ni le supprimer.
+    await assertSucceeds(bobDb.doc("agents/agent-org-1").get());
+    await assertFails(bobDb.doc("agents/agent-org-1").update({ name: "Détourné" }));
+    await assertFails(bobDb.doc("agents/agent-org-1").delete());
+
+    // alice (owner org) écrit.
+    await assertSucceeds(aliceDb.doc("agents/agent-org-1").update({ name: "Renommé par owner" }));
+
+    // L'étranger (hors org) ne voit même pas l'agent.
+    await assertFails(outsiderDb.doc("agents/agent-org-1").get());
+
+    // ownerId immuable : même l'owner de l'org ne peut pas réattribuer l'agent.
+    await assertFails(bobDb.doc("agents/agent-org-1").update({ ownerId: bob }));
+  });
+
+  it("agents org (rec C) — création avec orgId : membre ok, non-membre refusé", async () => {
+    await seedFixtures();
+    const bobDb = testEnv.authenticatedContext("bob-uid").firestore();
+    const outsiderDb = testEnv.authenticatedContext("outsider-uid").firestore();
+
+    // bob est membre d'org-1 → il peut y publier un agent.
+    await assertSucceeds(
+      bobDb.collection("agents").add({ ownerId: bob, orgId: "org-1", name: "Agent de Bob" }),
+    );
+    // bob n'est PAS membre d'org-2 → refus.
+    await assertFails(
+      bobDb.collection("agents").add({ ownerId: bob, orgId: "org-2", name: "Agent interdit" }),
+    );
+    // L'étranger ne peut pas publier dans org-1 non plus.
+    await assertFails(
+      outsiderDb.collection("agents").add({ ownerId: "outsider-uid", orgId: "org-1", name: "Piraté" }),
+    );
+  });
+
+  it("knowledgeDocuments org (rec C) — membre lit, étranger refusé, ownerId immuable", async () => {
+    await seedFixtures();
+    const bobDb = testEnv.authenticatedContext("bob-uid").firestore();
+    const outsiderDb = testEnv.authenticatedContext("outsider-uid").firestore();
+
+    await assertSucceeds(bobDb.doc("knowledgeDocuments/kdoc-org-1").get());
+    await assertFails(outsiderDb.doc("knowledgeDocuments/kdoc-org-1").get());
+    // Le créateur reste le créateur : bob ne peut pas se réattribuer le doc.
+    await assertFails(bobDb.doc("knowledgeDocuments/kdoc-org-1").update({ userId: bob }));
+  });
+
+  it("workflows org (rec C) — lecture membre, écriture client fermée (Admin SDK seul)", async () => {
+    await seedFixtures();
+    const bobDb = testEnv.authenticatedContext("bob-uid").firestore();
+
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("workflows/wf-org-1").set({ userId: alice, orgId: "org-1", name: "WF" });
+    });
+    await assertSucceeds(bobDb.doc("workflows/wf-org-1").get());
+    await assertFails(bobDb.doc("workflows/wf-org-1").delete());
   });
 
   it("collections inconnues — refus par défaut (deny-all)", async () => {

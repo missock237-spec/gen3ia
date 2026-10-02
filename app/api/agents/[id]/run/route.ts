@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
-import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser } from "@/lib/agents/repository";
 import { createPersonalizedPlan, policyForAgent } from "@/lib/agents/personalized-plan";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { executionLogger, safeError } from "@/lib/observability/logger";
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const agent = await getAgentForOwner(user.uid, id);
+    const agent = await getAgentForUser(user.uid, id);
     if (!agent) {
       return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404, headers: { "x-request-id": requestId } });
     }

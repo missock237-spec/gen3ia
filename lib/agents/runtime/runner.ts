@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { generateForUser } from "@/lib/billing/ai-execution";
 import { getWallet, WALLET_CURRENCY } from "@/lib/billing/wallet";
-import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser } from "@/lib/agents/repository";
 import { executeToolSecurely } from "./secure-tool-executor";
 import { ExecutionPolicy, DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
 import { RuntimeExecutionState, RuntimePlan, RuntimeStep } from "./types";
@@ -334,7 +334,7 @@ export class AgentRuntime {
     if (!step.agentId || !allowlist.includes(step.agentId)) {
       throw new Error(`Sous-agent non autorisé pour l'étape ${step.id} (absent de la liste des sous-agents de l'agent).`);
     }
-    const sub = await getAgentForOwner(this.state.userId, step.agentId);
+    const sub = await getAgentForUser(this.state.userId, step.agentId);
     if (!sub || sub.status !== "active") {
       throw new Error(`Sous-agent introuvable ou inactif pour l'étape ${step.id}.`);
     }

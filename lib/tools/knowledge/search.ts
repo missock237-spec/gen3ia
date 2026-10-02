@@ -5,6 +5,7 @@ import type {
 } from "../types";
 
 import {
+  resolveKnowledgeScope,
   searchKnowledge,
 } from "@/lib/knowledge/search";
 
@@ -77,7 +78,10 @@ export const knowledgeSearchTool:
           // projet et ne tentera pas une lecture globale.
           return { results: [], total: 0 };
         }
-        const hits = await searchKnowledge(context.userId, context.projectId, input.query, input.limit);
+        // Périmètre org résolu SERVEUR (index user→org) — l'agent ne peut
+        // pas élargir lui-même sa portée de lecture.
+        const orgIds = await resolveKnowledgeScope(context.userId);
+        const hits = await searchKnowledge(context.userId, context.projectId, input.query, input.limit, orgIds);
         return {
           results: hits.map((hit) => ({
             documentId: String(hit.documentId ?? ""),

@@ -3,7 +3,7 @@ import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
-import { deleteAgentForOwner, getAgentForOwner, toSummary, updateAgentForOwner } from "@/lib/agents/repository";
+import { deleteAgentForUser, getAgentForUser, toSummary, updateAgentForUser } from "@/lib/agents/repository";
 import { AGENT_TYPES } from "@/lib/agents/schema";
 import { resolveAndHarden } from "@/lib/agents/tool-resolver";
 import { getDeveloperProject } from "@/lib/developer/projects";
@@ -13,6 +13,9 @@ interface RouteContext { params: Promise<{ id: string }> }
 const PatchSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(), description: z.string().trim().max(500).optional(),
   type: z.enum(AGENT_TYPES).optional(), projectId: z.string().trim().min(1).max(128).optional(),
+  // Transfert organisationnel : orgId valide = rattacher ; "" = détacher
+  // (retour personnel). La politique centralisée valide la destination.
+  orgId: z.string().trim().max(128).optional(),
   typeLabel: z.string().trim().min(1).max(80).optional(),
   skills: z.array(z.string().trim().min(1).max(80)).max(24).optional(),
   agentMode: z.enum(["standard", "call"]).optional(),
@@ -37,13 +40,14 @@ const PatchSchema = z.object({
 });
 
 /**
- * Valide la liste blanche de sous-agents : ids réels, possédés par
- * l'utilisateur, actifs, et sans auto-référence.
+ * Valide la liste blanche de sous-agents : ids réels, accessibles à
+ * l'utilisateur (propriétaire ou org partagée — recommandation C), actifs,
+ * et sans auto-référence.
  */
-async function validateSubAgentIds(ownerId: string, agentId: string, subAgentIds: string[] | undefined): Promise<string | null> {
+async function validateSubAgentIds(userId: string, agentId: string, subAgentIds: string[] | undefined): Promise<string | null> {
   if (!subAgentIds) return null;
   if (subAgentIds.includes(agentId)) return "Un agent ne peut pas se déléguer à lui-même.";
-  const resolved = await Promise.all(subAgentIds.map((subId) => getAgentForOwner(ownerId, subId)));
+  const resolved = await Promise.all(subAgentIds.map((subId) => getAgentForUser(userId, subId)));
   const missing = subAgentIds.filter((_, index) => !resolved[index] || resolved[index]!.status !== "active");
   return missing.length > 0 ? `Sous-agents introuvables ou inactifs : ${missing.join(", ")}` : null;
 }
@@ -52,7 +56,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
     const user = await requireUser(request); const { id } = await context.params;
-    const record = await getAgentForOwner(user.uid, id);
+    const record = await getAgentForUser(user.uid, id);
     if (!record) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
     return NextResponse.json({ agent: { ...toSummary(record), systemPrompt: record.systemPrompt }, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Agent indisponible", requestId }, { status: errorStatus(error, 500) }); }
@@ -73,7 +77,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     let patch = parsed.data;
     let toolReport: ReturnType<typeof resolveAndHarden>["report"] | undefined;
     if (patch.tools !== undefined || patch.authorizationMode !== undefined) {
-      const current = await getAgentForOwner(user.uid, id);
+      const current = await getAgentForUser(user.uid, id);
       if (!current) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
       const tools = patch.tools ?? current.tools;
       const mode = patch.authorizationMode ?? current.authorizationMode;
@@ -82,7 +86,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       const changed = resolution.unknown.length > 0 || resolution.mapping.some((entry) => entry.status === "mapped") || hardening.hardened;
       if (changed) toolReport = report;
     }
-    const record = await updateAgentForOwner(user.uid, id, patch);
+    const record = await updateAgentForUser(user.uid, id, patch);
     if (!record) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
     return NextResponse.json({ agent: toSummary(record), ...(toolReport ? { toolReport } : {}), requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Mise a jour impossible", requestId }, { status: errorStatus(error, 500) }); }
@@ -92,7 +96,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
     const user = await requireUser(request); const { id } = await context.params;
-    const deleted = await deleteAgentForOwner(user.uid, id);
+    const deleted = await deleteAgentForUser(user.uid, id);
     if (!deleted) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
     return NextResponse.json({ deleted: true, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Suppression impossible", requestId }, { status: errorStatus(error, 500) }); }

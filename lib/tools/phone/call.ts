@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ToolDefinition } from "@/lib/tools/types";
 import { createPhoneCallSession, startPhoneCall } from "@/lib/integrations/twilio/calls";
-import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser } from "@/lib/agents/repository";
 import { listAgentPhoneNumbers } from "@/lib/integrations/twilio/numbers";
 
 const PhoneCallInput = z.object({
@@ -28,7 +28,7 @@ export const phoneCallTool: ToolDefinition<z.infer<typeof PhoneCallInput>, {
   inputSchema: PhoneCallInput,
   async execute(input, context) {
     const selectedAgentId = input.agentId ?? context.agentId;
-    const agent = selectedAgentId ? await getAgentForOwner(context.userId, selectedAgentId) : null;
+    const agent = selectedAgentId ? await getAgentForUser(context.userId, selectedAgentId) : null;
     if (input.agentId && !agent) throw new Error("Voice agent not found.");
     if (agent && !agent.voiceEnabled) throw new Error("Voice calls are disabled for this agent.");
     const assignedNumber = agent ? (await listAgentPhoneNumbers(context.userId, agent.id)).find((item) => item.status === "active") : null;

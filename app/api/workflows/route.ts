@@ -7,6 +7,7 @@ import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { adminDb } from "@/lib/firebase/admin";
 import { WorkflowSchema } from "@/lib/workflows/types";
 import { validateWorkflow } from "@/lib/workflows/validator";
+import { assertOrgAttach, listUserOrgIds } from "@/lib/tenants/resource-access";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,12 +22,22 @@ export const maxDuration = 60;
 export async function GET(request: NextRequest) {
   try {
     const user = await requireUser(request);
-    const snapshot = await adminDb.collection("workflows")
-      .where("userId", "==", user.uid)
-      .limit(100)
-      .get();
-    const workflows = snapshot.docs
-      .map((doc) => ({ id: doc.id, createdAt: "", updatedAt: "", ...doc.data() as Record<string, unknown> }))
+    // Union org-aware (recommandation C) : workflows personnels + workflows
+    // des organisations de l'utilisateur (orgIds résolus SERVEUR, chunks ≤30).
+    const orgIds = await listUserOrgIds(user.uid);
+    const chunks: string[][] = [];
+    for (let i = 0; i < orgIds.length; i += 30) chunks.push(orgIds.slice(i, i + 30));
+    const snapshots = await Promise.all([
+      adminDb.collection("workflows").where("userId", "==", user.uid).limit(100).get(),
+      ...chunks.map((ids) => adminDb.collection("workflows").where("orgId", "in", ids).limit(100).get()),
+    ]);
+    const byId = new Map<string, Record<string, unknown>>();
+    for (const snapshot of snapshots) {
+      for (const doc of snapshot.docs) {
+        if (!byId.has(doc.id)) byId.set(doc.id, { id: doc.id, createdAt: "", updatedAt: "", ...doc.data() as Record<string, unknown> });
+      }
+    }
+    const workflows = [...byId.values()]
       .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));
     return NextResponse.json({ workflows });
   } catch (error) {
@@ -51,10 +62,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Workflow invalide : ${validation.errors.join(" | ")}`, requestId }, { status: 422 });
     }
 
+    // Rattachement org optionnel : la politique centralisée vérifie
+    // l'appartenance AVANT l'écriture (jamais de publication dans une org
+    // dont l'appelant ne fait pas partie).
+    const orgId = typeof body.orgId === "string" ? body.orgId.trim() : "";
+    if (orgId) await assertOrgAttach(user.uid, orgId);
     const id = randomUUID();
     const now = new Date().toISOString();
     await adminDb.collection("workflows").doc(id).set({
       ...body,
+      ...(orgId ? { orgId } : {}),
       id,
       version: 1,
       userId: user.uid,

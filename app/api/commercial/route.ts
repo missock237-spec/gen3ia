@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
-import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser } from "@/lib/agents/repository";
 import { createCommercialConfig, listCommercialConfigs } from "@/lib/agents/commercial";
 
 export const runtime = "nodejs";
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     // L'agent doit appartenir à l'utilisateur : impossible d'exposer un
     // agent tiers via un lien client.
-    const agent = await getAgentForOwner(user.uid, parsed.data.agentId);
+    const agent = await getAgentForUser(user.uid, parsed.data.agentId);
     if (!agent) return NextResponse.json({ error: "Agent introuvable ou non autorisé." }, { status: 403 });
 
     const config = await createCommercialConfig(user.uid, parsed.data);

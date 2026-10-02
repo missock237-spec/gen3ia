@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { requireUser } from "@/lib/security/authenticated-request";
-import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser } from "@/lib/agents/repository";
 import { listAgentPhoneNumbers } from "@/lib/integrations/twilio/numbers";
 import { createPhoneCallSession, startPhoneCall } from "@/lib/integrations/twilio/calls";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const parsed = CallSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Numéro de destination invalide." }, { status: 400 });
 
-    const agent = await getAgentForOwner(user.uid, id);
+    const agent = await getAgentForUser(user.uid, id);
     if (!agent) return NextResponse.json({ error: "Agent introuvable." }, { status: 404 });
     if (!agent.voiceEnabled || agent.voiceConfig?.outboundEnabled === false) {
       return NextResponse.json({ error: "Les appels sortants sont désactivés pour cet agent." }, { status: 400 });

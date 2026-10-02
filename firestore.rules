@@ -19,6 +19,36 @@ service cloud.firestore {
     function isTeamAdmin(teamId) { return isTeamMember(teamId) && getTeamRole(teamId) in ['owner', 'admin']; }
     function canEditTeam(teamId) { return isTeamMember(teamId) && getTeamRole(teamId) in ['owner', 'admin', 'editor']; }
 
+    // ── Multi-tenant : accès aux ressources rattachées à une organisation
+    // (recommandation C). Une ressource SANS orgId reste strictement
+    // personnelle ; AVEC orgId, les membres de l'org lisent et les
+    // owner/admin écrivent. ownerId est immuable côté client.
+    function orgResourceReadable() {
+      return resource.data.orgId is string && resource.data.orgId != '' &&
+        exists(/databases/$(database)/documents/organizations/$(resource.data.orgId)/members/$(request.auth.uid));
+    }
+    function orgResourceWritable() {
+      return resource.data.orgId is string && resource.data.orgId != '' &&
+        get(/databases/$(database)/documents/organizations/$(resource.data.orgId)/members/$(request.auth.uid)).data.role in ['owner', 'admin'];
+    }
+    function agentReadable() {
+      return signedIn() && (resource.data.ownerId == request.auth.uid || orgResourceReadable());
+    }
+    function agentCreateValid() {
+      return signedIn() && request.resource.data.ownerId == request.auth.uid && (
+        // Ressource personnelle : pas d'orgId.
+        !('orgId' in request.resource.data.keys()) ||
+        // Rattachement org : l'appelant doit déjà être membre.
+        exists(/databases/$(database)/documents/organizations/$(request.resource.data.orgId)/members/$(request.auth.uid))
+      );
+    }
+    function agentWritable() {
+      return signedIn() && (resource.data.ownerId == request.auth.uid || orgResourceWritable());
+    }
+    function ownerIdImmutable() {
+      return request.resource.data.ownerId == resource.data.ownerId;
+    }
+
     match /users/{userId} {
       allow read, update: if isOwner(userId);
       allow create: if isOwner(userId);
@@ -41,9 +71,10 @@ service cloud.firestore {
       allow update, delete: if signedIn() && resource.data.ownerId == request.auth.uid;
     }
     match /agents/{agentId} {
-      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update, delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow read: if agentReadable();
+      allow create: if agentCreateValid();
+      allow update: if agentWritable() && ownerIdImmutable();
+      allow delete: if agentWritable();
     }
     match /executions/{executionId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
@@ -56,6 +87,22 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if signedIn() && resource.data.userId == request.auth.uid;
       allow delete: if false;
+    }
+    match /knowledgeDocuments/{documentId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || orgResourceReadable());
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if signedIn() && (resource.data.userId == request.auth.uid || orgResourceWritable()) && request.resource.data.userId == resource.data.userId;
+      allow delete: if signedIn() && (resource.data.userId == request.auth.uid || orgResourceWritable());
+    }
+    match /knowledgeChunks/{chunkId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || orgResourceReadable());
+      allow write: if false; // écriture via Admin SDK uniquement
+    }
+    // Workflows : graphes exécutables, écrits via Admin SDK côté serveur ;
+    // lecture client personnelle + org (recommandation C), mutations fermées.
+    match /workflows/{workflowId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || orgResourceReadable());
+      allow write: if false;
     }
     match /documents/{documentId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;

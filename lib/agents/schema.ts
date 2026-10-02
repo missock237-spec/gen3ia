@@ -68,6 +68,10 @@ export const AgentRecordSchema = z.object({
     name: z.string().trim().min(1).max(255),
   }).optional(),
   projectId: z.string().trim().min(1).max(128).optional(),
+  // Rattachement organisationnel optionnel (recommandation C) : absent =
+  // agent personnel (comportement historique) ; présent = partagé avec les
+  // membres de l'organisation selon la matrice lib/tenants/resource-access.
+  orgId: z.string().trim().min(1).max(128).optional(),
   // Optionnel : sans prompt saisi, la charte professionnelle est générée
   // automatiquement côté serveur (lib/agents/charter.ts).
   systemPrompt: z.string().trim().max(20_000).optional(),
@@ -105,7 +109,7 @@ export type AgentRecord = z.infer<typeof AgentRecordSchema> & { id: string; owne
 
 export type AgentSummary = Pick<AgentRecord,
   "id" | "name" | "description" | "type" | "typeLabel" | "skills" | "agentMode" | "memoryFile" |
-  "projectId" | "status" | "modelStrategy" |
+  "projectId" | "orgId" | "status" | "modelStrategy" |
   "preferredProvider" | "preferredModel" | "autonomous" | "subagentsEnabled" | "maxSubagents" | "maxIterations" | "tools" |
   "memoryEnabled" | "webResearchEnabled" | "documentGenerationEnabled" | "voiceEnabled" |
   "voiceConfig" | "persona" | "createdAt" | "updatedAt"

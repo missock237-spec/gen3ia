@@ -97,7 +97,7 @@ export async function ensureVectorCollection(
     // not found »). userId indexé en premier — c'est le filtre de sécurité
     // présent sur toutes les recherches. Exécuté même si la collection
     // existait déjà (auto-réparation d'une collection créée sans index).
-    for (const field of ["userId", "projectId", "agentId", "documentId"]) {
+    for (const field of ["userId", "projectId", "agentId", "documentId", "orgId"]) {
       try {
         await client.createPayloadIndex(collection, {
           field_name: field,
@@ -166,6 +166,15 @@ export interface VectorSearchFilter {
   agentId?: string;
 
   documentId?: string;
+
+  /**
+   * Organisations dont l'appelant est membre (recommandation C) : élargit
+   * la portée de lecture aux fragments rattachés à ces organisations. La
+   * liste est résolue SERVEUR (index user→org) — jamais depuis l'entrée de
+   * l'agent ; userId reste toujours acceptable (clause should), ce qui
+   * garantit : personnel OU org, jamais un tiers.
+   */
+  orgIds?: string[];
 }
 
 export interface VectorSearchHit {
@@ -189,9 +198,21 @@ export async function searchVectorPoints(
   const client = getQdrant();
   if (!client) return null;
 
-  const must: Array<Record<string, unknown>> = [
+  const must: Array<Record<string, unknown>> = [];
+  const should: Array<Record<string, unknown>> = [
     { key: "userId", match: { value: options.filter.userId } },
   ];
+  const orgIds = (options.filter.orgIds ?? []).filter((orgId) => typeof orgId === "string" && orgId.trim().length > 0);
+  for (const orgId of orgIds.slice(0, 30)) {
+    should.push({ key: "orgId", match: { value: orgId } });
+  }
+  if (orgIds.length > 0) {
+    // userId OU l'une des orgs de l'appelant (min_should=1) : le périmètre
+    // de lecture s'élargit sans jamais traverser vers un tiers.
+    must.push({ min_should: 1, should });
+  } else {
+    must.push({ key: "userId", match: { value: options.filter.userId } });
+  }
   if (options.filter.projectId) {
     must.push({ key: "projectId", match: { value: options.filter.projectId } });
   }

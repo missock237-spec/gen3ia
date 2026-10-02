@@ -12,7 +12,7 @@ import { createActionApproval, listActionApprovals } from "@/lib/agents/action-a
 import { selectApprovalRequiredSteps } from "@/lib/agents/approval-policy";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage, createConversation, getConversation, listMessages, updateConversation, type ChatConversation } from "@/lib/chat/repository";
-import { getAgentForOwner } from "@/lib/agents/repository";
+import { getAgentForUser } from "@/lib/agents/repository";
 import { policyForAgent } from "@/lib/agents/personalized-plan";
 import { answerAsAgent, classifyRequest, historyContextNote, outOfScopeReply, planAgentTask } from "@/lib/agents/chat-engine";
 import { recordAgentRun } from "@/lib/agents/conversation-run";
@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
 
     let agent: AgentRecord | null = null;
     if (body.agentId) {
-      agent = await getAgentForOwner(user.uid, body.agentId);
+      agent = await getAgentForUser(user.uid, body.agentId);
       if (!agent) return NextResponse.json({ error: "Agent introuvable." }, { status: 404 });
       if (agent.status !== "active") {
         return NextResponse.json({ error: `L'agent est ${agent.status}. Activez-le avant de discuter.` }, { status: 409 });

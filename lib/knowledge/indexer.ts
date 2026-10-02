@@ -31,6 +31,8 @@ export async function indexKnowledgeDocument(
     projectId: string;
     documentId: string;
     text: string;
+    /** Rattachement org optionnel (recommandation C) — validé par l'appelant. */
+    orgId?: string;
   },
 ): Promise<number> {
   const chunks =
@@ -67,6 +69,8 @@ export async function indexKnowledgeDocument(
       projectId:
         input.projectId,
 
+      ...(input.orgId ? { orgId: input.orgId } : {}),
+
       documentId:
         input.documentId,
 
@@ -94,6 +98,7 @@ export async function indexKnowledgeDocument(
       payload: {
         userId: input.userId,
         projectId: input.projectId,
+        ...(input.orgId ? { orgId: input.orgId } : {}),
         documentId: input.documentId,
         chunkIndex: chunk.index,
         // Texte complet du fragment : évite un aller-retour Firestore par
