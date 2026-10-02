@@ -28,7 +28,23 @@ const CONTENT_SECURITY_POLICY = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
   "media-src 'self' blob: https:",
-  "connect-src 'self' https: wss:",
+  // Allowlist CONNECT-SRC explicite (Task 60, priorité #4 — remplace
+  // « https: wss: » ouverts). Audit des domaines réellement appelés par le
+  // NAVIGATEUR :
+  //   - Firebase (client Auth uniquement) : identitytoolkit / securetoken /
+  //     installations / logging + canal web-channel → *.googleapis.com
+  //     (motif recommandé par la documentation Firebase) et canaux
+  //     websocket Firebase (RTDB futur) ; gapi (apis.google.com) + gstatic
+  //     pour le tunnel auth (cf. bug 07-2025 ci-dessus) ;
+  //   - Sentry (SDK navigateur, DSN public) : hôtes d'ingestion
+  //     o4511820262473728.ingest.de.sentry.io + replis (cf.
+  //     SENTRY_INGEST_HOSTS dans instrumentation.ts) ;
+  //   - Google AdSense (Task 40) : beacons du loader et suivi de clic
+  //     (googlesyndication, doubleclick, googleadservices) ;
+  //   - Composio, QStash/Upstash, Qdrant, Agnes/Groq, webhooks sortants :
+  //     appels SERVEUR uniquement — volontairement ABSENTS de la CSP
+  //     navigateur (aucun fetch direct depuis le client).
+  "connect-src 'self' https://apis.google.com https://*.googleapis.com https://www.gstatic.com https://*.firebaseio.com wss://*.googleapis.com wss://*.firebaseio.com https://o4511820262473728.ingest.de.sentry.io https://ingest.de.sentry.io https://ingest.sentry.io https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com",
   // Google AdSense (Task 40) : les annonces se rendent dans des iframes
   // servies par googleads.g.doubleclick.net et tpc.googlesyndication.com.
   "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.firebaseio.com https://content.googleapis.com https://googleads.g.doubleclick.net https://*.googlesyndication.com https://*.doubleclick.net",
@@ -57,6 +73,12 @@ const ARTEFACT_CONTENT_SECURITY_POLICY = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
   "media-src 'self' blob: https:",
+  // connect-src ouvert VOLONTAIRE (Task 60) : les apps artefact sont des
+  // applications GÉNÉRÉES qui appellent par conception des API choisies
+  // par leurs auteurs — une allowlist fixe les casserait. Le risque est
+  // borné par la sandbox : iframe sans allow-same-origin (origine opaque,
+  // ni cookies ni DOM Gen3ia) — « 'self' » n'y désigne AUCUNE origine
+  // Gen3ia et aucune donnée de session n'y est exposée.
   "connect-src 'self' https: wss:",
   "worker-src 'self' blob:",
   "upgrade-insecure-requests",

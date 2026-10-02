@@ -179,7 +179,9 @@ export function securityHeaders(
       "font-src 'self' https: data:",
       "style-src 'self' 'unsafe-inline'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "connect-src 'self' https:",
+      // Task 60 : ces en-têtes équipent des réponses JSON (garde de route,
+      // 429) — aucun fetch légitime n'en part ; connect-src est fermé.
+      "connect-src 'self'",
       "frame-ancestors 'none'",
     ].join("; "),
   );

@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 
 const BASE = process.env.BASE_URL || "https://gen3ia.online";
 const RELAXED_CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://www.googleapis.com; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.firebaseio.com https://content.googleapis.com; connect-src 'self' https: wss:";
+  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://www.googleapis.com; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.firebaseio.com https://content.googleapis.com; connect-src 'self' https://apis.google.com https://*.googleapis.com https://www.gstatic.com https://*.firebaseio.com wss://*.googleapis.com wss://*.firebaseio.com https://o4511820262473728.ingest.de.sentry.io https://ingest.de.sentry.io https://ingest.sentry.io";
 
 const run = async () => {
   const browser = await chromium.launch({ headless: true });
