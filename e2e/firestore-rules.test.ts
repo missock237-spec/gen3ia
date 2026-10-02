@@ -165,7 +165,7 @@ describe("Règles Firestore : isolation multi-tenant", () => {
   });
 
   it("agents org (rec C) — membre lit, ne gère pas ; owner/org écrit ; étranger rien", async () => {
-    await seedFixtures();
+    const { bob } = await seedFixtures();
     const aliceDb = testEnv.authenticatedContext("alice-uid").firestore();
     const bobDb = testEnv.authenticatedContext("bob-uid").firestore();
     const outsiderDb = testEnv.authenticatedContext("outsider-uid").firestore();
@@ -186,7 +186,7 @@ describe("Règles Firestore : isolation multi-tenant", () => {
   });
 
   it("agents org (rec C) — création avec orgId : membre ok, non-membre refusé", async () => {
-    await seedFixtures();
+    const { bob } = await seedFixtures();
     const bobDb = testEnv.authenticatedContext("bob-uid").firestore();
     const outsiderDb = testEnv.authenticatedContext("outsider-uid").firestore();
 
@@ -205,7 +205,7 @@ describe("Règles Firestore : isolation multi-tenant", () => {
   });
 
   it("knowledgeDocuments org (rec C) — membre lit, étranger refusé, ownerId immuable", async () => {
-    await seedFixtures();
+    const { bob } = await seedFixtures();
     const bobDb = testEnv.authenticatedContext("bob-uid").firestore();
     const outsiderDb = testEnv.authenticatedContext("outsider-uid").firestore();
 
@@ -216,7 +216,7 @@ describe("Règles Firestore : isolation multi-tenant", () => {
   });
 
   it("workflows org (rec C) — lecture membre, écriture client fermée (Admin SDK seul)", async () => {
-    await seedFixtures();
+    const { alice } = await seedFixtures();
     const bobDb = testEnv.authenticatedContext("bob-uid").firestore();
 
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
