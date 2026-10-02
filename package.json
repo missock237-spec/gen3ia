@@ -32,7 +32,10 @@
     "seed": "tsx scripts/seed.ts",
     "db:reset": "npx firebase-tools emulators:exec --project demo-gen3ia --only auth,firestore \"tsx scripts/seed.ts\"",
     "check:a11y": "node scripts/a11y_prod.mjs",
-    "backfill:supabase": "NODE_OPTIONS=--conditions=react-server tsx scripts/backfill_supabase.ts"
+    "backfill:supabase": "NODE_OPTIONS=--conditions=react-server tsx scripts/backfill_supabase.ts",
+    "sdk:build": "node sdk/build.mjs",
+    "sdk:pack": "npm pack ./sdk --pack-destination public/sdk",
+    "sdk:test": "vitest run sdk/test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1133.0",

@@ -1,0 +1,34 @@
+{
+  "name": "@gen3ia/sdk",
+  "version": "1.0.0",
+  "description": "SDK TypeScript officiel de l'API Gen3ia — agents, missions longues (file QStash + SSE), salons clients publics et déclencheurs webhook.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/cjs/index.js",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/cjs/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "keywords": [
+    "gen3ia",
+    "ai",
+    "agents",
+    "sdk",
+    "api"
+  ]
+}

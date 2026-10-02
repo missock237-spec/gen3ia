@@ -40,6 +40,7 @@
     "live-agent",
     "functions",
     "sandbox",
+    "sdk",
     "vitest",
     "vitest.config.mts",
     "**/*.test.ts",

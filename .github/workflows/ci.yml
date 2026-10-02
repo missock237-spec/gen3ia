@@ -47,6 +47,13 @@ jobs:
       - name: Install sandbox service dependencies
         run: npm ci --no-audit --no-fund --prefix sandbox
 
+      # Task 61 : le SDK public @gen3ia/sdk est typechecké avec un tsc strict
+      # dédié et émis en double format (ESM + CJS). Son échec bloque la CI
+      # comme le reste du produit — le tarball distribué depuis
+      # /api/public/sdk doit refléter un build sain.
+      - name: SDK @gen3ia/sdk (typecheck + build ESM/CJS)
+        run: npm run sdk:build
+
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
         continue-on-error: false

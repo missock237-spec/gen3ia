@@ -28,6 +28,8 @@ export default defineConfig({
       // Services annexes (logique pure + comportemental inject) — Tâche 56.
       "live-agent/src/**/*.test.ts",
       "sandbox/src/**/*.test.ts",
+      // SDK public @gen3ia/sdk (client, erreurs, SSE, suivi missions) — Tâche 61.
+      "sdk/test/**/*.test.ts",
       // Helpers des sondes de production — Tâche 57.
       "scripts/lib/**/*.test.mjs",
     ],
