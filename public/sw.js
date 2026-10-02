@@ -263,5 +263,9 @@ self.addEventListener("notificationclick", (event) => {
 
 // Reprise également au démarrage du SW (navigateurs sans Background Sync).
 self.addEventListener("message", (event) => {
+  // Seuls les documents de NOTRE origine pilotent le SW (alerte CodeQL
+  // missing-origin-check : un postMessage intersites ne doit jamais
+  // déclencher la reprise de la file d'envoi).
+  if (event.origin !== self.location.origin) return;
   if (event.data === "gen3ia-flush") event.waitUntil(flushOutbox());
 });

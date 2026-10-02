@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { assertPublicHttpUrl } from "@/lib/security/url-safety";
+import { markupToText } from "@/lib/content/html-text";
 
 /**
  * Sources de veille des agents « toujours actifs » : RSS ou page web.
@@ -37,15 +38,12 @@ export function normalizeSourceContent(type: WatchSourceType, raw: string): stri
     text = text
       .replace(/<(lastBuildDate|pubDate|updated|published|dc:date|atom:updated|atom:published)[^>]*>[\s\S]*?<\/\1>/gi, "")
       .replace(/<(lastBuildDate|pubDate|updated|published|dc:date)[^>]*\/>/gi, "");
-  } else {
-    text = text
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ");
   }
-  return text
-    .replace(/\s+/g, " ")
-    .trim();
+  // Machine à états dédiée pour la suppression de balises (une passe,
+  // guillemets d'attributs respectés, éléments bruts ignorés jusqu'à leur
+  // fermeture réelle) — alerte CodeQL bad-tag-filter fermée par robustesse
+  // réelle, pas par filtrage plus large.
+  return markupToText(text);
 }
 
 export function hashSourceContent(normalized: string): string {

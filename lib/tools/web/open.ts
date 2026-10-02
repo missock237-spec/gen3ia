@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolDefinition } from "../types";
 import { assertPublicHttpUrl } from "@/lib/security/url-safety";
+import { markupToText } from "@/lib/content/html-text";
 
 const OpenInput = z.object({
   url: z.string().url(),
@@ -46,7 +47,10 @@ async function extractResponse(response: Response): Promise<OpenResult> {
   if (Number.isFinite(contentLength) && contentLength > 5_000_000) throw new Error("Web page exceeds the 5 MiB response limit.");
   const html = await response.text();
   if (Buffer.byteLength(html, "utf8") > 5_000_000) throw new Error("Web page exceeds the 5 MiB response limit.");
-  const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 50000);
+  // Machine à états dédiée (une passe, balises imbriquées inertes) — la
+  // chaîne de regex historique laissait des balises actives résiduelles
+  // (alerte CodeQL bad-tag-filter).
+  const text = markupToText(html).slice(0, 50000);
   return { url: response.url, status: response.status, contentType, text };
 }
 

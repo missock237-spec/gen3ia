@@ -65,10 +65,30 @@ async function readWorkspaceFiles(workspaceRoot: string) {
         continue;
       }
       if (!stat.isFile()) continue;
-      if (stat.size > MAX_SINGLE_FILE) throw new Error(`File exceeds ${MAX_SINGLE_FILE} bytes: ${safePath}`);
-      totalBytes += stat.size;
-      if (totalBytes > MAX_TOTAL_BYTES) throw new Error("Workspace exceeds ZIP uncompressed size limit");
-      entries.push({ filename: safePath, data: await fs.readFile(absolute) });
+      // Lecture par descripteur ouvert SANS suivi de lien symbolique
+      // (O_NOFOLLOW) puis statistiques sur le DESCRIPTEUR : la fenêtre
+      // TOCTOU entre lstat et readFile (alerte CodeQL file-system-race —
+      // un fichier substitué par un lien symbolique entre les deux appels)
+      // est fermée : les données lues proviennent exactement de l'inode
+      // vérifié (type + taille), jamais d'un chemin re-résolu.
+      const handle = await fs.open(absolute, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+      try {
+        const opened = await handle.stat();
+        if (opened.isSymbolicLink() || !opened.isFile()) continue;
+        if (opened.size > MAX_SINGLE_FILE) throw new Error(`File exceeds ${MAX_SINGLE_FILE} bytes: ${safePath}`);
+        totalBytes += opened.size;
+        if (totalBytes > MAX_TOTAL_BYTES) throw new Error("Workspace exceeds ZIP uncompressed size limit");
+        const data = Buffer.alloc(opened.size);
+        let read = 0;
+        while (read < opened.size) {
+          const { bytesRead } = await handle.read(data, read, opened.size - read, read);
+          if (bytesRead <= 0) throw new Error(`File truncated while reading: ${safePath}`);
+          read += bytesRead;
+        }
+        entries.push({ filename: safePath, data });
+      } finally {
+        await handle.close();
+      }
     }
   }
 

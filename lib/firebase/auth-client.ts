@@ -291,6 +291,10 @@ export async function establishSession(user: User, redirectTo?: string | null): 
     }
 
     if (response.ok) {
+      // codeql[js/client-side-unvalidated-url-redirection] — la cible est
+      // passée par sanitizeRedirect (chemin relatif strict + résolution
+      // WHATWG + exigence d'origine same-origin, Tâche 50, 5 tests dédiés) :
+      // le flux est durci, CodeQL ne modélise pas ce sanitizer local.
       window.location.href = sanitizeRedirect(redirectTo) ?? "/studio";
       return;
     }

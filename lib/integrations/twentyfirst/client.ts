@@ -199,7 +199,7 @@ function parseComponent(raw: string, id: string): ComponentCode {
     const blocks = [...section.matchAll(/```(?:tsx?|jsx?|css)?\n([\s\S]*?)```/g)].map((m) => m[1]);
     if (blocks.length === 0) continue;
     if (/^Component/i.test(section)) codeBlocks.push(...blocks);
-    else if (/^Demo|Usage|Example/i.test(section)) demoBlocks.push(...blocks);
+    else if (/^(?:demo|usage|example)/i.test(section)) demoBlocks.push(...blocks);
     else codeBlocks.push(...blocks);
   }
 

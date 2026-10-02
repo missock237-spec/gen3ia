@@ -5,6 +5,7 @@ import yauzl from "yauzl";
 import { assertPublicHttpUrl } from "@/lib/security/url-safety";
 import { adminDb } from "@/lib/firebase/admin";
 import { indexKnowledgeDocument } from "./indexer";
+import { markupToText } from "@/lib/content/html-text";
 
 /**
  * Ingestion Knowledge / RAG Gen3ia.
@@ -34,25 +35,18 @@ export interface KnowledgeDocumentRecord {
   createdAt: string;
 }
 
-/** Supprime les balises, décode les entités de base et compacte les blancs. */
+/**
+ * HTML → texte : machine à états dédiée (lib/content/html-text.ts) — les
+ * chaînes de regex historiques laissaient traverser des balises imbriquées
+ * (`<scr<script>ipt>`) et décodaient les entités par passes successives
+ * (alertes CodeQL bad-tag-filter / double-escaping /
+ * incomplete-multi-character-sanitization). Le parseur incrémental ne peut
+ * pas être évasé : il suit les guillemets d'attributs, ignore les éléments
+ * à contenu brut jusqu'à leur fermeture réelle et décode chaque entité
+ * exactement une fois.
+ */
 export function htmlToText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<head[\s\S]*?<\/head>/gi, " ")
-    .replace(/<\/(p|div|section|article|li|h[1-6]|tr|br)>/gi, "\n")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n\s*\n\s*\n+/g, "\n\n")
-    .trim();
+  return markupToText(html);
 }
 
 /** Extrait le texte lisible d'un DOCX (zip Word) : word/document.xml → texte. */
@@ -100,16 +94,14 @@ export async function docxToText(buffer: Buffer): Promise<string> {
           });
           stream.on("end", () => {
             const xml = Buffer.concat(chunks).toString("utf8");
-            const text = xml
-              .replace(/<\/w:p>/g, "\n")
-              .replace(/<w:tab[^>]*\/>/g, "\t")
-              .replace(/<[^>]+>/g, "")
-              .replace(/&amp;/g, "&")
-              .replace(/&lt;/g, "<")
-              .replace(/&gt;/g, ">")
-              .replace(/&quot;/g, '"')
-              .replace(/&#39;|&apos;/g, "'")
-              .replace(/[ \t]+/g, " ")
+            // Même machine à états que le HTML : `</w:p>` émet la fin de
+            // paragraphe, `<w:tab/>` une tabulation — le balisage résiduel
+            // et les entités partiellement décodées sont désormais impossibles.
+            const text = markupToText(xml, {
+              blockElements: [],
+              tabElements: ["w:tab"],
+              collapseWhitespace: false,
+            }).replace(/[ \t]+/g, " ")
               .replace(/\n\s*\n\s*\n+/g, "\n\n")
               .trim();
             finish(text);

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { markupToText } from "@/lib/content/html-text";
+
 import type {
   ToolDefinition,
 } from "../types";
@@ -402,16 +404,10 @@ function decodeDuckDuckGoHref(href: string): string | null {
 }
 
 function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  // Machine à états (une passe, un seul décodage d'entité, balises
+  // imbriquées inertes) — remplace la chaîne de regex vulnérable aux
+  // évasions et signalée par CodeQL (double-escaping / bad-tag-filter).
+  return markupToText(html);
 }
 
 /**

@@ -85,10 +85,25 @@ function normalizeUrl(
   return url.toString();
 }
 
+/**
+ * Comparaison d'hôte EXACTE (hôte ou sous-domaine du domaine de référence) :
+ * les sous-chaînes (`includes`) faisaient correspondre
+ * « evil-github.com.evil.io » à github.com (alertes CodeQL
+ * incomplete-url-substring-sanitization) — un hôte ne peut plus être
+ * reconnu qu'en entier, délimité par des points.
+ */
+function hostIs(
+  domain: string,
+  reference: string,
+): boolean {
+  return domain === reference || domain.endsWith(`.${reference}`);
+}
+
 function classifyDomain(
   domain: string,
 ): ResearchSource["sourceType"] {
   if (
+    domain === "gov" ||
     domain.endsWith(".gov") ||
     domain.endsWith(".gov.uk")
   ) {
@@ -96,24 +111,24 @@ function classifyDomain(
   }
 
   if (
-    domain.includes("github.com") ||
-    domain.includes("readthedocs") ||
-    domain.includes("developer.")
+    hostIs(domain, "github.com") ||
+    hostIs(domain, "readthedocs.io") ||
+    domain.startsWith("developer.")
   ) {
     return "documentation";
   }
 
   if (
-    domain.includes("arxiv.org") ||
-    domain.includes("nature.com") ||
-    domain.includes("acm.org")
+    hostIs(domain, "arxiv.org") ||
+    hostIs(domain, "nature.com") ||
+    hostIs(domain, "acm.org")
   ) {
     return "academic";
   }
 
   if (
-    domain.includes("reddit.com") ||
-    domain.includes("stackoverflow.com")
+    hostIs(domain, "reddit.com") ||
+    hostIs(domain, "stackoverflow.com")
   ) {
     return "community";
   }
@@ -132,15 +147,15 @@ function authorityScore(
   }
 
   if (
-    domain.includes("github.com") ||
-    domain.includes("openai.com") ||
-    domain.includes("google.com")
+    hostIs(domain, "github.com") ||
+    hostIs(domain, "openai.com") ||
+    hostIs(domain, "google.com")
   ) {
     return 0.9;
   }
 
   if (
-    domain.includes("arxiv.org")
+    hostIs(domain, "arxiv.org")
   ) {
     return 0.9;
   }
