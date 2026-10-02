@@ -30,6 +30,10 @@ function appOrigin(request: Request): string {
 export async function POST(request: Request) {
   try {
     const token = await verifyFirebaseRequest(request);
+    // Surface sensible argent (Task 63) : si le compte est marqué « MFA
+    // requis », un second facteur vérifié est exigé avant tout rechargement.
+    const { assertStrongAuth } = await import("@/lib/security/mfa");
+    await assertStrongAuth(request);
     const topupLimit = await enforceRateLimit(`billing-topup:${token.uid}`, { limit: 10, windowMs: 10 * 60 * 1000 });
     if (!topupLimit.allowed) {
       return Response.json({ error: "Trop de tentatives de rechargement. Reessayez plus tard." }, { status: 429, headers: { "retry-after": String(Math.max(1, Math.ceil(topupLimit.retryAfterMs / 1000))) } });

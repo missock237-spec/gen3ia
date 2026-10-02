@@ -20,6 +20,13 @@ export interface SessionPayload {
   name: string | null;
   picture: string | null;
   provider: string;
+  /**
+   * true : la session a été établie APRÈS un second facteur MFA vérifié
+   * (Task 63 — sécurité entreprise). Absent/false sur les anciens cookies
+   * (rétrocompatible) : le flag est recopié tel quel, la politique
+   * d'application reste côté lib/security/mfa.ts.
+   */
+  mfa?: boolean;
   exp: number; // epoch seconds
 }
 

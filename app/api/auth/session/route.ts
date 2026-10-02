@@ -9,6 +9,7 @@ import {
   sessionCookieHeader,
 } from "@/lib/server/session-cookie";
 import { logger } from "@/lib/observability/logger";
+import { mfaStatusFromToken } from "@/lib/security/mfa";
 
 interface SessionWallet {
   currency: string;
@@ -22,6 +23,8 @@ interface SessionResponseBody {
   authenticated: boolean;
   /** true : jeton valide mais provisioning Firestore indisponible (mode dégradé). */
   degraded?: boolean;
+  /** true : session établie après un second facteur MFA vérifié (Task 63). */
+  mfa?: boolean;
   user: {
     uid: string;
     email: string | null;
@@ -87,12 +90,16 @@ export async function POST(request: NextRequest) {
   try {
     const token = await verifyFirebaseToken(request.headers.get("authorization"));
     const provider = token.firebase?.sign_in_provider || "unknown";
+    // Preuve MFA (Task 63) : recopiée dans le cookie de session signé — les
+    // surfaces sensibles (assertStrongAuth) s'y fient pour les sessions cookie.
+    const mfaStatus = mfaStatusFromToken(token);
 
     const { wallet, degraded } = await provisionnerUtilisateur(token);
 
     const body: SessionResponseBody = {
       authenticated: true,
       ...(degraded ? { degraded: true } : {}),
+      mfa: mfaStatus.secondFactorUsed,
       user: { uid: token.uid, email: token.email ?? null, name: token.name ?? null, picture: token.picture ?? null },
       wallet,
     };
@@ -108,6 +115,7 @@ export async function POST(request: NextRequest) {
           name: token.name ?? null,
           picture: token.picture ?? null,
           provider,
+          ...(mfaStatus.secondFactorUsed ? { mfa: true } : {}),
         }),
       },
     });
