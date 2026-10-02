@@ -147,6 +147,9 @@ describe("sandbox /execute — exécution signée réelle (docker indisponible �
     const body = response.json();
     expect(body.success).toBe(false);
     expect(typeof body.stderr).toBe("string");
-    expect(body.exitCode).toBeNull();
+    // Docker ABSENT (bac à sable local sans CLI) → erreur de spawn → null ;
+    // Docker PRÉSENT sans l'image (CI ubuntu-latest) → sortie CLI 125.
+    // Dans les deux cas : échec STRUCTURÉ renvoyé 200 (contrat testé).
+    expect([null, 125]).toContain(body.exitCode);
   });
 });
