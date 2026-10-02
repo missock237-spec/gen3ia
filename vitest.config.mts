@@ -28,6 +28,8 @@ export default defineConfig({
       // Services annexes (logique pure + comportemental inject) — Tâche 56.
       "live-agent/src/**/*.test.ts",
       "sandbox/src/**/*.test.ts",
+      // Helpers des sondes de production — Tâche 57.
+      "scripts/lib/**/*.test.mjs",
     ],
     env: {
       // Dummy Firebase Admin credentials so server modules that initialize

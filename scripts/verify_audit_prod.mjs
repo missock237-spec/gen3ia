@@ -24,6 +24,8 @@
 
 import { chromium } from "playwright";
 
+import { cspAuthorizes, cspAuthorizesAny, cspHasToken, urlHasHost } from "./lib/csp-probe.mjs";
+
 const BASE = process.env.BASE_URL || "https://gen3ia.online";
 const API_KEY = "AIzaSyCWeyTdWPj0HjIfo0EyLPldAeRrSIyBJbQ";
 const EMAIL = `e2e-audit-${Date.now()}@gen3ia.test`;
@@ -73,9 +75,12 @@ async function main() {
   const previewRes = await fetch(`${BASE}/preview/audit-probe-id`, { redirect: "manual" });
   const previewCsp = previewRes.headers.get("content-security-policy") || "";
   const previewXfo = previewRes.headers.get("x-frame-options") || "";
+  const jsdelivrOk = cspAuthorizesAny(previewCsp, "cdn.jsdelivr.net");
+  const evalOk = cspHasToken(previewCsp, "'unsafe-eval'");
+  const ancestorsSelfOk = cspAuthorizes(previewCsp, "frame-ancestors", "'self'");
   ok("7/csp-artefact-preview",
-    previewCsp.includes("cdn.jsdelivr.net") && previewCsp.includes("unsafe-eval") && previewCsp.includes("frame-ancestors 'self'"),
-    `jsdelivr=${previewCsp.includes("cdn.jsdelivr.net")} eval=${previewCsp.includes("unsafe-eval")} ancestors-self=${previewCsp.includes("frame-ancestors 'self'")}`);
+    jsdelivrOk && evalOk && ancestorsSelfOk,
+    `jsdelivr=${jsdelivrOk} eval=${evalOk} ancestors-self=${ancestorsSelfOk}`);
   ok("7b/xfo-preview", previewXfo === "SAMEORIGIN", previewXfo);
 
   // ---------- 8. Trace-id cryptographique ----------
@@ -96,15 +101,15 @@ async function main() {
   await page.getByRole("button", { name: /continuer avec google/i }).click();
   await page.waitForTimeout(8000);
   const googlePages = context.pages().map((p) => p.url());
-  ok("9/popup-google", googlePages.some((u) => u.includes("accounts.google.com")),
-    (googlePages.find((u) => u.includes("accounts.google.com")) || "aucune popup").slice(0, 80));
+  ok("9/popup-google", googlePages.some((u) => urlHasHost(u, "accounts.google.com")),
+    (googlePages.find((u) => urlHasHost(u, "accounts.google.com")) || "aucune popup").slice(0, 80));
 
   await page.goto(`${BASE}/login`, { waitUntil: "networkidle", timeout: 60000 });
   await page.getByRole("button", { name: /continuer avec github/i }).click();
   await page.waitForTimeout(8000);
   const githubPages = context.pages().map((p) => p.url());
-  ok("10/popup-github", githubPages.some((u) => u.includes("github.com/login")),
-    (githubPages.find((u) => u.includes("github.com/login")) || "aucune popup").slice(0, 80));
+  ok("10/popup-github", githubPages.some((u) => urlHasHost(u, "github.com")),
+    (githubPages.find((u) => urlHasHost(u, "github.com")) || "aucune popup").slice(0, 80));
 
   await browser.close();
 

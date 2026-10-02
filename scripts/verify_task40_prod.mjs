@@ -16,6 +16,7 @@
  * Usage : BASE_URL=https://gen3ia.online node scripts/verify_task40_prod.mjs
  */
 import { gunzipSync } from "node:zlib";
+import { cspAuthorizes, cspAuthorizesAny, cspHasToken } from "./lib/csp-probe.mjs";
 
 const BASE = process.env.BASE_URL || "https://gen3ia.online";
 const PUB = "ca-pub-7168568074147796";
@@ -68,10 +69,10 @@ async function main() {
   try {
     const { res } = await fetchPage("/");
     const csp = res.headers.get("content-security-policy") || "";
-    record("CSP : pagead2 autorisé (script-src AdSense)", csp.includes("pagead2.googlesyndication.com"));
-    record("CSP : iframes DoubleClick autorisées", csp.includes("doubleclick.net"));
-    record("CSP : unsafe-eval TOUJOURS interdit", !csp.includes("'unsafe-eval'"));
-    record("CSP : frame-ancestors none conservé", csp.includes("frame-ancestors 'none'"));
+    record("CSP : pagead2 autorisé (script-src AdSense)", cspAuthorizesAny(csp, "pagead2.googlesyndication.com"));
+    record("CSP : iframes DoubleClick autorisées", cspAuthorizesAny(csp, "doubleclick.net"));
+    record("CSP : unsafe-eval TOUJOURS interdit", !cspHasToken(csp, "'unsafe-eval'"));
+    record("CSP : frame-ancestors none conservé", cspAuthorizes(csp, "frame-ancestors", "'none'"));
   } catch (e) {
     record("CSP vitrine", false, e.message);
   }

@@ -19,6 +19,8 @@
 
 import { chromium } from "playwright";
 
+import { cspAuthorizesAny } from "./lib/csp-probe.mjs";
+
 const BASE = process.env.BASE_URL || "https://gen3ia.online";
 const API_KEY = "AIzaSyCWeyTdWPj0HjIfo0EyLPldAeRrSIyBJbQ";
 const EMAIL = `e2e-services-${Date.now()}@gen3ia.test`;
@@ -48,9 +50,9 @@ async function sendMessage(cookie, conversationId, message) {
   // 1. CSP corrigée
   const pageHead = await fetch(`${BASE}/login`, { method: "HEAD" });
   const csp = pageHead.headers.get("content-security-policy") ?? "";
-  check("1/csp-apis-google", csp.includes("https://apis.google.com"), "script-src autorise gapi");
-  check("1/csp-gstatic", csp.includes("https://www.gstatic.com"));
-  check("1/csp-frame-googleapis", csp.includes("https://content.googleapis.com"));
+  check("1/csp-apis-google", cspAuthorizesAny(csp, "apis.google.com"), "script-src autorise gapi");
+  check("1/csp-gstatic", cspAuthorizesAny(csp, "www.gstatic.com"));
+  check("1/csp-frame-googleapis", cspAuthorizesAny(csp, "content.googleapis.com"));
   check("1/login-200", pageHead.status === 200, `HTTP ${pageHead.status}`);
 
   // 2. OAuth réel : le clic Google ouvre le popup vers la page Google

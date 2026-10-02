@@ -11,7 +11,10 @@ const run = async () => {
 
   await page.goto(`${BASE}/login`, { waitUntil: "networkidle", timeout: 60000 });
 
-  const btn = page.getByRole("button", { name: new RegExp(`continuer avec ${provider}`, "i") });
+  // provider provient de argv (entrée utilisateur) : échappé avant d'être
+  // compilé en regex — un argument « .*|x » ne peut plus détourner le motif.
+  const providerPattern = provider.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const btn = page.getByRole("button", { name: new RegExp(`continuer avec ${providerPattern}`, "i") });
   await btn.click();
   await page.waitForTimeout(8000);
 
@@ -29,7 +32,7 @@ const run = async () => {
     console.log(redirectUri);
     // tester la disponibilité du handler Firebase
     if (redirectUri.includes("__/auth/handler")) {
-      const res = await fetch(redirectUri.replace("/__/auth/handler", "/__/auth/handler"), { redirect: "manual" });
+      const res = await fetch(redirectUri, { redirect: "manual" });
       console.log("=== HANDLER STATUS ===", res.status);
     }
   }

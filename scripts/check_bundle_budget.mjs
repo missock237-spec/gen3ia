@@ -22,7 +22,7 @@
  *         BUDGET_FIRST_LOAD_KB=260 node scripts/check_bundle_budget.mjs (override)
  */
 
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, existsSync, openSync, fstatSync, readSync, closeSync } from "node:fs";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 
@@ -62,17 +62,32 @@ function measureRoute(files) {
   for (const rel of uniq) {
     const abs = join(NEXT_DIR, rel.replace(/^\/?/, ""));
     if (!existsSync(abs)) continue;
-    const stat = statSync(abs);
-    if (!stat.isFile() || stat.size > 8_000_000) continue;
-    const buf = readFileSync(abs);
-    rawTotal += buf.length;
-    gzipTotal += gzipSync(buf).length;
-    // Scan marqueurs : uniquement les chunks raisonnables (évite le concat géant).
-    if (buf.length < 1_500_000) {
-      const text = buf.toString("utf8");
-      for (const marker of FORBIDDEN_MARKERS) {
-        if (text.includes(marker) && !markers.has(marker)) markers.set(marker, rel);
+    // Lecture par DESCRIPTEUR (open → fstat → read) : plus aucune paire
+    // stat→readFile sur le chemin — la fenêtre TOCTOU (substitution du fichier
+    // entre la vérification et la lecture) est fermée par construction.
+    const fd = openSync(abs, "r");
+    try {
+      const stat = fstatSync(fd);
+      if (!stat.isFile() || stat.size > 8_000_000) continue;
+      const buf = Buffer.alloc(stat.size);
+      let read = 0;
+      while (read < stat.size) {
+        const n = readSync(fd, buf, read, stat.size - read, read);
+        if (n <= 0) break;
+        read += n;
       }
+      if (read !== stat.size) continue;
+      rawTotal += buf.length;
+      gzipTotal += gzipSync(buf).length;
+      // Scan marqueurs : uniquement les chunks raisonnables (évite le concat géant).
+      if (buf.length < 1_500_000) {
+        const text = buf.toString("utf8");
+        for (const marker of FORBIDDEN_MARKERS) {
+          if (text.includes(marker) && !markers.has(marker)) markers.set(marker, rel);
+        }
+      }
+    } finally {
+      closeSync(fd);
     }
   }
   return { gzipTotal, rawTotal, markers: [...markers.entries()] };
