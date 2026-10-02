@@ -36,6 +36,57 @@ const PUBLISH_TIMEOUT_MS = 10_000;
 /** Repli du nombre de tentatives QStash pour une délivrance de tick. */
 const TICK_RETRIES = 3;
 
+/**
+ * Publie un corps vers une URL destination ABSOLUE via QStash.
+ *
+ * PATH BRUT OU ENCODÉ (Task 62) : la build QStash de ce compte (instance
+ * régionale + global vérifiés en sondes réelles) rejette les chemins
+ * URL-encodés (« invalid destination url… invalid scheme ») et exige la
+ * destination BRUTE dans le path — `:` et `/` sont licites dans un segment
+ * de chemin (RFC 3986). L'ancien code encodait (encodeURIComponent) : chaque
+ * publish de production échouait 400 et les missions « auto » repliaient
+ * silencieusement en sync — la file n'a jamais délivré. Le path brut est
+ * désormais la forme primaire ; en cas de 400 « invalid destination »,
+ * un second essai ENCODÉ couvre les builds QStash historiques qui exigent
+ * l'inverse (compatibilité sans env var).
+ */
+async function publishToDestination(
+  config: QStashConfig,
+  destinationUrl: string,
+  body: string,
+  options: { delaySeconds?: number; retries?: number } = {},
+): Promise<{ messageId: string }> {
+  const headers = {
+    Authorization: `Bearer ${config.token}`,
+    "Content-Type": "application/json",
+    "Upstash-Retries": String(options.retries ?? TICK_RETRIES),
+    ...(options.delaySeconds && options.delaySeconds > 0
+      ? { "Upstash-Delay": `${Math.round(options.delaySeconds)}s` }
+      : {}),
+  };
+
+  const attempt = async (path: string): Promise<Response> =>
+    fetch(`${QSTASH_BASE_URL}${path}`, {
+      method: "POST",
+      headers,
+      body,
+      signal: AbortSignal.timeout(PUBLISH_TIMEOUT_MS),
+    });
+
+  // 1) Path BRUT (forme exigée par la build QStash de ce compte).
+  let response = await attempt(`/v2/publish/${destinationUrl}`);
+  if (response.status === 400) {
+    // 2) Compatibilité : build historique exigeant la destination encodée.
+    response = await attempt(`/v2/publish/${encodeURIComponent(destinationUrl)}`);
+  }
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`QStash publish ${response.status}: ${detail.slice(0, 300)}`);
+  }
+  const payload = (await response.json().catch(() => null)) as { messageId?: string } | null;
+  return { messageId: payload?.messageId ?? "unknown" };
+}
+
 export interface QStashConfig {
   token: string;
   currentSigningKey: string;
@@ -80,26 +131,32 @@ export async function publishMissionTick(
 ): Promise<{ messageId: string } | null> {
   const config = qstashConfig();
   if (!config) return null;
-  const url = `${QSTASH_BASE_URL}/v2/publish/${encodeURIComponent(missionTickUrl(origin))}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-      "Content-Type": "application/json",
-      "Upstash-Retries": String(TICK_RETRIES),
-      ...(options.delaySeconds && options.delaySeconds > 0
-        ? { "Upstash-Delay": `${Math.round(options.delaySeconds)}s` }
-        : {}),
-    },
-    body: JSON.stringify({ runId }),
-    signal: AbortSignal.timeout(PUBLISH_TIMEOUT_MS),
+  return publishToDestination(config, missionTickUrl(origin), JSON.stringify({ runId }), {
+    delaySeconds: options.delaySeconds,
   });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(`QStash publish ${response.status}: ${detail.slice(0, 300)}`);
-  }
-  const payload = (await response.json().catch(() => null)) as { messageId?: string } | null;
-  return { messageId: payload?.messageId ?? "unknown" };
+}
+
+/** URL absolue du receiver de la boucle de dispatch planifié (Task 62). */
+export function dispatchTickUrl(origin: string): string {
+  return `${origin.replace(/\/$/, "")}/api/queue/dispatch-tick`;
+}
+
+/**
+ * Publie le tick SUIVANT de la boucle de dispatch planifié (Task 62).
+ * `delaySeconds` = secondes jusqu'au début du slot suivant — la délivrance
+ * tombe au bon moment, sans registre de planification côté QStash.
+ * Même sémantique d'erreur que publishMissionTick (échec PROPAGÉ).
+ */
+export async function publishDispatchTick(
+  origin: string,
+  options: { delaySeconds: number; slotEpoch: number },
+): Promise<{ messageId: string } | null> {
+  const config = qstashConfig();
+  if (!config) return null;
+  return publishToDestination(config, dispatchTickUrl(origin), JSON.stringify({ slotEpoch: options.slotEpoch }), {
+    delaySeconds: Math.max(0, Math.min(options.delaySeconds, 86_400)),
+    retries: TICK_RETRIES,
+  });
 }
 
 /** Une entrée `v1,<hex>` du header Upstash-Signature. */

@@ -19,6 +19,13 @@ import {
 import { assertActionAllowed, assertFreshLiveTimestamp, validateFrameBase64 } from "@/lib/live/security";
 import { actionRequiresConfirmation, decideLiveAction } from "@/lib/live/vision-decider";
 import { LiveActionSchema } from "@/lib/live/types";
+import {
+  acquireDecisionLock,
+  getPreviousFramePrint,
+  isDecisionInFlight,
+  releaseDecisionLock,
+  setFramePrint,
+} from "@/lib/live/decision-lock";
 
 const PC_ONLY_MESSAGE =
   "L'agent Live est reserve aux ordinateurs (Windows/Linux/macOS) : il utilise le partage d'ecran natif du navigateur.";
@@ -28,27 +35,12 @@ export const maxDuration = 60;
 
 const ACTION_RESULT_MAX_AGE_MS = 5 * 60_000;
 /**
- * Verrous serveur (Task 45) : une seule décision vision en vol par session
- * (la décision LLM dure 2-5 s ; le client peut renvoyer une frame entre-temps)
- * et dédup des frames identiques (écran inchangé = pas d'appel LLM).
+ * Verrous serveur (Task 45, distribués en Task 62) : une seule décision
+ * vision en vol par session ET dédup des frames identiques — les deux
+ * gardes vivent dans Redis (partagées par toutes les instances, une seule
+ * décision LLM concurrente possible) avec repli mémoire Task 45 si Redis
+ * est absent. Implémentation : lib/live/decision-lock.ts.
  */
-const decisionsInFlight = new Map<string, number>();
-const DECISION_LOCK_MS = 30_000;
-const lastFramePrints = new Map<string, { hash: string; feedbackAt: number }>();
-const FRAME_PRINT_TTL_MS = 10 * 60_000;
-
-function isDecisionInFlight(id: string): boolean {
-  const at = decisionsInFlight.get(id);
-  return typeof at === "number" && Date.now() - at < DECISION_LOCK_MS;
-}
-
-/** Empêche la croissance illimitée du cache de dédup (processus longue durée). */
-function purgeFramePrints(): void {
-  const now = Date.now();
-  for (const [key, print] of lastFramePrints) {
-    if (!print || now - (print.feedbackAt || 0) > FRAME_PRINT_TTL_MS) lastFramePrints.delete(key);
-  }
-}
 
 const FrameSchema = z.object({
   deviceId: z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9._-]+$/, "deviceId invalide"),
@@ -134,26 +126,28 @@ export async function POST(request: Request, { params }: Params) {
         ? { ...session.runtime.lastActionResult }
         : undefined;
 
-    // Dédup (Task 45) : frame identique à la précédente ET aucun nouveau
+    // Dédup (Task 45/62) : frame identique à la précédente ET aucun nouveau
     // résultat d'action → écran inchangé, réponse immédiate sans LLM.
     const frameHash = createHash("sha256").update(body.jpegBase64).digest("hex");
     const feedbackAt = feedback ? feedback.at : 0;
-    const previousPrint = lastFramePrints.get(id);
-    if (previousPrint && previousPrint.hash === frameHash && previousPrint.feedbackAt === feedbackAt && !isDecisionInFlight(id)) {
+    const [previousPrint, decisionInFlight] = await Promise.all([
+      getPreviousFramePrint(id),
+      isDecisionInFlight(id),
+    ]);
+    if (previousPrint && previousPrint.hash === frameHash && previousPrint.feedbackAt === feedbackAt && !decisionInFlight) {
       return NextResponse.json({ decision: { done: false, message: "Écran inchangé depuis la dernière analyse — en attente d'évolution." }, unchanged: true });
     }
 
-    if (isDecisionInFlight(id)) {
+    const lock = await acquireDecisionLock(id);
+    if (!lock.acquired) {
       return fail(409, "Une décision de vision est déjà en cours pour cette session — réenvoyez la frame dans un instant.", "LIVE_DECISION_IN_FLIGHT");
     }
-    decisionsInFlight.set(id, Date.now());
     try {
       const decision = await decideLiveAction(session, jpeg, body.width, body.height, feedback);
       const action = decision.action ? LiveActionSchema.parse(decision.action) : undefined;
       const actionId = action ? randomUUID() : undefined;
 
-      lastFramePrints.set(id, { hash: frameHash, feedbackAt });
-      purgeFramePrints();
+      await setFramePrint(id, { hash: frameHash, feedbackAt });
 
       await recordLiveObservation(id, {
         deviceId: body.deviceId,
@@ -197,7 +191,7 @@ export async function POST(request: Request, { params }: Params) {
       await recordLiveEvent(id, { type: "action.requested", actionId, action });
       return NextResponse.json({ decision: { done: false, message: decision.message }, action: { actionId, action } });
     } finally {
-      decisionsInFlight.delete(id);
+      await releaseDecisionLock(id);
     }
   } catch (error) {
     captureServerException(error, { route: "live.sessions.browser.frames" });

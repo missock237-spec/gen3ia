@@ -33,7 +33,7 @@ export async function POST(
         executionId
       );
 
-    registerWorkspace(
+    await registerWorkspace(
       workspace,
       guard.context.userId,
       executionId

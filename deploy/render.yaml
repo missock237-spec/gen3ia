@@ -23,6 +23,11 @@ services:
   - type: web
     name: gen3ia-live-gateway
     runtime: node
+    # numInstances DOIT rester à 1 (Task 62 — scalabilité) : le fanout des
+    # frames device → viewers est un pub/sub EN MÉMOIRE (Maps de
+    # lib/live/gateway.ts). Une seconde instance fragmenterait les salons
+    # (device sur A, viewers sur B = écran noir). Passage à N instances =
+    # ajouter un pub/sub Redis en amont des Maps.
     numInstances: 1
     buildCommand: npm install
     startCommand: npm run live:gateway

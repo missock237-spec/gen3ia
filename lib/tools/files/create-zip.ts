@@ -112,7 +112,7 @@ export const createZipTool: ToolDefinition = {
     let entries: Array<{ filename: string; data: Buffer }>;
 
     if (parsed.workspaceId) {
-      const workspace = assertWorkspaceOwner(parsed.workspaceId, context.userId);
+      const workspace = await assertWorkspaceOwner(parsed.workspaceId, context.userId);
       entries = await readWorkspaceFiles(workspace.root);
     } else {
       entries = parsed.files!.map((file) => ({

@@ -41,7 +41,7 @@ export async function POST(
       RequestSchema.parse(body);
 
     const workspace =
-      assertWorkspaceOwner(
+      await assertWorkspaceOwner(
         input.workspaceId,
         guard.context.userId
       );

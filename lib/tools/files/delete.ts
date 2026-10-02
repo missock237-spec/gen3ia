@@ -38,7 +38,7 @@ export const deleteFileTool: ToolDefinition = {
   inputSchema,
   execute: async (input, context) => {
     const parsed = inputSchema.parse(input);
-    const workspace = assertWorkspaceOwner(parsed.workspaceId, context.userId);
+    const workspace = await assertWorkspaceOwner(parsed.workspaceId, context.userId);
     const relative = safeRelativePath(parsed.filename);
     const target = path.resolve(workspace.root, relative);
     const root = path.resolve(workspace.root) + path.sep;

@@ -98,7 +98,7 @@ export const extractZipTool: ToolDefinition = {
   inputSchema,
   execute: async (input, context) => {
     const parsed = inputSchema.parse(input);
-    const workspace = assertWorkspaceOwner(parsed.workspaceId, context.userId);
+    const workspace = await assertWorkspaceOwner(parsed.workspaceId, context.userId);
     const artifact = await getArtifactRecord(parsed.artifactId);
 
     if (!artifact || artifact.ownerId !== context.userId) throw new Error("Artifact not found");
