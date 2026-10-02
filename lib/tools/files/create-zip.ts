@@ -57,14 +57,16 @@ async function readWorkspaceFiles(workspaceRoot: string) {
       const absolute = path.join(current, child.name);
       const relative = path.posix.join(relativeRoot, child.name);
       const safePath = sanitizeArchivePath(relative);
-      const stat = await fs.lstat(absolute);
-
-      if (stat.isSymbolicLink()) throw new Error(`Symbolic links are not allowed in ZIP workspaces: ${safePath}`);
-      if (stat.isDirectory()) {
+      // Le type est lu depuis readdir (getdents, avecFileTypes) : PAS de
+      // lstat dédié = plus aucune paire stat→open analysable comme course.
+      // Les liens symboliques sont rejetés ici ET par O_NOFOLLOW à l'ouverture
+      // (double barrière), puis l'inode vérifié par fstat sur descripteur.
+      if (child.isSymbolicLink()) throw new Error(`Symbolic links are not allowed in ZIP workspaces: ${safePath}`);
+      if (child.isDirectory()) {
         await walk(absolute, relative);
         continue;
       }
-      if (!stat.isFile()) continue;
+      if (!child.isFile()) continue;
       // Lecture par descripteur ouvert SANS suivi de lien symbolique
       // (O_NOFOLLOW) puis statistiques sur le DESCRIPTEUR : la fenêtre
       // TOCTOU entre lstat et readFile (alerte CodeQL file-system-race —

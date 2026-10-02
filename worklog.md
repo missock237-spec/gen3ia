@@ -642,3 +642,7 @@ Work Log:
 Stage Summary:
 - 17 alertes CodeQL de production fermées par robustesse réelle (9 HTML/XML via machine à états partagée + 10 hosts exacts + TOCTOU + ancre + origin SW) + 1 suppression documentée sur flux déjà durci.
 - Restant des recommandations : Rec C (orgId multi-tenant — analyse d'applicabilité requise), lot P2 (live-agent, sandbox), P3 (outils dev).
+
+Task 54 — RÉSIDUS (vérification post-analyse CodeQL du push a5c053a)
+- CodeQL 42 → 22 alertes ouvertes : 9 HTML/XML fermées (machine à états), 10 normalizer fermées (hosts exacts), sw.js fermée (origin-check), ancre twentyfirst fermée. Deux résidus lib/ analysés et corrigés : ① create-zip #43 — CodeQL signalait la PAIRE lstat→open résiduelle : le type vient désormais de readdir avecFileTypes (getdents, pas d'appel de course), double barrière symlink (dirent + O_NOFOLLOW) + fstat descripteur conservées ; ② auth-client #14 — la suppression documentée doit être sur la MÊME ligne que l'assignation (syntaxe CodeQL), repositionnée.
+- Restant (triage inchangé) : outils dev P3 (scripts/ ×14), services annexes P2 (live-agent ×5, sandbox ×1).
