@@ -61,11 +61,16 @@ function measureRoute(files) {
   const markers = new Map(); // marker -> chunk
   for (const rel of uniq) {
     const abs = join(NEXT_DIR, rel.replace(/^\/?/, ""));
-    if (!existsSync(abs)) continue;
-    // Lecture par DESCRIPTEUR (open → fstat → read) : plus aucune paire
-    // stat→readFile sur le chemin — la fenêtre TOCTOU (substitution du fichier
-    // entre la vérification et la lecture) est fermée par construction.
-    const fd = openSync(abs, "r");
+    // Lecture par DESCRIPTEUR (open → fstat → read), SANS check préalable de
+    // type existsSync : open() est ATOMIQUE (le seul point de vérité est le
+    // descripteur) — plus aucune paire vérifier-puis-utiliser sur le chemin
+    // (fenêtre TOCTOU fermée par construction).
+    let fd;
+    try {
+      fd = openSync(abs, "r");
+    } catch {
+      continue; // absent/illisible : chunk ignoré, comme l'ancien existsSync.
+    }
     try {
       const stat = fstatSync(fd);
       if (!stat.isFile() || stat.size > 8_000_000) continue;

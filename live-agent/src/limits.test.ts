@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   FRAME_INTERVAL_BUCKETS_MS,
   HEARTBEAT_INTERVAL_BUCKETS_MS,
+  describeStopReason,
   nextIntervalBucket,
-  sanitizeLogText,
 } from "./limits";
 
 describe("nextIntervalBucket (intervalles distants boulonnés sur barillets constants)", () => {
@@ -42,32 +42,37 @@ describe("nextIntervalBucket (intervalles distants boulonnés sur barillets cons
   });
 });
 
-describe("sanitizeLogText (hygiène des journaux contre les données distantes)", () => {
-  it("purge les caractères de contrôle C0 (sauts de ligne, retours, tabulations, nul)", () => {
-    expect(sanitizeLogText("ligne1\nligne2")).toBe("ligne1 ligne2");
-    expect(sanitizeLogText("a\rb\nc\td")).toBe("a b c d");
-    expect(sanitizeLogText("avant\u0000après")).toBe("avant après");
-    expect(sanitizeLogText("\u001b[31mrouge\u001b[0m")).toBe(" [31mrouge [0m");
+describe("describeStopReason (libellés constants — aucune donnée distante journalisée)", () => {
+  it("classe les signaux système", () => {
+    expect(describeStopReason("SIGINT")).toBe("signal SIGINT");
+    expect(describeStopReason("SIGTERM")).toBe("signal SIGTERM");
   });
 
-  it("purge les caractères de contrôle C1 (0x7F–0x9F)", () => {
-    expect(sanitizeLogText("ok\u007f\u009ffin")).toBe("ok  fin");
+  it("classe le fichier d'arrêt local et les demandes gateway", () => {
+    expect(describeStopReason("Local stop file is present.")).toBe("fichier d'arrêt local présent");
+    expect(describeStopReason("gateway requested stop")).toBe("demande du gateway");
+    expect(describeStopReason("n'importe quel motif libre distant")).toBe(
+      "demande du gateway (motif non classé)",
+    );
   });
 
-  it("conserve les textes sains et les accents", () => {
-    expect(sanitizeLogText("Arrêt demandé par l'opérateur")).toBe("Arrêt demandé par l'opérateur");
-  });
-
-  it("plafonne la longueur (défaut 200 caractères)", () => {
-    const long = "x".repeat(500);
-    expect(sanitizeLogText(long).length).toBe(200);
-    expect(sanitizeLogText("abcdefghij", 5)).toBe("abcde");
-  });
-
-  it("neutralise une tentative de forge de ligne de journal", () => {
-    const forged = 'stop\n2026-01-01 ERROR: faux journal\nat generated/by/attacker';
-    const cleaned = sanitizeLogText(forged);
-    expect(cleaned).not.toContain("\n");
-    expect(cleaned.split("\n").length).toBe(1);
+  it("le libellé renvoyé appartient TOUJOURS à l'ensemble constant (injection impossible)", () => {
+    const ATTACKS = [
+      "ligne1\n2026 ERROR faux journal\nat attacker",
+      "\u001b[31mansi\u001b[0m",
+      "SIGINT\nforged",
+      "",
+      "x".repeat(10_000),
+    ];
+    const ALLOWED = new Set([
+      "signal SIGINT",
+      "signal SIGTERM",
+      "fichier d'arrêt local présent",
+      "demande du gateway",
+      "demande du gateway (motif non classé)",
+    ]);
+    for (const attack of ATTACKS) {
+      expect(ALLOWED.has(describeStopReason(attack))).toBe(true);
+    }
   });
 });

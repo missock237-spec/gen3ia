@@ -35,12 +35,15 @@ export function nextIntervalBucket(
 }
 
 /**
- * Purge les caractères de contrôle C0/C1 (sauts de ligne, retours chariot,
- * séquences ANSI, octets nuls) d'une chaîne destinée aux journaux : un texte
- * distant ne peut ni forger de fausses lignes de log ni polluer le terminal.
- * Longueur plafonnée pour éviter un déluge de journal.
+ * Classe un motif d'arrêt d'urgence dans un ensemble CONSTANT de libellés :
+ * la valeur distante ne fait que SÉLECTIONNER le libellé, elle n'entre jamais
+ * dans la chaîne journalisée (aucune donnée réseau au terminal, structurellement).
+ * Le détail libre du motif reste disponible côté émetteur (journaux du gateway).
  */
-export function sanitizeLogText(value: string, maxLength = 200): string {
-  const cleaned = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ");
-  return cleaned.length > maxLength ? cleaned.slice(0, maxLength) : cleaned;
+export function describeStopReason(reason: string): string {
+  if (reason.includes("SIGINT")) return "signal SIGINT";
+  if (reason.includes("SIGTERM")) return "signal SIGTERM";
+  if (reason.includes("stop file")) return "fichier d'arrêt local présent";
+  if (reason.includes("gateway")) return "demande du gateway";
+  return "demande du gateway (motif non classé)";
 }

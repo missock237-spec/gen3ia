@@ -53,7 +53,15 @@ export function createFileCapsule(root: string, maxBytes: number) {
       }
     },
 
-    /** Écrit un fichier du root autorisé (écrasement, symlink refusé, mode 0600). */
+    /**
+     * Écrit un fichier du root autorisé en DEUX ouvertures sécurisées :
+     * 1. O_CREAT|O_EXCL|O_NOFOLLOW — création atomique si le fichier n'existe
+     *    pas encore (aucune fenêtre de création non exclusive) ;
+     * 2. sur EEXIST : O_WRONLY|O_TRUNC|O_NOFOLLOW — écrasement d'un fichier
+     *    EXISTANT sans le recréer (pas de combinaison O_CREAT+O_TRUNC, et le
+     *    O_NOFOLLOW de chaque ouverture refuse tout symlink pivot).
+     * Sémantique « w » de l'ancien writeFile conservée, mode 0600.
+     */
     async write(requestedPath: string, content: string): Promise<number> {
       const target = resolveInside(requestedPath);
       const buffer = Buffer.from(content, "utf8");
@@ -62,11 +70,17 @@ export function createFileCapsule(root: string, maxBytes: number) {
       }
       let handle: Awaited<ReturnType<typeof open>> | undefined;
       try {
-        handle = await open(
-          target,
-          fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_TRUNC | fsConstants.O_NOFOLLOW,
-          0o600,
-        );
+        try {
+          handle = await open(
+            target,
+            fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW,
+            0o600,
+          );
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException)?.code;
+          if (code !== "EEXIST") throw error;
+          handle = await open(target, fsConstants.O_WRONLY | fsConstants.O_TRUNC | fsConstants.O_NOFOLLOW, 0o600);
+        }
         await handle.writeFile(buffer);
         return buffer.byteLength;
       } finally {

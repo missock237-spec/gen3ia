@@ -9,8 +9,8 @@ import { createFileCapsule } from "./file-capsule.js";
 import {
   FRAME_INTERVAL_BUCKETS_MS,
   HEARTBEAT_INTERVAL_BUCKETS_MS,
+  describeStopReason,
   nextIntervalBucket,
-  sanitizeLogText,
 } from "./limits.js";
 
 const gatewayUrl = process.env.GEN3IA_LIVE_GATEWAY_URL;
@@ -168,10 +168,11 @@ function activateEmergencyStop(reason: string) {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   heartbeatTimer = undefined; reconnectTimer = undefined;
   socket?.close(4000, "Emergency stop"); socket = null;
-  // Le motif d'arrêt provient du gateway (donnée distante) : les caractères de
-  // contrôle sont purgés AVANT journalisation pour qu'aucune ligne ne puisse
-  // être forgée, et la longueur est plafonnée.
-  console.warn(`Gen3ia Live Agent emergency stopped: ${sanitizeLogText(reason)}`); // codeql[js/log-injection] — raison purge des caractères de contrôle C0/C1 par sanitizeLogText (sanitizeur local non modélisé par CodeQL) et longueur plafonnée.
+  // Le motif d'arrêt provient du gateway (donnée distante) : describeStopReason
+  // le classe dans un ensemble CONSTANT de libellés — la valeur distante ne
+  // fait que choisir le libellé, aucune forge de ligne de log n'est possible
+  // (le détail libre reste dans les journaux du gateway, côté émetteur).
+  console.warn(`Gen3ia Live Agent emergency stopped: ${describeStopReason(reason)}`);
 }
 
 function scheduleReconnect() {

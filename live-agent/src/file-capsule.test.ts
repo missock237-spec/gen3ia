@@ -1,5 +1,5 @@
 import { constants as fsConstants } from "node:fs";
-import { mkdir, readFile as rawReadFile, symlink, writeFile as rawWriteFile, stat, chmod } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile as rawReadFile, symlink, writeFile as rawWriteFile, stat, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -7,18 +7,30 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createFileCapsule } from "./file-capsule";
 
+// Racine de test créée par mkdtemp (répertoire unique généré ATOMIQUEMENT par
+// l'API canonique — jamais un chemin tmpdir() assemblé à la main).
 let root = "";
+let outsideDir = "";
+const rootsToClean: string[] = [];
 const MAX_BYTES = 2_000_000;
 
 beforeEach(async () => {
-  root = join(tmpdir(), `gen3ia-capsule-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  await mkdir(root, { recursive: true });
+  root = await mkdtemp(join(tmpdir(), "gen3ia-capsule-"));
+  rootsToClean.push(root);
 });
 
 afterEach(async () => {
-  // Racine de test volontairement détendue pour le nettoyage des fixtures chmod.
-  await chmod(root, 0o700).catch(() => undefined);
+  for (const dir of rootsToClean.splice(0)) {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
+
+/** Petite aide : un répertoire HORS jail, lui aussi créé par mkdtemp. */
+async function outsideRoot(): Promise<string> {
+  outsideDir = await mkdtemp(join(tmpdir(), "gen3ia-outside-"));
+  rootsToClean.push(outsideDir);
+  return outsideDir;
+}
 
 describe("createFileCapsule — lecture (descripteur vérifié, zéro TOCTOU)", () => {
   it("lit un fichier présent dans la racine autorisée", async () => {
@@ -51,7 +63,7 @@ describe("createFileCapsule — lecture (descripteur vérifié, zéro TOCTOU)", 
   });
 
   it("refuse un symlink posé sur le composant final (O_NOFOLLOW → ELOOP)", async () => {
-    const outside = join(tmpdir(), `gen3ia-outside-${Date.now()}.txt`);
+    const outside = join(await outsideRoot(), "secret.txt");
     await rawWriteFile(outside, "SECRET-HORS-JAIL", "utf8");
     const link = join(root, "link.txt");
     await symlink(outside, link);
@@ -97,7 +109,7 @@ describe("createFileCapsule — écriture (écrasement sûr, symlink refusé)", 
   });
 
   it("refuse d'écrire À TRAVERS un symlink final (O_NOFOLLOW)", async () => {
-    const outside = join(tmpdir(), `gen3ia-outside-w-${Date.now()}.txt`);
+    const outside = join(await outsideRoot(), "original.txt");
     await rawWriteFile(outside, "original", "utf8");
     await symlink(outside, join(root, "wl.txt"));
     const capsule = createFileCapsule(root, MAX_BYTES);
