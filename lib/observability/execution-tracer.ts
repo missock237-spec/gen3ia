@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { executionLogger } from "./logger";
 import { persistExecutionEvent } from "./execution-store";
+import { traceExecutionEvent } from "./otel";
 
 export type ExecutionEventType =
   | "execution.started"
@@ -77,6 +78,11 @@ export class ExecutionTracer {
     void persistExecutionEvent(result).catch((error) => {
       this.log.warn({ err: error, eventId: result.id }, "failed to persist execution telemetry");
     });
+
+    // Pont OpenTelemetry (Task 59) : chaque événement devient une span
+    // fermée (corrélation gen3ia.execution_id + gen3ia.trace_id depuis le
+    // metadata). No-op quand l'export OTLP est désactivé ; fire-and-forget.
+    traceExecutionEvent(result);
 
     return result;
   }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { safeError, executionLogger } from "@/lib/observability/logger";
+import { recordExecutionMetrics } from "@/lib/observability/otel";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { loadCheckpoint } from "@/lib/agents/runtime/checkpoint";
 import { isExecutionPauseRequested } from "@/lib/agents/runtime/pause";
@@ -136,6 +137,7 @@ export async function POST(request: NextRequest) {
 
     let state;
     let failure: string | undefined;
+    const tickStartedAt = Date.now();
     try {
       state = await runtime.run();
     } catch (error) {
@@ -146,6 +148,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (state) {
+      // Métriques OTel (Task 59) : coût par organisation, chaque tranche
+      // terminée incrémente les compteurs (no-op si export désactivé).
+      recordExecutionMetrics({
+        executionId,
+        status: state.status,
+        orgId: record.orgId,
+        userId: record.userId,
+        chargeMinor: state.billing?.totalChargeMinor ?? 0,
+        providerCostEur: state.billing?.totalProviderCostEur ?? 0,
+        inputTokens: state.billing?.llmInputTokens ?? 0,
+        outputTokens: state.billing?.llmOutputTokens ?? 0,
+        durationMs: Date.now() - tickStartedAt,
+      });
       const steps = state.plan.steps;
       await persistMissionProgress(runId, steps);
       const pendingRemaining = steps.some((step) => step.status === "pending");

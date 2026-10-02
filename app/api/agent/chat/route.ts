@@ -6,6 +6,7 @@ import { errorBody } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { planUniversalAgent } from "@/lib/agents/runtime/unified-agent";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
+import { recordExecutionMetrics } from "@/lib/observability/otel";
 import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/execution-policy";
 import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
 import { createActionApproval, listActionApprovals } from "@/lib/agents/action-approvals";
@@ -501,6 +502,19 @@ export async function POST(request: NextRequest) {
         }, { status: errorStatus(error, 400) });
       }
 
+      // Métriques OTel (Task 59) : coût par organisation (no-op si export désactivé).
+      recordExecutionMetrics({
+        executionId: plan.executionId,
+        status: result.status,
+        orgId: agent.orgId,
+        userId: user.uid,
+        agentId: agent.id,
+        chargeMinor: result.billing.totalChargeMinor,
+        providerCostEur: result.billing.totalProviderCostEur,
+        inputTokens: result.billing.llmInputTokens,
+        outputTokens: result.billing.llmOutputTokens,
+      });
+
       const currentApprovals = await listActionApprovals(user.uid, plan.executionId);
       const pending = currentApprovals.filter((item) => item.status === "pending");
       const status = pending.length > 0 ? "waiting_approval" : result.status;
@@ -714,6 +728,18 @@ export async function POST(request: NextRequest) {
         approvals: await listActionApprovals(user.uid, plan.executionId),
       }, { status: errorStatus(error, 400) });
     }
+
+    // Métriques OTel (Task 59) : chemin universel sans agent — exécution
+    // personnelle (pas d'orgId), coût/tokens toujours enregistrés.
+    recordExecutionMetrics({
+      executionId: plan.executionId,
+      status: result.status,
+      userId: user.uid,
+      chargeMinor: result.billing.totalChargeMinor,
+      providerCostEur: result.billing.totalProviderCostEur,
+      inputTokens: result.billing.llmInputTokens,
+      outputTokens: result.billing.llmOutputTokens,
+    });
 
     const currentApprovals = await listActionApprovals(user.uid, plan.executionId);
     const pending = currentApprovals.filter((item) => item.status === "pending");

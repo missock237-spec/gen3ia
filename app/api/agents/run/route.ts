@@ -9,6 +9,7 @@ import {
   RuntimePlanSchema,
 } from "@/lib/agents/runtime";
 import { executionLogger, safeError } from "@/lib/observability/logger";
+import { recordExecutionMetrics } from "@/lib/observability/otel";
 import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
 import {
   createQueuedMission,
@@ -194,6 +195,20 @@ export async function POST(request: NextRequest) {
 
     const state = await runtime.run();
     const durationMs = Date.now() - startedAt;
+
+    // Métriques OTel (Task 59) : coût par organisation (no-op si export désactivé).
+    recordExecutionMetrics({
+      executionId,
+      status: state.status,
+      orgId: parsed.data.orgId,
+      userId: user.uid,
+      traceId: requestId,
+      chargeMinor: state.billing?.totalChargeMinor ?? 0,
+      providerCostEur: state.billing?.totalProviderCostEur ?? 0,
+      inputTokens: state.billing?.llmInputTokens ?? 0,
+      outputTokens: state.billing?.llmOutputTokens ?? 0,
+      durationMs,
+    });
 
     executionLog.info(
       {

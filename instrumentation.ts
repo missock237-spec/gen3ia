@@ -71,6 +71,16 @@ export async function register(): Promise<void> {
       // Profilage continu actif uniquement si le vars permis l'autorisent.
       profilesSampleRate: 0.0,
     });
+
+    // Export OpenTelemetry (Task 59) : UNIQUEMENT si l'endpoint OTLP est
+    // défini (Datadog, Grafana, collecteur interne). Import dynamique du
+    // pont — sans la variable, aucun module OTel n'est chargé.
+    try {
+      const { initOtel, isOtelExportEnabled } = await import("./lib/observability/otel");
+      if (isOtelExportEnabled()) await initOtel();
+    } catch {
+      /* l'observabilité ne doit jamais empêcher le service de démarrer. */
+    }
   }
 
   if (process.env.NEXT_RUNTIME === "edge") {

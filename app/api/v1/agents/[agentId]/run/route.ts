@@ -8,6 +8,7 @@ import { getAgentForOwner } from "@/lib/agents/repository";
 import { createPersonalizedPlan, policyForAgent } from "@/lib/agents/personalized-plan";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { executionLogger, safeError } from "@/lib/observability/logger";
+import { recordExecutionMetrics } from "@/lib/observability/otel";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -123,6 +124,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const state = await runtime.run();
     const durationMs = Date.now() - startedAt;
+
+    // Métriques OTel (Task 59) : coût par organisation (no-op si export désactivé).
+    recordExecutionMetrics({
+      executionId,
+      status: state.status,
+      orgId: agent.orgId,
+      userId: identity.userId,
+      agentId: agent.id,
+      traceId: requestId,
+      chargeMinor: state.billing?.totalChargeMinor ?? 0,
+      providerCostEur: state.billing?.totalProviderCostEur ?? 0,
+      inputTokens: state.billing?.llmInputTokens ?? 0,
+      outputTokens: state.billing?.llmOutputTokens ?? 0,
+      durationMs,
+    });
 
     executionLog.info(
       { event: "api.agent.execution.completed", status: state.status, durationMs },
