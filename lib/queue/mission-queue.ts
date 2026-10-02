@@ -89,6 +89,8 @@ export interface CreateQueuedMissionInput {
   userId: string;
   objective: string;
   projectId?: string;
+  /** Organisation propriétaire (Task 58) — validée par la route appelante (assertOrgAttach) ; relayée sur l'exécution au tick. */
+  orgId?: string;
   /** Plan COMPLET exécutable — le tick receiver le relit pour construire le runtime (le document de file est la seule mémoire entre deux ticks). */
   plan: RuntimePlan;
   messageId?: string;
@@ -100,6 +102,8 @@ export interface MissionQueueRecord {
   executionId: string;
   objective: string;
   projectId?: string;
+  /** Organisation propriétaire (Task 58) — présente sur les missions enfilées depuis un contexte d'organisation. */
+  orgId?: string;
   status: MissionQueueStatus;
   attempts: number;
   leaseUntilMs?: number;
@@ -128,6 +132,7 @@ export async function createQueuedMission(input: CreateQueuedMissionInput): Prom
     executionId: input.executionId,
     objective: input.objective,
     ...(input.projectId ? { projectId: input.projectId } : {}),
+    ...(input.orgId ? { orgId: input.orgId } : {}),
     status: "queued" satisfies MissionQueueStatus,
     attempts: 0,
     plan: input.plan,
@@ -182,6 +187,7 @@ export async function claimMissionTick(runId: string): Promise<ClaimOutcome> {
         executionId: data.executionId ?? "",
         objective: data.objective ?? "",
         ...(data.projectId ? { projectId: data.projectId } : {}),
+        ...(typeof data.orgId === "string" && data.orgId ? { orgId: data.orgId } : {}),
         status: "running",
         attempts: (typeof data.attempts === "number" ? data.attempts : 0) + 1,
         leaseUntilMs: now + MISSION_LEASE_MS,

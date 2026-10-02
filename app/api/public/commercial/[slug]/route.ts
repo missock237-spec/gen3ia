@@ -102,6 +102,9 @@ export async function POST(request: NextRequest, context: Context) {
         objective: message,
         plan,
         policy: { ...DEFAULT_EXECUTION_POLICY, allowFileDelete: false, allowExternalApps: false },
+        // Cloisonnement multi-tenant (Task 58) : l'exécution du client
+        // porte l'organisation de l'agent commercial (vue coût par org).
+        orgId: agent.orgId,
       }).run();
       const outputs = Object.values(result.outputs ?? {}).reverse();
       const text = outputs.find((value): value is string => typeof value === "string" && value.trim().length > 0)

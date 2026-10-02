@@ -358,6 +358,24 @@ export async function claimDueSchedule(schedule: AgentSchedule, now = new Date()
   });
 }
 
+/**
+ * Résolution paresseuse de l'organisation propriétaire de l'agent planifié
+ * (Task 58) : une lecture Firestore par exécution déclenchée, tolérante aux
+ * pannes (agent supprimé / Firestore indisponible → undefined, l'exécution
+ * reste personnelle — comportement historique). Les exécutions issues d'un
+ * agent rattaché à une organisation portent ainsi orgId dans la collection
+ * `executions` (facturation et vues par organisation).
+ */
+async function resolveAgentOrgId(agentId: string): Promise<string | undefined> {
+  try {
+    const snap = await adminDb.collection("agents").doc(agentId).get();
+    const orgId = snap.exists ? (snap.data() as { orgId?: unknown } | undefined)?.orgId : undefined;
+    return typeof orgId === "string" && orgId.trim() ? orgId.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function runSchedule(schedule: AgentSchedule, executionId: string, slot: string, contextNote?: string) {
   const plan = schedule.plan ?? {
     steps: [{
@@ -385,6 +403,9 @@ export async function runSchedule(schedule: AgentSchedule, executionId: string, 
       userId: schedule.userId,
       objective,
       plan: { ...plan, executionId, objective },
+      // Cloisonnement multi-tenant (Task 58) : organisation de l'agent
+      // planifié, résolue paresseusement (échec → exécution personnelle).
+      orgId: await resolveAgentOrgId(schedule.agentId),
     });
     const state = await runtime.run();
 

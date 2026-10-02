@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, context: Context) {
     const { AgentRuntime } = await import("@/lib/agents/runtime/runner");
     const { DEFAULT_EXECUTION_POLICY } = await import("@/lib/security/execution-policy");
     const plan = await planUniversalAgent(agent.ownerId, `${agent.systemPrompt}\n\nRéponds au client de façon claire et commerciale.\nMessage client: ${message}`);
-    const result = await new AgentRuntime({ userId: agent.ownerId, objective: message, plan, policy: { ...DEFAULT_EXECUTION_POLICY, allowFileDelete: false, allowExternalApps: false } }).run();
+    const result = await new AgentRuntime({ userId: agent.ownerId, objective: message, plan, policy: { ...DEFAULT_EXECUTION_POLICY, allowFileDelete: false, allowExternalApps: false }, orgId: agent.orgId }).run();
     const outputs = Object.values(result.outputs ?? {}).reverse();
     const text = outputs.find((value): value is string => typeof value === "string" && value.trim().length > 0) ?? "Merci pour votre message. Je reviens vers vous rapidement.";
     return NextResponse.json({ text });

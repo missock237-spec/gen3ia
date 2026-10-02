@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
  * sans réseau.
  */
 
-import { aggregateOrgUsage } from "./org-queries";
+import { aggregateOrgUsage, mergeOrgExecutionSummaries } from "./org-queries";
 import type { ExecutionSummary } from "./queries";
 
 function summary(overrides: Partial<ExecutionSummary> & { id: string }): ExecutionSummary {
@@ -104,5 +104,41 @@ describe("aggregateOrgUsage (vue organisation)", () => {
     ];
     const view = aggregateOrgUsage("org-1", summaries, 1, 14);
     expect(view.totals.avgDurationMs).toBe(1500);
+  });
+});
+
+describe("mergeOrgExecutionSummaries (fusion chemin rapide orgId + hérité membres, Task 58)", () => {
+  it("déduplique par id : une exécution porteuse d'orgId matche les DEUX requêtes (userId membre) — comptée UNE fois", () => {
+    const fast = [
+      summary({ id: "new-1", createdAt: "2026-10-01T10:00:00.000Z" }),
+      summary({ id: "shared", createdAt: "2026-10-01T09:00:00.000Z", chargeMinor: 200 }),
+    ];
+    const legacy = [
+      summary({ id: "shared", createdAt: "2026-10-01T09:00:00.000Z", chargeMinor: 200 }),
+      summary({ id: "old-1", createdAt: "2026-09-01T09:00:00.000Z" }),
+    ];
+    const merged = mergeOrgExecutionSummaries(fast, legacy);
+    expect(merged).toHaveLength(3);
+    expect(merged.map((s) => s.id)).toEqual(["new-1", "shared", "old-1"]);
+    // Pas de double comptage : le résumé fusionné est unique et cohérent.
+    expect(merged.filter((s) => s.id === "shared")).toHaveLength(1);
+    expect(merged.find((s) => s.id === "shared")?.chargeMinor).toBe(200);
+  });
+
+  it("trie par createdAt desc à travers les deux chemins", () => {
+    const fast = [summary({ id: "a", createdAt: "2026-10-02T00:00:00.000Z" })];
+    const legacy = [
+      summary({ id: "b", createdAt: "2026-10-03T00:00:00.000Z" }),
+      summary({ id: "c", createdAt: "2026-10-01T00:00:00.000Z" }),
+    ];
+    const merged = mergeOrgExecutionSummaries(fast, legacy);
+    expect(merged.map((s) => s.id)).toEqual(["b", "a", "c"]);
+  });
+
+  it("chemins vides ou disjoints : union simple", () => {
+    expect(mergeOrgExecutionSummaries([], [])).toEqual([]);
+    const fast = [summary({ id: "f1" })];
+    const legacy = [summary({ id: "l1", createdAt: "2026-08-01T00:00:00.000Z" })];
+    expect(mergeOrgExecutionSummaries(fast, legacy).map((s) => s.id)).toEqual(["f1", "l1"]);
   });
 });

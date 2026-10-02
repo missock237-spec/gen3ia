@@ -86,9 +86,14 @@ export interface RuntimeAgentConfig {
   subAgentIds?: string[];
   // Plafond de dépense par exécution en centimes (facturation LLM runner).
   budgetEurMinor?: number;
+  // Organisation propriétaire de l'agent (Task 58) : propagée sur l'état
+  // d'exécution pour le cloisonnement multi-tenant et la facturation par
+  // organisation. Validé EN AMONT par les routes (agent chargé via
+  // getAgentForUser — l'appartenance est déjà garantie par le dépôt).
+  orgId?: string;
 }
 
-export interface RuntimeRunnerOptions { userId: string; projectId?: string; objective: string; plan: RuntimePlan; conversationId?: string; signal?: AbortSignal; policy?: ExecutionPolicy; agent?: RuntimeAgentConfig; /** Reprise : sorties des étapes déjà complétées (checkpoint) — sans elles, les étapes dépendantes reprendraient à vide. */ initialOutputs?: Record<string, unknown>; /** Échéance horloge (epoch ms) : passé ce seuil, plus AUCUN nouveau lot d'étapes n'est lancé — le runtime se met en PAUSE PROPRE (checkpoint conservé, étapes restantes "pending") au lieu de démarrer un travail qui dépasserait la fenêtre d'exécution. Mécanisme de la file d'attente mission (Task 53, recommandation A de l'audit) : chaque tick exécute une tranche bornée puis ré-enfile la suite. Non défini = comportement inchangé (toute l'exécution dans l'appel). */ batchDeadlineMs?: number; /** Réserve minimale (ms) exigée avant de lancer un lot quand batchDeadlineMs est défini — un lot démarré doit avoir la place de se terminer (timeout d'étape inclus). Défaut : 45 000 ms. */ minBatchReserveMs?: number; }
+export interface RuntimeRunnerOptions { userId: string; projectId?: string; objective: string; plan: RuntimePlan; conversationId?: string; signal?: AbortSignal; policy?: ExecutionPolicy; agent?: RuntimeAgentConfig; /** Organisation propriétaire (Task 58) : source explicite (file mission, tâche workspace) quand aucun agent n'est transmis ; l'orgId de l'agent PRIME sinon. */ orgId?: string; /** Reprise : sorties des étapes déjà complétées (checkpoint) — sans elles, les étapes dépendantes reprendraient à vide. */ initialOutputs?: Record<string, unknown>; /** Échéance horloge (epoch ms) : passé ce seuil, plus AUCUN nouveau lot d'étapes n'est lancé — le runtime se met en PAUSE PROPRE (checkpoint conservé, étapes restantes "pending") au lieu de démarrer un travail qui dépasserait la fenêtre d'exécution. Mécanisme de la file d'attente mission (Task 53, recommandation A de l'audit) : chaque tick exécute une tranche bornée puis ré-enfile la suite. Non défini = comportement inchangé (toute l'exécution dans l'appel). */ batchDeadlineMs?: number; /** Réserve minimale (ms) exigée avant de lancer un lot quand batchDeadlineMs est défini — un lot démarré doit avoir la place de se terminer (timeout d'étape inclus). Défaut : 45 000 ms. */ minBatchReserveMs?: number; }
 
 export class AgentRuntime {
   private state: RuntimeExecutionState;
@@ -114,8 +119,14 @@ export class AgentRuntime {
     this.minBatchReserve = options.minBatchReserveMs ?? 45_000;
     this.scheduler = new RuntimeScheduler(options.plan.maxConcurrency);
     this.startedAtMs = Date.now();
+    // Cloisonnement multi-tenant (Task 58) : l'orgId explicite (file, tâche
+    // workspace, API) sert de source ; celui de l'agent rattaché prime —
+    // il est garanti membre de l'organisation du propriétaire au moment de
+    // la création de l'agent (assertOrgAttach du dépôt).
+    const runtimeOrgId = options.agent?.orgId?.trim() || options.orgId?.trim() || undefined;
     this.state = {
       executionId: options.plan.executionId || randomUUID(), userId: options.userId, objective: options.objective, ...(options.conversationId !== undefined ? { conversationId: options.conversationId } : {}),
+      ...(runtimeOrgId ? { orgId: runtimeOrgId } : {}),
       status: "pending", plan: options.plan, observations: [], evaluations: [], outputs: options.initialOutputs ? { ...options.initialOutputs } : {}, iteration: 0,
       totalRetries: 0, maxTotalRetries: 15,
       billing: { currency: WALLET_CURRENCY, totalChargeMinor: 0, totalProviderCostEur: 0, llmInputTokens: 0, llmOutputTokens: 0 },

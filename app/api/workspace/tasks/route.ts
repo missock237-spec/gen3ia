@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { createWorkspaceTask,listWorkspaceTasks } from "@/lib/agents/workspace";
-const Schema=z.object({objective:z.string().min(3).max(20000)});
+const Schema=z.object({objective:z.string().min(3).max(20000),/** Organisation propriétaire (Task 58) — l'appelant doit en être membre (validé par le dépôt avant la transaction). */ orgId:z.string().trim().min(1).max(128).optional()});
 export async function GET(request:NextRequest){
   try{
     const user=await requireUser(request);
@@ -13,4 +13,4 @@ export async function GET(request:NextRequest){
   }catch(e){return NextResponse.json(errorBody(e,"Unable to load tasks"),{status:errorStatus(e)});}
 }
 
-export async function POST(request:NextRequest){try{const user=await requireUser(request);const body=Schema.parse(await request.json());return NextResponse.json({success:true,task:await createWorkspaceTask(user.uid,body.objective)},{status:201});}catch(e){return NextResponse.json(errorBody(e,"Task creation failed"),{status:errorStatus(e,400)});}}
+export async function POST(request:NextRequest){try{const user=await requireUser(request);const body=Schema.parse(await request.json());return NextResponse.json({success:true,task:await createWorkspaceTask(user.uid,body.objective,{orgId:body.orgId})},{status:201});}catch(e){return NextResponse.json(errorBody(e,"Task creation failed"),{status:errorStatus(e,400)});}}

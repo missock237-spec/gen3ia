@@ -14,6 +14,7 @@ import {
   createQueuedMission,
   markMissionEnqueueFailed,
 } from "@/lib/queue/mission-queue";
+import { assertOrgAttach } from "@/lib/tenants/resource-access";
 
 /**
  * Exécution d'un agent (API développeur + interne).
@@ -39,6 +40,8 @@ export const maxDuration = 60;
 const RunAgentSchema = z.object({
   objective: z.string().min(3).max(50_000),
   projectId: z.string().trim().min(1).max(128).optional(),
+  /** Organisation propriétaire de la mission (Task 58) : l'appelant doit en être membre (validation AVANT toute écriture). */
+  orgId: z.string().trim().min(1).max(128).optional(),
   plan: RuntimePlanSchema
     .omit({ executionId: true, objective: true })
     .optional(),
@@ -71,8 +74,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Cloisonnement multi-tenant (Task 58) : l'orgId explicite n'est accepté
+    // que si l'appelant est membre de l'organisation — garde AVANT toute
+    // écriture (file ou exécution).
+    if (parsed.data.orgId) {
+      try {
+        await assertOrgAttach(user.uid, parsed.data.orgId);
+      } catch {
+        return NextResponse.json({ error: "Organisation introuvable ou accès refusé", requestId }, { status: 403 });
+      }
+    }
+
     const executionId = randomUUID();
-    const executionLog = log.child({ executionId, userId: user.uid, projectId: parsed.data.projectId });
+    const executionLog = log.child({ executionId, userId: user.uid, projectId: parsed.data.projectId, ...(parsed.data.orgId ? { orgId: parsed.data.orgId } : {}) });
 
     const plan = parsed.data.plan ?? {
       steps: [
@@ -112,6 +126,7 @@ export async function POST(request: NextRequest) {
           userId: user.uid,
           objective: parsed.data.objective,
           ...(parsed.data.projectId ? { projectId: parsed.data.projectId } : {}),
+          ...(parsed.data.orgId ? { orgId: parsed.data.orgId } : {}),
           plan: runtimePlan,
         });
         const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
@@ -173,6 +188,8 @@ export async function POST(request: NextRequest) {
       objective: parsed.data.objective,
       plan: runtimePlan,
       signal: request.signal,
+      // Cloisonnement multi-tenant (Task 58) : mission d'organisation.
+      orgId: parsed.data.orgId,
     });
 
     const state = await runtime.run();

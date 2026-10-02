@@ -123,6 +123,9 @@ export async function POST(request: NextRequest) {
     const runtime = new AgentRuntime({
       userId: record.userId,
       ...(record.projectId ? { projectId: record.projectId } : {}),
+      // Cloisonnement multi-tenant (Task 58) : relayé depuis le document de
+      // file (l'orgId a été validé à l'enfilement par assertOrgAttach).
+      ...(record.orgId ? { orgId: record.orgId } : {}),
       objective: record.objective || plan.objective,
       plan,
       ...(checkpoint && Object.keys(checkpoint.outputs ?? {}).length > 0

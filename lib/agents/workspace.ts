@@ -4,17 +4,23 @@ import { adminDb } from "@/lib/firebase/admin";
 import { createAgentPlan } from "@/lib/agents/planner/service";
 import type { RuntimePlan } from "@/lib/agents/runtime";
 import { clearExecutionPause, requestExecutionPause, requestExecutionStop } from "@/lib/agents/runtime/pause";
+import { assertOrgAttach } from "@/lib/tenants/resource-access";
 
 export type WorkspaceTaskStatus = "draft"|"awaiting_approval"|"approved"|"running"|"completed"|"failed"|"cancelled"|"paused";
-export interface WorkspaceTask { id:string; ownerId:string; objective:string; status:WorkspaceTaskStatus; plan?:RuntimePlan; parentTaskId?:string; activeBranchId:string; createdAt:number; updatedAt:number; approvedAt?:number; completedAt?:number; }
+export interface WorkspaceTask { id:string; ownerId:string; objective:string; status:WorkspaceTaskStatus; plan?:RuntimePlan; parentTaskId?:string; activeBranchId:string; /** Organisation propriétaire (Task 58) — présente uniquement sur les tâches créées dans un contexte d'organisation. */ orgId?:string; createdAt:number; updatedAt:number; approvedAt?:number; completedAt?:number; }
 function assertOwner(ownerId:string){if(!ownerId?.trim()) throw new Error("ownerId is required.");}
 function ms(v:unknown){return v instanceof Timestamp?v.toMillis():typeof v==="number"?v:Date.now();}
 // Document Firestore agentWorkspaceTasks tel que stocké (champs requis par
 // createWorkspaceTask — assertions non-null justifiées à la lecture).
-type WorkspaceTaskDoc = { ownerId?:string; objective?:string; status?:string; plan?:RuntimePlan; parentTaskId?:string; activeBranchId?:string; createdAt?:Timestamp|number; updatedAt?:Timestamp|number; approvedAt?:Timestamp|number; completedAt?:Timestamp|number; };
-function taskFrom(id:string,d:WorkspaceTaskDoc):WorkspaceTask{return {id,ownerId:d.ownerId!,objective:d.objective!,status:d.status as WorkspaceTaskStatus,plan:d.plan,parentTaskId:d.parentTaskId,activeBranchId:d.activeBranchId!,createdAt:ms(d.createdAt),updatedAt:ms(d.updatedAt),approvedAt:d.approvedAt?ms(d.approvedAt):undefined,completedAt:d.completedAt?ms(d.completedAt):undefined};}
+type WorkspaceTaskDoc = { ownerId?:string; objective?:string; status?:string; plan?:RuntimePlan; parentTaskId?:string; activeBranchId?:string; orgId?:string; createdAt?:Timestamp|number; updatedAt?:Timestamp|number; approvedAt?:Timestamp|number; completedAt?:Timestamp|number; };
+function taskFrom(id:string,d:WorkspaceTaskDoc):WorkspaceTask{return {id,ownerId:d.ownerId!,objective:d.objective!,status:d.status as WorkspaceTaskStatus,plan:d.plan,parentTaskId:d.parentTaskId,activeBranchId:d.activeBranchId!,...(d.orgId?{orgId:d.orgId}:{}),createdAt:ms(d.createdAt),updatedAt:ms(d.updatedAt),approvedAt:d.approvedAt?ms(d.approvedAt):undefined,completedAt:d.completedAt?ms(d.completedAt):undefined};}
 const TASKS="agentWorkspaceTasks", BRANCHES="agentWorkspaceBranches", SNAPSHOTS="agentWorkspaceSnapshots";
-export async function createWorkspaceTask(ownerId:string,objective:string){assertOwner(ownerId);const plan=await createAgentPlan(ownerId,objective);const id=randomUUID(),branchId=randomUUID(),snapshotId=randomUUID(),now=Date.now();await adminDb.runTransaction(async tx=>{tx.create(adminDb.collection(TASKS).doc(id),{ownerId,objective,status:"awaiting_approval",plan,activeBranchId:branchId,createdAt:Timestamp.fromMillis(now),updatedAt:Timestamp.fromMillis(now)});tx.create(adminDb.collection(BRANCHES).doc(branchId),{ownerId,taskId:id,name:"main",snapshotId,active:true,createdAt:Timestamp.fromMillis(now)});tx.create(adminDb.collection(SNAPSHOTS).doc(snapshotId),{ownerId,taskId:id,branchId,state:{plan,status:"awaiting_approval"},createdAt:Timestamp.fromMillis(now)});});return getWorkspaceTask(ownerId,id);}
+export async function createWorkspaceTask(ownerId:string,objective:string,opts?:{orgId?:string}){assertOwner(ownerId);const plan=await createAgentPlan(ownerId,objective);
+// Cloisonnement multi-tenant (Task 58) : rattachement validé AVANT la
+// transaction — l'appelant doit être membre de l'organisation cible.
+const orgId=opts?.orgId?.trim()||undefined;
+if(orgId) await assertOrgAttach(ownerId,orgId);
+const id=randomUUID(),branchId=randomUUID(),snapshotId=randomUUID(),now=Date.now();await adminDb.runTransaction(async tx=>{tx.create(adminDb.collection(TASKS).doc(id),{ownerId,objective,status:"awaiting_approval",plan,activeBranchId:branchId,...(orgId?{orgId}:{}),createdAt:Timestamp.fromMillis(now),updatedAt:Timestamp.fromMillis(now)});tx.create(adminDb.collection(BRANCHES).doc(branchId),{ownerId,taskId:id,name:"main",snapshotId,active:true,createdAt:Timestamp.fromMillis(now)});tx.create(adminDb.collection(SNAPSHOTS).doc(snapshotId),{ownerId,taskId:id,branchId,state:{plan,status:"awaiting_approval"},createdAt:Timestamp.fromMillis(now)});});return getWorkspaceTask(ownerId,id);}
 export async function listWorkspaceTasks(ownerId:string,limitCount=12){
   assertOwner(ownerId);
   const safeLimit=Math.min(Math.max(Math.floor(limitCount)||12,1),50);

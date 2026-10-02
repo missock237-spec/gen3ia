@@ -34,6 +34,16 @@ export interface RuntimeBillingState {
 }
 export interface RuntimeExecutionState {
   executionId: string; userId: string; objective: string; conversationId?: string;
+  /**
+   * Cloisonnement multi-tenant (Task 58, priorité #1) : orgId porté par
+   * l'exécution dès sa création (migration lazy — les exécutions écrites
+   * AVANT la migration n'en ont pas et restent couvertes par les vues
+   * organisation via l'appartenance utilisateur). Présent uniquement quand
+   * la mission est lancée depuis un contexte d'organisation (agent
+   * rattaché, tâche/file d'org) : aucun orgId = exécution personnelle,
+   * comportement historique inchangé.
+   */
+  orgId?: string;
   status: "pending" | "running" | "completed" | "failed" | "cancelled" | "paused";
   plan: RuntimePlan; observations: RuntimeObservation[]; evaluations: RuntimeEvaluation[];
   outputs: Record<string, unknown>; iteration: number; totalRetries: number; maxTotalRetries: number;

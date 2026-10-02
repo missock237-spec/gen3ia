@@ -56,6 +56,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         plan: task.plan,
         policy: DEFAULT_EXECUTION_POLICY,
         signal: request.signal,
+        // Cloisonnement multi-tenant (Task 58) : tâche d'organisation.
+        ...(task.orgId ? { orgId: task.orgId } : {}),
       });
       const state = await runtime.run();
       await taskRef.update({

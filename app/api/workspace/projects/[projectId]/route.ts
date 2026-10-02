@@ -14,6 +14,8 @@ const PatchSchema = z.object({
   authorizedConnectors: z.array(z.string().trim().min(1).max(80)).max(64).optional(),
   privacyRules: z.string().trim().max(2000).optional(),
   status: z.enum(["active", "archived"]).optional(),
+  /** Transfert d'organisation (Task 58) : orgId cible (chaîne vide = détachement). Validé par le dépôt (assertOrgTransfer). */
+  orgId: z.string().trim().max(128).optional(),
 });
 
 export async function GET(request: NextRequest, { params }: RouteContext) {

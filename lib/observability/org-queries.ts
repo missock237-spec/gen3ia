@@ -82,6 +82,37 @@ async function fetchExecutionSummariesForChunk(
   return snap.docs.map((doc) => summarizeExecution(doc.id, doc.data() as Record<string, unknown>));
 }
 
+/** Lit les exécutions récentes portant directement l'orgId (chemin rapide Task 58). */
+async function fetchExecutionSummariesForOrgId(
+  orgId: string,
+  limit: number,
+): Promise<ExecutionSummary[]> {
+  const snap = await adminDb
+    .collection("executions")
+    .where("orgId", "==", orgId)
+    .limit(limit)
+    .get();
+  return snap.docs.map((doc) => summarizeExecution(doc.id, doc.data() as Record<string, unknown>));
+}
+
+/**
+ * Fusion PURE (testée) des deux familles de résultats — chemin rapide
+ * orgId (exécutions écrites depuis la Task 58) et chemin hérité par
+ * membres (exécutions antérieures, sans orgId) — dédupliquée par identifiant
+ * de document, triée createdAt desc. Une exécution porteuse d'orgId matche
+ * les DEUX requêtes (son userId est membre de l'org) : la déduplication
+ * est donc obligatoire pour éviter le double comptage.
+ */
+export function mergeOrgExecutionSummaries(
+  fastPath: ExecutionSummary[],
+  legacyPath: ExecutionSummary[],
+): ExecutionSummary[] {
+  const byId = new Map<string, ExecutionSummary>();
+  for (const summary of legacyPath) byId.set(summary.id, summary);
+  for (const summary of fastPath) byId.set(summary.id, summary);
+  return [...byId.values()].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+}
+
 /**
  * Agrégation PURE (testée) des résumés d'exécution en vue organisation :
  * totaux, dimensions agent / outil / jour. Aucune dépendance Firestore.
@@ -198,23 +229,28 @@ export async function buildOrgUsageOverview(
 
   const uids = await listOrgMemberUids(orgId);
   if (uids.length === 0) {
-    return aggregateOrgUsage(orgId, [], 0, windowDays);
+    // Aucun membre listé : le chemin rapide orgId reste essayé (couvre les
+    // exécutions d'org écrites depuis la Task 58 même si la sous-collection
+    // members dépasse le plafond de lecture ou est momentanément vide).
+    const fastOnly = await fetchExecutionSummariesForOrgId(orgId, limit);
+    return aggregateOrgUsage(orgId, fastOnly, 0, windowDays);
   }
 
   const chunks: string[][] = [];
   for (let i = 0; i < uids.length; i += IN_CHUNK) chunks.push(uids.slice(i, i + IN_CHUNK));
 
   const perChunkLimit = Math.max(20, Math.ceil(limit / chunks.length));
-  const batches = await Promise.all(chunks.map((chunk) => fetchExecutionSummariesForChunk(chunk, perChunkLimit)));
+  const [fastPath, batches] = await Promise.all([
+    fetchExecutionSummariesForOrgId(orgId, limit),
+    Promise.all(chunks.map((chunk) => fetchExecutionSummariesForChunk(chunk, perChunkLimit))),
+  ]);
 
   const windowStart = Date.now() - windowDays * 86_400_000;
-  const summaries = batches
-    .flat()
+  const summaries = mergeOrgExecutionSummaries(fastPath, batches.flat())
     .filter((execution) => {
       const created = execution.createdAt ? new Date(execution.createdAt).getTime() : 0;
       return created > windowStart;
-    })
-    .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+    });
 
   return aggregateOrgUsage(orgId, summaries, uids.length, windowDays);
 }

@@ -474,6 +474,9 @@ export async function POST(request: NextRequest) {
           systemPrompt: agent.systemPrompt,
           provider: agent.modelStrategy === "fixed" ? agent.preferredProvider : undefined,
           model: agent.modelStrategy === "fixed" ? agent.preferredModel : undefined,
+          // Cloisonnement multi-tenant (Task 58) : l'exécution porte
+          // l'organisation de l'agent (facturation et vues par org).
+          orgId: agent.orgId,
         },
       });
 

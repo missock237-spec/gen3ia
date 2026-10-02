@@ -11,6 +11,8 @@ const CreateSchema = z.object({
   instructions: z.string().trim().max(8000).optional(),
   authorizedConnectors: z.array(z.string().trim().min(1).max(80)).max(64).optional(),
   privacyRules: z.string().trim().max(2000).optional(),
+  /** Organisation propriétaire (Task 58) — l'appelant doit en être membre (validé par le dépôt avant l'écriture). */
+  orgId: z.string().trim().min(1).max(128).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -28,7 +30,8 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requireUser(request);
     const body = CreateSchema.parse(await request.json());
-    const project = await createProject(user.uid, body);
+    const { orgId, ...fields } = body;
+    const project = await createProject(user.uid, fields, { orgId });
     return NextResponse.json({ project }, { status: 201 });
   } catch (error) {
     return NextResponse.json(errorBody(error, "Création du projet impossible."), { status: errorStatus(error, 400) });
