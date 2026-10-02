@@ -126,6 +126,12 @@ const GROUPS: GroupSpec[] = [
     fallback: "logs structurés pino seuls (aucune perte applicative)",
   },
   {
+    group: "queue-qstash",
+    role: "File d'attente QStash (missions agents longues, exécution par tranches — recommandation A)",
+    required: ["QSTASH_TOKEN", "QSTASH_CURRENT_SIGNING_KEY", "QSTASH_NEXT_SIGNING_KEY"],
+    fallback: "exécution synchrone dans la requête (limitée par la fenêtre serverless)",
+  },
+  {
     group: "data-supabase",
     role: "Supabase/PostgreSQL (backend de données piloté, ADR-006)",
     required: ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"],

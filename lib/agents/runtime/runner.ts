@@ -9,7 +9,7 @@ import { RuntimeExecutionState, RuntimePlan, RuntimeStep } from "./types";
 import { createCheckpoint, saveCheckpoint } from "./checkpoint";
 import { getReadySteps, validateDAG } from "./dag";
 import { RuntimeScheduler } from "./scheduler";
-import { assertNotPaused, assertNotStopped } from "./pause";
+import { assertNotPaused, assertNotStopped, PauseRequestedError } from "./pause";
 import { generateImageWithAgnes, isImageGenerationEnabled } from "@/lib/ai/image-generation";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import { RESPONSE_FORMAT_RULES } from "@/lib/ai/response-quality";
@@ -88,7 +88,7 @@ export interface RuntimeAgentConfig {
   budgetEurMinor?: number;
 }
 
-export interface RuntimeRunnerOptions { userId: string; projectId?: string; objective: string; plan: RuntimePlan; conversationId?: string; signal?: AbortSignal; policy?: ExecutionPolicy; agent?: RuntimeAgentConfig; /** Reprise : sorties des étapes déjà complétées (checkpoint) — sans elles, les étapes dépendantes reprendraient à vide. */ initialOutputs?: Record<string, unknown>; }
+export interface RuntimeRunnerOptions { userId: string; projectId?: string; objective: string; plan: RuntimePlan; conversationId?: string; signal?: AbortSignal; policy?: ExecutionPolicy; agent?: RuntimeAgentConfig; /** Reprise : sorties des étapes déjà complétées (checkpoint) — sans elles, les étapes dépendantes reprendraient à vide. */ initialOutputs?: Record<string, unknown>; /** Échéance horloge (epoch ms) : passé ce seuil, plus AUCUN nouveau lot d'étapes n'est lancé — le runtime se met en PAUSE PROPRE (checkpoint conservé, étapes restantes "pending") au lieu de démarrer un travail qui dépasserait la fenêtre d'exécution. Mécanisme de la file d'attente mission (Task 53, recommandation A de l'audit) : chaque tick exécute une tranche bornée puis ré-enfile la suite. Non défini = comportement inchangé (toute l'exécution dans l'appel). */ batchDeadlineMs?: number; /** Réserve minimale (ms) exigée avant de lancer un lot quand batchDeadlineMs est défini — un lot démarré doit avoir la place de se terminer (timeout d'étape inclus). Défaut : 45 000 ms. */ minBatchReserveMs?: number; }
 
 export class AgentRuntime {
   private state: RuntimeExecutionState;
@@ -98,6 +98,8 @@ export class AgentRuntime {
   private readonly startedAtMs: number;
   private readonly agentConfig?: RuntimeAgentConfig;
   private readonly projectId?: string;
+  private readonly batchDeadline?: number;
+  private readonly minBatchReserve: number;
   private criticRounds = 0;
   private static readonly CRITIC_MAX_ROUNDS = 1;
 
@@ -108,6 +110,8 @@ export class AgentRuntime {
     this.policy = options.policy ?? DEFAULT_EXECUTION_POLICY;
     this.agentConfig = options.agent;
     this.projectId = options.projectId;
+    this.batchDeadline = options.batchDeadlineMs;
+    this.minBatchReserve = options.minBatchReserveMs ?? 45_000;
     this.scheduler = new RuntimeScheduler(options.plan.maxConcurrency);
     this.startedAtMs = Date.now();
     this.state = {
@@ -150,6 +154,17 @@ export class AgentRuntime {
           await this.throwIfPaused();
           await this.throwIfStopped();
           this.assertExecutionBudget();
+          if (this.batchDeadline !== undefined && Date.now() + this.minBatchReserve > this.batchDeadline) {
+            // File d'attente mission (recommandation A) : la fenêtre de
+            // l'invocation arrive à échéance — on ne lance PAS un nouveau
+            // lot qui serait coupé par la plateforme (travail payant
+            // perdu). Pause PROPRE réutilisant le chemin éprouvé : le
+            // checkpoint (lots déjà complétés + outputs) est conservé, les
+            // étapes restantes restent "pending" — le tick suivant ré-enfile
+            // la suite. Zéro facturation perdue : aucun appel n'est démarré
+            // au-delà de l'échéance.
+            throw new PauseRequestedError(this.state.executionId);
+          }
           this.state.iteration++;
           const completed = this.getCompletedSteps();
           const running = new Set(this.scheduler.getRunning());

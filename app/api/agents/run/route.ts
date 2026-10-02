@@ -9,6 +9,32 @@ import {
   RuntimePlanSchema,
 } from "@/lib/agents/runtime";
 import { executionLogger, safeError } from "@/lib/observability/logger";
+import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import {
+  createQueuedMission,
+  markMissionEnqueueFailed,
+} from "@/lib/queue/mission-queue";
+
+/**
+ * Exécution d'un agent (API développeur + interne).
+ *
+ * Deux modes (recommandation A de l'audit de production — file d'attente des
+ * tâches longues) :
+ *
+ *  - ASYNC (défaut quand la file QStash est configurée) : la mission est
+ *    enregistrée (document `missionQueue`) et enfilée ; la réponse 202
+ *    renvoie immédiatement `runId` + URLs de suivi (polling SSE/status).
+ *    L'exécution se fait PAR TRANCHES dans /api/queue/mission-tick : une
+ *    mission de plusieurs minutes survit aux fenêtres serverless (60 s),
+ *    le client peut se déconnecter sans la tuer.
+ *  - SYNC (fallback : file non configurée, ou `mode:"sync"` explicite) :
+ *    exécution dans la requête comme avant — compatibilité totale avec les
+ *    intégrations existantes. `maxDuration = 60` (au lieu du défaut
+ *    plateforme 10 s, insuffisant pour un seul appel LLM outillé).
+ */
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const RunAgentSchema = z.object({
   objective: z.string().min(3).max(50_000),
@@ -16,6 +42,8 @@ const RunAgentSchema = z.object({
   plan: RuntimePlanSchema
     .omit({ executionId: true, objective: true })
     .optional(),
+  /** « auto » (défaut) : async si la file est configurée, sinon sync. */
+  mode: z.enum(["auto", "async", "sync"]).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -73,6 +101,62 @@ export async function POST(request: NextRequest) {
       objective: parsed.data.objective,
     };
 
+    // ---- File d'attente (mode async) --------------------------------
+    const wantsAsync = parsed.data.mode === "async" || (parsed.data.mode !== "sync" && missionQueueConfigured());
+    if (wantsAsync && missionQueueConfigured()) {
+      const runId = randomUUID();
+      try {
+        await createQueuedMission({
+          runId,
+          executionId,
+          userId: user.uid,
+          objective: parsed.data.objective,
+          ...(parsed.data.projectId ? { projectId: parsed.data.projectId } : {}),
+          plan: runtimePlan,
+        });
+        const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
+        const published = await publishMissionTick(origin, runId);
+        executionLog.info(
+          { event: "execution.queued", runId, messageId: published?.messageId, steps: runtimePlan.steps.length },
+          "Mission enfilée (exécution par tranches)",
+        );
+        return NextResponse.json(
+          {
+            runId,
+            executionId,
+            requestId,
+            status: "queued",
+            async: true,
+            statusUrl: `/api/agents/runs/${runId}`,
+            streamUrl: `/api/agents/runs/${runId}/stream`,
+            pollSeconds: 2,
+          },
+          { status: 202, headers: { "x-request-id": requestId } },
+        );
+      } catch (error) {
+        // Enfilement impossible (création ou publish) : échec HONNÊTE — la
+        // mission est marquée failed dans la file (si le document existe) et
+        // on ne bascule PAS silencieusement en sync : l'appelant a demandé
+        // une exécution détachée (client mobile, mission > 60 s), un
+        // démarrage synchrone serait coupé par la plateforme sans qu'il le
+        // sache.
+        if (parsed.data.mode === "async") {
+          await markMissionEnqueueFailed(runId, error);
+          executionLog.error({ event: "execution.enqueue.failed", runId, error: safeError(error) }, "Enfilement impossible");
+          return NextResponse.json(
+            {
+              error: `File d'attente indisponible : ${error instanceof Error ? error.message : String(error)}`,
+              requestId,
+            },
+            { status: 502, headers: { "x-request-id": requestId } },
+          );
+        }
+        // mode auto : repli synchrone assumé (compatibilité intégrations).
+        executionLog.warn({ event: "execution.enqueue.fallback", error: safeError(error) }, "File indisponible — repli synchrone");
+      }
+    }
+
+    // ---- Exécution synchrone (fallback / explicite) ------------------
     executionLog.info(
       {
         event: "execution.started",
@@ -112,6 +196,7 @@ export async function POST(request: NextRequest) {
         status: state.status,
         outputs: state.outputs,
         observations: state.observations,
+        async: false,
       },
       { headers: { "x-request-id": requestId } },
     );

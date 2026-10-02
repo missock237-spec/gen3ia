@@ -1,0 +1,156 @@
+import "server-only";
+
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+/**
+ * Client QStash (Upstash) — file d'attente HTTP des missions longues
+ * (recommandation A de l'audit de production).
+ *
+ * POURQUOI QSTASH : sur Vercel serverless, une fonction est coupée par la
+ * plateforme (fenêtre de 60 s en plan Hobby). Une mission agent multi-étapes
+ * exécutée DANS la requête HTTP mourait avec elle. QStash est une file
+ * d'attente HTTP : elle publie un POST signé vers /api/queue/mission-tick,
+ * qui exécute une TRANCHE bornée du plan (deadline → pause propre, checkpoint
+ * conservé) puis se ré-enfile jusqu'à complétion. BullMQ est écarté : il
+ * exige un worker process permanent, incompatible avec le serverless.
+ *
+ * SÉCURITÉ DU RECEIVER : QStash signe chaque délivrance
+ * `Upstash-Signature: v1,<hmac>` avec hmac = HMAC-SHA256(clé, `clé\n corps`).
+ * Pendant une rotation de clés, DEUX signatures peuvent coexister — la
+ * vérification accepte la clé courante OU la suivante, en comparaison à
+ * temps constant. Sans clés de signature configurées, la file n'est PAS
+ * activée (un receiver non vérifiable serait une porte ouverte).
+ *
+ * SÉMANTIQUE D'EXÉCUTION : at-least-once. Une redélivrance QStash (ou une
+ * reprise après kill plateforme) peut ré-exécuter une étape dont le travail
+ * a démarré juste avant la coupure — même compromis que la reprise manuelle
+ * existante (« Continuer la mission », Task 46) ; le bail d'exécution
+ * (lease) rend les doubles délivrances concurrentes impossibles.
+ */
+
+const QSTASH_BASE_URL = "https://qstash.upstash.io";
+
+/** Durée maximale d'un appel HTTP QStash (publish) — jamais bloquant au-delà. */
+const PUBLISH_TIMEOUT_MS = 10_000;
+
+/** Repli du nombre de tentatives QStash pour une délivrance de tick. */
+const TICK_RETRIES = 3;
+
+export interface QStashConfig {
+  token: string;
+  currentSigningKey: string;
+  nextSigningKey: string;
+}
+
+/**
+ * Configuration lue À L'APPEL (jamais au chargement du module) : une variable
+ * ajoutée dans Vercel devient active sans redéploiement du code — même
+ * politique que le routage qualité (Task 52).
+ */
+export function qstashConfig(): QStashConfig | null {
+  const token = process.env.QSTASH_TOKEN?.trim();
+  const currentSigningKey = process.env.QSTASH_CURRENT_SIGNING_KEY?.trim();
+  const nextSigningKey = process.env.QSTASH_NEXT_SIGNING_KEY?.trim();
+  if (!token || !currentSigningKey || !nextSigningKey) return null;
+  return { token, currentSigningKey, nextSigningKey };
+}
+
+/** La file d'attente des missions est-elle activable dans cet environnement ? */
+export function missionQueueConfigured(): boolean {
+  return qstashConfig() !== null;
+}
+
+/** URL absolue du receiver, dérivée de l'origine de la requête entrante. */
+export function missionTickUrl(origin: string): string {
+  return `${origin.replace(/\/$/, "")}/api/queue/mission-tick`;
+}
+
+/**
+ * Publie un tick de mission. `delaySeconds` diffère la délivrance (utilisé
+ * pour le ré-enfilement : laisse le temps au checkpoint d'être visible).
+ * Retourne l'identifiant QStash du message, ou null si la file n'est pas
+ * configurée. Une erreur réseau/HTTP est PROPAGÉE : l'appelant (route
+ * d'entrée) doit savoir que la mission n'a pas été enfilée — un échec
+ * silencieux laisserait une mission fantôme « queued » pour toujours.
+ */
+export async function publishMissionTick(
+  origin: string,
+  runId: string,
+  options: { delaySeconds?: number } = {},
+): Promise<{ messageId: string } | null> {
+  const config = qstashConfig();
+  if (!config) return null;
+  const url = `${QSTASH_BASE_URL}/v2/publish/${encodeURIComponent(missionTickUrl(origin))}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+      "Content-Type": "application/json",
+      "Upstash-Retries": String(TICK_RETRIES),
+      ...(options.delaySeconds && options.delaySeconds > 0
+        ? { "Upstash-Delay": `${Math.round(options.delaySeconds)}s` }
+        : {}),
+    },
+    body: JSON.stringify({ runId }),
+    signal: AbortSignal.timeout(PUBLISH_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`QStash publish ${response.status}: ${detail.slice(0, 300)}`);
+  }
+  const payload = (await response.json().catch(() => null)) as { messageId?: string } | null;
+  return { messageId: payload?.messageId ?? "unknown" };
+}
+
+/** Une entrée `v1,<hex>` du header Upstash-Signature. */
+interface ParsedSignature {
+  version: string;
+  hex: string;
+}
+
+/** Parse le header Upstash-Signature (« v1,abc,v1,def » pendant les rotations). */
+export function parseUpstashSignature(header: string | null): ParsedSignature[] {
+  if (!header) return [];
+  const entries: ParsedSignature[] = [];
+  const parts = header.split(",").map((part) => part.trim());
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const version = parts[i];
+    const hex = parts[i + 1];
+    if (version && hex && /^[0-9a-f]+$/i.test(hex)) entries.push({ version, hex: hex.toLowerCase() });
+  }
+  return entries;
+}
+
+/**
+ * Calcule la signature QStash d'un corps — exporté pour les vecteurs de
+ * test. Schéma officiel : HMAC-SHA256(cléDeSignature, `cléDeSignature\ncorps`).
+ */
+export function computeUpstashSignature(signingKey: string, body: string): string {
+  return createHmac("sha256", signingKey).update(`${signingKey}\n${body}`).digest("hex");
+}
+
+/**
+ * Vérifie la signature d'une délivrance QStash en TEMPS CONSTANT, contre la
+ * clé courante OU la clé suivante (rotation). Aucune dépendance : le corps
+ * brut doit être fourni AVANT tout parsing (le moindre réencodage change
+ * l'octet, donc la signature).
+ */
+export function verifyUpstashSignature(
+  config: QStashConfig,
+  rawBody: string,
+  signatureHeader: string | null,
+): boolean {
+  const candidates = parseUpstashSignature(signatureHeader).filter((entry) => entry.version === "v1");
+  if (candidates.length === 0) return false;
+  const expected = new Set(
+    [config.currentSigningKey, config.nextSigningKey].map((key) => computeUpstashSignature(key, rawBody)),
+  );
+  for (const candidate of candidates) {
+    for (const expectedHex of expected) {
+      const a = Buffer.from(candidate.hex, "utf8");
+      const b = Buffer.from(expectedHex, "utf8");
+      if (a.length === b.length && timingSafeEqual(a, b)) return true;
+    }
+  }
+  return false;
+}
