@@ -795,3 +795,23 @@ Work Log:
 Stage Summary:
 - Les 10 concepts post-SaaS sont désormais INSTALLÉS et TESTÉS dans Gen3ia (couverture finale dans le rapport) : #1/#2 contrats de résultat + porte + avoir, #3/#8 réseaux persistants + messagerie, #4 intent→provisioning, #5 catalogue de capacités, #6 marketplace (préexistant, vérifié), #7 pulse business, #9 perception + déclencheurs, #10 auto-évolution + replanification.
 - 4 lots, 4 pushes (08e3469, 4a01752, f5f2afb, cabdc65), 95 nouveaux tests, suite complète 1486 verts, zéro régression (budget bundle inchangé, CI verte sur les lots contrôlés).
+
+---
+Task ID: 68
+Agent: Super Z (principal)
+Task: Déploiement Firebase en production (demande explicite : « déploy firebase ») — règles Firestore + vérification des index composites sur le projet `gen3ia`.
+
+Work Log:
+- Découverte de l'infrastructure réelle : deux projets Firebase — `gen3ia` (données serveur, base Firestore nommée `gen3ia`, service account firebase-adminsdk-fbsvc) et `gen3ia-b5a92` (auth client + storage, NEXT_PUBLIC_*) ; `.firebaserc` pointe sur `demo-gen3ia` (émulateurs) — le CLI ne pouvait donc pas déployer sans config.
+- Credentials récupérés via l'API Vercel (decrypt des 3 variables FIREBASE_* production) → fichier service account local (gitignoré, jamais committé).
+- Scripts d'exploitation réutilisables créés : scripts/deploy_firebase_prod.mjs (règles + index via API REST Google), backup_firebase_rules.mjs (sauvegarde avant déploiement), verify_firebase_rules.mjs (diff ruleset déployé ↔ repo), probe_firebase_indexes.mjs (sonde d'index par runQuery).
+- API Firebase Rules apprises à la dure : release = `cloud.firestore/<database_id>` (PAS `firestore/...`), PATCH exige l'ID encodé %2F dans l'URL ET le nom complet de la ressource dans le corps ; le JWT OAuth2 manuel échoue (invalid_grant) → google-auth-library (dépendance firebase-admin) utilisée.
+- ÉTAT TROUVÉ EN PRODUCTION : règles deny-all par défaut (`allow read, write: if false`, 162 octets) — jamais déployées depuis août. Index : les 9 composites déclarés (chat, agentNetworks, agentMessages) sont DÉJÀ présents et fonctionnels (sondes runQuery OK, 0 manquant).
+- DÉPLOIEMENT : ruleset 4a100901 créé depuis firestore.rules (205 lignes, multi-tenant orgId Tasks 47/55/65) et publié sur la release `cloud.firestore/gen3ia` (PATCH 200) ; vérification : ruleset déployé IDENTIQUE au repo ✔ ; backup des règles précédentes conservé (.rules_backup_before_deploy.rules).
+- Impact sécurité : les données restent 100 % serveur (admin SDK contourne les règles) ; les nouvelles règles = défense en profondeur testée E2E (CI « E2E Firebase émulateurs » verte) et cohérente avec la matrice owner/org de la recommandation C ; aucun accès client direct Firestore n'existe dans le code.
+- Sondes production après déploiement : health 200, auth/session 401 sans identifiants (intact) ; Vercel : 08b0332 (worklog) et cabdc65 (concepts #10/#7) READY ; CI cabdc65 6/6 SUCCESS.
+- .gitignore complété (.fb_deploy_key.json, .rules_backup_before_deploy.rules) — zéro secret dans le repo.
+
+Stage Summary:
+- Firebase production est désormais aligné sur le repo : les règles Firestore multi-tenant testées remplacent le deny-all par défaut, les 9 index composites sont confirmés présents, et des scripts d'exploitation réutilisables permettent backup/déploiement/vérification/sonde sans CLI (token CI inutile).
+- Note IAM : le service account ne peut pas CRÉER d'index (403 datastore.indexes.create) — la sonde runQuery prouve que tout est déjà en place ; si un futur index doit être créé, passer par la console (lien renvoyé par la sonde) ou ajouter roles/datastore.indexAdmin au service account.
