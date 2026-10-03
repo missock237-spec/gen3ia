@@ -29,13 +29,13 @@ import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import { describeConnectorsForPrompt, describeConnectedConnectorsForPrompt, type ConnectedConnectorsContext } from "@/lib/integrations/mention";
 import { describeProjectServicesForPrompt, PROJECT_SERVICE_TOOLS } from "@/lib/agents/services/bridge";
 import {
-  enhanceImagePrompt,
   generateImageWithAgnes,
   ImageGenerationError,
   isImageGenerationEnabled,
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
 import type { AgentRecord } from "@/lib/agents/schema";
+import { buildImageGenerationSkill } from "@/lib/agents/skills/image-generation";
 
 const Body = z.object({
   message: z.string().trim().min(1).max(200_000),
@@ -187,8 +187,9 @@ async function respondWithImage(params: {
     return { reply, imageUrl: undefined, model: undefined };
   }
   try {
-    const image = await generateImageWithAgnes({ prompt: enhanceImagePrompt(message) });
-    const reply = "Voici l'image que j'ai générée pour vous.";
+    const imageSkill = buildImageGenerationSkill(message);
+    const image = await generateImageWithAgnes({ prompt: imageSkill.prompt, ratio: imageSkill.ratio });
+    const reply = "";
     await appendMessage({
       conversationId, userId, role: "assistant", content: reply,
       imageUrl: image.imageUrl, provider: "agnes", model: image.model,
@@ -471,6 +472,7 @@ export async function POST(request: NextRequest) {
       // Réponse claire et simple : la charte pilote un appel LLM direct.
       if (classification.mode === "chat") {
         const reply = await answerAsAgent(
+          user.uid,
           agent,
           history.map((item) => ({ role: item.role, content: item.content })),
           body.message,
