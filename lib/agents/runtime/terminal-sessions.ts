@@ -106,6 +106,7 @@ export async function ensureTerminalSession(params: {
   sessionId?: string;
   projectId?: string;
   conversationId?: string;
+  workspaceId?: string;
 }): Promise<TerminalSession | null> {
   try {
     const db = sessionsDb();
@@ -114,11 +115,13 @@ export async function ensureTerminalSession(params: {
       const snapshot = await ref.get();
       if (snapshot.exists && snapshot.get("userId") === params.userId) return sessionFrom(snapshot.id, snapshot.data() ?? {});
     }
-    const scopeId = params.projectId
-      ? `project:${params.projectId}`
-      : params.conversationId
-        ? `conversation:${params.conversationId}`
-        : "agent";
+    const scopeId = params.workspaceId
+      ? `workspace:${params.workspaceId}`
+      : params.projectId
+        ? `project:${params.projectId}`
+        : params.conversationId
+          ? `conversation:${params.conversationId}`
+          : "agent";
     const query = await db
       .collection(SESSIONS_COLLECTION)
       .where("userId", "==", params.userId)
@@ -136,7 +139,14 @@ export async function ensureTerminalSession(params: {
       scopeKey: scopeId,
       projectId: params.projectId ?? null,
       conversationId: params.conversationId ?? null,
-      title: params.projectId ? `Terminal · ${params.projectId}` : params.conversationId ? `Terminal · conversation` : "Terminal des agents",
+      workspaceId: params.workspaceId ?? null,
+      title: params.workspaceId
+        ? `Terminal · workspace`
+        : params.projectId
+          ? `Terminal · ${params.projectId}`
+          : params.conversationId
+            ? `Terminal · conversation`
+            : "Terminal des agents",
       status: "active" satisfies TerminalSessionStatus,
       commandCount: 0,
       createdAt: now,
@@ -153,6 +163,7 @@ export interface RecordTerminalExecutionInput {
   sessionId?: string;
   projectId?: string;
   conversationId?: string;
+  workspaceId?: string;
   command: string;
   success: boolean;
   stdout?: string;
@@ -172,7 +183,7 @@ export interface RecordTerminalExecutionInput {
 export async function recordTerminalExecution(input: RecordTerminalExecutionInput): Promise<TerminalEntry | null> {
   try {
     const session =
-      (await ensureTerminalSession({ userId: input.userId, sessionId: input.sessionId, projectId: input.projectId, conversationId: input.conversationId })) ??
+      (await ensureTerminalSession({ userId: input.userId, sessionId: input.sessionId, projectId: input.projectId, conversationId: input.conversationId, workspaceId: input.workspaceId })) ??
       (await ensureTerminalSession({ userId: input.userId }));
     if (!session) return null;
 

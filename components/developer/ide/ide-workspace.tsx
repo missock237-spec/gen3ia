@@ -148,7 +148,7 @@ export function IdeWorkspace() {
   /* ---------------- Chargement sessions ---------------- */
   const loadSessions = useCallback(async () => {
     try {
-      const response = await authFetch("/api/developer/terminal/sessions");
+      const response = await authFetch("/api/terminal/sessions");
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Sessions indisponibles.");
       const list = (data.sessions ?? []) as TerminalSession[];
@@ -171,7 +171,7 @@ export function IdeWorkspace() {
 
   const fetchEntries = useCallback(
     async (sessionId: string, since: number) => {
-      const response = await authFetch(`/api/developer/terminal/sessions/${sessionId}?since=${since}`);
+      const response = await authFetch(`/api/terminal/sessions/${sessionId}?since=${since}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Entrées indisponibles.");
       return (data.entries ?? []) as TerminalEntry[];
@@ -291,6 +291,31 @@ export function IdeWorkspace() {
   }, [openTabs, activeTabId, loadFiles]);
 
   /* ---------------- Contrôles session ---------------- */
+  /* Terminal utilisateur : exécution directe dans le workspace personnel. */
+  const [commandRunning, setCommandRunning] = useState(false);
+  const runUserCommand = useCallback(async (command: string) => {
+    setCommandRunning(true);
+    try {
+      const response = await authFetch("/api/terminal/exec", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ command }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Exécution impossible.");
+      setSaveNote(data.execution?.mode === "sandbox" ? "Commande exécutée (sandbox réelle)." : "Commande traitée (simulation — sandbox non déployée).");
+    } catch (e) {
+      setSaveNote(e instanceof Error ? e.message : "Exécution impossible.");
+    } finally {
+      setCommandRunning(false);
+      setTimeout(() => setSaveNote(""), 4_000);
+      // La session workspace vient d'être créée/mise à jour côté serveur :
+      // on recharge les sessions puis les entrées (le polling suit ensuite).
+      await loadSessions();
+      setSessionError("");
+    }
+  }, [loadSessions]);
+
   const stopSession = useCallback(async (sessionId: string) => {
     setStopping(true);
     try {
@@ -610,6 +635,8 @@ export function IdeWorkspace() {
               loadingEntries={entriesLoading}
               error={sessionError}
               stopping={stopping}
+              commandRunning={commandRunning}
+              onRunCommand={(command) => runUserCommand(command)}
               onSelectSession={(id) => setActiveSessionId(id)}
               onToggleLive={() => setLive((v) => !v)}
               onStopSession={(id) => void stopSession(id)}

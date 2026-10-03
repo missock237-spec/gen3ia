@@ -9,11 +9,11 @@ import type { ErrorRef } from "@/lib/developer/ide";
 import type { TerminalEntry, TerminalSession } from "@/lib/agents/runtime/terminal-sessions";
 
 /**
- * Terminal du Workshop IDE — RÉSERVÉ AUX AGENTS.
+ * Terminal du Workshop IDE — AGENTS + UTILISATEUR.
  *
- * L'utilisateur observe en lecture seule le flux des commandes exécutées
- * par ses agents (aucune saisie de commande n'est possible) et garde les
- * leviers de contrôle : pause de session, arrêt d'urgence global.
+ * L'utilisateur observe le flux des commandes exécutées par ses agents et
+ * peut DÉSORMAIS y exécuter ses propres commandes (terminal utilisateur :
+ * workspace personnel persistant 24 h, mêmes garde-fous, mode annoncé).
  * Cliquer sur une référence d'erreur (fichier:ligne) ouvre le fichier à
  * la ligne concernée dans l'éditeur — synchronisation contextuelle.
  */
@@ -27,6 +27,8 @@ interface TerminalViewProps {
   loadingEntries: boolean;
   error: string;
   stopping: boolean;
+  commandRunning?: boolean;
+  onRunCommand?: (command: string) => Promise<void>;
   onSelectSession: (sessionId: string) => void;
   onToggleLive: () => void;
   onStopSession: (sessionId: string) => void;
@@ -56,6 +58,8 @@ export function TerminalView({
   loadingEntries,
   error,
   stopping,
+  commandRunning,
+  onRunCommand,
   onSelectSession,
   onToggleLive,
   onStopSession,
@@ -65,7 +69,16 @@ export function TerminalView({
 }: TerminalViewProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const [followOutput, setFollowOutput] = useState(true);
+  const [userCommand, setUserCommand] = useState("");
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
+
+  const submitUserCommand = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const command = userCommand.trim();
+    if (!command || !onRunCommand || commandRunning) return;
+    setUserCommand("");
+    await onRunCommand(command);
+  };
 
   // Références d'erreurs cliquables (fichier:ligne) dans les sorties.
   const clickableRefs = useMemo(() => {
@@ -84,7 +97,10 @@ export function TerminalView({
     });
   }, [entries.length, followOutput]);
 
-  if (sessions.length === 0 && !error && !loadingEntries) {
+  if (sessions.length === 0 && !error && !loadingEntries && !onRunCommand) {
+    // Sans terminal utilisateur : écran d'accueil « observation des agents ».
+    // Avec le terminal utilisateur, on affiche le layout complet (la saisie
+    // crée la première session workspace dès la première commande).
     return (
       <div className="grid h-full place-items-center overflow-y-auto bg-[var(--g3-deep)] px-6 py-10 text-center">
         <div className="max-w-md">
@@ -164,10 +180,10 @@ export function TerminalView({
         </div>
       </div>
 
-      {/* Bandeau de sécurité : terminal réservé aux agents */}
+      {/* Bandeau de sécurité : exécution encadrée */}
       <p className="border-b border-[var(--g3-border)] bg-[var(--g3-deep)]/40 px-3 py-1.5 text-[10px] text-[var(--g3-muted)]">
-        <span className="mr-1.5 rounded bg-[var(--g3-deep)] px-1.5 py-0.5 font-semibold text-[var(--g3-faint)]">Lecture seule</span>
-        Terminal réservé aux agents — vous ne pouvez pas y saisir de commandes. Sorties masquées automatiquement si elles contiennent des secrets.
+        <span className="mr-1.5 rounded bg-[var(--g3-deep)] px-1.5 py-0.5 font-semibold text-[var(--g3-faint)]">Encadré</span>
+        Commandes des agents et vôtres (workspace personnel 24 h) — politique de sécurité Gen3ia, secrets masqués automatiquement.
       </p>
 
       {error && (
@@ -183,7 +199,11 @@ export function TerminalView({
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2" aria-live="polite">
         {entries.length === 0 && !error && (
           <p className="py-6 text-center text-xs text-[var(--g3-muted)]">
-            {loadingEntries ? "Chargement de la session…" : "Session vide — en attente des commandes de vos agents."}
+            {loadingEntries
+              ? "Chargement de la session…"
+              : onRunCommand
+                ? "Session vide — saisissez une commande ci-dessous, ou lancez un agent de type code depuis une conversation."
+                : "Session vide — en attente des commandes de vos agents."}
           </p>
         )}
         {entries.map((entry) => {
@@ -231,6 +251,31 @@ export function TerminalView({
         })}
         <div ref={endRef} />
       </div>
+
+      {/* Saisie utilisateur (terminal intégré avancé) */}
+      {onRunCommand && (
+        <form onSubmit={(event) => void submitUserCommand(event)} className="flex items-center gap-2 border-t border-[var(--g3-border)] px-3 py-2">
+          <span className="g3-console-prompt text-xs" aria-hidden>$</span>
+          <label className="sr-only" htmlFor="user-terminal-input">Commande à exécuter dans votre workspace</label>
+          <input
+            id="user-terminal-input"
+            value={userCommand}
+            onChange={(event) => setUserCommand(event.target.value)}
+            placeholder={commandRunning ? "Exécution en cours…" : "Commande dans votre workspace (ex. node --version)"}
+            disabled={commandRunning}
+            autoComplete="off"
+            spellCheck={false}
+            className="min-w-0 flex-1 rounded-lg border border-[var(--g3-border)] bg-[var(--g3-deep)] px-2.5 py-1.5 font-mono text-xs text-[var(--g3-text-secondary)] placeholder:text-[var(--g3-faint)] focus:border-neutral-600 focus:outline-none disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={commandRunning || !userCommand.trim()}
+            className="rounded-full bg-[var(--g3-surface)] px-3 py-1.5 text-[11px] font-semibold text-black transition hover:bg-[var(--g3-elevated)] disabled:opacity-50"
+          >
+            {commandRunning ? "…" : "Exécuter"}
+          </button>
+        </form>
+      )}
 
       {/* Suivi de sortie */}
       <label className="flex items-center justify-between border-t border-[var(--g3-border)] px-3 py-1.5 text-[10px] text-[var(--g3-muted)]">
