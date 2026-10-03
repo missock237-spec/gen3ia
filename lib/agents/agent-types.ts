@@ -27,4 +27,5 @@ export const AGENT_TYPE_META: Record<AgentType, { label: string; description: st
   content: { label: "Contenu", description: "Redaction, marketing, generation de documents et publications.", securityLevel: "standard" },
   research: { label: "Recherche", description: "Veille, analyse de marche et synthese documentaire via recherche web.", securityLevel: "standard" },
   automation: { label: "Automatisation", description: "Workflows repetitifs, planification et orchestration d'outils.", securityLevel: "standard" },
+  custom: { label: "Personnalisé", description: "Agent spécialisé selon le type métier défini par l’utilisateur.", securityLevel: "standard" },
 };
