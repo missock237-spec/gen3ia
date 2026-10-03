@@ -50,7 +50,12 @@ export default defineConfig({
         "lib/billing/cost-engine.ts",
         "lib/billing/tool-meter.ts",
         "lib/ai/router.ts",
+        "lib/ai/prompt-template.ts",
         "lib/security/route-guard.ts",
+        "lib/tenants/resource-access.ts",
+        "lib/knowledge/triggers.ts",
+        "lib/skills/runtime-bridge.ts",
+        "lib/capabilities/catalog.ts",
       ],
       exclude: ["**/*.test.ts", "**/*.d.ts", "lib/security/rate-limit.ts"],
       thresholds: {
