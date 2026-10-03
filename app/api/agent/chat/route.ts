@@ -471,6 +471,7 @@ export async function POST(request: NextRequest) {
       // Réponse claire et simple : la charte pilote un appel LLM direct.
       if (classification.mode === "chat") {
         const reply = await answerAsAgent(
+          user.uid,
           agent,
           history.map((item) => ({ role: item.role, content: item.content })),
           body.message,
