@@ -222,6 +222,11 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   }
 
   return (
+    // FRAGMENT RACINE : le dialogue « Créer un agent » est un frère du layout
+    // principal (portail de modal) — il doit être rendu HORS de la colonne
+    // flex, d'où le fragment englobant (build cassé du 3 oct. réparé : le
+    // </> de fermeture existait sans ouverture).
+    <>
     <div className="flex h-full min-h-0 flex-col gap-2 lg:gap-4">
       {sessionDisponible === false && <Callout tone="warning" className="rounded-2xl">Session expirée — reconnectez-vous pour discuter avec Gen IA.</Callout>}
       {error && <Callout tone="error" className="rounded-2xl"><span className="flex items-center justify-between gap-3"><span>{error}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full border border-[rgba(246,98,110,0.45)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]">Réessayer</button></span></Callout>}

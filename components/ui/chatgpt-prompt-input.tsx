@@ -116,7 +116,7 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
             }
           }}
           placeholder={placeholder}
-          className="max-h-[220px] min-h-14 w-full resize-none border-0 bg-transparent px-3 py-3 text-[15px] leading-6 text-[var(--g3-text)] outline-none placeholder:text-[var(--g3-faint)] disabled:opacity-50"
+          className="max-h-[220px] min-h-14 w-full resize-none border-0 bg-transparent px-3 py-3 text-[15px] leading-6 text-[var(--g3-text)] outline-none focus-visible:outline-none focus-visible:ring-0 placeholder:text-[var(--g3-faint)] disabled:opacity-50"
         />
 
         <div className="flex items-center gap-1.5 px-1 pb-1">

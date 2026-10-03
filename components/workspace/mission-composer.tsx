@@ -210,7 +210,7 @@ export function MissionComposer({
           placeholder={template.placeholder}
           rows={compact ? 3 : 4}
           autoFocus={autoFocus}
-          className="w-full resize-y rounded-2xl border border-[rgba(23,23,20,0.12)] bg-[var(--g3-elevated)] p-4 text-sm leading-6 text-[var(--g3-text)] outline-none transition placeholder:text-[var(--g3-faint)] focus:border-neutral-500 focus:bg-[var(--g3-surface)]"
+          className="w-full resize-y rounded-2xl border border-[rgba(23,23,20,0.12)] bg-[var(--g3-elevated)] p-4 text-sm leading-6 text-[var(--g3-text)] outline-none focus-visible:outline-none focus-visible:ring-0 transition placeholder:text-[var(--g3-faint)] focus:border-neutral-500 focus:bg-[var(--g3-surface)]"
         />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-[var(--g3-faint)]">

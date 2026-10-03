@@ -82,13 +82,29 @@ describe("Composants critiques — plus de pastels cassant le thème", () => {
   });
 });
 
-describe("Artéfact « carré parasite » (étape 12)", () => {
+describe("Artéfact « carré parasite » (étape 12 + exigence utilisateur)", () => {
   it("le textarea du composer n'a plus le contour rectangulaire violet au focus (le focus-within de la carte signale l'état)", () => {
     const composer = read("components/ui/command-composer.tsx");
     // La règle globale textarea:focus-visible { outline: 2px solid var(--g3-primary) }
     // battait .outline-none (spécificité) et dessinait un rectangle à angles
     // droits autour du composer — capture utilisateur IMG_20260929.
     expect(composer).toContain("focus-visible:outline-none focus-visible:ring-0");
+  });
+
+  it("TOUTES les interfaces de prompt utilisateur sont neutralisées (le carré ne doit plus apparaître nulle part)", () => {
+    // Exigence utilisateur : le « carré » recouvrait encore les autres
+    // interfaces de prompt. Chaque textarea de saisie IA porte désormais la
+    // neutralisation explicite (spécificité > textarea:focus-visible global).
+    const surfaces: Array<[string, RegExp]> = [
+      ["components/workspace/mission-composer.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
+      ["app/page.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
+      ["app/client/[agentId]/page.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
+      ["app/client/c/[slug]/page.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
+      ["components/ui/chatgpt-prompt-input.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
+    ];
+    for (const [file, pattern] of surfaces) {
+      expect(read(file), `textarea sans neutralisation : ${file}`).toMatch(pattern);
+    }
   });
 
   it("la règle globale de focus reste en place pour l'accessibilité des autres éléments", () => {

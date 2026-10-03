@@ -100,6 +100,15 @@ function statusLabel(status?: string) {
   }
 }
 
+/**
+ * Clé de persistance de session : la dernière conversation ouverte est
+ * mémorisée PAR AGENT — après un refresh, l'utilisateur retrouve son fil
+ * et la mission éventuellement encore en cours d'exécution.
+ */
+function conversationStorageKey(agentId: string) {
+  return `gen3ia:agent-chat:conversation:${agentId}`;
+}
+
 function statusClass(status?: string) {
   if (status === "completed") return "text-emerald-300";
   if (status === "failed" || status === "blocked") return "text-red-300";
@@ -163,6 +172,13 @@ export function AgentChatPanel({
   // (contrôle Firestore via /api/agent/chat/stop).
   const requestAbortRef = React.useRef<AbortController | null>(null);
 
+  // PLEIN ÉCRAN (demande utilisateur) : le chat peut occuper TOUT l'écran —
+  // overlay CSS « fixed inset-0 » (fonctionne partout, y compris iOS Safari)
+  // + API Fullscreen native quand le navigateur la propose (masque la barre
+  // d'adresse). Les deux sont pilotés par le même bouton d'en-tête.
+  const [fullscreen, setFullscreen] = React.useState(false);
+  const sectionRef = React.useRef<HTMLElement | null>(null);
+
   // SUIVI LIVE : pendant l'exécution d'une mission (bloquante OU en file
   // arrière-plan), le DERNIER run de la conversation est sondé (2,5 s) pour
   // afficher l'avancement réel des étapes — au lieu d'un spinner figé. Quand
@@ -203,6 +219,34 @@ export function AgentChatPanel({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, tracking, conversationId]);
+
+  // PLEIN ÉCRAN : bascule l'overlay CSS et demande l'API Fullscreen native
+  // quand le navigateur la propose. L'échec (iOS, permission refusée) est
+  // silencieux : l'overlay CSS seul reste un vrai plein écran fonctionnel.
+  function toggleFullscreen() {
+    const next = !fullscreen;
+    setFullscreen(next);
+    try {
+      if (next) {
+        const element = sectionRef.current;
+        if (element && typeof element.requestFullscreen === "function") {
+          void element.requestFullscreen().catch(() => undefined);
+        }
+      } else if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => undefined);
+      }
+    } catch { /* API indisponible : l'overlay CSS plein écran reste actif */ }
+  }
+
+  // Synchronisation du plein écran : sortie native (Échap, F11, geste du
+  // navigateur) → l'état CSS suit, le bouton reste cohérent avec l'écran.
+  React.useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) setFullscreen(false);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
 
   const typeLabel = labelForAgent(agent);
   const quickPrompts = QUICK_PROMPTS[agent.type] ?? QUICK_PROMPTS.custom;
@@ -270,12 +314,28 @@ export function AgentChatPanel({
   }, [conversationId, loadConversations]);
 
   // Nouvelle conversation à chaque changement d'agent : le contexte du chat
-  // appartient à l'agent sélectionné.
+  // appartient à l'agent sélectionné (l'effet de reprise ci-dessous rouvre
+  // ensuite la dernière conversation MÉMORISÉE de ce même agent).
   React.useEffect(() => {
     setConversationId(null);
     setMessages([]);
     setActive(null);
     setError("");
+  }, [agent.id]);
+
+  // REPRISE APRÈS REFRESH (exigence production) : au montage — et à chaque
+  // changement d'agent — la dernière conversation mémorisée est rouverte.
+  // Si une mission y est encore en cours (run non terminal), openConversation
+  // réarme le suivi live : l'utilisateur voit l'exécution continuer, exactement
+  // comme avant l'actualisation de la page.
+  React.useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = sessionStorage.getItem(conversationStorageKey(agent.id));
+    } catch { /* stockage indisponible */ }
+    if (!stored || loading) return;
+    void openConversation(stored);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agent.id]);
 
   React.useEffect(() => {
@@ -314,12 +374,12 @@ export function AgentChatPanel({
         text: item.content,
         imageUrl: item.imageUrl,
       }));
-      setConversationId(id);
+      rememberConversation(id);
       // Historique complet : le DERNIER run de mission enregistré sur le fil
       // restaure le panneau de mission (plan, étapes, sorties, coût) tel
       // qu'affiché pendant l'exécution — plus aucune mission perdue à la
       // réouverture.
-      const runs = ((data.runs ?? []) as Array<{
+      const runList = ((data.runs ?? []) as Array<{
         id: string;
         status: string;
         runtime?: {
@@ -330,8 +390,21 @@ export function AgentChatPanel({
           finalText?: string;
           error?: string;
         };
-      }>).filter((run) => run.runtime?.plan);
-      const lastRun = runs[0];
+      }>);
+      // REPRISE APRÈS REFRESH : un run non terminal = mission ENCORE en cours
+      // côté serveur (file QStash ou exécution détachée) — le suivi live est
+      // réarmé immédiatement, sans aucune action de l'utilisateur.
+      const freshestRun = runList[0];
+      const terminalStatuses = ["completed", "failed", "cancelled", "awaiting_approval", "waiting_approval"];
+      if (freshestRun && !terminalStatuses.includes(freshestRun.status)) {
+        setTracking({
+          runId: freshestRun.id,
+          ...(freshestRun.runtime?.executionId ? { executionId: freshestRun.runtime.executionId } : {}),
+        });
+      } else {
+        setTracking(null);
+      }
+      const lastRun = runList.find((run) => run.runtime?.plan);
       if (lastRun?.runtime) {
         setActive({
           mode: "agent",
@@ -359,9 +432,22 @@ export function AgentChatPanel({
     openConversationRef.current = openConversation;
   });
 
+  /**
+   * Mémorise la conversation ouverte (sessionStorage, par agent) : c'est ce
+   * qui permet au refresh de rouvrir le fil et de réafficher la mission en
+   * cours — le stockage est silencieusement ignoré s'il est indisponible.
+   */
+  function rememberConversation(id: string | null) {
+    setConversationId(id);
+    try {
+      if (id) sessionStorage.setItem(conversationStorageKey(agent.id), id);
+      else sessionStorage.removeItem(conversationStorageKey(agent.id));
+    } catch { /* stockage indisponible (navigation privée) : reprise inactive, aucune erreur visible */ }
+  }
+
   function resetConversation() {
     if (loading) return;
-    setConversationId(null);
+    rememberConversation(null);
     setMessages([]);
     setActive(null);
     setError("");
@@ -431,7 +517,7 @@ export function AgentChatPanel({
         return;
       }
 
-      if (data.conversationId) setConversationId(data.conversationId);
+      if (data.conversationId) rememberConversation(data.conversationId);
       // Pièces jointes consommées par l'envoi : nettoyage immédiat.
       setAttachments([]);
 
@@ -478,7 +564,7 @@ export function AgentChatPanel({
               ? "J'ai préparé le plan d'exécution et mis les actions sensibles en attente de votre confirmation."
               : result.status === "completed"
                 ? "Mission terminée. Les résultats affichés correspondent aux étapes réellement exécutées."
-                : "Mission en cours d'exécution dans mon périmètre."),
+                : "Mission en cours d'exécution — les étapes réellement exécutées s'affichent en direct."),
           mode: "task",
           result,
         }]);
@@ -617,7 +703,7 @@ export function AgentChatPanel({
         setError("Vous êtes hors ligne : cette décision exige le réseau. Reconnectez-vous puis validez à nouveau.");
         return;
       }
-      if (data.conversationId) setConversationId(data.conversationId);
+      if (data.conversationId) rememberConversation(data.conversationId);
       const result = data as AgentResult;
       setActive(result);
       setMessages((items) => [...items, {
@@ -639,6 +725,9 @@ export function AgentChatPanel({
   }
 
   const pendingApprovals = (active?.approvals ?? []).filter((item) => item.status === "pending");
+  // Mission vivante : exécution bloquante (loading) OU mission en file suivie
+  // en arrière-plan (tracking) — l'un OU l'autre affiche le panneau live.
+  const missionLive = loading || tracking !== null;
 
   const composerCommands = React.useMemo(() => ([
     {
@@ -673,9 +762,12 @@ export function AgentChatPanel({
     // (hauteur via la chaîne AppShell → layout → atelier, largeur bord à
     // bord) ; le fil défile en interne (flex-1 + min-h-0) et le composer
     // reste collé en bas. Bord à bord sur mobile/tablette, carte arrondie
-    // sur grand écran.
+    // sur grand écran. MODE PLEIN ÉCRAN ACTIVÉ : overlay « fixed inset-0 »
+    // au-dessus de toute l'interface (rail, navigation, Zen) — le chat
+    // occupe littéralement tout l'écran, sur mobile comme sur desktop.
     <section
-      className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 bg-[var(--g3-deep)] shadow-none lg:rounded-[30px] lg:border lg:border-white/10 lg:shadow-[0_24px_70px_-28px_rgba(0,0,0,0.95)]"
+      ref={sectionRef}
+      className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 bg-[var(--g3-deep)] shadow-none lg:rounded-[30px] lg:border lg:border-white/10 lg:shadow-[0_24px_70px_-28px_rgba(0,0,0,0.95)] ${fullscreen ? "fixed inset-0 z-[100] h-[100dvh] max-h-none w-screen lg:rounded-none lg:border-0 lg:shadow-none" : ""}`}
       aria-label={`Chat avec ${agent.name}`}
     >
       <div className="pointer-events-none absolute -left-32 -top-32 h-72 w-72 rounded-full bg-[var(--g3-surface)]/5 blur-3xl" aria-hidden="true" />
@@ -698,6 +790,9 @@ export function AgentChatPanel({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button type="button" onClick={toggleFullscreen} aria-pressed={fullscreen} title={fullscreen ? "Quitter le plein écran (Échap)" : "Afficher le chat en plein écran"} className="rounded-xl border border-white/10 px-3 py-2 text-[11px] text-[var(--g3-faint)] transition hover:bg-[var(--g3-surface)]/5 hover:text-white">
+            {fullscreen ? "◱ Quitter le plein écran" : "⛶ Plein écran"}
+          </button>
           <button type="button" onClick={() => { void loadConversations(); setShowHistory((current) => !current); }} aria-expanded={showHistory} className="rounded-xl border border-white/10 px-3 py-2 text-[11px] text-[var(--g3-faint)] transition hover:bg-[var(--g3-surface)]/5 hover:text-white">Historique</button>
           <button type="button" onClick={resetConversation} disabled={loading} className="rounded-xl border border-white/10 px-3 py-2 text-[11px] text-[var(--g3-faint)] transition hover:bg-[var(--g3-surface)]/5 hover:text-white disabled:opacity-30">Nouveau</button>
         </div>
@@ -752,8 +847,8 @@ export function AgentChatPanel({
                 </div>
                 <h3 className="mt-5 font-serif text-2xl font-bold tracking-tight text-[var(--g3-text-secondary)] md:text-3xl">Bonjour, je suis {agent.name}.</h3>
                 <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-[var(--g3-faint)]">
-                  {agent.description || "Votre agent IA personnalisé."} Je réponds de manière professionnelle et j&apos;exécute vos tâches{" "}
-                  <strong className="text-[var(--g3-text-secondary)]">exclusivement dans mon domaine : {typeLabel}</strong>.
+                  {agent.description || "Votre agent IA personnalisé."} Je réponds à toutes vos questions et j&apos;exécute vos tâches —{" "}
+                  <strong className="text-[var(--g3-text-secondary)]">spécialiste {typeLabel}</strong>, avec les outils et connecteurs fournis.
                 </p>
                 <div className="mt-6 grid gap-2 sm:grid-cols-2">
                   {quickPrompts.map((prompt) => (
@@ -875,9 +970,10 @@ export function AgentChatPanel({
               </div>
             ))}
 
-            {loading && (
+            {missionLive && (
               <div className="mr-auto max-w-[88%] space-y-2">
-                {/* Mission LIVE : avancement réel des étapes (polling des runs) */}
+                {/* Mission LIVE : avancement réel des étapes (polling des runs) —
+                    affiché pendant l'exécution ET après un refresh (reprise) */}
                 {liveRun && liveRun.steps.length > 0 && (
                   <div className="rounded-2xl border border-white/10 bg-[var(--g3-deep)] p-3" aria-live="polite">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--g3-faint)]">
@@ -900,20 +996,41 @@ export function AgentChatPanel({
                     </ul>
                   </div>
                 )}
-                <div className="mr-auto flex items-center gap-3 rounded-2xl border border-white/10 bg-[var(--g3-elevated)] px-4 py-3 text-xs text-[var(--g3-faint)]">
-                  <Gen3iaLogo size={26} working alt="" />
-                  <span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-primary-strong)]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-magenta)] [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-secondary)] [animation-delay:240ms]" /></span>
-                  J&apos;analyse votre demande — réponse ou exécution selon le besoin…
-                <button
-                  type="button"
-                  onClick={stopAgent}
-                  className="ml-1 flex items-center gap-1.5 rounded-full border border-[rgba(239,68,68,0.45)] bg-[rgba(239,68,68,0.12)] px-3 py-1 text-[11px] font-semibold text-[#f87171] transition hover:bg-[rgba(239,68,68,0.22)]"
-                  aria-label="Arrêter l'agent"
-                >
-                  <span className="inline-block h-1.5 w-1.5 rounded-[2px] bg-[#f87171]" aria-hidden="true" />
-                  Arrêter
-                </button>
-                </div>
+                {loading ? (
+                  <div className="mr-auto flex items-center gap-3 rounded-2xl border border-white/10 bg-[var(--g3-elevated)] px-4 py-3 text-xs text-[var(--g3-faint)]">
+                    <Gen3iaLogo size={26} working alt="" />
+                    <span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-primary-strong)]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-magenta)] [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-secondary)] [animation-delay:240ms]" /></span>
+                    J&apos;analyse votre demande — réponse ou exécution selon le besoin…
+                  <button
+                    type="button"
+                    onClick={stopAgent}
+                    className="ml-1 flex items-center gap-1.5 rounded-full border border-[rgba(239,68,68,0.45)] bg-[rgba(239,68,68,0.12)] px-3 py-1 text-[11px] font-semibold text-[#f87171] transition hover:bg-[rgba(239,68,68,0.22)]"
+                    aria-label="Arrêter l'agent"
+                  >
+                    <span className="inline-block h-1.5 w-1.5 rounded-[2px] bg-[#f87171]" aria-hidden="true" />
+                    Arrêter
+                  </button>
+                  </div>
+                ) : (
+                  /* Reprise après refresh : la mission a survécu à l'actualisation
+                     (elle appartient au serveur) — l'utilisateur le VOIT et peut
+                     l'arrêter, au lieu d'un fil qui semble inactif. */
+                  <div className="mr-auto flex flex-wrap items-center gap-3 rounded-2xl border border-sky-400/25 bg-sky-400/10 px-4 py-3 text-xs text-sky-100" aria-live="polite">
+                    <Gen3iaLogo size={26} working alt="" />
+                    <span>
+                      <span className="font-semibold">Mission en cours d&apos;exécution</span> — elle continue côté serveur, même après l&apos;actualisation de la page. Le résultat s&apos;affichera ici dès qu&apos;elle sera livrée.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={stopAgent}
+                      className="ml-auto flex items-center gap-1.5 rounded-full border border-[rgba(239,68,68,0.45)] bg-[rgba(239,68,68,0.12)] px-3 py-1 text-[11px] font-semibold text-[#f87171] transition hover:bg-[rgba(239,68,68,0.22)]"
+                      aria-label="Arrêter la mission en cours"
+                    >
+                      <span className="inline-block h-1.5 w-1.5 rounded-[2px] bg-[#f87171]" aria-hidden="true" />
+                      Arrêter
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -945,7 +1062,7 @@ export function AgentChatPanel({
             onAuthorizationModeChange={setAuthorizationMode}
           />
           <p className="mt-2 text-center text-[10px] text-[var(--g3-muted)]">
-            {agent.name} répond et agit uniquement en {typeLabel.toLowerCase()} · Entrée envoie · Maj+Entrée nouvelle ligne
+            {agent.name} répond à tout et agit avec les outils fournis ({typeLabel.toLowerCase()}) · Entrée envoie · Maj+Entrée nouvelle ligne
           </p>
         </div>
       </div>

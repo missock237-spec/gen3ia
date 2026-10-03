@@ -29,6 +29,12 @@ vi.mock("@/lib/ai/router", () => ({
   generate: vi.fn(),
 }));
 
+// Le grounding (contexte de vérité) interroge l'index vectoriel : mocké ici
+// pour garder ce test hermétique (aucun Firestore/Qdrant réel).
+vi.mock("@/lib/chat/vector-index", () => ({
+  searchConversationMessages: vi.fn(async () => []),
+}));
+
 const mockedGenerate = vi.mocked(generate);
 
 const agent = {
@@ -91,30 +97,30 @@ beforeEach(() => {
 
 describe("answerAsAgent — chat d'agent personnalisé (visible)", () => {
   it("injecte le contrat de présentation APRÈS la charte (charte intacte en tête)", async () => {
-    await answerAsAgent(agent, [], "Bonjour");
+    await answerAsAgent("user-1", agent, [], "Bonjour");
     const call = mockedGenerate.mock.calls[0][0];
     const system = call.messages[0]?.content ?? "";
     expect(system).toContain("CodeMaster");
-    expect(system).toContain("PÉRIMÈTRE STRICT");
+    expect(system).toContain("PÉRIMÈTRE & POLYVALENCE");
     expect(system).toContain("FORMAT DE RÉPONSE");
-    expect(system.indexOf("PÉRIMÈTRE STRICT")).toBeLessThan(system.indexOf("FORMAT DE RÉPONSE"));
+    expect(system.indexOf("PÉRIMÈTRE & POLYVALENCE")).toBeLessThan(system.indexOf("FORMAT DE RÉPONSE"));
   });
 
   it("routage qualité : PAS de préférence gratuite en mode premium (défaut)", async () => {
-    await answerAsAgent(agent, [], "Bonjour");
+    await answerAsAgent("user-1", agent, [], "Bonjour");
     const call = mockedGenerate.mock.calls[0][0];
     expect(call.preferFree).toBe(false);
   });
 
   it("mode free explicite : le comportement gratuit historique reste accessible", async () => {
     process.env.GEN3IA_RESPONSE_QUALITY = "free";
-    await answerAsAgent(agent, [], "Bonjour");
+    await answerAsAgent("user-1", agent, [], "Bonjour");
     const call = mockedGenerate.mock.calls[0][0];
     expect(call.preferFree).toBe(true);
   });
 
   it("budget de sortie 4096 tokens (les longues réponses ne sont plus tronquées à 3000)", async () => {
-    await answerAsAgent(agent, [], "Bonjour");
+    await answerAsAgent("user-1", agent, [], "Bonjour");
     const call = mockedGenerate.mock.calls[0][0];
     expect(call.maxTokens).toBe(4096);
   });

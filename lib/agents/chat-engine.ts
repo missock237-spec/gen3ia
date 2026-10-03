@@ -43,7 +43,8 @@ const CLASSIFIER_SYSTEM = [
   "2. RÈGLES DE PÉRIMÈTRE (inScope) :",
   "   - TOUJOURS inScope: true pour les échanges conversationnels : questions sur la conversation elle-même (ce qui a été dit, qui est l'utilisateur, rappeler un détail déjà évoqué), politesses, questions sur l'agent, tout ce qui mobilise la mémoire du fil.",
   "   - TOUJOURS inScope: true pour une demande de génération d'image ou de visuel (image, photo, logo, illustration, affiche) : c'est une capacité native de l'agent Gen3ia, ne la bloque JAMAIS, même si le sujet demandé n'est pas métier.",
-  "   - inScope: false UNIQUEMENT si le besoin relève CLAIREMENT d'un AUTRE métier que celui de l'agent (exemple : une stratégie marketing pour un agent de code). En cas de doute, inScope: true.",
+  "   - Les agents Gen3ia sont POLYVALENTS : une demande hors de la spécialité principale de l'agent n'est JAMAIS hors périmètre pour autant — inScope: true dès que le besoin peut être servi par une réponse LLM de qualité ou par les outils, connecteurs et services disponibles.",
+  "   - inScope: false UNIQUEMENT si la demande est matériellement impossible à servir même avec les outils, connecteurs et services disponibles (exemple : passer un appel téléphonique alors qu'aucun connecteur de téléphonie n'est disponible). En cas de doute, inScope: true.",
   "3. reason: une courte justification en français.",
   "Réponds STRICTEMENT en JSON : {\"mode\":\"chat|task\",\"inScope\":true|false,\"reason\":\"...\"}",
 ].join(" ");
@@ -143,9 +144,8 @@ export function historyContextNote(history: ChatHistoryMessage[], limit = 8): st
 
 /**
  * Réponse directe (mode "chat") : la charte de l'agent pilote un appel LLM
- * classique. La charte impose un ton professionnel et le respect du
- * périmètre — le refus hors-domaine est donc déjà couvert ici ; ce mode est
- * utilisé après une classification inScope=true.
+ * classique. La charte impose un ton professionnel, la polyvalence et
+ * l'honnêteté de capacité — ce mode est utilisé après la classification.
  */
 export async function answerAsAgent(
   userId: string,
@@ -196,20 +196,22 @@ export async function answerAsAgent(
 }
 
 /**
- * Refus professionnel déterministe hors-périmètre : fiable, instantané et
- * sans coût LLM. Utilisé quand la classification détecte un message
- * clairement hors du domaine de l'agent.
+ * Réponse déterministe quand la demande est MATERIELLEMENT IMPOSSIBLE
+ * (aucune capacité disponible même avec les outils fournis) : honnête,
+ * instantanée et sans coût LLM. Elle explique ce qui manque et ce qui reste
+ * possible — elle ne rejette JAMAIS au motif du domaine de l'agent : les
+ * agents Gen3ia sont polyvalents (charte « PÉRIMÈTRE & POLYVALENCE »).
  */
-export function outOfScopeReply(agent: Pick<AgentRecord, "name" | "type" | "typeLabel" | "skills">, message: string): string {
+export function unavailableCapabilityReply(agent: Pick<AgentRecord, "name" | "type" | "typeLabel" | "skills">, message: string): string {
   const label = labelForAgent(agent);
   const skills = (agent.skills ?? []).filter(Boolean).slice(0, 5);
   const excerpt = message.trim().slice(0, 120);
   return [
     `Je suis ${agent.name}, votre agent ${label} sur Gen3ia.`,
     "",
-    `Votre demande${excerpt ? ` (« ${excerpt}${message.trim().length > 120 ? "…" : ""} »)` : ""} sort de mon périmètre d'intervention : je suis strictement spécialisé en ${label.toLowerCase()}${skills.length ? ` et mes compétences couvrent notamment ${skills.join(", ")}` : ""}.`,
+    `Votre demande${excerpt ? ` (« ${excerpt}${message.trim().length > 120 ? "…" : ""} »)` : ""} nécessite une capacité qui n'est pas disponible pour le moment (aucun outil, connecteur ou service fourni ne permet de la réaliser réellement). Je préfère vous le dire honnêtement plutôt que de simuler un résultat.`,
     "",
-    "Pour rester dans mon cadre, pouvez-vous reformuler votre besoin dans mon domaine ? Je pourrai alors vous livrer un résultat complet et vérifié. Pour un sujet d'une autre nature, créez un agent dédié depuis le Studio Gen3ia : chaque agent y possède son propre périmètre.",
+    `Ce que je peux faire dès maintenant : répondre à toutes vos questions et exécuter des tâches avec les outils fournis (recherche web, fichiers, code, applications connectées)${skills.length ? `, et en particulier ${skills.join(", ")}` : ""}. Reformulez votre besoin avec ces moyens — ou connectez l'application nécessaire depuis les intégrations Gen3ia — et je m'en occupe de bout en bout.`,
   ].join("\n");
 }
 

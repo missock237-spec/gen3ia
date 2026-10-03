@@ -19,11 +19,19 @@ describe("charter de l'agent", () => {
     expect(charter).toContain("Débogage");
   });
 
-  it("impose un périmètre strict et un refus professionnel hors domaine", () => {
+  it("garantit la POLYVALENCE : aucune demande n'est refusée pour cause de domaine (exigence utilisateur)", () => {
     const charter = buildAgentCharter(baseAgent);
-    expect(charter).toContain("PÉRIMÈTRE STRICT");
-    expect(charter).toContain("refus courtois et professionnel");
-    expect(charter).toContain("n'agis jamais hors de ton rôle");
+    expect(charter).toContain("PÉRIMÈTRE & POLYVALENCE");
+    expect(charter).toContain("TOUTE question");
+    expect(charter).toContain("TOUTE demande");
+    expect(charter).toContain("Ne refuse JAMAIS une demande au motif que le sujet sort de ton domaine");
+    expect(charter).toContain("outils, connecteurs et services qui te sont fournis");
+    // L'ancien régime de refus hors-domaine ne doit plus exister.
+    expect(charter).not.toContain("refus courtois");
+    expect(charter).not.toContain("n'agis jamais hors de ton rôle");
+    expect(charter).not.toContain("créer un agent dédié");
+    // L'honnêteté de capacité remplace le refus de domaine.
+    expect(charter).toContain("Honnêteté de capacité");
   });
 
   it("impose des règles de conduite professionnelles", () => {

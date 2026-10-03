@@ -44,7 +44,7 @@ vi.mock("@/lib/agents/chat-engine", () => ({
   answerAsAgent: vi.fn(),
   classifyRequest: vi.fn(),
   historyContextNote: vi.fn(() => "[Contexte de la conversation — échanges précédents.]"),
-  outOfScopeReply: vi.fn(() => "Hors périmètre."),
+  unavailableCapabilityReply: vi.fn(() => "Capacité indisponible."),
   planAgentTask: vi.fn(),
 }));
 vi.mock("@/lib/agents/conversation-run", () => ({
@@ -215,7 +215,9 @@ describe("POST /api/agent/chat — historique des conversations d'agent mémoris
     }));
     const body = await response.json();
     expect(body.mode).toBe("chat");
-    const note = mockedAnswer.mock.calls[0][3] as string;
+    // Signature actuelle : (userId, agent, history, message, contextNote) —
+    // la note de contexte est l'argument d'indice 4 (le 3 étant le message).
+    const note = mockedAnswer.mock.calls[0][4] as string;
     expect(note).toContain("2 fichiers");
     expect(note).toContain("doc-a.pdf");
     expect(note).toContain("doc-b.pdf");
@@ -230,7 +232,8 @@ describe("POST /api/agent/chat — historique des conversations d'agent mémoris
       attachmentPath: "uploads/seul.pdf",
       attachmentName: "seul.pdf",
     }));
-    const note = mockedAnswer.mock.calls[0][3] as string;
+    // Signature actuelle : (userId, agent, history, message, contextNote).
+    const note = mockedAnswer.mock.calls[0][4] as string;
     expect(note).toContain("seul.pdf");
     expect(note).toContain("file.read");
   });

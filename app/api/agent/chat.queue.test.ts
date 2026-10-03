@@ -26,7 +26,7 @@ vi.mock("@/lib/agents/chat-engine", () => ({
   answerAsAgent: vi.fn(),
   classifyRequest: vi.fn(),
   historyContextNote: vi.fn(() => "[Contexte de la conversation]"),
-  outOfScopeReply: vi.fn(() => "Hors périmètre."),
+  unavailableCapabilityReply: vi.fn(() => "Capacité indisponible."),
   planAgentTask: vi.fn(),
 }));
 vi.mock("@/lib/agents/conversation-run", () => ({

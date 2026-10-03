@@ -223,7 +223,7 @@ export default function HomePage() {
                     name="intent"
                     rows={3}
                     placeholder="Décrivez ce que votre agent doit faire pour vous…"
-                    className="w-full resize-none bg-transparent px-2 py-1.5 text-sm text-[var(--g3-text)] outline-none placeholder:text-[var(--g3-faint)] sm:text-base"
+                    className="w-full resize-none bg-transparent px-2 py-1.5 text-sm text-[var(--g3-text)] outline-none focus-visible:outline-none focus-visible:ring-0 placeholder:text-[var(--g3-faint)] sm:text-base"
                   />
                   <div className="flex items-center justify-between px-2 pb-1">
                     <span className="text-xs text-[var(--g3-faint)]">Gen3ia s&apos;occupe du reste</span>

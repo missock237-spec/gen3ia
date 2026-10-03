@@ -4,8 +4,14 @@ vi.mock("../ai/router", () => ({
   generate: vi.fn(),
 }));
 
+// Le grounding (contexte de vérité) interroge l'index vectoriel : mocké ici
+// pour garder ce test unitaire hermétique (aucun Firestore/Qdrant réel).
+vi.mock("@/lib/chat/vector-index", () => ({
+  searchConversationMessages: vi.fn(async () => []),
+}));
+
 import { generate } from "../ai/router";
-import { answerAsAgent, classifyRequest, heuristicClassification, outOfScopeReply, planAgentTask } from "./chat-engine";
+import { answerAsAgent, classifyRequest, heuristicClassification, unavailableCapabilityReply, planAgentTask } from "./chat-engine";
 import type { AgentRecord } from "./schema";
 
 const mockedGenerate = vi.mocked(generate);
@@ -96,32 +102,38 @@ describe("heuristicClassification (repli déterministe)", () => {
   });
 });
 
-describe("outOfScopeReply", () => {
-  it("produit un refus professionnel qui rappelle la spécialité", () => {
-    const reply = outOfScopeReply(agent, "Rédige une campagne publicitaire pour mon restaurant.");
+describe("unavailableCapabilityReply", () => {
+  it("explique honnêtement la capacité manquante SANS refuser le domaine (exigence utilisateur : agent polyvalent)", () => {
+    const reply = unavailableCapabilityReply(agent, "Rédige une campagne publicitaire pour mon restaurant.");
     expect(reply).toContain("CodeMaster");
     expect(reply).toContain("Développement & Code");
     expect(reply).toContain("campagne publicitaire");
-    expect(reply).toContain("créez un agent dédié");
+    expect(reply).toContain("capacité qui n'est pas disponible");
+    expect(reply).toContain("outils fournis");
+    // L'ancien refus hors-domaine ne doit plus apparaître.
+    expect(reply).not.toContain("sort de mon périmètre");
+    expect(reply).not.toContain("reformuler votre besoin dans mon domaine");
+    expect(reply).not.toContain("créez un agent dédié");
   });
 });
 
 describe("answerAsAgent", () => {
   it("injecte la charte comme message système et transmet l'historique", async () => {
     mockedGenerate.mockResolvedValueOnce({ text: "  Réponse professionnelle.  " } as Awaited<ReturnType<typeof generate>>);
-    const reply = await answerAsAgent(agent, [{ role: "user", content: "Salut" }, { role: "assistant", content: "Bonjour !" }], "Comment tu fonctionnes ?");
+    const reply = await answerAsAgent("user-1", agent, [{ role: "user", content: "Salut" }, { role: "assistant", content: "Bonjour !" }], "Comment tu fonctionnes ?");
     expect(reply).toBe("Réponse professionnelle.");
     const call = mockedGenerate.mock.calls[0][0];
     expect(call.messages[0].role).toBe("system");
     expect(call.messages[0].content).toContain("CodeMaster");
-    expect(call.messages[0].content).toContain("PÉRIMÈTRE STRICT");
-    expect(call.messages.at(-1)?.content).toBe("Comment tu fonctionnes ?");
+    expect(call.messages[0].content).toContain("PÉRIMÈTRE & POLYVALENCE");
+    // Le message utilisateur est préfixé par le grounding (contexte de vérité).
+    expect(call.messages.at(-1)?.content).toContain("Comment tu fonctionnes ?");
     expect(call.messages).toHaveLength(4);
   });
 
   it("préfixe la note de contexte au message utilisateur", async () => {
     mockedGenerate.mockResolvedValueOnce({ text: "ok" } as Awaited<ReturnType<typeof generate>>);
-    await answerAsAgent(agent, [], "Résume ce document.", "[Fichier disponible : notes.pdf]");
+    await answerAsAgent("user-1", agent, [], "Résume ce document.", "[Fichier disponible : notes.pdf]");
     const call = mockedGenerate.mock.calls[0][0];
     expect(call.messages.at(-1)?.content).toContain("[Fichier disponible : notes.pdf]");
     expect(call.messages.at(-1)?.content).toContain("Résume ce document.");

@@ -163,7 +163,7 @@ export default function ClientCommercialPage() {
             rows={1}
             placeholder="Votre message…"
             maxLength={2_000}
-            className="max-h-32 flex-1 resize-none rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3 text-sm"
+            className="max-h-32 flex-1 resize-none rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3 text-sm outline-none focus-visible:outline-none focus-visible:ring-0"
             disabled={sending}
             aria-label="Votre message"
           />

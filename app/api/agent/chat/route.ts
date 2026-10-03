@@ -18,7 +18,7 @@ import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage, createConversation, getConversation, listMessages, updateConversation, type ChatConversation } from "@/lib/chat/repository";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { policyForAgent } from "@/lib/agents/personalized-plan";
-import { answerAsAgent, classifyRequest, historyContextNote, outOfScopeReply, planAgentTask } from "@/lib/agents/chat-engine";
+import { answerAsAgent, classifyRequest, historyContextNote, unavailableCapabilityReply, planAgentTask } from "@/lib/agents/chat-engine";
 import { recordAgentRun } from "@/lib/agents/conversation-run";
 import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
 import { createQueuedMission } from "@/lib/queue/mission-queue";
@@ -455,9 +455,13 @@ export async function POST(request: NextRequest) {
       const servicesNote = describeProjectServicesForPrompt();
       const fullNote = [note, memoryNote, mcpNote, connectorsNote, servicesNote].filter(Boolean).join("\n\n") || undefined;
 
-      // Hors périmètre : refus professionnel, sans exécution ni coût LLM.
+      // Demande MATERIELLEMENT IMPOSSIBLE (aucune capacité disponible même
+      // avec les outils fournis) : réponse honnête déterministe, sans coût
+      // LLM. Une demande hors spécialité N'EST PAS bloquée ici : les agents
+      // Gen3ia sont polyvalents (charte « PÉRIMÈTRE & POLYVALENCE ») et le
+      // classificateur ne renvoie inScope:false QUE pour l'impossible.
       if (!classification.inScope) {
-        const reply = outOfScopeReply(agent, body.message);
+        const reply = unavailableCapabilityReply(agent, body.message);
         await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
         after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: reply, mode: "chat" }));
         return NextResponse.json({
@@ -567,7 +571,7 @@ export async function POST(request: NextRequest) {
           return approval;
         }));
 
-        const waitingText = `J'ai préparé le plan d'exécution dans mon domaine (${classification.reason || "tâche confirmée"}). Une ou plusieurs actions externes nécessitent votre confirmation avant exécution.`;
+        const waitingText = `J'ai préparé le plan d'exécution (${classification.reason || "tâche confirmée"}). Une ou plusieurs actions externes nécessitent votre confirmation avant exécution.`;
         await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: waitingText, ...(waitingRunId ? { runId: waitingRunId } : {}) });
 
         return NextResponse.json({
