@@ -9,15 +9,19 @@ import {
   installExtension,
   uninstallExtension,
 } from "@/lib/extensions/repository";
-import { startChariowPurchase } from "@/lib/extensions/entitlements";
+import { startChariowPurchase, purchaseWithWallet } from "@/lib/extensions/entitlements";
+
+const WALLET_CURRENCIES = new Set(["xaf", "xfcfa", "xfpfc"]); // devise unique du wallet Gen3ia
 
 type Params = { params: Promise<{ id: string }> };
 
 /**
  * POST /api/extensions/:id/install.
- * Free extensions install immediately. Paid extensions use Chariow only.
- * Payment is never trusted from the browser: entitlement is created only by
- * the verified Chariow Pulse webhook.
+ * Free extensions install immediately. Paid extensions: body.paymentMethod
+ * = "wallet" (débit immédiat du wallet Gen3ia, XAF uniquement) ou défaut
+ * "chariow" (checkout 202). Payment is never trusted from the browser:
+ * entitlement is created server-side only (wallet settlement or verified
+ * Chariow Pulse webhook).
  */
 export async function POST(request: Request, { params }: Params) {
   try {
@@ -32,14 +36,23 @@ export async function POST(request: Request, { params }: Params) {
     const version = await getLatestApprovedVersion(id);
     if (!version) return NextResponse.json({ error: "Aucune version approuvée." }, { status: 400 });
 
-    const body = (await request.json().catch(() => ({}))) as { email?: string; redirectUrl?: string };
+    const body = (await request.json().catch(() => ({}))) as { email?: string; redirectUrl?: string; paymentMethod?: string };
     const pricing = version.manifest.pricing;
+    let walletPurchased = false;
 
     if (pricing.model !== "free") {
       const existing = await getInstallation(id, token.uid);
       const entitled = await hasActiveEntitlement(id, token.uid);
-      if (!existing || existing.status !== "active") {
-        if (!entitled) {
+      if ((!existing || existing.status !== "active") && !entitled) {
+        if (body.paymentMethod === "wallet") {
+          const currency = String(pricing.currency ?? "XAF").toUpperCase();
+          if (!WALLET_CURRENCIES.has(currency)) {
+            return NextResponse.json({ error: `Cette extension est facturée en ${currency} : le wallet Gen3ia (XAF) ne peut pas la payer. Utilisez le paiement Chariow.` }, { status: 400 });
+          }
+          const reference = `ext-install:${id}:${token.uid}`;
+          await purchaseWithWallet({ userId: token.uid, extension, reference });
+          walletPurchased = true;
+        } else {
           const email = body.email?.trim() || token.email?.trim();
           if (!email) return NextResponse.json({ error: "Une adresse e-mail est requise pour démarrer le paiement Chariow." }, { status: 400 });
           const checkout = await startChariowPurchase({
@@ -64,6 +77,7 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({
       installation: { extensionId: installation.extensionId, version: installation.version, status: installation.status },
       permissionsGranted: installation.permissionsGranted,
+      ...(walletPurchased ? { payment: { provider: "wallet", status: "paid" } } : {}),
     });
   } catch (error) {
     return extensionApiError(error);

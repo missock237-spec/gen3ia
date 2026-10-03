@@ -19,6 +19,7 @@ export async function GET(_request: Request, { params }: Params) {
         rating: review.rating,
         title: review.title ?? null,
         body: review.body,
+        developerReply: review.developerReply ?? null,
         createdAt: review.createdAt,
       })),
     });

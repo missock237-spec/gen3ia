@@ -4,7 +4,7 @@ import { authenticateDeveloper } from "@/lib/extensions/developer-keys";
 import { extensionApiError } from "@/lib/extensions/api";
 import { validateManifest } from "@/lib/extensions/manifest";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
-import { createExtension, getExtension, listApprovedExtensions } from "@/lib/extensions/repository";
+import { createExtension, getExtension, listApprovedCatalogPage } from "@/lib/extensions/repository";
 
 export async function POST(request: Request) {
   try {
@@ -32,16 +32,27 @@ export async function GET(request: Request) {
   try {
     await verifyFirebaseAuth(request);
     const url = new URL(request.url);
-    const extensions = await listApprovedExtensions({
+    const sortParam = url.searchParams.get("sort") ?? "popular";
+    const sort = (["popular", "newest", "price_asc", "rating"] as const).includes(sortParam as never)
+      ? (sortParam as "popular" | "newest" | "price_asc" | "rating")
+      : "popular";
+    const page = await listApprovedCatalogPage({
       q: url.searchParams.get("q") ?? undefined,
       category: url.searchParams.get("category") ?? undefined,
       limit: Number(url.searchParams.get("limit") ?? 48),
+      sort,
+      cursor: url.searchParams.get("cursor") ?? undefined,
     });
-    return NextResponse.json({ extensions: extensions.map((extension) => ({
-      id: extension.id, name: extension.name, description: extension.description, category: extension.category,
-      tags: extension.tags, developerName: extension.developerName, latestVersion: extension.latestVersion,
-      approvedVersion: extension.approvedVersion, pricing: extension.pricing,
-      stats: { installs: extension.stats.installs, ratingCount: extension.stats.ratingCount, rating: extension.stats.ratingCount > 0 ? Number((extension.stats.ratingSum / extension.stats.ratingCount).toFixed(2)) : null },
-    })) });
+    return NextResponse.json({
+      sort: page.sort,
+      nextCursor: page.nextCursor,
+      truncated: page.truncated,
+      extensions: page.docs.map((extension) => ({
+        id: extension.id, name: extension.name, description: extension.description, category: extension.category,
+        tags: extension.tags, developerName: extension.developerName, latestVersion: extension.latestVersion,
+        approvedVersion: extension.approvedVersion, pricing: extension.pricing,
+        stats: { installs: extension.stats.installs, ratingCount: extension.stats.ratingCount, rating: extension.stats.ratingCount > 0 ? Number((extension.stats.ratingSum / extension.stats.ratingCount).toFixed(2)) : null },
+      })),
+    });
   } catch (error) { return extensionApiError(error); }
 }

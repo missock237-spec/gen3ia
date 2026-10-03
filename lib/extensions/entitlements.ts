@@ -19,6 +19,31 @@ import {
   upsertEntitlement,
 } from "./repository";
 import { canUseExtension, subscriptionExpiry, type PricingInfo } from "./pricing";
+import { addDeveloperRevenue } from "./repository";
+
+/**
+ * Part développeur (80/20) enregistrée après un paiement RÉEL. Best-effort
+ * journalisé : l'acheteur ne doit pas perdre son installation si l'écriture
+ * de revenu échoue — l'achat reste rejouable depuis extensionPurchases.
+ */
+async function recordDeveloperRevenueSafe(params: {
+  extension: ExtensionDoc;
+  purchaseId: string;
+  amountMinor: number;
+  currency: string;
+}): Promise<void> {
+  try {
+    await addDeveloperRevenue({
+      developerId: params.extension.developerId,
+      extensionId: params.extension.id,
+      purchaseId: params.purchaseId,
+      grossAmountMinor: params.amountMinor,
+      currency: params.currency,
+    });
+  } catch (error) {
+    console.error("[extensions] revenu développeur non enregistré (achat conservé):", error instanceof Error ? error.message : error);
+  }
+}
 
 export interface PurchaseStartResult {
   mode: "wallet" | "chariow";
@@ -107,6 +132,12 @@ export async function purchaseWithWallet(params: {
   }
 
   await markPurchasePaid(purchase.id, `wallet:${params.reference}`);
+  await recordDeveloperRevenueSafe({
+    extension: params.extension,
+    purchaseId: purchase.id,
+    amountMinor,
+    currency: pricing.currency ?? WALLET_CURRENCY,
+  });
   const expiresAt = await grantEntitlement({
     userId: params.userId,
     extension: params.extension,
@@ -293,6 +324,15 @@ export async function settleChariowExtensionPurchase(params: {
     });
     granted = true;
   });
+
+  if (granted) {
+    await recordDeveloperRevenueSafe({
+      extension,
+      purchaseId: purchase.id,
+      amountMinor: purchase.amountMinor,
+      currency: purchase.currency,
+    });
+  }
 
   return { granted };
 }

@@ -69,9 +69,144 @@ export async function getExtensionPurchase(id:string){const snap=await adminDb.c
 export async function markPurchasePaid(id:string,providerRef:string){const ref=adminDb.collection(COL.purchases).doc(id);await ref.update({status:"paid",providerRef,paidAt:now()});const snap=await ref.get();return snap.data() as PurchaseDoc;}
 export async function createLicense(params:{purchaseId:string;userId:string;extensionId:string;licenseKey:string;expiresAt?:number|null}){await adminDb.collection(COL.licenses).doc(params.licenseKey).create({licenseKey:params.licenseKey,purchaseId:params.purchaseId,userId:params.userId,extensionId:params.extensionId,status:"active",expiresAt:params.expiresAt??null,createdAt:now()});}
 export async function listPurchasesByUser(userId:string,limit=50){const snap=await adminDb.collection(COL.purchases).where("userId","==",userId).orderBy("createdAt","desc").limit(limit).get();return snap.docs.map(d=>d.data() as PurchaseDoc);}
-export interface ReviewDoc{id:string;extensionId:string;userId:string;rating:number;title?:string|null;body:string;status:"visible"|"hidden";createdAt:number;updatedAt:number;deletedAt?:number|null;}
+export interface ReviewDoc{id:string;extensionId:string;userId:string;rating:number;title?:string|null;body:string;status:"visible"|"hidden";developerReply?:{body:string;at:number}|null;createdAt:number;updatedAt:number;deletedAt?:number|null;}
 export async function upsertReview(params:{extensionId:string;userId:string;rating:number;title?:string;body:string}){const timestamp=now();const ref=adminDb.collection(COL.reviews).doc(`${params.extensionId}__${params.userId}`);await adminDb.runTransaction(async tx=>{const snap=await tx.get(ref);if(snap.exists){const previous=snap.data() as ReviewDoc;tx.update(ref,{rating:params.rating,title:params.title??null,body:params.body.slice(0,4000),updatedAt:timestamp});tx.update(extensionRef(params.extensionId),{"stats.ratingSum":FieldValue.increment(params.rating-previous.rating),updatedAt:timestamp});return;}tx.create(ref,{id:ref.id,extensionId:params.extensionId,userId:params.userId,rating:params.rating,title:params.title??null,body:params.body.slice(0,4000),status:"visible",createdAt:timestamp,updatedAt:timestamp,deletedAt:null});tx.update(extensionRef(params.extensionId),{"stats.ratingSum":FieldValue.increment(params.rating),"stats.ratingCount":FieldValue.increment(1),updatedAt:timestamp});});}
 export async function listReviews(extensionId:string,limit=20){const snap=await adminDb.collection(COL.reviews).where("extensionId","==",extensionId).where("status","==","visible").orderBy("createdAt","desc").limit(limit).get();return snap.docs.map(d=>d.data() as ReviewDoc);}
+
+/* ── Catalogue paginé (marketplace avancé) ───────────────────────────────────
+ * UNE SEULE forme de requête Firestore (equality status+deletedAt, plafond
+ * 200) → tri en mémoire par clé de tri avec départage par identifiant
+ * (déterministe). Le curseur opaque encode {k,id} de la dernière fiche : le
+ * serveur reprend APRÈS cette fiche (keyset), stable face aux insertions.
+ * `truncated:true` signale honnêtement qu'un dépôt >200 fiches n'est pas
+ * paginé au-delà (l'ancienne API était déjà limitée à 100 sans pagination). */
+export type CatalogSort = "popular" | "newest" | "price_asc" | "rating";
+const CATALOG_SCAN_CAP = 200;
+
+function encodeCursor(value: { k: number | string; id: string }): string {
+  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+}
+function decodeCursor(raw: string | undefined): { k: number | string; id: string } | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as { k?: unknown; id?: unknown };
+    if (typeof parsed.id !== "string" || !parsed.id || (typeof parsed.k !== "number" && typeof parsed.k !== "string")) return null;
+    return { k: parsed.k as number | string, id: parsed.id };
+  } catch {
+    throw new Error("Curseur de catalogue invalide.");
+  }
+}
+
+function ratingOf(doc: ExtensionDoc): number {
+  return doc.stats.ratingCount > 0 ? doc.stats.ratingSum / doc.stats.ratingCount : 0;
+}
+
+export async function listApprovedCatalogPage(options: {
+  q?: string; category?: string; limit?: number; sort?: CatalogSort; cursor?: string;
+}): Promise<{ docs: ExtensionDoc[]; nextCursor: string | null; truncated: boolean; sort: CatalogSort }> {
+  const sort: CatalogSort = options.sort ?? "popular";
+  const limit = Math.min(Math.max(options.limit ?? 48, 1), 100);
+  let query: FirebaseFirestore.Query = adminDb.collection(COL.extensions)
+    .where("status", "==", "approved").where("deletedAt", "==", null).limit(CATALOG_SCAN_CAP);
+  if (options.category) query = query.where("category", "==", options.category);
+  const snap = await query.get();
+  let docs = snap.docs.map((d) => d.data() as ExtensionDoc);
+  if (docs.length >= CATALOG_SCAN_CAP) docs.sort((a, b) => a.id.localeCompare(b.id)); // fenêtre déterministe au cap
+  const needle = options.q?.trim().toLowerCase();
+  if (needle) docs = docs.filter((d) => d.name.toLowerCase().includes(needle) || d.description.toLowerCase().includes(needle) || d.tags.some((t) => t.toLowerCase().includes(needle)));
+
+  const keyOf = (doc: ExtensionDoc): number | string => {
+    switch (sort) {
+      case "newest": return doc.createdAt ?? 0;
+      case "price_asc": return doc.pricing?.amountMinor ?? 0;
+      case "rating": return ratingOf(doc);
+      case "popular": default: return doc.stats?.installs ?? 0;
+    }
+  };
+  const ascending = sort === "price_asc";
+  docs.sort((a, b) => {
+    const ka = keyOf(a), kb = keyOf(b);
+    const cmp = ka < kb ? -1 : ka > kb ? 1 : 0;
+    return (ascending ? cmp : -cmp) || a.id.localeCompare(b.id);
+  });
+
+  const cursor = decodeCursor(options.cursor);
+  if (cursor) {
+    const idx = docs.findIndex((d) => d.id === cursor.id && keyOf(d) === cursor.k);
+    if (idx >= 0) docs = docs.slice(idx + 1);
+    else throw new Error("Curseur de catalogue invalide.");
+  }
+  const page = docs.slice(0, limit);
+  const last = page[page.length - 1];
+  const hasMore = docs.length > page.length;
+  return {
+    docs: page,
+    nextCursor: last && hasMore ? encodeCursor({ k: keyOf(last), id: last.id }) : null,
+    truncated: snap.size >= CATALOG_SCAN_CAP,
+    sort,
+  };
+}
+
+/* ── Réponses développeur aux avis + modération admin ─────────────────────── */
+function reviewRef(reviewId: string) { return adminDb.collection(COL.reviews).doc(reviewId); }
+
+export async function getReviewById(reviewId: string): Promise<ReviewDoc | null> {
+  const snap = await reviewRef(reviewId).get();
+  return (snap.data() as ReviewDoc | undefined) ?? null;
+}
+
+/** Le DÉVELOPPEUR de l'extension répond publiquement à un avis visible. */
+export async function replyToReview(params: { extensionId: string; developerId: string; reviewId: string; reply: string }): Promise<ReviewDoc> {
+  const extension = await getExtension(params.extensionId);
+  if (!extension) throw new Error("Extension introuvable.");
+  if (extension.developerId !== params.developerId) throw new Error("Seul le développeur de l'extension peut répondre aux avis.");
+  const ref = reviewRef(params.reviewId);
+  const snap = await ref.get();
+  const review = snap.data() as ReviewDoc | undefined;
+  if (!review || review.extensionId !== params.extensionId) throw new Error("Avis introuvable.");
+  if (review.status !== "visible") throw new Error("Cet avis n'est pas visible.");
+  const body = params.reply.trim().slice(0, 2000);
+  if (body.length < 2) throw new Error("La réponse doit contenir au moins 2 caractères.");
+  await ref.update({ developerReply: { body, at: now() }, updatedAt: now() });
+  const updated = await ref.get();
+  return updated.data() as ReviewDoc;
+}
+
+/** Modération admin : masquer / réafficher un avis (les stats suivent le
+ * statut — une fiche masquée ne compte plus dans la moyenne). */
+export async function moderateReview(params: { reviewId: string; action: "hide" | "show" }): Promise<ReviewDoc> {
+  const ref = reviewRef(params.reviewId);
+  const snap = await ref.get();
+  const review = snap.data() as ReviewDoc | undefined;
+  if (!review) throw new Error("Avis introuvable.");
+  const wasVisible = review.status === "visible";
+  const willBeVisible = params.action === "show";
+  if (wasVisible === willBeVisible) return review; // idempotent
+  await adminDb.runTransaction(async (tx) => {
+    const fresh = await tx.get(ref);
+    const current = fresh.data() as ReviewDoc | undefined;
+    if (!current) throw new Error("Avis introuvable.");
+    const stillVisible = current.status === "visible";
+    tx.update(ref, { status: willBeVisible ? "visible" : "hidden", updatedAt: now() });
+    const delta = stillVisible === willBeVisible ? 0 : willBeVisible ? 1 : -1;
+    if (delta !== 0) {
+      tx.update(extensionRef(current.extensionId), {
+        "stats.ratingSum": FieldValue.increment(delta * current.rating),
+        "stats.ratingCount": FieldValue.increment(delta),
+        updatedAt: now(),
+      });
+    }
+  });
+  const extension = await getExtension(review.extensionId);
+  if (extension) {
+    const avg = extension.stats.ratingCount > 0
+      ? Math.round((extension.stats.ratingSum / extension.stats.ratingCount) * 100) / 100
+      : 0;
+    await extensionRef(review.extensionId).update({ "stats.ratingAvg": avg, updatedAt: now() }).catch(() => undefined);
+  }
+  const updated = await ref.get();
+  return updated.data() as ReviewDoc;
+}
 export async function createReport(params:{extensionId:string;userId:string;reason:string;details?:string}){await adminDb.collection(COL.reports).add({extensionId:params.extensionId,userId:params.userId,reason:params.reason.slice(0,200),details:params.details?.slice(0,2000)??null,status:"open",createdAt:now()});}
 export async function recordExtensionExecution(params:{extensionId:string;version:string;userId:string;toolId:string;ok:boolean;status:string;durationMs:number;error?:string;executionId?:string}){const timestamp=now();await Promise.all([adminDb.collection(COL.executions).add({extensionId:params.extensionId,version:params.version,userId:params.userId,toolId:params.toolId,ok:params.ok,status:params.status,durationMs:params.durationMs,error:params.error?.slice(0,1000)??null,executionId:params.executionId??null,createdAt:timestamp}),adminDb.collection(COL.usage).doc(`${params.extensionId}__${params.userId}__${new Date(timestamp).toISOString().slice(0,10)}`).set({extensionId:params.extensionId,userId:params.userId,day:new Date(timestamp).toISOString().slice(0,10),executions:FieldValue.increment(1),updatedAt:timestamp},{merge:true}),extensionRef(params.extensionId).update({"stats.executions":FieldValue.increment(1),updatedAt:timestamp})]);}
 export async function getUsageCounter(extensionId:string,userId:string,day:string){const snap=await adminDb.collection(COL.usage).doc(`${extensionId}__${userId}__${day}`).get();return snap.data()??null;}
