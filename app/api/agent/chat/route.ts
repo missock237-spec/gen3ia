@@ -36,6 +36,7 @@ import {
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
 import type { AgentRecord } from "@/lib/agents/schema";
+import { buildImageGenerationSkill } from "@/lib/agents/skills/image-generation";
 
 const Body = z.object({
   message: z.string().trim().min(1).max(200_000),
@@ -187,7 +188,8 @@ async function respondWithImage(params: {
     return { reply, imageUrl: undefined, model: undefined };
   }
   try {
-    const image = await generateImageWithAgnes({ prompt: enhanceImagePrompt(message) });
+    const imageSkill = buildImageGenerationSkill(message);
+    const image = await generateImageWithAgnes({ prompt: imageSkill.prompt, ratio: imageSkill.ratio });
     const reply = "Voici l'image que j'ai générée pour vous.";
     await appendMessage({
       conversationId, userId, role: "assistant", content: reply,
