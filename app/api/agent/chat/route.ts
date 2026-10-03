@@ -29,7 +29,6 @@ import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import { describeConnectorsForPrompt, describeConnectedConnectorsForPrompt, type ConnectedConnectorsContext } from "@/lib/integrations/mention";
 import { describeProjectServicesForPrompt, PROJECT_SERVICE_TOOLS } from "@/lib/agents/services/bridge";
 import {
-  enhanceImagePrompt,
   generateImageWithAgnes,
   ImageGenerationError,
   isImageGenerationEnabled,
