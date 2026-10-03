@@ -39,6 +39,12 @@ const Body = z.object({
   agentId: z.string().trim().min(1).max(128).optional(),
   attachmentPath: z.string().trim().min(1).max(500).optional(),
   attachmentName: z.string().trim().min(1).max(255).optional(),
+  // Pièces jointes MULTIPLES (chat d'agent avancé) : jusqu'à 5 fichiers
+  // pré-téléversés. Les champs historiques ci-dessus restent acceptés.
+  attachments: z.array(z.object({
+    path: z.string().trim().min(1).max(500),
+    name: z.string().trim().min(1).max(255),
+  })).max(5).optional(),
   // Connecteurs activés par l'utilisateur via le sélecteur « @ » du chat :
   // l'agent reçoit le contexte des actions disponibles et peut agir dessus.
   activatedConnectors: z.array(
@@ -144,15 +150,19 @@ function policyForAgentMission(
   };
 }
 
-/** Note de contexte (pièce jointe ou fichier mémoire) ajoutée au message. */
-function contextNoteFor(attachmentPath: string | undefined, agent: AgentRecord | null): string | undefined {
-  if (attachmentPath) {
-    return `[Contexte fourni par l'utilisateur : le fichier « ${attachmentPath} » est disponible dans le stockage Gen3ia. Utilise l'outil file.read pour le consulter si nécessaire.]`;
+/** Note de contexte (pièces jointes et/ou fichier mémoire) ajoutée au message. */
+function contextNoteFor(attachments: Array<{ path: string; name: string }>, agent: AgentRecord | null): string | undefined {
+  const notes: string[] = [];
+  if (attachments.length === 1) {
+    notes.push(`[Contexte fourni par l'utilisateur : le fichier « ${attachments[0].name} » (${attachments[0].path}) est disponible dans le stockage Gen3ia. Utilise l'outil file.read pour le consulter si nécessaire.]`);
+  } else if (attachments.length > 1) {
+    const list = attachments.map((item) => `- « ${item.name} » (${item.path})`).join("\n");
+    notes.push(`[Contexte fourni par l'utilisateur : ${attachments.length} fichiers sont disponibles dans le stockage Gen3ia :\n${list}\nUtilise l'outil file.read pour les consulter si nécessaire.]`);
   }
   if (agent?.memoryFile?.path) {
-    return `[Mémoire de l'agent : le fichier « ${agent.memoryFile.name} » (${agent.memoryFile.path}) est disponible dans le stockage Gen3ia. Utilise l'outil file.read pour le consulter dès qu'il peut améliorer ta réponse.]`;
+    notes.push(`[Mémoire de l'agent : le fichier « ${agent.memoryFile.name} » (${agent.memoryFile.path}) est disponible dans le stockage Gen3ia. Utilise l'outil file.read pour le consulter dès qu'il peut améliorer ta réponse.]`);
   }
-  return undefined;
+  return notes.length > 0 ? notes.join("\n\n") : undefined;
 }
 
 /**
@@ -287,7 +297,14 @@ export async function POST(request: NextRequest) {
         body.message,
         history.map((item) => ({ role: item.role, content: item.content })),
       );
-      const note = contextNoteFor(body.attachmentPath, agent);
+      const note = contextNoteFor(
+        [
+          // Compat : ancien champ unique + nouveau tableau multi-fichiers.
+          ...(body.attachmentPath ? [{ path: body.attachmentPath, name: body.attachmentName ?? body.attachmentPath }] : []),
+          ...(body.attachments ?? []),
+        ],
+        agent,
+      );
 
       // Mémoire épisodique : rappel sémantique des échanges passés de cet
       // agent (similarité cosinus sur embeddings) — silence si indisponible.

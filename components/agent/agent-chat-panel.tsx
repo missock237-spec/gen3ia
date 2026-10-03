@@ -133,8 +133,11 @@ export function AgentChatPanel({
   const [active, setActive] = React.useState<AgentResult | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
-  const [attachment, setAttachment] = React.useState<File | null>(null);
-  const [attachmentPath, setAttachmentPath] = React.useState<string | null>(null);
+  // Pièces jointes MULTIPLES (chat avancé) : jusqu'à 5 fichiers téléversés.
+  const [attachments, setAttachments] = React.useState<Array<{ file: File; path: string }>>([]);
+  // Mission LIVE : pendant l'exécution bloquante, polling des runs de la
+  // conversation → suivi des étapes réelles en direct.
+  const [liveRun, setLiveRun] = React.useState<{ id: string; status: string; steps: Array<{ id: string; name: string; status: string }> } | null>(null);
   const [uploading, setUploading] = React.useState(false);
   const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
   const [showHistory, setShowHistory] = React.useState(false);
@@ -154,6 +157,36 @@ export function AgentChatPanel({
   // effets montés avant sa déclaration.
   const openConversationRef = React.useRef<((id: string) => Promise<void>) | null>(null);
   React.useEffect(() => () => requestAbortRef.current?.abort(), []);
+
+  // SUIVI LIVE : pendant l'exécution bloquante d'une mission, le DERNIER run
+  // de la conversation est sondé (2,5 s) pour afficher l'avancement réel des
+  // étapes — au lieu d'un spinner figé. Le run est créé côté serveur AVANT
+  // l'exécution, il apparaît donc dès les premières secondes.
+  React.useEffect(() => {
+    if (!loading || !conversationId) {
+      setLiveRun(null);
+      return;
+    }
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/chat/conversations/${conversationId}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json();
+        const runs = (data.runs ?? []) as Array<{ id: string; status: string; steps?: Array<{ id: string; name: string; status: string }> }>;
+        const freshest = runs[0];
+        if (!cancelled && freshest) {
+          setLiveRun({ id: freshest.id, status: freshest.status, steps: freshest.steps ?? [] });
+        }
+      } catch { /* sondage indisponible : le spinner reste honnête */ }
+    };
+    void poll();
+    const interval = setInterval(() => void poll(), 2_500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [loading, conversationId]);
 
   const typeLabel = labelForAgent(agent);
   const quickPrompts = QUICK_PROMPTS[agent.type] ?? QUICK_PROMPTS.custom;
@@ -316,15 +349,16 @@ export function AgentChatPanel({
     setMessages([]);
     setActive(null);
     setError("");
-    setAttachment(null);
-    setAttachmentPath(null);
+    setAttachments([]);
     setMessage("");
   }
 
   async function handleAttachment(file: File) {
-    setAttachment(file);
-    setAttachmentPath(null);
     setError("");
+    if (attachments.length >= 5) {
+      setError("5 fichiers maximum par message.");
+      return;
+    }
     setUploading(true);
     try {
       const result = await uploadPermanentFiles([file]);
@@ -332,9 +366,8 @@ export function AgentChatPanel({
       if (!uploaded) throw new Error(result.failed[0]?.error || "Téléversement impossible.");
       const path = uploaded.path || uploaded.filename;
       if (!path) throw new Error("Le stockage n'a pas retourné le chemin du fichier.");
-      setAttachmentPath(path);
+      setAttachments((current) => [...current, { file, path }]);
     } catch (e) {
-      setAttachment(null);
       setError(e instanceof Error ? e.message : "Le fichier n'a pas pu être téléversé.");
     } finally {
       setUploading(false);
@@ -356,7 +389,7 @@ export function AgentChatPanel({
           agentId: agent.id,
           authorizationMode,
           ...(conversationId ? { conversationId } : {}),
-          ...(attachmentPath ? { attachmentPath, attachmentName: attachment?.name } : {}),
+          ...(attachments.length > 0 ? { attachments: attachments.map(({ file, path }) => ({ path, name: file.name })) } : {}),
           ...(activated.length > 0 ? { activatedConnectors: activated.map((item) => item.toolkit) } : {}),
         }),
       });
@@ -378,6 +411,8 @@ export function AgentChatPanel({
       }
 
       if (data.conversationId) setConversationId(data.conversationId);
+      // Pièces jointes consommées par l'envoi : nettoyage immédiat.
+      setAttachments([]);
 
       if (data.mode === "chat") {
         setMessages((items) => [...items, {
@@ -758,10 +793,34 @@ export function AgentChatPanel({
             ))}
 
             {loading && (
-              <div className="mr-auto flex items-center gap-3 rounded-2xl border border-white/10 bg-[var(--g3-elevated)] px-4 py-3 text-xs text-[var(--g3-faint)]">
-                <Gen3iaLogo size={26} working alt="" />
-                <span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-primary-strong)]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-magenta)] [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-secondary)] [animation-delay:240ms]" /></span>
-                J&apos;analyse votre demande — réponse ou exécution selon le besoin…
+              <div className="mr-auto max-w-[88%] space-y-2">
+                {/* Mission LIVE : avancement réel des étapes (polling des runs) */}
+                {liveRun && liveRun.steps.length > 0 && (
+                  <div className="rounded-2xl border border-white/10 bg-[var(--g3-deep)] p-3" aria-live="polite">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--g3-faint)]">
+                      Mission en cours · {liveRun.steps.filter((s) => s.status === "completed").length}/{liveRun.steps.length} étapes
+                    </p>
+                    <ul className="mt-2 space-y-1.5">
+                      {liveRun.steps.map((step) => (
+                        <li key={step.id} className="flex items-center gap-2 text-xs text-[var(--g3-muted)]">
+                          <span className={
+                            "mt-0.5 h-2 w-2 shrink-0 rounded-full " +
+                            (step.status === "completed" ? "bg-[var(--g3-success)]"
+                              : step.status === "failed" ? "bg-[var(--g3-danger)]"
+                              : step.status === "running" ? "animate-pulse bg-[var(--g3-primary-strong)]"
+                              : step.status === "waiting_approval" ? "bg-[var(--g3-warning)]"
+                              : "bg-[var(--g3-faint)]")
+                          } aria-hidden="true" />
+                          <span className={step.status === "running" ? "font-semibold text-[var(--g3-text-secondary)]" : ""}>{step.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div className="mr-auto flex items-center gap-3 rounded-2xl border border-white/10 bg-[var(--g3-elevated)] px-4 py-3 text-xs text-[var(--g3-faint)]">
+                  <Gen3iaLogo size={26} working alt="" />
+                  <span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-primary-strong)]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-magenta)] [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-secondary)] [animation-delay:240ms]" /></span>
+                  J&apos;analyse votre demande — réponse ou exécution selon le besoin…
                 <button
                   type="button"
                   onClick={stopAgent}
@@ -771,6 +830,7 @@ export function AgentChatPanel({
                   <span className="inline-block h-1.5 w-1.5 rounded-[2px] bg-[#f87171]" aria-hidden="true" />
                   Arrêter
                 </button>
+                </div>
               </div>
             )}
           </div>
@@ -794,9 +854,9 @@ export function AgentChatPanel({
             onDeactivateMention={deactivateConnector}
             commands={composerCommands}
             plusAction="file"
-            attachmentName={attachment?.name ?? null}
+            attachmentName={attachments.length === 0 ? null : attachments.length === 1 ? attachments[0].file.name : `${attachments.length} fichiers joints`}
             attachmentUploading={uploading}
-            onRemoveAttachment={() => { setAttachment(null); setAttachmentPath(null); }}
+            onRemoveAttachment={() => setAttachments([])}
             onFile={(file) => void handleAttachment(file)}
             authorizationMode={authorizationMode}
             onAuthorizationModeChange={setAuthorizationMode}

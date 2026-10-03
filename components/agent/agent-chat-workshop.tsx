@@ -66,6 +66,9 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
   const [pendingConversationId, setPendingConversationId] = React.useState<string | null>(null);
   const [showRailMobile, setShowRailMobile] = React.useState(false);
+  // MODE ZEN : masque le rail historique sur desktop pour un chat plein
+  // écran sans distraction (le rail reste accessible via le bouton).
+  const [zen, setZen] = React.useState(false);
   const [error, setError] = React.useState("");
   const [_loadFailed, setLoadFailed] = React.useState(false);
   const [voiceSetupAgentId, setVoiceSetupAgentId] = React.useState<string | null>(null);
@@ -218,6 +221,19 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
       {sessionDisponible === false && <Callout tone="warning" className="rounded-2xl">Session expirée — reconnectez-vous pour discuter avec Gen IA.</Callout>}
       {error && <Callout tone="error" className="rounded-2xl"><span className="flex items-center justify-between gap-3"><span>{error}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full border border-[rgba(246,98,110,0.45)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]">Réessayer</button></span></Callout>}
 
+      {/* Mode ZEN (plein écran avancé) : masque le rail historique sur desktop */}
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => setZen((current) => !current)}
+          aria-pressed={zen}
+          title={zen ? "Réafficher l'historique des chats" : "Mode zen : masquer l'historique pour un chat plein écran"}
+          className="hidden rounded-full border border-[var(--g3-border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--g3-muted)] transition hover:bg-[var(--g3-elevated)] lg:block"
+        >
+          {zen ? "▤ Historique" : "▭ Mode zen"}
+        </button>
+      </div>
+
       {/* Sélecteur mobile : le rail se replie sous lg */}
       <button
         type="button"
@@ -235,7 +251,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
       {showRailMobile && <div className="lg:hidden">{rail}</div>}
 
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 lg:grid-cols-[290px_minmax(0,1fr)]">
-        <div className="hidden min-h-0 lg:block">{rail}</div>
+        <div className={zen ? "hidden" : "hidden min-h-0 lg:block"}>{rail}</div>
         <div className="min-h-0 min-w-0">
           {agent ? (
             <AgentChatPanel

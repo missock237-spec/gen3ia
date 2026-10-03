@@ -202,6 +202,38 @@ describe("POST /api/agent/chat — historique des conversations d'agent mémoris
     expect(mockedAppend).toHaveBeenCalledWith(expect.objectContaining({ role: "assistant", content: "Voici ma réponse claire." }));
   });
 
+  it("pièces jointes MULTIPLES : la note de contexte liste chaque fichier pour l'agent", async () => {
+    const response = await POST(postRequest({
+      message: "Compare ces deux documents",
+      agentId: "agent-1",
+      conversationId: "conv-1",
+      attachments: [
+        { path: "uploads/doc-a.pdf", name: "doc-a.pdf" },
+        { path: "uploads/doc-b.pdf", name: "doc-b.pdf" },
+      ],
+    }));
+    const body = await response.json();
+    expect(body.mode).toBe("chat");
+    const note = mockedAnswer.mock.calls[0][3] as string;
+    expect(note).toContain("2 fichiers");
+    expect(note).toContain("doc-a.pdf");
+    expect(note).toContain("doc-b.pdf");
+    expect(note).toContain("file.read");
+  });
+
+  it("compat : l'ancienne pièce jointe unique (attachmentPath) reste acceptée", async () => {
+    await POST(postRequest({
+      message: "Analyse ce fichier",
+      agentId: "agent-1",
+      conversationId: "conv-1",
+      attachmentPath: "uploads/seul.pdf",
+      attachmentName: "seul.pdf",
+    }));
+    const note = mockedAnswer.mock.calls[0][3] as string;
+    expect(note).toContain("seul.pdf");
+    expect(note).toContain("file.read");
+  });
+
   it("mode task : le planificateur reçoit le contexte conversationnel (note d'historique)", async () => {
     mockedClassify.mockResolvedValue({ mode: "task", inScope: true, reason: "livrable" });
     mockedPlanTask.mockResolvedValue({
