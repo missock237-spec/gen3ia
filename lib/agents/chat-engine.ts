@@ -4,6 +4,7 @@ import { preferFreeForVisibleAnswers, withResponseStyle } from "../ai/response-q
 import type { AIProvider } from "../ai/models";
 import { assembleMessages } from "../ai/context-window";
 import { applyPromptVariables, type PromptVariableContext } from "../ai/prompt-template";
+import { buildTruthContext, formatTruthContext, cleanRequestedResult } from "../ai/truth-context";
 import { planUniversalAgent } from "./runtime/unified-agent";
 import type { RuntimePlan } from "./runtime/types";
 import { policyForAgent } from "./personalized-plan";
@@ -147,6 +148,7 @@ export function historyContextNote(history: ChatHistoryMessage[], limit = 8): st
  * utilisé après une classification inScope=true.
  */
 export async function answerAsAgent(
+  userId: string,
   agent: Pick<AgentRecord, "name" | "description" | "type" | "typeLabel" | "skills" | "agentMode" | "memoryFile" | "preferredModel">,
   history: ChatHistoryMessage[],
   message: string,
@@ -162,7 +164,9 @@ export async function answerAsAgent(
     agentTypeLabel: agent.typeLabel,
     ...promptContext,
   }).text;
-  const userContent = contextNote ? `${contextNote}\n\n${message}` : message;
+  const truth = await buildTruthContext(userId, message, history);
+  const grounding = formatTruthContext(truth);
+  const userContent = `${grounding}${contextNote ? `\n\n${contextNote}` : ""}\n\nDEMANDE ACTUELLE :\n${message}`;
   // Fenêtre de contexte (Task 42, axe 1) : au lieu d'une troncature brutale
   // aux 12 derniers messages (qui perdait le fil des longues conversations),
   // l'historique ENTIER est tenu dans la fenêtre du modèle — récents
@@ -170,7 +174,7 @@ export async function answerAsAgent(
   const { messages } = assembleMessages({
     // Task 52 : la charte est complétée par le contrat de présentation
     // (structure markdown, précision selon le sujet, zéro invention).
-    system: withResponseStyle(charter),
+    system: withResponseStyle(charter + "\n\nCONTRAT DE FIABILITÉ:\n- Comprends la demande actuelle à la lumière de tout l'historique fourni.\n- N'invente jamais un fait, une action exécutée, un résultat ou une source.\n- Si une information manque, dis-le au lieu de la compléter par supposition.\n- Retourne uniquement le résultat demandé par l'utilisateur ; pas de raisonnement, plan ou commentaire méta non demandé."),
     history: history.map((item) => ({ role: item.role, content: item.content })),
     message: userContent,
     model: agent.preferredModel ?? null,
@@ -188,7 +192,7 @@ export async function answerAsAgent(
   });
   // Anti-balises : le raisonnement interne de certains modèles (<think>…)
   // ne doit jamais atteindre l'utilisateur.
-  return stripThinkTags(response.text.trim());
+  return cleanRequestedResult(stripThinkTags(response.text.trim()));
 }
 
 /**
