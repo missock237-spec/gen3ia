@@ -31,8 +31,13 @@ describe("extractTextFromUpload — garde-fous de format", () => {
     await expect(extractTextFromUpload(pdf)).rejects.toThrow(/PDF/);
   });
 
-  it("refuse les formats non texte avec la liste des formats acceptés", async () => {
+  it("route les images vers la couche perception (OCR) — erreur explicite si aucun modèle vision configuré", async () => {
     const binary = new File([new Uint8Array([0x00, 0x01, 0x02])], "image.png", { type: "image/png" });
+    await expect(extractTextFromUpload(binary)).rejects.toThrow(/OCR indisponible|aucun modèle vision/);
+  });
+
+  it("refuse les formats réellement non pris en charge avec la liste mise à jour (OCR/ASR inclus)", async () => {
+    const binary = new File([new Uint8Array([0x00, 0x01, 0x02])], "archive.bin", { type: "application/octet-stream" });
     await expect(extractTextFromUpload(binary)).rejects.toThrow(/DOCX/);
   });
 

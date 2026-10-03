@@ -7,6 +7,8 @@ import { adminDb } from "@/lib/firebase/admin";
 import { assertResourceWrite } from "@/lib/tenants/resource-access";
 import { indexKnowledgeDocument } from "./indexer";
 import { markupToText } from "@/lib/content/html-text";
+import { perceiveIfSupported } from "./perception";
+import { evaluateKnowledgeTriggers } from "./triggers";
 
 /**
  * Ingestion Knowledge / RAG Gen3ia.
@@ -118,7 +120,7 @@ export async function docxToText(buffer: Buffer): Promise<string> {
 }
 
 /** Extrait le texte d'un fichier téléversé selon son type réel. */
-export async function extractTextFromUpload(file: File): Promise<{ text: string; mimeType: string }> {
+export async function extractTextFromUpload(file: File): Promise<{ text: string; mimeType: string; perception?: string }> {
   if (file.size > KNOWLEDGE_MAX_FILE_BYTES) {
     throw new Error(`Fichier trop volumineux (max ${Math.round(KNOWLEDGE_MAX_FILE_BYTES / 1_000_000)} Mo).`);
   }
@@ -131,6 +133,18 @@ export async function extractTextFromUpload(file: File): Promise<{ text: string;
     return { text, mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
   }
 
+  // COUCHE PERCEPTION (concept #9) : images (OCR par modèle vision) et
+  // audios (ASR ElevenLabs) deviennent du TEXTE indexable — le réel entre
+  // dans la base de connaissances. Erreur honnête si fournisseur absent.
+  if (file.type.startsWith("image/") || file.type.startsWith("audio/") || ["png", "jpg", "jpeg", "webp", "gif", "mp3", "wav", "m4a", "ogg", "flac", "webm"].includes(extension)) {
+    const mimeType = file.type || (extension === "png" || extension === "gif" || extension === "webp" ? `image/${extension}` : extension === "jpg" || extension === "jpeg" ? "image/jpeg" : extension === "mp3" ? "audio/mpeg" : extension === "wav" ? "audio/wav" : extension === "m4a" ? "audio/mp4" : extension === "ogg" ? "audio/ogg" : extension === "flac" ? "audio/flac" : `image/${extension}`);
+    const perception = await perceiveIfSupported({ buffer, mimeType, filename: file.name });
+    if (perception) {
+      if (!perception.text.trim()) throw new Error(`Aucun texte extractible de cette source (${perception.providerLabel}).`);
+      return { text: perception.text, mimeType, perception: perception.providerLabel };
+    }
+  }
+
   const text = buffer.toString("utf8");
   if (extension === "html" || extension === "htm" || file.type === "text/html") {
     return { text: htmlToText(text), mimeType: "text/html" };
@@ -139,7 +153,7 @@ export async function extractTextFromUpload(file: File): Promise<{ text: string;
     throw new Error("Format PDF non encore pris en charge par l'ingestion Knowledge. Convertissez le document en DOCX, TXT, Markdown ou HTML.");
   }
   if (!TEXT_EXTENSIONS.has(extension) && !file.type.startsWith("text/") && file.type !== "application/json") {
-    throw new Error(`Format « ${extension || file.type || "inconnu"} » non pris en charge. Formats acceptés : TXT, MD, CSV, JSON, HTML, DOCX.`);
+    throw new Error(`Format « ${extension || file.type || "inconnu"} » non pris en charge. Formats acceptés : TXT, MD, CSV, JSON, HTML, DOCX, images (OCR), audio (ASR).`);
   }
   return { text, mimeType: file.type || `text/${extension || "plain"}` };
 }
@@ -159,6 +173,15 @@ export async function extractTextFromUrl(rawUrl: string): Promise<{ text: string
 
   const buffer = Buffer.from(await response.arrayBuffer());
   if (buffer.length > KNOWLEDGE_MAX_URL_BYTES) throw new Error("Page trop volumineuse (max 2 Mo).");
+
+  // Perception des URLs directes vers des images (OCR) — concept #9.
+  if (contentType.startsWith("image/")) {
+    const perception = await perceiveIfSupported({ buffer, mimeType: contentType, filename: response.url.split("/").pop() ?? "image" });
+    if (perception && perception.text.trim()) {
+      return { text: perception.text, mimeType: contentType, finalUrl: response.url || url.toString() };
+    }
+  }
+
   const text = buffer.toString("utf8");
 
   if (contentType === "text/html" || contentType === "application/xhtml+xml") {
@@ -220,6 +243,21 @@ export async function ingestKnowledgeDocument(input: {
       orgId: input.orgId,
     });
     await ref.update({ chunkCount, status: chunkCount > 0 ? "indexed" : "empty", updatedAt: new Date().toISOString() });
+    // DÉCLENCHEURS (concept #9) : le document fraîchement indexé peut lancer
+    // des missions d'agents (fail-soft, journalisé — jamais d'échec
+    // d'ingestion à cause d'un déclencheur).
+    void evaluateKnowledgeTriggers({
+      userId: input.userId,
+      ...(input.orgId ? { orgId: input.orgId } : {}),
+      document: {
+        id,
+        name: input.name,
+        mimeType: input.mimeType,
+        excerpt: text.slice(0, 600),
+      },
+    }).catch((triggerError) => {
+      console.error("[knowledge] déclencheurs non évalués (fail-soft):", triggerError instanceof Error ? triggerError.message : triggerError);
+    });
     return {
       id, projectId: input.projectId, ...(input.orgId ? { orgId: input.orgId } : {}), name: input.name.slice(0, 300), mimeType: input.mimeType.slice(0, 160),
       source: input.source, ...(input.storagePath ? { storagePath: input.storagePath } : {}),
