@@ -250,6 +250,18 @@ export async function planUniversalAgent(
   ].join("\n");
   const finalSystemPromptWithDirectApi = `${finalSystemPrompt}${directApiSection}`;
 
+  // SKILLS ACTIVES (pont runtime) : spécialisations composées réellement
+  // injectées dans la planification — fail-soft (panne → bloc absent).
+  let skillsSection = "";
+  try {
+    const { selectSkillsForObjective, formatSkillsSection } = await import("@/lib/skills/runtime-bridge");
+    const skillsBlock = await selectSkillsForObjective({ userId, objective: trimmed });
+    skillsSection = formatSkillsSection(skillsBlock);
+  } catch {
+    skillsSection = "";
+  }
+  const finalSystemPromptWithSkills = `${finalSystemPromptWithDirectApi}${skillsSection}`;
+
   const buildUserPrompt = (correctiveHint?: string) =>
     [
       JSON.stringify({ objective: trimmed, availableCapabilities: toolCatalog(catalog) }),
@@ -267,7 +279,7 @@ export async function planUniversalAgent(
     const response = await generate({
       task: "agent",
       messages: [
-        { role: "system", content: finalSystemPromptWithDirectApi },
+        { role: "system", content: finalSystemPromptWithSkills },
         { role: "user", content: buildUserPrompt(essai > 1 ? dernierErreur : undefined) },
       ],
       requiresStructuredOutput: true,

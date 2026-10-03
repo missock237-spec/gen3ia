@@ -35,6 +35,11 @@ vi.mock("@/lib/agents/networks/repository", () => ({
   listNetworks: (...args: unknown[]) => listNetworksMock(...args),
 }));
 
+const listSkillsMock = vi.fn();
+vi.mock("@/lib/skills/repository", () => ({
+  listSkills: (...args: unknown[]) => listSkillsMock(...args),
+}));
+
 import { listCapabilitiesForUser } from "./catalog";
 
 beforeEach(() => {
@@ -42,6 +47,7 @@ beforeEach(() => {
   listEnabledCustomApisMock.mockReset();
   listUserServersMock.mockReset();
   listNetworksMock.mockReset();
+  listSkillsMock.mockReset().mockResolvedValue([]);
 });
 
 describe("listCapabilitiesForUser", () => {
@@ -62,7 +68,7 @@ describe("listCapabilitiesForUser", () => {
 
     const catalog = await listCapabilitiesForUser("u1");
     expect(catalog.totalCount).toBe(6); // 2 natifs + 1 extension + 1 api + 1 mcp actif + 1 équipe
-    expect(catalog.byKind).toEqual({ tool: 2, extension: 1, custom_api: 1, mcp_server: 1, network: 1 });
+    expect(catalog.byKind).toEqual({ tool: 2, skill: 0, extension: 1, custom_api: 1, mcp_server: 1, network: 1 });
     const ext = catalog.capabilities.find((entry) => entry.kind === "extension");
     expect(ext?.id).toBe("ext.crm.create_contact");
     expect(ext?.sideEffect).toBe(true);
@@ -77,10 +83,25 @@ describe("listCapabilitiesForUser", () => {
     listEnabledCustomApisMock.mockRejectedValue(new Error("firestore down"));
     listUserServersMock.mockResolvedValue([]);
     listNetworksMock.mockRejectedValue(new Error("firestore down"));
+    listSkillsMock.mockRejectedValue(new Error("firestore down"));
     const catalog = await listCapabilitiesForUser("u1");
     expect(catalog.byKind.tool).toBe(2);
     expect(catalog.byKind.extension).toBe(0);
     expect(catalog.byKind.custom_api).toBe(0);
+    expect(catalog.byKind.skill).toBe(0);
     expect(catalog.totalCount).toBe(2);
+  });
+
+  it("skills actives visibles : système + privées de l'utilisateur, JAMAIS celles d'un autre", async () => {
+    installedExtensionCapabilitiesMock.mockResolvedValue({ tools: [], skills: [], workflows: [] });
+    listSkillsMock.mockResolvedValue([
+      { id: "s-sys", name: "Recherche web", description: "Recherche approfondie", category: "research", visibility: "system", authorId: null },
+      { id: "s-mine", name: "Ma skill", description: "Privée", category: "productivity", visibility: "private", authorId: "u1" },
+      { id: "s-other", name: "Skill d'autrui", description: "Privée d'un autre", category: "productivity", visibility: "private", authorId: "u999" },
+    ]);
+    const catalog = await listCapabilitiesForUser("u1");
+    const skills = catalog.capabilities.filter((entry) => entry.kind === "skill");
+    expect(skills.map((entry) => entry.id)).toEqual(["s-sys", "s-mine"]);
+    expect(catalog.byKind.skill).toBe(2);
   });
 });

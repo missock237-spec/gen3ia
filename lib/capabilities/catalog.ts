@@ -19,7 +19,7 @@ import { listUserServers } from "@/lib/integrations/mcp/service";
  * clients (UI, SDK, planners) une seule liste cohérente et intègre.
  */
 
-export type CapabilityKind = "tool" | "extension" | "custom_api" | "mcp_server" | "network";
+export type CapabilityKind = "tool" | "skill" | "extension" | "custom_api" | "mcp_server" | "network";
 
 export interface CapabilityEntry {
   /** Identifiant d'appel réel (toolName, ou id de ressource pour les kinds non-outils). */
@@ -104,6 +104,25 @@ async function mcpCapabilities(userId: string): Promise<CapabilityEntry[]> {
   }
 }
 
+async function skillCapabilities(userId: string): Promise<CapabilityEntry[]> {
+  try {
+    const { listSkills } = await import("@/lib/skills/repository");
+    const skills = await listSkills({ status: "active" });
+    // Cloisonnement : skills système + privées de l'utilisateur uniquement.
+    return skills
+      .filter((skill) => skill.visibility === "system" || skill.authorId === userId)
+      .map((skill) => ({
+        id: String((skill as unknown as { id?: string }).id ?? skill.name),
+        kind: "skill" as const,
+        name: skill.name,
+        description: skill.description?.trim() || `Skill ${skill.category}`,
+        source: `skill:${skill.visibility}`,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 async function networkCapabilities(userId: string): Promise<CapabilityEntry[]> {
   try {
     const { listNetworks } = await import("@/lib/agents/networks/repository");
@@ -124,15 +143,17 @@ async function networkCapabilities(userId: string): Promise<CapabilityEntry[]> {
 export async function listCapabilitiesForUser(userId: string): Promise<CapabilityCatalog> {
   const capabilities: CapabilityEntry[] = [...nativeCapabilities()];
 
-  const [installed, customApis, mcps, networks] = await Promise.all([
+  const [installed, customApis, mcps, networks, skills] = await Promise.all([
     getInstalledExtensionCapabilities(userId).catch(() => ({ tools: [], skills: [], workflows: [] })),
     customApiCapabilities(userId),
     mcpCapabilities(userId),
     networkCapabilities(userId),
+    skillCapabilities(userId),
   ]);
 
   capabilities.push(
     ...extensionCapabilities(installed),
+    ...skills,
     ...customApis,
     ...mcps,
     ...networks,
@@ -143,7 +164,7 @@ export async function listCapabilitiesForUser(userId: string): Promise<Capabilit
       acc[entry.kind] += 1;
       return acc;
     },
-    { tool: 0, extension: 0, custom_api: 0, mcp_server: 0, network: 0 },
+    { tool: 0, skill: 0, extension: 0, custom_api: 0, mcp_server: 0, network: 0 },
   );
 
   return {
