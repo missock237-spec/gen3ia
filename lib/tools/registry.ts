@@ -74,4 +74,8 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "custom_api.write", description: "Modifie RÉELLEMENT des données via une API personnelle de l'utilisateur (POST/PUT/PATCH/DELETE).", risk: "external", permission: "tool.external", sideEffect: true },
   { name: "web.api", description: "Appelle RÉELLEMENT (GET) une API publique désignée par URL et retourne la réponse réelle.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "web.api.write", description: "Modifie RÉELLEMENT des données via une API publique désignée par URL (POST/PUT/PATCH/DELETE).", risk: "external", permission: "tool.external", sideEffect: true },
+  { name: "network.list", description: "Liste les équipes (réseaux) d'agents du propriétaire : membres, rôles, topologie.", risk: "read", permission: "tool.read", sideEffect: false },
+  { name: "network.send_message", description: "Envoie un message à un agent coéquipier du MÊME réseau (collaboration agent-à-agent).", risk: "write", permission: "tool.write", sideEffect: true },
+  { name: "network.read_inbox", description: "Lit la boîte de réception d'un agent (messages de ses coéquipiers).", risk: "read", permission: "tool.read", sideEffect: false },
+  { name: "network.mark_read", description: "Marque un message d'équipe comme lu.", risk: "read", permission: "tool.read", sideEffect: false },
 ];

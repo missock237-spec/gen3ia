@@ -60,6 +60,13 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "workflow.list": { name: "workflow.list", risk: "read", requiredPermissions: ["tool.read"] },
   "workflow.run": { name: "workflow.run", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
   "workflow.delete": { name: "workflow.delete", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  // Outils d'équipe (réseaux d'agents persistants) : opérations INTERNES
+  // (Firestore, aucun réseau ni fichier) — la messagerie est bornée aux
+  // coéquipiers du MÊME réseau du MÊME propriétaire (validation au dépôt).
+  "network.list": { name: "network.list", risk: "read", requiredPermissions: ["tool.read"] },
+  "network.send_message": { name: "network.send_message", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  "network.read_inbox": { name: "network.read_inbox", risk: "read", requiredPermissions: ["tool.read"] },
+  "network.mark_read": { name: "network.mark_read", risk: "read", requiredPermissions: ["tool.read"] },
 };
 
 export function getToolSecurityDefinition(toolName: string): ToolSecurityDefinition { const definition = TOOL_SECURITY[toolName]; if (!definition) throw new Error(`Unknown tool security definition: ${toolName}`); return definition; }

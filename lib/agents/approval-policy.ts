@@ -27,6 +27,10 @@ export const INTERNAL_ACTION_TOOLS = new Set([
   "workflow.update",
   "workflow.delete",
   "workflow.run",
+  // Équipes d'agents : messagerie interne propriétaire-scopée (aucune app
+  // externe, destinataire revérifié membre du MÊME réseau au dépôt).
+  "network.send_message",
+  "network.mark_read",
 ]);
 
 /** Décide, pour une liste d'étapes de plan, lesquelles exigent une approbation. */

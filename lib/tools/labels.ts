@@ -36,6 +36,10 @@ const TOOL_LABELS: Record<string, string> = {
   "knowledge.search": "Recherche dans les documents",
   "agent.delegate": "Délégation à un sous-agent",
   "schedule.create": "Planification d'une tâche",
+  "network.list": "Consultation des équipes d'agents",
+  "network.send_message": "Message à un agent coéquipier",
+  "network.read_inbox": "Lecture de la boîte d'équipe",
+  "network.mark_read": "Marquage d'un message d'équipe lu",
 };
 
 /** Libellés des familles d'outils identifiés par préfixe. */

@@ -52,6 +52,12 @@ import {
   workflowRunTool,
   workflowDeleteTool,
 } from "@/lib/tools/workflows";
+import {
+  networkListTool,
+  networkSendMessageTool,
+  networkReadInboxTool,
+  networkMarkReadTool,
+} from "@/lib/agents/networks/tools";
 
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -103,6 +109,12 @@ export function createDefaultToolRegistry(): ToolRegistry {
   registry.register(workflowListTool);
   registry.register(workflowRunTool);
   registry.register(workflowDeleteTool);
+  // Équipes d'agents persistantes : toujours enregistrés — opérations
+  // internes propriétaire-scopées (échec propre si aucun réseau n'existe).
+  registry.register(networkListTool);
+  registry.register(networkSendMessageTool);
+  registry.register(networkReadInboxTool);
+  registry.register(networkMarkReadTool);
   if (process.env.GITHUB_TOKEN) registry.register(githubCreateRepositoryTool);
   if (process.env.ELEVENLABS_API_KEY) {
     registry.register(voiceSpeakTool);

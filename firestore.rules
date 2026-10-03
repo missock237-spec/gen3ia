@@ -173,6 +173,10 @@ service cloud.firestore {
     match /skillEvaluations/{evaluationId} { allow read, write: if false; }
     match /chariowPulseDeliveries/{deliveryId} { allow read, write: if false; }
     match /events/{eventId} { allow read, write: if false; }
+    // Réseaux d'agents + messagerie d'équipe (Admin SDK uniquement) :
+    // les accès passent par les routes serveur propriétaire-scopées.
+    match /agentNetworks/{networkId} { allow read, write: if false; }
+    match /agentMessages/{messageId} { allow read, write: if false; }
 
     // ── Multi-tenant : organisations (tenants) ──────────────────────────
     // Isolation : toute lecture/écriture exige l'appartenance documentée
