@@ -81,6 +81,10 @@ export async function grantEntitlement(params: {
     source: params.source,
     purchaseId: params.purchaseId ?? null,
     expiresAt,
+    // Un NOUVEL achat réactive le renouvellement auto (intention fraîche) ;
+    // les renouvellements internes passent par extendEntitlementAfterCharge
+    // qui préserve le choix de l'utilisateur.
+    autoRenew: pricing.model === "subscription" ? true : undefined,
   });
   return expiresAt;
 }
@@ -292,7 +296,7 @@ export async function settleChariowExtensionPurchase(params: {
     }
 
     const currentEntitlement = entitlementSnap.exists
-      ? entitlementSnap.data() as { createdAt?: number; expiresAt?: number | null }
+      ? entitlementSnap.data() as { createdAt?: number; expiresAt?: number | null; autoRenew?: boolean }
       : null;
 
     let expiresAt: number | null = null;
@@ -310,6 +314,8 @@ export async function settleChariowExtensionPurchase(params: {
       source: currentPurchase.kind === "subscription" ? "subscription" : "purchase",
       purchaseId: purchase.id,
       expiresAt,
+      // Nouvel achat Chariow = intention fraîche : autoRenew activé.
+      autoRenew: currentPurchase.kind === "subscription" ? true : (currentEntitlement?.autoRenew ?? false),
       createdAt: typeof currentEntitlement?.createdAt === "number" ? currentEntitlement.createdAt : settlementNow,
       updatedAt: settlementNow,
     });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { dispatchSchedules } from "@/lib/agents/scheduler";
 import { renewDueNumbers, reactivateNumbersInGrace } from "@/lib/voice/renewals";
+import { renewDueExtensionSubscriptions } from "@/lib/extensions/subscriptions";
 import { errorStatus } from "@/lib/security/http-errors";
 import { scheduleNextDispatchTick, slotFor } from "@/lib/queue/dispatch-loop";
 import { publishDispatchTick } from "@/lib/queue/qstash";
@@ -50,6 +51,12 @@ export async function GET(request: NextRequest) {
       failures.push(`reactivations: ${error instanceof Error ? error.message : "erreur"}`);
       return null;
     });
+    // Renouvellement auto des abonnements d'extensions (Task 80) :
+    // débit wallet dans la fenêtre d'avance, grâce 7 jours, expiration finale.
+    const extensionRenewals = await renewDueExtensionSubscriptions(new Date()).catch((error: unknown) => {
+      failures.push(`extension-renewals: ${error instanceof Error ? error.message : "erreur"}`);
+      return null;
+    });
 
     // Sentinelle de résurrection (Task 62) : le prochain slot de la boucle
     // doit TOUJOURS être programmé après ce passage — même si la boucle
@@ -62,7 +69,7 @@ export async function GET(request: NextRequest) {
       return null;
     });
 
-    return NextResponse.json({ ok: true, ...result, renewals, reactivations, dispatchLoop: loop, ...(failures.length > 0 ? { partialFailures: failures } : {}) });
+    return NextResponse.json({ ok: true, ...result, renewals, reactivations, extensionRenewals, dispatchLoop: loop, ...(failures.length > 0 ? { partialFailures: failures } : {}) });
   } catch (error) {
     console.error("Agent schedule dispatcher failed", error);
     return NextResponse.json(

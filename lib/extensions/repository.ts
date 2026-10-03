@@ -1,4 +1,4 @@
-import { FieldValue } from "firebase-admin/firestore";
+import { AggregateField, FieldValue } from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { compareSemver, type ExtensionManifest } from "./manifest";
@@ -30,7 +30,7 @@ export interface InstallationDoc {
   status: "active" | "disabled" | "uninstalled"; permissionsGranted: string[];
   settings: Record<string, string | number | boolean>; installedAt: number; updatedAt: number; deletedAt?: number | null;
 }
-const COL = { developers:"developers", apiKeys:"developerApiKeys", extensions:"extensions", versions:"extensionVersions", installations:"extensionInstallations", entitlements:"extensionEntitlements", purchases:"extensionPurchases", licenses:"extensionLicenses", reviews:"extensionReviews", reports:"extensionReports", executions:"extensionExecutions", usage:"extensionUsageCounters", secrets:"extensionSecrets", revenue:"developerRevenue" } as const;
+const COL = { developers:"developers", apiKeys:"developerApiKeys", extensions:"extensions", versions:"extensionVersions", installations:"extensionInstallations", entitlements:"extensionEntitlements", purchases:"extensionPurchases", licenses:"extensionLicenses", reviews:"extensionReviews", reports:"extensionReports", executions:"extensionExecutions", usage:"extensionUsageCounters", secrets:"extensionSecrets", revenue:"developerRevenue", payouts:"developerPayouts", payoutStats:"developerPayoutStats" } as const;
 function now(){return Date.now();}
 function extensionRef(id:string){return adminDb.collection(COL.extensions).doc(id);}
 function versionRef(extensionId:string,version:string){return adminDb.collection(COL.versions).doc(`${extensionId}@${version}`);}
@@ -59,8 +59,26 @@ export async function updateInstallationVersion(extensionId:string,userId:string
 export async function listInstalledExtensions(userId:string){const snap=await adminDb.collection(COL.installations).where("userId","==",userId).where("status","==","active").limit(100).get();return snap.docs.map(d=>d.data() as InstallationDoc);}
 export async function updateInstallationSettings(extensionId:string,userId:string,settings:Record<string,string|number|boolean>){await installationRef(extensionId,userId).update({settings,updatedAt:now()});}
 
-export interface EntitlementDoc{id:string;extensionId:string;userId:string;status:"active"|"expired"|"revoked";source:"free"|"purchase"|"subscription"|"grant";purchaseId?:string|null;expiresAt?:number|null;createdAt:number;updatedAt:number;}
-export async function upsertEntitlement(params:{extensionId:string;userId:string;source:EntitlementDoc["source"];purchaseId?:string|null;expiresAt?:number|null}){const timestamp=now();const ref=entitlementRef(params.extensionId,params.userId);const existing=await ref.get();const payload:EntitlementDoc={id:`${params.extensionId}__${params.userId}`,extensionId:params.extensionId,userId:params.userId,status:"active",source:params.source,purchaseId:params.purchaseId??null,expiresAt:params.expiresAt??null,createdAt:existing.exists?Number(existing.get("createdAt")):timestamp,updatedAt:timestamp};await ref.set(payload,{merge:true});return payload;}
+export interface EntitlementDoc{id:string;extensionId:string;userId:string;status:"active"|"expired"|"revoked";source:"free"|"purchase"|"subscription"|"grant";purchaseId?:string|null;expiresAt?:number|null;
+/** Renouvellement auto (abonnements uniquement) : activé par défaut, l'utilisateur peut le couper. */
+autoRenew?:boolean;
+/** Dernier cycle de renouvellement : "ok" débité, "failed" solde insuffisant (grace). */
+renewalState?:"ok"|"failed"|null;renewalFailedAt?:number|null;renewalNotice?:string|null;
+/** Anti-spam notifications : dernier envoi + compteur (grace → expiration finale). */
+lastRenewalAlertAt?:number|null;renewalAlertCount?:number;createdAt:number;updatedAt:number;}
+export async function upsertEntitlement(params:{extensionId:string;userId:string;source:EntitlementDoc["source"];purchaseId?:string|null;expiresAt?:number|null;autoRenew?:boolean}){const timestamp=now();const ref=entitlementRef(params.extensionId,params.userId);const existing=await ref.get();const payload:EntitlementDoc={id:`${params.extensionId}__${params.userId}`,extensionId:params.extensionId,userId:params.userId,status:"active",source:params.source,purchaseId:params.purchaseId??null,expiresAt:params.expiresAt??null,
+// L'autoRenew est PRÉSERVÉ d'un renouvellement à l'autre : l'utilisateur
+// qui a coupé le renouvellement ne doit pas se voir re-débité.
+autoRenew:params.autoRenew??(existing.exists?(existing.get("autoRenew")as boolean|undefined)??params.source==="subscription":params.source==="subscription"),createdAt:existing.exists?Number(existing.get("createdAt")):timestamp,updatedAt:timestamp};await ref.set(payload,{merge:true});return payload;}
+/** Bascule le renouvellement auto d'un abonnement (réservé au propriétaire via route authentifiée). */
+export async function setEntitlementAutoRenew(extensionId:string,userId:string,autoRenew:boolean):Promise<EntitlementDoc>{const ref=entitlementRef(extensionId,userId);const snap=await ref.get();if(!snap.exists)throw new Error("Entitlement not found.");const entitlement=snap.data() as EntitlementDoc;if(entitlement.source!=="subscription")throw new Error("Le renouvellement automatique ne s'applique qu'aux abonnements.");const timestamp=now();await ref.update({autoRenew,updatedAt:timestamp,renewalNotice:null});const updated=await ref.get();return updated.data() as EntitlementDoc;}
+/**
+ * Abonnements éligibles au renouvellement. Lecture par source (index simple
+ * natif) puis filtrage en mémoire — évite tout index composite nouveau
+ * (déploiement d'index nécessite le rôle datastore.indexAdmin, indisponible
+ * au compte de service ; leçon Task 68).
+ */
+export async function listSubscriptionEntitlements(scanLimit=200):Promise<EntitlementDoc[]>{const snap=await adminDb.collection(COL.entitlements).where("source","==","subscription").limit(scanLimit).get();return snap.docs.map(d=>d.data() as EntitlementDoc);}
 export async function getEntitlement(extensionId:string,userId:string){const snap=await entitlementRef(extensionId,userId).get();return(snap.data() as EntitlementDoc|undefined)??null;}
 export async function revokeEntitlement(extensionId:string,userId:string){await entitlementRef(extensionId,userId).update({status:"revoked",updatedAt:now()});}
 export interface PurchaseDoc{id:string;userId:string;extensionId:string;version?:string;provider:"wallet"|"chariow";providerRef?:string|null;amountMinor:number;currency:string;status:"pending"|"paid"|"failed"|"refunded";kind:"one_time"|"subscription";createdAt:number;paidAt?:number|null;}
@@ -283,6 +301,38 @@ export async function deleteExtensionSecret(extensionId: string, ref: string, de
   if (developerId && projectId) await assertExtensionProject(extensionId, developerId, projectId);
   await adminDb.collection(COL.secrets).doc(`${extensionId}__${ref}`).delete();
 }
+
+/**
+ * Revenus nets cumulés d'un développeur pour une devise donnée — agrégation
+ * Firestore côté serveur (sum) : le volume d'entrées ne dégrade pas la page.
+ * Les filtres égalitaires (developerId + currency) s'appuient sur les index
+ * simples natifs, aucun index composite requis. Les entrées de revenus sont
+ * append-only : une valeur légèrement périmée est CONSERVATRICE (sous-estime
+ * le gagné, jamais le sur-estime) — propriété exploitable par les retraits.
+ */
+export async function sumDeveloperNetEarnings(developerId: string, currency: string): Promise<number> {
+  const snapshot = await adminDb
+    .collection(COL.revenue)
+    .where("developerId", "==", developerId)
+    .where("currency", "==", currency)
+    .aggregate({ totalNetMinor: AggregateField.sum("netAmountMinor") })
+    .get();
+  const value = Number(snapshot.data().totalNetMinor ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+/** Stats de retraits d'un développeur (source d'autorité du montant engagé). */
+export interface DeveloperPayoutStatsDoc{developerId:string;payoutCount:number;committedMinor:number;currency:string;lastPayoutAt?:number|null;updatedAt:number;}
+export function developerPayoutStatsRef(developerId:string){return adminDb.collection(COL.payoutStats).doc(developerId);}
+export async function getDeveloperPayoutStats(developerId:string):Promise<DeveloperPayoutStatsDoc|null>{const snap=await developerPayoutStatsRef(developerId).get();return(snap.data() as DeveloperPayoutStatsDoc|undefined)??null;}
+
+/** Demande de retrait d'un développeur (lecture seule ici — écriture transactionnelle dans payouts.ts). */
+export interface PayoutDoc{id:string;developerId:string;amountMinor:number;currency:string;method:"mtn_momo"|"orange_money"|"bank_transfer";methodDetail:{accountName:string;accountNumber:string;bankName?:string|null;country:string};status:"requested"|"approved"|"paid"|"rejected";developerNote?:string|null;adminNote?:string|null;providerRef?:string|null;requestedAt:number;decidedAt?:number|null;paidAt?:number|null;updatedAt:number;}
+export function payoutRef(payoutId:string){return adminDb.collection(COL.payouts).doc(payoutId);}
+export async function getPayoutDoc(payoutId:string):Promise<PayoutDoc|null>{const snap=await payoutRef(payoutId).get();return(snap.data() as PayoutDoc|undefined)??null;}
+export async function listPayoutsByDeveloper(developerId:string,limit=50):Promise<PayoutDoc[]>{const snap=await adminDb.collection(COL.payouts).where("developerId","==",developerId).orderBy("requestedAt","desc").limit(limit).get();return snap.docs.map(d=>d.data() as PayoutDoc);}
+/** File admin : demandes à traiter (requested/approved) ou tout statut fourni. */
+export async function listPayoutsByStatus(statuses:PayoutDoc["status"][],limit=100):Promise<PayoutDoc[]>{const snap=await adminDb.collection(COL.payouts).where("status","in",statuses).orderBy("requestedAt","asc").limit(limit).get();return snap.docs.map(d=>d.data() as PayoutDoc);}
 
 export async function getDeveloperRevenueSummary(developerId: string): Promise<{
   totalGrossMinor: number;

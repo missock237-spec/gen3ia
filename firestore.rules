@@ -162,6 +162,10 @@ service cloud.firestore {
     match /developers/{developerId} { allow read: if signedIn() && developerId == request.auth.uid; allow write: if false; }
     match /developerRevenue/{entryId} { allow read: if signedIn() && resource.data.developerId == request.auth.uid; allow write: if false; }
     match /developerApiKeys/{keyHash} { allow read, write: if false; }
+    // Retraits développeurs (Task 80) : lecture par le propriétaire uniquement ;
+    // écritures exclusivement serveur (Admin SDK) — engagement transactionnel.
+    match /developerPayouts/{payoutId} { allow read: if signedIn() && resource.data.developerId == request.auth.uid; allow write: if false; }
+    match /developerPayoutStats/{developerId} { allow read: if signedIn() && developerId == request.auth.uid; allow write: if false; }
     match /system/{document=**} { allow read, write: if false; }
     // Collections serveur uniquement (Admin SDK) : acces client explicitement interdit.
     match /liveAgentSessions/{sessionId} { allow read, write: if false; }

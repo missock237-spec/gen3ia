@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { HttpError } from "@/lib/security/http-errors";
 
+import { PayoutError } from "./payouts";
+
 export function extensionApiError(error: unknown): NextResponse {
   const message = error instanceof Error ? error.message : "Invalid request.";
 
@@ -9,6 +11,10 @@ export function extensionApiError(error: unknown): NextResponse {
   // 401 auth, 503 infra) et ne doit jamais être ré-interprété par les
   // heuristiques de message ci-dessous.
   if (error instanceof HttpError) {
+    return NextResponse.json({ error: message }, { status: error.status });
+  }
+
+  if (error instanceof PayoutError) {
     return NextResponse.json({ error: message }, { status: error.status });
   }
 

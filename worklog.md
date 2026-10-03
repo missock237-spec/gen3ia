@@ -891,3 +891,23 @@ Work Log:
 
 Stage Summary:
 - GEN3IA VIDEO AGENT validé en production : code + CI + sondes réelles. Rendu vidéo opérationnel via QStash → /api/video/worker/tick (lots de 3 segments + continuation) ou worker standalone scripts/video-worker.mts sur hôte FFmpeg.
+
+---
+Task ID: 80
+Agent: Super Z (principal)
+Task: « Continu ou tu t'ai arrêté » — piste 1 de la file Task 78 : payouts développeurs + renouvellement auto des abonnements extensions.
+
+Work Log:
+- Analyse préalable : wallet (reserve/settle idempotents par référence ledger), pattern de renouvellement renewDueNumbers, cron /api/cron/agent-schedules (quotidien 06:00 UTC + sentinelle dispatch), developerRevenue (append-only, split 80/20), style tests (vi.mock adminDb) et UI (Panel/Card, nav-registry).
+- ① Renouvellement auto (lib/extensions/subscriptions.ts) : débit wallet dans une fenêtre d'avance de 36 h (zéro interruption malgré un cron quotidien), référence idempotente PAR PÉRIODE (ext-renewal-{entitlement}-{terme}), achat d'audit à ID déterministe (renewal-…) → convergence sans double débit ni double comptage de revenu, part développeur 80/20 enregistrée, licence nouvelle période, grâce 7 jours (renewalState failed + notice) puis expiration définitive (autoRenew coupé), notifications avec espacement 48 h (expiration finale TOUJOURS annoncée), autoRenew préservé par le moteur mais réactivé par tout NOUVEL achat (intention fraîche, wallet ET Chariow).
+- ② Payouts (lib/extensions/payouts.ts) : disponible = agrégat Firestore sum(netAmountMinor) (append-only → lecture périmée = CONSERVATRICE, jamais de sur-paiement) − committedMinor muté en TRANSACTION sur developerPayoutStats (demandes concurrentes sérialisées) ; mandat créé dans la MÊME transaction que l'engagement ; cycle requested → approved → paid (providerRef exigée, traçabilité MoMo/virement) / rejected (libération transactionnelle) ; minimum 5 000 XAF (env), méthodes MTN MoMo / Orange Money / virement, sanitize strict (contrôles refusés, code pays JAMAIS tronqué — CMR rejeté), notification à chaque transition.
+- ③ API : GET/PATCH /api/extensions/entitlements (mes abonnements + toggle autoRenew, 404 anti-énumération) ; GET/POST /api/developer/payouts (solde + historique + demande) ; GET/POST /api/admin/payouts (file + décisions, requireAdminAccess). extensionApiError enrichi (PayoutError = statut autoritaire).
+- ④ UI : /developer/payouts « Revenus & retraits » (3 cartes solde, formulaire mandats, historique complet) + onglet nav ; /marketplace/purchases section « Abonnements » avec bascule renouvellement auto ; /admin/payouts console de traitement (approuver / marquer payé / rejeter, notes + réf fournisseur) + onglet nav admin.
+- ⑤ Cron : renewDueExtensionSubscriptions branchée sur /api/cron/agent-schedules (partialFailures conservé).
+- ⑥ Règles Firestore : developerPayouts (lecture propriétaire) + developerPayoutStats (lecture propriétaire) — écritures client deny-all, serveur uniquement.
+- Tests réels : +29 (12 subscriptions, 17 payouts) — déterminisme des références, bornes de la fenêtre, grâce/expiration, convergence (achat déjà payé → ni débit ni revenu), cumul transactionnel, refus de sur-engagement, table de transitions, sanitize (CMR rejeté), décisions admin. Correctifs en cours de route : mock tx (fonction data résolue), pays jamais tronqué (bug réel trouvé PAR le test), borne de fenêtre, 2 lint JSX.
+- Dépannage environnement : échec sandbox/src/app.behavior.test.ts = fastify absent du sous-projet (environnement reconstruit) — prouvé préexistant via git stash, corrigé par npm install sandbox → suite 100 % verte.
+
+Stage Summary:
+- Task 80 LIVRÉE : les développeurs de la Marketplace perçoivent désormais leurs revenus (workflow de retrait complet, anti-fraude transactionnel) et les abonnements d'extensions se renouvellent automatiquement (débit idempotent, grâce, expiration, notifications) — le tout testé (1650 verts, tsc 0, lint 0), sécurisé (3 niveaux d'auth + règles deny-all) et branché sur l'infrastructure existante (wallet, cron, notifications, nav).
+- Auto-évaluation : 9.7/10 → push autorisé. Suites possibles (file Task 78) : sandbox Docker déployé en production (terminal réel), orgId sur les ~14 collections restantes, facturation CPC/CPM au wallet annonceur auto-service.

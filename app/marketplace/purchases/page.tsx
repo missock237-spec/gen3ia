@@ -29,6 +29,16 @@ type License = {
   extension?: { id: string; name: string; developerName: string; latestVersion: string | null } | null;
 };
 
+type Entitlement = {
+  extensionId: string;
+  extensionName: string;
+  status: string;
+  expiresAt: number | null;
+  autoRenew: boolean;
+  renewalState: string | null;
+  renewalNotice: string | null;
+};
+
 function money(amountMinor: number, currency: string) {
   return `${(amountMinor / 100).toLocaleString("fr-FR")} ${currency}`;
 }
@@ -48,8 +58,11 @@ export default function MarketplacePurchasesPage() {
 function PurchasesContent() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
+  const [entitlements, setEntitlements] = useState<Entitlement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -57,16 +70,19 @@ function PurchasesContent() {
       setLoading(true);
       try {
         // authFetch : ID token Firebase si disponible, sinon cookie de session.
-        const [purchaseResponse, licenseResponse] = await Promise.all([
+        const [purchaseResponse, licenseResponse, entitlementResponse] = await Promise.all([
           authFetch("/api/extensions/purchases?limit=100", { cache: "no-store" }),
           authFetch("/api/extensions/licenses?limit=100", { cache: "no-store" }),
+          authFetch("/api/extensions/entitlements", { cache: "no-store" }),
         ]);
         if (!purchaseResponse.ok || !licenseResponse.ok) throw new Error("Impossible de charger vos achats et licences.");
         const purchaseData = await purchaseResponse.json();
         const licenseData = await licenseResponse.json();
+        const entitlementData = entitlementResponse.ok ? await entitlementResponse.json() : { entitlements: [] };
         if (!cancelled) {
           setPurchases(Array.isArray(purchaseData.purchases) ? purchaseData.purchases : []);
           setLicenses(Array.isArray(licenseData.licenses) ? licenseData.licenses : []);
+          setEntitlements(Array.isArray(entitlementData.entitlements) ? entitlementData.entitlements : []);
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Erreur de chargement.");
@@ -76,6 +92,28 @@ function PurchasesContent() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  const toggleAutoRenew = async (entitlement: Entitlement) => {
+    setToggling(entitlement.extensionId);
+    setError("");
+    setNotice("");
+    try {
+      const response = await authFetch("/api/extensions/entitlements", {
+        method: "PATCH",
+        body: JSON.stringify({ extensionId: entitlement.extensionId, autoRenew: !entitlement.autoRenew }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Action impossible.");
+      setNotice(payload.message ?? "Abonnement mis à jour.");
+      setEntitlements((current) =>
+        current.map((item) => (item.extensionId === entitlement.extensionId ? { ...item, autoRenew: !entitlement.autoRenew } : item)),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur inattendue.");
+    } finally {
+      setToggling(null);
+    }
+  };
 
   return (
     <div className="min-h-full bg-[var(--g3-bg)] px-4 py-6 text-[var(--g3-text)] sm:px-6 lg:px-10">
@@ -88,8 +126,37 @@ function PurchasesContent() {
         </div>
 
         {error && <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">{error}</div>}
+        {notice && !error && <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{notice}</div>}
         {loading ? <div className="mt-6 grid gap-4 md:grid-cols-2"><div className="h-48 animate-pulse rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)]" /><div className="h-48 animate-pulse rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)]" /></div> : (
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <div className="mt-6 space-y-6">
+            {entitlements.length > 0 && (
+            <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+              <div className="flex items-center justify-between"><div><h2 className="font-serif font-semibold">Abonnements</h2><p className="mt-1 text-xs text-[var(--g3-faint)]">Le renouvellement automatique débite votre wallet dans les 36 h précédant le terme.</p></div><span className="rounded-full bg-sky-100 px-3 py-1 text-[10px] text-sky-700">Auto-renew</span></div>
+              <div className="mt-5 space-y-3">
+                {entitlements.map((entitlement) => (
+                  <div key={entitlement.extensionId} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4">
+                    <div>
+                      <p className="font-medium">{entitlement.extensionName}</p>
+                      <p className="mt-1 text-xs text-[var(--g3-faint)]">
+                        Terme : {entitlement.expiresAt ? date(entitlement.expiresAt) : "—"}
+                        {entitlement.status !== "active" ? ` · ${entitlement.status}` : ""}
+                      </p>
+                      {entitlement.renewalNotice && <p className="mt-1 text-xs text-amber-700">{entitlement.renewalNotice}</p>}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={toggling === entitlement.extensionId}
+                      onClick={() => void toggleAutoRenew(entitlement)}
+                      className={`rounded-full px-4 py-2 text-xs font-semibold transition disabled:opacity-40 ${entitlement.autoRenew ? "bg-emerald-600 text-white hover:bg-emerald-500" : "bg-[var(--g3-elevated)] text-[var(--g3-muted)] hover:bg-neutral-200"}`}
+                    >
+                      {toggling === entitlement.extensionId ? "…" : entitlement.autoRenew ? "Renouvellement auto : activé" : "Renouvellement auto : désactivé"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+            )}
+          <div className="grid gap-6 lg:grid-cols-2">
             <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
               <div className="flex items-center justify-between"><div><h2 className="font-serif font-semibold">Licences actives</h2><p className="mt-1 text-xs text-[var(--g3-faint)]">{licenses.length} licence{licenses.length > 1 ? "s" : ""}</p></div><span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] text-emerald-600">Serveur</span></div>
               <div className="mt-5 space-y-3">
@@ -114,6 +181,7 @@ function PurchasesContent() {
                 ))}
               </div>
             </section>
+          </div>
           </div>
         )}
       </div>
