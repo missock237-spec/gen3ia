@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { AgentChatPanel } from "@/components/agent/agent-chat-panel";
+import { CreateAgentDialog } from "@/components/agent/create-agent-dialog";
 import { VoiceAgentSetup } from "@/components/agent/voice-agent-setup";
 import { Callout } from "@/components/studio/callout";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
@@ -72,6 +73,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   const [error, setError] = React.useState("");
   const [_loadFailed, setLoadFailed] = React.useState(false);
   const [voiceSetupAgentId, setVoiceSetupAgentId] = React.useState<string | null>(null);
+  const [showCreateAgent, setShowCreateAgent] = React.useState(false);
 
   const refreshConversations = React.useCallback(async () => {
     if (!agent) return;
@@ -159,6 +161,9 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
         onClick={() => { setPendingConversationId(null); setShowRailMobile(false); }}
       >
         + Nouveau chat
+      </button>
+      <button type="button" className="mt-2 w-full rounded-xl border border-[var(--g3-border)] px-3 py-2 text-xs font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]" onClick={() => setShowCreateAgent(true)}>
+        + Créer un agent
       </button>
 
       <p className="mt-4 text-[10px] font-black uppercase tracking-[.24em] text-[var(--g3-muted)]">Historique des chats</p>
@@ -272,5 +277,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
         <VoiceAgentSetup agentId={voiceSetupAgentId} onDone={() => { setVoiceSetupAgentId(null); void refresh(); }} />
       )}
     </div>
+    {showCreateAgent && <CreateAgentDialog onClose={() => setShowCreateAgent(false)} onCreated={() => void refresh()} />}
+    </>
   );
 }
