@@ -780,3 +780,18 @@ Work Log:
 Stage Summary:
 - Concepts #4 (Intent-to-Infrastructure) et #9 (Reality-to-Digital Engine) installés et testés.
 - Prochain lot (Task 67) : auto-évolution — clusters d'échec + replanification dynamique (#10) + boucle business autonome (#7).
+
+---
+Task ID: 67
+Agent: Super Z (principal)
+Task: Auto-évolution (clusters d'échec + replanification dynamique) + pulse business autonome — concepts post-SaaS #10 « Self-Evolving Platform » et #7 « Autonomous Business Cloud » (lot D — dernier lot du plan 10 concepts).
+
+Work Log:
+- IMPLÉMENTATION (règle 2) : ① lib/agents/evolution.ts — forage de CLUSTERS D'ÉCHEC : classement pur en 7 classes (timeout, fonds, permissions, outil manquant, fournisseur, approbation, entrée invalide, other), id de cluster stable (sha256 utilisateur×type×outil×classe), transaction atomique par cluster (occurrences incrémentées, échantillon d'erreur, dernier executionId), getEvolutionBrief = bloc de leçons compact (8 plus récents) ; FAIL-SOFT total ; déclenché après échec dans /api/agents/run ET /api/queue/mission-tick. ② lib/agents/runtime/replan.ts — REPLANIFICATION DYNAMIQUE : contexte RÉEL (étapes réussies avec résumé de sorties, échecs avec messages d'erreur) + leçons d'évolution injectées (« écueils à ne pas répéter ») → LLM borné (1-10 étapes séquentielles = DAG sans cycle possible, types restreints llm/research/document/tool, sideEffect false, outils toujours soumis à authorizeTool à l'exécution) ; étapes réussies CONSERVÉES à l'identique (sorties préservées) ; facturation réelle de l'appel ; juge en panne = échec honnête conservé. ③ runner rewiré — après épuisement de la réparation critic, si échec persistant : UNE replanification (REPLAN_MAX_ROUNDS=1), jamais sur arrêt utilisateur. ④ lib/business/pulse.ts — PULSE BUSINESS : collecte fail-soft des KPIs RÉELS (portefeuille via getWallet, campagnes actives/pause + budgets via listCampaigns, top écueils via clusters) ; objectif construit HORS LLM (faits chiffrés, dépense explicitement interdite, rapport = livrable) ; mission enfilée via la file QStash (résiliente) ; ledger businessPulses ; dry-run sans exécution ; API POST /api/business/pulse (orgId validé). Combiné aux planifications existantes → boucle indicateurs→rapport→décisions.
+- TESTS RÉELS (règle 5) : +16 — evolution.test.ts (11 : classification, stabilité d'id, incrément atomique vs création, fail-soft, brief de leçons, contexte réel, plan replanifié linéaire avec réussies conservées + leçons injectées + facturation, panne juge propagée honnêtement) ; pulse.test.ts (5 : agrégation KPIs, panne source = absence jamais invention, faits dans l'objectif + dépense interdite, dry-run zéro mission, enfilement réel + ledger, file absente = refus honnête). SUITE COMPLÈTE : 1486 verts / 171 fichiers.
+- QA : typecheck 0, lint 0, build ✓ (mode compile), check:bundle exit 0 — pire route /layout 183 kB gzip INCHANGÉE, 315 routes scannées.
+- SCORE AUTO-ÉVALUÉ (règle 3) : 9,6/10 — la plateforme apprend de ses erreurs (échec → cluster → leçon → meilleure replanification) et le cloud business a son rendez-vous d'analyse autonome borné.
+
+Stage Summary:
+- Les 10 concepts post-SaaS sont désormais INSTALLÉS et TESTÉS dans Gen3ia (couverture finale dans le rapport) : #1/#2 contrats de résultat + porte + avoir, #3/#8 réseaux persistants + messagerie, #4 intent→provisioning, #5 catalogue de capacités, #6 marketplace (préexistant, vérifié), #7 pulse business, #9 perception + déclencheurs, #10 auto-évolution + replanification.
+- 4 lots, 4 pushes (08e3469, 4a01752, f5f2afb, cabdc65), 95 nouveaux tests, suite complète 1486 verts, zéro régression (budget bundle inchangé, CI verte sur les lots contrôlés).
