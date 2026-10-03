@@ -3,7 +3,7 @@
 import * as React from "react";
 import { authFetch } from "@/lib/firebase/auth-client";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
-import { AGENT_TYPES, type AgentType } from "@/lib/agents/agent-types";
+import type { AgentType } from "@/lib/agents/agent-types";
 
 const TYPES: Array<{ value: AgentType; label: string }> = [
   { value: "code", label: "Code" },
