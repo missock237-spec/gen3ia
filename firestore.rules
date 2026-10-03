@@ -173,6 +173,13 @@ service cloud.firestore {
     match /skillEvaluations/{evaluationId} { allow read, write: if false; }
     match /chariowPulseDeliveries/{deliveryId} { allow read, write: if false; }
     match /events/{eventId} { allow read, write: if false; }
+    // Studio vidéo (Task 79) — Admin SDK uniquement : toutes les surfaces
+    // passent par les routes /api/video/* propriétaire-scopées.
+    match /videoProjects/{projectId} { allow read, write: if false; }
+    match /videoAssets/{assetId} { allow read, write: if false; }
+    match /videoVoices/{voiceId} { allow read, write: if false; }
+    match /videoRenderJobs/{jobId} { allow read, write: if false; }
+    match /videoVersions/{versionId} { allow read, write: if false; }
     // Réseaux d'agents + messagerie d'équipe (Admin SDK uniquement) :
     // les accès passent par les routes serveur propriétaire-scopées.
     match /agentNetworks/{networkId} { allow read, write: if false; }
