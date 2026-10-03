@@ -7,6 +7,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { createQueuedMission } from "@/lib/queue/mission-queue";
 import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { assertOrgAttach } from "@/lib/tenants/resource-access";
 
 /**
  * DÉCLENCHEURS D'INGESTION (concept post-SaaS #9 « Reality-to-Digital
@@ -73,13 +74,18 @@ export interface TriggerEvaluationResult {
 /* CRUD (routes API)                                                    */
 /* ------------------------------------------------------------------ */
 
-/** Valide l'agent cible AVANT persistance (réel, actif, accessible). */
+/** Valide l'agent cible AVANT persistance (réel, actif, accessible) et le
+ * rattachement org (assertOrgAttach — le même garde que agents/workflows/
+ * missions : sans lui, un orgId arbitraire étiquetterait les missions et le
+ * facturation d'exécutions d'une organisation dont l'appelant n'est pas
+ * membre). */
 export async function createKnowledgeTrigger(userId: string, input: unknown): Promise<KnowledgeTriggerDoc> {
   const parsed = KnowledgeTriggerSchema.parse(input);
   const agent = await getAgentForUser(userId, parsed.action.agentId);
   if (!agent || agent.status !== "active") {
     throw new Error("Agent cible du déclencheur introuvable ou inactif.");
   }
+  if (parsed.orgId) await assertOrgAttach(userId, parsed.orgId);
   const now = Date.now();
   const doc: KnowledgeTriggerDoc = {
     id: randomUUID(),
@@ -169,6 +175,10 @@ export async function evaluateKnowledgeTriggers(input: {
   for (const trigger of triggers) {
     if (!triggerMatches(trigger, input.document)) continue;
     let result: TriggerEvaluationResult;
+    // Le rattachement org de la MISSION est celui du DÉCLENCHEUR (validé par
+    // assertOrgAttach à la création) ; l'orgId d'ingestion ne sert qu'en
+    // l'absence de rattachement propre.
+    const missionOrgId = trigger.orgId ?? input.orgId;
     try {
       if (!missionQueueConfigured()) {
         result = { triggerId: trigger.id, triggerName: trigger.name, status: "matched_no_queue", detail: "File d'attente non configurée — mission non lancée." };
@@ -189,7 +199,7 @@ export async function evaluateKnowledgeTriggers(input: {
             executionId,
             userId: input.userId,
             objective,
-            ...(input.orgId ? { orgId: input.orgId } : {}),
+            ...(missionOrgId ? { orgId: missionOrgId } : {}),
             plan: {
               executionId,
               objective,
@@ -222,12 +232,13 @@ export async function evaluateKnowledgeTriggers(input: {
       result = { triggerId: trigger.id, triggerName: trigger.name, status: "failed", detail: (error instanceof Error ? error.message : "Erreur inconnue").slice(0, 300) };
     }
     results.push(result);
-    // Journal par document (best-effort — jamais bloquant).
+    // Journal par document (best-effort — jamais bloquant). L'orgId journalisé
+    // est celui RÉELLEMENT porté par la mission (traçabilité de facturation).
     await adminDb.collection(RUNS_COLLECTION).add({
       documentId: input.document.id,
       triggerId: trigger.id,
       userId: input.userId,
-      ...(input.orgId ? { orgId: input.orgId } : {}),
+      ...(missionOrgId ? { orgId: missionOrgId } : {}),
       status: result.status,
       detail: result.detail,
       ...(result.runId ? { runId: result.runId } : {}),

@@ -40,6 +40,11 @@ vi.mock("@/lib/queue/qstash", () => ({
   publishMissionTick: (...args: unknown[]) => publishMissionTickMock(...args),
 }));
 
+const assertOrgAttachMock = vi.fn();
+vi.mock("@/lib/tenants/resource-access", () => ({
+  assertOrgAttach: (...args: unknown[]) => assertOrgAttachMock(...args),
+}));
+
 import {
   createKnowledgeTrigger,
   deleteKnowledgeTrigger,
@@ -75,6 +80,8 @@ beforeEach(() => {
   createQueuedMissionMock.mockReset();
   publishMissionTickMock.mockReset();
   missionQueueConfiguredMock.mockReset();
+  assertOrgAttachMock.mockReset();
+  assertOrgAttachMock.mockResolvedValue({ orgId: "o1", role: "owner", plan: "pro" });
   getAgentForUserMock.mockImplementation(async (_u: string, agentId: string) => ({ id: agentId, status: "active", name: "Compta" }));
   runsDocAdd.mockResolvedValue(undefined);
   docSet.mockResolvedValue(undefined);
@@ -133,6 +140,28 @@ describe("CRUD des déclencheurs", () => {
     expect(triggers).toHaveLength(1);
     expect(triggers[0].action.agentId).toBe("a-compta");
   });
+
+  it("rattachement org validé (assertOrgAttach) à la création — membre OK, étranger refusé sans écriture", async () => {
+    await createKnowledgeTrigger("u1", {
+      name: "Org trigger",
+      match: { kind: "any" },
+      action: { type: "run_agent_mission", agentId: "a1", objectiveTemplate: "Analyse le document" },
+      orgId: "org-1",
+    });
+    expect(assertOrgAttachMock).toHaveBeenCalledWith("u1", "org-1");
+    expect(docSet).toHaveBeenCalledTimes(1);
+
+    assertOrgAttachMock.mockRejectedValueOnce(new Error("Organisation introuvable ou accès refusé."));
+    await expect(
+      createKnowledgeTrigger("u1", {
+        name: "X",
+        match: { kind: "any" },
+        action: { type: "run_agent_mission", agentId: "a1", objectiveTemplate: "abc def" },
+        orgId: "org-etrangere",
+      }),
+    ).rejects.toThrow("introuvable ou accès refusé");
+    expect(docSet).toHaveBeenCalledTimes(1); // pas d'écriture supplémentaire
+  });
 });
 
 describe("évaluation après ingestion", () => {
@@ -187,5 +216,16 @@ describe("évaluation après ingestion", () => {
     expect(results).toHaveLength(0);
     expect(createQueuedMissionMock).not.toHaveBeenCalled();
     expect(runsDocAdd).not.toHaveBeenCalled();
+  });
+
+  it("mission org-rattacée : l'orgId du DÉCLENCHEUR prime sur celui de l'ingestion", async () => {
+    queryGet.mockResolvedValue({ docs: [{ data: () => triggerDoc({ orgId: "org-trigger" }) }] });
+    missionQueueConfiguredMock.mockReturnValue(true);
+    createQueuedMissionMock.mockResolvedValue(undefined);
+    publishMissionTickMock.mockResolvedValue(undefined);
+
+    await evaluateKnowledgeTriggers({ userId: "u1", orgId: "org-ingestion", document: DOCUMENT });
+    expect(createQueuedMissionMock.mock.calls[0][0].orgId).toBe("org-trigger");
+    expect(runsDocAdd).toHaveBeenCalledWith(expect.objectContaining({ orgId: "org-trigger" }));
   });
 });
