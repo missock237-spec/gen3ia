@@ -21,6 +21,7 @@ import {
 } from "@/lib/queue/mission-queue";
 import type { RuntimeExecutionState } from "@/lib/agents/runtime/types";
 import { applyOutcomeCredit, shouldCreditOutcomeFailure } from "@/lib/billing/outcome-credits";
+import { recordFailureClusters } from "@/lib/agents/evolution";
 
 /**
  * Receiver de la file d'attente des missions (recommandation A de l'audit).
@@ -204,6 +205,11 @@ export async function POST(request: NextRequest) {
           totalChargeMinor: state.billing?.totalChargeMinor ?? 0,
           missionStatus: state.status,
         });
+      }
+      // AUTO-ÉVOLUTION (concept #10) : les échecs alimentent les clusters de
+      // leçons (fail-soft — jamais un blocage de la finalisation).
+      if (state.status === "failed") {
+        void recordFailureClusters(state, { ...(record.orgId ? { orgId: record.orgId } : {}) }).catch(() => undefined);
       }
       log.info({ event: "queue.tick.finished", runId, executionId, status: state.status }, "Mission terminée dans la file");
       return NextResponse.json({ ok: true, runId, status: state.status });

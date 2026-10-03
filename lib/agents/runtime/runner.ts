@@ -14,6 +14,7 @@ import { generateImageWithAgnes, isImageGenerationEnabled } from "@/lib/ai/image
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import { RESPONSE_FORMAT_RULES } from "@/lib/ai/response-quality";
 import { verifyOutcomeCriteria, type OutcomeContract } from "@/lib/agents/outcome-contract";
+import { buildReplan } from "./replan";
 
 /* ------------------------------------------------------------------ */
 /* Completion des livrables document (artifact.create)                 */
@@ -111,6 +112,8 @@ export class AgentRuntime {
   private outcomeRepairs = 0;
   private static readonly OUTCOME_MAX_REPAIRS = 1;
   private static readonly GATE_FEEDBACK_LIMIT = 800;
+  private replanRounds = 0;
+  private static readonly REPLAN_MAX_ROUNDS = 1;
 
   constructor(options: RuntimeRunnerOptions) {
     const validation = validateDAG(options.plan);
@@ -208,6 +211,31 @@ export class AgentRuntime {
             delete this.state.error;
             await this.persistCheckpoint();
             continue; // reprend la boucle interne avec les étapes réinitialisées
+          }
+        }
+        // REPLANIFICATION DYNAMIQUE (concept #10) : les étapes ont encore
+        // échoué APRÈS la réparation du critic — on ne rejoue PAS bêtement
+        // le même plan : le replanificateur réécrit la suite (contexte réel
+        // + leçons d'évolution), au plus UNE fois, jamais sur arrêt. Un
+        // échec du replanificateur = échec honnête de la mission.
+        if (hasFailedSteps() && this.replanRounds < AgentRuntime.REPLAN_MAX_ROUNDS && !this.signal?.aborted) {
+          this.replanRounds++;
+          try {
+            const { plan, usage } = await buildReplan(this.state, {
+              userId: this.state.userId,
+              executionId: this.state.executionId,
+            });
+            this.state.billing.totalChargeMinor += usage.chargeMinor;
+            this.state.billing.totalProviderCostEur += usage.providerCostEur;
+            this.state.billing.llmInputTokens += usage.inputTokens;
+            this.state.billing.llmOutputTokens += usage.outputTokens;
+            this.state.plan = plan;
+            this.state.status = "running";
+            delete this.state.error;
+            await this.persistCheckpoint();
+            continue;
+          } catch (error) {
+            console.error("[runtime] Replanification impossible (échec conservé):", error instanceof Error ? error.message : error);
           }
         }
         // PORTE DE RÉSULTAT (concepts #1/#2) : sans étape en échec, la

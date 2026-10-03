@@ -18,6 +18,7 @@ import {
 import { assertOrgAttach } from "@/lib/tenants/resource-access";
 import { OutcomeContractSchema } from "@/lib/agents/outcome-contract";
 import { applyOutcomeCredit, shouldCreditOutcomeFailure } from "@/lib/billing/outcome-credits";
+import { recordFailureClusters } from "@/lib/agents/evolution";
 
 /**
  * Exécution d'un agent (API développeur + interne).
@@ -215,6 +216,11 @@ export async function POST(request: NextRequest) {
         totalChargeMinor: state.billing?.totalChargeMinor ?? 0,
         missionStatus: state.status,
       }).catch(() => undefined);
+    }
+
+    // AUTO-ÉVOLUTION (concept #10) : échecs → clusters de leçons (fail-soft).
+    if (state.status === "failed") {
+      void recordFailureClusters(state, { ...(parsed.data.orgId ? { orgId: parsed.data.orgId } : {}) }).catch(() => undefined);
     }
 
     // Métriques OTel (Task 59) : coût par organisation (no-op si export désactivé).
