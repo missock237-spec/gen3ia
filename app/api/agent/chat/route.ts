@@ -189,7 +189,7 @@ async function respondWithImage(params: {
   try {
     const imageSkill = buildImageGenerationSkill(message);
     const image = await generateImageWithAgnes({ prompt: imageSkill.prompt, ratio: imageSkill.ratio });
-    const reply = "Voici l'image que j'ai générée pour vous.";
+    const reply = "";
     await appendMessage({
       conversationId, userId, role: "assistant", content: reply,
       imageUrl: image.imageUrl, provider: "agnes", model: image.model,
