@@ -39,7 +39,34 @@ export function listAgentDefinitions(): AgentDefinition[] { return Object.values
 export function classifyRoles(objective: string, requestedRoles?: AgentRole[]): AgentRole[] { if (requestedRoles?.length) return [...new Set(requestedRoles)]; const normalized = objective.toLocaleLowerCase(); const scores = (Object.keys(ROLE_KEYWORDS) as AgentRole[]).map((role) => ({ role, score: ROLE_KEYWORDS[role].reduce((n, word) => n + (normalized.includes(word) ? 1 : 0), 0) })); const selected = scores.filter((x) => x.score > 0).sort((a, b) => b.score - a.score).map((x) => x.role); return selected.length ? selected.slice(0, 4) : ["analytics"]; }
 function buildSteps(task: OrchestratorTask, roles: AgentRole[], context: Record<string, unknown>): RuntimeStep[] { const selectedSkills = selectSkills(task.objective);
   const steps: RuntimeStep[] = roles.map((role) => { const definition = AGENTS[role]; const isResearch = role === "analytics"; return { id: `agent-${role}`, type: isResearch ? "research" : "llm", name: definition.name, description: `${definition.mission} Capacités: ${definition.capabilities.join(", ")}.`, dependencies: [], status: "pending", input: isResearch ? { query: task.objective, maxResults: 10, context } : { context, role, instruction: task.objective }, toolName: isResearch ? "web.search" : undefined, skillIds: selectedSkills.map((skill) => skill.id), maxRetries: 2, timeoutMs: 120_000, sideEffect: false, requiresApproval: false, agentRole: role }; }); steps.push({ id: "orchestrator-synthesis", type: "llm", name: "Orchestrator Synthesis", description: "Fusionner les sorties de toute l'équipe en une réponse opérationnelle unique.", dependencies: roles.map((role) => `agent-${role}`), status: "pending", input: { context, instruction: task.objective, team: roles }, skillIds: selectedSkills.map((skill) => skill.id), maxRetries: 2, timeoutMs: 120_000, sideEffect: false, requiresApproval: false, agentRole: "orchestrator" }); return steps; }
-export function createOrchestratorPlan(task: OrchestratorTask): { executionId: string; roles: AgentRole[]; plan: RuntimePlan } { const executionId = randomUUID(); const roles = classifyRoles(task.objective, task.requestedRoles); const context = { ...(task.context ?? {}), ...(task.customerId ? { customerId: task.customerId } : {}) }; return { executionId, roles, plan: { executionId, objective: task.objective, steps: buildSteps(task, roles, context), maxConcurrency: Math.min(4, roles.length), maxIterations: 20 } }; }
+export function createOrchestratorPlan(task: OrchestratorTask): { executionId: string; roles: AgentRole[]; plan: RuntimePlan } { const executionId = randomUUID(); const roles = classifyRoles(task.objective, task.requestedRoles); const context = { ...(task.context ?? {}), ...(task.customerId ? { customerId: task.customerId } : {}) }; const planSteps = buildSteps(task, roles, context);
+  // Délégation multi-agent uniquement lorsqu'au moins deux responsabilités
+  // distinctes sont nécessaires ; le superviseur reste la seule source de
+  // synthèse et les sous-agents n'obtiennent aucun accès direct aux effets.
+  if (roles.length > 1) {
+    const delegationIds = roles.map((role) => `subagent-${role}`);
+    planSteps.splice(0, roles.length);
+    roles.forEach((role) => {
+      const definition = AGENTS[role];
+      planSteps.push({
+        id: `agent-${role}`,
+        type: "agent",
+        name: definition.name,
+        description: definition.mission,
+        dependencies: [],
+        status: "pending",
+        input: { context, role, instruction: task.objective },
+        skillIds: selectSkills(task.objective).map((skill) => skill.id),
+        maxRetries: 2,
+        timeoutMs: 120_000,
+        sideEffect: false,
+        requiresApproval: false,
+        agentRole: role,
+        agentId: delegationIds[roles.indexOf(role)],
+      });
+    });
+  }
+  return { executionId, roles, plan: { executionId, objective: task.objective, steps: planSteps, maxConcurrency: Math.min(4, roles.length), maxIterations: 20 } }; }
 export async function runOrchestrator(task: OrchestratorTask): Promise<OrchestratorResult> { if (!task.userId?.trim()) throw new Error("Orchestrator requires userId"); if (!task.objective?.trim()) throw new Error("Orchestrator requires objective"); await assertUserWalletActive(task.userId); const persistedCustomer = task.customerId ? await getCustomerContext(task.userId, task.customerId) : null; // Auto-discovery of installed, approved and entitled extension capabilities.
  // A failing extension discovery must never break the core agent flow.
  const extensionAddendum = await buildExtensionPolicyAddendum(task.userId).catch(() => ({ toolNames: [] as string[], contextBlock: "" })); const effectiveTask = { ...task, context: { ...(task.context ?? {}), ...(task.customerId ? { customerId: task.customerId } : {}), ...(persistedCustomer ? { customer: persistedCustomer } : {}), ...(extensionAddendum.contextBlock ? { extensions: extensionAddendum.contextBlock } : {}) } }; const { executionId, roles, plan } = createOrchestratorPlan(effectiveTask); const policy: ExecutionPolicy = { ...READ_POLICY, maxSteps: Math.max(DEFAULT_EXECUTION_POLICY.maxSteps, plan.steps.length + 5), allowedTools: extensionAddendum.toolNames.length > 0 ? [...READ_POLICY.allowedTools, ...extensionAddendum.toolNames] : READ_POLICY.allowedTools, permissions: extensionAddendum.toolNames.length > 0 ? [...READ_POLICY.permissions, "extension.execute" as const] : READ_POLICY.permissions, allowNetwork: true, allowExternalApps: extensionAddendum.toolNames.length > 0 ? true : READ_POLICY.allowExternalApps }; const runtime = new AgentRuntime({ userId: task.userId, objective: task.objective, plan, policy, signal: task.signal }); const state = await runtime.run(); const synthesis = state.outputs["orchestrator-synthesis"]; const summary = typeof synthesis === "string" ? synthesis : "Équipe multi-agent exécutée; consultez les sorties de l'exécution pour le détail."; return { executionId, roles, state, summary }; }
