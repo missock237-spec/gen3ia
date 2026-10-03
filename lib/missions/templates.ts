@@ -21,6 +21,25 @@ export interface MissionTemplate {
   engines: EngineId[];
   /** Filtre/catégorie affiché dans le composer. */
   category: string;
+  /**
+   * SYSTÈME MISSION AVANCÉ — critères d'acceptation professionnels du
+   * modèle (contrat de résultat appliqué à la mission) : chaque critère
+   * est vérifié par la porte de sortie du runtime (déterministe ou juge
+   * LLM). Une mission sous modèle n'est « Terminée » que si son contrat
+   * est satisfait — façon humain : on ne livre pas à moitié.
+   */
+  acceptance?: MissionAcceptance;
+}
+
+export interface MissionAcceptance {
+  /** Format de livrable attendu (contrat artifact_format). */
+  format?: string;
+  /** Longueur minimale du livrable (contrat min_length). */
+  minLength?: number;
+  /** Motifs qui DOIVENT apparaître dans le livrable (contrat contains). */
+  contains?: string[];
+  /** Motifs INTERDITS dans le livrable (contrat not_contains). */
+  notContains?: string[];
 }
 
 export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
@@ -43,6 +62,11 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
     placeholder: "Ex. : une landing page pour mon application de réservation pour salons de coiffure…",
     engines: ["ai", "document"],
     category: "Marketing",
+    acceptance: {
+      minLength: 4_000,
+      contains: ["accroche", "bénéfice", "appel à l'action"],
+      notContains: ["TODO", "Lorem ipsum"],
+    },
   },
   {
     id: "marketing-webinar",
@@ -133,6 +157,11 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
     placeholder: "Ex. : mes entrées/sorties du dernier trimestre…",
     engines: ["analytics", "document"],
     category: "Finance",
+    acceptance: {
+      minLength: 3_000,
+      contains: ["90 jours", "scénario"],
+      notContains: ["TODO"],
+    },
   },
   {
     id: "finance-unpaid",
@@ -158,6 +187,66 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
 
 export function templateById(id: string): MissionTemplate | undefined {
   return MISSION_TEMPLATES.find((template) => template.id === id);
+}
+
+/**
+ * Construit le CONTRAT DE RÉSULTAT d'un modèle (système mission avancé).
+ * Les critères sont déterministes quand possible (coût nul, reproductible) :
+ * min_length, contains, not_contains, artifact_format. Retourne undefined
+ * pour le modèle « libre » ou sans critères.
+ */
+export function contractForTemplate(templateId: string): MissionAcceptance | undefined {
+  const template = templateById(templateId);
+  if (!template?.acceptance) return undefined;
+  return template.acceptance;
+}
+
+/**
+ * Convertit des critères d'acceptation en CONTRAT DE RÉSULTAT exécutable
+ * (schéma OutcomeContract du runtime). Import de TYPE uniquement : ce
+ * module reste pur et partagé client/serveur.
+ */
+export function acceptanceToOutcomeContract(
+  acceptance: MissionAcceptance,
+): import("@/lib/agents/outcome-contract").OutcomeContract {
+  const criteria: import("@/lib/agents/outcome-contract").OutcomeCriterion[] = [];
+  if (acceptance.minLength) {
+    criteria.push({
+      id: "min_length",
+      description: `Le livrable compte au moins ${acceptance.minLength} caractères.`,
+      kind: "min_length",
+      minLength: acceptance.minLength,
+      required: true,
+    });
+  }
+  (acceptance.contains ?? []).forEach((pattern, index) => {
+    criteria.push({
+      id: `contains_${index + 1}`,
+      description: `Le livrable mentionne « ${pattern} ».`,
+      kind: "contains",
+      pattern,
+      required: true,
+    });
+  });
+  (acceptance.notContains ?? []).forEach((pattern, index) => {
+    criteria.push({
+      id: `not_contains_${index + 1}`,
+      description: `Le livrable ne contient aucun « ${pattern} » (espace réservé ou texte de remplissage interdit).`,
+      kind: "not_contains",
+      pattern,
+      required: true,
+    });
+  });
+  if (acceptance.format) {
+    criteria.push({
+      id: "artifact_format",
+      description: `Un livrable téléchargeable au format ${acceptance.format.toUpperCase()} est remis.`,
+      kind: "artifact_format",
+      format: acceptance.format,
+      required: true,
+    });
+  }
+  return { criteria, failPolicy: "retry_once" };
 }
 
 /** Catégories distinctes, dans l'ordre d'affichage. */

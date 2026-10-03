@@ -9,6 +9,7 @@ import { indexKnowledgeDocument } from "./indexer";
 import { markupToText } from "@/lib/content/html-text";
 import { perceiveIfSupported } from "./perception";
 import { evaluateKnowledgeTriggers } from "./triggers";
+import { pdfToText } from "@/lib/files/pdf-text";
 
 /**
  * Ingestion Knowledge / RAG Gen3ia.
@@ -20,7 +21,9 @@ import { evaluateKnowledgeTriggers } from "./triggers";
  */
 
 export const KNOWLEDGE_MAX_TEXT_BYTES = 2_000_000;
-export const KNOWLEDGE_MAX_FILE_BYTES = 20_000_000;
+// Politique unifiée des pièces jointes : 50 Mo par fichier (canal R2 — le
+// corps serverless ne limite plus l'ingestion depuis le stockage permanent).
+export const KNOWLEDGE_MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const KNOWLEDGE_MAX_URL_BYTES = 2_000_000;
 
 const TEXT_EXTENSIONS = new Set(["txt", "md", "markdown", "csv", "tsv", "json", "log", "xml", "yml", "yaml", "html", "htm"]);
@@ -149,13 +152,72 @@ export async function extractTextFromUpload(file: File): Promise<{ text: string;
   if (extension === "html" || extension === "htm" || file.type === "text/html") {
     return { text: htmlToText(text), mimeType: "text/html" };
   }
-  if (extension === "pdf") {
-    throw new Error("Format PDF non encore pris en charge par l'ingestion Knowledge. Convertissez le document en DOCX, TXT, Markdown ou HTML.");
+  if (extension === "pdf" || file.type === "application/pdf") {
+    // PDF natif ACCEPTÉ (exigence production) : extraction réelle partagée
+    // avec l'import de conversation (lib/files/pdf-text.ts). Un PDF scanné
+    // (aucun texte natif) bascule vers la perception OCR quand disponible.
+    const { text } = pdfToText(buffer);
+    if (text.replace(/[^A-Za-zÀ-ÿ0-9]/g, "").length >= 30) {
+      return { text, mimeType: "application/pdf" };
+    }
+    const perception = await perceiveIfSupported({ buffer, mimeType: "application/pdf", filename: file.name });
+    if (perception && perception.text.trim()) {
+      return { text: perception.text, mimeType: "application/pdf", perception: perception.providerLabel };
+    }
+    throw new Error("PDF sans texte natif extractible (probablement scanné) et perception indisponible. Convertissez-le en DOCX, TXT ou Markdown.");
   }
   if (!TEXT_EXTENSIONS.has(extension) && !file.type.startsWith("text/") && file.type !== "application/json") {
-    throw new Error(`Format « ${extension || file.type || "inconnu"} » non pris en charge. Formats acceptés : TXT, MD, CSV, JSON, HTML, DOCX, images (OCR), audio (ASR).`);
+    throw new Error(`Format « ${extension || file.type || "inconnu"} » non pris en charge. Formats acceptés : TXT, MD, CSV, JSON, HTML, DOCX, PDF, images (OCR), audio (ASR).`);
   }
   return { text, mimeType: file.type || `text/${extension || "plain"}` };
+}
+
+/**
+ * Ingestion Knowledge depuis le stockage PERMANENT (canal R2 — exigence
+ * production : fichiers jusqu'à 50 Mo sans limite de corps serverless).
+ * Le cloisonnement (préfixe permanent du propriétaire) est vérifié avant
+ * tout téléchargement, puis la même extraction que le canal direct.
+ */
+export async function extractTextFromPermanentFile(input: {
+  userId: string;
+  path: string;
+  filename: string;
+  contentType?: string;
+}): Promise<{ text: string; mimeType: string; perception?: string }> {
+  const { downloadFromR2 } = await import("@/lib/storage/r2");
+  if (!input.path.startsWith(`users/${input.userId}/permanent/`)) {
+    throw new Error("Chemin de stockage invalide pour ce compte.");
+  }
+  const buffer = await downloadFromR2(input.path, KNOWLEDGE_MAX_FILE_BYTES);
+  if (!buffer || buffer.length === 0) throw new Error("Fichier introuvable dans le stockage.");
+  const contentType = (input.contentType || "application/octet-stream").split(";")[0].trim();
+  const extension = input.filename.toLowerCase().includes(".") ? input.filename.toLowerCase().split(".").pop()! : "";
+
+  if (extension === "docx" || contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    return { text: await docxToText(buffer), mimeType: contentType };
+  }
+  if (contentType.startsWith("image/") || contentType.startsWith("audio/") || ["png", "jpg", "jpeg", "webp", "gif", "mp3", "wav", "m4a", "ogg", "flac", "webm"].includes(extension)) {
+    const perception = await perceiveIfSupported({ buffer, mimeType: contentType, filename: input.filename });
+    if (perception) {
+      if (!perception.text.trim()) throw new Error(`Aucun texte extractible de cette source (${perception.providerLabel}).`);
+      return { text: perception.text, mimeType: contentType, perception: perception.providerLabel };
+    }
+  }
+  if (extension === "pdf" || contentType === "application/pdf") {
+    const { text } = pdfToText(buffer);
+    if (text.replace(/[^A-Za-zÀ-ÿ0-9]/g, "").length >= 30) return { text, mimeType: "application/pdf" };
+    const perception = await perceiveIfSupported({ buffer, mimeType: "application/pdf", filename: input.filename });
+    if (perception && perception.text.trim()) return { text: perception.text, mimeType: "application/pdf", perception: perception.providerLabel };
+    throw new Error("PDF sans texte natif extractible et perception indisponible.");
+  }
+  const text = buffer.toString("utf8");
+  if (extension === "html" || extension === "htm" || contentType === "text/html") {
+    return { text: htmlToText(text), mimeType: "text/html" };
+  }
+  if (!TEXT_EXTENSIONS.has(extension) && !contentType.startsWith("text/") && contentType !== "application/json") {
+    throw new Error(`Format « ${extension || contentType || "inconnu"} » non pris en charge (canal stockage permanent).`);
+  }
+  return { text, mimeType: contentType.startsWith("text/") || contentType !== "application/octet-stream" ? contentType : `text/${extension || "plain"}` };
 }
 
 /** Télécharge et extrait le texte d'une page web (garde SSRF + taille). */

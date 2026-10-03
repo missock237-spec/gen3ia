@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { randomUUID } from "crypto";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { loadCheckpoint } from "@/lib/agents/runtime/checkpoint";
@@ -7,9 +8,12 @@ import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/execution-policy";
 import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
 import type { RuntimePlan, RuntimeStep } from "@/lib/agents/runtime/types";
-import { appendMessage } from "@/lib/chat/repository";
 import { reconcileAgentRun } from "@/lib/agents/conversation-run";
 import { buildFinalResponse } from "@/lib/agents/final-response";
+import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
+import { createQueuedMission } from "@/lib/queue/mission-queue";
+import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
 import { errorStatus, errorBody } from "@/lib/security/http-errors";
 
 const Body = z.object({
@@ -63,6 +67,11 @@ function buildPolicy(plan: RuntimePlan): ExecutionPolicy {
   };
 }
 
+export const runtime = "nodejs";
+// Reprise synchrone (repli) bornée proprement par batchDeadlineMs.
+export const maxDuration = 300;
+const RESUME_SYNC_BUDGET_MS = 290_000;
+
 export async function POST(request: NextRequest) {
   try {
     // Auth DANS le try : session absente → 401 structuré, jamais un 500.
@@ -106,12 +115,48 @@ export async function POST(request: NextRequest) {
       }),
     };
 
+    const conversationId = state.conversationId ?? body.conversationId;
+
+    // REPRISE SUR LA FILE (exigence production) : quand la file est
+    // configurée, la reprise s'exécute en arrière-plan, par tranches —
+    // déconnecter, rafraîchir ou fermer l'onglet n'interrompt plus jamais la
+    // reprise. Le tick final livre le message final + livrables + run.
+    if (missionQueueConfigured()) {
+      const runId = randomUUID();
+      try {
+        await createQueuedMission({
+          runId,
+          executionId: state.executionId,
+          userId: user.uid,
+          objective: state.objective,
+          ...(conversationId ? { conversationId } : {}),
+          plan: resumedPlan,
+        });
+        const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
+        await publishMissionTick(origin, runId);
+        return NextResponse.json({
+          mode: "agent",
+          status: "queued",
+          runId,
+          executionId: state.executionId,
+          conversationId,
+          objective: state.objective,
+          plan: resumedPlan,
+          resumed: true,
+          pollSeconds: 2,
+        }, { status: 202 });
+      } catch (error) {
+        console.warn("[agent-continue] enfilement impossible — repli synchrone", error instanceof Error ? error.message : error);
+      }
+    }
+
     const runtime = new AgentRuntime({
       userId: user.uid,
       objective: state.objective,
       plan: resumedPlan,
       policy: buildPolicy(resumedPlan),
       initialOutputs: state.outputs ?? {},
+      batchDeadlineMs: Date.now() + RESUME_SYNC_BUDGET_MS,
       ...(state.conversationId ? { conversationId: state.conversationId } : {}),
     });
 
@@ -131,35 +176,43 @@ export async function POST(request: NextRequest) {
       }, { status: errorStatus(error, 400) });
     }
 
-    const conversationId = state.conversationId ?? body.conversationId;
     const resultStatus: string = result.status;
-    const resumedFinalText = buildFinalResponse(result.plan, result.outputs, { ...(result.outcomeVerification ? { outcome: result.outcomeVerification } : {}) }).text;
+
+    // LIVRAISON UNIFIÉE (run réconcilié + message final + livrables réels).
+    let deliveryFinalText: string | undefined;
     if (conversationId) {
-      const closingText = resultStatus === "completed"
-        ? resumedFinalText
-        : resultStatus === "waiting_approval"
-          ? "La reprise est prête : une ou plusieurs actions nécessitent votre confirmation pour continuer."
-          // HONNÊTETÉ : le texte persisté nomme les étapes NON livrées
-          // (annexe déterministe de buildFinalResponse) + la cause réelle.
-          : `${resumedFinalText}\n\nCause de l'interruption : ${result.error ?? "erreur inconnue"}.`;
-      await appendMessage({
-        conversationId,
+      const delivery = await deliverMissionToConversation({
         userId: user.uid,
-        role: "assistant",
-        content: closingText,
+        conversationId,
+        state: result,
+      }).catch(() => ({ finalText: undefined as string | undefined, deliverables: [], messageId: undefined }));
+      deliveryFinalText = delivery.finalText;
+    } else {
+      await reconcileAgentRun({
+        userId: user.uid,
+        conversationId: "",
+        plan: result.plan,
+        status: result.status,
+        outputs: result.outputs,
+        observations: result.observations,
+        billing: result.billing,
+        finalText: resultStatus === "completed" ? buildFinalResponse(result.plan, result.outputs, { ...(result.outcomeVerification ? { outcome: result.outcomeVerification } : {}) }).text : undefined,
+        error: result.error,
       }).catch(() => undefined);
     }
-    await reconcileAgentRun({
-      userId: user.uid,
-      conversationId: conversationId ?? "",
-      plan: result.plan,
-      status: result.status,
-      outputs: result.outputs,
-      observations: result.observations,
-      billing: result.billing,
-      finalText: resultStatus === "completed" ? resumedFinalText : undefined,
-      error: result.error,
-    }).catch(() => undefined);
+
+    // Continuation arrière-plan si l'échéance de tranche a recoupé la mission.
+    let continuation: { queued: boolean; runId?: string; reason?: string } | undefined;
+    if (result.status === "paused" && result.plan.steps.some((step) => step.status === "pending")) {
+      continuation = await enqueueMissionContinuation({
+        userId: user.uid,
+        executionId: result.executionId,
+        objective: result.objective || state.objective,
+        plan: result.plan,
+        ...(conversationId ? { conversationId } : {}),
+        origin: process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin,
+      });
+    }
 
     return NextResponse.json({
       mode: "agent",
@@ -171,10 +224,11 @@ export async function POST(request: NextRequest) {
       observations: result.observations,
       outputs: result.outputs,
       billing: result.billing,
-      finalText: resultStatus === "completed" ? resumedFinalText : undefined,
+      finalText: deliveryFinalText,
       error: result.error,
       resumed: true,
       resumable: resultStatus === "failed",
+      ...(continuation ? { continuation } : {}),
     });
   } catch (error) {
     const body = errorBody(error, "La reprise de la mission a échoué.");

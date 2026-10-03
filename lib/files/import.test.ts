@@ -101,7 +101,7 @@ describe("convertUploadedFile — conversion réelle par type", () => {
 
   it("refuse les fichiers trop volumineux", async () => {
     const big = new File([new Uint8Array(10)], "huge.txt", { type: "text/plain" });
-    Object.defineProperty(big, "size", { value: 21_000_000 });
+    Object.defineProperty(big, "size", { value: 52_500_000 });
     await expect(convertUploadedFile(big)).rejects.toThrow(/trop volumineux/);
   });
 });

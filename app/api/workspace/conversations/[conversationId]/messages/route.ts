@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { clientIp } from "@/lib/security/rate-limit";
 import { rateLimitDistributed } from "@/lib/cache/redis";
+import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
 import { runConversationTurn } from "@/lib/domain/conversations/engine";
 
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ const AttachmentSchema = z.object({
   path: z.string().trim().max(400).optional(),
   url: z.string().trim().max(2000).optional(),
   contentType: z.string().trim().max(120).optional(),
-  sizeBytes: z.number().int().nonnegative().max(200 * 1024 * 1024).optional(),
+  sizeBytes: z.number().int().nonnegative().max(ATTACHMENT_MAX_FILE_BYTES).optional(),
 });
 
 const ConnectorSchema = z
@@ -30,7 +31,8 @@ const ConnectorSchema = z
 
 const BodySchema = z.object({
   message: z.string().trim().min(1).max(20000),
-  attachments: z.array(AttachmentSchema).max(8).optional(),
+  // Politique unifiée des pièces jointes : 10 fichiers × 50 Mo max.
+  attachments: z.array(AttachmentSchema).max(ATTACHMENT_MAX_FILES).optional(),
   projectId: z.string().trim().min(1).max(128).optional(),
   provider: z.string().trim().max(60).optional(),
   model: z.string().trim().max(200).optional(),

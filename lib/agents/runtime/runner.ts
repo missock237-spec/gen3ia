@@ -109,12 +109,19 @@ export class AgentRuntime {
   private readonly batchDeadline?: number;
   private readonly minBatchReserve: number;
   private criticRounds = 0;
-  private static readonly CRITIC_MAX_ROUNDS = 1;
+  // AUTONOMIE « FAÇON HUMAIN » (exigence production : l'agent ne s'arrête que
+  // lorsqu'il a terminé ET livré) : deux tours de réparation critic au lieu
+  // d'un seul — la persistance du travail reste bornée (coût maîtrisé) mais
+  // les échecs transitoires sont surmontés à deux niveaux de stratégie.
+  private static readonly CRITIC_MAX_ROUNDS = 2;
   private outcomeRepairs = 0;
   private static readonly OUTCOME_MAX_REPAIRS = 1;
   private static readonly GATE_FEEDBACK_LIMIT = 800;
   private replanRounds = 0;
-  private static readonly REPLAN_MAX_ROUNDS = 1;
+  // Deux replanifications dynamiques (contexte réel + leçons d'évolution) au
+  // lieu d'une seule : la mission tente deux stratégies complètes avant de
+  // déclarer un échec honnête.
+  private static readonly REPLAN_MAX_ROUNDS = 2;
 
   constructor(options: RuntimeRunnerOptions) {
     const validation = validateDAG(options.plan);

@@ -38,6 +38,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
         pendingCount: record.pendingCount,
         timeline: record.timeline,
         ...(record.lastError ? { lastError: record.lastError } : {}),
+        // Manifest des livrables réels (artefacts, fichiers) — renseigné à
+        // la finalisation par le runtime/tick (exigence « mission livrée »).
+        ...(Array.isArray(record.deliverables) && record.deliverables.length > 0 ? { deliverables: record.deliverables } : {}),
         createdAtMs: record.createdAtMs,
         updatedAtMs: record.updatedAtMs,
         ...(record.completedAtMs ? { completedAtMs: record.completedAtMs } : {}),

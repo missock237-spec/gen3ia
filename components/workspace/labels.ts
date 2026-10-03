@@ -6,13 +6,16 @@ import type { ApprovalStatus, RunStatus, RunStepStatus } from "@/lib/domain/conv
  * conversations, runs et validations.
  */
 
+// VOCABULAIRE CANONIQUE des statuts (source unique — status-badge.tsx et
+// les autres écrans s'alignent sur CES libellés) : même genre grammatical
+// partout, une seule tournure par état.
 export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
   planning: "Planification",
-  awaiting_approval: "Validation requise",
+  awaiting_approval: "À valider",
   running: "En cours",
-  completed: "Terminé",
+  completed: "Terminée",
   failed: "Échec",
-  cancelled: "Annulé",
+  cancelled: "Annulée",
 };
 
 export const RUN_STATUS_STYLES: Record<RunStatus, string> = {

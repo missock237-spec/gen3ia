@@ -158,6 +158,22 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
     }
   }, [conversationId, loadDetail]);
 
+  // REPRISE DE VUE APRÈS REFRESH (exigence production) : le serveur poursuit
+  // son tour même si l'onglet a été fermé/rafraîchi. Au chargement d'une
+  // conversation dont le DERNIER run est encore « running », le détail est
+  // rechargé périodiquement (4 s) jusqu'à l'état terminal : l'écran suit
+  // l'exécution réelle au lieu de rester figé sur l'état au refresh.
+  useEffect(() => {
+    const status = detail?.runs?.[0]?.status;
+    if (status !== "running") return;
+    const id = conversationId;
+    if (!id) return;
+    const interval = setInterval(() => {
+      void loadDetail(id, true);
+    }, 4_000);
+    return () => clearInterval(interval);
+  }, [detail?.runs, conversationId, loadDetail]);
+
   // Reprise hors-ligne (Background Sync) : une requête envoyée hors connexion
   // vient d'être exécutée en arrière-plan — la conversation ouverte se
   // rafraîchit automatiquement pour afficher le résultat réel.

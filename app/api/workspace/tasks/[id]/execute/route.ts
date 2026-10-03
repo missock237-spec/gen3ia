@@ -7,8 +7,15 @@ import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { isExecutionStopRequested } from "@/lib/agents/runtime/pause";
 import { DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
 import { getWorkspaceTask } from "@/lib/agents/workspace";
+import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
 import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
+
+export const runtime = "nodejs";
+// Fenêtre bornée pour le repli synchrone : l'échéance de tranche coupe la
+// mission PROPREMENT avant la fin de fenêtre et la suite part en file.
+export const maxDuration = 300;
+const TASK_SYNC_BUDGET_MS = 290_000;
 
 const BodySchema = z.object({}).optional();
 
@@ -43,7 +50,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         objective: task.objective,
         plan: task.plan,
         policy: DEFAULT_EXECUTION_POLICY,
-        signal: request.signal,
+        // PAS de signal requête (exigence production) : l'utilisateur qui
+        // rafraîchit ou ferme l'onglet n'exprime PAS un arrêt — l'exécution
+        // continue serveur jusqu'à sa borne de tranche. L'arrêt explicite
+        // passe par les contrôles pause/stop (routes dédiées).
+        batchDeadlineMs: Date.now() + TASK_SYNC_BUDGET_MS,
+        // SYSTÈME MISSION AVANCÉ : contrat de résultat du modèle professionnel
+        // — la porte de sortie vérifie les critères d'acceptation.
+        ...(task.outcomeContract ? { outcomeContract: task.outcomeContract } : {}),
         // Cloisonnement multi-tenant (Task 58) : tâche d'organisation.
         ...(task.orgId ? { orgId: task.orgId } : {}),
       });
@@ -57,6 +71,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       // un arrêt demandé par l'utilisateur).
       const stopWasRequested = await isExecutionStopRequested(state.executionId);
       const finalStatus = stopWasRequested ? "cancelled" : state.status;
+
+      // CONTINUATION ARRIÈRE-PLAN (exigence production) : la borne de tranche
+      // a interrompu la mission avec des étapes restantes → la suite part sur
+      // la file. Fermer l'onglet ne stoppe plus jamais une tâche lancée.
+      let continuation: { queued: boolean; runId?: string; reason?: string } | undefined;
+      if (!stopWasRequested && finalStatus === "paused" && state.plan.steps.some((step) => step.status === "pending")) {
+        continuation = await enqueueMissionContinuation({
+          userId: user.uid,
+          executionId: state.executionId,
+          objective: task.objective,
+          plan: state.plan,
+          ...(task.orgId ? { orgId: task.orgId } : {}),
+          origin: process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin,
+        });
+      }
+
       await taskRef.update({
         plan: state.plan,
         status: finalStatus === "completed" ? "completed" : finalStatus === "paused" ? "paused" : finalStatus === "cancelled" ? "cancelled" : "failed",
@@ -67,18 +97,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         success: finalStatus === "completed",
         executionId: state.executionId,
         status: finalStatus,
+        ...(continuation ? { continuation } : {}),
         outputs: state.outputs,
         observations: state.observations,
         billing: state.billing,
       });
     } catch (error) {
-      // Déconnexion du client pendant l'exécution = volonté d'arrêter :
-      // la tâche est marquée "cancelled" (travail déjà payé conservé dans
-      // le checkpoint) au lieu d'un "failed" trompeur.
-      if (request.signal.aborted) {
-        await taskRef.update({ status: "cancelled", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-        return NextResponse.json({ success: false, status: "cancelled" });
-      }
+      // Erreur réelle de la mission (PAS une déconnexion : le signal requête
+      // n'est plus propagé au runtime) — la tâche est marquée "failed" et le
+      // checkpoint reste disponible pour une reprise manuelle.
       await taskRef.update({ status: "failed", updatedAt: FieldValue.serverTimestamp() });
       throw error;
     }

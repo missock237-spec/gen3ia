@@ -194,23 +194,26 @@ export async function evaluateKnowledgeTriggers(input: {
           });
           const runId = randomUUID();
           const executionId = randomUUID();
-          await createQueuedMission({
-            runId,
-            executionId,
-            userId: input.userId,
-            objective,
-            ...(missionOrgId ? { orgId: missionOrgId } : {}),
-            plan: {
+          // AUTONOMIE « FAÇON HUMAIN » (exigence production) : une mission
+          // déclenchée n'est plus un plan à UNE étape codé en dur —
+          // l'objectif passe par le PLANIFICATEUR UNIVERSEL (recherche,
+          // outils, livrables artifact.create). Repli : plan simple.
+          let plan;
+          try {
+            const { planUniversalAgent } = await import("@/lib/agents/runtime/unified-agent");
+            plan = await planUniversalAgent(input.userId, objective);
+          } catch {
+            plan = {
               executionId,
               objective,
               steps: [
                 {
                   id: "step_1",
-                  type: "llm",
+                  type: "llm" as const,
                   name: "Traiter le document ingéré",
                   description: objective,
                   dependencies: [],
-                  status: "pending",
+                  status: "pending" as const,
                   input: {},
                   skillIds: [],
                   maxRetries: 2,
@@ -221,7 +224,15 @@ export async function evaluateKnowledgeTriggers(input: {
               ],
               maxConcurrency: 1,
               maxIterations: 10,
-            },
+            };
+          }
+          await createQueuedMission({
+            runId,
+            executionId,
+            userId: input.userId,
+            objective,
+            ...(missionOrgId ? { orgId: missionOrgId } : {}),
+            plan: { ...plan, executionId },
           });
           const origin = process.env.GEN3IA_APP_ORIGIN?.trim();
           if (origin) await publishMissionTick(origin, runId);

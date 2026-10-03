@@ -7,6 +7,10 @@ import { AgentRuntime, RuntimePlanSchema } from "@/lib/agents/runtime";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { checkWatchSource, type WatchSource } from "@/lib/agents/watch-sources";
 import { notifyScheduleRunCompleted } from "@/lib/integrations/messaging/notify";
+import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
+
+/** Budget de tranche pour une exécution planifiée (marge sous la fenêtre 60 s). */
+const SCHEDULE_SYNC_BUDGET_MS = 50_000;
 
 export const ScheduleSchema = z.object({
   agentId: z.string().trim().min(1).max(200),
@@ -418,13 +422,40 @@ export async function runSchedule(schedule: AgentSchedule, executionId: string, 
       userId: schedule.userId,
       objective,
       plan: { ...plan, executionId, objective },
+      // ÉCHÉANCE DE TRANCHE (exigence production) : une planification longue
+      // est coupée PROPREMENT avant la fin de la fenêtre serverless (au lieu
+      // d'être tuée en pleine étape) puis la suite est enfilée dans la file
+      // — l'exécution planifiée continue en arrière-plan jusqu'à livraison.
+      batchDeadlineMs: Date.now() + SCHEDULE_SYNC_BUDGET_MS,
       // Cloisonnement multi-tenant (Task 58) : organisation de l'agent
       // planifié, résolue paresseusement (échec → exécution personnelle).
       orgId: await resolveAgentOrgId(schedule.agentId),
     });
     const state = await runtime.run();
 
-    await finishScheduleRun(schedule.id, schedule.userId, executionId, state.status, undefined, slot);
+    let continuation: { queued: boolean; runId?: string; reason?: string } | undefined;
+    if (state.status === "paused" && state.plan.steps.some((step) => step.status === "pending")) {
+      const origin = process.env.GEN3IA_APP_ORIGIN?.trim();
+      if (origin) {
+        continuation = await enqueueMissionContinuation({
+          userId: schedule.userId,
+          executionId,
+          objective,
+          plan: state.plan,
+          orgId: await resolveAgentOrgId(schedule.agentId),
+          origin,
+        });
+      }
+    }
+
+    await finishScheduleRun(
+      schedule.id,
+      schedule.userId,
+      executionId,
+      state.status,
+      continuation && !continuation.queued && continuation.reason ? `Suite non enfilée : ${continuation.reason}` : undefined,
+      slot,
+    );
     return { executionId, status: state.status };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Scheduled execution failed";

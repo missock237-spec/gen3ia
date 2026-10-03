@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { randomUUID } from "crypto";
 import { errorStatus } from "@/lib/security/http-errors";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
+import { loadAgentAttachmentsContext } from "@/lib/files/attachment-context";
 import { planUniversalAgent } from "@/lib/agents/runtime/unified-agent";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { recordExecutionMetrics } from "@/lib/observability/otel";
@@ -17,7 +20,10 @@ import { getAgentForUser } from "@/lib/agents/repository";
 import { policyForAgent } from "@/lib/agents/personalized-plan";
 import { answerAsAgent, classifyRequest, historyContextNote, outOfScopeReply, planAgentTask } from "@/lib/agents/chat-engine";
 import { recordAgentRun } from "@/lib/agents/conversation-run";
-import { buildFinalResponse } from "@/lib/agents/final-response";
+import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
+import { createQueuedMission } from "@/lib/queue/mission-queue";
+import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
 import { recallAgentContext, recordExchange, shouldSummarize, summarizeConversation } from "@/lib/memory/episodic";
 import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import { describeConnectorsForPrompt, describeConnectedConnectorsForPrompt, type ConnectedConnectorsContext } from "@/lib/integrations/mention";
@@ -39,12 +45,17 @@ const Body = z.object({
   agentId: z.string().trim().min(1).max(128).optional(),
   attachmentPath: z.string().trim().min(1).max(500).optional(),
   attachmentName: z.string().trim().min(1).max(255).optional(),
-  // Pièces jointes MULTIPLES (chat d'agent avancé) : jusqu'à 5 fichiers
-  // pré-téléversés. Les champs historiques ci-dessus restent acceptés.
+  // Pièces jointes MULTIPLES (politique unifiée : 10 fichiers × 50 Mo) —
+  // pré-téléversées dans le stockage permanent R2 du propriétaire. Le
+  // contenu RÉEL est extrait côté serveur et injecté dans le prompt ;
+  // l'agent peut aussi relire chaque fichier à la demande via l'outil
+  // file.read (clé permanente). Les champs historiques restent acceptés.
   attachments: z.array(z.object({
     path: z.string().trim().min(1).max(500),
     name: z.string().trim().min(1).max(255),
-  })).max(5).optional(),
+    sizeBytes: z.number().int().nonnegative().max(50 * 1024 * 1024).optional(),
+    contentType: z.string().trim().max(160).optional(),
+  })).max(ATTACHMENT_MAX_FILES).optional(),
   // Connecteurs activés par l'utilisateur via le sélecteur « @ » du chat :
   // l'agent reçoit le contexte des actions disponibles et peut agir dessus.
   activatedConnectors: z.array(
@@ -150,19 +161,12 @@ function policyForAgentMission(
   };
 }
 
-/** Note de contexte (pièces jointes et/ou fichier mémoire) ajoutée au message. */
-function contextNoteFor(attachments: Array<{ path: string; name: string }>, agent: AgentRecord | null): string | undefined {
-  const notes: string[] = [];
-  if (attachments.length === 1) {
-    notes.push(`[Contexte fourni par l'utilisateur : le fichier « ${attachments[0].name} » (${attachments[0].path}) est disponible dans le stockage Gen3ia. Utilise l'outil file.read pour le consulter si nécessaire.]`);
-  } else if (attachments.length > 1) {
-    const list = attachments.map((item) => `- « ${item.name} » (${item.path})`).join("\n");
-    notes.push(`[Contexte fourni par l'utilisateur : ${attachments.length} fichiers sont disponibles dans le stockage Gen3ia :\n${list}\nUtilise l'outil file.read pour les consulter si nécessaire.]`);
-  }
+/** Note de contexte (mémoire de l'agent) — les pièces jointes passent par loadAgentAttachmentsContext. */
+function memoryNoteFor(agent: AgentRecord | null): string | undefined {
   if (agent?.memoryFile?.path) {
-    notes.push(`[Mémoire de l'agent : le fichier « ${agent.memoryFile.name} » (${agent.memoryFile.path}) est disponible dans le stockage Gen3ia. Utilise l'outil file.read pour le consulter dès qu'il peut améliorer ta réponse.]`);
+    return `[Mémoire de l'agent : le fichier « ${agent.memoryFile.name} » (${agent.memoryFile.path}) est disponible dans le stockage permanent Gen3ia (lecture réelle via l'outil file.read, input { path }) dès qu'il peut améliorer ta réponse.]`;
   }
-  return notes.length > 0 ? notes.join("\n\n") : undefined;
+  return undefined;
 }
 
 /**
@@ -197,6 +201,90 @@ async function respondWithImage(params: {
     await appendMessage({ conversationId, userId, role: "assistant", content: reply });
     return { reply, imageUrl: undefined, model: undefined };
   }
+}
+
+export const runtime = "nodejs";
+// Fenêtre du repli SYNCHRONE (file non configurée) : les missions longues
+// sont coupées PROPREMENT par batchDeadlineMs avant la fin de fenêtre, puis
+// enfilées dans la file pour continuation arrière-plan.
+export const maxDuration = 300;
+
+/** Budget de tranche synchrone (marge 10 s sous la fenêtre). */
+const MISSION_SYNC_BUDGET_MS = 290_000;
+
+/** Message utilisateur enrichi des pièces jointes (persistance complète). */
+function attachmentsForMessage(attachments?: Array<{ path: string; name: string; sizeBytes?: number; contentType?: string }>, legacy?: { path?: string; name?: string }) {
+  const list = [
+    ...(legacy?.path ? [{ filename: legacy.name ?? legacy.path, path: legacy.path }] : []),
+    ...(attachments ?? []).map((item) => ({
+      filename: item.name,
+      path: item.path,
+      ...(item.sizeBytes !== undefined ? { sizeBytes: item.sizeBytes } : {}),
+      ...(item.contentType ? { contentType: item.contentType } : {}),
+    })),
+  ];
+  return list.length > 0 ? list : undefined;
+}
+
+/**
+ * Lance une mission en mode task SUR LA FILE QStash quand elle est
+ * disponible : l'exécution est 100 % serveur, par tranches de 50 s, et la
+ * mission NE MEURT JAMAIS avec l'onglet (refresh, fermeture, suppression —
+ * exigence production). Le run conversationnel est enregistré AVANT
+ * l'exécution (suivi live), le message final + les livrables + la
+ * notification sont livrés par le tick final.
+ */
+async function launchQueuedTaskMission(input: {
+  userId: string;
+  conversationId: string;
+  objective: string;
+  plan: RuntimePlan;
+  projectId?: string;
+  orgId?: string;
+  origin: string;
+}): Promise<{ queued: boolean; runId?: string; reason?: string }> {
+  if (!missionQueueConfigured()) {
+    return { queued: false, reason: "File d'attente non configurée." };
+  }
+  const runId = randomUUID();
+  try {
+    await createQueuedMission({
+      runId,
+      executionId: input.plan.executionId,
+      userId: input.userId,
+      objective: input.objective,
+      ...(input.projectId ? { projectId: input.projectId } : {}),
+      ...(input.orgId ? { orgId: input.orgId } : {}),
+      conversationId: input.conversationId,
+      plan: input.plan,
+    });
+    // Run conversationnel AVANT exécution : le suivi live (polling des runs
+    // du fil) montre le plan et les étapes dès les premières secondes.
+    try {
+      await recordAgentRun({
+        userId: input.userId,
+        conversationId: input.conversationId,
+        ...(input.projectId ? { projectId: input.projectId } : {}),
+        plan: input.plan,
+        status: "running",
+        outputs: {},
+        observations: [],
+        billing: { currency: "XAF", totalChargeMinor: 0, totalProviderCostEur: 0, llmInputTokens: 0, llmOutputTokens: 0 },
+      });
+    } catch (runError) {
+      console.warn("[agent-chat] run initial non enregistré", runError instanceof Error ? runError.message : runError);
+    }
+    await publishMissionTick(input.origin, runId);
+    return { queued: true, runId };
+  } catch (error) {
+    console.warn("[agent-chat] enfilement impossible — repli synchrone", error instanceof Error ? error.message : error);
+    return { queued: false, reason: error instanceof Error ? error.message : "Enfilement impossible." };
+  }
+}
+
+/** Origine pour publier les ticks (env prioritaire, sinon origine de la requête). */
+function requestOrigin(request: NextRequest): string {
+  return process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
 }
 
 export async function POST(request: NextRequest) {
@@ -261,13 +349,18 @@ export async function POST(request: NextRequest) {
       // ────────────────────────────────────────────────────────────────
       // Chemin agent personnalisé : classification → réponse/refus/exécution.
       // ────────────────────────────────────────────────────────────────
+      // Compat : ancien champ unique + nouveau tableau multi-fichiers.
+      const chatAttachments = [
+        ...(body.attachmentPath ? [{ path: body.attachmentPath, name: body.attachmentName ?? body.attachmentPath }] : []),
+        ...(body.attachments ?? []),
+      ];
       await appendMessage({
         conversationId,
         userId: user.uid,
         role: "user",
         content: body.message,
+        ...(attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) ? { attachments: attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) } : {}),
       });
-
       // Génération d'images réelle (Agnes AI) : une demande explicite d'image
       // est servie directement, quel que soit le type d'agent — c'est une
       // capacité de la plateforme, pas du LLM conversationnel.
@@ -297,14 +390,15 @@ export async function POST(request: NextRequest) {
         body.message,
         history.map((item) => ({ role: item.role, content: item.content })),
       );
-      const note = contextNoteFor(
-        [
-          // Compat : ancien champ unique + nouveau tableau multi-fichiers.
-          ...(body.attachmentPath ? [{ path: body.attachmentPath, name: body.attachmentName ?? body.attachmentPath }] : []),
-          ...(body.attachments ?? []),
-        ],
-        agent,
-      );
+
+      // CONTENU RÉEL des pièces jointes (exigence production) : chaque
+      // fichier du stockage permanent est téléchargé et converti côté
+      // serveur ; le contenu extrait nourrit la réponse ET la planification.
+      // Fail-soft : un fichier illisible n'empêche jamais la réponse.
+      const attachmentsContext = chatAttachments.length > 0
+        ? await loadAgentAttachmentsContext(user.uid, chatAttachments).catch(() => ({ note: "", files: [] }))
+        : { note: "", files: [] };
+      const note = [attachmentsContext.note, memoryNoteFor(agent)].filter(Boolean).join("\n\n") || undefined;
 
       // Mémoire épisodique : rappel sémantique des échanges passés de cet
       // agent (similarité cosinus sur embeddings) — silence si indisponible.
@@ -494,13 +588,66 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      // EXIGENCE PRODUCTION : la mission part SUR LA FILE quand elle est
+      // configurée — l'exécution est 100 % serveur (tranches de 50 s) et
+      // continue même si l'utilisateur actualise, ferme ou supprime l'onglet.
+      // Le tick final livre le message, les livrables et la notification.
+      const queuedLaunch = await launchQueuedTaskMission({
+        userId: user.uid,
+        conversationId,
+        objective: body.message,
+        plan,
+        projectId: agent.projectId,
+        orgId: agent.orgId,
+        origin: requestOrigin(request),
+      });
+      if (queuedLaunch.queued) {
+        return NextResponse.json({
+          mode: "agent",
+          status: "queued",
+          runId: queuedLaunch.runId,
+          executionId: plan.executionId,
+          conversationId,
+          agentId: agent.id,
+          classification,
+          objective: body.message,
+          plan,
+          pollSeconds: 2,
+        }, { status: 202 });
+      }
+
+      // Repli SYNCHRONE (file indisponible) : exécution dans la requête mais
+      // DÉTACHÉE du client (pas de signal) — un refresh ne tue plus la
+      // mission ; l'échéance de tranche coupe proprement puis la suite est
+      // enfilée en arrière-plan (enqueueMissionContinuation).
+      // Timeline persistée AVANT exécution : suivi live dès les premières
+      // secondes, réconcilié à la fin (deliverMissionToConversation).
+      let syncRunId: string | undefined;
+      try {
+        syncRunId = await recordAgentRun({
+          userId: user.uid,
+          conversationId,
+          projectId: agent.projectId,
+          plan,
+          status: "running",
+          outputs: {},
+          observations: [],
+          billing: { currency: "XAF", totalChargeMinor: 0, totalProviderCostEur: 0, llmInputTokens: 0, llmOutputTokens: 0 },
+        });
+      } catch (runError) {
+        console.warn("[agent-chat] run initial non enregistré", runError instanceof Error ? runError.message : runError);
+      }
+
       const runtime = new AgentRuntime({
         userId: user.uid,
         projectId: agent.projectId,
         objective: body.message,
         plan,
         policy: policyForAgentMission(agent, plan, activatedConnectors, connected.toolkits, { customApiAccess: hasCustomApiAccess }),
-        signal: request.signal,
+        // PAS de signal requête : l'utilisateur qui quitte/rafraîchit la page
+        // n'exprime PAS un arrêt — la mission continue serveur. L'arrêt
+        // explicite passe par /api/agent/chat/stop (contrôle Firestore).
+        batchDeadlineMs: Date.now() + MISSION_SYNC_BUDGET_MS,
         agent: {
           agentId: agent.id,
           name: agent.name,
@@ -551,43 +698,44 @@ export async function POST(request: NextRequest) {
       const currentApprovals = await listActionApprovals(user.uid, plan.executionId);
       const pending = currentApprovals.filter((item) => item.status === "pending");
       const status = pending.length > 0 ? "waiting_approval" : result.status;
-      const finalResponse = buildFinalResponse(result.plan, result.outputs, { ...(result.outcomeVerification ? { outcome: result.outcomeVerification } : {}) });
-      const finalText = finalResponse.text;
+
+      // LIVRAISON UNIFIÉE : run réconcilié + message final honnête +
+      // manifest des livrables réels. Best-effort — jamais bloquant.
+      const delivery = await deliverMissionToConversation({
+        userId: user.uid,
+        conversationId,
+        state: result,
+        projectId: agent.projectId,
+        ...(syncRunId ? { runId: syncRunId } : {}),
+        ...(status === "waiting_approval" ? { overrideClosingText: "J'ai exécuté les étapes autorisées. Une ou plusieurs actions nécessitent maintenant votre confirmation." } : {}),
+      }).catch(() => ({ finalText: undefined as string | undefined, deliverables: [], messageId: undefined }));
+
+      // CONTINUATION ARRIÈRE-PLAN : la tranche synchrone a atteint son
+      // échéance avec des étapes restantes → la suite part sur la file.
+      // L'utilisateur peut fermer l'onglet : la mission continue.
+      let continuation: { queued: boolean; runId?: string; reason?: string } | undefined;
+      if (result.status === "paused" && result.plan.steps.some((step) => step.status === "pending")) {
+        continuation = await enqueueMissionContinuation({
+          userId: user.uid,
+          executionId: result.executionId,
+          objective: result.objective || body.message,
+          plan: result.plan,
+          projectId: agent.projectId,
+          orgId: agent.orgId,
+          conversationId,
+          origin: requestOrigin(request),
+        });
+      }
+      const finalText = delivery.finalText;
       const taskReply = status === "waiting_approval"
         ? "J'ai exécuté les étapes autorisées. Une ou plusieurs actions nécessitent maintenant votre confirmation."
-        : finalText;
-      // Historique complet : le run de la mission (plan, étapes, sorties,
-      // coût) est persisté sur le fil et lié au message final — la
-      // réouverture ré-affiche la mission intégrale.
-      let runId: string | undefined;
-      try {
-        runId = await recordAgentRun({
-          userId: user.uid,
-          conversationId,
-          projectId: agent.projectId,
-          plan: result.plan,
-          status,
-          outputs: result.outputs,
-          observations: result.observations,
-          billing: result.billing,
-          finalText: status === "completed" ? finalText : undefined,
-          error: result.error,
-        });
-      } catch (runError) {
-        console.warn("[agent-chat] run non enregistré", runError instanceof Error ? runError.message : runError);
-      }
-      await appendMessage({
-        conversationId,
-        userId: user.uid,
-        role: "assistant",
-        content: taskReply,
-        ...(runId ? { runId } : {}),
-      });
-      after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: taskReply, mode: "task" }));
+        : undefined;
+      after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: taskReply ?? finalText ?? "", mode: "task" }));
 
       return NextResponse.json({
         mode: "agent",
         status,
+        ...(syncRunId ? { runId: syncRunId } : {}),
         executionId: result.executionId,
         conversationId,
         agentId: agent.id,
@@ -597,6 +745,8 @@ export async function POST(request: NextRequest) {
         observations: result.observations,
         outputs: result.outputs,
         billing: result.billing,
+        deliverables: delivery.deliverables,
+        ...(continuation ? { continuation } : {}),
         approvals: currentApprovals.map((item) => ({
           id: item.id,
           toolSlug: item.toolSlug,
@@ -605,18 +755,20 @@ export async function POST(request: NextRequest) {
           expiresAt: item.expiresAt,
           stepId: typeof item.arguments.__stepId === "string" ? item.arguments.__stepId : undefined,
         })),
-        finalText: status === "completed" ? finalText : undefined,
+        finalText,
       });
     }
 
     // ──────────────────────────────────────────────────────────────────
     // Chemin universel historique (compatibilité : flux existants).
     // ──────────────────────────────────────────────────────────────────
+    const universalAttachments = (body.attachments ?? []);
     await appendMessage({
       conversationId,
       userId: user.uid,
       role: "user",
       content: body.message,
+      ...(attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) ? { attachments: attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) } : {}),
     });
 
     // Génération d'images réelle (Agnes AI) sur le chemin universel aussi.
@@ -651,7 +803,16 @@ export async function POST(request: NextRequest) {
     // Contexte conversationnel : le planificateur universel reçoit aussi les
     // échanges récents du fil (références implicites comprises).
     const universalHistoryNote = historyContextNote(history.map((item) => ({ role: item.role, content: item.content })));
+    // Contenu RÉEL des pièces jointes : identique au chemin agent scopé.
+    const universalAttachmentContexts = [
+      ...(body.attachmentPath ? [{ path: body.attachmentPath, name: body.attachmentName ?? body.attachmentPath }] : []),
+      ...universalAttachments,
+    ];
+    const universalAttachmentsNote = universalAttachmentContexts.length > 0
+      ? await loadAgentAttachmentsContext(user.uid, universalAttachmentContexts).catch(() => ({ note: "", files: [] }))
+      : { note: "", files: [] };
     const universalObjective = [
+      universalAttachmentsNote.note,
       connectedUniversal.note,
       universalHistoryNote,
       body.message,
@@ -719,10 +880,47 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // EXIGENCE PRODUCTION (chemin universel aussi) : la mission part sur la
+    // file dès que possible — exécution serveur continue, onglet remplaçable.
+    const universalQueued = await launchQueuedTaskMission({
+      userId: user.uid,
+      conversationId,
+      objective: body.message,
+      plan,
+      origin: requestOrigin(request),
+    });
+    if (universalQueued.queued) {
+      return NextResponse.json({
+        mode: "agent",
+        status: "queued",
+        runId: universalQueued.runId,
+        executionId: plan.executionId,
+        conversationId,
+        objective: body.message,
+        plan,
+        pollSeconds: 2,
+      }, { status: 202 });
+    }
+
+    // Repli synchrone détaché du client (identique au chemin agent scopé).
+    let universalSyncRunId: string | undefined;
+    try {
+      universalSyncRunId = await recordAgentRun({
+        userId: user.uid,
+        conversationId,
+        plan,
+        status: "running",
+        outputs: {},
+        observations: [],
+        billing: { currency: "XAF", totalChargeMinor: 0, totalProviderCostEur: 0, llmInputTokens: 0, llmOutputTokens: 0 },
+      });
+    } catch { /* fail-soft */ }
+
     const runtime = new AgentRuntime({
       userId: user.uid,
       objective: body.message,
       plan,
+      batchDeadlineMs: Date.now() + MISSION_SYNC_BUDGET_MS,
       policy: {
         ...buildPolicy(plan),
         allowedTools: [
@@ -778,19 +976,33 @@ export async function POST(request: NextRequest) {
     const pending = currentApprovals.filter((item) => item.status === "pending");
 
     const status = pending.length > 0 ? "waiting_approval" : result.status;
-    const finalText = buildFinalResponse(result.plan, result.outputs, { ...(result.outcomeVerification ? { outcome: result.outcomeVerification } : {}) }).text;
-    await appendMessage({
-      conversationId,
+
+    // LIVRAISON UNIFIÉE (run réconcilié + message + livrables réels).
+    const universalDelivery = await deliverMissionToConversation({
       userId: user.uid,
-      role: "assistant",
-      content: status === "waiting_approval"
-        ? "J'ai préparé et exécuté les étapes autorisées. Une ou plusieurs actions nécessitent maintenant votre confirmation."
-        : finalText,
-    });
+      conversationId,
+      state: result,
+      ...(universalSyncRunId ? { runId: universalSyncRunId } : {}),
+    }).catch(() => ({ finalText: undefined as string | undefined, deliverables: [], messageId: undefined }));
+
+    // Continuation arrière-plan si l'échéance de tranche a coupé la mission.
+    let universalContinuation: { queued: boolean; runId?: string; reason?: string } | undefined;
+    if (result.status === "paused" && result.plan.steps.some((step) => step.status === "pending")) {
+      universalContinuation = await enqueueMissionContinuation({
+        userId: user.uid,
+        executionId: result.executionId,
+        objective: result.objective || body.message,
+        plan: result.plan,
+        conversationId,
+        origin: requestOrigin(request),
+      });
+    }
+    const finalText = universalDelivery.finalText;
 
     return NextResponse.json({
       mode: "agent",
       status,
+      ...(universalSyncRunId ? { runId: universalSyncRunId } : {}),
       executionId: result.executionId,
       conversationId,
       objective: result.objective,
@@ -798,6 +1010,8 @@ export async function POST(request: NextRequest) {
       observations: result.observations,
       outputs: result.outputs,
       billing: result.billing,
+      deliverables: universalDelivery.deliverables,
+      ...(universalContinuation ? { continuation: universalContinuation } : {}),
       approvals: currentApprovals.map((item) => ({
         id: item.id,
         toolSlug: item.toolSlug,
@@ -806,7 +1020,7 @@ export async function POST(request: NextRequest) {
         expiresAt: item.expiresAt,
         stepId: typeof item.arguments.__stepId === "string" ? item.arguments.__stepId : undefined,
       })),
-      finalText: status === "completed" ? finalText : undefined,
+      finalText,
     });
   } catch (error) {
     // Erreur structurée : un code machine (PROVIDER_UNAVAILABLE, INTERNAL…)

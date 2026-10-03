@@ -4,7 +4,7 @@ import { useCallback, useRef, useState, type DragEvent } from "react";
 
 import { authFetch } from "@/lib/firebase/auth-client";
 import { uploadPermanentFiles, type UploadItem } from "@/lib/storage/upload-client";
-import { formatBytes, MAX_FILES_PER_BATCH } from "@/lib/storage/upload-policy";
+import { formatBytes, MAX_FILES_PER_BATCH, MAX_FILE_BYTES } from "@/lib/storage/upload-policy";
 import type { StorageUsageView } from "@/components/memory/memory-workspace";
 
 export type DocumentFileEntry = {
@@ -140,7 +140,7 @@ export function DocumentsPanel(props: {
       >
         <p className="font-serif text-lg font-semibold">Déposez vos documents ici</p>
         <p className="mt-1 max-w-md text-sm text-[var(--g3-muted)]">
-          Jusqu&apos;à <strong>{MAX_FILES_PER_BATCH} fichiers par lot</strong>, <strong>100 Mo par fichier</strong>.
+          Jusqu&apos;à <strong>{MAX_FILES_PER_BATCH} fichiers par lot</strong>, <strong>{Math.round(MAX_FILE_BYTES / (1024 * 1024))} Mo par fichier</strong>.
           PDF, Word, Excel, images, audio, vidéo, archives et textes.
         </p>
         <button

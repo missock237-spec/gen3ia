@@ -25,11 +25,11 @@ export default function EmailAuthForm() {
   useEffect(() => { setNextPath(readNextRedirect()); }, []);
 
   function validate(): string | null {
-    if (!email.trim() || !email.includes("@")) return "Veuillez saisir une adresse email valide.";
-    if (password.length < 6) return "Le mot de passe doit contenir au moins 6 caracteres.";
+    if (!email.trim() || !email.includes("@")) return "Veuillez saisir une adresse e-mail valide.";
+    if (password.length < 6) return "Le mot de passe doit contenir au moins 6 caractères.";
     if (mode === "inscription") {
-      if (!firstName.trim() || !lastName.trim()) return "Le prenom et le nom sont obligatoires.";
-      if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username.trim())) return "Choisissez un nom d'utilisateur de 3 a 32 caracteres.";
+      if (!firstName.trim() || !lastName.trim()) return "Le prénom et le nom sont obligatoires.";
+      if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username.trim())) return "Choisissez un nom d'utilisateur de 3 à 32 caractères.";
       if (password !== confirmPassword) return "Les deux mots de passe ne correspondent pas.";
     }
     return null;
@@ -54,9 +54,9 @@ export default function EmailAuthForm() {
 
   async function handleReset(event: React.MouseEvent) {
     event.preventDefault(); setError(null); setInfo(null);
-    if (!email.trim() || !email.includes("@")) { setError("Saisissez votre adresse email, puis cliquez a nouveau sur le lien."); return; }
+    if (!email.trim() || !email.includes("@")) { setError("Saisissez votre adresse e-mail, puis cliquez à nouveau sur le lien."); return; }
     setPending(true);
-    try { await resetPassword(email); setInfo("Email de reinitialisation envoye. Consultez votre boite de reception (et vos spams)."); }
+    try { await resetPassword(email); setInfo("E-mail de réinitialisation envoyé. Consultez votre boîte de réception (et vos spams)."); }
     catch (resetError) { setError(traduireErreurAuth(resetError)); }
     finally { setPending(false); }
   }
@@ -71,22 +71,22 @@ export default function EmailAuthForm() {
       {mode === "inscription" && (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <input className={inputClasses} placeholder="Prenom" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required />
+            <input className={inputClasses} placeholder="Prénom" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required />
             <input className={inputClasses} placeholder="Nom" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required />
           </div>
           <input className={inputClasses} placeholder="Nom d'utilisateur" value={username} onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))} autoComplete="username" required maxLength={32} />
           <input className={inputClasses} placeholder="Pays (optionnel)" value={country} onChange={(e) => setCountry(e.target.value)} autoComplete="country-name" />
-          <p className="text-xs opacity-50">Tu pourras completer ton profil plus tard depuis ton tableau de bord.</p>
+          <p className="text-xs opacity-50">Tu pourras compléter ton profil plus tard depuis ton tableau de bord.</p>
         </>
       )}
 
-      <input type="email" placeholder="Adresse email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required className={inputClasses} />
+      <input type="email" placeholder="Adresse e-mail" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required className={inputClasses} />
       <input type="password" placeholder="Mot de passe" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === "inscription" ? "new-password" : "current-password"} required minLength={6} className={inputClasses} />
       {mode === "inscription" && <input type="password" placeholder="Confirmer le mot de passe" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" required minLength={6} className={inputClasses} />}
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {info && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{info}</p>}
-      <button type="submit" disabled={pending} className={buttonClasses}>{pending ? "Creation du profil..." : mode === "connexion" ? "Se connecter" : "Creer mon compte"}</button>
-      {mode === "connexion" && <a href="#" onClick={handleReset} className="text-center text-xs opacity-60 hover:opacity-100">Mot de passe oublie ?</a>}
+      <button type="submit" disabled={pending} className={buttonClasses}>{pending ? "Création du profil…" : mode === "connexion" ? "Se connecter" : "Créer mon compte"}</button>
+      {mode === "connexion" && <a href="#" onClick={handleReset} className="text-center text-xs opacity-60 hover:opacity-100">Mot de passe oublié ?</a>}
     </form>
   );
 }

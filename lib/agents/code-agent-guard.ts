@@ -18,7 +18,7 @@ export async function requireCodeAgentOwner(
       return {
         forbidden: NextResponse.json(
           {
-            error: "Atelier reserve aux agents de code. Creez et activez un agent de type « code » dans le Studio.",
+            error: "Atelier réservé aux agents de code. Créez et activez un agent de type « code » dans le Studio.",
             code: "CODE_AGENT_REQUIRED",
           },
           { status: 403 },

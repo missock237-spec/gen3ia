@@ -49,6 +49,14 @@ function attachmentsFrom(value: unknown): MessageAttachment[] | undefined {
       url: typeof x.url === "string" ? x.url : undefined,
       contentType: typeof x.contentType === "string" ? x.contentType : undefined,
       sizeBytes: typeof x.sizeBytes === "number" ? x.sizeBytes : undefined,
+      // Métadonnées de conversion conservées à la relecture : sans elles, le
+      // contenu RÉEL des fichiers importés ne peut plus être ré-injecté dans
+      // les tours suivants ni ré-affiché (bug production : l'historique
+      // amputait fileId/fileKind/charCount/rowCount).
+      fileId: typeof x.fileId === "string" ? x.fileId : undefined,
+      fileKind: typeof x.fileKind === "string" ? x.fileKind : undefined,
+      charCount: typeof x.charCount === "number" ? x.charCount : undefined,
+      rowCount: typeof x.rowCount === "number" ? x.rowCount : undefined,
     }));
   return list.length > 0 ? list : undefined;
 }

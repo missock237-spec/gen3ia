@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { ConversationWorkspace } from "@/components/workspace/conversation-workspace";
 
-export const metadata: Metadata = { title: "Conversations — Gen3ia" };
+export const metadata: Metadata = { title: "Conversations" };
 
 /**
  * Espace conversationnel PLEIN ÉCRAN : colonne gauche (conversations

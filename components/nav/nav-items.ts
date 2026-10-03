@@ -45,7 +45,7 @@ export const WORKSPACE: NavItem[] = groupByIds(["conversations", "projects", "wo
 /** Agents & automatisation (surfaces transverses). */
 export const AGENTS: NavItem[] = [
   ...groupByIds(["schedules", "live"]),
-  { href: "/studio/agents", label: "Agents & chat", icon: "✦", hint: "Personnaliser et dialoguer avec vos agents" },
+  { href: "/studio/agents", label: "Agents IA", icon: "✦", hint: "Personnaliser et dialoguer avec vos agents" },
   { href: "/observability", label: "Observabilité", icon: "∿", hint: "Traces, coûts et alertes de vos agents" },
   { href: "/integrations", label: "Intégrations", icon: "⧉", hint: "Connecter vos services externes" },
 ];

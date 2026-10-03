@@ -7,6 +7,7 @@ import { clientIp } from "@/lib/security/rate-limit";
 import { rateLimitDistributed } from "@/lib/cache/redis";
 import { runConversationTurn } from "@/lib/domain/conversations/engine";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
+import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
 
 export const runtime = "nodejs";
 // Conversation turns may orchestrate multiple providers/tools; 5 minutes avoids
@@ -26,7 +27,7 @@ const AttachmentSchema = z.object({
   path: z.string().trim().max(400).optional(),
   url: z.string().trim().max(2000).optional(),
   contentType: z.string().trim().max(120).optional(),
-  sizeBytes: z.number().int().nonnegative().max(200 * 1024 * 1024).optional(),
+  sizeBytes: z.number().int().nonnegative().max(ATTACHMENT_MAX_FILE_BYTES).optional(),
   fileId: z.string().trim().max(128).optional(),
   fileKind: z.string().trim().max(40).optional(),
   charCount: z.number().int().nonnegative().max(100_000_000).optional(),
@@ -35,7 +36,8 @@ const AttachmentSchema = z.object({
 
 const BodySchema = z.object({
   message: z.string().trim().min(1).max(20000),
-  attachments: z.array(AttachmentSchema).max(8).optional(),
+  // Politique unifiée des pièces jointes : 10 fichiers × 50 Mo max.
+  attachments: z.array(AttachmentSchema).max(ATTACHMENT_MAX_FILES).optional(),
   projectId: z.string().trim().min(1).max(128).optional(),
   provider: z.string().trim().max(60).optional(),
   model: z.string().trim().max(200).optional(),

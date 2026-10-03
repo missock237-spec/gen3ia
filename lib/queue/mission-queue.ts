@@ -5,6 +5,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import type { OutcomeContract } from "@/lib/agents/outcome-contract";
+import type { MissionDeliverable } from "@/lib/agents/deliverables";
 
 /**
  * Cycle de vie des missions en file d'attente (recommandation A de l'audit).
@@ -97,6 +98,8 @@ export interface CreateQueuedMissionInput {
   /** Contrat de résultat (concepts #1/#2) : relayé au runtime par chaque tick. */
   outcomeContract?: OutcomeContract;
   messageId?: string;
+  /** Conversation propriétaire (missions lancées depuis un chat) : le tick final y réconcilie le run, y publie la réponse et notifie la livraison. */
+  conversationId?: string;
 }
 
 export interface MissionQueueRecord {
@@ -121,6 +124,9 @@ export interface MissionQueueRecord {
   updatedAtMs: number;
   completedAtMs?: number;
   messageId?: string;
+  conversationId?: string;
+  /** Manifest des livrables réellement produits (artefacts, fichiers) — renseigné à la finalisation. */
+  deliverables?: MissionDeliverable[];
 }
 
 function docRef(runId: string) {
@@ -145,6 +151,7 @@ export async function createQueuedMission(input: CreateQueuedMissionInput): Prom
     timeline: steps.map((step) => compactQueueStep(step)),
     pendingCount: steps.filter((step) => (step.status ?? "pending") === "pending").length,
     ...(input.messageId ? { messageId: input.messageId } : {}),
+    ...(input.conversationId ? { conversationId: input.conversationId } : {}),
     createdAtMs: now,
     updatedAtMs: now,
   });
@@ -200,6 +207,8 @@ export async function claimMissionTick(runId: string): Promise<ClaimOutcome> {
         ...(data.lastError ? { lastError: data.lastError } : {}),
         ...(data.plan ? { plan: data.plan as RuntimePlan } : {}),
         ...(data.outcomeContract ? { outcomeContract: data.outcomeContract as OutcomeContract } : {}),
+        ...(typeof data.conversationId === "string" && data.conversationId ? { conversationId: data.conversationId } : {}),
+        ...(Array.isArray(data.deliverables) ? { deliverables: data.deliverables as MissionDeliverable[] } : {}),
         timeline: Array.isArray(data.timeline) ? data.timeline : [],
         pendingCount: typeof data.pendingCount === "number" ? data.pendingCount : 0,
         createdAtMs: typeof data.createdAtMs === "number" ? data.createdAtMs : now,
@@ -233,7 +242,7 @@ export async function persistMissionProgress(
 export async function finalizeMissionRun(
   runId: string,
   status: Exclude<MissionQueueStatus, "queued" | "running">,
-  details: { error?: string } = {},
+  details: { error?: string; deliverables?: MissionDeliverable[] } = {},
 ): Promise<void> {
   try {
     await docRef(runId).set(
@@ -242,6 +251,7 @@ export async function finalizeMissionRun(
         leaseUntilMs: FieldValue.delete(),
         completedAtMs: status === "completed" || status === "failed" || status === "cancelled" ? Date.now() : FieldValue.delete(),
         ...(details.error ? { lastError: details.error.slice(0, 2_000) } : {}),
+        ...(details.deliverables && details.deliverables.length > 0 ? { deliverables: details.deliverables } : {}),
         updatedAtMs: Date.now(),
       },
       { merge: true },
@@ -309,6 +319,8 @@ export async function getMissionRun(userId: string, runId: string): Promise<Miss
     ...(data.lastError ? { lastError: data.lastError } : {}),
     timeline: Array.isArray(data.timeline) ? data.timeline : [],
     ...(data.outcomeContract ? { outcomeContract: data.outcomeContract } : {}),
+    ...(typeof data.conversationId === "string" && data.conversationId ? { conversationId: data.conversationId } : {}),
+    ...(Array.isArray(data.deliverables) ? { deliverables: data.deliverables as MissionDeliverable[] } : {}),
     pendingCount: typeof data.pendingCount === "number" ? data.pendingCount : 0,
     createdAtMs: typeof data.createdAtMs === "number" ? data.createdAtMs : now,
     updatedAtMs: typeof data.updatedAtMs === "number" ? data.updatedAtMs : now,

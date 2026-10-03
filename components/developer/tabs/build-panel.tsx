@@ -64,16 +64,16 @@ export function BuildPanel() {
 
   const surfaces: Array<[string, string]> = [
     ["APIs & routes", "Workspace"],
-    ["Tools", "Workspace"],
+    ["Outils", "Workspace"],
     ["Connecteurs OAuth", "Workspace"],
     ["Extensions", "Disponible"],
-    ["Skills", "Workspace"],
+    ["Compétences", "Workspace"],
     ["Webhooks", "Workspace"],
-    ["Knowledge / RAG", "Workspace"],
+    ["Bases de connaissances (RAG)", "Workspace"],
     ["Secrets", "Workspace"],
     ["Sandbox", "Workspace"],
-    ["Evaluations", "Workspace"],
-    ["Deployments", "Workspace"],
+    ["Évaluations", "Workspace"],
+    ["Déploiements", "Workspace"],
   ];
 
   return (

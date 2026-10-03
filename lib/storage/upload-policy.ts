@@ -19,8 +19,8 @@ function envLimit(name: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-/** 100 Mo max par fichier. */
-export const MAX_FILE_BYTES = envLimit("GEN3IA_MAX_PERMANENT_FILE_BYTES", 100 * 1024 * 1024);
+/** 50 Mo max par fichier (politique unifiée des pièces jointes Gen3ia). */
+export const MAX_FILE_BYTES = envLimit("GEN3IA_MAX_PERMANENT_FILE_BYTES", 50 * 1024 * 1024);
 
 /** 10 fichiers max par lot de televersement. */
 export const MAX_FILES_PER_BATCH = envLimit("GEN3IA_MAX_PERMANENT_BATCH_FILES", 10);

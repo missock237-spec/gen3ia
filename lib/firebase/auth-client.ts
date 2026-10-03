@@ -151,17 +151,17 @@ export function traduireErreurAuth(error: unknown): string {
   const code = typeof error === "object" && error !== null && "code" in error
     ? String((error as { code: unknown }).code) : "";
   switch (code) {
-    case "auth/email-already-in-use": return "Cette adresse email est deja utilisee par un compte existant.";
-    case "auth/invalid-email": return "L'adresse email saisie n'est pas valide.";
-    case "auth/missing-email": return "Veuillez saisir une adresse email.";
+    case "auth/email-already-in-use": return "Cette adresse e-mail est déjà utilisée par un compte existant.";
+    case "auth/invalid-email": return "L'adresse e-mail saisie n'est pas valide.";
+    case "auth/missing-email": return "Veuillez saisir une adresse e-mail.";
     case "auth/missing-password": return "Veuillez saisir un mot de passe.";
-    case "auth/weak-password": return "Le mot de passe est trop faible : utilisez au moins 6 caracteres.";
+    case "auth/weak-password": return "Le mot de passe est trop faible : utilisez au moins 6 caractères.";
     case "auth/invalid-credential":
     case "auth/wrong-password":
     case "auth/user-not-found":
-    case "auth/invalid-login-credentials": return "Email ou mot de passe incorrect.";
-    case "auth/too-many-requests": return "Trop de tentatives. Veuillez reessayer dans quelques minutes.";
-    case "auth/unauthorized-domain": return "Ce domaine n'est pas autorise pour l'authentification. Ajoutez gen3ia.online (et www.gen3ia.online) dans la console Firebase (Authentication -> Settings -> Authorized domains).";
+    case "auth/invalid-login-credentials": return "E-mail ou mot de passe incorrect.";
+    case "auth/too-many-requests": return "Trop de tentatives. Veuillez réessayer dans quelques minutes.";
+    case "auth/unauthorized-domain": return "Ce domaine n'est pas autorisé pour l'authentification. Ajoutez gen3ia.online (et www.gen3ia.online) dans la console Firebase (Authentication -> Settings -> Authorized domains).";
     case "auth/internal-error": {
       // Le message brut Firebase est affiché en complément : il contient la
       // cause réelle (domaine non autorisé, fournisseur désactivé…) et
@@ -169,16 +169,16 @@ export function traduireErreurAuth(error: unknown): string {
       const brut = error instanceof Error && error.message && error.message !== code
         ? ` (${error.message.slice(0, 300)})`
         : "";
-      return `Erreur interne Firebase pendant la connexion. Verifiez que gen3ia.online est bien autorise dans la console Firebase, puis reessayez.${brut}`;
+      return `Erreur interne Firebase pendant la connexion. Vérifiez que gen3ia.online est bien autorisé dans la console Firebase, puis réessayez.${brut}`;
     }
-    case "auth/popup-blocked": return "Le navigateur a bloqué la fenêtre de connexion. Autorisez les popups ou reessayez — la connexion par redirection est tentée automatiquement.";
-    case "auth/popup-closed-by-user": return "Fenêtre de connexion fermée avant la fin. Veuillez reessayer.";
-    case "auth/cancelled-popup-request": return "Une seule fenêtre de connexion peut etre ouverte a la fois. Veuillez reessayer.";
-    case "auth/user-disabled": return "Ce compte a ete desactive.";
-    case "auth/network-request-failed": return "Erreur reseau : verifiez votre connexion internet.";
-    case "auth/operation-not-allowed": return "La connexion par email/mot de passe n'est pas encore activee sur ce projet.";
-    case "auth/admin-restricted-operation": return "La creation de compte n'est pas autorisee actuellement.";
-    default: return error instanceof Error && error.message ? error.message : "Une erreur inattendue s'est produite. Veuillez reessayer.";
+    case "auth/popup-blocked": return "Le navigateur a bloqué la fenêtre de connexion. Autorisez les popups ou réessayez — la connexion par redirection est tentée automatiquement.";
+    case "auth/popup-closed-by-user": return "Fenêtre de connexion fermée avant la fin. Veuillez réessayer.";
+    case "auth/cancelled-popup-request": return "Une seule fenêtre de connexion peut être ouverte à la fois. Veuillez réessayer.";
+    case "auth/user-disabled": return "Ce compte a été désactivé.";
+    case "auth/network-request-failed": return "Erreur réseau : vérifiez votre connexion internet.";
+    case "auth/operation-not-allowed": return "La connexion par e-mail/mot de passe n'est pas encore activée sur ce projet.";
+    case "auth/admin-restricted-operation": return "La création de compte n'est pas autorisée actuellement.";
+    default: return error instanceof Error && error.message ? error.message : "Une erreur inattendue s'est produite. Veuillez réessayer.";
   }
 }
 

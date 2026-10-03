@@ -262,6 +262,20 @@ export async function planUniversalAgent(
   }
   const finalSystemPromptWithSkills = `${finalSystemPromptWithDirectApi}${skillsSection}`;
 
+  // AUTO-ÉVOLUTION À FROID (concept #10) : les leçons tirées des échecs
+  // passés de l'utilisateur sont injectées DÈS LA PREMIÈRE planification —
+  // le planner ne répète pas les écueils connus (au lieu d'apprendre
+  // uniquement après un premier échec). Fail-soft : indisponible = rien.
+  let evolutionSection = "";
+  try {
+    const { getEvolutionBrief } = await import("@/lib/agents/evolution");
+    const brief = await getEvolutionBrief(userId);
+    evolutionSection = brief.text ? `\n\n${brief.text}\nAdapte le plan pour contourner ces écueils (outils alternatifs, étapes de vérification, tailles réduites).` : "";
+  } catch {
+    evolutionSection = "";
+  }
+  const finalSystemPromptWithEvolution = `${finalSystemPromptWithSkills}${evolutionSection}`;
+
   const buildUserPrompt = (correctiveHint?: string) =>
     [
       JSON.stringify({ objective: trimmed, availableCapabilities: toolCatalog(catalog) }),
@@ -279,7 +293,7 @@ export async function planUniversalAgent(
     const response = await generate({
       task: "agent",
       messages: [
-        { role: "system", content: finalSystemPromptWithSkills },
+        { role: "system", content: finalSystemPromptWithEvolution },
         { role: "user", content: buildUserPrompt(essai > 1 ? dernierErreur : undefined) },
       ],
       requiresStructuredOutput: true,

@@ -23,7 +23,7 @@ const METRIC_LABELS: Array<[string, string, string]> = [
   ["agents", "Agents", "Agents personnalisés"],
   ["extensions", "Extensions", "Catalogue Marketplace"],
   ["installations", "Installations", "Extensions installées"],
-  ["executions", "Exécutions", "Runs enregistrés"],
+  ["executions", "Exécutions", "Exécutions enregistrées"],
   ["memories", "Mémoires", "Souvenirs permanents"],
 ];
 

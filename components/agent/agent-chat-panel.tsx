@@ -6,6 +6,7 @@ import { CommandComposer, type CommandComposerHandle } from "@/components/ui/com
 import { MarkdownContent } from "@/components/workspace/markdown";
 import type { MentionItem } from "@/lib/ui/command-composer-helpers";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
+import { ATTACHMENT_MAX_FILES, attachmentLimitLabel, validateAttachment } from "@/lib/files/attachment-policy";
 import { Callout } from "@/components/studio/callout";
 import { labelForAgent } from "@/lib/agents/charter";
 import { approvalToolLabel, toolLabel } from "@/lib/tools/labels";
@@ -88,11 +89,13 @@ const QUICK_PROMPTS: Record<string, string[]> = {
 
 function statusLabel(status?: string) {
   switch (status) {
-    case "completed": return "Terminé";
+    case "completed": return "Terminée";
     case "running": return "En cours";
+    case "queued": return "En file d'exécution";
     case "waiting_approval": return "Confirmation requise";
     case "failed": return "Échec";
-    case "cancelled": return "Annulé";
+    case "cancelled": return "Annulée";
+    case "paused": return "En pause";
     default: return status ?? "En attente";
   }
 }
@@ -133,11 +136,15 @@ export function AgentChatPanel({
   const [active, setActive] = React.useState<AgentResult | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
-  // Pièces jointes MULTIPLES (chat avancé) : jusqu'à 5 fichiers téléversés.
+  // Pièces jointes MULTIPLES (politique unifiée : 10 fichiers × 50 Mo).
   const [attachments, setAttachments] = React.useState<Array<{ file: File; path: string }>>([]);
-  // Mission LIVE : pendant l'exécution bloquante, polling des runs de la
-  // conversation → suivi des étapes réelles en direct.
+  // Mission LIVE : pendant l'exécution (bloquante OU en file arrière-plan),
+  // polling des runs de la conversation → suivi des étapes réelles en direct.
   const [liveRun, setLiveRun] = React.useState<{ id: string; status: string; steps: Array<{ id: string; name: string; status: string }> } | null>(null);
+  // SUIVI D'UNE MISSION EN FILE (202) : la requête HTTP est terminée, la
+  // mission continue serveur — le panneau suit le run jusqu'à son état
+  // terminal puis recharge la conversation (message final + livrables).
+  const [tracking, setTracking] = React.useState<{ runId: string; executionId?: string } | null>(null);
   const [uploading, setUploading] = React.useState(false);
   const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
   const [showHistory, setShowHistory] = React.useState(false);
@@ -149,25 +156,27 @@ export function AgentChatPanel({
   const [authorizationMode, setAuthorizationMode] = React.useState<AuthorizationMode>("always_ask");
   const composerRef = React.useRef<CommandComposerHandle | null>(null);
   const logRef = React.useRef<HTMLDivElement | null>(null);
-  // Arrêt à tout moment : l'AbortController de la requête en cours. Le
-  // serveur transmet déjà request.signal au runtime : l'abort client
-  // interrompt donc RÉELLEMENT la mission côté serveur aussi.
+  // Arrêt à tout moment : l'AbortController de la requête en cours.
+  // NOTE (exigence production) : le DÉMONTAGE du composant (refresh, fermeture
+  // d'onglet, navigation) n'abort PLUS la requête — la mission appartient au
+  // serveur, pas à l'onglet. Seul le bouton « Arrêter » exprime un arrêt
+  // (contrôle Firestore via /api/agent/chat/stop).
   const requestAbortRef = React.useRef<AbortController | null>(null);
-  // Référence stable vers openConversation (déclarée plus bas) pour les
-  // effets montés avant sa déclaration.
-  const openConversationRef = React.useRef<((id: string) => Promise<void>) | null>(null);
-  React.useEffect(() => () => requestAbortRef.current?.abort(), []);
 
-  // SUIVI LIVE : pendant l'exécution bloquante d'une mission, le DERNIER run
-  // de la conversation est sondé (2,5 s) pour afficher l'avancement réel des
-  // étapes — au lieu d'un spinner figé. Le run est créé côté serveur AVANT
-  // l'exécution, il apparaît donc dès les premières secondes.
+  // SUIVI LIVE : pendant l'exécution d'une mission (bloquante OU en file
+  // arrière-plan), le DERNIER run de la conversation est sondé (2,5 s) pour
+  // afficher l'avancement réel des étapes — au lieu d'un spinner figé. Quand
+  // le run atteint un état terminal, la conversation est rechargée : le
+  // message final et les livrables apparaissent, même après un refresh.
+  const openConversationRef = React.useRef<((id: string) => Promise<void>) | null>(null);
   React.useEffect(() => {
-    if (!loading || !conversationId) {
+    const following = tracking && conversationId;
+    if ((!loading && !following) || !conversationId) {
       setLiveRun(null);
       return;
     }
     let cancelled = false;
+    const terminal = (status: string) => ["completed", "failed", "cancelled", "awaiting_approval", "waiting_approval"].includes(status);
     const poll = async () => {
       try {
         const response = await fetch(`/api/chat/conversations/${conversationId}`, { cache: "no-store" });
@@ -175,10 +184,16 @@ export function AgentChatPanel({
         const data = await response.json();
         const runs = (data.runs ?? []) as Array<{ id: string; status: string; steps?: Array<{ id: string; name: string; status: string }> }>;
         const freshest = runs[0];
-        if (!cancelled && freshest) {
-          setLiveRun({ id: freshest.id, status: freshest.status, steps: freshest.steps ?? [] });
+        if (cancelled || !freshest) return;
+        setLiveRun({ id: freshest.id, status: freshest.status, steps: freshest.steps ?? [] });
+        if (tracking && terminal(freshest.status)) {
+          // État terminal atteint : rechargement complet de la conversation
+          // (messages + run final) puis fin du suivi.
+          setTracking(null);
+          await openConversationRef.current?.(conversationId);
+          void loadConversations();
         }
-      } catch { /* sondage indisponible : le spinner reste honnête */ }
+      } catch { /* sondage indisponible : le panneau reste honnête */ }
     };
     void poll();
     const interval = setInterval(() => void poll(), 2_500);
@@ -186,7 +201,8 @@ export function AgentChatPanel({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [loading, conversationId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, tracking, conversationId]);
 
   const typeLabel = labelForAgent(agent);
   const quickPrompts = QUICK_PROMPTS[agent.type] ?? QUICK_PROMPTS.custom;
@@ -355,8 +371,13 @@ export function AgentChatPanel({
 
   async function handleAttachment(file: File) {
     setError("");
-    if (attachments.length >= 5) {
-      setError("5 fichiers maximum par message.");
+    if (attachments.length >= ATTACHMENT_MAX_FILES) {
+      setError(attachmentLimitLabel());
+      return;
+    }
+    const verdict = validateAttachment({ name: file.name, size: file.size });
+    if (!verdict.ok) {
+      setError(verdict.reason);
       return;
     }
     setUploading(true);
@@ -389,7 +410,7 @@ export function AgentChatPanel({
           agentId: agent.id,
           authorizationMode,
           ...(conversationId ? { conversationId } : {}),
-          ...(attachments.length > 0 ? { attachments: attachments.map(({ file, path }) => ({ path, name: file.name })) } : {}),
+          ...(attachments.length > 0 ? { attachments: attachments.map(({ file, path }) => ({ path, name: file.name, sizeBytes: file.size, contentType: file.type || undefined })) } : {}),
           ...(activated.length > 0 ? { activatedConnectors: activated.map((item) => item.toolkit) } : {}),
         }),
       });
@@ -413,6 +434,29 @@ export function AgentChatPanel({
       if (data.conversationId) setConversationId(data.conversationId);
       // Pièces jointes consommées par l'envoi : nettoyage immédiat.
       setAttachments([]);
+
+      // MISSION EN FILE (202) : la requête HTTP est terminée, la mission
+      // s'exécute 100 % côté serveur — rafraîchir, fermer l'onglet ou changer
+      // de page ne l'interrompt PAS. Le panneau suit le run en direct (polling
+      // existant) et recharge la conversation à l'état terminal.
+      if (data.status === "queued" && data.runId) {
+        setTracking({ runId: String(data.runId), ...(data.executionId ? { executionId: String(data.executionId) } : {}) });
+        setActive({
+          mode: "agent",
+          status: "queued",
+          executionId: String(data.executionId ?? data.runId),
+          conversationId: data.conversationId,
+          plan: data.plan ?? { steps: [], maxIterations: 0 },
+        });
+        setMessages((items) => [...items, {
+          id: crypto.randomUUID(),
+          role: "agent",
+          text: "Mission lancée : je travaille en arrière-plan et je livre le résultat ici dès qu'elle est terminée — vous pouvez quitter cette page, le travail continue.",
+          mode: "task",
+        }]);
+        void loadConversations();
+        return;
+      }
 
       if (data.mode === "chat") {
         setMessages((items) => [...items, {
@@ -462,6 +506,26 @@ export function AgentChatPanel({
 
   /** Arrête l'agent à tout moment pendant une exécution en cours. */
   function stopAgent() {
+    // ARRÊT EXPLICITE (seule façon d'interrompre une mission) : contrôle
+    // Firestore consulté par le runtime, que la mission soit synchrone ou en
+    // file — le travail déjà payé reste conservé.
+    const executionId = tracking?.executionId ?? active?.executionId;
+    if (executionId) {
+      void fetch("/api/agent/chat/stop", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ executionId }),
+      }).catch(() => undefined);
+      setMessages((items) => [...items, {
+        id: crypto.randomUUID(),
+        role: "agent",
+        text: "Arrêt demandé — l'exécution va s'interrompre au plus près de l'étape en cours. Le travail déjà réalisé est conservé.",
+        mode: "chat",
+      }]);
+      setTracking(null);
+    }
+    // Requête synchrone encore en vol : l'abort n'annule plus la mission
+    // côté serveur (détachée), il libère seulement l'attente locale.
     requestAbortRef.current?.abort();
     requestAbortRef.current = null;
   }
@@ -485,6 +549,25 @@ export function AgentChatPanel({
       if (!response.ok) throw new Error(data.error || "La reprise de la mission a échoué.");
       if (data.queued && data.offline) {
         setError("Vous êtes hors ligne : la reprise exige le réseau. Reconnectez-vous puis continuez à nouveau.");
+        return;
+      }
+      // Reprise en file (202) : la suite s'exécute en arrière-plan — le
+      // panneau suit le run jusqu'à la livraison finale.
+      if (data.status === "queued" && data.runId) {
+        setTracking({ runId: String(data.runId), ...(data.executionId ? { executionId: String(data.executionId) } : {}) });
+        setActive({
+          mode: "agent",
+          status: "queued",
+          executionId: String(data.executionId ?? data.runId),
+          conversationId: data.conversationId ?? conversationId ?? undefined,
+          plan: data.plan ?? { steps: [], maxIterations: 0 },
+        });
+        setMessages((items) => [...items, {
+          id: crypto.randomUUID(),
+          role: "agent",
+          text: "Reprise lancée en arrière-plan : la mission continue même si vous quittez cette page.",
+          mode: "task",
+        }]);
         return;
       }
       const result = data as AgentResult;

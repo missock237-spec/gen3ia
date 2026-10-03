@@ -12,7 +12,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Aperçu en direct — Gen3ia",
+  title: "Aperçu en direct",
   robots: { index: false, follow: false },
 };
 

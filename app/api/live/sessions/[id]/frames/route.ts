@@ -28,7 +28,7 @@ import {
 } from "@/lib/live/decision-lock";
 
 const PC_ONLY_MESSAGE =
-  "L'agent Live est reserve aux ordinateurs (Windows/Linux/macOS) : il utilise le partage d'ecran natif du navigateur.";
+  "L'agent Live est réservé aux ordinateurs (Windows/Linux/macOS) : il utilise le partage d'écran natif du navigateur.";
 
 // La boucle de vision (LLM) peut dépasser la durée par défaut des fonctions.
 export const maxDuration = 60;

@@ -230,7 +230,7 @@ export function ContextDrawer({
             <div>
               <p className="font-medium text-[var(--g3-text-secondary)]">Runs de la conversation</p>
               {runs.length === 0 ? (
-                <p className="text-[var(--g3-muted)]">Aucun run.</p>
+                <p className="text-[var(--g3-muted)]">Aucune exécution.</p>
               ) : (
                 <ul className="mt-1 space-y-1">
                   {runs.map((run) => (

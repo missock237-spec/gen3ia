@@ -12,7 +12,7 @@ import { LivePermissionSchema, LiveSessionModeSchema } from "@/lib/live/types";
 import { errorStatus } from "@/lib/security/http-errors";
 
 const PC_ONLY_MESSAGE =
-  "L'agent Live est reserve aux ordinateurs (Windows/Linux/macOS) : il utilise le partage d'ecran natif du navigateur.";
+  "L'agent Live est réservé aux ordinateurs (Windows/Linux/macOS) : il utilise le partage d'écran natif du navigateur.";
 
 /**
  * Garde serveur PC-only : l'agent Live observe un vrai ordinateur via le

@@ -90,6 +90,25 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- rechargement volontairement cle sur taskId ; load lit l'etat courant
   useEffect(() => { void load(); }, [taskId]);
 
+  // SUIVI D'EXÉCUTION (exigence production) : pendant qu'une tâche est
+  // « running », son statut est rechargé automatiquement (4 s) — le résultat
+  // apparaît dès la fin, même si l'utilisateur avait rafraîchi la page
+  // pendant l'exécution (qui continue serveur, onglet ou pas).
+  useEffect(() => {
+    if (task?.status !== "running") return; // une pause attend une action utilisateur
+    const interval = setInterval(() => {
+      void (async () => {
+        try {
+          const response = await authFetch("/api/workspace/tasks/" + encodeURIComponent(taskId), { cache: "no-store" });
+          if (!response.ok) return;
+          const data = await response.json();
+          if (data.task) setTask(data.task);
+        } catch { /* sondage indisponible */ }
+      })();
+    }, 4_000);
+    return () => clearInterval(interval);
+  }, [task?.status, taskId]);
+
   async function loadHistory() {
     try {
       const [branchResponse, snapshotResponse] = await Promise.all([

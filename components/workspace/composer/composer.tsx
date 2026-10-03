@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CommandComposer, type CommandComposerHandle } from "@/components/ui/command-composer";
 import { authFetch } from "@/lib/firebase/auth-client";
+import { uploadPermanentFiles } from "@/lib/storage/upload-client";
+import { ATTACHMENT_MAX_FILES, ATTACHMENT_MAX_FILE_BYTES, attachmentLimitLabel, validateAttachment } from "@/lib/files/attachment-policy";
 import {
   AUTHORIZATION_MODE_STORAGE_KEY,
   DEFAULT_AUTHORIZATION_MODE,
@@ -105,7 +107,8 @@ export function Composer({
       const key = injected.attachment.path ?? injected.attachment.url ?? injected.attachment.filename;
       const already = current.some((item) => (item.path ?? item.url ?? item.filename) === key);
       if (already) return current;
-      return [...current.slice(0, 7), injected.attachment];
+      if (current.length >= ATTACHMENT_MAX_FILES) return current;
+      return [...current, injected.attachment];
     });
     if (injected.text) setValue((current) => (current.trim().length === 0 ? injected.text as string : current));
     onInjectedConsumed?.();
@@ -115,26 +118,50 @@ export function Composer({
 
   const uploadFile = async (file: File) => {
     setUploadError("");
+    // Politique unifiée des pièces jointes : 10 fichiers × 50 Mo max.
+    if (attachments.length >= ATTACHMENT_MAX_FILES) {
+      setUploadError(attachmentLimitLabel());
+      return;
+    }
+    const verdict = validateAttachment({ name: file.name, size: file.size });
+    if (!verdict.ok) {
+      setUploadError(verdict.reason);
+      return;
+    }
     setUploading(true);
     setUploadingName(file.name);
     try {
-      // Import RÉEL : le fichier est réellement converti (CSV → lignes, JSON →
-      // structure, XLSX, DOCX, HTML, PDF natif, texte) puis stocké dans la base
-      // de données du projet (Firestore). Le contenu converti accompagne ensuite
-      // le message — le modèle travaille sur le contenu réel, pas sur un nom.
-      const form = new FormData();
-      form.append("file", file);
-      if (projectId) form.append("projectId", projectId);
-      const response = await fetch("/api/files/import", { method: "POST", body: form });
+      // CANAL R2 (multipart présigné) : le fichier est déposé DIRECTEMENT
+      // dans le stockage permanent — aucune limite de corps serverless — puis
+      // converti côté serveur (CSV → lignes, JSON → structure, XLSX, DOCX,
+      // HTML, PDF natif, texte) et stocké en base de données. Le contenu
+      // converti accompagne ensuite le message — le modèle travaille sur le
+      // contenu réel, pas sur un nom. Jusqu'à 50 Mo par fichier.
+      const uploaded = await uploadPermanentFiles([file]);
+      const stored = uploaded.uploaded[0];
+      if (!stored || !stored.path) {
+        throw new Error(uploaded.failed[0]?.error || "Téléversement impossible.");
+      }
+      const response = await authFetch("/api/files/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          path: stored.path,
+          filename: stored.filename || file.name,
+          contentType: stored.contentType || file.type || "application/octet-stream",
+          sizeBytes: stored.sizeBytes || file.size,
+          ...(projectId ? { projectId } : {}),
+        }),
+      });
       if (!response.ok) {
         const data = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? "Envoi du fichier impossible.");
+        throw new Error(data.error ?? "Conversion du fichier impossible.");
       }
       const data = (await response.json()) as {
         file: { id: string; filename: string; kind: string; charCount: number; rowCount?: number; contentType: string; sizeBytes: number; conversion: string; path?: string };
       };
       setAttachments((current) => [
-        ...current.slice(0, 7),
+        ...current.slice(0, ATTACHMENT_MAX_FILES - 1),
         {
           filename: data.file.filename,
           fileId: data.file.id,
@@ -149,7 +176,7 @@ export function Composer({
         },
       ]);
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "Envoi du fichier impossible.");
+      setUploadError(error instanceof Error ? error.message : `Envoi du fichier impossible (${Math.round(ATTACHMENT_MAX_FILE_BYTES / (1024 * 1024))} Mo max par fichier).`);
     } finally {
       setUploading(false);
       setUploadingName(null);

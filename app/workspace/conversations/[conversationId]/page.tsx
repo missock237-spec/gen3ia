@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { ConversationWorkspace } from "@/components/workspace/conversation-workspace";
 
-export const metadata: Metadata = { title: "Conversation — Gen3ia" };
+export const metadata: Metadata = { title: "Conversation" };
 
 /**
  * Conversation complète : fil de messages, timeline d'exécution repliable,

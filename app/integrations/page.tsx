@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import { IntegrationsWorkspace } from "@/components/integrations/integrations-workspace";
 
 export const metadata: Metadata = {
-  title: "Intégrations — GEN3IA",
+  title: "Intégrations",
   description:
-    "Connectez WhatsApp, Telegram, Slack, LinkedIn, X, Gmail, Google Agenda, Stripe et plus de 20 services externes à vos agents GEN3IA. Webhooks sortants et approbation depuis votre messagerie.",
+    "Connectez WhatsApp, Telegram, Slack, LinkedIn, X, Gmail, Google Agenda, Stripe et plus de 20 services externes à vos agents Gen3ia. Webhooks sortants et approbation depuis votre messagerie.",
 };
 
 export default function IntegrationsPage() {

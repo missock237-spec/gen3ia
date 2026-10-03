@@ -59,12 +59,13 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
 };
 
+// Libellés alignés sur le vocabulaire canonique (components/workspace/labels.ts).
 const STATUS_LABELS: Record<string, string> = {
   completed: "Terminée",
-  failed: "Échouée",
+  failed: "Échec",
   running: "En cours",
   pending: "En file",
-  waiting_approval: "À approuver",
+  waiting_approval: "À valider",
   cancelled: "Annulée",
 };
 

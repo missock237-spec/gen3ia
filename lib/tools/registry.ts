@@ -34,7 +34,7 @@ export interface Gen3iaToolDefinition {
 export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "web.search", description: "Search the public web.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "web.open", description: "Open and extract text from a public web page.", risk: "read", permission: "network.read", sideEffect: false },
-  { name: "file.read", description: "Read a workspace file.", risk: "read", permission: "file.read", sideEffect: false },
+  { name: "file.read", description: "Read a REAL file: an attachment from the owner's permanent storage (users/<uid>/permanent/...) or an authorized workspace file (input { path, workspaceId? }). Returns converted text plus metadata.", risk: "read", permission: "file.read", sideEffect: false },
   { name: "file.create", description: "Create a workspace file.", risk: "write", permission: "file.create", sideEffect: true },
   { name: "file.modify", description: "Modify a workspace file.", risk: "write", permission: "file.write", sideEffect: true },
   { name: "zip.analyze", description: "Analyze a ZIP archive safely.", risk: "read", permission: "file.read", sideEffect: false },

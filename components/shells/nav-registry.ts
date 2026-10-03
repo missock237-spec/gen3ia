@@ -87,9 +87,9 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
   {
     id: "knowledge",
     href: "/workspace/knowledge",
-    label: "Knowledge",
+    label: "Bases de connaissances",
     icon: "▤",
-    description: "Bases de connaissances RAG : documents, pages web, recherche",
+    description: "Documents, pages web et recherche sémantique (RAG)",
     contexts: ["workspace"],
     section: "primary",
     keywords: ["knowledge", "connaissances", "documents", "rag", "recherche", "embeddings", "wiki"],

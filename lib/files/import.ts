@@ -1,11 +1,12 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
-import { inflateSync, inflateRawSync } from "zlib";
 
 import { adminDb } from "@/lib/firebase/admin";
+import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
+import { pdfToText } from "@/lib/files/pdf-text";
 import { docxToText, htmlToText } from "@/lib/knowledge/ingestion";
-import { isR2Configured, uploadToR2 } from "@/lib/storage/r2";
+import { downloadFromR2, isR2Configured, uploadToR2 } from "@/lib/storage/r2";
 
 /**
  * Import de fichiers RÉELLEMENT converti et stocké en base de données :
@@ -15,9 +16,26 @@ import { isR2Configured, uploadToR2 } from "@/lib/storage/r2";
  *     projet) — le contenu converti devient disponible pour le modèle ;
  *  3) contexte injecté dans les tours de conversation (contenu RÉEL, jamais
  *     le simple nom de fichier).
+ *
+ * DEUX canaux d'entrée (politique unifiée 10 fichiers × 50 Mo) :
+ *  - canal direct : FormData → /api/files/import (fichiers ≤ limite corps
+ *    serverless) ;
+ *  - canal R2 : { path } JSON d'un fichier DÉJÀ téléversé dans le stockage
+ *    permanent (multipart présigné) — le serveur télécharge depuis R2 puis
+ *    convertit : les 50 Mo passent RÉELLEMENT en production.
  */
 
-export const IMPORT_MAX_FILE_BYTES = 20_000_000;
+export const IMPORT_MAX_FILE_BYTES = ATTACHMENT_MAX_FILE_BYTES;
+
+/** Préfixe de clé R2 autorisé pour le canal R2 (cloisonnement par propriétaire). */
+export function permanentKeyPrefix(userId: string): string {
+  return `users/${userId}/permanent/`;
+}
+
+/** Vérifie qu'une clé R2 appartient bien au stockage PERMANENT de l'utilisateur. */
+export function isOwnedPermanentKey(userId: string, path: string): boolean {
+  return typeof path === "string" && path.startsWith(permanentKeyPrefix(userId)) && path.length <= 500;
+}
 /** Taille maximale du texte stocké par document (limite doc Firestore ≈ 1 Mo). */
 export const IMPORT_MAX_TEXT_CHARS = 600_000;
 /** Nombre maximal de lignes structurées stockées (aperçu complet conservé via texte). */
@@ -118,81 +136,47 @@ export function parseCsv(content: string, delimiter?: string): { headers: string
   return { headers, rows };
 }
 
-/** Extraction texte d'un PDF natif (streams décompressés + opérateurs de texte). */
-export function pdfToText(buffer: Buffer): { text: string; pageCount: number } {
-  const raw = buffer.toString("latin1");
-  const pageCount = Math.max((raw.match(/\/Type\s*\/Page[^s]/g) ?? []).length, 0);
-  const chunks: string[] = [];
-  const streamRe = /stream\r?\n?([\s\S]*?)endstream/g;
-  let match: RegExpExecArray | null;
-  while ((match = streamRe.exec(raw)) !== null) {
-    const streamBody = Buffer.from(match[1], "latin1");
-    let content: string | null = null;
-    try {
-      content = inflateSync(streamBody).toString("latin1");
-    } catch {
-      try {
-        content = inflateRawSync(streamBody).toString("latin1");
-      } catch {
-        content = match[1]; // stream non compressé : opérateurs lisibles directs
-      }
-    }
-    if (!content || !/(Tj|TJ)/.test(content)) continue;
-    const textParts: string[] = [];
-    const tokenRe = /\((?:\\.|[^\\)])*\)|TJ|Tj|T\*|Td|TD|ET|BT|<([0-9A-Fa-f\s]+)>/g;
-    let token: RegExpExecArray | null;
-    while ((token = tokenRe.exec(content)) !== null) {
-      if (token[0] === "T*" || token[0] === "Td" || token[0] === "TD" || token[0] === "ET") {
-        textParts.push("\n");
-      } else if (token[1] !== undefined) {
-        // Chaîne hexadécimale (UTF-16BE fréquent dans les PDF générés)
-        const hex = token[1].replace(/\s+/g, "");
-        let decoded = "";
-        for (let i = 0; i + 3 < hex.length + 1; i += 4) {
-          const code = Number.parseInt(hex.slice(i, i + 4), 16);
-          if (!Number.isNaN(code) && code >= 32) decoded += String.fromCharCode(code);
-        }
-        if (decoded) textParts.push(decoded);
-      } else {
-        const literal = token[0].slice(1, -1)
-          .replace(/\\([nrtbf()\\])/g, (_, escaped: string) =>
-            ({ n: "\n", r: "\n", t: "\t", b: "", f: "" })[escaped] ?? escaped)
-          .replace(/\\[0-7]{1,3}/g, (oct) => String.fromCharCode(Number.parseInt(oct.slice(1), 8)));
-        if (literal) textParts.push(literal);
-      }
-    }
-    const extracted = textParts.join("").trim();
-    if (extracted.length > 20) chunks.push(extracted);
-  }
-
-  const text = chunks
-    .join("\n\n")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return { text, pageCount };
-}
+/** Extraction texte d'un PDF natif — ré-export du module pur partagé. */
+export { pdfToText } from "@/lib/files/pdf-text";
 
 /** Conversion RÉELLE d'un fichier téléversé selon son type. */
 export async function convertUploadedFile(file: File): Promise<ConversionResult> {
   if (file.size > IMPORT_MAX_FILE_BYTES) {
-    throw new Error(`Fichier trop volumineux (max ${Math.round(IMPORT_MAX_FILE_BYTES / 1_000_000)} Mo).`);
+    throw new Error(`Fichier trop volumineux (max ${Math.round(IMPORT_MAX_FILE_BYTES / (1024 * 1024))} Mo).`);
   }
   const buffer = Buffer.from(await file.arrayBuffer());
-  const name = file.name.toLowerCase();
+  return convertFileBuffer(buffer, file.name, file.type, file.size);
+}
+
+/**
+ * Conversion RÉELLE d'un contenu binaire (cœur réutilisable) — utilisée par
+ * le canal direct (File) ET le canal R2 (buffer téléchargé du stockage
+ * permanent). Pure vis-à-vis du transport : mêmes résultats sur les deux
+ * canaux.
+ */
+export async function convertFileBuffer(
+  buffer: Buffer,
+  filename: string,
+  contentType: string,
+  sizeBytes: number,
+): Promise<ConversionResult> {
+  if (sizeBytes > IMPORT_MAX_FILE_BYTES) {
+    throw new Error(`Fichier trop volumineux (max ${Math.round(IMPORT_MAX_FILE_BYTES / (1024 * 1024))} Mo).`);
+  }
+  const name = filename.toLowerCase();
   const extension = name.includes(".") ? name.split(".").pop()! : "";
 
   // Images : métadonnées réelles, pas de « conversion » texte illusoire.
-  if (file.type.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)) {
+  if (contentType.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)) {
     return { kind: "image", text: "", conversion: "metadata-only", note: "Image importée : métadonnées stockées (pas de contenu texte)." };
   }
 
-  if (extension === "docx" || file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+  if (extension === "docx" || contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
     const text = await docxToText(buffer);
     return { kind: "docx", text, conversion: text ? "full" : "metadata-only" };
   }
 
-  if (["xlsx", "xlsm"].includes(extension) || file.type.includes("spreadsheetml")) {
+  if (["xlsx", "xlsm"].includes(extension) || contentType.includes("spreadsheetml")) {
     const ExcelJS = (await import("exceljs")).default;
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
@@ -213,7 +197,7 @@ export async function convertUploadedFile(file: File): Promise<ConversionResult>
     return { kind: "xlsx", text, structured: { headers, rows }, rowCount: allRows.length, sheetCount, conversion: "full" };
   }
 
-  if (extension === "pdf" || file.type === "application/pdf") {
+  if (extension === "pdf" || contentType === "application/pdf") {
     const { text, pageCount } = pdfToText(buffer);
     if (text.replace(/[^A-Za-zÀ-ÿ0-9]/g, "").length < 30) {
       return {
@@ -227,7 +211,7 @@ export async function convertUploadedFile(file: File): Promise<ConversionResult>
     return { kind: "pdf", text, pageCount, conversion: "full" };
   }
 
-  if (extension === "json" || file.type === "application/json") {
+  if (extension === "json" || contentType === "application/json") {
     const text = buffer.toString("utf8");
     let structured: unknown;
     try {
@@ -238,7 +222,7 @@ export async function convertUploadedFile(file: File): Promise<ConversionResult>
     return { kind: "json", text, structured, conversion: "full" };
   }
 
-  if (extension === "csv" || extension === "tsv" || file.type === "text/csv") {
+  if (extension === "csv" || extension === "tsv" || contentType === "text/csv") {
     const text = buffer.toString("utf8");
     const { headers, rows } = parseCsv(text, extension === "tsv" ? "\t" : undefined);
     return {
@@ -250,12 +234,12 @@ export async function convertUploadedFile(file: File): Promise<ConversionResult>
     };
   }
 
-  if (extension === "html" || extension === "htm" || file.type === "text/html") {
+  if (extension === "html" || extension === "htm" || contentType === "text/html") {
     const text = htmlToText(buffer.toString("utf8"));
     return { kind: "html", text, conversion: "full" };
   }
 
-  if (extension === "md" || extension === "markdown" || file.type === "text/markdown") {
+  if (extension === "md" || extension === "markdown" || contentType === "text/markdown") {
     return { kind: "markdown", text: buffer.toString("utf8"), conversion: "full" };
   }
 
@@ -280,9 +264,35 @@ export interface StoredImportedFile extends ImportedFileRecord {
   note?: string;
 }
 
+/**
+ * Convertit un fichier DÉJÀ téléversé dans le stockage permanent de
+ * l'utilisateur (canal R2 — multipart présigné) : téléchargement R2 puis
+ * conversion réelle. Le cloisonnement est vérifié AVANT tout téléchargement
+ * (seul le préfixe permanent de CE propriétaire est lisible).
+ */
+export async function convertPermanentFile(input: {
+  userId: string;
+  path: string;
+  filename: string;
+  contentType?: string;
+  sizeBytes?: number;
+}): Promise<{ conversion: ConversionResult; buffer: Buffer; contentType: string }> {
+  if (!isOwnedPermanentKey(input.userId, input.path)) {
+    throw new Error("Chemin de stockage invalide pour ce compte.");
+  }
+  const buffer = await downloadFromR2(input.path, IMPORT_MAX_FILE_BYTES);
+  if (!buffer || buffer.length === 0) throw new Error("Fichier introuvable dans le stockage.");
+  const contentType = (input.contentType || "application/octet-stream").split(";")[0].trim();
+  const conversion = await convertFileBuffer(buffer, input.filename, contentType, buffer.length);
+  return { conversion, buffer, contentType };
+}
+
 export async function persistImportedFile(input: {
   userId: string;
-  file: File;
+  /** Canal direct (FormData). Mutuellement exclusif avec permanentDescriptor. */
+  file?: File;
+  /** Canal R2 : descripteur du fichier déjà présent dans le stockage permanent. */
+  permanentDescriptor?: { path: string; filename: string; contentType: string; sizeBytes: number };
   conversion: ConversionResult;
   conversationId?: string;
   projectId?: string;
@@ -290,31 +300,40 @@ export async function persistImportedFile(input: {
   const { conversion } = input;
   const id = randomUUID();
   const now = new Date().toISOString();
+  const descriptor = input.permanentDescriptor
+    ? { name: input.permanentDescriptor.filename, type: input.permanentDescriptor.contentType, size: input.permanentDescriptor.sizeBytes }
+    : { name: input.file!.name, type: input.file!.type, size: input.file!.size };
   // Étape 8 — le binaire des images importées est réellement persisté dans
   // le stockage permanent de l'utilisateur : l'image devient une source
   // exploitable par l'édition image-to-image (résolue côté serveur) au lieu
   // d'être jetée (« metadata-only » sans ressource).
+  // Canal R2 : l'image est DÉJÀ dans le stockage permanent — sa clé existante
+  // est réutilisée telle quelle (aucune double copie).
   let imagePath: string | undefined;
   if (conversion.kind === "image" && isR2Configured()) {
-    try {
-      const buffer = Buffer.from(await input.file.arrayBuffer());
-      if (buffer.length > 0 && buffer.length <= IMPORT_MAX_FILE_BYTES) {
-        const contentType = (input.file.type || "image/png").split(";")[0].trim();
-        const ext = contentType.includes("jpeg") ? "jpg" : contentType.includes("webp") ? "webp" : contentType.includes("gif") ? "gif" : contentType.includes("svg") ? "svg" : "png";
-        const key = `users/${input.userId}/permanent/imported-images/${Date.now()}-${id}.${ext}`;
-        await uploadToR2(key, buffer, contentType);
-        imagePath = key;
+    if (input.permanentDescriptor && isOwnedPermanentKey(input.userId, input.permanentDescriptor.path)) {
+      imagePath = input.permanentDescriptor.path;
+    } else if (input.file) {
+      try {
+        const buffer = Buffer.from(await input.file.arrayBuffer());
+        if (buffer.length > 0 && buffer.length <= IMPORT_MAX_FILE_BYTES) {
+          const contentType = (input.file.type || "image/png").split(";")[0].trim();
+          const ext = contentType.includes("jpeg") ? "jpg" : contentType.includes("webp") ? "webp" : contentType.includes("gif") ? "gif" : contentType.includes("svg") ? "svg" : "png";
+          const key = `users/${input.userId}/permanent/imported-images/${Date.now()}-${id}.${ext}`;
+          await uploadToR2(key, buffer, contentType);
+          imagePath = key;
+        }
+      } catch (error) {
+        console.warn("[import] persistance R2 de l'image impossible (l'import continue sans la ressource):", error instanceof Error ? error.message : error);
       }
-    } catch (error) {
-      console.warn("[import] persistance R2 de l'image impossible (l'import continue sans la ressource):", error instanceof Error ? error.message : error);
     }
   }
   const record: StoredImportedFile = {
     id,
     userId: input.userId,
-    filename: input.file.name.slice(0, 300),
-    contentType: (input.file.type || "application/octet-stream").slice(0, 160),
-    sizeBytes: input.file.size,
+    filename: descriptor.name.slice(0, 300),
+    contentType: (descriptor.type || "application/octet-stream").slice(0, 160),
+    sizeBytes: descriptor.size,
     kind: conversion.kind,
     conversion: conversion.conversion,
     charCount: conversion.text.length,
@@ -375,9 +394,9 @@ export async function loadImportedFilesContext(
   budget: { perFile?: number; total?: number } = {},
 ): Promise<string> {
   const perFile = budget.perFile ?? 12_000;
-  const maxTotal = budget.total ?? 36_000;
+  const maxTotal = budget.total ?? 60_000;
   if (!attachments || attachments.length === 0) return "";
-  const fileIds = attachments.map((a) => a.fileId).filter((id): id is string => Boolean(id)).slice(0, 8);
+  const fileIds = attachments.map((a) => a.fileId).filter((id): id is string => Boolean(id)).slice(0, ATTACHMENT_MAX_FILES);
   if (fileIds.length === 0) return "";
 
   const parts: string[] = [];

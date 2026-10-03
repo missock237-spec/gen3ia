@@ -11,6 +11,7 @@ import {
   deleteKnowledgeDocument,
   extractTextFromUpload,
   extractTextFromUrl,
+  extractTextFromPermanentFile,
   ingestKnowledgeDocument,
   KnowledgeDocumentRecord,
 } from "@/lib/knowledge/ingestion";
@@ -36,6 +37,15 @@ const URL_BODY_SCHEMA = z.object({
   projectId: z.string().trim().min(1).max(128),
   name: z.string().trim().min(1).max(300).optional(),
   // Rattachement org optionnel (recommandation C) : validé par la politique.
+  orgId: z.string().trim().max(128).optional(),
+});
+
+/** Canal stockage permanent (JSON) : fichier déjà téléversé via multipart présigné R2. */
+const PERMANENT_BODY_SCHEMA = z.object({
+  path: z.string().trim().min(1).max(500),
+  projectId: z.string().trim().min(1).max(128),
+  filename: z.string().trim().min(1).max(300),
+  contentType: z.string().trim().max(160).optional(),
   orgId: z.string().trim().max(128).optional(),
 });
 
@@ -83,9 +93,34 @@ export async function POST(request: NextRequest) {
 
     const contentType = request.headers.get("content-type") ?? "";
 
-    // ── Ingestion par URL ────────────────────────────────────────────────
+    // ── Ingestion par JSON ───────────────────────────────────────────────
     if (contentType.includes("application/json")) {
-      const body = URL_BODY_SCHEMA.parse(await request.json());
+      const raw = await request.json().catch(() => ({})) as Record<string, unknown>;
+      // Canal STOCKAGE PERMANENT (R2) : gros fichiers (jusqu'à 50 Mo) sans
+      // limite de corps serverless — cloisonnement vérifié avant lecture.
+      if (typeof raw.path === "string") {
+        const body = PERMANENT_BODY_SCHEMA.parse(raw);
+        if (body.orgId) await assertOrgAttach(user.uid, body.orgId);
+        const extracted = await extractTextFromPermanentFile({
+          userId: user.uid,
+          path: body.path,
+          filename: body.filename,
+          ...(body.contentType ? { contentType: body.contentType } : {}),
+        });
+        const document = await ingestKnowledgeDocument({
+          userId: user.uid,
+          projectId: body.projectId,
+          ...(body.orgId ? { orgId: body.orgId } : {}),
+          name: body.filename,
+          mimeType: extracted.mimeType,
+          text: extracted.text,
+          source: "upload",
+          storagePath: body.path,
+        });
+        return NextResponse.json({ document }, { status: 201 });
+      }
+      // Canal URL (historique, garde SSRF conservée).
+      const body = URL_BODY_SCHEMA.parse(raw);
       if (body.orgId) await assertOrgAttach(user.uid, body.orgId);
       const extracted = await extractTextFromUrl(body.url);
       const document = await ingestKnowledgeDocument({

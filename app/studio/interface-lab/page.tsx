@@ -126,7 +126,7 @@ export default function InterfaceLabPage() {
       } catch {
         if (!cancelled) {
           setAccess(false);
-          setAccessMessage("Verification d'acces impossible.");
+          setAccessMessage("Vérification d'accès impossible.");
         }
       } finally {
         if (!cancelled) setChecking(false);
@@ -164,7 +164,7 @@ export default function InterfaceLabPage() {
         if (tab === "themes") {
           const onlyThemes = all.filter((r) => r.kind === "theme");
           setThemes(onlyThemes);
-          setNote(onlyThemes.length === 0 ? "Aucun theme pour cette recherche — essayez l'onglet Composants." : "");
+          setNote(onlyThemes.length === 0 ? "Aucun thème pour cette recherche — essayez l'onglet Composants." : "");
           setResults(onlyThemes.length > 0 ? onlyThemes : all);
         } else {
           setResults(all);
@@ -291,9 +291,9 @@ export default function InterfaceLabPage() {
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-sky-700" aria-hidden="true"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6" /></svg>
           </div>
           <div className="g3-eyebrow mt-6">Acces exclusif</div>
-          <h1 className="mt-2 font-serif text-2xl font-semibold md:text-3xl">Atelier reserve aux agents de code</h1>
+          <h1 className="mt-2 font-serif text-2xl font-semibold md:text-3xl">Atelier réservé aux agents de code</h1>
           <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[var(--g3-muted)]">
-            {accessMessage || "L'Atelier d'Interfaces est une fonctionnalite premium reservee aux agents de type « code ». Creez un agent de code dans le Studio, activez-le, puis revenez : l'atelier se deverrouillera automatiquement."}
+            {accessMessage || "L'Atelier d'Interfaces est une fonctionnalité premium réservée aux agents de type « code ». Creez un agent de code dans le Studio, activez-le, puis revenez : l'atelier se deverrouillera automatiquement."}
           </p>
           <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
             <Link href="/studio" className="g3-btn g3-btn-primary">Creer un agent de code</Link>

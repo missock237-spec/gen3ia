@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Politique de confidentialité — Gen3ia",
+  title: "Politique de confidentialité",
   description:
     "Comment Gen3ia collecte, utilise, conserve et supprime vos données personnelles (RGPD).",
 };

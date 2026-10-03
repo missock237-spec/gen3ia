@@ -44,8 +44,8 @@ const CAPABILITIES = [
   { href: "/studio", label: "Agents IA", icon: "M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6l-8-4Z" },
   { href: "/live", label: "Agent Live", icon: "M2 3h20v14H2zM8 21h8M12 17v4" },
   { href: "/marketplace", label: "Marketplace", icon: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4H6Z" },
-  { href: "/studio/interface-lab", label: "Interfaces pro", icon: "m8 6-6 6 6 6M16 6l6 6-6 6" },
-  { href: "/workspace/conversations", label: "Planification", icon: "M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" },
+  { href: "/studio/interface-lab", label: "Atelier d’Interfaces", icon: "m8 6-6 6 6 6M16 6l6 6-6 6" },
+  { href: "/workspace/schedules", label: "Planifications", icon: "M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" },
   { href: "/storage", label: "Stockage", icon: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2Z" },
   { href: "/team", label: "Équipes", icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" },
   { href: "/developer", label: "Développeurs", icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
@@ -554,7 +554,7 @@ export default function HomePage() {
                 Chaque capacité dangereuse est encadrée : permissions
                 explicites, sandbox isolée, double validation humaine et
                 journalisation. Vous gardez le contrôle permanent sur ce que
-                vos agents peuvent faire — et de ce qu’ils peuvent dépenser.
+                vos agents peuvent faire — et sur ce qu’ils peuvent dépenser.
               </p>
               <ul className="mt-8 space-y-3.5">
                 {SECURITY_POINTS.map((point) => (
@@ -710,7 +710,7 @@ export default function HomePage() {
                   </li>
                 ))}
                 <li><Link href="/studio/interface-lab" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Atelier d&apos;Interfaces</Link></li>
-                <li><Link href="/workspace/conversations" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Planification</Link></li>
+                <li><Link href="/workspace/schedules" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Planifications</Link></li>
                 <li><Link href="/faq" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">FAQ</Link></li>
               </ul>
             </nav>

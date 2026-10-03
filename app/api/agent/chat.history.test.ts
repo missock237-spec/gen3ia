@@ -100,7 +100,7 @@ import {
 } from "@/lib/chat/repository";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { answerAsAgent, classifyRequest, planAgentTask } from "@/lib/agents/chat-engine";
-import { recordAgentRun } from "@/lib/agents/conversation-run";
+import { recordAgentRun, reconcileAgentRun } from "@/lib/agents/conversation-run";
 import { POST } from "./chat/route";
 
 const mockedRequireUser = vi.mocked(requireUser);
@@ -115,6 +115,7 @@ const mockedClassify = vi.mocked(classifyRequest);
 const mockedAnswer = vi.mocked(answerAsAgent);
 const mockedPlanTask = vi.mocked(planAgentTask);
 const mockedRecordRun = vi.mocked(recordAgentRun);
+const mockedReconcile = vi.mocked(reconcileAgentRun);
 
 const AGENT = {
   id: "agent-1",
@@ -287,8 +288,15 @@ describe("POST /api/agent/chat — historique des conversations d'agent mémoris
       billing: { currency: "XAF", totalChargeMinor: 0, totalProviderCostEur: 0, llmInputTokens: 0, llmOutputTokens: 0 },
     });
     await POST(postRequest({ message: "Prépare le rapport", agentId: "agent-1", conversationId: "conv-1" }));
+    // EXIGENCE PRODUCTION : le run est créé AVANT l'exécution (suivi live),
+    // puis réconcilié à la livraison (statut final + texte final + livrables).
     expect(mockedRecordRun).toHaveBeenCalledWith(expect.objectContaining({
       userId: "user-1",
+      conversationId: "conv-1",
+      plan: expect.objectContaining({ executionId: "exec-1" }),
+      status: "running",
+    }));
+    expect(mockedReconcile).toHaveBeenCalledWith(expect.objectContaining({
       conversationId: "conv-1",
       plan: expect.objectContaining({ executionId: "exec-1" }),
       status: "completed",

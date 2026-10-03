@@ -25,7 +25,7 @@ type ConversationSummary = {
 };
 
 const GEN_IA_PAYLOAD = {
-  name: "Gen IA",
+  name: "Agent universel Gen3ia",
   description:
     "Agent IA universel de Gen3ia : donnez-lui n'importe quel prompt (code, rédaction, analyse, recherche, automatisation, données, présentations…) et il résout le problème de bout en bout. Capable de déployer jusqu'à 10 sous-agents spécialisés pour une tâche complexe.",
   type: "universal" as const,
@@ -112,20 +112,20 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
             setLoadFailed(false);
             setError("");
           } else if (created.status === 429) {
-            setError("Préparation de Gen IA momentanément indisponible (limite de création). Réessayez dans un instant.");
+            setError("Préparation de l'agent universel momentanément indisponible (limite de création). Réessayez dans un instant.");
           } else {
             setLoadFailed(true);
-            setError("Impossible de préparer Gen IA. Vérifiez votre connexion puis réessayez.");
+            setError("Impossible de préparer l'agent universel. Vérifiez votre connexion puis réessayez.");
           }
           setBootstrapping(false);
         }
       } else {
         setLoadFailed(true);
-        if (response.status !== 401) setError("Impossible de charger Gen IA. Vérifiez votre connexion puis réessayez.");
+        if (response.status !== 401) setError("Impossible de charger l'agent universel. Vérifiez votre connexion puis réessayez.");
       }
     } catch {
       setLoadFailed(true);
-      setError("Connexion au serveur impossible. Gen IA réapparaîtra au réessai.");
+      setError("Connexion au serveur impossible. L'agent universel réapparaîtra au réessai.");
     } finally {
       setLoading(false);
     }
@@ -144,11 +144,11 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   }
 
   const rail = (
-    <aside className="flex h-full min-h-0 flex-col rounded-[26px] bg-[var(--g3-surface)] p-4 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.18)]" aria-label="Chats de Gen IA">
+    <aside className="flex h-full min-h-0 flex-col rounded-[26px] bg-[var(--g3-surface)] p-4 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.18)]" aria-label="Chats de l'agent universel">
       <div className="flex items-center gap-3">
         <span className="g3-brand-mark" aria-hidden="true"><Gen3iaLogo size={31} /></span>
         <span className="min-w-0">
-          <span className="block truncate text-sm font-black text-[var(--g3-text)]">Gen IA</span>
+          <span className="block truncate text-sm font-black text-[var(--g3-text)]">Agent universel</span>
           <span className="block truncate text-[10px] font-semibold uppercase tracking-[.18em] text-violet-600">Agent IA universel</span>
         </span>
       </div>
@@ -165,7 +165,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
       <div className="mt-2 max-h-[420px] min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5 lg:max-h-none">
         {conversations.length === 0 ? (
           <p className="rounded-xl bg-[var(--g3-elevated)] px-3 py-4 text-center text-xs leading-5 text-[var(--g3-faint)]">
-            Aucun chat pour l&apos;instant. Donnez votre premier prompt à Gen IA : il résout le problème de bout en bout.
+            Aucun chat pour l&apos;instant. Donnez votre premier prompt à l&apos;agent universel : il résout le problème de bout en bout.
           </p>
         ) : (
           conversations.map((conversation) => {
@@ -210,7 +210,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
       <div className="g3-card grid place-items-center p-16 text-sm text-[var(--g3-muted)]" role="status">
         <span className="flex items-center gap-3">
           <Gen3iaLogo size={30} working />
-          {bootstrapping ? "Préparation de Gen IA…" : "Chargement…"}
+          {bootstrapping ? "Préparation de l'agent universel…" : "Chargement…"}
         </span>
       </div>
     );

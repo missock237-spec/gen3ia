@@ -118,23 +118,27 @@ export async function runBusinessPulse(input: { userId: string; orgId?: string; 
 
   const executionId = randomUUID();
   const runId = randomUUID();
-  await createQueuedMission({
-    runId,
-    executionId,
-    userId: input.userId,
-    objective,
-    ...(input.orgId ? { orgId: input.orgId } : {}),
-    plan: {
+  // AUTONOMIE « FAÇON HUMAIN » (exigence production) : le pulse n'est plus
+  // un plan à UNE étape codé en dur — l'objectif passe par le PLANIFICATEUR
+  // UNIVERSEL, qui compose un vrai plan multi-étapes outillé (recherche web
+  // pour les références de marché, analyse, livrable artifact.create
+  // téléchargeable). Échec du planificateur → repli sur le plan simple.
+  let plan;
+  try {
+    const { planUniversalAgent } = await import("@/lib/agents/runtime/unified-agent");
+    plan = await planUniversalAgent(input.userId, objective);
+  } catch {
+    plan = {
       executionId,
       objective,
       steps: [
         {
           id: "pulse_analysis",
-          type: "llm",
+          type: "llm" as const,
           name: "Analyse + recommandations",
           description: objective,
           dependencies: [],
-          status: "pending",
+          status: "pending" as const,
           input: {},
           skillIds: [],
           maxRetries: 2,
@@ -146,7 +150,15 @@ export async function runBusinessPulse(input: { userId: string; orgId?: string; 
       ],
       maxConcurrency: 1,
       maxIterations: 6,
-    },
+    };
+  }
+  await createQueuedMission({
+    runId,
+    executionId,
+    userId: input.userId,
+    objective,
+    ...(input.orgId ? { orgId: input.orgId } : {}),
+    plan: { ...plan, executionId },
   });
   const origin = process.env.GEN3IA_APP_ORIGIN?.trim();
   if (origin) await publishMissionTick(origin, runId);

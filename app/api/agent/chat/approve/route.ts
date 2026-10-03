@@ -16,7 +16,15 @@ import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage } from "@/lib/chat/repository";
 import { reconcileAgentRun } from "@/lib/agents/conversation-run";
 import { buildFinalResponse } from "@/lib/agents/final-response";
+import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
+import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
 import { errorCode, errorStatus } from "@/lib/security/http-errors";
+
+export const runtime = "nodejs";
+// La reprise après approbation peut dépasser la fenêtre par défaut ; elle
+// est bornée proprement par batchDeadlineMs puis enfilée si nécessaire.
+export const maxDuration = 300;
+const APPROVE_SYNC_BUDGET_MS = 290_000;
 
 const Body = z.object({ approvalId: z.string().min(1).max(256), action: z.enum(["approve", "reject"]).default("approve") });
 
@@ -146,6 +154,7 @@ export async function POST(request: NextRequest) {
         objective: state.objective,
         plan: state.plan,
         policy: buildPolicy(state.plan),
+        batchDeadlineMs: Date.now() + APPROVE_SYNC_BUDGET_MS,
       });
       const result = await runtime.run();
 
@@ -155,45 +164,54 @@ export async function POST(request: NextRequest) {
           : import("@/lib/agents/action-approvals").then(({ failAction: markFailed }) => markFailed(user.uid, id, result.error ?? "Agent execution failed.")));
       }
 
-      // Historique complet : le résultat FINAL de la mission (après
-      // approbation et reprise) est persisté dans le fil — jusqu'ici le
-      // refus était journalisé mais pas la fin réelle de l'exécution.
-      const approvedFinalText = buildFinalResponse(result.plan, result.outputs, { ...(result.outcomeVerification ? { outcome: result.outcomeVerification } : {}) }).text;
+      // LIVRAISON UNIFIÉE (exigence production) : run réconcilié + message
+      // final honnête + manifest des livrables réels — le même passage que
+      // les missions en file, y compris après une approbation HITL.
       if (state.conversationId) {
-        const closingText = result.status === "completed"
-          ? approvedFinalText
-          : `L'exécution a été interrompue : ${result.error ?? "erreur inconnue"}. Les étapes déjà approuvées restent conservées dans l'historique.`;
-        await appendMessage({
-          conversationId: state.conversationId,
+        await deliverMissionToConversation({
           userId: user.uid,
-          role: "assistant",
-          content: closingText,
+          conversationId: state.conversationId,
+          state: result,
+        }).catch(() => undefined);
+      } else {
+        await reconcileAgentRun({
+          userId: user.uid,
+          conversationId: "",
+          plan: result.plan,
+          status: result.status,
+          outputs: result.outputs,
+          observations: result.observations,
+          billing: result.billing,
+          finalText: result.status === "completed" ? buildFinalResponse(result.plan, result.outputs, { ...(result.outcomeVerification ? { outcome: result.outcomeVerification } : {}) }).text : undefined,
+          error: result.error,
         }).catch(() => undefined);
       }
-      // Réconciliation du run lié à la conversation (statut final, timeline,
-      // payload runtime) — fail-soft, jamais bloquant pour la réponse.
-      await reconcileAgentRun({
-        userId: user.uid,
-        conversationId: state.conversationId ?? "",
-        plan: result.plan,
-        status: result.status,
-        outputs: result.outputs,
-        observations: result.observations,
-        billing: result.billing,
-        finalText: result.status === "completed" ? approvedFinalText : undefined,
-        error: result.error,
-      }).catch(() => undefined);
+      // Continuation arrière-plan si l'échéance de tranche a coupé la mission.
+      let continuation: { queued: boolean; runId?: string; reason?: string } | undefined;
+      if (result.status === "paused" && result.plan.steps.some((step) => step.status === "pending")) {
+        continuation = await enqueueMissionContinuation({
+          userId: user.uid,
+          executionId: result.executionId,
+          objective: result.objective || state.objective,
+          plan: result.plan,
+          ...(state.conversationId ? { conversationId: state.conversationId } : {}),
+          origin: process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin,
+        });
+      }
 
       return NextResponse.json({
         status: result.status,
         executionId: result.executionId,
         conversationId: state.conversationId,
-        finalText: approvedFinalText,
+        finalText: result.status === "completed"
+          ? buildFinalResponse(result.plan, result.outputs, { ...(result.outcomeVerification ? { outcome: result.outcomeVerification } : {}) }).text
+          : undefined,
         objective: result.objective,
         plan: result.plan,
         observations: result.observations,
         outputs: result.outputs,
         billing: result.billing,
+        ...(continuation ? { continuation } : {}),
       });
     } catch (error) {
       await Promise.all(claimed.map((id) => failAction(user.uid, id, error).catch(() => undefined)));

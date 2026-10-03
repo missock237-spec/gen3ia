@@ -5,6 +5,7 @@ import { knowledgeSearchTool } from "./knowledge/search";
 import { getArtifactTool } from "./files/get-artifact";
 import { createArtifactTool } from "./files/create-artifact";
 import { createFileTool } from "./files/create";
+import { readFileTool } from "./files/read-file";
 import { deleteFileTool } from "./files/delete";
 import { createZipTool } from "./files/create-zip";
 import { analyzeZipTool } from "./files/analyze-zip";
@@ -68,6 +69,10 @@ export function createDefaultToolRegistry(): ToolRegistry {
     getArtifactTool,
     createArtifactTool,
     createFileTool,
+    // file.read RÉEL : lecture des pièces jointes du stockage permanent du
+    // propriétaire (conversion texte réelle) et des fichiers de workspace —
+    // l'outil était annoncé au planificateur mais aucun exécuteur n'existait.
+    readFileTool,
     deleteFileTool,
     createZipTool,
     analyzeZipTool,

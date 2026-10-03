@@ -22,6 +22,8 @@ import {
 import type { RuntimeExecutionState } from "@/lib/agents/runtime/types";
 import { applyOutcomeCredit, shouldCreditOutcomeFailure } from "@/lib/billing/outcome-credits";
 import { recordFailureClusters } from "@/lib/agents/evolution";
+import { extractDeliverables } from "@/lib/agents/deliverables";
+import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
 
 /**
  * Receiver de la file d'attente des missions (recommandation A de l'audit).
@@ -193,7 +195,25 @@ export async function POST(request: NextRequest) {
       }
 
       if (queueStatus === "completed" || queueStatus === "failed" || queueStatus === "cancelled" || queueStatus === "paused") {
-        await finalizeMissionRun(runId, queueStatus, { error: state.error });
+        // Manifest des livrables réels (artefacts, fichiers) extrait des
+        // sorties d'étapes — exposé au client via /api/agents/runs/[runId].
+        const deliverables = extractDeliverables(state.plan, state.outputs ?? {});
+        await finalizeMissionRun(runId, queueStatus, {
+          error: state.error,
+          ...(deliverables.length > 0 ? { deliverables } : {}),
+        });
+        // LIVRAISON À LA CONVERSATION (missions lancées depuis un chat) :
+        // message final honnête + livrables + run réconcilié + notification.
+        // La mission continue de vivre dans la file, jamais liée à l'onglet.
+        if (record.conversationId) {
+          await deliverMissionToConversation({
+            userId: record.userId,
+            conversationId: record.conversationId,
+            state,
+            ...(record.projectId ? { projectId: record.projectId } : {}),
+            background: queueStatus === "completed" || queueStatus === "failed",
+          }).catch(() => undefined);
+        }
       }
       // Avoir automatique (concept #2) : mission sous contrat terminée en
       // échec (étapes en échec ou porte d'acceptation bloquante) → avoir

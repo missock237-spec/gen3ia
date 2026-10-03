@@ -166,7 +166,7 @@ export function AdsWorkshop() {
           )}
           {publishResult && <Callout tone="success" className="mt-3">{publishResult}</Callout>}
         </div>
-        <FeatureCard title="Terminal IA" text="Un terminal sandboxé réservé aux agents. Aucun accès direct utilisateur au shell d'exécution." />
+        <FeatureCard title="Terminal des agents" text="Un terminal sandboxé réservé aux agents. Aucun accès direct utilisateur au shell d'exécution." />
         <FeatureLinkCard href="/memory" title="Mémoire permanente" text="Souvenirs et documents (100 Mo max, 10 fichiers par lot) conservés pour vos missions. Gestion sur une page dédiée." cta="Ouvrir la mémoire" />
         <FeatureCard title="Caméra & fichiers" text="La caméra fonctionne uniquement après autorisation explicite. Les captures et fichiers peuvent être conservés dans le stockage permanent." />
       </section>
