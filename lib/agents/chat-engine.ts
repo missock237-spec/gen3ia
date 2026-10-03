@@ -148,6 +148,7 @@ export function historyContextNote(history: ChatHistoryMessage[], limit = 8): st
  * utilisé après une classification inScope=true.
  */
 export async function answerAsAgent(
+  userId: string,
   agent: Pick<AgentRecord, "name" | "description" | "type" | "typeLabel" | "skills" | "agentMode" | "memoryFile" | "preferredModel">,
   history: ChatHistoryMessage[],
   message: string,
@@ -163,7 +164,7 @@ export async function answerAsAgent(
     agentTypeLabel: agent.typeLabel,
     ...promptContext,
   }).text;
-  const truth = await buildTruthContext("", message, history);
+  const truth = await buildTruthContext(userId, message, history);
   const grounding = formatTruthContext(truth);
   const userContent = `${grounding}${contextNote ? `\n\n${contextNote}` : ""}\n\nDEMANDE ACTUELLE :\n${message}`;
   // Fenêtre de contexte (Task 42, axe 1) : au lieu d'une troncature brutale
