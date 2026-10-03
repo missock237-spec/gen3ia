@@ -308,6 +308,13 @@ export interface AdSelectionContext {
   language?: string;
   /** Appareil déclaré par le client (ciblage appareil). */
   device?: CampaignDevice;
+  /**
+   * Mots-clés du CONTEXTE de diffusion (page/intention, ciblage sémantique).
+   * Une campagne qui déclare des mots-clés n'est servie que si le contexte
+   * en fournit au moins un — le ciblage déclaré par l'annonceur est RESPECTÉ
+   * (avant : les mots-clés étaient stockés puis ignorés).
+   */
+  keywords?: string[];
 }
 
 /** Score de diffusion PRO : priorité × pondération d'enchère × boost CTR réel. */
@@ -348,7 +355,53 @@ export function passesTargeting(params: {
   if (!campaign.targeting.placements.includes(placement)) return false;
   if (context.language && campaign.targeting.languages?.length && !campaign.targeting.languages.includes(context.language.toLowerCase())) return false;
   if (context.device && campaign.targeting.devices?.length && !campaign.targeting.devices.includes(context.device)) return false;
+  // CIBLAGE PAR MOTS-CLÉS (système publicitaire avancé) : si l'annonceur a
+  // déclaré des mots-clés, le contexte de diffusion doit en contenir au
+  // moins un (comparaison insensible à la casse, correspondance par inclusion
+  // du mot-clé dans un token du contexte ou égalité directe).
+  const declared = campaign.targeting.keywords?.map((keyword) => keyword.trim().toLowerCase()).filter(Boolean) ?? [];
+  if (declared.length > 0) {
+    const provided = (context.keywords ?? []).map((keyword) => keyword.trim().toLowerCase()).filter(Boolean);
+    if (provided.length === 0) return false;
+    const match = declared.some((keyword) =>
+      provided.some((token) => token === keyword || token.includes(keyword) || keyword.includes(token)),
+    );
+    if (!match) return false;
+  }
   return true;
+}
+
+/**
+ * BUDGET QUOTIDIEN RÉEL : dépense du jour d'une campagne = impressions du
+ * jour / 1000 × CPM. Une campagne dont la dépense du jour atteint le budget
+ * quotidien n'est plus servie jusqu'au lendemain (anti-dépassement).
+ * Fail-closed : en cas de panne de lecture, la campagne est considérée
+ * hors budget (jamais de sur-diffusion facturée).
+ */
+export async function isWithinDailyBudget(campaign: AdCampaign): Promise<boolean> {
+  const dailyBudget = Number(campaign.dailyBudgetMinor ?? 0);
+  if (!(dailyBudget > 0)) return true; // pas de budget journalier = pas de garde
+  try {
+    const adsSnapshot = await adminDb.collection("platformAds").where("campaignId", "==", campaign.id).limit(200).get();
+    const adIds = [...new Set(adsSnapshot.docs.map((doc) => doc.id))];
+    if (adIds.length === 0) return true;
+    const startOfDayMs = new Date();
+    startOfDayMs.setHours(0, 0, 0, 0);
+    let impressionsToday = 0;
+    for (const adId of adIds) {
+      const events = await adminDb.collection("platformAdEvents")
+        .where("adId", "==", adId)
+        .where("type", "==", "impression")
+        .where("createdAtMs", ">=", startOfDayMs.getTime())
+        .limit(5_000)
+        .get();
+      impressionsToday += events.size;
+    }
+    const spendMinor = Math.round((impressionsToday / 1_000) * DEFAULT_CPM_MINOR);
+    return spendMinor < dailyBudget;
+  } catch {
+    return false;
+  }
 }
 
 /** Export du compteur de nettoyage pour les tests. */

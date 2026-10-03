@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { choosePlatformAd, listEligiblePlatformAds, recordPlatformAdEvent } from "@/lib/ads/platform-placement";
 import { errorStatus } from "@/lib/security/http-errors";
 
@@ -29,10 +30,17 @@ export async function GET(request: NextRequest) {
     });
     if (!parsed.success) return NextResponse.json({ error: "Placement invalide." }, { status: 400 });
     const { placement, mode } = parsed.data;
+    // Mots-clés du contexte de diffusion (ciblage sémantique des campagnes) :
+    // fournis par la surface d'affichage via ?context=mot1,mot2 (10 max).
+    const keywords = (url.searchParams.get("context") ?? "")
+      .split(",")
+      .map((keyword) => keyword.trim().slice(0, 40))
+      .filter(Boolean)
+      .slice(0, 10);
 
     if (mode === "all") {
       const ads = await listEligiblePlatformAds(placement);
-      const list = ads.length > 0 ? ads : [await choosePlatformAd(placement, { userId: user.uid })];
+      const list = ads.length > 0 ? ads : [await choosePlatformAd(placement, { userId: user.uid, keywords })];
       await Promise.all(
         list.map((ad) =>
           recordPlatformAdEvent({ adId: ad.id, placement, type: "impression", userId: user.uid }).catch(() => undefined),
@@ -41,7 +49,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ads: list }, { headers: { "cache-control": "no-store" } });
     }
 
-    const ad = await choosePlatformAd(placement, { userId: user.uid });
+    const ad = await choosePlatformAd(placement, { userId: user.uid, keywords });
     void recordPlatformAdEvent({
       adId: ad.id,
       placement,
@@ -64,6 +72,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser(request);
+    // ANTI-FRAUDE : débit borné par utilisateur (les doublons exacts sont de
+    // toute façon écrasés par le doc-id déterministe côté enregistrement).
+    const limit = await enforceRateLimit(`ads-event:${user.uid}`, { limit: 60, windowMs: 60 * 1000 });
+    if (!limit.allowed) {
+      return NextResponse.json({ error: "Trop d'événements publicitaires." }, { status: 429 });
+    }
     const parsed = EventSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Événement publicitaire invalide." }, { status: 400 });
 

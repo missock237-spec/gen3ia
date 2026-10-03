@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { FieldValue, type DocumentData } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { countImpressionsToday, passesTargeting, scoreAdCandidate, type AdSelectionContext } from "@/lib/ads/campaigns";
@@ -135,9 +136,12 @@ export async function choosePlatformAd(placement: string, context: AdSelectionCo
       // ciblage et plafond de fréquence appliqués (échec → annonce ignorée).
       const eligible = await (async () => {
         try {
-          const { getCampaignById } = await import("@/lib/ads/campaigns");
+          const { getCampaignById, isWithinDailyBudget } = await import("@/lib/ads/campaigns");
           const campaign = await getCampaignById(ad.campaignId!);
+          if (!campaign) return false;
           if (!passesTargeting({ campaign, placement, context })) return false;
+          // Budget quotidien RÉEL : au-delà, la campagne n'est plus servie.
+          if (!(await isWithinDailyBudget(campaign))) return false;
           if (context.userId && campaign.frequencyCapPerDay) {
             const shown = await countImpressionsToday({ adId: ad.id, userId: context.userId });
             if (shown >= campaign.frequencyCapPerDay) return false;
@@ -188,13 +192,28 @@ function weightedPick(candidates: Array<{ ad: PlatformAd; score: number }>): Pla
   return candidates[candidates.length - 1].ad;
 }
 
+/**
+ * ANTI-FRAUDE (système publicitaire avancé) : les événements authentifiés
+ * sont DÉDUPLIQUÉS par identifiant déterministe :
+ *  - impression : 1 max par utilisateur/annonce/jour (re-diffusion = écrasement) ;
+ *  - clic : 1 max par utilisateur/annonce/heure (martèlement impossible).
+ * Les événements anonymes (sans userId) restent horodatés à l'UUID.
+ */
+function dedupEventId(type: "impression" | "click", adId: string, userId: string | undefined): string {
+  if (!userId) return randomUUID();
+  const day = new Date().toISOString().slice(0, 10);
+  const bucket = type === "click" ? new Date().toISOString().slice(0, 13) : day; // heure pour les clics
+  const hash = createHash("sha256").update(`${type}|${adId}|${userId}|${bucket}`).digest("hex").slice(0, 32);
+  return `${type.slice(0, 3)}_${hash}`;
+}
+
 export async function recordPlatformAdEvent(params: {
   adId: string;
   placement: string;
   type: "impression" | "click";
   userId?: string;
 }): Promise<void> {
-  await adminDb.collection(EVENTS_COLLECTION).doc(randomUUID()).set({
+  await adminDb.collection(EVENTS_COLLECTION).doc(dedupEventId(params.type, params.adId.slice(0, 160), params.userId?.slice(0, 160))).set({
     adId: params.adId.slice(0, 160),
     placement: params.placement.slice(0, 80),
     type: params.type,
