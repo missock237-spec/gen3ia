@@ -42,4 +42,28 @@ describe("agent scheduler", () => {
     const allDay = { ...base, startTime: "00:00", endTime: "00:00" };
     expect(isScheduleActive(allDay, new Date("2026-09-14T23:59:00.000Z"))).toBe(true);
   });
+
+  // ─── ONE-SHOT (runAtMs) : actif à l'échéance, sans fenêtre cron ───
+  it("one-shot : actif dès l'échéance même sans fenêtre, avant : inactif", () => {
+    const oneShot: AgentSchedule = {
+      ...base,
+      daysOfWeek: undefined,
+      startTime: undefined,
+      endTime: undefined,
+      runAtMs: new Date("2026-09-14T10:00:00.000Z").getTime(),
+    };
+    expect(isScheduleActive(oneShot, new Date("2026-09-14T09:59:00.000Z"))).toBe(false);
+    expect(isScheduleActive(oneShot, new Date("2026-09-14T10:00:00.000Z"))).toBe(true);
+    expect(isScheduleActive(oneShot, new Date("2026-09-15T10:00:00.000Z"))).toBe(true);
+    // Un one-shot désactivé ne se déclenche pas (auto-désarmement).
+    expect(isScheduleActive({ ...oneShot, enabled: false }, new Date("2026-09-15T10:00:00.000Z"))).toBe(false);
+  });
+
+  it("one-shot coexiste avec la fenêtre hebdo : l'échéance force l'activation hors fenêtre", () => {
+    const both: AgentSchedule = {
+      ...base,
+      runAtMs: new Date("2026-09-13T10:00:00.000Z").getTime(), // dimanche, hors fenêtre
+    };
+    expect(isScheduleActive(both, new Date("2026-09-13T12:00:00.000Z"))).toBe(true);
+  });
 });

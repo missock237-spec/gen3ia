@@ -98,6 +98,7 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
 
 const WORKSPACE_SECONDARY: NavRoute[] = [
   { id: "missions", href: "/studio", label: "Missions", icon: "◈", description: "Tâches en cours, validations et historique", contexts: ["workspace"], section: "secondary", keywords: ["missions", "tâches", "historique"] },
+  { id: "schedules", href: "/workspace/schedules", label: "Planifications", icon: "⏱", description: "Tâches planifiées : récurrences, one-shot, relances", contexts: ["workspace"], section: "secondary", keywords: ["planifications", "schedules", "cron", "récurrence", "one-shot", "automatisations", "veille"] },
   { id: "team", href: "/team", label: "Équipe", icon: "◎", description: "Membres, rôles et activité partagée", contexts: ["workspace"], section: "secondary", keywords: ["équipe", "membres", "rôles"] },
   { id: "live", href: "/live", label: "Agent Live", icon: "◉", description: "Contrôler un poste de travail", contexts: ["workspace"], section: "secondary", keywords: ["live", "pc"] },
   { id: "marketplace", href: "/marketplace", label: "Marketplace", icon: "◇", description: "Ajouter des capacités à vos agents", contexts: ["workspace"], section: "secondary", keywords: ["marketplace", "extensions"] },

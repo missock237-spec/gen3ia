@@ -20,6 +20,10 @@ export const ScheduleSchema = z.object({
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
   endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
   intervalMinutes: z.number().int().min(0).max(1440).default(0),
+  // ONE-SHOT (tâche planifiée avancée) : exécution PONCTUELLE à une date
+  // précise (epoch ms). Compatible avec une fenêtre cron (les deux
+  // déclencheurs coexistent) ; la planification se désarme seule après.
+  runAtMs: z.number().int().positive().optional(),
   enabled: z.boolean().default(true),
   maxRetries: z.number().int().min(0).max(5).default(2),
   retryDelayMinutes: z.number().int().min(1).max(1440).default(5),
@@ -60,6 +64,8 @@ export type AgentSchedule = z.infer<typeof ScheduleSchema> & {
   createdAt?: string;
   updatedAt?: string;
   nextRunAt?: string;
+  /** État de relance après échec (retry automatique borné). */
+  retryState?: { attempt: number; notBeforeMs: number };
 };
 
 export type ScheduleRun = {
@@ -163,6 +169,9 @@ function calendarDate(local: ReturnType<typeof localParts>) {
 
 export function isScheduleActive(schedule: AgentSchedule, now = new Date()) {
   if (!schedule.enabled) return false;
+  // ONE-SHOT : actif dès que la date d'exécution est atteinte (le claim
+  // transactionnel garantit exactement-une fois, puis auto-désarmement).
+  if (typeof schedule.runAtMs === "number" && now.getTime() >= schedule.runAtMs) return true;
   if (!schedule.daysOfWeek?.length || !schedule.startTime || !schedule.endTime) return false;
   const local = localParts(now, schedule.timezone);
   const current = local.hour * 60 + local.minute;
@@ -185,6 +194,10 @@ export function isScheduleActive(schedule: AgentSchedule, now = new Date()) {
 function slotFor(schedule: AgentSchedule, now = new Date()) {
   // Garde d'abord : startTime/endTime sont optionnels (plans toujours actifs).
   if (!isScheduleActive(schedule, now)) return null;
+  // ONE-SHOT : un slot unique et immuable = exactement-une exécution.
+  if (typeof schedule.runAtMs === "number" && now.getTime() >= schedule.runAtMs) {
+    return `oneshot:${schedule.runAtMs}`;
+  }
   const local = localParts(now, schedule.timezone);
   const current = local.hour * 60 + local.minute;
   const start = minutes(schedule.startTime!);
@@ -208,13 +221,14 @@ export async function createSchedule(userId: string, input: unknown) {
   const parsed = ScheduleSchema.parse(input);
   assertTimezone(parsed.timezone);
 
-  // Cohérence des déclencheurs : sans webhook ni veille, la fenêtre cron
-  // est obligatoire ; avec un déclencheur événementiel, elle devient
-  // optionnelle (l'agent s'exécute à l'événement, pas à l'horloge).
+  // Cohérence des déclencheurs : sans webhook ni veille ni one-shot, la
+  // fenêtre cron est obligatoire ; avec un déclencheur événementiel, elle
+  // devient optionnelle (l'agent s'exécute à l'événement, pas à l'horloge).
   const wantsWebhook = parsed.enableWebhook === true;
   const wantsWatch = (parsed.watchSourceInputs?.length ?? 0) > 0;
-  if (!wantsWebhook && !wantsWatch && (!parsed.daysOfWeek?.length || !parsed.startTime || !parsed.endTime)) {
-    throw new Error("A schedule requires daysOfWeek/startTime/endTime, a webhook trigger, or watch sources");
+  const wantsOneShot = typeof parsed.runAtMs === "number" && parsed.runAtMs > 0;
+  if (!wantsWebhook && !wantsWatch && !wantsOneShot && (!parsed.daysOfWeek?.length || !parsed.startTime || !parsed.endTime)) {
+    throw new Error("A schedule requires daysOfWeek/startTime/endTime, a webhook trigger, watch sources, or runAtMs");
   }
 
   const agent = await getAgentForUser(userId, parsed.agentId);
@@ -245,6 +259,7 @@ export async function createSchedule(userId: string, input: unknown) {
     ...(parsed.startTime ? { startTime: parsed.startTime } : {}),
     ...(parsed.endTime ? { endTime: parsed.endTime } : {}),
     intervalMinutes: parsed.intervalMinutes,
+    ...(wantsOneShot ? { runAtMs: parsed.runAtMs } : {}),
     enabled: parsed.enabled,
     maxRetries: parsed.maxRetries,
     retryDelayMinutes: parsed.retryDelayMinutes,
@@ -437,12 +452,31 @@ async function finishScheduleRun(
     const scheduleData = scheduleSnap.data()!;
     if (scheduleData.userId !== userId || scheduleData.runningExecutionId !== executionId) return;
 
+    // RETRY AUTOMATIQUE (tâche planifiée avancée) : un échec borneé plante
+    // une relance différée (retryState) tant que maxRetries n'est pas
+    // épuisé ; un succès ou l'épuisement des tentatives nettoie l'état.
+    const maxRetries = Number(scheduleData.maxRetries ?? 0);
+    const retryDelayMs = Number(scheduleData.retryDelayMinutes ?? 5) * 60_000;
+    const previousAttempt = Number((scheduleData.retryState as { attempt?: number } | undefined)?.attempt ?? 0);
+    let retryState: { attempt: number; notBeforeMs: number } | ReturnType<typeof FieldValue.delete> | undefined;
+    if (status === "failed" && maxRetries > 0 && previousAttempt < maxRetries) {
+      retryState = { attempt: previousAttempt + 1, notBeforeMs: Date.now() + retryDelayMs };
+    } else {
+      retryState = FieldValue.delete() as ReturnType<typeof FieldValue.delete>;
+    }
+
+    // ONE-SHOT : la planification se DÉSARME après sa première exécution
+    // terminée (succès comme échec final) — jamais de re-déclenchement.
+    const oneShot = typeof scheduleData.runAtMs === "number";
+
     tx.update(scheduleRef, {
       runningExecutionId: FieldValue.delete(),
       runningExecutionStartedAt: FieldValue.delete(),
       lastExecutionStatus: status,
       lastExecutionAt: now,
       ...(error ? { lastError: error.slice(0, 4000) } : { lastError: FieldValue.delete() }),
+      ...(retryState ? { retryState } : { retryState: FieldValue.delete() }),
+      ...(oneShot ? { enabled: false } : {}),
       updatedAt: FieldValue.serverTimestamp(),
     });
     tx.set(runRef, {
@@ -539,17 +573,53 @@ export async function dispatchSchedules(now = new Date()) {
       results.push({ scheduleId: schedule.id, agentId: schedule.agentId, status: "skipped", reason: `agent ${agentStatus}` });
       continue;
     }
+    // RATTRAPAGE (catchUp) : un créneau manqué (indisponibilité passée) est
+    // signalé dans le contexte de l'exécution courante — BORNÉ : jamais de
+    // rejeu des créneaux intermédiaires (anti-spam d'exécutions).
+    const catchUpNote = describeCatchUp(schedule, now);
     const claim = await claimDueSchedule(schedule, now);
     if (!claim) continue;
 
     try {
-      results.push({ scheduleId: schedule.id, ...(await runSchedule(schedule, claim.executionId, claim.slot)) });
+      results.push({ scheduleId: schedule.id, ...(await runSchedule(schedule, claim.executionId, claim.slot, catchUpNote)) });
     } catch (error) {
       results.push({
         scheduleId: schedule.id,
         executionId: claim.executionId,
         status: "failed",
         error: error instanceof Error ? error.message : "Scheduled execution failed",
+      });
+    }
+  }
+
+  // ─── RELANCES AUTOMATIQUES (retry après échec) ───
+  const retryDue = all.filter((schedule) => {
+    const state = schedule.retryState;
+    return Boolean(state && typeof state.notBeforeMs === "number" && state.notBeforeMs <= now.getTime());
+  });
+  for (const schedule of retryDue) {
+    const agentStatus = await resolveAgentStatus(schedule.agentId);
+    if (agentStatus === "paused" || agentStatus === "archived") continue;
+    const claim = await claimRetrySchedule(schedule, now);
+    if (!claim) continue;
+    const attempt = schedule.retryState?.attempt ?? 1;
+    try {
+      results.push({
+        scheduleId: schedule.id,
+        ...(await runSchedule(
+          schedule,
+          claim.executionId,
+          claim.slot,
+          `Relance automatique après échec (tentative ${attempt} / ${schedule.maxRetries ?? 0}).`,
+        )),
+      });
+    } catch (error) {
+      results.push({
+        scheduleId: schedule.id,
+        executionId: claim.executionId,
+        status: "failed",
+        trigger: "retry",
+        error: error instanceof Error ? error.message : "Retry execution failed",
       });
     }
   }
@@ -569,6 +639,77 @@ export async function dispatchSchedules(now = new Date()) {
   }
 
   return { checked: snap.size, due: due.length, executed: results };
+}
+
+/**
+ * Note de rattrapage : détecte (sans le rejouer) un créneau manqué — le
+ * dernier slot exécuté est antérieur au créneau précédent de la fenêtre
+ * courante. Retourne une note de contexte bornée, ou undefined.
+ */
+function describeCatchUp(schedule: AgentSchedule, now: Date): string | undefined {
+  if (!schedule.catchUp) return undefined;
+  const slot = slotFor(schedule, now);
+  const last = schedule.lastTriggeredSlot;
+  if (!slot || !last || last === slot) return undefined;
+  const [lastDate, lastIdxRaw] = last.split(":");
+  const [curDate, curIdxRaw] = slot.split(":");
+  const lastIdx = Number(lastIdxRaw?.replace("start", "0") ?? NaN);
+  const curIdx = Number(curIdxRaw?.replace("start", "0") ?? NaN);
+  if (!Number.isFinite(lastIdx) || !Number.isFinite(curIdx)) return undefined;
+  const sameDay = lastDate === curDate;
+  const missed = sameDay ? curIdx - lastIdx > 1 : true; // jour différent = fenêtre précédente manquée
+  return missed
+    ? `Note de rattrapage : le créneau précédent (${last}) a été manqué (indisponibilité). Cette exécution couvre le créneau courant (${slot}).`
+    : undefined;
+}
+
+/** Claim d'une RELANCE (retry) : exactement-une par transaction, bail
+ * d'exécution respecté, état retryState consommé atomiquement. */
+async function claimRetrySchedule(schedule: AgentSchedule, now = new Date()): Promise<ClaimedRun | null> {
+  const state = schedule.retryState;
+  if (!state || state.notBeforeMs > now.getTime()) return null;
+
+  const executionId = randomUUID();
+  const slot = `retry:${state.attempt}:${executionId.slice(0, 8)}`;
+  const ref = adminDb.collection(COLLECTION).doc(schedule.id);
+  const runRef = adminDb.collection(RUNS_COLLECTION).doc(executionId);
+
+  return adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return null;
+    const data = snap.data()!;
+    if (data.userId !== schedule.userId || data.enabled !== true) return null;
+    const current = data.retryState as { attempt?: number; notBeforeMs?: number } | undefined;
+    if (!current || typeof current.notBeforeMs !== "number" || current.notBeforeMs > now.getTime()) return null;
+
+    const runningStarted = data.runningExecutionStartedAt instanceof Timestamp
+      ? data.runningExecutionStartedAt.toDate().getTime()
+      : 0;
+    const runningActive = Boolean(data.runningExecutionId) && runningStarted > 0 && now.getTime() - runningStarted < EXECUTION_LEASE_MS;
+    if (runningActive) return null;
+
+    const startedAt = Timestamp.fromDate(now);
+    tx.update(ref, {
+      runningExecutionId: executionId,
+      runningExecutionStartedAt: startedAt,
+      lastExecutionId: executionId,
+      lastExecutionStatus: "running",
+      retryState: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(runRef, {
+      scheduleId: schedule.id,
+      userId: schedule.userId,
+      agentId: schedule.agentId,
+      slot,
+      status: "running",
+      attempt: current.attempt ?? 1,
+      trigger: "retry",
+      startedAt,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return { executionId, slot };
+  });
 }
 
 
