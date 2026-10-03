@@ -44,6 +44,10 @@ const Body = z.object({
   activatedConnectors: z.array(
     z.string().trim().toLowerCase().regex(/^[a-z0-9_]{2,64}$/, "connecteur invalide"),
   ).max(10).optional(),
+  // Prompts système avancés : fuseau IANA du client (variables {{date}}/
+  // {{time}} de la charte résolues dans le fuseau de l'utilisateur ; invalide
+  // = repli UTC silencieux).
+  timezone: z.string().trim().max(64).optional(),
 });
 
 function buildPolicy(plan: RuntimePlan): ExecutionPolicy {
@@ -355,7 +359,19 @@ export async function POST(request: NextRequest) {
 
       // Réponse claire et simple : la charte pilote un appel LLM direct.
       if (classification.mode === "chat") {
-        const reply = await answerAsAgent(agent, history.map((item) => ({ role: item.role, content: item.content })), body.message, fullNote);
+        const reply = await answerAsAgent(
+          agent,
+          history.map((item) => ({ role: item.role, content: item.content })),
+          body.message,
+          fullNote,
+          {
+            // Prompts système avancés : variables dynamiques résolues avec le
+            // contexte réel (fuseau client, utilisateur connecté).
+            userName: user.name ?? user.email?.split("@")[0],
+            userEmail: user.email,
+            timezone: body.timezone,
+          },
+        );
         await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
         after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: reply, mode: "chat" }));
         if (agent.memoryEnabled && shouldSummarize(priorMessageCount + 2)) {

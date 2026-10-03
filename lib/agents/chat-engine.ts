@@ -3,6 +3,7 @@ import { stripThinkTags } from "../ai/think-filter";
 import { preferFreeForVisibleAnswers, withResponseStyle } from "../ai/response-quality";
 import type { AIProvider } from "../ai/models";
 import { assembleMessages } from "../ai/context-window";
+import { applyPromptVariables, type PromptVariableContext } from "../ai/prompt-template";
 import { planUniversalAgent } from "./runtime/unified-agent";
 import type { RuntimePlan } from "./runtime/types";
 import { policyForAgent } from "./personalized-plan";
@@ -150,8 +151,17 @@ export async function answerAsAgent(
   history: ChatHistoryMessage[],
   message: string,
   contextNote?: string,
+  promptContext?: PromptVariableContext,
 ): Promise<string> {
-  const charter = buildAgentCharter(agent);
+  // Prompts système avancés : les jetons {{date}}, {{time}}, {{user.name}},
+  // {{agent.name}}… de la charte sont résolus avec l'état RÉEL de la
+  // requête (jamais de placeholder qui fuit dans le prompt).
+  const charter = applyPromptVariables(buildAgentCharter(agent), {
+    agentName: agent.name,
+    agentType: agent.type,
+    agentTypeLabel: agent.typeLabel,
+    ...promptContext,
+  }).text;
   const userContent = contextNote ? `${contextNote}\n\n${message}` : message;
   // Fenêtre de contexte (Task 42, axe 1) : au lieu d'une troncature brutale
   // aux 12 derniers messages (qui perdait le fil des longues conversations),

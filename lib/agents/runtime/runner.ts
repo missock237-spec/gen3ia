@@ -13,6 +13,7 @@ import { assertNotPaused, assertNotStopped, PauseRequestedError } from "./pause"
 import { generateImageWithAgnes, isImageGenerationEnabled } from "@/lib/ai/image-generation";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import { RESPONSE_FORMAT_RULES } from "@/lib/ai/response-quality";
+import { applyPromptVariables } from "@/lib/ai/prompt-template";
 import { verifyOutcomeCriteria, type OutcomeContract } from "@/lib/agents/outcome-contract";
 import { buildReplan } from "./replan";
 
@@ -461,8 +462,17 @@ export class AgentRuntime {
     const role = step.agentRole ?? "general";
     const complexity = role === "analytics" ? 1.35 : role === "orchestrator" ? 1.25 : 1;
     const personalPrompt = this.agentConfig?.systemPrompt?.trim();
-    const systemContent = personalPrompt
-      ? `You are "${this.agentConfig?.name ?? "Agent"}", a personalized AI agent created in the Gen3ia Studio${this.agentConfig?.type ? ` (specialty: ${this.agentConfig.type})` : ""}.\n\n--- OWNER INSTRUCTIONS (personnalite et mission de l'agent) ---\n${personalPrompt.slice(0, 12_000)}\n--- END OWNER INSTRUCTIONS ---\n\nYou are executing one step of a mission inside the Gen3ia multi-agent runtime. Work only on your assigned responsibility. ${AgentRuntime.SAFETY_CONTRACT}`
+    // Prompts système avancés : les jetons {{…}} des instructions du
+    // propriétaire sont résolus à CHAQUE étape (date/heure réelles, agent) —
+    // un jeton inconnu est supprimé, jamais transmis tel quel au modèle.
+    const renderedPersonalPrompt = personalPrompt
+      ? applyPromptVariables(personalPrompt.slice(0, 12_000), {
+          agentName: this.agentConfig?.name,
+          agentType: this.agentConfig?.type,
+        }).text
+      : undefined;
+    const systemContent = renderedPersonalPrompt
+      ? `You are "${this.agentConfig?.name ?? "Agent"}", a personalized AI agent created in the Gen3ia Studio${this.agentConfig?.type ? ` (specialty: ${this.agentConfig.type})` : ""}.\n\n--- OWNER INSTRUCTIONS (personnalite et mission de l'agent) ---\n${renderedPersonalPrompt}\n--- END OWNER INSTRUCTIONS ---\n\nYou are executing one step of a mission inside the Gen3ia multi-agent runtime. Work only on your assigned responsibility. ${AgentRuntime.SAFETY_CONTRACT}`
       : `You are the ${role} agent inside the Gen3ia multi-agent runtime. Work only on your assigned responsibility. Be factual, operational and explicit about uncertainty. ${AgentRuntime.SAFETY_CONTRACT}`;
     // Task 52 : le texte produit par une étape llm devient la réponse/livrable
     // visible de la mission — il respecte le contrat de présentation (clarté,
