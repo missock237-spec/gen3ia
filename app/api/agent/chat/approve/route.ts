@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
       // Historique complet : le résultat FINAL de la mission (après
       // approbation et reprise) est persisté dans le fil — jusqu'ici le
       // refus était journalisé mais pas la fin réelle de l'exécution.
-      const approvedFinalText = buildFinalResponse(result.plan, result.outputs).text;
+      const approvedFinalText = buildFinalResponse(result.plan, result.outputs, { ...(result.outcomeVerification ? { outcome: result.outcomeVerification } : {}) }).text;
       if (state.conversationId) {
         const closingText = result.status === "completed"
           ? approvedFinalText

@@ -1,4 +1,5 @@
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
+import type { OutcomeVerification } from "@/lib/agents/outcome-contract";
 
 /**
  * HONNÊTETÉ DE LIVRAISON (étape 3 du plan 20) : une mission dont des étapes
@@ -32,7 +33,7 @@ function deliverableOutput(plan: RuntimePlan, outputs: Record<string, unknown>):
 export function buildFinalResponse(
   plan: RuntimePlan,
   outputs: Record<string, unknown>,
-  options: { completedFallback?: string } = {},
+  options: { completedFallback?: string; outcome?: OutcomeVerification } = {},
 ): FinalResponse {
   const failedSteps = plan.steps
     .filter((step) => step.status === "failed")
@@ -41,12 +42,25 @@ export function buildFinalResponse(
   const deliverable = deliverableOutput(plan, outputs);
 
   if (ok) {
+    // Contrat de résultat (concepts #1/#2) : un « completed » n'est annoncé
+    // comme VÉRIFIÉ que si le contrat est présent ET satisfait. Une
+    // vérification indisponible ou des critères non requis non atteints
+    // sont nommés honnêtement — jamais silencieux.
+    const outcome = options.outcome;
+    const outcomeSection = outcome
+      ? outcome.passed
+        ? "\n\nContrat de résultat : vérifié — tous les critères d'acceptation sont atteints."
+        : outcome.unavailable
+          ? `\n\nContrat de résultat : vérification indisponible (${outcome.summary}) — les critères ne sont PAS confirmés.`
+          : `\n\nContrat de résultat : critères d'acceptation NON ATTEINTS — ${outcome.summary}`
+      : "";
     return {
       ok: true,
       failedSteps: [],
-      text: deliverable
-        ?? options.completedFallback
-        ?? "Le plan de l'agent a été exécuté. Consultez les étapes et résultats ci-dessous.",
+      text:
+        (deliverable
+          ?? options.completedFallback
+          ?? "Le plan de l'agent a été exécuté. Consultez les étapes et résultats ci-dessous.") + outcomeSection,
     };
   }
 

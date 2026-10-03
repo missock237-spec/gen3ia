@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/firebase/admin";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
+import type { OutcomeContract } from "@/lib/agents/outcome-contract";
 
 /**
  * Cycle de vie des missions en file d'attente (recommandation A de l'audit).
@@ -93,6 +94,8 @@ export interface CreateQueuedMissionInput {
   orgId?: string;
   /** Plan COMPLET exécutable — le tick receiver le relit pour construire le runtime (le document de file est la seule mémoire entre deux ticks). */
   plan: RuntimePlan;
+  /** Contrat de résultat (concepts #1/#2) : relayé au runtime par chaque tick. */
+  outcomeContract?: OutcomeContract;
   messageId?: string;
 }
 
@@ -110,6 +113,8 @@ export interface MissionQueueRecord {
   lastError?: string;
   /** Plan complet (présent sur le record brut du claim — jamais renvoyé au client). */
   plan?: RuntimePlan;
+  /** Contrat de résultat (présent quand la mission en porte un). */
+  outcomeContract?: OutcomeContract;
   timeline: MissionQueueStep[];
   pendingCount: number;
   createdAtMs: number;
@@ -136,6 +141,7 @@ export async function createQueuedMission(input: CreateQueuedMissionInput): Prom
     status: "queued" satisfies MissionQueueStatus,
     attempts: 0,
     plan: input.plan,
+    ...(input.outcomeContract ? { outcomeContract: input.outcomeContract } : {}),
     timeline: steps.map((step) => compactQueueStep(step)),
     pendingCount: steps.filter((step) => (step.status ?? "pending") === "pending").length,
     ...(input.messageId ? { messageId: input.messageId } : {}),
@@ -193,6 +199,7 @@ export async function claimMissionTick(runId: string): Promise<ClaimOutcome> {
         leaseUntilMs: now + MISSION_LEASE_MS,
         ...(data.lastError ? { lastError: data.lastError } : {}),
         ...(data.plan ? { plan: data.plan as RuntimePlan } : {}),
+        ...(data.outcomeContract ? { outcomeContract: data.outcomeContract as OutcomeContract } : {}),
         timeline: Array.isArray(data.timeline) ? data.timeline : [],
         pendingCount: typeof data.pendingCount === "number" ? data.pendingCount : 0,
         createdAtMs: typeof data.createdAtMs === "number" ? data.createdAtMs : now,
@@ -301,6 +308,7 @@ export async function getMissionRun(userId: string, runId: string): Promise<Miss
     leaseUntilMs: typeof data.leaseUntilMs === "number" ? data.leaseUntilMs : undefined,
     ...(data.lastError ? { lastError: data.lastError } : {}),
     timeline: Array.isArray(data.timeline) ? data.timeline : [],
+    ...(data.outcomeContract ? { outcomeContract: data.outcomeContract } : {}),
     pendingCount: typeof data.pendingCount === "number" ? data.pendingCount : 0,
     createdAtMs: typeof data.createdAtMs === "number" ? data.createdAtMs : now,
     updatedAtMs: typeof data.updatedAtMs === "number" ? data.updatedAtMs : now,

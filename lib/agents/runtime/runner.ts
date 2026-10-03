@@ -13,6 +13,7 @@ import { assertNotPaused, assertNotStopped, PauseRequestedError } from "./pause"
 import { generateImageWithAgnes, isImageGenerationEnabled } from "@/lib/ai/image-generation";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import { RESPONSE_FORMAT_RULES } from "@/lib/ai/response-quality";
+import { verifyOutcomeCriteria, type OutcomeContract } from "@/lib/agents/outcome-contract";
 
 /* ------------------------------------------------------------------ */
 /* Completion des livrables document (artifact.create)                 */
@@ -93,7 +94,7 @@ export interface RuntimeAgentConfig {
   orgId?: string;
 }
 
-export interface RuntimeRunnerOptions { userId: string; projectId?: string; objective: string; plan: RuntimePlan; conversationId?: string; signal?: AbortSignal; policy?: ExecutionPolicy; agent?: RuntimeAgentConfig; /** Organisation propriétaire (Task 58) : source explicite (file mission, tâche workspace) quand aucun agent n'est transmis ; l'orgId de l'agent PRIME sinon. */ orgId?: string; /** Reprise : sorties des étapes déjà complétées (checkpoint) — sans elles, les étapes dépendantes reprendraient à vide. */ initialOutputs?: Record<string, unknown>; /** Échéance horloge (epoch ms) : passé ce seuil, plus AUCUN nouveau lot d'étapes n'est lancé — le runtime se met en PAUSE PROPRE (checkpoint conservé, étapes restantes "pending") au lieu de démarrer un travail qui dépasserait la fenêtre d'exécution. Mécanisme de la file d'attente mission (Task 53, recommandation A de l'audit) : chaque tick exécute une tranche bornée puis ré-enfile la suite. Non défini = comportement inchangé (toute l'exécution dans l'appel). */ batchDeadlineMs?: number; /** Réserve minimale (ms) exigée avant de lancer un lot quand batchDeadlineMs est défini — un lot démarré doit avoir la place de se terminer (timeout d'étape inclus). Défaut : 45 000 ms. */ minBatchReserveMs?: number; }
+export interface RuntimeRunnerOptions { userId: string; projectId?: string; objective: string; plan: RuntimePlan; conversationId?: string; signal?: AbortSignal; policy?: ExecutionPolicy; agent?: RuntimeAgentConfig; /** Organisation propriétaire (Task 58) : source explicite (file mission, tâche workspace) quand aucun agent n'est transmis ; l'orgId de l'agent PRIME sinon. */ orgId?: string; /** Reprise : sorties des étapes déjà complétées (checkpoint) — sans elles, les étapes dépendantes reprendraient à vide. */ initialOutputs?: Record<string, unknown>; /** Échéance horloge (epoch ms) : passé ce seuil, plus AUCUN nouveau lot d'étapes n'est lancé — le runtime se met en PAUSE PROPRE (checkpoint conservé, étapes restantes "pending") au lieu de démarrer un travail qui dépasserait la fenêtre d'exécution. Mécanisme de la file d'attente mission (Task 53, recommandation A de l'audit) : chaque tick exécute une tranche bornée puis ré-enfile la suite. Non défini = comportement inchangé (toute l'exécution dans l'appel). */ batchDeadlineMs?: number; /** Réserve minimale (ms) exigée avant de lancer un lot quand batchDeadlineMs est défini — un lot démarré doit avoir la place de se terminer (timeout d'étape inclus). Défaut : 45 000 ms. */ minBatchReserveMs?: number; /** Contrat de résultat (concepts #1/#2) : critères d'acceptation mesurables — la porte de sortie bloque « completed » tant qu'ils ne sont pas vérifiés. */ outcomeContract?: OutcomeContract; }
 
 export class AgentRuntime {
   private state: RuntimeExecutionState;
@@ -107,6 +108,9 @@ export class AgentRuntime {
   private readonly minBatchReserve: number;
   private criticRounds = 0;
   private static readonly CRITIC_MAX_ROUNDS = 1;
+  private outcomeRepairs = 0;
+  private static readonly OUTCOME_MAX_REPAIRS = 1;
+  private static readonly GATE_FEEDBACK_LIMIT = 800;
 
   constructor(options: RuntimeRunnerOptions) {
     const validation = validateDAG(options.plan);
@@ -127,6 +131,7 @@ export class AgentRuntime {
     this.state = {
       executionId: options.plan.executionId || randomUUID(), userId: options.userId, objective: options.objective, ...(options.conversationId !== undefined ? { conversationId: options.conversationId } : {}),
       ...(runtimeOrgId ? { orgId: runtimeOrgId } : {}),
+      ...(options.outcomeContract ? { outcomeContract: options.outcomeContract } : {}),
       status: "pending", plan: options.plan, observations: [], evaluations: [], outputs: options.initialOutputs ? { ...options.initialOutputs } : {}, iteration: 0,
       totalRetries: 0, maxTotalRetries: 15,
       billing: { currency: WALLET_CURRENCY, totalChargeMinor: 0, totalProviderCostEur: 0, llmInputTokens: 0, llmOutputTokens: 0 },
@@ -203,6 +208,43 @@ export class AgentRuntime {
             delete this.state.error;
             await this.persistCheckpoint();
             continue; // reprend la boucle interne avec les étapes réinitialisées
+          }
+        }
+        // PORTE DE RÉSULTAT (concepts #1/#2) : sans étape en échec, la
+        // mission n'est « completed » que si son contrat de résultat est
+        // vérifié. Critères non atteints + failPolicy « retry_once » → une
+        // passe de correction des étapes livrables (feedback du verdict
+        // injecté dans leur description). Toujours bornée : au plus une
+        // passe, jamais sur arrêt utilisateur, juge en échec = porte levée
+        // (honnêteté : `unavailable`, jamais de faux « critères atteints »).
+        if (!hasFailedSteps() && this.state.outcomeContract && !this.signal?.aborted) {
+          const { verification, usage } = await verifyOutcomeCriteria(this.state.outcomeContract, this.state, {
+            userId: this.state.userId,
+            executionId: this.state.executionId,
+          });
+          this.state.billing.totalChargeMinor += usage.chargeMinor;
+          this.state.billing.totalProviderCostEur += usage.providerCostEur;
+          this.state.billing.llmInputTokens += usage.inputTokens;
+          this.state.billing.llmOutputTokens += usage.outputTokens;
+          this.state.outcomeVerification = verification;
+          if (!verification.passed && !verification.unavailable) {
+            const repaired =
+              this.outcomeRepairs < AgentRuntime.OUTCOME_MAX_REPAIRS &&
+              this.state.outcomeContract.failPolicy === "retry_once"
+                ? this.resetGateDeliverableSteps(verification.summary)
+                : [];
+            if (repaired.length > 0) {
+              this.outcomeRepairs++;
+              this.state.status = "running";
+              delete this.state.error;
+              await this.persistCheckpoint();
+              continue;
+            }
+            this.state.status = "failed";
+            this.state.error = `Critères d'acceptation non atteints : ${verification.summary}`;
+            this.state.completedAt = new Date().toISOString();
+            await this.persistCheckpoint();
+            return this.state;
           }
         }
         break;
@@ -554,4 +596,23 @@ export class AgentRuntime {
     }
   }
   private finalize(): void { const hasFailures = this.state.plan.steps.some((step) => step.status === "failed"); this.state.status = hasFailures ? "failed" : "completed"; this.state.completedAt = new Date().toISOString(); }
+
+  /**
+   * Passe de correction de la porte de résultat : réinitialise les étapes
+   * livrables COMPLÉTÉES (llm/document/media/research) avec le verdict du
+   * juge injecté dans leur description — la régénération sait CE QUI manque.
+   * Retourne les étapes réinitialisées (vide = aucune réparation possible).
+   */
+  private resetGateDeliverableSteps(feedback: string): RuntimeStep[] {
+    const deliverableTypes = new Set(["llm", "document", "media", "research"]);
+    const repaired: RuntimeStep[] = [];
+    for (const step of this.state.plan.steps) {
+      if (step.status !== "completed" || !deliverableTypes.has(step.type)) continue;
+      step.status = "pending";
+      const suffix = `Correction requise (critères d'acceptation non atteints) : ${feedback.slice(0, AgentRuntime.GATE_FEEDBACK_LIMIT)}`;
+      step.description = `${step.description}\n${suffix}`.slice(0, 2_000);
+      repaired.push(step);
+    }
+    return repaired;
+  }
 }

@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     const conversationId = state.conversationId ?? body.conversationId;
     const resultStatus: string = result.status;
-    const resumedFinalText = buildFinalResponse(result.plan, result.outputs).text;
+    const resumedFinalText = buildFinalResponse(result.plan, result.outputs, { ...(result.outcomeVerification ? { outcome: result.outcomeVerification } : {}) }).text;
     if (conversationId) {
       const closingText = resultStatus === "completed"
         ? resumedFinalText

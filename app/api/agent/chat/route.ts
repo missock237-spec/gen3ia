@@ -518,7 +518,7 @@ export async function POST(request: NextRequest) {
       const currentApprovals = await listActionApprovals(user.uid, plan.executionId);
       const pending = currentApprovals.filter((item) => item.status === "pending");
       const status = pending.length > 0 ? "waiting_approval" : result.status;
-      const finalResponse = buildFinalResponse(result.plan, result.outputs);
+      const finalResponse = buildFinalResponse(result.plan, result.outputs, { ...(result.outcomeVerification ? { outcome: result.outcomeVerification } : {}) });
       const finalText = finalResponse.text;
       const taskReply = status === "waiting_approval"
         ? "J'ai exécuté les étapes autorisées. Une ou plusieurs actions nécessitent maintenant votre confirmation."
@@ -745,7 +745,7 @@ export async function POST(request: NextRequest) {
     const pending = currentApprovals.filter((item) => item.status === "pending");
 
     const status = pending.length > 0 ? "waiting_approval" : result.status;
-    const finalText = buildFinalResponse(result.plan, result.outputs).text;
+    const finalText = buildFinalResponse(result.plan, result.outputs, { ...(result.outcomeVerification ? { outcome: result.outcomeVerification } : {}) }).text;
     await appendMessage({
       conversationId,
       userId: user.uid,

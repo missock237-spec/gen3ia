@@ -20,6 +20,7 @@ import {
   type MissionQueueStatus,
 } from "@/lib/queue/mission-queue";
 import type { RuntimeExecutionState } from "@/lib/agents/runtime/types";
+import { applyOutcomeCredit, shouldCreditOutcomeFailure } from "@/lib/billing/outcome-credits";
 
 /**
  * Receiver de la file d'attente des missions (recommandation A de l'audit).
@@ -132,6 +133,9 @@ export async function POST(request: NextRequest) {
       ...(checkpoint && Object.keys(checkpoint.outputs ?? {}).length > 0
         ? { initialOutputs: checkpoint.outputs }
         : {}),
+      // Contrat de résultat (concepts #1/#2) : relayé depuis le document de
+      // file — la porte d'acceptation s'applique à chaque tick final.
+      ...(record.outcomeContract ? { outcomeContract: record.outcomeContract } : {}),
       batchDeadlineMs: Date.now() + TICK_BUDGET_MS,
     });
 
@@ -189,6 +193,17 @@ export async function POST(request: NextRequest) {
 
       if (queueStatus === "completed" || queueStatus === "failed" || queueStatus === "cancelled" || queueStatus === "paused") {
         await finalizeMissionRun(runId, queueStatus, { error: state.error });
+      }
+      // Avoir automatique (concept #2) : mission sous contrat terminée en
+      // échec (étapes en échec ou porte d'acceptation bloquante) → avoir
+      // sur les frais réels (plafonné, idempotent, fail-soft).
+      if (shouldCreditOutcomeFailure({ contractPresent: Boolean(record.outcomeContract), missionStatus: state.status })) {
+        await applyOutcomeCredit({
+          userId: record.userId,
+          executionId,
+          totalChargeMinor: state.billing?.totalChargeMinor ?? 0,
+          missionStatus: state.status,
+        });
       }
       log.info({ event: "queue.tick.finished", runId, executionId, status: state.status }, "Mission terminée dans la file");
       return NextResponse.json({ ok: true, runId, status: state.status });

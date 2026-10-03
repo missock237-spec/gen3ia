@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { OutcomeContract, OutcomeVerification } from "../outcome-contract";
+
 export const RuntimeStepStatusSchema = z.enum(["pending","ready","running","completed","failed","cancelled","waiting_approval","skipped"]);
 export type RuntimeStepStatus = z.infer<typeof RuntimeStepStatusSchema>;
 
@@ -45,6 +47,14 @@ export interface RuntimeExecutionState {
    */
   orgId?: string;
   status: "pending" | "running" | "completed" | "failed" | "cancelled" | "paused";
+  /**
+   * Contrat de résultat (concepts #1/#2) : critères d'acceptation mesurables
+   * portés par la mission — la porte de sortie du runtime bloque l'état
+   * « completed » tant qu'ils ne sont pas vérifiés (voir runner).
+   */
+  outcomeContract?: OutcomeContract;
+  /** Verdict du contrat (persisté avec le checkpoint) : preuve d'acceptation ou motif de refus. */
+  outcomeVerification?: OutcomeVerification;
   plan: RuntimePlan; observations: RuntimeObservation[]; evaluations: RuntimeEvaluation[];
   outputs: Record<string, unknown>; iteration: number; totalRetries: number; maxTotalRetries: number;
   billing: RuntimeBillingState;

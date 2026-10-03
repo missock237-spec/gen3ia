@@ -16,6 +16,8 @@ import {
   markMissionEnqueueFailed,
 } from "@/lib/queue/mission-queue";
 import { assertOrgAttach } from "@/lib/tenants/resource-access";
+import { OutcomeContractSchema } from "@/lib/agents/outcome-contract";
+import { applyOutcomeCredit, shouldCreditOutcomeFailure } from "@/lib/billing/outcome-credits";
 
 /**
  * Exécution d'un agent (API développeur + interne).
@@ -46,6 +48,8 @@ const RunAgentSchema = z.object({
   plan: RuntimePlanSchema
     .omit({ executionId: true, objective: true })
     .optional(),
+  /** Contrat de résultat (concepts #1/#2) : critères d'acceptation mesurables — la mission ne sera « completed » que s'ils sont vérifiés ; un échec déclenche un avoir automatique. */
+  outcomeContract: OutcomeContractSchema.optional(),
   /** « auto » (défaut) : async si la file est configurée, sinon sync. */
   mode: z.enum(["auto", "async", "sync"]).optional(),
 });
@@ -128,6 +132,7 @@ export async function POST(request: NextRequest) {
           objective: parsed.data.objective,
           ...(parsed.data.projectId ? { projectId: parsed.data.projectId } : {}),
           ...(parsed.data.orgId ? { orgId: parsed.data.orgId } : {}),
+          ...(parsed.data.outcomeContract ? { outcomeContract: parsed.data.outcomeContract } : {}),
           plan: runtimePlan,
         });
         const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
@@ -191,10 +196,26 @@ export async function POST(request: NextRequest) {
       signal: request.signal,
       // Cloisonnement multi-tenant (Task 58) : mission d'organisation.
       orgId: parsed.data.orgId,
+      // Contrat de résultat (concepts #1/#2) : la porte de sortie bloque
+      // « completed » tant que les critères ne sont pas vérifiés.
+      ...(parsed.data.outcomeContract ? { outcomeContract: parsed.data.outcomeContract } : {}),
     });
 
     const state = await runtime.run();
     const durationMs = Date.now() - startedAt;
+
+    // Avoir automatique (concept #2) : mission sous contrat terminée en
+    // échec → les frais réels sont remboursés (plafonnés, idempotent,
+    // fail-soft). Fire-and-forget assumé : l'avoir ne bloque JAMAIS la
+    // réponse de l'exécution.
+    if (shouldCreditOutcomeFailure({ contractPresent: Boolean(parsed.data.outcomeContract), missionStatus: state.status })) {
+      void applyOutcomeCredit({
+        userId: user.uid,
+        executionId,
+        totalChargeMinor: state.billing?.totalChargeMinor ?? 0,
+        missionStatus: state.status,
+      }).catch(() => undefined);
+    }
 
     // Métriques OTel (Task 59) : coût par organisation (no-op si export désactivé).
     recordExecutionMetrics({
