@@ -15,20 +15,30 @@ const inter = Inter({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-inter",
+  // Inter reste PRÉCHARGÉE : police du corps de texte présente sur 100 %
+  // des pages, le preload élimine le flash de substitution.
 });
 
-/** V2 « Aurora OS » : display techy-premium pour titres et marque. */
+/** V2 « Aurora OS » : display techy-premium pour titres et marque.
+ * preload:false (Task 96-d, budget bundle /layout à 100 %) : cette police
+ * décorative n'est utilisée que par les titres — pas besoin de la
+ * précharger sur TOUTES les routes (~30-90 Ko de requête de police en moins
+ * au premier chargement). display:swap évite tout blocage de texte. */
 const display = Space_Grotesk({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-display",
+  preload: false,
 });
 
-/** V2 : mono dédiée pour le code, la console et les métadonnées techniques. */
+/** V2 : mono dédiée pour le code, la console et les métadonnées techniques.
+ * preload:false (Task 96-d) : idem Space_Grotesk — réservée aux surfaces
+ * techniques (console, IDE), pas représentative du trafic général. */
 const jet = JetBrains_Mono({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-jet",
+  preload: false,
 });
 
 export const viewport: Viewport = {

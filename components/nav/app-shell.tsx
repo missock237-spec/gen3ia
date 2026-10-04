@@ -1,11 +1,53 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { AppNav } from "@/components/nav/app-nav";
 import { Breadcrumbs } from "@/components/nav/breadcrumbs";
 import { ScrollTop } from "@/components/nav/scroll-top";
-import { NotificationCenter } from "@/components/notifications/notification-center";
 import { isImmersiveChatRoute } from "@/lib/ui/chat-surface";
+
+/**
+ * Task 96-d (budget bundle /layout à 100 %) : AppNav et NotificationCenter
+ * sont chargés À LA DEMANDE (chunks séparés, téléchargés après le JS
+ * principal) au lieu de gonfler le chunk partagé de TOUTES les routes.
+ * ssr:false assumé : ces deux composants ne produisent rien d'utile au
+ * premier paint serveur (AppNav attend le rôle renvoyé par /api/auth/access,
+ * NotificationCenter attend la session Firebase) et n'existent que côté
+ * client.
+ *
+ * Squelettes de MÊMES dimensions que les cibles (sidebar .g3-sidebar vide,
+ * pastille fixe 40×40 au même emplacement) : aucun décalage de mise en page
+ * pendant le chargement des chunks.
+ */
+
+/** Squelette AppNav : l'aside vide porte la même classe de mise en page que
+ * la vraie sidebar — largeur et position réservées dès la première peinture. */
+function AppNavSkeleton() {
+  return <aside className="g3-sidebar" aria-hidden="true" />;
+}
+
+/** Squelette NotificationCenter : pastille fixe (h-10 w-10, right/top
+ * identiques au bouton cloche) — position:fixed, zéro impact sur le flux. */
+function NotificationCenterSkeleton() {
+  return (
+    <div className="fixed right-3 top-2.5 z-[70] sm:right-4" aria-hidden="true">
+      <div className="h-10 w-10 rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)]" />
+    </div>
+  );
+}
+
+const AppNav = dynamic(
+  () => import("@/components/nav/app-nav").then((m) => m.AppNav),
+  { ssr: false, loading: () => <AppNavSkeleton /> },
+);
+
+const NotificationCenter = dynamic(
+  () =>
+    import("@/components/notifications/notification-center").then(
+      (m) => m.NotificationCenter,
+    ),
+  { ssr: false, loading: () => <NotificationCenterSkeleton /> },
+);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

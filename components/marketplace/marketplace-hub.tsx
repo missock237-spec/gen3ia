@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth, authFetch } from "@/lib/firebase/auth-client";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 
@@ -33,6 +33,59 @@ function price(value?: Extension["pricing"]) {
 }
 
 function initials(name: string) { return name.trim().slice(0, 2).toUpperCase() || "G3"; }
+
+type ExtensionCardProps = {
+  extension: Extension;
+  isFavorite: boolean;
+  onToggleFavorite: (id: string) => void;
+};
+
+/**
+ * Carte catalogue mémoïsée (Task 96-d).
+ *
+ * Définie au niveau MODULE — une définition à l'intérieur du composant parent
+ * recréerait le type à chaque rendu et annulerait memo — et alimentée
+ * uniquement par des props stables : l'objet `extension` (référence conservée
+ * par le state, le useMemo du filtre recrée le TABLEAU mais pas les éléments),
+ * le booléen `isFavorite` et `onToggleFavorite` enveloppé dans useCallback.
+ * Résultat : une frappe dans la recherche re-rend le conteneur de grille mais
+ * plus les ≤100 cartes ; un bascule de favori ne re-rend que les deux cartes
+ * concernées.
+ */
+const ExtensionCard = memo(function ExtensionCard({
+  extension,
+  isFavorite,
+  onToggleFavorite,
+}: ExtensionCardProps) {
+  return (
+    <article className="group relative overflow-hidden rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--g3-border)] hover:shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)]">
+      <button
+        aria-label={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+        onClick={() => onToggleFavorite(extension.id)}
+        className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] text-sm text-[var(--g3-muted)] hover:text-[var(--g3-text)]"
+      >
+        {isFavorite ? "★" : "☆"}
+      </button>
+      <Link href={`/marketplace/${extension.id}`} className="block">
+        <div className="flex items-start gap-3">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-sky-100 text-xs font-bold text-sky-700">{initials(extension.name)}</div>
+          <div className="min-w-0 pr-10">
+            <h3 className="truncate font-semibold">{extension.name}</h3>
+            <p className="mt-1 text-[11px] text-[var(--g3-faint)]">{extension.developerName ?? "Développeur Gen3ia"} · v{extension.latestVersion ?? "—"}</p>
+          </div>
+        </div>
+        <p className="mt-4 line-clamp-3 min-h-[60px] text-sm leading-5 text-[var(--g3-muted)]">{extension.description}</p>
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          {(extension.tags ?? []).slice(0, 3).map((tag) => <span key={tag} className="rounded-full bg-[var(--g3-elevated)] px-2 py-1 text-[10px] text-[var(--g3-muted)]">{tag}</span>)}
+        </div>
+        <div className="mt-5 flex items-center justify-between border-t border-[var(--g3-border)] pt-4">
+          <span className="text-xs text-[var(--g3-faint)]">{extension.stats?.installs ?? 0} installations · {extension.stats?.rating ? `${extension.stats.rating}/5` : "Nouveau"}</span>
+          <b className="text-sm text-violet-700">{price(extension.pricing)}</b>
+        </div>
+      </Link>
+    </article>
+  );
+});
 
 export function MarketplaceHub() {
   const { user } = useAuth();
@@ -83,13 +136,16 @@ export function MarketplaceHub() {
     try { setFavorites(JSON.parse(localStorage.getItem("gen3ia:marketplace:favorites") ?? "[]")); } catch { setFavorites([]); }
   }, [user]);
 
-  const toggleFavorite = (id: string) => {
+  // Task 96-d : référence stable via useCallback — prop de ExtensionCard,
+  // la callback ne doit PAS être recréée à chaque frappe sinon memo est
+  // invalidé pour les 100 cartes.
+  const toggleFavorite = useCallback((id: string) => {
     setFavorites((current) => {
       const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
       localStorage.setItem("gen3ia:marketplace:favorites", JSON.stringify(next));
       return next;
     });
-  };
+  }, []);
 
   const visible = useMemo(() => {
     let list = [...extensions];
@@ -133,7 +189,7 @@ export function MarketplaceHub() {
 
           <section className="mt-7">
             <div className="mb-4 flex items-center justify-between"><div><h2 className="font-serif text-lg font-semibold">{tab === "discover" ? "Explorer" : tabs.find((x) => x[0] === tab)?.[1]}</h2><p className="mt-1 text-xs text-[var(--g3-faint)]">{tab === "installed" && installedLoading ? "Synchronisation…" : `${visible.length} résultat${visible.length > 1 ? "s" : ""}`}</p></div><Link href="/developer" className="text-xs font-semibold text-sky-700 hover:text-sky-800">Publier une extension →</Link></div>
-            {error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-600">{error}</div> : loading || (tab === "installed" && installedLoading) ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-60 animate-pulse rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)]" />)}</div> : visible.length === 0 ? <div className="p-10 text-center"><div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[var(--g3-elevated)] text-xl">⌕</div><h3 className="mt-4 font-semibold">{tab === "installed" ? "Aucune extension installée" : tab === "favorites" ? "Aucun favori" : tab === "purchases" ? "Aucun achat affiché" : "Aucun résultat"}</h3><p className="mt-2 text-sm text-[var(--g3-faint)]">{tab === "installed" ? "Installez une extension depuis sa fiche pour la retrouver ici." : tab === "favorites" ? "Ajoutez des extensions à vos favoris pour les retrouver rapidement." : tab === "purchases" ? "La gestion détaillée des licences sera ajoutée dans l’espace achats." : "Modifiez votre recherche, catégorie ou sélection."}</p>{tab === "installed" && <button onClick={() => setTab("discover")} className="mt-5 rounded-full bg-[var(--g3-deep)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--g3-deep)]">Explorer le catalogue</button>}</div> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{visible.map((extension) => <article key={extension.id} className="group relative overflow-hidden rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--g3-border)] hover:shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)]"><button aria-label={favorites.includes(extension.id) ? "Retirer des favoris" : "Ajouter aux favoris"} onClick={() => toggleFavorite(extension.id)} className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] text-sm text-[var(--g3-muted)] hover:text-[var(--g3-text)]">{favorites.includes(extension.id) ? "★" : "☆"}</button><Link href={`/marketplace/${extension.id}`} className="block"><div className="flex items-start gap-3"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-sky-100 text-xs font-bold text-sky-700">{initials(extension.name)}</div><div className="min-w-0 pr-10"><h3 className="truncate font-semibold">{extension.name}</h3><p className="mt-1 text-[11px] text-[var(--g3-faint)]">{extension.developerName ?? "Développeur Gen3ia"} · v{extension.latestVersion ?? "—"}</p></div></div><p className="mt-4 line-clamp-3 min-h-[60px] text-sm leading-5 text-[var(--g3-muted)]">{extension.description}</p><div className="mt-4 flex flex-wrap gap-1.5">{(extension.tags ?? []).slice(0, 3).map((tag) => <span key={tag} className="rounded-full bg-[var(--g3-elevated)] px-2 py-1 text-[10px] text-[var(--g3-muted)]">{tag}</span>)}</div><div className="mt-5 flex items-center justify-between border-t border-[var(--g3-border)] pt-4"><span className="text-xs text-[var(--g3-faint)]">{extension.stats?.installs ?? 0} installations · {extension.stats?.rating ? `${extension.stats.rating}/5` : "Nouveau"}</span><b className="text-sm text-violet-700">{price(extension.pricing)}</b></div></Link></article>)}</div>}
+            {error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-600">{error}</div> : loading || (tab === "installed" && installedLoading) ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-60 animate-pulse rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)]" />)}</div> : visible.length === 0 ? <div className="p-10 text-center"><div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[var(--g3-elevated)] text-xl">⌕</div><h3 className="mt-4 font-semibold">{tab === "installed" ? "Aucune extension installée" : tab === "favorites" ? "Aucun favori" : tab === "purchases" ? "Aucun achat affiché" : "Aucun résultat"}</h3><p className="mt-2 text-sm text-[var(--g3-faint)]">{tab === "installed" ? "Installez une extension depuis sa fiche pour la retrouver ici." : tab === "favorites" ? "Ajoutez des extensions à vos favoris pour les retrouver rapidement." : tab === "purchases" ? "La gestion détaillée des licences sera ajoutée dans l’espace achats." : "Modifiez votre recherche, catégorie ou sélection."}</p>{tab === "installed" && <button onClick={() => setTab("discover")} className="mt-5 rounded-full bg-[var(--g3-deep)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--g3-deep)]">Explorer le catalogue</button>}</div> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{visible.map((extension) => <ExtensionCard key={extension.id} extension={extension} isFavorite={favorites.includes(extension.id)} onToggleFavorite={toggleFavorite} />)}</div>}
           </section>
         </div>
       </div>

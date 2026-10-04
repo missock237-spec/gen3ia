@@ -104,8 +104,9 @@ export function ConnectorsPanel() {
               <div key={connector.toolkit} className="rounded-2xl border p-4">
                 <div className="flex items-center gap-3">
                   {connector.logo ? (
+                    /* Task 96-d (CLS) : logo 32×32 — mêmes dimensions que le placeholder à initiale ci-dessous, aucune bascule de layout au chargement. */
                     /* eslint-disable-next-line @next/next/no-img-element -- Composio sert des logos de centaines de domaines imprévisibles ; next/image exige une allowlist statique impossible pour 800+ apps. */
-                    <img src={connector.logo} alt="" className="h-8 w-8 rounded-lg" />
+                    <img src={connector.logo} alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
                   ) : (
                     <div className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--g3-elevated)] text-xs font-bold">{connector.label.slice(0, 1)}</div>
                   )}

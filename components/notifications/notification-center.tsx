@@ -23,7 +23,9 @@ import {
  * serveur). Une notification native du navigateur est également émise si la
  * permission a été accordée.
  *
- * Rafraîchissement : polling léger (25 s) + refresh au retour d'onglet.
+ * Rafraîchissement : polling léger (25 s) EN PAUSE quand l'onglet est caché
+ * (Task 96-d : Page Visibility — aucune requête ni lecture Firestore pour un
+ * onglet que personne ne regarde) + refresh immédiat au retour d'onglet.
  */
 
 type Gen3iaNotification = {
@@ -111,7 +113,14 @@ export function NotificationCenter() {
   React.useEffect(() => {
     if (!sessionAvailable) return;
     void refresh();
-    const timer = window.setInterval(() => void refresh(), POLL_INTERVAL_MS);
+    const timer = window.setInterval(() => {
+      // Task 96-d : onglet caché = polling en pause. La reprise est GARANTIE
+      // par le listener visibilitychange ci-dessous, qui déclenche un
+      // rafraîchissement immédiat dès que l'onglet redevient visible —
+      // aucune notification ne peut être manquée par cette pause.
+      if (document.hidden) return;
+      void refresh();
+    }, POLL_INTERVAL_MS);
     const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
     document.addEventListener("visibilitychange", onVisible);
     return () => {

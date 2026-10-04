@@ -90,8 +90,9 @@ export function SettingsAdSpace() {
           onClick={() => void track("click")}
           className="block bg-[var(--g3-elevated)]"
         >
+          {/* Task 96-d (CLS) : dimensions plausibles 3:1 (bannière) — ratio réservé avant chargement, object-cover recadre sans déformation quelle que soit la création réelle. */}
           {/* eslint-disable-next-line @next/next/no-img-element -- creative URL externe fournie par l'inventaire publicitaire */}
-          <img src={ad.imageUrl} alt={ad.title} className="max-h-[320px] w-full object-cover" loading="lazy" />
+          <img src={ad.imageUrl} alt={ad.title} width={1200} height={400} className="max-h-[320px] w-full object-cover" loading="lazy" />
         </a>
       )}
 

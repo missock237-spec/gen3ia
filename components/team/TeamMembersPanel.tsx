@@ -137,8 +137,9 @@ export function TeamMembersPanel({ teamId }: { teamId: string }) {
           >
             <div className="flex min-w-0 items-center gap-3">
               {member.photoURL ? (
+                // Task 96-d (CLS) : avatar 40×40 — mêmes dimensions que le placeholder à initiales ci-dessous, aucune bascule de layout au chargement.
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={member.photoURL} alt="" className="h-10 w-10 shrink-0 rounded-full border border-[var(--g3-border)]" />
+                <img src={member.photoURL} alt="" width={40} height={40} className="h-10 w-10 shrink-0 rounded-full border border-[var(--g3-border)]" />
               ) : (
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--g3-elevated)] text-sm font-semibold text-[var(--g3-muted)]">
                   {(member.displayName || member.email || '?').charAt(0).toUpperCase()}
