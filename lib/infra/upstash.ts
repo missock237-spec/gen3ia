@@ -22,7 +22,7 @@ export async function setJobProgress(
   if (!client) return;
   await client.set(
     `gen3ia:job:${jobId}`,
-    { progress: Math.max(0, Math.min(100, progress)), status, ...extra, updatedAt: Date.now() },
+    { progress: Math.max(0, Math.min(1, progress)), status, ...extra, updatedAt: Date.now() },
     { ex: 60 * 60 * 24 },
   );
 }
