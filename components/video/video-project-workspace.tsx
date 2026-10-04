@@ -776,7 +776,7 @@ function TimelinePanel({ project, onRefresh, busy, runAction }: { project: Video
         fadeOutSec: Number(payload.fadeOutSec ?? found.clip.audio?.fadeOutSec ?? 0),
       };
     } else if (op === "set_motion" && found) {
-      found.clip.motion = { ...(found.clip.motion ?? {}), preset: String(payload.preset ?? "slow_zoom") } as TimelineClip["motion"];
+      found.clip.motion = found.clip.motion ? { ...found.clip.motion, preset: String(payload.preset ?? found.clip.motion.preset) as NonNullable<TimelineClip["motion"]>["preset"] } : found.clip.motion;
     } else if (op === "set_text" && found) {
       found.clip.text = String(payload.text ?? "");
     } else if (op === "add_text_clip") {
@@ -833,7 +833,6 @@ function TimelinePanel({ project, onRefresh, busy, runAction }: { project: Video
       setTimeline(optimistic);
       await cacheLocalProject({ ...project, timeline: optimistic, updatedAt: new Date().toISOString() });
       await enqueueTimelineSync(project.id, op, payload, clipId);
-      setError(data.error ?? "Serveur indisponible : modification mise en attente.");
       return;
     }
     setTimeline(data.timeline ?? null);
