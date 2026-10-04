@@ -162,6 +162,22 @@ export async function resilientList<T>(
   }
 }
 
+export async function resilientListByPayloadField<T>(
+  collection: string,
+  field: string,
+  value: string,
+): Promise<T[]> {
+  try {
+    const snap = await adminDb.collection(collection).where(field, "==", value).get();
+    return snap.docs.map((doc) => doc.data() as T);
+  } catch (error) {
+    if (!isFirestoreQuotaError(error) || !fallbackEnabled()) throw error;
+    const supabase = getSupabaseAdmin()!;
+    const { data, error: dbError } = await supabase.from("firestore_fallback").select("payload").eq("collection", collection).filter("payload->>" + field, "eq", value);
+    if (dbError) throw fallbackError();
+    return (data ?? []).map((row) => row.payload as T);
+  }
+}
 export async function resilientCount(
   collection: string,
   ownerField: string,
