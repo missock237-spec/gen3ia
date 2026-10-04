@@ -22,7 +22,7 @@ type JobWithUrls = Omit<RenderJob, "exports" | "output"> & {
   exports: Array<RenderJob["exports"][number] & { playbackUrl?: string | null }>;
 };
 import { formatTimecode, type VideoProject, type VideoTimeline, type VideoAsset, type RenderJob, type VoiceProfile, type ProductionLogEntry, type TimelineClip } from "@/lib/video/types";
-import { listLocalFiles, createLocalObjectUrl, type LocalFileRecord } from "@/lib/storage/local-file-store";
+import { listLocalFiles, createLocalObjectUrl, type LocalFileRecord, cacheLocalProject, getCachedLocalProject } from "@/lib/storage/local-file-store";
 
 type Tab = "director" | "script" | "storyboard" | "voice" | "timeline" | "render";
 
@@ -51,8 +51,19 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
       setError((await response.json().catch(() => ({}))).error ?? "Projet introuvable");
       return;
     }
-    const data = (await response.json()) as { project: VideoProject };
-    setProject(data.project);
+    if (response.ok) {
+      const data = (await response.json()) as { project: VideoProject };
+      setProject(data.project);
+      await cacheLocalProject(data.project);
+      return;
+    }
+    const cached = await getCachedLocalProject<VideoProject>(projectId);
+    if (cached) {
+      setProject(cached.project);
+      setError("Mode hors connexion : dernière version locale utilisée.");
+      return;
+    }
+    setError((await response.json().catch(() => ({}))).error ?? "Projet introuvable");
   }, [projectId]);
 
   const loadAssets = useCallback(async () => {
