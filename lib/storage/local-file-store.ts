@@ -4,6 +4,7 @@ const DB_NAME = "gen3ia-local-files";
 const STORE_NAME = "files";
 const DB_VERSION = 2;
 const PROJECT_STORE_NAME = "projects";
+const SYNC_STORE_NAME = "syncQueue";
 
 export interface LocalFileRecord {
   id: string;
@@ -23,6 +24,7 @@ function openDb(): Promise<IDBDatabase> {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: "id" });
       if (!db.objectStoreNames.contains(PROJECT_STORE_NAME)) db.createObjectStore(PROJECT_STORE_NAME, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(SYNC_STORE_NAME)) db.createObjectStore(SYNC_STORE_NAME, { keyPath: "id" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -133,4 +135,72 @@ export async function getCachedLocalProject<T extends { id: string }>(id: string
   });
   db.close();
   return value;
+}
+
+
+export type LocalSyncStatus = "pending" | "syncing" | "synced" | "error";
+
+export interface LocalSyncItem {
+  id: string;
+  projectId: string;
+  localFileId: string;
+  status: LocalSyncStatus;
+  attempts: number;
+  lastError?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export async function enqueueLocalSync(projectId: string, localFileId: string): Promise<LocalSyncItem> {
+  const db = await openDb();
+  const item: LocalSyncItem = {
+    id: `file:${localFileId}`,
+    projectId,
+    localFileId,
+    status: "pending",
+    attempts: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(SYNC_STORE_NAME, "readwrite");
+    tx.objectStore(SYNC_STORE_NAME).put(item);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+  return item;
+}
+
+export async function listLocalSyncItems(status?: LocalSyncStatus): Promise<LocalSyncItem[]> {
+  const db = await openDb();
+  const items = await new Promise<LocalSyncItem[]>((resolve, reject) => {
+    const tx = db.transaction(SYNC_STORE_NAME, "readonly");
+    const request = tx.objectStore(SYNC_STORE_NAME).getAll();
+    request.onsuccess = () => {
+      const all = (request.result as LocalSyncItem[]) ?? [];
+      resolve(status ? all.filter((item) => item.status === status) : all);
+    };
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return items;
+}
+
+export async function updateLocalSyncItem(id: string, patch: Partial<Pick<LocalSyncItem, "status" | "attempts" | "lastError">>): Promise<void> {
+  const db = await openDb();
+  const current = await new Promise<LocalSyncItem | null>((resolve, reject) => {
+    const tx = db.transaction(SYNC_STORE_NAME, "readonly");
+    const request = tx.objectStore(SYNC_STORE_NAME).get(id);
+    request.onsuccess = () => resolve((request.result as LocalSyncItem | undefined) ?? null);
+    request.onerror = () => reject(request.error);
+  });
+  if (!current) { db.close(); return; }
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(SYNC_STORE_NAME, "readwrite");
+    tx.objectStore(SYNC_STORE_NAME).put({ ...current, ...patch, updatedAt: Date.now() });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
 }
