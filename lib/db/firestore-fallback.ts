@@ -41,6 +41,7 @@ export async function resilientCreate(
 ): Promise<void> {
   try {
     await adminDb.collection(collection).doc(documentId).create(payload);
+    await mirrorToSupabase(collection, documentId, payload, ownerId);
     return;
   } catch (error) {
     if (!isFirestoreQuotaError(error) || !fallbackEnabled()) throw error;
@@ -65,6 +66,7 @@ export async function resilientSet(
     await adminDb.collection(collection).doc(documentId).set(payload, {
       merge: options.merge ?? false,
     });
+    await mirrorToSupabase(collection, documentId, payload, options.ownerId);
     return;
   } catch (error) {
     if (!isFirestoreQuotaError(error) || !fallbackEnabled()) throw error;
@@ -99,6 +101,26 @@ export async function resilientGet<T>(
     const row = await readFallback(collection, documentId);
     return (row?.payload as T | undefined) ?? null;
   }
+}
+
+async function mirrorToSupabase(
+  collection: string,
+  documentId: string,
+  payload: Record<string, unknown>,
+  ownerId?: string,
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return;
+  // Best-effort mirror: Firestore reste la source primaire tant que son quota
+  // est disponible. Le miroir garantit que le chemin de secours possède les
+  // données nécessaires au moment où Firestore devient indisponible.
+  await supabase.from("firestore_fallback").upsert({
+    collection,
+    document_id: documentId,
+    owner_id: ownerId ?? (typeof payload.userId === "string" ? payload.userId : null),
+    payload,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "collection,document_id" });
 }
 
 async function readFallback(collection: string, documentId: string): Promise<Row | null> {
