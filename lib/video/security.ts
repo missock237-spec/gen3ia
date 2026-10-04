@@ -335,6 +335,7 @@ export const RevisionRequestSchema = z.object({
 
 export const TimelinePatchSchema = z.object({
   op: z.enum([
+    "add_clip",
     "move_clip",
     "resize_clip",
     "set_transform",
