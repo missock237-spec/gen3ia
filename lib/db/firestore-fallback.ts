@@ -9,6 +9,7 @@ import {
   isFirestoreQuotaError,
   isFirestoreTransientError,
   noteFirestoreQuotaError,
+  noteFirestoreStall,
   noteFirestoreSuccess,
   shouldShortCircuitFirestore,
 } from "@/lib/db/quota-guard";
@@ -54,6 +55,54 @@ function fallbackError(): Error {
  */
 function firestoreUsable(): boolean {
   return !shouldShortCircuitFirestore() || beginFirestoreProbe();
+}
+
+// ---------------------------------------------------------------------------
+// Deadline anti-stall (Task 97) — constat production du 05/10
+// ---------------------------------------------------------------------------
+
+/**
+ * Délai imparti à CHAQUE tentative Firestore. Constaté en production le
+ * 05/10 : quand le quota quotidien est épuisé, les ÉCRITURES Firestore ne
+ * remontent PAS l'erreur RESOURCE_EXHAUSTED — elles pendent indéfiniment
+ * côté SDK (retentées internes), ce qui ferait pendre les requêtes serverless
+ * au lieu de basculer sur le repli. Chaque tentative est donc bornée : au
+ *-delà du délai, un "stall" est noté au disjoncteur (qui s'ouvre
+ * immédiatement) et l'appel bascule sur le miroir.
+ *
+ * 6 s : assez long pour laisser passer les appels lents légitimes (p99),
+ * assez court pour que create→get→set d'un même appel métier tienne dans le
+ * budget d'une fonction serverless (le premier stall ouvre le circuit — les
+ * appels suivants sont instantanés).
+ */
+export const FIRESTORE_ATTEMPT_TIMEOUT_MS = 6_000;
+
+/**
+ * Exécute `op` sous deadline. Au-delà de FIRESTORE_ATTEMPT_TIMEOUT_MS :
+ *  - `noteFirestoreStall()` ouvre le disjoncteur (signal coûteux = preuve
+ *    suffisante, cf. quota-guard.noteFirestoreStall) ;
+ *  - l'erreur synthétique porte le mot "quota" → classée quota par
+ *    isFirestoreQuotaError → TOUS les chemins de repli existants s'engagent
+ *    sans modification (le contrat d'erreur du module est préservé).
+ * Le rejet tardif de `op` (après timeout) est absorbé par la course
+ * (Promise.race souscrit aux deux promesses — jamais d'unhandledRejection).
+ */
+async function attemptFirestore<T>(label: string, op: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      op(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          const detail = `${label}: aucune réponse en ${FIRESTORE_ATTEMPT_TIMEOUT_MS}ms`;
+          noteFirestoreStall(detail);
+          reject(new Error(`${detail} (probablement quota Firestore épuisé — bascule vers le repli).`));
+        }, FIRESTORE_ATTEMPT_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 type Row = {
@@ -279,7 +328,9 @@ export async function resilientCreate(
     return writeFallbackInsert(collection, documentId, payload, ownerId);
   }
   try {
-    await adminDb.collection(collection).doc(documentId).create(payload);
+    await attemptFirestore(`create ${collection}/${documentId}`, () =>
+      adminDb.collection(collection).doc(documentId).create(payload),
+    );
     noteFirestoreSuccess();
     await mirrorToSupabase(collection, documentId, payload, ownerId);
     return;
@@ -303,9 +354,11 @@ export async function resilientSet(
     return writeFallbackSet(collection, documentId, payload, options);
   }
   try {
-    await adminDb.collection(collection).doc(documentId).set(payload, {
-      merge: options.merge ?? false,
-    });
+    await attemptFirestore(`set ${collection}/${documentId}`, () =>
+      adminDb.collection(collection).doc(documentId).set(payload, {
+        merge: options.merge ?? false,
+      }),
+    );
     noteFirestoreSuccess();
     await mirrorToSupabase(collection, documentId, payload, options.ownerId, {
       merge: options.merge ?? false,
@@ -330,7 +383,9 @@ export async function resilientGet<T>(
     return (row?.payload as T | undefined) ?? null;
   }
   try {
-    const snapshot = await adminDb.collection(collection).doc(documentId).get();
+    const snapshot = await attemptFirestore(`get ${collection}/${documentId}`, () =>
+      adminDb.collection(collection).doc(documentId).get(),
+    );
     // La LECTURE a réussi (doc absent = succès quand même) : referme le circuit.
     noteFirestoreSuccess();
     if (snapshot.exists) return snapshot.data() as T;
@@ -499,7 +554,9 @@ export async function resilientList<T>(
     return listFallbackByOwner<T>(collection, ownerId);
   }
   try {
-    const snap = await adminDb.collection(collection).where(ownerField, "==", ownerId).get();
+    const snap = await attemptFirestore(`list ${collection} par ${ownerField}`, () =>
+      adminDb.collection(collection).where(ownerField, "==", ownerId).get(),
+    );
     noteFirestoreSuccess();
     return snap.docs.map((doc) => doc.data() as T);
   } catch (error) {
@@ -532,7 +589,9 @@ export async function resilientListByPayloadField<T>(
     return listFallbackByPayloadField<T>(collection, field, value);
   }
   try {
-    const snap = await adminDb.collection(collection).where(field, "==", value).get();
+    const snap = await attemptFirestore(`list ${collection} par ${field}`, () =>
+      adminDb.collection(collection).where(field, "==", value).get(),
+    );
     noteFirestoreSuccess();
     return snap.docs.map((doc) => doc.data() as T);
   } catch (error) {
@@ -565,7 +624,9 @@ export async function resilientCount(
     return countFallback(collection, ownerId);
   }
   try {
-    const snap = await adminDb.collection(collection).where(ownerField, "==", ownerId).get();
+    const snap = await attemptFirestore(`count ${collection} par ${ownerField}`, () =>
+      adminDb.collection(collection).where(ownerField, "==", ownerId).get(),
+    );
     noteFirestoreSuccess();
     return snap.size;
   } catch (error) {
@@ -714,7 +775,7 @@ export async function resilientQuery<T>(
       query = query.where(filter.field, "==", filter.value);
     }
     query = query.limit(scanCap);
-    const snapshot = await query.get();
+    const snapshot = await attemptFirestore(`query ${collection} (${filters.length} filtre(s))`, () => query.get());
     noteFirestoreSuccess();
     let docs = snapshot.docs.map((doc) =>
       options?.includeIds
@@ -789,7 +850,9 @@ export async function resilientDelete(collection: string, documentId: string): P
     return deleteFallbackOnly(collection, documentId);
   }
   try {
-    await adminDb.collection(collection).doc(documentId).delete();
+    await attemptFirestore(`delete ${collection}/${documentId}`, () =>
+      adminDb.collection(collection).doc(documentId).delete(),
+    );
     noteFirestoreSuccess();
     await purgeMirrorRow(collection, documentId);
     return;
@@ -863,7 +926,9 @@ export async function reconcileFallbackToFirestore(
   let successNoted = false;
   for (const row of rows) {
     try {
-      await adminDb.collection(row.collection).doc(row.document_id).set(row.payload, { merge: true });
+      await attemptFirestore(`reconcile ${row.collection}/${row.document_id}`, () =>
+        adminDb.collection(row.collection).doc(row.document_id).set(row.payload, { merge: true }),
+      );
       reconciled += 1;
       if (!successNoted) {
         // Un succès réel referme le circuit (au plus une note par passe).

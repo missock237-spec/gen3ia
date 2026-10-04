@@ -33,6 +33,8 @@ export interface QuotaGuardStats {
   lastQuotaError: string | null;
   /** Appels Firestore évités pendant l'ouverture (compteur de vie du process). */
   shortCircuits: number;
+  /** Total de "stalls" (écritures/lectures Firestore jamais revenues) depuis le démarrage du process. */
+  stalls: number;
   /** true = quota QUOTIDIEN détecté (cooldown long), sinon quota logiciel. */
   hardQuota: boolean;
   cooldownEndsAt: string | null;
@@ -193,6 +195,7 @@ let openedAtMs: number | null = null;
 let lastQuotaErrorAtMs: number | null = null;
 let lastQuotaErrorMessage: string | null = null;
 let shortCircuits = 0;
+let stalls = 0;
 let hardQuota = false;
 let cooldownEndsAtMs: number | null = null;
 /** Sonde half-open consommée et pas encore résolue (succès/échec). */
@@ -243,6 +246,30 @@ export function noteFirestoreQuotaError(error: unknown): void {
     breakerState === "open" || wasHalfOpen || consecutiveQuotaErrors >= QUOTA_BREAKER_OPEN_THRESHOLD;
   if (!mustOpen) return;
   openBreaker(error);
+}
+
+/**
+ * Enregistre un "stall" Firestore : un appel qui n'a JAMAIS répondu dans le
+ * délai imparti (Task 97 — constaté en production le 05/10 : sous quota
+ * quotidien épuisé, les ÉCRITURES Firestore ne remontent PAS l'erreur
+ * RESOURCE_EXHAUSTED, elles pendent indéfiniment côté SDK ; les lectures,
+ * elles, échouent vite).
+ *
+ * Un stall est un signal COÛTEUX (le client a déjà attendu le délai complet)
+ * et quasi toujours synonyme de quota épuisé : on ouvre donc le disjoncteur
+ * IMMÉDIATEMENT (cooldown SOFT) au lieu d'exiger QUOTA_BREAKER_OPEN_THRESHOLD
+ * occurrences — le circuit s'auto-répare via la sonde half-open si le
+ * diagnostic était faux (blip réseau long). Les calls suivants basculent
+ * instantanément sur le repli Supabase.
+ */
+export function noteFirestoreStall(detail: string): void {
+  stalls += 1;
+  consecutiveQuotaErrors += 1;
+  lastQuotaErrorAtMs = Date.now();
+  lastQuotaErrorMessage = `stall: ${detail}`.slice(0, 300);
+  const wasHalfOpen = currentState() === "half-open";
+  if (wasHalfOpen) probeInFlight = false;
+  openBreaker(lastQuotaErrorMessage);
 }
 
 /**
@@ -298,6 +325,7 @@ export function getQuotaGuardStats(): QuotaGuardStats {
     lastQuotaErrorAt: lastQuotaErrorAtMs === null ? null : new Date(lastQuotaErrorAtMs).toISOString(),
     lastQuotaError: lastQuotaErrorMessage,
     shortCircuits,
+    stalls,
     hardQuota,
     cooldownEndsAt: cooldownEndsAtMs === null ? null : new Date(cooldownEndsAtMs).toISOString(),
   };
@@ -311,6 +339,7 @@ export function resetQuotaGuardForTests(): void {
   lastQuotaErrorAtMs = null;
   lastQuotaErrorMessage = null;
   shortCircuits = 0;
+  stalls = 0;
   hardQuota = false;
   cooldownEndsAtMs = null;
   probeInFlight = false;

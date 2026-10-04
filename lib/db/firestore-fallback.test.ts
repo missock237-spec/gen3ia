@@ -27,6 +27,9 @@ const firestoreState = vi.hoisted(() => ({
   ops: [] as Array<{ kind: string; path: string; payload?: unknown; opts?: unknown }>,
   /** Quand défini, chaque get/set/create lève cette erreur (quota, 429…). */
   failWith: null as unknown,
+  /** Task 97 : quand vrai, chaque get/set/create NE RÉPOND JAMAIS (stall —
+   * comportement réel observé sous quota quotidien épuisé). */
+  hang: false,
   /** Résultats factices des requêtes where().get() / where().limit().get(). */
   queryResults: [] as Array<Record<string, unknown>>,
 }));
@@ -39,22 +42,27 @@ vi.mock("@/lib/firebase/admin", () => ({
         const throwIfFailing = () => {
           if (firestoreState.failWith) throw firestoreState.failWith;
         };
+        const hangForever = <T>(value: T): Promise<T> =>
+          firestoreState.hang ? new Promise<T>(() => {}) : Promise.resolve(value);
         return {
           create: async (payload: unknown) => {
             firestoreState.ops.push({ kind: "create", path, payload });
             throwIfFailing();
+            if (firestoreState.hang) return hangForever({});
             firestoreState.docs.set(path, { exists: true, data: payload as Record<string, unknown> });
             return {};
           },
           delete: async () => {
             firestoreState.ops.push({ kind: "delete", path });
             throwIfFailing();
+            if (firestoreState.hang) return hangForever({});
             firestoreState.docs.delete(path);
             return {};
           },
           set: async (payload: unknown, opts?: unknown) => {
             firestoreState.ops.push({ kind: "set", path, payload, opts });
             throwIfFailing();
+            if (firestoreState.hang) return hangForever({});
             const existing = firestoreState.docs.get(path);
             const merge = (opts as { merge?: boolean } | undefined)?.merge === true;
             firestoreState.docs.set(path, {
@@ -66,6 +74,7 @@ vi.mock("@/lib/firebase/admin", () => ({
           get: async () => {
             firestoreState.ops.push({ kind: "get", path });
             throwIfFailing();
+            if (firestoreState.hang) return hangForever({ exists: false, data: () => undefined });
             const doc = firestoreState.docs.get(path);
             if (!doc?.exists) return { exists: false, data: () => undefined };
             return { exists: true, data: () => doc.data };
@@ -265,6 +274,7 @@ function resetAll(): void {
   firestoreState.docs.clear();
   firestoreState.ops.length = 0;
   firestoreState.failWith = null;
+  firestoreState.hang = false;
   firestoreState.queryResults = [];
   supabaseState.rows = [];
   supabaseState.ops.length = 0;
@@ -275,8 +285,10 @@ function resetAll(): void {
 }
 
 import { noteFirestoreQuotaError, resetQuotaGuardForTests } from "./quota-guard";
+import { getQuotaGuardStats } from "./quota-guard";
 import {
   DEFAULT_RECONCILE_COLLECTIONS,
+  FIRESTORE_ATTEMPT_TIMEOUT_MS,
   reconcileFallbackToFirestore,
   resilientCreate,
   resilientDelete,
@@ -651,5 +663,68 @@ describe("resilientQuery includeIds + tri horodatage (Task 96-c)", () => {
       "2026-01-02T10:00:00.000Z",
       "2026-01-03T10:00:00.000Z",
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Deadline anti-stall (Task 97) — comportement réel constaté en production :
+// sous quota quotidien épuisé, les écritures Firestore pendent SANS erreur.
+// ---------------------------------------------------------------------------
+
+describe("deadline anti-stall (Task 97)", () => {
+  it("resilientCreate : écriture Firestore qui ne répond JAMAIS → bascule miroir sous délai + disjoncteur ouvert", async () => {
+    vi.useFakeTimers();
+    try {
+      firestoreState.hang = true;
+      const pending = resilientCreate("chatConversations", "stall-1", { userId: "u1", title: "t" }, "u1");
+      const awaited = vi.advanceTimersByTimeAsync(FIRESTORE_ATTEMPT_TIMEOUT_MS + 1).then(() => pending);
+      await awaited;
+      // Le miroir a reçu la ligne (insert de secours, disponibilité préservée).
+      const mirrorRow = supabaseState.ops.find(
+        (op) => op.op === "insert" && (op.args as Record<string, unknown>)?.collection === "chatConversations"
+          && (op.args as Record<string, unknown>)?.document_id === "stall-1",
+      );
+      expect(mirrorRow).toBeDefined();
+      // Le stall a ouvert le disjoncteur IMMÉDIATEMENT (signal coûteux = preuve suffisante).
+      const stats = getQuotaGuardStats();
+      expect(stats.state).toBe("open");
+      expect(stats.stalls).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resilientGet : lecture qui ne répond jamais → miss miroir → null, circuit ouvert pour la suite", async () => {
+    vi.useFakeTimers();
+    try {
+      firestoreState.hang = true;
+      const pending = resilientGet("chatConversations", "stall-2");
+      await vi.advanceTimersByTimeAsync(FIRESTORE_ATTEMPT_TIMEOUT_MS + 1).then(() => pending);
+      expect(getQuotaGuardStats().state).toBe("open");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("après UN stall, les appels suivants court-circuitent Firestore (miroir instantané, zéro nouvel appel Firestore)", async () => {
+    vi.useFakeTimers();
+    try {
+      firestoreState.hang = true;
+      const pending = resilientGet("chatConversations", "stall-3");
+      await vi.advanceTimersByTimeAsync(FIRESTORE_ATTEMPT_TIMEOUT_MS + 1).then(() => pending);
+      const firestoreOpsBefore = firestoreState.ops.length;
+
+      // Circuit ouvert : ce set ne doit PAS tenter Firestore (aucun nouveau hang).
+      await resilientSet("chatConversations", "stall-3", { title: "via miroir" }, { merge: true, ownerId: "u1" });
+      expect(firestoreState.ops.length).toBe(firestoreOpsBefore);
+      const mirrorRow = supabaseState.ops.find(
+        (op) => op.op === "upsert" && (op.args as Record<string, unknown>)?.collection === "chatConversations"
+          && (op.args as Record<string, unknown>)?.document_id === "stall-3",
+      );
+      expect(mirrorRow).toBeDefined();
+      expect(getQuotaGuardStats().shortCircuits).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

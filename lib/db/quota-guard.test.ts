@@ -16,6 +16,7 @@ import {
   isFirestoreQuotaError,
   isFirestoreTransientError,
   noteFirestoreQuotaError,
+  noteFirestoreStall,
   noteFirestoreSuccess,
   QUOTA_BREAKER_OPEN_THRESHOLD,
   QUOTA_COOLDOWN_HARD_MS,
@@ -217,9 +218,41 @@ describe("disjoncteur (machine à états)", () => {
       lastQuotaErrorAt: null,
       lastQuotaError: null,
       shortCircuits: 0,
+      stalls: 0,
       hardQuota: false,
       cooldownEndsAt: null,
     });
     expect(beginFirestoreProbe()).toBe(false);
+  });
+});
+
+describe("noteFirestoreStall (Task 97 — écritures qui pendent sous quota épuisé)", () => {
+  beforeEach(() => resetQuotaGuardForTests());
+
+  it("UN SEUL stall ouvre immédiatement le disjoncteur (signal coûteux = preuve suffisante)", () => {
+    noteFirestoreStall("create chatConversations/x: aucune réponse en 6000ms");
+    const stats = getQuotaGuardStats();
+    expect(stats.state).toBe("open");
+    expect(stats.stalls).toBe(1);
+    expect(stats.consecutiveQuotaErrors).toBe(1);
+    expect(stats.lastQuotaError).toContain("stall:");
+    expect(stats.lastQuotaError).toContain("aucune réponse");
+    expect(stats.hardQuota).toBe(false);
+  });
+
+  it("le stall est classable quota par isFirestoreQuotaError (message synthétique)", () => {
+    const synthetic = new Error("create x: aucune réponse en 6000ms (probablement quota Firestore épuisé — bascule vers le repli).");
+    expect(isFirestoreQuotaError(synthetic)).toBe(true);
+    expect(isFirestoreTransientError(synthetic)).toBe(false);
+  });
+
+  it("un succès après un stall referme le circuit et remet les compteurs", () => {
+    noteFirestoreStall("get y: aucune réponse en 6000ms");
+    expect(getQuotaGuardStats().state).toBe("open");
+    noteFirestoreSuccess();
+    const stats = getQuotaGuardStats();
+    expect(stats.state).toBe("closed");
+    expect(stats.consecutiveQuotaErrors).toBe(0);
+    expect(stats.hardQuota).toBe(false);
   });
 });
