@@ -13,6 +13,13 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import {
+  resilientCreate,
+  resilientGet,
+  resilientSet,
+  resilientList,
+  resilientCount,
+} from "@/lib/db/firestore-fallback";
+import {
   type VideoProject,
   type VideoProjectStatus,
   type ProductionLogEntry,
@@ -94,16 +101,13 @@ export async function createProject(userId: string, input: CreateProjectInput): 
     createdAt: now,
     updatedAt: now,
   };
-  await adminDb.collection(PROJECTS_COLLECTION).doc(id).create({ ...project });
+  await resilientCreate(PROJECTS_COLLECTION, id, { ...project }, userId);
   return project;
 }
 
 export async function countActiveProjects(userId: string): Promise<number> {
-  const snap = await adminDb
-    .collection(PROJECTS_COLLECTION)
-    .where("userId", "==", userId)
-    .get();
-  return snap.docs.filter((d) => d.data()?.status !== "archived").length;
+  const projects = await resilientList<VideoProject>(PROJECTS_COLLECTION, "userId", userId);
+  return projects.filter((project) => project.status !== "archived").length;
 }
 
 /**
@@ -113,10 +117,7 @@ export async function countActiveProjects(userId: string): Promise<number> {
  * autres ressources tenants/).
  */
 export async function getOwnedProject(userId: string, projectId: string): Promise<VideoProject | null> {
-  const ref = adminDb.collection(PROJECTS_COLLECTION).doc(projectId);
-  const snap = await ref.get();
-  if (!snap.exists) return null;
-  const data = snap.data() as VideoProject | undefined;
+  const data = await resilientGet<VideoProject>(PROJECTS_COLLECTION, projectId);
   if (!data || data.userId !== userId) return null;
   return data;
 }
@@ -128,10 +129,7 @@ export async function getOwnedProjectOrThrow(userId: string, projectId: string):
 }
 
 export async function listProjects(userId: string): Promise<VideoProject[]> {
-  const snap = await adminDb.collection(PROJECTS_COLLECTION).where("userId", "==", userId).get();
-  const projects = snap.docs
-    .map((d) => d.data() as VideoProject)
-    .filter(Boolean);
+  const projects = await resilientList<VideoProject>(PROJECTS_COLLECTION, "userId", userId);
   // Tri en mémoire (pas d'index composite requis — requête single-field).
   projects.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
   return projects;
@@ -152,16 +150,18 @@ export async function patchProject(
     createdAt: project.createdAt,
     updatedAt: nowIso(),
   };
-  await adminDb.collection(PROJECTS_COLLECTION).doc(projectId).set(merged);
+  await resilientSet(PROJECTS_COLLECTION, projectId, merged, { ownerId: userId });
   return merged;
 }
 
 export async function setProjectStatus(userId: string, projectId: string, status: VideoProjectStatus): Promise<void> {
   if (!VIDEO_PROJECT_STATUSES.includes(status)) throw new Error(`Statut inconnu : ${status}`);
-  await adminDb
-    .collection(PROJECTS_COLLECTION)
-    .doc(projectId)
-    .set({ status, updatedAt: nowIso() }, { merge: true });
+  await resilientSet(
+    PROJECTS_COLLECTION,
+    projectId,
+    { status, updatedAt: nowIso() },
+    { merge: true, ownerId: userId },
+  );
 }
 
 export async function appendProductionLog(
@@ -171,17 +171,15 @@ export async function appendProductionLog(
 ): Promise<void> {
   const project = await getOwnedProjectOrThrow(userId, projectId);
   const log = [...project.productionLog, { at: nowIso(), ...entry }].slice(-200);
-  await adminDb.collection(PROJECTS_COLLECTION).doc(projectId).set({ productionLog: log, updatedAt: nowIso() }, { merge: true });
+  await resilientSet(PROJECTS_COLLECTION, projectId, { productionLog: log, updatedAt: nowIso() }, { merge: true, ownerId: userId });
 }
 
 export async function logSystem(projectId: string, message: string): Promise<void> {
   // Variante système (worker) : ne re-vérifie pas la propriété (appel interne).
-  const ref = adminDb.collection(PROJECTS_COLLECTION).doc(projectId);
-  const snap = await ref.get();
-  if (!snap.exists) return;
-  const project = snap.data() as VideoProject;
+  const project = await resilientGet<VideoProject>(PROJECTS_COLLECTION, projectId);
+  if (!project) return;
   const log = [...(project.productionLog ?? []), { at: nowIso(), actor: "system" as const, message }].slice(-200);
-  await ref.set({ productionLog: log, updatedAt: nowIso() }, { merge: true });
+  await resilientSet(PROJECTS_COLLECTION, projectId, { productionLog: log, updatedAt: nowIso() }, { merge: true, ownerId: project.userId });
 }
 
 /** Duplication complète : documents recopiés, assets R2 conservés (mêmes clés). */
@@ -202,7 +200,7 @@ export async function duplicateProject(userId: string, projectId: string): Promi
     musicMood: source.musicMood,
     orgId: source.orgId,
   });
-  await adminDb.collection(PROJECTS_COLLECTION).doc(copy.id).set({
+  await resilientSet(PROJECTS_COLLECTION, copy.id, {
     visualBible: source.visualBible,
     script: source.script ?? null,
     storyboard: source.storyboard ?? null,
@@ -210,7 +208,7 @@ export async function duplicateProject(userId: string, projectId: string): Promi
     status: source.script ? source.status : "draft",
     stats: { ...emptyStats(), assetCount: source.stats.assetCount },
     updatedAt: nowIso(),
-  }, { merge: true });
+  }, { merge: true, ownerId: userId });
   return (await getOwnedProject(copy.userId, copy.id))!;
 }
 
@@ -256,18 +254,19 @@ export async function snapshotVersion(
     note,
     createdAt: nowIso(),
   };
-  await adminDb.collection(VERSIONS_COLLECTION).doc(version.id).create({ ...version });
-  await adminDb.collection(PROJECTS_COLLECTION).doc(projectId).set(
+  await resilientCreate(VERSIONS_COLLECTION, version.id, { ...version }, userId);
+  await resilientSet(
+    PROJECTS_COLLECTION,
+    projectId,
     { versionCounter: project.versionCounter + 1, updatedAt: nowIso() },
-    { merge: true },
+    { merge: true, ownerId: userId },
   );
   return version;
 }
 
 export async function listVersions(userId: string, projectId: string): Promise<ProjectVersion[]> {
   await getOwnedProjectOrThrow(userId, projectId);
-  const snap = await adminDb.collection(VERSIONS_COLLECTION).where("projectId", "==", projectId).get();
-  const versions = snap.docs.map((d) => d.data() as ProjectVersion);
+  const versions = await resilientList<ProjectVersion>(VERSIONS_COLLECTION, "projectId", projectId);
   versions.sort((a, b) => b.versionNumber - a.versionNumber);
   return versions;
 }
