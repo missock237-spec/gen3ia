@@ -2,6 +2,14 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
+import {
+  resilientCreate,
+  resilientDelete,
+  resilientGet,
+  resilientQuery,
+  resilientSet,
+} from "@/lib/db/firestore-fallback";
+import { isFirestoreQuotaError, shouldShortCircuitFirestore } from "@/lib/db/quota-guard";
 import type {
   ConversationMessage,
   ConversationStatus,
@@ -12,6 +20,26 @@ import type {
 import {
   indexConversationMessage,
 } from "@/lib/chat/vector-index";
+
+/**
+ * Dépôt conversation/messages (Task 96-c) — entièrement adossé à la couche
+ * résiliente Firestore→Supabase (lib/db/firestore-fallback) : sous quota
+ * Firestore épuisé, la section Agent IA ET le workspace continuent de
+ * créer/lire/renommer/supprimer des conversations via le miroir chaud.
+ *
+ * Règles respectées :
+ *  - écritures en `new Date()` (JAMAIS FieldValue.serverTimestamp) : les
+ *    sentinelles sont écartées du miroir JSONB et casseraient le tri ;
+ *  - garde d'ownership (userId) reproduite à l'identique sur les chemins
+ *    de repli — jamais la conversation d'un autre utilisateur ;
+ *  - tri/lémitage : resilientQuery filtre par égalité puis trie EN MÉMOIRE
+ *    (index-safe) ; le cap de scan est demandé à 200 puis redécoupé ici,
+ *    car un `limit(N)` côté Firestore renverrait des documents ARBITRAIRES
+ *    (le tri est appliqué après le scan).
+ */
+
+/** Cap de scan partagé avec resilientQuery (QUERY_DEFAULT_LIMIT). */
+const SCAN_LIMIT = 200;
 
 export interface ChatConversation {
   id: string;
@@ -75,12 +103,32 @@ function citationsFrom(value: unknown): MessageCitation[] | undefined {
 
 const conversationRef = (id: string) => adminDb.collection("chatConversations").doc(id);
 
+/** Horodatage lisible : Date (écritures 96-c), Timestamp Firestore (lectures) ou chaîne ISO (miroir). */
 function iso(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string" && !Number.isNaN(Date.parse(value))) return value;
   if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate: () => Date }).toDate === "function") {
     return (value as { toDate: () => Date }).toDate().toISOString();
   }
   return new Date().toISOString();
+}
+
+type ConversationDoc = Record<string, unknown> & { id?: string };
+
+function conversationFrom(id: string, x: ConversationDoc): ChatConversation {
+  return {
+    id,
+    userId: x.userId as string,
+    title: String(x.title ?? "Nouvelle conversation"),
+    projectId: typeof x.projectId === "string" ? x.projectId : undefined,
+    agentId: typeof x.agentId === "string" ? x.agentId : undefined,
+    model: x.model,
+    provider: x.provider,
+    status: x.status === "archived" ? ("archived" as const) : ("active" as const),
+    messageCount: Number(x.messageCount ?? 0),
+    createdAt: iso(x.createdAt),
+    updatedAt: iso(x.updatedAt),
+  } as ChatConversation;
 }
 
 export async function createConversation(
@@ -88,17 +136,24 @@ export async function createConversation(
   title = "Nouvelle conversation",
   options: { projectId?: string; agentId?: string } = {},
 ) {
-  const ref = adminDb.collection("chatConversations").doc();
+  // Identifiant généré localement par le SDK (aucune I/O) : il alimente
+  // resilientCreate, qui tient Firestore ET le miroir à jour.
+  const id = adminDb.collection("chatConversations").doc().id;
   const now = new Date();
-  await ref.set({
-    userId, title: title.slice(0, 120), messageCount: 0,
-    ...(options.projectId ? { projectId: options.projectId } : {}),
-    ...(options.agentId ? { agentId: options.agentId } : {}),
-    status: "active" as const,
-    createdAt: now, updatedAt: now,
-  });
+  await resilientCreate(
+    "chatConversations",
+    id,
+    {
+      userId, title: title.slice(0, 120), messageCount: 0,
+      ...(options.projectId ? { projectId: options.projectId } : {}),
+      ...(options.agentId ? { agentId: options.agentId } : {}),
+      status: "active" as const,
+      createdAt: now, updatedAt: now,
+    },
+    userId,
+  );
   return {
-    id: ref.id, userId, title, messageCount: 0,
+    id, userId, title, messageCount: 0,
     ...(options.projectId ? { projectId: options.projectId } : {}),
     ...(options.agentId ? { agentId: options.agentId } : {}),
     status: "active" as const,
@@ -112,59 +167,22 @@ export async function listConversations(
   options: { projectId?: string; agentId?: string; query?: string } = {},
 ): Promise<ChatConversation[]> {
   const capped = Math.min(limit, 100);
-  const mapConversation = (d: FirebaseFirestore.QueryDocumentSnapshot): ChatConversation => {
-    const x = d.data();
-    return {
-      id: d.id,
-      userId: x.userId,
-      title: String(x.title ?? "Nouvelle conversation"),
-      projectId: typeof x.projectId === "string" ? x.projectId : undefined,
-      agentId: typeof x.agentId === "string" ? x.agentId : undefined,
-      model: x.model,
-      provider: x.provider,
-      status: x.status === "archived" ? ("archived" as const) : ("active" as const),
-      messageCount: Number(x.messageCount ?? 0),
-      createdAt: iso(x.createdAt),
-      updatedAt: iso(x.updatedAt),
-    };
-  };
-  let conversations: ChatConversation[];
+  const filters: Array<{ field: string; value: unknown }> = [{ field: "userId", value: userId }];
   if (options.agentId) {
     // Historique scopé à un agent IA : seuls ses fils sont listés.
-    try {
-      const snap = await adminDb
-        .collection("chatConversations")
-        .where("userId", "==", userId)
-        .where("agentId", "==", options.agentId)
-        .orderBy("updatedAt", "desc")
-        .limit(capped)
-        .get();
-      conversations = snap.docs.map(mapConversation);
-    } catch {
-      // Repli SANS index composite (déploiement d'index en attente) : requête
-      // simple (userId + updatedAt) puis filtre agentId en mémoire. Garantit
-      // que le rail « Historique des chats » fonctionne en toute circonstance.
-      const snap = await adminDb
-        .collection("chatConversations")
-        .where("userId", "==", userId)
-        .orderBy("updatedAt", "desc")
-        .limit(200)
-        .get();
-      conversations = snap.docs.map(mapConversation).filter((c) => c.agentId === options.agentId).slice(0, capped);
-    }
-  } else if (options.projectId) {
-    const snap = await adminDb
-      .collection("chatConversations")
-      .where("userId", "==", userId)
-      .where("projectId", "==", options.projectId)
-      .orderBy("updatedAt", "desc")
-      .limit(capped)
-      .get();
-    conversations = snap.docs.map(mapConversation);
-  } else {
-    const snap = await adminDb.collection("chatConversations").where("userId", "==", userId).orderBy("updatedAt", "desc").limit(capped).get();
-    conversations = snap.docs.map(mapConversation);
+    filters.push({ field: "agentId", value: options.agentId });
   }
+  if (options.projectId) filters.push({ field: "projectId", value: options.projectId });
+  // Scan borné 200 + tri mémoire updatedAt desc (index-safe : pas d'index
+  // composite requis, comportement de repli no-index historique absorbé) —
+  // puis redécoupage à la limite demandée.
+  const docs = await resilientQuery<ConversationDoc>(
+    "chatConversations",
+    filters,
+    { orderField: "updatedAt", descending: true, limit: SCAN_LIMIT, includeIds: true },
+  );
+  let conversations = docs.map((x) => conversationFrom(String(x.id), x));
+  if (conversations.length > capped) conversations = conversations.slice(0, capped);
   const query = options.query?.trim().toLowerCase();
   if (query) {
     conversations = conversations.filter((c) => c.title.toLowerCase().includes(query));
@@ -174,45 +192,25 @@ export async function listConversations(
 
 /** Dernière conversation de l'utilisateur (accueil « Reprendre »). */
 export async function findLatestConversation(userId: string): Promise<ChatConversation | null> {
-  const snap = await adminDb
-    .collection("chatConversations")
-    .where("userId", "==", userId)
-    .orderBy("updatedAt", "desc")
-    .limit(1)
-    .get();
-  const doc = snap.docs[0];
-  if (!doc) return null;
-  const x = doc.data();
-  return {
-    id: doc.id,
-    userId: x.userId,
-    title: String(x.title ?? "Nouvelle conversation"),
-    projectId: typeof x.projectId === "string" ? x.projectId : undefined,
-    agentId: typeof x.agentId === "string" ? x.agentId : undefined,
-    status: x.status === "archived" ? "archived" : "active",
-    messageCount: Number(x.messageCount ?? 0),
-    createdAt: iso(x.createdAt),
-    updatedAt: iso(x.updatedAt),
-  };
+  // Scan borné + tri mémoire : un `limit(1)` côté Firestore renverrait un
+  // document ARBITRAIRE (tri appliqué après le scan) — on scanne jusqu'au
+  // cap puis on prend le plus récent.
+  const docs = await resilientQuery<ConversationDoc>(
+    "chatConversations",
+    [{ field: "userId", value: userId }],
+    { orderField: "updatedAt", descending: true, limit: SCAN_LIMIT, includeIds: true },
+  );
+  const first = docs[0];
+  if (!first) return null;
+  return conversationFrom(String(first.id), first);
 }
 
 export async function getConversation(userId: string, id: string) {
-  const snap = await conversationRef(id).get();
-  if (!snap.exists || snap.data()?.userId !== userId) return null;
-  const x = snap.data()!;
-  return {
-    id: snap.id,
-    userId: x.userId,
-    title: String(x.title ?? "Nouvelle conversation"),
-    projectId: typeof x.projectId === "string" ? x.projectId : undefined,
-    agentId: typeof x.agentId === "string" ? x.agentId : undefined,
-    model: x.model,
-    provider: x.provider,
-    status: x.status === "archived" ? ("archived" as const) : ("active" as const),
-    messageCount: Number(x.messageCount ?? 0),
-    createdAt: iso(x.createdAt),
-    updatedAt: iso(x.updatedAt),
-  } as ChatConversation;
+  const x = await resilientGet<ConversationDoc>("chatConversations", id);
+  // Garde d'ownership identique au chemin Firestore historique : une
+  // conversation d'un autre utilisateur est indiscernable d'une absente.
+  if (!x || x.userId !== userId) return null;
+  return conversationFrom(id, x);
 }
 
 /**
@@ -224,6 +222,30 @@ export async function getConversation(userId: string, id: string) {
  */
 export type ListMessagesOrder = "asc" | "recent";
 
+type MessageDoc = Record<string, unknown> & { id?: string };
+
+function messageFrom(id: string, conversationId: string, userId: string, x: MessageDoc): ChatMessage {
+  return {
+    id,
+    conversationId,
+    userId,
+    role: x.role,
+    content: String(x.content ?? ""),
+    attachments: attachmentsFrom(x.attachments),
+    citations: citationsFrom(x.citations),
+    generationStatus: x.generationStatus === "failed" ? ("failed" as const) : ("complete" as const),
+    provider: x.provider,
+    model: x.model,
+    imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : undefined,
+    runId: typeof x.runId === "string" ? x.runId : undefined,
+    connectors: Array.isArray(x.connectors)
+      ? x.connectors.filter((c: unknown): c is string => typeof c === "string" && c.length > 0 && c.length <= 60)
+      : undefined,
+    usage: x.usage,
+    createdAt: iso(x.createdAt),
+  } as ChatMessage;
+}
+
 export async function listMessages(
   userId: string,
   conversationId: string,
@@ -232,51 +254,33 @@ export async function listMessages(
 ): Promise<ChatMessage[]> {
   if (!(await getConversation(userId, conversationId))) throw new Error("Conversation introuvable.");
   const capped = Math.min(limit, 200);
-  let docs;
+  const recent = options.order === "recent";
+  const filters = [
+    { field: "conversationId", value: conversationId },
+    { field: "userId", value: userId },
+  ];
+  let docs: MessageDoc[];
   try {
-    if (options.order === "recent") {
-      const snap = await adminDb.collection("chatMessages").where("conversationId", "==", conversationId).where("userId", "==", userId).orderBy("createdAt", "desc").limit(capped).get();
-      docs = snap.docs;
-    } else {
-      const snap = await adminDb.collection("chatMessages").where("conversationId", "==", conversationId).where("userId", "==", userId).orderBy("createdAt", "asc").limit(capped).get();
-      docs = snap.docs;
-    }
+    docs = await resilientQuery<MessageDoc>("chatMessages", filters, {
+      orderField: "createdAt",
+      descending: recent,
+      // Scan borné puis tri mémoire + découpage : un `limit(capped)` côté
+      // Firestore renverrait des documents ARBITRAIRES — le contexte LLM
+      // exige les VRAIS N plus récents/anciens (RC3, plan 20).
+      limit: SCAN_LIMIT,
+      includeIds: true,
+    });
   } catch {
-    // Repli SANS index (déploiement d'index en attente) : tri en mémoire —
-    // le contexte LLM ne casse jamais. Même contrat que les requêtes :
-    // "recent" → docs du plus récent au plus ancien ; "asc" → chronologique.
-    const snap = await adminDb.collection("chatMessages").where("conversationId", "==", conversationId).where("userId", "==", userId).limit(capped * 2).get();
-    const sortedAsc = snap.docs.sort((a, b) => iso(a.data().createdAt).localeCompare(iso(b.data().createdAt)));
-    docs = options.order === "recent"
-      ? sortedAsc.slice(-capped).reverse()
-      : sortedAsc.slice(0, capped);
+    // Repli SANS index (déploiement d'index en attente) : requête filtrée
+    // simple puis tri en mémoire — le contexte LLM ne casse jamais.
+    docs = await resilientQuery<MessageDoc>("chatMessages", filters, { limit: SCAN_LIMIT, includeIds: true });
   }
-  const messages = docs.map(d => {
-    const x = d.data();
-    return {
-      id: d.id,
-      conversationId,
-      userId,
-      role: x.role,
-      content: String(x.content ?? ""),
-      attachments: attachmentsFrom(x.attachments),
-      citations: citationsFrom(x.citations),
-      generationStatus: x.generationStatus === "failed" ? ("failed" as const) : ("complete" as const),
-      provider: x.provider,
-      model: x.model,
-      imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : undefined,
-      runId: typeof x.runId === "string" ? x.runId : undefined,
-      connectors: Array.isArray(x.connectors)
-        ? x.connectors.filter((c: unknown): c is string => typeof c === "string" && c.length > 0 && c.length <= 60)
-        : undefined,
-      usage: x.usage,
-      createdAt: iso(x.createdAt),
-    };
-  });
-  // Ordre "recent" : la requête Firestore renvoie du plus récent au plus
-  // ancien — on rétablit l'ordre chronologique pour nourrir le modèle.
-  if (options.order === "recent") messages.reverse();
-  return messages;
+  const messages = docs.map((x) => messageFrom(String(x.id), conversationId, userId, x));
+  // Tri chronologique déterministe, puis fenêtre demandée :
+  //  - "recent" : la FIN du fil (les N plus récents), réordonnée asc ;
+  //  - "asc"    : le DÉBUT du fil (les N plus anciens).
+  messages.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return recent && messages.length > capped ? messages.slice(-capped) : messages.slice(0, capped);
 }
 
 export async function appendMessage(input: Omit<ChatMessage, "id" | "createdAt">) {
@@ -286,22 +290,58 @@ export async function appendMessage(input: Omit<ChatMessage, "id" | "createdAt">
   // sans lecture Firestore supplémentaire) : sert au filtrage du miroir
   // vectoriel par projet (recherche sémantique contextuelle).
   let conversationProjectId: string | null = null;
-  await adminDb.runTransaction(async tx => {
-    const conversation = conversationRef(input.conversationId);
-    const snap = await tx.get(conversation);
-    if (!snap.exists || snap.data()?.userId !== input.userId) throw new Error("Conversation introuvable.");
-    const data = snap.data();
-    if (typeof data?.projectId === "string" && data.projectId.length > 0) {
-      conversationProjectId = data.projectId;
+  let transactionDone = false;
+  try {
+    // CHEMIN NOMINAL : transaction Firestore (atomicité message + compteur).
+    // Disjoncteur ouvert : ni transaction ni sonde gaspillée — repli direct.
+    if (!shouldShortCircuitFirestore()) {
+      await adminDb.runTransaction(async tx => {
+        const conversation = conversationRef(input.conversationId);
+        const snap = await tx.get(conversation);
+        if (!snap.exists || snap.data()?.userId !== input.userId) throw new Error("Conversation introuvable.");
+        const data = snap.data();
+        if (typeof data?.projectId === "string" && data.projectId.length > 0) {
+          conversationProjectId = data.projectId;
+        }
+        tx.set(ref, {
+          ...input,
+          generationStatus: input.generationStatus ?? "complete",
+          createdAt: now,
+        });
+        const current = Number(snap.data()?.messageCount ?? 0);
+        tx.update(conversation, { messageCount: current + 1, updatedAt: now });
+      });
+      transactionDone = true;
     }
-    tx.set(ref, {
-      ...input,
-      generationStatus: input.generationStatus ?? "complete",
-      createdAt: now,
-    });
-    const current = Number(snap.data()?.messageCount ?? 0);
-    tx.update(conversation, { messageCount: current + 1, updatedAt: FieldValue.serverTimestamp() });
-  });
+  } catch (error) {
+    // QUOTA (ou disjoncteur fraîchement ouvert) : décomposition résiliente.
+    // Les incidents TRANSITOIRES et métier restent rejetés (comportement
+    // historique : retry côté appelant).
+    if (!isFirestoreQuotaError(error) && !shouldShortCircuitFirestore()) throw error;
+  }
+  if (!transactionDone) {
+    // QUOTA (ou disjoncteur ouvert) : décomposition résiliente sur le miroir
+    // Supabase — get (garde d'ownership) + create (message) + set merge
+    // (compteur incrémenté, résolu côté miroir). L'atomicité message/compteur
+    // cède devant la DISPONIBILITÉ du chat.
+    const conversation = await resilientGet<ConversationDoc>("chatConversations", input.conversationId);
+    if (!conversation || conversation.userId !== input.userId) throw new Error("Conversation introuvable.");
+    if (typeof conversation.projectId === "string" && conversation.projectId.length > 0) {
+      conversationProjectId = conversation.projectId;
+    }
+    await resilientCreate(
+      "chatMessages",
+      ref.id,
+      { ...input, generationStatus: input.generationStatus ?? "complete", createdAt: now },
+      input.userId,
+    );
+    await resilientSet(
+      "chatConversations",
+      input.conversationId,
+      { messageCount: FieldValue.increment(1), updatedAt: now },
+      { merge: true, ownerId: input.userId },
+    );
+  }
   const saved: ChatMessage = { ...input, generationStatus: input.generationStatus ?? "complete", id: ref.id, createdAt: now.toISOString() };
 
   // Miroir vectoriel (recherche sémantique de l'historique) : best-effort,
@@ -330,7 +370,12 @@ export async function appendMessage(input: Omit<ChatMessage, "id" | "createdAt">
 export async function renameConversation(userId: string, id: string, title: string) {
   const conversation = await getConversation(userId, id);
   if (!conversation) throw new Error("Conversation introuvable.");
-  await conversationRef(id).update({ title: title.trim().slice(0, 120), updatedAt: FieldValue.serverTimestamp() });
+  await resilientSet(
+    "chatConversations",
+    id,
+    { title: title.trim().slice(0, 120), updatedAt: new Date() },
+    { merge: true, ownerId: userId },
+  );
 }
 
 /** Mise à jour partielle (projet, agent, statut, modèle) d'une conversation. */
@@ -340,9 +385,11 @@ export async function updateConversation(
   patch: { projectId?: string | null; agentId?: string; status?: ConversationStatus; model?: string; provider?: string },
 ) {
   if (!(await getConversation(userId, id))) throw new Error("Conversation introuvable.");
-  const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
+  const update: Record<string, unknown> = { updatedAt: new Date() };
   if (patch.projectId !== undefined) {
     // null détache le projet ; une chaîne non vide le rattache.
+    // FieldValue.delete() : la clé est retirée de Firestore ET écartée du
+    // miroir (assainissement) — pas de résurrection du projet côté repli.
     update.projectId = patch.projectId || FieldValue.delete();
   }
   if (patch.agentId) {
@@ -353,15 +400,26 @@ export async function updateConversation(
   if (patch.status) update.status = patch.status;
   if (patch.model) update.model = patch.model;
   if (patch.provider) update.provider = patch.provider;
-  await conversationRef(id).update(update);
+  await resilientSet("chatConversations", id, update, { merge: true, ownerId: userId });
   return getConversation(userId, id);
 }
 
 export async function deleteConversation(userId: string, id: string) {
   if (!(await getConversation(userId, id))) throw new Error("Conversation introuvable.");
-  const messages = await adminDb.collection("chatMessages").where("conversationId", "==", id).where("userId", "==", userId).limit(500).get();
-  const batch = adminDb.batch();
-  messages.docs.forEach(d => batch.delete(d.ref));
-  batch.delete(conversationRef(id));
-  await batch.commit();
+  // Purge des messages : Firestore-first (les identifiants de messages ne
+  // vivent que dans les ids de documents, hors payload). Sous quota, les
+  // messages orphelins restent en place (aucune route ne les expose sans
+  // conversation) — la conversation, elle, disparaît des DEUX stores via
+  // resilientDelete ci-dessous.
+  try {
+    const messages = await adminDb.collection("chatMessages").where("conversationId", "==", id).where("userId", "==", userId).limit(500).get();
+    const batch = adminDb.batch();
+    messages.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  } catch (error) {
+    if (!isFirestoreQuotaError(error) && !shouldShortCircuitFirestore()) throw error;
+    // Quota : purge Firestore des messages différée — ne bloque JAMAIS la
+    // suppression de la conversation (pivot de l'historique).
+  }
+  await resilientDelete("chatConversations", id);
 }

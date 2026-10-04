@@ -5,6 +5,8 @@ import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { isFirestoreQuotaError } from "@/lib/db/quota-guard";
+import { logger } from "@/lib/observability/logger";
 import { ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
 import { loadAgentAttachmentsContext } from "@/lib/files/attachment-context";
 import { planUniversalAgent } from "@/lib/agents/runtime/unified-agent";
@@ -709,7 +711,10 @@ export async function POST(request: NextRequest) {
             billing: checkpoint.billing,
           });
         } catch (runError) {
-          console.warn("[agent-chat] run waiting_approval non enregistré", runError instanceof Error ? runError.message : runError);
+          // Observabilité fail-soft (Task 96-c) : un échec d'écriture du run
+          // ne doit JAMAIS transformer une réponse IA en 400 — pino remplace
+          // console.warn (cohérence des journaux structurés).
+          logger.warn({ err: runError instanceof Error ? runError.message : runError }, "agent_chat_run_waiting_not_recorded");
         }
 
         const approvals = await Promise.all(approvalSteps.map(async (step) => {
@@ -795,7 +800,9 @@ export async function POST(request: NextRequest) {
           billing: { currency: "XAF", totalChargeMinor: 0, totalProviderCostEur: 0, llmInputTokens: 0, llmOutputTokens: 0 },
         });
       } catch (runError) {
-        console.warn("[agent-chat] run initial non enregistré", runError instanceof Error ? runError.message : runError);
+        // Fail-soft (Task 96-c) : la timeline peut être réconciliée plus tard
+        // (reconcileAgentRun) — la mission démarre même sans run initial.
+        logger.warn({ err: runError instanceof Error ? runError.message : runError }, "agent_chat_run_initial_not_recorded");
       }
 
       const runtime = new AgentRuntime({
@@ -1110,7 +1117,12 @@ export async function POST(request: NextRequest) {
         observations: [],
         billing: { currency: "XAF", totalChargeMinor: 0, totalProviderCostEur: 0, llmInputTokens: 0, llmOutputTokens: 0 },
       });
-    } catch { /* fail-soft */ }
+    } catch (runError) {
+      // Fail-soft (Task 96-c) : la valeur de retour reste neutre (undefined)
+      // — le message final partira sans runId, la livraison elle-même est
+      // indépendante de l'observabilité.
+      logger.warn({ err: runError instanceof Error ? runError.message : runError }, "agent_chat_universal_run_not_recorded");
+    }
 
     const runtime = new AgentRuntime({
       userId: user.uid,
@@ -1228,10 +1240,25 @@ export async function POST(request: NextRequest) {
     if (body.code === "AUTH_REQUIRED") {
       return NextResponse.json({ error: body.error, code: body.code }, { status: 401 });
     }
-    const upstream = body.code === "PROVIDER_UNAVAILABLE"
-      || body.error.includes("provider")
+    // Fournisseur IA / planificateur : 502 avec le message d'origine
+    // (comportement historique inchangé).
+    const upstream =
+      body.error.includes("provider")
       || body.error.includes("planner")
       || body.error.includes("plan généré");
+    // Persistance indisponible (Task 96-c : quota Firestore épuisé, repli
+    // Supabase absent/en erreur, incident Firestore dégradé) : 503 actionnable
+    // — une panne de stockage ne doit JAMAIS ressembler à un simple échec de
+    // mission (400) ni masquer l'état réel derrière « Impossible de lancer ».
+    if (isFirestoreQuotaError(error) || (body.code === "PROVIDER_UNAVAILABLE" && !upstream)) {
+      return NextResponse.json(
+        {
+          error: "Persistance momentanément indisponible (quota de base de données atteint). Le repli Supabase prend le relais dès sa configuration — réessaie dans quelques instants.",
+          code: "PROVIDER_UNAVAILABLE",
+        },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       { error: upstream ? body.error : "Impossible de lancer la mission pour le moment. Réessayez.", code: body.code },
       { status: upstream ? 502 : 400 },

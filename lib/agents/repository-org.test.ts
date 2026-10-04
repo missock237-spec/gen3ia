@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const docGet = vi.fn();
 const docSet = vi.fn();
+const docCreate = vi.fn();
 const docDelete = vi.fn();
 const personalQueryGet = vi.fn();
 const orgQueryGet = vi.fn();
@@ -18,12 +19,14 @@ vi.mock("@/lib/firebase/admin", () => ({
   Timestamp: {},
   adminDb: {
     collection: vi.fn(() => ({
-      doc: vi.fn(() => ({ get: docGet, set: docSet, delete: docDelete })),
-      where: vi.fn(() => ({
-        orderBy: vi.fn(() => ({
-          limit: vi.fn(() => ({ get: (...args: unknown[]) => personalQueryGet(...args) })),
+      doc: vi.fn(() => ({ get: docGet, set: docSet, create: docCreate, delete: docDelete })),
+      where: vi.fn((_field: string) => ({
+        limit: vi.fn(() => ({
+          // Task 96-c : la liste personnelle passe par resilientQuery
+          // (where(ownerId).limit().get(), tri mémoire) — routage par champ,
+          // l'opérateur `in` des requêtes d'organisation reste distinct.
+          get: (...args: unknown[]) => (_field === "ownerId" ? personalQueryGet(...args) : orgQueryGet(...args)),
         })),
-        limit: vi.fn(() => ({ get: (...args: unknown[]) => orgQueryGet(...args) })),
       })),
     })),
   },
@@ -67,7 +70,7 @@ function baseAgent(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 beforeEach(() => {
-  docGet.mockReset(); docSet.mockReset(); docDelete.mockReset();
+  docGet.mockReset(); docSet.mockReset(); docCreate.mockReset(); docDelete.mockReset();
   personalQueryGet.mockReset(); orgQueryGet.mockReset();
   mockedAssertRead.mockReset(); mockedAssertWrite.mockReset();
   mockedAssertAttach.mockReset(); mockedAssertTransfer.mockReset(); mockedListOrgs.mockReset();
@@ -82,7 +85,8 @@ describe("createAgentRecord — rattachement organisationnel", () => {
   it("sans orgId : aucun appel d'attachement (comportement historique)", async () => {
     await createAgentRecord("u1", baseAgent());
     expect(mockedAssertAttach).not.toHaveBeenCalled();
-    const written = docSet.mock.calls[0][0] as Record<string, unknown>;
+    // Task 96-c : l'écriture passe par la couche résiliente (create).
+    const written = docCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(written.ownerId).toBe("u1");
     expect(written.orgId).toBeUndefined();
   });
@@ -90,21 +94,21 @@ describe("createAgentRecord — rattachement organisationnel", () => {
   it("avec orgId : l'attachement est validé AVANT l'écriture", async () => {
     await createAgentRecord("u1", baseAgent(), { orgId: "org-1" });
     expect(mockedAssertAttach).toHaveBeenCalledWith("u1", "org-1");
-    expect(docSet).toHaveBeenCalledTimes(1);
-    const written = docSet.mock.calls[0][0] as Record<string, unknown>;
+    expect(docCreate).toHaveBeenCalledTimes(1);
+    const written = docCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(written.orgId).toBe("org-1");
   });
 
   it("attach refusé : l'écriture n'a JAMAIS lieu", async () => {
     mockedAssertAttach.mockRejectedValue(new Error("Organisation introuvable ou accès refusé."));
     await expect(createAgentRecord("u1", baseAgent(), { orgId: "org-x" })).rejects.toThrow("Organisation introuvable");
-    expect(docSet).not.toHaveBeenCalled();
+    expect(docCreate).not.toHaveBeenCalled();
   });
 
   it("orgId blanc dans les options : traité comme absent", async () => {
     await createAgentRecord("u1", baseAgent(), { orgId: "   " });
     expect(mockedAssertAttach).not.toHaveBeenCalled();
-    const written = docSet.mock.calls[0][0] as Record<string, unknown>;
+    const written = docCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(written.orgId).toBeUndefined();
   });
 });

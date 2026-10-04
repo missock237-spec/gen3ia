@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { createConversation, listConversations } from "@/lib/chat/repository";
-import { errorStatus } from "@/lib/security/http-errors";
+import { errorBody, errorStatus, serviceUnavailable } from "@/lib/security/http-errors";
+import { isFirestoreQuotaError } from "@/lib/db/quota-guard";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,7 +15,11 @@ export async function GET(request: NextRequest) {
     const agentId = params.get("agentId")?.trim() || undefined;
     return NextResponse.json({ conversations: await listConversations(user.uid, Number.isFinite(limit) ? limit : 50, { agentId }) });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur." }, { status: errorStatus(error, 401) });
+    // Persistance indisponible (quota Firestore épuisé) : 503 dégradé — 401
+    // reste réservé aux vraies erreurs d'authentification (sinon l'UI prend
+    // une panne de base pour une déconnexion).
+    const normalized = isFirestoreQuotaError(error) ? serviceUnavailable() : error;
+    return NextResponse.json(errorBody(normalized, "Erreur."), { status: errorStatus(normalized, 401) });
   }
 }
 
@@ -24,6 +29,8 @@ export async function POST(request: NextRequest) {
     const body = z.object({ title: z.string().trim().max(120).optional() }).parse(await request.json().catch(() => ({})));
     return NextResponse.json({ conversation: await createConversation(user.uid, body.title) }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur." }, { status: errorStatus(error, 400) });
+    // Même contrat que le GET : la panne de persistance est un 503 dégradé.
+    const normalized = isFirestoreQuotaError(error) ? serviceUnavailable() : error;
+    return NextResponse.json(errorBody(normalized, "Erreur."), { status: errorStatus(normalized, 400) });
   }
 }

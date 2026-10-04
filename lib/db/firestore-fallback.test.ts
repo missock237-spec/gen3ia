@@ -46,6 +46,12 @@ vi.mock("@/lib/firebase/admin", () => ({
             firestoreState.docs.set(path, { exists: true, data: payload as Record<string, unknown> });
             return {};
           },
+          delete: async () => {
+            firestoreState.ops.push({ kind: "delete", path });
+            throwIfFailing();
+            firestoreState.docs.delete(path);
+            return {};
+          },
           set: async (payload: unknown, opts?: unknown) => {
             firestoreState.ops.push({ kind: "set", path, payload, opts });
             throwIfFailing();
@@ -207,6 +213,25 @@ function supabaseFake() {
           then: (resolve: (value: unknown) => void) => resolve({ data: null, error: supabaseState.upsertError ?? null }),
         };
       },
+      delete: () => {
+        ops.push({ op: "delete" });
+        const deleteFilters: Array<[string, string, unknown]> = [];
+        const deleteBuilder = {
+          eq: (column: string, value: unknown) => {
+            deleteFilters.push([column, "eq", value]);
+            return deleteBuilder;
+          },
+          // Thenable : `await deleteBuilder` exécute la suppression.
+          then: (resolve: (value: unknown) => void) => {
+            const before = rows.length;
+            const kept = rows.filter((row) => !matchesFilters(row, deleteFilters));
+            rows.length = 0;
+            rows.push(...kept);
+            resolve({ data: null, error: null, removed: before - rows.length });
+          },
+        };
+        return deleteBuilder;
+      },
       select: (columns: string, opts?: unknown) => {
         ops.push({ op: "select", args: [columns, opts] });
         return queryBuilder(table);
@@ -254,6 +279,7 @@ import {
   DEFAULT_RECONCILE_COLLECTIONS,
   reconcileFallbackToFirestore,
   resilientCreate,
+  resilientDelete,
   resilientGet,
   resilientList,
   resilientQuery,
@@ -486,5 +512,144 @@ describe("reconcileFallbackToFirestore (ré-imbrication)", () => {
     expect(DEFAULT_RECONCILE_COLLECTIONS).toContain("videoRenderJobs");
     expect(DEFAULT_RECONCILE_COLLECTIONS).toContain("videoProductionJobs");
     expect(DEFAULT_RECONCILE_COLLECTIONS).toContain("videoProjects");
+  });
+});
+
+describe("resilientDelete (Task 96-c)", () => {
+  it("nominal : delete Firestore + PURGE de la ligne miroir (anti-résurrection)", async () => {
+    firestoreState.docs.set("chatConversations/c1", { exists: true, data: { userId: "u1", title: "Fil" } });
+    supabaseState.rows = [
+      { collection: "chatConversations", document_id: "c1", owner_id: "u1", payload: { userId: "u1", title: "Fil" } },
+    ];
+    await resilientDelete("chatConversations", "c1");
+    expect(firestoreState.docs.has("chatConversations/c1")).toBe(false);
+    expect(firestoreState.ops.some((op) => op.kind === "delete" && op.path === "chatConversations/c1")).toBe(true);
+    // La ligne miroir a disparu : resilientGet ne peut plus la ressusciter.
+    expect(supabaseState.rows).toHaveLength(0);
+    expect(await resilientGet("chatConversations", "c1")).toBeNull();
+  });
+
+  it("nominal : doc absent de Firestore (idempotent) → miroir purgé quand même", async () => {
+    supabaseState.rows = [
+      { collection: "chatConversations", document_id: "c2", owner_id: "u1", payload: { userId: "u1" } },
+    ];
+    await resilientDelete("chatConversations", "c2");
+    expect(supabaseState.rows).toHaveLength(0);
+  });
+
+  it("quota : purge du MIROIR seul, Firestore intact (doc conservé)", async () => {
+    firestoreState.docs.set("chatConversations/c3", { exists: true, data: { userId: "u1" } });
+    firestoreState.failWith = quotaError();
+    supabaseState.rows = [
+      { collection: "chatConversations", document_id: "c3", owner_id: "u1", payload: { userId: "u1" } },
+    ];
+    await resilientDelete("chatConversations", "c3");
+    // Firestore factice : le throw précède la mutation → doc toujours présent.
+    expect(firestoreState.docs.has("chatConversations/c3")).toBe(true);
+    expect(supabaseState.rows).toHaveLength(0);
+  });
+
+  it("quota + Supabase absent → l'erreur de quota d'origine est propagée", async () => {
+    firestoreState.failWith = quotaError();
+    const { getSupabaseAdmin } = await import("@/lib/supabase/admin");
+    vi.mocked(getSupabaseAdmin).mockReturnValueOnce(null);
+    await expect(resilientDelete("chatConversations", "c4")).rejects.toThrow("Quota exceeded");
+  });
+
+  it("erreur transitoire → rejetée SANS purge miroir ni disjoncteur", async () => {
+    firestoreState.failWith = transientError();
+    supabaseState.rows = [
+      { collection: "chatConversations", document_id: "c5", owner_id: "u1", payload: { userId: "u1" } },
+    ];
+    await expect(resilientDelete("chatConversations", "c5")).rejects.toThrow("currently unavailable");
+    expect(supabaseState.rows).toHaveLength(1);
+  });
+
+  it("erreur métier (code 7) → rejetée telle quelle, miroir intact", async () => {
+    firestoreState.failWith = Object.assign(new Error("permission denied"), { code: 7 });
+    supabaseState.rows = [
+      { collection: "chatConversations", document_id: "c6", owner_id: "u1", payload: { userId: "u1" } },
+    ];
+    await expect(resilientDelete("chatConversations", "c6")).rejects.toThrow("permission denied");
+    expect(supabaseState.rows).toHaveLength(1);
+  });
+
+  it("disjoncteur ouvert → purge miroir directe sans toucher Firestore", async () => {
+    openBreaker();
+    supabaseState.rows = [
+      { collection: "chatConversations", document_id: "c7", owner_id: "u1", payload: { userId: "u1" } },
+    ];
+    await resilientDelete("chatConversations", "c7");
+    expect(firestoreState.ops.some((op) => op.kind === "delete")).toBe(false);
+    expect(supabaseState.rows).toHaveLength(0);
+  });
+
+  it("disjoncteur ouvert + Supabase absent → fallbackError", async () => {
+    openBreaker();
+    const { getSupabaseAdmin } = await import("@/lib/supabase/admin");
+    vi.mocked(getSupabaseAdmin).mockReturnValueOnce(null);
+    await expect(resilientDelete("chatConversations", "c8")).rejects.toThrow(
+      "Firestore quota atteinte et Supabase fallback indisponible.",
+    );
+  });
+});
+
+describe("resilientQuery includeIds + tri horodatage (Task 96-c)", () => {
+  it("includeIds : injecte doc.id Firestore dans chaque résultat", async () => {
+    firestoreState.queryResults = [{ title: "a" }, { title: "b" }];
+    const result = await resilientQuery<{ id?: string; title: string }>(
+      "chatConversations",
+      [{ field: "userId", value: "u1" }],
+      { includeIds: true },
+    );
+    // Le mock génère des ids q0, q1, … dans l'ordre des résultats.
+    expect(result.map((row) => row.id)).toEqual(["q0", "q1"]);
+    expect(result.map((row) => row.title)).toEqual(["a", "b"]);
+  });
+
+  it("includeIds côté repli : id = document_id miroir", async () => {
+    firestoreState.failWith = quotaError();
+    supabaseState.rows = [
+      { collection: "agents", document_id: "agent-9", owner_id: "u1", payload: { ownerId: "u1", name: "Nine" } },
+    ];
+    const result = await resilientQuery<{ id?: string; name: string }>(
+      "agents",
+      [{ field: "ownerId", value: "u1" }],
+      { includeIds: true },
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe("agent-9");
+    expect(result[0]!.name).toBe("Nine");
+  });
+
+  it("tri mémoire sur Timestamp-like (toMillis) : ordre chronologique respecté", async () => {
+    const old = { toMillis: () => 1_000 };
+    const mid = { toMillis: () => 2_000 };
+    const late = { toMillis: () => 3_000 };
+    firestoreState.queryResults = [{ createdAt: late }, { createdAt: old }, { createdAt: mid }];
+    const asc = await resilientQuery<{ createdAt: unknown }>("chatMessages", [{ field: "conversationId", value: "c" }], {
+      orderField: "createdAt",
+      includeIds: true,
+    });
+    expect(asc.map((row) => (row.createdAt as { toMillis: () => number }).toMillis())).toEqual([1_000, 2_000, 3_000]);
+    const desc = await resilientQuery<{ createdAt: unknown }>("chatMessages", [{ field: "conversationId", value: "c" }], {
+      orderField: "createdAt",
+      descending: true,
+    });
+    expect(desc.map((row) => (row.createdAt as { toMillis: () => number }).toMillis())).toEqual([3_000, 2_000, 1_000]);
+  });
+
+  it("tri mémoire sur objets Date : ordre chronologique (mocks sans SDK)", async () => {
+    firestoreState.queryResults = [
+      { createdAt: new Date("2026-01-03T10:00:00Z") },
+      { createdAt: new Date("2026-01-01T10:00:00Z") },
+      { createdAt: new Date("2026-01-02T10:00:00Z") },
+    ];
+    const result = await resilientQuery<{ createdAt: Date }>("chatMessages", [{ field: "conversationId", value: "c" }], { orderField: "createdAt" });
+    expect(result.map((row) => row.createdAt.toISOString())).toEqual([
+      "2026-01-01T10:00:00.000Z",
+      "2026-01-02T10:00:00.000Z",
+      "2026-01-03T10:00:00.000Z",
+    ]);
   });
 });

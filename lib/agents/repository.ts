@@ -1,5 +1,11 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
+import {
+  resilientCreate,
+  resilientGet,
+  resilientQuery,
+} from "@/lib/db/firestore-fallback";
+import { logger } from "@/lib/observability/logger";
 import { buildAgentCharter } from "./charter";
 import { AgentRecord, AgentRecordSchema, AgentRecordInput, AgentSummary } from "./schema";
 import {
@@ -11,7 +17,19 @@ import {
 } from "@/lib/tenants/resource-access";
 
 const COLLECTION = "agents";
-interface AgentDoc { [key: string]: unknown; ownerId: string; createdAt?: Timestamp | FieldValue; updatedAt?: Timestamp | FieldValue; }
+interface AgentDoc { [key: string]: unknown; ownerId: string; createdAt?: Timestamp | Date | string | FieldValue; updatedAt?: Timestamp | Date | string | FieldValue; }
+
+/**
+ * Horodatage lisible d'un document agent : Timestamp Firestore (écritures
+ * historiques serverTimestamp), Date (écritures 96-c via la couche
+ * résiliente) ou chaîne ISO (miroir Supabase) — jamais d'horodatage perdu.
+ */
+function recordTimestamp(value: unknown): string {
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string" && !Number.isNaN(Date.parse(value))) return value;
+  return new Date().toISOString();
+}
 
 function toRecord(id: string, data: AgentDoc): AgentRecord {
   const parsed = AgentRecordSchema.parse({
@@ -23,8 +41,8 @@ function toRecord(id: string, data: AgentDoc): AgentRecord {
     systemPrompt: typeof data.systemPrompt === "string" && data.systemPrompt.trim().length >= 10 ? data.systemPrompt : "Agent Gen3ia. Tu réponds de manière professionnelle.",
   }) as AgentRecord;
   return { ...parsed, id, ownerId: data.ownerId,
-    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : new Date().toISOString(),
+    createdAt: recordTimestamp(data.createdAt),
+    updatedAt: recordTimestamp(data.updatedAt),
   };
 }
 /**
@@ -46,13 +64,29 @@ export async function createAgentRecord(ownerId: string, input: AgentRecordInput
   if (!values.systemPrompt || values.systemPrompt.trim().length < 10) {
     values.systemPrompt = buildAgentCharter(values);
   }
-  const ref = adminDb.collection(COLLECTION).doc(); const now = FieldValue.serverTimestamp();
-  await ref.set({ ...values, ownerId, createdAt: now, updatedAt: now } satisfies AgentDoc);
-  return toRecord(ref.id, (await ref.get()).data() as AgentDoc);
+  // Couche résiliente (Task 96-c) : écriture Firestore + miroir Supabase en
+  // un seul appel ; sous quota, l'agent est créé sur le miroir seul — la
+  // section Agent IA reste utilisable. ownerId EXPLICITE (les payloads
+  // `agents` portent ownerId, pas userId : le sniff automatique ne voit rien).
+  const id = adminDb.collection(COLLECTION).doc().id;
+  const now = new Date();
+  const payload = { ...values, ownerId, createdAt: now, updatedAt: now } satisfies AgentDoc;
+  await resilientCreate(COLLECTION, id, payload, ownerId);
+  return toRecord(id, payload);
 }
 export async function listAgentsByOwner(ownerId: string, projectId?: string): Promise<AgentRecord[]> {
-  const snapshot = await adminDb.collection(COLLECTION).where("ownerId", "==", ownerId).orderBy("createdAt", "desc").limit(100).get();
-  return snapshot.docs.filter(d => d.data().status !== "archived").filter(d => !projectId || d.data().projectId === projectId).map(d => toRecord(d.id, d.data() as AgentDoc));
+  // Scan borné (cap 200) + tri mémoire createdAt desc : index-safe (aucun
+  // index composite requis) et quota-safe (repli miroir transparent).
+  const docs = await resilientQuery<AgentDoc>(
+    COLLECTION,
+    [{ field: "ownerId", value: ownerId }],
+    { orderField: "createdAt", descending: true, limit: 200, includeIds: true },
+  );
+  return docs
+    .filter(d => d.status !== "archived")
+    .filter(d => !projectId || d.projectId === projectId)
+    .slice(0, LIST_CAP)
+    .map(d => toRecord(String(d.id), d));
 }
 
 /** Firestore limite l'opérateur `in` à 30 valeurs par requête. */
@@ -67,13 +101,30 @@ const LIST_CAP = 100;
  */
 export async function listAgentsForUser(userId: string, projectId?: string): Promise<AgentRecord[]> {
   const personal = await listAgentsByOwner(userId, projectId);
-  const orgIds = await listUserOrgIds(userId);
+  // Fail-soft QUOTA (Task 96-c) : si l'index d'appartenance aux organisations
+  // est injoignable (quota Firestore épuisé), on livre AU MOINS les agents
+  // personnels au lieu d'un 500 — la section Agent IA reste ouverte.
+  let orgIds: string[] = [];
+  try {
+    orgIds = await listUserOrgIds(userId);
+  } catch (error) {
+    logger.warn({ err: error }, "list_user_org_ids_failed_failsoft");
+    return personal;
+  }
   if (orgIds.length === 0) return personal;
 
   const chunks: string[][] = [];
   for (let i = 0; i < orgIds.length; i += IN_QUERY_CHUNK) chunks.push(orgIds.slice(i, i + IN_QUERY_CHUNK));
-  const orgSnapshots = await Promise.all(chunks.map((chunk) =>
-    adminDb.collection(COLLECTION).where("orgId", "in", chunk).limit(LIST_CAP).get()));
+  // Type structurel (data() peut manquer de champs requis par AgentDoc — le
+  // cast AgentDoc est refait à la lecture de chaque doc).
+  let orgSnapshots: Array<{ docs: Array<{ id: string; data: () => Record<string, unknown> | undefined }> }>;
+  try {
+    orgSnapshots = await Promise.all(chunks.map((chunk) =>
+      adminDb.collection(COLLECTION).where("orgId", "in", chunk).limit(LIST_CAP).get())) as typeof orgSnapshots;
+  } catch (error) {
+    logger.warn({ err: error }, "list_org_agents_failed_failsoft");
+    return personal;
+  }
 
   const byId = new Map<string, AgentRecord>();
   for (const record of personal) byId.set(record.id, record);
@@ -90,12 +141,10 @@ export async function listAgentsForUser(userId: string, projectId?: string): Pro
     .slice(0, LIST_CAP);
 }
 export async function getAgentById(agentId: string): Promise<AgentRecord | null> {
-  const snap = await adminDb.collection(COLLECTION).doc(agentId).get(); if (!snap.exists) return null;
-  const data = snap.data() as AgentDoc | undefined; if (!data || data.status !== "active") return null; return toRecord(snap.id, data);
+  const data = await resilientGet<AgentDoc>(COLLECTION, agentId); if (!data || data.status !== "active") return null; return toRecord(agentId, data);
 }
 export async function getAgentForOwner(ownerId: string, agentId: string): Promise<AgentRecord | null> {
-  const snap = await adminDb.collection(COLLECTION).doc(agentId).get(); if (!snap.exists) return null;
-  const data = snap.data() as AgentDoc | undefined; if (!data || data.ownerId !== ownerId) return null; return toRecord(snap.id, data);
+  const data = await resilientGet<AgentDoc>(COLLECTION, agentId); if (!data || data.ownerId !== ownerId) return null; return toRecord(agentId, data);
 }
 
 /**
@@ -105,14 +154,17 @@ export async function getAgentForOwner(ownerId: string, agentId: string): Promis
  * renvoie null (indiscernable d'une ressource absente — anti-énumération).
  */
 export async function getAgentForUser(userId: string, agentId: string): Promise<AgentRecord | null> {
-  const snap = await adminDb.collection(COLLECTION).doc(agentId).get(); if (!snap.exists) return null;
-  const data = snap.data() as AgentDoc | undefined; if (!data) return null;
+  const data = await resilientGet<AgentDoc>(COLLECTION, agentId); if (!data) return null;
   try {
+    // Ressource personnelle : aucune I/O Firestore (ownerId === userId) —
+    // le chat avec SON agent survit au quota. Ressource d'org : le contexte
+    // org consulte Firestore ; son échec interne renvoie null (fail-closed,
+    // indiscernable d'une ressource absente).
     await assertResourceRead(userId, { ownerId: data.ownerId, orgId: typeof data.orgId === "string" ? data.orgId : null });
   } catch {
     return null;
   }
-  return toRecord(snap.id, data);
+  return toRecord(agentId, data);
 }
 export async function updateAgentForOwner(ownerId: string, agentId: string, patch: Partial<AgentRecordInput>): Promise<AgentRecord | null> {
   const current = await getAgentForOwner(ownerId, agentId); if (!current) return null;

@@ -376,15 +376,32 @@ async function writeFallbackSet(
   options: { merge?: boolean; ownerId?: string },
 ): Promise<void> {
   const supabase = getSupabaseAdmin()!;
-  const current = options.merge ? await readFallback(collection, documentId) : null;
-  const merged = {
-    ...((current?.payload ?? {}) as object),
-    ...payload,
-  };
+  // Assainissement identique au miroir nominal : les sentinelles
+  // (FieldValue.increment / delete) ne sont pas sérialisables en JSONB —
+  // les incréments sont résolus sur la valeur miroir ACTUELLE (contrat
+  // Task 95-b/96-c : `messageCount: FieldValue.increment(1)` écrit un
+  // nombre, jamais un objet opaque), les delete retirent la clé.
+  const { payload: sanitized } = sanitizeMirrorPayload(payload);
+  const increments = PENDING_INCREMENTS.get(sanitized) ?? [];
+  PENDING_INCREMENTS.delete(sanitized);
+  const deletes = PENDING_DELETES.get(sanitized) ?? [];
+  PENDING_DELETES.delete(sanitized);
+  const needBase = options.merge === true || increments.length > 0 || deletes.length > 0;
+  const current = needBase ? await readFallback(collection, documentId) : null;
+  const base = { ...((current?.payload ?? {}) as Record<string, unknown>) };
+  const merged = options.merge === true ? { ...base, ...sanitized } : { ...sanitized };
+  if (options.merge === true) {
+    for (const deletedPath of deletes) removePath(merged, deletedPath);
+  }
+  for (const increment of increments) {
+    const currentNumber = Number(getPath(base, increment.path) ?? 0);
+    const baseNumber = Number.isFinite(currentNumber) ? currentNumber : 0;
+    setPath(merged, increment.path, baseNumber + increment.amount);
+  }
   const { error: dbError } = await supabase.from("firestore_fallback").upsert({
     collection,
     document_id: documentId,
-    owner_id: resolveOwnerId(payload, options.ownerId ?? current?.owner_id ?? undefined) ?? current?.owner_id ?? null,
+    owner_id: resolveOwnerId(sanitized, options.ownerId ?? current?.owner_id ?? undefined) ?? current?.owner_id ?? null,
     payload: merged,
     updated_at: new Date().toISOString(),
   }, { onConflict: "collection,document_id" });
@@ -582,15 +599,46 @@ export interface FallbackQueryOptions {
   descending?: boolean;
   /** Nombre max de résultats (défaut : cap de scan 200). */
   limit?: number;
+  /**
+   * Injecte l'identifiant du document dans chaque résultat (`id` = doc.id
+   * Firestore côté nominal, `document_id` miroir côté repli). Requis par les
+   * dépôts dont les payloads ne portent PAS l'identifiant (chat, agents) —
+   * sans lui, un résultat resilientQuery est impossible à ré-addresser
+   * (lecture ciblée, suppression…).
+   */
+  includeIds?: boolean;
 }
 
 /** Cap de scan par défaut — protège Firestore ET la table de secours d'un balayage complet. */
 const QUERY_DEFAULT_LIMIT = 200;
 
 /**
- * Comparateur mémoire : dates ISO 8601 (Date.parse) > nombres > chaînes ;
- * valeurs absentes repoussées à la fin.
+ * Comparateur mémoire : horodatages (Timestamp Firestore via toMillis,
+ * objets Date, dates ISO 8601) > nombres > chaînes ; valeurs absentes
+ * repoussées à la fin. Les Timestamp/Date sont indispensables : les docs
+ * écrits avec `new Date()` (Task 96-c) relisent des Timestamp Firestore,
+ * et le tri mémoire doit rester juste sans dépendre du SDK.
  */
+function temporalMillis(value: unknown): number | null {
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { toMillis?: unknown }).toMillis === "function"
+  ) {
+    try {
+      const ms = (value as { toMillis: () => number }).toMillis();
+      return Number.isFinite(ms) ? ms : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 function looksLikeIsoDate(value: unknown): value is string {
   return (
     typeof value === "string" &&
@@ -605,6 +653,9 @@ function compareDocs(left: unknown, right: unknown, field: string): number {
   if (leftValue === undefined && rightValue === undefined) return 0;
   if (leftValue === undefined) return 1;
   if (rightValue === undefined) return -1;
+  const leftMs = temporalMillis(leftValue);
+  const rightMs = temporalMillis(rightValue);
+  if (leftMs !== null && rightMs !== null) return leftMs - rightMs;
   if (looksLikeIsoDate(leftValue) && looksLikeIsoDate(rightValue)) {
     return Date.parse(leftValue) - Date.parse(rightValue);
   }
@@ -623,7 +674,7 @@ async function queryFallback<T>(
   scanCap: number,
 ): Promise<T[]> {
   const supabase = getSupabaseAdmin()!;
-  let request = supabase.from("firestore_fallback").select("payload").eq("collection", collection);
+  let request = supabase.from("firestore_fallback").select("collection,document_id,payload").eq("collection", collection);
   for (const filter of filters) {
     request = request.filter("payload->>" + filter.field, "eq", String(filter.value));
   }
@@ -633,7 +684,11 @@ async function queryFallback<T>(
   request = request.limit(scanCap);
   const { data, error: dbError } = await request;
   if (dbError) throw fallbackError();
-  return (data ?? []).map((row) => row.payload as T);
+  return (data ?? []).map((row) =>
+    options?.includeIds
+      ? ({ ...(row.payload as object), id: row.document_id } as T)
+      : (row.payload as T),
+  );
 }
 
 /**
@@ -661,7 +716,11 @@ export async function resilientQuery<T>(
     query = query.limit(scanCap);
     const snapshot = await query.get();
     noteFirestoreSuccess();
-    let docs = snapshot.docs.map((doc) => doc.data() as T);
+    let docs = snapshot.docs.map((doc) =>
+      options?.includeIds
+        ? ({ ...(doc.data() as object), id: doc.id } as T)
+        : (doc.data() as T),
+    );
     if (options?.orderField) {
       const orderField = options.orderField;
       docs = [...docs].sort((left, right) => compareDocs(left, right, orderField));
@@ -675,6 +734,71 @@ export async function resilientQuery<T>(
     noteFirestoreQuotaError(error);
     if (!fallbackEnabled()) throw error;
     return queryFallback<T>(collection, filters, options, scanCap);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Suppression résiliente (Task 96-c)
+// ---------------------------------------------------------------------------
+
+/**
+ * Purge la ligne miroir correspondante (best-effort, ne lève JAMAIS) —
+ * obligatoire après un delete Firestore nominal : sans elle, resilientGet
+ * « ressusciterait » un document supprimé via le repli (miss Firestore →
+ * lecture miroir).
+ */
+async function purgeMirrorRow(collection: string, documentId: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return;
+  try {
+    const { error } = await supabase
+      .from("firestore_fallback")
+      .delete()
+      .eq("collection", collection)
+      .eq("document_id", documentId);
+    if (error) return; // le miroir ne lève jamais
+  } catch {
+    // le miroir ne lève jamais
+  }
+}
+
+/** Suppression de repli : purge du miroir SEUL (Firestore injoignable). */
+async function deleteFallbackOnly(collection: string, documentId: string): Promise<void> {
+  const supabase = getSupabaseAdmin()!;
+  const { error } = await supabase
+    .from("firestore_fallback")
+    .delete()
+    .eq("collection", collection)
+    .eq("document_id", documentId);
+  if (error) throw fallbackError();
+}
+
+/**
+ * Suppression résiliente : delete Firestore d'abord ; en cas de QUOTA, purge
+ * du miroir seul (le document disparaît de la vue utilisateur dans les deux
+ * mondes — la vérité Firestore sera complétée par la réconciliation, qui ne
+ * ré-imbrique PAS les lignes miroir purgées). Les erreurs TRANSITOIRES et
+ * métier sont rejetées telles quelles (conventions du module). À noter :
+ * le delete Firestore est idempotent (doc absent = succès) — le chemin
+ * nominal purge donc aussi le miroir d'un document qui n'existerait PLUS
+ * que dans le repli (jamais réconcilié).
+ */
+export async function resilientDelete(collection: string, documentId: string): Promise<void> {
+  if (!firestoreUsable()) {
+    if (!fallbackEnabled()) throw fallbackError();
+    return deleteFallbackOnly(collection, documentId);
+  }
+  try {
+    await adminDb.collection(collection).doc(documentId).delete();
+    noteFirestoreSuccess();
+    await purgeMirrorRow(collection, documentId);
+    return;
+  } catch (error) {
+    if (isFirestoreTransientError(error)) throw error;
+    if (!isFirestoreQuotaError(error)) throw error;
+    noteFirestoreQuotaError(error);
+    if (!fallbackEnabled()) throw error;
+    return deleteFallbackOnly(collection, documentId);
   }
 }
 

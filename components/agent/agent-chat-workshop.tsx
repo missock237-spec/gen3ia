@@ -72,6 +72,10 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   const [zen, setZen] = React.useState(false);
   const [error, setError] = React.useState("");
   const [_loadFailed, setLoadFailed] = React.useState(false);
+  // Historique MOMENTANÉMENT indisponible (erreur serveur/infra) — distinct
+  // d'une liste vide : sous quota de base de données l'utilisateur ne doit
+  // pas croire qu'il n'a AUCUN chat (Task 96-c).
+  const [historyUnavailable, setHistoryUnavailable] = React.useState(false);
   const [voiceSetupAgentId, setVoiceSetupAgentId] = React.useState<string | null>(null);
   const [showCreateAgent, setShowCreateAgent] = React.useState(false);
 
@@ -82,8 +86,15 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
       if (response.ok) {
         const data = await response.json();
         setConversations((data.conversations ?? []) as ConversationSummary[]);
+        setHistoryUnavailable(false);
+      } else if (response.status >= 500) {
+        // 503 dégradé (quota de base de données…) : l'historique existe mais
+        // est momentanément illisible — JAMAIS confondu avec « Aucun chat ».
+        setHistoryUnavailable(true);
       }
-    } catch { /* historique indisponible */ }
+    } catch {
+      setHistoryUnavailable(true);
+    }
   }, [agent]);
 
   // Charge l'agent « Gen IA » (créé automatiquement au premier usage —
@@ -169,9 +180,15 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
       <p className="mt-4 text-[10px] font-black uppercase tracking-[.24em] text-[var(--g3-muted)]">Historique des chats</p>
       <div className="mt-2 max-h-[420px] min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5 lg:max-h-none">
         {conversations.length === 0 ? (
-          <p className="rounded-xl bg-[var(--g3-elevated)] px-3 py-4 text-center text-xs leading-5 text-[var(--g3-faint)]">
-            Aucun chat pour l&apos;instant. Donnez votre premier prompt à l&apos;agent universel : il résout le problème de bout en bout.
-          </p>
+          historyUnavailable ? (
+            <p className="rounded-xl bg-[var(--g3-elevated)] px-3 py-4 text-center text-xs leading-5 text-[var(--g3-faint)]">
+              Historique momentanément indisponible (le stockage est en limite de quota). Vos chats réapparaissent dès le retour du service — réessayez dans un instant.
+            </p>
+          ) : (
+            <p className="rounded-xl bg-[var(--g3-elevated)] px-3 py-4 text-center text-xs leading-5 text-[var(--g3-faint)]">
+              Aucun chat pour l&apos;instant. Donnez votre premier prompt à l&apos;agent universel : il résout le problème de bout en bout.
+            </p>
+          )
         ) : (
           conversations.map((conversation) => {
             const selected = conversation.id === pendingConversationId;
