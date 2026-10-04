@@ -163,3 +163,52 @@ describe("resolveAndHarden + buildToolReport", () => {
     expect(report.removed).toEqual([expect.objectContaining({ from: "inconnu-total" })]);
   });
 });
+
+describe("alias médias (image.generate / video.create) — audit outils médias", () => {
+  it("mappe image/photo/dessin/logo/bannière/illustration vers image.generate", () => {
+    const { resolved, mapping } = resolveDeclaredTools([
+      "Génération d'images",
+      "photo",
+      "dessins",
+      "logo pour ma marque",
+      "bannière",
+      "illustrations",
+    ]);
+    expect(resolved).toEqual(["image.generate"]);
+    expect(mapping.every((entry) => entry.status === "mapped")).toBe(true);
+    expect(mapping.find((entry) => entry.from === "photo")?.to).toBe("image.generate");
+  });
+
+  it("mappe vidéo/clip/shorts/montage vidéo/reels-de-plateforme vers video.create", () => {
+    const { resolved } = resolveDeclaredTools([
+      "vidéo youtube",
+      "clips",
+      "shorts",
+      "montage vidéo",
+      "reels instagram",
+      "tiktok reels",
+    ]);
+    expect(resolved).toEqual(["video.create"]);
+  });
+
+  it("ne mappe PAS les homographes : « réels » (reel(s) après normalisation) et « short » adjectif restent hors médias", () => {
+    const { resolved, unknown } = resolveDeclaredTools(["données réelles", "short link"]);
+    expect(resolved).toEqual([]);
+    expect(unknown).toEqual(["données réelles", "short link"]);
+  });
+
+  it("« photo » passe désormais à image.generate tandis que camera/capture reste camera.capture", () => {
+    const { resolved } = resolveDeclaredTools(["capture d'écran", "photos générées", "camera"]);
+    expect(resolved).toContain("camera.capture");
+    expect(resolved).toContain("image.generate");
+    expect(resolved).not.toContain("photo"); // jamais un nom hors registre
+  });
+
+  it("les outils médias sensibles déclenchent le durcissement auto_allow → ask_if_needed", () => {
+    const { resolution, hardening } = resolveAndHarden(["générer une image", "montage vidéo"], "auto_allow");
+    expect(resolution.resolved).toEqual(["image.generate", "video.create"]);
+    expect(hardening.hardened).toBe(true);
+    expect(hardening.mode).toBe("ask_if_needed");
+    expect(hardening.sensitiveTools).toEqual(["image.generate", "video.create"]);
+  });
+});

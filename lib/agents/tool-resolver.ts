@@ -86,6 +86,16 @@ const ALIAS_RULES: AliasRule[] = [
   //   conflit, mais « gmail » doit passer avant « mail » générique).
   { pattern: /\bgmail\b|\bcourriel\b|\bemail\b|\be mails?\b|\bmails?\b|\boutlook\b|\bsmtp\b|envoi\w* mail|send (an? )?email/, tools: ["email.send"], label: "email.send (envoi d'email réel)" },
   { pattern: /\bslack\b|\bwhatsapp\b|\btelegram\b|\bmessenger\b|\bsms\b|\bmessaging\b/, tools: ["messaging.send"], label: "messaging.send (WhatsApp/Telegram/Slack)" },
+  // — Médias générés (image & vidéo) : AVANT les règles sociaux/publicité et
+  //   caméra — « photo » désigne ici une image GÉNÉRÉE (image.generate), pas
+  //   une capture caméra (qui garde « camera » / « capture ») ; « instagram
+  //   reels » est une VIDÉO, pas une publication sociale. Pour la vidéo,
+  //   « reel » n'est reconnu QUE accolé à une plateforme : après
+  //   normalisation (accents retirés), « reel(s) » est l'homographe de
+  //   « réel(s) » — jamais deviné seul. Idem pour « short » : le nom
+  //   (« shorts », YouTube Shorts) mappe, pas l'adjectif anglais générique.
+  { pattern: /\bimages?\b|\bphoto\w*\b|\bdessins?\b|\blogo\w*\b|\bbanni[èe]res?\b|\billustrations?\b|\bicones?\b|\bavatars?\b/, tools: ["image.generate"], label: "image.generate (génération d'image à partir d'un texte)" },
+  { pattern: /\bvid[ée]os?\b|\bclips?\b|\bmontage(s)? vid[ée]o\b|\b(?:instagram|tiktok|facebook|youtube)\s+reels?\b|\breels?\s+(?:instagram|tiktok|facebook|youtube)\b|\bshorts\b|\bvideo courte\b|\bvid[ée]o courte\b/, tools: ["video.create"], label: "video.create (production vidéo complète autonome)" },
   // — Réseaux sociaux & publicité
   { pattern: /\bgoogle ads\b|\bmeta ads\b|\btiktok ads\b|\badwords\b|\bpublicite\b|\bpublicités?\b|\badvertising\b|\bads\b/, tools: ["ads.read"], label: "ads.read (lecture publicitaire ; la publication reste une action approuvée)" },
   { pattern: /\blinkedin\b|\btwitter\b|\bx post\b|\binstagram\b|\bfacebook\b|\breseaux? sociaux?\b|\bsocial\b/, tools: ["social.publish"], label: "social.publish (publication sur plateforme connectée)" },
@@ -119,7 +129,7 @@ const ALIAS_RULES: AliasRule[] = [
   // — Voix & téléphone & caméra
   { pattern: /\bvoix\b|\bvoice\b|\bvocal\w*\b|\btts\b|\bspeech\b|\bsynthese vocale\b|\baudio\b|\bpodcast\b/, tools: ["voice.speak"], label: "voice.speak (audio naturel à partir du texte)" },
   { pattern: /\bphone\b|\bappel\w*\b|\btelephon\w*\b|\btéléphone\b/, tools: ["phone.call"], label: "phone.call (appel IA sortant borné)" },
-  { pattern: /\bcamera\b|\bphoto\w*\b|\bcapture\w*\b/, tools: ["camera.capture"], label: "camera.capture (capture autorisée)" },
+  { pattern: /\bcamera\b|\bcapture\w*\b/, tools: ["camera.capture"], label: "camera.capture (capture autorisée)" },
   // — Outils explicitement SANS équivalent Gen3ia : reconnus comme « removed »
   //   avec une raison claire plutôt que silencieusement perdus.
   { pattern: /\bjira\b|\btrello\b|\basana\b|\blinear\b|\bclickup\b|\bmonday\b|\bconfluence\b/, tools: [], label: "aucun équivalent direct Gen3ia — connectez l'app via MCP ou Composio (Intégrations)" },

@@ -4,6 +4,8 @@ import * as React from "react";
 
 import { CommandComposer, type CommandComposerHandle } from "@/components/ui/command-composer";
 import { MarkdownContent } from "@/components/workspace/markdown";
+import { MediaProgressFrame } from "@/components/media/media-progress-frame";
+import { VideoProductionCard } from "@/components/workspace/video-production-card";
 import type { MentionItem } from "@/lib/ui/command-composer-helpers";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import { ATTACHMENT_MAX_FILES, attachmentLimitLabel, validateAttachment } from "@/lib/files/attachment-policy";
@@ -66,6 +68,8 @@ type Message = {
   mode?: "chat" | "task";
   /** URL d'une image générée par l'agent (Agnes AI), affichée sous le texte. */
   imageUrl?: string;
+  /** Production vidéo autopilotée lancée par l'agent (suivi temps réel). */
+  videoProject?: { projectId: string };
   result?: AgentResult;
 };
 
@@ -99,6 +103,49 @@ function statusLabel(status?: string) {
     case "paused": return "En pause";
     default: return status ?? "En attente";
   }
+}
+
+/**
+ * Lit un flux NDJSON de progression média ({type:"progress"|"result"|"stream_error"})
+ * et retourne la charge utile finale — chaque événement de progression est
+ * transmis au callback pour un rendu en direct (cadre de progression réel).
+ */
+async function consumeMediaProgressStream(
+  response: Response,
+  onProgress: (event: { label: string; stage?: string; percent?: number }) => void,
+): Promise<Record<string, unknown>> {
+  const body = response.body;
+  if (!body) throw new Error("Flux de progression indisponible.");
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: Record<string, unknown> = {};
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+      newlineIndex = buffer.indexOf("\n");
+      if (!line) continue;
+      try {
+        const event = JSON.parse(line) as { type?: string; label?: string; stage?: string; percent?: number; data?: Record<string, unknown>; message?: string };
+        if (event.type === "progress") {
+          onProgress({ label: event.label ?? "Génération en cours…", stage: event.stage, percent: event.percent });
+        } else if (event.type === "result" && event.data) {
+          result = event.data;
+        } else if (event.type === "stream_error") {
+          throw new Error(event.message || "Erreur pendant la génération.");
+        }
+      } catch (parseError) {
+        if (parseError instanceof SyntaxError) continue; // ligne partielle : suivante
+        throw parseError;
+      }
+    }
+  }
+  return result;
 }
 
 /**
@@ -164,6 +211,8 @@ export function AgentChatPanel({
   const [active, setActive] = React.useState<AgentResult | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  /** Progression RÉELLE des générations médias (flux NDJSON serveur). */
+  const [mediaProgress, setMediaProgress] = React.useState<{ label: string; percent: number | null } | null>(null);
   // Pièces jointes MULTIPLES (politique unifiée : 10 fichiers × 50 Mo).
   const [attachments, setAttachments] = React.useState<Array<{ file: File; path: string }>>([]);
   // Mission LIVE : pendant l'exécution (bloquante OU en file arrière-plan),
@@ -508,6 +557,7 @@ export function AgentChatPanel({
   async function sendMessage(objective: string) {
     setLoading(true);
     setError("");
+    setMediaProgress(null);
     const controller = new AbortController();
     requestAbortRef.current = controller;
     try {
@@ -524,8 +574,19 @@ export function AgentChatPanel({
           ...(activated.length > 0 ? { activatedConnectors: activated.map((item) => item.toolkit) } : {}),
         }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "L'agent n'a pas pu répondre.");
+      // Flux NDJSON de PROGRESSION (générations image/vidéo) : chaque étape
+      // RÉELLE du serveur met à jour le cadre de progression en direct ; le
+      // résultat final arrive en {type:"result", data}.
+      let data: Record<string, unknown>;
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/x-ndjson")) {
+        data = await consumeMediaProgressStream(response, (event) => {
+          setMediaProgress({ label: event.label, percent: typeof event.percent === "number" ? event.percent : null });
+        });
+      } else {
+        data = await response.json();
+      }
+      if (!response.ok) throw new Error(String(data.error) || "L'agent n'a pas pu répondre.");
 
       // File hors-ligne (SW 202) : la mission PARTIRA au retour du réseau —
       // on l'annonce honnêtement au lieu d'un faux « en cours d'exécution ».
@@ -541,7 +602,7 @@ export function AgentChatPanel({
         return;
       }
 
-      if (data.conversationId) rememberConversation(data.conversationId);
+      if (data.conversationId) rememberConversation(String(data.conversationId));
       // Pièces jointes consommées par l'envoi : nettoyage immédiat.
       setAttachments([]);
 
@@ -555,8 +616,8 @@ export function AgentChatPanel({
           mode: "agent",
           status: "queued",
           executionId: String(data.executionId ?? data.runId),
-          conversationId: data.conversationId,
-          plan: data.plan ?? { steps: [], maxIterations: 0 },
+          conversationId: String(data.conversationId ?? ""),
+          plan: (data.plan as AgentResult["plan"]) ?? { steps: [], maxIterations: 0 },
         });
         setMessages((items) => [...items, {
           id: crypto.randomUUID(),
@@ -574,6 +635,9 @@ export function AgentChatPanel({
           role: "agent",
           text: String(data.reply ?? ""),
           ...(data.imageUrl ? { imageUrl: String(data.imageUrl) } : {}),
+          ...(data.videoProject && typeof data.videoProject === "object" && "projectId" in (data.videoProject as Record<string, unknown>)
+            ? { videoProject: { projectId: String((data.videoProject as Record<string, unknown>).projectId) } }
+            : {}),
           mode: "chat",
         }]);
         setActive(null);
@@ -611,6 +675,7 @@ export function AgentChatPanel({
     } finally {
       requestAbortRef.current = null;
       setLoading(false);
+      setMediaProgress(null);
     }
   }
 
@@ -727,7 +792,7 @@ export function AgentChatPanel({
         setError("Vous êtes hors ligne : cette décision exige le réseau. Reconnectez-vous puis validez à nouveau.");
         return;
       }
-      if (data.conversationId) rememberConversation(data.conversationId);
+      if (data.conversationId) rememberConversation(String(data.conversationId));
       const result = data as AgentResult;
       setActive(result);
       setMessages((items) => [...items, {
@@ -938,6 +1003,13 @@ export function AgentChatPanel({
                   </div>
                 )}
 
+                {/* Production vidéo lancée par l'agent : progression RÉELLE + lecteur final. */}
+                {item.videoProject && (
+                  <div className="mt-2">
+                    <VideoProductionCard videoProjectId={item.videoProject.projectId} tone="light" />
+                  </div>
+                )}
+
                 {/* Trace d'exécution + approbations (mode task uniquement) */}
                 {/* Résultat SEUL à l'écran : le détail du plan d'exécution
                     n'est affiché que lorsqu'il demande une action de
@@ -1020,6 +1092,18 @@ export function AgentChatPanel({
                   </div>
                 )}
                 {loading ? (
+                  mediaProgress ? (
+                    /* Progression RÉELLE (flux NDJSON serveur) : étapes réelles
+                       de la génération — jamais une fausse barre animée. */
+                    <div className="mr-auto w-full max-w-[88%]">
+                      <MediaProgressFrame
+                        status={mediaProgress.percent === 100 ? "complete" : "running"}
+                        stageLabel={mediaProgress.label}
+                        percent={mediaProgress.percent}
+                        tone="light"
+                      />
+                    </div>
+                  ) : (
                   <div className="mr-auto flex items-center gap-3 rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3 text-xs text-[var(--g3-muted)]">
                     <Gen3iaLogo size={26} working alt="" />
                     <span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-primary-strong)]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-magenta)] [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--g3-secondary)] [animation-delay:240ms]" /></span>
@@ -1034,6 +1118,7 @@ export function AgentChatPanel({
                     Arrêter
                   </button>
                   </div>
+                  )
                 ) : (
                   /* Reprise après refresh : la mission a survécu à l'actualisation
                      (elle appartient au serveur) — l'utilisateur le VOIT et peut

@@ -86,6 +86,28 @@ describe("classifyRequest", () => {
     const result = await classifyRequest(agent, "Bonjour");
     expect(result.mode).toBe("chat");
   });
+
+  it("propage la clarifyingQuestion du classificateur (canal de clarification)", async () => {
+    mockedGenerate.mockResolvedValueOnce({
+      text: JSON.stringify({
+        mode: "chat",
+        inScope: true,
+        reason: "Ambiguïté réelle",
+        clarifyingQuestion: "Voulez-vous que je rédige le plan de lancement ou que j'envoie la campagne ?",
+      }),
+    } as Awaited<ReturnType<typeof generate>>);
+    const result = await classifyRequest(agent, "Prépare le lancement");
+    expect(result.mode).toBe("chat");
+    expect(result.clarifyingQuestion).toContain("plan de lancement");
+  });
+
+  it("laisse clarifyingQuestion absente quand le classificateur n'en propose pas", async () => {
+    mockedGenerate.mockResolvedValueOnce({
+      text: JSON.stringify({ mode: "task", inScope: true, reason: "Exécution claire" }),
+    } as Awaited<ReturnType<typeof generate>>);
+    const result = await classifyRequest(agent, "Crée un bouton React.");
+    expect(result.clarifyingQuestion).toBeUndefined();
+  });
 });
 
 describe("heuristicClassification (repli déterministe)", () => {
@@ -99,6 +121,33 @@ describe("heuristicClassification (repli déterministe)", () => {
     expect(heuristicClassification("Crée un site vitrine complet.").mode).toBe("task");
     expect(heuristicClassification("Analyse ce fichier et prépare un rapport.").mode).toBe("task");
     expect(heuristicClassification("Génère un PDF de 10 pages.").mode).toBe("task");
+  });
+
+  it("détection de question INDÉPENDANTE DE LA LANGUE (audit : marqueurs FR uniquement)", () => {
+    expect(heuristicClassification("What can you do for me?").mode).toBe("chat");
+    expect(heuristicClassification("How does the billing work on Gen3ia?").mode).toBe("chat");
+    expect(heuristicClassification("Who created you?").mode).toBe("chat");
+  });
+
+  it("une LONGUE question française reste une question (plafond 400 → 1200)", () => {
+    const longQuestion = `${"Explique-moi en détail comment fonctionne le système de facturation de la plateforme, ".repeat(9)}et donne-moi des exemples ?`;
+    expect(longQuestion.length).toBeGreaterThan(400);
+    expect(longQuestion.length).toBeLessThanOrEqual(1200);
+    expect(heuristicClassification(longQuestion).mode).toBe("chat");
+  });
+
+  it("un « ? » dans les 200 derniers caractères suffit (question longue à préambule)", () => {
+    const preamble = `${"Voici le contexte de mon projet : je gère une boutique de vêtements en ligne avec plusieurs fournisseurs. ".repeat(4)}`;
+    const message = `${preamble}peux-tu m'expliquer comment suivre mes stocks ?`;
+    expect(message.length).toBeGreaterThan(400);
+    expect(heuristicClassification(message).mode).toBe("chat");
+  });
+
+  it("les verbes d'action EXPLICITES forcent task, même polis ou avec un « ? »", () => {
+    expect(heuristicClassification("Peux-tu générer un rapport complet des ventes ?").mode).toBe("task");
+    expect(heuristicClassification("Please generate a full report for Q3").mode).toBe("task");
+    expect(heuristicClassification("Can you send the invoice to the client?").mode).toBe("task");
+    expect(heuristicClassification("envoie le fichier au client").mode).toBe("task");
   });
 });
 

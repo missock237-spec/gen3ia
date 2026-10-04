@@ -39,7 +39,9 @@ import {
   recordRunOutcome,
   type ComplexityAssessment,
 } from "@/lib/ai/auto-improvement";
-import { enhancePromptForExecution } from "@/lib/ai/prompt-enhancer";
+import { enhancePromptForExecution, languageDirective } from "@/lib/ai/prompt-enhancer";
+import { imagesForModel } from "@/lib/ai/vision-input";
+import { extractVideoTitle, looksLikeVideoRequest } from "@/lib/ai/video-intent";
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
 import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
 import { getImportedFileContent, listImportedFiles, loadImportedFilesContext } from "@/lib/files/import";
@@ -47,6 +49,7 @@ import {
   detectScheduleIntent,
   detectServiceControlIntent,
   detectWorkflowIntent,
+  isDraftEmailRequest,
   type ScheduleIntent,
   type ServiceControlIntent,
   type WorkflowIntent,
@@ -188,6 +191,8 @@ export function estimatedCostForTool(toolName: string): string {
   if (toolName.startsWith("custom_api.")) return "gratuit (votre API — quota du fournisseur)";
   if (toolName === "workflow.run" || (toolName === "workflow.create")) return "gratuit à la création ; exécution facturée selon les modèles";
   if (toolName.startsWith("schedule.") || toolName.startsWith("workflow.")) return "gratuit";
+  if (toolName === "image.generate") return "~0,01–0,04 € / image (facturée à l'usage)";
+  if (toolName === "video.create") return "production complète facturée selon durée/résolution + visuels et voix";
   return "gratuit";
 }
 
@@ -226,6 +231,8 @@ export function dataScopeForTool(toolName: string, input: unknown): string {
   if (toolName === "phone.call") return "Numéro appelé + transcript de l'appel";
   if (toolName === "file.create" || toolName === "artifact.create") return "Votre stockage permanent Gen3ia";
   if (toolName === "memory.write") return "Mémoire permanente de vos agents";
+  if (toolName === "image.generate") return "Génération d'une image à partir de votre description (stockée dans votre espace)";
+  if (toolName === "video.create") return "Production vidéo complète : scénario, visuels, voix, montage et rendu (votre espace vidéo)";
   if (toolName.startsWith("cloudflare.")) return "Zones DNS Cloudflare autorisées";
   if (toolName.startsWith("notion.")) return "Espace Notion autorisé";
   return "Données transmises dans la demande";
@@ -270,6 +277,11 @@ const IntentSchema = z.object({
   reply: z.string().max(18000).optional().describe("Réponse directe si mode=chat"),
   objective: z.string().max(1000).optional().describe("Objectif du plan si mode=plan"),
   steps: z.array(IntentStepSchema).max(8).optional(),
+  /** Canal de clarification : vrai UNIQUEMENT si la demande est réellement
+   *  ambiguë entre deux actions matériellement différentes et qu'aucun
+   *  défaut raisonnable n'existe — alors poser UNE question précise. */
+  needsClarification: z.boolean().optional(),
+  clarifyingQuestion: z.string().max(600).optional().describe("Une seule question de clarification, si needsClarification"),
 });
 
 export type TurnIntent = z.infer<typeof IntentSchema>;
@@ -362,7 +374,10 @@ export function detectExplicitToolIntent(message: string, catalog: ToolCatalogEn
   // Attention : rédiger/brouiller un email (sans envoi ni adresse) ne déclenche PAS le garde.
   const emailSendVerb = /\b(envoi[ez]|envoie|envoyer|exp[ée]di\w*|transmets?|transmets|send)\b/i;
   const emailWord = /\b(e-?mails?|courriels?)\b/i;
-  if (catalogNames.has("email.send") && emailSendVerb.test(lower) && emailWord.test(lower)) {
+  // Garde « brouillon » : rédiger/préparer un email n'est PAS un envoi réel —
+  // la demande reste conversationnelle (audit compréhension : « envoie-moi un
+  // brouillon d'email… » ne doit jamais partir chez Resend).
+  if (catalogNames.has("email.send") && emailSendVerb.test(lower) && emailWord.test(lower) && !isDraftEmailRequest(message)) {
     const address = message.match(EMAIL_ADDRESS_RE)?.[0];
     if (address) {
       return {
@@ -484,6 +499,8 @@ export interface IntentPromptMeta {
   runHistoryContext?: string;
   /** Évaluation de complexité de la demande. */
   complexity?: ComplexityAssessment;
+  /** Directive de langue calculée depuis le dernier message utilisateur. */
+  languageDirective?: string;
 }
 
 export function buildIntentSystemPrompt(
@@ -552,6 +569,29 @@ export function buildIntentSystemPrompt(
         "N'invente JAMAIS une URL ni une clé : utilise uniquement ce que l'utilisateur a énoncé.",
       ].join("\n")
     : "";
+  const mediaSection = [
+    "",
+    "RÈGLE IMPÉRATIVE — VISUELS : toute demande de CRÉATION d'image, photo, illustration, dessin, logo, affiche, poster, bannière, avatar, icône, fond d'écran ou miniature est routée en mode=plan avec UN SEUL step :",
+    '  { title: "Génération de l\'image", toolName: "image.generate", toolInput: { prompt: "<description visuelle fidèle de CE QUE L\'UTILISATEUR a demandé — le sujet exact, sans rien ajouter ni inventer>" } }.',
+    "Cela vaut quel que soit la formulation (« dessine-moi un chat », « je veux une photo de… », « un logo pour ma boulangerie », « fais-moi une image de… »). Ne réponds JAMAIS une demande de visuel par du texte seul.",
+    catalogNames.has("video.create")
+      ? [
+          "",
+          "RÈGLE IMPÉRATIVE — VIDÉO : toute demande de CRÉATION/PRODUCTION d'une vidéo, clip, reel, short, trailer, bande-annonce ou montage vidéo est routée en mode=plan avec UN SEUL step :",
+          '  { title: "Production vidéo", toolName: "video.create", toolInput: { prompt: "<la demande EXACTE de l\'utilisateur : sujet, durée, format, ton, message — fidèle, sans rien inventer>", title?: "<titre court>", aspectRatio?: "16:9" | "9:16" | "1:1" } }.',
+          "La production complète (scénario, visuels, voix, musique, montage, rendu) est enchaînée AUTOMATIQUEMENT par la plateforme, avec progression en temps réel affichée dans la conversation. Ne réponds JAMAIS une demande de vidéo par du texte seul, et ne demande JAMAIS de passer par l'atelier vidéo : tu lances la production toi-même.",
+        ].join("\n")
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const clarificationSection = [
+    "",
+    "CLARIFICATION (compréhension exacte) :",
+    "Avant de choisir le mode, reformule silencieusement la demande dans `understanding` — fidèle aux mots de l'utilisateur.",
+    "Si la demande est VRAIMENT ambiguë entre deux actions matériellement différentes (ex. « fais une vidéo sur X » sans durée ni format ET deux interprétations majeures), pose UNE seule question : needsClarification=true + clarifyingQuestion (une question courte, précise, en français).",
+    "Dans TOUS les autres cas, ne demande JAMAIS de clarification : choisis l'interprétation la plus probable et agis. Une question inutile est une erreur.",
+  ].join("\n");
   const base = [
     "Tu es le moteur d'exécution de Gen3ia, une plateforme d'agents avec connecteurs.",
     "Pour chaque demande utilisateur, tu décides :",
@@ -561,14 +601,15 @@ export function buildIntentSystemPrompt(
     "Un step sans toolName est une étape de raisonnement/rédaction exécutée par toi-même.",
     "Les outils marqués « validation requise » ne seront exécutés qu'après approbation explicite de l'utilisateur : décris leur impact précisément dans detail.",
     "Ne propose jamais un outil qui n'est pas dans le catalogue. Ne fabrique pas d'identifiants, de tokens ou de numéros.",
-    "",
-    "RÈGLE IMPÉRATIVE — VISUELS : toute demande de CRÉATION d'image, photo, illustration, dessin, logo, affiche, poster, bannière, avatar, icône, fond d'écran ou miniature est routée en mode=plan avec UN SEUL step :",
-    '  { title: "Génération de l\'image", toolName: "image.generate", toolInput: { prompt: "<description visuelle fidèle de CE QUE L\'UTILISATEUR a demandé — le sujet exact, sans rien ajouter ni inventer>" } }.',
-    "Cela vaut quel que soit la formulation (« dessine-moi un chat », « je veux une photo de… », « un logo pour ma boulangerie », « fais-moi une image de… »). Ne réponds JAMAIS une demande de visuel par du texte seul.",
+    mediaSection,
+    clarificationSection,
     "",
     "Catalogue d'outils disponibles :",
     toolLines,
     "- image.generate (risque low) : génère une image réelle et photoréaliste à partir d'une description visuelle (input { prompt }).",
+    catalogNames.has("video.create")
+      ? "- video.create (risque medium) : lance une production vidéo complète autonome — scénario, visuels de scènes, voix, musique, montage, rendu — avec progression en temps réel (input { prompt, title?, aspectRatio? })."
+      : "",
     "",
     project?.instructions ? `Instructions persistantes du projet « ${project.name} » (à respecter) :\n${project.instructions}` : "",
     project?.privacyRules ? `Règles de confidentialité du projet (impératives) :\n${project.privacyRules}` : "",
@@ -585,6 +626,7 @@ export function buildIntentSystemPrompt(
   const metaSections = [
     meta?.evolutionContext,
     meta?.runHistoryContext,
+    meta?.languageDirective,
     meta?.complexity
       ? `COMPLEXITÉ DE LA DEMANDE : score ${meta.complexity.score}/100 (niveau ${meta.complexity.level})${meta.complexity.beyondMastered ? " — au-delà du niveau déjà maîtrisé : MODE ÉVOLUTION activé, planifie plus finement, vérifie chaque étape, utilise de vrais outils et délègue à des sous-agents si nécessaire." : " — planifie en conséquence, sans étapes superflues."}`
       : "",
@@ -818,8 +860,26 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     return result;
   }
   if (looksLikeImageRequest(input.message) || looksLikeExplicitDrawingRequest(input.message)) {
-    await onEvent({ type: "status", phase: "image", label: "Génération de l'image en cours…" });
+    await onEvent({ type: "status", phase: "image", label: "Génération de l'image en cours…", stage: "generating", percent: 10 });
     const result = await runImageTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+
+  // 2 quater) DEMANDE DE VIDÉO : production COMPLÈTE autopilotée (file
+  // `videoProductionJobs`) — création du projet, plan du réalisateur,
+  // scénario, visuels de scènes, voix, montage et rendu, une étape par tick
+  // QStash (repli : continuation par sondage). L'utilisateur suit la
+  // progression RÉELLE dans la conversation (artefact vidéo) et dans
+  // l'atelier vidéo.
+  if (looksLikeVideoRequest(input.message)) {
+    await onEvent({ type: "status", phase: "execution", label: "Lancement de la production vidéo…" });
+    const result = await runVideoTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,
@@ -889,6 +949,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
           evolutionContext: evolution.context,
           runHistoryContext: runHistory,
           complexity,
+          languageDirective: languageDirective(input.message),
         }),
         prompt:
           `Historique récent :\n${priorHistory.slice(-6).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 500)}`).join("\n") || "(vide)"}` +
@@ -904,6 +965,36 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   } catch {
     // Décision indisponible : repli sûr = réponse conversationnelle simple.
     intent = { mode: "chat", understanding: "Réponse directe (planification indisponible)." };
+  }
+
+  // Canal de CLARIFICATION : le classifieur a détecté une ambiguïté réelle
+  // entre deux actions matériellement différentes — une seule question
+  // précise est posée (réponse déterministe, aucun appel LLM supplémentaire).
+  if (intent.mode === "chat" && intent.needsClarification && intent.clarifyingQuestion?.trim()) {
+    await onEvent({ type: "status", phase: "intention", label: "Clarification de votre demande…" });
+    const assistantMessage = await appendMessage({
+      conversationId: input.conversationId,
+      userId: input.userId,
+      role: "assistant",
+      content: intent.clarifyingQuestion.trim(),
+      generationStatus: "complete",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    const clarifyResult: ConversationTurnResult = {
+      conversationId: input.conversationId,
+      userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent,
+    };
+    await onEvent({
+      type: "done",
+      assistantMessage: clarifyResult.assistantMessage,
+      artifacts: clarifyResult.artifacts,
+      approvals: clarifyResult.approvals,
+    });
+    return clarifyResult;
   }
 
   if (intent.mode === "chat") {
@@ -1078,6 +1169,8 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     // sujet saisi, structure markdown, zéro invention) — aligné sur l'exigence
     // « qualité ChatGPT à chaque requête ».
     RESPONSE_FORMAT_RULES,
+    // Compréhension exacte : répondre dans la LANGUE du dernier message.
+    languageDirective(ctx.message),
     "La génération d'images est effectuée par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré, affiché ou décrit un visuel comme s'il était affiché, et n'invente jamais d'URL d'image.",
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
@@ -1086,12 +1179,16 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     ctx.knowledgeContext ? `Ces extraits proviennent de la BASE DE CONNAISSANCES du projet (documents indexés par l'utilisateur) — cite-les fidèlement quand ils répondent à la demande et ne complète JAMAIS par une invention de leur contenu :${ctx.knowledgeContext}` : "",
   ].filter(Boolean);
 
+  // VISION : les images réellement jointes au message sont transmises aux
+  // modèles vision (parts image_url / blocs image selon le provider) —
+  // « que voit-on sur cette photo ? » fonctionne enfin.
+  const visionImages = imagesForModel(ctx.attachments);
   const requestMessages = [
     ...(systemParts.length > 0
       ? [{ role: "system" as const, content: systemParts.join("\n\n") }]
       : []),
     ...historyForModel(ctx.priorHistory),
-    { role: "user" as const, content: ctx.message },
+    { role: "user" as const, content: ctx.message, ...(visionImages ? { images: visionImages } : {}) },
   ];
 
   let content: string;
@@ -1257,6 +1354,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 async function produceConversationImage(
   ctx: Pick<TurnContext, "message" | "userId">,
   plannedPrompt?: string,
+  onProgress?: (event: { label: string; stage: string; percent: number }) => Promise<void> | void,
 ): Promise<{ imageUrl: string; model: string; storagePath?: string; inlineDataUrl?: string }> {
   const rawPrompt =
     typeof plannedPrompt === "string" && plannedPrompt.trim().length >= 3
@@ -1264,17 +1362,20 @@ async function produceConversationImage(
       : extractImagePrompt(ctx.message);
   // Amélioration bornée : si le LLM d'amélioration traîne, la génération
   // part avec le prompt d'origine plutôt que de dépasser le budget.
+  await onProgress?.({ label: "Amélioration du prompt visuel…", stage: "enhance", percent: 15 });
   const enhancement = await withTimeout(
     enhanceImagePrompt(rawPrompt).catch(() => ({ prompt: rawPrompt, enhanced: false })),
     32_000,
     "amélioration du prompt image",
   ).catch(() => ({ prompt: rawPrompt, enhanced: false }));
+  await onProgress?.({ label: "Génération de l'image en cours…", stage: "generating", percent: 40 });
   const image = await generateImageWithAgnes({
     prompt: enhancement.prompt,
     size: "2K",
     ratio: detectImageRatio(ctx.message),
     timeoutMs: 40_000,
   });
+  await onProgress?.({ label: "Enregistrement sécurisé de l'image…", stage: "persisting", percent: 80 });
   const persisted = await persistGeneratedImage(ctx.userId, image.imageUrl).catch(() => ({}));
   return { imageUrl: image.imageUrl, model: image.model, ...persisted };
 }
@@ -1413,7 +1514,13 @@ async function runImageEditTurn(ctx: TurnBase, lastConversationImage: string | n
 async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   try {
-    const image = await produceConversationImage(ctx);
+    // Progression RÉELLE émise par le serveur au fil des étapes réelles
+    // (amélioration → génération → enregistrement) — cadre de progression
+    // temps réel côté client (Task « cadre de progression »).
+    const image = await produceConversationImage(ctx, undefined, async ({ label, stage, percent }) => {
+      await onEvent({ type: "status", phase: "image", label, stage, percent });
+    });
+    await onEvent({ type: "status", phase: "image", label: "Image prête.", stage: "complete", percent: 100 });
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
       userId: ctx.userId,
@@ -1466,6 +1573,89 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       artifacts: [],
       approvals: [],
       intent: { mode: "chat", understanding: "Demande de génération d'image." },
+    };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Tour « vidéo » — production COMPLÈTE autopilotée + artefact suivi   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * La demande vidéo de l'utilisateur lance une PRODUCTION RÉELLE complète :
+ * la file `videoProductionJobs` (lib/video/production-queue) enchaîne — une
+ * étape par tick QStash (repli : continuation par sondage) — création du
+ * projet, plan du réalisateur, scénario, visuels de scènes (Consistency
+ * Engine, facturation image existante), narration vocale, musique, puis le
+ * rendu FFmpeg avec contrôle qualité. La conversation reçoit IMMÉDIATEMENT
+ * un artefact de type "video" portant projectId/jobId : le client sonde la
+ * progression réelle (GET production) et affiche le rendu final.
+ */
+async function runVideoTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  try {
+    const { createVideoProductionJob } = await import("@/lib/video/production-queue");
+    const job = await createVideoProductionJob({
+      userId: ctx.userId,
+      prompt: ctx.message.trim().slice(0, 4000),
+      title: extractVideoTitle(ctx.message),
+    });
+    const studioUrl = `/studio/video/${job.projectId}`;
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content: [
+        "Votre production vidéo est lancée. Voici ce qui se passe maintenant, étape par étape :",
+        "1. Plan du réalisateur et scénario complet (hook, chapitres, scènes, CTA) ;",
+        "2. Génération des visuels de chaque scène avec un style cohérent ;",
+        "3. Narration vocale, musique et montage multicam ;",
+        "4. Rendu final avec contrôle qualité automatique (durée, audio, sous-titres).",
+        "",
+        "Le cadre ci-dessous affiche la progression RÉELLE en temps réel — il se met à jour tout seul jusqu'à la vidéo finie. Le projet complet (timeline, versions, exports) est disponible dans l'atelier vidéo : " + studioUrl,
+      ].join("\n"),
+      generationStatus: "complete",
+    });
+    const artifact = await createArtifact({
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      projectId: ctx.projectId,
+      type: "video",
+      title: extractVideoTitle(ctx.message),
+      note: "Production vidéo autonome — progression en temps réel",
+      videoProjectId: job.projectId,
+      videoJobId: job.jobId,
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    await onEvent({ type: "artifact_created", artifact });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [artifact],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Demande de production vidéo complète (autopilote lancé)." },
+    };
+  } catch (error) {
+    const unavailable = error instanceof Error && /n.est pas disponible/.test(error.message);
+    const message = unavailable
+      ? "La production vidéo n'est pas disponible sur cette plateforme actuellement (moteur de production non configuré). Votre demande est conservée : réessayez plus tard ou depuis l'atelier vidéo."
+      : "Le lancement de la production vidéo a échoué. Votre demande est conservée — réessayez dans un instant.";
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content: message,
+      generationStatus: "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Demande de production vidéo complète (échec du lancement)." },
     };
   }
 }
@@ -2299,7 +2489,13 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
       await persistSteps();
       const startedAt = new Date().toISOString();
       try {
-        const image = await produceConversationImage(ctx, typeof planned.toolInput?.prompt === "string" ? planned.toolInput.prompt : undefined);
+        const image = await produceConversationImage(
+          ctx,
+          typeof planned.toolInput?.prompt === "string" ? planned.toolInput.prompt : undefined,
+          async ({ label, stage, percent }) => {
+            await onEvent({ type: "status", phase: "image", label, stage, percent });
+          },
+        );
         step.status = "done";
         step.startedAt = startedAt;
         step.finishedAt = new Date().toISOString();
@@ -2325,6 +2521,66 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         step.startedAt = startedAt;
         step.finishedAt = new Date().toISOString();
         step.output = error instanceof ImageGenerationError ? error.message : "La génération d'image a échoué.";
+        anyFailure = true;
+      }
+      await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
+      continue;
+    }
+
+    // Compétence vidéo : l'étape video.create est interceptée AVANT le
+    // catalogue d'outils — la production RÉELLE (file autopilotée) démarre
+    // immédiatement et l'artefact vidéo (progression temps réel) est rattaché
+    // au run, comme pour l'image.
+    if (planned.toolName === "video.create") {
+      const step = makeStep({
+        phase: "execution",
+        title: planned.title,
+        detail: planned.detail,
+        toolName: "video.create",
+        toolInput: planned.toolInput,
+        status: "in_progress",
+      });
+      steps.push(step);
+      await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
+      const startedAt = new Date().toISOString();
+      try {
+        const { createVideoProductionJob } = await import("@/lib/video/production-queue");
+        const promptInput = typeof planned.toolInput?.prompt === "string" && planned.toolInput.prompt.trim() ? planned.toolInput.prompt.trim() : ctx.message;
+        const aspectInput = planned.toolInput && typeof planned.toolInput === "object" && "aspectRatio" in planned.toolInput ? String((planned.toolInput as Record<string, unknown>).aspectRatio) : undefined;
+        const job = await createVideoProductionJob({
+          userId: ctx.userId,
+          prompt: promptInput.slice(0, 4000),
+          title: extractVideoTitle(promptInput),
+          options: aspectInput === "16:9" || aspectInput === "9:16" || aspectInput === "1:1" ? { aspectRatio: aspectInput } : undefined,
+        });
+        step.status = "done";
+        step.startedAt = startedAt;
+        step.finishedAt = new Date().toISOString();
+        step.output = `Production vidéo lancée (projet ${job.projectId}) — progression en temps réel.`;
+        executedSomething = true;
+        const artifact = await createArtifact({
+          userId: ctx.userId,
+          conversationId: ctx.conversationId,
+          projectId: ctx.projectId,
+          runId: run.id,
+          type: "video",
+          title: promptInput.slice(0, 80),
+          note: "Production vidéo autonome — progression en temps réel",
+          videoProjectId: job.projectId,
+          videoJobId: job.jobId,
+        });
+        artifacts.push(artifact);
+        step.artifactId = artifact.id;
+        await onEvent({ type: "artifact_created", artifact });
+      } catch (error) {
+        step.status = "failed";
+        step.startedAt = startedAt;
+        step.finishedAt = new Date().toISOString();
+        step.output = error instanceof Error && /n.est pas disponible/.test(error.message)
+          ? "La production vidéo n'est pas disponible sur cette plateforme actuellement."
+          : "Le lancement de la production vidéo a échoué.";
         anyFailure = true;
       }
       await onEvent({ type: "step_update", runId: run.id, step });

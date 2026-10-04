@@ -89,3 +89,19 @@ export function responseQualityMode(): ResponseQualityMode {
 export function preferFreeForVisibleAnswers(): boolean {
   return responseQualityMode() === "free";
 }
+
+/**
+ * Décision de routage pour une tâche de COMPRÉHENSION interne qui
+ * conditionne directement la qualité de la réponse finale (classification
+ * d'une requête utilisateur, planification d'un plan d'agent, décision
+ * d'intention conversationnelle) : en mode « premium » (défaut), ces tâches
+ * ne subissent PLUS la préférence « modèles gratuits » — le routeur
+ * sélectionne le meilleur fournisseur configuré, car un classificateur ou un
+ * planificateur médiocre dégrade mécaniquement la réponse visible. En mode
+ * « free » explicite, le comportement gratuit historique est conservé.
+ * (Miroir de `preferFreeForVisibleAnswers` : preferFree === true
+ * uniquement lorsque le mode n'est PAS explicitement premium.)
+ */
+export function preferFreeForUnderstanding(): boolean {
+  return responseQualityMode() !== "premium";
+}

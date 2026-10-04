@@ -125,11 +125,13 @@ describe("answerAsAgent — chat d'agent personnalisé (visible)", () => {
     expect(call.maxTokens).toBe(4096);
   });
 
-  it("les tâches INTERNES (classification) restent en routage gratuit quel que soit le mode", () => {
-    // Le classificateur (chat-engine) conserve preferFree: true — coût
-    // maîtrisé, aucune incidence utilisateur. Garde structurel : si la
-    // classification passe à la politique visible, c'est une régression coût.
-    expect(CHAT_ENGINE_SOURCE).toMatch(/preferFree: true[\s\S]{0,200}?purpose: "agent-chat-classification"/s);
+  it("les tâches de COMPRÉHENSION (classification) suivent la politique de qualité (plus de gratuit forcé)", () => {
+    // FIX compréhension : le classificateur conditionne la qualité de la
+    // réponse finale — il ne force PLUS `preferFree: true` : il suit la
+    // politique `preferFreeForUnderstanding()` (gratuit uniquement en mode
+    // free explicite, meilleur fournisseur en premium). Garde structurel :
+    // un retour au gratuit forcé serait une régression qualité.
+    expect(CHAT_ENGINE_SOURCE).toMatch(/preferFree: preferFreeForUnderstanding\(\)[\s\S]{0,200}?purpose: "agent-chat-classification"/s);
   });
 });
 

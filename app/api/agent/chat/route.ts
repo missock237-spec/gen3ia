@@ -34,6 +34,10 @@ import {
   isImageGenerationEnabled,
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
+import { extractVideoTitle, looksLikeVideoRequest } from "@/lib/ai/video-intent";
+import { imagesForModel } from "@/lib/ai/vision-input";
+import type { AIImageAttachment } from "@/lib/ai/models";
+import { createR2DownloadUrl } from "@/lib/storage/r2";
 import type { AgentRecord } from "@/lib/agents/schema";
 import { buildImageGenerationSkill } from "@/lib/agents/skills/image-generation";
 
@@ -161,6 +165,79 @@ function policyForAgentMission(
   };
 }
 
+/**
+ * VISION : convertit les pièces jointes image du message en parts vision
+ * réelles — une clé R2 est résolue en URL signée https (courte durée), une
+ * URL https passe telle quelle. Purement additif : sans image exploitable,
+ * undefined (rétrocompatible, aucun appel réseau inutile).
+ */
+async function visionImagesFor(
+  attachments?: Array<{ path: string; name: string; sizeBytes?: number; contentType?: string }>,
+  legacy?: { path?: string; name?: string } | null,
+): Promise<AIImageAttachment[] | undefined> {
+  const candidates = [
+    ...(legacy?.path ? [{ path: legacy.path, name: legacy.name ?? legacy.path, contentType: (undefined as string | undefined) }] : []),
+    ...(attachments ?? []).map((item) => ({ path: item.path, name: item.name, contentType: item.contentType as string | undefined })),
+  ];
+  const resolved: MessageAttachmentLike[] = [];
+  for (const candidate of candidates) {
+    const isImage = (candidate.contentType ?? "").startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(candidate.name);
+    if (!isImage) continue;
+    let url: string | undefined;
+    if (/^https:\/\//i.test(candidate.path)) {
+      url = candidate.path;
+    } else {
+      try {
+        url = await createR2DownloadUrl(candidate.path, 600);
+      } catch {
+        continue; // résolution impossible : cette image est écartée
+      }
+    }
+    resolved.push({ filename: candidate.name, url, ...(candidate.contentType ? { contentType: candidate.contentType } : {}) });
+  }
+  return imagesForModel(resolved);
+}
+
+interface MessageAttachmentLike {
+  filename: string;
+  url?: string;
+  contentType?: string;
+}
+
+/**
+ * Réponse NDJSON de PROGRESSION pour les générations médias de l'agent :
+ * chaque étape réelle émet un événement {type:"progress",...} et le résultat
+ * final part en {type:"result", data}. Le client lit le flux en direct —
+ * cadre de progression RÉEL (stages serveur), jamais une fausse barre.
+ */
+function mediaProgressResponse(run: (report: (event: { label: string; stage: string; percent: number }) => Promise<void> | void) => Promise<Record<string, unknown>>): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (payload: unknown) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+      };
+      try {
+        const data = await run(async (event) => {
+          send({ type: "progress", ...event });
+        });
+        send({ type: "result", data });
+      } catch (error) {
+        send({ type: "stream_error", message: error instanceof Error ? error.message : "Erreur inconnue" });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "content-type": "application/x-ndjson; charset=utf-8",
+      "cache-control": "no-store",
+      "x-accel-buffering": "no",
+    },
+  });
+}
+
 /** Note de contexte (mémoire de l'agent) — les pièces jointes passent par loadAgentAttachmentsContext. */
 function memoryNoteFor(agent: AgentRecord | null): string | undefined {
   if (agent?.memoryFile?.path) {
@@ -179,21 +256,27 @@ async function respondWithImage(params: {
   conversationId: string;
   message: string;
   agentId?: string;
+  /** Rapport de progression RÉEL (amélioration → génération → enregistrement). */
+  onProgress?: (event: { label: string; stage: string; percent: number }) => Promise<void> | void;
 }): Promise<{ reply: string; imageUrl: string | undefined; model: string | undefined }> {
-  const { userId, conversationId, message } = params;
+  const { userId, conversationId, message, onProgress } = params;
   if (!isImageGenerationEnabled()) {
     const reply = "La génération d'images n'est pas encore disponible sur la plateforme. Réessayez bientôt.";
     await appendMessage({ conversationId, userId, role: "assistant", content: reply });
     return { reply, imageUrl: undefined, model: undefined };
   }
   try {
+    await onProgress?.({ label: "Amélioration du prompt visuel…", stage: "enhance", percent: 15 });
     const imageSkill = buildImageGenerationSkill(message);
+    await onProgress?.({ label: "Génération de l'image en cours…", stage: "generating", percent: 40 });
     const image = await generateImageWithAgnes({ prompt: imageSkill.prompt, ratio: imageSkill.ratio });
+    await onProgress?.({ label: "Finalisation de l'image…", stage: "persisting", percent: 85 });
     const reply = "";
     await appendMessage({
       conversationId, userId, role: "assistant", content: reply,
       imageUrl: image.imageUrl, provider: "agnes", model: image.model,
     });
+    await onProgress?.({ label: "Image prête.", stage: "complete", percent: 100 });
     return { reply, imageUrl: image.imageUrl, model: image.model };
   } catch (error) {
     const reply = error instanceof ImageGenerationError
@@ -362,44 +445,94 @@ export async function POST(request: NextRequest) {
         content: body.message,
         ...(attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) ? { attachments: attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) } : {}),
       });
-      // Génération d'images réelle (Agnes AI) : une demande explicite d'image
-      // est servie directement, quel que soit le type d'agent — c'est une
-      // capacité de la plateforme, pas du LLM conversationnel.
-      if (looksLikeImageRequest(body.message)) {
-        const imageResult = await respondWithImage({
-          userId: user.uid,
-          conversationId,
-          message: body.message,
-          agentId: agent.id,
-        });
-        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: imageResult.reply, mode: "chat" }));
-        return NextResponse.json({
-          mode: "chat",
-          conversationId,
-          agentId: agent.id,
-          classification: { mode: "chat" as const, inScope: true, reason: "Génération d'image" },
-          reply: imageResult.reply,
-          imageUrl: imageResult.imageUrl,
-        });
+      // PRODUCTION VIDÉO (autopilote) : une demande explicite de vidéo lance
+      // la file de production RÉELLE (projet → plan → scénario → visuels →
+      // voix → rendu) — le client suit la progression via l'API production.
+      if (looksLikeVideoRequest(body.message)) {
+        try {
+          const { createVideoProductionJob } = await import("@/lib/video/production-queue");
+          const job = await createVideoProductionJob({
+            userId: user.uid,
+            prompt: body.message.trim().slice(0, 4000),
+            title: extractVideoTitle(body.message),
+          });
+          const reply = [
+            "Votre production vidéo est lancée. Enchaînement automatique : plan du réalisateur, scénario, visuels de scènes, narration, musique, montage et rendu final avec contrôle qualité.",
+            `Le cadre de progression affiché ici suit la production RÉELLE en temps réel. Projet complet dans l'atelier vidéo : /studio/video/${job.projectId}`,
+          ].join("\n");
+          await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
+          after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: reply, mode: "chat" }));
+          return NextResponse.json({
+            mode: "chat",
+            conversationId,
+            agentId: agent.id,
+            classification: { mode: "chat" as const, inScope: true, reason: "Production vidéo" },
+            reply,
+            videoProject: { projectId: job.projectId, jobId: job.jobId },
+          });
+        } catch (videoError) {
+          const unavailable = videoError instanceof Error && /n.est pas disponible/.test(videoError.message);
+          const reply = unavailable
+            ? "La production vidéo n'est pas disponible sur cette plateforme actuellement (moteur de production non configuré). Réessayez plus tard."
+            : "Le lancement de la production vidéo a échoué. Réessayez dans un instant.";
+          await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
+          return NextResponse.json({
+            mode: "chat",
+            conversationId,
+            agentId: agent.id,
+            classification: { mode: "chat" as const, inScope: true, reason: "Production vidéo" },
+            reply,
+          });
+        }
       }
 
-      // Classification AVEC l'historique récent : le classificateur résout
-      // les références implicites (« ce fichier », « la même chose ») au lieu
-      // de décider sur un message isolé hors de son contexte.
-      const classification = await classifyRequest(
-        agent,
-        body.message,
-        history.map((item) => ({ role: item.role, content: item.content })),
-      );
+      // Génération d'images réelle (Agnes AI) : une demande explicite d'image
+      // est servie directement, quel que soit le type d'agent — c'est une
+      // capacité de la plateforme, pas du LLM conversationnel. Réponse en
+      // NDJSON : chaque étape réelle émet un événement de progression
+      // (cadre temps réel côté client).
+      if (looksLikeImageRequest(body.message)) {
+        return mediaProgressResponse(async (report) => {
+          const imageResult = await respondWithImage({
+            userId: user.uid,
+            conversationId,
+            message: body.message,
+            agentId: agent.id,
+            onProgress: report,
+          });
+          after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: imageResult.reply, mode: "chat" }));
+          return {
+            mode: "chat",
+            conversationId,
+            agentId: agent.id,
+            classification: { mode: "chat" as const, inScope: true, reason: "Génération d'image" },
+            reply: imageResult.reply,
+            imageUrl: imageResult.imageUrl,
+          };
+        });
+      }
 
       // CONTENU RÉEL des pièces jointes (exigence production) : chaque
       // fichier du stockage permanent est téléchargé et converti côté
       // serveur ; le contenu extrait nourrit la réponse ET la planification.
       // Fail-soft : un fichier illisible n'empêche jamais la réponse.
+      // (Chargé AVANT la classification : le classificateur décide en voyant
+      // le même contexte que la réponse — plus de décision sur un message
+      // isolé ignorant les fichiers fournis.)
       const attachmentsContext = chatAttachments.length > 0
         ? await loadAgentAttachmentsContext(user.uid, chatAttachments).catch(() => ({ note: "", files: [] }))
         : { note: "", files: [] };
       const note = [attachmentsContext.note, memoryNoteFor(agent)].filter(Boolean).join("\n\n") || undefined;
+
+      // Classification AVEC l'historique récent ET le contexte réel des
+      // pièces jointes : le classificateur résout les références implicites
+      // (« ce fichier », « la même chose ») au lieu de décider hors contexte.
+      const classification = await classifyRequest(
+        agent,
+        body.message,
+        history.map((item) => ({ role: item.role, content: item.content })),
+        note,
+      );
 
       // Mémoire épisodique : rappel sémantique des échanges passés de cet
       // agent (similarité cosinus sur embeddings) — silence si indisponible.
@@ -474,7 +607,27 @@ export async function POST(request: NextRequest) {
       }
 
       // Réponse claire et simple : la charte pilote un appel LLM direct.
+      // [clarify] Canal de clarification : le classificateur peut renvoyer
+      // UNE question (française) quand la demande est réellement ambiguë
+      // entre deux actions matériellement différentes et qu'aucun choix par
+      // défaut raisonnable n'existe — on la répond telle quelle au lieu de
+      // deviner une action à exécuter (jamais pour une simple question).
+      if (classification.mode === "chat" && classification.clarifyingQuestion) {
+        const reply = classification.clarifyingQuestion;
+        await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
+        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: reply, mode: "chat" }));
+        return NextResponse.json({
+          mode: "chat",
+          conversationId,
+          agentId: agent.id,
+          classification,
+          reply,
+        });
+      }
       if (classification.mode === "chat") {
+        // VISION : les images jointes au message sont transmises au modèle
+        // (URLs R2 signées — parts vision réelles).
+        const visionImages = await visionImagesFor(body.attachments, body.attachmentPath ? { path: body.attachmentPath, name: body.attachmentName ?? body.attachmentPath } : null);
         const reply = await answerAsAgent(
           user.uid,
           agent,
@@ -488,6 +641,7 @@ export async function POST(request: NextRequest) {
             userEmail: user.email,
             timezone: body.timezone,
           },
+          visionImages,
         );
         await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
         after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: reply, mode: "chat" }));
@@ -777,20 +931,56 @@ export async function POST(request: NextRequest) {
       ...(attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) ? { attachments: attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) } : {}),
     });
 
-    // Génération d'images réelle (Agnes AI) sur le chemin universel aussi.
+    // PRODUCTION VIDÉO (autopilote) sur le chemin universel aussi.
+    if (looksLikeVideoRequest(body.message)) {
+      try {
+        const { createVideoProductionJob } = await import("@/lib/video/production-queue");
+        const job = await createVideoProductionJob({
+          userId: user.uid,
+          prompt: body.message.trim().slice(0, 4000),
+          title: extractVideoTitle(body.message),
+        });
+        const reply = [
+          "Votre production vidéo est lancée. Enchaînement automatique : plan du réalisateur, scénario, visuels de scènes, narration, musique, montage et rendu final avec contrôle qualité.",
+          `Le cadre de progression affiché ici suit la production RÉELLE en temps réel. Projet complet dans l'atelier vidéo : /studio/video/${job.projectId}`,
+        ].join("\n");
+        await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
+        return NextResponse.json({
+          mode: "chat",
+          status: "completed",
+          conversationId,
+          objective: body.message,
+          reply,
+          videoProject: { projectId: job.projectId, jobId: job.jobId },
+        });
+      } catch (videoError) {
+        const unavailable = videoError instanceof Error && /n.est pas disponible/.test(videoError.message);
+        const reply = unavailable
+          ? "La production vidéo n'est pas disponible sur cette plateforme actuellement (moteur de production non configuré). Réessayez plus tard."
+          : "Le lancement de la production vidéo a échoué. Réessayez dans un instant.";
+        await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
+        return NextResponse.json({ mode: "chat", status: "completed", conversationId, objective: body.message, reply });
+      }
+    }
+
+    // Génération d'images réelle (Agnes AI) sur le chemin universel aussi —
+    // en NDJSON pour la progression RÉELLE.
     if (looksLikeImageRequest(body.message)) {
-      const imageResult = await respondWithImage({
-        userId: user.uid,
-        conversationId,
-        message: body.message,
-      });
-      return NextResponse.json({
-        mode: "chat",
-        status: "completed",
-        conversationId,
-        objective: body.message,
-        reply: imageResult.reply,
-        imageUrl: imageResult.imageUrl,
+      return mediaProgressResponse(async (report) => {
+        const imageResult = await respondWithImage({
+          userId: user.uid,
+          conversationId,
+          message: body.message,
+          onProgress: report,
+        });
+        return {
+          mode: "chat",
+          status: "completed",
+          conversationId,
+          objective: body.message,
+          reply: imageResult.reply,
+          imageUrl: imageResult.imageUrl,
+        };
       });
     }
 

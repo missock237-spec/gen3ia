@@ -14,6 +14,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { Callout } from "@/components/studio/callout";
+// Task 1-c — cadre de progression RÉELLE partagé (rendu vidéo + storyboard).
+import { MediaProgressFrame, type MediaProgressStatus } from "@/components/media/media-progress-frame";
 
 type JobWithUrls = Omit<RenderJob, "exports" | "output"> & {
   output?: (NonNullable<RenderJob["output"]> & { playbackUrl?: string | null }) | undefined;
@@ -274,27 +276,79 @@ function ScriptPanel({ project, busy, runAction }: { project: VideoProject; onRe
 // Storyboard — images IA scène par scène (Consistency Engine)
 // ────────────────────────────────────────────────────────────────────────────
 
-function StoryboardPanel({ project, assets, busy, runAction }: { project: VideoProject; assets: VideoAsset[]; onRefresh: () => void; busy: string | null; runAction: (key: string, a: () => Promise<void>) => Promise<void> }) {
-  void assets;
+function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { project: VideoProject; assets: VideoAsset[]; onRefresh: () => Promise<void> | void; busy: string | null; runAction: (key: string, a: () => Promise<void>) => Promise<void> }) {
   const storyboard = project.storyboard ?? [];
   const scenes = project.script?.scenes ?? [];
   const images = assets.filter((a) => a.kind === "image");
 
+  // Task 1-c — progression RÉELLE du lot d'images en cours : pendant le POST
+  // generate-assets, on sonde GET /assets toutes les 3 s et on compte les
+  // scènes du scénario qui possèdent déjà leur image (kind=image + sceneId).
+  const [batchProgress, setBatchProgress] = useState<{ ready: number; total: number } | null>(null);
+  const pollRef = useRef<{ timer: ReturnType<typeof setInterval>; controller: AbortController } | null>(null);
+
+  useEffect(() => () => {
+    // Démontage : arrêt du sondage + abort des GET en vol.
+    if (pollRef.current) {
+      clearInterval(pollRef.current.timer);
+      pollRef.current.controller.abort();
+      pollRef.current = null;
+    }
+  }, []);
+
+  function countScenesWithImage(list: VideoAsset[]) {
+    return scenes.filter((s) => list.some((img) => img.kind === "image" && img.sceneId === s.id)).length;
+  }
+
   async function generateBatch(force = false) {
     const target = scenes.filter((s) => force || !images.some((img) => img.sceneId === s.id)).slice(0, 4);
     if (target.length === 0) throw new Error("Toutes les scènes ont déjà une image — utilisez Régénérer.");
-    const response = await authFetch(`/api/video/projects/${project.id}/generate-assets`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sceneIds: target.map((s) => s.id), force }),
-    });
-    const data = (await response.json()) as { error?: string; generated?: number; failed?: Array<{ error: string }> };
-    if (!response.ok) throw new Error(data.error ?? "Génération impossible");
-    if (data.failed?.length) throw new Error(`${data.generated ?? 0} image(s) générée(s), ${data.failed.length} échec(s) : ${data.failed[0].error}`);
+    const total = scenes.length;
+    const controller = new AbortController();
+    const timer = setInterval(async () => {
+      try {
+        const poll = await authFetch(`/api/video/projects/${project.id}/assets`, { signal: controller.signal });
+        if (!poll.ok) return;
+        const fresh = ((await poll.json()) as { assets: VideoAsset[] }).assets;
+        setBatchProgress({ ready: countScenesWithImage(fresh), total });
+      } catch {
+        // GET annulé (fin de lot / démontage) — silencieux.
+      }
+    }, 3_000);
+    pollRef.current = { timer, controller };
+    setBatchProgress({ ready: countScenesWithImage(assets), total });
+    try {
+      const response = await authFetch(`/api/video/projects/${project.id}/generate-assets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sceneIds: target.map((s) => s.id), force }),
+      });
+      const data = (await response.json()) as { error?: string; generated?: number; failed?: Array<{ error: string }> };
+      if (!response.ok) throw new Error(data.error ?? "Génération impossible");
+      if (data.failed?.length) throw new Error(`${data.generated ?? 0} image(s) générée(s), ${data.failed.length} échec(s) : ${data.failed[0].error}`);
+    } finally {
+      // Fin du lot (succès ou échec) : arrêt du sondage puis rafraîchissement
+      // unique des assets (l'état réel final est relu au serveur).
+      clearInterval(timer);
+      controller.abort();
+      pollRef.current = null;
+      setBatchProgress(null);
+      await onRefresh();
+    }
   }
 
   return (
     <div className="space-y-4">
+      {batchProgress ? (
+        <MediaProgressFrame
+          compact
+          tone="dark"
+          status="running"
+          stageLabel="Génération des images de scènes"
+          percent={batchProgress.total > 0 ? (batchProgress.ready / batchProgress.total) * 100 : null}
+          detail={`${batchProgress.ready}/${batchProgress.total} images prêtes`}
+        />
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <button onClick={() => runAction("images", () => generateBatch(false))} disabled={busy === "images" || !project.script} className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">
           {busy === "images" ? "Génération…" : `Générer les images (${Math.max(0, scenes.filter((s) => !images.some((img) => img.sceneId === s.id)).length)})`}
@@ -552,6 +606,16 @@ const STAGE_LABELS: Record<string, string> = {
   audio: "Mixage audio", subtitles: "Sous-titres", qc: "Contrôle qualité", exports: "Exports", finalize: "Finalisation",
 };
 
+// Task 1-c — statuts de job → états du cadre de progression partagé.
+const JOB_STATUS_TO_PROGRESS: Record<RenderJob["status"], MediaProgressStatus> = {
+  queued: "queued",
+  processing: "running",
+  paused: "paused",
+  completed: "complete",
+  failed: "failed",
+  cancelled: "cancelled",
+};
+
 function RenderPanel({ project, jobs, onRefresh, busy, runAction }: { project: VideoProject; jobs: JobWithUrls[]; onRefresh: () => Promise<void>; busy: string | null; runAction: (key: string, a: () => Promise<void>) => Promise<void> }) {
   const [versions, setVersions] = useState<Array<{ versionNumber: number; label: string; createdAt: string }>>([]);
   const [targets, setTargets] = useState<string[]>(["shorts_9_16"]);
@@ -623,18 +687,31 @@ function RenderPanel({ project, jobs, onRefresh, busy, runAction }: { project: V
           <h2 className="font-semibold text-neutral-900">Rendus</h2>
           {jobs.length === 0 ? <p className="text-sm text-neutral-500">Aucun rendu pour l&apos;instant.</p> : (
             <ul className="space-y-3">
-              {jobs.map((job) => (
+              {jobs.map((job) => {
+                // Task 1-c — ROBUSTESSE D'ÉCHELLE : l'API historique expose 0..1,
+                // certains chemins renvoient déjà 0..100. Tolère les deux.
+                const pct = Math.max(0, Math.min(100, job.progress <= 1 ? job.progress * 100 : job.progress));
+                const segmentsDone = job.checkpoints?.completedSegments?.length ?? 0;
+                const totalSegments = job.plan?.segments.length ?? 0;
+                const stageBase = STAGE_LABELS[job.stage] ?? job.stage;
+                const stageLabel = job.stage === "segments" && totalSegments > 0
+                  ? `${stageBase} · segment ${Math.min(segmentsDone + 1, totalSegments)}/${totalSegments}`
+                  : stageBase;
+                const startedAtMs = Date.parse(job.createdAt);
+                return (
                 <li key={job.id} className="rounded-xl border border-neutral-200 p-4 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-mono text-neutral-500">{job.id.slice(0, 8)} · {STAGE_LABELS[job.stage] ?? job.stage}</span>
-                    <span className={`rounded-full px-2 py-0.5 font-semibold ${job.status === "completed" ? "bg-emerald-100 text-emerald-700" : job.status === "failed" ? "bg-rose-100 text-rose-700" : job.status === "processing" ? "bg-blue-100 text-blue-700" : "bg-neutral-100 text-neutral-600"}`}>
-                      {job.status}
-                    </span>
-                  </div>
-                  <div className="h-2 rounded bg-neutral-100">
-                    <div className="h-2 rounded bg-blue-500 transition-all" style={{ width: `${Math.round((job.progress ?? 0) * 100)}%` }} />
-                  </div>
-                  <p className="text-[11px] text-neutral-500">{Math.round((job.progress ?? 0) * 100)} % · {job.checkpoints?.completedSegments?.length ?? 0} segment(s) rendu(s){job.autoFixRounds ? ` · ${job.autoFixRounds} correction(s) auto` : ""}</p>
+                  <p className="font-mono text-xs text-neutral-400">{job.id.slice(0, 8)}</p>
+                  <MediaProgressFrame
+                    tone="dark"
+                    status={JOB_STATUS_TO_PROGRESS[job.status]}
+                    stageLabel={stageLabel}
+                    percent={pct}
+                    detail={`${segmentsDone} segment(s) rendu(s)${job.autoFixRounds ? ` · ${job.autoFixRounds} correction(s) auto` : ""}`}
+                    error={job.errorMessage}
+                    startedAt={Number.isFinite(startedAtMs) ? startedAtMs : undefined}
+                    onCancel={job.status === "queued" || job.status === "processing" || job.status === "paused" ? () => jobAction(job.id, "cancel") : undefined}
+                    onRetry={job.status === "failed" ? () => jobAction(job.id, "resume") : undefined}
+                  />
                   {job.qcReport ? (
                     <p className={`text-[11px] ${job.qcReport.passed ? "text-emerald-600" : "text-amber-600"}`}>
                       QC : {job.qcReport.passed ? "validé" : `${job.qcReport.issues.length} problème(s)`}{job.qcReport.metrics?.durationSec ? ` · ${job.qcReport.metrics.durationSec.toFixed(1)} s` : ""}
@@ -654,15 +731,14 @@ function RenderPanel({ project, jobs, onRefresh, busy, runAction }: { project: V
                     {job.status === "processing" || job.status === "queued" ? (
                       <button onClick={() => jobAction(job.id, "pause")} className="rounded-lg border px-3 py-1 text-xs">Pause</button>
                     ) : null}
-                    {job.status === "paused" || job.status === "failed" ? (
+                    {job.status === "paused" ? (
                       <button onClick={() => jobAction(job.id, "resume")} className="rounded-lg border px-3 py-1 text-xs">Reprendre</button>
                     ) : null}
-                    {job.status !== "completed" && job.status !== "cancelled" ? (
-                      <button onClick={() => jobAction(job.id, "cancel")} className="rounded-lg border border-rose-200 px-3 py-1 text-xs text-rose-600">Annuler</button>
-                    ) : null}
+                    {/* Annuler / Réessayer sont portés par MediaProgressFrame (Task 1-c). */}
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>

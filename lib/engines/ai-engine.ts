@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { generate } from "@/lib/ai/router";
 import type { TaskType } from "@/lib/ai/models";
+import { preferFreeForUnderstanding } from "@/lib/ai/response-quality";
 import type { EngineFeature } from "./types";
 
 /**
@@ -40,7 +41,10 @@ export interface RunAIResult {
 export async function runAI(input: RunAIInput): Promise<RunAIResult> {
   const response = await generate({
     task: input.task ?? "reasoning",
-    preferFree: true,
+    // Tâches de COMPRÉHENSION (intention, mémoire, analyse) : routage par la
+    // politique de qualité — plus de préférence « modèles gratuits » forcée
+    // en mode premium, car ces décisions conditionnent la réponse finale.
+    preferFree: preferFreeForUnderstanding(),
     temperature: input.temperature ?? 0.4,
     maxTokens: input.maxTokens ?? 1_600,
     messages: [

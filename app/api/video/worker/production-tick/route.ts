@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { qstashConfig, verifyUpstashSignature } from "@/lib/queue/qstash";
-import { advanceJob, publishVideoTick, sweepStaleRenderJobs } from "@/lib/video/render-queue";
+import { advanceProductionJob, publishProductionTick, sweepStaleProductionJobs } from "@/lib/video/production-queue";
 import { logSystem } from "@/lib/video/project-service";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
- * Worker du rendu vidéo (receiver QStash signé).
+ * Worker de la production vidéo autopilote (receiver QStash signé — même
+ * vérification que le tick de rendu, Task 1-a FIX 7).
  *
- * QStash délivre un POST signé { jobId } : chaque délivrance fait avancer
- * le job d'UNE étape (ou d'un lot borné de segments) puis se ré-enfile si
- * il reste du travail. Le rendu survit donc aux fermetures d'onglets, aux
- * échéances serverless et aux redémarrages — reprise par CHECKPOINTS
- * (segments terminés, passes d'assemblage), jamais de re-rendu complet.
- *
- * Task 1-a : chaque délivrance passe d'abord le SWEEPER (best-effort) —
- * les jobs « processing » dont le bail a expiré (worker tué) sont remis
- * en file ou échoués proprement, sans jamais bloquer ce tick.
+ * QStash délivre un POST signé { jobId } : chaque délivrance exécute UNE
+ * étape (ou un lot borné de scènes) puis se ré-enfile jusqu'à complétion —
+ * création → plan → scénario → visuels → voix → rendu → livraison.
  */
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -46,15 +41,15 @@ export async function POST(request: NextRequest) {
 
   const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
   // Sweep des jobs orphelins (bail expiré) — best-effort, jamais bloquant.
-  await sweepStaleRenderJobs(origin).catch(() => undefined);
+  await sweepStaleProductionJobs(origin).catch(() => undefined);
   try {
-    const result = await advanceJob(jobId, origin);
+    const result = await advanceProductionJob(jobId, origin);
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Tick échoué";
-    await logSystem("", `Worker : incident tick ${jobId.slice(0, 8)} — ${message}`).catch(() => undefined);
-    // Ré-enfile avec délai (le job restera récupérable par les tentatives internes).
-    await publishVideoTick(origin, jobId, 60).catch(() => undefined);
+    const message = error instanceof Error ? error.message : "Tick de production échoué";
+    await logSystem("", `Worker production : incident tick ${jobId.slice(0, 8)} — ${message}`).catch(() => undefined);
+    // Ré-enfile avec délai (le job restera récupérable par le sweeper / sondage).
+    await publishProductionTick(origin, jobId, 60).catch(() => undefined);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

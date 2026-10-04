@@ -272,9 +272,11 @@ describe("moteur conversationnel — garde-fou d'intention explicite", () => {
 });
 
 describe("moteur conversationnel — artefacts standardisés", () => {
-  it("couvre les six types d'artefacts", () => {
-    expect(ARTIFACT_TYPES).toEqual(["code", "document", "table", "image", "report", "file"]);
+  it("couvre les huit types d'artefacts (vidéo et audio inclus)", () => {
+    expect(ARTIFACT_TYPES).toEqual(["code", "document", "table", "image", "video", "report", "file", "audio"]);
     expect(isArtifactType("code")).toBe(true);
+    expect(isArtifactType("video")).toBe(true);
+    expect(isArtifactType("audio")).toBe(true);
     expect(isArtifactType("podcast")).toBe(false);
   });
 

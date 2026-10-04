@@ -67,6 +67,24 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "network.send_message": { name: "network.send_message", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
   "network.read_inbox": { name: "network.read_inbox", risk: "read", requiredPermissions: ["tool.read"] },
   "network.mark_read": { name: "network.mark_read", risk: "read", requiredPermissions: ["tool.read"] },
+  // Médias générés (audit outils médias).
+  // image.generate : appel réseau SORTANT vers Agnes AI (AGNES_API_KEY) —
+  // même profil de capacité que voice.speak (génération de média via API
+  // externe, aucun effet de bord utilisateur : l'outil ne fait que renvoyer
+  // une URL). Décision : risque de sécurité « external » + network (la
+  // capacité est un appel externe) ; le risque HITL de la définition de
+  // l'outil dans lib/tools reste « medium » (exécution directe, parité avec
+  // le comportement conversationnel existant).
+  "image.generate": { name: "image.generate", risk: "external", requiredPermissions: ["tool.external", "network.read"], network: true },
+  // video.create : l'outil se contente d'ENCHERIR un job dans la file de
+  // production interne (lib/video/production-queue) — la capacité est une
+  // écriture interne (Firestore), comme schedule.create ; les appels
+  // externes payants (Agnes) sont effectués par le PIPELINE aval, hors de
+  // portée de l'outil lui-même. Décision : risque de sécurité « write » sans
+  // flag réseau/externe ; le risque HITL « high » (action longue + payante →
+  // carte de validation) est porté par la définition de l'outil dans
+  // lib/tools — même convention documentée que schedule.*.
+  "video.create": { name: "video.create", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
 };
 
 export function getToolSecurityDefinition(toolName: string): ToolSecurityDefinition { const definition = TOOL_SECURITY[toolName]; if (!definition) throw new Error(`Unknown tool security definition: ${toolName}`); return definition; }

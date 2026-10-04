@@ -1,7 +1,7 @@
 import { generate } from "../ai/router";
 import { stripThinkTags } from "../ai/think-filter";
-import { preferFreeForVisibleAnswers, withResponseStyle } from "../ai/response-quality";
-import type { AIProvider } from "../ai/models";
+import { preferFreeForUnderstanding, preferFreeForVisibleAnswers, withResponseStyle } from "../ai/response-quality";
+import type { AIImageAttachment, AIProvider } from "../ai/models";
 import { assembleMessages } from "../ai/context-window";
 import { applyPromptVariables, type PromptVariableContext } from "../ai/prompt-template";
 import { buildTruthContext, formatTruthContext, cleanRequestedResult } from "../ai/truth-context";
@@ -32,6 +32,13 @@ export interface RequestClassification {
   mode: ChatRequestMode;
   inScope: boolean;
   reason: string;
+  /**
+   * Question de clarification (français, max 1) : proposée par le
+   * classificateur UNIQUEMENT quand la demande est réellement ambiguë entre
+   * deux actions matériellement différentes ET qu'aucun choix par défaut
+   * raisonnable n'existe. Jamais pour une simple question.
+   */
+  clarifyingQuestion?: string;
 }
 
 const CLASSIFIER_SYSTEM = [
@@ -46,19 +53,44 @@ const CLASSIFIER_SYSTEM = [
   "   - Les agents Gen3ia sont POLYVALENTS : une demande hors de la spécialité principale de l'agent n'est JAMAIS hors périmètre pour autant — inScope: true dès que le besoin peut être servi par une réponse LLM de qualité ou par les outils, connecteurs et services disponibles.",
   "   - inScope: false UNIQUEMENT si la demande est matériellement impossible à servir même avec les outils, connecteurs et services disponibles (exemple : passer un appel téléphonique alors qu'aucun connecteur de téléphonie n'est disponible). En cas de doute, inScope: true.",
   "3. reason: une courte justification en français.",
-  "Réponds STRICTEMENT en JSON : {\"mode\":\"chat|task\",\"inScope\":true|false,\"reason\":\"...\"}",
+  "4. clarifyingQuestion (OPTIONNEL, en français) : UNE question de clarification, UNIQUEMENT si le besoin réel est ambigu entre DEUX ACTIONS MATERIELLEMENT DIFFÉRENTES (exemple : « prépare le lancement » = rédiger un plan ? envoyer une campagne ? créer une page ?) ET qu'aucun choix par défaut raisonnable n'existe. Laisse le champ ABSENT dans tous les autres cas : jamais pour une salutation, une simple question, une demande déjà claire ou lorsque l'historique lève l'ambiguïté.",
+  "Réponds STRICTEMENT en JSON : {\"mode\":\"chat|task\",\"inScope\":true|false,\"reason\":\"...\",\"clarifyingQuestion\":\"... (optionnel)\"}",
 ].join(" ");
 
 /**
+ * Marqueurs interrogatifs FR + EN (détection INDÉPENDANTE DE LA LANGUE) :
+ * l'ancienne liste était exclusivement française — une question anglaise de
+ * 500 caractères était classée « mission ».
+ */
+const QUESTION_STARTER_RE =
+  /^(?:bonjour|salut|bonsoir|hello|coucou|merci|qui es[- ]tu|tu es|c['’]est quoi|qu['’]est-ce|qu['’]est ce|comment|pourquoi|quel(?:le|s)?|quoi|que|qui|où|quand|combien|peux-tu|pourrais-tu|pouvez-vous|est-ce que|explique(?:-moi)?|parle-moi|what|why|how|who|where|when|which|can you|could you|tell me|do you|are you|is there)\b/i;
+
+/**
+ * Verbes d'action EXPLICITES (FR + EN) : ils forcent le mode task, même
+ * quand la demande est formulée poliment (« Peux-tu créer un site ? ») ou
+ * se termine par un « ? » — poser une question POLIE ne change pas la nature
+ * d'une demande d'exécution.
+ */
+const EXPLICIT_ACTION_VERB_RE =
+  /\b(cr[ée]e(?:r|z)?|g[éeè]n[éeè]re(?:r|z)?|r[ée]dige(?:r|z)?|analys[ée](?:r|z)?|envoi(?:e|er|ez)|envoy(?:e|er|ez)|exp[ée]di(?:e|er)|ex[ée]cute(?:r|z)?|construis(?:re)?|programme(?:r)?|publi(?:e|er|ez)|pr[ée]par(?:e|er|ez)|t[ée]l[ée]charge(?:r|z)?|convertis?(?:r)?|impl[ée]mente(?:r|z)?|corrige(?:r|z)?|d[ée]ploy(?:e|er|ez)|liste(?:r|-moi)?|trouve(?:r|-moi)?|cherche(?:r|-moi)?|supprim(?:e|er|ez)|modifi(?:e|er|ez)|automatis(?:e|er)|planifi(?:e|er|ez)|r[ée]serv(?:e|er)|create|generate|send|build|write|make|produce|deploy|implement|fix|convert|publish|prepare|analyze|download|upload|delete|remove|update|schedule|automate|run|execute|search|find|summarize|translate|export)\b/i;
+
+/**
  * Repli déterministe quand le classificateur LLM est indisponible :
- * les messages interrogatifs courts et sans verbe d'action obtiennent une
- * réponse directe, tout le reste suit le comportement d'exécution historique.
+ * les messages interrogatifs (LANGUE-AGNOSTIQUE : « ? » dans les 200 derniers
+ * caractères OU marqueur interrogatif FR+EN) sans verbe d'action obtiennent
+ * une réponse directe, tout le reste suit le comportement d'exécution
+ * historique. Plafond de longueur relevé à 1200 caractères : une LONGUE
+ * question française reste une question (l'ancien plafond de 400 la
+ * transformait en mission).
  */
 export function heuristicClassification(message: string): RequestClassification {
-  const text = message.trim().toLowerCase();
-  const isQuestion = /\?\s*$/.test(text) || /^(bonjour|salut|bonsoir|hello|coucou|merci|qui es|tu es|c'est quoi|qu'est-ce|comment|pourquoi|quel|quelle|quels|quelles|peux-tu m'expliquer|explique(-moi)?)\b/.test(text);
-  const hasActionVerb = /\b(cr[ée]e|g[ée]n[èe]re|r[ée]dige|analyse|envoie|ex[ée]cute|construis|programme|publie|pr[ée]pare|t[ée]l[ée]charge|converts|impl[ée]mente|corrige|d[ée]ploie|liste(-moi)?|trouve(-moi)?|cherche(-moi)?)\b/.test(text);
-  const shortConversational = text.length <= 400 && !hasActionVerb;
+  const text = message.trim();
+  const lower = text.toLowerCase();
+  const isQuestion = text.slice(-200).includes("?") || QUESTION_STARTER_RE.test(lower);
+  // Les verbes d'action EXPLICITES forcent le mode task, même formulés
+  // poliment ou avec un « ? » final.
+  const hasActionVerb = EXPLICIT_ACTION_VERB_RE.test(lower);
+  const shortConversational = lower.length <= 1200 && !hasActionVerb;
   const mode: ChatRequestMode = isQuestion && shortConversational ? "chat" : "task";
   return { mode, inScope: true, reason: "Classification heuristique (classificateur IA indisponible)." };
 }
@@ -71,6 +103,9 @@ export async function classifyRequest(
   agent: Pick<AgentRecord, "name" | "description" | "type" | "typeLabel" | "skills">,
   message: string,
   history: ChatHistoryMessage[] = [],
+  /** Contexte préalable (pièces jointes réelles, mémoire…) : le
+   *  classificateur décide en voyant le MÊME contexte que la réponse. */
+  contextNote?: string,
 ): Promise<RequestClassification> {
   const charter = buildAgentCharter(agent);
   try {
@@ -79,10 +114,13 @@ export async function classifyRequest(
       task: "agent",
       messages: [
         { role: "system", content: CLASSIFIER_SYSTEM },
-        { role: "user", content: JSON.stringify({ charte: charter, ...(recentHistory.length > 0 ? { derniersEchanges: recentHistory } : {}), message }) },
+        { role: "user", content: JSON.stringify({ charte: charter, ...(recentHistory.length > 0 ? { derniersEchanges: recentHistory } : {}), ...(contextNote ? { contexteReel: contextNote } : {}), message }) },
       ],
       requiresStructuredOutput: true,
-      preferFree: true,
+      // Tâche de COMPRÉHENSION qui conditionne la qualité de la réponse
+      // finale : routage par la politique de qualité (gratuit forcé
+      // uniquement en mode free explicite — plus de gratuit systématique).
+      preferFree: preferFreeForUnderstanding(),
       maxTokens: 500,
       metadata: { purpose: "agent-chat-classification" },
     });
@@ -112,6 +150,9 @@ export async function classifyRequest(
           mode,
           inScope: record.inScope !== false,
           reason: typeof record.reason === "string" ? record.reason.slice(0, 300) : "",
+          ...(typeof record.clarifyingQuestion === "string" && record.clarifyingQuestion.trim()
+            ? { clarifyingQuestion: record.clarifyingQuestion.trim().slice(0, 500) }
+            : {}),
         };
       }
     }
@@ -154,6 +195,9 @@ export async function answerAsAgent(
   message: string,
   contextNote?: string,
   promptContext?: PromptVariableContext,
+  /** VISION : images réellement jointes au message (parts vision
+   *  consommées par les providers — voir lib/ai/vision-input.ts). */
+  images?: AIImageAttachment[],
 ): Promise<string> {
   // Prompts système avancés : les jetons {{date}}, {{time}}, {{user.name}},
   // {{agent.name}}… de la charte sont résolus avec l'état RÉEL de la
@@ -181,6 +225,17 @@ export async function answerAsAgent(
     reservedOutputTokens: 4_096,
     keepRecent: 12,
   });
+  // VISION : les images jointes sont rattachées au dernier message
+  // utilisateur (contrat AIMessage.images — parts réelles par provider).
+  if (images && images.length > 0) {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const candidate = messages[index];
+      if (candidate && candidate.role === "user") {
+        messages[index] = { ...candidate, images };
+        break;
+      }
+    }
+  }
   const response = await generate({
     task: "chat",
     messages,

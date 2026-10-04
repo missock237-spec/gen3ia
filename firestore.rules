@@ -184,6 +184,9 @@ service cloud.firestore {
     match /videoVoices/{voiceId} { allow read, write: if false; }
     match /videoRenderJobs/{jobId} { allow read, write: if false; }
     match /videoVersions/{versionId} { allow read, write: if false; }
+    // File de production autopilote (Task 1-a) — Admin SDK uniquement :
+    // créée/avancée par les routes serveur et le receiver QStash signé.
+    match /videoProductionJobs/{jobId} { allow read, write: if false; }
     // Réseaux d'agents + messagerie d'équipe (Admin SDK uniquement) :
     // les accès passent par les routes serveur propriétaire-scopées.
     match /agentNetworks/{networkId} { allow read, write: if false; }

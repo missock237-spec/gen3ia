@@ -42,10 +42,54 @@ export function isPromptAlreadyStructured(message: string): boolean {
   return structured.test(message) && words.length >= 18;
 }
 
-export function detectLanguage(message: string): "fr" | "en" | "autre" {
-  if (/\b(le|la|les|une|un|des|pour|avec|dans|crée|créer|fais|génère|écris|analyse)\b/i.test(message)) return "fr";
-  if (/\b(the|and|for|with|create|make|write|build|analyze)\b/i.test(message)) return "en";
-  return "autre";
+/**
+ * Mots vides FR / EN (listes DISJOINTES par conception : tout mot ambigu
+ * dans les deux langues — « on », « me », « plus », « or »… — est exclu des
+ * deux listes pour ne pas biaiser le score).
+ */
+const FRENCH_STOPWORDS_RE =
+  /\b(je|tu|il|elle|nous|vous|ils|elles|le|la|les|l'|un|une|des|du|de|au|aux|et|mais|donc|ni|pour|avec|dans|sur|sous|pas|plus|très|bien|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|votre|leur|est|sont|sommes|être|avoir|te|se|qui|que|quoi|quand|comment|pourquoi|combien|où|oui|non|merci|bonjour|salut|bonsoir|voici|voilà|besoin|veux|voudrais|aimerais|peux|pourrais|dois|fais|faire|crée|créer|génère|générer|écris|rédige|analyse)\b/gi;
+
+const ENGLISH_STOPWORDS_RE =
+  /\b(the|an|and|for|with|in|at|to|of|is|are|was|were|be|been|have|has|had|do|does|did|you|your|this|that|these|those|my|please|thanks|thank|hello|hi|hey|need|want|would|could|should|can|will|make|create|write|build|generate|analyze|send|get|give|when|what|why|how|who|where|which|about|from|into|then|there|here)\b/gi;
+
+/** Caractères accentués typiques du français (l'anglais n'en possède aucun). */
+const FRENCH_ACCENTED_CHARS_RE = /[àâäçéèêëîïôöùûüÿœæ]/gi;
+
+/**
+ * Détection de langue ROBUSTE (audit : les deux regexes initiales renvoyaient
+ * « autre » pour des messages parfaitement français) :
+ *  1. score de mots vides FR vs EN (listes disjointes) ;
+ *  2. signe fort français : les caractères accentués n'existent pas en anglais.
+ * Retourne "fr", "en" ou "other" (langue non couverte : allemand, arabe…).
+ */
+export function detectLanguage(message: string): "fr" | "en" | "other" {
+  const text = message.trim();
+  if (!text) return "other";
+  const fr = (text.match(FRENCH_STOPWORDS_RE) ?? []).length;
+  const en = (text.match(ENGLISH_STOPWORDS_RE) ?? []).length;
+  if (fr > en) return "fr";
+  if (en > fr) return "en";
+  // Égalité (ou absence de mot vide) : les accents tranchent (≥ 2 signaux).
+  const accented = (text.match(FRENCH_ACCENTED_CHARS_RE) ?? []).length;
+  return accented >= 2 ? "fr" : "other";
+}
+
+/**
+ * Directive de LANGUE à injecter dans les prompts système (décision
+ * d'intention ET tour conversationnel) : l'agent répond IMPÉRATIVEMENT dans
+ * la langue du DERNIER message utilisateur — plus jamais une réponse
+ * française à une question anglaise (ou l'inverse). Fonction pure.
+ */
+export function languageDirective(userText: string): string {
+  const language = detectLanguage(userText);
+  if (language === "fr") {
+    return "LANGUE : réponds impérativement en français (langue détectée du dernier message).";
+  }
+  if (language === "en") {
+    return "LANGUE : réponds impérativement en anglais (langue détectée du dernier message).";
+  }
+  return "LANGUE : réponds dans la langue du dernier message de l'utilisateur.";
 }
 
 function deterministicEnhancement(message: string): PromptEnhancement {

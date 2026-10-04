@@ -21,9 +21,9 @@ export interface DetectedApiProvisioning {
 /** Mots-clés « API » obligatoires pour éviter tout faux positif sur une simple URL. */
 const API_KEYWORD = /\bapi\b/i;
 
-/** Verbes d'enregistrement/branchement explicites. */
+/** Verbes d'enregistrement/branchement explicites (FR + EN — audit : détection historiquement francophone). */
 const PROVISIONING_VERBS =
-  /(connecte[rz]?|ajoute[rz]?|enregistre[rz]?|branche[rz]?|ajout(e|ons)|ajouter|declare[rz]?|configure[rz]?|int[eé]gre[rz]?)\b/i;
+  /(connecte[rz]?|connect(?:ed|s|ing)?|ajoute[rz]?|enregistre[rz]?|register|branche[rz]?|plug(?:ged|s|ging)?|ajout(e|ons)|ajouter|declare[rz]?|configure[rz]?|int[eé]gre[rz]?|integrat(?:e[ds]?|ing)|use\s+this\s+api)\b/i;
 
 /** Formules « voici mon api / utilise cette api / nouvelle api … » suivies d'une URL. */
 const API_PRESENTATION = /(voici|voil[àa]|j'ai|nouvelle|this|my)\s+(mon\s+|ma\s+|la\s+|cette\s+|the\s+|your\s+)?api\b/i;

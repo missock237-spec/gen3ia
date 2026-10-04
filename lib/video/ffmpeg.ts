@@ -16,11 +16,12 @@ import { spawn } from "node:child_process";
 import { stat, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
-  FFMPEG_BINARY,
-  FFPROBE_BINARY,
+  resolveFfmpegBinary,
+  resolveFfprobeBinary,
   FFMPEG_SANDBOX_ARGS,
   ffmpegTimeoutSec,
   VIDEO_LIMITS,
+  type ResolvedBinary,
 } from "@/lib/video/security";
 import type { MediaProbe } from "@/lib/video/types";
 
@@ -117,7 +118,8 @@ export async function runFfmpeg(params: {
       assertInsideDir(params.cwd, arg);
     }
   }
-  const result = await runCommand(FFMPEG_BINARY, allArgs, {
+  const ffmpeg = await resolveFfmpegBinary();
+  const result = await runCommand(ffmpeg.path, allArgs, {
     cwd: params.cwd,
     timeoutSec: ffmpegTimeoutSec(params.outputDurationSec),
     onLine: params.onProgress,
@@ -142,8 +144,9 @@ export async function runFfmpeg(params: {
 /** Sonde ffprobe — métadonnées réelles des médias (durée, dimensions, audio). */
 export async function probeMedia(filePath: string, cwd: string): Promise<MediaProbe> {
   assertInsideDir(cwd, filePath);
+  const ffprobe = await resolveFfprobeBinary();
   const result = await runCommand(
-    FFPROBE_BINARY,
+    ffprobe.path,
     [
       "-v", "error",
       "-print_format", "json",
@@ -191,21 +194,44 @@ function parseFps(rate: string): number | undefined {
   return Number.isFinite(fps) ? Math.round(fps * 100) / 100 : undefined;
 }
 
-/** Vérifie la disponibilité des binaires (diagnostic worker). */
-export async function checkFfmpegAvailable(): Promise<{ ffmpeg: boolean; ffprobe: boolean; version?: string }> {
+/**
+ * Vérifie la disponibilité des binaires (préflight de rendu, diagnostics).
+ * Renvoie aussi la source de résolution (env / paquet statique / PATH) —
+ * le message de réparation doit dire À L'UTILISATEUR quoi configurer.
+ */
+export interface FfmpegAvailability {
+  ffmpeg: boolean;
+  ffprobe: boolean;
+  version?: string;
+  ffmpegSource?: ResolvedBinary["source"];
+  ffprobeSource?: ResolvedBinary["source"];
+  ffmpegPath?: string;
+  ffprobePath?: string;
+}
+
+export async function checkFfmpegAvailable(): Promise<FfmpegAvailability> {
+  const [ffmpeg, ffprobe] = await Promise.all([resolveFfmpegBinary(), resolveFfprobeBinary()]);
   try {
-    const result = await runCommand(FFMPEG_BINARY, ["-version"], { cwd: "/tmp", timeoutSec: 15 });
-    let ffprobe = false;
+    const result = await runCommand(ffmpeg.path, ["-version"], { cwd: "/tmp", timeoutSec: 15 });
+    let ffprobeOk = false;
     try {
-      await runCommand(FFPROBE_BINARY, ["-version"], { cwd: "/tmp", timeoutSec: 15 });
-      ffprobe = true;
+      await runCommand(ffprobe.path, ["-version"], { cwd: "/tmp", timeoutSec: 15 });
+      ffprobeOk = true;
     } catch {
-      ffprobe = false;
+      ffprobeOk = false;
     }
     const version = result.stdout.split("\n")[0]?.trim();
-    return { ffmpeg: true, ffprobe, version };
+    return {
+      ffmpeg: true,
+      ffprobe: ffprobeOk,
+      version,
+      ffmpegSource: ffmpeg.source,
+      ffprobeSource: ffprobe.source,
+      ffmpegPath: ffmpeg.source === "path" ? undefined : ffmpeg.path,
+      ffprobePath: ffprobe.source === "path" ? undefined : ffprobe.path,
+    };
   } catch {
-    return { ffmpeg: false, ffprobe: false };
+    return { ffmpeg: false, ffprobe: false, ffmpegSource: ffmpeg.source, ffprobeSource: ffprobe.source };
   }
 }
 

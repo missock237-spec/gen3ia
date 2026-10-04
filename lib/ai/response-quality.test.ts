@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   RESPONSE_FORMAT_RULES,
   RESPONSE_QUALITY_SYSTEM,
+  preferFreeForUnderstanding,
   preferFreeForVisibleAnswers,
   responseQualityMode,
   withResponseStyle,
@@ -49,6 +50,27 @@ describe("responseQualityMode", () => {
   it("FREE en majuscules/espaces est normalisé", () => {
     process.env[ENV_KEY] = "  FREE ";
     expect(responseQualityMode()).toBe("free");
+  });
+});
+
+describe("preferFreeForUnderstanding (tâches de compréhension : classification, planification, intention)", () => {
+  const saved = process.env[ENV_KEY];
+
+  afterEach(() => restore(saved));
+
+  it("premium (défaut) : PAS de préférence gratuite — le meilleur fournisseur sert la compréhension", () => {
+    delete process.env[ENV_KEY];
+    expect(preferFreeForUnderstanding()).toBe(false);
+  });
+
+  it("mode free explicite : comportement gratuit historique conservé", () => {
+    process.env[ENV_KEY] = "free";
+    expect(preferFreeForUnderstanding()).toBe(true);
+  });
+
+  it("valeur invalide → repli sûr premium (jamais free par accident)", () => {
+    process.env[ENV_KEY] = "ultra";
+    expect(preferFreeForUnderstanding()).toBe(false);
   });
 });
 

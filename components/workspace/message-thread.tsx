@@ -8,6 +8,8 @@ import { MarkdownContent } from "./markdown";
 import { formatBytes } from "./labels";
 import { downloadUrl } from "@/lib/client/download";
 import { LiveAppPreviewButton } from "./artifact-preview";
+import { MediaProgressFrame } from "@/components/media/media-progress-frame";
+import { VideoProductionCard } from "./video-production-card";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import type {
   ConversationApproval,
@@ -35,6 +37,10 @@ interface MessageThreadProps {
   streamingStatus?: string;
   /** Image générée pendant le tour en cours (affichée immédiatement). */
   liveImageUrl?: string;
+  /** Progression RÉELLE média (étapes serveur image) du tour en cours. */
+  liveMedia?: { label: string; stage?: string; percent?: number | null } | null;
+  /** Artefacts vidéo du tour en cours (production autopilotée à suivre). */
+  liveVideoArtifacts?: ConversationArtifact[];
   /** Run en cours de construction (timeline vivante du tour en cours). */
   liveRun?: ConversationRun | null;
   onDecide: (approvalId: string, decision: "approved" | "rejected") => Promise<void>;
@@ -54,6 +60,8 @@ export function MessageThread({
   streamingContent,
   streamingStatus,
   liveImageUrl,
+  liveMedia,
+  liveVideoArtifacts,
   liveRun,
   onDecide,
   onEditImage,
@@ -61,6 +69,10 @@ export function MessageThread({
   const runsById = new Map(runs.map((run) => [run.id, run]));
   const artifactsById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const streaming = typeof streamingContent === "string";
+  // Artefacts vidéo PERSISTÉS de la conversation (reprise après refresh :
+  // la carte continue de suivre la production réelle et fait avancer la
+  // file par sondage tant qu'elle est affichée).
+  const persistedVideoArtifacts = artifacts.filter((artifact) => artifact.type === "video" && artifact.videoProjectId);
 
   return (
     <div className="space-y-4">
@@ -184,7 +196,37 @@ export function MessageThread({
         );
       })}
 
+      {/* Cartes de production vidéo PERSISTÉES (reprise après refresh) :
+          chaque artefact vidéo de la conversation continue d'afficher la
+          progression réelle et le lecteur dès que le rendu est terminé. */}
+      {persistedVideoArtifacts.length > 0 && (
+        <div className="space-y-3">
+          {persistedVideoArtifacts.map((artifact) => (
+            <VideoProductionCard key={`persisted-video-${artifact.id}`} videoProjectId={artifact.videoProjectId as string} title={artifact.title} />
+          ))}
+        </div>
+      )}
+
       {liveRun && <RunTimeline run={liveRun} />}
+
+      {/* Cadre de progression RÉELLE des générations médias (image) : étapes
+          serveur réelles (amélioration → génération → enregistrement) avec
+          pourcentage, affiché tant que le média n'est pas terminé. */}
+      {streaming && liveMedia && liveMedia.stage !== "complete" && (
+        <div className="mr-auto w-full max-w-[92%]">
+          <MediaProgressFrame
+            status={liveMedia.stage === "failed" ? "failed" : "running"}
+            stageLabel={liveMedia.label}
+            percent={liveMedia.percent ?? null}
+            tone="dark"
+          />
+        </div>
+      )}
+
+      {/* Cartes de production vidéo du tour EN COURS (temps réel). */}
+      {(liveVideoArtifacts ?? []).map((artifact) => (
+        <VideoProductionCard key={`live-video-${artifact.id}`} videoProjectId={artifact.videoProjectId as string} title={artifact.title} />
+      ))}
 
       {streaming && (
         <div aria-live="polite" className="mr-auto flex items-start gap-2">

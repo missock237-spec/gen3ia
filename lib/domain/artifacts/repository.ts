@@ -13,7 +13,7 @@ import type { ArtifactType, ArtifactVersion, ConversationArtifact } from "@/lib/
 
 const COLLECTION = "conversationArtifacts";
 
-export const ARTIFACT_TYPES: readonly ArtifactType[] = ["code", "document", "table", "image", "report", "file"];
+export const ARTIFACT_TYPES: readonly ArtifactType[] = ["code", "document", "table", "image", "video", "report", "file", "audio"];
 
 export function isArtifactType(value: string): value is ArtifactType {
   return (ARTIFACT_TYPES as readonly string[]).includes(value);
@@ -34,6 +34,8 @@ function docFrom(id: string, data: FirebaseFirestore.DocumentData): Conversation
     content: typeof data.content === "string" ? data.content : undefined,
     storagePath: typeof data.storagePath === "string" ? data.storagePath : undefined,
     url: typeof data.url === "string" ? data.url : undefined,
+    videoProjectId: typeof data.videoProjectId === "string" ? data.videoProjectId : undefined,
+    videoJobId: typeof data.videoJobId === "string" ? data.videoJobId : undefined,
     versions: versions
       .map((v) => ({
         version: Number(v.version ?? 1),
@@ -61,11 +63,16 @@ export interface CreateArtifactInput {
   content?: string;
   storagePath?: string;
   url?: string;
+  videoProjectId?: string;
+  videoJobId?: string;
   note?: string;
 }
 
 export async function createArtifact(input: CreateArtifactInput): Promise<ConversationArtifact> {
-  if (!input.content && !input.storagePath && !input.url) {
+  const hasMedia = Boolean(input.content || input.storagePath || input.url);
+  // Un artefact vidéo démarre SANS média : il référence une production en
+  // cours (autopilote) dont le rendu final sera relu via la file de rendu.
+  if (!hasMedia && !(input.type === "video" && input.videoProjectId)) {
     throw new Error("Un artefact requiert un contenu, un fichier stocké ou une URL.");
   }
   const now = new Date();
@@ -90,6 +97,8 @@ export async function createArtifact(input: CreateArtifactInput): Promise<Conver
     content: input.content,
     storagePath: input.storagePath,
     url: input.url,
+    videoProjectId: input.videoProjectId,
+    videoJobId: input.videoJobId,
     versions: [version],
     createdAt: now,
     updatedAt: now,

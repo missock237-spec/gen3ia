@@ -61,15 +61,34 @@ export function isImageGenerationEnabled(): boolean {
  * quand la formulation sort du gabarit verbe+nom strict) :
  *  - verbes de volonté (« je veux/voudrais/aimerais une image… »),
  *  - « faire » (« peux-tu me faire un dessin… »),
- *  - message COMMENÇANT par un nom visuel (« un logo pour ma boulangerie »).
- * Garde-fous anti-faux-positifs : les questions explicatives (« Comment
- * créer une image ? ») ne déclenchent PAS de génération.
+ *  - message COMMENÇANT par un nom visuel (« un logo pour ma boulangerie »),
+ *  - messages COURTS (« un logo ») : AUCUNE longueur minimale — un visuel
+ *    explicite de 3 caractères reste une demande réelle.
+ * Garde-fous anti-faux-positifs : seules les VRAIES questions méta
+ * (« Comment créer une image ? », « C'est quoi un logo ? », « What is a
+ * mockup? ») ne déclenchent PAS de génération — une demande polie avec
+ * verbe de création (« Peux-tu générer un logo ? ») déclenche.
  */
 const IMAGE_VERBS =
-  /\b(g[ée]n[èe]re(?:r|z|s)?|g[ée]n[ée]ration|cr[ée]e(?:r|z|s)?|cr[ée]ation|cr[ée][ée]e?|dessine(?:r|z|s|\-moi)?|fais(?:-|\s)?moi|faisons|faire|fabrique(?:r|z|s)?|produis(?:-|\s)?moi|imagine(?:r|z|s)?|peins(?:-|\s)?(?:moi)?|veux|voudrais|aimerais|souhaite(?:r|z|s)?|besoin|render|generate|generating|create|draw|make|produce|design|illustrate)\b/i;
+  /\b(g[éeè]n[éeè]re(?:r|z|s)?|g[ée]n[ée]ration|cr[ée]e(?:r|z|s)?|cr[ée]ation|cr[ée][ée]e?|dessine(?:r|z|s|\-moi)?|fais(?:-|\s)?moi|faisons|faire|fabrique(?:r|z|s)?|produis(?:-|\s)?moi|imagine(?:r|z|s)?|peins(?:-|\s)?(?:moi)?|veux|voudrais|aimerais|souhaite(?:r|z|s)?|besoin|render|generate|generating|create|draw|make|produce|design|illustrate)\b/i;
 
 const IMAGE_NOUNS =
-  /\b(image|images|photo|photos|photographie|visuel|visuels|logo|logos|illustration|illustrations|dessin|dessins|paysage|paysages|affiche|affiches|poster|posters|banni[èe]re|banni[èe]res|bandeaux?|ic[ôo]ne|ic[ôo]nes|avatar|fond d'[éé]cran|wallpaper|thumbnail|miniature|picture|pictures|portrait|artwork|tableau|banni[èe]re publicitaire|image de couverture|couverture)\b/i;
+  /\b(image|images|photo|photos|photographie|visuel|visuels|logo|logos|illustration|illustrations|dessin|dessins|paysage|paysages|affiche|affiches|poster|posters|banni[èe]re|banni[èe]res|banner|banners|bandeaux?|flyer|flyers|ic[ôo]ne|ic[ôo]nes|icone|icon|icons|avatar|avatars|fond d'[éé]cran|wallpaper|wallpapers|thumbnail|thumbnails|miniature|miniatures|sticker|stickers|picture|pictures|portrait|artwork|tableau|couverture|cover|covers|mockup|mockups|sketch|sketches|rendu|rendus|banni[èe]re publicitaire|image de couverture)\b/i;
+
+/**
+ * Vraies questions méta : l'utilisateur demande une EXPLICATION ou une
+ * définition, pas la production d'un visuel. Détectées par un marqueur
+ * interrogatif EN TÊTE de message (français ET anglais). Les demandes
+ * polies (« Peux-tu me faire un logo ? », « Est-ce que tu peux générer une
+ * image ? ») ne sont PAS des méta-questions : elles portent une demande de
+ * création réelle et suivent la logique verbe+nom.
+ */
+const META_QUESTION_RE =
+  /^\s*(?:c['’]est quoi|qu['’]est-ce|qu['’]est ce|que\b|quoi\b|pourquoi|comment|qui\b|où\b|quand\b|quel(?:le|s)?\b|combien\b|est-ce que tu (?:peux|pourrais)\s+(?:m['’]|me\s+)?expliquer|what|why|how|who|where|which)\b/i;
+
+function isMetaQuestion(text: string): boolean {
+  return META_QUESTION_RE.test(text);
+}
 
 /** Message qui COMMENCE par un nom visuel précédé d'un déterminant. */
 const IMAGE_NOUN_LEAD =
@@ -81,14 +100,19 @@ const IMAGE_NON_GENERATION_VERBS =
 
 /** Verbes de GÉNÉRATION explicites (lèvent le garde d'analyse/édition). */
 const IMAGE_GENERATION_VERBS =
-  /\b(g[ée]n[èe]re(?:r|z|s)?|dessine(?:r|z|s)?|peins?(?:-\s?moi)?|imagine(?:r|z|s)?|cr[ée]e(?:r|z|s)?|fabrique(?:r|z|s)?|produis(?:-\s?moi)?|draw|generate|create|illustrate|render)\b/i;
+  /\b(g[éeè]n[éeè]re(?:r|z|s)?|dessine(?:r|z|s)?|peins?(?:-\s?moi)?|imagine(?:r|z|s)?|cr[ée]e(?:r|z|s)?|fabrique(?:r|z|s)?|produis(?:-\s?moi)?|draw|generate|create|illustrate|render)\b/i;
 
 export function looksLikeImageRequest(message: string): boolean {
   const text = message.trim();
-  if (text.length < 8 || text.length > 4000) return false;
-  // Question explicative (« Comment créer une image ? », « C'est quoi un
-  // logo vectoriel ? ») : l'utilisateur veut une RÉPONSE, pas un visuel.
-  if (/^(?:comment|pourquoi|est-ce que tu peux m'expliquer|c'est quoi|qu'est-ce qu')/i.test(text)) return false;
+  if (text.length > 4000) return false;
+  // Vraie question méta (« Comment créer une image ? », « C'est quoi un
+  // logo ? », « What is a mockup? ») : l'utilisateur veut une RÉPONSE, pas
+  // un visuel. Une demande polie avec verbe de création n'est PAS une
+  // méta-question (« est-ce que tu peux générer un logo ? » → visuel).
+  if (isMetaQuestion(text)) return false;
+  // Verbe de dessin explicite : suffit PAR LUI-MÊME (« Dessine un chat »),
+  // même sans nom visuel dans la phrase (sujet visuel implicite).
+  if (EXPLICIT_DRAWING_VERBS.test(text)) return true;
   const wantsGeneration = IMAGE_VERBS.test(text);
   // Action sur une image existante (analyser, supprimer, modifier…) sans
   // verbe de GÉNÉRATION explicite : ce n'est PAS une demande de création.
@@ -121,8 +145,9 @@ const EXPLICIT_DRAWING_VERBS =
  */
 export function looksLikeExplicitDrawingRequest(message: string): boolean {
   const text = message.trim();
-  if (text.length < 8 || text.length > 4000) return false;
-  if (/^(?:comment|pourquoi|c'est quoi|qu'est-ce qu')/i.test(text)) return false;
+  if (text.length > 4000) return false;
+  // Même garde méta-question que looksLikeImageRequest (français + anglais).
+  if (isMetaQuestion(text)) return false;
   return EXPLICIT_DRAWING_VERBS.test(text);
 }
 

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { generate } from "@/lib/ai/router";
 import type { AIProvider } from "@/lib/ai/models";
+import { preferFreeForUnderstanding } from "@/lib/ai/response-quality";
 import { GEN3IA_TOOLS } from "@/lib/tools/registry";
 import { AgentRuntime } from "./runner";
 import { RuntimePlanSchema, type RuntimePlan } from "./types";
@@ -215,7 +216,7 @@ export async function planUniversalAgent(
         "",
         "AGENT PERSONNALISÉ — CHARTE OBLIGATOIRE :",
         agentContext.charter,
-        "Chaque étape du plan doit respecter strictement cette charte : n'inclus AUCUNE étape qui sortirait du périmètre de l'agent. Si l'objectif sort du périmètre, produis un plan minimal d'une seule étape llm qui le signale et refuse courtoisement.",
+        "Chaque étape du plan doit respecter strictement cette charte : la charte N'INTERDIT JAMAIS de traiter une demande au motif que le sujet sortirait de la spécialité principale (POLYVALENCE) — tente de réaliser TOUTE demande de l'utilisateur avec les outils, connecteurs et services disponibles. Honnêteté de capacité uniquement : si une capacité RÉELLEMENT requise est indisponible (outil absent, accès manquant), produis alors un plan minimal d'une seule étape llm qui l'explique clairement et propose la meilleure alternative réalisable — jamais un refus au motif du domaine, jamais un résultat inventé.",
         subAgents.length > 0
           ? `SOUS-AGENTS DÉLÉGABLES : ${JSON.stringify(subAgents)} — pour déléguer une sous-tâche autonome à l'un de ces agents — ou pour une tâche très complexe exigeant une équipe — utilise une étape type "agent" avec son id dans agentId (jusqu'à 10 sous-agents déployables en parallèle pour une même mission ; le sous-agent répond avec sa propre expertise, il n'exécute PAS d'outils).`
           : "",
@@ -297,7 +298,10 @@ export async function planUniversalAgent(
         { role: "user", content: buildUserPrompt(essai > 1 ? dernierErreur : undefined) },
       ],
       requiresStructuredOutput: true,
-      preferFree: true,
+      // Tâche de COMPRÉHENSION (le plan conditionne toute la mission) :
+      // routage par la politique de qualité — plus de gratuit forcé en
+      // mode premium (un planificateur médiocre dégrade la mission entière).
+      preferFree: preferFreeForUnderstanding(),
       maxTokens: 6000,
       provider: options?.provider,
       model: options?.model,

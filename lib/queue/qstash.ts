@@ -50,7 +50,17 @@ const TICK_RETRIES = 3;
  * un second essai ENCODÉ couvre les builds QStash historiques qui exigent
  * l'inverse (compatibilité sans env var).
  */
-async function publishToDestination(
+/**
+ * Résultat discriminé d'une publication QStash : l'appelant distingue
+ * « file non configurée » (continuation par sondage possible) d'un échec
+ * réel (à journaliser — jamais de fantôme « queued » silencieux).
+ */
+export type QStashPublishResult =
+  | { ok: true; mode: "qstash"; messageId: string }
+  | { ok: false; mode: "unconfigured" }
+  | { ok: false; mode: "error"; message: string };
+
+export async function publishToDestination(
   config: QStashConfig,
   destinationUrl: string,
   body: string,
@@ -109,6 +119,29 @@ export function qstashConfig(): QStashConfig | null {
 /** La file d'attente des missions est-elle activable dans cet environnement ? */
 export function missionQueueConfigured(): boolean {
   return qstashConfig() !== null;
+}
+
+/**
+ * Publication partagée « haute niveau » pour les files de l'application
+ * (missions, rendu vidéo, production vidéo) : applique le pattern PATH BRUT
+ * → repli encodé, distingue file non configurée / échec réel, ne lève
+ * JAMAIS (le résultat discriminé est inspectable par l'appelant — un échec
+ * silencieux laisserait un job fantôme « queued » pour toujours, un échec
+ * levé casserait une entrée déjà validée ; ici l'appelant décide).
+ */
+export async function publishJsonDestination(
+  destinationUrl: string,
+  body: string,
+  options: { delaySeconds?: number } = {},
+): Promise<QStashPublishResult> {
+  const config = qstashConfig();
+  if (!config) return { ok: false, mode: "unconfigured" } as const;
+  try {
+    const { messageId } = await publishToDestination(config, destinationUrl, body, options);
+    return { ok: true, mode: "qstash", messageId } as const;
+  } catch (error) {
+    return { ok: false, mode: "error", message: error instanceof Error ? error.message : String(error) } as const;
+  }
 }
 
 /** URL absolue du receiver, dérivée de l'origine de la requête entrante. */

@@ -176,7 +176,7 @@ export interface ConversationApproval {
 /* Artifact — livrable standardisé                                     */
 /* ------------------------------------------------------------------ */
 
-export type ArtifactType = "code" | "document" | "table" | "image" | "report" | "file" | "audio";
+export type ArtifactType = "code" | "document" | "table" | "image" | "video" | "report" | "file" | "audio";
 
 export interface ArtifactVersion {
   version: number;
@@ -204,6 +204,10 @@ export interface ConversationArtifact {
   content?: string;
   storagePath?: string;
   url?: string;
+  /** Production vidéo liée (artefact vidéo autopilotée — suivi en temps réel). */
+  videoProjectId?: string;
+  /** Job de la file de production vidéo associé (stages plan→script→…→render). */
+  videoJobId?: string;
   versions: ArtifactVersion[];
   createdAt: string;
   updatedAt: string;

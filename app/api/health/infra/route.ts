@@ -8,6 +8,8 @@ import { isSandboxConfigured } from "@/lib/sandbox/simulation";
 import { pingR2, type R2HealthStatus } from "@/lib/storage/r2";
 import { summarizeEnv } from "@/lib/env/config-report";
 import { getDualWriteDomains, getDualWriteStats } from "@/lib/db/dual-write";
+import { checkFfmpegAvailable, type FfmpegAvailability } from "@/lib/video/ffmpeg";
+import { qstashConfig } from "@/lib/queue/qstash";
 
 export const runtime = "nodejs";
 
@@ -36,12 +38,13 @@ export async function GET(request: NextRequest) {
   const guard = await protectRoute(request, { rateLimit: { limit: 30, windowMs: 60_000 } });
   if (!guard.ok) return guard.response;
 
-  const [redis, memoriesCount, knowledgeCount, conversationsCount, storage] = await Promise.all([
+  const [redis, memoriesCount, knowledgeCount, conversationsCount, storage, ffmpeg] = await Promise.all([
     redisPing(),
     isVectorStoreConfigured() ? countVectorPoints(VECTOR_COLLECTION_MEMORIES) : Promise.resolve(null),
     isVectorStoreConfigured() ? countVectorPoints(VECTOR_COLLECTION_KNOWLEDGE) : Promise.resolve(null),
     isVectorStoreConfigured() ? countVectorPoints(CONVERSATION_VECTOR_COLLECTION) : Promise.resolve(null),
     sondeStockageR2(),
+    sondeFfmpeg(),
   ]);
 
   return NextResponse.json({
@@ -65,6 +68,18 @@ export async function GET(request: NextRequest) {
         deployed: isSandboxConfigured(),
         mode: isSandboxConfigured() ? "docker" : "simulation-integree",
         role: "exécution de code / terminal agent",
+      },
+      // Pipeline vidéo (Task 1-a, additif) : binaire FFmpeg réellement
+      // exécutable + mode de continuation des files de rendu/production.
+      video: {
+        ffmpeg: {
+          available: ffmpeg.ffmpeg,
+          ffprobe: ffmpeg.ffprobe,
+          ...(ffmpeg.version ? { version: ffmpeg.version } : {}),
+          ...(ffmpeg.ffmpegSource ? { source: ffmpeg.ffmpegSource } : {}),
+        },
+        queueMode: qstashConfig() ? ("qstash" as const) : ("poll" as const),
+        role: "rendu vidéo réel (FFmpeg sandboxé) + files rendu/production (QStash ou sondage)",
       },
     },
     // La route reste 200 : le champ reflète la vérité du stockage,
@@ -94,5 +109,17 @@ async function sondeStockageR2(): Promise<R2HealthStatus> {
     return await pingR2(3_000);
   } catch {
     return { ok: false, reason: "error" };
+  }
+}
+
+/**
+ * Sonde FFmpeg protégée (Task 1-a, additif) : le healthcheck ne crash pas
+ * si la résolution de binaire change — unavailable est un état honnête.
+ */
+async function sondeFfmpeg(): Promise<FfmpegAvailability> {
+  try {
+    return await checkFfmpegAvailable();
+  } catch {
+    return { ffmpeg: false, ffprobe: false };
   }
 }

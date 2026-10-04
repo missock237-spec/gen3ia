@@ -59,6 +59,8 @@ interface LiveTurn {
   content: string;
   /** URL de l'image générée pendant ce tour (affichée immédiatement). */
   imageUrl?: string;
+  /** Progression RÉELLE média émise par le serveur (cadre de progression). */
+  media?: { label: string; stage?: string; percent?: number | null } | null;
   run: ConversationRun | null;
   approvals: ConversationApproval[];
   artifacts: ConversationArtifact[];
@@ -204,7 +206,19 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         });
         break;
       case "status":
-        setLive((current) => ({ ...(current ?? emptyLive()), status: event.label }));
+        setLive((current) => ({
+          ...(current ?? emptyLive()),
+          status: event.label,
+          // Progression RÉELLE des générations médias (stage/percent additifs
+          // du contrat de flux) : le cadre de progression affiche les étapes
+          // réelles — enhance → generating → persisting — avec pourcentage.
+          media:
+            event.stage || typeof event.percent === "number"
+              ? { label: event.label, stage: event.stage, percent: event.percent ?? null }
+              : event.phase === "image" && current?.media
+                ? current.media
+                : current?.media,
+        }));
         break;
       case "message_delta":
         setLive((current) => ({ ...(current ?? emptyLive()), content: (current?.content ?? "") + event.delta }));
@@ -240,6 +254,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           content: event.message.content,
           imageUrl: event.message.imageUrl ?? current?.imageUrl,
           status: "",
+          media: null,
         }));
         break;
       case "done":
@@ -560,6 +575,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               streamingStatus={live?.status}
               liveImageUrl={live?.imageUrl}
               liveRun={live?.run}
+              liveMedia={live?.media ?? null}
+              liveVideoArtifacts={live?.artifacts.filter((artifact) => artifact.type === "video" && artifact.videoProjectId) ?? []}
               onDecide={decideApproval}
               onEditImage={(image) => setInjectedEdit({
                 attachment: {

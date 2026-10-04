@@ -1,6 +1,6 @@
 import type { z } from "zod";
 
-export type ToolCategory = "web" | "browser" | "github" | "files" | "database" | "http" | "code" | "mcp" | "composio" | "system";
+export type ToolCategory = "web" | "browser" | "github" | "files" | "database" | "http" | "code" | "mcp" | "composio" | "media" | "system";
 export type ToolRisk = "low" | "medium" | "high" | "critical";
 export type ToolExecutionStatus = "success" | "failed" | "denied" | "timeout" | "cancelled";
 

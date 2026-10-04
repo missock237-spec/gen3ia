@@ -122,8 +122,93 @@ export function assertMediaSizeAllowed(sizeBytes: number, kind: "image" | "video
  */
 export const FFMPEG_SANDBOX_ARGS = ["-nostdin", "-protocol_whitelist", "file,pipe", "-max_alloc", "2147483648"] as const;
 
-export const FFMPEG_BINARY = process.env.VIDEO_FFMPEG_PATH || "ffmpeg";
-export const FFPROBE_BINARY = process.env.VIDEO_FFPROBE_PATH || "ffprobe";
+// ────────────────────────────────────────────────────────────────────────────
+// Résolution des binaires FFmpeg/ffprobe (Task 1-a)
+// ────────────────────────────────────────────────────────────────────────────
+
+export type FfmpegBinarySource = "env" | "ffmpeg-static" | "path";
+export interface ResolvedBinary {
+  path: string;
+  source: FfmpegBinarySource;
+}
+
+/**
+ * Résolution HIÉRARCHIQUE d'un binaire (Task 1-a) :
+ *  1. variable d'environnement dédiée (VIDEO_FFMPEG_PATH / VIDEO_FFPROBE_PATH)
+ *     — déploiements maître-esclave où FFmpeg vit sur un hôte précis ;
+ *  2. paquet npm ffmpeg-static / ffprobe-static (binaires statiques embarqués
+ *     — rend le rendu fonctionnel sans installation système) ; import
+ *     DYNAMIQUE et gardé : l'absence du paquet ne casse jamais le module ;
+ *  3. binaire système sur le PATH (« ffmpeg » / « ffprobe ») — comportement
+ *     historique, vérifié par la sonde checkFfmpegAvailable().
+ */
+async function resolveStaticBinary(
+  packageName: "ffmpeg-static" | "ffprobe-static",
+  pick: (mod: unknown) => string | null,
+): Promise<ResolvedBinary | null> {
+  try {
+    const mod: unknown = await import(packageName);
+    const candidate = pick(mod);
+    if (!candidate) return null;
+    const { access } = await import("node:fs/promises");
+    await access(candidate); // le paquet peut être présent sans binaire téléchargé
+    return { path: candidate, source: "ffmpeg-static" };
+  } catch {
+    return null;
+  }
+}
+
+function staticFfmpegPath(mod: unknown): string | null {
+  // ffmpeg-static : `export default path` (peut être null si l'install
+  // script n'a pas tourné) ou `module.exports = path` selon l'interop CJS/ESM.
+  const m = mod as { default?: unknown } | string | null;
+  const candidate = typeof m === "string" ? m : (m?.default as string | null | undefined);
+  return typeof candidate === "string" && candidate.length > 0 ? candidate : null;
+}
+
+function staticFfprobePath(mod: unknown): string | null {
+  // ffprobe-static : `module.exports = { path }` (interop : souvent sous default).
+  const m = mod as { path?: unknown; default?: { path?: unknown } };
+  const candidate = (m?.default?.path ?? m?.path) as string | undefined;
+  return typeof candidate === "string" && candidate.length > 0 ? candidate : null;
+}
+
+let ffmpegResolution: Promise<ResolvedBinary> | null = null;
+let ffprobeResolution: Promise<ResolvedBinary> | null = null;
+
+/** Résout (et met en cache) le binaire FFmpeg de cet environnement. */
+export function resolveFfmpegBinary(): Promise<ResolvedBinary> {
+  if (!ffmpegResolution) {
+    ffmpegResolution = (async () => {
+      const env = process.env.VIDEO_FFMPEG_PATH?.trim();
+      if (env) return { path: env, source: "env" } as const;
+      const staticBinary = await resolveStaticBinary("ffmpeg-static", staticFfmpegPath);
+      if (staticBinary) return staticBinary;
+      return { path: "ffmpeg", source: "path" } as const;
+    })();
+  }
+  return ffmpegResolution;
+}
+
+/** Résout (et met en cache) le binaire ffprobe de cet environnement. */
+export function resolveFfprobeBinary(): Promise<ResolvedBinary> {
+  if (!ffprobeResolution) {
+    ffprobeResolution = (async () => {
+      const env = process.env.VIDEO_FFPROBE_PATH?.trim();
+      if (env) return { path: env, source: "env" } as const;
+      const staticBinary = await resolveStaticBinary("ffprobe-static", staticFfprobePath);
+      if (staticBinary) return staticBinary;
+      return { path: "ffprobe", source: "path" } as const;
+    })();
+  }
+  return ffprobeResolution;
+}
+
+/** Réinitialise les résolutions en cache (tests / changement d'env à chaud). */
+export function resetBinaryResolutionCache(): void {
+  ffmpegResolution = null;
+  ffprobeResolution = null;
+}
 
 /** Timeout par commande FFmpeg : les segments courts sont bornés, les longs rendus passent par des segments. */
 export function ffmpegTimeoutSec(outputDurationSec: number): number {

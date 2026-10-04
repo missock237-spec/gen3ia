@@ -544,7 +544,21 @@ export interface RenderJob {
   mode?: "full" | "exports_only";
   qcReport?: QcReport;
   autoFixRounds: number;
+  /**
+   * Compteur INFORMATIF de ticks pris en charge (claim par claim). À NE PAS
+   * confondre avec retryCount : un rendu de 40 ticks ne doit PAS perdre ses
+   * relances automatiques (Task 1-a FIX 3).
+   */
   attempts: number;
+  /**
+   * Budget de RELANCE après échec (défaut absent = 0 pour les documents
+   * historiques — compatibilité champs). Sature à RENDER_RETRY_BUDGET.
+   */
+  retryCount?: number;
+  /** Propriétaire du bail courant (jobId:suffixe aléatoire — claim transactionnel). */
+  leaseOwner?: string;
+  /** Expiration du bail en ms epoch (claim transactionnel anti double-worker). */
+  leaseExpiresAt?: number;
   errorCode?: string;
   errorMessage?: string;
   output?: { r2Key: string; sizeBytes: number; durationSec: number; width: number; height: number };

@@ -40,6 +40,8 @@ const TOOL_LABELS: Record<string, string> = {
   "network.send_message": "Message à un agent coéquipier",
   "network.read_inbox": "Lecture de la boîte d'équipe",
   "network.mark_read": "Marquage d'un message d'équipe lu",
+  "image.generate": "Génération d'image",
+  "video.create": "Production vidéo",
 };
 
 /** Libellés des familles d'outils identifiés par préfixe. */
@@ -48,6 +50,7 @@ const TOOL_PREFIX_LABELS: Array<{ prefix: string; label: string }> = [
   { prefix: "mcp.", label: "Outil externe connecté" },
   { prefix: "web.", label: "Accès web" },
   { prefix: "image.", label: "Génération d'image" },
+  { prefix: "video.", label: "Production vidéo" },
 ];
 
 /**

@@ -23,16 +23,47 @@ describe("looksLikeImageRequest — détection d'intention image", () => {
     expect(looksLikeImageRequest("Peux-tu me faire un portrait de femme au chapeau ?")).toBe(true);
   });
 
-  it("détecte un visuel en tête de message", () => {
+  it("détecte un visuel en tête de message (MÊME TRÈS COURT — ancien garde length<8 retiré)", () => {
     expect(looksLikeImageRequest("Un logo pour ma boulangerie")).toBe(true);
     expect(looksLikeImageRequest("Une image d'un chat roux")).toBe(true);
     expect(looksLikeImageRequest("Mon avatar de profil professionnel")).toBe(true);
+    expect(looksLikeImageRequest("un logo")).toBe(true);
+    expect(looksLikeImageRequest("une affiche")).toBe(true);
   });
 
-  it("ne déclenche PAS pour une question explicative", () => {
+  it("détecte les noms visuels ajoutés par l'audit (bannière, flyer, sticker, mockup, icône…)", () => {
+    expect(looksLikeImageRequest("génère une bannière 16:9")).toBe(true);
+    expect(looksLikeImageRequest("génère une banner pour mon site")).toBe(true);
+    expect(looksLikeImageRequest("crée un flyer pour l'ouverture")).toBe(true);
+    expect(looksLikeImageRequest("fais-moi un sticker de mon chat")).toBe(true);
+    expect(looksLikeImageRequest("génère un mockup d'application mobile")).toBe(true);
+    expect(looksLikeImageRequest("dessine une icone de panier")).toBe(true);
+    expect(looksLikeImageRequest("crée une icône de panier")).toBe(true);
+    expect(looksLikeImageRequest("génère une miniature YouTube")).toBe(true);
+    expect(looksLikeImageRequest("un wallpaper de montagne")).toBe(true);
+    expect(looksLikeImageRequest("génère une couverture de livre")).toBe(true);
+  });
+
+  it("détecte un verbe de dessin SANS nom visuel (« dessine un chat »)", () => {
+    expect(looksLikeImageRequest("dessine un chat")).toBe(true);
+    expect(looksLikeImageRequest("Dessine un dragon")).toBe(true);
+    expect(looksLikeImageRequest("draw a cat")).toBe(true);
+  });
+
+  it("ne déclenche PAS pour une question explicative (française ou anglaise)", () => {
     expect(looksLikeImageRequest("Comment créer une image de qualité ?")).toBe(false);
     expect(looksLikeImageRequest("C'est quoi un logo vectoriel ?")).toBe(false);
     expect(looksLikeImageRequest("Pourquoi mes photos sont-elles floues ?")).toBe(false);
+    expect(looksLikeImageRequest("c'est quoi un logo ?")).toBe(false);
+    expect(looksLikeImageRequest("Quelle image choisir pour mon site ?")).toBe(false);
+    expect(looksLikeImageRequest("What is a mockup?")).toBe(false);
+    expect(looksLikeImageRequest("How do I create a logo?")).toBe(false);
+    expect(looksLikeImageRequest("Est-ce que tu peux m'expliquer les logos vectoriels ?")).toBe(false);
+  });
+
+  it("UNE demande polie avec verbe de création N'EST PAS une question méta (déclenche)", () => {
+    expect(looksLikeImageRequest("Est-ce que tu peux générer un logo ?")).toBe(true);
+    expect(looksLikeImageRequest("Peux-tu générer une bannière pour ma boutique ?")).toBe(true);
   });
 
   it("ne déclenche PAS pour une action sur une image existante", () => {
@@ -64,6 +95,7 @@ describe("looksLikeExplicitDrawingRequest — verbes de dessin explicites", () =
     expect(looksLikeExplicitDrawingRequest("Peux-tu dessiner la tour Eiffel ?")).toBe(true);
     expect(looksLikeExplicitDrawingRequest("Dessinez un paysage de montagne enneigée.")).toBe(true);
     expect(looksLikeExplicitDrawingRequest("Peins la baie de Somme au crépuscule.")).toBe(true);
+    expect(looksLikeExplicitDrawingRequest("sketch a bridge")).toBe(true);
   });
 
   it("ne déclenche PAS pour le NOM « dessin » (œuvre existante)", () => {

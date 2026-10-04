@@ -59,6 +59,9 @@ import {
   networkReadInboxTool,
   networkMarkReadTool,
 } from "@/lib/agents/networks/tools";
+import { generateImageTool } from "@/lib/tools/media/generate-image";
+import { createVideoTool } from "@/lib/tools/media/create-video";
+import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
 
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -124,6 +127,17 @@ export function createDefaultToolRegistry(): ToolRegistry {
   if (process.env.ELEVENLABS_API_KEY) {
     registry.register(voiceSpeakTool);
     registry.register(voiceListTool);
+  }
+  // Médias RÉELS (audit outils médias) : génération d'image Agnes AI (la MÊME
+  // voie que le chat conversationnel) et production vidéo autonome (file
+  // interne payante). Gated par la clé Agnes — sans clé, les outils
+  // n'existent PAS au registre (aucune capacité fantôme annoncée aux
+  // planners) ; avec clé, « image.generate » devient un outil exécutable
+  // réel là où la conversation l'annonçait déjà. La production vidéo charge
+  // son module par import paresseux au moment de l'exécution.
+  if (isImageGenerationEnabled()) {
+    registry.register(generateImageTool);
+    registry.register(createVideoTool);
   }
   if (process.env.TWENTY_FIRST_API_KEY) registry.register(twentyFirstUiTool);
   if (process.env.NOTION_API_TOKEN) {

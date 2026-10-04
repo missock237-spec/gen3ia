@@ -129,9 +129,9 @@ export function extraireIntervalle(message: string): number | null {
 /* Détection : création d'une tâche planifiée                          */
 /* ------------------------------------------------------------------ */
 
-/** Marqueurs de récurrence claire (toutes langues usuelles de la plateforme). */
+/** Marqueurs de récurrence claire (toutes langues usuelles de la plateforme — FR + EN). */
 const RECURRENCE_RE =
-  /\b(chaque|tous les|toutes les|chaque jour|quotidien|quotidienne|chaque semaine|hebdomadaire|chaque mois|mensuel|chaque matin|chaque soir|de mani[eè]re r[eé]currente|p[eé]riodique|périodiquement|r[eé]guli[eè]rement|recurring|every|daily|weekly|each day|each week|7\s?\/\s?7|7j7|en boucle|automatiquement)\b/i;
+  /\b(chaque|tous les|toutes les|chaque jour|quotidien|quotidienne|chaque semaine|hebdomadaire|chaque mois|mensuel|chaque matin|chaque soir|de mani[eè]re r[eé]currente|p[eé]riodique|périodiquement|r[eé]guli[eè]rement|recurring|every|every day|every week|every month|every morning|every monday|each day|each week|each month|each morning|daily|weekly|monthly|yearly|annually|regularly|7\s?\/\s?7|7j7|en boucle|automatiquement)\b/i;
 
 /** Verbes qui lient la récurrence à une mise en place par un agent. */
 const SCHEDULE_VERB_RE =
@@ -139,11 +139,17 @@ const SCHEDULE_VERB_RE =
 
 /**
  * Verbes d'action récurrente d'agent : le déclencheur temporel (« chaque
- * lundi à 9h, prépare-moi un rapport ») suffit à exprimer l'automatisation,
- * même sans le verbe « planifier ».
+ * lundi à 9h, prépare-moi un rapport » / "every monday at 9am, prepare a
+ * report") suffit à exprimer l'automatisation, même sans le verbe
+ * « planifier ». Couverture FR + EN (audit : détection historiquement
+ * francophone uniquement).
  */
 const SCHEDULE_ACTION_RE =
-  /\b(prépar(?:e|er|ez)|prepare|envoi(?:e|er|ez)|g[eé]n[eè]re(?:r|z)?|r[eé]dig(?:e|er|ez)|v[eé]rifi(?:e|er|ez)|surveill(?:e|er|ez)|analys(?:e|er|ez)|publi(?:e|er|ez)|collect(?:e|er|ez)|r[eé]sum(?:e|er|ez)|synth[eé]tis(?:e|er|ez)|contr[oô]l(?:e|er|ez)|rapport(?:e|er)|scrap(?:e|er)|extrais|suis(?:s-?moi)?|envoie-moi)\b/i;
+  /\b(prépar(?:e|er|ez)|prepare|preparing|envoi(?:e|er|ez)|envoy(?:e|er|ez)|g[eé]n[eè]re(?:r|z)?|generate|r[eé]dig(?:e|er|ez)|write|v[eé]rifi(?:e|er|ez)|check|surveill(?:e|er|ez)|monitor|analys(?:e|er|ez)|analyze|publi(?:e|er|ez)|publish|post|collect(?:e|er|ez)?|r[eé]sum(?:e|er|ez)|summarize|synth[eé]tis(?:e|er|ez)|contr[oô]l(?:e|er|ez)|rapport(?:e|er)?|report|scrap(?:e|er)?|scrape|extract|fetch|extrais|suis(?:s-?moi)?|follow|envoie-moi|create|send|run|build|make)\b/i;
+
+/** Formulation à la première personne EN ANGLAIS : un constat, PAS un ordre. */
+const PREMIERE_PERSONNE_EN_RE =
+  /\b(?:i|we)\s+(?:am|'m|was|were|prepare|send|generate|write|check|monitor|analyze|publish|collect|summarize|report|scrape|extract|follow|run|make|post|create|update)\b/i;
 
 /** Formulation à la première personne : un constat, PAS un ordre à l'agent. */
 const PREMIERE_PERSONNE_RE = /\b(?:je|j'|nous|on)\s+(?:me\s+|nous\s+)?(?:pr[eé]par|envoi|g[eé]n[eè]r|r[eé]dig|v[eé]rifi|surveill|analys|publi|fais|collect|r[eé]sum|synth[eé]tis|pass|aim)/i;
@@ -163,8 +169,8 @@ export function detectScheduleIntent(message: string): ScheduleIntent | null {
   // Intention de contrôle (désactive/supprime/liste…) : ce n'est pas une création.
   if (detectServiceControlIntent(messageNettoyé)) return null;
 
-  // Constat à la première personne : pas une demande d'automatisation.
-  if (PREMIERE_PERSONNE_RE.test(lower)) return null;
+  // Constat à la première personne (FR ou EN) : pas une demande d'automatisation.
+  if (PREMIERE_PERSONNE_RE.test(lower) || PREMIERE_PERSONNE_EN_RE.test(lower)) return null;
 
   if (!RECURRENCE_RE.test(lower)) return null;
   if (!SCHEDULE_VERB_RE.test(lower) && !SCHEDULE_ACTION_RE.test(lower)) return null;
@@ -198,6 +204,24 @@ export function nomDepuisMessage(message: string, fallback: string): string {
   const base = nettoyé.length >= 8 ? nettoyé : message.trim();
   const court = base.slice(0, 80).trim();
   return court.length > 0 ? court : fallback;
+}
+
+/* ------------------------------------------------------------------ */
+/* Détection : brouillon d'email (rédiger SANS envoyer)                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Demande de BROUILLON d'email : l'utilisateur veut un TEXTE À RELIRE, pas
+ * un envoi réel — le garde d'envoi (email.send) doit NE PAS se déclencher.
+ * Couverture FR + EN : « prépare-moi un brouillon », « rédige un brouillon
+ * d'email », "write a draft", "prepare a draft", "drafting an email".
+ * Fonction pure : consommable par les gates d'envoi réel (engine, routes).
+ */
+const DRAFT_EMAIL_RE =
+  /\b(brouillons?|draft(?:s|ing|ed)?|write(?:\s+me)?\s+a\s+draft|prepare(?:\s+me)?\s+a\s+draft)\b/i;
+
+export function isDraftEmailRequest(text: string): boolean {
+  return DRAFT_EMAIL_RE.test(text);
 }
 
 /* ------------------------------------------------------------------ */

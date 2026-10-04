@@ -25,6 +25,9 @@ export default defineConfig({
       "lib/**/*.test.ts",
       "lib/__tests__/**/*.test.ts",
       "app/**/*.test.ts",
+      // Primitifs UI partagés (Task 1-c : cadre de progression média) —
+      // tests Node sans jsdom (logique pure + verrous structurels).
+      "components/**/*.test.{ts,tsx}",
       // Services annexes (logique pure + comportemental inject) — Tâche 56.
       "live-agent/src/**/*.test.ts",
       "sandbox/src/**/*.test.ts",

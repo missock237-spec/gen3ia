@@ -151,6 +151,11 @@ const nextConfig: NextConfig = {
     "@opentelemetry/exporter-trace-otlp-http",
     "@opentelemetry/exporter-metrics-otlp-http",
     "@opentelemetry/resources",
+    // Binaires statiques FFmpeg/ffprobe (Task 1-a) : embarquent de VRAIS
+    // exécutables — ils doivent rester externes au bundle (le bundler ne
+    // doit ni les inliner ni casser leurs chemins node_modules).
+    "ffmpeg-static",
+    "ffprobe-static",
   ],
 };
 

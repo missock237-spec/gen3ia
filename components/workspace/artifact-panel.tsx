@@ -6,6 +6,7 @@ import { ARTIFACT_TYPE_ICONS, ARTIFACT_TYPE_LABELS, formatBytes } from "./labels
 import { MarkdownContent } from "./markdown";
 import { downloadDataUri, downloadUrl } from "@/lib/client/download";
 import type { ArtifactType, ArtifactVersion, ConversationArtifact } from "@/lib/domain/conversations/types";
+import { VideoProductionCard } from "./video-production-card";
 
 /**
  * ArtifactPanel — livrables standardisés de la conversation : code,
@@ -63,6 +64,7 @@ function defaultFilename(artifact: ConversationArtifact): string {
     document: "md",
     table: "csv",
     image: "png",
+    video: "mp4",
     audio: "mp3",
     report: "md",
     file: "bin",
@@ -242,6 +244,12 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
           </div>
 
           <div className="px-3 py-2.5">
+            {/* Artefact vidéo autopiloté : carte de progression RÉELLE + lecteur final. */}
+            {selected.type === "video" && selected.videoProjectId && (
+              <div className="mb-3">
+                <VideoProductionCard videoProjectId={selected.videoProjectId} title={selected.title} />
+              </div>
+            )}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-[var(--g3-text)]">{selected.title}</p>
               {selected.versions.length > 1 && (

@@ -23,8 +23,11 @@ export type StreamPhase = "intention" | "image" | "plan" | "execution" | "synthe
 export type ConversationStreamEvent =
   /** Le message utilisateur est persisté — le tour démarre réellement. */
   | { type: "turn_started"; conversationId: string; userMessage: ConversationMessage }
-  /** Étape de travail en cours (compréhension, planification, exécution…). */
-  | { type: "status"; phase: StreamPhase; label: string }
+  /** Étape de travail en cours (compréhension, planification, exécution…).
+   *  `stage`/`percent` (additifs, rétrocompatibles) portent la progression
+   *  RÉELLE des générations médias : stages image enhance→generating→
+   *  persisting, pourcentage 0..100 quand il est connu du serveur. */
+  | { type: "status"; phase: StreamPhase; label: string; stage?: string; percent?: number }
   /** Un run vient d'être créé (plan d'exécution suivi étape par étape). */
   | { type: "run_created"; run: ConversationRun }
   | { type: "run_status"; runId: string; status: ConversationRun["status"] }

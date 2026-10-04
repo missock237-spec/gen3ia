@@ -32,7 +32,11 @@ interface AnthropicResponse {
  * Contenu de message Anthropic : texte simple, ou parts multiples quand le
  * message porte des images (vision, Task 42 axe 4). Les images base64 sont
  * envoyées en source base64 ; les URLs en source url (support natif).
+ * Une data URI transmise dans une source url (appelant direct) est convertie
+ * en base64 : l'API Anthropic n'accepte que http(s) en source url.
  */
+const DATA_URI_IMAGE_RE = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i;
+
 function toAnthropicContent(message: AIMessage): string | Array<Record<string, unknown>> {
   const images = message.images ?? [];
   if (images.length === 0) return message.content;
@@ -41,12 +45,25 @@ function toAnthropicContent(message: AIMessage): string | Array<Record<string, u
     parts.push({ type: "text", text: message.content });
   }
   for (const image of images) {
+    if (image.source.type === "base64") {
+      parts.push({
+        type: "image",
+        source: { type: "base64", media_type: image.mediaType, data: image.source.data },
+      });
+      continue;
+    }
+    const url = image.source.url.trim();
+    const dataUri = DATA_URI_IMAGE_RE.exec(url);
+    if (dataUri) {
+      parts.push({
+        type: "image",
+        source: { type: "base64", media_type: dataUri[1], data: dataUri[2] },
+      });
+      continue;
+    }
     parts.push({
       type: "image",
-      source:
-        image.source.type === "base64"
-          ? { type: "base64", media_type: image.mediaType, data: image.source.data }
-          : { type: "url", url: image.source.url },
+      source: { type: "url", url },
     });
   }
   return parts;
