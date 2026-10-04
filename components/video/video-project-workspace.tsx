@@ -796,6 +796,28 @@ function RenderPanel({ project, jobs, onRefresh, busy, runAction }: { project: V
       const data = (await response.json().catch(() => ({}))) as { asset?: { id?: string }; error?: string };
       if (!response.ok || !data.asset?.id) throw new Error(data.error ?? `Upload du média local impossible : ${local.name}`);
       await updateLocalFile(local.id, { serverAssetId: data.asset.id });
+      // Les clips qui pointent encore vers local:<id> sont rebinding vers
+      // l'asset serveur avant le rendu. Aucun upload supplémentaire ensuite.
+      const current = project.timeline;
+      if (current) {
+        const localClipIds = current.tracks
+          .flatMap((track) => track.clips.map((clip) => ({ track, clip })))
+          .filter(({ clip }) => clip.assetId === `local:${local.id}`);
+        for (const { clip } of localClipIds) {
+          const bindResponse = await authFetch(`/api/video/projects/${project.id}/timeline`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              op: "set_asset",
+              clipId: clip.id,
+              payload: { assetId: data.asset.id },
+            }),
+          });
+          if (!bindResponse.ok) {
+            throw new Error((await bindResponse.json().catch(() => ({}))).error ?? `Association du média impossible : ${local.name}`);
+          }
+        }
+      }
     }
   }
 
