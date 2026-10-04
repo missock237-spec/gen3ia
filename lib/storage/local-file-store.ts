@@ -7,6 +7,7 @@ const DB_VERSION = 1;
 export interface LocalFileRecord {
   id: string;
   projectId?: string;
+  serverAssetId?: string;
   name: string;
   type: string;
   size: number;
@@ -88,4 +89,21 @@ export async function listLocalFiles(projectId?: string): Promise<LocalFileRecor
 export async function createLocalObjectUrl(id: string): Promise<string | null> {
   const record = await getLocalFile(id);
   return record ? URL.createObjectURL(record.blob) : null;
+}
+
+
+export async function updateLocalFile(
+  id: string,
+  patch: Partial<Pick<LocalFileRecord, "projectId" | "serverAssetId" | "name">>,
+): Promise<void> {
+  const record = await getLocalFile(id);
+  if (!record) return;
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put({ ...record, ...patch, updatedAt: Date.now() });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
 }
