@@ -10,7 +10,7 @@
  * (file, checkpoints, QC, exports, versions).
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { Callout } from "@/components/studio/callout";
@@ -21,7 +21,8 @@ type JobWithUrls = Omit<RenderJob, "exports" | "output"> & {
   output?: (NonNullable<RenderJob["output"]> & { playbackUrl?: string | null }) | undefined;
   exports: Array<RenderJob["exports"][number] & { playbackUrl?: string | null }>;
 };
-import { formatTimecode, type VideoProject, type VideoTimeline, type VideoAsset, type RenderJob, type VoiceProfile, type ProductionLogEntry } from "@/lib/video/types";
+import { formatTimecode, type VideoProject, type VideoTimeline, type VideoAsset, type RenderJob, type VoiceProfile, type ProductionLogEntry, type TimelineClip } from "@/lib/video/types";
+import { listLocalFiles, createLocalObjectUrl, type LocalFileRecord } from "@/lib/storage/local-file-store";
 
 type Tab = "director" | "script" | "storyboard" | "voice" | "timeline" | "render";
 
@@ -634,7 +635,15 @@ function VoicePanel({ project, voices, onRefresh, busy, runAction }: { project: 
 
 function TimelinePanel({ project, onRefresh, busy, runAction }: { project: VideoProject; onRefresh: () => void; busy: string | null; runAction: (key: string, a: () => Promise<void>) => Promise<void> }) {
   const [timeline, setTimeline] = useState<VideoTimeline | null>(project.timeline ?? null);
+  const [localFiles, setLocalFiles] = useState<LocalFileRecord[]>([]);
+  const [selectedLocalId, setSelectedLocalId] = useState<string | null>(null);
   const duration = timeline?.durationSec ?? 1;
+
+  const refreshLocal = useCallback(async () => {
+    setLocalFiles(await listLocalFiles(project.id));
+  }, [project.id]);
+
+  useEffect(() => { void refreshLocal(); }, [refreshLocal]);
 
   useEffect(() => {
     if (project.timeline) { setTimeline(project.timeline); return; }
@@ -660,62 +669,82 @@ function TimelinePanel({ project, onRefresh, busy, runAction }: { project: Video
     onRefresh();
   }
 
+  async function addLocalToTimeline(file: LocalFileRecord) {
+    if (!timeline) return;
+    const kind = file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "voice" : "image";
+    const track = timeline.tracks.find((t) => t.kind === kind) ?? timeline.tracks.find((t) => t.kind === "video");
+    if (!track) throw new Error("Aucune piste compatible.");
+    const lastEnd = track.clips.reduce((max, clip) => Math.max(max, clip.startSec + clip.durationSec), 0);
+    const clip: TimelineClip = {
+      id: `local_${file.id}`,
+      assetId: file.serverAssetId ?? `local:${file.id}`,
+      startSec: lastEnd,
+      durationSec: kind === "voice" ? 5 : 4,
+      layer: track.clips.length,
+      transform: { x: 0, y: 0, scale: 1, rotationDeg: 0, opacity: 1 },
+      effects: [],
+    };
+    await patch("add_clip", { trackId: track.id, clip });
+    setSelectedLocalId(file.id);
+  }
+
   if (!timeline) return <p className="text-sm text-neutral-500">{busy ? "Initialisation de la timeline…" : "Timeline indisponible (scénario requis)."}</p>;
 
-  const trackColors: Record<string, string> = {
-    image: "bg-indigo-400", video: "bg-indigo-500", text: "bg-amber-400",
-    voice: "bg-emerald-400", music: "bg-sky-400", sfx: "bg-rose-400",
-  };
+  const trackColors: Record<string, string> = { image: "bg-indigo-400", video: "bg-indigo-500", text: "bg-amber-400", voice: "bg-emerald-400", music: "bg-sky-400", sfx: "bg-rose-400" };
 
   return (
     <div className="space-y-4">
+      {localFiles.length ? (
+        <section className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div><h3 className="text-sm font-semibold text-neutral-900">Médias locaux disponibles</h3><p className="text-[11px] text-neutral-500">Ils restent sur l’appareil jusqu’au rendu. Ajouter à la Timeline ne déclenche aucun upload.</p></div>
+            <button onClick={() => void refreshLocal()} className="text-xs text-blue-700 hover:underline">Actualiser</button>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {localFiles.map((file) => <LocalTimelineAsset key={file.id} file={file} selected={selectedLocalId === file.id} onAdd={() => void runAction(`local-add-${file.id}`, () => addLocalToTimeline(file))} />)}
+          </div>
+        </section>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-xs text-neutral-500">Durée : {formatTimecode(duration)} · {timeline.tracks.reduce((n, t) => n + t.clips.length, 0)} clips · v{timeline.version}</span>
-        <label className="flex items-center gap-1 text-xs">
-          <input type="checkbox" checked={timeline.captions.enabled} onChange={() => runAction("captions", () => patch("set_captions", { enabled: !timeline.captions.enabled }))} />
-          Sous-titres
-        </label>
-        <select
-          value={timeline.captions.style}
-          onChange={(e) => runAction("captions-style", () => patch("set_captions", { enabled: true, style: e.target.value }))}
-          className="rounded-lg border border-neutral-300 px-2 py-1 text-xs"
-        >
-          <option value="documentary">Style documentaire</option>
-          <option value="minimal">Minimal</option>
-          <option value="shorts_bold">Shorts gras</option>
-          <option value="cinematic_yellow">Cinéma jaune</option>
+        <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={timeline.captions.enabled} onChange={() => runAction("captions", () => patch("set_captions", { enabled: !timeline.captions.enabled }))} />Sous-titres</label>
+        <select value={timeline.captions.style} onChange={(e) => runAction("captions-style", () => patch("set_captions", { enabled: true, style: e.target.value }))} className="rounded-lg border border-neutral-300 px-2 py-1 text-xs">
+          <option value="documentary">Style documentaire</option><option value="minimal">Minimal</option><option value="shorts_bold">Shorts gras</option><option value="cinematic_yellow">Cinéma jaune</option>
         </select>
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-neutral-200 bg-white p-4">
         <div className="min-w-[720px] space-y-2">
-          {timeline.tracks.map((track) => (
-            <div key={track.id} className="flex items-center gap-2">
-              <span className="w-28 shrink-0 text-right text-[11px] font-medium text-neutral-500">{track.name}</span>
-              <div className="relative h-7 flex-1 rounded bg-neutral-100">
-                {track.clips.map((clip) => (
-                  <button
-                    key={clip.id}
-                    title={`${clip.id} — ${clip.startSec}s → ${clip.startSec + clip.durationSec}s`}
-                    onClick={() => runAction(`clip-${clip.id}`, () => patch("resize_clip", { durationSec: Math.max(0.5, Math.round((clip.durationSec + 0.5) * 100) / 100) }, clip.id))}
-                    className={`absolute top-0.5 h-6 rounded ${trackColors[track.kind] ?? "bg-neutral-400"} opacity-90 hover:opacity-100`}
-                    style={{ left: `${(clip.startSec / duration) * 100}%`, width: `${Math.max(1, (clip.durationSec / duration) * 100)}%` }}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-          <div className="flex items-center gap-2 border-t pt-2">
-            <span className="w-28 shrink-0" />
-            <div className="flex flex-1 justify-between font-mono text-[10px] text-neutral-400">
-              {[0, 0.25, 0.5, 0.75, 1].map((r) => <span key={r}>{formatTimecode(duration * r)}</span>)}
-            </div>
-          </div>
+          {timeline.tracks.map((track) => <div key={track.id} className="flex items-center gap-2"><span className="w-28 shrink-0 text-right text-[11px] font-medium text-neutral-500">{track.name}</span><div className="relative h-7 flex-1 rounded bg-neutral-100">
+            {track.clips.map((clip) => <button key={clip.id} title={`${clip.id} — ${clip.startSec}s → ${clip.startSec + clip.durationSec}s`} onClick={() => runAction(`clip-${clip.id}`, () => patch("resize_clip", { durationSec: Math.max(0.5, Math.round((clip.durationSec + 0.5) * 100) / 100) }, clip.id))} className={`absolute top-0.5 h-6 rounded ${trackColors[track.kind] ?? "bg-neutral-400"} opacity-90 hover:opacity-100`} style={{ left: `${(clip.startSec / duration) * 100}%`, width: `${Math.max(1, (clip.durationSec / duration) * 100)}%` }} />)}
+          </div></div>)}
+          <div className="flex items-center gap-2 border-t pt-2"><span className="w-28 shrink-0" /><div className="flex flex-1 justify-between font-mono text-[10px] text-neutral-400">{[0, 0.25, 0.5, 0.75, 1].map((r) => <span key={r}>{formatTimecode(duration * r)}</span>)}</div></div>
         </div>
       </div>
-      <p className="text-[11px] text-neutral-400">Astuce : cliquez un clip pour l&apos;allonger de 0,5 s. Les opérations avancées (motion, effets, transitions) passent par le Directeur (« rends l&apos;intro plus cinématographique »).</p>
+      <p className="text-[11px] text-neutral-400">Les clips locaux utilisent un identifiant local tant qu’ils ne sont pas nécessaires au rendu.</p>
     </div>
   );
+}
+
+function LocalTimelineAsset({ file, selected, onAdd }: { file: LocalFileRecord; selected: boolean; onAdd: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void createLocalObjectUrl(file.id).then((value) => { if (!active) { if (value) URL.revokeObjectURL(value); return; } objectUrlRef.current = value; setUrl(value); });
+    return () => { active = false; if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); };
+  }, [file.id]);
+  const isVideo = file.type.startsWith("video/");
+  const isAudio = file.type.startsWith("audio/");
+  return <div className={`overflow-hidden rounded-xl border bg-white ${selected ? "border-blue-500" : "border-neutral-200"}`}>
+    <div className="aspect-video bg-neutral-100">
+      {url && isVideo ? <video src={url} muted className="h-full w-full object-cover" /> : null}
+      {url && !isVideo && !isAudio ? <img src={url} alt={file.name} className="h-full w-full object-cover" /> : null}
+      {url && isAudio ? <audio src={url} controls className="mt-5 w-full" /> : null}
+    </div>
+    <div className="p-2"><p className="truncate text-[11px] font-medium">{file.name}</p><button onClick={onAdd} className="mt-1 w-full rounded-lg bg-neutral-900 px-2 py-1.5 text-[11px] font-semibold text-white">Ajouter à la Timeline</button></div>
+  </div>;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
