@@ -223,7 +223,8 @@ export type TimelinePatchOp =
   | "add_text_clip"
   | "delete_clip"
   | "set_captions"
-  | "set_music_bed";
+  | "set_music_bed"
+  | "set_asset";
 
 /**
  * Applique une opération d'édition typée et validée (agent conversationnel
@@ -331,6 +332,13 @@ export function applyTimelinePatch(
         style: (String(payload?.style ?? next.captions.style) as SubtitleStyleName),
         position: (["bottom", "center", "top"].includes(String(payload?.position)) ? String(payload?.position) : next.captions.position) as "bottom" | "center" | "top",
       };
+      break;
+    }
+    case "set_asset": {
+      const found = requireClip(next, clipId);
+      const assetId = String(payload?.assetId ?? "");
+      if (!assetId || assetId.length > 200) throw new Error("assetId invalide.");
+      found.clip.assetId = assetId;
       break;
     }
     case "set_music_bed": {
