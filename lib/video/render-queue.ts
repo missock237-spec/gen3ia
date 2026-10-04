@@ -63,8 +63,16 @@ import { createNotification } from "@/lib/notifications/repository";
 import { ensureAudioAssetsForProject } from "@/lib/video/audio-engine";
 import { publishJsonDestination, type QStashPublishResult } from "@/lib/queue/qstash";
 import { ensureProjectTimeline } from "@/lib/video/timeline-bootstrap";
+import { setJobProgress } from "@/lib/infra/upstash";
 
 export const JOBS_COLLECTION = "videoRenderJobs";
+async function mirrorRenderProgress(job: Pick<RenderJob, "id" | "status" | "stage" | "progress">, extra?: Record<string, unknown>): Promise<void> {
+  await setJobProgress(job.id, normalizeStoredProgress(job.progress), job.status, {
+    stage: job.stage,
+    ...extra,
+  }).catch(() => undefined);
+}
+
 
 /**
  * Progression par étape — CONTRAT STOCKÉ 0..1 (Task 1-a FIX 4) :
@@ -187,6 +195,7 @@ export async function startRenderJob(params: {
     updatedAt: nowIso(),
   };
   await adminDb.collection(JOBS_COLLECTION).doc(jobId).create({ ...job });
+  await mirrorRenderProgress(job, { projectId: job.projectId });
   await setProjectStatus(params.userId, params.projectId, "rendering");
   await logSystem(params.projectId, `Rendu ${jobId.slice(0, 8)} mis en file (estimation ${estimate.amountMinor} minor, ${Math.round(expectedSec)} s).`);
   const published = await publishVideoTick(params.origin, jobId);
@@ -519,9 +528,9 @@ export async function advanceJob(jobId: string, origin: string, options: { timeB
       return { jobId, status: refreshed.status, stage: refreshed.stage, done: false, continued: enqueued, message: `Étape ${startedStage} terminée.` };
     }
     const enqueued = await publishTickAndLog(job, origin, outcome.delaySeconds ?? 0);
-    return { jobId, status: "processing", stage: outcome.stage, done: false, continued: enqueued, message: outcome.message };
+    const refreshed = await refreshJob(jobId);\n    await mirrorRenderProgress(refreshed, { projectId: refreshed.projectId });\n    return { jobId, status: refreshed.status, stage: refreshed.stage, done: false, continued: enqueued, message: outcome.message };
   } catch (error) {
-    return await failJob(job, error instanceof Error ? error : new Error(String(error)), origin);
+    const result = await failJob(job, error instanceof Error ? error : new Error(String(error)), origin);\n    await mirrorRenderProgress({ ...job, status: result.status, progress: result.done ? job.progress : job.progress }, { projectId: job.projectId, error: result.message });\n    return result;
   }
 }
 
