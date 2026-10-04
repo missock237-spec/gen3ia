@@ -14,6 +14,8 @@ import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { StudioHeader } from "@/components/studio/studio-header";
 import { Callout } from "@/components/studio/callout";
 import type { VideoProject } from "@/lib/video/types";
+import { saveLocalFile } from "@/lib/storage/local-file-store";
+import { VIDEO_LIMITS, assertMediaSizeAllowed, assertMediaTypeAllowed } from "@/lib/video/security";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Brouillon",
@@ -53,6 +55,7 @@ export function VideoStudioHome() {
   const [brief, setBrief] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [localMedia, setLocalMedia] = useState<File[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -78,6 +81,14 @@ export function VideoStudioHome() {
       const chosen = template ?? null;
       const description = chosen ? chosen.brief : brief.trim();
       if (!description || description.length < 10) throw new Error("Décrivez votre vidéo en quelques mots (10 caractères minimum).");
+      for (const file of localMedia) {
+        const kind = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : null;
+        if (!kind) throw new Error(`Format non pris en charge : ${file.name}`);
+        assertMediaTypeAllowed(kind, file.type);
+        assertMediaSizeAllowed(file.size, kind);
+        if (file.size > VIDEO_LIMITS.maxMediaBytes) throw new Error(`Fichier trop volumineux : ${file.name}`);
+      }
+
       const createResponse = await authFetch("/api/video/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -91,6 +102,7 @@ export function VideoStudioHome() {
       });
       if (!createResponse.ok) throw new Error((await createResponse.json().catch(() => ({}))).error ?? "Création impossible");
       const { project } = (await createResponse.json()) as { project: VideoProject };
+      await Promise.all(localMedia.map((file) => saveLocalFile(file, crypto.randomUUID(), project.id)));
       // Le Directeur planifie immédiatement à partir du brief.
       await authFetch(`/api/video/projects/${project.id}/plan`, {
         method: "POST",
@@ -126,6 +138,20 @@ export function VideoStudioHome() {
       {/* Création — demande libre au Directeur */}
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 space-y-4">
         <h2 className="text-lg font-semibold text-neutral-900">Nouvelle production</h2>
+        <label className="block text-sm font-medium text-neutral-700">
+          Médias locaux (stockés sur cet appareil)
+          <input
+            type="file"
+            multiple
+            accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/mp4,audio/wav,audio/webm,audio/ogg,audio/opus,audio/flac"
+            onChange={(e) => setLocalMedia(Array.from(e.target.files ?? []))}
+            className="mt-2 block w-full text-sm"
+          />
+          <span className="mt-1 block text-xs font-normal text-neutral-500">
+            {localMedia.length ? `${localMedia.length} fichier(s) resteront sur cet appareil et seront associés au projet.` : "Aucun fichier importé. Les médias ne sont pas envoyés au serveur à cette étape."}
+          </span>
+        </label>
+
         <textarea
           value={brief}
           onChange={(e) => setBrief(e.target.value)}
