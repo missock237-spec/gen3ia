@@ -347,6 +347,7 @@ export const TimelinePatchSchema = z.object({
     "delete_clip",
     "set_captions",
     "set_music_bed",
+    "set_asset",
   ]),
   clipId: z.string().max(120).optional(),
   trackId: z.string().max(120).optional(),
