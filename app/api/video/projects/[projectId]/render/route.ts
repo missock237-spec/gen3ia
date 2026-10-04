@@ -6,6 +6,7 @@ import { startRenderJob, listJobs, pauseJob, resumeJob, cancelJob, sweepStaleRen
 import { checkFfmpegAvailable } from "@/lib/video/ffmpeg";
 import { qstashConfig } from "@/lib/queue/qstash";
 import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
+import { getJobProgress } from "@/lib/infra/upstash";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -90,8 +91,17 @@ export async function GET(request: NextRequest, { params }: Params) {
     // URLs de lecture présignées pour les rendus terminés (master + exports).
     const { createVideoPlaybackUrl } = await import("@/lib/video/storage");
     const jobsWithUrls = await Promise.all(
-      jobs.map(async (job) => ({
+      jobs.map(async (job) => {
+        const liveProgress = await getJobProgress(job.id);
+        return {
         ...job,
+        ...(liveProgress
+          ? {
+              progress: liveProgress.progress,
+              status: liveProgress.status as typeof job.status,
+              stage: (liveProgress.stage as typeof job.stage) ?? job.stage,
+            }
+          : {}),
         output: job.output
           ? { ...job.output, playbackUrl: await createVideoPlaybackUrl(guard.context.userId, job.output.r2Key, 900).catch(() => null) }
           : undefined,
@@ -100,7 +110,8 @@ export async function GET(request: NextRequest, { params }: Params) {
             ? { ...e, playbackUrl: await createVideoPlaybackUrl(guard.context.userId, e.r2Key, 900).catch(() => null) }
             : e),
         ),
-      })),
+        };
+      }),
     );
     return NextResponse.json({
       jobs: jobsWithUrls,
