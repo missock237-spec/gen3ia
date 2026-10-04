@@ -115,13 +115,14 @@ async function mirrorToSupabase(
   // est disponible. Le miroir garantit que le chemin de secours possède les
   // données nécessaires au moment où Firestore devient indisponible.
   try {
-    await supabase.from("firestore_fallback").upsert({
+    const { error } = await supabase.from("firestore_fallback").upsert({
       collection,
       document_id: documentId,
       owner_id: ownerId ?? (typeof payload.userId === "string" ? payload.userId : null),
       payload,
       updated_at: new Date().toISOString(),
     }, { onConflict: "collection,document_id" });
+    if (error) return;
   } catch {
     // Le miroir ne doit jamais rendre indisponible Firestore.
   }
