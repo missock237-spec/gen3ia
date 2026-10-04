@@ -528,9 +528,13 @@ export async function advanceJob(jobId: string, origin: string, options: { timeB
       return { jobId, status: refreshed.status, stage: refreshed.stage, done: false, continued: enqueued, message: `Étape ${startedStage} terminée.` };
     }
     const enqueued = await publishTickAndLog(job, origin, outcome.delaySeconds ?? 0);
-    const refreshed = await refreshJob(jobId);\n    await mirrorRenderProgress(refreshed, { projectId: refreshed.projectId });\n    return { jobId, status: refreshed.status, stage: refreshed.stage, done: false, continued: enqueued, message: outcome.message };
+    const refreshed = await refreshJob(jobId);
+    await mirrorRenderProgress(refreshed, { projectId: refreshed.projectId });
+    return { jobId, status: refreshed.status, stage: refreshed.stage, done: false, continued: enqueued, message: outcome.message };
   } catch (error) {
-    const result = await failJob(job, error instanceof Error ? error : new Error(String(error)), origin);\n    await mirrorRenderProgress({ ...job, status: result.status, progress: result.done ? job.progress : job.progress }, { projectId: job.projectId, error: result.message });\n    return result;
+    const result = await failJob(job, error instanceof Error ? error : new Error(String(error)), origin);
+    await mirrorRenderProgress({ ...job, status: result.status, progress: result.done ? job.progress : job.progress }, { projectId: job.projectId, error: result.message });
+    return result;
   }
 }
 

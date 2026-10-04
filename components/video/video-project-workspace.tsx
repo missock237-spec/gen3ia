@@ -22,7 +22,7 @@ type JobWithUrls = Omit<RenderJob, "exports" | "output"> & {
   exports: Array<RenderJob["exports"][number] & { playbackUrl?: string | null }>;
 };
 import { formatTimecode, type VideoProject, type VideoTimeline, type VideoAsset, type RenderJob, type VoiceProfile, type ProductionLogEntry, type TimelineClip } from "@/lib/video/types";
-import { listLocalFiles, createLocalObjectUrl, type LocalFileRecord, cacheLocalProject, getCachedLocalProject, enqueueLocalSync, listLocalSyncItems, updateLocalSyncItem, getLocalFile, updateLocalFile, enqueueTimelineSync, listTimelineSyncItems, updateTimelineSyncItem, removeTimelineSyncItem } from "@/lib/storage/local-file-store";
+import { listLocalFiles, createLocalObjectUrl, type LocalFileRecord, cacheLocalProject, getCachedLocalProject, enqueueLocalSync, listLocalSyncItems, updateLocalSyncItem, getLocalFile, deleteLocalFile, updateLocalFile, enqueueTimelineSync, listTimelineSyncItems, updateTimelineSyncItem, removeTimelineSyncItem } from "@/lib/storage/local-file-store";
 
 type Tab = "director" | "script" | "storyboard" | "voice" | "timeline" | "render";
 
@@ -168,7 +168,7 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
     if (!fileList?.length) return;
     const { saveLocalFile } = await import("@/lib/storage/local-file-store");
     for (const file of Array.from(fileList)) {
-      if (!/^((image|video|audio)\\/)/.test(file.type)) throw new Error(`Format non pris en charge : ${file.name}`);
+      if (!/^((image|video|audio)\/)/.test(file.type)) throw new Error(`Format non pris en charge : ${file.name}`);
       if (file.size > 50 * 1024 * 1024) throw new Error(`Fichier trop volumineux : ${file.name}`);
       const saved = await saveLocalFile(file, crypto.randomUUID(), projectId);
       await enqueueLocalSync(projectId, saved.id);
@@ -759,7 +759,36 @@ function TimelinePanel({ project, onRefresh, busy, runAction }: { project: Video
       const source = (payload.clip ?? {}) as Record<string, unknown>;
       const track = next.tracks.find((candidate) => candidate.id === trackId);
       if (!track) throw new Error("Piste introuvable.");
-      track.clips.push(source as TimelineClip);
+      // Reprise hors ligne : mêmes règles que applyTimelinePatch (serveur,
+      // autorité finale au replay de la file) — clip normalisé, jamais injecté brut.
+      const id = String(source.id ?? "");
+      const assetId = String(source.assetId ?? "");
+      const startSec = Number(source.startSec);
+      const durationSec = Number(source.durationSec);
+      const rawLayer = Number(source.layer);
+      if (!id || id.length > 120) throw new Error("Identifiant de clip invalide.");
+      if (!assetId || assetId.length > 200) throw new Error("Asset du clip invalide.");
+      if (!Number.isFinite(startSec) || startSec < 0) throw new Error("startSec invalide.");
+      if (!Number.isFinite(durationSec) || durationSec <= 0 || durationSec > 600) throw new Error("durationSec invalide.");
+      const rawTransform = (source.transform ?? {}) as Partial<TimelineClip["transform"]>;
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+      track.clips.push({
+        id,
+        assetId,
+        startSec: round2(startSec),
+        durationSec: round2(durationSec),
+        layer: Number.isInteger(rawLayer) && rawLayer >= 0 ? rawLayer : track.clips.length,
+        transform: {
+          x: clamp(Number(rawTransform.x ?? 0), -1, 1),
+          y: clamp(Number(rawTransform.y ?? 0), -1, 1),
+          scale: clamp(Number(rawTransform.scale ?? 1), 0.1, 4),
+          rotationDeg: clamp(Number(rawTransform.rotationDeg ?? 0), -180, 180),
+          opacity: clamp(Number(rawTransform.opacity ?? 1), 0, 1),
+        },
+        effects: Array.isArray(source.effects) ? (source.effects as TimelineClip["effects"]) : [],
+        ...(typeof source.text === "string" && source.text ? { text: source.text } : {}),
+      });
     } else if (op === "move_clip" && found) {
       found.clip.startSec = Number(payload.startSec);
     } else if (op === "resize_clip" && found) {

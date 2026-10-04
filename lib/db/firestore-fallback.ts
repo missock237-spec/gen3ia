@@ -33,10 +33,13 @@ type Row = {
   updated_at?: string;
 };
 
+/** Payload métier : tout objet sérialisable (interfaces sans index signature acceptées). */
+type WritablePayload = object;
+
 export async function resilientCreate(
   collection: string,
   documentId: string,
-  payload: Record<string, unknown>,
+  payload: WritablePayload,
   ownerId?: string,
 ): Promise<void> {
   try {
@@ -59,7 +62,7 @@ export async function resilientCreate(
 export async function resilientSet(
   collection: string,
   documentId: string,
-  payload: Record<string, unknown>,
+  payload: WritablePayload,
   options: { merge?: boolean; ownerId?: string } = {},
 ): Promise<void> {
   try {
@@ -75,7 +78,7 @@ export async function resilientSet(
       ? await readFallback(collection, documentId)
       : null;
     const merged = {
-      ...(current?.payload ?? {}),
+      ...((current?.payload ?? {}) as object),
       ...payload,
     };
     const { error: dbError } = await supabase.from("firestore_fallback").upsert({
@@ -106,7 +109,7 @@ export async function resilientGet<T>(
 async function mirrorToSupabase(
   collection: string,
   documentId: string,
-  payload: Record<string, unknown>,
+  payload: WritablePayload,
   ownerId?: string,
 ): Promise<void> {
   const supabase = getSupabaseAdmin();
@@ -114,11 +117,12 @@ async function mirrorToSupabase(
   // Best-effort mirror: Firestore reste la source primaire tant que son quota
   // est disponible. Le miroir garantit que le chemin de secours possède les
   // données nécessaires au moment où Firestore devient indisponible.
+  const candidate = payload as Record<string, unknown>;
   try {
     const { error } = await supabase.from("firestore_fallback").upsert({
       collection,
       document_id: documentId,
-      owner_id: ownerId ?? (typeof payload.userId === "string" ? payload.userId : null),
+      owner_id: ownerId ?? (typeof candidate.userId === "string" ? candidate.userId : null),
       payload,
       updated_at: new Date().toISOString(),
     }, { onConflict: "collection,document_id" });
