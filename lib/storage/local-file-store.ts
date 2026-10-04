@@ -6,6 +6,7 @@ const DB_VERSION = 1;
 
 export interface LocalFileRecord {
   id: string;
+  projectId?: string;
   name: string;
   type: string;
   size: number;
@@ -24,9 +25,10 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveLocalFile(file: File, id = crypto.randomUUID()): Promise<LocalFileRecord> {
+export async function saveLocalFile(file: File, id = crypto.randomUUID(), projectId?: string): Promise<LocalFileRecord> {
   const record: LocalFileRecord = {
     id,
+    projectId,
     name: file.name,
     type: file.type,
     size: file.size,
@@ -65,4 +67,25 @@ export async function deleteLocalFile(id: string): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
   db.close();
+}
+
+
+export async function listLocalFiles(projectId?: string): Promise<LocalFileRecord[]> {
+  const db = await openDb();
+  const records = await new Promise<LocalFileRecord[]>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const request = tx.objectStore(STORE_NAME).getAll();
+    request.onsuccess = () => {
+      const all = (request.result as LocalFileRecord[]) ?? [];
+      resolve(projectId ? all.filter((file) => file.projectId === projectId) : all);
+    };
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return records;
+}
+
+export async function createLocalObjectUrl(id: string): Promise<string | null> {
+  const record = await getLocalFile(id);
+  return record ? URL.createObjectURL(record.blob) : null;
 }
