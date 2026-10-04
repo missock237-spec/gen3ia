@@ -8,6 +8,8 @@ import { isSandboxConfigured } from "@/lib/sandbox/simulation";
 import { pingR2, type R2HealthStatus } from "@/lib/storage/r2";
 import { summarizeEnv } from "@/lib/env/config-report";
 import { getDualWriteDomains, getDualWriteStats } from "@/lib/db/dual-write";
+import { getQuotaGuardStats } from "@/lib/db/quota-guard";
+import { isSupabaseAdminConfigured } from "@/lib/supabase/config";
 import { checkFfmpegAvailable, type FfmpegAvailability } from "@/lib/video/ffmpeg";
 import { qstashConfig } from "@/lib/queue/qstash";
 
@@ -95,6 +97,13 @@ export async function GET(request: NextRequest) {
     dualWrite: {
       domains: getDualWriteDomains(),
       stats: getDualWriteStats(),
+    },
+    // Task 95-b : repli Firestore→Supabase — configuration et état du
+    // disjoncteur quota (ouvert = les files vidéo tournent sur le miroir
+    // jusqu'à la fin du cooldown). Aucune valeur sensible.
+    firestoreFallback: {
+      configured: isSupabaseAdminConfigured(),
+      breaker: getQuotaGuardStats(),
     },
     timestamp: new Date().toISOString(),
   });
