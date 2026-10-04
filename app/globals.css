@@ -2128,3 +2128,57 @@ textarea:focus-visible, [tabindex]:focus-visible {
    pour l'affordance (bordures invisibles → bordure du thème). */
 [data-theme="light"] :where(.border-white\/10, .border-white\/20, .border-white\/30) { border-color: var(--g3-border) !important; }
 
+/* ============================================================
+   14. CHAT AGENT IA — THÈME « CRÈME » (refonte capture utilisateur)
+   L'interface Agent IA adopte l'esthétique de la capture fournie :
+   fond crème chaud, cartes blanc chaud, accent terracotta, salutation
+   serif. Portée SCOPÉE à la racine .g3-agent-light (atelier Gen IA) :
+   le reste du Studio conserve son thème. Toutes les couleurs pastel
+   y sont écrites en valeurs arbitraires (jamais de classes bg-*-50)
+   pour échapper à la couche de remap sombre ci-dessus.
+   ============================================================ */
+.g3-agent-light {
+  color-scheme: light;
+  --g3-bg: #F0EEE6;
+  --g3-surface: #FAF9F5;
+  --g3-elevated: #EAE5D9;
+  --g3-deep: #F0EEE6;
+  --g3-hover: rgba(31, 30, 26, 0.05);
+  --g3-border: #E5E1D5;
+  --g3-border-strong: #D3CDBB;
+  --g3-text: #1F1E1A;
+  --g3-text-secondary: #3D3B34;
+  --g3-muted: #83817A;
+  --g3-faint: #A9A79E;
+  --g3-primary: #D97757;
+  --g3-primary-strong: #C05B3D;
+  --g3-primary-soft: rgba(217, 119, 87, 0.12);
+  --g3-on-primary: #FFFFFF;
+  --g3-success: #3F7D44;
+  --g3-success-soft: rgba(63, 125, 68, 0.12);
+  --g3-success-strong: #2F5F33;
+  --g3-warning: #B4801F;
+  --g3-warning-soft: rgba(180, 128, 31, 0.12);
+  --g3-warning-strong: #8A6117;
+  --g3-danger: #C24141;
+  --g3-danger-soft: rgba(194, 65, 65, 0.10);
+  --g3-danger-strong: #9F2F2F;
+  --g3-secondary: #2A7E8C;
+  --g3-secondary-soft: rgba(42, 126, 140, 0.12);
+  --g3-magenta: #B05590;
+  --g3-magenta-soft: rgba(176, 85, 144, 0.12);
+  --g3-gradient: linear-gradient(115deg, #D97757 0%, #C05B3D 55%, #B4801F 100%);
+  --g3-gradient-soft: linear-gradient(115deg, rgba(217,119,87,.16), rgba(192,91,61,.12) 55%, rgba(180,128,31,.12));
+  --g3-gradient-line: linear-gradient(90deg, transparent, rgba(217,119,87,.85), rgba(192,91,61,.75), rgba(180,128,31,.85), transparent);
+  background: var(--g3-bg);
+  color: var(--g3-text);
+}
+/* Le « carré parasite » ne doit jamais réapparaître ici non plus : le
+   focus du textarea est porté par le focus-within de la carte composer. */
+.g3-agent-light textarea:focus-visible { outline: none; }
+.g3-agent-light ::selection { background: rgba(217, 119, 87, 0.22); }
+/* Carte composer blanche (capture) : ombre douce et chaude. */
+.g3-agent-light .g3-composer-card {
+  box-shadow: 0 10px 34px -16px rgba(59, 56, 45, 0.28), 0 1px 2px rgba(59, 56, 45, 0.06);
+}
+

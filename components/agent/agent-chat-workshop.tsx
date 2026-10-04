@@ -146,12 +146,12 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   }
 
   const rail = (
-    <aside className="flex h-full min-h-0 flex-col rounded-[26px] bg-[var(--g3-surface)] p-4 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.18)]" aria-label="Chats de l'agent universel">
+    <aside className="flex h-full min-h-0 flex-col rounded-[26px] border border-[var(--g3-border)] bg-[var(--g3-surface)] p-4 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.14)]" aria-label="Chats de l'agent universel">
       <div className="flex items-center gap-3">
         <span className="g3-brand-mark" aria-hidden="true"><Gen3iaLogo size={31} /></span>
         <span className="min-w-0">
           <span className="block truncate text-sm font-black text-[var(--g3-text)]">Agent universel</span>
-          <span className="block truncate text-[10px] font-semibold uppercase tracking-[.18em] text-violet-600">Agent IA universel</span>
+          <span className="block truncate text-[10px] font-semibold uppercase tracking-[.18em] text-[var(--g3-primary-strong)]">Agent IA universel</span>
         </span>
       </div>
 
@@ -212,7 +212,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
 
   if (loading || bootstrapping) {
     return (
-      <div className="g3-card grid place-items-center p-16 text-sm text-[var(--g3-muted)]" role="status">
+      <div className="g3-agent-light g3-card grid place-items-center rounded-[26px] p-16 text-sm text-[var(--g3-muted)]" role="status">
         <span className="flex items-center gap-3">
           <Gen3iaLogo size={30} working />
           {bootstrapping ? "Préparation de l'agent universel…" : "Chargement…"}
@@ -227,7 +227,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
     // flex, d'où le fragment englobant (build cassé du 3 oct. réparé : le
     // </> de fermeture existait sans ouverture).
     <>
-    <div className="flex h-full min-h-0 flex-col gap-2 lg:gap-4">
+    <div className="g3-agent-light flex h-full min-h-0 flex-col gap-2 lg:gap-4">
       {sessionDisponible === false && <Callout tone="warning" className="rounded-2xl">Session expirée — reconnectez-vous pour discuter avec Gen IA.</Callout>}
       {error && <Callout tone="error" className="rounded-2xl"><span className="flex items-center justify-between gap-3"><span>{error}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full border border-[rgba(246,98,110,0.45)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]">Réessayer</button></span></Callout>}
 
@@ -249,12 +249,12 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
         type="button"
         onClick={() => setShowRailMobile((current) => !current)}
         aria-expanded={showRailMobile}
-        className="flex w-full items-center justify-between rounded-2xl bg-[var(--g3-surface)] px-4 py-3 text-sm lg:hidden"
+        className="flex w-full items-center justify-between rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-3 text-sm lg:hidden"
       >
         <span className="flex items-center gap-2">
           <Gen3iaLogo size={28} />
           <span className="font-bold">Gen IA</span>
-          <span className="text-xs text-violet-600">Agent IA universel</span>
+          <span className="text-xs text-[var(--g3-primary-strong)]">Agent IA universel</span>
         </span>
         <span className="text-xs text-[var(--g3-faint)]">{showRailMobile ? "Fermer" : "Historique"}</span>
       </button>
