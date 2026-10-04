@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -121,7 +121,7 @@ function supabaseFake() {
     });
   }
 
-  function queryBuilder(table: string) {
+  function queryBuilder(_table: string) {
     const filters: Array<[string, string, unknown]> = [];
     let orderColumn: string | null = null;
     let ascending = true;

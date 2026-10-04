@@ -21,10 +21,16 @@ import "server-only";
  * - facturation EXISTANTE honorée : billImageGeneration (visuels générés),
  *   billTts (caractères ElevenLabs réels) — le rendu réserve/règle/libère
  *   son propre budget via startRenderJob.
+ * - reprise QUOTA-AWARE (Task 95-d, miroir du rendu Task 95-c) : les
+ *   documents job passent par la couche résiliente (miroir chaud Supabase),
+ *   le claim bascule sur le miroir sous quota, et un incident QUOTA ne
+ *   consomme PAS le budget de relance (backoff automatique, checkpoints
+ *   conservés, aucune fausse notification d'échec).
  */
 
 import { randomUUID } from "node:crypto";
 import { adminDb } from "@/lib/firebase/admin";
+import { logger } from "@/lib/observability/logger";
 import { publishJsonDestination, type QStashPublishResult } from "@/lib/queue/qstash";
 import { createProject, getOwnedProjectOrThrow, patchProject, logSystem } from "@/lib/video/project-service";
 import { VideoProjectCreateSchema, DirectorBriefSchema, RenderRequestSchema } from "@/lib/video/security";
@@ -39,6 +45,17 @@ import { ensureMusicBed } from "@/lib/video/audio-engine";
 import { isOwnedVideoKey } from "@/lib/video/storage";
 import { startRenderJob, getJob } from "@/lib/video/render-queue";
 import type { VideoExportTarget, VideoProject } from "@/lib/video/types";
+import {
+  claimJobViaFallback,
+  classifyTickError,
+  createJobDoc,
+  loadJobDoc,
+  maybeReconcileQuotaRecovery,
+  queryJobDocs,
+  resumePolicyFor,
+  saveJobDoc,
+  type ResumePolicy,
+} from "@/lib/video/queue-resume";
 
 export const PRODUCTION_JOBS_COLLECTION = "videoProductionJobs";
 
@@ -121,6 +138,13 @@ export interface VideoProductionJob {
   updatedAt: string;
   timeline: ProductionStageTimelineEntry[];
 }
+
+/**
+ * Job enrichi (Task 95-d) — compteur d'incidents quota consécutifs (alimente
+ * le backoff). Il vit HORS du type historique : VideoProductionJob et
+ * lib/video/types.ts restent inchangés, les documents le portent tel quel.
+ */
+type ProductionJobWithResume = VideoProductionJob & { quotaFailures?: number };
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -244,7 +268,13 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
     updatedAt: now,
     timeline: [],
   };
-  await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(jobId).create({ ...job });
+  // Task 95-d — création via la couche résiliente (miroir chaud Supabase :
+  // le job existe dès sa création, même Firestore sous quota). PAS de
+  // compensation : AUCUNE réservation wallet ne précède cette création — les
+  // visuels/TTS sont facturés au réel au fil de l'eau pendant les ticks et
+  // le rendu réserve/libère SON propre budget dans startRenderJob ; une
+  // erreur ici ne bloque donc jamais de fonds (rien à rembourser).
+  await createJobDoc(PRODUCTION_JOBS_COLLECTION, jobId, { ...job }, params.userId);
   await logSystem(project.id, `Production autopilote ${jobId.slice(0, 8)} enfile (prompt : ${brief.slice(0, 120)}).`).catch(() => undefined);
 
   const origin = params.origin?.trim() || process.env.GEN3IA_APP_ORIGIN?.trim() || "";
@@ -293,8 +323,11 @@ function leaseActive(job: VideoProductionJob, now: number): boolean {
   return typeof job.leaseExpiresAt === "number" && job.leaseExpiresAt > now;
 }
 
-/** Normalise un document Firestore (compatibilité champs manquants). */
-function normalizeJobDoc(stored: Partial<VideoProductionJob>, id: string): VideoProductionJob {
+/**
+ * Normalise un document job (compatibilité champs manquants). Task 95-d :
+ * le compteur `quotaFailures` (hors contrat historique) transite tel quel.
+ */
+function normalizeJobDoc(stored: Partial<ProductionJobWithResume>, id: string): ProductionJobWithResume {
   return {
     id,
     userId: stored.userId ?? "",
@@ -316,42 +349,81 @@ function normalizeJobDoc(stored: Partial<VideoProductionJob>, id: string): Video
     createdAt: stored.createdAt ?? nowIso(),
     updatedAt: stored.updatedAt ?? nowIso(),
     timeline: Array.isArray(stored.timeline) ? stored.timeline : [],
+    ...(typeof stored.quotaFailures === "number" ? { quotaFailures: stored.quotaFailures } : {}),
   };
 }
 
 async function claimProductionJob(jobId: string): Promise<ProductionClaimOutcome> {
-  return adminDb.runTransaction(async (tx) => {
-    const ref = adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(jobId);
-    const snapshot = await tx.get(ref);
-    if (!snapshot.exists) return { kind: "missing" } as const;
-    const job = normalizeJobDoc((snapshot.data() ?? {}) as Partial<VideoProductionJob>, jobId);
-    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
-      return { kind: "terminal", job } as const;
-    }
+  // Task 95-d — le claim reste TRANSACTIONNEL sur Firestore ; en cas d'erreur
+  // de QUOTA, bascule sur un claim ATOMIQUE sur la ligne miroir Supabase
+  // (failover en fin de fonction). Transitoire/fatal : propagation inchangée.
+  try {
+    return await adminDb.runTransaction(async (tx) => {
+      const ref = adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(jobId);
+      const snapshot = await tx.get(ref);
+      if (!snapshot.exists) return { kind: "missing" } as const;
+      const job = normalizeJobDoc((snapshot.data() ?? {}) as Partial<ProductionJobWithResume>, jobId);
+      if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+        return { kind: "terminal", job } as const;
+      }
+      const now = Date.now();
+      if (job.status === "processing" && leaseActive(job, now)) {
+        return { kind: "lease-held", job } as const;
+      }
+      const leaseOwner = `${jobId}:${randomUUID()}`;
+      const leaseExpiresAt = now + PRODUCTION_LEASE_MS;
+      tx.update(ref, {
+        status: "processing",
+        leaseOwner,
+        leaseExpiresAt,
+        attempts: job.attempts + 1,
+        updatedAt: nowIso(),
+      });
+      return {
+        kind: "claimed",
+        job: { ...job, status: "processing", leaseOwner, leaseExpiresAt, attempts: job.attempts + 1 },
+      } as const;
+    });
+  } catch (error) {
+    // Task 95-d — FAILOVER QUOTA : Firestore sous quota (RESOURCE_EXHAUSTED)
+    // → claim ATOMIQUE sur la ligne miroir Supabase (bail + statut posés dans
+    // un seul UPDATE conditionnel — deux workers ne peuvent pas gagner tous
+    // deux). Statuts réclamables = exactement les conditions de la
+    // transaction : « queued », ou « processing » au bail libre/expiré (le
+    // filtre de bail est exprimé dans claimJobViaFallback).
+    if (classifyTickError(error) !== "quota") throw error;
     const now = Date.now();
-    if (job.status === "processing" && leaseActive(job, now)) {
-      return { kind: "lease-held", job } as const;
-    }
     const leaseOwner = `${jobId}:${randomUUID()}`;
     const leaseExpiresAt = now + PRODUCTION_LEASE_MS;
-    tx.update(ref, {
-      status: "processing",
-      leaseOwner,
-      leaseExpiresAt,
-      attempts: job.attempts + 1,
-      updatedAt: nowIso(),
-    });
-    return {
-      kind: "claimed",
-      job: { ...job, status: "processing", leaseOwner, leaseExpiresAt, attempts: job.attempts + 1 },
-    } as const;
-  });
+    const expiresAtIso = new Date(leaseExpiresAt).toISOString();
+    // `attempts` n'est PAS patché (compteur informatif) : +1 appliqué sur la
+    // valeur miroir lue, comme le fait la transaction.
+    const payload = await claimJobViaFallback(
+      PRODUCTION_JOBS_COLLECTION,
+      jobId,
+      { owner: leaseOwner, expiresAtIso },
+      ["queued", "processing"],
+      { status: "processing", deadlineAt: expiresAtIso, updatedAt: nowIso() },
+    );
+    // Miroir absent, bail déjà pris ou Supabase indisponible : on propage
+    // l'erreur de quota d'origine (le tick sera republié par la route).
+    if (!payload) throw error;
+    const stored = payload as unknown as Partial<ProductionJobWithResume>;
+    const job = normalizeJobDoc(stored, jobId);
+    job.status = "processing";
+    job.leaseOwner = leaseOwner;
+    job.leaseExpiresAt = leaseExpiresAt;
+    job.attempts = (typeof stored.attempts === "number" ? stored.attempts : 0) + 1;
+    return { kind: "claimed", job } as const;
+  }
 }
 
 async function releaseLease(jobId: string): Promise<void> {
-  await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(jobId).set(
+  // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+  await saveJobDoc(
+    PRODUCTION_JOBS_COLLECTION,
+    jobId,
     { leaseOwner: null, leaseExpiresAt: 0, updatedAt: nowIso() },
-    { merge: true },
   ).catch(() => undefined);
 }
 
@@ -382,10 +454,8 @@ async function ensureStageEntry(job: VideoProductionJob): Promise<void> {
   if (job.timeline.some((e) => e.stage === job.stage)) return;
   const timeline: ProductionStageTimelineEntry[] = [...job.timeline, { stage: job.stage, startedAt: nowIso() }];
   job.timeline = timeline;
-  await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(job.id).set(
-    { timeline, updatedAt: nowIso() },
-    { merge: true },
-  ).catch(() => undefined);
+  // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+  await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, { timeline, updatedAt: nowIso() }, job.userId).catch(() => undefined);
 }
 
 async function moveToNextProductionStage(job: VideoProductionJob, detail?: string): Promise<void> {
@@ -403,7 +473,8 @@ async function moveToNextProductionStage(job: VideoProductionJob, detail?: strin
     timeline,
     updatedAt: nowIso(),
   };
-  await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(job.id).set(patch, { merge: true });
+  // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+  await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, patch, job.userId);
   job.stage = next;
   job.stageIndex = patch.stageIndex;
   job.progress = patch.progress;
@@ -458,13 +529,16 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
       project = await getOwnedProjectOrThrow(job.userId, job.projectId);
     }
     job.sceneCursor = scenes.findIndex((s) => s.id === scene.id) + 1;
-    await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(job.id).set(
+    // Task 95-d — checkpoint via la couche résiliente (miroir chaud).
+    await saveJobDoc(
+      PRODUCTION_JOBS_COLLECTION,
+      job.id,
       {
         sceneCursor: job.sceneCursor,
         progress: computeProductionProgress("assets", job.sceneCursor, scenes.length),
         updatedAt: nowIso(),
       },
-      { merge: true },
+      job.userId,
     );
   }
 
@@ -526,13 +600,16 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
       }
     }
     job.sceneCursor = scenes.findIndex((s) => s.id === scene.id) + 1;
-    await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(job.id).set(
+    // Task 95-d — checkpoint via la couche résiliente (miroir chaud).
+    await saveJobDoc(
+      PRODUCTION_JOBS_COLLECTION,
+      job.id,
       {
         sceneCursor: job.sceneCursor,
         progress: computeProductionProgress("voice", job.sceneCursor, scenes.length),
         updatedAt: nowIso(),
       },
-      { merge: true },
+      job.userId,
     );
   }
 
@@ -580,10 +657,8 @@ async function stageRender(job: VideoProductionJob, origin: string): Promise<Pro
     : [];
   const render = await startRenderJob({ userId: job.userId, projectId: job.projectId, derivedTargets, origin });
   // Rattaché AVANT le passage à l'étape done (visible même si le tick meurt ici).
-  await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(job.id).set(
-    { renderJobId: render.jobId, updatedAt: nowIso() },
-    { merge: true },
-  );
+  // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+  await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, { renderJobId: render.jobId, updatedAt: nowIso() }, job.userId);
   job.renderJobId = render.jobId;
   return { action: "advance", detail: `Rendu ${render.jobId.slice(0, 8)} en file.` };
 }
@@ -610,9 +685,12 @@ async function stageDone(job: VideoProductionJob): Promise<ProductionStageResult
 
 /**
  * Fait avancer un job de production d'UNE étape. Claim transactionnel avec
- * bail ; en fin de tick réussi, le bail est libéré AVANT la re-file (le
- * tick suivant — QStash ou sondage — claimr aussitôt). Les échecs passent
- * par le budget retryCount (3) puis échec définitif notifié.
+ * bail (failover miroir Supabase sous quota — Task 95-d) ; en fin de tick
+ * réussi, le bail est libéré AVANT la re-file (le tick suivant — QStash ou
+ * sondage — claimr aussitôt). Un incident QUOTA/transitoire ne consomme PAS
+ * le budget de relance : re-file automatique avec backoff, checkpoints
+ * conservés. Les échecs fatals passent par le budget retryCount (3) puis
+ * échec définitif notifié.
  */
 export async function advanceProductionJob(jobId: string, origin: string, options: { timeBudgetMs?: number } = {}): Promise<ProductionTickResult> {
   const outcome = await claimProductionJob(jobId);
@@ -670,7 +748,21 @@ export async function advanceProductionJob(jobId: string, origin: string, option
     }
     return await concludeProductionTick(job, stageResult, origin);
   } catch (error) {
-    return await failProductionJob(job, error instanceof Error ? error : new Error(String(error)), origin);
+    // Task 95-d — une erreur de QUOTA n'est pas un échec de production : elle
+    // ne consomme PAS le budget de relance, ne marque JAMAIS failed et ne
+    // notifie pas l'utilisateur. `quotaFailures` alimente le backoff.
+    const klass = classifyTickError(error);
+    const jobWithResume = job as ProductionJobWithResume;
+    const quotaFailures =
+      klass === "quota"
+        ? (typeof jobWithResume.quotaFailures === "number" ? jobWithResume.quotaFailures : 0) + 1
+        : 0;
+    const policy = resumePolicyFor(error, quotaFailures);
+    // failProductionJob reçoit la politique : quota/transitoire ne
+    // consomment PAS le budget, ne marquent JAMAIS failed, ne notifient PAS.
+    // (failProductionJob peut propager si la ré-écriture échoue aussi côté
+    // miroir — la route tick republiera.)
+    return await failProductionJob(job, error instanceof Error ? error : new Error(String(error)), origin, policy, quotaFailures);
   }
 }
 
@@ -687,7 +779,10 @@ async function concludeProductionTick(
     const timeline: ProductionStageTimelineEntry[] = job.timeline.map((e) =>
       e.stage === "done" && !e.finishedAt ? { ...e, finishedAt: nowIso(), detail: message } : e,
     );
-    await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(job.id).set(
+    // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+    await saveJobDoc(
+      PRODUCTION_JOBS_COLLECTION,
+      job.id,
       {
         status: failed ? "failed" : "completed",
         ...(failed ? { error: message } : {}),
@@ -697,7 +792,7 @@ async function concludeProductionTick(
         leaseExpiresAt: 0,
         updatedAt: nowIso(),
       },
-      { merge: true },
+      job.userId,
     );
     if (failed) {
       await logSystem(job.projectId, `Production ${job.id.slice(0, 8)} ÉCHOUÉE : ${message}`).catch(() => undefined);
@@ -739,10 +834,8 @@ async function concludeProductionTick(
 
   // "stay" : travail partiel (lot de visuels/narrations) ou re-sondage du rendu.
   if (typeof stageResult.mirrorProgress === "number") {
-    await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(job.id).set(
-      { progress: stageResult.mirrorProgress, updatedAt: nowIso() },
-      { merge: true },
-    );
+    // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+    await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, { progress: stageResult.mirrorProgress, updatedAt: nowIso() }, job.userId);
     job.progress = stageResult.mirrorProgress;
   }
   const enqueued = await publishTickAndLog(job, origin, stageResult.delaySeconds ?? 0);
@@ -760,69 +853,138 @@ async function concludeProductionTick(
 }
 
 /**
- * Échec d'un tick de production : budget retryCount (3) puis échec
- * définitif. Aucune réservation à libérer au niveau production : les
- * images/TTS sont facturés au réel au fil de l'eau et le job de rendu
- * (réservé séparément) libère son propre budget sur son propre échec.
+ * Échec d'un tick de production — DEUX régimes (Task 95-d, miroir du rendu) :
+ *
+ * 1. AVEC politique de reprise non consommatrice (`policy.consumeRetry`
+ *    false — quota Firestore ou incident transitoire) : le budget
+ *    `retryCount` N'EST PAS touché, le job repasse en file avec
+ *    `nextAttemptAt` (backoff) et `quotaFailures` (compteur dédié). JAMAIS
+ *    d'échec définitif, JAMAIS de notification utilisateur, JAMAIS de
+ *    libération de réservation — la reprise se fait au dernier checkpoint
+ *    (sceneCursor/stage). Aucune réservation à libérer au niveau production :
+ *    les images/TTS sont facturés au réel au fil de l'eau et le job de rendu
+ *    (réservé séparément) libère son propre budget sur son propre échec.
+ * 2. SANS politique ou politique fatale (legacy) : budget de relance =
+ *    `retryCount` (3), puis échec définitif notifié (comportement historique).
+ *
+ * Toute la fonction est protégée : si la RÉ-ÉCRITURE elle-même échoue
+ * (quota aussi côté miroir — Supabase indisponible), on journalise et on
+ * PROPAGE — la route tick ré-enfilera le job.
  */
-async function failProductionJob(job: VideoProductionJob, error: Error, origin?: string): Promise<ProductionTickResult> {
+async function failProductionJob(job: VideoProductionJob, error: Error, origin?: string, policy?: ResumePolicy, quotaFailures?: number): Promise<ProductionTickResult> {
   const message = error.message.slice(0, 800);
-  const retryCount = typeof job.retryCount === "number" ? job.retryCount : 0;
-  if (retryCount < PRODUCTION_RETRY_BUDGET) {
-    await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(job.id).set(
-      {
+  // Régime « reprise » : politique fournie et budget NON consommé (quota /
+  // transitoire). Une politique fatale retombe dans le régime legacy.
+  const resumeMode = policy ? !policy.consumeRetry : false;
+  try {
+    if (resumeMode && policy) {
+      const isQuota = classifyTickError(error) === "quota";
+      // Message stocké actionnable : pour un quota, pas d'alarme utilisateur.
+      const storedMessage = isQuota
+        ? `Quota Firestore épuisé — reprise automatique programmée (backoff ${policy.delaySeconds} s).`
+        : message;
+      const patch: Record<string, unknown> = {
         status: "queued",
+        error: storedMessage,
+        leaseOwner: null,
+        leaseExpiresAt: 0,
+        nextAttemptAt: new Date(Date.now() + policy.delaySeconds * 1000).toISOString(),
+        updatedAt: nowIso(),
+      };
+      if (isQuota && typeof quotaFailures === "number" && quotaFailures > 0) {
+        // Compteur d'incidents quota consécutifs (n'alimente PAS retryCount).
+        patch.quotaFailures = quotaFailures;
+      }
+      await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, patch, job.userId);
+      if (origin) await publishTickAndLog(job, origin, policy.delaySeconds);
+      await logSystem(
+        job.projectId,
+        `Production ${job.id.slice(0, 8)} : incident ${isQuota ? "quota Firestore" : "transitoire"} à l'étape ${job.stage} — reprise automatique dans ${policy.delaySeconds} s (budget de relance intact, checkpoints conservés).`,
+      ).catch(() => undefined);
+      return {
+        jobId: job.id,
+        projectId: job.projectId,
+        status: "queued",
+        stage: job.stage,
+        progress: job.progress,
+        done: false,
+        continued: Boolean(origin),
+        ...(job.renderJobId ? { renderJobId: job.renderJobId } : {}),
+        message: storedMessage,
+      };
+    }
+    const retryCount = typeof job.retryCount === "number" ? job.retryCount : 0;
+    // Régime legacy : jusqu'à PRODUCTION_RETRY_BUDGET relances (comportement
+    // historique — budget retryCount consommé, relance à délai fixe).
+    if (retryCount < PRODUCTION_RETRY_BUDGET) {
+      await saveJobDoc(
+        PRODUCTION_JOBS_COLLECTION,
+        job.id,
+        {
+          status: "queued",
+          error: message,
+          retryCount: retryCount + 1,
+          leaseOwner: null,
+          leaseExpiresAt: 0,
+          updatedAt: nowIso(),
+        },
+        job.userId,
+      );
+      if (origin) await publishTickAndLog(job, origin, 20);
+      await logSystem(job.projectId, `Production ${job.id.slice(0, 8)} : incident à l'étape ${job.stage} (relance ${retryCount + 1}/${PRODUCTION_RETRY_BUDGET}) — reprise automatique. ${message}`).catch(() => undefined);
+      return {
+        jobId: job.id,
+        projectId: job.projectId,
+        status: "queued",
+        stage: job.stage,
+        progress: job.progress,
+        done: false,
+        continued: Boolean(origin),
+        ...(job.renderJobId ? { renderJobId: job.renderJobId } : {}),
+        message,
+      };
+    }
+    await saveJobDoc(
+      PRODUCTION_JOBS_COLLECTION,
+      job.id,
+      {
+        status: "failed",
         error: message,
-        retryCount: retryCount + 1,
         leaseOwner: null,
         leaseExpiresAt: 0,
         updatedAt: nowIso(),
       },
-      { merge: true },
+      job.userId,
     );
-    if (origin) await publishTickAndLog(job, origin, 20);
-    await logSystem(job.projectId, `Production ${job.id.slice(0, 8)} : incident à l'étape ${job.stage} (relance ${retryCount + 1}/${PRODUCTION_RETRY_BUDGET}) — reprise automatique. ${message}`).catch(() => undefined);
+    await logSystem(job.projectId, `Production ${job.id.slice(0, 8)} ÉCHOUÉE à l'étape ${job.stage} : ${message}`).catch(() => undefined);
+    const { createNotification } = await import("@/lib/notifications/repository");
+    await createNotification({
+      userId: job.userId,
+      type: "info",
+      title: "Production vidéo échouée",
+      body: `La production autopilote a échoué à l'étape « ${job.stage} » : ${message.slice(0, 200)} Les étapes déjà produites restent dans le studio vidéo.`,
+    }).catch(() => undefined);
     return {
       jobId: job.id,
       projectId: job.projectId,
-      status: "queued",
+      status: "failed",
       stage: job.stage,
       progress: job.progress,
-      done: false,
-      continued: Boolean(origin),
+      done: true,
+      continued: false,
       ...(job.renderJobId ? { renderJobId: job.renderJobId } : {}),
       message,
     };
+  } catch (requeueError) {
+    // La ré-écriture elle-même a échoué (quota aussi côté miroir — Supabase
+    // indisponible) : on journalise et on PROPAGE — la route tick ré-enfilera
+    // avec délai ; aucun budget consommé côté job.
+    logger.warn(
+      { jobId: job.id, stage: job.stage, error: requeueError instanceof Error ? requeueError.message : String(requeueError) },
+      "fail_production_requeue_failed",
+    );
+    throw requeueError;
   }
-  await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(job.id).set(
-    {
-      status: "failed",
-      error: message,
-      leaseOwner: null,
-      leaseExpiresAt: 0,
-      updatedAt: nowIso(),
-    },
-    { merge: true },
-  );
-  await logSystem(job.projectId, `Production ${job.id.slice(0, 8)} ÉCHOUÉE à l'étape ${job.stage} : ${message}`).catch(() => undefined);
-  const { createNotification } = await import("@/lib/notifications/repository");
-  await createNotification({
-    userId: job.userId,
-    type: "info",
-    title: "Production vidéo échouée",
-    body: `La production autopilote a échoué à l'étape « ${job.stage} » : ${message.slice(0, 200)} Les étapes déjà produites restent dans le studio vidéo.`,
-  }).catch(() => undefined);
-  return {
-    jobId: job.id,
-    projectId: job.projectId,
-    status: "failed",
-    stage: job.stage,
-    progress: job.progress,
-    done: true,
-    continued: false,
-    ...(job.renderJobId ? { renderJobId: job.renderJobId } : {}),
-    message,
-  };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -841,12 +1003,13 @@ export interface ProductionSweepResult {
  * touche jamais un job vivant.
  */
 export async function sweepStaleProductionJobs(origin?: string): Promise<ProductionSweepResult> {
-  const snap = await adminDb.collection(PRODUCTION_JOBS_COLLECTION).where("status", "==", "processing").get();
+  // Task 95-d — lecture via la couche résiliente (miroir chaud sous quota).
+  const stale = await queryJobDocs<VideoProductionJob>(PRODUCTION_JOBS_COLLECTION, "status", "processing");
   const now = Date.now();
   let requeued = 0;
   let failed = 0;
-  for (const doc of snap.docs) {
-    const job = normalizeJobDoc((doc.data() ?? {}) as Partial<VideoProductionJob>, doc.id);
+  for (const stored of stale) {
+    const job = normalizeJobDoc(stored as Partial<ProductionJobWithResume>, stored.id);
     if (leaseActive(job, now)) continue;
     // Sans bail (document historique), l'ancienneté updatedAt tranche (2× bail).
     if (typeof job.leaseExpiresAt !== "number" || job.leaseExpiresAt <= 0) {
@@ -857,7 +1020,11 @@ export async function sweepStaleProductionJobs(origin?: string): Promise<Product
     if (result.status === "queued") requeued += 1;
     else failed += 1;
   }
-  return { scanned: snap.docs.length, requeued, failed };
+  // Task 95-d — réconciliation opportuniste (throttle 5 min process-local) :
+  // quand le disjoncteur est refermé, ré-imbrique les lignes miroir dans
+  // Firestore. Ne lève jamais.
+  await maybeReconcileQuotaRecovery(25);
+  return { scanned: stale.length, requeued, failed };
 }
 
 /**
@@ -867,9 +1034,10 @@ export async function sweepStaleProductionJobs(origin?: string): Promise<Product
  * empêche les sondages concurrents de doubler un tick QStash.
  */
 export async function maybeAdvancePendingProductionJob(jobId: string, options: { origin: string; timeBudgetMs?: number }): Promise<ProductionTickResult | null> {
-  const snap = await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(jobId).get();
-  if (!snap.exists) return null;
-  const job = normalizeJobDoc((snap.data() ?? {}) as Partial<VideoProductionJob>, jobId);
+  // Task 95-d — lecture via la couche résiliente (miroir chaud sous quota).
+  const stored = await loadJobDoc<Partial<ProductionJobWithResume>>(PRODUCTION_JOBS_COLLECTION, jobId);
+  if (!stored) return null;
+  const job = normalizeJobDoc(stored, jobId);
   if (job.status === "queued") {
     return advanceProductionJob(jobId, options.origin, { timeBudgetMs: options.timeBudgetMs });
   }
@@ -884,16 +1052,19 @@ export async function maybeAdvancePendingProductionJob(jobId: string, options: {
 // ────────────────────────────────────────────────────────────────────────────
 
 export async function getProductionJob(jobId: string): Promise<VideoProductionJob | null> {
-  const snap = await adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(jobId).get();
-  if (!snap.exists) return null;
-  return normalizeJobDoc((snap.data() ?? {}) as Partial<VideoProductionJob>, jobId);
+  // Task 95-d — lecture via la couche résiliente (miroir chaud sous quota).
+  const stored = await loadJobDoc<Partial<ProductionJobWithResume>>(PRODUCTION_JOBS_COLLECTION, jobId);
+  if (!stored) return null;
+  return normalizeJobDoc(stored, jobId);
 }
 
 /** Dernier job de production du projet (le plus récent d'abord). */
 export async function listProductionJobs(userId: string, projectId?: string): Promise<VideoProductionJob[]> {
-  const snap = await adminDb.collection(PRODUCTION_JOBS_COLLECTION).where("userId", "==", userId).get();
-  const jobs = snap.docs
-    .map((d) => normalizeJobDoc((d.data() ?? {}) as Partial<VideoProductionJob>, d.id))
+  // Task 95-d — lecture via la couche résiliente (miroir chaud sous quota) ;
+  // tri en mémoire inchangé (comportement historique).
+  const stored = await queryJobDocs<VideoProductionJob>(PRODUCTION_JOBS_COLLECTION, "userId", userId);
+  const jobs = stored
+    .map((d) => normalizeJobDoc(d as Partial<ProductionJobWithResume>, d.id))
     .filter((j) => !projectId || j.projectId === projectId);
   jobs.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   return jobs;
