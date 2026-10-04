@@ -114,13 +114,17 @@ async function mirrorToSupabase(
   // Best-effort mirror: Firestore reste la source primaire tant que son quota
   // est disponible. Le miroir garantit que le chemin de secours possède les
   // données nécessaires au moment où Firestore devient indisponible.
-  await supabase.from("firestore_fallback").upsert({
-    collection,
-    document_id: documentId,
-    owner_id: ownerId ?? (typeof payload.userId === "string" ? payload.userId : null),
-    payload,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "collection,document_id" });
+  try {
+    await supabase.from("firestore_fallback").upsert({
+      collection,
+      document_id: documentId,
+      owner_id: ownerId ?? (typeof payload.userId === "string" ? payload.userId : null),
+      payload,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "collection,document_id" });
+  } catch {
+    // Le miroir ne doit jamais rendre indisponible Firestore.
+  }
 }
 
 async function readFallback(collection: string, documentId: string): Promise<Row | null> {
