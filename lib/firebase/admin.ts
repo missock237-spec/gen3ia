@@ -102,13 +102,16 @@ export function getAdminDb(): Firestore {
   // contiennent parfois des champs undefined (ex. publishedAt absent d'un
   // resultat). Firestore les refuse par defaut et fait echouer checkpoints,
   // conversations et sauvegardes : on les ignore silencieusement.
+  // Serverless (Vercel) : REST au lieu de gRPC — les erreurs de QUOTA
+  // (RESOURCE_EXHAUSTED) échouent immédiatement et lisiblement au lieu de
+  // pendre en reconnexion gRPC jusqu'au timeout de la fonction (constaté
+  // en production le 4 oct. : quota lectures gratuit épuisé → 300 s figé).
+  // Jamais contre l'ÉMULATEUR (tests E2E) : le simulateur Firestore ne
+  // sert que le canal gRPC — preferRest y casse l'E2E (CI, commit a72dccd).
+  const usingEmulator = Boolean(process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_FIRESTORE_EMULATOR_ADDRESS);
   db.settings({
     ignoreUndefinedProperties: true,
-    // Serverless (Vercel) : REST au lieu de gRPC — les erreurs de QUOTA
-    // (RESOURCE_EXHAUSTED) échouent immédiatement et lisiblement au lieu de
-    // pendre en reconnexion gRPC jusqu'au timeout de la fonction (constaté
-    // en production le 4 oct. : quota lectures gratuit épuisé → 300 s figé).
-    preferRest: true,
+    ...(usingEmulator ? {} : { preferRest: true }),
   });
   return db;
 }
