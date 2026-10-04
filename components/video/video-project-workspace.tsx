@@ -22,7 +22,7 @@ type JobWithUrls = Omit<RenderJob, "exports" | "output"> & {
   exports: Array<RenderJob["exports"][number] & { playbackUrl?: string | null }>;
 };
 import { formatTimecode, type VideoProject, type VideoTimeline, type VideoAsset, type RenderJob, type VoiceProfile, type ProductionLogEntry, type TimelineClip } from "@/lib/video/types";
-import { listLocalFiles, createLocalObjectUrl, type LocalFileRecord, cacheLocalProject, getCachedLocalProject, enqueueLocalSync, listLocalSyncItems, updateLocalSyncItem, getLocalFile, updateLocalFile } from "@/lib/storage/local-file-store";
+import { listLocalFiles, createLocalObjectUrl, type LocalFileRecord, cacheLocalProject, getCachedLocalProject, enqueueLocalSync, listLocalSyncItems, updateLocalSyncItem, getLocalFile, updateLocalFile, enqueueTimelineSync, listTimelineSyncItems, updateTimelineSyncItem, removeTimelineSyncItem } from "@/lib/storage/local-file-store";
 
 type Tab = "director" | "script" | "storyboard" | "voice" | "timeline" | "render";
 
@@ -85,6 +85,36 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
     void loadJobs();
   }, [session, loadProject, loadAssets, loadVoices, loadJobs]);
 
+  const syncTimelineMutations = useCallback(async () => {
+    if (!navigator.onLine) return;
+    const items = await listTimelineSyncItems();
+    for (const item of items) {
+      if (item.status === "syncing") continue;
+      await updateTimelineSyncItem(item.id, { status: "syncing", attempts: item.attempts + 1 });
+      try {
+        const response = await authFetch(`/api/video/projects/${item.projectId}/timeline`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ op: item.op, clipId: item.clipId, payload: item.payload }),
+        });
+        const data = (await response.json().catch(() => ({}))) as { timeline?: VideoTimeline; error?: string };
+        if (!response.ok || !data.timeline) throw new Error(data.error ?? "Synchronisation Timeline impossible");
+        await removeTimelineSyncItem(item.id);
+        if (item.projectId === projectId) {
+          setProject((current) => current ? { ...current, timeline: data.timeline } : current);
+          await cacheLocalProject({ ...(await getCachedLocalProject<VideoProject>(projectId))?.project ?? project, timeline: data.timeline, updatedAt: new Date().toISOString() });
+        }
+      } catch (error) {
+        await updateTimelineSyncItem(item.id, {
+          status: "error",
+          lastError: error instanceof Error ? error.message : "Erreur de synchronisation",
+        });
+        break;
+      }
+    }
+    if (items.length > 0) await loadProject();
+  }, [projectId, loadProject]);
+
   const syncLocalFiles = useCallback(async () => {
     if (!navigator.onLine) return;
     const items = await listLocalSyncItems();
@@ -111,11 +141,22 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
   }, []);
 
   useEffect(() => {
-    const handler = () => void syncLocalFiles();
+    const handler = () => {
+      void syncLocalFiles();
+      void syncTimelineMutations();
+    };
     window.addEventListener("online", handler);
     void syncLocalFiles();
-    return () => window.removeEventListener("online", handler);
-  }, [syncLocalFiles]);
+    void syncTimelineMutations();
+    const timer = window.setInterval(() => {
+      void syncLocalFiles();
+      void syncTimelineMutations();
+    }, 15_000);
+    return () => {
+      window.removeEventListener("online", handler);
+      window.clearInterval(timer);
+    };
+  }, [syncLocalFiles, syncTimelineMutations]);
 
 
 
@@ -699,14 +740,102 @@ function TimelinePanel({ project, onRefresh, busy, runAction }: { project: Video
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id, project.script]);
 
+  function applyOfflinePatch(base: VideoTimeline, op: string, payload: Record<string, unknown>, clipId?: string): VideoTimeline {
+    const next = structuredClone(base);
+    const find = () => {
+      for (const track of next.tracks) {
+        const clip = track.clips.find((candidate) => candidate.id === clipId);
+        if (clip) return { track, clip };
+      }
+      return null;
+    };
+    const found = find();
+    if (op === "add_clip") {
+      const trackId = String(payload.trackId ?? "");
+      const source = (payload.clip ?? {}) as Record<string, unknown>;
+      const track = next.tracks.find((candidate) => candidate.id === trackId);
+      if (!track) throw new Error("Piste introuvable.");
+      track.clips.push(source as TimelineClip);
+    } else if (op === "move_clip" && found) {
+      found.clip.startSec = Number(payload.startSec);
+    } else if (op === "resize_clip" && found) {
+      found.clip.durationSec = Number(payload.durationSec);
+    } else if (op === "set_transform" && found) {
+      const t = payload as Partial<TimelineClip["transform"]>;
+      found.clip.transform = { ...found.clip.transform, ...t };
+    } else if (op === "set_effects" && found) {
+      found.clip.effects = Array.isArray(payload.effects) ? payload.effects as TimelineClip["effects"] : [];
+    } else if (op === "set_transition" && found) {
+      const side = payload.side === "out" ? "transitionOut" : "transitionIn";
+      const name = String(payload.name ?? "cut");
+      found.clip[side] = name === "cut" ? undefined : { name: name as NonNullable<TimelineClip["transitionIn"]>["name"], durationSec: Number(payload.durationSec ?? 0.3) };
+    } else if (op === "set_clip_audio" && found) {
+      found.clip.audio = {
+        volume: Number(payload.volume ?? found.clip.audio?.volume ?? 1),
+        fadeInSec: Number(payload.fadeInSec ?? found.clip.audio?.fadeInSec ?? 0),
+        fadeOutSec: Number(payload.fadeOutSec ?? found.clip.audio?.fadeOutSec ?? 0),
+      };
+    } else if (op === "set_motion" && found) {
+      found.clip.motion = { ...(found.clip.motion ?? {}), preset: String(payload.preset ?? "slow_zoom") } as TimelineClip["motion"];
+    } else if (op === "set_text" && found) {
+      found.clip.text = String(payload.text ?? "");
+    } else if (op === "add_text_clip") {
+      const track = next.tracks.find((candidate) => candidate.kind === "text");
+      if (track) track.clips.push({
+        id: `offline_txt_${crypto.randomUUID().slice(0, 8)}`,
+        text: String(payload.text ?? ""),
+        startSec: Number(payload.startSec ?? 0),
+        durationSec: Number(payload.durationSec ?? 3),
+        layer: 5,
+        transform: { x: 0, y: Number(payload.y ?? -0.35), scale: 1, rotationDeg: 0, opacity: 1 },
+        effects: [],
+      });
+    } else if (op === "delete_clip" && found) {
+      found.track.clips = found.track.clips.filter((candidate) => candidate.id !== found.clip.id);
+    } else if (op === "set_captions") {
+      next.captions = { ...next.captions, enabled: Boolean(payload.enabled ?? true), style: (payload.style as typeof next.captions.style) ?? next.captions.style };
+    } else if (op === "set_music_bed") {
+      next.musicBed = payload.assetId ? { assetId: String(payload.assetId), volume: Number(payload.volume ?? 0.6), duckTo: Number(payload.duckTo ?? 0.22) } : undefined;
+    } else if (op === "set_asset" && found) {
+      found.clip.assetId = String(payload.assetId ?? "");
+    }
+    next.durationSec = Math.max(0, ...next.tracks.flatMap((track) => track.clips.map((clip) => clip.startSec + clip.durationSec)));
+    next.version += 1;
+    next.updatedAt = new Date().toISOString();
+    return next;
+  }
+
   async function patch(op: string, payload: Record<string, unknown>, clipId?: string) {
+    const request = {
+      op,
+      clipId,
+      payload,
+    };
+    if (!navigator.onLine) {
+      const base = timeline;
+      if (!base) throw new Error("Timeline indisponible.");
+      const optimistic = applyOfflinePatch(base, op, payload, clipId);
+      setTimeline(optimistic);
+      await cacheLocalProject({ ...project, timeline: optimistic, updatedAt: new Date().toISOString() });
+      await enqueueTimelineSync(project.id, op, payload, clipId);
+      return;
+    }
     const response = await authFetch(`/api/video/projects/${project.id}/timeline`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ op, clipId, payload }),
+      body: JSON.stringify(request),
     });
     const data = (await response.json()) as { timeline?: VideoTimeline; error?: string };
-    if (!response.ok) throw new Error(data.error ?? "Édition impossible");
+    if (!response.ok) {
+      const base = timeline;
+      if (!base) throw new Error(data.error ?? "Édition impossible");
+      const optimistic = applyOfflinePatch(base, op, payload, clipId);
+      setTimeline(optimistic);
+      await cacheLocalProject({ ...project, timeline: optimistic, updatedAt: new Date().toISOString() });
+      await enqueueTimelineSync(project.id, op, payload, clipId);
+      setError(data.error ?? "Serveur indisponible : modification mise en attente.");
+      return;
+    }
     setTimeline(data.timeline ?? null);
     if (data.timeline) {
       await cacheLocalProject({ ...project, timeline: data.timeline, updatedAt: new Date().toISOString() });
