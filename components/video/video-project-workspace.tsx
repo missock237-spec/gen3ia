@@ -210,8 +210,19 @@ function LocalMediaTile({ file, onDelete }: { file: LocalFileRecord; onDelete: (
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    void createLocalObjectUrl(file.id).then((value) => { if (active) setUrl(value); });
-    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+    let objectUrl: string | null = null;
+    void createLocalObjectUrl(file.id).then((value) => {
+      if (!active) {
+        if (value) URL.revokeObjectURL(value);
+        return;
+      }
+      objectUrl = value;
+      setUrl(value);
+    });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [file.id]);
   const media = file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "image";
   return (
