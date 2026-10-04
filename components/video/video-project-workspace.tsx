@@ -677,6 +677,9 @@ function TimelinePanel({ project, onRefresh, busy, runAction }: { project: Video
     const data = (await response.json()) as { timeline?: VideoTimeline; error?: string };
     if (!response.ok) throw new Error(data.error ?? "Édition impossible");
     setTimeline(data.timeline ?? null);
+    if (data.timeline) {
+      await cacheLocalProject({ ...project, timeline: data.timeline, updatedAt: new Date().toISOString() });
+    }
     onRefresh();
   }
 
