@@ -22,7 +22,7 @@ type JobWithUrls = Omit<RenderJob, "exports" | "output"> & {
   exports: Array<RenderJob["exports"][number] & { playbackUrl?: string | null }>;
 };
 import { formatTimecode, type VideoProject, type VideoTimeline, type VideoAsset, type RenderJob, type VoiceProfile, type ProductionLogEntry, type TimelineClip } from "@/lib/video/types";
-import { listLocalFiles, createLocalObjectUrl, type LocalFileRecord, cacheLocalProject, getCachedLocalProject } from "@/lib/storage/local-file-store";
+import { listLocalFiles, createLocalObjectUrl, type LocalFileRecord, cacheLocalProject, getCachedLocalProject, enqueueLocalSync, listLocalSyncItems, updateLocalSyncItem, getLocalFile, updateLocalFile } from "@/lib/storage/local-file-store";
 
 type Tab = "director" | "script" | "storyboard" | "voice" | "timeline" | "render";
 
@@ -89,13 +89,48 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
     void loadJobs();
   }, [session, loadProject, loadAssets, loadVoices, loadJobs]);
 
+  const syncLocalFiles = useCallback(async () => {
+    if (!navigator.onLine) return;
+    const items = await listLocalSyncItems();
+    for (const item of items) {
+      if (item.status === "synced" || item.status === "syncing") continue;
+      const local = await getLocalFile(item.localFileId);
+      if (!local || local.serverAssetId) {
+        await updateLocalSyncItem(item.id, { status: "synced" });
+        continue;
+      }
+      await updateLocalSyncItem(item.id, { status: "syncing", attempts: item.attempts + 1 });
+      try {
+        const form = new FormData();
+        form.append("file", local.blob, local.name);
+        const response = await authFetch(`/api/video/projects/${item.projectId}/assets`, { method: "POST", body: form });
+        const data = (await response.json().catch(() => ({}))) as { asset?: { id: string }; error?: string };
+        if (!response.ok || !data.asset?.id) throw new Error(data.error ?? "Synchronisation impossible");
+        await updateLocalFile(local.id, { serverAssetId: data.asset.id });
+        await updateLocalSyncItem(item.id, { status: "synced", lastError: undefined });
+      } catch (error) {
+        await updateLocalSyncItem(item.id, { status: "error", lastError: error instanceof Error ? error.message : "Erreur de synchronisation" });
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const handler = () => void syncLocalFiles();
+    window.addEventListener("online", handler);
+    void syncLocalFiles();
+    return () => window.removeEventListener("online", handler);
+  }, [syncLocalFiles]);
+
+
+
   async function importLocalMedia(fileList: FileList | null) {
     if (!fileList?.length) return;
     const { saveLocalFile } = await import("@/lib/storage/local-file-store");
     for (const file of Array.from(fileList)) {
       if (!/^((image|video|audio)\\/)/.test(file.type)) throw new Error(`Format non pris en charge : ${file.name}`);
       if (file.size > 50 * 1024 * 1024) throw new Error(`Fichier trop volumineux : ${file.name}`);
-      await saveLocalFile(file, crypto.randomUUID(), projectId);
+      const saved = await saveLocalFile(file, crypto.randomUUID(), projectId);
+      await enqueueLocalSync(projectId, saved.id);
     }
     await loadAssets();
   }
