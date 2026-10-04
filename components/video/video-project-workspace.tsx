@@ -77,6 +77,19 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
     void loadJobs();
   }, [session, loadProject, loadAssets, loadVoices, loadJobs]);
 
+  const localFilesRef = useRef<File[]>([]);
+
+  async function importLocalMedia(fileList: FileList | null) {
+    if (!fileList?.length) return;
+    const { saveLocalFile } = await import("@/lib/storage/local-file-store");
+    for (const file of Array.from(fileList)) {
+      if (!/^((image|video|audio)\\/)/.test(file.type)) throw new Error(`Format non pris en charge : ${file.name}`);
+      if (file.size > 50 * 1024 * 1024) throw new Error(`Fichier trop volumineux : ${file.name}`);
+      await saveLocalFile(file, crypto.randomUUID(), projectId);
+    }
+    await loadAssets();
+  }
+
   // Polling pendant les rendus actifs (survit aux reloads : la file est côté serveur).
   const hasActiveJob = jobs.some((j) => j.status === "processing" || j.status === "queued");
   useEffect(() => {
@@ -108,6 +121,16 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
       <div>
         <Link href="/studio/video" className="text-xs text-blue-600 hover:underline">← Studio vidéo</Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
+        <label className="cursor-pointer rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-neutral-50">
+          + Média local
+          <input
+            type="file"
+            multiple
+            accept="image/*,video/*,audio/*"
+            className="hidden"
+            onChange={(e) => { void importLocalMedia(e.target.files); e.currentTarget.value = ""; }}
+          />
+        </label>
           <h1 className="text-2xl font-bold text-neutral-900">{project.title}</h1>
           <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-600">{project.style}</span>
           <span className="text-xs text-neutral-500">{project.aspectRatio} · {project.resolution} · {formatTimecode(project.script?.estimatedDurationSec ?? project.targetDurationSec)}</span>
