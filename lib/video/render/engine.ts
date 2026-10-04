@@ -200,7 +200,7 @@ export async function finalizeMaster(params: {
     ...(vf.length > 0 ? ["-vf", vf.join(",")] : []),
     "-map", "0:v:0",
     ...(params.audioFile ? ["-map", "1:a:0"] : []),
-    "-c:v", "copy",
+    ...(params.burnAssFileName ? ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"] : ["-c:v", "copy"]),
     ...(params.audioFile ? ["-c:a", "aac", "-b:a", "192k"] : ["-an"]),
     "-shortest",
     outFile,
