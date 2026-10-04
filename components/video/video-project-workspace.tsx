@@ -10,7 +10,7 @@
  * (file, checkpoints, QC, exports, versions).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { Callout } from "@/components/studio/callout";
@@ -76,8 +76,6 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
     void loadVoices();
     void loadJobs();
   }, [session, loadProject, loadAssets, loadVoices, loadJobs]);
-
-  const localFilesRef = useRef<File[]>([]);
 
   async function importLocalMedia(fileList: FileList | null) {
     if (!fileList?.length) return;
