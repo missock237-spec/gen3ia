@@ -14,7 +14,7 @@ import "server-only";
 
 import { spawn } from "node:child_process";
 import { stat, rm } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, relative, isAbsolute } from "node:path";
 import {
   resolveFfmpegBinary,
   resolveFfprobeBinary,
@@ -97,8 +97,8 @@ async function runCommand(
 export function assertInsideDir(dir: string, target: string): void {
   const resolvedDir = resolve(dir);
   const resolved = resolve(target);
-  const relative = require("node:path").relative(resolvedDir, resolved) as string;
-  if (relative.startsWith("..") || require("node:path").isAbsolute(relative)) {
+  const relativePath = relative(resolvedDir, resolved);
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
     throw new FfmpegError("SPAWN_ERROR", `Chemin hors du bac à sable : ${target}`);
   }
 }
