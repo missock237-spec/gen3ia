@@ -116,6 +116,8 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
 
       {error ? <Callout tone="error">{error}</Callout> : null}
 
+      <LocalMediaPanel projectId={project.id} />
+
       <nav className="flex flex-wrap gap-1 border-b border-neutral-200" role="tablist">
         {TABS.map((t) => (
           <button
@@ -136,6 +138,93 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
       {tab === "voice" ? <VoicePanel project={project} voices={voices} assets={assets} onRefresh={() => runAction("refresh", async () => { await loadProject(); await loadAssets(); await loadVoices(); })} busy={busy} runAction={runAction} /> : null}
       {tab === "timeline" ? <TimelinePanel project={project} onRefresh={() => runAction("refresh", loadProject)} busy={busy} runAction={runAction} /> : null}
       {tab === "render" ? <RenderPanel project={project} jobs={jobs} onRefresh={async () => { await loadJobs(); await loadProject(); }} busy={busy} runAction={runAction} /> : null}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Médias locaux — stockage appareil, zéro upload automatique
+// ────────────────────────────────────────────────────────────────────────────
+
+function LocalMediaPanel({ projectId }: { projectId: string }) {
+  const [files, setFiles] = useState<LocalFileRecord[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setFiles(await listLocalFiles(projectId));
+  }, [projectId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function importFiles(fileList: FileList | null) {
+    if (!fileList?.length) return;
+    setBusy(true);
+    try {
+      for (const file of Array.from(fileList)) {
+        const kind = file.type.startsWith("image/") || file.type.startsWith("video/") || file.type.startsWith("audio/");
+        if (!kind) throw new Error(`Format non pris en charge : ${file.name}`);
+        if (file.size <= 0 || file.size > 50 * 1024 * 1024) {
+          throw new Error(`Fichier trop volumineux : ${file.name} (maximum 50 Mo)`);
+        }
+        await import("@/lib/storage/local-file-store").then(({ saveLocalFile }) =>
+          saveLocalFile(file, crypto.randomUUID(), projectId),
+        );
+      }
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-900">Médias de l’appareil</h2>
+          <p className="text-xs text-neutral-500">Les fichiers restent dans le stockage local de cet appareil. Aucun upload cloud automatique.</p>
+        </div>
+        <label className="cursor-pointer rounded-xl bg-neutral-900 px-4 py-2 text-xs font-semibold text-white hover:bg-neutral-800">
+          {busy ? "Importation…" : "Ajouter des médias"}
+          <input
+            type="file"
+            multiple
+            accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/mp4,audio/wav,audio/webm,audio/ogg,audio/opus,audio/flac"
+            className="hidden"
+            disabled={busy}
+            onChange={(e) => { void importFiles(e.target.files); e.currentTarget.value = ""; }}
+          />
+        </label>
+      </div>
+      {files.length ? (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {files.map((file) => <LocalMediaTile key={file.id} file={file} onDelete={async () => { await deleteLocalFile(file.id); await load(); }} />)}
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-neutral-400">Aucun média local associé à ce projet.</p>
+      )}
+    </section>
+  );
+}
+
+function LocalMediaTile({ file, onDelete }: { file: LocalFileRecord; onDelete: () => Promise<void> }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void createLocalObjectUrl(file.id).then((value) => { if (active) setUrl(value); });
+    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+  }, [file.id]);
+  const media = file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "image";
+  return (
+    <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+      <div className="aspect-video bg-neutral-100">
+        {url && media === "video" ? <video src={url} muted controls className="h-full w-full object-cover" /> : null}
+        {url && media === "audio" ? <audio src={url} controls className="mt-4 w-full" /> : null}
+        {url && media === "image" ? <img src={url} alt={file.name} className="h-full w-full object-cover" /> : null}
+      </div>
+      <div className="p-2">
+        <p className="truncate text-[11px] font-medium">{file.name}</p>
+        <button onClick={() => void onDelete()} className="mt-1 text-[11px] text-rose-600 hover:underline">Supprimer de l’appareil</button>
+      </div>
     </div>
   );
 }
