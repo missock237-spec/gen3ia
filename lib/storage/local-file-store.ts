@@ -2,9 +2,10 @@
 
 const DB_NAME = "gen3ia-local-files";
 const STORE_NAME = "files";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const PROJECT_STORE_NAME = "projects";
 const SYNC_STORE_NAME = "syncQueue";
+const TIMELINE_SYNC_STORE_NAME = "timelineSyncQueue";
 
 export interface LocalFileRecord {
   id: string;
@@ -25,6 +26,7 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: "id" });
       if (!db.objectStoreNames.contains(PROJECT_STORE_NAME)) db.createObjectStore(PROJECT_STORE_NAME, { keyPath: "id" });
       if (!db.objectStoreNames.contains(SYNC_STORE_NAME)) db.createObjectStore(SYNC_STORE_NAME, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(TIMELINE_SYNC_STORE_NAME)) db.createObjectStore(TIMELINE_SYNC_STORE_NAME, { keyPath: "id" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -199,6 +201,94 @@ export async function updateLocalSyncItem(id: string, patch: Partial<Pick<LocalS
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(SYNC_STORE_NAME, "readwrite");
     tx.objectStore(SYNC_STORE_NAME).put({ ...current, ...patch, updatedAt: Date.now() });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
+
+export type LocalTimelineSyncStatus = "pending" | "syncing" | "error";
+
+export interface LocalTimelineSyncItem {
+  id: string;
+  projectId: string;
+  op: string;
+  clipId?: string;
+  payload: Record<string, unknown>;
+  status: LocalTimelineSyncStatus;
+  attempts: number;
+  lastError?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export async function enqueueTimelineSync(
+  projectId: string,
+  op: string,
+  payload: Record<string, unknown>,
+  clipId?: string,
+): Promise<LocalTimelineSyncItem> {
+  const db = await openDb();
+  const item: LocalTimelineSyncItem = {
+    id: `timeline:${crypto.randomUUID()}`,
+    projectId,
+    op,
+    clipId,
+    payload,
+    status: "pending",
+    attempts: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(TIMELINE_SYNC_STORE_NAME, "readwrite");
+    tx.objectStore(TIMELINE_SYNC_STORE_NAME).put(item);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+  return item;
+}
+
+export async function listTimelineSyncItems(): Promise<LocalTimelineSyncItem[]> {
+  const db = await openDb();
+  const items = await new Promise<LocalTimelineSyncItem[]>((resolve, reject) => {
+    const tx = db.transaction(TIMELINE_SYNC_STORE_NAME, "readonly");
+    const request = tx.objectStore(TIMELINE_SYNC_STORE_NAME).getAll();
+    request.onsuccess = () => resolve(((request.result as LocalTimelineSyncItem[]) ?? []).sort((a, b) => a.createdAt - b.createdAt));
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return items;
+}
+
+export async function updateTimelineSyncItem(
+  id: string,
+  patch: Partial<Pick<LocalTimelineSyncItem, "status" | "attempts" | "lastError">>,
+): Promise<void> {
+  const db = await openDb();
+  const current = await new Promise<LocalTimelineSyncItem | null>((resolve, reject) => {
+    const tx = db.transaction(TIMELINE_SYNC_STORE_NAME, "readonly");
+    const request = tx.objectStore(TIMELINE_SYNC_STORE_NAME).get(id);
+    request.onsuccess = () => resolve((request.result as LocalTimelineSyncItem | undefined) ?? null);
+    request.onerror = () => reject(request.error);
+  });
+  if (!current) { db.close(); return; }
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(TIMELINE_SYNC_STORE_NAME, "readwrite");
+    tx.objectStore(TIMELINE_SYNC_STORE_NAME).put({ ...current, ...patch, updatedAt: Date.now() });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
+export async function removeTimelineSyncItem(id: string): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(TIMELINE_SYNC_STORE_NAME, "readwrite");
+    tx.objectStore(TIMELINE_SYNC_STORE_NAME).delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
