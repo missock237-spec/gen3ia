@@ -15,7 +15,7 @@ import { StudioHeader } from "@/components/studio/studio-header";
 import { Callout } from "@/components/studio/callout";
 import type { VideoProject } from "@/lib/video/types";
 import { saveLocalFile } from "@/lib/storage/local-file-store";
-import { VIDEO_LIMITS, assertMediaSizeAllowed, assertMediaTypeAllowed } from "@/lib/video/security";
+
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Brouillon",
@@ -84,9 +84,14 @@ export function VideoStudioHome() {
       for (const file of localMedia) {
         const kind = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : null;
         if (!kind) throw new Error(`Format non pris en charge : ${file.name}`);
-        assertMediaTypeAllowed(kind, file.type);
-        assertMediaSizeAllowed(file.size, kind);
-        if (file.size > VIDEO_LIMITS.maxMediaBytes) throw new Error(`Fichier trop volumineux : ${file.name}`);
+        const allowed = {
+          image: ["image/png", "image/jpeg", "image/webp"],
+          video: ["video/mp4", "video/webm", "video/quicktime"],
+          audio: ["audio/mpeg", "audio/mp4", "audio/wav", "audio/webm", "audio/ogg", "audio/opus", "audio/flac"],
+        } as const;
+        if (!allowed[kind].includes(file.type as never)) throw new Error(`Format non autorisé : ${file.name}`);
+        const maxBytes = 50 * 1024 * 1024;
+        if (file.size <= 0 || file.size > maxBytes) throw new Error(`Fichier trop volumineux : ${file.name} (maximum 50 Mo)`);
       }
 
       const createResponse = await authFetch("/api/video/projects", {
