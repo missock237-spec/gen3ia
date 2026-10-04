@@ -47,10 +47,6 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
 
   const loadProject = useCallback(async () => {
     const response = await authFetch(`/api/video/projects/${projectId}`);
-    if (!response.ok) {
-      setError((await response.json().catch(() => ({}))).error ?? "Projet introuvable");
-      return;
-    }
     if (response.ok) {
       const data = (await response.json()) as { project: VideoProject };
       setProject(data.project);
@@ -63,7 +59,7 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
       setError("Mode hors connexion : dernière version locale utilisée.");
       return;
     }
-    setError((await response.json().catch(() => ({}))).error ?? "Projet introuvable");
+    setError("Connexion indisponible : aucune copie locale de ce projet.");
   }, [projectId]);
 
   const loadAssets = useCallback(async () => {
@@ -234,9 +230,9 @@ function LocalMediaPanel({ projectId }: { projectId: string }) {
         if (file.size <= 0 || file.size > 50 * 1024 * 1024) {
           throw new Error(`Fichier trop volumineux : ${file.name} (maximum 50 Mo)`);
         }
-        await import("@/lib/storage/local-file-store").then(({ saveLocalFile }) =>
-          saveLocalFile(file, crypto.randomUUID(), projectId),
-        );
+        const { saveLocalFile } = await import("@/lib/storage/local-file-store");
+        const saved = await saveLocalFile(file, crypto.randomUUID(), projectId);
+        await enqueueLocalSync(projectId, saved.id);
       }
       await load();
     } finally {
