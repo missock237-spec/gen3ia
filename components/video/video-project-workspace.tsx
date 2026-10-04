@@ -715,8 +715,35 @@ function RenderPanel({ project, jobs, onRefresh, busy, runAction }: { project: V
     });
   }, [project.id]);
 
+  async function ensureLocalAssetsUploaded() {
+    const localFiles = await listLocalFiles(project.id);
+    for (const local of localFiles) {
+      if (local.serverAssetId) continue;
+      const kind = local.type.startsWith("image/")
+        ? "image"
+        : local.type.startsWith("video/")
+          ? "video"
+          : "audio_music";
+      const form = new FormData();
+      form.append("file", local.blob, local.name);
+      form.append("meta", JSON.stringify({
+        kind,
+        label: local.name,
+        contentType: local.type,
+      }));
+      const response = await authFetch(`/api/video/projects/${project.id}/assets`, { method: "POST", body: form });
+      const data = (await response.json().catch(() => ({}))) as { asset?: { id?: string }; error?: string };
+      if (!response.ok || !data.asset?.id) throw new Error(data.error ?? `Upload du média local impossible : ${local.name}`);
+      await updateLocalFile(local.id, { serverAssetId: data.asset.id });
+    }
+  }
+
   function startRender() {
     void runAction("render-start", async () => {
+      // Local-first : les médias restent sur l'appareil jusqu'au moment où
+      // le rendu serveur en a réellement besoin. Ils sont alors enregistrés
+      // une seule fois comme assets R2 et leur identifiant est mémorisé localement.
+      await ensureLocalAssetsUploaded();
       const response = await authFetch(`/api/video/projects/${project.id}/render`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
