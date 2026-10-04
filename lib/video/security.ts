@@ -130,6 +130,8 @@ export type FfmpegBinarySource = "env" | "ffmpeg-static" | "path";
 export interface ResolvedBinary {
   path: string;
   source: FfmpegBinarySource;
+  /** Diagnostic de la dernière tentative (pour health/infra — jamais secret). */
+  diagnostic?: string;
 }
 
 /**
@@ -137,40 +139,49 @@ export interface ResolvedBinary {
  *  1. variable d'environnement dédiée (VIDEO_FFMPEG_PATH / VIDEO_FFPROBE_PATH)
  *     — déploiements maître-esclave où FFmpeg vit sur un hôte précis ;
  *  2. paquet npm ffmpeg-static / ffprobe-static (binaires statiques embarqués
- *     — rend le rendu fonctionnel sans installation système) ; import
- *     DYNAMIQUE et gardé : l'absence du paquet ne casse jamais le module ;
+ *     — rend le rendu fonctionnel sans installation système) ; IMPORTS
+ *     LITTÉRAUX STATIQUES : un import dynamique à variable n'est PAS tracé
+ *     par le bundler et casse dans la Lambda Vercel (constaté en production
+ *     le 4 oct. — « source: path » alors que le paquet est installé) ;
  *  3. binaire système sur le PATH (« ffmpeg » / « ffprobe ») — comportement
  *     historique, vérifié par la sonde checkFfmpegAvailable().
  */
-async function resolveStaticBinary(
-  packageName: "ffmpeg-static" | "ffprobe-static",
-  pick: (mod: unknown) => string | null,
+// Imports LITTÉRAUX (tracés par le bundler, conservés externes via
+// serverExternalPackages) — jamais des variables.
+import ffmpegStaticModule from "ffmpeg-static";
+import ffprobeStaticModule from "ffprobe-static";
+
+function staticFfmpegPath(): string | null {
+  // ffmpeg-static : `export default path` (peut être null si l'install
+  // script n'a pas tourné) ou `module.exports = path` selon l'interop CJS/ESM.
+  const m = ffmpegStaticModule as unknown as { default?: unknown } | string | null;
+  const candidate = typeof m === "string" ? m : ((m?.default ?? m) as string | null | undefined);
+  return typeof candidate === "string" && candidate.length > 0 ? candidate : null;
+}
+
+function staticFfprobePath(): string | null {
+  // ffprobe-static : `module.exports = { path }` (interop : souvent sous default).
+  const m = ffprobeStaticModule as unknown as { path?: unknown; default?: { path?: unknown } };
+  const candidate = (m?.default?.path ?? m?.path) as string | undefined;
+  return typeof candidate === "string" && candidate.length > 0 ? candidate : null;
+}
+
+async function verifyStaticBinary(
+  candidate: string | null,
+  packageName: string,
 ): Promise<ResolvedBinary | null> {
+  if (!candidate) return { path: "", source: "path", diagnostic: `${packageName} présent mais export de chemin vide (install script ?)` };
   try {
-    const mod: unknown = await import(packageName);
-    const candidate = pick(mod);
-    if (!candidate) return null;
     const { access } = await import("node:fs/promises");
     await access(candidate); // le paquet peut être présent sans binaire téléchargé
     return { path: candidate, source: "ffmpeg-static" };
-  } catch {
-    return null;
+  } catch (error) {
+    return {
+      path: "",
+      source: "path",
+      diagnostic: `${packageName} : binaire introuvable (${candidate}) — ${error instanceof Error ? error.message.slice(0, 140) : "accès impossible"}`,
+    };
   }
-}
-
-function staticFfmpegPath(mod: unknown): string | null {
-  // ffmpeg-static : `export default path` (peut être null si l'install
-  // script n'a pas tourné) ou `module.exports = path` selon l'interop CJS/ESM.
-  const m = mod as { default?: unknown } | string | null;
-  const candidate = typeof m === "string" ? m : (m?.default as string | null | undefined);
-  return typeof candidate === "string" && candidate.length > 0 ? candidate : null;
-}
-
-function staticFfprobePath(mod: unknown): string | null {
-  // ffprobe-static : `module.exports = { path }` (interop : souvent sous default).
-  const m = mod as { path?: unknown; default?: { path?: unknown } };
-  const candidate = (m?.default?.path ?? m?.path) as string | undefined;
-  return typeof candidate === "string" && candidate.length > 0 ? candidate : null;
 }
 
 let ffmpegResolution: Promise<ResolvedBinary> | null = null;
@@ -182,9 +193,9 @@ export function resolveFfmpegBinary(): Promise<ResolvedBinary> {
     ffmpegResolution = (async () => {
       const env = process.env.VIDEO_FFMPEG_PATH?.trim();
       if (env) return { path: env, source: "env" } as const;
-      const staticBinary = await resolveStaticBinary("ffmpeg-static", staticFfmpegPath);
-      if (staticBinary) return staticBinary;
-      return { path: "ffmpeg", source: "path" } as const;
+      const staticBinary = await verifyStaticBinary(staticFfmpegPath(), "ffmpeg-static");
+      if (staticBinary && staticBinary.path) return staticBinary;
+      return { path: "ffmpeg", source: "path", ...(staticBinary?.diagnostic ? { diagnostic: staticBinary.diagnostic } : {}) };
     })();
   }
   return ffmpegResolution;
@@ -196,9 +207,9 @@ export function resolveFfprobeBinary(): Promise<ResolvedBinary> {
     ffprobeResolution = (async () => {
       const env = process.env.VIDEO_FFPROBE_PATH?.trim();
       if (env) return { path: env, source: "env" } as const;
-      const staticBinary = await resolveStaticBinary("ffprobe-static", staticFfprobePath);
-      if (staticBinary) return staticBinary;
-      return { path: "ffprobe", source: "path" } as const;
+      const staticBinary = await verifyStaticBinary(staticFfprobePath(), "ffprobe-static");
+      if (staticBinary && staticBinary.path) return staticBinary;
+      return { path: "ffprobe", source: "path", ...(staticBinary?.diagnostic ? { diagnostic: staticBinary.diagnostic } : {}) };
     })();
   }
   return ffprobeResolution;

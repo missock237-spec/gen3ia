@@ -12,3 +12,10 @@ declare module "ffprobe-static" {
   const ffprobeStatic: { path: string };
   export default ffprobeStatic;
 }
+
+// ffmpeg-static (Task 1-a) : CommonJS `module.exports = <chemin du binaire>`
+// (null si le script d'installation n'a pas tourné).
+declare module "ffmpeg-static" {
+  const ffmpegStatic: string | null;
+  export default ffmpegStatic;
+}

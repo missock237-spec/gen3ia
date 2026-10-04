@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
           ffprobe: ffmpeg.ffprobe,
           ...(ffmpeg.version ? { version: ffmpeg.version } : {}),
           ...(ffmpeg.ffmpegSource ? { source: ffmpeg.ffmpegSource } : {}),
+          ...(ffmpeg.diagnostic ? { diagnostic: ffmpeg.diagnostic } : {}),
         },
         queueMode: qstashConfig() ? ("qstash" as const) : ("poll" as const),
         role: "rendu vidéo réel (FFmpeg sandboxé) + files rendu/production (QStash ou sondage)",

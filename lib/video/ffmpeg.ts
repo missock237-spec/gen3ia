@@ -205,6 +205,8 @@ export interface FfmpegAvailability {
   version?: string;
   ffmpegSource?: ResolvedBinary["source"];
   ffprobeSource?: ResolvedBinary["source"];
+  /** Pourquoi la résolution a échoué (diagnostic production, jamais secret). */
+  diagnostic?: string;
   ffmpegPath?: string;
   ffprobePath?: string;
 }
@@ -227,11 +229,12 @@ export async function checkFfmpegAvailable(): Promise<FfmpegAvailability> {
       version,
       ffmpegSource: ffmpeg.source,
       ffprobeSource: ffprobe.source,
+      ...(ffmpeg.diagnostic ? { diagnostic: ffmpeg.diagnostic } : ffprobe.diagnostic ? { diagnostic: ffprobe.diagnostic } : {}),
       ffmpegPath: ffmpeg.source === "path" ? undefined : ffmpeg.path,
       ffprobePath: ffprobe.source === "path" ? undefined : ffprobe.path,
     };
   } catch {
-    return { ffmpeg: false, ffprobe: false, ffmpegSource: ffmpeg.source, ffprobeSource: ffprobe.source };
+    return { ffmpeg: false, ffprobe: false, ffmpegSource: ffmpeg.source, ffprobeSource: ffprobe.source, ...(ffmpeg.diagnostic ? { diagnostic: ffmpeg.diagnostic } : {}) };
   }
 }
 
