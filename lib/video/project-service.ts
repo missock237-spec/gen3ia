@@ -17,6 +17,7 @@ import {
   resilientGet,
   resilientSet,
   resilientList,
+  resilientListByPayloadField,
   resilientCount,
 } from "@/lib/db/firestore-fallback";
 import {
@@ -266,7 +267,7 @@ export async function snapshotVersion(
 
 export async function listVersions(userId: string, projectId: string): Promise<ProjectVersion[]> {
   await getOwnedProjectOrThrow(userId, projectId);
-  const versions = await resilientList<ProjectVersion>(VERSIONS_COLLECTION, "projectId", projectId);
+  const versions = await resilientListByPayloadField<ProjectVersion>(VERSIONS_COLLECTION, "projectId", projectId);
   versions.sort((a, b) => b.versionNumber - a.versionNumber);
   return versions;
 }
