@@ -157,6 +157,15 @@ const nextConfig: NextConfig = {
     "ffmpeg-static",
     "ffprobe-static",
   ],
+  // Traçage de fichiers FORCÉ (constat production 4 oct.) : les binaires
+  // ffmpeg/ffprobe sont référencés par CHEMIN à l'exécution (pas par
+  // require) — le traceur de la Lambda ne les inclut pas, d'où
+  // « binaire introuvable (/var/task/node_modules/ffmpeg-static/ffmpeg) ».
+  // On force leur inclusion dans chaque fonction qui peut rendre/sonder.
+  outputFileTracingIncludes: {
+    "/api/video/**": ["./node_modules/ffmpeg-static/ffmpeg", "./node_modules/ffprobe-static/bin/**"],
+    "/api/health/**": ["./node_modules/ffmpeg-static/ffmpeg", "./node_modules/ffprobe-static/bin/**"],
+  },
 };
 
 /**
