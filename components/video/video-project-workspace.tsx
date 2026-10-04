@@ -102,7 +102,11 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
         await removeTimelineSyncItem(item.id);
         if (item.projectId === projectId) {
           setProject((current) => current ? { ...current, timeline: data.timeline } : current);
-          await cacheLocalProject({ ...(await getCachedLocalProject<VideoProject>(projectId))?.project ?? project, timeline: data.timeline, updatedAt: new Date().toISOString() });
+          const cachedProject = await getCachedLocalProject<VideoProject>(projectId);
+          const baseProject = cachedProject?.project ?? project;
+          if (baseProject) {
+            await cacheLocalProject({ ...baseProject, timeline: data.timeline, updatedAt: new Date().toISOString() });
+          }
         }
       } catch (error) {
         await updateTimelineSyncItem(item.id, {
