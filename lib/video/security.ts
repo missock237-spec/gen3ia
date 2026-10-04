@@ -126,7 +126,7 @@ export const FFMPEG_SANDBOX_ARGS = ["-nostdin", "-protocol_whitelist", "file,pip
 // Résolution des binaires FFmpeg/ffprobe (Task 1-a)
 // ────────────────────────────────────────────────────────────────────────────
 
-export type FfmpegBinarySource = "env" | "ffmpeg-static" | "path";
+export type FfmpegBinarySource = "env" | "ffmpeg-static" | "runtime-download" | "path";
 export interface ResolvedBinary {
   path: string;
   source: FfmpegBinarySource;
@@ -184,6 +184,80 @@ async function verifyStaticBinary(
   }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Repli TÉLÉCHARGEMENT RUNTIME (constat production 4 oct. : sur Vercel
+// Hobby, le plan limite les fonctions serverless — outputFileTracingIncludes
+// par motifs éclate le bundle et le déploiement échoue ; et le traceur
+// n'emmène jamais le binaire référencé par chemin). Le binaire est alors
+// téléchargé UNE FOIS par instance dans /tmp (persistant à chaud), depuis la
+// release GitHub du paquet ffmpeg-static (mêmes binaires que le paquet npm).
+// ────────────────────────────────────────────────────────────────────────────
+
+const RUNTIME_RELEASE_TAG = process.env.VIDEO_STATIC_RELEASE_TAG?.trim() || "b6.0";
+const RUNTIME_BASE_URL = process.env.VIDEO_STATIC_BINARIES_URL?.trim().replace(/\/$/, "")
+  || `https://github.com/eugeneware/ffmpeg-static/releases/download/${RUNTIME_RELEASE_TAG}`;
+const RUNTIME_DIR = "/tmp/gen3ia-ffmpeg";
+const MIN_BINARY_BYTES = 1_000_000;
+
+const runtimeDownloads = new Map<string, Promise<string>>();
+
+async function ensureRuntimeBinary(kind: "ffmpeg" | "ffprobe"): Promise<string> {
+  const cached = runtimeDownloads.get(kind);
+  if (cached) return cached;
+  const download = (async () => {
+    const target = `${RUNTIME_DIR}/${kind}`;
+    const fs = await import("node:fs/promises");
+    // Instance chaude : déjà téléchargé et exécutable.
+    try {
+      await fs.access(target, fs.constants.X_OK);
+      return target;
+    } catch {
+      /* premier usage de cette instance */
+    }
+    await fs.mkdir(RUNTIME_DIR, { recursive: true });
+    const url = `${RUNTIME_BASE_URL}/${kind}-linux-x64`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(180_000), redirect: "follow" });
+    if (!response.ok) throw new Error(`HTTP ${response.status} sur ${url}`);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length < MIN_BINARY_BYTES) throw new Error(`binaire trop petit (${buffer.length} o) — téléchargement corrompu`);
+    await fs.writeFile(target, buffer, { mode: 0o755 });
+    await fs.access(target, fs.constants.X_OK); // exécutable réellement posé
+    return target;
+  })();
+  runtimeDownloads.set(kind, download);
+  download.catch(() => runtimeDownloads.delete(kind)); // retenter au prochain usage
+  return download;
+}
+
+function runtimeDownloadSupported(): boolean {
+  // Lambda/Vercel Linux x64 : /tmp inscriptible, réseau sortant disponible.
+  return process.platform === "linux" && process.arch === "x64";
+}
+
+async function resolveWithRuntimeFallback(
+  staticBinary: ResolvedBinary | null,
+  kind: "ffmpeg" | "ffprobe",
+): Promise<ResolvedBinary> {
+  if (staticBinary && staticBinary.path) return staticBinary;
+  if (runtimeDownloadSupported()) {
+    try {
+      const path = await ensureRuntimeBinary(kind);
+      return { path, source: "runtime-download" };
+    } catch (error) {
+      return {
+        path: kind,
+        source: "path",
+        diagnostic: `téléchargement runtime ${kind} impossible — ${error instanceof Error ? error.message.slice(0, 160) : "erreur inconnue"}`,
+      };
+    }
+  }
+  return {
+    path: kind,
+    source: "path",
+    ...(staticBinary?.diagnostic ? { diagnostic: staticBinary.diagnostic } : {}),
+  };
+}
+
 let ffmpegResolution: Promise<ResolvedBinary> | null = null;
 let ffprobeResolution: Promise<ResolvedBinary> | null = null;
 
@@ -194,8 +268,7 @@ export function resolveFfmpegBinary(): Promise<ResolvedBinary> {
       const env = process.env.VIDEO_FFMPEG_PATH?.trim();
       if (env) return { path: env, source: "env" } as const;
       const staticBinary = await verifyStaticBinary(staticFfmpegPath(), "ffmpeg-static");
-      if (staticBinary && staticBinary.path) return staticBinary;
-      return { path: "ffmpeg", source: "path", ...(staticBinary?.diagnostic ? { diagnostic: staticBinary.diagnostic } : {}) };
+      return await resolveWithRuntimeFallback(staticBinary, "ffmpeg");
     })();
   }
   return ffmpegResolution;
@@ -208,8 +281,7 @@ export function resolveFfprobeBinary(): Promise<ResolvedBinary> {
       const env = process.env.VIDEO_FFPROBE_PATH?.trim();
       if (env) return { path: env, source: "env" } as const;
       const staticBinary = await verifyStaticBinary(staticFfprobePath(), "ffprobe-static");
-      if (staticBinary && staticBinary.path) return staticBinary;
-      return { path: "ffprobe", source: "path", ...(staticBinary?.diagnostic ? { diagnostic: staticBinary.diagnostic } : {}) };
+      return await resolveWithRuntimeFallback(staticBinary, "ffprobe");
     })();
   }
   return ffprobeResolution;
