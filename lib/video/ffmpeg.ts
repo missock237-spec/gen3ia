@@ -95,8 +95,10 @@ async function runCommand(
 
 /** Vérifie que le chemin reste dans le répertoire du job (anti-traversée). */
 export function assertInsideDir(dir: string, target: string): void {
+  const resolvedDir = resolve(dir);
   const resolved = resolve(target);
-  if (!resolved.startsWith(resolve(dir))) {
+  const relative = require("node:path").relative(resolvedDir, resolved) as string;
+  if (relative.startsWith("..") || require("node:path").isAbsolute(relative)) {
     throw new FfmpegError("SPAWN_ERROR", `Chemin hors du bac à sable : ${target}`);
   }
 }
