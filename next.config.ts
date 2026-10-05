@@ -23,6 +23,19 @@ const withBundleAnalyzer =
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Task 100 (déploiement 10-2025) : la phase « Linting and checking
+  // validity of types » de next build faisait dépasser la RAM du conteneur
+  // de build (OOM SIGKILL en local comme sur Vercel — compile OK en 3,7 min,
+  // mort au type-check). Le type-check et le lint restent des BARRIÈRES
+  // obligatoires, mais déplacées là où la mémoire suffit :
+  //   1. CI GitHub Actions à CHAQUE push (.github/workflows/ci.yml :
+  //      typecheck + lint + tests + audit + build + budget) ;
+  //   2. local avant tout push : npm run typecheck + npm run lint
+  //      (tsc --noEmit = 0 erreur requis).
+  // Le build Vercel compile et bundle uniquement — aucune perte de garantie
+  // sur les types, l'exécution CI fait foi.
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: true },
   // Production uniquement : console.* est retiré du bundle (moins de code,
   // pas de logs de debug en exploitation) — error/warn conservés.
   compiler: {
