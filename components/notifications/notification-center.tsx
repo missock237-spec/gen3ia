@@ -26,6 +26,12 @@ import {
  * Rafraîchissement : polling léger (25 s) EN PAUSE quand l'onglet est caché
  * (Task 96-d : Page Visibility — aucune requête ni lecture Firestore pour un
  * onglet que personne ne regarde) + refresh immédiat au retour d'onglet.
+ *
+ * Chaîne native (Task 99-b) : émission pendant que la page est masquée
+ * (chemin historique) ET passe de rattrapage au premier rafraîchissement
+ * après le retour visible — les items nés pendant l'absence (polling en
+ * pause) ne peuvent plus échapper à la notification native (fenêtre bornée
+ * par l'instant du dernier masquage, dédoublonnage strict par id).
  */
 
 type Gen3iaNotification = {
@@ -43,6 +49,11 @@ type Gen3iaNotification = {
 };
 
 const POLL_INTERVAL_MS = 25_000;
+
+/** Rattrapage (Task 99-b) : marge retranchée à l'instant du masquage pour
+ * couvrir le décalage d'horloge entre la création serveur d'un item et
+ * l'horloge locale de l'appareil. */
+const CATCH_UP_MARGIN_MS = 2_000;
 
 function timeAgo(ms: number): string {
   const seconds = Math.max(1, Math.round((Date.now() - ms) / 1000));
@@ -65,6 +76,11 @@ export function NotificationCenter() {
   const seenApprovalIds = React.useRef<Set<string>>(new Set());
   const firstLoadDone = React.useRef(false);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+  // Task 99-b : instant du dernier masquage de l'onglet + fenêtre de
+  // rattrapage armée au retour visible (consommée par le premier
+  // rafraîchissement réussi — conservée si le réseau échoue).
+  const lastHiddenAtRef = React.useRef<number | null>(null);
+  const catchUpSinceRef = React.useRef<number | null>(null);
 
   const refresh = React.useCallback(async () => {
     if (!sessionAvailable) return;
@@ -81,6 +97,10 @@ export function NotificationCenter() {
       // le service et accordé la permission — avec déduplication stricte,
       // repli service worker (Android / app installée) et jamais pendant le
       // premier chargement (on ne rejoue pas l'historique).
+      // Task 99-b : passe de rattrapage — au premier rafraîchissement après
+      // un retour d'onglet, les items nés pendant l'absence (polling en
+      // pause) restent éligibles même si la page est redevenue visible.
+      const catchUpSince = catchUpSinceRef.current ?? undefined;
       for (const item of list) {
         if (item.read) continue;
         const dedupId = item.approvalId ?? item.id;
@@ -92,6 +112,8 @@ export function NotificationCenter() {
           enabled: isNativeNotificationsEnabled(),
           isHidden: document.hidden,
           alreadyShown: alreadyShownThisSession(dedupId),
+          eligibleWhileVisibleSince: catchUpSince,
+          createdAtMs: item.createdAtMs,
         });
         if (!eligible) continue;
         markShownThisSession(dedupId);
@@ -99,9 +121,20 @@ export function NotificationCenter() {
           title: item.type === "approval_requested" ? "Gen3ia — validation requise" : `Gen3ia — ${item.title}`,
           body: item.body ? item.body.slice(0, 300) : undefined,
           tag: dedupId,
-          url: item.conversationId ? `/workspace?c=${encodeURIComponent(item.conversationId)}` : item.executionId ? `/studio?taskId=${encodeURIComponent(item.executionId)}` : "/dashboard",
+          // Deep-link (Task 99-b) : la conversation cible directement la
+          // route dynamique dédiée — la racine de l'espace de travail ne
+          // propage aucun paramètre de conversation (redirect nu), l'ancien
+          // lien n'amenait donc jamais sur le bon fil.
+          url: item.conversationId
+            ? `/workspace/conversations/${encodeURIComponent(item.conversationId)}`
+            : item.executionId
+              ? `/studio?taskId=${encodeURIComponent(item.executionId)}`
+              : "/dashboard",
         });
       }
+      // La passe de rattrapage ne vaut que pour ce rafraîchissement réussi :
+      // en cas d'échec réseau elle est conservée pour la tentative suivante.
+      if (catchUpSince !== undefined) catchUpSinceRef.current = null;
       firstLoadDone.current = true;
     } catch {
       /* réseau indisponible : le polling suivant retentera */
@@ -121,11 +154,26 @@ export function NotificationCenter() {
       if (document.hidden) return;
       void refresh();
     }, POLL_INTERVAL_MS);
-    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
-    document.addEventListener("visibilitychange", onVisible);
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        // Task 99-b : mémorise l'instant du masquage — les items créés
+        // après (moins la marge d'horloge) seront rattrapés au retour.
+        lastHiddenAtRef.current = Date.now();
+        return;
+      }
+      if (document.visibilityState === "visible") {
+        // Task 99-b : arme la fenêtre de rattrapage AVANT le rafraîchissement
+        // immédiat — la première passe visible couvre l'absence entière.
+        if (lastHiddenAtRef.current !== null) {
+          catchUpSinceRef.current = Math.max(0, lastHiddenAtRef.current - CATCH_UP_MARGIN_MS);
+        }
+        void refresh();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [refresh, sessionAvailable]);
 
@@ -208,7 +256,7 @@ export function NotificationCenter() {
   if (!sessionAvailable) return null;
 
   return (
-    <div ref={containerRef} className="fixed right-3 top-2.5 z-[70] sm:right-4">
+    <div ref={containerRef} className="g3-notification-bell fixed right-3 top-2.5 z-[70] sm:right-4">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}

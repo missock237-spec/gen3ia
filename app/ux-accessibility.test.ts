@@ -169,3 +169,52 @@ describe("D8 — 404 : deux issues distinctes", () => {
     expect(page).toContain('href="/studio"');
   });
 });
+
+describe("D9 — PWA installée : safe-area top + installation in-app (Task 99-c)", () => {
+  it("globals.css : bloc @media (display-mode: standalone) décale le menu ☰ au-dessus de la notch", () => {
+    const css = read("app/globals.css");
+    const block = css.match(/@media \(display-mode: standalone\) \{[\s\S]*?\n\}/);
+    expect(block, "bloc standalone manquant dans app/globals.css").not.toBeNull();
+    expect(block?.[0]).toContain(".g3-mobile-menu");
+    expect(block?.[0]).toContain("env(safe-area-inset-top)");
+    // La cloche de notifications (classe posée côté composant par 99-b)
+    // et le squelette app-shell sont couverts par le même bloc.
+    expect(block?.[0]).toContain(".g3-notification-bell");
+    expect(block?.[0]).toContain(".g3-shell-skeleton");
+  });
+
+  it("app-shell : le squelette du centre de notifications porte l'ancre g3-shell-skeleton", () => {
+    const shell = read("components/nav/app-shell.tsx");
+    expect(shell).toContain("g3-shell-skeleton");
+  });
+
+  it("app/studio/loading.tsx et app/developer/loading.tsx existent avec le squelette conventionnel", () => {
+    for (const segment of ["studio", "developer"]) {
+      const source = read(`app/${segment}/loading.tsx`);
+      const shared = source.includes("Skeleton");
+      const inline = source.includes("var(--g3-elevated)") || source.includes("aria-busy");
+      expect(
+        shared || inline,
+        `skeleton manquant/incohérent : app/${segment}/loading.tsx`,
+      ).toBe(true);
+    }
+  });
+
+  it("install-button : beforeinstallprompt, navigator.standalone et appinstalled gérés", () => {
+    const button = read("components/pwa/install-button.tsx");
+    expect(button).toContain('"beforeinstallprompt"');
+    expect(button).toContain("navigator.standalone");
+    expect(button).toContain('"appinstalled"');
+    // Le bouton ne réapparaît jamais en mode application installée.
+    expect(button).toContain('(display-mode: standalone)');
+  });
+
+  it("les Paramètres exposent la section « Application » avec état + instructions iOS", () => {
+    const settings = read("app/settings/page.tsx");
+    expect(settings).toContain("PwaInstallSection");
+    const section = read("components/settings/pwa-install-section.tsx");
+    expect(section).toContain("Application installée");
+    expect(section).toContain("Navigateur");
+    expect(section).toContain("Sur l&apos;écran d&apos;accueil");
+  });
+});

@@ -28,10 +28,13 @@ function AppNavSkeleton() {
 }
 
 /** Squelette NotificationCenter : pastille fixe (h-10 w-10, right/top
- * identiques au bouton cloche) — position:fixed, zéro impact sur le flux. */
+ * identiques au bouton cloche) — position:fixed, zéro impact sur le flux.
+ * La classe g3-shell-skeleton sert d'ancre au bloc safe-area top standalone
+ * (globals.css section 16) : en PWA installée la pastille passe sous la
+ * notch iOS sinon. */
 function NotificationCenterSkeleton() {
   return (
-    <div className="fixed right-3 top-2.5 z-[70] sm:right-4" aria-hidden="true">
+    <div className="g3-shell-skeleton fixed right-3 top-2.5 z-[70] sm:right-4" aria-hidden="true">
       <div className="h-10 w-10 rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)]" />
     </div>
   );

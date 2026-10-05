@@ -2195,3 +2195,23 @@ textarea:focus-visible, [tabindex]:focus-visible {
   .g3-mpf .g3-progress::after { animation: none; }
 }
 
+/* ============================================================
+   16. PWA INSTALLÉE (STANDALONE) — SAFE-AREA TOP
+   En application installée, l'interface passe sous la notch /
+   status bar iOS (viewport-fit=cover est posé dans layout.tsx).
+   On décale chaque élément FIXÉ en haut de page au-dessus de
+   l'encoche : bouton ☰ du menu mobile, cloche de notifications
+   (.g3-notification-bell — classe posée côté composant par la
+   task 99-b), squelette du centre de notifications (.g3-shell-
+   skeleton) et fil d'Ariane. env(safe-area-inset-top) vaut 0 sur
+   les appareils sans encoche : max() préserve les valeurs
+   actuelles (14px / 10px) dans ce cas. Placé EN FIN de feuille
+   pour surcharger les règles de même spécificité plus haut.
+   ============================================================ */
+@media (display-mode: standalone) {
+  .g3-mobile-menu { top: max(14px, env(safe-area-inset-top)); }
+  .g3-notification-bell { top: max(10px, env(safe-area-inset-top)); }
+  .g3-shell-skeleton { top: max(10px, env(safe-area-inset-top)); }
+  .g3-breadcrumb { padding-top: max(14px, env(safe-area-inset-top)); }
+}
+

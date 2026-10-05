@@ -15,8 +15,9 @@ import {
  *
  * Chaîne réelle : choix utilisateur explicite → demande de permission du
  * navigateur (au clic, jamais au chargement) → affichage natif des
- * nouvelles notifications quand l'utilisateur regarde ailleurs (repli
- * service worker sur Android et en app installée). L'état réel du
+ * nouvelles notifications quand l'utilisateur regarde ailleurs, avec
+ * rattrapage au retour sur l'onglet des alertes nées pendant l'absence
+ * (repli service worker sur Android et en app installée). L'état réel du
  * navigateur est toujours affiché — jamais une promesse non tenue.
  */
 export function NativeNotificationsSetting() {
@@ -65,8 +66,9 @@ export function NativeNotificationsSetting() {
         Notifications natives de l&apos;appareil
       </h2>
       <p className="mt-2 text-sm leading-6 text-[var(--g3-muted)]">
-        Recevez les alertes Gen3ia (validations d&apos;actions sensibles, missions, messages) directement sur votre appareil,
-        même lorsque l&apos;application est en arrière-plan. Désactivées par défaut : vous choisissez.
+        Recevez une notification quand une mission avance pendant que l&apos;application est en arrière-plan
+        ou que votre onglet est inactif ; les alertes survenues pendant votre absence vous rattrapent
+        dès votre retour sur l&apos;onglet. Désactivées par défaut : vous choisissez.
       </p>
       <p className={`mt-3 text-xs leading-5 ${permission === "denied" ? "text-[var(--g3-warning-strong)]" : "text-[var(--g3-faint)]"}`} role="status">
         {stateLabel}

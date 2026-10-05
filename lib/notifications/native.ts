@@ -11,6 +11,13 @@
  *  3. affichage via new Notification (desktop) AVEC repli automatique sur
  *     le service worker showNotification (Android + app installée) ;
  *  4. clic sur la notification : retour dans l'app (focus + navigation).
+ *
+ * Rattrapage (Task 99-b) : le polling du centre est EN PAUSE quand l'onglet
+ * est caché — une notification née pendant l'absence ne pouvait plus passer
+ * le critère « onglet caché » au retour. L'éligibilité accepte désormais une
+ * fenêtre de rattrapage (eligibleWhileVisibleSince) : l'item né pendant
+ * l'absence est émis à la première passe visible qui le couvre, sans jamais
+ * rejouer un item déjà montré (déduplication stricte).
  */
 
 export type NativePermissionState = "unsupported" | "default" | "granted" | "denied";
@@ -71,13 +78,34 @@ export interface NativeEligibilityInput {
   isHidden: boolean;
   /** Déjà montrée pendant cette session (déduplication stricte par id). */
   alreadyShown: boolean;
+  /** Fenêtre de rattrapage (epoch ms) : borne inférieure de création des
+   * items encore éligibles ALORS QUE l'onglet est redevenu visible. Le
+   * polling étant en pause quand l'onglet est caché, un item né pendant
+   * l'absence n'a jamais pu passer le critère isHidden — cette fenêtre le
+   * couvre à la première passe visible. Absent/0 = comportement historique
+   * strict (émission uniquement onglet caché). */
+  eligibleWhileVisibleSince?: number;
+  /** Date de création de l'item (epoch ms), requise pour prouver le
+   * rattrapage. Sans elle, la fenêtre ne s'applique pas. */
+  createdAtMs?: number;
 }
 
 export function shouldShowNativeNotification(input: NativeEligibilityInput): boolean {
   if (!input.enabled) return false;
   if (input.permission !== "granted") return false;
   if (input.alreadyShown) return false;
-  return input.isHidden;
+  // Chemin historique : onglet caché = l'utilisateur regarde ailleurs.
+  if (input.isHidden) return true;
+  // Rattrapage (Task 99-b) : l'item est né pendant l'absence (polling en
+  // pause), strictement après la borne — on l'émet à cette passe visible.
+  // Un item antérieur (ou à la borne exacte) reste ignoré : jamais de rejeu
+  // d'historique au retour de l'utilisateur.
+  return (
+    typeof input.eligibleWhileVisibleSince === "number" &&
+    input.eligibleWhileVisibleSince > 0 &&
+    typeof input.createdAtMs === "number" &&
+    input.createdAtMs > input.eligibleWhileVisibleSince
+  );
 }
 
 /** Déduplication par session : ids déjà montrés (plafonné à 200). */

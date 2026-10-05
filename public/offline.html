@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hors ligne — Gen3ia AI Studio</title>
     <style>
+      /* Couleurs alignées sur les tokens du design system GEN3IA
+         (app/globals.css, thème sombre « Nebula ») :
+         fond --g3-bg, surface --g3-surface, accent --g3-primary. */
       :root { color-scheme: dark; }
       * { box-sizing: border-box; }
       body {
@@ -14,8 +17,8 @@
         align-items: center;
         justify-content: center;
         padding: 24px;
-        background: #070a12;
-        color: #fff;
+        background: #05060C;
+        color: #F4F5FB;
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       }
       .card {
@@ -23,46 +26,234 @@
         width: 100%;
         text-align: center;
         padding: 40px 32px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid #1D2138;
         border-radius: 24px;
-        background: #0d1220;
+        background: #0B0D17;
       }
       .badge {
         display: inline-block;
         padding: 6px 12px;
         border-radius: 10px;
-        border: 1px solid rgba(167, 139, 250, 0.4);
-        background: rgba(124, 58, 237, 0.15);
-        color: #c4b5fd;
+        border: 1px solid rgba(124, 92, 255, 0.4);
+        background: rgba(124, 92, 255, 0.16);
+        color: #9E85FF;
         font-size: 12px;
         letter-spacing: 0.2em;
         text-transform: uppercase;
       }
-      h1 { margin: 20px 0 8px; font-size: 22px; }
-      p { margin: 0; color: rgba(255, 255, 255, 0.6); font-size: 14px; line-height: 1.7; }
+      /* Pastille d'état réseau : « Hors ligne » → « Reconnexion… ». */
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 18px 0 0;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: rgba(246, 98, 110, 0.13);
+        color: #FB8E96;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .status .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #F6626E;
+      }
+      .status.reconnexion {
+        background: rgba(124, 92, 255, 0.16);
+        color: #9E85FF;
+      }
+      .status.reconnexion .dot { background: #7C5CFF; }
+      h1 { margin: 20px 0 8px; font-size: 22px; color: #F4F5FB; }
+      p { margin: 0; color: #8F95B8; font-size: 14px; line-height: 1.7; }
+      /* File hors-ligne : bloc discret, visible seulement si des missions
+         attendent d'être renvoyées au retour du réseau. */
+      .outbox {
+        margin-top: 16px;
+        padding: 10px 14px;
+        border-radius: 12px;
+        background: rgba(245, 174, 49, 0.13);
+        color: #FBC96B;
+        font-size: 13px;
+      }
       button {
         margin-top: 24px;
         padding: 12px 24px;
         border: 0;
         border-radius: 12px;
-        background: #7c3aed;
-        color: #fff;
+        background: #7C5CFF;
+        color: #FFFFFF;
         font-size: 14px;
         font-weight: 600;
         cursor: pointer;
       }
-      button:hover { background: #8b5cf6; }
+      button:hover:not(:disabled) { background: #9E85FF; }
+      button:disabled { opacity: 0.7; cursor: default; }
+      button:focus-visible { outline: 2px solid #9E85FF; outline-offset: 2px; }
     </style>
   </head>
   <body>
     <div class="card">
       <span class="badge">Gen3ia</span>
+      <p class="status" id="status" role="status" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="status-label">Hors ligne</span>
+      </p>
       <h1>Vous êtes hors ligne</h1>
       <p>
         Gen3ia AI Studio nécessite une connexion Internet pour faire tourner
         ses agents. Vérifiez votre réseau puis réessayez.
       </p>
-      <button onclick="location.reload()">Réessayer</button>
+      <p class="outbox" id="outbox" hidden></p>
+      <button id="retry" type="button">Réessayer</button>
     </div>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var pastille = document.getElementById("status");
+        var libelle = document.getElementById("status-label");
+        var bouton = document.getElementById("retry");
+        var blocFile = document.getElementById("outbox");
+
+        function passerEnReconnexion() {
+          if (pastille) pastille.classList.add("reconnexion");
+          if (libelle) libelle.textContent = "Reconnexion…";
+          if (bouton) {
+            bouton.disabled = true;
+            bouton.textContent = "Reconnexion…";
+          }
+        }
+
+        function revenirHorsLigne() {
+          if (pastille) pastille.classList.remove("reconnexion");
+          if (libelle) libelle.textContent = "Hors ligne";
+          if (bouton) {
+            bouton.disabled = false;
+            bouton.textContent = "Réessayer";
+          }
+        }
+
+        /* Auto-retry : dès le retour du réseau, on affiche l'état
+           « Reconnexion… » (pastille + bouton) puis on recharge la page.
+           Le court délai rend l'état visible si le réseau revient puis
+           recoupe : le rechargement retombera alors proprement sur cette
+           page, pastille ramenée à « Hors ligne ». */
+        window.addEventListener("online", function () {
+          passerEnReconnexion();
+          window.setTimeout(function () { location.reload(); }, 500);
+        });
+        /* Le réseau peut recouper avant le rechargement effectif. */
+        window.addEventListener("offline", revenirHorsLigne);
+
+        if (bouton) {
+          bouton.addEventListener("click", function () {
+            passerEnReconnexion();
+            location.reload();
+          });
+        }
+
+        /* ------- Compteur de missions en attente (file du service worker) ------- */
+
+        /* Lit le nombre d'items de la file hors-ligne tenue par le service
+           worker (IndexedDB « gen3ia-outbox », store « requests »).
+           Retourne le total, ou null si indisponible. Totalement défensif :
+           la base est la propriété du service worker — on ne la crée JAMAIS
+           (une base créée vide ici priverait le SW de son store et casserait
+           la file) et toute erreur masque le bloc sans bruit console. */
+        function compterMissions() {
+          try {
+            if (!("indexedDB" in window) || typeof indexedDB.databases !== "function") {
+              return Promise.resolve(null);
+            }
+            return indexedDB.databases().then(function (bases) {
+              var existe = (bases || []).some(function (base) {
+                return base && base.name === "gen3ia-outbox";
+              });
+              if (!existe) return null; /* aucune file : rien à afficher. */
+              return new Promise(function (resolve, reject) {
+                /* Ouverture SANS version : jamais d'upgrade ni de création
+                   de schéma — le SW reste seul propriétaire de la base. */
+                var requete = indexedDB.open("gen3ia-outbox");
+                requete.onsuccess = function () { resolve(requete.result); };
+                requete.onerror = function () { reject(requete.error); };
+                requete.onblocked = function () { reject(new Error("base bloquee")); };
+              }).then(function (db) {
+                try {
+                  if (!db.objectStoreNames.contains("requests")) {
+                    /* Store absent (course rare : base créée puis supprimée
+                       entre-temps) — on restitue la base au SW, qui recréera
+                       son schéma, et on masque le bloc. */
+                    db.close();
+                    try { indexedDB.deleteDatabase("gen3ia-outbox"); } catch (err) { /* silencieux */ }
+                    return null;
+                  }
+                  var tx = db.transaction("requests", "readonly");
+                  var tout = tx.objectStore("requests").getAll();
+                  return new Promise(function (resolve, reject) {
+                    tout.onsuccess = function () { resolve((tout.result || []).length); };
+                    tout.onerror = function () { reject(tout.error); };
+                  }).then(
+                    function (total) { db.close(); return total; },
+                    function (erreur) { db.close(); throw erreur; }
+                  );
+                } catch (erreur) {
+                  db.close();
+                  throw erreur;
+                }
+              });
+            });
+          } catch (erreur) {
+            return Promise.resolve(null);
+          }
+        }
+
+        function majCompteur() {
+          compterMissions().then(function (total) {
+            if (!blocFile) return;
+            if (total === null || total <= 0) {
+              blocFile.hidden = true;
+              blocFile.textContent = "";
+              return;
+            }
+            blocFile.textContent = total === 1
+              ? "1 mission en attente — envoi automatique dès le retour du réseau"
+              : total + " missions en attente — envoi automatique dès le retour du réseau";
+            blocFile.hidden = false;
+          }).catch(function () {
+            /* IndexedDB indisponible (navigation privée, quota…) : le bloc
+               se masque silencieusement, sans erreur console. */
+            if (blocFile) {
+              blocFile.hidden = true;
+              blocFile.textContent = "";
+            }
+          });
+        }
+
+        majCompteur();
+
+        /* Le service worker prévient les pages à chaque mouvement de la file
+           (gen3ia-outbox-flushed / -failed / -pending). Son payload ne porte
+           pas de compteur (url/status/attempts uniquement) : on relit la
+           file pour rafraîchir le total — un item délivré ou rejeté a déjà
+           été retiré de la base à ce stade. */
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.addEventListener("message", function (event) {
+            var type = event.data && event.data.type;
+            if (
+              type === "gen3ia-outbox-flushed" ||
+              type === "gen3ia-outbox-failed" ||
+              type === "gen3ia-outbox-pending"
+            ) {
+              majCompteur();
+            }
+          });
+        }
+      })();
+    </script>
   </body>
 </html>

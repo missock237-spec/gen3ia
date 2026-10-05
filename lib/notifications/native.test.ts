@@ -65,6 +65,54 @@ describe("shouldShowNativeNotification — éligibilité stricte", () => {
   });
 });
 
+describe("shouldShowNativeNotification — passe de rattrapage au retour d'onglet (Task 99-b)", () => {
+  // Contexte : le polling est en PAUSE quand l'onglet est caché — un item né
+  // pendant l'absence n'a jamais pu passer le critère isHidden. Au retour
+  // visible, la fenêtre [eligibleWhileVisibleSince → ∞) le rend éligible.
+  const visibleBase = { permission: "granted" as const, enabled: true, isHidden: false, alreadyShown: false };
+
+  it("item né pendant l'absence (strictement après la borne) → éligible au retour visible", () => {
+    expect(
+      shouldShowNativeNotification({ ...visibleBase, eligibleWhileVisibleSince: 10_000, createdAtMs: 10_500 }),
+    ).toBe(true);
+  });
+
+  it("item antérieur à la fenêtre de rattrapage → non éligible (jamais de rejeu d'historique)", () => {
+    expect(
+      shouldShowNativeNotification({ ...visibleBase, eligibleWhileVisibleSince: 10_000, createdAtMs: 9_000 }),
+    ).toBe(false);
+  });
+
+  it("borne exclusive : un item exactement à la borne est exclu (créé avant le masquage)", () => {
+    expect(
+      shouldShowNativeNotification({ ...visibleBase, eligibleWhileVisibleSince: 10_000, createdAtMs: 10_000 }),
+    ).toBe(false);
+  });
+
+  it("sans fenêtre armée (ou fenêtre nulle), la règle historique tient : visible = silence", () => {
+    expect(shouldShowNativeNotification({ ...visibleBase, createdAtMs: 999_999 })).toBe(false);
+    expect(
+      shouldShowNativeNotification({ ...visibleBase, eligibleWhileVisibleSince: 0, createdAtMs: 999_999 }),
+    ).toBe(false);
+  });
+
+  it("sans date de création, le rattrapage ne peut pas être prouvé → non éligible", () => {
+    expect(shouldShowNativeNotification({ ...visibleBase, eligibleWhileVisibleSince: 10_000 })).toBe(false);
+  });
+
+  it("les gardes strictes restent prioritaires pendant le rattrapage (choix, permission, dédup)", () => {
+    const catchUp = { eligibleWhileVisibleSince: 10_000, createdAtMs: 10_500 } as const;
+    expect(shouldShowNativeNotification({ ...visibleBase, ...catchUp, enabled: false })).toBe(false);
+    expect(shouldShowNativeNotification({ ...visibleBase, ...catchUp, permission: "default" })).toBe(false);
+    expect(shouldShowNativeNotification({ ...visibleBase, ...catchUp, permission: "unsupported" })).toBe(false);
+    expect(shouldShowNativeNotification({ ...visibleBase, ...catchUp, alreadyShown: true })).toBe(false);
+  });
+
+  it("onglet caché : le chemin historique prime (éligible même sans fenêtre de rattrapage)", () => {
+    expect(shouldShowNativeNotification({ ...visibleBase, isHidden: true })).toBe(true);
+  });
+});
+
 describe("Déduplication par session (stockage de session)", () => {
   beforeEach(() => {
     // window vient d'être recréé : sessionStorage vierge à chaque test.
@@ -112,6 +160,22 @@ describe("Câblage production (garde anti-dérive)", () => {
     expect(center).toContain("shouldShowNativeNotification");
     expect(center).toContain("showNativeNotification");
     expect(center).toContain("markShownThisSession");
+  });
+
+  it("le rattrapage est câblé : le centre mémorise l'absence et passe la fenêtre au module natif", () => {
+    const center = read("components/notifications/notification-center.tsx");
+    expect(center).toContain("visibilitychange");
+    expect(center).toContain("lastHiddenAt");
+    expect(center).toContain("eligibleWhileVisibleSince");
+    expect(center).toContain("createdAtMs: item.createdAtMs");
+  });
+
+  it("deep-link conversation : la notification cible la route dynamique dédiée", () => {
+    const center = read("components/notifications/notification-center.tsx");
+    expect(center).toContain("/workspace/conversations/");
+    // La racine avalait le paramètre de conversation (redirect nu) — ce
+    // lien cassé ne doit jamais revenir.
+    expect(center).not.toContain("/workspace?c=");
   });
 
   it("les Paramètres exposent l'activation (demande de permission au clic, jamais au chargement)", () => {

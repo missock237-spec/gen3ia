@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { FeatureAuthGate } from "@/components/auth/feature-auth-gate";
+import { PwaInstallSection } from "@/components/settings/pwa-install-section";
 import { SettingsAdSpace } from "@/components/settings/settings-ad-space";
 import { ThemeChoice } from "@/components/ui/theme-choice";
 import { NativeNotificationsSetting } from "@/components/notifications/native-notifications-setting";
@@ -47,6 +48,8 @@ function SettingsContent() {
         </section>
 
         <NativeNotificationsSetting />
+
+        <PwaInstallSection />
 
         <section className="mt-6" aria-labelledby="settings-ad-title">
           <h2 id="settings-ad-title" className="sr-only">Publicités</h2>

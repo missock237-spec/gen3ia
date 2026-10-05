@@ -1040,3 +1040,228 @@ Stage Summary:
   nouveaux secrets (héritage lu sans clé) ; TTL Firestore sur
   executionIdempotency/expireAt à activer côté projet (gcloud firestore
   fields ttl update executionIdempotency --ttl-field expireAt).
+
+---
+Task ID: 99-a
+Agent: impl-sw-outbox
+Task: SW clients.claim() + purge caches + compteur outbox + badge banner
+
+Work Log:
+- Lecture du worklog (conventions : gardes structurels fs.readFileSync, UI et
+  commentaires FR), de public/sw.js, components/nav/offline-banner.tsx,
+  app/pwa-consistency.test.ts, app/ux-accessibility.test.ts (invariants
+  verrouillés) et components/pwa-register.tsx (chaîne de relais des messages
+  SW → CustomEvents window, payload intégral passé dans detail).
+- public/sw.js — activate (l.52-72) : remplacement du `matchAll({ type:
+  "window" })` dont le résultat était jeté par `await self.clients.claim()`
+  (les pages déjà ouvertes passent sous le nouveau SW immédiatement →
+  controllerchange côté client, exploité par pwa-register) ; ajout de la
+  purge des caches hérités : caches.keys() filtrés sur préfixe « gen3ia- »
+  hors liste blanche KEPT_CACHES = new Set(["gen3ia-offline-v1",
+  "gen3ia-immutable-v1"]) (constante l.35-39) → caches.delete(name) en
+  Promise.all, commentaires FR (caches orphelins qui s'accumulaient).
+  skipWaiting conservé tel quel dans install.
+- public/sw.js — compteur outbox : les 3 sites d'émission
+  « gen3ia-outbox-pending » enrichis avec pendingCount: (await
+  listQueued()).length — post-enqueue (l.233-237, compté après l'enfilement),
+  replafonnement transitoire après updateQueued (l.292-297), toujours hors
+  ligne dans flushOutbox (l.310-314) — la longueur réelle de la file est
+  transmise à chaque notification.
+- components/nav/offline-banner.tsx : state pendingCount persistant — réglé
+  par le pendingCount du SW à « gen3ia:outbox-pending » (fallback +1), décrémenté
+  (ou réglé si compteur fourni) à « gen3ia:outbox-flushed » /
+  « gen3ia:outbox-failed », Math.max(0, …) partout, badge masqué à 0 ;
+  pastille PERSISTANTE (plus seulement le toast éphémère, conservé) quand
+  pendingCount > 0 : « 1 mission en attente d'envoi » / « N missions en
+  attente d'envoi » (accord singulier/pluriel), role="status" +
+  aria-live="polite", mêmes tokens --g3-* et safe-area-inset-bottom
+  (conteneur flex-col : pastille file au-dessus du bandeau hors-ligne) ;
+  docblock FR mis à jour.
+- app/pwa-consistency.test.ts : nouveau describe « Task 99-a » (4 gardes
+  structurels) — clients.claim() présent dans le slice activate ; purge
+  (Set des 2 caches whitelistés + startsWith("gen3ia-") + caches.delete dans
+  activate) ; pendingCount présent sur chaque site gen3ia-outbox-pending
+  (comptage regex : sites comptés ≥ sites d'émission) ; banner gère
+  pendingCount + libellés FR singulier/pluriel « en attente d'envoi ».
+- Fichiers modifiés : STRICTEMENT les 3 autorisés (public/sw.js,
+  components/nav/offline-banner.tsx, app/pwa-consistency.test.ts). Pas de
+  commit, pas de build.
+
+Stage Summary:
+- Bug majeur corrigé : le SW ne prenait jamais le contrôle des pages ouvertes
+  (clients.claim() manquant) — les mises à jour n'étaient appliquées qu'au
+  rechargement manuel ; désormais claim() déclenche la chaîne
+  controllerchange → pwa-register existante.
+- Quota maîtrisé : à chaque activation, les caches « gen3ia-* » orphelins
+  laissés par les anciens SW sont purgés (liste blanche offline + immutable).
+- Compteur outbox fidèle de bout en bout : le SW envoie la longueur réelle de
+  la file dans chaque gen3ia-outbox-pending ; le banner affiche une pastille
+  persistante FR accordée en nombre (1 mission / N missions), décrémentée à
+  chaque reprise ou échec définitif, masquée à zéro — plus jamais de perte de
+  visibilité après la disparition du toast.
+- Vérifications : npx tsc --noEmit = 0 erreur ; vitest run
+  app/pwa-consistency.test.ts app/ux-accessibility.test.ts = 42/42 verts
+  (24 + 18) ; node --check public/sw.js OK ; bonus
+  lib/notifications/native.test.ts = 12/12 verts (autre lecteur de sw.js).
+
+---
+Task ID: 99-d
+Agent: impl-offline-page
+Task: offline.html aligné tokens + auto-retry + compteur outbox + garde de test
+
+Work Log:
+- Lecture du worklog (80 dernières lignes), de public/sw.js (file outbox :
+  DB "gen3ia-outbox" v1, store "requests" keyPath id autoIncrement, types
+  postMessage gen3ia-outbox-pending/flushed/failed, payload SANS compteur
+  — url/status/attempts uniquement), de app/globals.css (tokens réels :
+  --g3-bg #05060C, --g3-surface #0B0D17, --g3-primary #7C5CFF,
+  --g3-primary-strong #9E85FF, --g3-border #1D2138, softs danger/warning/
+  primary) et de app/pwa-consistency.test.ts (conventions des gardes).
+- public/offline.html réécrit (SEUL fichier runtime touché) :
+  - Couleurs : body #070a12 → #05060C (--g3-bg), carte #0d1220 → #0B0D17
+    (--g3-surface), bordure carte → #1D2138 (--g3-border), accent bouton
+    #7c3aed → #7C5CFF (--g3-primary) hover #9E85FF (--g3-primary-strong),
+    badge sur primary-soft rgba(124,92,255,.16) + texte #9E85FF, texte
+    #F4F5FB / secondaire #8F95B8. Typographie/espacements inchangés.
+  - Auto-retry : listener "online" → état « Reconnexion… » (pastille +
+    bouton désactivé) puis reload après 500 ms (l'état reste visible si le
+    réseau recoupe) ; listener "offline" → retour propre à « Hors ligne »
+    (bouton réactivé) ; bouton manuel « Réessayer » conservé (click →
+    état + reload).
+  - Pastille d'état réseau : p#status role="status" aria-live="polite",
+    « Hors ligne » (dot #F6626E sur danger-soft) → « Reconnexion… » (dot
+    #7C5CFF sur primary-soft).
+  - Compteur outbox : bloc #outbox hidden par défaut, visible seulement si
+    count > 0, « 1 mission en attente — envoi automatique dès le retour du
+    réseau » / « N missions en attente — … » (warning-soft #FBC96B).
+  - Script IIFE défensif : IndexedDB ouverte SANS version (aucune création/
+    upgrade — la base reste la propriété exclusive du SW : une base créée
+    vide ici priverait le SW de son store et casserait la file) ;
+    pré-check indexedDB.databases() (base absente ou databases() non
+    supporté → bloc masqué silencieusement) ; double garde
+    objectStoreNames.contains("requests") ; lecture readonly + getAll ;
+    db.close() systématique ; tout échec → catch silencieux (aucune erreur
+    console, navigation privée OK) ; nettoyage deleteDatabase si base vide
+    créée par une course rare.
+  - Refresh du compteur : majCompteur() au chargement + à chaque message SW
+    gen3ia-outbox-flushed / -failed / -pending (payload sans pendingCount
+    → relecture de la file ; un item délivré/rejeté a déjà été retiré).
+- app/offline-page.test.ts NOUVEAU (garde structurel fs.readFileSync, 9
+  tests) : lang="fr"+viewport ; tokens extraits EN DIRECT de globals.css
+  (regex --g3-bg/--g3-surface/--g3-primary) et retrouvés dans la page,
+  anciennes couleurs bannies (#070a12, #0d1220, #7c3aed) ; listener online
+  + reload + état Reconnexion… + listener offline ; bouton Réessayer ;
+  base "gen3ia-outbox" + store "requests" readonly + getAll + ouverture
+  SANS version (indexedDB.open("gen3ia-outbox") sans ", 1") + gardes
+  databases()/hidden ; écoute des 3 types gen3ia-outbox-* via
+  navigator.serviceWorker ; singulier/pluriel + mention envoi automatique ;
+  100 % offline (aucun fetch(, aucune URL http(s), aucun script src/link
+  href externes) ; pas d'alert/prompt, role=status + aria-live.
+- Aucun autre fichier modifié (sw.js, manifest, nav, pwa-consistency
+  intacts) ; pas de commit, pas de build.
+
+Stage Summary:
+- offline.html collée au design system Nebula (bg/surface/accent = tokens
+  réels), auto-retry au retour du réseau avec feedback « Reconnexion… »
+  visible, compteur de missions en attente branché en lecture seule sur la
+  file du SW (jamais créée, jamais bloquée — invariant outbox préservé),
+  page 100 % offline-safe.
+- Vérifications : npx vitest run app/offline-page.test.ts
+  app/pwa-consistency.test.ts app/perf-cache-policy.test.ts → 37/37 verts
+  (9 nouveaux ; les 28 gardes existants inchangés) ; npx tsc --noEmit →
+  0 erreur.
+
+---
+Task ID: 99-b
+Agent: impl-notifications
+Task: Chaîne notifications locales réparée + deep-link conversations + setting honnête
+
+Work Log:
+- Lecture du worklog (conventions 96-d/98) + fichiers cibles : notification-center.tsx, native.ts, native-notifications-setting.tsx, native.test.ts ; vérification des routes : app/workspace/page.tsx = redirect("/workspace/conversations") SANS propagation de ?c= ; app/workspace/conversations/[conversationId]/page.tsx existe (param : conversationId) ; /studio?taskId= est bien consommé (app/studio/page.tsx lit params.get("taskId")) — donc seule la cible conversation était cassée. Grep des tests lisant notification-center : uniquement native.test.ts (invariants « Câblage production » respectés : shouldShowNativeNotification/showNativeNotification/markShownThisSession conservés).
+- BUG MAJEUR réparé (chaîne locale) : l'éligibilité exigeait isHidden=true alors que le polling est en pause onglet caché → notification impossible sauf micro-course à la reprise. Correctif : notification-center mémorise lastHiddenAtRef à chaque visibilitychange→hidden ; au retour visible, arme catchUpSinceRef = lastHiddenAt − 2 000 ms (CATCH_UP_MARGIN_MS, décalage d'horloge) AVANT le refresh immédiat ; la première passe réussie consomme la fenêtre (conservée si échec réseau) ; shouldShowNativeNotification reçoit eligibleWhileVisibleSince + createdAtMs (item non lu né strictement après la borne → éligible même document.hidden=false). Chemin historique (émission pendant hidden) intact ; dédoublonnage réutilisé tel quel (seenApprovalIds + alreadyShownThisSession/markShownThisSession + tag OS) — jamais deux fois le même item.
+- Deep-link réparé : notification native de conversation cible désormais /workspace/conversations/<conversationId> (encodeURIComponent) au lieu de /workspace?c=<id> avalé par le redirect nu ; cible /studio?taskId= vérifiée fonctionnelle et conservée ; repli /dashboard inchangé.
+- Réglage honnête : texte des Paramètres reformulé (plus de promesse « même en arrière-plan » toute faite) : notification quand une mission avance app en arrière-plan/onglet inactif + rattrapage des alertes manquées dès le retour sur l'onglet ; doc-comment du composant alignée.
+- Contrat agent 99-c : classe stable g3-notification-bell AJOUTÉE au conteneur positionné de la cloche (en plus de fixed right-3 top-2.5 z-[70] sm:right-4, rien retiré) — globals.css non touché.
+- Tests (native.test.ts) : 12 → 21 — nouveau describe « passe de rattrapage » (item né pendant l'absence → éligible ; antérieur/à la borne exacte → exclu ; sans fenêtre ou sans createdAtMs → règle historique ; gardes strictes prioritaires : enabled/permission/dédup ; chemin caché intact) + 2 gardes anti-dérive (rattrapage câblé : visibilitychange/lastHiddenAt/eligibleWhileVisibleSince/createdAtMs ; deep-link : contient /workspace/conversations/ et NE contient plus /workspace?c=). Style vitest existant conservé (describe/it FR, logique pure sans navigateur).
+
+Stage Summary:
+- Chaîne de notifications natives de nouveau opérationnelle de bout en bout : émission quand la page est masquée (chemin historique) + rattrapage garanti au retour d'onglet des items nés pendant l'absence — la fenêtre de course qui perdait les notifications est fermée, sans rejeu d'historique ni double notification.
+- Deep-link conversation restauré : le clic sur une notification native ouvre directement le fil (/workspace/conversations/<id>) au lieu de retomber sur la liste.
+- Promesse du réglage alignée sur le comportement réel (sobre, exacte, FR) ; sélecteur stable g3-notification-bell livré pour le safe-area standalone (agent 99-c).
+- Fichiers modifiés (4 seulement) : lib/notifications/native.ts, components/notifications/notification-center.tsx, components/notifications/native-notifications-setting.tsx, lib/notifications/native.test.ts.
+- Vérifications : npx tsc --noEmit → 0 erreur ; npx vitest run lib/notifications/native.test.ts → 21/21 verts ; eslint sur les 4 fichiers → 0 problème. Aucun commit, aucun build lancé.
+---
+Task ID: 99-c
+Agent: impl-standalone-install
+Task: Safe-area top standalone + installation in-app + loading.tsx studio/developer
+
+Work Log:
+- Lecture worklog (80 dernières lignes) + fichiers cibles : app-downloads.tsx
+  (PwaInstallButton inline), app/page.tsx:603 (montage vitrine), settings/page.tsx
+  (structure sections), globals.css (.g3-mobile-menu L1129-1148, breadcrumbs
+  L1154-1171, tokens L41-42), ux-accessibility.test.ts (D1-D8 verrouillés),
+  dashboard/loading.tsx (convention skeletons), app-shell.tsx (skeleton cloche
+  top-2.5), lib/device/use-device.ts + detect.ts (hook mort confirmé, 0 import).
+- globals.css : nouvelle section 16 « PWA INSTALLÉE (STANDALONE) — SAFE-AREA TOP »
+  (L2198-2216) — @media (display-mode: standalone) en FIN de feuille (surcharge
+  de même spécificité) : .g3-mobile-menu top max(14px, env(safe-area-inset-top)),
+  .g3-notification-bell top max(10px, env(...)) (classe posée côté composant par
+  99-b, règle créée ici — voulu), .g3-shell-skeleton top max(10px, env(...)),
+  .g3-breadcrumb padding-top max(14px, env(...)). env()=0 sans encoche → max()
+  préserve 14px/10px actuels.
+- app-shell.tsx (uniquement la classe du skeleton) : NotificationCenterSkeleton
+  porte désormais l'ancre stable `g3-shell-skeleton` (L30-41) + commentaire.
+- Extraction NOUVEAU components/pwa/install-button.tsx (client, 128 L) :
+  PwaInstallButton + hook exporté useStandaloneInstalled. Détection « déjà
+  installée » renforcée : navigator.standalone (iOS, via cast IosWindow) OU
+  matchMedia("(display-mode: standalone)") ; listener `change` matchMedia
+  (web → app sans rechargement) + événement `appinstalled` ; un seul sens
+  (jamais de réaffichage en standalone). Prop align ("start"|"end", défaut
+  "end" → vitrine pixel-identique) ; dispatch appinstalled après userChoice
+  accepted (non émis partout après prompt programmatique).
+- app-downloads.tsx : composant inline supprimé (~74 L), import du composant
+  extrait (L1) ; le "use client" devient inutile (section serveur pure) ;
+  app/page.tsx:603 inchangé — vitrine fonctionnelle à l'identique.
+- NOUVEAU components/settings/pwa-install-section.tsx (client, 66 L) :
+  section « Application » ton sobre (g3-gradient-border mt-6 p-6, aria-labelledby)
+  — état réel role="status" (« Application installée ✓ » / « Navigateur »),
+  bouton (align start), instructions iOS FR en 3 étapes « Partager → Sur
+  l'écran d'accueil ». Détection iOS via useDevice (os ios/ipados) — le hook
+  mort est désormais branché et utile ; iPadOS déguisé macOS couvert par le
+  guide générique du bouton.
+- settings/page.tsx : import (L6) + montage <PwaInstallSection /> (L52) entre
+  notifications natives et espace publicités (NativeNotificationsSetting
+  conservé → garde lib/notifications/native.test.ts intact).
+- NOUVEAUX app/studio/loading.tsx (PageHeaderSkeleton + AgentGridSkeleton du
+  Studio, 13 L) et app/developer/loading.tsx (PageHeaderSkeleton + ListSkeleton,
+  13 L) — convention tokens --g3-elevated/aria ; le loading du segment parent
+  couvre les sous-sections studio (finance/marketing/documents…) et developer.
+- ux-accessibility.test.ts : describe D9 ajouté APRÈS D8 (L173-220, aucun test
+  existant modifié) — 5 gardes : bloc standalone globals.css (regex + .g3-mobile-menu
+  + env(safe-area-inset-top) + .g3-notification-bell + .g3-shell-skeleton),
+  ancre app-shell, existence + squelette conventionnel studio/developer loading.tsx,
+  install-button (beforeinstallprompt + navigator.standalone + appinstalled +
+  display-mode), section Paramètres (état + instructions iOS).
+- Vérifications : npx tsc --noEmit → 0 erreur ; npx vitest run
+  app/ux-accessibility.test.ts → 23/23 verts (18 existants + 5 D9) ;
+  lib/notifications/native.test.ts 21/21 (lit settings/page.tsx) ;
+  pwa-consistency 24/24 + theme-consistency 10/10 (fichiers partagés intacts) ;
+  eslint sur les 8 fichiers touchés → 0. Grep : aucun autre test ne lit
+  app-downloads.tsx/install-button (seul native.test.ts lit settings/page.tsx,
+  relancé vert). Fichiers interdits non touchés (sw.js, offline.html,
+  offline-banner, notifications/*, pwa-consistency.test.ts) ; ni commit, ni build.
+
+Stage Summary:
+- PWA installée : le bouton ☰, la cloche de notifications, son squelette et le
+  fil d'Ariane passent au-dessus de la notch iOS (safe-area top via env() +
+  max(), dégradation identique sans encoche) — fin des contrôles inaccessibles
+  sous la status bar en display:standalone.
+- Installation in-app : le bouton PWA existe désormais dans les Paramètres
+  (section « Application ») en plus de la vitrine, avec détection fiable et
+  réactive de l'état installé (navigator.standalone, display-mode change,
+  appinstalled — bouton jamais réaffiché en mode app) et guide iOS FR dédié.
+- Perception de vitesse : /studio et /developer ont leurs loading.tsx
+  (squelettes conventionnels, couverture des sous-segments) — 8 → 10 segments.
+- Nettoyage : PwaInstallButton extrait (source unique), section vitrine redevenue
+  composant serveur, hook useDevice branché sur la détection iOS.
+- Tests : +5 gardes structurels D9 (23/23 verts), typecheck 0, lint 0.

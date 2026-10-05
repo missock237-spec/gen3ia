@@ -158,3 +158,59 @@ describe("Bannière « nouvelle version » — le signal visible-tab atteint l'U
     expect(layout).toContain("<UpdateBanner />");
   });
 });
+
+describe("Task 99-a — reprise de contrôle, purge des caches et compteur outbox", () => {
+  const sw = read("public/sw.js");
+  const banner = read("components/nav/offline-banner.tsx");
+
+  /** Extrait le corps du handler "activate" (entre activate et fetch). */
+  const activateHandler = (() => {
+    const start = sw.indexOf('self.addEventListener("activate"');
+    const end = sw.indexOf('self.addEventListener("fetch"', start);
+    return sw.slice(start, end);
+  })();
+
+  it("activate : clients.claim() — les pages déjà ouvertes passent sous le nouveau SW immédiatement", () => {
+    // L'ancien handler appelait matchAll({ type: "window" }) en jetant le
+    // résultat : les pages ouvertes restaient sous l'ancien SW jusqu'à un
+    // rechargement manuel. claim() déclenche controllerchange côté client
+    // (exploité par pwa-register pour appliquer la nouvelle version).
+    expect(activateHandler).toContain("self.clients.claim()");
+    // skipWaiting conservé à l'installation (garde existant complété).
+    expect(sw).toContain("self.skipWaiting()");
+  });
+
+  it("activate : purge des caches « gen3ia- » hérités hors liste blanche", () => {
+    // Les deux caches légitimes sont explicitement listés dans une structure
+    // de type Set, et le handler supprime réellement les autres caches.
+    expect(sw).toContain('new Set(["gen3ia-offline-v1", "gen3ia-immutable-v1"])');
+    expect(activateHandler).toContain('name.startsWith("gen3ia-")');
+    expect(activateHandler).toContain("KEPT_CACHES.has(name)");
+    expect(activateHandler).toContain("caches.delete(name)");
+  });
+
+  it("les payloads gen3ia-outbox-pending portent pendingCount (longueur réelle de la file)", () => {
+    // Trois sites d'émission (post-enqueue, replafonnement, toujours hors
+    // ligne) : chacun doit compter la file APRÈS mutation pour que le badge
+    // du banner affiche un nombre fidèle.
+    const pendingSites = sw.match(/type: "gen3ia-outbox-pending"/g)?.length ?? 0;
+    const countedSites = sw.match(/pendingCount: \(await listQueued\(\)\)\.length/g)?.length ?? 0;
+    expect(pendingSites).toBeGreaterThanOrEqual(3);
+    expect(countedSites).toBeGreaterThanOrEqual(pendingSites);
+  });
+
+  it("offline-banner : badge PERSISTANT du nombre de missions en attente (garde FR)", () => {
+    // Compteur maintenu côté banner (pas qu'un toast éphémère) : réglé par
+    // pendingCount du SW, décrémenté à chaque reprise ou échec définitif.
+    expect(banner).toContain("pendingCount");
+    expect(banner).toContain('"gen3ia:outbox-flushed"');
+    expect(banner).toContain('"gen3ia:outbox-failed"');
+    // Garde FR : libellé affiché avec accord singulier/pluriel.
+    expect(banner).toContain("en attente d'envoi");
+    expect(banner).toContain("1 mission en attente d'envoi");
+    expect(banner).toContain("missions en attente d'envoi");
+    // Annonce aux lecteurs d'écran, cohérente avec le bandeau hors-ligne.
+    expect(banner).toContain('role="status"');
+    expect(banner).toContain('aria-live="polite"');
+  });
+});

@@ -32,6 +32,11 @@ const MAX_ATTEMPTS = 5;
 const IMMUTABLE_CACHE = "gen3ia-immutable-v1";
 const IMMUTABLE_PREFIXES = ["/_next/static/", "/icons/"];
 const IMMUTABLE_MAX_ENTRIES = 100;
+// Liste blanche des caches conservés entre les versions : le fallback
+// hors-ligne et les statiques immuables. Tout autre cache « gen3ia-* »
+// hérité d'un ancien service worker est purgé à l'activation (les caches
+// orphelins s'accumulaient à chaque déploiement jusqu'à saturation du quota).
+const KEPT_CACHES = new Set(["gen3ia-offline-v1", "gen3ia-immutable-v1"]);
 
 self.addEventListener("install", (event) => {
   // Fallback hors-ligne UNIQUEMENT pour les navigations (network-first :
@@ -48,7 +53,20 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       await self.registration.sync?.register?.(SYNC_TAG).catch(() => undefined);
-      await self.clients.matchAll({ type: "window" });
+      // Purge des caches hérités : les anciens service workers laissaient des
+      // caches « gen3ia-* » orphelins qui s'accumulaient à chaque déploiement
+      // — tout cache hors liste blanche est supprimé ici.
+      const names = await caches.keys();
+      await Promise.all(
+        names
+          .filter((name) => name.startsWith("gen3ia-") && !KEPT_CACHES.has(name))
+          .map((name) => caches.delete(name)),
+      );
+      // Prise de contrôle IMMÉDIATE : les pages déjà ouvertes passent sous le
+      // nouveau SW sans attendre un rechargement manuel (déclenche
+      // « controllerchange » côté client, exploité par pwa-register pour
+      // appliquer la nouvelle version au moment sûr).
+      await self.clients.claim();
     })(),
   );
 });
@@ -210,7 +228,13 @@ self.addEventListener("fetch", (event) => {
             idempotencyKey,
           });
           await self.registration.sync?.register?.(SYNC_TAG).catch(() => undefined);
-          await notifyClients({ type: "gen3ia-outbox-pending", url: url.pathname });
+          // Compteur FIDÈLE : l'item vient d'être enfilé — la longueur réelle
+          // de la file permet au banner d'afficher un badge exact.
+          await notifyClients({
+            type: "gen3ia-outbox-pending",
+            url: url.pathname,
+            pendingCount: (await listQueued()).length,
+          });
           return new Response(JSON.stringify({ queued: true, offline: true }), {
             status: 202,
             headers: { "content-type": "application/json" },
@@ -264,7 +288,13 @@ async function flushOutbox() {
             await notifyClients({ type: "gen3ia-outbox-failed", url: item.url, status: response.status, reason: "max_attempts" });
           } else {
             await updateQueued(item.id, { attempts });
-            await notifyClients({ type: "gen3ia-outbox-pending", url: item.url, attempts });
+            // L'item reste en file : on transmet la longueur réelle restante.
+            await notifyClients({
+              type: "gen3ia-outbox-pending",
+              url: item.url,
+              attempts,
+              pendingCount: (await listQueued()).length,
+            });
             break;
           }
         } else {
@@ -275,8 +305,13 @@ async function flushOutbox() {
           await notifyClients({ type: "gen3ia-outbox-failed", url: item.url, status: response.status, reason: "rejected" });
         }
       } catch {
-        // Toujours hors ligne : nouvelle tentative au prochain sync.
-        await notifyClients({ type: "gen3ia-outbox-pending", url: item.url });
+        // Toujours hors ligne : nouvelle tentative au prochain sync (l'item
+        // reste en file — on transmet la longueur réelle restante).
+        await notifyClients({
+          type: "gen3ia-outbox-pending",
+          url: item.url,
+          pendingCount: (await listQueued()).length,
+        });
         break;
       }
     }
