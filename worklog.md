@@ -1265,3 +1265,34 @@ Stage Summary:
 - Nettoyage : PwaInstallButton extrait (source unique), section vitrine redevenue
   composant serveur, hook useDevice branché sur la détection iOS.
 - Tests : +5 gardes structurels D9 (23/23 verts), typecheck 0, lint 0.
+
+---
+Task ID: 99-orchestration
+Agent: orchestrateur (Super Z)
+Task: Coordination Task 99 (4 sous-agents parallèles), vérification intégrée, build, déploiement production
+
+Work Log:
+- Audit « version app » par sous-agent Explore : 8 lacunes identifiées (4 majeures,
+  4 mineures) sur la chaîne PWA/standalone.
+- 4 sous-agents full-stack déployés en parallèle, périmètres de fichiers disjoints :
+  99-a (sw.js + offline-banner + gardes), 99-b (notifications natives + deep-link),
+  99-c (standalone + installation in-app + loading), 99-d (offline.html + garde).
+- Intégration vérifiée : tsc 0 erreur, 2006 tests verts / 215 fichiers (+27),
+  eslint 0 erreur (3 warnings préexistants), build production OK (mode compile,
+  First Load JS 105 kB), budget bundle 359 routes OK (pire 182 kB < 240).
+- Commit ef6440a pushé sur main ; déploiement Vercel dpl_8pkWCNSa READY.
+- Vérifications production live : gen3ia.online 200 ; sw.js contient clients.claim()
+  (1 site), pendingCount (3 sites d'émission), purge KEPT_CACHES ; offline.html
+  aligné tokens (#05060C/#0B0D17) + état « Reconnexion… » + compteur gen3ia-outbox ;
+  /settings et /studio 200.
+
+Stage Summary:
+- La version app (PWA installée) est désormais entièrement fonctionnelle : mises à
+  jour SW effectives sur les pages ouvertes (claim), file hors-ligne visible
+  (badge compteur persistant + offline.html), notifications natives réellement
+  émises (rattrapage au retour de visibilité + promesse honnête), deep-links de
+  notifications vers la bonne conversation, UI respectant la notch en standalone,
+  installation guidée depuis les Paramètres, splashes de chargement complets.
+- Prochaine étape candidate (Task 100) : vrai push serveur (VAPID/FCM +
+  /api/push/subscribe + handler push dans sw.js) pour alerter app fermée,
+  et splash iOS apple-touch-startup-image.
