@@ -1960,3 +1960,49 @@ Stage Summary:
   avec l'ordre garanti — ÷4 à ÷10 de lectures sur les listes + justesse corrigée.
 - Suites : tsc 0 ; 2144 tests verts / 223 fichiers (intégration complète des 4 lots) ;
   lint 0 ; build complet OK ; budget 357 routes.
+
+---
+Task ID: 101-orchestration
+Agent: orchestrateur (Super Z)
+Task: Coordination Task 101 (audit + 4 sous-agents), intégration, déploiement production, incident de vérification résolu
+
+Work Log:
+- Audit sous-agent Explore : 0 accès Firestore client (100 % Admin SDK serveur) ;
+  TOP 12 consommateurs cartographiés (polls conversation ~55k lectures/run,
+  sonnette ~17k/jour à 100 % MISS cache, scans 200 sans orderBy, sweeps vidéo
+  cross-user par tick) ; 5 blocs de code mort identifiés.
+- 4 sous-agents parallèles, périmètres disjoints : 101-a (cache/LRU/session/live),
+  101-b (couche résiliente orderBy+limit + index + listes), 101-c (GET meta=1 +
+  polls + vidéo), 101-d (code mort + mineurs). Incidents tool : 101-b et 101-c
+  ont signalé un timeout de reporting mais leur travail était complet dans
+  l'arbre — vérifié ligne à ligne par l'orchestrateur (C3a/C3b/M3/index présents,
+  2144 tests verts) ; section worklog 101-b rédigée par l'orchestrateur.
+- Intégration : tsc 0, 2144 tests verts / 223 fichiers (+57), lint 0,
+  build complet OK, budget 357 routes (−3 = routes supprimées).
+- Déploiement 035ccbd : Vercel READY (PROMOTED). Faux incident enquêté :
+  GET 405/POST 500 sur /api/agents/autonomous/run — causé par le FALLBACK du
+  routeur Next sur la route dynamique [id]/run (x-matched-path le prouve),
+  PAS par un artefact stale ; redéploiement sans build cache exécuté pour
+  le confirmer. evals → 404 propres. Rien à corriger.
+- CI GitHub : job principal (typecheck·lint·tests·audit·build·budget) SUCCESS ;
+  jobs annexes (gitleaks, e2e Firebase, axe) annulés (quota minutes GitHub) puis
+  relancés.
+
+Stage Summary:
+- Gains de quota Firestore estimés (par DAU) : sonnette 17 000 → ~2 500
+  lectures/jour ; suivi de conversation ÷15-50 (meta=1 : ~7 lectures/tick vs
+  ~373) ; suivi chat 221 → ~21/tick ; listes ÷4-10 (orderBy serveur + limit
+  demandé) ; session 2-3 appels/page → 1 + 0-1 write au lieu de 1/page ;
+  live ÷6 au repos + heartbeat ÷2 ; knowledge : 0 lecture quand Qdrant répond ;
+  adStats : 2 lectures d'agrégat vs ≤2 000 ; executionTelemetry (10-30 writes
+  par exécution) SUPPRIMÉE ; 596 lignes de code mort Firestore retirées.
+- Repli LRU process-local pour cacheWrap : la plateforme survit sans Upstash
+  sans multiplier les lectures Firestore.
+- NOTE OPS : déployer les index composites ajoutés (conversationRuns,
+  conversationApprovals, videoVersions) via `firebase deploy --only
+  firestore:indexes` — en attendant, le repli résilient absorbe
+  FAILED_PRECONDITION (coût dégradé, justesse conservée).
+- Candidats Task 102 : agrégation usageDaily (M5, writes identiques mais
+  stocke ÷N), sweep schedules indexé dueAtMs, télémétrie de livraison push,
+  suppression planner/orchestrator orphelins (lib/agents/autonomous/,
+  lib/agents/orchestrator/) devenus morts après la suppression de la route.
