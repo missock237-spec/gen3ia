@@ -22,6 +22,9 @@ paths = [
   '''(^|/)docs/''',
   '''package-lock\.json$''',
   '''pnpm-lock\.yaml$''',
+  # Fixtures du test du module de chiffrement envelope : clés/secrets
+  # volontairement factices (Task 98) — jamais de valeur réelle.
+  '''lib/security/secret-envelope\.test\.ts$''',
 ]
 # Clés d'API Web Firebase NEXT_PUBLIC_* : par conception publiques
 # (identifient le projet, ne donnent aucun accès sans règles de sécurité).
