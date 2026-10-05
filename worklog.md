@@ -2006,3 +2006,30 @@ Stage Summary:
   stocke ÷N), sweep schedules indexé dueAtMs, télémétrie de livraison push,
   suppression planner/orchestrator orphelins (lib/agents/autonomous/,
   lib/agents/orchestrator/) devenus morts après la suppression de la route.
+
+---
+Task ID: 101-finalisation
+Agent: orchestrateur (Super Z)
+Task: Stabilisation CI (job flaky sandbox) + validation complète verte
+
+Work Log:
+- CI GitHub initialement entortillée : annulations croisées via le groupe de
+  concurrence (mes relances successives) + jobs annulés à 15m01s (provisionnement
+  runner) — aucune cause code.
+- Un échec réel identifié au fil des tentatives : test anti-rejeu sandbox
+  (« rejeu EXACT ») dépassant le timeout vitest par défaut de 5 s UNIQUEMENT sous
+  couverture v8 en CI (1re injection signée > 5 s ; vert en local ×3 et dans la
+  run CI de 035ccbd). Correctif : timeout 30 s sur CE test — le contrat testé
+  est le rejet du rejeu, pas la latence.
+- Commit 51d272d : CI COMPLETE SUCCESS (gitleaks + typecheck/lint/tests/
+  couverture/audit/build/budget + e2e Firebase émulateurs + axe WCAG 2.1 AA),
+  CodeQL success, Vercel READY.
+- Live : gen3ia.online 200, notifications 401 (protégée), evals 404 (supprimée),
+  splash 200.
+
+Stage Summary:
+- Task 101 validée de bout en bout : audit → 4 lots → intégration → déploiement →
+  CI/CodeQL verts → production vérifiée.
+- Réduction quota Firestore substantielle (détail dans 101-orchestration) ;
+  les index composites restent à déployer via firebase CLI (repli résilient
+  actif en attendant).
