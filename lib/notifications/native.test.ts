@@ -185,3 +185,32 @@ describe("Câblage production (garde anti-dérive)", () => {
     expect(settings).toContain("NativeNotificationsSetting");
   });
 });
+
+describe("Câblage push serveur (Task 100-b, garde anti-dérive)", () => {
+  const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
+
+  it("l'opt-in natif déclenche l'abonnement push en arrière-plan (non bloquant) et le retire à la désactivation", () => {
+    const setting = read("components/notifications/native-notifications-setting.tsx");
+    expect(setting).toContain('from "@/lib/push/client"');
+    // Fire-and-forget : l'UI ne doit jamais attendre le réseau.
+    expect(setting).toContain("void subscribeToPush()");
+    expect(setting).toContain("void unsubscribeFromPush()");
+  });
+
+  it("le client push parle au contrat serveur Task 100 (POST/DELETE /api/push/subscribe, clé VAPID)", () => {
+    const client = read("lib/push/client.ts");
+    expect(client).toContain('"/api/push/subscribe"');
+    expect(client).toContain('"POST"');
+    expect(client).toContain('"DELETE"');
+    expect(client).toContain("NEXT_PUBLIC_VAPID_PUBLIC_KEY");
+    expect(client).toContain("userVisibleOnly: true");
+  });
+
+  it("le texte des Paramètres reste honnête : push réel sous conditions explicites (iOS 16.4, PWA installée)", () => {
+    const setting = read("components/notifications/native-notifications-setting.tsx");
+    // La promesse honnête (Task 99-b) doit survivre à l'annonce du push réel.
+    expect(setting).toContain("16.4");
+    expect(setting).toContain("même application fermée");
+    expect(setting).toContain("les alertes locales");
+  });
+});

@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
+import { pushPayloadFromNotification, sendPushToUser } from "@/lib/push/server";
 import { cacheDelete } from "@/lib/cache/redis";
 import { isSupabaseBackend, resolveProfileId } from "@/lib/db/driver";
 import {
@@ -73,7 +74,12 @@ export async function createNotification(input: CreateNotificationInput): Promis
         uid: input.userId,
         provider: "firebase-bridge",
       });
-      if (created) invalidateNotificationsCache(created.userId);
+      if (created) {
+        invalidateNotificationsCache(created.userId);
+        // Push serveur (Task 100) : fire-and-forget, JAMAIS bloquant — la
+        // notification in-app est déjà créée ; un échec push est silencieux.
+        void sendPushToUser(created.userId, pushPayloadFromNotification(created)).catch(() => undefined);
+      }
       return created;
     }
 
@@ -113,6 +119,10 @@ export async function createNotification(input: CreateNotificationInput): Promis
     // P2 (ADR-006) : miroir Supabase best-effort si le domaine est inscrit
     // (DUAL_WRITE_DOMAINS). Firestore reste la vérité — voir mirror.ts.
     mirrorNotificationCreated(notification);
+    // Push serveur (Task 100) : alerte même APPLICATION FERMÉE (Web Push /
+    // VAPID). Fire-and-forget strict — aucun échec push ne remonte ici ; no-op
+    // silencieux si les clés VAPID ne sont pas configurées.
+    void sendPushToUser(notification.userId, pushPayloadFromNotification(notification)).catch(() => undefined);
     return notification;
   } catch (error) {
     console.warn("[notifications] création impossible (non bloquant):", error instanceof Error ? error.message : error);

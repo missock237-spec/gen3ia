@@ -9,9 +9,13 @@ import {
   setNativeNotificationsEnabled,
   type NativePermissionState,
 } from "@/lib/notifications/native";
+import { isPushSupported, subscribeToPush, unsubscribeFromPush } from "@/lib/push/client";
+
+/** État de l'abonnement push serveur (affiché en sous-texte discret). */
+type PushUiState = "idle" | "subscribing" | "done" | "failed";
 
 /**
- * Réglage « Notifications natives de l'appareil » (étape 18).
+ * Réglage « Notifications natives de l'appareil » (étape 18, étendu Task 100-b).
  *
  * Chaîne réelle : choix utilisateur explicite → demande de permission du
  * navigateur (au clic, jamais au chargement) → affichage natif des
@@ -19,11 +23,19 @@ import {
  * rattrapage au retour sur l'onglet des alertes nées pendant l'absence
  * (repli service worker sur Android et en app installée). L'état réel du
  * navigateur est toujours affiché — jamais une promesse non tenue.
+ *
+ * Task 100-b : la permission accordée déclenche EN ARRIÈRE-PLAN
+ * l'abonnement au push serveur (Web Push VAPID → POST /api/push/subscribe),
+ * pour alerter même application fermée sur les appareils compatibles.
+ * L'abonnement est non bloquant et silencieux en cas d'échec : le réglage
+ * reste activé pour les notifications locales quoi qu'il arrive (seul un
+ * sous-texte discret rapporte l'état réel du push sur cet appareil).
  */
 export function NativeNotificationsSetting() {
   const [permission, setPermission] = React.useState<NativePermissionState>("unsupported");
   const [enabled, setEnabled] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const [pushState, setPushState] = React.useState<PushUiState>("idle");
 
   React.useEffect(() => {
     setPermission(nativePermissionState());
@@ -31,6 +43,27 @@ export function NativeNotificationsSetting() {
   }, []);
 
   const unsupported = permission === "unsupported";
+
+  /** Abonnement push serveur en arrière-plan : jamais bloquant, jamais bruyant. */
+  function startPushSubscription() {
+    // Pas de push Web ici (Safari iOS < 16.4 sans PWA installée, webview) :
+    // on n'affiche rien — les notifications locales restent la promesse.
+    if (!isPushSupported()) return;
+    setPushState("subscribing");
+    void subscribeToPush().then((outcome) => {
+      if (outcome.ok) {
+        setPushState("done");
+        return;
+      }
+      // Dégradations attendues, sans alarmer : navigateur sans push, PWA
+      // non installée sur iOS, clé serveur absente du déploiement → silence.
+      if (outcome.reason === "unsupported" || outcome.reason === "unconfigured") {
+        setPushState("idle");
+        return;
+      }
+      setPushState("failed");
+    });
+  }
 
   async function activate() {
     setBusy(true);
@@ -42,6 +75,10 @@ export function NativeNotificationsSetting() {
       // La permission refusée doit être comprise : l'utilisateur sait quoi
       // faire (réglages du navigateur) au lieu d'un silence perpétuel.
       if (result === "denied") setEnabled(false);
+      // Task 100-b : permission accordée → abonnement au push serveur en
+      // arrière-plan (non bloquant, silencieux) : le réglage reste activé
+      // pour les notifications locales quoi qu'il arrive.
+      if (result === "granted") startPushSubscription();
     } finally {
       setBusy(false);
     }
@@ -50,6 +87,10 @@ export function NativeNotificationsSetting() {
   function deactivate() {
     setNativeNotificationsEnabled(false);
     setEnabled(false);
+    setPushState("idle");
+    // Task 100-b : retire aussi l'abonnement push serveur (fire-and-forget,
+    // idempotent, jamais de throw — voir lib/push/client).
+    void unsubscribeFromPush();
   }
 
   const stateLabel = unsupported
@@ -66,13 +107,28 @@ export function NativeNotificationsSetting() {
         Notifications natives de l&apos;appareil
       </h2>
       <p className="mt-2 text-sm leading-6 text-[var(--g3-muted)]">
-        Recevez une notification quand une mission avance pendant que l&apos;application est en arrière-plan
-        ou que votre onglet est inactif ; les alertes survenues pendant votre absence vous rattrapent
-        dès votre retour sur l&apos;onglet. Désactivées par défaut : vous choisissez.
+        Recevez une alerte quand une mission avance, même application fermée, sur les appareils compatibles
+        (Android/Chrome ; iPhone : iOS 16.4 ou plus avec l&apos;application installée). Sinon, les alertes locales
+        vous rattrapent dès votre retour sur l&apos;onglet. Désactivées par défaut : vous choisissez.
       </p>
       <p className={`mt-3 text-xs leading-5 ${permission === "denied" ? "text-[var(--g3-warning-strong)]" : "text-[var(--g3-faint)]"}`} role="status">
         {stateLabel}
       </p>
+      {pushState === "subscribing" && (
+        <p className="mt-2 text-xs leading-5 text-[var(--g3-faint)]" role="status">
+          Abonnement aux alertes serveur en cours…
+        </p>
+      )}
+      {pushState === "done" && (
+        <p className="mt-2 text-xs leading-5 text-[var(--g3-success-strong)]" role="status">
+          Alertes serveur activées sur cet appareil.
+        </p>
+      )}
+      {pushState === "failed" && (
+        <p className="mt-2 text-xs leading-5 text-[var(--g3-warning-strong)]" role="status">
+          Alertes serveur indisponibles sur cet appareil (les notifications locales restent actives).
+        </p>
+      )}
       <div className="mt-4 flex flex-wrap items-center gap-3">
         {!unsupported && !enabled && (
           <button

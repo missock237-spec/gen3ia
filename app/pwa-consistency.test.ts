@@ -214,3 +214,62 @@ describe("Task 99-a — reprise de contrôle, purge des caches et compteur outbo
     expect(banner).toContain('aria-live="polite"');
   });
 });
+
+describe("Task 100 — push serveur (Web Push / VAPID) : alerte même app fermée", () => {
+  const sw = read("public/sw.js");
+  const route = read("app/api/push/subscribe/route.ts");
+  const notifRepository = read("lib/notifications/repository.ts");
+
+  /** Extrait le corps du handler "push" (entre push et notificationclick). */
+  const pushHandler = (() => {
+    const start = sw.indexOf('self.addEventListener("push"');
+    const end = sw.indexOf('self.addEventListener("notificationclick"', start);
+    return sw.slice(start, end);
+  })();
+
+  it("le service worker écoute l'événement push (Web Push / VAPID)", () => {
+    expect(sw).toContain('self.addEventListener("push"');
+  });
+
+  it("ANTI-DOUBLE NOTIFICATION : aucune notification système si une fenêtre de l'app est visible", () => {
+    // matchAll incluant les clients non contrôlés + test visibilityState :
+    // l'app visible affiche elle-même la notification in-app (cloche) — le
+    // SW ne montre PAS la notification système (pas de doublon).
+    expect(pushHandler).toContain('self.clients.matchAll({ type: "window", includeUncontrolled: true })');
+    expect(pushHandler).toContain('client.visibilityState === "visible"');
+    expect(pushHandler).toContain('"focus" in client');
+    // Fenêtre visible → retour anticipé (l'app affiche elle-même).
+    expect(pushHandler).toContain("if (appVisible) return");
+  });
+
+  it("notification système : tag unique ÉCRASANT (pas d'empilement), icônes Gen3ia, deep-link conservé", () => {
+    expect(pushHandler).toContain('tag: "gen3ia-notification"');
+    expect(pushHandler).toContain('icon: "/icons/icon-192.png"');
+    expect(pushHandler).toContain('badge: "/icons/icon-192.png"');
+    expect(pushHandler).toContain("data: { url: data.url }");
+    // Le handler notificationclick existant ouvre/focus la cible du push.
+    expect(sw).toContain('event.notification.data?.url ?? "/dashboard"');
+  });
+
+  it("charge utile illisible → repli générique FR (jamais de crash du handler push)", () => {
+    expect(pushHandler).toContain('"Une mise à jour de ta mission t\'attend."');
+    expect(pushHandler).toContain('"/dashboard"');
+  });
+
+  it("route /api/push/subscribe : authentifiée (requireUser) avec POST et DELETE idempotents", () => {
+    expect(route).toContain("requireUser");
+    expect(route).toContain("export async function POST");
+    expect(route).toContain("export async function DELETE");
+    expect(route).toContain("upsertPushSubscription");
+    expect(route).toContain("deletePushSubscription");
+    // Réponse canonique du contrat API.
+    expect(route).toContain("errorBody");
+    expect(route).toContain("{ ok: true }");
+  });
+
+  it("chaque notification créée déclenche le push serveur en fire-and-forget", () => {
+    expect(notifRepository).toContain(
+      "void sendPushToUser(notification.userId, pushPayloadFromNotification(notification)).catch(() => undefined)",
+    );
+  });
+});

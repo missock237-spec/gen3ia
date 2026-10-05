@@ -173,6 +173,26 @@ export default function RootLayout({
             repli pour les navigateurs sans support preconnect. */}
         <link rel="preconnect" href="https://pagead2.googlesyndication.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
+        {/* Task 100-C — écrans de démarrage iOS (apple-touch-startup-image).
+            En mode standalone, iOS n'a pas d'équivalent du splash Android
+            (généré depuis le manifest) : sans ces link, l'app installée
+            affiche un écran BLANC au lancement. Chaque PNG (fond #05060C +
+            logo GEN3IA centré, public/images/splash/) est appairé à un
+            appareil via les dimensions CSS RÉELLES (largeur pt × ratio) :
+            1179px = 393pt×3, 1290 = 430×3, 1284 = 428×3, 1170 = 390×3,
+            1125 = 375×3, 828 = 414×2, 2048 = 1024×2, 1668 = 834×2,
+            1536 = 768×2. Couverture PORTRAIT uniquement — le paysage
+            retombe sur le splash le plus proche ou l'écran uni, assumé
+            pour rester léger (cf. worklog Task 100-C). */}
+        <link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/images/splash/apple-splash-1179x2556.png" />
+        <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/images/splash/apple-splash-1290x2796.png" />
+        <link rel="apple-touch-startup-image" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/images/splash/apple-splash-1284x2778.png" />
+        <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/images/splash/apple-splash-1170x2532.png" />
+        <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/images/splash/apple-splash-1125x2436.png" />
+        <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/images/splash/apple-splash-828x1792.png" />
+        <link rel="apple-touch-startup-image" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/images/splash/apple-splash-2048x2732.png" />
+        <link rel="apple-touch-startup-image" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/images/splash/apple-splash-1668x2388.png" />
+        <link rel="apple-touch-startup-image" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/images/splash/apple-splash-1536x2048.png" />
         {/* Connexion Google AdSense (Task 41) — snippet officiel de
             vérification de site + Auto Ads, servi SSR dans le head de
             CHAQUE page : c'est ce marqueur que le robot AdSense vient

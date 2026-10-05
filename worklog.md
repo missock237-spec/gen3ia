@@ -1296,3 +1296,254 @@ Stage Summary:
 - Prochaine étape candidate (Task 100) : vrai push serveur (VAPID/FCM +
   /api/push/subscribe + handler push dans sw.js) pour alerter app fermée,
   et splash iOS apple-touch-startup-image.
+---
+Task ID: 100-b
+Agent: sous-agent full-stack (client Web Push)
+Task: Côté CLIENT du vrai push serveur — abonnement Web Push VAPID branché sur l'opt-in natif existant (serveur + sw.js en parallèle par 100-a)
+
+Work Log:
+- Lecture du worklog (Task 99) + étude complète : native-notifications-setting.tsx,
+  lib/notifications/native.ts + native.test.ts (invariants + style de mocks node,
+  stubs globaux), lib/firebase/auth-client.ts (authFetch L465 : (input, init?, opts?)
+  → Promise<Response>, retry idempotent GET/HEAD), notification-center.tsx (chaîne
+  native Task 99-b). Grep : seul native.test.ts lit native-notifications-setting.tsx
+  (garde « requestNativeNotifications » à conserver).
+- NOUVEAU lib/push/client.ts (module client pur, 169 L, import authFetch, jamais de
+  throw) : isPushSupported() (window + serviceWorker in navigator + PushManager in
+  window + Notification — retourne false partout ailleurs, le navigateur filtre déjà
+  sur Safari iOS < 16.4 / webviews) ; urlBase64ToUint8Array() (padding + -/_ →
+  Uint8Array<ArrayBuffer> pour applicationServerKey) ; snapshotFromSubscription()
+  (toJSON → endpoint/expirationTime/keys) ; buildSubscribeBody() / buildUnsubscribeBody()
+  (corps au contrat Task 100, expirationTime omis si nullish) ; subscribeToPush()
+  (support → permission granted → NEXT_PUBLIC_VAPID_PUBLIC_KEY sinon "unconfigured" →
+  navigator.serviceWorker.ready → getSubscription réutilisée sinon subscribe
+  { userVisibleOnly: true, applicationServerKey } → POST /api/push/subscribe via
+  authFetch ; retours typés { ok } | { ok: false, reason: unsupported|permission|
+  unconfigured|error }, catch global → "error") ; unsubscribeFromPush() (getSubscription
+  → unsubscribe() → DELETE /api/push/subscribe { endpoint } ; idempotent : pas
+  d'abonnement = true, déjà désabonné = true, échec = false). Commentaire FR : push
+  Web iOS exige ≥ 16.4 + PWA installée, dégradation gracieuse — notifications locales
+  intactes.
+- NOUVEAU lib/push/client.test.ts (25 tests, node env, style dépôt : vi.hoisted +
+  vi.mock("@/lib/firebase/auth-client"), stubs globaux window/navigator/Notification
+  via vi.stubGlobal, vi.stubEnv pour la clé) : urlBase64ToUint8Array (round-trip clé
+  VAPID 65 octets → 87 chars, vecteurs "AQIDBA" et "a-b_", padding), corps POST/DELETE
+  au contrat + omission expirationTime + aller-simple abonnement→corps,
+  isPushSupported (5 cas), subscribeToPush (unsupported/permission/unconfigured sans
+  appel réseau ; succès = POST + clé décodée + userVisibleOnly ; réutilisation
+  abonnement existant ; BadRequestError → "error" ; HTTP != 200 → "error"),
+  unsubscribeFromPush (false sans push, true idempotent sans réseau, DELETE avec
+  endpoint, unsubscribe false → true sans réseau, HTTP ko → false, erreur → false).
+- native-notifications-setting.tsx (160 L) : import { isPushSupported, subscribeToPush,
+  unsubscribeFromPush } de @/lib/push/client ; état interne pushState
+  "idle"|"subscribing"|"done"|"failed" ; à l'ACTIVATION (résultat === "granted"),
+  startPushSubscription() fire-and-forget (non bloquant, silencieux : unsupported/
+  unconfigured → retour "idle" sans sous-texte, erreur → "failed") ; à la
+  DÉSACTIVATION : void unsubscribeFromPush() + reset "idle" ; sous-textes discrets
+  role="status" (défaut "faint", succès "success-strong", échec "warning-strong") ;
+  texte FR mis à jour, promesse honnête : « même application fermée » sur appareils
+  compatibles « (Android/Chrome ; iPhone : iOS 16.4 ou plus avec l'application
+  installée). Sinon, les alertes locales vous rattrapent dès votre retour sur
+  l'onglet. » ; gardes existantes intactes (requestNativeNotifications conservé).
+- native.test.ts : +29 lignes, 0 suppression (describe « Câblage push serveur
+  (Task 100-b, garde anti-dérive) ») : 3 gardes — le composant importe les fonctions
+  de @/lib/push/client et les appelle fire-and-forget (« void subscribeToPush() » /
+  « void unsubscribeFromPush() ») ; lib/push/client.ts parle au contrat (POST/DELETE
+  /api/push/subscribe, NEXT_PUBLIC_VAPID_PUBLIC_KEY, userVisibleOnly) ; le texte
+  mentionne « 16.4 » + « même application fermée » + repli « les alertes locales ».
+- Périmètre respecté : AUCUNE modification de public/sw.js, app/api/**,
+  lib/notifications/repository.ts, app/layout.tsx, app/pwa-consistency.test.ts
+  (modifiés en parallèle par 100-a, non touchés par ce périmètre), pas de
+  package.json, pas de commit/push/build, aucun console.log.
+- Vérifications : npx tsc --noEmit → 0 erreur (1 itération : retour
+  urlBase64ToUint8Array typé Uint8Array<ArrayBuffer> pour satisfaire BufferSource
+  sous TS 6) ; npx vitest run lib/push lib/notifications/native.test.ts → 91/91
+  verts (client 25 + native 24 [21 existants + 3 gardes] + server/repository de
+  100-a 42, intégration parallèle déjà compatible) ; eslint sur les 4 fichiers
+  touchés → 0 ; non-régression app/pwa-consistency.test.ts + app/ux-accessibility.test.ts
+  → 53/53.
+
+Stage Summary:
+- L'opt-in « Notifications natives » des Paramètres déclenche désormais l'abonnement
+  réel au push serveur (Web Push VAPID) en arrière-plan, sans jamais bloquer l'UI ni
+  casser les notifications locales : un appareil compatible (Android/Chrome ; iOS
+  16.4+ avec PWA installée) reçoit « Alertes serveur activées sur cet appareil. »,
+  un appareil sans push garde le rattrapage local au retour d'onglet, et l'absence
+  de clé VAPID côté déploiement dégrade en silence.
+- Désactivation = désabonnement réel du navigateur + prévention du serveur
+  (DELETE idempotent) : plus aucune alerte serveur après un « Désactiver ».
+- Côté serveur (contrat respecté à la lettre) : POST/DELETE /api/push/subscribe via
+  authFetch, payload push { title, body, url } géré par le sw.js de 100-a.
+
+---
+Task ID: 100-a
+Agent: sous-agent implémentation (Super Z)
+Task: VRAI push serveur (Web Push / VAPID) — stockage des abonnements, envoi
+fire-and-forget depuis createNotification, route /api/push/subscribe,
+handler « push » dans le service worker (alerte même app fermée).
+
+Work Log:
+- Lecture préalable : worklog (conventions), lib/notifications/repository.ts
+  (schéma + createNotification + branches Firestore/Supabase),
+  app/api/notifications/route.ts (pattern requireUser + errorBody/errorStatus/
+  errorCode), lib/security/authenticated-request.ts + http-errors.ts,
+  public/sw.js (handlers existants gardés intacts),
+  components/notifications/notification-center.tsx (logique deep-link à
+  aligner), lib/firebase/admin.ts (accès Firestore : adminDb), @types/web-push
+  (PushSubscription accepte expirationTime null|number ; WebPushError porte
+  statusCode).
+- NOUVEAU lib/push/repository.ts (126 L) : stockage Firestore
+  users/{uid}/pushSubscriptions/{hashEndpoint} — hash = SHA-256 base64url de
+  l'endpoint (URL signée jamais exposée comme id de document). Champs : endpoint,
+  p256dh, auth, expirationTime|null, userAgent tronqué 200 chars, createdAtMs
+  (conservé sur ré-souscription), lastSeenAtMs. API : upsertPushSubscription
+  (idempotent, même endpoint → remplace, clés fraîches), deletePushSubscription
+  (idempotent, true même si absent), listPushSubscriptions (lastSeenAtMs desc,
+  plafond 50, lignes incomplètes ignorées). Best-effort strict : Firestore
+  indispo → false/[] , JAMAIS de throw vers l'appelant métier.
+- NOUVEAU lib/push/server.ts (183 L) : wrapper web-push server-only.
+  isPushConfigured() = VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY présents (valeurs
+  vides/undefined/null traitées comme absentes) ; sans clés, TOUT le module est
+  no-op silencieux (plateforme inchangée, comme avant la Task 100).
+  sendPushToUser(userId, {title, body, url}) : listage, plafond 10 abonnements
+  par envoi (ordre lastSeenAtMs desc du repository), import dynamique
+  await import("web-push") (cold start préservé, convention du dépôt),
+  setVapidDetails memoïsé PAR VALEUR de clé (VAPID_SUBJECT ||
+  "mailto:contact@gen3ia.online"), envoi Promise.all, suppression de
+  l'abonnement si statusCode 404/410 (nettoyage + console.warn avec endpoint
+  MASQUÉ), autres erreurs (429/5xx/réseau) ignorées, JAMAIS de throw.
+  notificationUrlFrom() : deep-link serveur ALIGNÉ sur notification-center.tsx
+  (conversation → /workspace/conversations/<id>, executionId →
+  /studio?taskId=<id>, sinon /dashboard — commentaire FR d'alignement à
+  maintenir) ; pushPayloadFromNotification : mêmes libellés que les natives
+  client (« Gen3ia — validation requise » / « Gen3ia — <titre> », corps borné
+  300) ; compactPayload : troncatures défensives + réduction par moitiés du
+  corps jusqu'à < 4 096 octets ; maskedEndpoint : 8 derniers chars seulement
+  (endpoint signé et clés p256dh/auth jamais journalisés).
+- NOUVEAU app/api/push/subscribe/route.ts (65 L) : POST + DELETE, runtime
+  nodejs, requireUser, zod strict (endpoint ≤2048, clés ≤512,
+  expirationTime nullable optionnelle), POST → upsert avec user-agent de la
+  requête, DELETE → suppression idempotente, réponses 200 { ok: true },
+  erreurs via errorBody/errorStatus/errorCode + header x-gen3ia-error-code
+  (contrat API respecté à la lettre).
+- lib/notifications/repository.ts (+11 L net) : UNIQUEMENT le hook push —
+  import de pushPayloadFromNotification/sendPushToUser ; à la fin de
+  createNotification RÉUSSIE (dans les deux branches : Supabase si `created`
+  non null, Firestore après mirrorNotificationCreated) : fire-and-forget
+  `void sendPushToUser(userId, pushPayloadFromNotification(notification))
+  .catch(() => undefined)` — aucun envoi dans les cas qui retournent null
+  (userId vide, erreur capturée). Tests existants du repository relancés verts.
+- public/sw.js (+42 L) : section « Push serveur (Web Push / VAPID, Task 100) »,
+  handler addEventListener("push") : parse event.data.json() en try/catch avec
+  repli générique FR (title "Gen3ia", body "Une mise à jour de ta mission
+  t'attend.", url "/dashboard") ; ANTI-DOUBLE NOTIFICATION :
+  clients.matchAll({ type: "window", includeUncontrolled: true }) — si au
+  moins un client visible (visibilityState === "visible" ET "focus" in client)
+  → return (l'app affiche elle-même la notification in-app) ; sinon
+  showNotification avec icon/badge /icons/icon-192.png, tag
+  "gen3ia-notification" (écrase au lieu d'empiler), data { url } — consommé
+  par le handler notificationclick EXISTANT (data?.url ?? "/dashboard",
+  focus+navigate/openWindow) : aucune modification de ce handler.
+- NOUVEAUX tests : lib/push/repository.test.ts (194 L, 16 tests — Firestore
+  simulé par carte mémoire : hash déterministe sans exposition d'URL, upsert
+  idempotent avec createdAtMs conservé, entrées invalides, pannes →
+  false/[], tri lastSeenAtMs desc, lignes incomplètes ignorées) ;
+  lib/push/server.test.ts (250 L, 26 tests — web-push + repository mockés :
+  deep-link aligné (encodage, priorité conversation > tâche), titres
+  conventionnels, no-op sans VAPID, double clés requises, memoïsation
+  setVapidDetails une fois par couple, 404/410 → suppression, 429 → conservé,
+  plafond 10 (plus récents d'abord), panne listage silencieuse, payload
+  envoyé < 4 Ko, endpoint masqué sans protocole/domaine).
+- app/pwa-consistency.test.ts (+59 L, AJOUTS uniquement — describe « Task 100 »
+  en fin de fichier, aucun test existant modifié) : 6 gardes —
+  addEventListener("push") dans le SW ; anti-double (matchAll
+  includeUncontrolled + visibilityState "visible" + "focus" in client +
+  return anticipé) ; tag "gen3ia-notification" + icônes /icons/icon-192.png +
+  data { url } + handler notificationclick conservé ; repli générique FR ;
+  route subscribe (requireUser + POST + DELETE + upsert/delete + { ok: true }
+  + errorBody) ; hook fire-and-forget exact dans le repository notifications.
+- Vérifications : npx tsc --noEmit → 0 erreur (une erreur transitoire a été
+  observée DANS lib/push/client.ts de l'agent 100-b pendant son travail —
+  fichier hors de mon périmètre, jamais touché ; corrigée par l'agent
+  concerné, tsc final 0) ; npx vitest run lib/push
+  lib/notifications/repository.test.ts app/pwa-consistency.test.ts
+  lib/notifications/native.test.ts → 125 tests verts / 6 fichiers (dont les
+  25 tests client de 100-b) ; node --check public/sw.js → OK ;
+  eslint sur les 8 fichiers touchés → 0 erreur. Ni commit, ni build, ni
+  npm install ; package.json/lock intacts ; clé privée VAPID uniquement via
+  process.env (jamais dans un fichier du dépôt).
+
+Stage Summary:
+- Le push serveur est RÉEL : toute notification Gen3ia (validation d'action
+  sensible, info) part désormais en Web Push / VAPID vers tous les appareils
+  enregistrés de l'utilisateur, même APPLICATION FERMÉE — dans la limite de
+  10 abonnements, avec nettoyage automatique des abonnements morts (404/410)
+  et reprise naturelle après une erreur transitoire.
+- Aucun double affichage : app visible → cloche in-app seule (le SW renonce) ;
+  app fermée/arsrière-plan → notification système unique au tag écrasant,
+  deep-link vers la bonne conversation ou la tâche studio au clic.
+- Dégradation gracieuse intégrale : sans VAPID configuré, la chaîne est un
+  no-op silencieux et la plateforme fonctionne exactement comme avant.
+- Contrat API partagé avec 100-b respecté : POST/DELETE /api/push/subscribe
+  (auth requireUser, upsert idempotent, DELETE idempotent 200), payload
+  { title, body, url } avec URL relative, stockage Firestore
+  users/{uid}/pushSubscriptions/{hashEndpoint}.
+
+---
+Task ID: 100-c
+Agent: sous-agent Next.js senior (Task 100, volet C)
+Task: Splash de démarrage iOS (apple-touch-startup-image) — génération des PNG + câblage dans app/layout.tsx
+
+Work Log:
+- Étude préalable : app/layout.tsx lu en entier (le <head> JSX explicite existait déjà :
+  preconnects + bootstrap thème — le rendu head explicite est donc un précédent validé),
+  manifest.webmanifest (theme_color #05060C), app/pwa-consistency.test.ts (conventions des
+  gardes structurels), assets : public/gen3ia-logo.png 1024×1024 RGBA, PIL 11.3.0 présent.
+- Génération (script persisté /home/z/my-project/scripts/gen_splash.py) : 9 PNG PORTRAIT
+  sous public/images/splash/apple-splash-{w}x{h}.png — fond plein #05060C, logo GEN3IA
+  centré (hauteur = 20 % de la largeur d'écran), resize LANCZOS, optimize=True ; aucune
+  quantization nécessaire (tous < 150 Ko) : 1179×2556 (63,6 Ko), 1290×2796 (72,8),
+  1284×2778 (71,8), 1170×2532 (63,0), 1125×2436 (60,9), 828×1792 (39,5), 2048×2732 (130,9),
+  1668×2388 (100,0), 1536×2048 (89,9) — total ≈ 665 Ko.
+- Câblage : 9 <link rel="apple-touch-startup-image"> ajoutés dans le <head> JSX explicite
+  du root layout, media-queries = dimensions CSS RÉELLES (393×852 @3x, 430×932 @3x,
+  428×926 @3x, 390×844 @3x, 375×812 @3x, 414×896 @2x, 1024×1366 @2x, 834×1194 @2x,
+  768×1024 @2x) + (orientation: portrait). Portrait seul couvert — paysage → splash le
+  plus proche ou écran uni, assumé (léger).
+- POINT DE CONTRÔLE EMPIRIQUE — DÉCISION : GARDER (balises bien dans <head> du HTML final).
+  * build compile-only prescrit → OK (3 passages au total, layout final inclus).
+  * MAIS le grep prescrit est structurellement muet en compile-only : .next/server/app ne
+    contient AUCUN .html (0 fichier — seulement page.js + assets statiques), avec ou sans
+    le changement : ce grep ne peut jamais rien montrer dans ce mode.
+  * Preuve réelle par rendu serveur effectif (même chemin React SSR que la prod, serveur
+    Next lancé sur le dépôt, page / capturée) : 9 balises <link rel="apple-touch-startup-image">
+    NON échappées DANS <head> ; 0 balise DOM hors <head> (les 9 occurrences « hors head »
+    sont le payload RSC sérialisé en script inline, pas du DOM).
+  * Full build (tenté 2× : heap défaut puis 3 Go) : « Compiled successfully in 2,4-2,5 min »
+    puis Killed en phase « Linting and checking validity of types » — OOM sur cette box
+    4 Go (le repo a grossi avec les ajouts Task 100 ; le build complet Task 99 passait).
+    Note orchestrateur : le build production complet ne tient plus dans 4 Go local —
+    la preuve HTML prérendu devra passer par CI/Vercel ; la preuve SSR ci-dessus couvre
+    exactement la même chaîne de rendu du root layout.
+- Test app/ios-splash.test.ts (NOUVEAU, 5 gardes FR, conventions pwa-consistency) :
+  occurrences « apple-touch-startup-image » ≥ 8 ; chaque balise porte device-width/height
+  + -webkit-device-pixel-ratio + orientation: portrait + href /images/splash/ ; chaque
+  href existe sur disque (fs.existsSync) et sans doublon ; aucune image > 200 Ko
+  (fs.statSync.size) ; toutes les balises vivent dans le bloc <head> explicite du layout.
+- Vérifications : npx tsc --noEmit → 0 ; npx vitest run app/ios-splash.test.ts
+  app/pwa-consistency.test.ts app/perf-cache-policy.test.ts → 39/39 verts (30 + 4
+  existants inchangés) ; eslint app/layout.tsx + app/ios-splash.test.ts → 0 ; build
+  compile-only final → OK. Aucun console.log, commentaires FR.
+- Périmètre respecté : seuls app/layout.tsx (9 link + commentaire), public/images/splash/**
+  (9 PNG nouveaux) et app/ios-splash.test.ts (nouveau) touchés. sw.js, manifest.webmanifest,
+  lib/**, app/api/** et package.json intouchés ; ni commit, ni npm install.
+
+Stage Summary:
+- Fin de l'écran blanc au lancement standalone iOS : 9 splashes portrait (fond #05060C +
+  logo centré) appairés aux dimensions CSS réelles des iPhone X→15 Pro Max et iPad
+  9,7"→12,9" ; Android conserve son splash généré depuis le manifest.
+- La preuve « balises dans <head> » repose sur le rendu SSR effectif (capture : 9 balises
+  in-head) — le grep compile-only ne peut rien montrer (aucun .html émis par ce mode).
+- Coût dépôt : ~665 Ko de PNG (max 131 Ko/fichier, cible < 150 Ko respectée).
+- Reste candidat : splash paysage (optionnel) ; build production complet à revalider
+  hors box 4 Go (OOM en phase type-check/lint depuis les ajouts Task 100).

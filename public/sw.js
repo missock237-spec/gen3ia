@@ -324,6 +324,48 @@ self.addEventListener("sync", (event) => {
   if (event.tag === SYNC_TAG) event.waitUntil(flushOutbox());
 });
 
+/* ------------------ Push serveur (Web Push / VAPID, Task 100) ----------- */
+
+// Alerte même APPLICATION FERMÉE : le serveur pousse une charge utile JSON
+// minimale { title, body, url } (url RELATIVE, deep-link calculé côté
+// serveur — même logique que le centre de notifications).
+// ANTI-DOUBLE NOTIFICATION : si au moins une fenêtre de l'app est VISIBLE,
+// elle affiche elle-même la notification in-app (cloche + rafraîchissement
+// au retour d'onglet) — le SW ne montre PAS la notification système pour
+// éviter le doublon. App fermée / arrière-plan → notification système.
+self.addEventListener("push", (event) => {
+  let payload = null;
+  try {
+    payload = event.data ? event.data.json() : null;
+  } catch {
+    // Charge utile illisible : repli générique plutôt qu'un crash silencieux.
+    payload = null;
+  }
+  const data = {
+    title: typeof payload?.title === "string" && payload.title ? payload.title : "Gen3ia",
+    body: typeof payload?.body === "string" && payload.body ? payload.body : "Une mise à jour de ta mission t'attend.",
+    url: typeof payload?.url === "string" && payload.url ? payload.url : "/dashboard",
+  };
+  event.waitUntil(
+    (async () => {
+      const windowClients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const appVisible = windowClients.some(
+        (client) => client.visibilityState === "visible" && "focus" in client,
+      );
+      if (appVisible) return; // l'app affiche elle-même (cloche in-app)
+      await self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
+        // Un seul emplacement : les push successifs ÉCRASENT la précédente
+        // au lieu d'empiler des notifications identiques.
+        tag: "gen3ia-notification",
+        data: { url: data.url },
+      });
+    })(),
+  );
+});
+
 /* --------------------- Notifications natives (clic) -------------------- */
 
 // Clic sur une notification native montrée par le SW (Android + app
