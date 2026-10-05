@@ -17,7 +17,9 @@ export default function NotFound() {
           Vérifiez l&apos;adresse, ou reprenez depuis votre tableau de bord.
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-          <Link href="/studio" className="g3-btn g3-btn-primary rounded-full">
+          {/* Deux issues DISTINCTES (audit UX 2-c) : le tableau de bord d'un
+              côté, le Studio de l'autre — les deux ne pointaient que /studio. */}
+          <Link href="/dashboard" className="g3-btn g3-btn-primary rounded-full">
             Tableau de bord
           </Link>
           <Link href="/studio" className="g3-btn g3-btn-ghost rounded-full">

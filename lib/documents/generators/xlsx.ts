@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import type { DocumentPlan } from "../types";
+import { toXlsxCellValue } from "./safe-cell";
 
 export async function generateXlsx(
   plan: DocumentPlan,
@@ -20,18 +21,18 @@ export async function generateXlsx(
     switch (block.type) {
       case "heading":
       case "paragraph":
-        sheet.addRow([block.text ?? ""]);
+        sheet.addRow([toXlsxCellValue(block.text ?? "")]);
         break;
 
       case "list":
         for (const item of block.items ?? []) {
-          sheet.addRow([item]);
+          sheet.addRow([toXlsxCellValue(item)]);
         }
         break;
 
       case "table": {
         if (block.columns?.length) {
-          const header = sheet.addRow(block.columns);
+          const header = sheet.addRow(block.columns.map(toXlsxCellValue));
 
           header.font = {
             bold: true,
@@ -39,18 +40,18 @@ export async function generateXlsx(
         }
 
         for (const row of block.rows ?? []) {
-          sheet.addRow(row);
+          sheet.addRow(row.map(toXlsxCellValue));
         }
 
         break;
       }
 
       case "code":
-        sheet.addRow([block.text ?? ""]);
+        sheet.addRow([toXlsxCellValue(block.text ?? "")]);
         break;
 
       case "quote":
-        sheet.addRow([block.text ?? ""]);
+        sheet.addRow([toXlsxCellValue(block.text ?? "")]);
         break;
     }
   }
@@ -59,10 +60,13 @@ export async function generateXlsx(
     let maxLength = 10;
 
     column.eachCell?.({ includeEmpty: false }, (cell) => {
-      maxLength = Math.max(
-        maxLength,
-        String(cell.value ?? "").length,
-      );
+      const value = cell.value;
+      // Cellules texte forcé (richText) : largeur sur la longueur réelle.
+      const length =
+        typeof value === "object" && value !== null && "richText" in value
+          ? (value as { richText: Array<{ text: string }> }).richText.reduce((sum, run) => sum + run.text.length, 0)
+          : String(value ?? "").length;
+      maxLength = Math.max(maxLength, length);
     });
 
     column.width = Math.min(maxLength + 2, 60);

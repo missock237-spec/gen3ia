@@ -138,9 +138,12 @@ service cloud.firestore {
       }
     }
     match /invitations/{invitationId} {
-      allow read: if signedIn();
+      // Lecture limitée aux membres de l'équipe concernée et à l'invité
+      // lui-même : les documents contiennent invitedEmail (PII tiers).
+      allow read: if signedIn() && (isTeamMember(resource.data.teamId) || request.auth.token.email == resource.data.invitedEmail);
       allow create: if signedIn() && isTeamAdmin(request.resource.data.teamId);
-      allow update: if signedIn() && (isTeamAdmin(resource.data.teamId) || (request.auth.token.email == resource.data.invitedEmail && request.resource.data.status in ['accepted', 'declined']));
+      // L'invité ne mute QUE son statut (accepté/refusé) — aucun autre champ.
+      allow update: if signedIn() && (isTeamAdmin(resource.data.teamId) || (request.auth.token.email == resource.data.invitedEmail && request.resource.data.status in ['accepted', 'declined'] && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])));
       allow delete: if isTeamAdmin(resource.data.teamId);
     }
     match /userTeams/{userId} {
@@ -208,9 +211,9 @@ service cloud.firestore {
         allow write: if false; // invitations/rôles via Admin SDK
       }
       match /invitations/{invitationId} {
-        // Lecture par l'invité pour afficher l'invitation, acceptation
-        // logique via Admin SDK : le client ne mute que son propre statut.
-        allow read: if signedIn();
+        // Lecture par le membre de l'org concernée ou l'invité lui-même :
+        // les documents contiennent email (PII tiers) — jamais d'accès global.
+        allow read: if signedIn() && (isOrgMember(orgId) || request.auth.token.email == resource.data.email);
         allow write: if false;
       }
     }

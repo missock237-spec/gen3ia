@@ -1,17 +1,4 @@
 import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun
-} from "docx";
-
-import {
-  PDFDocument,
-  StandardFonts,
-  rgb
-} from "pdf-lib";
-
-import {
   DocumentRequest,
   GeneratedDocument
 } from "./types";
@@ -38,9 +25,8 @@ import {
   validateArtifact,
 } from "./validator";
 
-import {
-  createZip,
-  type ZipEntry,
+import type {
+  ZipEntry,
 } from "./zip";
 
 export interface GenerateArtifactInput {
@@ -64,7 +50,18 @@ export async function generateArtifact(
   let data: Buffer;
 
   if (plan.format === "zip") {
-    data = await createZip(
+    // archiver chargé UNIQUEMENT à la demande (audit 2-a, C3 : cold start
+    // serverless — échec d'import re-levé avec un message explicite).
+    let zip: typeof import("./zip");
+    try {
+      zip = await import("./zip");
+    } catch (error) {
+      throw new Error(
+        `Module « zip » indisponible : ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
+    data = await zip.createZip(
       input.zipEntries ?? [],
     );
   } else {
@@ -164,6 +161,19 @@ export class DocumentEngine {
   private async generateDocx(
     request: DocumentRequest
   ): Promise<GeneratedDocument> {
+    // docx (~1 Mo) chargé UNIQUEMENT à la demande (audit 2-a, C3 : cold
+    // start serverless — échec d'import re-levé avec un message explicite).
+    let docx: typeof import("docx");
+    try {
+      docx = await import("docx");
+    } catch (error) {
+      throw new Error(
+        `Module « docx » indisponible : ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
+    const { Document, Packer, Paragraph, TextRun } = docx;
+
     const paragraphs =
       request.content
         .split(/\n+/)
@@ -214,6 +224,19 @@ export class DocumentEngine {
   private async generatePdf(
     request: DocumentRequest
   ): Promise<GeneratedDocument> {
+    // pdf-lib chargé UNIQUEMENT à la demande (audit 2-a, C3 : cold start
+    // serverless — échec d'import re-levé avec un message explicite).
+    let pdfLib: typeof import("pdf-lib");
+    try {
+      pdfLib = await import("pdf-lib");
+    } catch (error) {
+      throw new Error(
+        `Module « pdf-lib » indisponible : ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
+    const { PDFDocument, StandardFonts, rgb } = pdfLib;
+
     const pdf =
       await PDFDocument.create();
 

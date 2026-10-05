@@ -925,3 +925,118 @@ Work Log:
 
 Stage Summary:
 - Task 80 validée de bout en bout : CI 6/6, production live avec les 3 nouvelles routes sous auth, périmètre règle Firestore documenté (déploiement bloqué sur la clé SA à re-fournir par le propriétaire — deny-by-default couvre la période intermédiaire).
+
+---
+Task ID: 98 (amélioration globale multi-lots + durcissement sécurité)
+Agent: Super Z (principal) + 3 sous-agents (fiabilité, performance, UX)
+
+Task: Améliorer chaque fonctionnalité et aspect du projet (4 audits parallèles
+puis 4 lots d'implémentation), garantir la version app fonctionnelle, suivre
+le processus de build Vercel.
+
+Work Log:
+- AUDITS (4 sous-agents Explore, lecture seule) : perf/bundle, sécurité,
+  UX/accessibilité, qualité code — 50+ constats priorisés, déjà-fait exclu.
+- LOT SÉCURITÉ (principal) :
+  - P0 RCE FERMÉ : lib/sandbox/simulation.ts n'exécute PLUS de JS réel hors
+    Docker — node:vm n'est pas une frontière de sécurité (les intrinsèques
+    host passés au contexte exposaient le realm hôte via
+    Object.constructor('return process')() → process.env/RCE par tout
+    compte authentifié). Remplacé par analyse statique structurée
+    (engine "static-node") : littéraux + arithmétique pure évalués sans
+    eval (shunting-yard), constructions dangereuses rejetées (require/
+    process/eval/new Function/globalThis/import()/prototype escape),
+    syntaxe suspecte signalée — aligné sur python/shell. GET
+    /api/terminal/exec : auth requise (ne révèle plus sandboxDeployed).
+  - RÈGLES FIRESTORE : /invitations lisibles par l'équipe OU l'invité
+    uniquement (fuite PII invitedEmail fermée) ; mutation invité bornée à
+    affectedKeys()==['status'] ; /organizations/*/invitations idem (email).
+  - RATE LIMITS : /api/ai/generate (30/5min), /api/chat/message (60/5min),
+    /api/skills/create (10/5min) — garde-fous anti-abus LLM.
+  - CSV/XLSX : lib/documents/generators/safe-cell.ts (neutralisation
+    anti-formule OWASP : apostrophe CSV + richText forcé ExcelJS) branché
+    sur generateCsv + generateXlsx (cellules LLM/agent jamais interprétées
+    =HYPERLINK/=cmd à l'ouverture par le client).
+  - SECRETS AU REPOS : lib/security/secret-envelope.ts (AES-256-GCM,
+    SECRETS_ENVELOPE_KEY, format enc:v1:iv:tag:data, compat héritage clair)
+    branché sur extensionSecrets (set/get) et outgoingWebhooks (création/
+    lecture HMAC) — déchiffré uniquement à l'usage.
+  - TIMING-SAFE : lib/security/timing-safe.ts appliqué à /api/cron/
+    agent-schedules et /api/storage/r2-diagnostic (+ session admin requise
+    sur le diagnostic, origin localhost retirée du CORS en production).
+  - CSP JSON (request-security.ts) : script-src/style-src retirés du bloc
+    (l'unsafe-eval divergeait volontairement du middleware).
+- LOT FIABILITÉ (sous-agent) :
+  - lib/firestore/chunked-commit.ts : commitOpsInChunks (450/batch, marge
+    sous la limite 500) — deleteKnowledgeDocument (crash >500 chunks),
+    deleteProject (501e conversation) et deleteConversation (orphelins
+    501+) corrigés par boucles.
+  - execution-idempotency.ts : bail de staleness 10 min (claim "processing"
+    mort re-claimable après kill serveur — QStash at-least-once) + expireAt
+    TTL 30 j (collection à croissance infinie bornée).
+  - Contrats d'erreur : 10 routes qui devinaient le statut HTTP par
+    message.includes("authorization") migrées sur HttpError/errorStatus
+    (billing wallet/topup/verify/transactions, orchestrator actions,
+    webhooks agent-triggers) — comportement externe identique.
+  - Code mort supprimé (~42 fichiers vérifiés 0-import) : lib/research
+    entière (13 fichiers), agents/evaluator+state+critic+evaluation+runtime
+    orphelins, auth/mfa-client, documents/{checksum,file-schemas,mimes}+
+    zip/*, domain/conversations/execution-control, files/secure-workspace,
+    projects/software-project, security/{execution-depth,quota,tool-gateway},
+    skills/{bootstrap,evaluator}, team/server-access, tools/files/analyze-
+    artifact, billing/credits ; deps sanitize-html (0 import) + double
+    lockfile pnpm-lock.yaml retirés.
+- LOT PERFORMANCE (sous-agent) :
+  - Polling vidéo (video-production-card) : intervalle STOPPÉ NET sur état
+    terminal + pause onglet caché en mode qstash / ralenti 10 s en mode
+    poll (la route reste alors le moteur de continuation) — fin des
+    requêtes/lectures Firestore infinies.
+  - Hook useVisiblePolling (components/hooks) : gate visibilité + refresh
+    au visibilitychange, appliqué à 7 pollers (workspace-task-panel, calls,
+    live-dashboard, ide-workspace, video-project-workspace ×2 + IndexedDB
+    early-exit, conversation-workspace, agent-chat-panel).
+  - message-thread : MessageRow mémoïsé + markdown mémoïsé par contenu +
+    précalcul des approbations par run (O(n²)→O(n)) — plus de re-render de
+    toute la liste à chaque token de streaming. Erreur réseau EN « Failed
+    to fetch » → message FR propre + message optimiste local retiré en
+    échec (conversation-workspace).
+  - Cold start serveur : docx/pdf-lib/exceljs/pptxgenjs/archiver passés en
+    await import() par format (documents engine/generators + create-zip)
+    — ~3-4 Mo de moins parsés à froid sur /api/files, /api/documents, outils.
+  - next.config : removeConsole prod (error/warn conservés) + cache long
+    /sdk/*.tgz, /llms.txt, /llms-full.txt ; sw.js : cache-first borné pour
+    /_next/static/* et /icons/* (LRU 100) sans toucher au offline existant ;
+    OG metadata corrigée 1200×630 (l'image réelle) ; logo UI en SVG inline
+    (−39 Ko par page, PNG conservés pour la PWA).
+- LOT UX (sous-agent) : EmailAuthForm libellé pending conditionnel (fini le
+  « Création du profil… » en mode connexion) ; Dialog : piège de focus
+  Tab/Maj+Tab (WCAG 2.4.3) + aria-labelledby/describedby + focus restauré ;
+  OfflineBanner (gen3ia:online/gen3ia:outbox-pending enfin consommés) dans
+  app-shell ; lib/ui/money.ts formatXAF (XAF 0 décimale — fini « 12,5 XAF »)
+  branché sur marketplace ; cibles tactiles 44 px (theme-toggle, prompt
+  input, conversation-list, mobile menu) ; metadata Marketplace/Studio (layouts
+  serveur, studio scindé layout serveur + client) ; 8 loading.tsx skeletons
+  (dashboard/billing/settings/memory/team/admin/live/marketplace) ;
+  not-found : 1er CTA vers /dashboard.
+- TESTS : +34 nouveaux (sandbox 10, safe-cell 5, secret-envelope 6,
+  chunked-commit, idempotence, money, verrous structurels UX) — 1971+ verts
+  / 214 fichiers, typecheck 0, lint 0 (3 warnings préexistants), build
+  production OK (compile 2.4 min, First Load JS partagé 105 kB, pire route
+  182 kB < budget 240), budget bundle OK.
+
+Stage Summary:
+- Trou de sécurité CRITIQUE fermé (RCE sandbox multi-tenant), 2 fuites PII
+  Firestore fermées, secrets tiers chiffrés au repos, exports documents
+  durcis, 3 routes LLM rate-limitées — la plateforme est re-productible
+  sans exécution de code arbitraire côté host.
+- Fiabilité : plus aucun batch Firestore >500 ops, idempotence rejouable
+  après kill, contrats d'erreur canoniques, ~3 000 lignes de code mort
+  retirées.
+- Perf : polling discipliné (visibilité + états terminaux), cold starts
+  allégés, thread de chat mémoïsé, service worker cache-first statique.
+- UX : auth/fr/monnaie/clavier/offline/metadata/skeletons corrigés.
+- Note opérationnelle : ajouter SECRETS_ENVELOPE_KEY (32 octets base64 ou
+  passphrase forte) dans les env Vercel pour activer le chiffrement des
+  nouveaux secrets (héritage lu sans clé) ; TTL Firestore sur
+  executionIdempotency/expireAt à activer côté projet (gcloud firestore
+  fields ttl update executionIdempotency --ttl-field expireAt).

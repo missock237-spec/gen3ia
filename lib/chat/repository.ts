@@ -10,6 +10,7 @@ import {
   resilientSet,
 } from "@/lib/db/firestore-fallback";
 import { isFirestoreQuotaError, shouldShortCircuitFirestore } from "@/lib/db/quota-guard";
+import { CHUNKED_COMMIT_SIZE, commitOpsInChunks, type ChunkedWriteOp } from "@/lib/firestore/chunked-commit";
 import type {
   ConversationMessage,
   ConversationStatus,
@@ -412,10 +413,17 @@ export async function deleteConversation(userId: string, id: string) {
   // conversation) — la conversation, elle, disparaît des DEUX stores via
   // resilientDelete ci-dessous.
   try {
-    const messages = await adminDb.collection("chatMessages").where("conversationId", "==", id).where("userId", "==", userId).limit(500).get();
-    const batch = adminDb.batch();
-    messages.docs.forEach(d => batch.delete(d.ref));
-    await batch.commit();
+    // Purge par lots de 450 jusqu'à épuisement (limite Firestore : 500 ops
+    // par batch) — l'ancien `.limit(500)` unique laissait des messages
+    // orphelins au-delà de 500.
+    for (;;) {
+      const messages = await adminDb.collection("chatMessages").where("conversationId", "==", id).where("userId", "==", userId).limit(CHUNKED_COMMIT_SIZE).get();
+      const messageDocs = messages.docs;
+      if (messageDocs.length === 0) break;
+      const ops: ChunkedWriteOp[] = messageDocs.map((d) => ({ kind: "delete" as const, ref: d.ref }));
+      await commitOpsInChunks(adminDb, ops);
+      if (messageDocs.length < CHUNKED_COMMIT_SIZE) break;
+    }
   } catch (error) {
     if (!isFirestoreQuotaError(error) && !shouldShortCircuitFirestore()) throw error;
     // Quota : purge Firestore des messages différée — ne bloque JAMAIS la

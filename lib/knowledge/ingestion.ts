@@ -5,6 +5,7 @@ import yauzl from "yauzl";
 import { assertPublicHttpUrl } from "@/lib/security/url-safety";
 import { adminDb } from "@/lib/firebase/admin";
 import { assertResourceWrite } from "@/lib/tenants/resource-access";
+import { CHUNKED_COMMIT_SIZE, commitOpsInChunks, type ChunkedWriteOp } from "@/lib/firestore/chunked-commit";
 import { indexKnowledgeDocument } from "./indexer";
 import { markupToText } from "@/lib/content/html-text";
 import { perceiveIfSupported } from "./perception";
@@ -350,17 +351,26 @@ export async function deleteKnowledgeDocument(userId: string, documentId: string
     return false;
   }
 
-  const chunks = await adminDb.collection("knowledgeChunks")
-    .where("documentId", "==", documentId)
-    .limit(2000)
-    .get();
+  // Purge des fragments par lots de 450 (limite Firestore : 500 ops par
+  // batch) — boucle jusqu'à épuisement, un document volumineux peut compter
+  // plusieurs milliers de chunks (l'ancien `.limit(2000)` + batch unique
+  // crashait au-delà de 500).
   const chunkIds: string[] = [];
-  const batch = adminDb.batch();
-  chunks.docs.forEach((chunk) => {
-    batch.delete(chunk.ref);
-    chunkIds.push(chunk.id);
-  });
-  await batch.commit();
+  for (;;) {
+    const chunks = await adminDb.collection("knowledgeChunks")
+      .where("documentId", "==", documentId)
+      .limit(CHUNKED_COMMIT_SIZE)
+      .get();
+    const chunkDocs = chunks.docs;
+    if (chunkDocs.length === 0) break;
+    const ops: ChunkedWriteOp[] = [];
+    for (const chunk of chunkDocs) {
+      chunkIds.push(chunk.id);
+      ops.push({ kind: "delete", ref: chunk.ref });
+    }
+    await commitOpsInChunks(adminDb, ops);
+    if (chunkDocs.length < CHUNKED_COMMIT_SIZE) break;
+  }
   await ref.delete();
 
   // Miroir vectoriel : suppression best-effort (la recherche retombe sur

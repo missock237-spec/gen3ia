@@ -3,6 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { assertPublicHttpUrl } from "@/lib/security/url-safety";
+import { encryptSecret, decryptSecret } from "@/lib/security/secret-envelope";
 
 /**
  * Endpoints de webhooks sortants : Gen3ia émet ses événements
@@ -62,7 +63,8 @@ function fromDoc(doc: { id: string } & Record<string, unknown>): StoredWebhook {
     events: (Array.isArray(doc.events) ? doc.events : []) as OutgoingWebhookEvent[],
     description: typeof doc.description === "string" ? doc.description : undefined,
     disabled: Boolean(doc.disabled),
-    secret: String(doc.secret),
+    // Déchiffré à l'usage (signature HMAC) — jamais stocké en clair.
+    secret: decryptSecret(String(doc.secret)),
     createdAt: doc.createdAt as Timestamp,
   };
 }
@@ -115,7 +117,9 @@ export async function createOutgoingWebhook(params: {
     events,
     description: description ?? null,
     disabled: false,
-    secret,
+    // Secret chiffré au repos (AES-256-GCM) — retourné en clair UNE fois
+    // au créateur, dans la réponse ci-dessous.
+    secret: encryptSecret(secret),
     createdAt: FieldValue.serverTimestamp(),
   });
 

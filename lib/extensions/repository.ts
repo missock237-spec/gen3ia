@@ -1,6 +1,7 @@
 import { AggregateField, FieldValue } from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/firebase/admin";
+import { encryptSecret, decryptSecret } from "@/lib/security/secret-envelope";
 import { compareSemver, type ExtensionManifest } from "./manifest";
 import { computeRevenueSplit } from "./pricing";
 
@@ -278,7 +279,9 @@ export async function setExtensionSecret(extensionId: string, ref: string, value
   await adminDb.collection(COL.secrets).doc(`${extensionId}__${ref}`).set({
     extensionId,
     ref,
-    value,
+    // Chiffré au repos (AES-256-GCM, SECRETS_ENVELOPE_KEY) — déchiffré
+    // uniquement à l'injection runtime.
+    value: encryptSecret(value),
     updatedAt: now(),
   });
 }
@@ -287,7 +290,7 @@ export async function getExtensionSecrets(extensionId: string, developerId?: str
   if (developerId && projectId) await assertExtensionProject(extensionId, developerId, projectId);
   const snap = await adminDb.collection(COL.secrets).where("extensionId", "==", extensionId).get();
   const secrets: Record<string, string> = {};
-  for (const doc of snap.docs) secrets[String(doc.get("ref"))] = String(doc.get("value") ?? "");
+  for (const doc of snap.docs) secrets[String(doc.get("ref"))] = decryptSecret(String(doc.get("value") ?? ""));
   return secrets;
 }
 

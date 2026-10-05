@@ -4,6 +4,7 @@ import { dispatchSchedules } from "@/lib/agents/scheduler";
 import { renewDueNumbers, reactivateNumbersInGrace } from "@/lib/voice/renewals";
 import { renewDueExtensionSubscriptions } from "@/lib/extensions/subscriptions";
 import { errorStatus } from "@/lib/security/http-errors";
+import { timingSafeStringEqual } from "@/lib/security/timing-safe";
 import { scheduleNextDispatchTick, slotFor } from "@/lib/queue/dispatch-loop";
 import { publishDispatchTick } from "@/lib/queue/qstash";
 
@@ -15,7 +16,8 @@ function isAuthorized(request: NextRequest) {
   if (!secret) return false;
 
   const authorization = request.headers.get("authorization") ?? "";
-  return authorization === `Bearer ${secret}`;
+  // Comparaison à temps constant (pas de court-circuit exploitable).
+  return timingSafeStringEqual(authorization, `Bearer ${secret}`);
 }
 
 /**

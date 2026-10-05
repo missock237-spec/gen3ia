@@ -2,6 +2,7 @@ import { z } from "zod";
 import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { createActionApproval } from "@/lib/agents/action-approvals";
 import { roleCanUseExternalActions } from "@/lib/agents/orchestrator-actions";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 
 const BodySchema = z.object({
   executionId: z.string().min(1).max(256),
@@ -37,8 +38,7 @@ export async function POST(request: Request) {
       expiresAt: approval.expiresAt,
     }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not create action approval";
-    const status = message.includes("authorization") || message.includes("token") ? 401 : 400;
-    return Response.json({ error: message }, { status });
+    // Classification canonique : 401 auth, 422 Zod, repli 400.
+    return Response.json(errorBody(error, "Could not create action approval"), { status: errorStatus(error, 400) });
   }
 }

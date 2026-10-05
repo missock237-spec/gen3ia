@@ -1,4 +1,5 @@
 import type { DocumentPlan } from "../types";
+import { neutralizeCsvCell } from "./safe-cell";
 
 function escapeHtml(value: string): string {
   return value.replace(
@@ -66,7 +67,8 @@ function generateCsv(plan: DocumentPlan): Buffer {
     .map((row) =>
       row
         .map((cell) => {
-          const value = String(cell ?? "");
+          // Injection de formules neutralisée (anti CSV-injection OWASP).
+          const value = neutralizeCsvCell(String(cell ?? ""));
           return `"${value.replace(/"/g, '""')}"`;
         })
         .join(","),

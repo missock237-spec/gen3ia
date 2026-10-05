@@ -65,6 +65,13 @@ export function VideoProductionCard({ videoProjectId, title, tone = "dark" }: { 
   useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
+    // État terminal atteint : le suivi s'arrête NET (plus aucune requête).
+    let finished = false;
+    // Mode de file annoncé par la route : qstash (le serveur poursuit seul,
+    // le sondage n'est que de l'affichage) vs poll (CETTE route est le moteur
+    // de continuation — chaque GET fait avancer le rendu d'un tick borné).
+    let queueMode: ProductionStatus["queueMode"] | undefined;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     const resolvePlayback = async (renderJobId: string) => {
       try {
@@ -78,6 +85,9 @@ export function VideoProductionCard({ videoProjectId, title, tone = "dark" }: { 
         /* sondage suivant */
       }
     };
+
+    const isTerminal = (candidate: ProductionStatus["status"]) =>
+      candidate === "completed" || candidate === "failed" || candidate === "cancelled";
 
     const poll = async () => {
       try {
@@ -95,6 +105,17 @@ export function VideoProductionCard({ videoProjectId, title, tone = "dark" }: { 
         }
         startedRef.current = data.createdAt ? Date.parse(data.createdAt) || startedRef.current : startedRef.current;
         setStatus(data);
+        queueMode = data.queueMode;
+        if (isTerminal(data.status)) {
+          // Production terminée/échouée/annulée : plus rien à suivre ni à
+          // faire avancer — l'intervalle est supprimé (fin des requêtes et
+          // des lectures Firestore au-delà du rendu final affiché).
+          finished = true;
+          if (interval !== null) {
+            clearInterval(interval);
+            interval = null;
+          }
+        }
         if (data.status === "completed" && data.renderJobId && !playbackUrl) {
           void resolvePlayback(data.renderJobId);
         }
@@ -103,11 +124,36 @@ export function VideoProductionCard({ videoProjectId, title, tone = "dark" }: { 
       }
     };
 
+    // (Ré)armement de l'intervalle selon la visibilité ET le mode de file :
+    //  - qstash  : en arrière-plan le serveur poursuit seul → PAUSE (affichage
+    //    seul) ; reprise + rafraîchissement immédiat au retour de visibilité ;
+    //  - poll (ou mode inconnu, prudent par défaut) : la route production est
+    //    le moteur de continuation → sondage MAINTENU au ralenti (10 s) même
+    //    caché, pour ne jamais figer un rendu faute de sondeur.
+    const restart = (visible: boolean) => {
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
+      if (finished || cancelled) return;
+      if (!visible && queueMode !== "poll") return;
+      interval = setInterval(() => void poll(), visible ? 5_000 : 10_000);
+    };
+
+    const onVisibility = () => {
+      const visible = document.visibilityState === "visible";
+      restart(visible);
+      if (visible && !finished) void poll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     void poll();
-    const interval = setInterval(() => void poll(), 5_000);
+    restart(document.visibilityState === "visible");
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      finished = true;
+      if (interval !== null) clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 import { coordinateTeamExecution } from "@/lib/orchestrator/team-coordination";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 
 const RequestSchema = z.object({
   teamId: z.string().trim().min(1).max(256),
@@ -18,9 +19,13 @@ export async function POST(request: Request) {
     const result = await coordinateTeamExecution({ userId: token.uid, ...body });
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Orchestrator execution failed";
-    if (/authorization|token|revoked|scheme/i.test(message)) return NextResponse.json({ error: message }, { status: 401 });
-    if (/team|membership|archived|role/i.test(message)) return NextResponse.json({ error: message }, { status: 403 });
-    return NextResponse.json({ error: message }, { status: 400 });
+    // Cloisonnement équipe (adhésion / rôle / archivage) : 403 explicite —
+    // cas métier dominant ici, classification canonique pour le reste
+    // (401 auth, 422 Zod, repli 400).
+    const message = error instanceof Error ? error.message : "";
+    if (/team|membership|archived|role/i.test(message)) {
+      return NextResponse.json(errorBody(error, "Orchestrator execution failed"), { status: 403 });
+    }
+    return NextResponse.json(errorBody(error, "Orchestrator execution failed"), { status: errorStatus(error, 400) });
   }
 }

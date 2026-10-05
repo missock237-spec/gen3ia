@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { triggerScheduleByWebhookToken } from "@/lib/agents/scheduler";
 
 /**
@@ -49,9 +50,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
     return NextResponse.json({ ok: true, executionId: result.executionId, status: "accepted" }, { status: 202 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Webhook trigger failed";
-    const status = message.includes("not found") ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+    // Classification canonique : 404 planning introuvable, repli 500.
+    return NextResponse.json(errorBody(error, "Webhook trigger failed"), { status: errorStatus(error, 500) });
   }
 }
 

@@ -71,7 +71,8 @@ export function forbidden(message = "Accès refusé."): HttpError {
 }
 
 const AUTH_MESSAGE_RE =
-  /missing authorization|authentification requise|authentication required|unauthorized|jeton invalide|invalid[_ ]token|token expired|pas de session/i;
+  /\bauthorization\b|\bscheme\b|\btoken\b|revoked|authentification requise|authentication required|unauthorized|jeton invalide|invalid[_ ]token|token expired|pas de session/i;
+const NOT_FOUND_MESSAGE_RE = /\bnot found\b|introuvable/i;
 const DEGRADED_MESSAGE_RE =
   /failed precondition|unavailable|firestore|deadline exceeded|quota exceeded|resource.exhausted|backend error|service.*(indisponible|unavailable)/i;
 
@@ -97,16 +98,19 @@ export function isZodErrorLike(error: unknown): boolean {
  * 2. ZodError -> 422 (validation : requête syntaxiquement invalide mais
  *    compréhensible — voir `zodValidationError` pour le message lisible) ;
  * 3. message d'authentification -> 401 (compatibilité avec les messages
- *    historiques "Missing Authorization header") ;
- * 4. panne d'infrastructure connue -> 503 (l'UI sait alors qu'il faut
+ *    historiques "Missing Authorization header", "Invalid authorization
+ *    scheme", "Token …" émis par verifyFirebaseAuth) ;
+ * 4. ressource introuvable -> 404 ("not found" / "introuvable") ;
+ * 5. panne d'infrastructure connue -> 503 (l'UI sait alors qu'il faut
  *    réessayer, pas se reconnecter) ;
- * 5. sinon -> le statut de repli fourni (500 par défaut).
+ * 6. sinon -> le statut de repli fourni (500 par défaut).
  */
 export function errorStatus(error: unknown, fallback = 500): number {
   if (error instanceof HttpError) return error.status;
   if (isZodErrorLike(error)) return 422;
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (AUTH_MESSAGE_RE.test(message)) return 401;
+  if (NOT_FOUND_MESSAGE_RE.test(message)) return 404;
   if (DEGRADED_MESSAGE_RE.test(message)) return 503;
   return fallback;
 }
@@ -120,6 +124,7 @@ export function errorCode(error: unknown): ApiErrorCode {
   if (isZodErrorLike(error)) return "INVALID_REQUEST";
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (AUTH_MESSAGE_RE.test(message)) return "AUTH_REQUIRED";
+  if (NOT_FOUND_MESSAGE_RE.test(message)) return "NOT_FOUND";
   if (DEGRADED_MESSAGE_RE.test(message)) return "PROVIDER_UNAVAILABLE";
   return "INTERNAL";
 }

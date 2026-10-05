@@ -46,7 +46,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
       title={label}
       data-testid="theme-toggle"
       className={`inline-flex items-center justify-center gap-2 rounded-xl border transition-colors ${
-        compact ? "h-9 w-9" : "h-9 w-full px-3 sm:w-9"
+        compact ? "h-11 w-11" : "h-11 w-full px-3 sm:w-11"
       }`}
       style={{
         borderColor: "var(--g3-border)",

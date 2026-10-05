@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { authFetch } from "@/lib/firebase/auth-client";
 import { StudioHeader } from "@/components/studio/studio-header";
+import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
 /**
  * Call App évoluée (/studio/calls).
@@ -63,7 +64,6 @@ export default function StudioCallsPage() {
   const [liveSession, setLiveSession] = useState<CallSession | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryBusy, setSummaryBusy] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -92,24 +92,32 @@ export default function StudioCallsPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Suivi d'appel en direct : polling léger tant qu'un appel est vivant.
-  useEffect(() => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    if (!openId) { setLiveSession(null); return; }
-    const poll = async () => {
-      try {
-        const response = await authFetch(`/api/voice/calls/${encodeURIComponent(openId)}`, { cache: "no-store" });
-        const data = await response.json();
-        if (response.ok && data.session) {
-          setLiveSession(data.session);
-          if (!LIVE_STATUSES.has(data.session.status)) void load();
-        }
-      } catch { /* continuation de polling */ }
-    };
-    void poll();
-    pollRef.current = setInterval(poll, 4_000);
-    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+  // Suivi d'appel en direct (lot C2) : interrogation unique partagée par le
+  // premier chargement et le sondage visibilité-gaté — arrêté dès statut
+  // terminal (completed/failed/…) et quand l'onglet est en arrière-plan.
+  const pollLiveSession = useCallback(async () => {
+    if (!openId) return;
+    try {
+      const response = await authFetch(`/api/voice/calls/${encodeURIComponent(openId)}`, { cache: "no-store" });
+      const data = await response.json();
+      if (response.ok && data.session) {
+        setLiveSession(data.session);
+        if (!LIVE_STATUSES.has(data.session.status)) void load();
+      }
+    } catch { /* continuation de polling */ }
   }, [openId, load]);
+
+  // liveSession suit TOUJOURS l'appel ouvert (jamais celui d'avant) : reset à
+  // chaque ouverture + première interrogation immédiate (comportement initial).
+  useEffect(() => {
+    setLiveSession(null);
+    if (openId) void pollLiveSession();
+  }, [openId, pollLiveSession]);
+
+  const liveTracking =
+    openId !== null &&
+    (liveSession === null || liveSession.id !== openId || LIVE_STATUSES.has(liveSession.status));
+  useVisiblePolling(pollLiveSession, liveTracking ? 4_000 : null);
 
   async function startCall() {
     if (busy) return;

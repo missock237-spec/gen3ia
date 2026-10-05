@@ -27,6 +27,7 @@ import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-
 import { safeClientTimezone, streamConversationTurn } from "@/lib/domain/conversations/stream-client";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 import type { AuthorizationMode } from "@/lib/security/authorization-mode";
+import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
 /**
  * Orchestrateur de l'espace conversation (layout 3 colonnes) :
@@ -75,6 +76,22 @@ const STARTER_SUGGESTIONS = [
 
 /** Message en attente après création depuis l'accueil (hand-off entre pages). */
 export const PENDING_MESSAGE_PREFIX = "g3-pending-message:";
+
+/**
+ * Erreur réseau bas niveau (fetch impossible : hors-ligne, DNS, TLS…) — le
+ * navigateur ne remonte qu'un TypeError générique (« Failed to fetch » /
+ * « Load failed »), inutilisable tel quel dans l'interface (lot C2).
+ */
+function isNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error instanceof TypeError ||
+    /failed to fetch|fetch failed|networkerror|load failed|network request failed/i.test(error.message)
+  );
+}
+
+/** Message FR affiché quand le tour n'a pas pu partir (réseau coupé). */
+const NETWORK_INTERRUPTED_MESSAGE = "Connexion interrompue — nouvelle tentative dès le retour du réseau.";
 
 function emptyLive(): LiveTurn {
   return { status: "", content: "", run: null, approvals: [], artifacts: [] };
@@ -165,16 +182,13 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   // conversation dont le DERNIER run est encore « running », le détail est
   // rechargé périodiquement (4 s) jusqu'à l'état terminal : l'écran suit
   // l'exécution réelle au lieu de rester figé sur l'état au refresh.
-  useEffect(() => {
-    const status = detail?.runs?.[0]?.status;
-    if (status !== "running") return;
-    const id = conversationId;
-    if (!id) return;
-    const interval = setInterval(() => {
-      void loadDetail(id, true);
-    }, 4_000);
-    return () => clearInterval(interval);
-  }, [detail?.runs, conversationId, loadDetail]);
+  // Lot C2 : sondage suspendu quand l'onglet est en arrière-plan.
+  useVisiblePolling(
+    async () => {
+      if (conversationId) await loadDetail(conversationId, true);
+    },
+    detail?.runs?.[0]?.status === "running" && conversationId ? 4_000 : null,
+  );
 
   // Reprise hors-ligne (Background Sync) : une requête envoyée hors connexion
   // vient d'être exécutée en arrière-plan — la conversation ouverte se
@@ -341,7 +355,20 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
             throw new Error(data.error ?? (streamError instanceof Error ? streamError.message : "Le message n'a pas pu être traité."));
           }
         } catch (fallbackError) {
-          setError(fallbackError instanceof Error ? fallbackError.message : "Le message n'a pas pu être traité.");
+          // Échec définitif du tour : le message optimiste (id « local-… »)
+          // est RETIRÉ du fil — il ne doit jamais rester fantôme.
+          setDetail((current) =>
+            current ? { ...current, messages: current.messages.filter((m) => m.id !== optimistic.id) } : current,
+          );
+          // Erreurs réseau bas niveau : message FR actionnable, jamais
+          // l'erreur navigateur brute (« Failed to fetch ») dans le chat.
+          setError(
+            isNetworkError(streamError) || isNetworkError(fallbackError)
+              ? NETWORK_INTERRUPTED_MESSAGE
+              : fallbackError instanceof Error
+                ? fallbackError.message
+                : "Le message n'a pas pu être traité.",
+          );
           setLive(null);
           setGenerating(false);
           return;
@@ -358,6 +385,20 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   const stopCurrentTurn = useCallback(() => {
     turnAbortRef.current?.abort();
     turnAbortRef.current = null;
+  }, []);
+
+  // Étape 8 — édition d'une image du fil : callback à identité STABLE pour
+  // préserver la mémoïsation des lignes du fil (lot C1).
+  const handleEditImage = useCallback((image: { url?: string; path?: string; filename?: string }) => {
+    setInjectedEdit({
+      attachment: {
+        filename: image.filename ?? "image-gen3ia.png",
+        contentType: "image/png",
+        ...(image.path ? { path: image.path } : {}),
+        ...(image.url ? { url: image.url } : {}),
+      },
+      text: "Édite cette image : ",
+    });
   }, []);
 
   const createConversation = useCallback(async () => {
@@ -578,15 +619,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               liveMedia={live?.media ?? null}
               liveVideoArtifacts={live?.artifacts.filter((artifact) => artifact.type === "video" && artifact.videoProjectId) ?? []}
               onDecide={decideApproval}
-              onEditImage={(image) => setInjectedEdit({
-                attachment: {
-                  filename: image.filename ?? "image-gen3ia.png",
-                  contentType: "image/png",
-                  ...(image.path ? { path: image.path } : {}),
-                  ...(image.url ? { url: image.url } : {}),
-                },
-                text: "Édite cette image : ",
-              })}
+              onEditImage={handleEditImage}
             />
           ) : null}
         </div>

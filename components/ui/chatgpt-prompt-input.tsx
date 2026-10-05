@@ -120,11 +120,11 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
         />
 
         <div className="flex items-center gap-1.5 px-1 pb-1">
-          <button type="button" disabled={disabled} onClick={() => fileRef.current?.click()} className="grid h-9 w-9 place-items-center rounded-full text-[var(--g3-muted)] transition hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)] disabled:opacity-30" aria-label="Joindre un fichier"><PlusIcon className="h-5 w-5"/></button>
+          <button type="button" disabled={disabled} onClick={() => fileRef.current?.click()} className="grid h-11 w-11 place-items-center rounded-full text-[var(--g3-muted)] transition hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)] disabled:opacity-30" aria-label="Joindre un fichier"><PlusIcon className="h-5 w-5"/></button>
           <div className="relative">
-            <button type="button" disabled={disabled} onClick={() => setOpen((v) => !v)} className="flex h-9 items-center gap-2 rounded-full px-3 text-xs font-medium text-[var(--g3-muted)] transition hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]" aria-expanded={open}><SlidersIcon className="h-4 w-4"/><span className="hidden sm:inline">Capacités</span></button>
+            <button type="button" disabled={disabled} onClick={() => setOpen((v) => !v)} className="flex h-11 items-center gap-2 rounded-full px-3 text-xs font-medium text-[var(--g3-muted)] transition hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]" aria-expanded={open}><SlidersIcon className="h-4 w-4"/><span className="hidden sm:inline">Capacités</span></button>
             {open && (
-              <div className="absolute bottom-11 left-0 z-50 w-[280px] overflow-hidden rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-2 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)] anim-scale-in">
+              <div className="absolute bottom-[3.25rem] left-0 z-50 w-[280px] overflow-hidden rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-2 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)] anim-scale-in">
                 <div className="px-2 py-2 text-[10px] font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">Outil prioritaire</div>
                 {AGENT_TOOLS.map((tool) => (
                   <button key={tool.id} type="button" onClick={() => { onToolChange?.(tool.id); setOpen(false); }} className="flex w-full items-start gap-3 rounded-xl p-2.5 text-left transition hover:bg-[var(--g3-elevated)]">
@@ -138,8 +138,8 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
 
           <span className="hidden text-[10px] text-[var(--g3-faint)] md:block">Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne</span>
           <div className="ml-auto flex items-center gap-1.5">
-            <button type="button" disabled={disabled} onClick={onVoice} className="grid h-9 w-9 place-items-center rounded-full text-[var(--g3-muted)] transition hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)] disabled:opacity-30" aria-label="Voix"><MicIcon className="h-4.5 w-4.5"/></button>
-            <button type="submit" disabled={!canSend} className="grid h-9 w-9 place-items-center rounded-full bg-[var(--g3-deep)] text-white shadow-lg shadow-neutral-900/15 transition hover:scale-105 hover:bg-[var(--g3-deep)] disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-30" aria-label="Envoyer"><SendIcon className="h-4.5 w-4.5"/></button>
+            <button type="button" disabled={disabled} onClick={onVoice} className="grid h-11 w-11 place-items-center rounded-full text-[var(--g3-muted)] transition hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)] disabled:opacity-30" aria-label="Voix"><MicIcon className="h-4.5 w-4.5"/></button>
+            <button type="submit" disabled={!canSend} className="grid h-11 w-11 place-items-center rounded-full bg-[var(--g3-deep)] text-white shadow-lg shadow-neutral-900/15 transition hover:scale-105 hover:bg-[var(--g3-deep)] disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-30" aria-label="Envoyer"><SendIcon className="h-4.5 w-4.5"/></button>
           </div>
         </div>
       </form>

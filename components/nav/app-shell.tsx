@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { Breadcrumbs } from "@/components/nav/breadcrumbs";
+import { OfflineBanner } from "@/components/nav/offline-banner";
 import { ScrollTop } from "@/components/nav/scroll-top";
 import { isImmersiveChatRoute } from "@/lib/ui/chat-surface";
 
@@ -91,6 +92,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Centre de notifications (validation à distance des actions sensibles) :
           disponible sur toutes les pages applicatives, même hors des chats. */}
       {!chrome && <NotificationCenter />}
+      {/* Bannière hors-ligne (réseaux instables) : uniquement dans l'app
+          authentifiée — la vitrine et l'auth restent épurées. */}
+      {!chrome && <OfflineBanner />}
       <ScrollTop />
     </div>
   );

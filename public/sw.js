@@ -5,7 +5,10 @@
  * hors-ligne à la place du Studio — bug corrigé) :
  * - Navigation            : réseau D'ABORD ; offline.html UNIQUEMENT si le
  *   réseau est indisponible (plus jamais l'inverse — bug historique).
- * - Statiques _next/static: jamais mises en cache (fichiers versionnés par build).
+ * - Statiques immuables   : /_next/static/* (versionnées par build) et
+ *   /icons/* servies en cache-first avec borne (purge au-delà de 100 entrées)
+ *   — revisites et hors-ligne instantanés ; GET same-origin uniquement,
+ *   navigations et /api/ inchangés.
  * - /api/                 : jamais mises en cache (données personnelles).
  * - POST de mission agent : si l'appareil est HORS LIGNE, la requête est
  *   placée dans une file durable (IndexedDB) puis REJOUÉE AUTOMATIQUEMENT
@@ -23,6 +26,12 @@ const OFFLINE_URL = "/offline.html";
 // tâche workspace. /api/chat/message est morte dans l'app et est retirée.
 const QUEUED_PATHS = new Set(["/api/agent/chat", "/api/workspace/tasks"]);
 const MAX_ATTEMPTS = 5;
+// Cache des statiques IMMUBABLES (lot C4) : /_next/static/* est versionnée
+// par build (contenu immuable), /icons/* est quasi immuable — cache-first
+// borné (purge des plus anciennes entrées au-delà du plafond).
+const IMMUTABLE_CACHE = "gen3ia-immutable-v1";
+const IMMUTABLE_PREFIXES = ["/_next/static/", "/icons/"];
+const IMMUTABLE_MAX_ENTRIES = 100;
 
 self.addEventListener("install", (event) => {
   // Fallback hors-ligne UNIQUEMENT pour les navigations (network-first :
@@ -109,6 +118,37 @@ async function notifyClients(payload) {
   for (const client of clients) client.postMessage(payload);
 }
 
+/* ------------------- Cache des statiques immuables --------------------- */
+
+// Cache-first pour /_next/static/* (URLs versionnées, immuables) et /icons/*.
+// Mise en cache : uniquement les réponses OK ; aucune revalidation — le
+// contenu versionné ne change jamais, une nouvelle version = une nouvelle URL.
+async function cacheFirstImmutable(request) {
+  const cache = await caches.open(IMMUTABLE_CACHE);
+  const hit = await cache.match(request);
+  if (hit) return hit;
+  try {
+    const response = await fetch(request);
+    if (response.ok) await putBounded(cache, request, response.clone());
+    return response;
+  } catch {
+    // Hors ligne et absente du cache : erreur réseau (jamais offline.html,
+    // réservé aux navigations).
+    return Response.error();
+  }
+}
+
+// Borne simple : les clés du Cache sont itérées en ordre d'insertion —
+// au-delà du plafond, les plus anciennes entrées sont purgées. Une entrée
+// chassée (URL immuable) se re-télécharge une seule fois si ré-demandée.
+async function putBounded(cache, request, response) {
+  await cache.put(request, response);
+  const keys = await cache.keys();
+  for (let i = 0; i < keys.length - IMMUTABLE_MAX_ENTRIES; i++) {
+    await cache.delete(keys[i]);
+  }
+}
+
 /* ------------------------- Interception réseau ------------------------- */
 
 self.addEventListener("fetch", (event) => {
@@ -129,6 +169,17 @@ self.addEventListener("fetch", (event) => {
         }
       })(),
     );
+    return;
+  }
+
+  // Statiques immuables (lot C4) : cache-first borné. GET same-origin sans
+  // plage uniquement — navigations, POST et /api/ restent inchangés.
+  if (
+    request.method === "GET" &&
+    !request.headers.has("range") &&
+    IMMUTABLE_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))
+  ) {
+    event.respondWith(cacheFirstImmutable(request));
     return;
   }
 

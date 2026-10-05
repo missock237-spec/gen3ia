@@ -12,6 +12,7 @@ import {
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
 import { appendMessage, createConversation, getConversation, listMessages } from "@/lib/chat/repository";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { errorStatus } from "@/lib/security/http-errors";
 
 const Body = z.object({
@@ -27,6 +28,14 @@ const Body = z.object({
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser(request);
+    // Coût LLM réel par appel : garde-fou anti-abus (aligné sur /api/agent/chat).
+    const limit = await enforceRateLimit(`chat-message:${user.uid}`, { limit: 60, windowMs: 5 * 60 * 1000 });
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Trop de messages rapprochés. Réessayez dans quelques instants." },
+        { status: 429, headers: { "retry-after": String(Math.ceil((limit.retryAfterMs ?? 60_000) / 1000)) } },
+      );
+    }
     const body = Body.parse(await request.json());
     let conversationId = body.conversationId;
     if (conversationId && !(await getConversation(user.uid, conversationId))) return NextResponse.json({ error: "Conversation introuvable." }, { status: 404 });

@@ -8,6 +8,10 @@ import {
 } from "@/lib/security/authenticated-request";
 
 import {
+  enforceRateLimit,
+} from "@/lib/security/rate-limit";
+
+import {
   generate,
 } from "@/lib/ai/router";
 
@@ -80,6 +84,15 @@ export async function POST(
   try {
     const user =
       await requireUser(request);
+
+    // Coût LLM réel par appel : garde-fou anti-abus (aligné sur /api/ai/image).
+    const limit = await enforceRateLimit(`ai-generate:${user.uid}`, { limit: 30, windowMs: 5 * 60 * 1000 });
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Trop de générations rapprochées. Réessayez dans quelques instants." },
+        { status: 429, headers: { "retry-after": String(Math.ceil((limit.retryAfterMs ?? 60_000) / 1000)) } },
+      );
+    }
 
     const body =
       await request.json();

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth, authFetch } from "@/lib/firebase/auth-client";
+import { formatMoney } from "@/lib/ui/money";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 
 type Extension = {
@@ -28,8 +29,9 @@ const categories = [
 
 function price(value?: Extension["pricing"]) {
   if (!value || value.model === "free") return "Gratuit";
-  const amount = (value.amountMinor ?? 0) / 100;
-  return `${amount.toLocaleString("fr-FR")} ${value.currency ?? "XAF"}${value.model === "subscription" ? "/mois" : ""}`;
+  // Format monétaire centralisé : XAF sans décimales (l'ancien /100 manuel
+  // affichait « 12,5 XAF » — cf. lib/ui/money.ts).
+  return `${formatMoney(value.amountMinor ?? 0, value.currency ?? "XAF")}${value.model === "subscription" ? "/mois" : ""}`;
 }
 
 function initials(name: string) { return name.trim().slice(0, 2).toUpperCase() || "G3"; }
@@ -62,14 +64,14 @@ const ExtensionCard = memo(function ExtensionCard({
       <button
         aria-label={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
         onClick={() => onToggleFavorite(extension.id)}
-        className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] text-sm text-[var(--g3-muted)] hover:text-[var(--g3-text)]"
+        className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] text-sm text-[var(--g3-muted)] hover:text-[var(--g3-text)]"
       >
         {isFavorite ? "★" : "☆"}
       </button>
       <Link href={`/marketplace/${extension.id}`} className="block">
         <div className="flex items-start gap-3">
           <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-sky-100 text-xs font-bold text-sky-700">{initials(extension.name)}</div>
-          <div className="min-w-0 pr-10">
+          <div className="min-w-0 pr-14">
             <h3 className="truncate font-semibold">{extension.name}</h3>
             <p className="mt-1 text-[11px] text-[var(--g3-faint)]">{extension.developerName ?? "Développeur Gen3ia"} · v{extension.latestVersion ?? "—"}</p>
           </div>

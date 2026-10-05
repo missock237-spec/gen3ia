@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { badRequest, errorBody, errorStatus, isZodErrorLike, zodValidationError } from "./http-errors";
+import { badRequest, errorBody, errorCode, errorStatus, isZodErrorLike, zodValidationError } from "./http-errors";
 
 describe("isZodErrorLike (détection duck-typed)", () => {
   it("reconnaît une vraie ZodError", () => {
@@ -29,6 +29,26 @@ describe("errorStatus (ZodError -> 422)", () => {
     expect(errorStatus(new Error("Missing Authorization header"))).toBe(401);
     expect(errorStatus(new Error("Firestore unavailable"))).toBe(503);
     expect(errorStatus(new Error("boom"), 500)).toBe(500);
+  });
+
+  it("couvre tous les messages d'authentification de verifyFirebaseAuth (401)", () => {
+    expect(errorStatus(new Error("Invalid authorization scheme."))).toBe(401);
+    expect(errorStatus(new Error("Missing Firebase ID token."))).toBe(401);
+    expect(errorStatus(new Error("Token subject is empty."))).toBe(401);
+    expect(errorStatus(new Error("Token issuer mismatch: x"))).toBe(401);
+    expect(errorStatus(new Error("Invalid or revoked Firebase ID token."))).toBe(401);
+  });
+
+  it("renvoie 404 pour une ressource introuvable (EN et FR), avec code NOT_FOUND", () => {
+    expect(errorStatus(new Error("Action approval not found."))).toBe(404);
+    expect(errorStatus(new Error("Projet introuvable."), 400)).toBe(404);
+    expect(errorStatus(new Error("Webhook trigger not found or disabled"), 500)).toBe(404);
+    expect(errorCode(new Error("Action approval not found."))).toBe("NOT_FOUND");
+  });
+
+  it("préserve le repli 409 des routes d'actions (conflit de statut métier)", () => {
+    expect(errorStatus(new Error('Action approval cannot be approved from status "executing".'), 409)).toBe(409);
+    expect(errorStatus(new Error("Action is not currently executing."), 409)).toBe(409);
   });
 });
 

@@ -177,10 +177,9 @@ export function securityHeaders(
       "default-src 'self'",
       "img-src 'self' data: https:",
       "font-src 'self' https: data:",
-      "style-src 'self' 'unsafe-inline'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       // Task 60 : ces en-têtes équipent des réponses JSON (garde de route,
-      // 429) — aucun fetch légitime n'en part ; connect-src est fermé.
+      // 429) — aucun script/style légitime : pas de directive script-src
+      // (l'unsafe-eval historique divergeait volontairement du middleware).
       "connect-src 'self'",
       "frame-ancestors 'none'",
     ].join("; "),

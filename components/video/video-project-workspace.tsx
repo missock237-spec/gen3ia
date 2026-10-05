@@ -16,6 +16,7 @@ import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { Callout } from "@/components/studio/callout";
 // Task 1-c — cadre de progression RÉELLE partagé (rendu vidéo + storyboard).
 import { MediaProgressFrame, type MediaProgressStatus } from "@/components/media/media-progress-frame";
+import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
 type JobWithUrls = Omit<RenderJob, "exports" | "output"> & {
   output?: (NonNullable<RenderJob["output"]> & { playbackUrl?: string | null }) | undefined;
@@ -144,6 +145,8 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
     }
   }, []);
 
+  // Retour du réseau : resynchronisation immédiate (le sondage 15 s ci-dessous
+  // est géré par useVisiblePolling, suspendu hors onglet visible — lot C2).
   useEffect(() => {
     const handler = () => {
       void syncLocalFiles();
@@ -152,15 +155,24 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
     window.addEventListener("online", handler);
     void syncLocalFiles();
     void syncTimelineMutations();
-    const timer = window.setInterval(() => {
-      void syncLocalFiles();
-      void syncTimelineMutations();
-    }, 15_000);
     return () => {
       window.removeEventListener("online", handler);
-      window.clearInterval(timer);
     };
   }, [syncLocalFiles, syncTimelineMutations]);
+
+  // Boucle de synchronisation IndexedDB → serveur (15 s) : en ligne et
+  // UNIQUEMENT si la file locale n'est pas vide (early-exit — plus aucune
+  // lecture/écriture inutile quand il n'y a rien à synchroniser).
+  useVisiblePolling(
+    async () => {
+      if (!navigator.onLine) return;
+      const [localPending, timelinePending] = await Promise.all([listLocalSyncItems(), listTimelineSyncItems()]);
+      if (localPending.length === 0 && timelinePending.length === 0) return;
+      await syncLocalFiles();
+      await syncTimelineMutations();
+    },
+    15_000,
+  );
 
 
 
@@ -176,16 +188,16 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
     await loadAssets();
   }
 
-  // Polling pendant les rendus actifs (survit aux reloads : la file est côté serveur).
+  // Polling pendant les rendus actifs (survit aux reloads : la file est côté
+  // serveur) — suspendu quand l'onglet est en arrière-plan (lot C2).
   const hasActiveJob = jobs.some((j) => j.status === "processing" || j.status === "queued");
-  useEffect(() => {
-    if (!hasActiveJob) return;
-    const timer = setInterval(() => {
-      void loadJobs();
-      void loadProject();
-    }, 4_000);
-    return () => clearInterval(timer);
-  }, [hasActiveJob, loadJobs, loadProject]);
+  useVisiblePolling(
+    async () => {
+      await loadJobs();
+      await loadProject();
+    },
+    hasActiveJob ? 4_000 : null,
+  );
 
   async function runAction(key: string, action: () => Promise<void>) {
     setBusy(key);

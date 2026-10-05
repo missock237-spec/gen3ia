@@ -132,7 +132,7 @@ export function ConversationList({
         <button
           type="button"
           onClick={onToggleCollapsed}
-          className="g3-btn g3-btn-ghost h-9 w-9 justify-center !px-0 text-lg"
+          className="g3-btn g3-btn-ghost h-11 w-11 justify-center !px-0 text-lg"
           title="Afficher la liste des conversations"
           aria-label="Afficher la liste des conversations"
         >
@@ -141,7 +141,7 @@ export function ConversationList({
         <button
           type="button"
           onClick={onNewConversation}
-          className="g3-btn g3-btn-primary h-9 w-9 justify-center !px-0 text-lg"
+          className="g3-btn g3-btn-primary h-11 w-11 justify-center !px-0 text-lg"
           title="Nouvelle conversation"
           aria-label="Nouvelle conversation"
         >
@@ -160,7 +160,7 @@ export function ConversationList({
         <button
           type="button"
           onClick={onToggleCollapsed}
-          className="g3-btn g3-btn-ghost h-9 w-9 justify-center !px-0"
+          className="g3-btn g3-btn-ghost h-11 w-11 justify-center !px-0"
           title="Replier la liste"
           aria-label="Replier la liste"
         >

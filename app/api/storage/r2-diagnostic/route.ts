@@ -8,6 +8,8 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { bootstrapBucketCors } from "@/lib/storage/permanent-user-storage";
+import { requireAdminAccess } from "@/lib/access/platform";
+import { timingSafeStringEqual } from "@/lib/security/timing-safe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,13 +18,23 @@ export const dynamic = "force-dynamic";
  * GET /api/storage/r2-diagnostic
  *
  * Diagnostic R2 bout-en-bout execute depuis le runtime de production.
- * Protege par le header x-diag-secret == process.env.R2_DIAG_SECRET.
- * Verifie : configuration, connectivite, listing des buckets, creation du
- * bucket applicatif et cycle put/get/delete.
+ * Double garde : session ADMIN requise (requireAdminAccess) ET header
+ * x-diag-secret == process.env.R2_DIAG_SECRET (comparaison a temps
+ * constant). Verifie : configuration, connectivite, listing des buckets,
+ * creation du bucket applicatif et cycle put/get/delete.
  */
 export async function GET(request: NextRequest) {
   const expected = process.env.R2_DIAG_SECRET;
-  if (!expected || request.headers.get("x-diag-secret") !== expected) {
+  if (
+    !expected ||
+    !timingSafeStringEqual(request.headers.get("x-diag-secret") ?? "", expected)
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    await requireAdminAccess(request);
+  } catch {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -89,8 +101,11 @@ export async function GET(request: NextRequest) {
 
   // 3. Configuration CORS (televersement direct navigateur -> R2)
   const origin = process.env.APP_URL || "https://gen3ia.online";
+  const corsOrigins = process.env.NODE_ENV === "production"
+    ? [origin, "https://www.gen3ia.online"]
+    : [origin, "https://www.gen3ia.online", "http://localhost:3000"];
   try {
-    steps.cors = { ...(await bootstrapBucketCors([origin, "https://www.gen3ia.online", "http://localhost:3000"])), origins: [origin, "https://www.gen3ia.online", "http://localhost:3000"] };
+    steps.cors = { ...(await bootstrapBucketCors(corsOrigins)), origins: corsOrigins };
   } catch (error) {
     steps.cors = { ok: false, error: error instanceof Error ? `${error.name}: ${error.message}` : String(error) };
     return NextResponse.json({ ok: false, steps }, { status: 502 });

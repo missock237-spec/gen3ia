@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { ToolDefinition } from "../types";
-import { createZip } from "@/lib/documents/zip";
 import { storeArtifactBuffer } from "@/lib/documents/artifact-store";
 import { assertWorkspaceOwner } from "@/lib/execution/workspace-registry";
 import { sanitizeArchivePath } from "@/lib/documents/zip/path-security";
@@ -128,7 +127,18 @@ export const createZipTool: ToolDefinition = {
       }
     }
 
-    const data = await createZip(entries);
+    // archiver chargé UNIQUEMENT à la demande (audit 2-a, C3 : cold start
+    // serverless — échec d'import re-levé avec un message explicite).
+    let zip: typeof import("@/lib/documents/zip");
+    try {
+      zip = await import("@/lib/documents/zip");
+    } catch (error) {
+      throw new Error(
+        `Module « zip » indisponible : ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    const data = await zip.createZip(entries);
     if (data.length > MAX_ARCHIVE_BYTES) throw new Error("Generated ZIP exceeds 100 MiB");
 
     const artifact = await storeArtifactBuffer({

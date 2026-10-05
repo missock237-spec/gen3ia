@@ -72,8 +72,15 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** GET /api/terminal/exec — état du service (mode d'exécution annoncé). */
-export async function GET() {
+/** GET /api/terminal/exec — état du service (mode d'exécution annoncé).
+ * Auth requise : ne révèle ni la configuration sandbox ni le moteur à un
+ * demandeur anonyme (surface de reconnaissance réduite). */
+export async function GET(request: NextRequest) {
+  try {
+    await requireUser(request);
+  } catch {
+    return NextResponse.json({ error: "Authentification requise." }, { status: 401 });
+  }
   return NextResponse.json({
     sandboxDeployed: isSandboxConfigured(),
     engine: isSandboxConfigured() ? "docker" : "simulation",

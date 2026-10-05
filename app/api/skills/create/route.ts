@@ -8,6 +8,10 @@ import {
 } from "@/lib/security/authenticated-request";
 
 import {
+  enforceRateLimit,
+} from "@/lib/security/rate-limit";
+
+import {
   errorBody,
   errorStatus,
 } from "@/lib/security/http-errors";
@@ -87,6 +91,16 @@ export async function POST(
   try {
     const user =
       await requireUser(request);
+
+    // Génération LLM réelle par appel : garde-fou anti-abus.
+    const limit =
+      await enforceRateLimit(`skills-create:${user.uid}`, { limit: 10, windowMs: 5 * 60 * 1000 });
+    if (!limit.allowed) {
+      return NextResponse.json(
+        errorBody("Trop de créations rapprochées. Réessayez dans quelques instants."),
+        { status: 429, headers: { "retry-after": String(Math.ceil((limit.retryAfterMs ?? 60_000) / 1000)) } },
+      );
+    }
 
     const body =
       await request.json();

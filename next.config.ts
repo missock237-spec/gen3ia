@@ -23,6 +23,11 @@ const withBundleAnalyzer =
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Production uniquement : console.* est retiré du bundle (moins de code,
+  // pas de logs de debug en exploitation) — error/warn conservés.
+  compiler: {
+    removeConsole: { exclude: ["error", "warn"] },
+  },
   // Les sous-services (tâches planifiées, workflows, automatisations) sont
   // exécutés par les agents IA : l'utilisateur décrit son besoin en langage
   // naturel dans la conversation. Les anciennes pages redirigent donc vers
@@ -81,6 +86,22 @@ const nextConfig: NextConfig = {
       {
         source: "/manifest.webmanifest",
         headers: [{ key: "Cache-Control", value: "public, max-age=3600, stale-while-revalidate=86400" }],
+      },
+      // SDK public (.tgz servi depuis /public/sdk) et corpus llms.txt /
+      // llms-full.txt : fichiers quasi immuables — cache long + stale-while-
+      // revalidate (téléchargements SDK et robots d'agents ne re-téléchargent
+      // plus à chaque visite ; périmé auto-corrigé en arrière-plan).
+      {
+        source: "/sdk/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      },
+      {
+        source: "/llms.txt",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      },
+      {
+        source: "/llms-full.txt",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
       },
       // Justesse des mises à jour PWA (étape 11) : le service worker et la
       // page hors-ligne DOIVENT être revalidés à chaque visite — un sw.js

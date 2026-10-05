@@ -7,6 +7,7 @@ import { type User } from "firebase/auth";
 import { watchAuth } from "@/lib/firebase/client";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import type { LiveAction } from "@/lib/live/types";
+import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
 type Permission =
   | "screen.read"
@@ -532,12 +533,10 @@ export function LiveDashboard() {
     }
   };
 
-  // Rafraîchit les sessions pour afficher les actions en attente de validation.
-  useEffect(() => {
-    if (!authReady) return;
-    const interval = setInterval(() => { void loadSessions(); }, 6_000);
-    return () => clearInterval(interval);
-  }, [authReady, loadSessions]);
+  // Rafraîchit les sessions pour afficher les actions en attente de validation
+  // (6 s, uniquement onglet visible — lot C2) ; le premier chargement est
+  // assuré par watchAuth.
+  useVisiblePolling(loadSessions, authReady ? 6_000 : null);
 
   if (!authReady || sessionDisponible === null) {
     return <div className="p-10 text-center text-[var(--g3-muted)]">Chargement…</div>;

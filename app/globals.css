@@ -1126,7 +1126,7 @@ body {
   .g3-sidebar-backdrop.is-open { display: block; }
 }
 
-/* Menu mobile flottant */
+/* Menu mobile flottant — cible tactile 44×44 (WCAG 2.5.8 / audit UX 2-c) */
 .g3-mobile-menu { display: none; }
 @media (max-width: 1023px) {
   .g3-mobile-menu {
@@ -1135,8 +1135,8 @@ body {
     left: 14px;
     top: 14px;
     z-index: 55;
-    width: 38px;
-    height: 38px;
+    width: 44px;
+    height: 44px;
     place-items: center;
     border: 1px solid var(--g3-border-strong);
     border-radius: 11px;
@@ -1168,7 +1168,7 @@ body {
 .g3-breadcrumb a:hover { color: var(--g3-primary-strong); text-decoration: underline; }
 .g3-breadcrumb [aria-current] { color: var(--g3-text); font-weight: 600; }
 .g3-breadcrumb .g3-breadcrumb-sep { color: var(--g3-faint); }
-@media (max-width: 1023px) { .g3-breadcrumb { padding: 14px 58px 0 58px; } }
+@media (max-width: 1023px) { .g3-breadcrumb { padding: 14px 64px 0 64px; } }
 
 /* Lien d'évitement */
 .g3-skip-link {

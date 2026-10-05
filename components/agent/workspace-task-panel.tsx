@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/firebase/auth-client";
 import { RuntimePlanSchema, validateDAG, type RuntimePlan, type RuntimeStep } from "@/lib/agents/runtime/types-and-dag";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
+import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
 type WorkspaceTask = {
   id: string;
@@ -94,20 +95,18 @@ export function WorkspaceTaskPanel({ taskId }: { taskId: string }) {
   // « running », son statut est rechargé automatiquement (4 s) — le résultat
   // apparaît dès la fin, même si l'utilisateur avait rafraîchi la page
   // pendant l'exécution (qui continue serveur, onglet ou pas).
-  useEffect(() => {
-    if (task?.status !== "running") return; // une pause attend une action utilisateur
-    const interval = setInterval(() => {
-      void (async () => {
-        try {
-          const response = await authFetch("/api/workspace/tasks/" + encodeURIComponent(taskId), { cache: "no-store" });
-          if (!response.ok) return;
-          const data = await response.json();
-          if (data.task) setTask(data.task);
-        } catch { /* sondage indisponible */ }
-      })();
-    }, 4_000);
-    return () => clearInterval(interval);
-  }, [task?.status, taskId]);
+  // Lot C2 : sondage suspendu quand l'onglet est en arrière-plan.
+  useVisiblePolling(
+    async () => {
+      try {
+        const response = await authFetch("/api/workspace/tasks/" + encodeURIComponent(taskId), { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.task) setTask(data.task);
+      } catch { /* sondage indisponible */ }
+    },
+    task?.status === "running" ? 4_000 : null,
+  );
 
   async function loadHistory() {
     try {

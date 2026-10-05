@@ -7,6 +7,7 @@ import {
 import { WALLET_CURRENCY } from "@/lib/billing/wallet";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { captureServerException } from "@/lib/observability/sentry";
 
 function appOrigin(request: Request): string {
@@ -103,8 +104,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     captureServerException(error, { route: "billing.topup" });
-    const message = error instanceof Error ? error.message : "Could not create top-up checkout";
-    const status = message.includes("authorization") || message.includes("token") ? 401 : 400;
-    return Response.json({ error: message }, { status });
+    return Response.json(errorBody(error, "Could not create top-up checkout"), { status: errorStatus(error, 400) });
   }
 }

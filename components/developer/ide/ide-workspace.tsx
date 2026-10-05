@@ -11,6 +11,7 @@ import { FileExplorer, type IdeFile } from "./file-explorer";
 import { CodeEditor, type IdeMarker, type OpenFileTab } from "./code-editor";
 import { TerminalView } from "./terminal-view";
 import { CommandPalette } from "./command-palette";
+import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
 /**
  * Workshop IDE unifié — remplace les deux panneaux indépendants
@@ -168,6 +169,9 @@ export function IdeWorkspace() {
 
   /* ---------------- Chargement + polling des entrées ---------------- */
   const lastIndexRef = useRef(-1);
+  // Garde-fou du sondage : une réponse arrivée APRÈS un changement de session
+  // est ignorée (équivalent du drapeau « cancelled » de l'ancien effet).
+  const activeSessionRef = useRef<string | null>(null);
 
   const fetchEntries = useCallback(
     async (sessionId: string, since: number) => {
@@ -179,18 +183,11 @@ export function IdeWorkspace() {
     [],
   );
 
-  useEffect(() => {
-    if (!activeSessionId) return;
-    let cancelled = false;
-    lastIndexRef.current = -1;
-    setEntries([]);
-    setEntriesLoading(true);
-    setSessionError("");
-
-    const pull = async (initial: boolean) => {
+  const pullEntries = useCallback(
+    async (sessionId: string, initial: boolean) => {
       try {
-        const fresh = await fetchEntries(activeSessionId, lastIndexRef.current);
-        if (cancelled) return;
+        const fresh = await fetchEntries(sessionId, lastIndexRef.current);
+        if (sessionId !== activeSessionRef.current) return;
         if (fresh.length > 0) {
           lastIndexRef.current = fresh[fresh.length - 1].index;
           setEntries((current) => {
@@ -202,24 +199,36 @@ export function IdeWorkspace() {
         setConnection(online ? "connected" : "offline");
         setSessionError("");
       } catch (e) {
-        if (cancelled) return;
+        if (sessionId !== activeSessionRef.current) return;
         setConnection("polling-error");
         if (initial) setSessionError(e instanceof Error ? e.message : "Entrées indisponibles. Vérifiez votre connexion puis réessayez.");
       } finally {
-        if (!cancelled) setEntriesLoading(false);
+        if (sessionId === activeSessionRef.current) setEntriesLoading(false);
       }
-    };
+    },
+    [fetchEntries, online],
+  );
 
-    void pull(true);
-    if (!live) return () => {
-      cancelled = true;
-    };
-    const interval = setInterval(() => void pull(false), 2_500);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [activeSessionId, live, fetchEntries, online]);
+  // (Re)chargement initial : reset de l'état + première interrogation.
+  useEffect(() => {
+    activeSessionRef.current = activeSessionId;
+    if (!activeSessionId) return;
+    lastIndexRef.current = -1;
+    setEntries([]);
+    setEntriesLoading(true);
+    setSessionError("");
+    void pullEntries(activeSessionId, true);
+  }, [activeSessionId, pullEntries]);
+
+  // Sondage « live » des entrées (2,5 s), suspendu hors onglet visible (lot
+  // C2) et arrêté quand le suivi live est désactivé.
+  useVisiblePolling(
+    async () => {
+      const sessionId = activeSessionRef.current;
+      if (sessionId && live) await pullEntries(sessionId, false);
+    },
+    activeSessionId !== null && live ? 2_500 : null,
+  );
 
   /* ---------------- Ouvrir un fichier ---------------- */
   const openFile = useCallback(async (file: IdeFile, line?: number) => {

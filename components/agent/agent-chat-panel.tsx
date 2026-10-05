@@ -6,6 +6,7 @@ import { CommandComposer, type CommandComposerHandle } from "@/components/ui/com
 import { MarkdownContent } from "@/components/workspace/markdown";
 import { MediaProgressFrame } from "@/components/media/media-progress-frame";
 import { VideoProductionCard } from "@/components/workspace/video-production-card";
+import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 import type { MentionItem } from "@/lib/ui/command-composer-helpers";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import { ATTACHMENT_MAX_FILES, attachmentLimitLabel, validateAttachment } from "@/lib/files/attachment-policy";
@@ -36,6 +37,10 @@ type PlanStep = {
   toolName?: string;
   status?: string;
 };
+
+/** États terminaux d'un run : le suivi live s'arrête (conversation rechargée). */
+const RUN_TERMINAL_STATUSES = ["completed", "failed", "cancelled", "awaiting_approval", "waiting_approval"];
+const isTerminalRun = (status: string) => RUN_TERMINAL_STATUSES.includes(status);
 
 type Approval = {
   id: string;
@@ -253,39 +258,18 @@ export function AgentChatPanel({
   // le run atteint un état terminal, la conversation est rechargée : le
   // message final et les livrables apparaissent, même après un refresh.
   const openConversationRef = React.useRef<((id: string) => Promise<void>) | null>(null);
+  // Époque du suivi live : une réponse de sondage arrivée APRÈS la fin du
+  // suivi (état terminal, mission stoppée) est ignorée — équivalent du
+  // drapeau « cancelled » de l'ancien effet.
+  const liveRunEpochRef = React.useRef(0);
+
+  // Pas de suivi vivant (mission absente ou terminée) → aucun run affiché.
   React.useEffect(() => {
     const following = tracking && conversationId;
     if ((!loading && !following) || !conversationId) {
+      liveRunEpochRef.current += 1;
       setLiveRun(null);
-      return;
     }
-    let cancelled = false;
-    const terminal = (status: string) => ["completed", "failed", "cancelled", "awaiting_approval", "waiting_approval"].includes(status);
-    const poll = async () => {
-      try {
-        const response = await fetch(`/api/chat/conversations/${conversationId}`, { cache: "no-store" });
-        if (!response.ok) return;
-        const data = await response.json();
-        const runs = (data.runs ?? []) as Array<{ id: string; status: string; steps?: Array<{ id: string; name: string; status: string }> }>;
-        const freshest = runs[0];
-        if (cancelled || !freshest) return;
-        setLiveRun({ id: freshest.id, status: freshest.status, steps: freshest.steps ?? [] });
-        if (tracking && terminal(freshest.status)) {
-          // État terminal atteint : rechargement complet de la conversation
-          // (messages + run final) puis fin du suivi.
-          setTracking(null);
-          await openConversationRef.current?.(conversationId);
-          void loadConversations();
-        }
-      } catch { /* sondage indisponible : le panneau reste honnête */ }
-    };
-    void poll();
-    const interval = setInterval(() => void poll(), 2_500);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, tracking, conversationId]);
 
   // PLEIN ÉCRAN : bascule l'overlay CSS et demande l'API Fullscreen native
@@ -348,6 +332,39 @@ export function AgentChatPanel({
   }, [agent.id, onConversationsChanged]);
 
   React.useEffect(() => { void loadConversations(); }, [loadConversations]);
+
+  // SUIVI LIVE (suite) : sondage du dernier run — suspendu hors onglet
+  // visible (lot C2), première interrogation immédiate au démarrage du suivi.
+  const pollLiveRun = React.useCallback(async () => {
+    if (!conversationId) return;
+    const epoch = liveRunEpochRef.current;
+    try {
+      const response = await fetch(`/api/chat/conversations/${conversationId}`, { cache: "no-store" });
+      if (!response.ok) return;
+      const data = await response.json();
+      const runs = (data.runs ?? []) as Array<{ id: string; status: string; steps?: Array<{ id: string; name: string; status: string }> }>;
+      const freshest = runs[0];
+      if (epoch !== liveRunEpochRef.current || !freshest) return;
+      setLiveRun({ id: freshest.id, status: freshest.status, steps: freshest.steps ?? [] });
+      if (tracking && isTerminalRun(freshest.status)) {
+        // État terminal atteint : rechargement complet de la conversation
+        // (messages + run final) puis fin du suivi.
+        setTracking(null);
+        await openConversationRef.current?.(conversationId);
+        void loadConversations();
+      }
+    } catch { /* sondage indisponible : le panneau reste honnête */ }
+  }, [conversationId, tracking, loadConversations]);
+
+  // Première interrogation immédiate au démarrage du suivi (comportement
+  // historique) ; l'intervalle est ensuite géré par useVisiblePolling.
+  React.useEffect(() => {
+    const following = tracking && conversationId;
+    if ((!loading && !following) || !conversationId) return;
+    void pollLiveRun();
+  }, [loading, tracking, conversationId, pollLiveRun]);
+
+  useVisiblePolling(pollLiveRun, conversationId !== null && (loading || tracking) ? 2_500 : null);
 
   // Ouverture demandée depuis le rail « Historique des chats » (extérieur).
   React.useEffect(() => {

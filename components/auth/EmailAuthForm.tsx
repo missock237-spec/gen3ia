@@ -85,7 +85,8 @@ export default function EmailAuthForm() {
       {mode === "inscription" && <input type="password" placeholder="Confirmer le mot de passe" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" required minLength={6} className={inputClasses} />}
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {info && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{info}</p>}
-      <button type="submit" disabled={pending} className={buttonClasses}>{pending ? "Création du profil…" : mode === "connexion" ? "Se connecter" : "Créer mon compte"}</button>
+      {/* Libellé conditionnel au mode : une CONNEXION n'a jamais « créé de profil » (audit UX 2-c). */}
+      <button type="submit" disabled={pending} className={buttonClasses}>{pending ? (mode === "connexion" ? "Connexion…" : "Création du profil…") : mode === "connexion" ? "Se connecter" : "Créer mon compte"}</button>
       {mode === "connexion" && <a href="#" onClick={handleReset} className="text-center text-xs opacity-60 hover:opacity-100">Mot de passe oublié ?</a>}
     </form>
   );

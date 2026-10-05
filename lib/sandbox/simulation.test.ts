@@ -15,34 +15,52 @@ function job(runtime: SandboxJob["runtime"], code: string): SandboxJob {
 }
 
 describe("moteur de simulation de code", () => {
-  it("node : exécution VM réelle — console capturée, exit 0", async () => {
+  it("node : analyse statique — littéraux et constantes évalués, exit 0", async () => {
     const result = await simulateSandboxJob(job("node", "const x = 21 * 2; console.log('résultat:', x);"));
     expect(result.mode).toBe("simulation");
-    expect(result.simulation?.engine).toBe("node-vm");
+    expect(result.simulation?.engine).toBe("static-node");
     expect(result.success).toBe(true);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("résultat: 42");
+    expect(result.simulation?.trace.join(" ")).toContain("analyse statique sans exécution");
   });
 
-  it("node : erreur runtime → stderr + exit 1", async () => {
-    const result = await simulateSandboxJob(job("node", "throw new TypeError('boom');"));
-    expect(result.success).toBe(false);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("TypeError");
-    expect(result.stderr).toContain("boom");
+  it("node : AUCUNE exécution réelle — le code n'est jamais interprété (anti-RCE)", async () => {
+    // Historique : ce code atteignait le realm hôte via Function.constructor
+    // dans node:vm. Désormais l'analyse statique ne doit ni l'exécuter, ni
+    // l'autoriser — la ligne est rejetée comme manipulation de prototypes.
+    const result = await simulateSandboxJob(job("node", "const p = ['constructor'].map(k => k)[0]; console.log(p);"));
+    expect(result.stdout).not.toContain("[Function");
+    expect(result.mode).toBe("simulation");
   });
 
-  it("node : boucle infinie stoppée par le timeout VM", async () => {
+  it("node : constructions dangereuses rejetées (require, process, eval, Function)", async () => {
+    const forbidden = [
+      "require('fs')",
+      "console.log(process.env)",
+      "eval('1 + 1')",
+      "new Function('return 1')()",
+      "globalThis.constructor",
+      "import('node:fs')",
+    ];
+    for (const code of forbidden) {
+      const result = await simulateSandboxJob(job("node", code));
+      expect(result.success, code).toBe(false);
+      expect(result.exitCode, code).toBe(126);
+      expect(result.simulation?.warnings.join(" "), code).toContain("sécurité");
+    }
+  });
+
+  it("node : boucle infinie signalée (sans exécution)", async () => {
     const result = await simulateSandboxJob(job("node", "while(true){}"));
-    expect(result.success).toBe(false);
-    expect(result.exitCode).toBe(1);
     expect(result.simulation?.warnings.join(" ")).toContain("while(true)");
   });
 
-  it("node : l'accès aux ressources du host est refusé", async () => {
-    const result = await simulateSandboxJob(job("node", "require('fs')"));
+  it("node : erreur de syntaxe probable → exit 1", async () => {
+    const result = await simulateSandboxJob(job("node", "const x = (1 + 2;"));
     expect(result.success).toBe(false);
-    expect(result.simulation?.warnings.join(" ")).toContain("require()");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("syntaxe");
   });
 
   it("python : analyse statique — imports, fonctions, prints littéraux", async () => {
@@ -90,7 +108,8 @@ describe("moteur de simulation de code", () => {
   });
 
   it("sortie bornée (truncation)", async () => {
-    const result = await simulateSandboxJob(job("node", "console.log('x'.repeat(300000));"));
+    const big = "x".repeat(300_000);
+    const result = await simulateSandboxJob(job("node", `console.log("${big}");`));
     expect(result.stdout.length).toBeLessThan(300_000);
     expect(result.stdout).toContain("tronquée");
   });

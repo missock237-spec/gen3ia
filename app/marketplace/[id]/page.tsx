@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
+import { formatMoney } from "@/lib/ui/money";
 import { FeatureAuthGate } from "@/components/auth/feature-auth-gate";
 
 type Fiche = {
@@ -25,8 +26,11 @@ type Fiche = {
 
 function price(pricing: Fiche["extension"]["pricing"]) {
   if (pricing.model === "free") return "Gratuit";
-  if (pricing.model === "usage") return `${((pricing.unitAmountMinor ?? 0) / 100).toLocaleString("fr-FR")} ${pricing.currency ?? "XAF"} / utilisation`;
-  const amount = `${((pricing.amountMinor ?? 0) / 100).toLocaleString("fr-FR")} ${pricing.currency ?? "XAF"}`;
+  // Format monétaire centralisé : XAF sans décimales (l'ancien /100 manuel
+  // affichait « 12,5 XAF » — cf. lib/ui/money.ts).
+  const currency = pricing.currency ?? "XAF";
+  if (pricing.model === "usage") return `${formatMoney(pricing.unitAmountMinor ?? 0, currency)} / utilisation`;
+  const amount = formatMoney(pricing.amountMinor ?? 0, currency);
   return pricing.model === "subscription" ? `${amount} / ${pricing.interval === "year" ? "an" : "mois"}` : amount;
 }
 

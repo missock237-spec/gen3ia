@@ -2,6 +2,7 @@ import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { claimActionExecution, completeAction, failAction, getActionApproval } from "@/lib/agents/action-approvals";
 import { executeToolSecurely } from "@/lib/agents/runtime/secure-tool-executor";
 import { buildOrchestratorActionPolicy, roleCanUseExternalActions } from "@/lib/agents/orchestrator-actions";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
   let ownerId = "";
@@ -47,7 +48,8 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
         // Preserve the original execution error. The approval remains protected from replay.
       }
     }
-    const status = message.includes("authorization") || message.includes("token") ? 401 : message.includes("not found") ? 404 : 409;
-    return Response.json({ error: message }, { status });
+    // Classification canonique : 401 auth, 404 introuvable, repli 409
+    // (conflit de statut de l'approbation — cas métier principal ici).
+    return Response.json(errorBody(error, "External action failed"), { status: errorStatus(error, 409) });
   }
 }

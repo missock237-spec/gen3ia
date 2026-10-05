@@ -1,6 +1,7 @@
 import { verifyFirebaseRequest } from "@/lib/auth/firebase";
 import { getChariowSale, getChariowTopupProductId } from "@/lib/billing/chariow";
 import { applyTopup, getWallet, WALLET_CURRENCY } from "@/lib/billing/wallet";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 
 const CREDITABLE_STATUSES = new Set(["completed", "settled"]);
 
@@ -68,8 +69,6 @@ export async function POST(request: Request) {
 
     return Response.json({ success: true, credited: true, wallet });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not verify top-up";
-    const status = message.includes("authorization") || message.includes("token") ? 401 : 400;
-    return Response.json({ error: message }, { status });
+    return Response.json(errorBody(error, "Could not verify top-up"), { status: errorStatus(error, 400) });
   }
 }

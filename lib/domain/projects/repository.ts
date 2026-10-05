@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
+import { CHUNKED_COMMIT_SIZE, commitOpsInChunks, type ChunkedWriteOp } from "@/lib/firestore/chunked-commit";
 
 import {
   assertOrgAttach,
@@ -219,14 +220,25 @@ export async function deleteProject(userId: string, id: string): Promise<void> {
   await assertResourceWrite(userId, { ownerId: String(data.userId ?? ""), orgId: typeof data.orgId === "string" ? data.orgId : null });
   // Les conversations rattachées sont détachées (pas supprimées) : aucun
   // contenu utilisateur n'est détruit par la suppression d'un projet.
-  const conversations = await adminDb
-    .collection("chatConversations")
-    .where("userId", "==", String(data.userId ?? userId))
-    .where("projectId", "==", id)
-    .limit(500)
-    .get();
-  const batch = adminDb.batch();
-  conversations.docs.forEach((d) => batch.update(d.ref, { projectId: FieldValue.delete() }));
-  batch.delete(adminDb.collection(COLLECTION).doc(id));
-  await batch.commit();
+  // Détachement par lots de 450 (limite Firestore : 500 ops par batch,
+  // updates + delete confondus) — boucle jusqu'à épuisement : chaque update
+  // retire le projectId, la re-query ne revoit donc jamais les mêmes docs.
+  for (;;) {
+    const conversations = await adminDb
+      .collection("chatConversations")
+      .where("userId", "==", String(data.userId ?? userId))
+      .where("projectId", "==", id)
+      .limit(CHUNKED_COMMIT_SIZE)
+      .get();
+    const convDocs = conversations.docs;
+    if (convDocs.length === 0) break;
+    const ops: ChunkedWriteOp[] = convDocs.map((d) => ({
+      kind: "update" as const,
+      ref: d.ref,
+      data: { projectId: FieldValue.delete() },
+    }));
+    await commitOpsInChunks(adminDb, ops);
+    if (convDocs.length < CHUNKED_COMMIT_SIZE) break;
+  }
+  await commitOpsInChunks(adminDb, [{ kind: "delete", ref: adminDb.collection(COLLECTION).doc(id) }]);
 }
