@@ -168,13 +168,16 @@ export async function choosePlatformAd(placement: string, context: AdSelectionCo
 /** CTR réel de l'annonce (impressions/clics réellement enregistrés). */
 async function adCtr(adId: string): Promise<number> {
   try {
-    const snapshot = await adminDb.collection(EVENTS_COLLECTION).where("adId", "==", adId).limit(2000).get();
-    let impressions = 0;
-    let clicks = 0;
-    for (const doc of snapshot.docs) {
-      if (doc.get("type") === "impression") impressions += 1;
-      if (doc.get("type") === "click") clicks += 1;
-    }
+    // Agrégations count() Firestore (1 lecture d'index chacune) au lieu de
+    // la lecture en mémoire d'un lot d'événements (jusqu'à 2 000 documents
+    // par calcul de CTR — quota brûlé pour un simple score de rotation).
+    const events = adminDb.collection(EVENTS_COLLECTION).where("adId", "==", adId);
+    const [impressionsSnapshot, clicksSnapshot] = await Promise.all([
+      events.where("type", "==", "impression").count().get(),
+      events.where("type", "==", "click").count().get(),
+    ]);
+    const impressions = impressionsSnapshot.data().count;
+    const clicks = clicksSnapshot.data().count;
     return impressions > 0 ? (clicks / impressions) * 100 : 0;
   } catch {
     return 0;

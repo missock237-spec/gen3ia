@@ -7,6 +7,7 @@ import {
   completeLiveAction,
   getLiveSession,
   heartbeatLiveSession,
+  HEARTBEAT_INTERVAL_MS,
   recordLiveEvent,
   recordLiveObservation,
   recordLiveRuntimeActionResult,
@@ -20,12 +21,23 @@ import { actionRequiresConfirmation, decideLiveAction } from "./vision-decider";
 import { LiveActionSchema, LiveClientMessageSchema, type LiveClientMessage, type LiveServerMessage } from "./types";
 
 const MAX_FRAME_INTERVAL_MS = 900;
-const HEARTBEAT_MS = 15_000;
+/**
+ * Heartbeat demandé au client — 30 s (Task 101, audit quota) : source
+ * unique HEARTBEAT_INTERVAL_MS (repository), qui plafonne aussi l'écriture
+ * Firestore des heartbeats. L'agent PC arrondit sur ses barillets constants
+ * (30 s en fait partie) : 2 writes/min par session au lieu de 4.
+ */
+const HEARTBEAT_MS = HEARTBEAT_INTERVAL_MS;
 const SESSION_POLL_MS = 2_000;
 const ACTION_RESULT_MAX_AGE_MS = 5 * 60_000;
 const MAX_VIEWERS_PER_SESSION = 3;
-/** Watchdog (Task 45) : un client muet (ni frame ni heartbeat) est mis en pause. */
-const CLIENT_ZOMBIE_MS = 45_000;
+/**
+ * Watchdog : un client muet (ni frame ni heartbeat) est mis en pause.
+ * 75 s (Task 101) : l'ancien seuil 45 s collait à l'ancien heartbeat de
+ * 15 s ; avec un heartbeat à 30 s il fallait une marge > 2 × intervalle,
+ * sinon un simple retard réseau mettrait une session saine en pause.
+ */
+const CLIENT_ZOMBIE_MS = 75_000;
 
 interface ConnectionState {
   sessionId: string;
@@ -340,9 +352,9 @@ export function startLiveGateway(port = Number(process.env.LIVE_GATEWAY_PORT || 
   const poller = setInterval(() => {
     const now = Date.now();
     for (const state of clients.values()) {
-      // Watchdog (Task 45) : un client sans frame ni heartbeat depuis 45 s
-      // est mis en pause — la session ne reste plus « running » des heures
-      // avec un client zombie (TTL précédent : 24 h).
+      // Watchdog : un client sans frame ni heartbeat depuis 75 s (marge
+      // > 2 × heartbeat 30 s, Task 101) est mis en pause — la session ne
+      // reste plus « running » des heures avec un client zombie.
       if (!state.pausedByServer && now - Math.max(state.lastFrameAt, state.lastHeartbeatAt) > CLIENT_ZOMBIE_MS) {
         state.pausedByServer = true;
         send(state.socket, { type: "pause", reason: "Aucun signal du client (frames/heartbeat) — session mise en pause automatiquement." });

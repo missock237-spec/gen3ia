@@ -175,6 +175,9 @@ export async function GET(request: NextRequest) {
 
     // Repli textuel : Qdrant indisponible, aucun hit, ou requête courte.
     // On conserve le comportement historique (titres correspondants).
+    // Task 101 (m4bis) : le limit 20 est appliqué CÔTÉ FIRESTORE (tri serveur
+    // updatedAt desc via listConversations) — ce repli ne lit plus que les
+    // 20 conversations demandées au lieu de balayer 200 documents.
     if (mode === "text") {
       const conversations = await listConversations(user.uid, 20, {
         projectId,

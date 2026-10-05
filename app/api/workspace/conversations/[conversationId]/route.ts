@@ -31,6 +31,21 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const conversation = await getConversation(user.uid, conversationId);
     if (!conversation) return NextResponse.json({ error: "Conversation introuvable." }, { status: 404 });
 
+    // Lot C2 — sondage léger (?meta=1) : le poll de reprise de vue ne
+    // consomme que le STATUT du dernier run. Le détail complet (messages,
+    // artefacts, validations) coûte jusqu'à ~373 lectures Firestore par tick
+    // ; ici, la conversation + les 5 runs récents suffisent (~7 lectures).
+    // La réponse garde l'enveloppe canonique de la route + `meta: true`.
+    if (request.nextUrl.searchParams.get("meta") === "1") {
+      const runs = await listRunsForConversation(user.uid, conversationId, 5);
+      return NextResponse.json({
+        conversation,
+        runs,
+        lastRunStatus: runs[0]?.status ?? null,
+        meta: true,
+      });
+    }
+
     const [messages, runs, artifacts, approvals] = await Promise.all([
       listMessages(user.uid, conversationId, 200),
       listRunsForConversation(user.uid, conversationId, 20),

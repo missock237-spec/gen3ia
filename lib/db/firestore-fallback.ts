@@ -15,7 +15,7 @@ import {
 } from "@/lib/db/quota-guard";
 
 /**
- * Accès Firestore résilient avec repli Supabase (Task 95-b).
+ * Accès Firestore résilient avec repli Supabase (Task 95-b, étendu Task 101).
  *
  * Principe : Firestore reste la VÉRITÉ ; la table `firestore_fallback`
  * (Supabase, JSONB, PK (collection, document_id)) porte un MIROIR tenu à
@@ -25,6 +25,12 @@ import {
  * files vidéo (rendu, production) continuent de progresser pendant la
  * panne et `reconcileFallbackToFirestore` ré-imbrique les écritures
  * miroir dans Firestore une fois le quota revenu.
+ *
+ * Task 101 (réduction quota) : les listes sont plafonnées (C3b) et
+ * resilientQuery porte le tri + le limit CÔTÉ Firestore (C3a) — un index
+ * composite manquant (FAILED_PRECONDITION) est absorbé dans la couche par
+ * le chemin historique scan + tri mémoire (C3c), sans mobiliser le
+ * disjoncteur ni le miroir.
  *
  * Disjoncteur (lib/db/quota-guard) : au-delà de 3 erreurs de quota
  * consécutives, Firestore n'est plus interrogé du tout (sonde half-open
@@ -544,18 +550,28 @@ async function readFallback(collection: string, documentId: string): Promise<Row
 // Lectures résilientes
 // ---------------------------------------------------------------------------
 
+/**
+ * Limite par défaut des listes résilientes (Task 101 / C3b) : conservateur,
+ * aligné sur le cap de scan de resilientQuery. Avant Task 101, ces listes
+ * lisaient INTÉGRALEMENT la collection (coût illimité) — le plafond borne le
+ * coût au pire cas sans casser les appelants raisonnables.
+ */
+const LIST_DEFAULT_LIMIT = 200;
+
 export async function resilientList<T>(
   collection: string,
   ownerField: string,
   ownerId: string,
+  limit: number = LIST_DEFAULT_LIMIT,
 ): Promise<T[]> {
+  const safeLimit = Math.max(1, Math.floor(limit) || LIST_DEFAULT_LIMIT);
   if (!firestoreUsable()) {
     if (!fallbackEnabled()) throw fallbackError();
-    return listFallbackByOwner<T>(collection, ownerId);
+    return listFallbackByOwner<T>(collection, ownerId, safeLimit);
   }
   try {
     const snap = await attemptFirestore(`list ${collection} par ${ownerField}`, () =>
-      adminDb.collection(collection).where(ownerField, "==", ownerId).get(),
+      adminDb.collection(collection).where(ownerField, "==", ownerId).limit(safeLimit).get(),
     );
     noteFirestoreSuccess();
     return snap.docs.map((doc) => doc.data() as T);
@@ -564,17 +580,18 @@ export async function resilientList<T>(
     if (!isFirestoreQuotaError(error)) throw error;
     noteFirestoreQuotaError(error);
     if (!fallbackEnabled()) throw error;
-    return listFallbackByOwner<T>(collection, ownerId);
+    return listFallbackByOwner<T>(collection, ownerId, safeLimit);
   }
 }
 
-async function listFallbackByOwner<T>(collection: string, ownerId: string): Promise<T[]> {
+async function listFallbackByOwner<T>(collection: string, ownerId: string, limit: number): Promise<T[]> {
   const supabase = getSupabaseAdmin()!;
   const { data, error: dbError } = await supabase
     .from("firestore_fallback")
     .select("payload")
     .eq("collection", collection)
-    .eq("owner_id", ownerId);
+    .eq("owner_id", ownerId)
+    .limit(limit);
   if (dbError) throw fallbackError();
   return (data ?? []).map((row) => row.payload as T);
 }
@@ -583,14 +600,16 @@ export async function resilientListByPayloadField<T>(
   collection: string,
   field: string,
   value: string,
+  limit: number = LIST_DEFAULT_LIMIT,
 ): Promise<T[]> {
+  const safeLimit = Math.max(1, Math.floor(limit) || LIST_DEFAULT_LIMIT);
   if (!firestoreUsable()) {
     if (!fallbackEnabled()) throw fallbackError();
-    return listFallbackByPayloadField<T>(collection, field, value);
+    return listFallbackByPayloadField<T>(collection, field, value, safeLimit);
   }
   try {
     const snap = await attemptFirestore(`list ${collection} par ${field}`, () =>
-      adminDb.collection(collection).where(field, "==", value).get(),
+      adminDb.collection(collection).where(field, "==", value).limit(safeLimit).get(),
     );
     noteFirestoreSuccess();
     return snap.docs.map((doc) => doc.data() as T);
@@ -599,7 +618,7 @@ export async function resilientListByPayloadField<T>(
     if (!isFirestoreQuotaError(error)) throw error;
     noteFirestoreQuotaError(error);
     if (!fallbackEnabled()) throw error;
-    return listFallbackByPayloadField<T>(collection, field, value);
+    return listFallbackByPayloadField<T>(collection, field, value, safeLimit);
   }
 }
 
@@ -607,50 +626,57 @@ async function listFallbackByPayloadField<T>(
   collection: string,
   field: string,
   value: string,
+  limit: number,
 ): Promise<T[]> {
   const supabase = getSupabaseAdmin()!;
-  const { data, error: dbError } = await supabase.from("firestore_fallback").select("payload").eq("collection", collection).filter("payload->>" + field, "eq", value);
+  const { data, error: dbError } = await supabase.from("firestore_fallback").select("payload").eq("collection", collection).filter("payload->>" + field, "eq", value).limit(limit);
   if (dbError) throw fallbackError();
   return (data ?? []).map((row) => row.payload as T);
 }
 
-export async function resilientCount(
-  collection: string,
-  ownerField: string,
-  ownerId: string,
-): Promise<number> {
-  if (!firestoreUsable()) {
-    if (!fallbackEnabled()) throw fallbackError();
-    return countFallback(collection, ownerId);
-  }
-  try {
-    const snap = await attemptFirestore(`count ${collection} par ${ownerField}`, () =>
-      adminDb.collection(collection).where(ownerField, "==", ownerId).get(),
-    );
-    noteFirestoreSuccess();
-    return snap.size;
-  } catch (error) {
-    if (isFirestoreTransientError(error)) throw error;
-    if (!isFirestoreQuotaError(error)) throw error;
-    noteFirestoreQuotaError(error);
-    if (!fallbackEnabled()) throw error;
-    return countFallback(collection, ownerId);
-  }
-}
+// ---------------------------------------------------------------------------
+// Détection « index composite manquant » (Task 101 / C3a-C3c)
+// ---------------------------------------------------------------------------
 
-async function countFallback(collection: string, ownerId: string): Promise<number> {
-  const supabase = getSupabaseAdmin()!;
-  const { count, error: dbError } = await supabase
-    .from("firestore_fallback")
-    .select("document_id", { count: "exact", head: true })
-    .eq("collection", collection)
-    .eq("owner_id", ownerId);
-  if (dbError) throw fallbackError();
-  return count ?? 0;
+/** Profondeur maximale de descente dans la chaîne error.cause. */
+const MAX_MISSING_INDEX_DEPTH = 5;
+
+/**
+ * L'erreur est-elle un FAILED_PRECONDITION « index composite manquant » ?
+ *
+ * Firestore rejette une requête combinant filtres d'égalité et orderBy sur un
+ * champ différent tant que l'index composite requis n'existe pas (gRPC 9 /
+ * FirebaseError "failed-precondition", message canonique « The query requires
+ * an index »). Le match est VOLONTAIREMENT large (code 9 OU message index) :
+ * le repli associé est le comportement historique (scan + tri mémoire), donc
+ * un faux positif ne dégrade que le coût, jamais la justesse.
+ */
+export function isFirestoreMissingIndexError(error: unknown): boolean {
+  let current: unknown = error;
+  let code = "";
+  let message = "";
+  for (let depth = 0; depth < MAX_MISSING_INDEX_DEPTH && current !== null && current !== undefined; depth += 1) {
+    if (typeof current === "string") {
+      if (!message) message = current.toLowerCase();
+      break; // une chaîne n'a pas de cause enfouie
+    }
+    if (typeof current !== "object") break;
+    const candidate = current as Record<string, unknown>;
+    if (!code && candidate.code !== undefined && candidate.code !== null) {
+      code = String(candidate.code).trim().toUpperCase().replace(/-/g, "_");
+    }
+    if (!message && typeof candidate.message === "string") {
+      message = candidate.message.toLowerCase();
+    }
+    current = candidate.cause;
+  }
+  if (!code && !message) message = String(error ?? "").toLowerCase();
+  return code === "9" || code === "FAILED_PRECONDITION" || message.includes("requires an index") || message.includes("needs an index");
 }
 
 // ---------------------------------------------------------------------------
-// resilientQuery — requête filtrée avec tri mémoire + cap de scan
+// resilientQuery — requête filtrée : tri serveur + limit exact (Task 101),
+// repli scan + tri mémoire (historique), puis miroir Supabase
 // ---------------------------------------------------------------------------
 
 export interface FallbackQueryOptions {
@@ -658,7 +684,12 @@ export interface FallbackQueryOptions {
   orderField?: string;
   /** Tri décroissant (défaut : ascendant). */
   descending?: boolean;
-  /** Nombre max de résultats (défaut : cap de scan 200). */
+  /**
+   * Nombre max de résultats (défaut : cap de scan 200). Depuis Task 101 (C3a),
+   * ce limit est appliqué CÔTÉ FIRESTORE dès qu'un champ d'ordre est fourni :
+   * la requête ne lit plus que `limit` documents (les bons), au lieu de
+   * balayer 200 documents arbitraires puis trier en mémoire.
+   */
   limit?: number;
   /**
    * Injecte l'identifiant du document dans chaque résultat (`id` = doc.id
@@ -753,9 +784,18 @@ async function queryFallback<T>(
 }
 
 /**
- * Requête résiliente : filtres d'égalité (+ tri mémoire et limite) côté
- * Firestore, filtres `payload->>` triés/limités côté secours. Quand le
- * disjoncteur est ouvert, le repli est consulté d'emblée.
+ * Requête résiliente (Task 101 / C3a) :
+ *  - Firestore (chemin nominal) : filtres d'égalité + orderBy SERVEUR dès
+ *    qu'un champ d'ordre est fourni + limit EXACT (le `limit` demandé, plus
+ *    jamais un cap de 200 re-trié en mémoire) — les N plus récents/anciens
+ *    sont garantis, et le coût en lectures tombe au nombre demandé ;
+ *  - index composite manquant (FAILED_PRECONDITION) : repli DANS la couche —
+ *    scan plafonné sans orderBy + tri mémoire (comportement historique), le
+ *    temps que l'index soit déployé ; ni le disjoncteur ni le miroir ne sont
+ *    mobilisés pour ce cas (ni quota, ni incident transitoire) ;
+ *  - quota Firestore : repli miroir Supabase (filtres `payload->>`, tri et
+ *    limit côté secours) ; le tri mémoire reste appliqué sur CE chemin.
+ * Quand le disjoncteur est ouvert, le repli est consulté d'emblée.
  */
 export async function resilientQuery<T>(
   collection: string,
@@ -764,36 +804,87 @@ export async function resilientQuery<T>(
 ): Promise<T[]> {
   const requestedLimit = options?.limit ?? null;
   const scanCap = requestedLimit ?? QUERY_DEFAULT_LIMIT;
+  /**
+   * Horizon de justesse du repli scan (Task 101) : quand l'index manque, le
+   * scan reprend le PLAFOND de la couche (200) plutôt que la seule limite
+   * demandée — le tri mémoire peut alors reconstruire une fenêtre « N plus
+   * récents » aussi juste que le permets l'horizon documenté. Coût borné au
+   * pire cas à 200 lectures, uniquement pendant la fenêtre de déploiement.
+   */
+  const fallbackScanCap = Math.max(scanCap, QUERY_DEFAULT_LIMIT);
+  const orderField = options?.orderField;
+  const descending = options?.descending === true;
+  const orderRequested = typeof orderField === "string" && orderField.length > 0;
 
   if (!firestoreUsable()) {
     if (!fallbackEnabled()) throw fallbackError();
     return queryFallback<T>(collection, filters, options, scanCap);
   }
-  try {
+
+  /** Construit la chaîne Firestore : filtres (+ tri serveur) + limite. */
+  const buildQuery = (ordered: boolean, scanLimit: number): Query<DocumentData, DocumentData> => {
     let query: Query<DocumentData, DocumentData> = adminDb.collection(collection);
     for (const filter of filters) {
       query = query.where(filter.field, "==", filter.value);
     }
-    query = query.limit(scanCap);
-    const snapshot = await attemptFirestore(`query ${collection} (${filters.length} filtre(s))`, () => query.get());
-    noteFirestoreSuccess();
+    if (ordered && orderRequested) {
+      // Tri porté par la requête : le limit demandé devient EXACT (garde de
+      // justesse Task 101 — un limit Firestore SANS orderBy renverrait un
+      // sous-ensemble arbitraire). Pas de cap 200 quand un limit est fourni.
+      query = query.orderBy(orderField!, descending ? "desc" : "asc");
+      query = query.limit(requestedLimit ?? scanLimit);
+    } else {
+      // Sans champ d'ordre : cap de scan (l'ordre brut de Firestore n'a pas
+      // de sens métier, le tri mémoire resterait cosmétique).
+      query = query.limit(scanLimit);
+    }
+    return query;
+  };
+
+  /** Exécute la requête puis applique tri mémoire (contrat miroir) + découpage. */
+  const collect = async (ordered: boolean, scanLimit: number): Promise<T[]> => {
+    const snapshot = await attemptFirestore(
+      `query ${collection} (${filters.length} filtre(s)${ordered ? ", trié" : ""})`,
+      () => buildQuery(ordered, scanLimit).get(),
+    );
     let docs = snapshot.docs.map((doc) =>
       options?.includeIds
         ? ({ ...(doc.data() as object), id: doc.id } as T)
         : (doc.data() as T),
     );
-    if (options?.orderField) {
-      const orderField = options.orderField;
+    if (orderField) {
+      // Tri mémoire conservé : il porte le chemin de repli miroir Supabase et
+      // le chemin scan (index manquant) ; sur le chemin trié serveur, il est
+      // un simple ré-arrangement idempotent du même ordre.
       docs = [...docs].sort((left, right) => compareDocs(left, right, orderField));
-      if (options.descending) docs.reverse();
+      if (descending) docs.reverse();
     }
     if (requestedLimit !== null) docs = docs.slice(0, requestedLimit);
     return docs;
+  };
+
+  try {
+    const docs = await collect(true, scanCap);
+    noteFirestoreSuccess();
+    return docs;
   } catch (error) {
-    if (isFirestoreTransientError(error)) throw error;
-    if (!isFirestoreQuotaError(error)) throw error;
-    noteFirestoreQuotaError(error);
-    if (!fallbackEnabled()) throw error;
+    // Index composite manquant sur la requête TRIÉE : la couche absorbe
+    // (contrat C3c) — scan à l'horizon de justesse + tri mémoire, disponibilité
+    // préservée pendant la fenêtre de déploiement d'index.
+    let failure: unknown = error;
+    if (orderRequested && isFirestoreMissingIndexError(error)) {
+      try {
+        const docs = await collect(false, fallbackScanCap);
+        noteFirestoreSuccess();
+        return docs;
+      } catch (scanError) {
+        failure = scanError; // traité ci-dessous (quota → miroir, etc.)
+      }
+    }
+    if (isFirestoreTransientError(failure)) throw failure;
+    if (!isFirestoreQuotaError(failure)) throw failure;
+    noteFirestoreQuotaError(failure);
+    if (!fallbackEnabled()) throw failure;
     return queryFallback<T>(collection, filters, options, scanCap);
   }
 }

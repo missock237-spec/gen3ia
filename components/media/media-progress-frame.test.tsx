@@ -188,3 +188,15 @@ describe("Intégration atelier vidéo (structurel) — rendu + storyboard", () =
     expect(workspace).toContain("await onRefresh();");
   });
 });
+
+describe("Lot C4d (Task 101-c) — tick de rendu : jobs et projet chargés en parallèle", () => {
+  const workspace = read(WORKSPACE);
+
+  it("le poll 4 s ne séquence plus loadJobs() puis loadProject() (Promise.all)", () => {
+    expect(workspace).toContain("await Promise.all([loadJobs(), loadProject()]);");
+    // L'ancien enchaînement séquentiel a disparu du sondage.
+    expect(workspace).not.toMatch(/await loadJobs\(\);\s*\n\s*await loadProject\(\);/);
+    // L'intervalle et la suspension hors onglet visible sont inchangés.
+    expect(workspace).toContain("hasActiveJob ? 4_000 : null");
+  });
+});

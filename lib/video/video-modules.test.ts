@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 
 /**
@@ -285,5 +287,44 @@ describe("Storyboard + Long Video Engine", () => {
     const project = { script } as unknown as VideoProject;
     expect(describeChapters(project)).toContain("Chapitre 1 — 00:00 → 30:00");
     expect(describeChapters(project)).toContain("Chapitre 2 — 30:00 → 1:00:00");
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Lot C4c (Task 101-c) — listVersions plafonné, sans snapshots (structurel)
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("Lot C4c — historique des versions plafonné et sans snapshots", () => {
+  const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
+  const service = read("lib/video/project-service.ts");
+
+  it("listVersions borne la requête Firestore à 20 versions (les plus récentes)", () => {
+    expect(service).toContain("export const VERSIONS_LIST_LIMIT = 20;");
+    expect(service).toMatch(/\.orderBy\("versionNumber", "desc"\)/);
+    expect(service).toMatch(/\.limit\(VERSIONS_LIST_LIMIT\)/);
+  });
+
+  it("la requête n'extrait PAS les snapshots (champ select limité aux métadonnées)", () => {
+    expect(service).toContain('.select("projectId", "versionNumber", "label", "createdBy", "note", "createdAt")');
+    // Le repli défensif (couche résiliente) retire lui-même le snapshot.
+    expect(service).toMatch(/snapshot: _snapshot, \.\.\.meta/);
+  });
+
+  it("l'index composite requis (projectId, versionNumber DESC) est déclaré et déployable", () => {
+    const indexes = JSON.parse(read("firestore.indexes.json")) as {
+      indexes: Array<{ collectionGroup: string; fields: Array<{ fieldPath: string; order: string }> }>;
+    };
+    const videoVersions = indexes.indexes.filter((idx) => idx.collectionGroup === "videoVersions");
+    expect(
+      videoVersions.some(
+        (idx) =>
+          idx.fields.some((f) => f.fieldPath === "projectId" && f.order === "ASCENDING") &&
+          idx.fields.some((f) => f.fieldPath === "versionNumber" && f.order === "DESCENDING"),
+      ),
+    ).toBe(true);
+  });
+
+  it("la restauration relit les documents COMPLETS (snapshot disponible pour toute version)", () => {
+    expect(service).toMatch(/restoreVersion[\s\S]*?resilientListByPayloadField<ProjectVersion>/);
   });
 });

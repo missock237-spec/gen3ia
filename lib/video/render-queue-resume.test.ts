@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RenderJob } from "@/lib/video/types";
 
@@ -512,5 +514,39 @@ describe("sweepStaleRenderJobs", () => {
 
     expect(result).toEqual({ scanned: 1, requeued: 0, failed: 0 });
     expect(queueResume.saveJobDoc).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Lot C4a/C4b (Task 101-c) — gardes structurels de la route GET render
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("Lot C4 — GET render : sweep throttlé + relecture conditionnelle (structurel)", () => {
+  const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
+  const route = read("app/api/video/projects/[projectId]/render/route.ts");
+
+  it("le sweep n'est plus exécuté à chaque GET : helper throttlé avec sortie immédiate en mode QStash", () => {
+    // La route ne balaie plus cross-user à chaque tick : en mode QStash le
+    // worker tick (app/api/video/worker/tick/route.ts) est responsable.
+    expect(route).toContain("async function sweepRenderJobsIfDue(");
+    expect(route).toMatch(/if \(qstashConfig\(\)\) return;/);
+    // Le corps du GET ne référence plus le sweep direct : uniquement le
+    // helper throttlé (l'ancien appel inconditionnel a disparu).
+    const getBlock = route.slice(route.indexOf("export async function GET"), route.indexOf("export async function PATCH"));
+    expect(getBlock).toContain("await sweepRenderJobsIfDue(projectId, origin);");
+    expect(getBlock).not.toContain("sweepStaleRenderJobs");
+  });
+
+  it("mode sondage : 1 exécution max/minute via clé Redis partagée + repli mémoire locale", () => {
+    expect(route).toContain('`sweep:render:${projectId}`');
+    expect(route).toContain("cacheGet<number>(throttleKey)");
+    expect(route).toContain("cacheSet(throttleKey, now");
+    expect(route).toContain("const localSweepAt = new Map<string, number>();");
+    expect(route).toContain("const SWEEP_THROTTLE_MS = 60_000;");
+  });
+
+  it("la relecture post-tick n'arrive QUE si le tick a réellement avancé (plus de double listJobs)", () => {
+    expect(route).toContain("const ticked = await maybeAdvancePendingJob(");
+    expect(route).toContain("if (ticked) jobs = await listJobs(guard.context.userId, projectId);");
   });
 });

@@ -43,6 +43,13 @@ export async function GET(request: NextRequest) {
     // limit=30, sans filtre) : invalidé par événement à chaque mutation
     // (voir repository.ts) — latence réelle inchangée, charge Firestore
     // réduite d'un ordre de grandeur. Toute autre forme bypass le cache.
+    //
+    // TTL 40 s (Task 101, audit quota) : le client sonne toutes les 25 s
+    // (notification-center.tsx), un TTL de 20 s expirait donc ENTRE deux
+    // polls → ~100 % de MISS (~31 lectures Firestore par tick). À 40 s,
+    // un poll sur deux est servi sans toucher Firestore. La fraîcheur reste
+    // garantie par invalidateNotificationsCache(), appelé à chaque
+    // création/marquage lu — le TTL n'est qu'un filet anti-dérive.
     const chargeur = async () => {
       const [notifications, unread] = await Promise.all([
         listNotifications(user.uid, limit, unreadOnly),
@@ -52,7 +59,7 @@ export async function GET(request: NextRequest) {
     };
     const { notifications, unread } =
       limit === 30 && !unreadOnly
-        ? (await cacheWrap(notificationsCacheKey(user.uid, 30, false), 20, chargeur)).value
+        ? (await cacheWrap(notificationsCacheKey(user.uid, 30, false), 40, chargeur)).value
         : await chargeur();
     return NextResponse.json({ notifications, unread });
   } catch (error) {

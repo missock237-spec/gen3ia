@@ -33,13 +33,15 @@ const STALE_RUNNING_MS=15*60*1000;
 /**
  * Résout une tâche fantôme « running » (fonction serveur tuée avant sa
  * finalisation) : après le délai de staleness, elle passe en « paused » —
- * la reprise redevient possible au lieu d'un blocage définitif. Retourne
- * null si la tâche n'est pas dans ce cas (l'appelant reprend le flux normal).
+ * la reprise redevient possible au lieu d'un blocage définitif. La tâche
+ * LUE est TOUJOURS retournée (l'ancien contrat « null si pas concernée »
+ * forçait l'appelant à relire le même document : 2 lectures Firestore par
+ * consultation du détail, alors que celle-ci est pollée par l'interface).
  */
-export async function resolveStaleRunningTask(ownerId:string,id:string):Promise<WorkspaceTask|null>{
+export async function resolveStaleRunningTask(ownerId:string,id:string):Promise<WorkspaceTask>{
   const task=await getWorkspaceTask(ownerId,id);
-  if(task.status!=="running") return null;
-  if(Date.now()-task.updatedAt<STALE_RUNNING_MS) return null;
+  if(task.status!=="running") return task;
+  if(Date.now()-task.updatedAt<STALE_RUNNING_MS) return task;
   await adminDb.collection(TASKS).doc(id).update({status:"paused",updatedAt:FieldValue.serverTimestamp()});
   return getWorkspaceTask(ownerId,id);
 }
@@ -49,12 +51,16 @@ export async function updateWorkspacePlan(ownerId:string,id:string,plan:RuntimeP
 export async function approveWorkspaceTask(ownerId:string,id:string){const task=await getWorkspaceTask(ownerId,id);if(task.status!=="awaiting_approval")throw new Error("Task is not awaiting approval.");await adminDb.collection(TASKS).doc(id).update({status:"approved",approvedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});return getWorkspaceTask(ownerId,id);}
 export async function listWorkspaceBranches(ownerId:string,taskId:string){
   const task=await getWorkspaceTask(ownerId,taskId);
-  const snap=await adminDb.collection(BRANCHES).where("ownerId","==",ownerId).where("taskId","==",task.id).get();
+  // Task 101 (m3) : plafond 50 — les branches d'une tâche sont des actes
+  // explicites de l'utilisateur, la liste intégrale ne sert que l'UI.
+  const snap=await adminDb.collection(BRANCHES).where("ownerId","==",ownerId).where("taskId","==",task.id).limit(50).get();
   return snap.docs.map(doc=>({id:doc.id,...doc.data()} as {id:string;createdAt?:Timestamp|number;[key:string]:unknown})).sort((a,b)=>ms(b.createdAt)-ms(a.createdAt));
 }
 export async function listWorkspaceSnapshots(ownerId:string,taskId:string){
   const task=await getWorkspaceTask(ownerId,taskId);
-  const snap=await adminDb.collection(SNAPSHOTS).where("ownerId","==",ownerId).where("taskId","==",task.id).get();
+  // Task 101 (m3) : plafond 50 — les snapshots s'accumulent à chaque mise à
+  // jour de plan / événement : sans limite, la liste croissait sans borne.
+  const snap=await adminDb.collection(SNAPSHOTS).where("ownerId","==",ownerId).where("taskId","==",task.id).limit(50).get();
   return snap.docs.map(doc=>({id:doc.id,...doc.data()} as {id:string;createdAt?:Timestamp|number;[key:string]:unknown})).sort((a,b)=>ms(b.createdAt)-ms(a.createdAt));
 }
 

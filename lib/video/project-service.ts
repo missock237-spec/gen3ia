@@ -264,11 +264,47 @@ export async function snapshotVersion(
   return version;
 }
 
-export async function listVersions(userId: string, projectId: string): Promise<ProjectVersion[]> {
+/**
+ * Métadonnées d'une version SANS l'instantané complet (lot C4c — quota
+ * Firestore) : les listes de versions n'exposent que l'en-tête ; le
+ * snapshot (scénario + storyboard + timeline complets) n'est utile qu'à la
+ * restauration, qui relit le document ciblé.
+ */
+export type ProjectVersionMeta = Omit<ProjectVersion, "snapshot">;
+
+/** Plafond de l'historique renvoyé par listVersions (les plus récentes). */
+export const VERSIONS_LIST_LIMIT = 20;
+
+/**
+ * Historique PLAFONNÉ des versions (lot C4c) : au plus les 20 versions les
+ * plus récentes, SANS les snapshots (champ select côté Firestore) — les
+ * documents videoVersions embarquent des instantanés complets du projet et
+ * la liste non bornée coûtait une lecture + le transfert de CHAQUE snapshot
+ * à chaque GET du projet. Appelants vérifiés (grep) : GET projet (en-têtes
+ * seuls), GET /versions (le client n'affiche que numéro, label, date),
+ * contrôle goto_version (présence du numéro) — tous consomment les
+ * métadonnées seules. Requête directe adossée à l'index composite
+ * (projectId ASC, versionNumber DESC) déclaré dans firestore.indexes.json ;
+ * en cas d'erreur (index pas encore déployé, incident), repli sur la couche
+ * résiliente historique (lecture complète) triée et bornée au même plafond —
+ * le service se dégrade, il ne casse pas.
+ */
+export async function listVersions(userId: string, projectId: string): Promise<ProjectVersionMeta[]> {
   await getOwnedProjectOrThrow(userId, projectId);
-  const versions = await resilientListByPayloadField<ProjectVersion>(VERSIONS_COLLECTION, "projectId", projectId);
-  versions.sort((a, b) => b.versionNumber - a.versionNumber);
-  return versions;
+  try {
+    const snap = await adminDb
+      .collection(VERSIONS_COLLECTION)
+      .where("projectId", "==", projectId)
+      .orderBy("versionNumber", "desc")
+      .limit(VERSIONS_LIST_LIMIT)
+      .select("projectId", "versionNumber", "label", "createdBy", "note", "createdAt")
+      .get();
+    return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<ProjectVersionMeta, "id">) }));
+  } catch {
+    const versions = await resilientListByPayloadField<ProjectVersion>(VERSIONS_COLLECTION, "projectId", projectId);
+    versions.sort((a, b) => b.versionNumber - a.versionNumber);
+    return versions.slice(0, VERSIONS_LIST_LIMIT).map(({ snapshot: _snapshot, ...meta }) => meta);
+  }
 }
 
 /**
@@ -277,8 +313,14 @@ export async function listVersions(userId: string, projectId: string): Promise<P
  * réécrit).
  */
 export async function restoreVersion(userId: string, projectId: string, versionNumber: number): Promise<VideoProject> {
-  const versions = await listVersions(userId, projectId);
-  const target = versions.find((v) => v.versionNumber === versionNumber);
+  // Lot C4c : la restauration a besoin du SNAPSHOT COMPLET de la version
+  // ciblée (l'historique listé est désormais plafonné et sans snapshots) —
+  // elle relit donc les documents complets via la couche résiliente.
+  // Opération rare, initiée par l'utilisateur : le coût de lecture complet
+  // n'est payé qu'à la restauration réelle, jamais dans les polls.
+  await getOwnedProjectOrThrow(userId, projectId);
+  const stored = await resilientListByPayloadField<ProjectVersion>(VERSIONS_COLLECTION, "projectId", projectId);
+  const target = stored.find((v) => v.versionNumber === versionNumber);
   if (!target) throw new Error(`Version ${versionNumber} introuvable.`);
   const restored = await patchProject(userId, projectId, {
     script: target.snapshot.script ?? undefined,

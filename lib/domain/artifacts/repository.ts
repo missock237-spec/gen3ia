@@ -147,6 +147,19 @@ export async function getArtifact(userId: string, artifactId: string): Promise<C
   return docFrom(snap.id, snap.data()!);
 }
 
+/**
+ * Cap de scan des artefacts (Task 101 / m5 — choix documenté) : pas de
+ * orderBy serveur ici, car les familles de filtres sont combinatoires
+ * (conversationId, projectId, runId, type — seuls ou combinés) : chaque
+ * combinaison exigerait son index composite dédié. Le compromis retenu est
+ * celui du chat : scan plafonné (200 — Firestore ne facture que les documents
+ * RENVOYÉS, le coût réel reste min(correspondances, 200)), tri mémoire
+ * updatedAt desc PUIS découpage à la limite demandée — la limite n'est plus
+ * appliquée AVANT le tri (l'ancien `.limit(limit)` arbitraire renvoyait un
+ * sous-ensemble non représentatif).
+ */
+const ARTIFACTS_SCAN_CAP = 200;
+
 export async function listArtifacts(
   userId: string,
   filters: { conversationId?: string; projectId?: string; type?: ArtifactType; runId?: string; limit?: number } = {},
@@ -157,11 +170,13 @@ export async function listArtifacts(
   if (filters.projectId) query = query.where("projectId", "==", filters.projectId);
   if (filters.runId) query = query.where("runId", "==", filters.runId);
   if (filters.type) query = query.where("type", "==", filters.type);
-  // Pas de orderBy composé (évite un index Firestore dédié) : tri en mémoire.
-  const snap = await query.limit(limit).get();
+  // Pas de orderBy composé (évite une famille d'index Firestore dédiés) :
+  // cap de scan puis tri mémoire — le découpage vient APRÈS le tri.
+  const snap = await query.limit(ARTIFACTS_SCAN_CAP).get();
   return snap.docs
     .map((d) => docFrom(d.id, d.data()))
-    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+    .slice(0, limit);
 }
 
 export async function deleteArtifact(userId: string, artifactId: string): Promise<void> {

@@ -20,14 +20,24 @@ vi.mock("@/lib/firebase/admin", () => ({
   adminDb: {
     collection: vi.fn(() => ({
       doc: vi.fn(() => ({ get: docGet, set: docSet, create: docCreate, delete: docDelete })),
-      where: vi.fn((_field: string) => ({
-        limit: vi.fn(() => ({
-          // Task 96-c : la liste personnelle passe par resilientQuery
-          // (where(ownerId).limit().get(), tri mémoire) — routage par champ,
-          // l'opérateur `in` des requêtes d'organisation reste distinct.
-          get: (...args: unknown[]) => (_field === "ownerId" ? personalQueryGet(...args) : orgQueryGet(...args)),
-        })),
-      })),
+      where: vi.fn((_field: string) => {
+        // Task 101 : la liste personnelle passe par resilientQuery qui pose
+        // DÉSORMAIS orderBy (tri serveur) avant limit — chaque maillon du
+        // chaînage renvoie un objet complet (orderBy ET limit), le routage
+        // reste par champ (ownerId → personnel, autre → organisation).
+        const route = (...args: unknown[]) => (_field === "ownerId" ? personalQueryGet(...args) : orgQueryGet(...args));
+        const limitBuilder = () => ({
+          get: (...args: unknown[]) => route(...args),
+        });
+        const orderBuilder = () => ({
+          orderBy: vi.fn(orderBuilder),
+          limit: vi.fn(limitBuilder),
+        });
+        return {
+          orderBy: vi.fn(orderBuilder),
+          limit: vi.fn(limitBuilder),
+        };
+      }),
     })),
   },
 }));

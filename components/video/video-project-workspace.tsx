@@ -190,11 +190,13 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
 
   // Polling pendant les rendus actifs (survit aux reloads : la file est côté
   // serveur) — suspendu quand l'onglet est en arrière-plan (lot C2).
+  // Lot C4d : jobs et projet sont chargés EN PARALLÈLE (états indépendants)
+  // — la latence du tick redevient celle du plus lent des deux, pas leur
+  // somme.
   const hasActiveJob = jobs.some((j) => j.status === "processing" || j.status === "queued");
   useVisiblePolling(
     async () => {
-      await loadJobs();
-      await loadProject();
+      await Promise.all([loadJobs(), loadProject()]);
     },
     hasActiveJob ? 4_000 : null,
   );

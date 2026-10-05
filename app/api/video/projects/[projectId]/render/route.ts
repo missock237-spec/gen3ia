@@ -7,11 +7,55 @@ import { checkFfmpegAvailable } from "@/lib/video/ffmpeg";
 import { qstashConfig } from "@/lib/queue/qstash";
 import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
 import { getJobProgress } from "@/lib/infra/upstash";
+import { cacheGet, cacheSet } from "@/lib/cache/redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 type Params = { params: Promise<{ projectId: string }> };
+
+// ────────────────────────────────────────────────────────────────────────────
+// Lot C4a (quota Firestore) — sweep retiré du chemin chaud du GET.
+//
+// Le balayage des jobs orphelins scanne jusqu'à 200 jobs « processing » DE
+// TOUS LES UTILISATEURS ; l'exécuter à chaque tick de poll (4-5 s) coûtait
+// des centaines de lectures par sondage. Désormais :
+//  - mode QStash  : le sweep est SUPPRIMÉ du GET — le worker tick
+//    (app/api/video/worker/tick/route.ts) balaie déjà les orphelins à
+//    chaque délivrance ; les jobs à bail expiré restent de plus récupérables
+//    par la continuation par sondage (claim transactionnel ci-dessous).
+//  - mode sondage (QStash absent) : le GET reste le seul récupérateur —
+//    sweep THROTTLÉ à 1 exécution / minute / projet : clé Redis partagée
+//    `g3:sweep:render:{projectId}` (TTL 60 s, préfixe g3: posé par le
+//    client), repli mémoire process-local défensif serverless (Redis
+//    absent/indisponible → la clé locale seule borne la fréquence par
+//    instance).
+// ────────────────────────────────────────────────────────────────────────────
+
+const SWEEP_THROTTLE_MS = 60_000;
+
+/** Horodatage du dernier sweep par clé — repli local si Redis est absent. */
+const localSweepAt = new Map<string, number>();
+
+async function sweepRenderJobsIfDue(projectId: string, origin: string): Promise<void> {
+  // Mode QStash : le worker tick est déjà responsable du sweep — aucun
+  // second balayage cross-user dans le GET.
+  if (qstashConfig()) return;
+  const throttleKey = `sweep:render:${projectId}`;
+  const now = Date.now();
+  const localAt = localSweepAt.get(throttleKey);
+  if (typeof localAt === "number" && now - localAt < SWEEP_THROTTLE_MS) return;
+  const sharedAt = await cacheGet<number>(throttleKey);
+  if (typeof sharedAt === "number" && now - sharedAt < SWEEP_THROTTLE_MS) {
+    // Synchronise l'horloge locale sur la décision partagée (évite de
+    // re-interroger Redis à chaque tick pendant la fenêtre).
+    localSweepAt.set(throttleKey, sharedAt);
+    return;
+  }
+  localSweepAt.set(throttleKey, now);
+  await cacheSet(throttleKey, now, Math.ceil(SWEEP_THROTTLE_MS / 1000));
+  await sweepStaleRenderJobs(origin).catch(() => undefined);
+}
 
 /**
  * Démarre un rendu (file QStash, checkpoints, reprise, budget réservé).
@@ -71,9 +115,10 @@ export async function GET(request: NextRequest, { params }: Params) {
     const { projectId } = await params;
     const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
 
-    // Sweep best-effort : les jobs orphelins de CE projet repassent en file
-    // (ou échouent proprement) avant la reprise par sondage.
-    await sweepStaleRenderJobs(origin).catch(() => undefined);
+    // Sweep best-effort des jobs orphelins de CE projet — throttlé (lot C4a,
+    // voir sweepRenderJobsIfDue) : supprimé en mode QStash, 1 exécution max
+    // par minute sinon.
+    await sweepRenderJobsIfDue(projectId, origin);
 
     let jobs = await listJobs(guard.context.userId, projectId);
     const pending = jobs.find((job) => {
@@ -84,8 +129,11 @@ export async function GET(request: NextRequest, { params }: Params) {
     });
     if (pending) {
       // UN job par poll, budget borné — le poll reste responsive.
-      await maybeAdvancePendingJob(pending.id, { origin, timeBudgetMs: POLL_ADVANCE_BUDGET_MS }).catch(() => undefined);
-      jobs = await listJobs(guard.context.userId, projectId);
+      // Lot C4b : la relecture post-tick n'arrive QUE si le tick a réellement
+      // avancé (résultat non nul) — un job détenu par un worker vivant (bail
+      // actif, cas nominal QStash) ne déclenche plus un second listJobs.
+      const ticked = await maybeAdvancePendingJob(pending.id, { origin, timeBudgetMs: POLL_ADVANCE_BUDGET_MS }).catch(() => null);
+      if (ticked) jobs = await listJobs(guard.context.userId, projectId);
     }
 
     // URLs de lecture présignées pour les rendus terminés (master + exports).

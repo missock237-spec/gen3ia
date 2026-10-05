@@ -39,3 +39,28 @@ describe("Bibliothèque → conversation directe en streaming", () => {
     expect(section).toContain("sessionStorage.removeItem(key)");
   });
 });
+
+describe("Lot C2 (Task 101-c) — sondage léger du suivi de run (quota Firestore)", () => {
+  const workspace = read("components/workspace/conversation-workspace.tsx");
+
+  it("le poll 4 s passe par le GET léger ?meta=1 (jamais le détail complet)", () => {
+    expect(workspace).toContain('fetch(`/api/workspace/conversations/${conversationId}?meta=1`');
+    // Le GET complet reste réservé aux rechargements déclenchés (ouverture,
+    // fin de tour, reprise hors-ligne) — plus aucun appel périodique.
+    expect(workspace).toContain("await loadDetail(conversationId, true)");
+  });
+
+  it("à l'état terminal, le rechargement COMPLET n'arrive qu'une fois (garde par réf)", () => {
+    expect(workspace).toContain("const runEndReloadRef = useRef(false);");
+    expect(workspace).toContain("if (!conversationId || runEndReloadRef.current) return;");
+    expect(workspace).toContain("runEndReloadRef.current = true;");
+    // Réarmement à l'ouverture d'un nouvel épisode (run en cours dans le détail).
+    expect(workspace).toContain('runEndReloadRef.current = data.runs?.[0]?.status === "running" ? false : runEndReloadRef.current;');
+  });
+
+  it("les invariants historiques du sondage sont conservés (visibilité + arrêt terminal)", () => {
+    // Pause onglet caché : le pilotage reste confié à useVisiblePolling.
+    expect(workspace).toContain("detail?.runs?.[0]?.status === \"running\" && conversationId ? 4_000 : null");
+    expect(workspace).toContain("useVisiblePolling(");
+  });
+});

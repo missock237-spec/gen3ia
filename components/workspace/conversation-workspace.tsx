@@ -123,6 +123,11 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   // Arrêt à tout moment : l'AbortController du tour en cours — le bouton
   // « Arrêter » interrompt le flux et l'agent cesse de travailler.
   const turnAbortRef = useRef<AbortController | null>(null);
+  // Lot C2 (quota Firestore) : garde du sondage léger — le rechargement
+  // COMPLET déclenché à l'état terminal du run n'arrive qu'UNE fois
+  // (entre la détection et la mise à jour de l'état, le détail affiché
+  // reste « running » : sans garde, chaque tick relancerait un GET complet).
+  const runEndReloadRef = useRef(false);
 
   const loadLists = useCallback(async () => {
     try {
@@ -157,6 +162,11 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
       setDetail(data);
       setProjectId(data.conversation.projectId);
       setError("");
+      // Lot C2 : (re)arme la détection de fin de run du sondage léger — un
+      // détail complet montrant un run EN COURS ouvre un nouvel épisode de
+      // suivi ; à l'état terminal la garde reste levée (le rechargement
+      // complet déclenché par le sondage n'arrive qu'UNE fois par run).
+      runEndReloadRef.current = data.runs?.[0]?.status === "running" ? false : runEndReloadRef.current;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Conversation introuvable.");
       setDetail(null);
@@ -179,13 +189,30 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
 
   // REPRISE DE VUE APRÈS REFRESH (exigence production) : le serveur poursuit
   // son tour même si l'onglet a été fermé/rafraîchi. Au chargement d'une
-  // conversation dont le DERNIER run est encore « running », le détail est
-  // rechargé périodiquement (4 s) jusqu'à l'état terminal : l'écran suit
-  // l'exécution réelle au lieu de rester figé sur l'état au refresh.
+  // conversation dont le DERNIER run est encore « running », le statut du
+  // run est sondé périodiquement (4 s) jusqu'à l'état terminal : l'écran
+  // suit l'exécution réelle au lieu de rester figé sur l'état au refresh.
   // Lot C2 : sondage suspendu quand l'onglet est en arrière-plan.
+  // Lot C2 (quota Firestore) : le sondage 4 s passe par le GET léger
+  // ?meta=1 (conversation + 5 runs ≈ 7 lectures) au lieu du détail complet
+  // (messages + artefacts + validations ≈ 373 lectures/tick) — il ne sert
+  // qu'à détecter la FIN du run. À l'état terminal, le rechargement COMPLET
+  // existant est déclenché une seule fois (garde runEndReloadRef).
   useVisiblePolling(
     async () => {
-      if (conversationId) await loadDetail(conversationId, true);
+      if (!conversationId || runEndReloadRef.current) return;
+      try {
+        const response = await fetch(`/api/workspace/conversations/${conversationId}?meta=1`, { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as { runs?: ConversationRun[]; meta?: boolean };
+        const status = data.runs?.[0]?.status;
+        if (status && status !== "running") {
+          runEndReloadRef.current = true;
+          await loadDetail(conversationId, true);
+        }
+      } catch {
+        /* sondage indisponible : l'état affiché est conservé */
+      }
     },
     detail?.runs?.[0]?.status === "running" && conversationId ? 4_000 : null,
   );

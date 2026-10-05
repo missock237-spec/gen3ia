@@ -12,8 +12,20 @@ import {
 
 import {
   VECTOR_COLLECTION_KNOWLEDGE,
+  isVectorStoreConfigured,
   searchVectorPoints,
 } from "@/lib/memory/vector-store";
+
+/**
+ * Plafond du repli Firestore quand Qdrant n'est PAS configuré (chemin
+ * récurrent, pas un incident) : 100 fragments AU TOTAL, répartis entre les
+ * portées (personnel + organisations). L'ancien plafond (500 par portée,
+ * jusqu'à 1 000+ lectures par recherche) n'est conservé que pour le repli
+ * sur ERREUR Qdrant transitoire — résilience maximale quand le chemin
+ * rapide devait fonctionner.
+ */
+const FALLBACK_TOTAL_LIMIT = 100;
+const FALLBACK_ERROR_LIMIT = 500;
 
 export interface KnowledgeSearchResult {
   id: string;
@@ -33,8 +45,10 @@ export interface KnowledgeSearchResult {
  * Chemin rapide (Qdrant configuré) : kNN filtré userId + projectId, texte
  * du fragment repris du payload (identique au Firestore : écrit ensemble).
  *
- * Chemin de repli : parcours Firestore (≤ 500 fragments) + cosinus en
- * mémoire — comportement historique, conservé pour la résilience.
+ * Chemin de repli (Qdrant non configuré OU en erreur uniquement) : parcours
+ * Firestore + cosinus en mémoire. Si Qdrant a répondu (même 0 hit), le
+ * résultat est légitime — AUCUN repli (l'ancien comportement scannait la
+ * base Firestore dès 0 hit, même avec Qdrant sain : quota brûlé pour rien).
  */
 /**
  * Périmètre de recherche d'un utilisateur : ses organisations membres
@@ -61,17 +75,25 @@ export async function searchKnowledge(
       query,
     );
 
-  const hits =
-    await searchVectorPoints(
-      VECTOR_COLLECTION_KNOWLEDGE,
-      queryEmbedding,
-      {
-        limit,
-        filter: { userId, projectId, orgIds },
-      },
-    );
+  // Qdrant configuré ? Sinon pas d'appel vectoriel du tout (le client
+  // répondrait null) — et surtout : null = « pas de réponse » (non
+  // configuré OU erreur), [] = « réponse légitime sans hit ».
+  const qdrantConfigured = isVectorStoreConfigured();
+  const hits = qdrantConfigured
+    ? await searchVectorPoints(
+        VECTOR_COLLECTION_KNOWLEDGE,
+        queryEmbedding,
+        {
+          limit,
+          filter: { userId, projectId, orgIds },
+        },
+      )
+    : null;
 
-  if (hits && hits.length > 0) {
+  if (hits) {
+    // Qdrant a RÉPONDU : 0 hit est un résultat légitime (index vide pour ce
+    // périmètre) — aucun repli Firestore, la réponse est retournée telle
+    // quelle (économie de quota : le repli coûtait jusqu'à 1 000+ lectures).
     return hits.map((hit) => ({
       id: hit.id,
       documentId: String(hit.payload.documentId ?? ""),
@@ -81,8 +103,8 @@ export async function searchKnowledge(
     }));
   }
 
-  // Repli Firestore : union personnel + organisations (recommandation C),
-  // plafonnée comme le chemin historique (500 fragments par portée).
+  // Repli Firestore (Qdrant non configuré OU en erreur) : union personnel
+  // + organisations (recommandation C).
   // Frontière de sécurité : orgIds est résolu SERVEUR depuis l'index
   // user→org de l'appelant ; les requêtes org filtrent par orgId (+ projet)
   // sans filtre userId — les fragments d'une org portent l'userId de leur
@@ -91,19 +113,28 @@ export async function searchKnowledge(
   const orgChunks: string[][] = [];
   for (let i = 0; i < scopeOrgs.length; i += 30) orgChunks.push(scopeOrgs.slice(i, i + 30));
 
+  // Plafond de lecture : réparti équitablement entre les portées (1
+  // personnelle + N requêtes org) — Qdrant non configuré = 100 fragments
+  // AU TOTAL ; erreur Qdrant transitoire = limites historiques (500 par
+  // portée) pour la résilience maximale sur un incident.
+  const snapshotCount = 1 + orgChunks.length;
+  const perScopeLimit = qdrantConfigured
+    ? FALLBACK_ERROR_LIMIT
+    : Math.max(1, Math.floor(FALLBACK_TOTAL_LIMIT / snapshotCount));
+
   const snapshots = await Promise.all([
     adminDb
       .collection("knowledgeChunks")
       .where("userId", "==", userId)
       .where("projectId", "==", projectId)
-      .limit(500)
+      .limit(perScopeLimit)
       .get(),
     ...orgChunks.map((ids) =>
       adminDb
         .collection("knowledgeChunks")
         .where("orgId", "in", ids)
         .where("projectId", "==", projectId)
-        .limit(500)
+        .limit(perScopeLimit)
         .get(),
     ),
   ]);

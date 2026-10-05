@@ -75,7 +75,9 @@ describe("cache Redis — repli sans configuration", () => {
     await expect(redisPing()).resolves.toBe(false);
   });
 
-  it("cacheWrap exécute le loader à chaque appel (pas de cache)", async () => {
+  it("cacheWrap exécute le loader une seule fois grâce au repli local (Task 101)", async () => {
+    // Repli process-local : sans Redis, le second appel est servi depuis la
+    // mémoire au lieu de retomber sur le loader (souvent Firestore).
     let calls = 0;
     const loader = async () => {
       calls += 1;
@@ -84,7 +86,64 @@ describe("cache Redis — repli sans configuration", () => {
     const first = await cacheWrap("k", 60, loader);
     const second = await cacheWrap("k", 60, loader);
     expect(first.hit).toBe(false);
-    expect(second.hit).toBe(false);
+    expect(second.hit).toBe(true);
+    expect(second.value).toEqual({ v: 1 });
+    expect(calls).toBe(1);
+  });
+
+  it("le repli local respecte le TTL (entrée expirée = rechargement)", async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const loader = async () => {
+        calls += 1;
+        return { v: calls };
+      };
+      await cacheWrap("k:ttl-local", 5, loader);
+      vi.advanceTimersByTime(6_000);
+      const after = await cacheWrap("k:ttl-local", 5, loader);
+      expect(after.hit).toBe(false);
+      expect(calls).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("plafond LRU ~200 entrées : les clés les plus anciennes sont évincées", async () => {
+    const loads = new Map<string, number>();
+    const loaderPour = (cle: string) => async () => {
+      loads.set(cle, (loads.get(cle) ?? 0) + 1);
+      return { cle };
+    };
+    for (let index = 0; index < 220; index += 1) {
+      await cacheWrap(`k:lru:${index}`, 60, loaderPour(`k:lru:${index}`));
+    }
+    // 220 insertions pour 200 places : les 20 premières clés sont évincées.
+    expect(loads.get("k:lru:0")).toBe(1);
+    const recharge = await cacheWrap("k:lru:0", 60, loaderPour("k:lru:0"));
+    expect(recharge.hit).toBe(false);
+    expect(loads.get("k:lru:0")).toBe(2);
+    // Une clé récente reste servie sans nouveau loader.
+    const recente = await cacheWrap("k:lru:219", 60, loaderPour("k:lru:219"));
+    expect(recente.hit).toBe(true);
+    expect(loads.get("k:lru:219")).toBe(1);
+  });
+
+  it("cacheDelete purge aussi le repli local (invalidation visible immédiatement)", async () => {
+    // La sonnette notifications repose sur l'invalidation événementielle :
+    // sans purge locale, un poll post-mutation serait servi périmé jusqu'à
+    // expiration du TTL quand Upstash est absent.
+    let calls = 0;
+    const loader = async () => {
+      calls += 1;
+      return { v: calls };
+    };
+    await cacheWrap("k:invalidation", 60, loader);
+    await cacheWrap("k:invalidation", 60, loader);
+    expect(calls).toBe(1);
+    await expect(cacheDelete("k:invalidation")).resolves.toBe(false);
+    const after = await cacheWrap("k:invalidation", 60, loader);
+    expect(after.hit).toBe(false);
     expect(calls).toBe(2);
   });
 });

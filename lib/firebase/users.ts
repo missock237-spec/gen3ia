@@ -29,6 +29,15 @@ function clean(value: string | null | undefined, max = 120): string | null {
   return normalized ? normalized.slice(0, max) : null;
 }
 
+/**
+ * Throttle d'écriture du login (Task 101, audit quota Firestore) :
+ * `ensureUserProfile` est appelé à chaque établissement de session —
+ * écrire `lastLoginAt`/`updatedAt` à chaque chargement coûtait 1 write
+ * inutile par visite pour un profil inchangé. Au-delà d'1 h, le login est
+ * re-tracé (usage analytics/antifraude préservé).
+ */
+const LOGIN_WRITE_THROTTLE_MS = 60 * 60_000;
+
 export async function ensureUserProfile(params: {
   uid: string;
   email?: string | null;
@@ -84,7 +93,9 @@ export async function ensureUserProfile(params: {
   const data = snapshot.data() as Partial<UserProfile>;
   const providers = Array.from(new Set([...(data.providers || []), provider]));
 
-  await ref.update({
+  // Valeurs SUIVANTES exactement comme l'update historique les calculait :
+  // on les compare au document AVANT d'écrire (Task 101 — audit quota).
+  const champsSuivants: Record<string, unknown> = {
     email: clean(params.email, 254) ?? data.email ?? null,
     displayName: derivedDisplayName ?? data.displayName ?? null,
     ...(params.firstName !== undefined ? { firstName } : {}),
@@ -97,7 +108,45 @@ export async function ensureUserProfile(params: {
     ...(params.language !== undefined ? { language: clean(params.language, 16) ?? "fr" } : {}),
     ...(params.timezone !== undefined ? { timezone: clean(params.timezone, 80) ?? "UTC" } : {}),
     providers,
-    updatedAt: FieldValue.serverTimestamp(),
-    lastLoginAt: FieldValue.serverTimestamp(),
+  };
+
+  const aChangement = Object.entries(champsSuivants).some(([champ, valeur]) => {
+    const actuel = (data as Record<string, unknown>)[champ];
+    if (Array.isArray(valeur)) {
+      const actuelTableau = Array.isArray(actuel) ? (actuel as unknown[]) : [];
+      return actuelTableau.length !== valeur.length || actuelTableau.some((item, index) => item !== valeur[index]);
+    }
+    return (actuel ?? null) !== valeur;
   });
+
+  // Throttle login (Task 101) : lastLoginAt ne mérite une écriture qu'une
+  // fois par heure — un rafraîchissement à CHAQUE chargement de page
+  // coûtait 1 write inutile par visite (login tracé ≠ fraîcheur métier).
+  const dernierLogin = data.lastLoginAt;
+  const dernierLoginMs =
+    dernierLogin instanceof Timestamp
+      ? dernierLogin.toMillis()
+      : typeof dernierLogin === "number"
+        ? dernierLogin
+        : 0;
+  const loginÀTracer = Date.now() - dernierLoginMs > LOGIN_WRITE_THROTTLE_MS;
+
+  if (aChangement) {
+    await ref.update({
+      ...champsSuivants,
+      updatedAt: FieldValue.serverTimestamp(),
+      lastLoginAt: FieldValue.serverTimestamp(),
+    });
+    return;
+  }
+
+  if (loginÀTracer) {
+    await ref.update({
+      updatedAt: FieldValue.serverTimestamp(),
+      lastLoginAt: FieldValue.serverTimestamp(),
+    });
+    return;
+  }
+
+  // Profil à jour ET login déjà tracé < 1 h : 0 écriture Firestore.
 }

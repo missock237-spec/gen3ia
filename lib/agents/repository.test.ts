@@ -72,23 +72,44 @@ vi.mock("@/lib/firebase/admin", () => ({
         // Égalité filtrée comme le vrai Firestore (les requêtes résilientes
         // n'utilisent QUE l'égalité : l'opérateur `in` reste brut).
         const equalityOnly = op === "==";
-        const runQuery = (limit?: number) => {
-          firestoreState.ops.push({ kind: "query", path: describe });
+        // Task 101 : chaîne complète where → orderBy → limit → get (le tri
+        // SERVEUR est émulé, comme le vrai Firestore avec index composite).
+        const state: { order: { field: string; dir: "asc" | "desc" } | null; limit: number | undefined } = {
+          order: null,
+          limit: undefined,
+        };
+        const runQuery = () => {
+          firestoreState.ops.push({ kind: "query", path: describe, opts: { order: state.order ? { ...state.order } : null, limit: state.limit ?? null } });
           if (firestoreState.failWith) throw firestoreState.failWith;
           let results = firestoreState.queryResults;
           if (equalityOnly) {
             results = results.filter((doc) => String(doc[field]) === String(value));
           }
-          if (limit) results = results.slice(0, limit);
+          if (state.order) {
+            const order = state.order;
+            results = [...results].sort((left, right) => {
+              const cmp = compareServeur(left, right, order.field);
+              return order.dir === "desc" ? -cmp : cmp;
+            });
+          }
+          if (state.limit !== undefined) results = results.slice(0, state.limit);
           return {
             docs: results.map((data, index) => ({ id: `q${index}`, data: () => data })),
             size: results.length,
           };
         };
-        return {
+        const builder = {
+          orderBy: (orderField: string, dir: "asc" | "desc" = "asc") => {
+            state.order = { field: orderField, dir };
+            return builder;
+          },
+          limit: (n: number) => {
+            state.limit = n;
+            return builder;
+          },
           get: async () => runQuery(),
-          limit: (n: number) => ({ get: async () => runQuery(n) }),
         };
+        return builder;
       },
     }),
   },
@@ -102,6 +123,36 @@ const supabaseState = vi.hoisted(() => ({
   rows: [] as Array<Record<string, unknown>>,
   ops: [] as Array<{ op: string; args?: unknown }>,
 }));
+
+/**
+ * Comparateur de tri SERVEUR simulé (Task 101) : émule l'ordre renvoyé par
+ * Firestore quand orderBy est posé (Date, toMillis, ISO, nombre, chaîne).
+ */
+function valeurServeur(value: unknown): number | null {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "object" && value !== null && typeof (value as { toMillis?: unknown }).toMillis === "function") {
+    try {
+      return (value as { toMillis: () => number }).toMillis();
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
+function compareServeur(left: Record<string, unknown>, right: Record<string, unknown>, field: string): number {
+  const ln = valeurServeur(left[field]);
+  const rn = valeurServeur(right[field]);
+  if (ln !== null && rn !== null) return ln - rn;
+  const ls = String(left[field] ?? "");
+  const rs = String(right[field] ?? "");
+  return ls < rs ? -1 : ls > rs ? 1 : 0;
+}
 
 vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdmin: vi.fn(() => supabaseFake()),

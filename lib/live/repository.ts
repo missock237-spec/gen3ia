@@ -3,6 +3,15 @@ import type { LiveAction, LivePermission, LivePendingAction, LiveRuntimeState, L
 
 const COLLECTION = "liveAgentSessions";
 const PENDING_ACTION_MAX_AGE_MS = 10 * 60_000;
+/**
+ * Intervalle canonique du heartbeat live — 30 s (Task 101, audit quota).
+ * - Le gateway l'annonce au client PC (hello.ack.heartbeatIntervalMs) ;
+ * - `heartbeatLiveSession` plafonne les ÉCRITURES Firestore à ce rythme :
+ *   un client plus bavard (version antérieure, repli 15 s) ne peut plus
+ *   dépasser 2 writes/min par session. La détection de vivacité reste
+ *   assurée par le watchdog mémoire du gateway (75 s > 2 × intervalle).
+ */
+export const HEARTBEAT_INTERVAL_MS = 30_000;
 // Plafond réaliste (Task 45) : une itération ≈ 1 décision vision LLM. 300
 // itérations couvrent largement les objectifs légitimes ; l'ancien plafond
 // (10 000) laissait tourner des heures d'appels payants sur un objectif
@@ -40,8 +49,25 @@ export async function updateLiveSessionStatus(id: string, status: LiveSessionSta
   await ref(id).update({ status, ...(deviceId ? { deviceId } : {}), ...(runtimeStatus ? { "runtime.status": runtimeStatus } : {}), updatedAt: now, version: now });
 }
 
+/**
+ * Dernière écriture de heartbeat par session (throttle process-local) —
+ * le gateway est un processus long (mini-service) : l'état en mémoire tient.
+ */
+const dernierHeartbeatÉcrit = new Map<string, number>();
+
 export async function heartbeatLiveSession(id: string, deviceId: string) {
   const now = Date.now();
+  // Throttle (Task 101) : 1 write / 30 s / session maximum. Un heartbeat
+  // plus fréquent que l'intervalle canonique est acquitté côté gateway
+  // (watchdog mémoire) sans coût Firestore.
+  if (now - (dernierHeartbeatÉcrit.get(id) ?? 0) < HEARTBEAT_INTERVAL_MS) return;
+  // Hygiène mémoire : purge des sessions muettes depuis plus d'une heure.
+  if (dernierHeartbeatÉcrit.size > 256) {
+    for (const [sessionId, at] of dernierHeartbeatÉcrit) {
+      if (now - at > 60 * 60_000) dernierHeartbeatÉcrit.delete(sessionId);
+    }
+  }
+  dernierHeartbeatÉcrit.set(id, now);
   await ref(id).update({ lastHeartbeatAt: now, deviceId, updatedAt: now });
 }
 
@@ -199,7 +225,14 @@ export async function recordLiveEvent(id: string, event: Record<string, unknown>
   await ref(id).collection("events").add({ ...event, createdAt: Date.now() });
 }
 
-export async function listLiveSessions(ownerId: string, limit = 20): Promise<LiveSession[]> {
+/**
+ * Liste les sessions live du propriétaire, de la plus récente (Task 101,
+ * audit quota : plafond par défaut 10 au lieu de 20 — le tableau de bord
+ * sonde cette liste toutes les 6/15 s et n'expose que les sessions
+ * « récentes » ; lire 20 docs par poll ne servait qu'à consommer du quota).
+ * Le paramètre reste surchargeable pour les rares besoins plus larges.
+ */
+export async function listLiveSessions(ownerId: string, limit = 10): Promise<LiveSession[]> {
   const snap = await adminDb
     .collection(COLLECTION)
     .where("ownerId", "==", ownerId)

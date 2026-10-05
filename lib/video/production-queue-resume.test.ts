@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -423,5 +425,33 @@ describe("sweepStaleProductionJobs", () => {
 
     expect(result).toEqual({ scanned: 1, requeued: 0, failed: 0 });
     expect(queueResume.saveJobDoc).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Lot C4a (Task 101-c) — garde structurel de la route GET production
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("Lot C4 — GET production : sweep throttlé (structurel)", () => {
+  const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
+  const route = read("app/api/video/projects/[projectId]/production/route.ts");
+
+  it("le sweep n'est plus exécuté à chaque GET : helper throttlé avec sortie immédiate en mode QStash", () => {
+    expect(route).toContain("async function sweepProductionJobsIfDue(");
+    expect(route).toMatch(/if \(qstashConfig\(\)\) return;/);
+    // Le corps du GET (dernière fonction de la route) ne référence plus le
+    // sweep direct : uniquement le helper throttlé (défini AVANT le GET,
+    // l'ancien appel inconditionnel a disparu).
+    const getBlock = route.slice(route.indexOf("export async function GET"));
+    expect(getBlock).toContain("await sweepProductionJobsIfDue(projectId, origin);");
+    expect(getBlock).not.toContain("sweepStaleProductionJobs");
+  });
+
+  it("mode sondage : 1 exécution max/minute via clé Redis partagée + repli mémoire locale", () => {
+    expect(route).toContain('`sweep:production:${projectId}`');
+    expect(route).toContain("cacheGet<number>(throttleKey)");
+    expect(route).toContain("cacheSet(throttleKey, now");
+    expect(route).toContain("const localSweepAt = new Map<string, number>();");
+    expect(route).toContain("const SWEEP_THROTTLE_MS = 60_000;");
   });
 });

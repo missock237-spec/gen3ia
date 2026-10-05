@@ -192,7 +192,7 @@ export function recordExecutionMetrics(telemetry: ExecutionTelemetry): void {
 }
 
 /* ------------------------------------------------------------------ */
-/* Pont événements ExecutionTracer → spans                            */
+/* Pont événements d'exécution → spans                                */
 /* ------------------------------------------------------------------ */
 
 export interface TraceableExecutionEvent {

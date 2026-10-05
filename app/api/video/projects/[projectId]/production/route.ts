@@ -10,11 +10,47 @@ import {
   type VideoProductionJob,
 } from "@/lib/video/production-queue";
 import { qstashConfig } from "@/lib/queue/qstash";
+import { cacheGet, cacheSet } from "@/lib/cache/redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 type Params = { params: Promise<{ projectId: string }> };
+
+// ────────────────────────────────────────────────────────────────────────────
+// Lot C4a (quota Firestore) — sweep retiré du chemin chaud du GET (miroir du
+// rendu, voir render/route.ts pour le raisonnement complet) :
+//  - mode QStash  : sweep SUPPRIMÉ du GET — le worker production-tick
+//    (app/api/video/worker/production-tick/route.ts) balaie déjà les
+//    orphelins à chaque délivrance.
+//  - mode sondage (QStash absent) : sweep THROTTLÉ à 1 exécution / minute /
+//    projet — clé Redis partagée `g3:sweep:production:{projectId}` (TTL
+//    60 s), repli mémoire process-local défensif serverless.
+// ────────────────────────────────────────────────────────────────────────────
+
+const SWEEP_THROTTLE_MS = 60_000;
+
+/** Horodatage du dernier sweep par clé — repli local si Redis est absent. */
+const localSweepAt = new Map<string, number>();
+
+async function sweepProductionJobsIfDue(projectId: string, origin: string): Promise<void> {
+  // Mode QStash : le worker production-tick est déjà responsable du sweep.
+  if (qstashConfig()) return;
+  const throttleKey = `sweep:production:${projectId}`;
+  const now = Date.now();
+  const localAt = localSweepAt.get(throttleKey);
+  if (typeof localAt === "number" && now - localAt < SWEEP_THROTTLE_MS) return;
+  const sharedAt = await cacheGet<number>(throttleKey);
+  if (typeof sharedAt === "number" && now - sharedAt < SWEEP_THROTTLE_MS) {
+    // Synchronise l'horloge locale sur la décision partagée (évite de
+    // re-interroger Redis à chaque tick pendant la fenêtre).
+    localSweepAt.set(throttleKey, sharedAt);
+    return;
+  }
+  localSweepAt.set(throttleKey, now);
+  await cacheSet(throttleKey, now, Math.ceil(SWEEP_THROTTLE_MS / 1000));
+  await sweepStaleProductionJobs(origin).catch(() => undefined);
+}
 
 /**
  * Statut de la production autopilote du projet (Task 1-a FIX 7) — lecture
@@ -33,9 +69,10 @@ export async function GET(request: NextRequest, { params }: Params) {
     await getOwnedProjectOrThrow(guard.context.userId, projectId);
     const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
 
-    // Sweep best-effort : les jobs orphelins repassent en file (ou échouent
-    // proprement) avant l'avance par sondage.
-    await sweepStaleProductionJobs(origin).catch(() => undefined);
+    // Sweep best-effort des jobs orphelins — throttlé (lot C4a, voir
+    // sweepProductionJobsIfDue) : supprimé en mode QStash, 1 exécution max
+    // par minute sinon.
+    await sweepProductionJobsIfDue(projectId, origin);
 
     const jobs = await listProductionJobs(guard.context.userId, projectId);
     const job: VideoProductionJob | undefined = jobs[0];

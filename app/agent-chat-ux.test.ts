@@ -113,3 +113,21 @@ describe("Exigence 3 — agent POLYVALENT (aucun refus de domaine)", () => {
     expect(panel).not.toContain("répond et agit uniquement en");
   });
 });
+
+describe("Lot C2 (Task 101-c) — sondage léger du suivi live (quota Firestore)", () => {
+  const panel = read(PANEL);
+
+  it("le poll 2,5 s du dernier run passe par le GET léger ?meta=1", () => {
+    // Le sondage ne consomme que runs[0] : plus de scan des messages.
+    expect(panel).toContain("fetch(`/api/chat/conversations/${conversationId}?meta=1`");
+  });
+
+  it("les invariants du suivi live sont conservés (intervalle, visibilité, rechargement final)", () => {
+    // Le pilotage (2,5 s, pause onglet caché) reste confié à useVisiblePolling.
+    expect(panel).toContain("useVisiblePolling(pollLiveRun, conversationId !== null && (loading || tracking) ? 2_500 : null);");
+    // À l'état terminal pendant un suivi : rechargement complet unique puis arrêt.
+    expect(panel).toContain("if (tracking && isTerminalRun(freshest.status)) {");
+    expect(panel).toContain("setTracking(null);");
+    expect(panel).toContain("await openConversationRef.current?.(conversationId);");
+  });
+});

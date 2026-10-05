@@ -33,13 +33,17 @@ import {
  *    sentinelles sont écartées du miroir JSONB et casseraient le tri ;
  *  - garde d'ownership (userId) reproduite à l'identique sur les chemins
  *    de repli — jamais la conversation d'un autre utilisateur ;
- *  - tri/lémitage : resilientQuery filtre par égalité puis trie EN MÉMOIRE
- *    (index-safe) ; le cap de scan est demandé à 200 puis redécoupé ici,
- *    car un `limit(N)` côté Firestore renverrait des documents ARBITRAIRES
- *    (le tri est appliqué après le scan).
+ *  - tri/limitation (Task 101 / C3a + m4bis) : les listes de CONVERSATIONS
+ *    transmettent leur limite ET leur champ d'ordre à resilientQuery — le
+ *    tri est porté par Firestore (index composites userId+updatedAt) et le
+ *    limit demandé est appliqué CÔTÉ SERVEUR (la recherche textuelle ne lit
+ *    plus que 20 conversations au lieu de 200). La lecture des MESSAGES
+ *    garde le contrat RC3 verrouillé par les tests « repository.recent » :
+ *    filtrage égalité seul, ordre du fil reconstitué EN MÉMOIRE sur un scan
+ *    plafonné (aucun orderBy côté Firestore).
  */
 
-/** Cap de scan partagé avec resilientQuery (QUERY_DEFAULT_LIMIT). */
+/** Cap de scan des MESSAGES — partagé avec resilientQuery (QUERY_DEFAULT_LIMIT). */
 const SCAN_LIMIT = 200;
 
 export interface ChatConversation {
@@ -174,13 +178,16 @@ export async function listConversations(
     filters.push({ field: "agentId", value: options.agentId });
   }
   if (options.projectId) filters.push({ field: "projectId", value: options.projectId });
-  // Scan borné 200 + tri mémoire updatedAt desc (index-safe : pas d'index
-  // composite requis, comportement de repli no-index historique absorbé) —
-  // puis redécoupage à la limite demandée.
+  // Task 101 (C3a + m4bis) : le limit DEMANDÉ est transmis à resilientQuery —
+  // avec le champ d'ordre, il est appliqué CÔTÉ FIRESTORE (tri serveur sur les
+  // index composites userId(+agentId)+updatedAt) : la route de recherche qui
+  // demande 20 conversations ne lit plus que 20 documents (au lieu de 200).
+  // Le filtrage par titre reste ensuite en mémoire, sur le même sous-ensemble
+  // « N plus récents » qu'historiquement — sémantique inchangée, coût divisé.
   const docs = await resilientQuery<ConversationDoc>(
     "chatConversations",
     filters,
-    { orderField: "updatedAt", descending: true, limit: SCAN_LIMIT, includeIds: true },
+    { orderField: "updatedAt", descending: true, limit: capped, includeIds: true },
   );
   let conversations = docs.map((x) => conversationFrom(String(x.id), x));
   if (conversations.length > capped) conversations = conversations.slice(0, capped);
@@ -193,13 +200,12 @@ export async function listConversations(
 
 /** Dernière conversation de l'utilisateur (accueil « Reprendre »). */
 export async function findLatestConversation(userId: string): Promise<ChatConversation | null> {
-  // Scan borné + tri mémoire : un `limit(1)` côté Firestore renverrait un
-  // document ARBITRAIRE (tri appliqué après le scan) — on scanne jusqu'au
-  // cap puis on prend le plus récent.
+  // Task 101 (C3a) : tri serveur (index userId+updatedAt DESC) + limit 1 —
+  // UNE lecture au lieu d'un scan de 200 documents re-triés en mémoire.
   const docs = await resilientQuery<ConversationDoc>(
     "chatConversations",
     [{ field: "userId", value: userId }],
-    { orderField: "updatedAt", descending: true, limit: SCAN_LIMIT, includeIds: true },
+    { orderField: "updatedAt", descending: true, limit: 1, includeIds: true },
   );
   const first = docs[0];
   if (!first) return null;
@@ -262,18 +268,20 @@ export async function listMessages(
   ];
   let docs: MessageDoc[];
   try {
+    // Contrat RC3 (verrouillé par lib/chat/repository.recent.test.ts) : le
+    // filtrage Firestore reste par ÉGALITÉ seule — AUCUN orderBy côté serveur,
+    // l'ordre chronologique du fil est reconstitué en mémoire ci-dessous sur
+    // un scan plafonné (SCAN_LIMIT). Task 101 : la limite demandée n'est PAS
+    // poussée côté Firestore ici, car sans orderBy serveur elle renverrait un
+    // sous-ensemble ARBITRAIRE — le cap de scan reste la garantie de justesse.
     docs = await resilientQuery<MessageDoc>("chatMessages", filters, {
-      orderField: "createdAt",
-      descending: recent,
-      // Scan borné puis tri mémoire + découpage : un `limit(capped)` côté
-      // Firestore renverrait des documents ARBITRAIRES — le contexte LLM
-      // exige les VRAIS N plus récents/anciens (RC3, plan 20).
       limit: SCAN_LIMIT,
       includeIds: true,
     });
   } catch {
-    // Repli SANS index (déploiement d'index en attente) : requête filtrée
-    // simple puis tri en mémoire — le contexte LLM ne casse jamais.
+    // Repli (index en attente, incident SDK ponctuel) : nouvelle tentative
+    // identique — la couche résiliente gère déjà quota (miroir Supabase) et
+    // index manquant (scan + tri mémoire) ; le contexte LLM ne casse jamais.
     docs = await resilientQuery<MessageDoc>("chatMessages", filters, { limit: SCAN_LIMIT, includeIds: true });
   }
   const messages = docs.map((x) => messageFrom(String(x.id), conversationId, userId, x));

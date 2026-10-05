@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
+import { isFirestoreMissingIndexError } from "@/lib/db/firestore-fallback";
 import type { ConversationRun, RunPhase, RunStatus, RunStep, RunStepStatus } from "@/lib/domain/conversations/types";
 
 /**
@@ -149,24 +150,41 @@ export async function listRunsForConversation(userId: string, conversationId: st
 
 /**
  * Missions récentes TOUTES conversations confondues (étape 16) : la vue
- * globale de l'activité d'exécution de l'utilisateur. Requête volontairement
- * SANS index composite (filtre userId seul + tri en mémoire) : fonctionne
- * dès la première mission, aucune migration d'index à déployer.
+ * globale de l'activité d'exécution de l'utilisateur.
+ *
+ * Task 101 (M3 — réduction quota) : le chemin nominal s'appuie sur l'index
+ * composite (userId, createdAt DESC) — orderBy SERVEUR + limit EXACT, soit
+ * N lectures au lieu des 80 lectures arbitraires re-triées en mémoire
+ * (historique : « scan 80 pour en afficher 8 »). Si l'index n'est pas (encore)
+ * déployé, le repli historique absorbe l'erreur (FAILED_PRECONDITION) : la
+ * disponibilité ne dépend JAMAIS du déploiement d'index.
  */
 export async function listRecentRuns(userId: string, limit = 8): Promise<ConversationRun[]> {
-  const snap = await adminDb
-    .collection(COLLECTION)
-    .where("userId", "==", userId)
-    .limit(80)
-    .get();
-  return snap.docs
-    .map((d) => docFrom(d.id, d.data()))
-    .sort((a, b) => {
-      const aTime = Date.parse(a.updatedAt ?? a.createdAt ?? "") || 0;
-      const bTime = Date.parse(b.updatedAt ?? b.createdAt ?? "") || 0;
-      return bTime - aTime;
-    })
-    .slice(0, Math.min(limit, 20));
+  const capped = Math.min(limit, 20);
+  try {
+    const snap = await adminDb
+      .collection(COLLECTION)
+      .where("userId", "==", userId)
+      .orderBy("createdAt", "desc")
+      .limit(capped)
+      .get();
+    // Le serveur renvoie DIRECTEMENT les N plus récents (ordre garanti).
+    return snap.docs.map((d) => docFrom(d.id, d.data()));
+  } catch (error) {
+    if (!isFirestoreMissingIndexError(error)) throw error;
+    // Repli SANS index composite : filtre userId seul + tri en mémoire
+    // (comportement historique, scan plafonné à 80) — coût dégradé,
+    // disponibilité intacte, même sémantique de fenêtre.
+    const snap = await adminDb
+      .collection(COLLECTION)
+      .where("userId", "==", userId)
+      .limit(80)
+      .get();
+    return snap.docs
+      .map((d) => docFrom(d.id, d.data()))
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      .slice(0, capped);
+  }
 }
 
 export async function updateRunSteps(userId: string, runId: string, steps: RunStep[]): Promise<void> {

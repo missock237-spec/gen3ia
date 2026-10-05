@@ -534,9 +534,16 @@ export function LiveDashboard() {
   };
 
   // Rafraîchit les sessions pour afficher les actions en attente de validation
-  // (6 s, uniquement onglet visible — lot C2) ; le premier chargement est
-  // assuré par watchAuth.
-  useVisiblePolling(loadSessions, authReady ? 6_000 : null);
+  // (uniquement onglet visible — lot C2) ; le premier chargement est assuré
+  // par watchAuth. Intervalle ADAPTATIF (Task 101, audit quota) : 6 s tant
+  // qu'au moins une session est en cours (les approbations HITL doivent
+  // remonter vite), 15 s sinon — sans session active, un poll de 6 s ne sert
+  // qu'à consommer du quota Firestore. useVisiblePolling ne redémarre
+  // l'intervalle que lorsque `ms` change : l'alternance 6 s ↔ 15 s suit
+  // proprement le dernier statut connu des sessions.
+  const uneSessionEnCours =
+    liveStatus === "running" || sessions.some((session) => session.status === "running");
+  useVisiblePolling(loadSessions, authReady ? (uneSessionEnCours ? 6_000 : 15_000) : null);
 
   if (!authReady || sessionDisponible === null) {
     return <div className="p-10 text-center text-[var(--g3-muted)]">Chargement…</div>;

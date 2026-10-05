@@ -144,6 +144,9 @@ export async function completerConnexionRedirect(redirectTo?: string | null): Pr
 
 export async function logout(): Promise<void> {
   try { await fetch("/api/auth/session", { method: "DELETE" }); } catch { /* le cookie expire de toute facon */ }
+  // La sonde dédupliquée devient périmée après déconnexion : on l'invalide
+  // pour que le prochain montage voie l'état réel (sans session).
+  invaliderSondeSession();
   await signOut(auth);
 }
 
@@ -291,6 +294,9 @@ export async function establishSession(user: User, redirectTo?: string | null): 
     }
 
     if (response.ok) {
+      // Session POSÉE : la sonde (401 récent éventuellement mis en cache par
+      // la dédup) ne reflète plus l'état — on l'invalide avant redirection.
+      invaliderSondeSession();
       window.location.href = sanitizeRedirect(redirectTo) ?? "/studio"; // codeql[js/client-side-unvalidated-url-redirection] — cible durcie par sanitizeRedirect (chemin relatif strict + résolution WHATWG + origine same-origin exigée, Tâche 50, 5 tests dédiés) : sanitizer local que CodeQL ne modélise pas.
       return;
     }
@@ -342,12 +348,92 @@ export function readNextRedirect(): string | null {
   return sanitizeRedirect(new URLSearchParams(window.location.search).get("next"));
 }
 
+/* ------------------------------------------------------------------ */
+/* Sonde de session dédupliquée (Task 101, audit quota Firestore)      */
+/* ------------------------------------------------------------------ */
+
+/** Résultat d'une sonde GET /api/auth/session (jamais rejetée). */
+export interface SessionProbeResult {
+  /** true = session serveur valide (2xx, mode dégradé inclus). */
+  ok: boolean;
+  /** Code HTTP de la dernière tentative (0 = réseau/serveur injoignable). */
+  status: number;
+}
+
+/** Fenêtre de partage de la sonde entre tous les appelants de l'onglet. */
+const SESSION_PROBE_TTL_MS = 60_000;
+
+let sondeSession: { at: number; promesse: Promise<SessionProbeResult> } | null = null;
+
+/**
+ * Exécute la sonde réseau (une seule à la fois grâce à la dédup) : 2
+ * tentatives — une erreur réseau isolée ne doit pas basculer un utilisateur
+ * authentifié (cookie présent) vers le portail de login. La promesse ne
+ * rejette JAMAIS (un incident réseau est un résultat ok:false) : une
+ * promesse partagée qui rejetterait empoisonnerait tous les appelants.
+ */
+function executerSondeSession(): Promise<SessionProbeResult> {
+  return (async () => {
+    let dernierStatus = 0;
+    for (let essai = 1; essai <= 2; essai++) {
+      try {
+        const response = await fetch("/api/auth/session", {
+          cache: "no-store",
+          signal: AbortSignal.timeout(12_000),
+        });
+        dernierStatus = response.status;
+        // 200 = session valide (même en mode dégradé). 401 = vraiment
+        // sans session. 5xx = panne serveur transitoire -> reprise.
+        if (response.ok) return { ok: true, status: response.status };
+        if (response.status < 500) {
+          if (essai < 2) { await attendre(500); continue; }
+          return { ok: false, status: response.status };
+        }
+      } catch {
+        /* réseau/timeout : reprise utile si la panne est transitoire */
+      }
+      if (essai < 2) await attendre(600);
+    }
+    return { ok: false, status: dernierStatus };
+  })();
+}
+
+/**
+ * Sonde la session serveur avec PARTAGE de la réponse par onglet : le
+ * premier appel fait le fetch, tous les appelants suivants (fenêtre de
+ * 60 s) reçoivent la même réponse sans nouvelle requête.
+ *
+ * `force = true` court-circuite la fenêtre (flux post-connexion : la
+ * réponse partagée peut dater d'avant un login/logout de l'onglet). Les
+ * refus (401, 429) ne sont pas retenus plus longtemps que le TTL : ils
+ * expirent exactement comme un succès.
+ */
+export async function sonderSessionServeur(force = false): Promise<SessionProbeResult> {
+  const now = Date.now();
+  if (!force && sondeSession && now - sondeSession.at < SESSION_PROBE_TTL_MS) {
+    return sondeSession.promesse;
+  }
+  const promesse = executerSondeSession();
+  sondeSession = { at: now, promesse };
+  return promesse;
+}
+
+/** Invalide la sonde partagée (appelé après un login ou un logout de l'onglet). */
+function invaliderSondeSession(): void {
+  sondeSession = null;
+}
+
 /**
  * Indique si l'utilisateur dispose d'une session utilisable, soit via l'etat
  * Firebase client, soit via le cookie de session serveur. Retourne :
  * - true : session presente (l'une ou l'autre) ;
  * - false : aucune session ;
  * - null : encore indetermine (chargement).
+ *
+ * La sonde HTTP est DÉDUPLIQUÉE au niveau du module (Task 101, audit quota) :
+ * le hook est monté dans ~20 composants et chaque page déclenchait 2-3
+ * requêtes GET /api/auth/session identiques — désormais une seule requête
+ * par onglet et par fenêtre de 60 s alimente tous les appelants.
  */
 export function useSessionAvailable(): boolean | null {
   const { user, loading } = useAuth();
@@ -357,30 +443,9 @@ export function useSessionAvailable(): boolean | null {
     if (user) { setServerSession(null); return; }
     if (loading) return;
     let cancelled = false;
-    (async () => {
-      // 2 tentatives : une erreur reseau isolée ne doit pas basculer un
-      // utilisateur authentifié (cookie présent) vers le portail de login.
-      for (let essai = 1; essai <= 2; essai++) {
-        try {
-          const response = await fetch("/api/auth/session", {
-            cache: "no-store",
-            signal: AbortSignal.timeout(12_000),
-          });
-          // 200 = session valide (même en mode dégradé). 401 = vraiment
-          // sans session. 5xx = panne serveur transitoire -> reprise.
-          if (!cancelled) {
-            if (response.ok) { setServerSession(true); return; }
-            if (response.status < 500 && essai < 2) { await attendre(500); continue; }
-            setServerSession(response.ok);
-            if (response.status < 500) return;
-          }
-          if (response.status < 500) return;
-        } catch {
-          if (!cancelled && essai >= 2) { setServerSession(false); return; }
-        }
-        if (essai < 2) await attendre(600);
-      }
-    })();
+    void sonderSessionServeur().then((resultat) => {
+      if (!cancelled) setServerSession(resultat.ok);
+    });
     return () => { cancelled = true; };
   }, [user, loading]);
 

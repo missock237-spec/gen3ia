@@ -1591,3 +1591,372 @@ Stage Summary:
   futurs : ne PAS réactiver ignoreBuildErrors=false sans solution mémoire).
 - Piste Task 101 : vérifier le statut CI GitHub Actions sur le commit, purge des
   anciens abonnements push via TTL Firestore, télémétrie push (taux de livraison).
+
+---
+Task ID: 101-d
+Agent: sous-agent Next.js senior (Task 101, volet D — quota Firestore)
+Task: « Réduire la consommation du quota Firestore — lot D : suppression du
+code mort Firestore (tracer d'exécution, surface evals, route autonomous/run)
++ correctifs mineurs M6 / m1 / m2. »
+
+Work Log:
+- AUDIT PRÉ-SUPPRESSION (greps exhaustifs dépôt entier hors node_modules) :
+  * ExecutionTracer / execution-store / persistExecutionEvent : 0 import hors
+    les deux fichiers eux-mêmes ; seule référence externe = commentaire inerte
+    dans lib/observability/otel.ts (bloc « Pont événements ExecutionTracer →
+    spans ») ; collection `executionTelemetry` écrite par persistExecutionEvent,
+    JAMAIS lue en prod (0 lecteur, 0 règle dédiée, 0 test) ; pas de test
+    dédié existant (aucun execution-*.test.ts).
+  * Surface evals : lib/agents/evals.ts importé UNIQUEMENT par
+    app/api/agents/[id]/evals/route.ts et …/[setId]/run/route.ts ; 0 fetch
+    client (components/**, app/studio/**, app/api/public/sdk/**, sitemap : 0
+    occurrence) ; 0 test ; collections agentTestSets/agentTestRuns sans
+    aucun autre lecteur.
+  * Route /api/agents/autonomous/run : 0 référence hors docs historiques ;
+    pas de test ; répertoire app/api/agents/autonomous/ ne contenait que run/.
+  * resolveStaleRunningTask (lib/agents/workspace.ts) : UN SEUL appelant
+    (app/api/workspace/tasks/[id]/route.ts) → changement de signature sans
+    risque ; pas de test existant sur workspace.ts.
+- SUPPRESSIONS (6 fichiers, 596 lignes retirées) :
+  * lib/observability/execution-tracer.ts (114 l.) + lib/observability/
+    execution-store.ts (36 l.) — collection `executionTelemetry` éliminée
+    (1 écriture create() par événement d'exécution : started/completed/
+    failed/agent.*/tool.*/model.*/artifact/sandbox = jusqu'à plusieurs
+    dizaines d'écritures PAR exécution d'agent, pour zéro lecture).
+  * otel.ts : commentaire nettoyé (« Pont événements d'exécution → spans ») ;
+    traceExecutionEvent/recordExecutionMetrics conservés (vivants, testés —
+    voir reste candidat).
+  * lib/agents/evals.ts (241 l.) + app/api/agents/[id]/evals/route.ts (68 l.)
+    + app/api/agents/[id]/evals/[setId]/run/route.ts (33 l.) — collections
+    agentTestSets/agentTestRuns éliminées (lectures/écritures de sets, runs,
+    exécutions facturées de juge LLM sans aucune UI).
+  * app/api/agents/autonomous/run/route.ts (104 l.) — orchestrateur
+    multi-agents + billing + Firestore sans aucun appelant.
+  * Les autres routes agents (CRUD, run, voice, schedules, generate, plan…)
+    intactes — vérifié par ls après suppression.
+- M6 — REPLI RECHERCHE DOCUMENTAIRE (lib/knowledge/search.ts) :
+  * searchVectorPoints renvoie null = « pas de réponse » (non configuré OU
+    erreur) et [] = « réponse légitime sans hit » ; l'ancien code repliait
+    sur Firestore dès hits.length === 0 — même Qdrant sain et vide.
+  * Nouveau : repli UNIQUEMENT si Qdrant non configuré OU en erreur ;
+    Qdrant répond (même 0 hit) → résultat retourné tel quel, AUCUNE lecture
+    Firestore. Quand Qdrant n'est PAS configuré (chemin récurrent) : plafond
+    repli = 100 fragments AU TOTAL, répartis équitablement entre les portées
+    (1 personnelle + N requêtes org, floor(100/N) chacune, min 1) ;
+    en cas d'ERREUR Qdrant transitoire : limites historiques conservées
+    (500/portée) pour la résilience. Signatures inchangées
+    (searchKnowledge/resolveKnowledgeScope) ; 2 appelants vérifiés
+    (moteur conversations, outil agent knowledge.search).
+  * Test search-org.test.ts : mock vector-store complété
+    (isVectorStoreConfigured) + capture des limit() + 4 nouveaux gardes
+    (0 hit légitime → 0 repli ; non configuré → ≤100 total, 25/portée sur
+    65 orgs ; non configuré sans org → [100] ; erreur → 500/portée).
+- m1 — CTR ADS EN AGRÉGATIONS COUNT() (lib/ads/platform-placement.ts) :
+  * adCtr() lisait jusqu'à 2 000 événements platformAdEvents et comptait en
+    mémoire à chaque scoring d'annonce de campagne. Remplacé par 2
+    agrégations Firestore count() en parallèle
+    (where adId + type=impression/click → .count().get() → data().count,
+    firebase-admin 13.10 : API native) — 1 lecture d'index chacune au lieu
+    d'un lot de documents ; catch → CTR 0 inchangé (dégradation silencieuse).
+    Choix le moins invasive : pas de compteur incrémental sur le doc ad
+    (aurait touché recordPlatformAdEvent + migration des compteurs).
+  * Test advanced-delivery.test.ts : mock étendu (count() chaînable, doc.get)
+    + 3 nouveaux gardes via choosePlatformAd (2 agrégations exactement +
+    AUCUN lot d'événements lu ; CTR 0 sans impression ; panne → diffusion
+    non interrompue).
+- m2 — DÉTAIL TÂCHE LU 2× PAR GET (app/api/workspace/tasks/[id]/route.ts +
+  lib/agents/workspace.ts) :
+  * resolveStaleRunningTask() lit déjà la tâche (getWorkspaceTask) puis
+    retournait null si pas « running stale » → la route re-lit le MÊME doc
+    avec ?? getWorkspaceTask(id) : 2 lectures par GET, et le détail est
+    POLLÉ par l'UI (4 s). Signature adaptée (1 seul appelant au dépôt) :
+    resolveStaleRunningTask retourne désormais TOUJOURS la tâche lue
+    (Promise<WorkspaceTask> — résolution fantôme puis re-lecture seulement
+    dans le cas stale) ; route = un seul await, fallback supprimé ; 404
+    inchangée (le throw « Task not found. » propage comme avant).
+- VÉRIFICATIONS : npx tsc --noEmit → 0 (avant ET après) ; npx vitest run
+  lib/observability lib/knowledge lib/ads lib/agents → 38 fichiers /
+  336 verts ; npx vitest run app → 40 fichiers / 345 verts ;
+  app/ux-accessibility + app/pwa-consistency + app/perf-cache-policy →
+  57 verts (intactes) ; SUITE COMPLÈTE → 219 fichiers / 2094 verts
+  (+2 skipped pré-existants) = baseline 2087 + 7 nouveaux gardes ;
+  eslint sur les 7 fichiers touchés → 0 ; greps finaux : 0 référence code
+  restante aux éléments supprimés (restent uniquement des mentions dans
+  docs/*.md historiques et l'historique worklog — hors périmètre).
+- Aucun commit/push, pas de next build, pas de npm install, pas de
+  console.log ajouté. Diff git : 13 fichiers, +227/−644 lignes.
+
+Stage Summary:
+- Quota Firestore récupéré (estimation) :
+  * executionTelemetry : jusqu'à ~10–30 écritures par exécution d'agent
+    supprimées (événements start/end agent/tool/model/sandbox/artifact) —
+    c'était le plus gros consommateur pur sans aucune lecture.
+  * Evals : lectures+écritures agentTestSets/agentTestRuns et exécutions LLM
+    facturées supprimées (surface jamais appelée).
+  * autonomous/run : route orpheline supprimée (0 référence).
+  * M6 : chaque recherche knowledge avec Qdrant sain ne lit PLUS Firestore
+    (avant : jusqu'à 500 + 500×N orgs lectures dès 0 hit — le cas « projet
+    sans chunks » paie désormais 0 lecture) ; Qdrant non configuré plafonné
+    à 100 lectures/recherche au lieu de 1 000+.
+  * m1 : calcul de CTR = 2 lectures d'agrégat au lieu de ≤2 000 lectures de
+    documents par scoring d'annonce campagne.
+  * m2 : détail tâche = 1 lecture au lieu de 2 par GET (polling 4 s →
+    jusqu'à −50 % des lectures sur cette route).
+- REMONTÉES À L'ORCHESTRATEUR (hors périmètre 101-d, fichiers non autorisés) :
+  * lib/agents/autonomous/planner.ts (createAutonomousPlan) et
+    lib/agents/orchestrator/{orchestrator,types}.ts (MultiAgentOrchestrator)
+    deviennent du code mort après la suppression de la route — seuls
+    consommateurs restants : aucun. Candidats à suppression ultérieure.
+  * otel.ts traceExecutionEvent (+ TraceableExecutionEvent) n'a plus
+    d'appelant production (seul le tracer supprimé l'appelait ; otel.test.ts
+    le teste encore) — candidat nettoyage si le pattern event-as-span est
+    abandonné, à arbitrer avec l'export OTLP (Task 59).
+  * lib/chat/repository.ts findLatestConversation (~l.195-207) : LOT DE
+    L'AGENT 101-b — non touché, comme prescrit ; 101-b a été briefé.
+  * docs/saas-roadmap.md, docs/plan-plateforme-enterprise.md,
+    docs/guide-technique.md mentionnent encore execution-tracer /
+    executionTelemetry / autonomous/run (documentation historique hors
+    liste de fichiers autorisés — à mettre à jour par un lot doc).
+
+---
+Task ID: 101-a
+Agent: sous-agent Next.js senior (Task 101, lot a — quota Firestore)
+Task: Réduire la consommation du quota Firestore — 6 correctifs (C1, m7, M1a, M1b, M2, m4)
+
+Work Log:
+- Lecture préalable : worklog.md (100 dernières lignes), app/api/notifications/route.ts,
+  app/perf-cache-policy.test.ts, lib/cache/redis.ts (+ redis.test.ts EXISTANT, absent du
+  premier glob — relu avant modification), lib/firebase/users.ts, lib/firebase/auth-client.ts
+  (+ auth-redirect.test.ts, auth-server.test.ts), app/live/live-dashboard.tsx (816 l.),
+  lib/live/repository.ts, lib/live/gateway.ts, lib/notifications/repository.ts (lecture seule :
+  invalidateNotificationsCache bien appelé aux 4 points de mutation → le TTL n'est qu'un filet),
+  lib/security/rate-limit.ts (patterns Map/repli local), components/hooks/use-visible-polling.ts
+  (le poll passe DÉJÀ par le hook gaté visibilité — seule la cadence a été rendue adaptative),
+  live-agent/src/limits.ts (lecture seule : 30_000 EST un barillet heartbeat → l'agent PC
+  honorera exactement 30 s).
+- C1 (CRITIQUE) app/api/notifications/route.ts : TTL cacheWrap 20 → 40 s + commentaire
+  (poll client 25 s ⇒ TTL 20 s expirait ENTRE deux polls = ~100 % MISS, 31 lectures/tick ;
+  à 40 s ~1 poll sur 2 est servi sans Firestore ; fraîcheur garantie par l'invalidation
+  événementielle). Garde ajouté dans app/perf-cache-policy.test.ts (2 tests : TTL extrait par
+  regex ≥ 35 s commenté « pourquoi » ; invalidation événementielle toujours branchée dans le
+  repository).
+- m7 lib/cache/redis.ts : repli process-local pour cacheWrap — Map LRU (~200 entrées,
+  récence rafraîchie à la lecture, éviction O(1) des plus anciennes), TTL respecté
+  (expiration = purge + rechargement), purement défensif (jamais de throw). Utilisé SEULEMENT
+  par cacheWrap (Redis consulté d'abord, repli local ensuite, loader une fois par clé/TTL/instance) ;
+  JAMAIS pour les verrous distribués ni les compteurs (rate-limit/decision-lock intacts).
+  cacheDelete purge AUSSI l'entrée locale — sans quoi l'invalidation événementielle (sonnette)
+  serait aveugle au repli et servirait du périmé jusqu'au TTL. resetRedisClientForTests étendu
+  (purge du cache local). lib/cache/redis.test.ts : le test historique « cacheWrap exécute le
+  loader à chaque appel (pas de cache) » verrouillait l'ANCIEN contrat → remplacé par 4 tests
+  du nouveau contrat (hit local au 2e appel, TTL expiré = rechargement, plafond LRU 200/évection,
+  cacheDelete purgent le local). Redis simulé inchangé pour le chemin heureux.
+- M1a lib/firebase/users.ts : fin de l'écriture inconditionnelle au chargement de session.
+  Pour un profil EXISTANT : calcul des valeurs suivantes identiques à l'update historique,
+  diff contre le document lu, puis : changement réel → update complet (champs + updatedAt +
+  lastLoginAt) ; sinon lastLoginAt > 1 h → update minimal (throttle LOGIN_WRITE_THROTTLE_MS =
+  60 min) ; sinon 0 write. Création (profil absent → set) inchangée ; API inchangée.
+  + lib/firebase/users.test.ts (NOUVEAU, 6 tests) : création légitime ; inchangé + login 10 min
+  → 0 écriture ; inchangé + login 2 h → update minimal exact ; email modifié → update complet
+  ; provider inédit → update (providers) ; lastLoginAt absent → re-tracé.
+- M1b lib/firebase/auth-client.ts : dédup module-level de la sonde de session.
+  Nouvelle fonction exportée sonderSessionServeur(force?) — promesse partagée par onglet,
+  TTL 60 s : le premier appel fait le fetch (2 tentatives, timeouts/retries repris de l'ancien
+  code inline), les suivants reçoivent la MÊME réponse ; force court-circuite la fenêtre ;
+  les refus (401/429) ne sont pas retenus plus longtemps que le TTL ; la promesse ne rejette
+  JAMAIS (panne réseau = ok:false, status 0) — une promesse partagée rejetée empoisonnerait
+  tous les appelants. useSessionAvailable réécrit DANS le hook (signature inchangée, les
+  ~20 appelants ne bougent pas) : 2-3 appels GET /api/auth/session par page → 1.
+  Invalidation branchée dans les flux post-connexion : establishSession (après POST ok) et
+  logout (après DELETE) → la réponse mise en cache ne survit pas à un login/logout de l'onglet.
+  + lib/firebase/auth-client-session.test.ts (NOUVEAU, 5 tests) : N appels → 1 requête ;
+  force × 2 → 2 requêtes ; TTL 60 s expiré → refetch ; 401 partagé puis expiré ; panne réseau
+  → ok:false sans rejet.
+- M2 : lib/live/repository.ts listLiveSessions — défaut limit 20 → 10 (paramètre conservé ;
+  l'unique appelant /api/live/sessions ne surcharge pas). app/live/live-dashboard.tsx — poll
+  ADAPTATIF via useVisiblePolling (déjà utilisé) : 6 s tant qu'une session est « running »
+  (statut serveur connu du client ou capture navigateur locale active), 15 s sinon ; le hook
+  ne redémarre l'intervalle que quand ms change → alternance propre. Route /api/live/sessions
+  NON touchée (hors périmètre, comme prescrit).
+- m4 : lib/live/gateway.ts HEARTBEAT_MS 15_000 → 30_000 (source unique HEARTBEAT_INTERVAL_MS
+  exportée par le repository, annoncée au client PC via hello.ack ; 30_000 est un barillet
+  live-agent → honoré exactement) + CLIENT_ZOMBIE_MS 45_000 → 75_000 (marge > 2 × intervalle :
+  à 45 s, un simple retard réseau d'un client heartbeat-30 s aurait pausé une session saine).
+  lib/live/repository.ts heartbeatLiveSession : throttle process-local — 1 write / 30 s / session
+  max (les clients plus bavards, repli 15 s des versions antérieures, ne paient plus d'écriture) ;
+  hygiène mémoire (purge > 1 h, cap 256). Les heartbeats throttlés continuent d'actualiser le
+  watchdog MÉMOIRE du gateway (indépendant des écritures).
+- Aucun test live verrouillant 15 s/45 s n'existait sous lib/live (decision-lock/security
+  indépendants) ; live-agent/src/** NON touché (hors périmètre).
+- Périmètre respecté : 9 fichiers modifiés (notifications route, perf-cache-policy.test,
+  lib/cache/redis.ts + son test, lib/firebase/users.ts, lib/firebase/auth-client.ts,
+  app/live/live-dashboard.tsx, lib/live/repository.ts, lib/live/gateway.ts) + 2 tests nouveaux
+  (lib/firebase/users.test.ts, lib/firebase/auth-client-session.test.ts). Aucun fichier
+  interdit touché (firestore-fallback, video, workspace, knowledge, observability,
+  notifications, route live/sessions, live-agent : 0 diff). Pas de git commit/push, pas de
+  npm install, pas de next build, aucun console.log (console.warn convention conservée).
+- Vérifications : npx tsc --noEmit → 0. npx vitest run app/perf-cache-policy.test.ts lib/live
+  lib/firebase lib/cache app/pwa-consistency.test.ts app/ux-accessibility.test.ts
+  lib/notifications/repository.test.ts → 11 fichiers, 109 passed + 1 skipped (skip préexistant
+  auth-server.test.ts, inchangé) — pwa-consistency et ux-accessibility INTACTS (30 + 23 verts).
+  Tests consommateurs relancés (grep) : lib/push/client.test.ts, app/api/extensions/route.test.ts,
+  app/api/integrations/catalog/route.test.ts, app/api/health/infra/route.test.ts → 42 verts
+  (tous mockent le module redis : contrats inchangés). eslint ciblé sur les 11 fichiers → 0.
+
+Stage Summary:
+- Sonnette : ~50 % des polls sans lecture Firestore (TTL 40 s vs 20 s) et, sans Redis, le
+  repli LRU process donne le même effet par instance au lieu de 100 % MISS → ~31 lectures
+  économisées par tick caché, à ~10 k clients ≈ −150 k lectures/h en pointe.
+- Session : 1 write inutile par chargement supprimé (diff + throttle 1 h) → pour un utilisateur
+  faisant 20 chargements/h : de 20 writes à 0-1 write ; et 2-3 GET /api/auth/session par page
+  réduits à 1 (dédup 60 s).
+- Live : liste 20 → 10 docs (−50 % lectures du poll), poll 6 s → 15 s hors session active
+  (−60 % requêtes au repos), heartbeat 2 → 1 write/30 s (−50 % writes de vivacité).
+- Contrats publics conservés : useSessionAvailable, cacheWrap, heartbeatLiveSession,
+  listLiveSessions (défaut seulement), création de profil et chemin Redis heureux inchangés ;
+  un test historique redis.test.ts adapté car il verrouillait explicitement l'ancien contrat
+  « pas de cache sans Redis » (objectif même du correctif m7).
+- Reste candidat (hors lot a) : cache serveur /api/live/sessions, garde e2e sur la cadence
+  6/15 s du dashboard, télémétrie hit-rate du repli local.
+
+---
+Task ID: 101-c
+Agent: sous-agent Next.js senior (Task 101, volet c)
+Task: Réduction du quota Firestore — pollers conversation/chat (C2) + routes vidéo (C4)
+
+Work Log:
+- Lectures préalables : worklog (Task 100), 6 routes/composants/lib du périmètre,
+  lib/cache/redis.ts et lib/db/firestore-fallback.ts (LECTURE SEULE), worker tick
+  app/api/video/worker/tick/route.ts (lecture seule), tests lisant mes fichiers
+  (agent-chat-ux, library-handoff, media-progress-frame, render/production-queue-resume,
+  video-modules) + grep exhaustif des appelants de listVersions (4 appelants).
+- C2a — GET léger ?meta=1 (app/api/workspace/conversations/[conversationId]/route.ts,
+  +15 l.) : branche meta=1 dans le GET après le 404 — renvoie { conversation, runs
+  (listRunsForConversation 5), lastRunStatus: runs[0]?.status ?? null, meta: true }.
+  Enveloppe canonique conservée (mêmes helpers requireUser/errorBody/errorStatus, même
+  NextResponse.json) ; route complète SANS param strictement inchangée. Coût ≈ 7
+  lectures (1 conv + ≤5 runs) au lieu de ≤373 (200 messages + 20 runs + 100 artefacts
+  + 50 validations).
+- C2b — poll 4 s de conversation-workspace.tsx (+35 l. net) : le sondage de reprise
+  de vue (useVisiblePolling, condition ms inchangée : dernier run « running ») appelle
+  GET ?meta=1 ; au statut terminal détecté → rechargement COMPLET existant
+  (loadDetail(id, true)) UNE SEULE fois via garde par réf runEndReloadRef (nécessaire :
+  le détail affiché reste « running » jusqu'à la fin du rechargement — sans garde,
+  chaque tick relancerait un GET complet). Réarmement automatique dans loadDetail
+  quand un nouveau run en cours apparaît (nouvel épisode). Conservés à l'identique :
+  pause onglet caché (useVisiblePolling), arrêt sur terminal (ms→null via detail),
+  tous les autres déclenchements de loadDetail (outbox-flushed, finishTurn, ouverture).
+- C2c — GET runs-only ?meta=1 (app/api/chat/conversations/[id]/route.ts, +9 l.) : même
+  principe — { conversation, runs (5), lastRunStatus, meta: true }, ≈ 6 lectures au
+  lieu de ≈ 221 ; route complète inchangée (20 runs + messages).
+- C2d — poll 2,5 s de agent-chat-panel.tsx (+8 l.) : pollLiveRun fetch ?meta=1 ; il ne
+  consommait déjà que data.runs — aucun autre changement de logique. À l'état terminal
+  pendant tracking : setTracking(null) + openConversation (GET complet) + reload
+  historique, UNE fois (fin du suivi = arrêt du poll), invariants conservés (epoch ref,
+  première interrogation immédiate, useVisiblePolling 2_500).
+- C4a — sweep retiré du chemin GET (render/route.ts +58, production/route.ts +43) :
+  CHOIX (a)+(b) combinés, documenté dans les routes : si qstashConfig() → sweep
+  SUPPRIMÉ du GET (le worker tick balaie déjà les orphelins à chaque délivrance, et la
+  continuation par sondage récupère de toute façon les bails expirés via le claim
+  transactionnel) ; sinon (mode sondage, QStash absent — le GET est alors le seul
+  récupérateur) → sweep THROTTLÉ 1 exécution max/min/projet : clé Redis partagée
+  g3:sweep:render|production:{projectId} (TTL 60 s — cacheGet/cacheSet de
+  lib/cache/redis.ts en import seul, l'API existante suffit : pas de setnx requis),
+  repli défensif process-local (Map module-level horodatée, synchronisée sur la
+  décision Redis) pour le serverless sans Redis. Justification : le sweep scanne ≤200
+  jobs processing DE TOUS LES UTILISATEURS à chaque tick 4-5 s ; le throttle par projet
+  conserve une récupération ≤ 1 min tout en divisant le coût par le nombre de ticks.
+- C4b — double listJobs (render GET) : la relecture post-tick n'arrive que si le tick a
+  réellement avancé (résultat non nul de maybeAdvancePendingJob, catch→null) — un job
+  détenu par un worker vivant (bail actif, cas nominal QStash) ne déclenche plus le
+  second listJobs. Production : inchangé (relecture déjà conditionnée à pendingTicked).
+- C4c — listVersions capé (lib/video/project-service.ts, +54 l.) : POINT D'ÉCART avec
+  l'énoncé — la fonction vivait dans project-service.ts (pas render-queue.ts) ;
+  fichier non interdit, modifié ici. listVersions renvoie désormais ProjectVersionMeta[]
+  (Omit<ProjectVersion, "snapshot">), plafonné VERSIONS_LIST_LIMIT = 20, requête directe
+  adminDb where(projectId).orderBy(versionNumber, desc).limit(20).select(métadonnées) —
+  les docs videoVersions embarquant des snapshots complets, la liste non bornée coûtait
+  1 lecture + le transfert de CHAQUE snapshot par GET. Appelants vérifiés par grep :
+  GET projet (en-têtes seuls), GET /versions (le client n'affiche que numéro/label/
+  date), goto_version (présence du numéro) → alignés. Repli défensif : en cas d'erreur
+  (index non encore déployé, incident), fallback sur la couche résiliente historique
+  (resilientListByPayloadField, miroir chaud) triée + slice(20) — dégradation, jamais
+  de casse. restoreVersion relit désormais les documents COMPLETS via la couche
+  résiliente (snapshot disponible pour TOUTE version, même > 20) — opération rare,
+  user-initiée, coût non payé dans les polls. Index composite videoVersions
+  (projectId ASC, versionNumber DESC) ajouté à firestore.indexes.json (+1 l. — requis
+  par le where+orderBy ; déployé par firebase deploy ; hors liste de fichiers,
+  écart assumé et justifié par l'exigence .limit(20), repli intégré en attendant).
+- C4d — video-project-workspace.tsx (+6 l.) : tick 4 s du poll rendu →
+  Promise.all([loadJobs(), loadProject()]) ; états indépendants (setJobs / setProject),
+  aucune autre adaptation nécessaire ; intervalle et suspension visibilité inchangés.
+- Gardes structurels (convention du dépôt, FR) dans 6 fichiers de test EXISTANTS :
+  library-handoff.test.ts (+25) : poll conversation ?meta=1, garde unique,
+  invariants visibilité/terminal ; agent-chat-ux.test.ts (+18) : poll chat ?meta=1,
+  intervalle 2_500 + rechargement final uniques ; render-queue-resume.test.ts (+36) :
+  GET render sans sweep direct (helper throttlé + sortie qstash + clé Redis/Map +
+  re-liste conditionnelle) ; production-queue-resume.test.ts (+30) : miroir production ;
+  video-modules.test.ts (+41) : listVersions plafonné/sans snapshot + index composite
+  déclaré + restauration sur docs complets ; media-progress-frame.test.tsx (+12) :
+  Promise.all du tick vidéo.
+- Vérifications : npx tsc --noEmit → 0. npx vitest run ciblé (15 fichiers lisant mes
+  changements) → 228/228 verts, dont 20 nouveaux gardes. eslint sur les 14 fichiers
+  touchés → 0 erreur, 3 warnings PRÉEXISTANTS (img/useCallback, hors de mes hunk).
+  Suite complète : 2126 verts / 8 échecs — les 8 sont dans des fichiers MODIFIÉS PAR
+  LES AUTRES SOUS-AGENTS 101 en parallèle (lib/db/firestore-fallback.test.ts « C3b »,
+  lib/agents/repository-org.test.ts, lib/firebase/auth-client-session.test.ts — tous
+  hors de mon périmètre, git status à l'appui), aucun échec dans mes fichiers.
+  Aucun console.log, aucun commit/push/install/build, commentaires 100 % FR.
+- Périmètre respecté : 8 fichiers de code + firestore.indexes.json (écart documenté)
+  + 6 fichiers de test existants étendus. Interdits intouchés : lib/db/**,
+  lib/chat/repository.ts, lib/domain/**, lib/notifications/**, lib/firebase/**,
+  lib/live/**, app/api/notifications/route.ts, lib/cache/** (import seul),
+  components/notifications/**.
+
+Stage Summary:
+- Quota Firestore : poll conversation ÷53 (≤373 → ~7 lectures/tick pendant un run de
+  N minutes : 55 000 → ~1 050 lectures/10 min) ; poll chat ÷37 (≈221 → ~6) ;
+  sweep vidéo GET : ÷∞ en mode QStash (supprimé), ÷(ticks/min) en mode sondage
+  (throttle 1/min/projet, ex. 15→1 pour un poll 4 s) ; listVersions ÷(versions/20)
+  en lectures et snapshot exclus du transfert (Go de bande passante évités) ;
+  double listJobs éliminé au tick sans avancement ; tick vidéo parallélisé (latence
+  ÷2 approx.). Estimations parsées des compteurs d'audit C2/C4, à confirmer en prod.
+- Contrats API : ?meta=1 = { conversation, runs(≤5), lastRunStatus, meta: true } sur
+  les DEUX routes (conversation + chat) — enveloppe canonique et codes d'erreur
+  inchangés ; routes complètes sans param inchangées.
+- Reste candidat : watcher du déploiement de l'index composite (repli actif entre-temps),
+  inversion de contrôle éventuelle des versions côté client si l'historique > 20 est
+  un jour affiché (aujourd'hui : aucun consommateur), télémétrie lectures/tick.
+
+---
+Task ID: 101-b
+Agent: impl-scans-index (section rédigée par l'orchestrateur — l'agent a terminé son travail mais est mort avant son rapport)
+Task: C3 scans Firestore orderBy serveur + limites + index composites + M3/M4bis/m3/m5 + resilientCount
+
+Work Log (constaté par vérification directe de l'arbre, tous tests verts) :
+- C3a : resilientQuery (lib/db/firestore-fallback.ts) — orderBy SERVEUR dès
+  qu'un champ d'ordre est fourni + limit = limit demandé (justesse : plus de
+  sous-ensemble arbitraire au-delà de 200 docs) ; chemin nominal Firestore ;
+  tri mémoire conservé pour le chemin miroir Supabase.
+- C3b : resilientList / resilientListByPayloadField — safeLimit appliqué
+  côté Firestore (plus de lectures non bornées).
+- C3c : firestore.indexes.json — ajout conversationRuns
+  (userId+conversationId+createdAt DESC ; userId+createdAt DESC) et
+  conversationApprovals (userId+conversationId+createdAt DESC ;
+  userId+status+createdAt DESC) — à déployer via
+  `firebase deploy --only firestore:indexes` (hors portée sandbox) ; repli
+  résilient sur FAILED_PRECONDITION en attendant.
+- M3 : listRecentRuns (lib/domain/runs/repository.ts) — orderBy(createdAt,desc)
+  + limit(8) serveur (8 lectures au lieu de 80), repli sans index plafonné 80
+  conservé via isFirestoreMissingIndexError.
+- M4bis : recherche conversationnelle — listConversations transmet le limit
+  demandé (search route ~20 lectures au lieu de 200).
+- m3 : listWorkspaceBranches limité (lib/agents/workspace.ts).
+- m5 : listArtifacts — justesse du tri/limit corrigée (lib/domain/artifacts/repository.ts).
+- Code mort : resilientCount supprimé (0 appelant, anti-pattern count-via-get).
+
+Stage Summary:
+- Toutes les listes Firestore appliquent maintenant le limit DEMANDÉ côté serveur
+  avec l'ordre garanti — ÷4 à ÷10 de lectures sur les listes + justesse corrigée.
+- Suites : tsc 0 ; 2144 tests verts / 223 fichiers (intégration complète des 4 lots) ;
+  lint 0 ; build complet OK ; budget 357 routes.

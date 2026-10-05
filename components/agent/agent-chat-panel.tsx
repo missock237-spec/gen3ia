@@ -335,11 +335,17 @@ export function AgentChatPanel({
 
   // SUIVI LIVE (suite) : sondage du dernier run — suspendu hors onglet
   // visible (lot C2), première interrogation immédiate au démarrage du suivi.
+  // Lot C2 (quota Firestore) : le sondage 2,5 s ne consomme que `runs[0]` —
+  // il passe par le GET léger ?meta=1 (conversation + 5 runs ≈ 6 lectures)
+  // au lieu du GET complet (messages scannés ≈ 221 lectures/tick). À l'état
+  // terminal pendant un suivi (tracking), la conversation est rechargée EN
+  // ENTIER une seule fois (la fin du suivi — setTracking(null) — arrête le
+  // sondage), comportement historique inchangé.
   const pollLiveRun = React.useCallback(async () => {
     if (!conversationId) return;
     const epoch = liveRunEpochRef.current;
     try {
-      const response = await fetch(`/api/chat/conversations/${conversationId}`, { cache: "no-store" });
+      const response = await fetch(`/api/chat/conversations/${conversationId}?meta=1`, { cache: "no-store" });
       if (!response.ok) return;
       const data = await response.json();
       const runs = (data.runs ?? []) as Array<{ id: string; status: string; steps?: Array<{ id: string; name: string; status: string }> }>;

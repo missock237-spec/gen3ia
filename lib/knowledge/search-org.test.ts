@@ -5,9 +5,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * élargit la lecture aux orgs de l'appelant (userId OU orgId, jamais un
  * tiers) ; le repli Firestore opère une union personnel + org avec la
  * même frontière de sécurité (orgIds résolus SERVEUR uniquement).
+ *
+ * Politique de repli (économie de quota Firestore) : Qdrant qui RÉPOND
+ * (même 0 hit) = résultat légitime, AUCUN repli ; repli réservé à
+ * Qdrant non configuré (plafond 100 fragments au total) ou en erreur
+ * (limites historiques 500 par portée).
  */
 
 const chunkQueryWhere = vi.fn();
+const chunkQueryLimits: number[] = [];
 const personalChunkGet = vi.fn();
 const orgChunkGet = vi.fn();
 
@@ -16,9 +22,15 @@ vi.mock("@/lib/firebase/admin", () => ({
     collection: vi.fn(() => ({
       where: vi.fn(() => ({
         where: vi.fn(() => ({
-          limit: vi.fn(() => ({ get: (...args: unknown[]) => chunkQueryWhere(...args) })),
+          limit: vi.fn((n: number) => {
+            chunkQueryLimits.push(n);
+            return { get: (...args: unknown[]) => chunkQueryWhere(...args) };
+          }),
         })),
-        limit: vi.fn(() => ({ get: (...args: unknown[]) => chunkQueryWhere(...args) })),
+        limit: vi.fn((n: number) => {
+          chunkQueryLimits.push(n);
+          return { get: (...args: unknown[]) => chunkQueryWhere(...args) };
+        }),
       })),
     })),
   },
@@ -36,9 +48,11 @@ vi.mock("@/lib/memory/similarity", () => ({
 }));
 
 const mockedSearchVectorPoints = vi.fn();
+const mockedVectorConfigured = vi.fn();
 vi.mock("@/lib/memory/vector-store", () => ({
   VECTOR_COLLECTION_KNOWLEDGE: "knowledge_test",
   searchVectorPoints: (...args: unknown[]) => mockedSearchVectorPoints(...args),
+  isVectorStoreConfigured: (...args: unknown[]) => mockedVectorConfigured(...args),
 }));
 
 const mockedListOrgs = vi.fn();
@@ -50,12 +64,14 @@ import { resolveKnowledgeScope, searchKnowledge } from "./search";
 
 beforeEach(() => {
   mockedSearchVectorPoints.mockReset();
+  mockedVectorConfigured.mockReset().mockReturnValue(true); // défaut : Qdrant configuré
   chunkQueryWhere.mockReset();
   personalChunkGet.mockReset();
   orgChunkGet.mockReset();
   mockedListOrgs.mockReset();
   mockedSearchVectorPoints.mockResolvedValue(null);
   chunkQueryWhere.mockResolvedValue({ docs: [] });
+  chunkQueryLimits.length = 0;
 });
 
 describe("resolveKnowledgeScope", () => {
@@ -89,15 +105,15 @@ describe("searchKnowledge — filtre vectoriel", () => {
   });
 });
 
-describe("searchKnowledge — repli Firestore en union", () => {
-  function mockFallbackQueries(personal: Array<{ id: string; data: () => Record<string, unknown> }>, org: Array<{ id: string; data: () => Record<string, unknown> }>) {
-    let orgCall = 0;
-    chunkQueryWhere.mockImplementation(() => {
-      if (orgCall++ === 0) return Promise.resolve({ docs: personal });
-      return Promise.resolve({ docs: org });
-    });
-  }
+function mockFallbackQueries(personal: Array<{ id: string; data: () => Record<string, unknown> }>, org: Array<{ id: string; data: () => Record<string, unknown> }>) {
+  let orgCall = 0;
+  chunkQueryWhere.mockImplementation(() => {
+    if (orgCall++ === 0) return Promise.resolve({ docs: personal });
+    return Promise.resolve({ docs: org });
+  });
+}
 
+describe("searchKnowledge — repli Firestore en union", () => {
   it("union personnel + org, dédupliquée par id, tri score desc, plafond respecté", async () => {
     mockFallbackQueries(
       [{ id: "c-perso", data: () => ({ documentId: "d1", text: "perso", chunkIndex: 0, embedding: [0.2, 0] }) }],
@@ -123,5 +139,43 @@ describe("searchKnowledge — repli Firestore en union", () => {
     const orgs = Array.from({ length: 65 }, (_, i) => `org-${i}`);
     await searchKnowledge("u1", "p1", "question", 8, orgs);
     expect(chunkQueryWhere).toHaveBeenCalledTimes(1 + 3);
+  });
+});
+
+describe("searchKnowledge — politique de repli (quota Firestore)", () => {
+  it("Qdrant configuré qui répond vide (0 hit légitime) : AUCUN repli Firestore", async () => {
+    mockedSearchVectorPoints.mockResolvedValue([]);
+    const hits = await searchKnowledge("u1", "p1", "question");
+    expect(hits).toEqual([]);
+    expect(chunkQueryWhere).not.toHaveBeenCalled();
+  });
+
+  it("Qdrant non configuré : repli plafonné à 100 fragments AU TOTAL (répartis entre portées)", async () => {
+    mockedVectorConfigured.mockReturnValue(false);
+    mockFallbackQueries([], []);
+    const orgs = Array.from({ length: 65 }, (_, i) => `org-${i}`); // 1 + 3 requêtes
+    await searchKnowledge("u1", "p1", "question", 8, orgs);
+    expect(mockedSearchVectorPoints).not.toHaveBeenCalled(); // pas d'appel vectoriel sans client
+    expect(chunkQueryLimits).toHaveLength(4);
+    const total = chunkQueryLimits.reduce((sum, n) => sum + n, 0);
+    expect(total).toBeLessThanOrEqual(100);
+    expect(chunkQueryLimits.every((n) => n === 25)).toBe(true); // 100 / 4 portées
+  });
+
+  it("Qdrant non configuré, sans org : une seule requête personnelle plafonnée à 100", async () => {
+    mockedVectorConfigured.mockReturnValue(false);
+    mockFallbackQueries([], []);
+    await searchKnowledge("u1", "p1", "question");
+    expect(chunkQueryLimits).toEqual([100]);
+  });
+
+  it("Qdrant en ERREUR (null) : repli conservé aux limites historiques (500 par portée)", async () => {
+    mockedSearchVectorPoints.mockResolvedValue(null);
+    mockFallbackQueries([], []);
+    const orgs = Array.from({ length: 65 }, (_, i) => `org-${i}`);
+    await searchKnowledge("u1", "p1", "question", 8, orgs);
+    expect(mockedSearchVectorPoints).toHaveBeenCalledTimes(1);
+    expect(chunkQueryLimits).toHaveLength(4);
+    expect(chunkQueryLimits.every((n) => n === 500)).toBe(true);
   });
 });

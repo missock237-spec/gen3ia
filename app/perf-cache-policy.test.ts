@@ -45,3 +45,28 @@ describe("Politique de cache statique (next.config headers)", () => {
     expect(read("middleware.ts")).not.toMatch(/cache-control/i);
   });
 });
+
+describe("Micro-cache sonnette notifications (quota Firestore, Task 101)", () => {
+  const route = read("app/api/notifications/route.ts");
+
+  it("la forme canonique du polling passe par cacheWrap avec un TTL ≥ 35 s", () => {
+    // Pourquoi ≥ 35 s : le centre de notifications sonne GET /api/notifications
+    // toutes les 25 s par client ouvert. Un TTL plus court expirait ENTRE deux
+    // polls (TTL 20 s historique = ~100 % de MISS, soit ~31 lectures Firestore
+    // par tick pour une cloche). La fraîcheur ne repose PAS sur le TTL :
+    // invalidateNotificationsCache() invalide la clé à chaque mutation
+    // (création, marquage lu) — le TTL n'est qu'un filet anti-dérive.
+    const correspondance = route.match(/cacheWrap\([^;]*?,\s*(\d+)\s*,\s*chargeur/);
+    expect(correspondance).not.toBeNull();
+    expect(Number(correspondance?.[1])).toBeGreaterThanOrEqual(35);
+  });
+
+  it("la fraîcheur repose sur l'invalidation événementielle (repository)", () => {
+    // Garde structurel : si l'invalidation disparaît du repository, le TTL
+    // devient la seule garantie de fraîcheur et la sonnette peut afficher un
+    // compteur périmé jusqu'à 40 s.
+    const repository = read("lib/notifications/repository.ts");
+    expect(repository).toContain("invalidateNotificationsCache(");
+    expect(repository).toContain("cacheDelete(notificationsCacheKey(");
+  });
+});

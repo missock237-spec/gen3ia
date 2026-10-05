@@ -49,12 +49,13 @@ export function isRedisConfigured(): boolean {
 }
 
 /**
- * @internal Réservé aux tests : réinitialise le singleton client afin de
- * re-évaluer la configuration d'environnement entre les scénarios.
+ * @internal Réservé aux tests : réinitialise le singleton client ET le cache
+ * local de repli afin de repartir d'un état neutre entre les scénarios.
  */
 export function resetRedisClientForTests(): void {
   redisClient = null;
   clientInitialised = false;
+  localCache.clear();
 }
 
 function prefixed(key: string): string {
@@ -98,8 +99,14 @@ export async function cacheSet(
   }
 }
 
-/** Supprime une clé (invalidation). Retourne true si la clé a été supprimée. */
+/**
+ * Supprime une clé (invalidation). Retourne true si la clé a été supprimée
+ * côté Redis. Purge AUSSI l'entrée du repli process-local : l'invalidation
+ * événementielle (sonnette notifications, …) doit être visible immédiatement
+ * même quand Upstash est absent ou en panne (Task 101).
+ */
 export async function cacheDelete(key: string): Promise<boolean> {
+  localCache.delete(key);
   const redis = getRedis();
   if (!redis) return false;
   try {
@@ -110,10 +117,81 @@ export async function cacheDelete(key: string): Promise<boolean> {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Repli local process-local (Task 101, audit quota Firestore)         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Cache mémoire process-local servant de repli à `cacheWrap` quand Upstash
+ * est absent ou en erreur. Sans lui, chaque appel retombait sur le loader
+ * (souvent Firestore) à CHAQUE requête : sur les environnements sans Redis
+ * (dev, preview, panne Upstash), le cache cache-aside était simplement
+ * inexistant.
+ *
+ * Portée et garde-fous :
+ *  - Map LRU simple (~200 entrées) : insertion en fin, rafraîchissement de
+ *    récence à la lecture, éviction des plus anciennes au-delà du plafond —
+ *    aucune croissance indéfinie entre deux cold starts.
+ *  - TTL respecté : une entrée expirée est ignorée ET purgée.
+ *  - Cohérence : ce repli ne sert QUE les lectures/écritures cache-aside de
+ *    `cacheWrap` — JAMAIS les verrous distribués ni les compteurs partagés
+ *    (rate-limit, decision-lock) qui exigent une vérité partagée entre
+ *    instances. Une Map process n'est pas partagée entre instances
+ *    serverless : c'est un cache, pas une source de vérité.
+ *  - `cacheDelete` purge AUSSI l'entrée locale : sans cela, l'invalidation
+ *    événementielle (ex. sonnette notifications) serait aveugle au repli et
+ *    les polls serviraient une valeur périmée jusqu'à expiration du TTL.
+ *  - Purement défensif : jamais de throw (les appelants continuent sans
+ *    cache en cas de moindre incident).
+ */
+interface LocalCacheEntry {
+  value: unknown;
+
+  expiresAt: number;
+}
+
+const localCache = new Map<string, LocalCacheEntry>();
+const LOCAL_CACHE_MAX_ENTRIES = 200;
+
+function localCacheGet(key: string): { found: boolean; value: unknown } {
+  try {
+    const entry = localCache.get(key);
+    if (!entry) return { found: false, value: null };
+    if (entry.expiresAt <= Date.now()) {
+      localCache.delete(key);
+      return { found: false, value: null };
+    }
+    // Rafraîchit la récence (Map LRU par ordre d'insertion).
+    localCache.delete(key);
+    localCache.set(key, entry);
+    return { found: true, value: entry.value };
+  } catch {
+    return { found: false, value: null };
+  }
+}
+
+function localCacheSet(key: string, value: unknown, ttlSeconds: number): void {
+  try {
+    const ttl = Math.max(1, Math.floor(ttlSeconds));
+    while (localCache.size >= LOCAL_CACHE_MAX_ENTRIES) {
+      const oldest = localCache.keys().next().value;
+      if (oldest === undefined) break;
+      localCache.delete(oldest);
+    }
+    localCache.set(key, { value, expiresAt: Date.now() + ttl * 1000 });
+  } catch {
+    /* Cache local indisponible : l'appelant continue sans repli. */
+  }
+}
+
 /**
  * Wrapper cache-aside : sert la valeur en cache si présente, sinon exécute
- * le loader, stocke le résultat (TTL) et le retourne. Si Redis est absent
- * ou en erreur, le loader est simplement exécuté à chaque fois.
+ * le loader, stocke le résultat (TTL) et le retourne.
+ *
+ * Ordre de consultation : Redis (vérité partagée entre instances) puis le
+ * repli process-local (Task 101). Si Redis est absent ou en erreur, le
+ * loader n'est plus exécuté qu'au premier appel par clé et par instance —
+ * les appels suivants dans la fenêtre TTL sont servis depuis la mémoire.
  */
 export async function cacheWrap<T>(
   key: string,
@@ -122,10 +200,13 @@ export async function cacheWrap<T>(
 ): Promise<{ value: T; hit: boolean }> {
   const cached = await cacheGet<T>(key);
   if (cached !== null) return { value: cached, hit: true };
+  const local = localCacheGet(key);
+  if (local.found) return { value: local.value as T, hit: true };
   const value = await loader();
   // On stocke même un résultat "falsy" tant qu'il est définissable : null
   // reste réservé à l'absence d'entrée.
   if (value !== null && value !== undefined) {
+    localCacheSet(key, value, ttlSeconds);
     await cacheSet(key, value, ttlSeconds);
   }
   return { value, hit: false };

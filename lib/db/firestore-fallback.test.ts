@@ -27,12 +27,48 @@ const firestoreState = vi.hoisted(() => ({
   ops: [] as Array<{ kind: string; path: string; payload?: unknown; opts?: unknown }>,
   /** Quand défini, chaque get/set/create lève cette erreur (quota, 429…). */
   failWith: null as unknown,
+  /** Task 101 : quand défini, chaque requête TRIÉE (orderBy posé) lève cette
+   * erreur — émulation FAILED_PRECONDITION « index composite manquant » (le
+   * scan simple, sans orderBy, continue de passer comme le vrai Firestore). */
+  failOrderedWith: null as unknown,
   /** Task 97 : quand vrai, chaque get/set/create NE RÉPOND JAMAIS (stall —
    * comportement réel observé sous quota quotidien épuisé). */
   hang: false,
   /** Résultats factices des requêtes where().get() / where().limit().get(). */
   queryResults: [] as Array<Record<string, unknown>>,
 }));
+
+/**
+ * Comparateur de tri SERVEUR simulé (Task 101) : émule l'ordre renvoyé par
+ * Firestore quand orderBy est posé (Timestamp-like toMillis, Date, ISO,
+ * nombre, chaîne) — indispensable pour valider le limit exact et le repli
+ * index manquant avec les mêmes données que le vrai service.
+ */
+function valeurServeur(value: unknown): number | null {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "object" && value !== null && typeof (value as { toMillis?: unknown }).toMillis === "function") {
+    try {
+      return (value as { toMillis: () => number }).toMillis();
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
+function compareServeur(left: Record<string, unknown>, right: Record<string, unknown>, field: string): number {
+  const ln = valeurServeur(left[field]);
+  const rn = valeurServeur(right[field]);
+  if (ln !== null && rn !== null) return ln - rn;
+  const ls = String(left[field] ?? "");
+  const rs = String(right[field] ?? "");
+  return ls < rs ? -1 : ls > rs ? 1 : 0;
+}
 
 vi.mock("@/lib/firebase/admin", () => ({
   adminDb: {
@@ -83,19 +119,50 @@ vi.mock("@/lib/firebase/admin", () => ({
       },
       where: (field: string, _op: string, value: unknown) => {
         const describe = `${name}?${field}==${String(value)}`;
-        const runQuery = (limit?: number) => {
-          firestoreState.ops.push({ kind: limit ? "whereLimit" : "where", path: describe });
+        // Task 101 : chaîne complète where → orderBy → limit → get (le vrai
+        // SDK porte le tri CÔTÉ Firestore ; le fake l'émule en triant les
+        // résultats avant l'application de la limite).
+        const state: { order: { field: string; dir: "asc" | "desc" } | null; limit: number | undefined } = {
+          order: null,
+          limit: undefined,
+        };
+        const runQuery = () => {
+          firestoreState.ops.push({
+            kind: state.limit !== undefined ? "whereLimit" : "where",
+            path: describe,
+            opts: { order: state.order ? { ...state.order } : null, limit: state.limit ?? null },
+          });
+          if (firestoreState.failOrderedWith && state.order) throw firestoreState.failOrderedWith;
           if (firestoreState.failWith) throw firestoreState.failWith;
-          const results = limit ? firestoreState.queryResults.slice(0, limit) : firestoreState.queryResults;
+          // (l'erreur « index manquant » est vérifiée AVANT le quota : la vraie
+          // requête triée échoue AVANT d'atteindre le backend — le scan de
+          // repli, lui, peut tomber sur le quota).
+          let results = [...firestoreState.queryResults];
+          if (state.order) {
+            const order = state.order;
+            results.sort((left, right) => {
+              const cmp = compareServeur(left, right, order.field);
+              return order.dir === "desc" ? -cmp : cmp;
+            });
+          }
+          if (state.limit !== undefined) results = results.slice(0, state.limit);
           return {
             docs: results.map((data, index) => ({ id: `q${index}`, data: () => data })),
             size: results.length,
           };
         };
-        return {
+        const builder = {
+          orderBy: (orderField: string, dir: "asc" | "desc" = "asc") => {
+            state.order = { field: orderField, dir };
+            return builder;
+          },
+          limit: (n: number) => {
+            state.limit = n;
+            return builder;
+          },
           get: async () => runQuery(),
-          limit: (n: number) => ({ get: async () => runQuery(n) }),
         };
+        return builder;
       },
     }),
   },
@@ -253,6 +320,15 @@ function supabaseFake() {
 // Helpers de tests
 // ---------------------------------------------------------------------------
 
+function missingIndexError(): Error {
+  // Forme canonique de l'échec FAILED_PRECONDITION « index composite
+  // manquant » (code gRPC 9 + message Firebase Console).
+  return Object.assign(
+    new Error("The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/test/firestore/indexes"),
+    { code: 9 },
+  );
+}
+
 function quotaError(message = "Quota exceeded for quota group 'default'."): Error {
   return Object.assign(new Error(message), { code: 8 });
 }
@@ -274,6 +350,7 @@ function resetAll(): void {
   firestoreState.docs.clear();
   firestoreState.ops.length = 0;
   firestoreState.failWith = null;
+  firestoreState.failOrderedWith = null;
   firestoreState.hang = false;
   firestoreState.queryResults = [];
   supabaseState.rows = [];
@@ -289,11 +366,13 @@ import { getQuotaGuardStats } from "./quota-guard";
 import {
   DEFAULT_RECONCILE_COLLECTIONS,
   FIRESTORE_ATTEMPT_TIMEOUT_MS,
+  isFirestoreMissingIndexError,
   reconcileFallbackToFirestore,
   resilientCreate,
   resilientDelete,
   resilientGet,
   resilientList,
+  resilientListByPayloadField,
   resilientQuery,
   resilientSet,
   sanitizeMirrorPayload,
@@ -471,6 +550,138 @@ describe("resilientQuery (requêtes résilientes)", () => {
     const result = await resilientQuery<{ id: string }>("videoProductionJobs", [{ field: "status", value: "queued" }]);
     expect(result).toHaveLength(1);
     expect(firestoreState.ops.some((op) => op.kind === "where")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 101 (C3a/C3b/C3c) — tri serveur + limit exact + repli index manquant
+// ---------------------------------------------------------------------------
+
+describe("resilientQuery — tri serveur + limit exact (Task 101)", () => {
+  it("orderBy + limit DEMANDÉ appliqués côté Firestore : les N plus récents, plus jamais le cap 200", async () => {
+    firestoreState.queryResults = Array.from({ length: 250 }, (_, index) => ({
+      id: `doc-${index + 1}`,
+      createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+    }));
+    const result = await resilientQuery<{ id: string }>(
+      "videoRenderJobs",
+      [{ field: "status", value: "queued" }],
+      { orderField: "createdAt", descending: true, limit: 20 },
+    );
+    expect(result).toHaveLength(20);
+    // Les 20 PLUS RÉCENTS (tri serveur simulé) — plus jamais un sous-ensemble
+    // arbitraire de 200 documents re-trié après coup.
+    expect(result[0]!.id).toBe("doc-250");
+    expect(result[19]!.id).toBe("doc-231");
+    // La requête Firestore a porté le tri ET la limite demandée (PAS 200).
+    const query = firestoreState.ops.find((op) => op.kind === "whereLimit" && op.path.includes("status"));
+    expect(query?.opts).toEqual({ order: { field: "createdAt", dir: "desc" }, limit: 20 });
+  });
+
+  it("FAILED_PRECONDITION (index composite manquant) → repli scan + tri mémoire, disjoncteur intact", async () => {
+    firestoreState.failOrderedWith = missingIndexError();
+    firestoreState.queryResults = [
+      { id: "c", createdAt: "2026-01-03T00:00:00.000Z" },
+      { id: "a", createdAt: "2026-01-01T00:00:00.000Z" },
+      { id: "b", createdAt: "2026-01-02T00:00:00.000Z" },
+    ];
+    const result = await resilientQuery<{ id: string }>(
+      "videoRenderJobs",
+      [{ field: "status", value: "queued" }],
+      { orderField: "createdAt", descending: true, limit: 2 },
+    );
+    // Résultats justes sur le sous-ensemble scanné (tri mémoire), fenêtre respectée.
+    expect(result.map((row) => row.id)).toEqual(["c", "b"]);
+    // Deux requêtes : la triée (échouée) puis le scan SANS orderBy — à
+    // l'HORIZON de justesse de la couche (cap 200), pas à la seule limite.
+    const queries = firestoreState.ops.filter((op) => op.kind === "whereLimit");
+    expect(queries).toHaveLength(2);
+    expect(queries[0]!.opts).toMatchObject({ order: { field: "createdAt", dir: "desc" } });
+    expect(queries[1]!.opts).toEqual({ order: null, limit: 200 });
+    // Ce n'est NI un quota NI un incident transitoire : le disjoncteur reste fermé.
+    expect(getQuotaGuardStats().state).toBe("closed");
+  });
+
+  it("index manquant PUIS quota sur le scan → repli miroir Supabase (chaîne complète)", async () => {
+    firestoreState.failOrderedWith = missingIndexError();
+    firestoreState.failWith = quotaError();
+    supabaseState.rows = [
+      { collection: "videoRenderJobs", document_id: "m1", payload: { id: "m1", status: "queued", createdAt: "2026-01-02T00:00:00.000Z" } },
+      { collection: "videoRenderJobs", document_id: "m2", payload: { id: "m2", status: "queued", createdAt: "2026-01-01T00:00:00.000Z" } },
+    ];
+    const result = await resilientQuery<{ id: string }>("videoRenderJobs", [{ field: "status", value: "queued" }], {
+      orderField: "createdAt",
+      descending: true,
+      limit: 10,
+    });
+    expect(result.map((row) => row.id)).toEqual(["m1", "m2"]);
+    // Le quota du scan a bien été noté au disjoncteur (chemin nominal épuisé).
+    expect(getQuotaGuardStats().consecutiveQuotaErrors).toBe(1);
+  });
+
+  it("sans champ d'ordre : cap de scan historique conservé (200)", async () => {
+    firestoreState.queryResults = [{ id: "x" }];
+    await resilientQuery<{ id: string }>("videoRenderJobs", [{ field: "status", value: "queued" }]);
+    const query = firestoreState.ops.find((op) => op.kind === "whereLimit");
+    expect(query?.opts).toEqual({ order: null, limit: 200 });
+  });
+});
+
+describe("resilientList / resilientListByPayloadField — limit (Task 101 / C3b)", () => {
+  it("resilientList : limit paramétrable appliqué côté Firestore (défaut 200)", async () => {
+    firestoreState.queryResults = [{ id: "a" }, { id: "b" }, { id: "c" }];
+    const limited = await resilientList<{ id: string }>("videoProjects", "userId", "u1", 2);
+    expect(limited.map((row) => row.id)).toEqual(["a", "b"]);
+    expect(firestoreState.ops.find((op) => op.kind === "whereLimit")?.opts).toEqual({ order: null, limit: 2 });
+
+    firestoreState.ops.length = 0;
+    await resilientList("videoProjects", "userId", "u1");
+    expect(firestoreState.ops.find((op) => op.kind === "whereLimit")?.opts).toEqual({ order: null, limit: 200 });
+  });
+
+  it("resilientList : erreur quota → repli miroir lui aussi plafonné", async () => {
+    firestoreState.failWith = quotaError();
+    supabaseState.rows = [
+      { collection: "videoProjects", document_id: "a", owner_id: "u1", payload: { id: "a" } },
+      { collection: "videoProjects", document_id: "b", owner_id: "u1", payload: { id: "b" } },
+    ];
+    const list = await resilientList<{ id: string }>("videoProjects", "userId", "u1", 1);
+    expect(list).toEqual([{ id: "a" }]);
+    const selectRun = supabaseState.ops.find((op) => op.op === "select-run");
+    expect((selectRun!.args as { limit: number }).limit).toBe(1);
+  });
+
+  it("resilientListByPayloadField : limit appliqué côté Firestore et côté miroir", async () => {
+    firestoreState.queryResults = [{ id: "v1" }, { id: "v2" }, { id: "v3" }];
+    const limited = await resilientListByPayloadField<{ id: string }>("videoVersions", "projectId", "p1", 2);
+    expect(limited.map((row) => row.id)).toEqual(["v1", "v2"]);
+    expect(firestoreState.ops.find((op) => op.kind === "whereLimit")?.opts).toEqual({ order: null, limit: 2 });
+
+    firestoreState.failWith = quotaError();
+    firestoreState.ops.length = 0;
+    supabaseState.rows = [
+      { collection: "videoVersions", document_id: "w1", owner_id: "u1", payload: { id: "w1", projectId: "p1" } },
+      { collection: "videoVersions", document_id: "w2", owner_id: "u1", payload: { id: "w2", projectId: "p1" } },
+      { collection: "videoVersions", document_id: "w3", owner_id: "u1", payload: { id: "w3", projectId: "p1" } },
+    ];
+    const mirrored = await resilientListByPayloadField<{ id: string }>("videoVersions", "projectId", "p1", 1);
+    expect(mirrored).toEqual([{ id: "w1", projectId: "p1" }]);
+    const selectRun = supabaseState.ops.find((op) => op.op === "select-run");
+    expect((selectRun!.args as { limit: number }).limit).toBe(1);
+  });
+});
+
+describe("isFirestoreMissingIndexError (Task 101)", () => {
+  it("reconnaît le code gRPC 9 / FAILED_PRECONDITION et le message canonique", () => {
+    expect(isFirestoreMissingIndexError(missingIndexError())).toBe(true);
+    expect(isFirestoreMissingIndexError(new Error("9 FAILED_PRECONDITION: The query requires an index."))).toBe(true);
+    expect(isFirestoreMissingIndexError(Object.assign(new Error("La requête nécessite un index."), { code: "failed-precondition" }))).toBe(true);
+  });
+
+  it("ne classe PAS quota / transitoire / métier comme index manquant", () => {
+    expect(isFirestoreMissingIndexError(quotaError())).toBe(false);
+    expect(isFirestoreMissingIndexError(transientError())).toBe(false);
+    expect(isFirestoreMissingIndexError(Object.assign(new Error("permission denied"), { code: 7 }))).toBe(false);
   });
 });
 
