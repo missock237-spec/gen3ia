@@ -85,7 +85,10 @@ describe("sandbox /execute — authentification", () => {
     expect(response.json().error).toBe("Invalid or replayed request");
   });
 
-  it("401 sur rejeu EXACT de la même requête (anti-rejeu conservé)", async () => {
+  // Timeout élargi (Task 101) : sous couverture v8 en CI, l'injection du 1er
+  // appel signé (initialisation app + crypto Ed25519) peut dépasser le
+  // défaut de 5 s — le contrat testé est le REJET du rejeu, pas la latence.
+  it("401 sur rejeu EXACT de la même requête (anti-rejeu conservé)", { timeout: 30_000 }, async () => {
     const headers = signedHeaders(VALID_JOB, "replay-test-0001");
     const first = await app.inject({ method: "POST", url: "/execute", payload: VALID_JOB, headers });
     const second = await app.inject({ method: "POST", url: "/execute", payload: VALID_JOB, headers });
