@@ -55,6 +55,14 @@ const CONSOLE_MEDIA_TOOLS = [
 /**
  * Copie de la politique standard étendue aux outils médias — jamais la
  * politique partagée elle-même (les agents autonomes gardent leur liste).
+ *
+ * La permission « tool.external » est ajoutée car authorizeTool
+ * (lib/security/tool-permissions.ts) exige cette permission pour tout outil
+ * de classe external (voice.speak, image.generate) — testé en production
+ * le 2026-10-07 : sans elle, la console renvoyait « Permission denied:
+ * tool.external » après déblocage de la liste allowedTools. Les gardes
+ * aval restent intacts : kill-switch, consentements par catégorie, audit,
+ * rate-limit 30/min, profils sécurité par outil.
  */
 function createConsolePolicy(): ExecutionPolicy {
   const base =
@@ -69,6 +77,12 @@ function createConsolePolicy(): ExecutionPolicy {
       ...base.allowedTools,
 
       ...CONSOLE_MEDIA_TOOLS,
+    ],
+
+    permissions: [
+      ...base.permissions,
+
+      "tool.external",
     ],
   };
 }
