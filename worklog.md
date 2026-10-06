@@ -2240,3 +2240,229 @@ Stage Summary:
   production vérifiée. Le quota Firestore de Gen3ia est désormais économe sur
   les trois postes majeurs (lectures de balayage, écritures/stockage usage IA,
   télémétrie sans base de données), avec replis résilients conservés.
+---
+Task ID: 103-c
+Agent: impl-incoherences
+Task: Incohérences mineures de l'audit médias — télémétrie config (faux écart AGNES_API_KEY), provider huggingface mort, dérive de contrat video.create
+
+Work Log:
+- Audit préalable : rg process.env.{AGNES|ELEVENLABS|VIDEO_|TWENTY_FIRST|GEN3IA_APP_ORIGIN} sur lib/app + rg "huggingface|HF_" (lib, app, components, e2e, scripts) ; lecture engine.ts L2535-2584 (lecture seule, interdit respecté) ; convention gardes fs.readFileSync reprise de scheduler.test.ts (import.meta.dirname).
+- Incohérence 1 (télémétrie config) : lib/env/config-report.ts — OPTIONAL_RECOGNIZED étendu de TOUTE variable média réellement lue et absente : AGNES_API_KEY, AGNES_IMAGE_MODEL, AGNES_API_BASE, AGNES_TEXT_MODEL (lib/ai/config.ts, image-generation.ts, vision-decider.ts), TWENTY_FIRST_API_KEY (integrations/twentyfirst), VIDEO_FFMPEG_PATH, VIDEO_FFPROBE_PATH, VIDEO_FONT_PATH, VIDEO_STATIC_RELEASE_TAG, VIDEO_STATIC_BINARIES_URL, VIDEO_RENDER_MINOR_PER_SEC (lib/video/security.ts, render/fonts.ts, credits.ts), GEN3IA_APP_ORIGIN (scheduler, production-queue, routes de queue) — regroupées par famille avec commentaires FR. ELEVENLABS_VOICE_ID déjà présente. GROUPS requis intouchés. NB : HF_TOKEN CONSERVÉ volontairement — l'audit « jamais lu hors test » est inexact, il alimente réellement lib/memory/embeddings.ts et lib/skills/semantic.ts (@huggingface/inference) ; ce n'est PAS le provider supprimé.
+- Incohérence 2 (provider mort) : union AIProvider sans "huggingface" (models.ts + commentaire FR sur HF_TOKEN=embeddings) ; case "huggingface" « implemented separately » supprimé de lib/ai/providers/index.ts (tombé dans default « Unsupported provider » — hors liste autorisée mais non interdit et requis par tsc TS2678) ; entrées huggingface/COST_HF_* retirées des Record<AIProvider,number> de lib/billing/cost-engine.ts (pricing.ts : rien à faire, aucune entrée) ; adaptations tsc-forcées hors liste autorisée mais non interdites : lib/workflows/executor.ts et lib/agents/runtime/runner.ts (unions littérales locales/VALID_PROVIDERS alimentant AIRequest.provider — un ancien doc stockant provider:"huggingface" retombe désormais dans le routage automatique, lecture tolérée au lieu du throw) ; EXCEPTION DÉCLARÉE à l'interdit app/api/** : app/api/chat/message/route.ts L21, le zod d'ENTRÉE du chat acceptait "huggingface" et cassait tsc (TS2322 via body.provider→AIRequest) — retrait d'une valeur d'enum, conforme à l'instruction explicite du lot (« si un schéma zod d'ENTRÉE utilisateur accepte huggingface, retire-la ») ; aucun autre schéma zod concerné (agents/schema.ts = z.string() libre, aucun writer de provider:"huggingface"). Tests adaptés : resilience.test.ts (huggingface→agnes, jamais utilisé ailleurs du fichier), router.test.ts (delete HF_TOKEN retiré du routeur).
+- Incohérence 3 (dérive video.create) : lib/tools/media/create-video.ts exporte VIDEO_ASPECT_RATIOS (as const) + type VideoAspectRatio ; le zod consomme z.enum(VIDEO_ASPECT_RATIOS) (plus aucun littéral dupliqué) ; commentaire FR documentant que l'intercept chat (engine.ts, hors périmètre, NON modifié) reste volontairement séparé mais que le constant est la source unique à aligner manuellement.
+- Gardes structurels (fs.readFileSync, messages FR) : config-report.test.ts +4 (1 comportemental « faux écart » llm-agnes + 3 gardes de reconnaissance AGNES/voix-21st/vidéo/GEN3IA_APP_ORIGIN) ; lib/ai/models.test.ts NOUVEAU 4 gardes (union sans "huggingface" + 6 providers réels présents, case/throw HF absents, plus aucun process.env.COST_HF, zod du chat aligné) ; tools.test.ts +1 test ratios (les 3 valeurs acceptées, 4:3 refusée) + 2 gardes (export+zod consommateur sans littéral dupliqué, commentaire source unique/intercept). Collision d'imports avec le lot parallèle 103-a sur tools.test.ts dédoublonnée (fichier partagé : leurs blocs persist intacts).
+- Validations (réellement exécutées) : npx tsc --noEmit → 0 erreur ; npx vitest run lib/env/config-report.test.ts lib/ai lib/billing lib/tools/media → 28 fichiers, 270 verts / 1 skip (gated production-queue) ; npx eslint sur les 13 fichiers touchés → 0 erreur. Périmètre : 12 fichiers 103-c (diffstat +127/−18) + fichiers du lot PARALLÈLE 103-a présents dans l'arbre (generate-image.ts, elevenlabs, voice-service, app/api/tools/execute, lib/media/** — non les miens, vérifiables au diff). Aucun install/commit/push/build ; aucun console.log ajouté.
+
+Stage Summary:
+- Supervision : /api/health/infra ne signale plus de faux écart — toute variable média lue par le code est reconnue (12 ajoutées), sans toucher aux groupes requis ni exposer de valeur.
+- Cohérence provider : AIProvider = exactement les 6 fournisseurs implémentés ; le provider fantôme « huggingface » (throw « implemented separately », tarifs COST_HF_* morts, enums d'entrée) est éradiqué du code et verrouillé par 4 gardes ; les anciennes configs stockées tombent en repli (routage automatique) au lieu d'un crash — coût : 1 exception assumée au zod d'entrée du chat (valeur invalide rejetée 400).
+- Contrat vidéo : les 3 valeurs d'aspectRatio ont une source unique exportée (VIDEO_ASPECT_RATIOS) consommée par le zod de l'outil ; l'intercept chat reste aligné manuellement, signalé en commentaire — la dérive de contrat est désormais impossible côté outil et détectable par garde côté source.
+---
+---
+Task ID: 103-a
+Agent: impl-tools-console
+Task: Console d'exécution d'outils (outils médias autorisés) + persistance R2 permanente des images générées par l'outil agent
+
+Work Log:
+- Contexte (audit production 2026-10-07) : POST /api/tools/execute renvoyait 403
+  « Tool not allowed: voice.speak » — la route construisait
+  createAgentPolicy("standard") dont allowedTools = web.search/file.read/
+  file.create, rejetant les outils médias RÉELS pourtant enregistrés au
+  registre (voix ElevenLabs gated ELEVENLABS_API_KEY, image/vidéo gated
+  AGNES_API_KEY — clés présentes en prod). Parallèlement, image.generate
+  retournait l'URL TEMPORAIRE d'Agnes sans copie permanente (le chat, lui,
+  copie chaque image en R2 users/<uid>/permanent/ai-images/).
+- A. Route console (app/api/tools/execute/route.ts) : nouveau helper local
+  createConsolePolicy() — COPIE de createAgentPolicy("standard") par spread,
+  allowedTools étendu de CONSOLE_MEDIA_TOOLS = voice.speak, voice.list,
+  image.generate, video.create. createAgentPolicy NON modifiée (utilisée aussi
+  par lib/agents/personalized-plan.ts) ; l'élargissement est propre à la
+  console d'exécution MANUELLE : auth + rate-limit 30/min inchangés en amont,
+  kill-switch + consentements par catégorie + audit en aval (lib/tools/
+  executor.ts, inchangés).
+- B. Nouveau module partagé lib/media/persist.ts : persistGeneratedImage
+  ({ userId, imageUrl, prefix? }) — accepte URL https provider OU data URI
+  Base64 ; téléchargement borné (timeout 30 s, limite 15 Mo, pattern
+  engine.ts L1390-1410 lu au préalable) ; upload R2 via lib/storage/r2.ts
+  sous users/<uid>/permanent/ai-images/<horodatage>-<uuid>.<ext> (parité chat,
+  prefix nettoyé [a-z0-9_-] — traversée de chemin impossible) ; retourne
+  { url, storage:"r2", storagePath } (url = URL signée 1 h de l'objet
+  PERMANENT, storagePath = handle durable re-résolvable via
+  /api/storage/permanent?path=…) ou, en échec, { url: originale,
+  storage:"provider" } — JAMAIS de throw (try/catch total, dégradation
+  gracieuse comme le chat). Décision documentée : pas de repli inline data
+  URI ici (réponse JSON de l'outil — le repli inline reste propre au chat).
+- C. lib/tools/media/generate-image.ts : import DIRECT de persistGeneratedImage
+  (pas d'import paresseux — la route est déjà nodejs) ; après
+  generateImageWithAgnes/editImageWithAgnes, l'image est persistée et la
+  sortie étendue (rétrocompatible) : { url (permanente si R2 ok),
+  providerUrl (URL Agnes d'origine), provider, model, latencyMs, taskId?,
+  storage: "r2"|"provider", storagePath? }. Erreurs Agnes continuent de
+  remonter telles quelles (persistance non atteinte).
+- D. Tests : lib/media/persist.test.ts nouveau (9 tests comportementaux,
+  fetch global stubé + mock @/lib/storage/r2 : copie R2 clé/extension,
+  data URI sans téléchargement, prefix nettoyé, replis HTTP/réseau/R2 non
+  configuré/trop gros/userId absent/upload en erreur — jamais de throw).
+  tools.test.ts étendu : mock de la frontière persist (choix de testabilité
+  documenté : les 2 états r2/provider y sont simulés ; le comportement réel
+  du persist est couvert dans persist.test.ts), assertions de forme mises à
+  jour (sortie étendue, url=providerUrl en repli, persist non appelé si Agnes
+  échoue) + 3 gardes structurels fs.readFileSync : route execute contient les
+  4 outils médias (dérivée du standard), generate-image.ts contient l'appel
+  persist + la forme étendue, persist.ts contient « permanent/ai-images » et
+  AUCUNE instruction throw (regex ancrée en début de ligne — un « throw »
+  dans un commentaire ne compte pas). route.test.ts : mock createAgentPolicy
+  à forme réaliste + 2 tests comportementaux (politique dérivée du standard
+  et contenant les 7 outils ; un outil média traverse le gateway factice et
+  atteint executeTool avec la même politique).
+- Validations (exécutées réellement) : npx tsc --noEmit → 0 (2 passes).
+  npx vitest run lib/tools/media lib/media app/api/tools/execute/route.test.ts
+  → 4 fichiers, 44 verts / 1 skipped (skip préexistant it.runIf
+  productionQueueAvailable, lot 1-a). npx eslint sur les 6 fichiers touchés →
+  0 erreur.
+- NB coactivité : tools.test.ts porte aussi des ajouts du lot PARALLÈLE 103-c
+  (VIDEO_ASPECT_RATIOS + ses gardes, importé de create-video.ts) — fusion
+  propre, sections clairement séparées ; mes modifications sont le mock
+  persist, les tests image.generate et le describe « gardes structurels …
+  (Task 103-a) ». Les autres fichiers modifiés du git status (elevenlabs,
+  chat/message, ai/*…) appartiennent aux lots parallèles.
+
+Stage Summary:
+- Production : voice.speak/voice.list/image.generate/video.create exécutables
+  depuis la console d'outils (403 « Tool not allowed » éteint) sans élargir
+  les agents autonomes ; chaque appel reste auth + 30/min + kill-switch +
+  consentements + audit.
+- Livrable : une image générée par l'outil agent ne disparaît plus — copie R2
+  permanente users/<uid>/permanent/ai-images/ (parité chat), sortie étendue
+  rétrocompatible { url, providerUrl, storage, storagePath? } ; échec
+  d'archivage = dégradation gracieuse (URL provider) et jamais une
+  génération perdue.
+- Coût/tests : +9 tests comportementaux persist, +2 tests comportementaux
+  route, +3 gardes structurels, assertions image.generate alignées sur le
+  nouveau contrat ; zéro nouveau import Firebase ; périmètre respecté
+  (route + route.test, generate-image, tools.test, lib/media/persist.ts +
+  son test) — interdits intouchés : lib/domain/**, lib/integrations/**,
+  lib/video/**, lib/security/agent-policy.ts, lib/execution/**,
+  lib/tools/default-registry.ts, lib/tools/registry.ts, next.config.ts.
+  Aucun install/commit/push/build ; aucun console.log ajouté.
+---
+Task ID: 103-b
+Agent: impl-voice-clone
+Task: Lot voix — clonage vocal ElevenLabs réellement branché (idempotent) + persistance R2 de l'audio voice.speak
+
+Work Log:
+- Lecture worklog (conventions append-only, gardes structurels, FR) + fichiers :
+  voice-service.ts, client.ts, tools.ts, security.ts, storage.ts (r2 + video),
+  pattern de persistance audio du chat (engine.ts artifactFromToolOutput),
+  appelants (route generate-voice, production-queue stageVoice voie A/B).
+- A. client.ts : addElevenLabsVoice({name, audioDataUri, description?}) → POST
+  ${API_BASE}/voices/add en multipart/form-data (FormData + Blob depuis le
+  buffer base64, champ "files", filename dérivé du mime : wav/ogg/flac/mp3/
+  m4a/webm), auth xi-api-key via getElevenLabsApiKey (construction d'URL
+  identique au reste du client), timeout 120 s (upload d'échantillon),
+  erreurs FR avec statut + extrait API ; sample vide → erreur FR avant tout
+  appel réseau ; réponse sans voice_id → erreur FR. Entête du module mise à
+  jour : le clonage (IVC) est désormais une fonctionnalité active, déclenché
+  uniquement sur échantillon attesté.
+- B. voice-service.ts : ensureElevenLabsClonedVoice(userId, voice) — voix déjà
+  liée → voiceId tel quel ; origin "recording" ATTESTÉE (rightsConfirmedAt)
+  sans elevenLabsVoiceId → relecture fraîche du doc videoVoices (idempotence
+  inter-processus) + dédoublonnage des clones concurrents in-process
+  (cloningInFlight Map) → downloadVideoAsset de l'échantillon → data URI
+  audio/webm → addElevenLabsVoice UNE FOIS → persistance { elevenLabsVoiceId,
+  clonedAtMs } (set merge) → voiceId utilisé pour la narration TTS. Échec de
+  clonage : erreur FR « Le clonage de la voix « X » a échoué : … » remontée
+  SANS repli muet ni voix de remplacement cachée (le stage voice de la
+  production gère déjà l'erreur : reprise/échec explicite, et l'absence de
+  profil voix reste l'unique chemin « vidéo muette assumée ») ; attestation
+  manquante ou échantillon absent/hors stockage propriétaire → erreurs FR
+  claires. Voix bibliothèque/importée sans voiceId : repli plateforme
+  historique (resolveVoiceId) conservé, documenté. Commentaire « clonée côté
+  ElevenLabs » enfin vrai ; coût clonage/TTS assumé (attestation = condition
+  d'entrée). attachRecordingAsNarration (voie A) inchangé.
+- C. tools.ts (voice.speak) : après synthèse, persistance R2 importée
+  directement (isR2Configured + uploadToR2) sous
+  users/<uid>/permanent/ai-audio/<ts>-<uuid>.<ext> — pattern identique au
+  chat (engine.ts) mais effectué à la source. Contrat étendu RÉTROCOMPATIBLE
+  : audioDataUri conservé, url = clé R2 permanente (référence résolue par le
+  canal signé de l'application, idiom storagePath des artefacts), storage:
+  "r2"|"inline", note adaptée. JAMAIS de throw si le stockage échoue :
+  dégradation en inline commentée FR.
+- D. Tests : lib/integrations/elevenlabs/client.test.ts (9 : multipart +
+  voiceId, description optionnelle, 402 quota → FR, voice_id absent, sample
+  vide, clé absente ; gardes structurels fs.readFileSync : client.ts
+  "voices/add"+FormData+Blob, voice-service.ts clonedAtMs+voiceId+Date.now
+  persistés, tools.ts "permanent/ai-audio/"+storage r2|inline+uploadToR2+
+  repli sans throw) ; lib/video/voice-service.test.ts (5, fetch via mocks
+  client/storage/adminDb à état hoisted : clone UNE FOIS + doc muté +
+  narration avec voiceId cloné + 2e appel sans re-clonage (profil stale),
+  échec → erreur FR sans TTS ni mutation doc, voix déjà liée → 0 clone,
+  sample absent/hors stockage → erreur FR, attestation absente → erreur FR).
+- Décisions documentées : createVoiceEntry/attachRecordingAsNarration — le
+  point de consommation ElevenLabs unique est generateSceneNarration, c'est
+  là que le clonage est branché (lazy, au premier besoin, coût payé une
+  seule fois) ; création de voix inchangée (un échec de clonage à la
+  création n'empêcherait jamais l'enregistrement d'un média non rejouable) ;
+  clonedAtMs typé localement (VoiceProfileWithClone) — lib/video/types.ts
+  intouché ; lib/video/security.ts intouché (VoiceCreateSchema accepte déjà
+  recording sans elevenLabsVoiceId : aucun changement de zod nécessaire).
+- Validations (exécutées réellement) : npx tsc --noEmit → 0. npx vitest run
+  lib/integrations/elevenlabs/client.test.ts lib/video/voice-service.test.ts
+  → 14/14 verts ; lib/video (10 fichiers) + lib/knowledge/perception.test.ts
+  → 126 verts ; consommateurs voice.speak (lib/tools/labels, lib/tools/media/
+  tools.test, app/api/tools/execute/route.test) → verts (un échec transitoire
+  isolé non reproductible sur 2 relances — fichier d'un lot parallèle en
+  cours d'édition). npx eslint sur les 5 fichiers touchés → 0 erreur.
+- Périmètre respecté : 3 fichiers modifiés (client.ts, tools.ts,
+  voice-service.ts) + 2 tests créés. Interdits intouchés : lib/domain/**,
+  app/api/**, lib/tools/**, lib/media/**, lib/video/security.ts,
+  lib/video/types.ts, next.config.ts (git status vérifié : les autres
+  entrées modifiées appartiennent aux lots parallèles 103).
+
+Stage Summary:
+- Clonage vocal RÉEL : une voix « recording » attestée est désormais
+  effectivement clonée côté ElevenLabs au premier besoin narration (IVC
+  /v1/voices/add, multipart), le voiceId cloné est persisté dans videoVoices
+  (elevenLabsVoiceId + clonedAtMs) et réutilisé à vie — jamais deux clones
+  (relecture fraîche du doc + dédoublonnage in-process) ; plus aucun
+  prérequis d'elevenLabsVoiceId manuel pour utiliser sa propre voix.
+- Honnêteté des échecs : clonage impossible (attestation, échantillon
+  disparu, quota/refus API) → erreur FR explicite remontée à la route et au
+  stage voice (reprise/échec tracé), jamais de narration muette silencieuse
+  ni de voix plateforme substituée à la voix de l'utilisateur.
+- Audio voice.speak persisté : chaque synthèse est copiée sous
+  users/<uid>/permanent/ai-audio/ en R2 (clé permanente exposée via
+  storage="r2") quand R2 est configuré, avec repli inline garanti (jamais
+  d'échec d'outil pour un échec de stockage) — l'audio survit hors
+  conversation au lieu d'un data URI volatile.
+- Tests : +14 (2 nouveaux fichiers, 0 fichier existant cassé), gardes
+  structurels anti-régression sur les 3 modules ; tsc 0, eslint 0.
+
+---
+Task ID: 103-orchestration
+Agent: orchestrateur (Super Z)
+Task: Capacités médias réelles de l'agent (image/voix/vidéo) + anomalies découvertes par test production
+
+Work Log:
+- Audit Explore exhaustif : image RÉELLE (Agnes t2i+i2i), voix RÉELLE (ElevenLabs TTS),
+  vidéo RÉELLE (pipeline FFmpeg complet plan→script→assets→voice→render, QStash/sondage,
+  miroirs Supabase/Redis de résilience). Clés prod vérifiées via API Vercel : AGNES,
+  ELEVENLABS, R2, QSTASH, FIREBASE — toutes présentes.
+- Tests RÉELS en production (session signée localement, même dérivation que
+  lib/server/session-cookie.ts) : POST /api/ai/image → image générée réellement
+  (Agnes, 9,2 s, task_…) ; POST /api/tools/execute voice.speak → 403 « Tool not
+  allowed » = ANOMALIE réelle.
+- 3 lots parallèles périmètres disjoints : 103-a (console outils + persist image R2),
+  103-b (clonage vocal réel + persist audio outil), 103-c (incohérences : télémétrie
+  config, provider huggingface mort, dérive aspectRatio). Écart documenté 103-c :
+  app/api/chat/message/route.ts (zod enum huggingface) tsc-forcé, hors liste initiale.
+- Intégration : tsc 0 ; 2204 tests verts / 2 skips (+32) ; eslint 0 sur 23 fichiers.
+
+Stage Summary:
+- Agent IA capable de générer RÉELLEMENT image (outil persistant R2), voix off
+  (TTS + clonage réel de la voix attestée de l'utilisateur, audio persistant),
+  vidéo (pipeline complet déjà réel — console d'exécution débloquée).
+- Anomalies corrigées : 403 console voice.speak/image.generate/video.create ;
+  images outil éphémères → R2 permanent ; clonage vocal annoncé mais absent →
+  branché (idempotent) ; faux écart télémétrie AGNES ; provider huggingface
+  mort supprimé ; aspectRatio source unique.

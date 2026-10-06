@@ -125,7 +125,10 @@ async function executeNode(ctx: ExecuteContext, node: WorkflowNode): Promise<unk
         executionId: `wf_${ctx.state.runId}`,
         request: {
           task: "agent",
-          ...(provider ? { provider: provider as "groq" | "openrouter" | "anthropic" | "openai" | "glm" | "huggingface" } : {}),
+          // Union alignée sur AIProvider (audit médias 103-c : « huggingface »
+          // retiré — provider mort sans adaptateur ; un ancien doc qui le
+          // stockerait tomberait désormais dans le routage automatique).
+          ...(provider ? { provider: provider as "groq" | "openrouter" | "anthropic" | "openai" | "glm" | "agnes" } : {}),
           ...(model ? { model } : {}),
           ...(typeof temperature === "number" ? { temperature } : {}),
           messages: [

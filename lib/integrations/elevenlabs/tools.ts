@@ -1,8 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import type {
   ToolDefinition,
 } from "@/lib/tools/types";
+
+import { isR2Configured, uploadToR2 } from "@/lib/storage/r2";
 
 import {
   ELEVENLABS_MODELS,
@@ -31,10 +34,21 @@ const SpeakInput = z.object({
 
 interface SpeakOutput {
   audioDataUri: string;
+
+  /** Référence permanente R2 (clé) quand le stockage a réussi, sinon absent. */
+  url?: string;
+
+  /** "r2" = audio persisté en permanence ; "inline" = seul le data URI existe. */
+  storage: "r2" | "inline";
+
   mimeType: string;
+
   voiceId: string;
+
   modelId: string;
+
   charactersUsed: number;
+
   note: string;
 }
 
@@ -62,7 +76,7 @@ export const voiceSpeakTool: ToolDefinition<
 
   async execute(
     input,
-    _context,
+    context,
   ): Promise<SpeakOutput> {
     const result =
       await elevenLabsTextToSpeech({
@@ -71,8 +85,43 @@ export const voiceSpeakTool: ToolDefinition<
         modelId: input.modelId,
       });
 
+    // Le data URI reste dans la sortie (contrat rétrocompatible) : le chat
+    // et les clients existants continuent de le lire tel quel.
+    const audioDataUri = `data:${result.mimeType};base64,${result.audioBase64}`;
+
+    // Persistance permanente — pattern identique au chat (engine.ts :
+    // users/<uid>/permanent/ai-audio/<ts>-<uuid>.<ext>) mais effectué ici,
+    // à la source, pour que l'audio survive même hors conversation.
+    // JAMAIS de throw si le stockage échoue : dégradation assumée en
+    // "inline" (seul le data URI est retourné), l'outil reste utilisable.
+    let url: string | undefined;
+    let storage: "r2" | "inline" = "inline";
+    try {
+      const buffer = Buffer.from(result.audioBase64, "base64");
+      if (buffer.byteLength > 0 && context.userId && isR2Configured()) {
+        const ext = result.mimeType.includes("wav")
+          ? "wav"
+          : result.mimeType.includes("ogg")
+            ? "ogg"
+            : "mp3";
+        const key = `users/${context.userId}/permanent/ai-audio/${Date.now()}-${randomUUID()}.${ext}`;
+        await uploadToR2(key, buffer, result.mimeType);
+        // Clé R2 = référence permanente (le canal signé de l'application
+        // la résout en URL de téléchargement côté panneau des artefacts).
+        url = key;
+        storage = "r2";
+      }
+    } catch {
+      // Stockage indisponible (R2 non configuré, panne, quota) : on garde
+      // le data URI inline — jamais d'échec de synthèse pour un échec de stockage.
+    }
+
     return {
-      audioDataUri: `data:${result.mimeType};base64,${result.audioBase64}`,
+      audioDataUri,
+
+      ...(url ? { url } : {}),
+
+      storage,
 
       mimeType: result.mimeType,
 
@@ -82,7 +131,10 @@ export const voiceSpeakTool: ToolDefinition<
 
       charactersUsed: result.charactersUsed,
 
-      note: "Audio MP3 encode en base64 (data URI) — lisible dans le navigateur ou telechargeable.",
+      note:
+        storage === "r2"
+          ? `Audio MP3 synthétisé et stocké définitivement (${url}) ; data URI conservé en sortie.`
+          : "Audio MP3 encode en base64 (data URI) — lisible dans le navigateur ou telechargeable.",
     };
   },
 };

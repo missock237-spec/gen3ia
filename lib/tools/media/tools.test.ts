@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -12,7 +15,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *     (import paresseux) et retourne jobId/projectId/status/stage ;
  *  5. enregistrement effectif dans le registre par défaut (gated AGNES_API_KEY,
  *     aucun outil fantôme sans clé) ;
- *  6. couverture TOOL_SECURITY + catalogue GEN3IA_TOOLS + libellés FR.
+ *  6. couverture TOOL_SECURITY + catalogue GEN3IA_TOOLS + libellés FR ;
+ *  7. image.generate PERSISTE l'image en R2 permanent (Task 103-a) via
+ *     lib/media/persist.ts — sortie étendue { url, providerUrl, provider,
+ *     model, latencyMs, taskId?, storage, storagePath? } rétrocompatible ;
+ *  8. gardes structurels : la console /api/tools/execute autorise les 4
+ *     outils médias et le module de persistance cible le chemin permanent
+ *     users/<uid>/permanent/ai-images/ sans jamais lever d'exception.
+ *
+ * Choix de testabilité (Task 103-a) : le module de persistance est mocké à
+ * CE niveau (frontière unitaire — la voie Agnes reste le sujet testé) dans
+ * les DEUX états { storage: "r2" } et { storage: "provider" } ; le
+ * comportement réel du persist (fetch/R2, replis) est couvert séparément et
+ * behavioralement dans lib/media/persist.test.ts (fetch global stubé).
  */
 
 vi.mock("@/lib/ai/image-generation", () => ({
@@ -22,6 +37,11 @@ vi.mock("@/lib/ai/image-generation", () => ({
   IMAGE_RATIOS: ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"],
   IMAGE_SIZES: ["1K", "2K", "3K", "4K"],
   AGNES_IMAGE_MODEL: "agnes-image-2.5-flash",
+}));
+
+const persistGeneratedImageMock = vi.fn();
+vi.mock("@/lib/media/persist", () => ({
+  persistGeneratedImage: (...args: unknown[]) => persistGeneratedImageMock(...args),
 }));
 
 const createVideoProductionJobMock = vi.fn();
@@ -34,7 +54,7 @@ import { GEN3IA_TOOLS } from "@/lib/tools/registry";
 import { createDefaultToolRegistry } from "@/lib/tools/default-registry";
 import { getToolSecurityDefinition } from "@/lib/security/tool-permissions";
 import { toolLabel } from "@/lib/tools/labels";
-import { createVideoTool } from "./create-video";
+import { createVideoTool, VIDEO_ASPECT_RATIOS } from "./create-video";
 import { generateImageTool } from "./generate-image";
 
 const mockedGenerate = vi.mocked(generateImageWithAgnes);
@@ -107,13 +127,19 @@ describe("outil image.generate — schéma d'entrée", () => {
   });
 });
 
-describe("outil image.generate — exécution réelle (voie Agnes)", () => {
-  it("appelle generateImageWithAgnes et retourne { url, provider, model, latencyMs, taskId }", async () => {
+describe("outil image.generate — exécution réelle (voie Agnes + persistance)", () => {
+  it("appelle generateImageWithAgnes, PERSISTE en R2 et retourne l'URL permanente en priorité", async () => {
     mockedGenerate.mockResolvedValue({
       imageUrl: "https://cdn.exemple.com/img.png",
       model: "agnes-image-2.5-flash",
       taskId: "task-1",
       latencyMs: 1234,
+    });
+    // Persistance RÉUSSIE : l'URL retournée est celle de la copie permanente.
+    persistGeneratedImageMock.mockResolvedValue({
+      url: "https://r2.exemple.com/signed/permanent.png",
+      storage: "r2",
+      storagePath: "users/user-1/permanent/ai-images/1710000000000-abc.png",
     });
     const output = await generateImageTool.execute(
       { prompt: "Un chat astronaute", ratio: "16:9", size: "2K" },
@@ -125,13 +151,50 @@ describe("outil image.generate — exécution réelle (voie Agnes)", () => {
       size: "2K",
     });
     expect(mockedEdit).not.toHaveBeenCalled();
+    // La copie part du userId du contexte et de l'URL Agnes d'origine.
+    expect(persistGeneratedImageMock).toHaveBeenCalledWith({
+      userId: "user-1",
+      imageUrl: "https://cdn.exemple.com/img.png",
+    });
+    // Contrat étendu (rétrocompatible) : url = permanente, providerUrl =
+    // l'URL Agnes temporaire d'origine, storage/storagePath explicites.
     expect(output).toEqual({
-      url: "https://cdn.exemple.com/img.png",
+      url: "https://r2.exemple.com/signed/permanent.png",
+      providerUrl: "https://cdn.exemple.com/img.png",
       provider: "agnes",
       model: "agnes-image-2.5-flash",
       latencyMs: 1234,
       taskId: "task-1",
+      storage: "r2",
+      storagePath: "users/user-1/permanent/ai-images/1710000000000-abc.png",
     });
+  });
+
+  it("repli gracieux : échec de persistance → url = providerUrl (storage 'provider'), sans lever", async () => {
+    mockedGenerate.mockResolvedValue({
+      imageUrl: "https://cdn.exemple.com/img.png",
+      model: "agnes-image-2.5-flash",
+      latencyMs: 1100,
+    });
+    // persistGeneratedImage ne lève JAMAIS : en échec il retourne l'URL
+    // d'origine avec storage:"provider" — l'outil reste en succès.
+    persistGeneratedImageMock.mockResolvedValue({
+      url: "https://cdn.exemple.com/img.png",
+      storage: "provider",
+    });
+    const output = await generateImageTool.execute(
+      { prompt: "Un chat astronaute" },
+      CONTEXT,
+    );
+    expect(output).toEqual({
+      url: "https://cdn.exemple.com/img.png",
+      providerUrl: "https://cdn.exemple.com/img.png",
+      provider: "agnes",
+      model: "agnes-image-2.5-flash",
+      latencyMs: 1100,
+      storage: "provider",
+    });
+    expect(output).not.toHaveProperty("storagePath");
   });
 
   it("bascule sur la voie édition/composition dès qu'une image de référence est fournie", async () => {
@@ -139,6 +202,11 @@ describe("outil image.generate — exécution réelle (voie Agnes)", () => {
       imageUrl: "https://cdn.exemple.com/edited.png",
       model: "agnes-image-2.5-flash",
       latencyMs: 900,
+    });
+    persistGeneratedImageMock.mockResolvedValue({
+      url: "https://r2.exemple.com/signed/edited.png",
+      storage: "r2",
+      storagePath: "users/user-1/permanent/ai-images/1710000000001-def.png",
     });
     const output = await generateImageTool.execute(
       {
@@ -152,16 +220,19 @@ describe("outil image.generate — exécution réelle (voie Agnes)", () => {
       images: ["https://exemple.com/source.png", "data:image/png;base64,AAAA"],
     });
     expect(mockedGenerate).not.toHaveBeenCalled();
-    expect(output.url).toBe("https://cdn.exemple.com/edited.png");
+    expect(output.url).toBe("https://r2.exemple.com/signed/edited.png");
+    expect(output.providerUrl).toBe("https://cdn.exemple.com/edited.png");
     expect(output.provider).toBe("agnes");
+    expect(output.storage).toBe("r2");
     expect(output).not.toHaveProperty("taskId");
   });
 
-  it("propage l'erreur réelle d'Agnes SANS masquage ni repli silencieux", async () => {
+  it("propage l'erreur réelle d'Agnes SANS masquage ni repli silencieux (persistance non atteinte)", async () => {
     mockedGenerate.mockRejectedValue(new Error("Agnes AI a renvoyé une erreur HTTP 503."));
     await expect(
       generateImageTool.execute({ prompt: "un paysage alpin" }, CONTEXT),
     ).rejects.toThrow(/HTTP 503/);
+    expect(persistGeneratedImageMock).not.toHaveBeenCalled();
   });
 });
 
@@ -197,6 +268,46 @@ describe("outil video.create — schéma d'entrée", () => {
         title: "t".repeat(121),
       }),
     ).toThrow();
+  });
+
+  it("accepte exactement les trois ratios du constant partagé VIDEO_ASPECT_RATIOS", () => {
+    expect(VIDEO_ASPECT_RATIOS).toEqual(["16:9", "9:16", "1:1"]);
+    for (const aspectRatio of VIDEO_ASPECT_RATIOS) {
+      expect(() =>
+        createVideoTool.inputSchema.parse({
+          prompt: "Une vidéo de présentation complète",
+          aspectRatio,
+        }).aspectRatio,
+      ).not.toThrow();
+    }
+    // Toute autre valeur reste refusée (dérive de contrat impossible).
+    expect(() =>
+      createVideoTool.inputSchema.parse({
+        prompt: "Une vidéo de présentation complète",
+        aspectRatio: "4:3",
+      }),
+    ).toThrow();
+  });
+});
+
+describe("video.create — source unique des ratios (audit médias 103-c)", () => {
+  // ─── Gardes structurels (convention du dépôt) : le constant partagé est ───
+  // ─── la source unique des 3 valeurs d'aspectRatio ; l'intercept du chat ───
+  // ─── (lib/domain/conversations/engine.ts, hors périmètre) reste          ───
+  // ─── volontairement séparé mais documenté comme devant être aligné.      ───
+  const source = readFileSync(path.join(import.meta.dirname, "create-video.ts"), "utf8");
+
+  it("garde : create-video.ts exporte VIDEO_ASPECT_RATIOS et le zod le consomme", () => {
+    expect(source).toContain("export const VIDEO_ASPECT_RATIOS");
+    expect(source).toContain("z.enum(VIDEO_ASPECT_RATIOS)");
+    // Plus AUCUN littéral de ratio en double maintenance dans le zod.
+    expect(source).not.toContain('z.enum(["16:9"');
+  });
+
+  it("garde : le constant est documenté comme source unique, intercept chat séparé", () => {
+    expect(source).toContain("SOURCE UNIQUE");
+    expect(source).toContain("lib/domain/conversations/engine.ts");
+    expect(source).toContain("align");
   });
 });
 
@@ -340,5 +451,49 @@ describe("couverture sécurité + catalogue + libellés", () => {
   it("libellés FR : jamais le slug brut à l'utilisateur", () => {
     expect(toolLabel("image.generate")).toBe("Génération d'image");
     expect(toolLabel("video.create")).toBe("Production vidéo");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Gardes structurels — console d'exécution + persistance images       */
+/* (Task 103-a, convention du dépôt : lecture du source)               */
+/* ------------------------------------------------------------------ */
+
+describe("gardes structurels — console /api/tools/execute + persistance des images générées (Task 103-a)", () => {
+  const read = (relativePath: string) =>
+    readFileSync(path.join(import.meta.dirname, relativePath), "utf8");
+
+  it("garde : la route execute étend sa politique aux 4 outils médias (dérivée du standard)", () => {
+    const source = read("../../../app/api/tools/execute/route.ts");
+    // Les 4 outils médias RÉELS doivent figurer dans la liste de la console.
+    expect(source).toContain('"voice.speak"');
+    expect(source).toContain('"voice.list"');
+    expect(source).toContain('"image.generate"');
+    expect(source).toContain('"video.create"');
+    // La politique reste DÉRIVÉE du standard — createAgentPolicy inchangé
+    // (il sert aussi aux agents autonomes, hors périmètre de cette route).
+    expect(source).toContain("createAgentPolicy(");
+    expect(source).toContain('"standard"');
+  });
+
+  it("garde : generate-image.ts appelle la persistance et expose la forme de sortie étendue", () => {
+    const source = read("generate-image.ts");
+    expect(source).toContain("persistGeneratedImage(");
+    // Contrat étendu rétrocompatible : URL provider d'origine conservée +
+    // état de persistance explicite.
+    expect(source).toContain("providerUrl");
+    expect(source).toContain('"r2" | "provider"');
+    expect(source).toContain("storagePath");
+  });
+
+  it("garde : lib/media/persist.ts cible le chemin permanent ai-images et ne lève JAMAIS", () => {
+    const source = read("../../media/persist.ts");
+    // Chemin permanent standard (parité chat : users/<uid>/permanent/ai-images/).
+    expect(source).toContain("permanent/ai-images");
+    // Pattern try/catch : dégradation gracieuse, aucune exception levée
+    // (aucune INSTRUCTION throw — un « throw » dans un commentaire ne compte
+    // pas, d'où l'ancre en début de ligne).
+    expect(source).toContain("catch");
+    expect(source).not.toMatch(/(^|\n)\s*throw\b/);
   });
 });

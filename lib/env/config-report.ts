@@ -139,12 +139,30 @@ const GROUPS: GroupSpec[] = [
   },
 ];
 
-/** Variables optionnelles reconnues mais jamais exigées (noms à part). */
+/**
+ * Variables optionnelles reconnues mais jamais exigées (noms à part).
+ *
+ * Convention (audit médias 103-c) : TOUTE variable média réellement lue dans
+ * le code (process.env.*) doit figurer ici — sinon la sonde
+ * /api/health/infra signale un faux « écart » entre variables câblées et
+ * variables reconnues. AGNES_API_KEY est le cas d'école : requise dans le
+ * groupe llm-agnes (ci-dessus) ET reconnue ici (la reconnaissance optionnelle
+ * n'est jamais bloquante, elle n'informe que la télémétrie de présence).
+ */
 const OPTIONAL_RECOGNIZED = [
   "OPENROUTER_API_KEY",
   "ANTHROPIC_API_KEY",
   "HF_TOKEN",
+  // Fournisseur LLM/image Agnes (lib/ai/config.ts, lib/ai/image-generation.ts,
+  // lib/live/vision-decider.ts) : clé + surcharges modèle/endpoint.
+  "AGNES_API_KEY",
+  "AGNES_IMAGE_MODEL",
+  "AGNES_API_BASE",
+  "AGNES_TEXT_MODEL",
+  // Voix (lib/integrations/elevenlabs/client.ts) et rendu UI 21st
+  // (lib/integrations/twentyfirst/client.ts).
   "ELEVENLABS_VOICE_ID",
+  "TWENTY_FIRST_API_KEY",
   "TWILIO_WEBHOOK_BASE_URL",
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ACCOUNT_ID",
@@ -165,6 +183,18 @@ const OPTIONAL_RECOGNIZED = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
+  // Pipeline vidéo (lib/video/security.ts, lib/video/render/fonts.ts,
+  // lib/video/credits.ts) : binaires ffmpeg/ffprobe, police, release statique,
+  // URL de binaires et coût de rendu — tous optionnels (replis par défaut).
+  "VIDEO_FFMPEG_PATH",
+  "VIDEO_FFPROBE_PATH",
+  "VIDEO_FONT_PATH",
+  "VIDEO_STATIC_RELEASE_TAG",
+  "VIDEO_STATIC_BINARIES_URL",
+  "VIDEO_RENDER_MINOR_PER_SEC",
+  // Origine publique de l'app (callbacks planifiés, liens de reprise —
+  // lib/agents/scheduler.ts, lib/video/production-queue.ts, routes de queue).
+  "GEN3IA_APP_ORIGIN",
   "DATA_BACKEND",
   "FIRESTORE_EMULATOR_HOST",
   "FIREBASE_AUTH_EMULATOR_HOST",

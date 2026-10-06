@@ -24,13 +24,29 @@ import type { ProductionStage } from "@/lib/video/production-queue";
  * : high ⇒ requiresApproval par défaut).
  */
 
+/**
+ * Ratios d'aspect supportés par le pipeline vidéo Gen3ia — SOURCE UNIQUE.
+ *
+ * Convention (audit médias 103-c) : ces 3 valeurs étaient dupliquées entre ce
+ * zod et la validation inline de l'intercept « video.create » du chat
+ * (lib/domain/conversations/engine.ts, volontairement NON modifié — hors
+ * périmètre). Désormais ce constant est la référence : toute évolution des
+ * ratios part d'ici. L'intercept du chat reste séparé par conception (il
+ * contourne le catalogue d'outils), il DOIT être aligné manuellement le cas
+ * échéant — signalé par ce commentaire.
+ */
+export const VIDEO_ASPECT_RATIOS = ["16:9", "9:16", "1:1"] as const;
+
+/** Ratio d'aspect vidéo valide (union des valeurs du constant partagé). */
+export type VideoAspectRatio = (typeof VIDEO_ASPECT_RATIOS)[number];
+
 const CreateVideoInput = z.object({
   /** Brief créatif complet : sujet, ton, durée visée, public, style. */
   prompt: z.string().min(10).max(4000),
   /** Titre du projet vidéo (défaut : déduit du prompt par le pipeline). */
   title: z.string().max(120).optional(),
-  /** Cadrage du master. */
-  aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
+  /** Cadrage du master (valeurs : VIDEO_ASPECT_RATIOS, source unique). */
+  aspectRatio: z.enum(VIDEO_ASPECT_RATIOS).optional(),
   /** Générer la narration vocale (voix IA). Défaut pipeline : tentative avec voix. */
   voiceEnabled: z.boolean().optional(),
   /** Incruster les sous-titres. */

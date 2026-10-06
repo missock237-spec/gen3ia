@@ -5,7 +5,10 @@
  *   eleven_flash_v2_5, eleven_turbo_v2_5, eleven_turbo_v2, eleven_flash_v2
  * - Modeles speech-to-speech listes mais non exploites ici (usage free restreint)
  * Fonctionnalites actives pour le projet : synthese vocale (TTS) multilingue
- * + listing des voix disponibles. Le clonage vocal professionnel est hors quota.
+ * + listing des voix disponibles + clonage vocal (Instant Voice Cloning,
+ *   POST /v1/voices/add) branché pour la bibliothèque de voix vidéo : le
+ *   clonage n'est déclenché QUE pour un échantillon dont l'utilisateur a
+ *   attesté détenir les droits (coût TTS/clonage alors assumé).
  */
 
 const API_BASE = "https://api.elevenlabs.io/v1";
@@ -43,6 +46,86 @@ export interface ElevenLabsVoice {
   category: string;
   labels: Record<string, string>;
   previewUrl?: string;
+}
+
+export interface AddElevenLabsVoiceResult {
+  voiceId: string;
+}
+
+/**
+ * Clone une voix (Instant Voice Cloning) à partir d'un échantillon audio
+ * encodé en data URI. POST {API_BASE}/v1/voices/add en multipart/form-data
+ * (même construction d'URL que les autres fonctions de ce client : API_BASE
+ * + chemin, auth entête "xi-api-key"). Champ "files" obligatoire côté API ;
+ * "name" porte le nom de la voix, "description" est optionnel.
+ */
+export async function addElevenLabsVoice(
+  params: {
+    name: string;
+    audioDataUri: string;
+    description?: string;
+  },
+): Promise<AddElevenLabsVoiceResult> {
+  const apiKey = getElevenLabsApiKey();
+
+  // Data URI -> Buffer : même découpage que la persistance audio du chat
+  // (entête "data:<mime>;base64," puis charge utile base64).
+  const [header, base64 = ""] = params.audioDataUri.split(",");
+  const mimeType = header.slice(5).replace(/;base64$/, "") || "audio/mpeg";
+  const audio = Buffer.from(base64, "base64");
+  if (audio.byteLength === 0) {
+    throw new Error(
+      "Le clonage de voix exige un échantillon audio non vide.",
+    );
+  }
+
+  const extension = mimeType.includes("wav")
+    ? "wav"
+    : mimeType.includes("ogg")
+      ? "ogg"
+      : mimeType.includes("flac")
+        ? "flac"
+        : mimeType.includes("mpeg")
+          ? "mp3"
+          : mimeType.includes("mp4")
+            ? "m4a"
+            : "webm"; // webm/opus (MediaRecorder navigateur) — accepté par IVC
+
+  const form = new FormData();
+  form.append("name", params.name);
+  if (params.description && params.description.trim().length > 0) {
+    form.append("description", params.description.trim());
+  }
+  form.append(
+    "files",
+    new Blob([new Uint8Array(audio)], { type: mimeType }),
+    `sample.${extension}`,
+  );
+
+  // Upload d'échantillon potentiellement lourd : timeout généreux (2 min),
+  // gestion d'erreur calquée sur le reste du client (statut + extrait API).
+  const response = await fetch(`${API_BASE}/voices/add`, {
+    method: "POST",
+    headers: { "xi-api-key": apiKey },
+    body: form,
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(
+      `Le clonage de la voix a échoué (ElevenLabs ${response.status}) : ${detail.slice(0, 200)}`,
+    );
+  }
+
+  const data = (await response.json()) as { voice_id?: string };
+  if (!data.voice_id) {
+    throw new Error(
+      "ElevenLabs n'a pas retourné d'identifiant pour la voix clonée.",
+    );
+  }
+
+  return { voiceId: data.voice_id };
 }
 
 export async function listElevenLabsVoices(): Promise<

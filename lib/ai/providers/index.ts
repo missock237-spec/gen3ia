@@ -33,10 +33,9 @@ export async function callProvider(
         request,
       );
 
-    case "huggingface":
-      throw new Error(
-        "Hugging Face text provider adapter is implemented separately.",
-      );
+    // NB (audit médias 103-c) : le case « huggingface » (throw « implemented
+    // separately ») a été supprimé avec le provider mort — la valeur ne fait
+    // plus partie de l'union AIProvider et tombe dans le default ci-dessous.
 
     default:
       throw new Error(

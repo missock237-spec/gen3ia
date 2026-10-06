@@ -19,7 +19,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import { z } from "zod";
-import { elevenLabsTextToSpeech } from "@/lib/integrations/elevenlabs/client";
+import { addElevenLabsVoice, elevenLabsTextToSpeech } from "@/lib/integrations/elevenlabs/client";
 import type { VoiceProfile } from "@/lib/video/types";
 import { uploadVideoAsset, downloadVideoAsset, isOwnedVideoKey } from "@/lib/video/storage";
 import { probeMedia } from "@/lib/video/ffmpeg";
@@ -196,10 +196,109 @@ export interface NarrationResult {
 }
 
 /**
+ * Profil voix étendu des champs de clonage persistés dans le document
+ * videoVoices (typage local : l'interface partagée VoiceProfile reste
+ * intacte — le champ est purement additionnel côté Firestore).
+ */
+type VoiceProfileWithClone = VoiceProfile & {
+  /** Date (ms) du clonage ElevenLabs réussi — sert d'idempotence. */
+  clonedAtMs?: number;
+};
+
+/**
+ * Clonages ElevenLabs en cours, par identifiant de profil : dédoublonne les
+ * appels concurrents DANS ce processus. L'idempotence inter-processus passe
+ * par le document (relecture fraîche de elevenLabsVoiceId avant clonage,
+ * puis écriture voiceId + clonedAtMs dès le succès).
+ */
+const cloningInFlight = new Map<string, Promise<string>>();
+
+/**
+ * Renvoie l'identifiant ElevenLabs à utiliser pour la narration :
+ * - voix déjà liée (elevenLabsVoiceId) → telle quelle ;
+ * - voix « recording » ATTESTÉE (rightsConfirmedAt) sans identifiant → clonage
+ *   réel de l'échantillon UNE FOIS via addElevenLabsVoice, puis persistance
+ *   du voiceId cloné dans le doc videoVoices (elevenLabsVoiceId + clonedAtMs)
+ *   pour ne jamais cloner deux fois ; le commentaire historique « la voix
+ *   user_voice est clonée côté ElevenLabs » devient enfin vrai, et le coût
+ *   TTS/clonage est assumé puisque l'utilisateur a attesté ses droits ;
+ * - voix de bibliothèque/importée sans identifiant → undefined (comportement
+ *   existant conservé : repli sur la voix plateforme via resolveVoiceId).
+ *   Une voix « recording » non clonable (échantillon absent/hors stockage,
+ *   attestation manquante) lève une erreur FR claire : jamais de narration
+ *   muette silencieuse ni de voix de remplacement déguisée en voix de
+ *   l'utilisateur (le stage voice de la production sait gérer l'échec —
+ *   reprise/échec explicite avec message).
+ */
+async function ensureElevenLabsClonedVoice(
+  userId: string,
+  voice: VoiceProfile,
+): Promise<string | undefined> {
+  if (voice.elevenLabsVoiceId) return voice.elevenLabsVoiceId;
+  if (voice.origin !== "recording") return undefined;
+
+  if (!voice.rightsConfirmedAt) {
+    throw new Error(
+      `La voix « ${voice.name} » n'a pas d'attestation de droits : le clonage ElevenLabs exige l'attestation (spéc §10B).`,
+    );
+  }
+  if (!voice.sampleR2Key || !isOwnedVideoKey(userId, voice.sampleR2Key)) {
+    throw new Error(
+      `L'échantillon de la voix « ${voice.name} » est introuvable : réenregistrez votre voix pour activer le clonage.`,
+    );
+  }
+
+  // Relecture fraîche : un autre processus (route ou worker) a peut-être
+  // déjà cloné cette voix depuis que ce profil a été chargé.
+  const snap = await adminDb.collection(VOICES_COLLECTION).doc(voice.id).get();
+  const fresh = snap.exists ? (snap.data() as VoiceProfileWithClone) : undefined;
+  if (fresh?.elevenLabsVoiceId) return fresh.elevenLabsVoiceId;
+
+  const inFlight = cloningInFlight.get(voice.id);
+  if (inFlight) return inFlight;
+
+  const clone = (async (): Promise<string> => {
+    // L'échantillon est le WebM/Opus du MediaRecorder navigateur (même
+    // hypothèse que attachRecordingAsNarration côté contentType).
+    const audio = await downloadVideoAsset(userId, voice.sampleR2Key as string);
+    const audioDataUri = `data:audio/webm;base64,${audio.toString("base64")}`;
+    let cloned: Awaited<ReturnType<typeof addElevenLabsVoice>>;
+    try {
+      cloned = await addElevenLabsVoice({
+        name: voice.name,
+        audioDataUri,
+        ...(voice.description ? { description: voice.description } : {}),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Le clonage de la voix « ${voice.name} » a échoué : ${message}`);
+    }
+    // Persistance de l'idempotence : toute narration suivante réutilisera
+    // cette voix sans re-cloner (coût clonage payé une seule fois).
+    await adminDb
+      .collection(VOICES_COLLECTION)
+      .doc(voice.id)
+      .set(
+        { elevenLabsVoiceId: cloned.voiceId, clonedAtMs: Date.now() },
+        { merge: true },
+      );
+    return cloned.voiceId;
+  })();
+
+  cloningInFlight.set(voice.id, clone);
+  try {
+    return await clone;
+  } finally {
+    cloningInFlight.delete(voice.id);
+  }
+}
+
+/**
  * Génère la narration d'une scène avec la voix choisie et l'enregistre
- * comme asset audio du projet. La voix « user_voice » est clonée côté
- * ElevenLabs via l'échantillon confirmé ; le bridge remonte les erreurs
- * réelles (clé manquante, quota ElevenLabs) sans les masquer.
+ * comme asset audio du projet. La voix « user_voice » est réellement clonée
+ * côté ElevenLabs via l'échantillon attesté (clonage une seule fois, voiceId
+ * persisté dans le doc videoVoices) ; le bridge remonte les erreurs réelles
+ * (clé manquante, échec de clonage, quota ElevenLabs) sans les masquer.
  */
 export async function generateSceneNarration(params: {
   userId: string;
@@ -208,9 +307,10 @@ export async function generateSceneNarration(params: {
   narration: string;
   voice: VoiceProfile;
 }): Promise<NarrationResult> {
+  const voiceId = await ensureElevenLabsClonedVoice(params.userId, params.voice);
   const tts = await elevenLabsTextToSpeech({
     text: params.narration,
-    voiceId: params.voice.elevenLabsVoiceId,
+    voiceId,
     modelId: "eleven_multilingual_v2",
   });
   const audio = Buffer.from(tts.audioBase64, "base64");

@@ -1,11 +1,20 @@
+/**
+ * Fournisseurs LLM réellement implémentés (lib/ai/providers/index.ts).
+ *
+ * NB (audit médias 103-c) : « huggingface » a été RETIRÉ — aucun adaptateur
+ * texte n'a jamais existé (le provider index levait « implemented
+ * separately ») et aucun chemin de production ne le référence ; HF_TOKEN
+ * reste une variable d'environnement valide mais sert UNIQUEMENT aux
+ * embeddings (lib/memory/embeddings.ts, lib/skills/semantic.ts), jamais à
+ * ce provider.
+ */
 export type AIProvider =
   | "groq"
   | "openrouter"
   | "anthropic"
   | "openai"
   | "glm"
-  | "agnes"
-  | "huggingface";
+  | "agnes";
 
 export type TaskType =
   | "chat"

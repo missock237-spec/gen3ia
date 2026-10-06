@@ -83,7 +83,9 @@ describe("selectModel", () => {
     delete process.env.OPENROUTER_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.GLM_API_KEY;
-    delete process.env.HF_TOKEN;
+    // NB (audit médias 103-c) : l'ancien « delete process.env.HF_TOKEN » a été
+    // retiré — HF_TOKEN n'est jamais lu par le routeur (provider huggingface
+    // supprimé) ; il ne sert qu'aux embeddings (lib/memory/embeddings.ts).
     try {
       const fresh = await import("./router");
       await expect(fresh.generate(request({}))).rejects.toThrow(/No configured provider/i);

@@ -69,6 +69,8 @@ describe("coupe-circuit par fournisseur", () => {
   });
 
   it("un fournisseur jamais vu n'a pas d'instantané", () => {
-    expect(getBreakerSnapshot("huggingface")).toBeNull();
+    // « agnes » n'est utilisé par aucun autre test de ce fichier (audit
+    // médias 103-c : « huggingface » retiré de AIProvider — provider mort).
+    expect(getBreakerSnapshot("agnes")).toBeNull();
   });
 });

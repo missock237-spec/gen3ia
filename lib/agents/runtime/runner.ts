@@ -458,10 +458,13 @@ export class AgentRuntime {
     return `[${sub.name}] ${billed.response.text}`;
   }
 
-  private static readonly VALID_PROVIDERS = new Set(["groq", "openrouter", "anthropic", "openai", "glm", "huggingface"]);
+  // Fournisseurs tolérés à la LECTURE des configs stockées (audit médias
+  // 103-c : « huggingface » retiré — provider mort ; un ancien doc qui le
+  // stockerait est désormais ignoré → routage automatique de repli).
+  private static readonly VALID_PROVIDERS = new Set(["groq", "openrouter", "anthropic", "openai", "glm", "agnes"]);
 
-  private static safeProvider(value?: string): "groq" | "openrouter" | "anthropic" | "openai" | "glm" | "huggingface" | undefined {
-    return value && AgentRuntime.VALID_PROVIDERS.has(value) ? (value as "groq" | "openrouter" | "anthropic" | "openai" | "glm" | "huggingface") : undefined;
+  private static safeProvider(value?: string): "groq" | "openrouter" | "anthropic" | "openai" | "glm" | "agnes" | undefined {
+    return value && AgentRuntime.VALID_PROVIDERS.has(value) ? (value as "groq" | "openrouter" | "anthropic" | "openai" | "glm" | "agnes") : undefined;
   }
 
   private async executeLLM(step: RuntimeStep): Promise<unknown> {

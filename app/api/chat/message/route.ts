@@ -18,7 +18,10 @@ import { errorStatus } from "@/lib/security/http-errors";
 const Body = z.object({
   conversationId: z.string().min(1).max(128).optional(),
   message: z.string().trim().min(1).max(200_000),
-  provider: z.enum(["groq","openrouter","anthropic","openai","glm","agnes","huggingface"]).optional(),
+  // « huggingface » retiré de l'enum (audit médias 103-c) : provider mort sans
+  // adaptateur — une entrée client avec cette valeur est désormais rejetée à
+  // la validation (400) au lieu d'échouer côté résolution de provider.
+  provider: z.enum(["groq","openrouter","anthropic","openai","glm","agnes"]).optional(),
   model: z.string().trim().max(200).optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().positive().max(20000).optional(),

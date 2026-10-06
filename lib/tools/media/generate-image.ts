@@ -6,6 +6,7 @@ import {
   editImageWithAgnes,
   generateImageWithAgnes,
 } from "@/lib/ai/image-generation";
+import { persistGeneratedImage } from "@/lib/media/persist";
 
 /**
  * Outil image.generate — génération d'image RÉELLE (audit outils médias).
@@ -41,11 +42,27 @@ const GenerateImageInput = z.object({
 });
 
 export interface GenerateImageToolOutput {
+  /**
+   * URL de l'image à utiliser : URL signée de la copie PERMANENTE (R2)
+   * quand la persistance a réussi, sinon l'URL provider d'origine
+   * (temporaire — repli gracieux). Rétrocompatible : toujours une URL
+   * http(s) directement affichable.
+   */
   url: string;
+  /** URL Agnes d'ORIGINE (temporaire) — conservée pour diagnostic/audit. */
+  providerUrl: string;
   provider: "agnes";
   model: string;
   latencyMs: number;
   taskId?: string;
+  /** "r2" = copie permanente réussie ; "provider" = repli URL temporaire. */
+  storage: "r2" | "provider";
+  /**
+   * Handle durable quand storage === "r2" : clé R2 complète
+   * (users/<uid>/permanent/ai-images/…), re-résolvable en URL signée via
+   * /api/storage/permanent?path=… — l'objet ne disparaît plus.
+   */
+  storagePath?: string;
 }
 
 export const generateImageTool: ToolDefinition<
@@ -59,7 +76,7 @@ export const generateImageTool: ToolDefinition<
   category: "media",
   risk: "medium",
   inputSchema: GenerateImageInput,
-  async execute(input): Promise<GenerateImageToolOutput> {
+  async execute(input, context): Promise<GenerateImageToolOutput> {
     const prompt = input.prompt.trim();
     const common = {
       prompt,
@@ -71,11 +88,26 @@ export const generateImageTool: ToolDefinition<
     const image = input.refImageUrls && input.refImageUrls.length > 0
       ? await editImageWithAgnes({ ...common, images: input.refImageUrls })
       : await generateImageWithAgnes(common);
+    // Persistance (Task 103-a, audit production 2026-10-07) : l'URL Agnes
+    // est TEMPORAIRE — sans copie, l'image livrée à l'utilisateur
+    // disparaissait à l'expiration. Parité avec le chat
+    // (produceConversationImage) : copie en R2 permanent sous
+    // users/<uid>/permanent/ai-images/. persistGeneratedImage ne lève
+    // JAMAIS (dégradation gracieuse : storage:"provider" + URL d'origine).
+    const persisted = await persistGeneratedImage({
+      userId: context.userId,
+      imageUrl: image.imageUrl,
+    });
     return {
-      url: image.imageUrl,
+      url: persisted.url,
+      providerUrl: image.imageUrl,
       provider: "agnes",
       model: image.model,
       latencyMs: image.latencyMs,
+      storage: persisted.storage,
+      ...(persisted.storagePath
+        ? { storagePath: persisted.storagePath }
+        : {}),
       ...(image.taskId ? { taskId: image.taskId } : {}),
     };
   },

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -102,5 +105,42 @@ describe("lib/env/config-report", () => {
     expect(optional).toContain("OPENROUTER_API_KEY");
     expect(optional).toContain("SENTRY_DSN");
     expect(optional).not.toContain("UNKNOWN_VAR");
+  });
+
+  it("reconnaît les variables média lues par le code (AGNES_API_KEY n'est plus un faux écart)", () => {
+    // Cas d'école de l'audit médias 103-c : AGNES_API_KEY est REQUISE dans le
+    // groupe llm-agnes ET doit être reconnue par la liste optionnelle — sinon
+    // /api/health/infra signale un écart fantôme entre câblage et reconnaissance.
+    const env = { AGNES_API_KEY: "agnes-test-key", GEN3IA_APP_ORIGIN: "https://gen3ia.online" };
+    const groups = describeEnvGroups(env);
+    expect(groups.find((g) => g.group === "llm-agnes")?.present).toBe(true);
+    const optional = listRecognizedOptional(env);
+    expect(optional).toContain("AGNES_API_KEY");
+    expect(optional).toContain("GEN3IA_APP_ORIGIN");
+  });
+
+  // ─── Gardes structurels (convention du dépôt) : la liste des variables ───
+  // ─── reconnues doit couvrir TOUTE variable média réellement lue, sinon  ───
+  // ─── la sonde d'infra produit un faux écart (audit médias 103-c).       ───
+  const source = readFileSync(path.join(import.meta.dirname, "config-report.ts"), "utf8");
+
+  it("garde : OPTIONAL_RECOGNIZED reconnaît AGNES_API_KEY et ses surcharges modèle/endpoint", () => {
+    expect(source).toContain('"AGNES_API_KEY"');
+    expect(source).toContain('"AGNES_IMAGE_MODEL"');
+    expect(source).toContain('"AGNES_API_BASE"');
+    expect(source).toContain('"AGNES_TEXT_MODEL"');
+  });
+
+  it("garde : OPTIONAL_RECOGNIZED reconnaît la voix/le rendu 21st et le pipeline vidéo", () => {
+    expect(source).toContain('"ELEVENLABS_VOICE_ID"');
+    expect(source).toContain('"TWENTY_FIRST_API_KEY"');
+    expect(source).toContain('"VIDEO_FFMPEG_PATH"');
+    expect(source).toContain('"VIDEO_FFPROBE_PATH"');
+    expect(source).toContain('"VIDEO_FONT_PATH"');
+    expect(source).toContain('"VIDEO_STATIC_RELEASE_TAG"');
+  });
+
+  it("garde : OPTIONAL_RECOGNIZED reconnaît l'origine publique GEN3IA_APP_ORIGIN", () => {
+    expect(source).toContain('"GEN3IA_APP_ORIGIN"');
   });
 });

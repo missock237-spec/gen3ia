@@ -17,6 +17,10 @@ import {
   createAgentPolicy,
 } from "@/lib/security/agent-policy";
 
+import type {
+  ExecutionPolicy,
+} from "@/lib/security/execution-policy";
+
 import {
   executeTool,
 } from "@/lib/tools";
@@ -24,6 +28,50 @@ import {
 import {
   randomUUID,
 } from "crypto";
+
+/**
+ * Outils médias RÉELS (audit production du 2026-10-07) : la politique
+ * « standard » n'autorisait que web.search/file.read/file.create — les
+ * outils médias pourtant enregistrés au registre quand leurs clés API
+ * existent (voix ElevenLabs, image Agnes, production vidéo) étaient rejetés
+ * en amont par la liste allowedTools (« Tool not allowed: voice.speak »),
+ * sans jamais atteindre l'exécuteur.
+ *
+ * Cette route est la CONSOLE D'EXÉCUTION MANUELLE de l'utilisateur : chaque
+ * appel est authentifié et rate-limité (30/min, voir ci-dessous), et
+ * l'exécution passe en aval par lib/tools/executor.ts qui applique le
+ * kill-switch (arrêt d'urgence), les consentements par catégorie et la
+ * piste d'audit. L'élargissement reste donc volontairement minimal et
+ * propre à CETTE route : createAgentPolicy n'est PAS modifiée (elle sert
+ * aussi à lib/agents/personalized-plan.ts notamment).
+ */
+const CONSOLE_MEDIA_TOOLS = [
+  "voice.speak",
+  "voice.list",
+  "image.generate",
+  "video.create",
+] as const;
+
+/**
+ * Copie de la politique standard étendue aux outils médias — jamais la
+ * politique partagée elle-même (les agents autonomes gardent leur liste).
+ */
+function createConsolePolicy(): ExecutionPolicy {
+  const base =
+    createAgentPolicy(
+      "standard",
+    );
+
+  return {
+    ...base,
+
+    allowedTools: [
+      ...base.allowedTools,
+
+      ...CONSOLE_MEDIA_TOOLS,
+    ],
+  };
+}
 
 export async function POST(
   request: NextRequest,
@@ -116,9 +164,7 @@ export async function POST(
         : randomUUID();
 
     const policy =
-      createAgentPolicy(
-        "standard",
-      );
+      createConsolePolicy();
 
     const result =
       await executeThroughGateway({
