@@ -47,8 +47,12 @@ function toClient(server: Awaited<ReturnType<typeof listUserServers>>[number]) {
 export async function GET(request: NextRequest) {
   const guard = await protectRoute(request, { key: "mcp", rateLimit: { limit: 120, windowMs: 5 * 60 * 1000 } });
   if (!guard.ok) return guard.response;
-  const servers = await listUserServers(guard.context.userId);
-  return NextResponse.json({ servers: servers.map(toClient) }, { headers: { "cache-control": "no-store" } });
+  try {
+    const servers = await listUserServers(guard.context.userId);
+    return NextResponse.json({ servers: servers.map(toClient) }, { headers: { "cache-control": "no-store" } });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Liste des serveurs MCP indisponible." }, { status: errorStatus(error, 500) });
+  }
 }
 
 export async function POST(request: NextRequest) {

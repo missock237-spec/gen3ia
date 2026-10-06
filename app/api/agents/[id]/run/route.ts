@@ -23,7 +23,13 @@ const RunSchema = z.object({
  * L'agent (nom, prompt systeme, type, modele prefere) pilote l'execution :
  * le plan est construit depuis sa configuration, sa politique de securite
  * derive de son type, et son prompt systeme est injecte dans chaque step LLM.
+ *
+ * maxDuration = 60, aligne sur /api/agents/run : l'execution est synchrone
+ * (AgentRuntime) et le defaut plateforme (10 s) est insuffisant meme pour
+ * un seul appel LLM outille.
  */
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   const startedAt = Date.now();

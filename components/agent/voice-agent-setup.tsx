@@ -168,7 +168,7 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
             <p className="mt-1 text-xs leading-5 text-[var(--g3-muted)]">Gen3ia cherche un numéro Twilio disponible puis l’attribue à cet agent. Le prix Gen3ia est débité du wallet.</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <input className="g3-input" value={country} onChange={(e) => setCountry(e.target.value.toUpperCase().slice(0, 2))} placeholder="US" maxLength={2} />
-              <input className="g3-input" value={areaCode} onChange={(e) => setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 5))} placeholder="Area code (optionnel)" />
+              <input className="g3-input" value={areaCode} onChange={(e) => setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 5))} placeholder="Indicatif régional (optionnel)" />
             </div>
             <button type="button" className="g3-btn g3-btn-primary mt-3" disabled={busy || country.length !== 2} onClick={search}>{busy ? "Recherche…" : "Rechercher des numéros"}</button>
             {available.length > 0 && <div className="mt-3 max-h-48 space-y-2 overflow-auto">{available.map((item) => <div key={item.phoneNumber} className="flex items-center justify-between gap-2 rounded-xl border bg-[var(--g3-surface)] p-3"><div><div className="font-semibold">{item.phoneNumber}</div><div className="text-[10px] uppercase tracking-wide text-sky-700">{provider}</div><div className="text-[11px] text-[var(--g3-muted)]">{item.locality}{item.region ? ", " + item.region : ""}</div></div><button type="button" className="g3-btn g3-btn-cyan !px-3 !py-2 text-xs" disabled={busy} onClick={() => buy(item.phoneNumber)}>Acheter</button></div>)}</div>}

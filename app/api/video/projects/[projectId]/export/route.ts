@@ -5,6 +5,10 @@ import { errorStatus } from "@/lib/security/http-errors";
 import { startAdditionalExports } from "@/lib/video/export-service";
 
 export const runtime = "nodejs";
+// Aligné sur la route render voisine (60 s) : le handler enfile le job
+// (Firestore + QStash) mais la réservation de budget et l'aller-retour file
+// ne doivent jamais heurter la fenêtre par défaut de la plateforme.
+export const maxDuration = 60;
 
 type Params = { params: Promise<{ projectId: string }> };
 

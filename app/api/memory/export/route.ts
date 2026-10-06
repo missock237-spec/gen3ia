@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { protectRoute } from "@/lib/security/route-guard";
+import { errorStatus } from "@/lib/security/http-errors";
 import { exportUserData } from "@/lib/memory/privacy";
 
 /**
@@ -13,7 +14,12 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   const guard = await protectRoute(request, { key: "memory-export", rateLimit: { limit: 5, windowMs: 60 * 60 * 1000 } });
   if (!guard.ok) return guard.response;
-  const data = await exportUserData(guard.context.userId);
+  let data: Awaited<ReturnType<typeof exportUserData>>;
+  try {
+    data = await exportUserData(guard.context.userId);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Export impossible pour le moment." }, { status: errorStatus(error, 500) });
+  }
   const stamp = data.exportedAt.slice(0, 10);
   return new NextResponse(JSON.stringify(data, null, 2), {
     headers: {

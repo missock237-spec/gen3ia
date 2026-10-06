@@ -42,6 +42,7 @@ import {
 import { enhancePromptForExecution, languageDirective } from "@/lib/ai/prompt-enhancer";
 import { imagesForModel } from "@/lib/ai/vision-input";
 import { extractVideoTitle, looksLikeVideoRequest } from "@/lib/ai/video-intent";
+import { VIDEO_ASPECT_RATIOS } from "@/lib/tools/media/create-video";
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
 import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
 import { getImportedFileContent, listImportedFiles, loadImportedFilesContext } from "@/lib/files/import";
@@ -2549,11 +2550,15 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         const { createVideoProductionJob } = await import("@/lib/video/production-queue");
         const promptInput = typeof planned.toolInput?.prompt === "string" && planned.toolInput.prompt.trim() ? planned.toolInput.prompt.trim() : ctx.message;
         const aspectInput = planned.toolInput && typeof planned.toolInput === "object" && "aspectRatio" in planned.toolInput ? String((planned.toolInput as Record<string, unknown>).aspectRatio) : undefined;
+        // Contrat aspectRatio (audit 103-f) : source unique — le constant
+        // partagé VIDEO_ASPECT_RATIOS du tool video.create remplace le
+        // littéral dupliqué (comportement identique : mêmes 3 valeurs).
+        const aspectValide = VIDEO_ASPECT_RATIOS.find((ratio) => ratio === aspectInput);
         const job = await createVideoProductionJob({
           userId: ctx.userId,
           prompt: promptInput.slice(0, 4000),
           title: extractVideoTitle(promptInput),
-          options: aspectInput === "16:9" || aspectInput === "9:16" || aspectInput === "1:1" ? { aspectRatio: aspectInput } : undefined,
+          options: aspectValide ? { aspectRatio: aspectValide } : undefined,
         });
         step.status = "done";
         step.startedAt = startedAt;

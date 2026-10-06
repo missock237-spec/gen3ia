@@ -29,11 +29,9 @@ import type { ProductionStage } from "@/lib/video/production-queue";
  *
  * Convention (audit médias 103-c) : ces 3 valeurs étaient dupliquées entre ce
  * zod et la validation inline de l'intercept « video.create » du chat
- * (lib/domain/conversations/engine.ts, volontairement NON modifié — hors
- * périmètre). Désormais ce constant est la référence : toute évolution des
- * ratios part d'ici. L'intercept du chat reste séparé par conception (il
- * contourne le catalogue d'outils), il DOIT être aligné manuellement le cas
- * échéant — signalé par ce commentaire.
+ * (lib/domain/conversations/engine.ts). Alignement (audit 103-f) : l'intercept
+ * du chat IMPORTE désormais CE constant (plus aucun littéral dupliqué) —
+ * toute évolution des ratios part d'ici et se propage au tool et au chat.
  */
 export const VIDEO_ASPECT_RATIOS = ["16:9", "9:16", "1:1"] as const;
 

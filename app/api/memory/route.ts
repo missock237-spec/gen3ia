@@ -16,7 +16,11 @@ const DeleteSchema = z.object({ key: z.string().min(1).max(160) });
 export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   const guard = await protectRoute(request, { key: "memory", rateLimit: { limit: 120, windowMs: 5 * 60 * 1000 } }); if (!guard.ok) return guard.response;
-  return NextResponse.json({ memories: await listMemories(guard.context.userId) }, { headers: { "cache-control": "no-store" } });
+  try {
+    return NextResponse.json({ memories: await listMemories(guard.context.userId) }, { headers: { "cache-control": "no-store" } });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Memory read failed" }, { status: errorStatus(error, 500) });
+  }
 }
 export async function POST(request: NextRequest) {
   const guard = await protectRoute(request, { key: "memory", rateLimit: { limit: 120, windowMs: 5 * 60 * 1000 } }); if (!guard.ok) return guard.response;

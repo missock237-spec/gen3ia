@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ARTIFACT_TYPE_ICONS, ARTIFACT_TYPE_LABELS, formatBytes } from "./labels";
 import { MarkdownContent } from "./markdown";
@@ -94,6 +94,36 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
   const currentVersion: ArtifactVersion | null = selected
     ? selected.versions[Math.min(versionIndex, selected.versions.length - 1)] ?? null
     : null;
+
+  // Résolution de l'URL signée pour la PRÉVISUALISATION. Un artefact
+  // persisté (audio voice.speak copié en R2, image d'outil après
+  // expiration de l'URL provider) porte une CLÉ de stockage (storagePath)
+  // qui n'est PAS une URL directe : sans résolution via le canal signé
+  // /api/storage/permanent, le lecteur audio ou l'aperçu de l'image reçoit
+  // un `src` invalide. L'URL fraîchement résolue est préférée à l'URL
+  // d'origine (provider temporaire) ; en cas d'échec, le repli reste
+  // l'URL inline (data URI) ou l'URL d'origine — jamais d'écran vide.
+  const previewPath =
+    selected && (selected.type === "image" || selected.type === "audio")
+      ? currentVersion?.content?.startsWith("data:")
+        ? null // inline déjà lisible directement
+        : selected.storagePath ?? null
+      : null;
+  useEffect(() => {
+    setPreviewUrl(null);
+    if (!previewPath) return;
+    let cancelled = false;
+    void (resolveFileUrl ?? defaultResolveFileUrl)(previewPath)
+      .then((url) => {
+        if (!cancelled) setPreviewUrl(url);
+      })
+      .catch(() => {
+        /* repli : URL inline ou d'origine déjà en place */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [previewPath, resolveFileUrl]);
 
   const copy = async (text: string) => {
     try {

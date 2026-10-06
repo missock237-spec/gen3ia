@@ -40,6 +40,14 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
   const session = useSessionAvailable();
   const [tab, setTab] = useState<Tab>("director");
   const [project, setProject] = useState<VideoProject | null>(null);
+  // Réf de lecture SYNCHRONE pour les callbacks mémoïsés (syncTimelineMutations) :
+  // la valeur d'état capturée à la création du useCallback restait figée
+  // (stale closure signalée par eslint) et le repli du cache local utilisait
+  // un projet périmé — souvent null juste après le montage.
+  const projectRef = useRef<VideoProject | null>(null);
+  useEffect(() => {
+    projectRef.current = project;
+  }, [project]);
   const [assets, setAssets] = useState<VideoAsset[]>([]);
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [jobs, setJobs] = useState<JobWithUrls[]>([]);
@@ -104,7 +112,7 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
         if (item.projectId === projectId) {
           setProject((current) => current ? { ...current, timeline: data.timeline } : current);
           const cachedProject = await getCachedLocalProject<VideoProject>(projectId);
-          const baseProject = cachedProject?.project ?? project;
+          const baseProject = cachedProject?.project ?? projectRef.current;
           if (baseProject) {
             await cacheLocalProject({ ...baseProject, timeline: data.timeline, updatedAt: new Date().toISOString() });
           }

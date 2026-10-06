@@ -292,9 +292,9 @@ describe("outil video.create — schéma d'entrée", () => {
 
 describe("video.create — source unique des ratios (audit médias 103-c)", () => {
   // ─── Gardes structurels (convention du dépôt) : le constant partagé est ───
-  // ─── la source unique des 3 valeurs d'aspectRatio ; l'intercept du chat ───
-  // ─── (lib/domain/conversations/engine.ts, hors périmètre) reste          ───
-  // ─── volontairement séparé mais documenté comme devant être aligné.      ───
+  // ─── la source unique des 3 valeurs d'aspectRatio ; depuis l'audit        ───
+  // ─── 103-f, l'intercept du chat (engine.ts) IMPORTE ce constant — plus   ───
+  // ─── aucun littéral dupliqué entre le tool et le chat.                    ───
   const source = readFileSync(path.join(import.meta.dirname, "create-video.ts"), "utf8");
 
   it("garde : create-video.ts exporte VIDEO_ASPECT_RATIOS et le zod le consomme", () => {
@@ -304,10 +304,21 @@ describe("video.create — source unique des ratios (audit médias 103-c)", () =
     expect(source).not.toContain('z.enum(["16:9"');
   });
 
-  it("garde : le constant est documenté comme source unique, intercept chat séparé", () => {
+  it("garde : le constant est documenté comme source unique, intercept chat aligné", () => {
     expect(source).toContain("SOURCE UNIQUE");
     expect(source).toContain("lib/domain/conversations/engine.ts");
-    expect(source).toContain("align");
+    expect(source).toContain("Alignement");
+  });
+
+  it("garde : l'intercept video.create du chat importe le constant partagé (audit 103-f)", () => {
+    const engineSource = readFileSync(
+      path.join(import.meta.dirname, "../../domain/conversations/engine.ts"),
+      "utf8",
+    );
+    expect(engineSource).toContain('from "@/lib/tools/media/create-video"');
+    expect(engineSource).toContain("VIDEO_ASPECT_RATIOS.find");
+    // Plus AUCUN littéral de ratio en double maintenance dans l'intercept.
+    expect(engineSource).not.toContain('aspectInput === "16:9"');
   });
 });
 

@@ -10,6 +10,10 @@ import {
 } from "@/lib/security/authenticated-request";
 
 import {
+  enforceRateLimit,
+} from "@/lib/security/rate-limit";
+
+import {
   errorBody,
   errorStatus,
 } from "@/lib/security/http-errors";
@@ -31,6 +35,28 @@ export async function POST(
   try {
     const user =
       await requireUser(request);
+
+    // Planification = appel LLM réel (même classe que les routes agent
+    // voisines : agent-continue 20/5min) — la route est authentifiée mais
+    // n'avait AUCUN quota : un client défaillant pouvait marteler le
+    // planificateur.
+    const limit =
+      await enforceRateLimit(
+        `agent-plan:${user.uid}`,
+        { limit: 20, windowMs: 5 * 60 * 1000 },
+      );
+
+    if (!limit.allowed) {
+      return NextResponse.json(
+        {
+          error:
+            "Trop de planifications rapprochées. Reessayez dans quelques minutes.",
+        },
+        {
+          status: 429,
+        },
+      );
+    }
 
     const body =
       await request.json();

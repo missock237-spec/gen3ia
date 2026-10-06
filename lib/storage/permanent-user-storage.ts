@@ -123,6 +123,15 @@ type SessionDoc = {
   createdAt: FirebaseFirestore.Timestamp | Date | null;
 };
 
+/**
+ * Variante d'écriture du doc session : le sentinel serveur (FieldValue)
+ * remplace la valeur matérialisée lue (Timestamp | Date | null) — évite
+ * toute assertion de type au point d'écriture.
+ */
+type SessionDocWrite = Omit<SessionDoc, "createdAt"> & {
+  createdAt: FirebaseFirestore.FieldValue;
+};
+
 function sessionRef(uploadId: string) { return adminDb.collection(SESSIONS_COLLECTION).doc(uploadId); }
 
 /**
@@ -148,7 +157,7 @@ export async function createUploadSessions(params: { userId: string; intents: Va
     for (let partNumber = 1; partNumber <= partsTotal; partNumber += 1) {
       partUrls.push({ partNumber, url: await presignPartUpload(key, r2UploadId, partNumber) });
     }
-    const doc: SessionDoc = {
+    const doc: SessionDocWrite = {
       userId: params.userId,
       path: key,
       filename: intent.safeFilename,
@@ -158,7 +167,7 @@ export async function createUploadSessions(params: { userId: string; intents: Va
       r2Key: key,
       r2UploadId,
       status: "active",
-      createdAt: FieldValue.serverTimestamp() as unknown as SessionDoc["createdAt"],
+      createdAt: FieldValue.serverTimestamp(),
     };
     await sessionRef(uploadId).set(doc);
     views.push({ uploadId, path: key, filename: intent.safeFilename, sizeBytes: intent.sizeBytes, contentType, partsTotal, partSizeBytes: PART_SIZE_BYTES, partUrls });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { protectRoute } from "@/lib/security/route-guard";
+import { errorStatus } from "@/lib/security/http-errors";
 import {
   getToolConsents,
   setToolConsents,
@@ -33,16 +34,20 @@ const PutSchema = z.object({
 export async function GET(request: NextRequest) {
   const guard = await protectRoute(request, { key: "tool-consents", rateLimit: { limit: 60, windowMs: 5 * 60 * 1000 } });
   if (!guard.ok) return guard.response;
-  const consents = await getToolConsents(guard.context.userId);
-  return NextResponse.json(
-    {
-      consents,
-      categories: CONSENT_CATEGORIES.map((category) => ({ id: category, label: CONSENT_CATEGORY_LABELS[category] })),
-      modes: CONSENT_MODES,
-      defaultMode: "ask",
-    },
-    { headers: { "cache-control": "no-store" } },
-  );
+  try {
+    const consents = await getToolConsents(guard.context.userId);
+    return NextResponse.json(
+      {
+        consents,
+        categories: CONSENT_CATEGORIES.map((category) => ({ id: category, label: CONSENT_CATEGORY_LABELS[category] })),
+        modes: CONSENT_MODES,
+        defaultMode: "ask",
+      },
+      { headers: { "cache-control": "no-store" } },
+    );
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Lecture des consentements impossible." }, { status: errorStatus(error, 500) });
+  }
 }
 
 export async function PUT(request: NextRequest) {

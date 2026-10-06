@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAgentById } from "@/lib/agents/repository";
+import { rateLimitDistributed } from "@/lib/cache/redis";
+import { clientIp } from "@/lib/security/rate-limit";
 import { errorStatus } from "@/lib/security/http-errors";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type Context = { params: Promise<{ agentId: string }> };
 
@@ -28,7 +31,20 @@ export async function POST(request: NextRequest, context: Context) {
     return NextResponse.json({ error: "Le chat client est temporairement indisponible. La configuration Firebase doit être activée en production." }, { status: 503 });
   }
   if (!agent) return NextResponse.json({ error: "Agent introuvable." }, { status: 404 });
-  const body = (await request.json()) as { message?: string };
+
+  // Chat client PUBLIC : l'exécution d'agent coûte de l'argent au
+  // PROPRIÉTAIRE (même logique que /api/public/commercial/[slug]) — quota
+  // distribué par IP + salon pour empêcher de vider le wallet sans compte.
+  const ip = clientIp(request);
+  const quota = await rateLimitDistributed(`public-agent:${agentId}:${ip}`, { limit: 12, windowMs: 5 * 60 * 1000 });
+  if (!quota.allowed) {
+    return NextResponse.json(
+      { error: "Trop de messages envoyés. Merci de patienter quelques minutes." },
+      { status: 429, headers: { "retry-after": String(Math.max(1, Math.ceil(quota.retryAfterMs / 1000))) } },
+    );
+  }
+
+  const body = (await request.json().catch(() => ({}))) as { message?: string };
   const message = body.message?.trim();
   if (!message || message.length > 4000) return NextResponse.json({ error: "Message invalide." }, { status: 400 });
   try {

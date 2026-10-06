@@ -36,7 +36,9 @@ export async function GET(request: NextRequest) {
     /* liste vide en cas de panne */
   }
 
-  let usageTotal = { requests: 0, costMinor: 0 };
+  let usageTotal = { requests: 0, costMinor: 0, models: {} as Record<string, number> };
+  // Sous-totaux par modèle agrégés sur la fenêtre lue (remplis dans le reduce).
+  const usageModels: Record<string, number> = {};
   try {
     // Task 102-a — QUOTA : lecture de la collection agrégée "usageDaily"
     // (1 document par utilisateur et par jour UTC, ID `${userId}_${YYYYMMDD}`)
@@ -57,12 +59,22 @@ export async function GET(request: NextRequest) {
         // (compatibilité avec d'éventuels documents sans compteur).
         const calls = typeof data.calls === "number" ? data.calls : 1;
         const cost = typeof data.costMinor === "number" ? data.costMinor : typeof data.costUsd === "number" ? Math.round(data.costUsd * 100) : 0;
+        // Sous-totaux par modèle (écrits par usageDaily sous models.<clé>.calls,
+        // clé assainie par lib/ai/usage.ts) : agrégés ici pour l'observabilité
+        // admin — écart signalé par les audits Task 103 (données écrites mais
+        // jamais exposées).
+        const models = (data.models ?? {}) as Record<string, { calls?: unknown }>;
+        for (const [modelKey, counters] of Object.entries(models)) {
+          const modelCalls = typeof counters?.calls === "number" ? counters.calls : 0;
+          usageModels[modelKey] = (usageModels[modelKey] ?? 0) + modelCalls;
+        }
         return {
           requests: accumulator.requests + calls,
           costMinor: accumulator.costMinor + cost,
+          models: accumulator.models,
         };
       },
-      { requests: 0, costMinor: 0 },
+      { requests: 0, costMinor: 0, models: usageModels },
     );
   } catch {
     /* agrégat indisponible */
@@ -75,7 +87,7 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json(
-    { executions, usage: usageTotal, statusCounts, generatedAt: Date.now() },
+    { executions, usage: { ...usageTotal, models: usageModels }, statusCounts, generatedAt: Date.now() },
     { headers: { "cache-control": "no-store" } },
   );
 }

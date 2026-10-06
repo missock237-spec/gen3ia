@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorStatus } from "@/lib/security/http-errors";
+import { rateLimitDistributed } from "@/lib/cache/redis";
 import { assertOrgAttach } from "@/lib/tenants/resource-access";
 import { runBusinessPulse } from "@/lib/business/pulse";
 
@@ -23,6 +24,11 @@ const PulseSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser(request);
+    // Le pulse lance une mission agent complète (planificateur universel +
+    // outils) : le domaine business limite ses routes à 120/5min — le POST
+    // coûteux n'en avait aucune.
+    const limit = await rateLimitDistributed(`business:pulse:${user.uid}`, { limit: 120, windowMs: 5 * 60 * 1000 });
+    if (!limit.allowed) return NextResponse.json({ error: "Trop de requêtes, réessayez dans un instant." }, { status: 429 });
     const parsed = PulseSchema.safeParse(await request.json().catch(() => ({})));
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });

@@ -131,8 +131,11 @@ export async function addElevenLabsVoice(
 export async function listElevenLabsVoices(): Promise<
   ElevenLabsVoice[]
 > {
+  // Appel léger (métadonnées) : timeout borné — une connexion pendante ne
+  // doit jamais bloquer l'exécution de l'outil (audit 103-f).
   const response = await fetch(`${API_BASE}/voices`, {
     headers: { "xi-api-key": getElevenLabsApiKey() },
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {
@@ -224,6 +227,9 @@ export async function elevenLabsTextToSpeech(
         text: options.text,
         model_id: modelId,
       }),
+      // Synthèse ≤ 2 500 caractères : quelques secondes en nominal —
+      // timeout borné (60 s) pour ne jamais pendre (audit 103-f).
+      signal: AbortSignal.timeout(60_000),
     },
   );
 

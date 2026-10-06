@@ -81,6 +81,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser(request);
+    // Génération IA (runAIJSON, action "create") : la limite couvrait
+    // uniquement le GET (liste) — le POST coûteux n'en avait aucune. Clé
+    // distincte du GET (paramètres voisins : 120/5min, cf. GET de ce module).
+    const limit = await rateLimitDistributed(`business:landing-ai:${user.uid}`, { limit: 120, windowMs: 5 * 60 * 1000 });
+    if (!limit.allowed) return NextResponse.json({ error: "Trop de requêtes, réessayez dans un instant." }, { status: 429 });
     const parsed = BodySchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Requête invalide.", details: parsed.error.flatten().fieldErrors }, { status: 400 });
 

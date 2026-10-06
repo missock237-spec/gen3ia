@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import {
   approveAction,
   claimActionExecution,
@@ -77,6 +78,13 @@ export async function POST(request: NextRequest) {
     // 401 structuré (errorStatus), jamais un 500 opaque — l'UI traite sinon
     // une déconnexion comme une panne système.
     const user = await requireUser(request);
+    // Approuver = REPRENDRE l'agent (appels LLM + outils, même classe de coût
+    // que /api/agent/chat/continue 20/5min) : la route était authentifiée
+    // mais sans quota.
+    const limit = await enforceRateLimit(`agent-approve:${user.uid}`, { limit: 20, windowMs: 5 * 60 * 1000 });
+    if (!limit.allowed) {
+      return NextResponse.json({ error: "Trop d'approbations rapprochées. Reessayez dans quelques minutes." }, { status: 429 });
+    }
     const { approvalId, action } = Body.parse(await request.json());
 
     if (action === "reject") {

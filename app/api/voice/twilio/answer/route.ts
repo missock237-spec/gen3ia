@@ -7,12 +7,27 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const url = new URL(request.url);
-  let sessionId = url.searchParams.get("sessionId");
+  const sessionId = url.searchParams.get("sessionId");
 
-  const form = await request.formData();
-  const params = Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)]));
+  let params: Record<string, string>;
+  try {
+    const form = await request.formData();
+    params = Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)]));
+  } catch {
+    return new Response("Invalid form data", { status: 400 });
+  }
   if (!verifyTwilioSignature(request, params)) return new Response("Unauthorized", { status: 401 });
 
+  try {
+    return await handleAnswer(sessionId, params);
+  } catch {
+    // Panne Firestore/annuaire : l'appelant entend un message honnête au lieu
+    // d'un silence radio (réponse 500 brute ininterprétable par Twilio).
+    return buildTwiML("<Say>Une erreur technique est survenue. Merci de réessayer plus tard.</Say><Hangup/>");
+  }
+}
+
+async function handleAnswer(sessionId: string | null, params: Record<string, string>) {
   let session = sessionId ? await getPhoneCallSession(sessionId) : null;
 
   if (!session) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { protectRoute } from "@/lib/security/route-guard";
+import { errorStatus } from "@/lib/security/http-errors";
 import { getMemoryConsent, setMemoryConsent } from "@/lib/memory/privacy";
 
 /**
@@ -19,8 +20,12 @@ const ConsentSchema = z.object({ memoryProcessing: z.boolean() });
 export async function GET(request: NextRequest) {
   const guard = await protectRoute(request, { key: "memory-consent", rateLimit: { limit: 60, windowMs: 5 * 60 * 1000 } });
   if (!guard.ok) return guard.response;
-  const state = await getMemoryConsent(guard.context.userId);
-  return NextResponse.json(state, { headers: { "cache-control": "no-store" } });
+  try {
+    const state = await getMemoryConsent(guard.context.userId);
+    return NextResponse.json(state, { headers: { "cache-control": "no-store" } });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Lecture du consentement impossible." }, { status: errorStatus(error, 500) });
+  }
 }
 
 export async function POST(request: NextRequest) {

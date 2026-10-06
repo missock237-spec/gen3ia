@@ -2466,3 +2466,181 @@ Stage Summary:
   images outil éphémères → R2 permanent ; clonage vocal annoncé mais absent →
   branché (idempotent) ; faux écart télémétrie AGNES ; provider huggingface
   mort supprimé ; aspectRatio source unique.
+---
+Task ID: 103-f
+Agent: audit-lib
+Task: Audit + correctifs du périmètre « lib » (résidus de refactor, contrat aspectRatio, wakeAtMs, usageDaily, types, replis, doublons)
+
+Work Log:
+- Lecture worklog (Tasks 99-103) + balayages rg sur lib/** : résidus, écritures agentSchedules, lecteurs usage/usageDaily, assertions de type, replis.
+- 1. RÉSIDUS DE REFACTOR — AUCUN résidu mort : toutes les occurrences « huggingface » restantes sont soit des usages VIVANTS (lib/memory/embeddings.ts, lib/skills/semantic.ts via @huggingface/inference + commentaires embeddings associés), soit des commentaires/gardes documentant la suppression 103-c (models.ts, providers/index.ts, cost-engine.ts, runner.ts, workflows/executor.ts, router/resilience/models tests). « executionTelemetry » = ExecutionTelemetry/recordExecutionMetrics dans lib/observability/otel.ts : VIVANT (6 routes app + otel.test.ts, worklog 102 explicitement « conservés ») — non touché. Aucune occurrence « agents/autonomous » ni « agents/orchestrator/ ».
+- 2. CONTRAT aspectRatio — CORRIGÉ : lib/domain/conversations/engine.ts dupliquait le littéral ["16:9","9:16","1:1"] dans l'intercept video.create (L2556). L'intercept IMPORTE désormais VIDEO_ASPECT_RATIOS depuis lib/tools/media/create-video.ts (source unique), sélection par find() → type VideoAspectRatio déduit, comportement identique (mêmes 3 valeurs). Doc-commentaire create-video.ts mis à jour (l'intercept n'est plus « à aligner manuellement »). Garde structurel étendu dans tools.test.ts : engine.ts contient l'import + « VIDEO_ASPECT_RATIOS.find » et ne contient plus « aspectInput === "16:9" ».
+- 3. wakeAtMs (Task 102) — CONFORME : les 7 chemins documentés (create, update, claimDue tx, terminaison tx, claimRetry tx, poll des sources de veille, backfill/réparation) maintiennent wakeAtMs ou FieldValue.delete() (désactivation/one-shot désarmé/webhook pur). 2 écritures additionnelles SANS recalcul analysées et correctes : triggerScheduleNow (déclenchement manuel — ne consomme aucun slot ni champ de computeWakeAtMs ; la terminaison recalcule ensuite) et claimAlwaysOnRun (webhook/veille — slot « webhook:… » sans collision avec l'exclusion « oneshot:… » ; le poll de veille recalcule à L1159). AUCUNE route app/api n'écrit agentSchedules directement (rg sur app : 0 occurrence) — les routes schedules passent toutes par lib/agents/scheduler.
+- 4. usageDaily (Task 102) — AUCUN lecteur de l'ancienne collection « usage » (rg lib+app : seuls le worklog et la garde du test en mentionnent le retrait). Sous-totaux models.<clé> écrits (lib/ai/usage.ts : calls/inputTokens/outputTokens/totalTokens + latencyMs somme) mais NON exposés par le lecteur admin app/api/admin/observability/route.ts (ne lit que calls + costMinor/costUsd) — HORS PÉRIMÈTRE (app/**), signalé sans corriger : l'extension serait triviale (agréger data.models dans le reduce) ; NB cohérence : costMinor n'est de toute façon pas écrit par usageDaily (coût suivi côté lib/billing) → total coût admin reste 0 côté usage.
+- 5. TYPES/CONTRATS — CORRIGÉ 1 cas : lib/storage/permanent-user-storage.ts L161 « FieldValue.serverTimestamp() as unknown as SessionDoc["createdAt"] » remplacé par un type d'écriture dédié SessionDocWrite (Omit<createdAt> + FieldValue) — zéro assertion, lectures inchangées. Documentés sans changement (non triviaux, protégés par normalisation runtime) : render-queue.ts L477 et production-queue.ts L411 (payload miroir Supabase casté puis immédiatement normalisé champ à champ), security.ts L157/164 (interop CJS ffmpeg/ffprobe-static), r2.ts L53 (sonde duck-typing destroy sur le Body S3), client.test.ts L77 (accès args mock en test). lib/ai, lib/media : 0 assertion.
+- 6. REPLIS DE PLI — persist.ts CONFORME (try/catch total jamais-throw, timeout fetch 30 s, plafond 15 Mo, data URI sans fetch) ; elevenlabs/tools.ts conforme (persistance R2 en try/catch total, repli inline). ANOMALIE CORRIGÉE : 2 fetch SANS timeout dans lib/integrations/elevenlabs/client.ts — listElevenLabsVoices (30 s) et elevenLabsTextToSpeech (60 s) bornés via AbortSignal.timeout (addElevenLabsVoice était déjà borné 120 s). lib/storage/r2.ts uploadVideoAsset : NON TOUCHÉ (décision produit documentée, connue).
+- 7. DOUBLONS persist/chat — NON fusionnés (engine.ts critique) ; clés R2 COMPATIBLES : mêmes préfixes et même forme users/<uid>/permanent/ai-images/<horodatage>-<uuid>.<ext>. Divergences mineures assumées (documentées) : extension (chat : jpeg/webp→sinon png ; persist : + gif/avif), timeout (20 s vs 30 s), plafond (aucun+repli inline ≤380 Ko vs 15 Mo) — le contentType réel est porté par l'objet R2 dans les deux chemins, donc la résolution /api/storage/permanent est identique.
+- Validations (exécutées réellement) : npx tsc --noEmit → 0. npx vitest run lib/tools lib/video lib/ai lib/media lib/integrations/elevenlabs lib/domain/conversations lib/storage → 46 fichiers, 474 verts / 1 skipped (skip préexistant it.runIf productionQueueAvailable). npx eslint sur les 5 fichiers touchés → 0 erreur.
+- Aucun install/commit/push/build ; aucun console.log ajouté ; périmètre respecté : lib/domain/conversations/engine.ts, lib/tools/media/create-video.ts, lib/tools/media/tools.test.ts, lib/storage/permanent-user-storage.ts, lib/integrations/elevenlabs/client.ts (app/**, components/**, next.config.ts, firestore.indexes.json, vercel.json intouchés).
+
+Stage Summary:
+- Périmètre lib audité sur 7 axes : 3 correctifs certains appliqués (aspectRatio source unique dans l'intercept chat ; 2 timeouts fetch ElevenLabs bornés ; assertion de type éliminée dans permanent-user-storage via type d'écriture SessionDocWrite) + 1 garde structurel renforcé.
+- Conformités vérifiées sans changement : wakeAtMs maintenu sur TOUTES les écritures agentSchedules (7 chemins + 2 analysés corrects, zéro écriture directe app) ; aucun lecteur de l'ancienne collection « usage » ; aucun résidu huggingface/executionTelemetry/agents-autonomous mort (HF_TOKEN vivant préservé) ; replis persist/tools jamais-throw ; uploadVideoAsset respecté (non modifié).
+- Signalé hors périmètre (app/**, non corrigé) : le lecteur admin /api/admin/observability n'expose pas les sous-totaux models.<clé> pourtant écrits par usageDaily (extension triviale à prévoir : agréger data.models dans le reduce ; constater aussi que costMinor n'est pas écrit par usageDaily).
+- Clés R2 chat vs outil image vérifiées compatibles (users/<uid>/permanent/ai-images/<ts>-<uuid>.<ext>) ; divergences mineures documentées. Validations : tsc 0, 474 tests verts, eslint 0.
+---
+Task ID: 103-e
+Agent: audit-frontend
+Task: Audit + correctifs du périmètre « frontend » (components/** et app/** hors app/api) — contrats fetch, handlers morts, hooks, FR/ton, a11y, hydration, régressions Tasks 99-100
+
+Work Log:
+- Lecture worklog (Tasks 99-103, conventions gardes structurels + FR) et
+  agent-ctx/103-c ; balayages rg ciblés sur les 7 axes. Arbre PARTAGÉ avec le
+  lot parallèle 103-f (ses fichiers app/api/**, lib/**, tools.test.ts dans le
+  git status ne sont pas les miens — périmètres disjoints vérifiés au diff).
+- 1. CONTRATS FETCH : aucun composant n'appelle /api/tools/execute ni
+  /api/ai/image directement (les sorties image.generate/voice.speak arrivent
+  en artefacts via le moteur) ; seul artifact-panel consomme storagePath +
+  /api/storage/permanent. Contrats vérifiés en croisant route ↔ composant
+  (~16 routes : storage/permanent, notifications, chat + conversations,
+  workspace search/missions, memory/search, knowledge, custom-apis call, ads
+  connections/connect/generate/publish, files/import, deploy-info, video
+  production/render) : AUCUNE divergence data.result vs data.data ni
+  conversationId vs id. ANOMALIE CORRIGÉE (artifact-panel) : `previewUrl`
+  jamais alimenté (état mort) — un artefact persisté porte une CLÉ R2
+  (storagePath), pas une URL : l'audio voice.speak copié en R2 (103-b,
+  content=undefined + storagePath=clé) recevait <audio src="users/…"> invalide
+  et les images d'outil à URL provider expirée (103-a) restaient cassées bien
+  que la copie permanente existe. Fix : effet de résolution image/audio → URL
+  signée fraîche via resolveFileUrl ?? defaultResolveFileUrl, repli
+  inline/URL d'origine, garde anti-course cancelled — les consommateurs
+  tirent enfin profit de la permanence R2 (compatible, rétroactif).
+- 2. HANDLERS MORTS : 0 onClick vide, 0 TODO, 0 état inutilisé (eslint 0
+  erreur) ; 1 seul href="#" — CORRIGÉ (EmailAuthForm : « Mot de passe
+  oublié ? » <a href="#" onClick> → <button type="button"> mêmes classes).
+- 3. HOOKS : les 12 setInterval/setTimeout récurrents vérifiés un par un —
+  cleanup strict partout (pwa-register, notification-center, update-banner,
+  deploy-watcher, media-progress-frame, run-timeline, video-production-card,
+  video-project-workspace ×2, toast, debounces composer/conversation-list) ;
+  sondages avec AbortController. ANOMALIE CORRIGÉE
+  (video-project-workspace) : syncTimelineMutations lisait `project` figé
+  (stale closure eslint) — repli cache local avec projet périmé/souvent null
+  au montage ; fix par projectRef (identité du callback inchangée, zéro
+  risque de boucle ; l'ajout naïf de la dep aurait fait boucler les retries
+  d'items en erreur via loadProject→setProject→re-run effet).
+- 4. FR/TON : 3 chaînes EN échappées CORRIGÉES — placeholder « Area code
+  (optionnel) » → « Indicatif régional (optionnel) » (voice-agent-setup),
+  erreur visible « Camera capture failed » → « La capture caméra a échoué. »
+  (app/storage) ; tutoiement isolé « Tu pourras compléter ton profil… » →
+  vouvoiement (EmailAuthForm, formulaire sinon 100 % vouvoiement). Aucune
+  autre chaîne EN trouvée (>champs, toasts, placeholders, erreurs).
+- 5. A11Y : boutons icône visibles (menu ☰, cloche, listes, scroll-top,
+  fermetures, étapes ↑/↓, voix/envoyer client) — aria-labels tous présents ;
+  1 icône incohérente CORRIGÉE (app/client/[agentId] : bouton voix affichait
+  la loupe ⌕ → 🎙, convention du dépôt) ; <img> rencontrées avec alt correct
+  (2 warnings no-img-element préexistants sur blob-URLs locaux, laissés).
+- 6. HYDRATION : aucun cas certain — run-timeline ne rend son horodatage que
+  pour un run actif (jamais au premier paint), données horodatées après fetch
+  client, footers getFullYear() stables, live-dashboard limité aux
+  refs/handlers. Aucune correction nécessaire.
+- 7. RÉGRESSIONS TASKS 99-100 : offline-banner, notification-center,
+  install-button, pwa-install-section, native-notifications-setting,
+  pwa-register relus intégralement — imports vivants, props réelles, états
+  tous settés, listeners nettoyés, chaîne SW→pwa-register→banner
+  (pendingCount) intacte ; verrous ux-accessibility/pwa-consistency verts.
+- Hors périmètre signalé (non corrigé) : le lecteur admin
+  /api/admin/observability n'expose pas les sous-totaux models.<clé> de
+  usageDaily (déjà signalé par 103-f) ; POST /api/public/agents sans
+  AbortController sur page client légère (non qualifiable de fuite évidente).
+- Validations (exécutées réellement) : npx tsc --noEmit → 0 (2 passes).
+  npx vitest run app/ux-accessibility app/pwa-consistency app/offline-page
+  app/ios-splash app/theme-consistency app/agent-chat-ux app/perf-cache-policy
+  app/geo-routes app/markdown-render app/deploy-auto-update
+  components/media/media-progress-frame.test components/hooks/
+  use-visible-polling.test → 12 fichiers, 168 verts / 0 échec. npx eslint sur
+  les 6 fichiers touchés → 0 erreur (le warning exhaustive-deps a disparu ;
+  restent les 2 warnings préexistants connus no-img-element). ESLint complet
+  components+app hors api : 0 erreur.
+- Aucun install/commit/push/build ; aucun console.log ajouté. Périmètre
+  respecté : 6 fichiers (artifact-panel, video-project-workspace,
+  EmailAuthForm, voice-agent-setup, app/storage, app/client/[agentId]) ;
+  lib/**, app/api/**, next.config.ts intouchés (les entrées correspondantes
+  du git status appartiennent au lot parallèle 103-f).
+
+Stage Summary:
+- Frontend audité sur 7 axes : 7 anomalies corrigées (1 moyenne-haute de
+  contrat média : prévisualisation image/audio des artefacts persistés R2
+  enfin branchée sur le canal signé — l'audio voice.speak et les images
+  d'outil à URL expirée redeviennent lisibles ; 1 stale closure hooks ;
+  1 faux lien mort ; 3 chaînes EN/tutoiement ; 1 icône a11y incohérente),
+  0 régression PWA/notifications Tasks 99-100, contrats fetch route↔composant
+  intégralement cohérents.
+- Fiches agent-ctx/103-e-audit-frontend.md (détail tableau anomalies + pièges)
+  + validations : tsc 0, 168 tests verts, eslint 0 erreur.
+---
+---
+Task ID: 103-d
+Agent: audit-api-routes
+Task: Audit + corrections du périmètre « routes API » (app/api/**) — auth, erreurs 500 brut, rate-limit routes coûteuses, maxDuration, dead routes, méthodes
+
+Work Log:
+- Lecture worklog (conventions 99-103) + cartographie : 254 route.ts, 21 *.test.ts, helpers auth = requireUser/protectRoute/verifyFirebaseAuth(Request)/verifyFirebaseToken/requireAdmin/requireDeveloperAccess/requireCodeAgentOwner/authenticateDeveloper/guard21st + signatures (verifyUpstashSignature, verifyPlivoSignature, verifyTwilioSignature, CHARIOW_PULSE_SECRET HMAC, triggerScheduleByWebhookToken, verifyRemoteApprovalToken).
+- AUTH : les 216 routes mutatrices balayées une à une (regex élargie aux helpers réels du dépôt). Résultat : AUCUNE route mutatrice non protégée ; les seules routes publiques volontaires sont public/**, auth/session|profile (verifyFirebaseToken), webhooks signés, voice plivo/twilio (signature fournisseur vérifiée) — validation d'entrée vérifiée au cas par cas. ANOMALIE : app/api/public/agents/[agentId] POST (chat client public qui exécute un agent facturé au PROPRIÉTAIRE) était sans rate-limit alors que sa voisine public/commercial/[slug] en a un (12/5min distribué IP+salon) → corrigé à l'identique (rateLimitDistributed `public-agent:<agentId>:<ip>` 12/5min + retry-after) ; plus request.json() non attrapé (JSON malformé = 500 brut) → .catch(() => ({})) ; maxDuration=60 aligné sur la voisine.
+- ERREURS : scan systématique (analyse d'accolades des spans try/.catch sur chaque handler) → 15 handlers avec await Firestore/LLM SANS try/catch. Corrigés (style voisin : try/catch + errorStatus(error, fallback)) : GET de memory, memory/consent, memory/export (RGPD), integrations/mcp, ads/connections, settings/tool-consents, camera/requests, code-agents/access ; POST/PATCH admin/ads/placement (request.json() hors try → 400 propre) ; 6 webhooks téléphonie (plivo/twilio answer|status|turn) : parsing formData borné (400), signature 401 inchangée AVANT try, puis catch global — answer/turn répondent un XML poliment parlant (« erreur technique ») au lieu d'un 500 brut ininterprétable, status renvoient un 500 CONTRÔLÉ pour que le fournisseur re-tente la livraison. Hors périmètre du fix (conforme, analysé) : chariow claim-transaction volontairement hors try (échec = retry fournisseur souhaité), auth/session GET (mode dégradé 200 interne déjà géré).
+- CONTRACTS : aucun fichier app/api ne mélange {ok:true} et {success:true} (scan exhaustif 0 hit) ; les formes sont cohérentes par domaine (workspace/orchestrator/billing = success:, memory/tools/agents = ok:, erreurs {error} partout). Aucun changement (changement = risque de casser consommateurs sans anomalie certaine).
+- RATE-LIMIT : 10 routes coûteuses authentifiées SANS quota alors que leurs voisines en ont un, corrigées : agents/run POST (entrée SDK/interne missions facturées → enforceRateLimit `mission-run:` 30/5min, copie v1/agents run), agents/plan POST (appel LLM planificateur → `agent-plan:` 20/5min, copie agent-continue), agent/chat/approve POST (approuver = reprendre l'agent → `agent-approve:` 20/5min, copie continue), 5 POST IA du domaine business dont la limite ne couvrait QUE le GET de liste (documents-contracts, finance-unpaid, marketing-landing, marketing-webinar, sales-call-intelligence → rateLimitDistributed `business:<module>-ai:` 120/5min, clé DISTINCTE du GET pour ne pas altérer le quota de lecture existant, 429 identique aux voisins), business/pulse POST (lance une mission complète → `business:pulse:` 120/5min). Routes 21st, video, voice/calls, tools/execute, ai/* : déjà couvertes (guard21st/protectRoute/enforceRateLimit) — fausses alertes écartées après lecture.
+- MAXDURATION : agents/[id]/run (exécution AgentRuntime SYNCHRONE, doc voisin agents/run : « défaut plateforme 10 s insuffisant ») → export const maxDuration = 60 ; video/projects/[projectId]/export → 60 (aligné render voisin ; vérifié startAdditionalExports = Firestore+QStash, jamais heurter la fenêtre). Storyboard vérifié : generateStoryboard SANS appel LLM (calcul local + Firestore) → PAS de maxDuration ajouté (pas d'incohérence réelle). Voice/twilio/plivo turn (1 appel LLM 500 tokens temps réel) : noté, non changé (pas de route longue).
+- DEAD ROUTES : rg "huggingface|executionTelemetry|autonomous" app/api → 0 référence morte (autonomous = champ VIVANT de lib/agents/schema.ts L81, huggingface = commentaire du retrait 103-c dans chat/message, tests à jour) ; vérification complémentaire : les 100 % des imports @/… de app/api résolvent (scan 0 fichier manquant). app/api/orchestrator/** = routes vivantes distinctes de l'orchestrateur supprimé en 102 (consumées par verifyFirebaseRequest + lib/execution).
+- MÉTHODES : 404/405 — dynamic="force-dynamic" n'est posé que sur 36/254 routes (convention repo : les handlers qui lisent request.url/headers/cookies sont de facto dynamiques) → rien à changer ; exemples GET avec erreurs propres vus (public/agents 404, schedules 404/409).
+- Validations (exécutées réellement) : npx tsc --noEmit → 0 (2 passes). npx vitest run app/api → 21 fichiers, 137 verts / 0 rouge (dont agents/run route.test 8 verts avec le nouveau rate-limit réel in-memory). npx eslint fichier par fichier sur les 27 fichiers touchés → 0 erreur (1 prefer-const apparue puis corrigée). Aucun console.log ajouté ; scan post-fix « JSON/await hors try » → 0 handler restant dans les catégories corrigées.
+- Périmètre respecté : 27 fichiers modifiés, TOUS dans app/api/**. Les autres entrées du git status (components/**, lib/**, app/client, app/storage, worklog) appartiennent aux lots parallèles 103-c/103-f — non touchées. Interdits respectés : pas d'install/commit/push/build ; lib/** et components/** lus mais jamais édités.
+
+Stage Summary:
+- Aucune route mutatrice non protégée dans app/api/** : auth/signature/quota vérifiés route par route (216 handlers, 8 mécanismes d'auth réels du dépôt).
+- L'exécution d'agents par un client PUBLIC (public/agents/[agentId]) ne permet plus de vider le wallet du propriétaire : quota distribué 12/5min par IP+agent, JSON malformé → 400, fenêtre 60 s alignée sur le salon commercial.
+- Plus aucun 500 brut sur les 15 handlers à risque : les 8 GET Firestore, les 2 mutations admin ads et les 6 webhooks téléphonie (Plivo/Twilio) répondent désormais des erreurs contrôlées et exploitables (message parlé à l'appelant, 500 retentable pour les callbacks statut).
+- 10 routes coûteuses (missions, planification LLM, reprise d'agent, 5 générations IA business, pulse, chat public) ont maintenant un quota explicite, copié sur leurs voisines — clé distincte de la lecture quand le GET en avait déjà une.
+- maxDuration cohérent sur les exécutions synchrones (agents/[id]/run 60, video export 60) ; dead routes = 0 ; contrats de réponses = 0 incohérence certaine.
+- Validations : tsc 0, vitest app/api 137/137, eslint 27 fichiers 0 erreur. Anomalies hors périmètre signalées SANS correction : app/api/admin/observability (sous-totaux models de usageDaily non exposés — déjà listé par 103-f), chariow claim hors try (design retry fournisseur assumé, à surveiller).
+
+---
+Task ID: 103-anomalies
+Agent: orchestrateur (Super Z)
+Task: Phase 2 — chasse aux anomalies (3 audits parallèles API/front/lib) + sous-totaux models exposés
+
+Work Log:
+- Smoke test production authentifié (session signée) : 9 pages 200, APIs saines
+  (les 404 initiaux étaient de mauvais chemins de test, pas des bugs).
+- TEST VIDÉO RÉEL production : video.create accepté (job+projet créés, mode poll),
+  pipeline avancé project → plan (LLM) → script (LLM) → assets puis ÉCHEC explicite
+  « R2 configuration is incomplete » — STOCKAGE PERMANENT INDISPONIBLE EN PROD :
+  R2_ACCOUNT_ID/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY VIDES dans Vercel (seul
+  R2_BUCKET renseigné), bucket Firebase Storage inexistant (404, création bloquée
+  sans facturation), SUPABASE_SERVICE_ROLE_KEY vide. Code correct — blocage ops
+  que seul le propriétaire peut lever (compléter les 3 valeurs R2 dans Vercel).
+- 3 audits parallèles périmètres disjoints :
+  - 103-d (app/api, 27 fichiers) : 29 anomalies corrigées — chat public facturé
+    SANS rate-limit (haute), 8 GET Firestore sans try/catch (500 bruts), 6
+    webhooks téléphonie sans catch (erreurs ininterprétables fournisseur), 3
+    routes LLM/missions sans quota, 5 routes business IA sans quota, 2
+    maxDuration manquants, JSON malformés 400 au lieu de 500.
+  - 103-e (frontend, 6 fichiers) : 7 corrigées — MAJEURE : artifact-panel
+    n'alimentait JAMAIS previewUrl (audio voice.speak R2 et images persistées
+    cassés à l'affichage) → résolution signée via /api/storage/permanent ;
+    stale closure video-workspace ; faux lien <a href="#"> ; FR (tu→vous,
+    placeholder anglais, message d'erreur EN) ; icône loupe sur bouton voix.
+  - 103-f (lib, 5 fichiers) : intercept chat aligné sur VIDEO_ASPECT_RATIOS ;
+    2 fetch ElevenLabs sans timeout bornés (30/60 s) ; assertion de type
+    supprimée (SessionDocWrite) ; garde anti-régression intercept.
+- Orchestrateur : observability expose désormais les sous-totaux models.<clé>
+  (données écrites mais jamais lues — écart signalé par les 3 audits).
+- Intégration : tsc 0 ; 2205 tests verts / 2 skips ; eslint global app+components
+  0 erreur (2 warnings no-img-element préexistants).
+
+Stage Summary:
+- 41 anomalies corrigées au total (29 API + 7 front + 4 lib + 1 observability).
+- Génération RÉELLE validée en production : image (Agnes 2×, 9,2 s), voix off
+  (ElevenLabs MP3 119 Ko), pipeline vidéo (job → plan → script réels). Seule
+  limite : persistance permanente (R2) en attente des identifiants du
+  propriétaire — replis propre (provider/inline) actifs entre-temps, vidéo en
+  échec explicite tant que le stockage n'est pas configuré.

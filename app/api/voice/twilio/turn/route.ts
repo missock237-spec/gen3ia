@@ -18,10 +18,26 @@ export async function POST(request: Request) {
   const sessionId = url.searchParams.get("sessionId");
   if (!sessionId) return new Response("Missing sessionId", { status: 400 });
 
-  const form = await request.formData();
-  const params = Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)]));
+  let params: Record<string, string>;
+  try {
+    const form = await request.formData();
+    params = Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)]));
+  } catch {
+    return new Response("Invalid form data", { status: 400 });
+  }
   if (!verifyTwilioSignature(request, params)) return new Response("Unauthorized", { status: 401 });
 
+  try {
+    return await handleTurn(sessionId, params);
+  } catch {
+    // Panne Firestore/LLM : la conversation ne doit pas mourir sur un 500
+    // brut — l'appelant entend un message honnête et la session reste
+    // consultable (statut non altéré).
+    return buildTwiML("<Say>Une erreur technique est survenue. Au revoir.</Say><Hangup/>");
+  }
+}
+
+async function handleTurn(sessionId: string, params: Record<string, string>) {
   const session = await getPhoneCallSession(sessionId);
   if (!session || Date.now() > session.expiresAt) {
     return buildTwiML("<Say>Cette session est terminée. Au revoir.</Say><Hangup/>");

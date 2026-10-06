@@ -76,7 +76,7 @@ export default function EmailAuthForm() {
           </div>
           <input className={inputClasses} placeholder="Nom d'utilisateur" value={username} onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))} autoComplete="username" required maxLength={32} />
           <input className={inputClasses} placeholder="Pays (optionnel)" value={country} onChange={(e) => setCountry(e.target.value)} autoComplete="country-name" />
-          <p className="text-xs opacity-50">Tu pourras compléter ton profil plus tard depuis ton tableau de bord.</p>
+          <p className="text-xs opacity-50">Vous pourrez compléter votre profil plus tard depuis votre tableau de bord.</p>
         </>
       )}
 
@@ -87,7 +87,10 @@ export default function EmailAuthForm() {
       {info && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{info}</p>}
       {/* Libellé conditionnel au mode : une CONNEXION n'a jamais « créé de profil » (audit UX 2-c). */}
       <button type="submit" disabled={pending} className={buttonClasses}>{pending ? (mode === "connexion" ? "Connexion…" : "Création du profil…") : mode === "connexion" ? "Se connecter" : "Créer mon compte"}</button>
-      {mode === "connexion" && <a href="#" onClick={handleReset} className="text-center text-xs opacity-60 hover:opacity-100">Mot de passe oublié ?</a>}
+      {/* Bouton (et non lien « # ») : le mot de passe oublié est une ACTION,
+          pas une navigation — href="#" polluait l'historique et l'arborescence
+          d'accessibilité (audit 103-e). */}
+      {mode === "connexion" && <button type="button" onClick={handleReset} className="text-center text-xs opacity-60 hover:opacity-100">Mot de passe oublié ?</button>}
     </form>
   );
 }

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { randomUUID } from "crypto";
 
 import { requireUser } from "@/lib/security/authenticated-request";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import {
   AgentRuntime,
   RuntimePlanSchema,
@@ -62,6 +63,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const user = await requireUser(request);
+    // Même classe de coût que /api/agents/[id]/run (12/5min) et
+    // /api/v1/agents/[agentId]/run (30/5min) : l'entrée SDK/interne sans
+    // limite pourrait enfiler des centaines de missions facturées.
+    const limit = await enforceRateLimit(`mission-run:${user.uid}`, { limit: 30, windowMs: 5 * 60 * 1000 });
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Trop d'executions rapprochees. Reessayez dans quelques minutes.", requestId },
+        { status: 429, headers: { "x-request-id": requestId, "retry-after": String(Math.max(1, Math.ceil(limit.retryAfterMs / 1000))) } },
+      );
+    }
     const body = await request.json();
     const parsed = RunAgentSchema.safeParse(body);
 

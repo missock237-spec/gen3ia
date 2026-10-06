@@ -64,7 +64,7 @@ export default function StoragePage() {
     if (sessionDisponible === false || !videoRef.current) return;
     setBusy(true); setActionError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } }); videoRef.current.srcObject = stream; await videoRef.current.play(); await new Promise(r => setTimeout(r, 800)); const canvas = document.createElement("canvas"); canvas.width = videoRef.current.videoWidth; canvas.height = videoRef.current.videoHeight; canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0); stream.getTracks().forEach(t => t.stop()); const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("Camera capture failed")), "image/jpeg", .92));
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } }); videoRef.current.srcObject = stream; await videoRef.current.play(); await new Promise(r => setTimeout(r, 800)); const canvas = document.createElement("canvas"); canvas.width = videoRef.current.videoWidth; canvas.height = videoRef.current.videoHeight; canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0); stream.getTracks().forEach(t => t.stop()); const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("La capture caméra a échoué.")), "image/jpeg", .92));
       const response = await authFetch(`/api/camera/complete`, { method: "POST", headers: { "content-type": "image/jpeg", "x-camera-request-id": requestId }, body: blob });
       if (!response.ok) {
         const detail = (await readJsonSafely<{ error?: string }>(response))?.error;

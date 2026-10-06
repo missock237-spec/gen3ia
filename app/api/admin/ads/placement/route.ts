@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const guard = await guardAdmin(request);
   if ("error" in guard) return guard.error;
-  const parsed = Input.safeParse(await request.json());
+  const parsed = Input.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Données publicitaires invalides." }, { status: 400 });
   try {
     const ad = await createPlatformAd(parsed.data as PlatformAdInput);
@@ -73,7 +73,7 @@ export async function PATCH(request: NextRequest) {
   if ("error" in guard) return guard.error;
   const id = new URL(request.url).searchParams.get("id")?.trim();
   if (!id) return NextResponse.json({ error: "Paramètre id requis." }, { status: 400 });
-  const parsed = Patch.safeParse(await request.json());
+  const parsed = Patch.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Modification publicitaire invalide." }, { status: 400 });
   try {
     const ad = await updatePlatformAd(id, parsed.data as Partial<PlatformAdInput>);
