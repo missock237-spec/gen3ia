@@ -118,6 +118,16 @@ export function maskedEndpoint(endpoint: string): string {
 }
 
 /**
+ * Identifiant utilisateur TRONQUÉ pour les journaux : préfixe de 4 caractères
+ * + ellipse — suffisant pour corréler les logs d'envoi sans exposer l'UID
+ * complet (contrainte de confidentialité identique à maskedEndpoint).
+ */
+export function maskedUser(userId: string): string {
+  const trimmed = userId ?? "";
+  return trimmed.length <= 4 ? "…" : `${trimmed.slice(0, 4)}…`;
+}
+
+/**
  * Charge utile bornée : troncatures défensives puis réduction progressive du
  * corps jusqu'à passer sous la limite de 4 096 octets (les services push
  * rejettent une charge trop lourde d'un 413 définitif).
@@ -143,6 +153,11 @@ export function compactPayload(payload: PushPayload): PushPayload {
  *   réseau) est ignorée — le prochain envoi réessaiera naturellement.
  * - JAMAIS de throw : le flux métier (création de notification, mission
  *   agent) continue quoi qu'il arrive.
+ *
+ * Télémétrie 100 % par logs structurés (Task 102-c) — ZÉRO écriture/lecture
+ * Firestore ajoutée (économie de quota) : une ligne console.warn par échec
+ * ou retrait d'abonnement, puis UNE ligne console.info de résumé par envoi
+ * (user tronqué, envoyés, échoués, abonnements supprimés 404/410).
  */
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
   try {
@@ -154,6 +169,10 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     const webPush = await import("web-push");
     ensureVapidDetails(webPush);
     const body = JSON.stringify(compactPayload(payload));
+    // Compteurs de télémétrie — agrégés en mémoire, JAMAIS persistés.
+    let sent = 0;
+    let failed = 0;
+    let removed = 0;
     await Promise.all(
       subscriptions.map(async (subscription) => {
         try {
@@ -165,17 +184,28 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
             },
             body,
           );
+          sent += 1;
         } catch (error) {
+          failed += 1;
           const status = (error as { statusCode?: number }).statusCode;
           if (typeof status === "number" && DEAD_SUBSCRIPTION_STATUS.has(status)) {
             // Abonnement mort : nettoyage — le navigateur se resouscrira au
             // prochain passage de l'utilisateur (permission conservée).
             await deletePushSubscription(userId, subscription.endpoint);
+            removed += 1;
             console.warn(`[push] abonnement mort (${status}) supprimé : ${maskedEndpoint(subscription.endpoint)}`);
+          } else {
+            // Toute autre erreur : ignorée (best-effort strict), mais tracée.
+            console.warn(
+              `[push] échec d'envoi${typeof status === "number" ? ` (${status})` : ""} : ${maskedEndpoint(subscription.endpoint)}`,
+            );
           }
-          // Toute autre erreur : ignorée (best-effort strict).
         }
       }),
+    );
+    // Résumé d'envoi : une ligne concise, identifiant utilisateur tronqué.
+    console.info(
+      `[push] envoi terminé : user=${maskedUser(userId)}, envoyés=${sent}, échoués=${failed}, abonnements supprimés (404/410)=${removed}`,
     );
   } catch {
     // Push best-effort : aucune erreur ne remonte vers l'appelant métier.

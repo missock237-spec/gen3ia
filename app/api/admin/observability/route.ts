@@ -38,13 +38,27 @@ export async function GET(request: NextRequest) {
 
   let usageTotal = { requests: 0, costMinor: 0 };
   try {
-    const snapshot = await adminDb.collection("usage").limit(200).get();
+    // Task 102-a — QUOTA : lecture de la collection agrégée "usageDaily"
+    // (1 document par utilisateur et par jour UTC, ID `${userId}_${YYYYMMDD}`)
+    // au lieu de "usage" (1 document par appel IA). Limite 200 = 200
+    // jours-utilisateurs récents, là où l'ancien code lisait 200 appels :
+    // même budget de lectures, mais chaque document couvre désormais N appels
+    // — requests = Σ des compteurs "calls" (le lecteur d'aujourd'hui ne lit
+    // plus 200 appels mais l'agrégat de 200 jours-utilisateurs).
+    // TRANSITION : les anciens documents "usage" ne sont plus lus —
+    // l'historique par appel devient inaccessible côté admin ; l'agrégat
+    // courant est identique ou meilleur (appels cumulés au lieu d'un simple
+    // comptage de documents, plafonné à 200).
+    const snapshot = await adminDb.collection("usageDaily").limit(200).get();
     usageTotal = snapshot.docs.reduce(
       (accumulator, doc) => {
         const data = doc.data() ?? {};
+        // Σ des appels agrégés ; repli : 1 par document si "calls" est absent
+        // (compatibilité avec d'éventuels documents sans compteur).
+        const calls = typeof data.calls === "number" ? data.calls : 1;
         const cost = typeof data.costMinor === "number" ? data.costMinor : typeof data.costUsd === "number" ? Math.round(data.costUsd * 100) : 0;
         return {
-          requests: accumulator.requests + 1,
+          requests: accumulator.requests + calls,
           costMinor: accumulator.costMinor + cost,
         };
       },

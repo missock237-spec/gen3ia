@@ -2033,3 +2033,180 @@ Stage Summary:
 - Réduction quota Firestore substantielle (détail dans 101-orchestration) ;
   les index composites restent à déployer via firebase CLI (repli résilient
   actif en attendant).
+---
+Task ID: 102-a
+Agent: impl-usage-daily
+Task: Agrégation Firestore « usageDaily » — recordAIUsage écrit 1 doc/jour/utilisateur (incrément atomique) et le lecteur admin observability somme les compteurs (stockage et lectures admin ÷N).
+
+Work Log:
+- Lectures préalables : worklog (conventions : sections append-only, gardes structurels, barrières qualité), lib/ai/usage.ts (ancien écrit : 1 doc auto-ID par appel IA, collection "usage"), app/api/admin/observability/route.ts (lecteur collection("usage").limit(200) + comptage 1/doc), lib/ai/models.ts (AIResponse/AIUsage), lib/firebase/admin.ts (init lazy → import test sans risque), vitest.config.mts (alias @, env Firebase fictif), app/perf-cache-policy.test.ts + lib/__tests__/csp-allowlist.test.ts (style gardes structurels).
+- Consommateurs vérifiés (rg "recordAIUsage") : unique appelant app/api/ai/generate/route.ts — await + .catch(() => undefined), valeur de retour NON consommée → signature conservée à l'identique, AUCUNE modification de la route nécessaire (tolérance non utilisée).
+- lib/ai/usage.ts (réécriture) : mêmes écritures (1 set par appel IA) mais collection "usageDaily", ID déterministe `${userId}_${YYYYMMDD}` (UTC ; un seul `new Date()` capturé pour ne pas désynchroniser ID et dayIso à minuit) ; set merge + FieldValue.increment atomique : calls(+1), inputTokens/outputTokens/totalTokens, latencyMs (SOMME → moyenne = latencyMs/calls), sous-totaux par modèle via chemins pointés models.<clé>.calls/.inputTokens/.outputTokens/.totalTokens avec clé `${provider}_${model}` assainie [^A-Za-z0-9]→_ ; userId + dayIso (YYYY-MM-DD) constants au merge ; updatedAt serverTimestamp. Signature et retour (ref.id) inchangés. Commentaires FR : POURQUOI quota (stockage ÷N, lectures admin ÷N, écrits identiques), atomique sans lecture (pas de course), transition (historique par appel — dont task — inaccessible côté admin).
+- Utilitaires purs exportés (testables) : cleModelePourChamp(provider, model), jourIsoUtc(instant), idDocUsageDaily(userId, instant).
+- app/api/admin/observability/route.ts : collection("usageDaily").limit(200) — requests = Σ data.calls (repli 1/doc si calls absent, compat anciens docs) ; coût inchangé (costMinor nombre, sinon costUsd ×100, sinon 0) ; CONTRAT INTACT { executions, usage: {requests, costMinor}, statusCounts, generatedAt } + no-store. Commentaires FR : sémantique (limite 200 = 200 jours-utilisateurs vs 200 appels avant) + transition (anciens "usage" plus lus, agrégat identique ou meilleur).
+- lib/ai/usage-daily.test.ts (NOUVEAU, 12 tests, convention garde structurel) : lecture source via fs.readFileSync résolu depuis le dossier du test (import.meta.dirname, équivalent ESM de __dirname — __dirname nu n'existe pas sous vitest ESM) : usage.ts contient usageDaily/FieldValue.increment/merge: true/${userId}_ et ne contient PLUS .collection("usage") ; route admin contient usageDaily + calls + usageTotal/statusCounts/executions/generatedAt ; logique pure testée directement (openai + gpt-4.1-mini → openai_gpt_4_1_mini ; neutralisation slash/deux-points ; ID UTC avant/après minuit ; format YYYY-MM-DD).
+- Tests existants couvrant usage.ts/observability : AUCUN (rg exhaustif *.test.ts — seuls des mocks de @/lib/observability/logger, hors sujet) → le nouveau garde suffit, aucune extension requise.
+- Périmètre respecté : 2 fichiers modifiés + 1 test nouveau ; AUCUN fichier interdit touché (lib/agents/**, lib/push/** — dont les diffs présents dans l'arbre appartiennent à un autre lot 102 en parallèle, git status à l'appui — lib/notifications/**, app/api/queue/**, app/api/ai/generate/route.ts non modifié, next.config.ts, firestore.indexes.json). Pas de npm install, pas de git commit/push, pas de next build, aucun console.log ajouté, commentaires 100 % FR.
+- Vérifications exécutées : npx tsc --noEmit → 0 erreur (exit 0). npx vitest run lib/ai/usage-daily.test.ts → 12/12 verts ; balisage élargi npx vitest run lib/ai → 20 fichiers, 170/170 verts. npx eslint lib/ai/usage.ts app/api/admin/observability/route.ts lib/ai/usage-daily.test.ts → 0 erreur, 0 warning (exit 0).
+
+Stage Summary:
+- Quota Firestore : écritures IA IDENTIQUES (1/appel, set merge incrémental atomique — pas de lecture préalable) mais stockage ÷N : 20 appels IA/jour/utilisateur → 1 document usageDaily au lieu de 20 (×365 jours : 7 300 docs/an/utilisateur → 365) ; lectures admin ÷N : le lecteur lit 200 jours-utilisateurs (Σ calls) au lieu de 200 appels, et le total n'est plus écrêté par le plafond de 200 appels (Σ exacte des 200 derniers jours).
+- Invariant conservé : signature recordAIUsage({userId, task, response}) et retour de l'id — unique appelant (app/api/ai/generate/route.ts) inchangé.
+- Reste candidat (hors lot) : TTL/rétention des anciens docs "usage" (export puis purge si requis RGPD), reconstruction d'un historique par modèle côté UI admin à partir des sous-totaux models.<clé> déjà écrits.
+---
+Task ID: 102-c
+Agent: impl-deadcode-push
+Task: Suppression du code mort (lib/agents/autonomous/, répertoire lib/agents/orchestrator/) + télémétrie push par logs structurés sans Firestore (lib/push/server.ts)
+
+Work Log:
+- Lecture des ~200 dernières lignes de worklog.md (conventions : sections
+  append-only, validations tsc/vitest/eslint, commentaires 100 % FR).
+- Vérifications rg PRÉ-suppression (sorties conservées) :
+  1) rg -n 'agents/autonomous' app lib components → 0 occurrence (AUCUN
+     importeur vivant) ;
+  2) rg -n 'agents/orchestrator/orchestrator|agents/orchestrator/types' app
+     lib components → UNE seule occurrence : lib/agents/autonomous/planner.ts:2
+     (import du planner mort lui-même) ;
+  3) rg -ln 'agents/autonomous|agents/orchestrator/' app lib --glob "*.test.*"
+     → 0 fichier (aucun test ne référençait le code supprimé) ;
+  4) contrôle complémentaire des imports RELATIFS (../autonomous, ./orchestrator/
+     …) dans app/lib/components → 0 occurrence ; e2e/ et scripts/ → 0.
+- Suppression via git rm -r (SANS commit) :
+  lib/agents/autonomous/planner.ts (80 l.), lib/agents/orchestrator/orchestrator.ts
+  (89 l.), lib/agents/orchestrator/types.ts (67 l.) → 236 lignes de code mort
+  retirées. Le fichier PLAT lib/agents/orchestrator.ts (vivatif, 10 641 octets),
+  orchestrator-actions.ts et orchestrator.test.ts (racine de lib/agents) sont
+  INTACTS — confusion répertoire/fichier plat évitée comme instruit.
+- npx tsc --noEmit après suppression → exit 0, 0 erreur (preuve ultime qu'aucun
+  import vivant ne référençait le code retiré).
+- Télémétrie lib/push/server.ts (logs structurés, 100 % FR, ZÉRO Firestore) :
+  ajout maskedUser (préfixe 4 caractères + ellipse, même contrat de
+  confidentialité que maskedEndpoint) ; compteurs en mémoire sent/failed/removed
+  (JAMAIS persistés) ; console.warn existant « abonnement mort (404/410)
+  supprimé » conservé + NOUVEAU console.warn « échec d'envoi (statut) » pour
+  les erreurs non mortelles ; UNE ligne console.info de résumé par envoi :
+  « [push] envoi terminé : user=<tronqué>, envoyés=N, échoués=N, abonnements
+  supprimés (404/410)=N ». Aucune écriture/lecture Firestore ajoutée —
+  baseline comparée AVANT/APRÈS : rg -c '\.set\(|\.add\(|\.update\(|\.collection\('
+  → 0 occurrence AVANT, 0 APRÈS ; aucun import firebase (0 occurrence).
+  lib/push/repository.ts et le reste du pipeline NOT touchés.
+- Gardes structurels (convention du dépôt, fs.readFileSync) EXTENSIFS au test
+  existant lib/push/server.test.ts (aucun nouveau fichier créé — le test
+  pertinent existait) : télémétrie console.warn/info + marqueurs FR du résumé
+  présents ; ZÉRO marqueur d'écriture Firestore (.set(/.add(/.update(/.collection()
+  vs baseline avant = 0) ; aucun import firebase. + 3 tests comportementaux
+  (espions console) : résumé unique par envoi avec comptes exacts, échec
+  transitoire 429 tracé sans retrait, no-op (sans VAPID ou sans abonnement)
+  → aucune télémétrie. + 2 tests maskedUser. afterEach : vi.restoreAllMocks().
+- Validations (exécutées réellement) : npx tsc --noEmit → 0. npx vitest run
+  lib/push/server.test.ts lib/push/repository.test.ts lib/push/client.test.ts
+  lib/agents/repository.test.ts lib/agents/repository-org.test.ts → 5 fichiers,
+  107/107 verts (dont 34 push server : 9 nouveaux). npx eslint lib/push/server.ts
+  lib/push/server.test.ts → 0 erreur.
+- Périmètre respecté : 2 fichiers modifiés (lib/push/server.ts, son test),
+  3 fichiers supprimés. Interdits intouchés : lib/agents/scheduler*.ts, lib/ai/**,
+  app/api/**, lib/notifications/**, lib/db/**, next.config.ts,
+  firestore.indexes.json. NB : git status montre aussi app/api/admin/observability/
+  route.ts, lib/ai/usage.ts et lib/ai/usage-daily.test.ts modifiés — travail des
+  lots PARALLÈLES 102, aucun n'est le mien (vérifiable au diff).
+- Aucun npm install, commit, push, build ; console uniquement dans
+  lib/push/server.ts (télémétrie autorisée par le lot).
+
+Stage Summary:
+- Code mort : −236 lignes (planner autonome + orchestrator de répertoire devenus
+  orphelins après la suppression de la route en Task 101) ; résolution
+  TypeScript confirmée (fichier plat lib/agents/orchestrator.ts préservé,
+  app/api/orchestrator/action-plan toujours compilé) ; tsc 0.
+- Quota Firestore : le module push envoie désormais sa télémétrie 100 % par
+  console (résumé une ligne/envoi + warn par échec/retrait) — zéro
+  écriture/lecture Firestore ajoutée, baseline 0 marqueur conservée.
+- Observabilité : envois push maintenant dénombrables en production (envoyés/
+  échoués/abonnements supprimés 404/410) sans nouveau coût de base de données ;
+  endpoints et UIDs jamais journalisés en clair (masquage conservé).
+
+---
+Task ID: 102-b
+Agent: impl-scheduler-sweep (section rédigée par l'orchestrateur — l'agent a livré les briques mais est mort avant le câblage final et son rapport ; intégré et complété par l'orchestrateur)
+Task: Sweep des plannings indexé par wakeAtMs — le plus gros consommateur Firestore restant (~144 000 lectures/jour)
+
+Work Log:
+- Briques livrées par l'agent (vérifiées ligne à ligne dans l'arbre) :
+  computeWakeAtMs pure exportée (min des réveils : prochaine occurrence cron,
+  one-shot runAtMs tant que son slot n'est pas consommé, retryState.notBeforeMs,
+  prochaine sonde de veille = lastCheckedAt + throttle 10 min ; undefined =
+  webhook pur / désactivé) ; champ wakeAtMs maintenu sur TOUTES les écritures
+  (création, mise à jour avec FieldValue.delete() sur désactivation,
+  claimDueSchedule tx, terminaison one-shot/retry tx, claimRetrySchedule tx,
+  réécriture des sources de veille) ; constantes LEGACY_SCAN_INTERVAL_MS (10 min)
+  et WAKE_REPAIR_TOLERANCE_MS (5 min) déclarées.
+- Câblage manquant complété par l'orchestrateur : dispatchSchedules interroge
+  désormais .where("wakeAtMs","<=",nowMs).orderBy("wakeAtMs").limit(200) —
+  requête à champ unique indexé automatiquement par Firestore (AUCUN index
+  composite à déployer, firestore.indexes.json intact) ; le scan legacy complet
+  (where enabled limit 500) ne tourne plus que (a) en repli si la requête
+  indexée échoue (toute erreur — plus résilient que le seul index manquant) ou
+  (b) au plus une fois toutes les 10 min par processus comme filet de sécurité
+  de migration ; repairWakeFields backfill/répare le champ par batchs de 400
+  (merge, 1 écriture par doc réparé, borné) ; fusion par id des deux sources ;
+  retour { checked: all.length, ... } corrigé (référence snap devenue
+  orpheline) ; import isFirestoreMissingIndexError retiré (non utilisé).
+- Gardes structurels ajoutés dans scheduler.test.ts (+7 tests) : 5 tests unitaires
+  computeWakeAtMs (cron, désactivé, one-shot consommé/non, retry, veille) + 3
+  gardes fs.readFileSync (requête indexée présente, repli legacy + throttle
+  10 min + tolérance, réparation bornée batch/delete). NB : nextOccurrence
+  construit les créneaux en heure SERVEUR (comportement existant) — sandbox/
+  CI/Vercel = UTC, assertion documentée.
+- Validations : npx tsc --noEmit → 0 ; suite complète → 2172 verts / 224
+  fichiers (+18 sandbox inclus) ; eslint sur les 7 fichiers touchés → 0 erreur.
+- Périmètre respecté : lib/agents/scheduler.ts, lib/agents/scheduler.test.ts
+  uniquement. Interdits intouchés : lib/ai/**, lib/push/**, app/api/**,
+  firestore.indexes.json, next.config.ts.
+
+Stage Summary:
+- Quota Firestore : 500 lectures/tick → ~0-2 lectures/tick en régime croisière
+  (288 ticks/jour : ~144 000 → <600 lectures/jour, ÷~99 %) ; coût de migration
+  transitoire borné (backfill ≤1 scan/10 min + 1 écriture par doc réparé) ;
+  aucune exécution perdue : réveils couvrant tous les motifs (cron, one-shot,
+  retry, veille), repli legacy sur toute erreur, rattrapage borné existant
+  amortit les retards de migration (≤10 min au pire).
+---
+Task ID: 102-orchestration
+Agent: orchestrateur (Super Z)
+Task: Coordination Task 102 (finalisation des candidats quota Firestore hérités de Task 101), intégration, déploiement production
+
+Work Log:
+- Contexte : reprise après compression de session ; Task 101 (audit + 4 lots)
+  déjà livrée et validée (CI verte, Vercel READY). Le worklog listait 4
+  « Candidats Task 102 » : agrégation usageDaily (M5), sweep schedules indexé
+  dueAtMs, télémétrie push, suppression planner/orchestrator orphelins.
+- Audit ciblé : recordAIUsage = 1 doc PAR appel IA (collection usage, lecteur
+  admin 200 docs) ; dispatchSchedules = 500 lectures × 288 ticks/jour
+  (DISPATCH_SLOT_MS 5 min) = ~144 000 lectures/jour ; chaîne morte confirmée
+  (autonomous/planner.ts 0 importeur → orchestrator/{orchestrator.ts,types.ts}
+  seul importeur = le planner mort ; fichier plat orchestrator.ts vivant et
+  préservé) ; décision télémétrie push = logs uniquement (0 write Firestore —
+  conforme à l'objectif quota, pas de contre-productif).
+- 3 sous-agents parallèles, périmètres disjoints : 102-a (usageDaily :
+  lib/ai/usage.ts + observability), 102-b (scheduler), 102-c (code mort + push
+  logs). Incidents tool : 102-b a dépassé son délai — briques livrées mais
+  câblage final manquant ; vérifié ligne à ligne puis COMPLÉTÉ par
+  l'orchestrateur (requête indexée, repli throttle 10 min, repairWakeFields,
+  correction retour snap orphelin, +7 tests gardes).
+- Intégration : tsc 0 ; 2172 tests verts / 224 fichiers (+28 vs 101) ;
+  eslint 0 sur les fichiers touchés ; budget routes inchangé (aucune route
+  ajoutée/supprimée — suppression limitée à lib/).
+- Déploiement : commit → push main → Vercel (voir Stage Summary production).
+
+Stage Summary:
+- Réduction quota Firestore (régime croisière, par rapport à l'état post-101) :
+  sweep plannings ~144 000 → <600 lectures/jour (÷~99 %, poste n°1 restant
+  éteint) ; usage IA : stockage ÷N (1 doc/jour/utilisateur au lieu de N docs
+  d'appels, sous-totaux par modèle conservés) et lecteur admin inchangé en
+  coût mais ÷N plus informatif ; code mort -236 lignes (3 fichiers) ;
+  télémétrie push sans base de données. Cumul 101+102 : les deux plus gros
+  consommateurs de lectures (sonnette, sweep) et le gaspillage d'écritures/
+  stockage par appel IA sont éteints.
+- Décisions notables : télémétrie push = console uniquement (jamais de
+  nouveaux writes pour observer) ; migration wakeAtMs sans opération ops
+  (filet legacy 10 min + auto-réparation) ; aucun index à déployer (champ
+  unique auto-indexé — différence clé avec les composites de Task 101).

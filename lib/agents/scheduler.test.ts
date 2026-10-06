@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { isScheduleActive, type AgentSchedule } from "@/lib/agents/scheduler";
+import { computeWakeAtMs, isScheduleActive, type AgentSchedule } from "@/lib/agents/scheduler";
 
 const base: AgentSchedule = {
   id: "s1",
@@ -65,5 +68,92 @@ describe("agent scheduler", () => {
       runAtMs: new Date("2026-09-13T10:00:00.000Z").getTime(), // dimanche, hors fenêtre
     };
     expect(isScheduleActive(both, new Date("2026-09-13T12:00:00.000Z"))).toBe(true);
+  });
+});
+
+// ─── Task 102-b — Réveil indexé wakeAtMs (quota Firestore) ───
+// AVANT : chaque tick (5 min, 288/jour) lisait jusqu'à 500 plannings pour
+// n'en exécuter que quelques-uns — jusqu'à ~144 000 lectures/jour.
+// APRÈS : chaque doc porte wakeAtMs (min des réveils pertinents) et le
+// balayage indexé ne lit QUE les plannings réellement dus.
+describe("réveil indexé wakeAtMs (Task 102-b)", () => {
+  it("planning cron actif : réveil = prochaine occurrence (créneau serveur UTC)", () => {
+    // Lundi 2026-09-14 10:00 UTC, dans la fenêtre → prochaine occurrence =
+    // mardi 08:00. NB : nextOccurrence construit les créneaux en heure
+    // SERVEUR (comportement existant du dépôt) ; sandbox/CI/Vercel = UTC.
+    const now = new Date("2026-09-14T10:00:00.000Z").getTime();
+    expect(computeWakeAtMs(base, now)).toBe(new Date("2026-09-15T08:00:00.000Z").getTime());
+  });
+
+  it("planning désactivé : aucun réveil (ne doit JAMAIS apparaître dans le balayage)", () => {
+    const now = new Date("2026-09-14T10:00:00.000Z").getTime();
+    expect(computeWakeAtMs({ ...base, enabled: false }, now)).toBeUndefined();
+  });
+
+  it("one-shot non consommé : réveil = runAtMs ; consommé : aucun réveil", () => {
+    const now = new Date("2026-09-14T09:00:00.000Z").getTime();
+    const runAtMs = new Date("2026-09-14T10:00:00.000Z").getTime();
+    const oneShot: AgentSchedule = {
+      ...base,
+      daysOfWeek: undefined,
+      startTime: undefined,
+      endTime: undefined,
+      runAtMs,
+    };
+    expect(computeWakeAtMs(oneShot, now)).toBe(runAtMs);
+    expect(
+      computeWakeAtMs({ ...oneShot, lastTriggeredSlot: `oneshot:${runAtMs}` }, now),
+    ).toBeUndefined();
+  });
+
+  it("relance différée : réveil = min(prochaine occurrence, notBeforeMs)", () => {
+    const now = new Date("2026-09-14T10:00:00.000Z").getTime();
+    const notBeforeMs = new Date("2026-09-14T11:30:00.000Z").getTime(); // avant mardi 07:00 UTC
+    expect(
+      computeWakeAtMs({ ...base, retryState: { attempt: 2, notBeforeMs } }, now),
+    ).toBe(notBeforeMs);
+  });
+
+  it("veille : source jamais sondée = dû immédiatement ; sondée = +10 min", () => {
+    const now = new Date("2026-09-14T10:00:00.000Z").getTime();
+    const watcher: AgentSchedule = {
+      ...base,
+      daysOfWeek: undefined,
+      startTime: undefined,
+      endTime: undefined,
+      watchSources: [{ kind: "rss", url: "https://exemple.fr/feed.xml" }],
+    };
+    expect(computeWakeAtMs(watcher, now)).toBe(now);
+    const checked = computeWakeAtMs(
+      {
+        ...watcher,
+        watchSources: [{ kind: "rss", url: "https://exemple.fr/feed.xml", lastCheckedAt: "2026-09-14T09:57:00.000Z" }],
+      },
+      now,
+    );
+    expect(checked).toBe(new Date("2026-09-14T09:57:00.000Z").getTime() + 10 * 60 * 1000);
+  });
+
+  // ─── Gardes structurels (convention du dépôt) : le contenu SOURCE doit ───
+  // ─── conserver le balayage indexé + ses replis, sinon régression quota ───
+  const source = readFileSync(path.join(import.meta.dirname, "scheduler.ts"), "utf8");
+
+  it("garde : le balayage indexé where(wakeAtMs<=now)+orderBy+limit(200) est présent", () => {
+    expect(source).toContain('where("wakeAtMs", "<=", nowMs)');
+    expect(source).toContain('orderBy("wakeAtMs")');
+    expect(source).toContain("limit(200)");
+  });
+
+  it("garde : le repli legacy complet et son throttle 10 min restent en place", () => {
+    expect(source).toContain('where("enabled", "==", true).limit(500)');
+    expect(source).toContain("LEGACY_SCAN_INTERVAL_MS = 10 * 60 * 1000");
+    expect(source).toContain("lastLegacyScanAtMs");
+    expect(source).toContain("WAKE_REPAIR_TOLERANCE_MS");
+  });
+
+  it("garde : la réparation wakeAtMs est bornée (batchs, merge, delete sur désarmement)", () => {
+    expect(source).toContain("async function repairWakeFields");
+    expect(source).toContain("adminDb.batch()");
+    expect(source).toContain("wakeAtMs: FieldValue.delete()");
   });
 });

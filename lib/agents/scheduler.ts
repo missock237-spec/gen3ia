@@ -70,6 +70,13 @@ export type AgentSchedule = z.infer<typeof ScheduleSchema> & {
   nextRunAt?: string;
   /** État de relance après échec (retry automatique borné). */
   retryState?: { attempt: number; notBeforeMs: number };
+  /**
+   * Réveil indexé du balayage (Task 102-b) : min des réveils pertinents en
+   * epoch ms — champ géré SERVEUR uniquement (jamais soumis par le client).
+   * Absent/supprimé = le doc n'est JAMAIS sélectionné par le balayage indexé
+   * (planification désactivée, ou webhook pur sans aucun réveil programmé).
+   */
+  wakeAtMs?: number;
 };
 
 export type ScheduleRun = {
@@ -92,6 +99,27 @@ const EXECUTION_LEASE_MS = 2 * 60 * 60 * 1000;
 // Anti-rafale : une même source de veille n'est pas sondée plus d'une fois
 // toutes les 10 minutes (utile quand le cron passe plus souvent que nécessaire).
 const WATCH_CHECK_THROTTLE_MS = 10 * 60 * 1000;
+// ─── Balayage indexé par wakeAtMs (Task 102-b — quota Firestore) ───
+// AVANT : chaque tick lisait jusqu'à 500 plannings (where enabled) — le tick
+// est publié toutes les 5 min (288/jour) → jusqu'à 144 000 lectures/jour
+// pour n'exécuter que quelques plannings dus.
+// APRÈS : chaque doc porte wakeAtMs = min des réveils pertinents (prochaine
+// occurrence du créneau, one-shot runAtMs, retryState.notBeforeMs, prochain
+// poll de veille) ; la requête indexée ne lit QUE les plannings réellement
+// dus (0 lecture si aucun dû, 1 lecture par doc dû, plafond 200) — ~÷99 %
+// de lectures en régime croisière.
+// Tolérance de cohérence du champ wakeAtMs pour la réparation (filet de
+// sécurité) : au-delà de 5 min d'écart avec le recalcul, le champ est
+// considéré périmé et réécrit.
+const WAKE_REPAIR_TOLERANCE_MS = 5 * 60 * 1000;
+// FILET DE SÉCURITÉ / AUTO-RÉPARATION (migration sans opération ops) : le
+// scan legacy complet reste exécuté AU PLUS une fois toutes les 10 minutes
+// PAR PROCESSUS (garde module-level ci-dessous) ; il backfill les docs
+// actifs sans wakeAtMs et répare les champs incohérents (1 écriture par doc
+// réparé — coût de migration transitoire borné). Les ticks intermédiaires
+// n'utilisent QUE la requête indexée.
+const LEGACY_SCAN_INTERVAL_MS = 10 * 60 * 1000;
+let lastLegacyScanAtMs = 0;
 
 function assertTimezone(timezone: string) {
   try {
@@ -165,6 +193,54 @@ function nextOccurrence(schedule: AgentSchedule, now = new Date()) {
     }
   }
   return undefined;
+}
+
+/**
+ * Réveil indexé d'une planification (Task 102-b) : le MINIMUM des réveils
+ * pertinents, en epoch ms — c'est la valeur du champ `wakeAtMs` écrit sur
+ * chaque doc agentSchedules et interrogée par le balayage indexé (voir
+ * dispatchSchedules). Fonction PURE (testée unitairement).
+ *
+ * Composantes du min :
+ * - prochaine occurrence du créneau cron (le miroir ms du champ nextRunAt) ;
+ * - one-shot : runAtMs tant que son slot n'est PAS consommé (lastTriggeredSlot
+ *   différent du slot one-shot) — après consommation, plus aucun réveil (le
+ *   claim transactionnel garantit l'exactement-une fois, la terminaison
+ *   réécrit le champ) ;
+ * - relance différée : retryState.notBeforeMs si présent ;
+ * - veille (watchSources) : prochaine sonde = lastCheckedAt + cadence de
+ *   throttle (WATCH_CHECK_THROTTLE_MS) — source jamais sondée = dû
+ *   immédiatement (aligné sur la cadence réelle des watchers).
+ *
+ * undefined = AUCUN réveil pertinent : webhook pur (déclenché par l'événement
+ * externe) ou planification désactivée — le doc ne doit JAMAIS apparaître
+ * dans le balayage indexé (champ absent ou supprimé).
+ */
+export function computeWakeAtMs(schedule: AgentSchedule, nowMs: number): number | undefined {
+  if (schedule.enabled === false) return undefined;
+  const wakes: number[] = [];
+  const nextRun = nextOccurrence(schedule, new Date(nowMs));
+  if (nextRun) wakes.push(new Date(nextRun).getTime());
+  if (
+    typeof schedule.runAtMs === "number" &&
+    schedule.runAtMs > 0 &&
+    schedule.lastTriggeredSlot !== `oneshot:${schedule.runAtMs}`
+  ) {
+    wakes.push(schedule.runAtMs);
+  }
+  if (typeof schedule.retryState?.notBeforeMs === "number") {
+    wakes.push(schedule.retryState.notBeforeMs);
+  }
+  if ((schedule.watchSources?.length ?? 0) > 0) {
+    let nextPollMs = Number.POSITIVE_INFINITY;
+    for (const source of schedule.watchSources!) {
+      const lastChecked = source.lastCheckedAt ? Date.parse(source.lastCheckedAt) : Number.NaN;
+      // Jamais sondée → dû immédiatement ; sinon cadence actuelle des veilles.
+      nextPollMs = Math.min(nextPollMs, Number.isFinite(lastChecked) ? lastChecked + WATCH_CHECK_THROTTLE_MS : nowMs);
+    }
+    if (Number.isFinite(nextPollMs)) wakes.push(nextPollMs);
+  }
+  return wakes.length > 0 ? Math.min(...wakes) : undefined;
 }
 
 function calendarDate(local: ReturnType<typeof localParts>) {
@@ -252,6 +328,13 @@ export async function createSchedule(userId: string, input: unknown) {
 
   const id = randomUUID();
   const now = FieldValue.serverTimestamp();
+  // Réveil indexé (Task 102-b) : calculé DÈS LA CRÉATION — prochaine
+  // occurrence du créneau, one-shot runAtMs, ou premier poll de veille
+  // (immédiat : sources jamais sondées). Une planification créée désactivée
+  // n'obtient PAS le champ (jamais dans le balayage indexé).
+  const draftWakeMs = parsed.enabled
+    ? computeWakeAtMs({ ...parsed, id, userId, ...(watchSources ? { watchSources } : {}) } as AgentSchedule, Date.now())
+    : undefined;
 
   await adminDb.collection(COLLECTION).doc(id).set({
     agentId: parsed.agentId,
@@ -272,6 +355,7 @@ export async function createSchedule(userId: string, input: unknown) {
     ...(alwaysOnWebhookToken ? { alwaysOnWebhookToken } : {}),
     ...(watchSources ? { watchSources } : {}),
     userId,
+    ...(draftWakeMs !== undefined ? { wakeAtMs: draftWakeMs } : {}),
     createdAt: now,
     updatedAt: now,
   });
@@ -309,12 +393,25 @@ export async function updateSchedule(userId: string, id: string, input: unknown)
   void _enableWebhook;
   void _watchSourceInputs;
 
+  // Vue fusionnée du doc APRÈS application du patch (base du recalcul des
+  // champs dérivés) — les champs serveur non patchés restent ceux du doc.
+  const merged = { ...(current.data() as AgentSchedule), ...parsed, id, userId } as AgentSchedule;
+  // État enabled EFFECTIF après le patch (Task 102-b) : un patch partiel
+  // (ex. renommage) sans champ `enabled` ne doit JAMAIS désarmer le réveil
+  // indexé — seul un `enabled: false` explicite supprime le champ.
+  const effectiveEnabled = merged.enabled !== false;
+  // Réveil indexé (Task 102-b) : recalculé à CHAQUE mise à jour. Une
+  // planification désactivée ne doit JAMAIS apparaître dans le balayage →
+  // wakeAtMs supprimé (idem si aucun réveil pertinent, ex. webhook pur).
+  const wakeMs = effectiveEnabled ? computeWakeAtMs(merged, Date.now()) : undefined;
+
   await ref.update({
     ...rest,
     ...(parsed.daysOfWeek ? { daysOfWeek: [...new Set(parsed.daysOfWeek)].sort((a, b) => a - b) } : {}),
     ...(parsed.enabled
-      ? { nextRunAt: nextOccurrence({ ...(current.data() as AgentSchedule), ...parsed, id, userId } as AgentSchedule) }
+      ? { nextRunAt: nextOccurrence(merged) }
       : { nextRunAt: FieldValue.delete() }),
+    ...(wakeMs !== undefined ? { wakeAtMs: wakeMs } : { wakeAtMs: FieldValue.delete() }),
     updatedAt: FieldValue.serverTimestamp(),
   });
   return getSchedule(userId, id);
@@ -353,6 +450,12 @@ export async function claimDueSchedule(schedule: AgentSchedule, now = new Date()
     if (runningActive) return null;
 
     const startedAt = Timestamp.fromDate(now);
+    // Réveil indexé APRÈS ce claim (Task 102-b) : recalculé DANS LA MÊME
+    // transaction (aucune écriture supplémentaire, même coût) sur la vue
+    // post-écriture — le slot one-shot vient d'être consommé (runAtMs exclu)
+    // et le retryState est relu à frais depuis `data`.
+    const postClaim = { ...serializeSchedule(schedule.id, data), lastTriggeredSlot: slot };
+    const nextWakeMs = computeWakeAtMs(postClaim, now.getTime());
     tx.update(ref, {
       lastTriggeredSlot: slot,
       runningExecutionId: executionId,
@@ -362,6 +465,7 @@ export async function claimDueSchedule(schedule: AgentSchedule, now = new Date()
       lastError: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
       nextRunAt: schedule.enabled ? nextOccurrence(schedule, now) : FieldValue.delete(),
+      ...(nextWakeMs !== undefined ? { wakeAtMs: nextWakeMs } : { wakeAtMs: FieldValue.delete() }),
     });
     tx.set(runRef, {
       scheduleId: schedule.id,
@@ -500,6 +604,18 @@ async function finishScheduleRun(
     // terminée (succès comme échec final) — jamais de re-déclenchement.
     const oneShot = typeof scheduleData.runAtMs === "number";
 
+    // Réveil indexé après terminaison (Task 102-b) :
+    //  - one-shot auto-désarmé (enabled:false) → champ SUPPRIMÉ : le doc ne
+    //    doit JAMAIS réapparaître dans le balayage ;
+    //  - relance plantée → réveil = min(prochaine occurrence, notBeforeMs) ;
+    //  - sinon (succès / tentatives épuisées) → réveil = prochaine occurrence
+    //    (retryState purgé).
+    const plantedRetry = typeof (retryState as { notBeforeMs?: unknown } | undefined)?.notBeforeMs === "number"
+      ? (retryState as { attempt: number; notBeforeMs: number })
+      : undefined;
+    const postFinish = { ...serializeSchedule(scheduleId, scheduleData), retryState: plantedRetry };
+    const nextWakeMs = oneShot ? undefined : computeWakeAtMs(postFinish, Date.now());
+
     tx.update(scheduleRef, {
       runningExecutionId: FieldValue.delete(),
       runningExecutionStartedAt: FieldValue.delete(),
@@ -508,6 +624,7 @@ async function finishScheduleRun(
       ...(error ? { lastError: error.slice(0, 4000) } : { lastError: FieldValue.delete() }),
       ...(retryState ? { retryState } : { retryState: FieldValue.delete() }),
       ...(oneShot ? { enabled: false } : {}),
+      ...(nextWakeMs !== undefined ? { wakeAtMs: nextWakeMs } : { wakeAtMs: FieldValue.delete() }),
       updatedAt: FieldValue.serverTimestamp(),
     });
     tx.set(runRef, {
@@ -577,9 +694,86 @@ function serializeRun(id: string, data: DocumentData): ScheduleRun {
   };
 }
 
+/**
+ * Backfill / réparation du champ `wakeAtMs` (Task 102-b — migration sans ops) :
+ * n'écrit QUE les docs actifs dont le champ est absent ou diverge de plus de
+ * WAKE_REPAIR_TOLERANCE_MS du recalcul (1 écriture par doc réparé, au plus une
+ * fois toutes les LEGACY_SCAN_INTERVAL_MS par processus — coût transitoire
+ * borné). Les écritures partent par lots de 400 (convention batchs du dépôt).
+ */
+async function repairWakeFields(schedules: AgentSchedule[], nowMs: number): Promise<void> {
+  const pending: Array<{ id: string; wakeAtMs: number | ReturnType<typeof FieldValue.delete> }> = [];
+  for (const schedule of schedules) {
+    const computed = computeWakeAtMs(schedule, nowMs);
+    if (computed === undefined && schedule.wakeAtMs === undefined) continue;
+    if (
+      typeof computed === "number" &&
+      typeof schedule.wakeAtMs === "number" &&
+      Math.abs(computed - schedule.wakeAtMs) <= WAKE_REPAIR_TOLERANCE_MS
+    ) {
+      continue;
+    }
+    pending.push({ id: schedule.id, ...(computed !== undefined ? { wakeAtMs: computed } : { wakeAtMs: FieldValue.delete() }) });
+  }
+  for (let offset = 0; offset < pending.length; offset += 400) {
+    const batch = adminDb.batch();
+    for (const repair of pending.slice(offset, offset + 400)) {
+      batch.set(
+        adminDb.collection(COLLECTION).doc(repair.id),
+        { wakeAtMs: repair.wakeAtMs, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true },
+      );
+    }
+    await batch.commit();
+  }
+}
+
 export async function dispatchSchedules(now = new Date()) {
-  const snap = await adminDb.collection(COLLECTION).where("enabled", "==", true).limit(500).get();
-  const all = snap.docs.map((doc) => serializeSchedule(doc.id, doc.data()));
+  const nowMs = now.getTime();
+  // ─── Balayage indexé (Task 102-b — quota Firestore) ───
+  // La requête à champ unique sur wakeAtMs (indexé automatiquement par
+  // Firestore : AUCUN index composite à déployer) ne lit QUE les plannings
+  // réellement dus — 0 lecture si aucun dû, plafond 200. Un réveil dû couvre
+  // TOUS les motifs : créneau cron échu, one-shot à échéance, relance
+  // (notBeforeMs) et sonde de veille (computeWakeAtMs = leur minimum).
+  let all: AgentSchedule[] = [];
+  let legacyReason: "interval" | "error" | null = null;
+  try {
+    const dueSnap = await adminDb
+      .collection(COLLECTION)
+      .where("wakeAtMs", "<=", nowMs)
+      .orderBy("wakeAtMs")
+      .limit(200)
+      .get();
+    all = dueSnap.docs.map((doc) => serializeSchedule(doc.id, doc.data()));
+    // Filet de sécurité (≤ 1 fois / 10 min par processus) : le scan legacy
+    // backfill les docs actifs sans wakeAtMs (migration depuis l'ancien
+    // schéma) et répare les champs périmés ; un réveil manqué pendant la
+    // transition est au pire retardé de LEGACY_SCAN_INTERVAL_MS (le
+    // rattrapage borné de claimDueSchedule amortit le retard).
+    if (nowMs - lastLegacyScanAtMs >= LEGACY_SCAN_INTERVAL_MS) legacyReason = "interval";
+  } catch {
+    // Repli résilient (convention Task 101) : index indisponible, requête en
+    // échec ou panne Firestore → scan legacy complet pour ne JAMAIS manquer
+    // une exécution (coût dégradé = l'ancien régime, justesse conservée).
+    legacyReason = "error";
+  }
+  if (legacyReason) {
+    lastLegacyScanAtMs = nowMs;
+    try {
+      const snap = await adminDb.collection(COLLECTION).where("enabled", "==", true).limit(500).get();
+      const legacyDocs = snap.docs.map((doc) => serializeSchedule(doc.id, doc.data()));
+      // Fusion par id : les dûs indexés complètent le scan legacy (un doc dû
+      // peut être absent du scan si > 500 actifs, et réciproquement).
+      const byId = new Map(legacyDocs.map((schedule) => [schedule.id, schedule]));
+      for (const schedule of all) byId.set(schedule.id, schedule);
+      all = [...byId.values()];
+      if (legacyReason === "interval") await repairWakeFields(legacyDocs, nowMs);
+    } catch {
+      // Scan legacy en échec à son tour : on continue avec le résultat
+      // indexé (éventuellement vide) — le prochain tick réessaiera.
+    }
+  }
   const due = all.filter((schedule) => isScheduleActive(schedule, now));
   const results: Array<Record<string, unknown>> = [];
 
@@ -669,7 +863,7 @@ export async function dispatchSchedules(now = new Date()) {
     }
   }
 
-  return { checked: snap.size, due: due.length, executed: results };
+  return { checked: all.length, due: due.length, executed: results };
 }
 
 /**
@@ -720,6 +914,11 @@ async function claimRetrySchedule(schedule: AgentSchedule, now = new Date()): Pr
     if (runningActive) return null;
 
     const startedAt = Timestamp.fromDate(now);
+    // Réveil indexé APRÈS ce claim (Task 102-b) : le retryState est consommé
+    // (supprimé dans la même transaction) → réveil = prochaine occurrence
+    // (cron, one-shot non consommé, veille) recalculée à frais depuis `data`.
+    const postClaim = { ...serializeSchedule(schedule.id, data), retryState: undefined };
+    const nextWakeMs = computeWakeAtMs(postClaim, now.getTime());
     tx.update(ref, {
       runningExecutionId: executionId,
       runningExecutionStartedAt: startedAt,
@@ -727,6 +926,7 @@ async function claimRetrySchedule(schedule: AgentSchedule, now = new Date()): Pr
       lastExecutionStatus: "running",
       retryState: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
+      ...(nextWakeMs !== undefined ? { wakeAtMs: nextWakeMs } : { wakeAtMs: FieldValue.delete() }),
     });
     tx.set(runRef, {
       scheduleId: schedule.id,
@@ -951,8 +1151,14 @@ export async function checkScheduleWatchSources(schedule: AgentSchedule, force =
   }
 
   if (updatedSources.some((source, index) => source !== sources[index])) {
+    // Réveil indexé (Task 102-b) : le prochain poll de veille est réfléchi
+    // dans wakeAtMs — dernière sonde + cadence de throttle (10 min), ou
+    // immédiat pour une source jamais sondée. Même écriture (aucun coût
+    // supplémentaire) : le balayage indexé réveillera la veille à l'heure.
+    const nextWakeMs = computeWakeAtMs({ ...schedule, watchSources: updatedSources }, Date.now());
     await adminDb.collection(COLLECTION).doc(schedule.id).update({
       watchSources: updatedSources,
+      ...(nextWakeMs !== undefined ? { wakeAtMs: nextWakeMs } : { wakeAtMs: FieldValue.delete() }),
       updatedAt: FieldValue.serverTimestamp(),
     }).catch(() => undefined);
   }
