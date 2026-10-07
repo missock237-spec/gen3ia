@@ -556,6 +556,52 @@ export async function advanceJob(jobId: string, options: { timeBudgetMs?: number
     job.tmpDir = tmpDir;
   }
 
+  // Reprise cross-instance : /tmp est LOCAL à chaque instance lambda. Si le
+  // répertoire du job n'existe pas SUR CETTE INSTANCE, aucun fichier
+  // intermédiaire (segments, video_noaudio, audio_final, master) n'est
+  // disponible — un tick au-delà de « segments » échouerait avec un ffmpeg
+  // code 1 (entrées absentes) et consommerait le budget de relance. Rollback
+  // déterministe : les images sont re-téléchargées depuis R2 et le rendu
+  // repart du début des segments (checkpoints remis à zéro).
+  if (!(await pathExists(tmpDir))) {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(tmpDir, { recursive: true });
+    if (
+      job.mode !== "exports_only" &&
+      STAGE_ORDER.indexOf(job.stage) > STAGE_ORDER.indexOf("segments")
+    ) {
+      const totalSegments = job.plan?.segments?.length ?? 0;
+      await saveJobDoc(
+        JOBS_COLLECTION,
+        jobId,
+        {
+          stage: "segments",
+          progress: computeJobProgress("segments", 0, totalSegments),
+          "checkpoints.completedSegments": [],
+          "checkpoints.transitionsDone": false,
+          "checkpoints.audioDone": false,
+          "checkpoints.subtitlesDone": false,
+          "checkpoints.qcDone": false,
+          updatedAt: nowIso(),
+        },
+        job.userId,
+      );
+      job.stage = "segments";
+      job.checkpoints = {
+        ...job.checkpoints,
+        completedSegments: [],
+        transitionsDone: false,
+        audioDone: false,
+        subtitlesDone: false,
+        qcDone: false,
+      };
+      await logSystem(
+        job.projectId,
+        `Rendu ${jobId.slice(0, 8)} : instance relais sans fichiers temporaires — reprise déterministe depuis les segments.`,
+      ).catch(() => undefined);
+    }
+  }
+
   const io = buildEngineIo(job, tmpDir);
   const startedStage = job.stage;
 
@@ -680,6 +726,17 @@ async function moveToNextStage(jobId: string, job: RenderJob, fromStage: RenderS
  */
 async function failJob(job: RenderJob, error: Error, policy?: ResumePolicy, quotaFailures?: number): Promise<TickResult> {
   const message = error.message.slice(0, 800);
+  // Observabilité production : le stderr capté par le runner FFmpeg (FfmpegError)
+  // est la seule preuve du pourquoi d'un code 1 — il accompagne désormais tout
+  // message d'échec persisté (borne 1200 caractères) + trace console (Sentry).
+  const rawStderr = (error as { stderr?: unknown }).stderr;
+  const stderrTail = typeof rawStderr === "string" && rawStderr.trim().length > 0
+    ? rawStderr.trim().slice(-1200)
+    : "";
+  const messageWithStderr = stderrTail ? `${message} | stderr: ${stderrTail}` : message;
+  if (stderrTail) {
+    console.error(`[video-render] job=${job.id} stage=${job.stage} stderr=${stderrTail}`);
+  }
   // Régime « reprise » : politique fournie et budget NON consommé (quota /
   // transitoire). Une politique fatale retombe dans le régime legacy.
   const resumeMode = policy ? !policy.consumeRetry : false;
@@ -689,7 +746,7 @@ async function failJob(job: RenderJob, error: Error, policy?: ResumePolicy, quot
       // Message stocké actionnable : pour un quota, pas d'alarme utilisateur.
       const storedMessage = isQuota
         ? `Quota Firestore épuisé — reprise automatique programmée (backoff ${policy.delaySeconds} s).`
-        : message;
+        : messageWithStderr;
       const patch: Record<string, unknown> = {
         status: "queued",
         errorMessage: storedMessage,
@@ -721,7 +778,7 @@ async function failJob(job: RenderJob, error: Error, policy?: ResumePolicy, quot
         job.id,
         {
           status: "queued",
-          errorMessage: message,
+          errorMessage: messageWithStderr,
           retryCount: FieldValue.increment(1),
           leaseOwner: FieldValue.delete(),
           leaseExpiresAt: 0,
@@ -740,7 +797,7 @@ async function failJob(job: RenderJob, error: Error, policy?: ResumePolicy, quot
       {
         status: "failed",
         errorCode: "RENDER_FAILED",
-        errorMessage: message,
+        errorMessage: messageWithStderr.slice(0, 2000),
         leaseOwner: FieldValue.delete(),
         leaseExpiresAt: 0,
         updatedAt: nowIso(),
@@ -760,7 +817,7 @@ async function failJob(job: RenderJob, error: Error, policy?: ResumePolicy, quot
       title: "Rendu vidéo échoué",
       body: `Le rendu a échoué (${job.stage}). Aucun montant débité — reprise possible depuis le studio vidéo.`,
     }).catch(() => undefined);
-    return { jobId: job.id, status: "failed", stage: job.stage, done: true, continued: false, message };
+    return { jobId: job.id, status: "failed", stage: job.stage, done: true, continued: false, message: messageWithStderr };
   } catch (requeueError) {
     // La ré-écriture elle-même a échoué (quota aussi côté miroir — Supabase
     // indisponible) : on journalise et on PROPAGE — la route tick ré-enfilera
@@ -1054,7 +1111,15 @@ async function stageQc(job: RenderJob, io: EngineIo): Promise<StageOutcome> {
   // Le master préliminaire : vidéo (transitions) + audio muxés sans ASS.
   const masterTmp = join2(io.tmpDir, "master.mp4");
   const videoFile = join2(io.tmpDir, "video_noaudio.mp4");
-  const audioFile = job.checkpoints.audioDone ? join2(io.tmpDir, "audio_final.m4a") : null;
+  // Défensif : audioDone=true n'implique pas que le fichier existe SUR CETTE
+  // INSTANCE (checkpoint Firestore vs /tmp local). Un input ffmpeg absent
+  // ferait échouer la QC en code 1 — on remuxe alors sans audio et l'auto-fix
+  // reconstruira la piste (issue « missing_audio_stream »).
+  const audioPath = join2(io.tmpDir, "audio_final.m4a");
+  const audioFile = job.checkpoints.audioDone && (await pathExists(audioPath)) ? audioPath : null;
+  if (job.checkpoints.audioDone && !audioFile) {
+    await io.log("QC : checkpoint audio présent mais fichier absent sur cette instance — remux sans audio, l'auto-fix reconstruira la piste.");
+  }
   await finalizeMaster({
     plan,
     io,
@@ -1287,8 +1352,28 @@ function buildEngineIo(job: RenderJob, tmpDir: string): EngineIo {
       });
       return upload.r2Key;
     },
-    log: (message) => logSystem(job.projectId, message),
+    log: async (message) => {
+      await logSystem(job.projectId, message);
+      // Fil conducteur : le dernier journal est posé SUR le job (diagnostic
+      // production immédiat — quelles étapes ont réellement tourné).
+      await adminDb
+        .collection(JOBS_COLLECTION)
+        .doc(job.id)
+        .set({ lastLog: message.slice(0, 280) }, { merge: true })
+        .catch(() => undefined);
+    },
   };
+}
+
+/** Existence d'un chemin sur le disque LOCAL de cette instance (jamais jeté). */
+async function pathExists(path: string): Promise<boolean> {
+  const { stat } = await import("node:fs/promises");
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Récupère un job pour lecture (worker sans user : vérification interne). */
