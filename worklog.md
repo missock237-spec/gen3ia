@@ -2866,3 +2866,22 @@ Work Log:
 Stage Summary:
 - Le plan « stocker les fichiers et checkpoints dans un stockage durable puis tester explicitement la reprise sur une autre instance » est livré : le registre Firestore porte le manifeste, R2 porte les octets, getWorkspace restaure — les missions QStash peuvent reprendre sur n'importe quelle instance. R2 non configuré = comportement actuel inchangé (variables R2 déjà présentes en production Vercel).
 - Validation orchestrateur : tsc 0, vitest lib/execution + lib/video = 156 verts, eslint 0.
+
+---
+Task ID: 104-e
+Agent: orchestrateur
+Task: garde-fous de livraison, hygiène du dépôt, qualification CodeQL des faux positifs, configuration production.
+
+Work Log:
+- Protection de branche main activée via API : checks requis stricts (Typecheck·Lint·Tests·Audit·Build·Budget, E2E émulateurs, gitleaks, axe WCAG, CodeQL SAST), force-push et suppressions interdits, historique linéaire. Pas de PR obligatoire (flux solo préservé) — les vérifications bloquent toute fusion de PR sans CI verte.
+- Dependabot : alertes de vulnérabilités (204) + corrections automatiques (204) activés ; .github/dependabot.yml créé (npm racine hebdo avec groupe minor/patch, sandbox npm, github-actions ; next major ignoré — montée 16.x = décision d'architecture ADR). 10 PRs Dependabot ouvertes au premier passage, soumissibles aux checks requis.
+- README.md + docs/guide-technique.md + docs/architecture-decisions.md : Next.js 16 → Next.js 15 (aligné sur package.json 15.5.26) ; domaine canonique gen3ia.online déjà cohérent dans les docs (vérifié).
+- GEN3IA_APP_ORIGIN créée dans Vercel AVANT les builds : production+preview = https://gen3ia.online, development = http://localhost:3000 (le P0 repliait réellement sur l'origine requête : la variable n'existait pas).
+- PR #3 (security, 325 commits derrière) fermée avec commentaire documenté : comportements visés couverts par l'évolution du runtime, à ré-extraire sur branche fraîche si résiduel.
+- PR #6 (UI v4 Nexus, 258 commits derrière) fermée avec commentaire documenté ; extraction effectuée : durcissement app/api/integrations/messaging/approvals (rate-limit par IP 30/10 min + retry-after, errorBody — aucune erreur interne brute sur route sans cookie ni Bearer) ; extraction écartée avec preuve : app/api/security/csp-report serait du code mort (CSP enforced sans report-uri — décision d'architecture à reprendre en ADR).
+- CodeQL 18 → 0 ouvertes : correctifs réels validés par la nouvelle analyse (#53, #54, #55, #69 fermées automatiquement) ; 12 écartées avec justification (10 scripts ops file-access-to-http, create-zip #56, #67, #75) — preuves complètes dans docs/codeql-triage.md ; 4 nouvelles alertes de TESTS (#71-74, écritures mkdtemp volontaires) écartées « used in tests ».
+
+Stage Summary:
+- gen3ia.online validée : /api/health ok, / et /studio 200, organisations 401 sans auth, NOUVEAU /api/admin/billing/reconcile déployé (AUTH_REQUIRED sans jeton), webhook Chariow 401 sans signature (contrat inchangé).
+- CI 5/5 success + Vercel READY sur les deux commits (26c9319, 97c3af1). Suite locale : 2344 tests verts, tsc 0, eslint 0 erreur (2 warnings préexistants sur un composant non touché).
+- Toutes les exigences du plan d'amélioration sont traitées : QStash falsifiable (P0), Chariow rejeu (P1), 18 alertes CodeQL, workspaces inter-instance, garde-fous (protection branche + Dependabot), incohérences (version Next.js, domaine canonique, PRs obsolètes).
