@@ -119,9 +119,12 @@ export function assertMediaSizeAllowed(sizeBytes: number, kind: "image" | "video
  *   filtre ou une entrée (protection SSRF définitive — tout est matérialisé
  *   en fichiers locaux dans le tmp du job avant rendu) ;
  * - -max_alloc : borne d'allocation mémoire (protection OOM/zip-bomb) ;
- * - -y : écrasement des sorties du tmp dédié au job uniquement.
+ * - -y : écrasement des sorties du tmp dédié au job uniquement. CRITIQUE pour
+ *   la reprise au checkpoint et la boucle auto-fix QC : sur une même instance
+ *   chaude, un re-rendu réécrit segment_XXXX.mp4 / audio_final.m4a / master.mp4
+ *   — sans -y, ffmpeg sort en code 1 (« File already exists. Exiting. »).
  */
-export const FFMPEG_SANDBOX_ARGS = ["-nostdin", "-protocol_whitelist", "file,pipe", "-max_alloc", "2147483648"] as const;
+export const FFMPEG_SANDBOX_ARGS = ["-nostdin", "-y", "-protocol_whitelist", "file,pipe", "-max_alloc", "2147483648"] as const;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Résolution des binaires FFmpeg/ffprobe (Task 1-a)

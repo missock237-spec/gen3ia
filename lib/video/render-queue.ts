@@ -1095,6 +1095,19 @@ async function stageAudio(job: RenderJob, io: EngineIo): Promise<void> {
   const expected = plan.estimatedSec;
   const audioFile = await mixAudio({ plan, io, durationSec: expected });
   if (!audioFile) {
+    // Honnêteté d'état : si le plan PRÉVOIT de l'audio (narration/musique/SFX),
+    // un mixage null signifie que les assets n'ont pas pu être résolus — on
+    // échoue le tick (relance au checkpoint) au lieu de poser un checkpoint
+    // « audio fait » qui produirait un master muet et une boucle QC inutile.
+    const audioExpected =
+      plan.audioMix.narration.length > 0 ||
+      plan.audioMix.music.length > 0 ||
+      plan.audioMix.sfx.length > 0;
+    if (audioExpected) {
+      throw new Error(
+        "Mixage audio attendu par le plan mais aucun fichier produit (assets musique/SFX indisponibles).",
+      );
+    }
     await io.log("Aucune entrée audio prévue — vidéo muette assumée (narration/musique absentes).");
   }
   await saveJobDoc(JOBS_COLLECTION, job.id, { "checkpoints.audioDone": true, updatedAt: nowIso() }, job.userId);
