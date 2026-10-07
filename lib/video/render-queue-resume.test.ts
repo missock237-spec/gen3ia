@@ -461,6 +461,10 @@ describe("stageFinalize — idempotence", () => {
   });
 
   it("premier passage (chemin nominal) : upload + settle + écriture finale complétée", async () => {
+    // Garde cross-instance : le master doit exister sur l'instance du finalize.
+    const { mkdir, writeFile, rm } = await import("node:fs/promises");
+    await mkdir("/tmp/gen3ia-render-test", { recursive: true });
+    await writeFile("/tmp/gen3ia-render-test/master.mp4", Buffer.from("master-test"));
     setDoc(baseJob({ status: "processing", stage: "finalize", leaseOwner: "job-1:ancien", leaseExpiresAt: 0 }));
     vi.mocked(uploadMaster).mockResolvedValue({
       r2Key: "renders/job-1/master.mp4",
@@ -471,17 +475,21 @@ describe("stageFinalize — idempotence", () => {
     });
     vi.mocked(settleRenderBudget).mockResolvedValue(1150);
 
-    const result = await advanceJob("job-1");
+    try {
+      const result = await advanceJob("job-1");
 
-    expect(uploadMaster).toHaveBeenCalledTimes(1);
-    expect(settleRenderBudget).toHaveBeenCalledTimes(1);
-    const finalPatch = vi.mocked(queueResume.saveJobDoc).mock.calls.at(-1)![2] as Record<string, unknown>;
-    expect(finalPatch).toMatchObject({
-      status: "completed",
-      "plan.masterR2Key": "renders/job-1/master.mp4",
-      billedMinor: 1150,
-    });
-    expect(result.status).toBe("completed");
+      expect(uploadMaster).toHaveBeenCalledTimes(1);
+      expect(settleRenderBudget).toHaveBeenCalledTimes(1);
+      const finalPatch = vi.mocked(queueResume.saveJobDoc).mock.calls.at(-1)![2] as Record<string, unknown>;
+      expect(finalPatch).toMatchObject({
+        status: "completed",
+        "plan.masterR2Key": "renders/job-1/master.mp4",
+        billedMinor: 1150,
+      });
+      expect(result.status).toBe("completed");
+    } finally {
+      await rm("/tmp/gen3ia-render-test", { recursive: true, force: true });
+    }
   });
 });
 

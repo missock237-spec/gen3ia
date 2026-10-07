@@ -570,35 +570,7 @@ export async function advanceJob(jobId: string, options: { timeBudgetMs?: number
       job.mode !== "exports_only" &&
       STAGE_ORDER.indexOf(job.stage) > STAGE_ORDER.indexOf("segments")
     ) {
-      const totalSegments = job.plan?.segments?.length ?? 0;
-      await saveJobDoc(
-        JOBS_COLLECTION,
-        jobId,
-        {
-          stage: "segments",
-          progress: computeJobProgress("segments", 0, totalSegments),
-          "checkpoints.completedSegments": [],
-          "checkpoints.transitionsDone": false,
-          "checkpoints.audioDone": false,
-          "checkpoints.subtitlesDone": false,
-          "checkpoints.qcDone": false,
-          updatedAt: nowIso(),
-        },
-        job.userId,
-      );
-      job.stage = "segments";
-      job.checkpoints = {
-        ...job.checkpoints,
-        completedSegments: [],
-        transitionsDone: false,
-        audioDone: false,
-        subtitlesDone: false,
-        qcDone: false,
-      };
-      await logSystem(
-        job.projectId,
-        `Rendu ${jobId.slice(0, 8)} : instance relais sans fichiers temporaires — reprise déterministe depuis les segments.`,
-      ).catch(() => undefined);
+      await resetToSegments(jobId, job, "instance relais sans fichiers temporaires");
     }
   }
 
@@ -620,8 +592,7 @@ export async function advanceJob(jobId: string, options: { timeBudgetMs?: number
         outcome = await stageSegments(job, io, options.timeBudgetMs);
         break;
       case "transitions":
-        await stageTransitions(job, io);
-        outcome = { kind: "next" } as const;
+        outcome = await stageTransitions(job, io);
         break;
       case "audio":
         await stageAudio(job, io);
@@ -1044,10 +1015,21 @@ async function stageSegments(job: RenderJob, io: EngineIo, timeBudgetMs?: number
 /** Seuil au-delà duquel l'assemblage récursif (Long Video Engine) s'applique. */
 const RECURSIVE_ASSEMBLY_THRESHOLD = 12;
 
-async function stageTransitions(job: RenderJob, io: EngineIo): Promise<void> {
-  if (job.checkpoints.transitionsDone) return;
+async function stageTransitions(job: RenderJob, io: EngineIo): Promise<StageOutcome> {
+  if (job.checkpoints.transitionsDone) {
+    await moveToNextStage(job.id, job, "transitions");
+    return { kind: "continue", stage: job.stage, message: "Transitions déjà assemblées." };
+  }
   const plan = job.plan!;
   const segmentFiles = plan.segments.map((s) => `${io.tmpDir}/segment_${String(s.index).padStart(4, "0")}.mp4`);
+  // Garde cross-instance : un seul fichier de segment manquant ferait échouer
+  // ffmpeg en code 1 — rollback déterministe au lieu de consommer les relances.
+  for (const file of segmentFiles) {
+    if (!(await pathExists(file))) {
+      await resetToSegments(job.id, job, "segments absents sur cette instance (transitions)");
+      return { kind: "continue", stage: "segments", message: "Reprise : segments re-rendus sur cette instance." };
+    }
+  }
 
   let assembledFile: string;
   let expectedSec: number;
@@ -1086,6 +1068,8 @@ async function stageTransitions(job: RenderJob, io: EngineIo): Promise<void> {
   }
   await saveJobDoc(JOBS_COLLECTION, job.id, { "checkpoints.transitionsDone": true, updatedAt: nowIso() }, job.userId);
   await io.log(`Assemblage vidéo terminé (${Math.round(expectedSec)} s attendues).`);
+  await moveToNextStage(job.id, job, "transitions");
+  return { kind: "continue", stage: job.stage, message: "Transitions terminées." };
 }
 
 /** AUDIO : mixage narration + musique duckée + SFX. */
@@ -1124,14 +1108,28 @@ async function stageQc(job: RenderJob, io: EngineIo): Promise<StageOutcome> {
   // Le master préliminaire : vidéo (transitions) + audio muxés sans ASS.
   const masterTmp = join2(io.tmpDir, "master.mp4");
   const videoFile = join2(io.tmpDir, "video_noaudio.mp4");
-  // Défensif : audioDone=true n'implique pas que le fichier existe SUR CETTE
-  // INSTANCE (checkpoint Firestore vs /tmp local). Un input ffmpeg absent
-  // ferait échouer la QC en code 1 — on remuxe alors sans audio et l'auto-fix
-  // reconstruira la piste (issue « missing_audio_stream »).
+  // Garde cross-instance : chaque tick peut atterrir sur une instance lambda
+  // différente — les fichiers intermédiaires ne survivent pas. Le montage
+  // vidéo absent ici ne peut PAS être re-matérialisé (il n'est pas dans R2) :
+  // rollback déterministe plutôt qu'un ffmpeg code 1.
+  if (!(await pathExists(videoFile))) {
+    await resetToSegments(job.id, job, "montage vidéo (video_noaudio) absent sur cette instance (QC)");
+    return { kind: "continue", stage: "segments", message: "Reprise : montage vidéo absent, rendu relancé." };
+  }
   const audioPath = join2(io.tmpDir, "audio_final.m4a");
-  const audioFile = job.checkpoints.audioDone && (await pathExists(audioPath)) ? audioPath : null;
-  if (job.checkpoints.audioDone && !audioFile) {
-    await io.log("QC : checkpoint audio présent mais fichier absent sur cette instance — remux sans audio, l'auto-fix reconstruira la piste.");
+  let audioFile: string | null = (await pathExists(audioPath)) ? audioPath : null;
+  if (!audioFile && job.checkpoints.audioDone) {
+    // L'audio a été mixé sur une autre instance : re-mixage DÉTERMINISTE ici
+    // (assets musique/SFX re-téléchargés depuis R2) au lieu d'un mux muet
+    // qui relancerait la boucle auto-fix sans jamais aboutir.
+    await io.log("QC : fichier audio absent sur cette instance — re-mixage déterministe depuis les assets.");
+    audioFile = await mixAudio({ plan, io, durationSec: plan.estimatedSec });
+  }
+  if (plan.subtitles?.assR2Key) {
+    const assPath = join2(io.tmpDir, "subtitles.ass");
+    if (!(await pathExists(assPath))) {
+      await io.materializeByName(plan.subtitles.assR2Key, "subtitles.ass");
+    }
   }
   await finalizeMaster({
     plan,
@@ -1287,6 +1285,12 @@ async function stageFinalize(job: RenderJob, io: EngineIo): Promise<StageOutcome
     await logSystem(job.projectId, `Rendu ${job.id.slice(0, 8)} déjà livré — état final reconfirmé sans re-facturation (reprise après incident).`).catch(() => undefined);
     return { kind: "terminal", result: { jobId: job.id, status: "completed", stage: "finalize", done: true, continued: false, message: "Rendu déjà livré — état final confirmé." } };
   }
+  if (!(await pathExists(join2(io.tmpDir, "master.mp4")))) {
+    // Le master n'existe que sur l'instance qui a produit la QC — s'il manque
+    // ici, impossible à re-matérialiser (pas encore dans R2) : re-rendu.
+    await resetToSegments(job.id, job, "master absent sur cette instance avant livraison");
+    return { kind: "continue", stage: "segments", message: "Reprise : master absent, rendu relancé." };
+  }
   const uploaded = await uploadMaster({
     io,
     masterFile: join2(io.tmpDir, "master.mp4"),
@@ -1387,6 +1391,44 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Remise déterministe au stage « segments » : les fichiers intermédiaires ne
+ * survivent pas d'une instance lambda à l'autre (/tmp local). Les images se
+ * re-téléchargent depuis R2 et le rendu repart du début des segments —
+ * correct à toute étape car TOUTE la production est déterministe.
+ */
+async function resetToSegments(jobId: string, job: RenderJob, reason: string): Promise<void> {
+  const totalSegments = job.plan?.segments?.length ?? 0;
+  await saveJobDoc(
+    JOBS_COLLECTION,
+    jobId,
+    {
+      stage: "segments",
+      progress: computeJobProgress("segments", 0, totalSegments),
+      "checkpoints.completedSegments": [],
+      "checkpoints.transitionsDone": false,
+      "checkpoints.audioDone": false,
+      "checkpoints.subtitlesDone": false,
+      "checkpoints.qcDone": false,
+      updatedAt: nowIso(),
+    },
+    job.userId,
+  );
+  job.stage = "segments";
+  job.checkpoints = {
+    ...job.checkpoints,
+    completedSegments: [],
+    transitionsDone: false,
+    audioDone: false,
+    subtitlesDone: false,
+    qcDone: false,
+  };
+  await logSystem(
+    job.projectId,
+    `Rendu ${jobId.slice(0, 8)} : ${reason} — reprise déterministe depuis les segments.`,
+  ).catch(() => undefined);
 }
 
 /** Récupère un job pour lecture (worker sans user : vérification interne). */
