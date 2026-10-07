@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { assertSafeDestinationUrl, resolveJobOrigin } from "./origin";
+
 /**
  * Client QStash (Upstash) — file d'attente HTTP des missions longues
  * (recommandation A de l'audit de production).
@@ -26,6 +28,19 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * a démarré juste avant la coupure — même compromis que la reprise manuelle
  * existante (« Continuer la mission », Task 46) ; le bail d'exécution
  * (lease) rend les doubles délivrances concurrentes impossibles.
+ *
+ * SÉCURITÉ DE LA DESTINATION (fix CodeQL js/request-forgery) : l'URL des
+ * receivers est construite depuis l'ORIGINE CANONIQUE du serveur
+ * (GEN3IA_APP_ORIGIN, validée contre une allowlist d'hôtes — voir
+ * lib/queue/origin.ts), JAMAIS depuis l'origine de la requête entrante
+ * (falsifiable par l'appelant : un enfilement induit pourrait sinon
+ * rediriger un POST signé vers un serveur tiers). Les fonctions
+ * publishMissionTick/publishDispatchTick ne prennent PLUS d'origine en
+ * paramètre : elles résolvent l'origine en interne et refusent de publier
+ * (retour null, contrat « non configuré ») si elle est absente/invalide —
+ * la continuation par sondage existante prend le relais. En dernière ligne
+ * de défense, publishToDestination valide TOUTE destination contre
+ * assertSafeDestinationUrl (https + hôte allowlisté) avant tout fetch.
  */
 
 const QSTASH_BASE_URL = "https://qstash.upstash.io";
@@ -66,6 +81,9 @@ export async function publishToDestination(
   body: string,
   options: { delaySeconds?: number; retries?: number } = {},
 ): Promise<{ messageId: string }> {
+  // Défense en profondeur : aucune publication vers une destination dont
+  // le schéma/l'hôte ne passe pas l'allowlist serveur (anti request-forgery).
+  assertSafeDestinationUrl(destinationUrl);
   const headers = {
     Authorization: `Bearer ${config.token}`,
     "Content-Type": "application/json",
@@ -144,29 +162,12 @@ export async function publishJsonDestination(
   }
 }
 
-/** URL absolue du receiver, dérivée de l'origine de la requête entrante. */
+/**
+ * URL absolue du receiver — fonction PURE : appelée UNIQUEMENT avec
+ * l'origine canonique résolue côté serveur (jamais une origine requête).
+ */
 export function missionTickUrl(origin: string): string {
   return `${origin.replace(/\/$/, "")}/api/queue/mission-tick`;
-}
-
-/**
- * Publie un tick de mission. `delaySeconds` diffère la délivrance (utilisé
- * pour le ré-enfilement : laisse le temps au checkpoint d'être visible).
- * Retourne l'identifiant QStash du message, ou null si la file n'est pas
- * configurée. Une erreur réseau/HTTP est PROPAGÉE : l'appelant (route
- * d'entrée) doit savoir que la mission n'a pas été enfilée — un échec
- * silencieux laisserait une mission fantôme « queued » pour toujours.
- */
-export async function publishMissionTick(
-  origin: string,
-  runId: string,
-  options: { delaySeconds?: number } = {},
-): Promise<{ messageId: string } | null> {
-  const config = qstashConfig();
-  if (!config) return null;
-  return publishToDestination(config, missionTickUrl(origin), JSON.stringify({ runId }), {
-    delaySeconds: options.delaySeconds,
-  });
 }
 
 /** URL absolue du receiver de la boucle de dispatch planifié (Task 62). */
@@ -175,18 +176,58 @@ export function dispatchTickUrl(origin: string): string {
 }
 
 /**
+ * Publie un tick de mission. `delaySeconds` diffère la délivrance (utilisé
+ * pour le ré-enfilement : laisse le temps au checkpoint d'être visible).
+ * Retourne l'identifiant QStash du message, ou null si la file n'est pas
+ * configurée OU si l'origine canonique n'est pas résolue (même contrat :
+ * la continuation par sondage existante prend le relais — JAMAIS de repli
+ * sur l'origine de la requête, falsifiable). Une erreur réseau/HTTP est
+ * PROPAGÉE : l'appelant (route d'entrée) doit savoir que la mission n'a
+ * pas été enfilée — un échec silencieux laisserait une mission fantôme
+ * « queued » pour toujours.
+ */
+export async function publishMissionTick(
+  runId: string,
+  options: { delaySeconds?: number } = {},
+): Promise<{ messageId: string } | null> {
+  const resolved = resolveJobOrigin();
+  if (!resolved.ok) {
+    // Origine canonique absente/invalide : refus de publier (aucune
+    // destination falsifiable) — visible en console, sondage en relais.
+    console.warn(
+      `[queue/qstash] Tick de mission ${runId} non publié : origine canonique non résolue (${resolved.reason}).`,
+    );
+    return null;
+  }
+  const config = qstashConfig();
+  if (!config) return null;
+  return publishToDestination(config, missionTickUrl(resolved.origin), JSON.stringify({ runId }), {
+    delaySeconds: options.delaySeconds,
+  });
+}
+
+/**
  * Publie le tick SUIVANT de la boucle de dispatch planifié (Task 62).
  * `delaySeconds` = secondes jusqu'au début du slot suivant — la délivrance
  * tombe au bon moment, sans registre de planification côté QStash.
- * Même sémantique d'erreur que publishMissionTick (échec PROPAGÉ).
+ * Origine canonique résolue EN INTERNE (aucun paramètre origin falsifiable) :
+ * non résolue → null (la réservation du slot est libérée par l'appelant et
+ * le cron quotidien — sentinelle — relancera la boucle). Même sémantique
+ * d'erreur que publishMissionTick (échec réseau/HTTP PROPAGÉ).
  */
 export async function publishDispatchTick(
-  origin: string,
   options: { delaySeconds: number; slotEpoch: number },
 ): Promise<{ messageId: string } | null> {
+  const resolved = resolveJobOrigin();
+  if (!resolved.ok) {
+    console.warn(
+      `[queue/qstash] Tick de dispatch (slot ${options.slotEpoch}) non publié : origine canonique non résolue (${resolved.reason}).`,
+    );
+    return null;
+  }
   const config = qstashConfig();
   if (!config) return null;
-  return publishToDestination(config, dispatchTickUrl(origin), JSON.stringify({ slotEpoch: options.slotEpoch }), {
+  return publishToDestination(config, dispatchTickUrl(resolved.origin), JSON.stringify({ slotEpoch: options.slotEpoch }), {
     delaySeconds: Math.max(0, Math.min(options.delaySeconds, 86_400)),
     retries: TICK_RETRIES,
   });

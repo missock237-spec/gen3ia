@@ -327,7 +327,6 @@ async function launchQueuedTaskMission(input: {
   plan: RuntimePlan;
   projectId?: string;
   orgId?: string;
-  origin: string;
 }): Promise<{ queued: boolean; runId?: string; reason?: string }> {
   if (!missionQueueConfigured()) {
     return { queued: false, reason: "File d'attente non configurée." };
@@ -360,17 +359,15 @@ async function launchQueuedTaskMission(input: {
     } catch (runError) {
       console.warn("[agent-chat] run initial non enregistré", runError instanceof Error ? runError.message : runError);
     }
-    await publishMissionTick(input.origin, runId);
+    // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishMissionTick
+    // résout GEN3IA_APP_ORIGIN en interne (allowlist serveur) — la
+    // destination n'est jamais dérivée de la requête entrante.
+    await publishMissionTick(runId);
     return { queued: true, runId };
   } catch (error) {
     console.warn("[agent-chat] enfilement impossible — repli synchrone", error instanceof Error ? error.message : error);
     return { queued: false, reason: error instanceof Error ? error.message : "Enfilement impossible." };
   }
-}
-
-/** Origine pour publier les ticks (env prioritaire, sinon origine de la requête). */
-function requestOrigin(request: NextRequest): string {
-  return process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
 }
 
 export async function POST(request: NextRequest) {
@@ -764,7 +761,6 @@ export async function POST(request: NextRequest) {
         plan,
         projectId: agent.projectId,
         orgId: agent.orgId,
-        origin: requestOrigin(request),
       });
       if (queuedLaunch.queued) {
         return NextResponse.json({
@@ -890,7 +886,6 @@ export async function POST(request: NextRequest) {
           projectId: agent.projectId,
           orgId: agent.orgId,
           conversationId,
-          origin: requestOrigin(request),
         });
       }
       const finalText = delivery.finalText;
@@ -1090,7 +1085,6 @@ export async function POST(request: NextRequest) {
       conversationId,
       objective: body.message,
       plan,
-      origin: requestOrigin(request),
     });
     if (universalQueued.queued) {
       return NextResponse.json({
@@ -1202,7 +1196,6 @@ export async function POST(request: NextRequest) {
         objective: result.objective || body.message,
         plan: result.plan,
         conversationId,
-        origin: requestOrigin(request),
       });
     }
     const finalText = universalDelivery.finalText;

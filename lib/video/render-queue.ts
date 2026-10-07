@@ -62,6 +62,7 @@ import { VIDEO_LIMITS, VideoQuotaError, MAX_AUTO_FIX_ROUNDS } from "@/lib/video/
 import { createNotification } from "@/lib/notifications/repository";
 import { ensureAudioAssetsForProject } from "@/lib/video/audio-engine";
 import { publishJsonDestination, type QStashPublishResult } from "@/lib/queue/qstash";
+import { resolveJobOrigin } from "@/lib/queue/origin";
 import { ensureProjectTimeline } from "@/lib/video/timeline-bootstrap";
 import { setJobProgress } from "@/lib/infra/upstash";
 import { logger } from "@/lib/observability/logger";
@@ -156,7 +157,6 @@ export async function startRenderJob(params: {
   userId: string;
   projectId: string;
   derivedTargets: VideoExportTarget[];
-  origin: string;
 }): Promise<{ jobId: string; queued: boolean; estimate: ReturnType<typeof estimateRenderCost> }> {
   const project = await getOwnedProjectOrThrow(params.userId, params.projectId);
   if (!project.script || project.script.scenes.length === 0) {
@@ -225,7 +225,9 @@ export async function startRenderJob(params: {
   await mirrorRenderProgress(job, { projectId: job.projectId });
   await setProjectStatus(params.userId, params.projectId, "rendering");
   await logSystem(params.projectId, `Rendu ${jobId.slice(0, 8)} mis en file (estimation ${estimate.amountMinor} minor, ${Math.round(expectedSec)} s).`);
-  const published = await publishVideoTick(params.origin, jobId);
+  // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishVideoTick résout
+  // GEN3IA_APP_ORIGIN en interne (allowlist serveur) — aucune origine requête.
+  const published = await publishVideoTick(jobId);
   if (!published.ok) {
     // PAS d'échec bloquant : la continuation par sondage (GET render) et le
     // sweeper prennent le relais — mais l'incident est journalisé.
@@ -256,22 +258,27 @@ export function videoTickUrl(origin: string): string {
  * Publie un tick de rendu via le pattern partagé de lib/queue/qstash :
  * PATH BRUT primaire (la build QStash du compte rejette les destinations
  * URL-encodées — 400 « invalid destination url ») + repli encodé pour les
- * builds historiques. Retourne un résultat DISCRIMINÉ : l'appelant
- * distingue « QStash non configuré » (continuation par sondage assumée)
- * d'un échec réel (à journaliser — jamais de fantôme « queued »).
+ * builds historiques. ORIGINE CANONIQUE (fix CodeQL request-forgery) :
+ * résolue en interne depuis GEN3IA_APP_ORIGIN (allowlist serveur) — jamais
+ * depuis une origine de requête. Retourne un résultat DISCRIMINÉ :
+ * « unconfigured » couvre QStash absent ET origine non résolue (la
+ * continuation par sondage prend le relais), « error » est à journaliser
+ * (jamais de fantôme « queued »).
  */
-export async function publishVideoTick(origin: string, jobId: string, delaySeconds = 1): Promise<QStashPublishResult> {
-  return publishJsonDestination(videoTickUrl(origin), JSON.stringify({ jobId }), { delaySeconds });
+export async function publishVideoTick(jobId: string, delaySeconds = 1): Promise<QStashPublishResult> {
+  const resolved = resolveJobOrigin();
+  if (!resolved.ok) return { ok: false, mode: "unconfigured" } as const;
+  return publishJsonDestination(videoTickUrl(resolved.origin), JSON.stringify({ jobId }), { delaySeconds });
 }
 
 /**
  * Publication interne : renvoie true si le tick est enfilé ; journalise
- * les échecs RÉELS (mode error) — le mode unconfigured est le fonctionnement
- * normal en environnement sans QStash (continuation par sondage).
+ * les échecs RÉELS (mode error) — le mode unconfigured (QStash absent ou
+ * origine canonique non résolue) est le fonctionnement normal en
+ * environnement sans file (continuation par sondage).
  */
-async function publishTickAndLog(job: Pick<RenderJob, "id" | "projectId">, origin: string, delaySeconds = 0): Promise<boolean> {
-  if (!origin) return false;
-  const published = await publishVideoTick(origin, job.id, delaySeconds);
+async function publishTickAndLog(job: Pick<RenderJob, "id" | "projectId">, delaySeconds = 0): Promise<boolean> {
+  const published = await publishVideoTick(job.id, delaySeconds);
   if (!published.ok && published.mode === "error") {
     await logSystem(job.projectId, `Continuation QStash échouée (${published.message.slice(0, 200)}) — reprise par sondage du studio ou worker local.`).catch(() => undefined);
   }
@@ -279,7 +286,7 @@ async function publishTickAndLog(job: Pick<RenderJob, "id" | "projectId">, origi
 }
 
 /** Reprise : remet un job en file et le re-file (utilisateur ou worker). */
-export async function resumeJob(userId: string, jobId: string, origin?: string): Promise<void> {
+export async function resumeJob(userId: string, jobId: string): Promise<void> {
   const job = await getOwnedJobOrThrow(userId, jobId);
   if (job.status !== "paused" && job.status !== "failed" && job.status !== "cancelled") {
     throw new Error(`Reprise impossible depuis l'état ${job.status}.`);
@@ -299,7 +306,7 @@ export async function resumeJob(userId: string, jobId: string, origin?: string):
     },
     { merge: true },
   );
-  if (origin) await publishTickAndLog(job, origin);
+  await publishTickAndLog(job);
 }
 
 export async function pauseJob(userId: string, jobId: string): Promise<void> {
@@ -518,7 +525,7 @@ async function releaseLease(jobId: string): Promise<void> {
  * le travail DANS l'étape segments : l'échéance est vérifiée entre chaque
  * segment, un checkpoint est écrit après chacun — le poll reste responsive.
  */
-export async function advanceJob(jobId: string, origin: string, options: { timeBudgetMs?: number } = {}): Promise<TickResult> {
+export async function advanceJob(jobId: string, options: { timeBudgetMs?: number } = {}): Promise<TickResult> {
   const outcome = await claimJobForTick(jobId);
   if (outcome.kind === "missing") {
     return { jobId, status: "failed", stage: null, done: true, continued: false, message: "Job introuvable." };
@@ -603,11 +610,11 @@ export async function advanceJob(jobId: string, origin: string, options: { timeB
     if (outcome.kind === "next") {
       await moveToNextStage(jobId, job, startedStage);
       const deadlineSoon = Date.now() + 30_000 > Date.parse(job.deadlineAt ?? "0");
-      const enqueued = await publishTickAndLog(job, origin, deadlineSoon ? 1 : 0);
+      const enqueued = await publishTickAndLog(job, deadlineSoon ? 1 : 0);
       const refreshed = await refreshJob(jobId);
       return { jobId, status: refreshed.status, stage: refreshed.stage, done: false, continued: enqueued, message: `Étape ${startedStage} terminée.` };
     }
-    const enqueued = await publishTickAndLog(job, origin, outcome.delaySeconds ?? 0);
+    const enqueued = await publishTickAndLog(job, outcome.delaySeconds ?? 0);
     const refreshed = await refreshJob(jobId);
     await mirrorRenderProgress(refreshed, { projectId: refreshed.projectId });
     return { jobId, status: refreshed.status, stage: refreshed.stage, done: false, continued: enqueued, message: outcome.message };
@@ -626,7 +633,7 @@ export async function advanceJob(jobId: string, origin: string, options: { timeB
     // budget, ne marquent JAMAIS failed, ne notifient PAS. (failJob peut
     // propager si la ré-écriture échoue aussi côté miroir — la route tick
     // republiera.)
-    const result = await failJob(job, error instanceof Error ? error : new Error(String(error)), origin, policy, quotaFailures);
+    const result = await failJob(job, error instanceof Error ? error : new Error(String(error)), policy, quotaFailures);
     await mirrorRenderProgress({ ...job, status: result.status, progress: job.progress }, { projectId: job.projectId, error: result.message });
     return result;
   }
@@ -671,7 +678,7 @@ async function moveToNextStage(jobId: string, job: RenderJob, fromStage: RenderS
  * (quota aussi côté miroir — Supabase indisponible), on journalise et on
  * PROPAGE — le catch de la route tick ré-enfilera le tick.
  */
-async function failJob(job: RenderJob, error: Error, origin?: string, policy?: ResumePolicy, quotaFailures?: number): Promise<TickResult> {
+async function failJob(job: RenderJob, error: Error, policy?: ResumePolicy, quotaFailures?: number): Promise<TickResult> {
   const message = error.message.slice(0, 800);
   // Régime « reprise » : politique fournie et budget NON consommé (quota /
   // transitoire). Une politique fatale retombe dans le régime legacy.
@@ -696,12 +703,15 @@ async function failJob(job: RenderJob, error: Error, origin?: string, policy?: R
         patch.quotaFailures = quotaFailures;
       }
       await saveJobDoc(JOBS_COLLECTION, job.id, patch, job.userId);
-      if (origin) await publishTickAndLog(job, origin, policy.delaySeconds);
+      // publishTickAndLog retourne la réussite RÉELLE du publish — le champ
+      // « continued » reflète l'honnêteté du ré-enfilement (faux = sondage
+      // en relais) au lieu de dériver d'un simple paramètre non vide.
+      const enqueued = await publishTickAndLog(job, policy.delaySeconds);
       await logSystem(
         job.projectId,
         `Rendu ${job.id.slice(0, 8)} : incident ${isQuota ? "quota Firestore" : "transitoire"} à l'étape ${job.stage} — reprise automatique dans ${policy.delaySeconds} s (budget de relance intact, checkpoints conservés).`,
       ).catch(() => undefined);
-      return { jobId: job.id, status: "queued", stage: job.stage, done: false, continued: origin ? true : false, message: storedMessage };
+      return { jobId: job.id, status: "queued", stage: job.stage, done: false, continued: enqueued, message: storedMessage };
     }
     const retryCount = typeof job.retryCount === "number" ? job.retryCount : 0;
     // Reprise automatique : jusqu'à RENDER_RETRY_BUDGET relances (crash transitoire).
@@ -719,9 +729,9 @@ async function failJob(job: RenderJob, error: Error, origin?: string, policy?: R
         },
         job.userId,
       );
-      if (origin) await publishTickAndLog(job, origin, 15);
+      const enqueued = await publishTickAndLog(job, 15);
       await logSystem(job.projectId, `Rendu ${job.id.slice(0, 8)} : incident à l'étape ${job.stage} (relance ${retryCount + 1}/${RENDER_RETRY_BUDGET}) — reprise automatique au dernier checkpoint. ${message}`).catch(() => undefined);
-      return { jobId: job.id, status: "queued", stage: job.stage, done: false, continued: origin ? true : false, message };
+      return { jobId: job.id, status: "queued", stage: job.stage, done: false, continued: enqueued, message };
     }
     // Échec définitif : libère la réservation, purge, notifie.
     await saveJobDoc(
@@ -780,7 +790,7 @@ export interface SweepResult {
  * retryCount, ou l'échec définitif avec libération des fonds. Idempotent :
  * un job vivant (bail actif ou échéance future) n'est jamais touché.
  */
-export async function sweepStaleRenderJobs(origin?: string): Promise<SweepResult> {
+export async function sweepStaleRenderJobs(): Promise<SweepResult> {
   // Task 95-c — lecture via la couche résiliente (miroir chaud sous quota).
   const stale = await queryJobDocs<RenderJob>(JOBS_COLLECTION, "status", "processing");
   const now = Date.now();
@@ -798,7 +808,7 @@ export async function sweepStaleRenderJobs(origin?: string): Promise<SweepResult
     const deadlineAt = job.deadlineAt ? Date.parse(job.deadlineAt) : Number.NaN;
     // Sans marqueur d'échéance (document historique), on ne juge pas.
     if (!Number.isFinite(deadlineAt) || deadlineAt > now) continue;
-    const result = await failJob(job, new Error("Échéance de traitement dépassée (worker interrompu) — reprise au dernier checkpoint."), origin);
+    const result = await failJob(job, new Error("Échéance de traitement dépassée (worker interrompu) — reprise au dernier checkpoint."));
     if (result.status === "queued") requeued += 1;
     else failed += 1;
   }
@@ -817,17 +827,17 @@ export async function sweepStaleRenderJobs(origin?: string): Promise<SweepResult
  * concurrent ne peut pas doubler un tick QStash (bail). Ne fait rien si le
  * job est terminal, en pause ou détenu par un worker vivant.
  */
-export async function maybeAdvancePendingJob(jobId: string, options: { origin: string; timeBudgetMs?: number }): Promise<TickResult | null> {
+export async function maybeAdvancePendingJob(jobId: string, options: { timeBudgetMs?: number } = {}): Promise<TickResult | null> {
   const job = await getJob(jobId);
   if (!job) return null;
   const now = Date.now();
   if (job.status === "queued") {
-    return advanceJob(jobId, options.origin, { timeBudgetMs: options.timeBudgetMs });
+    return advanceJob(jobId, { timeBudgetMs: options.timeBudgetMs });
   }
   if (job.status === "processing" && !leaseActive(job, now)) {
     // Bail expiré (ou absent) : récupérable — le claim transactionnel
     // arbitre si un autre worker vient de le prendre.
-    return advanceJob(jobId, options.origin, { timeBudgetMs: options.timeBudgetMs });
+    return advanceJob(jobId, { timeBudgetMs: options.timeBudgetMs });
   }
   return null;
 }

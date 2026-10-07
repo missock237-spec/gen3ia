@@ -37,7 +37,7 @@ const SWEEP_THROTTLE_MS = 60_000;
 /** Horodatage du dernier sweep par clé — repli local si Redis est absent. */
 const localSweepAt = new Map<string, number>();
 
-async function sweepRenderJobsIfDue(projectId: string, origin: string): Promise<void> {
+async function sweepRenderJobsIfDue(projectId: string): Promise<void> {
   // Mode QStash : le worker tick est déjà responsable du sweep — aucun
   // second balayage cross-user dans le GET.
   if (qstashConfig()) return;
@@ -54,7 +54,9 @@ async function sweepRenderJobsIfDue(projectId: string, origin: string): Promise<
   }
   localSweepAt.set(throttleKey, now);
   await cacheSet(throttleKey, now, Math.ceil(SWEEP_THROTTLE_MS / 1000));
-  await sweepStaleRenderJobs(origin).catch(() => undefined);
+  // ORIGINE CANONIQUE (fix CodeQL request-forgery) : le sweep et les ticks
+  // résolvent GEN3IA_APP_ORIGIN en interne — plus aucune origine requête.
+  await sweepStaleRenderJobs().catch(() => undefined);
 }
 
 /**
@@ -85,12 +87,13 @@ export async function POST(request: NextRequest, { params }: Params) {
       );
     }
 
-    const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
+    // ORIGINE CANONIQUE (fix CodeQL request-forgery) : startRenderJob résout
+    // GEN3IA_APP_ORIGIN en interne (allowlist serveur) — l'origine n'est pas
+    // un paramètre d'appelant.
     const result = await startRenderJob({
       userId: guard.context.userId,
       projectId,
       derivedTargets,
-      origin,
     });
     return NextResponse.json(
       { ...result, imagesEnabled: isImageGenerationEnabled(), queueMode: qstashConfig() ? ("qstash" as const) : ("poll" as const) },
@@ -113,12 +116,11 @@ export async function GET(request: NextRequest, { params }: Params) {
   if (!guard.ok) return guard.response;
   try {
     const { projectId } = await params;
-    const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
 
     // Sweep best-effort des jobs orphelins de CE projet — throttlé (lot C4a,
     // voir sweepRenderJobsIfDue) : supprimé en mode QStash, 1 exécution max
     // par minute sinon.
-    await sweepRenderJobsIfDue(projectId, origin);
+    await sweepRenderJobsIfDue(projectId);
 
     let jobs = await listJobs(guard.context.userId, projectId);
     const pending = jobs.find((job) => {
@@ -132,7 +134,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       // Lot C4b : la relecture post-tick n'arrive QUE si le tick a réellement
       // avancé (résultat non nul) — un job détenu par un worker vivant (bail
       // actif, cas nominal QStash) ne déclenche plus un second listJobs.
-      const ticked = await maybeAdvancePendingJob(pending.id, { origin, timeBudgetMs: POLL_ADVANCE_BUDGET_MS }).catch(() => null);
+      const ticked = await maybeAdvancePendingJob(pending.id, { timeBudgetMs: POLL_ADVANCE_BUDGET_MS }).catch(() => null);
       if (ticked) jobs = await listJobs(guard.context.userId, projectId);
     }
 
@@ -178,9 +180,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     await params;
     const { jobId, action } = (await request.json()) as { jobId?: string; action?: string };
     if (!jobId || !action) throw new Error("jobId et action requis.");
-    const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
+    // ORIGINE CANONIQUE (fix CodeQL request-forgery) : resumeJob republie le
+    // tick vers l'origine canonique résolue côté serveur (jamais la requête).
     if (action === "pause") await pauseJob(guard.context.userId, jobId);
-    else if (action === "resume") await resumeJob(guard.context.userId, jobId, origin);
+    else if (action === "resume") await resumeJob(guard.context.userId, jobId);
     else if (action === "cancel") await cancelJob(guard.context.userId, jobId);
     else throw new Error(`Action inconnue : ${action}`);
     return NextResponse.json({ ok: true });

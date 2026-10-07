@@ -72,6 +72,23 @@ async function readWorkspaceFiles(workspaceRoot: string) {
       // un fichier substitué par un lien symbolique entre les deux appels)
       // est fermée : les données lues proviennent exactement de l'inode
       // vérifié (type + taille), jamais d'un chemin re-résolu.
+      //
+      // ── CodeQL js/insecure-temporary-file (#56) : FAUX POSITIF documenté ──
+      // L'alerte cible cette ouverture dans un workspace /tmp, or :
+      //  1. AUCUN fichier n'est créé ici — ouverture en lecture seule
+      //     (O_RDONLY) : cette ligne n'écrit rien dans /tmp ;
+      //  2. O_NOFOLLOW : une entrée devenue lien symbolique ferait échouer
+      //     l'ouverture (ELOOP) — un lien n'est jamais suivi ;
+      //  3. type et taille sont vérifiés sur l'INODE OUVERT (fstat du
+      //     descripteur, pas un stat du chemin) : les données lues sont
+      //     exactement celles de l'inode validé, jamais d'un chemin re-résolu ;
+      //  4. la racine du workspace est un répertoire /tmp instance-local
+      //     créé mode 0700 par createExecutionWorkspace
+      //     (lib/execution/workspace.ts) — non inscriptible par des tiers,
+      //     et le descripteur reste attaché à l'inode : aucune substitution
+      //     possible entre ouverture et lecture.
+      // Comportement volontairement inchangé (aucune régression) ; l'alerte
+      // est qualifiée avec ces quatre preuves.
       const handle = await fs.open(absolute, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
       try {
         const opened = await handle.stat();

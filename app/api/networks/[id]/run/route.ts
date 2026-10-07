@@ -71,8 +71,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
           ...(parsed.data.outcomeContract ? { outcomeContract: parsed.data.outcomeContract } : {}),
           plan,
         });
-        const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
-        const published = await publishMissionTick(origin, runId);
+        // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishMissionTick
+        // résout GEN3IA_APP_ORIGIN en interne (allowlist serveur) — aucune
+        // origine dérivée de la requête entrante (falsifiable).
+        const published = await publishMissionTick(runId);
         log.info({ event: "network.mission.queued", runId, networkId: network.id, steps: plan.steps.length }, "Mission d'équipe enfilée");
         return NextResponse.json(
           {

@@ -98,8 +98,9 @@ describe("POST /api/agents/run — mode async (file configurée)", () => {
     expect(created.plan.objective).toBe("Étude de marché sur le secteur minier");
     expect(created.plan.steps.length).toBeGreaterThan(0);
     // Enfilement initial : publication immédiate (sans délai — le ré-enfilement
-    // des tranches suivantes est le seul à utiliser Upstash-Delay).
-    expect(mockedPublish).toHaveBeenCalledWith("https://gen3ia.local", payload.runId);
+    // des tranches suivantes est le seul à utiliser Upstash-Delay). Origine
+    // canonique : plus aucune origine en paramètre (résolution interne serveur).
+    expect(mockedPublish).toHaveBeenCalledWith(payload.runId);
     // AUCUNE exécution synchrone : la requête ne porte pas la mission.
     expect(AgentRuntime).not.toHaveBeenCalled();
   });

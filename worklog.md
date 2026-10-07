@@ -2644,3 +2644,225 @@ Stage Summary:
   limite : persistance permanente (R2) en attente des identifiants du
   propriétaire — replis propre (provider/inline) actifs entre-temps, vidéo en
   échec explicite tant que le stockage n'est pas configuré.
+
+---
+Task ID: 104-c
+Agent: sub-agent CodeQL hautes (lot 104-c)
+Task: Correction des alertes CodeQL HAUTES (#53 polynomial-redos, #55/#56/#69 insecure-temporary-file, #68/#70 http-to-file-access) — épinglage release + checksums SHA256 des binaires FFmpeg runtime
+
+Work Log:
+- Checksums OFFICIELS obtenus par double téléchargement direct des assets de la
+  release b6.0 de eugeneware/ffmpeg-static (deux téléchargements indépendants,
+  empreintes identiques) puis sha256sum :
+  - ffmpeg-linux-x64  = ed652b2f32e0851d1946894fb8333f5b677c1b2ce6b9d187910a67f8b99da028
+  - ffprobe-linux-x64 = a339171d90f7482b2db02234e261b9e00d51526391f87fa633d5da7b98a28cf4
+  (GitHub API en rate-limit — la vérification croisée a été faite par re-téléchargement
+  complet des assets ; les binaires node_modules locaux sont b6.1.1 du paquet npm,
+  empreinte e7e7fb30… différente et non concernée par le repli runtime).
+- sdk/src/client.ts (#53) : normalisation baseUrl par boucle linéaire
+  trimTrailingSlashes (endsWith/slice, O(n) sans backtracking) — plus aucune
+  regex sur donnée d'entrée ; sdk/test/client.test.ts : chaîne pathologique
+  « https://api.example.org » + 100 000 slashs construite et normalisée en < 100 ms
+  (verrou anti-backtracking) + URL finale vérifiée via fetch mock + garde
+  structurelle (client.ts ne contient plus la séquence replace(/\/+$…).
+- lib/video/security.ts (#69/#70) : release ÉPINGLÉE b6.0 + SHA256 épinglés en
+  constantes du code ; resolveExpectedRuntimeChecksum (pure, injectable) applique
+  la matrice fail-closed FR documentée en commentaire : tag/URL par défaut →
+  SHA256 épinglés (checksums env IGNORÉS dans ce cas — valeur épinglée non
+  contournable) ; VIDEO_STATIC_RELEASE_TAG ou VIDEO_STATIC_BINARIES_URL
+  surchargés → VIDEO_FFMPEG_SHA256 / VIDEO_FFPROBE_SHA256 REQUIS, sinon
+  échec AVANT toute requête réseau ; assertBinaryChecksum (pur, exporté) vérifie
+  le SHA256 du buffer AVANT toute écriture — mismatch → Error FR, binaire jamais
+  posé ni exécuté ; écriture durcie : fs.open(stagingPath, "wx", 0o700) avec
+  stagingPath = target.<randomUUID>.staging, chmod 0o755, renommage ATOMIQUE
+  fs.rename vers la cible (même répertoire), réutilisation si un pair a déjà posé
+  un binaire exécutable (fs.access X_OK), Map runtimeDownloads conservée pour la
+  dé-dup des téléchargements concurrents ; mkdir du répertoire runtime en 0700.
+- lib/video/asset-service.ts (#68) : probeBuffer durcie — writeFile(path, body,
+  { flag: "wx", mode: 0o600 }) dans le mkdtemp 0700 existant (nom fixe + cleanup
+  finally inchangés) + commentaire FR « fonctionnalité voulue » (sonde ffprobe
+  protocoles file,pipe uniquement).
+- lib/documents/file-engine.ts (#55) : writeWorkspaceFile en motif
+  rm-then-exclusive — fs.rm(force) PUIS writeFile({ flag: "wx", mode: 0o600 }) :
+  sémantique d'écrasement préservée, inode final toujours créé exclusivement ;
+  fenêtre rm→create neutralisée par la racine workspace /tmp/gen3ia-ws-<sha24>
+  créée mode 0700 par createExecutionWorkspace (lib/execution/workspace.ts,
+  vérifié en lecture seule — appelants hors périmètre non touchés, recommandation
+  documentée en commentaire).
+- lib/tools/files/create-zip.ts (#56) : AUCUN changement de comportement —
+  commentaire FR ciblé ligne 75 documentant le FAUX POSITIF en 4 preuves :
+  lecture seule O_RDONLY (aucune création), O_NOFOLLOW (ELOOP sur lien), type/
+  taille vérifiés sur l'inode ouvert (fstat descripteur), répertoire workspace
+  0700 instance-local non inscriptible par des tiers — à qualifier par
+  l'orchestrateur avec cette preuve.
+- Tests : +19 (lib/video/security.test.ts 12 : assertBinaryChecksum bon/corrompu/
+  format invalide/casse, matrice fail-closed pure complète y compris « checksum
+  env ignoré sur release épinglée », gardes structurelles SHA256 épinglés + ordre
+  source assertBinaryChecksum AVANT writeFile/rename + wx/staging/chmod ;
+  lib/documents/file-engine.test.ts 5 : écriture/lecture, réécriture=écrasement,
+  mode 0600, Buffer, refus de traverse ../ + absolu ; sdk/test/client.test.ts 2 :
+  ReDoS pathologique < 100 ms + garde structurelle).
+
+Stage Summary:
+- 5 alertes corrigées par durcissement réel (#53, #55, #68, #69, #70) + 1 faux
+  positif documenté avec preuves pour qualification (#56). Binaires FFmpeg
+  runtime : release b6.0 épinglée, SHA256 officiels vérifiés en code, checksum
+  obligatoire AVANT écriture, écriture exclusive 0700 + rename atomique,
+  fail-closed sur release surchargée sans empreinte env.
+- Validations : npx tsc --noEmit → 0 erreur ; sdk build (typecheck strict + ESM +
+  CJS) → OK ; npx vitest run lib/documents lib/tools/files lib/video sdk →
+  19 fichiers / 198 tests verts (+19 vs baseline 179) ; npx eslint lib/documents
+  lib/tools/files lib/video --max-warnings 0 → 0 (sdk/src ignoré par la config
+  eslint du dépôt — couvert par le typecheck strict du build SDK).
+- Périmètre respecté : 6 fichiers modifiés + 2 tests créés, aucun git write, ni
+  production-queue.ts / render-queue.ts / queue/** / app/api/** / scripts/**.
+---
+Task ID: 104-b
+Agent: webhook-resilience (chariow)
+Task: Lot 104-b — webhook Chariow résilient (P1 financier) : reprise des échecs et des baux expirés, dédoublonnage par saleId, rapprochement périodique admin ventes ↔ ledger
+
+Work Log:
+- Lecture de la fin du worklog (conventions 103-x : FR, gardes structurels fs,
+  mock firebase-admin) + lecture app/api/webhooks/chariow/route.ts,
+  lib/billing/wallet.ts (LECTURE SEULE, respectée : l'idempotence financière
+  tient par le document de journal `chariow_${saleId}` dans applyTopup —
+  docummentée en tête de chariow-delivery.ts comme dernière barrière anti
+  double-crédit), app/api/admin/observability/route.ts (garde admin recopiée :
+  requireAdmin + errorBody/errorStatus), app/api/admin/ads/placement (pattern
+  guardAdmin) et style de tests (outcome-credits.test.ts, agents/run
+  route.test.ts).
+- 1. lib/billing/chariow-delivery.ts (NOUVEAU, logique déplacée du route.ts,
+  pas réinventée) : CHARIOW_LEASE_MS = 10 min exporté ;
+  claimChariowDelivery(deliveryId, payloadSnapshot) exécutée DANS la
+  transaction — doc absent → create { deliveryId, event, receivedAt,
+  attempts:1, status:"processing", payload } ; status processed/ignored →
+  "duplicate-processed" ; status failed → REPRISE (update processing,
+  attempts+1, reclaimedAt, payload rafraîchi — répare aussi les documents
+  antérieurs sans payload) ; processing + bail expiré → REPRISE pareille ;
+  sinon → "in-flight". receivedAtToMillis conservateur (absent = frais, on ne
+  re-traite jamais un doc qu'on ne sait pas dater).
+- 2. buildChariowPayloadSnapshot : snapshot sérialisable (round-trip
+  JSON.stringify→JSON.parse, valeurs non-JSON écartées) borné 100 000
+  caractères — au-delà, tronqué et marqué __truncated (stockable mais jamais
+  retraité) ; storedChariowPayload extrait le payload retraitable d'un doc
+  (null si absent/tronqué/non-objet).
+- 3. processChariowSale(payload, deliveryId) : logique métier du webhook
+  déplacée telle quelle (branches extension_purchase / isTopupSale / topup
+  wallet, messages d'erreur inchangés, providerReference = saleId inchangé) —
+  retourne un résultat discriminé { extension_purchase | ignored |
+  user_not_found | duplicate_sale | credited | failed }, ne lève JAMAIS pour
+  un échec métier : le doc est marqué "failed" + error tronqué à 1000
+  caractères (avec .catch fail-soft sur l'écriture d'échec : un doc qui
+  reste "processing" se reprend de lui-même au bail) et le webhook répond 500
+  retentable. NOUVEAU : dédoublonnage par VENTE avant tout crédit — requête
+  champ simple `where("saleId","==").where("status","==","processed").limit(1)`
+  (auto-indexée, aucun index composite — politique quota Task 102) ; si une
+  autre livraison a déjà traité cette vente → doc courant marqué processed /
+  reason "duplicate_sale" → réponse { received:true, duplicate:true }
+  (fini le « credited:true » sur un no-op ; le garde doc.id !== deliveryId
+  est conservé par défense).
+- 4. app/api/webhooks/chariow/route.ts : adaptateur HTTP fin (vérif signature
+  HMAC CHARIOW_PULSE_SECRET inchangée → claim → process). Contrat conservé :
+  401 "Invalid signature", 400 "Missing delivery id" / "Invalid JSON",
+  200 {ignored} événement non successful.sale, 200 {duplicate} (claim
+  duplicate-processed ET duplicate_sale), 200 {kind:"extension_purchase",
+  granted}, 200 {credited:false, reason:"user_not_found"},
+  200 {credited:true, wallet}, 500 "Webhook processing failed" (échec ou
+  panne infra — Chariow re-delivre, le claim reprend). SEULE évolution
+  demandée par la mission : "in-flight" → 202 {received:true, inFlight:true}
+  (avant : conflité avec duplicate en 200). Le claim est volontairement hors
+  try du traitement (convention 103-d : échec = retry fournisseur souhaité)
+  mais couvert par le catch global → 500 retentable.
+- 5. app/api/admin/billing/reconcile/route.ts (NOUVEAU) : POST, garde admin
+  identique à observability (requireAdmin → errorBody/errorStatus), runtime
+  nodejs + force-dynamic + maxDuration 60 (jusqu'à 10 retraitements
+  synchrones). Scan : 2 requêtes champ simple limit 50 — status=="failed" et
+  status=="processing" (bail filtré EN MÉMOIRE : un range receivedAt +
+  égalité status exigerait un index composite). Sans corps → rapport
+  { failed, staleProcessing, oldest } (oldest = receivedAt ms du doc
+  problématique le plus ancien, ou null). Avec { retry:true } → re-traite
+  jusqu'à 10 docs RÉPARABLES (payload stocké présent, non tronqué ; docs
+  antérieurs à 104-b signalés mais non rejouables) via le MÊME chemin
+  idempotent que le webhook (claimChariowDelivery puis processChariowSale
+  avec le payload stocké), tri plus-ancien-d'abord ; rapport + { retried,
+  recovered, stillFailed } ; claim non-"process" ni repris ni compté échoué ;
+  erreurs isolées par livraison (try/catch dans la boucle). Toute écriture
+  est un update du doc existant (ou le create standard du claim) — aucun
+  nouveau pattern d'écriture.
+- 6. TESTS (42 nouveaux, style dépôt : mock adminDb/runTransaction à la
+  outcome-credits) : lib/billing/chariow-delivery.test.ts (19) — claim
+  premier passage/failed/bail expiré/in-flight/doublon, retraitement après
+  échec qui crédite au passage suivant, troncature d'erreur, dédoublonnage
+  saleId (wallet et Auth jamais touchés), user_not_found, extension, ignoré,
+  snapshot sérialisable + borné + non retraitable, gardes (CHARIOW_LEASE_MS
+  à 10 min ; fs : le webhook délègue au module partagé, plus aucun
+  « snap.exists » inline) ; app/api/webhooks/chariow/route.test.ts (14) —
+  contrat HTTP complet avec HMAC réel, mapping claim/résultat, snapshot
+  transmis au claim, 500 retentable ; app/api/admin/billing/reconcile/
+  route.test.ts (9) — 401 sans admin (zéro scan Firestore), rapport vide,
+  détection bail expiré vs frais, retry limité à 10 (plus ancien d'abord),
+  payload manquant non retraité, échec isolé, claim non-process, garde fs
+  (requireAdmin + CHARIOW_LEASE_MS + limit(SCAN_LIMIT) dans la source).
+- Validations (exécutées réellement) : npx tsc --noEmit → 0 erreur.
+  npx vitest run app/api/webhooks/chariow lib/billing app/api/admin → 7
+  fichiers, 101 verts (42 nouveaux + 59 préexistants). npx vitest run
+  app/api → 23 fichiers, 161 verts. npx eslint app/api/webhooks/chariow
+  lib/billing/chariow-delivery.ts(+test) app/api/admin --max-warnings 0 → 0.
+- Aucun git d'écriture, aucun install/build/console.log. Périmètre respecté :
+  app/api/webhooks/chariow/route.ts (+route.test.ts nouveau), 
+  lib/billing/chariow-delivery.ts(+test), app/api/admin/billing/reconcile/
+  route.ts(+test), worklog.md. wallet.ts et les interdits non touchés.
+- Observations intégration (hors périmètre) : courses transitoires vues
+  pendant la session sur app/api/agents/run (signature publishMissionTick de
+  lib/queue/qstash.ts en cours de modification par le lot parallèle) —
+  revenues au vert en fin de session ; rien à faire côté 104-b.
+
+Stage Summary:
+- Webhook Chariow réparable de bout en bout : une livraison échouée ou dont
+  le worker est mort est de nouveau traitée — par re-délivrance Chariow
+  (claim transactionnel : failed → reprise, bail 10 min expiré → reprise,
+  in-flight frais → 202) ou par le rapprochement admin POST
+  /api/admin/billing/reconcile ({retry:true} → 10 retraitements max par
+  appel via le même chemin claim + crédit idempotent, erreurs isolées).
+- Le Paiement non crédité (a) et le document coincé (b) du plan sont traités ;
+  le dédoublonnage par saleId (c) ferme la fuite de contrat : plus aucun
+  « credited:true » mensonger sur une vente déjà créditée — réponse
+  {duplicate:true} et doc marqué processed/reason duplicate_sale. Le wallet
+  reste la garantie absolue (chariow_${saleId}, wallet.ts LECTURE SEULE non
+  modifié).
+- Contrat HTTP préservé au statut près pour le seul cas demandé (in-flight →
+  202) ; CHARIOW_PULSE_SECRET inchangée ; aucun index Firestore nouveau ni
+  nouveau pattern d'écriture ; snapshot de charge utile borné (~100 Ko)
+  stocké au claim pour le retraitement.
+- 42 tests ajoutés ; validations : tsc 0, vitest 101 verts sur les scopes
+  demandés (161 verts sur app/api complet), eslint 0 warning.
+
+---
+Task ID: 104-a
+Agent: sous-agent queue (session interrompue — travail vérifié ligne à ligne puis validé par l'orchestrateur)
+Task: P0 — destination QStash falsifiable (CodeQL critique #54 js/request-forgery) : origine canonique serveur, allowlist, aucun repli sur l'hôte entrant.
+
+Work Log:
+- lib/queue/origin.ts NOUVEAU : resolveJobOrigin() lit UNIQUEMENT GEN3IA_APP_ORIGIN (jamais request.nextUrl.origin) ; validation URL + https obligatoire hors localhost (http toléré localhost/127.0.0.1/[::1] pour le dev) ; allowlist en dur gen3ia.online, www.gen3ia.online, gen3ia.vercel.app + extension GEN3IA_ALLOWED_ORIGINS (entrées revalidées par les mêmes règles — jamais d'élargissement accidentel) ; warn FR une fois par processus (télémétrie console, 0 écriture Firestore) ; assertSafeDestinationUrl() défense en profondeur pour toute destination publiée.
+- lib/queue/qstash.ts : publishMissionTick(runId, options) et publishDispatchTick(options) NE PRENNENT PLUS d'origine en paramètre — résolution canonique interne ; origine non résolue → null (contrat « non configuré » : la continuation par sondage existante prend le relais, jamais de publication vers une cible inconnue) ; publishToDestination appelle assertSafeDestinationUrl en première ligne.
+- Call sites mis à jour (suppression du motif `process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin`) : app/api/queue/mission-tick, dispatch-tick, app/api/networks/[id]/run, app/api/agent/chat (+approve, +continue), app/api/agents/run, app/api/cron/agent-schedules, lib/business/pulse.ts, lib/knowledge/triggers.ts, lib/queue/mission-continuation.ts, lib/agents/scheduler.ts.
+- lib/video/production-queue.ts + render-queue.ts : publishProductionTick/publishVideoTick résolvent l'origine canonique en interne ; chaînage advanceJob/advanceProductionJob/maybeAdvancePending*/startRenderJob allégé des paramètres origin ; export-service.ts : champ origin déprécié/ignoré (compatibilité appelants) ; routes video worker/projects adaptées.
+- Tests : lib/queue/origin.test.ts NOUVEAU (https exigé hors localhost, allowlist + GEN3IA_ALLOWED_ORIGINS, slash final, unset/invalid, gardes fs « plus aucun `request.nextUrl.origin` dans les chemins de publication ») ; qstash.test.ts, qstash.publish.test.ts, mission-continuation.test.ts, route.test.ts mission-tick/dispatch-tick, render/production-queue-resume.test.ts, app/api/agents/run/route.test.ts, chat.queue.test.ts mis à jour.
+
+Stage Summary:
+- CodeQL critique #54 fermé à la source : plus AUCUN flux requête→fetch dans les publications QStash ; la destination est une propriété du serveur (GEN3IA_APP_ORIGIN + allowlist). Variable créée côté Vercel par l'orchestrateur (production/preview = https://gen3ia.online, development = http://localhost:3000).
+- Validation orchestrateur : tsc 0, vitest lib/queue + app/api/queue + app/api/agent + app/api/networks + scheduler = 177 verts, eslint 0.
+
+---
+Task ID: 104-d
+Agent: sous-agent durabilité (session interrompue — travail vérifié ligne à ligne puis validé par l'orchestrateur)
+Task: reprise inter-instance des workspaces d'exécution — fichiers et checkpoints dans un stockage durable partagé (R2).
+
+Work Log:
+- lib/execution/workspace-durability.ts NOUVEAU : snapshotWorkspaceToDurableStorage (caps stricts 80 fichiers / 40 Mo, fichiers réguliers uniquement — jamais de lien symbolique, clés R2 déterministes execution-workspaces/<id>/<hash12>/<chemin>, manifeste écrit dans le doc registre existant via UN SEUL champ durableSnapshot en merge) ; rehydrateWorkspaceFromDurableStorage (restauration mkdtemp 0700, sha256 vérifié par fichier — mismatch → exclu avec raison, registre estampillé) ; snapshotWorkspaceSafe (fire-and-forget SÉCURISÉ 8 s, coalescé par sonde de changement — jamais bloquant, R2 non configuré → no-op, comportement de production inchangé sans R2) ; rehydrateWorkspaceIfLocalMissing (ENOENT cross-instance) ; cooldown anti-tempête après échec de reprise.
+- lib/execution/workspace-registry.ts : registerWorkspace → set merge:true (préserve durableSnapshot) + checkpoint snapshotWorkspaceSafe ; getWorkspace → répertoire local absent + manifeste présent → restauration R2 AVANT de rendre le workspace (l'ENOENT documenté n'est plus un cul-de-sac).
+- Tests : workspace-durability.test.ts NOUVEAU 26 tests (caps, hash, manifeste hostile/traversée, fichier corrompu exclu, tous échecs → ok:false retentable, cooldown, SONDE de changement, reprise sur une AUTRE instance via le chemin de reprise réel getWorkspace) ; workspace.test.ts NOUVEAU ; mocks R2 en mémoire + répertoires réels.
+
+Stage Summary:
+- Le plan « stocker les fichiers et checkpoints dans un stockage durable puis tester explicitement la reprise sur une autre instance » est livré : le registre Firestore porte le manifeste, R2 porte les octets, getWorkspace restaure — les missions QStash peuvent reprendre sur n'importe quelle instance. R2 non configuré = comportement actuel inchangé (variables R2 déjà présentes en production Vercel).
+- Validation orchestrateur : tsc 0, vitest lib/execution + lib/video = 156 verts, eslint 0.

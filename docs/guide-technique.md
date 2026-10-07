@@ -6,7 +6,7 @@ Ce document fournit un aperçu complet des modules techniques, des routes API, d
 
 ## 1. Vue d'ensemble de la Stack Technique
 
-- **Framework Web** : Next.js 16 (App Router, Server Actions, Route Handlers)
+- **Framework Web** : Next.js 15 (App Router, Server Actions, Route Handlers)
 - **Frontend** : React 19, Tailwind CSS v4, Lucide Icons, UI Composants personnalisés
 - **Backend & Base de Données** : Firebase Admin SDK, Firestore, Firebase Auth, Firebase Storage
 - **Stockage Objets** : Cloudflare R2 / AWS S3 (via `@aws-sdk/client-s3`)

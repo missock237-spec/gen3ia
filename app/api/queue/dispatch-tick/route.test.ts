@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 /**
@@ -50,7 +50,16 @@ const CONFIG = { token: "t", currentSigningKey: "c", nextSigningKey: "n" };
 beforeEach(() => {
   vi.clearAllMocks();
   mockedConfig.mockReturnValue(CONFIG);
+  // Origine canonique : la route la résout via lib/queue/origin (module réel,
+  // non mocké) pour scheduleNextDispatchTick — publishDispatchTick (mocké)
+  // la résoudrait de son côté en production.
   process.env.GEN3IA_APP_ORIGIN = "https://gen3ia.online";
+  delete process.env.GEN3IA_ALLOWED_ORIGINS;
+});
+
+afterEach(() => {
+  delete process.env.GEN3IA_APP_ORIGIN;
+  delete process.env.GEN3IA_ALLOWED_ORIGINS;
 });
 
 describe("POST /api/queue/dispatch-tick", () => {
@@ -92,9 +101,11 @@ describe("POST /api/queue/dispatch-tick", () => {
     expect(body.slotEpoch).toBe(41);
     expect(body.successor).toMatchObject({ kind: "published", slotEpoch: 42 });
     expect(mockedDispatch).toHaveBeenCalledTimes(1);
+    // L'origine canonique (env serveur) est transmise au contrôleur ; la
+    // callback du publish ne passe PLUS par une origine en paramètre.
+    expect(mockedScheduleNext.mock.calls[0]?.[0]).toBe("https://gen3ia.online");
     expect(mockedPublish).toHaveBeenCalledTimes(1);
-    expect(mockedPublish.mock.calls[0]?.[0]).toBe("https://gen3ia.online");
-    expect(mockedPublish.mock.calls[0]?.[1]).toMatchObject({ delaySeconds: 250, slotEpoch: 42 });
+    expect(mockedPublish).toHaveBeenCalledWith({ delaySeconds: 250, slotEpoch: 42 });
   });
 
   it("échec du publish du successeur → 502 (QStash redélivrera)", async () => {
@@ -124,5 +135,23 @@ describe("POST /api/queue/dispatch-tick", () => {
     expect(mockedScheduleNext).toHaveBeenCalledTimes(1);
     const fromSlot = mockedScheduleNext.mock.calls[0]?.[1];
     expect(typeof fromSlot).toBe("number");
+  });
+
+  it("origine canonique ABSENTE → chaîne vide au contrôleur (JAMAIS l'origine de la requête)", async () => {
+    // Anti request-forgery : même en face d'une requête forgée vers un hôte
+    // arbitraire, la route ne derive JAMAIS la destination de l'URL entrante.
+    delete process.env.GEN3IA_APP_ORIGIN;
+    mockedVerify.mockReturnValue(true);
+    mockedDispatch.mockResolvedValue({ checked: 0, due: 0, executed: [] } as never);
+    mockedScheduleNext.mockResolvedValue({ kind: "already-scheduled", slotEpoch: 44 });
+
+    const forged = new NextRequest("https://attacker.example.net/api/queue/dispatch-tick", {
+      method: "POST",
+      body: "{}",
+      headers: { "Content-Type": "application/json", "upstash-signature": "v1,abc" },
+    });
+    const response = await POST(forged);
+    expect(response.status).toBe(200);
+    expect(mockedScheduleNext.mock.calls[0]?.[0]).toBe("");
   });
 });

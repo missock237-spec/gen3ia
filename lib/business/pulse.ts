@@ -160,8 +160,9 @@ export async function runBusinessPulse(input: { userId: string; orgId?: string; 
     ...(input.orgId ? { orgId: input.orgId } : {}),
     plan: { ...plan, executionId },
   });
-  const origin = process.env.GEN3IA_APP_ORIGIN?.trim();
-  if (origin) await publishMissionTick(origin, runId);
+  // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishMissionTick
+  // résout GEN3IA_APP_ORIGIN en interne (allowlist serveur).
+  await publishMissionTick(runId);
 
   await adminDb.collection(COLLECTION).add({
     userId: input.userId,

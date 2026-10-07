@@ -62,10 +62,13 @@ export async function GET(request: NextRequest) {
 
     // Sentinelle de résurrection (Task 62) : le prochain slot de la boucle
     // doit TOUJOURS être programmé après ce passage — même si la boucle
-    // QStash est morte depuis la veille.
+    // QStash est morte depuis la veille. NB (fix request-forgery) :
+    // publishDispatchTick résout l'ORIGINE CANONIQUE en interne ; le
+    // paramètre origin de scheduleNextDispatchTick est ignoré par celle-ci
+    // (signature conservée — voir lib/queue/dispatch-loop.ts).
     const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
     const loop = await scheduleNextDispatchTick(origin, slotFor(Date.now()), Date.now(), (options) =>
-      publishDispatchTick(origin, options),
+      publishDispatchTick(options),
     ).catch((error: unknown) => {
       failures.push(`dispatch-loop: ${error instanceof Error ? error.message : "erreur"}`);
       return null;

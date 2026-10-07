@@ -234,8 +234,10 @@ export async function evaluateKnowledgeTriggers(input: {
             ...(missionOrgId ? { orgId: missionOrgId } : {}),
             plan: { ...plan, executionId },
           });
-          const origin = process.env.GEN3IA_APP_ORIGIN?.trim();
-          if (origin) await publishMissionTick(origin, runId);
+          // ORIGINE CANONIQUE (fix CodeQL request-forgery) :
+          // publishMissionTick résout GEN3IA_APP_ORIGIN en interne
+          // (allowlist serveur) — plus aucune origine en paramètre.
+          await publishMissionTick(runId);
           result = { triggerId: trigger.id, triggerName: trigger.name, status: "mission_queued", detail: "Mission enfilée.", runId };
         }
       }

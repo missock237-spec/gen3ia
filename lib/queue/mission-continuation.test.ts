@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/queue/mission-queue", () => ({
   createQueuedMission: vi.fn(),
@@ -36,6 +36,15 @@ beforeEach(() => {
   mockedPublish.mockResolvedValue(undefined as never);
   mockedCreate.mockResolvedValue(undefined as never);
   mockedMarkFailed.mockResolvedValue(undefined as never);
+  // Origine canonique présente : le module RÉEL lib/queue/origin est utilisé
+  // (non mocké) par enqueueMissionContinuation avant toute écriture Firestore.
+  process.env.GEN3IA_APP_ORIGIN = "https://gen3ia.online";
+  delete process.env.GEN3IA_ALLOWED_ORIGINS;
+});
+
+afterEach(() => {
+  delete process.env.GEN3IA_APP_ORIGIN;
+  delete process.env.GEN3IA_ALLOWED_ORIGINS;
 });
 
 /**
@@ -52,7 +61,6 @@ describe("enqueueMissionContinuation", () => {
       objective: "objectif",
       plan: PLAN,
       conversationId: "conv-1",
-      origin: "https://gen3ia.online",
     });
     expect(result).toMatchObject({ queued: true, runId: expect.any(String) });
     expect(mockedCreate).toHaveBeenCalledWith(expect.objectContaining({
@@ -61,7 +69,9 @@ describe("enqueueMissionContinuation", () => {
       conversationId: "conv-1",
       plan: PLAN,
     }));
-    expect(mockedPublish).toHaveBeenCalledWith("https://gen3ia.online", expect.any(String));
+    // ORIGINE CANONIQUE : publishMissionTick ne reçoit PLUS d'origine —
+    // elle est résolue en interne (GEN3IA_APP_ORIGIN, allowlist serveur).
+    expect(mockedPublish).toHaveBeenCalledWith(expect.any(String));
   });
 
   it("file non configurée → queued:false avec raison (reprise manuelle conservée)", async () => {
@@ -71,10 +81,22 @@ describe("enqueueMissionContinuation", () => {
       executionId: "exec-1",
       objective: "objectif",
       plan: PLAN,
-      origin: "https://gen3ia.online",
     });
     expect(result.queued).toBe(false);
     expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it("origine canonique non résolue → queued:false et AUCUN document créé (anti mission fantôme)", async () => {
+    delete process.env.GEN3IA_APP_ORIGIN;
+    const result = await enqueueMissionContinuation({
+      userId: "user-1",
+      executionId: "exec-1",
+      objective: "objectif",
+      plan: PLAN,
+    });
+    expect(result.queued).toBe(false);
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(mockedPublish).not.toHaveBeenCalled();
   });
 
   it("échec de publish → queued:false et mission marquée honnêtement en échec", async () => {
@@ -84,7 +106,6 @@ describe("enqueueMissionContinuation", () => {
       executionId: "exec-1",
       objective: "objectif",
       plan: PLAN,
-      origin: "https://gen3ia.online",
     });
     expect(result.queued).toBe(false);
     expect(mockedMarkFailed).toHaveBeenCalledWith(expect.any(String), expect.any(Error));

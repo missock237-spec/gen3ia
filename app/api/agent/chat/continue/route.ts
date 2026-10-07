@@ -132,8 +132,10 @@ export async function POST(request: NextRequest) {
           ...(conversationId ? { conversationId } : {}),
           plan: resumedPlan,
         });
-        const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
-        await publishMissionTick(origin, runId);
+        // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishMissionTick
+        // résout GEN3IA_APP_ORIGIN en interne — aucune origine dérivée de
+        // la requête entrante (falsifiable).
+        await publishMissionTick(runId);
         return NextResponse.json({
           mode: "agent",
           status: "queued",
@@ -210,7 +212,6 @@ export async function POST(request: NextRequest) {
         objective: result.objective || state.objective,
         plan: result.plan,
         ...(conversationId ? { conversationId } : {}),
-        origin: process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin,
       });
     }
 

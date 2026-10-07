@@ -8,6 +8,7 @@ import { getAgentForUser } from "@/lib/agents/repository";
 import { checkWatchSource, type WatchSource } from "@/lib/agents/watch-sources";
 import { notifyScheduleRunCompleted } from "@/lib/integrations/messaging/notify";
 import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
+import { resolveJobOrigin } from "@/lib/queue/origin";
 
 /** Budget de tranche pour une exécution planifiée (marge sous la fenêtre 60 s). */
 const SCHEDULE_SYNC_BUDGET_MS = 50_000;
@@ -539,15 +540,19 @@ export async function runSchedule(schedule: AgentSchedule, executionId: string, 
 
     let continuation: { queued: boolean; runId?: string; reason?: string } | undefined;
     if (state.status === "paused" && state.plan.steps.some((step) => step.status === "pending")) {
-      const origin = process.env.GEN3IA_APP_ORIGIN?.trim();
-      if (origin) {
+      // ORIGINE CANONIQUE (fix CodeQL request-forgery) : résolution serveur
+      // uniquement (GEN3IA_APP_ORIGIN, allowlist) — jamais l'origine requête.
+      // Non résolue → pas de continuation (sémantique historique : sans
+      // origine, la suite n'est PAS enfilée ; enqueueMissionContinuation
+      // refuserait aussi de créer un document sans destination sûre).
+      const originResolution = resolveJobOrigin();
+      if (originResolution.ok) {
         continuation = await enqueueMissionContinuation({
           userId: schedule.userId,
           executionId,
           objective,
           plan: state.plan,
           orgId: await resolveAgentOrgId(schedule.agentId),
-          origin,
         });
       }
     }

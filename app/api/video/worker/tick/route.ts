@@ -44,17 +44,19 @@ export async function POST(request: NextRequest) {
   }
   if (!jobId) return NextResponse.json({ error: "jobId requis" }, { status: 400 });
 
-  const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
+  // ORIGINE CANONIQUE (fix CodeQL request-forgery) : plus aucune origine
+  // dérivée de la requête — advanceJob/publishVideoTick/sweepStaleRenderJobs
+  // résolvent GEN3IA_APP_ORIGIN en interne (allowlist serveur).
   // Sweep des jobs orphelins (bail expiré) — best-effort, jamais bloquant.
-  await sweepStaleRenderJobs(origin).catch(() => undefined);
+  await sweepStaleRenderJobs().catch(() => undefined);
   try {
-    const result = await advanceJob(jobId, origin);
+    const result = await advanceJob(jobId);
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Tick échoué";
     await logSystem("", `Worker : incident tick ${jobId.slice(0, 8)} — ${message}`).catch(() => undefined);
     // Ré-enfile avec délai (le job restera récupérable par les tentatives internes).
-    await publishVideoTick(origin, jobId, 60).catch(() => undefined);
+    await publishVideoTick(jobId, 60).catch(() => undefined);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

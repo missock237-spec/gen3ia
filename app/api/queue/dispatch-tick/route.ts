@@ -11,6 +11,7 @@ import {
   scheduleNextDispatchTick,
   slotFor,
 } from "@/lib/queue/dispatch-loop";
+import { resolveJobOrigin } from "@/lib/queue/origin";
 
 /**
  * Receiver de la boucle de dispatch planifié (Task 62 — priorité #5).
@@ -67,7 +68,14 @@ export async function POST(request: NextRequest) {
     slotEpoch = slotFor(Date.now());
   }
 
-  const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
+  // ORIGINE CANONIQUE (fix CodeQL request-forgery) : lue côté serveur
+  // uniquement — JAMAIS dérivée de la requête entrante (falsifiable).
+  // scheduleNextDispatchTick attend une chaîne (paramètre qu'il ignore déjà) :
+  // on lui passe l'origine canonique, ou chaîne vide si non résolue — dans ce
+  // cas publishDispatchTick retournera null, la réservation sera libérée et
+  // le cron quotidien (sentinelle) relancera la boucle.
+  const canonicalOrigin = resolveJobOrigin();
+  const origin = canonicalOrigin.ok ? canonicalOrigin.origin : "";
 
   try {
     // 4) Travail du slot : dispatcher les planifications dues (idempotent).
@@ -75,7 +83,8 @@ export async function POST(request: NextRequest) {
 
     // 5) Exactement un successeur pour le slot suivant (contrôle transactionnel).
     const scheduled = await scheduleNextDispatchTick(origin, slotEpoch, Date.now(), (options) =>
-      publishDispatchTick(origin, options),
+      // publishDispatchTick résout l'origine canonique en interne.
+      publishDispatchTick(options),
     );
 
     if (scheduled.kind === "publish-failed") {

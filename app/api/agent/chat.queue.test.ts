@@ -189,7 +189,9 @@ describe("POST /api/agent/chat — mission en file (persistance après refresh)"
       conversationId: "conv-1",
       plan: RUNTIME_PLAN,
     }));
-    expect(mockedPublish).toHaveBeenCalledWith("https://gen3ia.local", expect.any(String));
+    // ORIGINE CANONIQUE : le publish ne reçoit PLUS d'origine — résolution
+    // interne (GEN3IA_APP_ORIGIN, allowlist), jamais l'URL de la requête.
+    expect(mockedPublish).toHaveBeenCalledWith(expect.any(String));
     // AUCUN runtime lancé dans la requête : le travail est détaché de l'onglet.
     expect(mockedPlanTask).toHaveBeenCalledTimes(1);
   });

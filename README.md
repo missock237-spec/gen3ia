@@ -1,6 +1,6 @@
 # Gen3ia — Plateforme SaaS d'Agents IA Autonomes
 
-**Gen3ia** est une plateforme SaaS enterprise de création, orchestration et exécution d'agents IA autonomes. Conçue avec **Next.js 16 (App Router)**, **React 19** et **Firebase**, elle combine un moteur de chat intelligent, une boucle d'exécution autonome (Planner-Executor-Evaluator), la vision live en navigateur, la téléphonie interactive, la publication multi-canal de publicités via Composio, et un écosystème d'extensions marketplace multi-tenant.
+**Gen3ia** est une plateforme SaaS enterprise de création, orchestration et exécution d'agents IA autonomes. Conçue avec **Next.js 15 (App Router)**, **React 19** et **Firebase**, elle combine un moteur de chat intelligent, une boucle d'exécution autonome (Planner-Executor-Evaluator), la vision live en navigateur, la téléphonie interactive, la publication multi-canal de publicités via Composio, et un écosystème d'extensions marketplace multi-tenant.
 
 **Production : <https://gen3ia.online>**
 
@@ -71,7 +71,7 @@ npm run dev         # http://localhost:3000
 
 | Dossier / Fichier | Rôle dans l'application |
 |---|---|
-| `app/` | Routes Next.js 16 (App Router) : `(auth)`, `admin`, `api`, `billing`, `dashboard`, `live`, `marketplace`, `memory`, `observability`, `studio`, `team` |
+| `app/` | Routes Next.js 15 (App Router) : `(auth)`, `admin`, `api`, `billing`, `dashboard`, `live`, `marketplace`, `memory`, `observability`, `studio`, `team` |
 | `components/` | Composants UI React 19 modulaires (`agent`, `auth`, `home`, `integrations`, `marketplace`, `memory`, `nav`, `observability`, `studio`, `team`, `ui`) |
 | `lib/` | Logique métier centralisée : `agents`, `ai`, `billing`, `documents`, `extensions`, `firebase`, `integrations`, `live`, `memory`, `observability`, `security`, `skills`, `tenants` |
 | `functions/` | Firebase Cloud Functions backend |

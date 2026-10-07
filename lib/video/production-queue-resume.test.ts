@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Tests d'intégration de la reprise QUOTA-AWARE dans production-queue
@@ -203,6 +203,10 @@ beforeEach(() => {
   firestoreState.docs.clear();
   firestoreState.txError = null;
   vi.clearAllMocks();
+  // Origine canonique : publishProductionTick la résout AVANT d'appeler le
+  // mock publishJsonDestination (l'ancien paramètre origin a été supprimé).
+  process.env.GEN3IA_APP_ORIGIN = "https://gen3ia.online";
+  delete process.env.GEN3IA_ALLOWED_ORIGINS;
   vi.mocked(queueResume.saveJobDoc).mockResolvedValue(undefined);
   vi.mocked(queueResume.loadJobDoc).mockResolvedValue(null as never);
   vi.mocked(queueResume.createJobDoc).mockResolvedValue(undefined);
@@ -212,6 +216,11 @@ beforeEach(() => {
   vi.mocked(getOwnedProjectOrThrow).mockResolvedValue(testProject as never);
   vi.mocked(generateSceneImage).mockResolvedValue({ generated: false } as never);
   setDoc(baseJob());
+});
+
+afterEach(() => {
+  delete process.env.GEN3IA_APP_ORIGIN;
+  delete process.env.GEN3IA_ALLOWED_ORIGINS;
 });
 
 /** Délai QStash passé au dernier publish (helper de lisibilité). */
@@ -230,7 +239,7 @@ describe("advanceProductionJob — erreur de quota sur un checkpoint", () => {
     // 1er appel saveJobDoc = checkpoint scène → QUOTA ; 2e = ré-file → OK.
     vi.mocked(queueResume.saveJobDoc).mockRejectedValueOnce(quotaError()).mockResolvedValueOnce(undefined);
 
-    const result = await advanceProductionJob("job-1", "https://app.test");
+    const result = await advanceProductionJob("job-1");
 
     const saveMock = vi.mocked(queueResume.saveJobDoc);
     expect(saveMock).toHaveBeenCalledTimes(2);
@@ -260,7 +269,7 @@ describe("advanceProductionJob — erreur de quota sur un checkpoint", () => {
   it("le message stocké est actionnable et mentionne le quota", async () => {
     vi.mocked(queueResume.saveJobDoc).mockRejectedValueOnce(quotaError()).mockResolvedValueOnce(undefined);
 
-    const result = await advanceProductionJob("job-1", "https://app.test");
+    const result = await advanceProductionJob("job-1");
 
     const requeuePatch = vi.mocked(queueResume.saveJobDoc).mock.calls[1][2] as Record<string, unknown>;
     expect(String(requeuePatch.error)).toMatch(/Quota Firestore épuisé/);
@@ -276,7 +285,7 @@ describe("advanceProductionJob — erreur de quota sur un checkpoint", () => {
       .mockRejectedValueOnce(quotaError()) // checkpoint scène 2 → QUOTA
       .mockResolvedValue(undefined); // ré-file failProductionJob
 
-    await advanceProductionJob("job-1", "https://app.test");
+    await advanceProductionJob("job-1");
 
     const calls = vi.mocked(queueResume.saveJobDoc).mock.calls;
     // le checkpoint de la scène 1 a bien été persisté avant l'incident
@@ -297,7 +306,7 @@ describe("failProductionJob — chemin legacy inchangé", () => {
   it("sous le budget : re-file 20 s avec retryCount incrémenté (incrément numérique historique)", async () => {
     vi.mocked(generateSceneImage).mockRejectedValue(new Error("Incident moteur de visuels"));
 
-    const result = await advanceProductionJob("job-1", "https://app.test");
+    const result = await advanceProductionJob("job-1");
 
     const saveMock = vi.mocked(queueResume.saveJobDoc);
     expect(saveMock).toHaveBeenCalledTimes(1);
@@ -318,7 +327,7 @@ describe("failProductionJob — chemin legacy inchangé", () => {
     setDoc(baseJob({ retryCount: PRODUCTION_RETRY_BUDGET }));
     vi.mocked(generateSceneImage).mockRejectedValue(new Error("Incident moteur de visuels"));
 
-    const result = await advanceProductionJob("job-1", "https://app.test");
+    const result = await advanceProductionJob("job-1");
 
     const saveMock = vi.mocked(queueResume.saveJobDoc);
     const failedPatch = saveMock.mock.calls
@@ -355,7 +364,7 @@ describe("claimProductionJob — failover quota vers le miroir", () => {
     });
     vi.mocked(queueResume.claimJobViaFallback).mockResolvedValue(payload as never);
 
-    const result = await advanceProductionJob("job-1", "https://app.test");
+    const result = await advanceProductionJob("job-1");
 
     const claimMock = vi.mocked(queueResume.claimJobViaFallback);
     expect(claimMock).toHaveBeenCalledTimes(1);
@@ -374,14 +383,14 @@ describe("claimProductionJob — failover quota vers le miroir", () => {
 
   it("erreur transitoire de transaction : PAS de failover, propagation inchangée", async () => {
     firestoreState.txError = Object.assign(new Error("Le service est actuellement indisponible."), { code: 14 });
-    await expect(advanceProductionJob("job-1", "https://app.test")).rejects.toThrow(/indisponible/);
+    await expect(advanceProductionJob("job-1")).rejects.toThrow(/indisponible/);
     expect(queueResume.claimJobViaFallback).not.toHaveBeenCalled();
   });
 
   it("claim miroir perdu (bail pris) → erreur de quota d'origine propagée", async () => {
     firestoreState.txError = quotaError();
     vi.mocked(queueResume.claimJobViaFallback).mockResolvedValue(null);
-    await expect(advanceProductionJob("job-1", "https://app.test")).rejects.toThrow(/Quota exceeded/);
+    await expect(advanceProductionJob("job-1")).rejects.toThrow(/Quota exceeded/);
     expect(queueResume.claimJobViaFallback).toHaveBeenCalledTimes(1);
   });
 });
@@ -401,7 +410,7 @@ describe("sweepStaleProductionJobs", () => {
       }) as never,
     ]);
 
-    const result = await sweepStaleProductionJobs("https://app.test");
+    const result = await sweepStaleProductionJobs();
 
     expect(queueResume.queryJobDocs).toHaveBeenCalledWith(PRODUCTION_JOBS_COLLECTION, "status", "processing");
     expect(result).toEqual({ scanned: 1, requeued: 1, failed: 0 });
@@ -443,7 +452,7 @@ describe("Lot C4 — GET production : sweep throttlé (structurel)", () => {
     // sweep direct : uniquement le helper throttlé (défini AVANT le GET,
     // l'ancien appel inconditionnel a disparu).
     const getBlock = route.slice(route.indexOf("export async function GET"));
-    expect(getBlock).toContain("await sweepProductionJobsIfDue(projectId, origin);");
+    expect(getBlock).toContain("await sweepProductionJobsIfDue(projectId);");
     expect(getBlock).not.toContain("sweepStaleProductionJobs");
   });
 

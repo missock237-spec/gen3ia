@@ -108,7 +108,14 @@ async function probeBuffer(body: Buffer, contentType: string): Promise<MediaProb
   try {
     const ext = contentType.includes("wav") ? ".wav" : contentType.includes("mp4") || contentType.includes("m4a") ? ".mp4" : contentType.includes("webm") ? ".webm" : contentType.includes("mpeg") ? ".mp3" : contentType.includes("ogg") ? ".ogg" : contentType.includes("flac") ? ".flac" : ".bin";
     const path = join(dir, `probe${ext}`);
-    await writeFile(path, body);
+    // Durcissement CodeQL js/http-to-file-access (#68) : le buffer provient
+    // d'un média téléversé ; la sonde ffprobe exige une matérialisation
+    // fichier (sandbox FFmpeg protocoles file,pipe uniquement —
+    // fonctionnalité voulue). L'écriture est durcie : création EXCLUSIVE
+    // (flag « wx » → échoue si le nom existe déjà) en mode 0600, dans un
+    // répertoire mkdtemp 0700 imprévisible et instance-local, sous un nom
+    // fixe créé par ce seul processus, répertoire supprimé en finally.
+    await writeFile(path, body, { flag: "wx", mode: 0o600 });
     return await probeMedia(path, dir);
   } catch {
     return undefined; // fail-soft : l'asset reste exploitable, sans métadonnées

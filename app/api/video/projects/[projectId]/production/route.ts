@@ -33,7 +33,7 @@ const SWEEP_THROTTLE_MS = 60_000;
 /** Horodatage du dernier sweep par clé — repli local si Redis est absent. */
 const localSweepAt = new Map<string, number>();
 
-async function sweepProductionJobsIfDue(projectId: string, origin: string): Promise<void> {
+async function sweepProductionJobsIfDue(projectId: string): Promise<void> {
   // Mode QStash : le worker production-tick est déjà responsable du sweep.
   if (qstashConfig()) return;
   const throttleKey = `sweep:production:${projectId}`;
@@ -49,7 +49,9 @@ async function sweepProductionJobsIfDue(projectId: string, origin: string): Prom
   }
   localSweepAt.set(throttleKey, now);
   await cacheSet(throttleKey, now, Math.ceil(SWEEP_THROTTLE_MS / 1000));
-  await sweepStaleProductionJobs(origin).catch(() => undefined);
+  // ORIGINE CANONIQUE (fix CodeQL request-forgery) : le sweep et les ticks
+  // résolvent GEN3IA_APP_ORIGIN en interne — plus aucune origine requête.
+  await sweepStaleProductionJobs().catch(() => undefined);
 }
 
 /**
@@ -67,19 +69,18 @@ export async function GET(request: NextRequest, { params }: Params) {
     const { projectId } = await params;
     // Cloisonnement propriétaire strict (anti-énumération).
     await getOwnedProjectOrThrow(guard.context.userId, projectId);
-    const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
 
     // Sweep best-effort des jobs orphelins — throttlé (lot C4a, voir
     // sweepProductionJobsIfDue) : supprimé en mode QStash, 1 exécution max
     // par minute sinon.
-    await sweepProductionJobsIfDue(projectId, origin);
+    await sweepProductionJobsIfDue(projectId);
 
     const jobs = await listProductionJobs(guard.context.userId, projectId);
     const job: VideoProductionJob | undefined = jobs[0];
     let pendingTicked = false;
     if (job && (job.status === "queued" || job.status === "processing")) {
       // UN tick borné par poll (~55 s max, checkpoint entre scènes).
-      const ticked = await maybeAdvancePendingProductionJob(job.id, { origin, timeBudgetMs: PRODUCTION_POLL_ADVANCE_BUDGET_MS }).catch(() => null);
+      const ticked = await maybeAdvancePendingProductionJob(job.id, { timeBudgetMs: PRODUCTION_POLL_ADVANCE_BUDGET_MS }).catch(() => null);
       pendingTicked = ticked !== null;
     }
 

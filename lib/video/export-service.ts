@@ -38,7 +38,13 @@ export async function startAdditionalExports(params: {
   projectId: string;
   sourceJobId: string;
   targets: VideoExportTarget[];
-  origin: string;
+  /**
+   * DÉPRÉCIÉ / IGNORÉ (fix CodeQL request-forgery) : l'URL receiver est
+   * désormais dérivée de l'origine canonique du serveur (GEN3IA_APP_ORIGIN,
+   * allowlist — lib/queue/origin.ts), jamais d'une origine fournie par
+   * l'appelant. Champ conservé pour compatibilité des appelants.
+   */
+  origin?: string;
 }): Promise<StartExportResult> {
   const project = await getOwnedProjectOrThrow(params.userId, params.projectId);
   const source = await getOwnedJobOrThrow(params.userId, params.sourceJobId);
@@ -80,7 +86,8 @@ export async function startAdditionalExports(params: {
   await adminDb.collection(JOBS_COLLECTION).doc(jobId).create({ ...exportJob });
   // Réservation réelle du budget exports (encodage + stockage, réglé à la livraison).
   await reserveExportsBudget(params.userId, jobId, targets.length * EXPORT_MINOR_PER_TARGET);
-  await publishVideoTick(params.origin, jobId);
+  // publishVideoTick résout l'origine canonique en interne (allowlist).
+  await publishVideoTick(jobId);
   return { jobId, queued: true, targets };
 }
 
@@ -92,7 +99,8 @@ export async function startAdditionalExports(params: {
 export async function requestShortsVersion(params: {
   userId: string;
   projectId: string;
-  origin: string;
+  /** DÉPRÉCIÉ / IGNORÉ — origine canonique résolue côté serveur (voir startAdditionalExports). */
+  origin?: string;
 }): Promise<StartExportResult | null> {
   const jobs = await adminDb.collection(JOBS_COLLECTION)
     .where("userId", "==", params.userId)

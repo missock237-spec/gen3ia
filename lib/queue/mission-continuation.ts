@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 
 import { createQueuedMission, markMissionEnqueueFailed } from "@/lib/queue/mission-queue";
 import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { resolveJobOrigin } from "@/lib/queue/origin";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import type { OutcomeContract } from "@/lib/agents/outcome-contract";
 
@@ -33,8 +34,14 @@ export interface MissionContinuationInput {
   outcomeContract?: OutcomeContract;
   /** Conversation à tenir informée (message final + run réconcilié au tick). */
   conversationId?: string;
-  /** Origine utilisée pour publier le tick (request origin / GEN3IA_APP_ORIGIN). */
-  origin: string;
+  /**
+   * DÉPRÉCIÉ / IGNORÉ (fix CodeQL request-forgery) : la destination QStash
+   * est désormais dérivée de l'ORIGINE CANONIQUE du serveur
+   * (GEN3IA_APP_ORIGIN, allowlist — lib/queue/origin.ts), jamais d'une
+   * origine fournie par l'appelant (falsifiable). Champ conservé en option
+   * pour compatibilité des appelants existants — sans effet.
+   */
+  origin?: string;
 }
 
 export interface MissionContinuationResult {
@@ -53,6 +60,14 @@ export async function enqueueMissionContinuation(input: MissionContinuationInput
   if (!missionQueueConfigured()) {
     return { queued: false, reason: "File d'attente non configurée — reprise manuelle disponible." };
   }
+  // ORIGINE CANONIQUE AVANT TOUTE ÉCRITURE (fix request-forgery) : si
+  // GEN3IA_APP_ORIGIN est absente/invalide, on ne crée PAS le document de
+  // file — un publish refusé après création laisserait une mission fantôme
+  // « queued » sans tick. L'appelant garde la reprise manuelle.
+  const resolvedOrigin = resolveJobOrigin();
+  if (!resolvedOrigin.ok) {
+    return { queued: false, reason: "Origine canonique non résolue (GEN3IA_APP_ORIGIN) — reprise manuelle disponible." };
+  }
   const runId = randomUUID();
   try {
     await createQueuedMission({
@@ -66,7 +81,10 @@ export async function enqueueMissionContinuation(input: MissionContinuationInput
       ...(input.conversationId ? { conversationId: input.conversationId } : {}),
       plan: input.plan,
     });
-    await publishMissionTick(input.origin, runId);
+    // publishMissionTick résout DÉJÀ l'origine canonique en interne ; le
+    // contrôle ci-dessus garantit seulement qu'aucun document n'est créé
+    // quand la publication est vouée au refus.
+    await publishMissionTick(runId);
     return { queued: true, runId };
   } catch (error) {
     // L'enfilement a échoué : la mission de file est marquée honnêtement en

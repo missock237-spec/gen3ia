@@ -1,0 +1,32 @@
+# Dependabot (Task 104-e) — mises à jour de dépendances et d'actions.
+# Version : mises à jour hebdomadaires groupées par écosystème ; les alertes
+# de vulnérabilités sont activées séparément dans les réglages du dépôt.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      prod-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Next.js 15.5.x épinglé : une montée majeure (16.x) est une décision
+      # d'architecture planifiée (ADR), pas une mise à jour automatique.
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "npm"
+    directory: "/sandbox"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

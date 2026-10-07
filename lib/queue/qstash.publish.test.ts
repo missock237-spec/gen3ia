@@ -5,13 +5,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * la build QStash de ce compte rejette les chemins URL-encodés (vérifié
  * en sondes réelles : encodé = 400 « invalid scheme », brut = 201). Le
  * repli encodé sur 400 couvre les builds historiques.
+ *
+ * ORIGINE CANONIQUE (fix CodeQL js/request-forgery) : les publish* ne
+ * prennent PLUS d'origine en paramètre — elle est résolue en interne
+ * (GEN3IA_APP_ORIGIN, allowlist serveur) et toute destination hors
+ * allowlist est rejetée par publishToDestination (défense en profondeur).
  */
 
 const fetchMock = vi.fn();
 
 vi.stubGlobal("fetch", fetchMock);
 
-import { dispatchTickUrl, missionTickUrl, publishDispatchTick, publishMissionTick, qstashConfig } from "./qstash";
+import {
+  dispatchTickUrl,
+  missionTickUrl,
+  publishDispatchTick,
+  publishMissionTick,
+  publishToDestination,
+  qstashConfig,
+} from "./qstash";
+import { assertSafeDestinationUrl } from "./origin";
 
 const CONFIG = {
   token: "qstash-token-test",
@@ -29,18 +42,22 @@ beforeEach(() => {
   process.env.QSTASH_TOKEN = CONFIG.token;
   process.env.QSTASH_CURRENT_SIGNING_KEY = CONFIG.currentSigningKey;
   process.env.QSTASH_NEXT_SIGNING_KEY = CONFIG.nextSigningKey;
+  process.env.GEN3IA_APP_ORIGIN = "https://gen3ia.online";
+  delete process.env.GEN3IA_ALLOWED_ORIGINS;
 });
 
 afterEach(() => {
   delete process.env.QSTASH_TOKEN;
   delete process.env.QSTASH_CURRENT_SIGNING_KEY;
   delete process.env.QSTASH_NEXT_SIGNING_KEY;
+  delete process.env.GEN3IA_APP_ORIGIN;
+  delete process.env.GEN3IA_ALLOWED_ORIGINS;
 });
 
 describe("publishMissionTick — path brut (bug production corrigé)", () => {
   it("publie avec la destination BRUTE dans le path (jamais %2F ni %3A)", async () => {
     fetchMock.mockResolvedValue(okPublish());
-    await publishMissionTick("https://gen3ia.online", "run-1");
+    await publishMissionTick("run-1");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const calledUrl = String(fetchMock.mock.calls[0]?.[0]);
@@ -54,7 +71,7 @@ describe("publishMissionTick — path brut (bug production corrigé)", () => {
     fetchMock
       .mockResolvedValueOnce(new Response('{"error":"invalid destination url"}', { status: 400 }))
       .mockResolvedValueOnce(okPublish("msg_encoded"));
-    const result = await publishMissionTick("https://gen3ia.online", "run-2");
+    const result = await publishMissionTick("run-2");
 
     expect(result?.messageId).toBe("msg_encoded");
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -65,20 +82,34 @@ describe("publishMissionTick — path brut (bug production corrigé)", () => {
     fetchMock
       .mockResolvedValueOnce(new Response('{"error":"invalid destination url"}', { status: 400 }))
       .mockResolvedValueOnce(new Response('{"error":"still bad"}', { status: 400 }));
-    await expect(publishMissionTick("https://gen3ia.online", "run-3")).rejects.toThrow(/QStash publish 400/);
+    await expect(publishMissionTick("run-3")).rejects.toThrow(/QStash publish 400/);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("délai QStash transmis via Upstash-Delay (ré-enfilement mission)", async () => {
     fetchMock.mockResolvedValue(okPublish());
-    await publishMissionTick("https://gen3ia.online", "run-4", { delaySeconds: 2 });
+    await publishMissionTick("run-4", { delaySeconds: 2 });
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
     expect(headers["Upstash-Delay"]).toBe("2s");
   });
 
   it("file non configurée → null (l'appelant garde son repli sync)", async () => {
     delete process.env.QSTASH_TOKEN;
-    const result = await publishMissionTick("https://gen3ia.online", "run-5");
+    const result = await publishMissionTick("run-5");
+    expect(result).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("origine canonique ABSENTE → null sans AUCUN appel réseau (anti request-forgery)", async () => {
+    delete process.env.GEN3IA_APP_ORIGIN;
+    const result = await publishMissionTick("run-6");
+    expect(result).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("origine canonique HORS ALLOWLIST → null sans AUCUN appel réseau", async () => {
+    process.env.GEN3IA_APP_ORIGIN = "https://attacker.example.net";
+    const result = await publishMissionTick("run-7");
     expect(result).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -91,7 +122,7 @@ describe("publishMissionTick — path brut (bug production corrigé)", () => {
 describe("publishDispatchTick — boucle de dispatch planifié", () => {
   it("publie { slotEpoch } vers /api/queue/dispatch-tick avec délai borné", async () => {
     fetchMock.mockResolvedValue(okPublish("msg_loop"));
-    const result = await publishDispatchTick("https://gen3ia.online", { delaySeconds: 250, slotEpoch: 4_891_234 });
+    const result = await publishDispatchTick({ delaySeconds: 250, slotEpoch: 4_891_234 });
 
     expect(result?.messageId).toBe("msg_loop");
     const calledUrl = String(fetchMock.mock.calls[0]?.[0]);
@@ -103,13 +134,46 @@ describe("publishDispatchTick — boucle de dispatch planifié", () => {
 
   it("borne le délai à 24 h maximum", async () => {
     fetchMock.mockResolvedValue(okPublish());
-    await publishDispatchTick("https://gen3ia.online", { delaySeconds: 500_000, slotEpoch: 1 });
+    await publishDispatchTick({ delaySeconds: 500_000, slotEpoch: 1 });
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
     expect(Number(headers["Upstash-Delay"].replace("s", ""))).toBeLessThanOrEqual(86_400);
   });
 
-  it("les helpers d'URL sont stables (contrat receiver)", () => {
+  it("origine canonique non résolue → null (réservation libérable par l'appelant)", async () => {
+    delete process.env.GEN3IA_APP_ORIGIN;
+    const result = await publishDispatchTick({ delaySeconds: 250, slotEpoch: 7 });
+    expect(result).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("les helpers d'URL sont stables (contrat receiver, fonctions pures)", () => {
     expect(missionTickUrl("https://gen3ia.online/")).toBe("https://gen3ia.online/api/queue/mission-tick");
     expect(dispatchTickUrl("https://gen3ia.online")).toBe("https://gen3ia.online/api/queue/dispatch-tick");
+  });
+});
+
+describe("publishToDestination — défense en profondeur sur la destination", () => {
+  it("rejette une destination http NON locale avant tout fetch", async () => {
+    await expect(
+      publishToDestination(CONFIG, "http://gen3ia.online/api/queue/mission-tick", "{}"),
+    ).rejects.toThrow(/https requis hors dev local/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejette une destination dont l'hôte n'est pas dans l'allowlist", async () => {
+    await expect(
+      publishToDestination(CONFIG, "https://attacker.example.net/exfil", "{}"),
+    ).rejects.toThrow(/non autorisé/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("tolère http pour le développement local", async () => {
+    fetchMock.mockResolvedValue(okPublish("msg_local"));
+    const result = await publishToDestination(CONFIG, "http://localhost:3000/api/queue/mission-tick", "{}");
+    expect(result.messageId).toBe("msg_local");
+  });
+
+  it("assertSafeDestinationUrl lève une Error FR sur URL malformée", () => {
+    expect(() => assertSafeDestinationUrl("pas-une-url")).toThrow(/Destination QStash invalide/);
   });
 });

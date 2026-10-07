@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { Gen3iaClient } from "../src/client.js";
@@ -236,3 +238,34 @@ describe("Gen3iaClient — politique de retry (GET uniquement)", () => {
 function makeNetworkFailure(): Error {
   return Object.assign(new Error("fetch failed: ECONNRESET"), { simulated: true });
 }
+
+// ─── Task 104-c : normalisation baseUrl linéaire (CodeQL #53 polynomial-redos) ───
+
+describe("Gen3iaClient — normalisation baseUrl linéaire (CodeQL js/polynomial-redos)", () => {
+  it("baseUrl pathologique (100 000 slashs) : normalisation < 100 ms, résultat correct", async () => {
+    // Chaîne adversariale maximisant le backtracking d'une regex /\/+$/ :
+    // si la normalisation était polynomiale, cette construction exploserait.
+    const pathological = "https://api.example.org" + "/".repeat(100_000);
+    const { fetch: impl, calls } = fetchMock([
+      jsonResponse({ ok: true, service: "gen3ia", time: "2026-01-01T00:00:00Z" }),
+    ]);
+
+    const start = performance.now();
+    const client = new Gen3iaClient({ baseUrl: pathological, fetch: impl });
+    const elapsedMs = performance.now() - start;
+
+    expect(elapsedMs).toBeLessThan(100); // verrou d'absence de backtracking polynomial
+    const health = await client.health();
+    expect(health.ok).toBe(true);
+    // Tous les slashs terminaux sont retirés, l'URL finale reste intacte.
+    expect(calls[0]?.url).toBe("https://api.example.org/api/public/health");
+  });
+
+  it("garde structurelle : client.ts ne contient plus de regex sur les slashs finaux", () => {
+    const source = readFileSync(path.join(import.meta.dirname, "../src/client.ts"), "utf8");
+    // La séquence d'origine `.replace(/\/+$/, "")` ne doit plus exister dans
+    // le client (commentaires compris) — normalisation 100 % boucle.
+    expect(source).not.toContain(".replace(/\\/+$/");
+    expect(source).toContain("trimTrailingSlashes");
+  });
+});

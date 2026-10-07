@@ -203,7 +203,6 @@ export async function POST(request: NextRequest) {
           objective: result.objective || state.objective,
           plan: result.plan,
           ...(state.conversationId ? { conversationId: state.conversationId } : {}),
-          origin: process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin,
         });
       }
 

@@ -147,8 +147,9 @@ export async function POST(request: NextRequest) {
           ...(parsed.data.outcomeContract ? { outcomeContract: parsed.data.outcomeContract } : {}),
           plan: runtimePlan,
         });
-        const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
-        const published = await publishMissionTick(origin, runId);
+        // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishMissionTick
+        // résout GEN3IA_APP_ORIGIN en interne (allowlist serveur).
+        const published = await publishMissionTick(runId);
         executionLog.info(
           { event: "execution.queued", runId, messageId: published?.messageId, steps: runtimePlan.steps.length },
           "Mission enfilée (exécution par tranches)",

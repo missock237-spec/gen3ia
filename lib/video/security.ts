@@ -13,6 +13,7 @@ import "server-only";
  * fois par les routes API et par le worker de rendu.
  */
 
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -193,15 +194,94 @@ async function verifyStaticBinary(
 // release GitHub du paquet ffmpeg-static (mêmes binaires que le paquet npm).
 // ────────────────────────────────────────────────────────────────────────────
 
-const RUNTIME_RELEASE_TAG = process.env.VIDEO_STATIC_RELEASE_TAG?.trim() || "b6.0";
-const RUNTIME_BASE_URL = process.env.VIDEO_STATIC_BINARIES_URL?.trim().replace(/\/$/, "")
-  || `https://github.com/eugeneware/ffmpeg-static/releases/download/${RUNTIME_RELEASE_TAG}`;
+/**
+ * Release ÉPINGLÉE du paquet ffmpeg-static + SHA256 OFFICIELS des binaires
+ * linux-x64, calculés sur place par DOUBLE téléchargement direct des assets
+ * officiels de la release GitHub (github.com/eugeneware/ffmpeg-static/
+ * releases/download/b6.0/) puis `sha256sum` — deux téléchargements
+ * indépendants, empreintes identiques :
+ *  - ffmpeg-linux-x64  : ed652b2f32e0851d1946894fb8333f5b677c1b2ce6b9d187910a67f8b99da028
+ *  - ffprobe-linux-x64 : a339171d90f7482b2db02234e261b9e00d51526391f87fa633d5da7b98a28cf4
+ *
+ * MATRICE D'INTÉGRITÉ (fail-closed — Task 104-c, alertes CodeQL #69/#70) :
+ *  1. Tag épinglé (« b6.0 ») + URL officielle par défaut (aucune surcharge
+ *     env) → les SHA256 ÉPINGLÉS ci-dessus font foi ; un checksum fourni par
+ *     env est volontairement IGNORÉ dans ce cas (une valeur épinglée dans le
+ *     code ne peut pas être affaiblie par l'environnement).
+ *  2. VIDEO_STATIC_RELEASE_TAG ou VIDEO_STATIC_BINARIES_URL surchargés
+ *     (autre release, miroir) → VIDEO_FFMPEG_SHA256 / VIDEO_FFPROBE_SHA256
+ *     deviennent REQUIS : sans eux, tout téléchargement runtime ÉCHOUE
+ *     (jamais d'écriture ni d'exécution d'un binaire à l'empreinte inconnue).
+ */
+const PINNED_RUNTIME_RELEASE_TAG = "b6.0";
+const PINNED_FFMPEG_LINUX_X64_SHA256 = "ed652b2f32e0851d1946894fb8333f5b677c1b2ce6b9d187910a67f8b99da028";
+const PINNED_FFPROBE_LINUX_X64_SHA256 = "a339171d90f7482b2db02234e261b9e00d51526391f87fa633d5da7b98a28cf4";
+const OFFICIAL_BINARIES_BASE_URL = "https://github.com/eugeneware/ffmpeg-static/releases/download";
 const RUNTIME_DIR = "/tmp/gen3ia-ffmpeg";
 const MIN_BINARY_BYTES = 1_000_000;
+
+/** Retire les slashs finaux d'une URL sans expression régulière (linéaire). */
+function stripTrailingSlash(value: string): string {
+  let out = value;
+  while (out.endsWith("/")) out = out.slice(0, -1);
+  return out;
+}
+
+/**
+ * Checksum EXIGÉ pour ce binaire selon la configuration (pure, injectable
+ * pour les tests). Jette si la release surchargée par env n'a pas d'empreinte
+ * de confiance : le téléchargement est alors refusé AVANT toute requête.
+ */
+export function resolveExpectedRuntimeChecksum(
+  kind: "ffmpeg" | "ffprobe",
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const tag = env.VIDEO_STATIC_RELEASE_TAG?.trim() || PINNED_RUNTIME_RELEASE_TAG;
+  const customBaseUrl = env.VIDEO_STATIC_BINARIES_URL?.trim() ?? "";
+  const envSha = (kind === "ffmpeg" ? env.VIDEO_FFMPEG_SHA256 : env.VIDEO_FFPROBE_SHA256)?.trim() ?? "";
+  if (tag !== PINNED_RUNTIME_RELEASE_TAG || customBaseUrl !== "") {
+    const requiredVar = kind === "ffmpeg" ? "VIDEO_FFMPEG_SHA256" : "VIDEO_FFPROBE_SHA256";
+    if (!envSha) {
+      throw new Error(
+        `Téléchargement runtime ${kind} refusé (fail-closed) : la release est surchargée ` +
+        `(tag « ${tag} »${customBaseUrl ? ", URL binaire personnalisée" : ""}) sans empreinte de ` +
+        `confiance. Définissez ${requiredVar} (SHA256 hexadécimal de 64 caractères du binaire ` +
+        `${kind}-linux-x64 de cette release) pour autoriser le téléchargement.`,
+      );
+    }
+    return envSha.toLowerCase();
+  }
+  return kind === "ffmpeg" ? PINNED_FFMPEG_LINUX_X64_SHA256 : PINNED_FFPROBE_LINUX_X64_SHA256;
+}
+
+/**
+ * Vérifie l'empreinte SHA256 d'un buffer contre la valeur attendue (hexadécimal
+ * 64 caractères). Appelé AVANT toute écriture du binaire téléchargé : en cas
+ * de divergence (téléchargement corrompu, intermédiaire compromis, miroir
+ * malveillant) on jette — le binaire n'est JAMAIS posé sur disque, encore
+ * moins exécuté. Pur (aucun I/O) : testable unitairement.
+ */
+export function assertBinaryChecksum(buffer: Buffer, expectedHex: string): void {
+  const expected = expectedHex.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(expected)) {
+    throw new Error(
+      `Checksum attendu invalide (${expected.slice(0, 32)}…) : SHA256 hexadécimal de 64 caractères requis.`,
+    );
+  }
+  const actual = createHash("sha256").update(buffer).digest("hex");
+  if (actual !== expected) {
+    throw new Error(
+      `Intégrité du binaire compromise : SHA256 réel ${actual.slice(0, 16)}… ≠ attendu ${expected.slice(0, 16)}… — écriture et exécution refusées.`,
+    );
+  }
+}
 
 const runtimeDownloads = new Map<string, Promise<string>>();
 
 async function ensureRuntimeBinary(kind: "ffmpeg" | "ffprobe"): Promise<string> {
+  // Empreinte exigée AVANT le réseau : fail-closed si la release surchargée
+  // par env n'a pas de checksum de confiance (jette sans aucune requête).
+  const expectedSha256 = resolveExpectedRuntimeChecksum(kind);
   const cached = runtimeDownloads.get(kind);
   if (cached) return cached;
   const download = (async () => {
@@ -214,13 +294,44 @@ async function ensureRuntimeBinary(kind: "ffmpeg" | "ffprobe"): Promise<string> 
     } catch {
       /* premier usage de cette instance */
     }
-    await fs.mkdir(RUNTIME_DIR, { recursive: true });
-    const url = `${RUNTIME_BASE_URL}/${kind}-linux-x64`;
+    const tag = process.env.VIDEO_STATIC_RELEASE_TAG?.trim() || PINNED_RUNTIME_RELEASE_TAG;
+    const baseUrl = stripTrailingSlash(
+      process.env.VIDEO_STATIC_BINARIES_URL?.trim() || `${OFFICIAL_BINARIES_BASE_URL}/${tag}`,
+    );
+    await fs.mkdir(RUNTIME_DIR, { recursive: true, mode: 0o700 });
+    const url = `${baseUrl}/${kind}-linux-x64`;
     const response = await fetch(url, { signal: AbortSignal.timeout(180_000), redirect: "follow" });
     if (!response.ok) throw new Error(`HTTP ${response.status} sur ${url}`);
     const buffer = Buffer.from(await response.arrayBuffer());
     if (buffer.length < MIN_BINARY_BYTES) throw new Error(`binaire trop petit (${buffer.length} o) — téléchargement corrompu`);
-    await fs.writeFile(target, buffer, { mode: 0o755 });
+    // INTÉGRITÉ AVANT ÉCRITURE : un binaire dont l'empreinte ne correspond
+    // pas à la valeur épinglée (ou exigée par env pour une release
+    // surchargée) n'est jamais posé sur disque ni exécuté.
+    assertBinaryChecksum(buffer, expectedSha256);
+    // Écriture durcie : création EXCLUSIVE (« wx », échoue si le chemin
+    // existe déjà) d'un fichier d'attelage dédié en mode 0700, chmod 0755,
+    // puis renommage ATOMIQUE vers la cible (même répertoire) — la cible
+    // n'apparaît jamais partiellement écrite et ne peut pas être écrasée
+    // par un flux non vérifié (CodeQL js/insecure-temporary-file #69).
+    const stagingPath = `${target}.${randomUUID()}.staging`;
+    const handle = await fs.open(stagingPath, "wx", 0o700);
+    try {
+      await handle.writeFile(buffer);
+      await handle.chmod(0o755);
+    } finally {
+      await handle.close();
+    }
+    // Accès concurrent : un pair a pu poser la cible pendant notre
+    // téléchargement — si elle existe déjà et est exécutable, on réutilise
+    // la sienne et on supprime notre doublon d'attelage.
+    try {
+      await fs.access(target, fs.constants.X_OK);
+      await fs.rm(stagingPath, { force: true });
+      return target;
+    } catch {
+      /* rien de posé par un pair : le renommage atomique prend le relais */
+    }
+    await fs.rename(stagingPath, target);
     await fs.access(target, fs.constants.X_OK); // exécutable réellement posé
     return target;
   })();

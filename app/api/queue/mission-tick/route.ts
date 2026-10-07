@@ -188,8 +188,11 @@ export async function POST(request: NextRequest) {
         // finalisation) laisserait, sur un échec de publish, un document
         // « running » sans tick planifié : mission fantôme.
         await finalizeMissionRun(runId, "paused");
-        const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
-        await publishMissionTick(origin, runId, { delaySeconds: NEXT_TICK_DELAY_SECONDS });
+        // ORIGINE CANONIQUE (fix CodeQL request-forgery) : la route ne calcule
+        // AUCUNE origine — publishMissionTick résout GEN3IA_APP_ORIGIN en
+        // interne (allowlist serveur) et refuse de publier vers une cible
+        // non autorisée (retour null si non résolue : sondage en relais).
+        await publishMissionTick(runId, { delaySeconds: NEXT_TICK_DELAY_SECONDS });
         log.info({ event: "queue.tick.reenqueued", runId, executionId, pendingRemaining }, "Tranche terminée — suite ré-enfilée");
         return NextResponse.json({ ok: true, runId, status: state.status, reenqueued: true });
       }

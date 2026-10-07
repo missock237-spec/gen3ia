@@ -12,7 +12,7 @@
 
 ### Contexte
 
-Le backend actuel vit dans les route handlers `app/api/**` (Next.js 16,
+Le backend actuel vit dans les route handlers `app/api/**` (Next.js 15,
 runtime Node). La plateforme appelle aujourd'hui ~45 routes : agents,
 billing, live, voice (Twilio/Plivo), extensions, storage R2, équipes,
 code-agents (21st.dev), webhooks Chariow. Plusieurs traitements longs

@@ -187,9 +187,11 @@ describe("POST /api/queue/mission-tick — tranche d'exécution", () => {
     expect(mockedProgress).toHaveBeenCalledWith(RUN_ID, state.plan.steps);
     // ORDRE CRITIQUE : finalisation (bail relâché) PUIS publish — un échec
     // de publish laisse alors QStash re-tenter un claim possible.
+    // ORIGINE CANONIQUE : le publish ne reçoit PLUS d'origine — résolution
+    // interne (GEN3IA_APP_ORIGIN, allowlist), jamais l'origine de la requête.
     expect(mockedFinalize).toHaveBeenCalledBefore(mockedPublish as never);
     expect(mockedFinalize).toHaveBeenCalledWith(RUN_ID, "paused");
-    expect(mockedPublish).toHaveBeenCalledWith("https://gen3ia.local", RUN_ID, { delaySeconds: NEXT_TICK_DELAY_SECONDS });
+    expect(mockedPublish).toHaveBeenCalledWith(RUN_ID, { delaySeconds: NEXT_TICK_DELAY_SECONDS });
   });
 
   it("checkpoint présent → reprise : plan du checkpoint + sorties déjà payées", async () => {
@@ -254,11 +256,17 @@ describe("POST /api/queue/mission-tick — tranche d'exécution", () => {
     expect(mockedFinalize).toHaveBeenCalledWith(RUN_ID, "paused");
   });
 
-  it("l'origine de ré-enfilement peut être forcée (auto-hébergement / proxy)", async () => {
-    process.env.GEN3IA_APP_ORIGIN = "https://api.gen3ia.online";
+  it("ré-enfilement SANS origine dérivée de la requête (origine canonique interne)", async () => {
+    // La route ne calcule plus AUCUNE origine : même envoyée depuis un hôte
+    // arbitraire (gen3ia.local), la destination n'en dépend PLUS — le publish
+    // reçoit uniquement (runId, options) et résout GEN3IA_APP_ORIGIN côté
+    // serveur (allowlist, fix CodeQL request-forgery).
     mockRun.mockResolvedValue(pausedState());
     await POST(tickRequest(JSON.stringify({ runId: RUN_ID })));
-    expect(mockedPublish).toHaveBeenCalledWith("https://api.gen3ia.online", RUN_ID, expect.anything());
-    delete process.env.GEN3IA_APP_ORIGIN;
+    expect(mockedPublish).toHaveBeenCalledTimes(1);
+    const args = mockedPublish.mock.calls[0];
+    expect(args?.[0]).toBe(RUN_ID);
+    expect(args?.[1]).toMatchObject({ delaySeconds: NEXT_TICK_DELAY_SECONDS });
+    expect(args).toHaveLength(2);
   });
 });

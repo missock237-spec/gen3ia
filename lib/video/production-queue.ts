@@ -32,6 +32,7 @@ import { randomUUID } from "node:crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import { logger } from "@/lib/observability/logger";
 import { publishJsonDestination, type QStashPublishResult } from "@/lib/queue/qstash";
+import { resolveJobOrigin } from "@/lib/queue/origin";
 import { createProject, getOwnedProjectOrThrow, patchProject, logSystem } from "@/lib/video/project-service";
 import { VideoProjectCreateSchema, DirectorBriefSchema, RenderRequestSchema } from "@/lib/video/security";
 import { applyProductionPlan } from "@/lib/video/director-service";
@@ -199,12 +200,6 @@ export interface CreateVideoProductionJobParams {
   prompt: string;
   title?: string;
   options?: ProductionJobOptions;
-  /**
-   * Origine de l'app (dérivation de l'URL receiver QStash). Absente dans le
-   * contexte agent : GEN3IA_APP_ORIGIN est utilisée, sinon la continuation
-   * se fait par sondage (GET production) — jamais d'échec bloquant.
-   */
-  origin?: string;
 }
 
 export interface CreateVideoProductionJobResult {
@@ -277,8 +272,10 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
   await createJobDoc(PRODUCTION_JOBS_COLLECTION, jobId, { ...job }, params.userId);
   await logSystem(project.id, `Production autopilote ${jobId.slice(0, 8)} enfile (prompt : ${brief.slice(0, 120)}).`).catch(() => undefined);
 
-  const origin = params.origin?.trim() || process.env.GEN3IA_APP_ORIGIN?.trim() || "";
-  const published = origin ? await publishProductionTick(origin, jobId) : ({ ok: false, mode: "unconfigured" } as const);
+  // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishProductionTick
+  // résout GEN3IA_APP_ORIGIN en interne (allowlist serveur) — l'origine
+  // n'est plus un paramètre d'appelant (falsifiable).
+  const published = await publishProductionTick(jobId);
   if (!published.ok && published.mode === "error") {
     // PAS d'échec bloquant : continuation par sondage (GET production) —
     // mais l'incident est journalisé (jamais de fantôme silencieux).
@@ -296,13 +293,21 @@ export function productionTickUrl(origin: string): string {
   return `${origin.replace(/\/$/, "")}/api/video/worker/production-tick`;
 }
 
-export async function publishProductionTick(origin: string, jobId: string, delaySeconds = 1): Promise<QStashPublishResult> {
-  return publishJsonDestination(productionTickUrl(origin), JSON.stringify({ jobId }), { delaySeconds });
+/**
+ * Publie un tick de production via le pattern partagé de lib/queue/qstash.
+ * ORIGINE CANONIQUE (fix CodeQL request-forgery) : résolue en interne depuis
+ * GEN3IA_APP_ORIGIN (allowlist serveur) — jamais depuis une origine de
+ * requête. « unconfigured » couvre QStash absent ET origine non résolue
+ * (la continuation par sondage prend le relais).
+ */
+export async function publishProductionTick(jobId: string, delaySeconds = 1): Promise<QStashPublishResult> {
+  const resolved = resolveJobOrigin();
+  if (!resolved.ok) return { ok: false, mode: "unconfigured" } as const;
+  return publishJsonDestination(productionTickUrl(resolved.origin), JSON.stringify({ jobId }), { delaySeconds });
 }
 
-async function publishTickAndLog(job: Pick<VideoProductionJob, "id" | "projectId">, origin: string, delaySeconds = 0): Promise<boolean> {
-  if (!origin) return false;
-  const published = await publishProductionTick(origin, job.id, delaySeconds);
+async function publishTickAndLog(job: Pick<VideoProductionJob, "id" | "projectId">, delaySeconds = 0): Promise<boolean> {
+  const published = await publishProductionTick(job.id, delaySeconds);
   if (!published.ok && published.mode === "error") {
     await logSystem(job.projectId, `Continuation QStash échouée (${published.message.slice(0, 200)}) — reprise par sondage du studio.`).catch(() => undefined);
   }
@@ -644,7 +649,7 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
 }
 
 /** RENDER : enfile le rendu réel (module 19) — il gère sa propre facturation. */
-async function stageRender(job: VideoProductionJob, origin: string): Promise<ProductionStageResult> {
+async function stageRender(job: VideoProductionJob): Promise<ProductionStageResult> {
   const project = await getOwnedProjectOrThrow(job.userId, job.projectId);
   // Option subtitlesEnabled:false → sous-titres coupés sur la timeline.
   if (job.options?.subtitlesEnabled === false && project.timeline?.captions?.enabled) {
@@ -655,7 +660,7 @@ async function stageRender(job: VideoProductionJob, origin: string): Promise<Pro
   const derivedTargets = job.options?.derivedTargets
     ? RenderRequestSchema.parse({ derivedTargets: job.options.derivedTargets }).derivedTargets
     : [];
-  const render = await startRenderJob({ userId: job.userId, projectId: job.projectId, derivedTargets, origin });
+  const render = await startRenderJob({ userId: job.userId, projectId: job.projectId, derivedTargets });
   // Rattaché AVANT le passage à l'étape done (visible même si le tick meurt ici).
   // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
   await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, { renderJobId: render.jobId, updatedAt: nowIso() }, job.userId);
@@ -692,7 +697,7 @@ async function stageDone(job: VideoProductionJob): Promise<ProductionStageResult
  * conservés. Les échecs fatals passent par le budget retryCount (3) puis
  * échec définitif notifié.
  */
-export async function advanceProductionJob(jobId: string, origin: string, options: { timeBudgetMs?: number } = {}): Promise<ProductionTickResult> {
+export async function advanceProductionJob(jobId: string, options: { timeBudgetMs?: number } = {}): Promise<ProductionTickResult> {
   const outcome = await claimProductionJob(jobId);
   if (outcome.kind === "missing") {
     return { jobId, projectId: "", status: "failed", stage: null, progress: 0, done: true, continued: false, message: "Job de production introuvable." };
@@ -736,7 +741,7 @@ export async function advanceProductionJob(jobId: string, origin: string, option
         stageResult = await stageVoice(job, options.timeBudgetMs);
         break;
       case "render":
-        stageResult = await stageRender(job, origin);
+        stageResult = await stageRender(job);
         break;
       case "done":
         stageResult = await stageDone(job);
@@ -746,7 +751,7 @@ export async function advanceProductionJob(jobId: string, origin: string, option
         throw new Error(`Étape de production inconnue : ${String(exhaustive)}`);
       }
     }
-    return await concludeProductionTick(job, stageResult, origin);
+    return await concludeProductionTick(job, stageResult);
   } catch (error) {
     // Task 95-d — une erreur de QUOTA n'est pas un échec de production : elle
     // ne consomme PAS le budget de relance, ne marque JAMAIS failed et ne
@@ -762,7 +767,7 @@ export async function advanceProductionJob(jobId: string, origin: string, option
     // consomment PAS le budget, ne marquent JAMAIS failed, ne notifient PAS.
     // (failProductionJob peut propager si la ré-écriture échoue aussi côté
     // miroir — la route tick republiera.)
-    return await failProductionJob(job, error instanceof Error ? error : new Error(String(error)), origin, policy, quotaFailures);
+    return await failProductionJob(job, error instanceof Error ? error : new Error(String(error)), policy, quotaFailures);
   }
 }
 
@@ -770,7 +775,6 @@ export async function advanceProductionJob(jobId: string, origin: string, option
 async function concludeProductionTick(
   job: VideoProductionJob,
   stageResult: ProductionStageResult,
-  origin: string,
 ): Promise<ProductionTickResult> {
   // Terminaisons (production finie ou échec du rendu rattaché).
   if (stageResult.action === "terminal-completed" || stageResult.action === "terminal-failed") {
@@ -818,7 +822,7 @@ async function concludeProductionTick(
   if (stageResult.action === "advance") {
     const finishedStage = job.stage;
     await moveToNextProductionStage(job, stageResult.detail);
-    const enqueued = await publishTickAndLog(job, origin);
+    const enqueued = await publishTickAndLog(job);
     return {
       jobId: job.id,
       projectId: job.projectId,
@@ -838,7 +842,7 @@ async function concludeProductionTick(
     await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, { progress: stageResult.mirrorProgress, updatedAt: nowIso() }, job.userId);
     job.progress = stageResult.mirrorProgress;
   }
-  const enqueued = await publishTickAndLog(job, origin, stageResult.delaySeconds ?? 0);
+  const enqueued = await publishTickAndLog(job, stageResult.delaySeconds ?? 0);
   return {
     jobId: job.id,
     projectId: job.projectId,
@@ -871,7 +875,7 @@ async function concludeProductionTick(
  * (quota aussi côté miroir — Supabase indisponible), on journalise et on
  * PROPAGE — la route tick ré-enfilera le job.
  */
-async function failProductionJob(job: VideoProductionJob, error: Error, origin?: string, policy?: ResumePolicy, quotaFailures?: number): Promise<ProductionTickResult> {
+async function failProductionJob(job: VideoProductionJob, error: Error, policy?: ResumePolicy, quotaFailures?: number): Promise<ProductionTickResult> {
   const message = error.message.slice(0, 800);
   // Régime « reprise » : politique fournie et budget NON consommé (quota /
   // transitoire). Une politique fatale retombe dans le régime legacy.
@@ -896,7 +900,9 @@ async function failProductionJob(job: VideoProductionJob, error: Error, origin?:
         patch.quotaFailures = quotaFailures;
       }
       await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, patch, job.userId);
-      if (origin) await publishTickAndLog(job, origin, policy.delaySeconds);
+      // publishTickAndLog retourne la réussite RÉELLE du publish — « continued »
+      // reflète l'honnêteté du ré-enfilement (faux = sondage en relais).
+      const enqueued = await publishTickAndLog(job, policy.delaySeconds);
       await logSystem(
         job.projectId,
         `Production ${job.id.slice(0, 8)} : incident ${isQuota ? "quota Firestore" : "transitoire"} à l'étape ${job.stage} — reprise automatique dans ${policy.delaySeconds} s (budget de relance intact, checkpoints conservés).`,
@@ -908,7 +914,7 @@ async function failProductionJob(job: VideoProductionJob, error: Error, origin?:
         stage: job.stage,
         progress: job.progress,
         done: false,
-        continued: Boolean(origin),
+        continued: enqueued,
         ...(job.renderJobId ? { renderJobId: job.renderJobId } : {}),
         message: storedMessage,
       };
@@ -930,7 +936,7 @@ async function failProductionJob(job: VideoProductionJob, error: Error, origin?:
         },
         job.userId,
       );
-      if (origin) await publishTickAndLog(job, origin, 20);
+      const enqueued = await publishTickAndLog(job, 20);
       await logSystem(job.projectId, `Production ${job.id.slice(0, 8)} : incident à l'étape ${job.stage} (relance ${retryCount + 1}/${PRODUCTION_RETRY_BUDGET}) — reprise automatique. ${message}`).catch(() => undefined);
       return {
         jobId: job.id,
@@ -939,7 +945,7 @@ async function failProductionJob(job: VideoProductionJob, error: Error, origin?:
         stage: job.stage,
         progress: job.progress,
         done: false,
-        continued: Boolean(origin),
+        continued: enqueued,
         ...(job.renderJobId ? { renderJobId: job.renderJobId } : {}),
         message,
       };
@@ -1002,7 +1008,7 @@ export interface ProductionSweepResult {
  * échec définitif après budget) via failProductionJob — idempotent, ne
  * touche jamais un job vivant.
  */
-export async function sweepStaleProductionJobs(origin?: string): Promise<ProductionSweepResult> {
+export async function sweepStaleProductionJobs(): Promise<ProductionSweepResult> {
   // Task 95-d — lecture via la couche résiliente (miroir chaud sous quota).
   const stale = await queryJobDocs<VideoProductionJob>(PRODUCTION_JOBS_COLLECTION, "status", "processing");
   const now = Date.now();
@@ -1016,7 +1022,7 @@ export async function sweepStaleProductionJobs(origin?: string): Promise<Product
       const age = now - Date.parse(job.updatedAt || job.createdAt);
       if (!(Number.isFinite(age) && age > 2 * PRODUCTION_LEASE_MS)) continue;
     }
-    const result = await failProductionJob(job, new Error("Échéance de traitement dépassée (worker interrompu) — reprise à l'étape courante."), origin);
+    const result = await failProductionJob(job, new Error("Échéance de traitement dépassée (worker interrompu) — reprise à l'étape courante."));
     if (result.status === "queued") requeued += 1;
     else failed += 1;
   }
@@ -1033,16 +1039,16 @@ export async function sweepStaleProductionJobs(origin?: string): Promise<Product
  * QStash tant que le client garde la page ouverte. Le claim transactionnel
  * empêche les sondages concurrents de doubler un tick QStash.
  */
-export async function maybeAdvancePendingProductionJob(jobId: string, options: { origin: string; timeBudgetMs?: number }): Promise<ProductionTickResult | null> {
+export async function maybeAdvancePendingProductionJob(jobId: string, options: { timeBudgetMs?: number } = {}): Promise<ProductionTickResult | null> {
   // Task 95-d — lecture via la couche résiliente (miroir chaud sous quota).
   const stored = await loadJobDoc<Partial<ProductionJobWithResume>>(PRODUCTION_JOBS_COLLECTION, jobId);
   if (!stored) return null;
   const job = normalizeJobDoc(stored, jobId);
   if (job.status === "queued") {
-    return advanceProductionJob(jobId, options.origin, { timeBudgetMs: options.timeBudgetMs });
+    return advanceProductionJob(jobId, { timeBudgetMs: options.timeBudgetMs });
   }
   if (job.status === "processing" && !leaseActive(job, Date.now())) {
-    return advanceProductionJob(jobId, options.origin, { timeBudgetMs: options.timeBudgetMs });
+    return advanceProductionJob(jobId, { timeBudgetMs: options.timeBudgetMs });
   }
   return null;
 }

@@ -51,6 +51,22 @@ const DEFAULT_RETRY_BASE_DELAY_MS = 250;
 /** Un run /api/v1 peut durer jusqu'à 300 s côté serveur (maxDuration). */
 const AGENT_RUN_TIMEOUT_MS = 320_000;
 
+/**
+ * Retire les slashs terminaux d'une URL de base SANS expression régulière.
+ *
+ * CodeQL js/polynomial-redos (alerte #53) : l'ancienne normalisation par
+ * expression régulière (« un ou plusieurs slashs en fin de chaîne ») sur une
+ * donnée non contrôlée (`options.baseUrl` vient du code appelant / de la
+ * configuration) est classée polynomial (backtracking sur de longues
+ * répétitions de « / »). La boucle `endsWith` + `slice` ci-dessous est
+ * strictement LINÉAIRE O(n) : aucun backtracking possible.
+ */
+export function trimTrailingSlashes(url: string): string {
+  let base = url;
+  while (base.endsWith("/")) base = base.slice(0, -1);
+  return base;
+}
+
 export interface Gen3iaClientOptions {
   /** Origine de l'API — défaut https://gen3ia.online. */
   baseUrl?: string;
@@ -180,7 +196,9 @@ export class Gen3iaClient {
   };
 
   constructor(options: Gen3iaClientOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    // Normalisation linéaire (trimTrailingSlashes) — jamais une regex sur
+    // donnée d'entrée (CodeQL js/polynomial-redos, alerte #53).
+    this.baseUrl = trimTrailingSlashes(options.baseUrl ?? DEFAULT_BASE_URL);
     this.apiKey = options.apiKey;
     this.projectId = options.projectId;
     this.firebaseToken = options.firebaseToken;
