@@ -11,6 +11,9 @@
  *  - FR + EN.
  */
 
+// Task 106-a — TYPES CANONIQUES du pipeline (source unique lib/video/types.ts)
+import { VIDEO_ASPECT_RATIOS, type VideoExportTarget } from "@/lib/video/types";
+
 const VIDEO_NOUN_RE =
   /\b(vid[ée]os?|videos?|clip|clips|reels?|shorts?|short video|montage|montages|film|trailer|teaser|bande[- ]annonce|bande annonce|pub vid[ée]o|publicit[ée] vid[ée]o|vid[ée]o publicitaire|tutoriel vid[ée]o|animation)\b/i;
 
@@ -62,4 +65,140 @@ export function extractVideoTitle(text: string): string {
     .trim();
   const base = cleaned || text.trim();
   return base.slice(0, 80) || "Production vidéo";
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Task 106-a — EXTRACTION DE PARAMÈTRES DE PRODUCTION (déterministe).
+ * Le chat lance des productions OPTIMALES : durée, cadrage et formats
+ * dérivés sont lus DIRECTEMENT dans la demande (aucun LLM, zéro variance),
+ * puis relayés à la file de production (ProductionJobOptions).
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** Ratios valides du pipeline — RÉ-EXPORT du constant canonique. */
+const PARAM_ASPECT_RATIOS = VIDEO_ASPECT_RATIOS;
+
+const NUMBER_WORDS: Record<string, number> = {
+  une: 1, un: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10,
+  one: 1, two: 2, three: 3, four: 4, five: 5, seven: 7, eight: 8, nine: 9, ten: 10, // « six » déjà défini (FR/EN)
+};
+
+/**
+ * Paramètres de production détectés dans la demande (tous optionnels).
+ * `derivedTargets` reprend les formats de diffusion dérivés du pipeline
+ * (lib/video/types.ts) — ex. une demande TikTok produit un 9:16 + shorts.
+ */
+export interface VideoRequestParams {
+  targetDurationSec?: number;
+  aspectRatio?: (typeof VIDEO_ASPECT_RATIOS)[number];
+  platform?: string;
+  derivedTargets?: VideoExportTarget[];
+}
+
+/** Durée cible en secondes lue dans le texte (bornée 10..3600), sinon undefined. */
+export function extractTargetDurationSec(text: string): number | undefined {
+  const lower = text.toLowerCase();
+
+  // 1) Heures : "1h30", "1 h 30" (demi-heure → 1800 s).
+  const hourMatch = lower.match(/\b(\d{1,2})\s*h(?:\s*(\d{1,2}))?\b/);
+  if (hourMatch) {
+    const h = Number(hourMatch[1]);
+    const m = hourMatch[2] ? Number(hourMatch[2]) : 0;
+    const total = h * 3600 + m * 60;
+    return clampDuration(total);
+  }
+  if (/\bdemi[- ]heure\b/.test(lower)) return 1800;
+
+  // 2) Minutes explicites : "90 minutes", "2 min", "une minute".
+  const minuteMatch = lower.match(/\b(\d{1,4})\s*(?:minutes?|mins?)\b/);
+  if (minuteMatch) return clampDuration(Number(minuteMatch[1]) * 60);
+
+  // 3) Secondes explicites : "30 secondes", "45s".
+  const secondMatch = lower.match(/\b(\d{1,4})\s*(?:secondes?|secs?)\b/);
+  if (secondMatch) return clampDuration(Number(secondMatch[1]));
+
+  // 4) Unité seule avec mot-nombre : "une minute", "deux minutes", "trois secondes".
+  const wordMatch = lower.match(/\b(une?|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|one|two|three|four|five|six|seven|eight|nine|ten)\s+(minutes?|secondes?|mins?|secs?)\b/);
+  if (wordMatch) {
+    const n = NUMBER_WORDS[wordMatch[1]] ?? 1;
+    const isMinutes = /m/.test(wordMatch[2]);
+    return clampDuration(n * (isMinutes ? 60 : 1));
+  }
+
+  // 5) Unité abrégée collée : "30 s", "2 m", "45 sec" (le plus explicite
+  // reste au-dessus) — l'unité portée par le match tranche.
+  const looseMatch = lower.match(/\b(\d{1,4})\s*(m|s|sec|min)\b/);
+  if (looseMatch) {
+    const n = Number(looseMatch[1]);
+    if (n > 0 && n <= 3600) return clampDuration(looseMatch[2].startsWith("m") ? n * 60 : n);
+  }
+  return undefined;
+}
+
+function clampDuration(total: number): number | undefined {
+  if (!Number.isFinite(total) || total <= 0) return undefined;
+  return Math.min(3600, Math.max(10, Math.round(total)));
+}
+
+/**
+ * Cadrage + plateforme + formats dérivés lus dans la demande. La plateforme
+ * est normalisée (TikTok, YouTube, Instagram, Reels, Shorts, Facebook) et
+ * implique le ratio + les formats dérivés quand ils ne sont pas explicites.
+ */
+export function extractVideoParams(text: string): VideoRequestParams {
+  const lower = text.toLowerCase();
+  const params: VideoRequestParams = {};
+  params.targetDurationSec = extractTargetDurationSec(text);
+
+  // Ratio explicite : "9:16", "16/9", "vertical", "horizontal", "paysage", "carré"…
+  const explicitRatio = lower.match(/\b(16|9|1|4|21)\s*[:\/]\s*(9|16|1|5)\b/);
+  if (explicitRatio) {
+    const candidate = `${explicitRatio[1]}:${explicitRatio[2]}`;
+    const found = PARAM_ASPECT_RATIOS.find((r) => r === candidate);
+    if (found) params.aspectRatio = found;
+  }
+  if (!params.aspectRatio) {
+    if (/\bverticales?\b|\bportrait\b/.test(lower)) params.aspectRatio = "9:16";
+    else if (/\bhorizontal\b|\bpaysage\b|\blandscape\b/.test(lower)) params.aspectRatio = "16:9";
+    else if (/\bcarr[ée]e?\b|\bsquare\b/.test(lower)) params.aspectRatio = "1:1";
+  }
+
+  // Plateforme → ratio + formats dérivés (priorité au ratio explicite).
+  const derived: VideoExportTarget[] = [];
+  if (/\btik[- ]?tok\b/.test(lower)) {
+    params.platform = "TikTok";
+    params.aspectRatio = params.aspectRatio ?? "9:16";
+    derived.push("tiktok_9_16");
+  } else if (/\breels?\b/.test(lower)) {
+    params.platform = "Instagram Reels";
+    params.aspectRatio = params.aspectRatio ?? "9:16";
+    derived.push("reels_9_16");
+  } else if (/\bshorts?\b/.test(lower)) {
+    params.platform = "YouTube Shorts";
+    params.aspectRatio = params.aspectRatio ?? "9:16";
+    derived.push("shorts_9_16");
+  } else if (/\byou[- ]?tube\b|\byt\b/.test(lower)) {
+    params.platform = "YouTube";
+    params.aspectRatio = params.aspectRatio ?? "16:9";
+    derived.push("youtube_16_9");
+  } else if (/\bfacebook\b|\bmeta\b/.test(lower)) {
+    params.platform = "Facebook";
+    params.aspectRatio = params.aspectRatio ?? "16:9";
+    derived.push("facebook_16_9");
+  } else if (/\binstagram\b/.test(lower)) {
+    params.platform = "Instagram";
+    if (params.aspectRatio === "9:16") derived.push("reels_9_16");
+    else if (params.aspectRatio === "1:1") derived.push("square_1_1");
+    else {
+      params.aspectRatio = params.aspectRatio ?? "4:5";
+      derived.push("square_1_1");
+    }
+  }
+
+  // "version TikTok ET YouTube" : formats dérivés multiples détectés.
+  if (/\btik[- ]?tok\b/.test(lower) && /\byou[- ]?tube\b/.test(lower) && !derived.includes("youtube_16_9")) {
+    derived.push("youtube_16_9");
+  }
+
+  if (derived.length > 0) params.derivedTargets = derived.slice(0, 4);
+  return params;
 }

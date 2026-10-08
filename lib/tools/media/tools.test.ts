@@ -270,8 +270,8 @@ describe("outil video.create — schéma d'entrée", () => {
     ).toThrow();
   });
 
-  it("accepte exactement les trois ratios du constant partagé VIDEO_ASPECT_RATIOS", () => {
-    expect(VIDEO_ASPECT_RATIOS).toEqual(["16:9", "9:16", "1:1"]);
+  it("accepte exactement les cinq ratios du constant partagé VIDEO_ASPECT_RATIOS (Task 106-a : alignement pipeline)", () => {
+    expect(VIDEO_ASPECT_RATIOS).toEqual(["16:9", "9:16", "1:1", "4:5", "21:9"]);
     for (const aspectRatio of VIDEO_ASPECT_RATIOS) {
       expect(() =>
         createVideoTool.inputSchema.parse({
@@ -352,6 +352,8 @@ describe("outil video.create — exécution réelle (file de production)", () =>
       status: "queued",
       stage: "project",
       queueMode: "qstash",
+      studioUrl: "/studio/video/proj-1",
+      appliedOptions: { aspectRatio: "9:16", voiceEnabled: true },
     });
     expect(createVideoProductionJobMock).toHaveBeenCalledTimes(1);
   });
@@ -379,6 +381,8 @@ describe("outil video.create — exécution réelle (file de production)", () =>
       status: "queued",
       stage: "script",
       queueMode: "poll",
+      studioUrl: "/studio/video/proj-2",
+      appliedOptions: {},
     });
   });
 

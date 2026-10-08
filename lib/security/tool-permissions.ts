@@ -85,6 +85,13 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   // carte de validation) est porté par la définition de l'outil dans
   // lib/tools — même convention documentée que schedule.*.
   "video.create": { name: "video.create", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  // video.status : lecture pure du job de production (Firestore interne),
+  // restreint au propriétaire — aucun flag réseau/externe.
+  "video.status": { name: "video.status", risk: "read", requiredPermissions: ["tool.read"] },
+  // video.revise : écrit le projet (versions, timeline, voix), pilote le
+  // rendu et les exports — capacité d'écriture interne (Firestore), appels
+  // externes éventuels (LLM de révision) effectués par le SERVICE aval.
+  "video.revise": { name: "video.revise", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
 };
 
 export function getToolSecurityDefinition(toolName: string): ToolSecurityDefinition { const definition = TOOL_SECURITY[toolName]; if (!definition) throw new Error(`Unknown tool security definition: ${toolName}`); return definition; }

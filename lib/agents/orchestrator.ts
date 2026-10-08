@@ -24,7 +24,7 @@ export function selectSkills(objective: string): DynamicSkill[] {
 }
 export interface OrchestratorResult { executionId: string; roles: AgentRole[]; state: Awaited<ReturnType<AgentRuntime["run"]>>; summary: string; }
 
-const AGENT_TOOLS = ["web.search", "file.read", "file.create", "zip.analyze", "zip.create", "zip.extract", "artifact.create", "artifact.download", "terminal.execute", "memory.read", "memory.write", "camera.capture"];
+const AGENT_TOOLS = ["web.search", "file.read", "file.create", "zip.analyze", "zip.create", "zip.extract", "artifact.create", "artifact.download", "terminal.execute", "memory.read", "memory.write", "camera.capture", "video.create", "video.status", "video.revise"];
 const READ_POLICY: ExecutionPolicy = { ...DEFAULT_EXECUTION_POLICY, allowedTools: AGENT_TOOLS, permissions: ["tool.read", "tool.write", "file.read", "file.write", "file.create", "network.read", "terminal.execute", "memory.read", "memory.write", "camera.capture"], allowNetwork: true, allowFileWrite: true, allowAgentTerminal: true, allowCamera: true };
 const AGENTS: Record<AgentRole, AgentDefinition> = {
   customer_service: { id: "customer_service", name: "Customer Service Agent", mission: "Gérer les demandes clients, FAQ, réclamations, qualification et escalade humaine.", capabilities: ["multilingual support", "FAQ", "customer context", "triage", "human escalation"], policy: READ_POLICY },

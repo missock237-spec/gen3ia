@@ -42,6 +42,8 @@ const TOOL_LABELS: Record<string, string> = {
   "network.mark_read": "Marquage d'un message d'équipe lu",
   "image.generate": "Génération d'image",
   "video.create": "Production vidéo",
+  "video.status": "Suivi vidéo",
+  "video.revise": "Révision vidéo",
 };
 
 /** Libellés des familles d'outils identifiés par préfixe. */

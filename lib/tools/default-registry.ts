@@ -61,6 +61,8 @@ import {
 } from "@/lib/agents/networks/tools";
 import { generateImageTool } from "@/lib/tools/media/generate-image";
 import { createVideoTool } from "@/lib/tools/media/create-video";
+import { videoStatusTool } from "@/lib/tools/media/video-status";
+import { videoReviseTool } from "@/lib/tools/media/video-revise";
 import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
 
 export function createDefaultToolRegistry(): ToolRegistry {
@@ -82,6 +84,10 @@ export function createDefaultToolRegistry(): ToolRegistry {
     extractZipTool,
     adsReadTool,
     phoneCallTool,
+    // Task 106-a — pilote vidéo complet du chat : création, suivi,
+    // révision/pause/annulation/exports (le pipeline existait déjà).
+    videoStatusTool,
+    videoReviseTool,
   ]) registry.register(tool);
   if (process.env.COMPOSIO_API_KEY) {
     registry.register(createComposioTool());

@@ -41,8 +41,8 @@ import {
 } from "@/lib/ai/auto-improvement";
 import { enhancePromptForExecution, languageDirective } from "@/lib/ai/prompt-enhancer";
 import { imagesForModel } from "@/lib/ai/vision-input";
-import { extractVideoTitle, looksLikeVideoRequest } from "@/lib/ai/video-intent";
-import { VIDEO_ASPECT_RATIOS } from "@/lib/tools/media/create-video";
+import { extractVideoParams, extractVideoTitle, looksLikeVideoRequest } from "@/lib/ai/video-intent";
+import { sanitizeProductionOptions, VIDEO_ASPECT_RATIOS } from "@/lib/tools/media/create-video";
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
 import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
 import { getImportedFileContent, listImportedFiles, loadImportedFilesContext } from "@/lib/files/import";
@@ -194,6 +194,7 @@ export function estimatedCostForTool(toolName: string): string {
   if (toolName.startsWith("schedule.") || toolName.startsWith("workflow.")) return "gratuit";
   if (toolName === "image.generate") return "~0,01–0,04 € / image (facturée à l'usage)";
   if (toolName === "video.create") return "production complète facturée selon durée/résolution + visuels et voix";
+  if (toolName === "video.revise") return "gratuit (révisions facturées au réel : visuels/voix régénérés le cas échéant)";
   return "gratuit";
 }
 
@@ -234,6 +235,8 @@ export function dataScopeForTool(toolName: string, input: unknown): string {
   if (toolName === "memory.write") return "Mémoire permanente de vos agents";
   if (toolName === "image.generate") return "Génération d'une image à partir de votre description (stockée dans votre espace)";
   if (toolName === "video.create") return "Production vidéo complète : scénario, visuels, voix, montage et rendu (votre espace vidéo)";
+  if (toolName === "video.status") return "Suivi de votre production vidéo (étape, progression, URL du master)";
+  if (toolName === "video.revise") return "Révision/pilotage de votre vidéo (musique, rythme, voix, pause, exports)";
   if (toolName.startsWith("cloudflare.")) return "Zones DNS Cloudflare autorisées";
   if (toolName.startsWith("notion.")) return "Espace Notion autorisé";
   return "Données transmises dans la demande";
@@ -579,7 +582,8 @@ export function buildIntentSystemPrompt(
       ? [
           "",
           "RÈGLE IMPÉRATIVE — VIDÉO : toute demande de CRÉATION/PRODUCTION d'une vidéo, clip, reel, short, trailer, bande-annonce ou montage vidéo est routée en mode=plan avec UN SEUL step :",
-          '  { title: "Production vidéo", toolName: "video.create", toolInput: { prompt: "<la demande EXACTE de l\'utilisateur : sujet, durée, format, ton, message — fidèle, sans rien inventer>", title?: "<titre court>", aspectRatio?: "16:9" | "9:16" | "1:1" } }.',
+          '  { title: "Production vidéo", toolName: "video.create", toolInput: { prompt: "<la demande EXACTE de l\'utilisateur : sujet, ton, message — fidèle, sans rien inventer>", title?: "<titre court>", aspectRatio?: "16:9" | "9:16" | "1:1" | "4:5" | "21:9", targetDurationSec?: <durée en secondes si l\'utilisateur la précise>, resolution?: "480p" | "720p" | "1080p" | "1440p" | "4K", language?: "<langue>", style?: "<style visuel/narratif>", audience?: "<public cible>", platform?: "<plateforme>", musicMood?: "cinematographique" | "documentaire" | "tension" | "energique" | "emotionnel" | "neutre", derivedTargets?: ["shorts_9_16" | "tiktok_9_16" | "reels_9_16" | "youtube_16_9" | "square_1_1" | "facebook_16_9"] } }.',
+          "TRANSMETS FIDÈLEMENT les paramètres exprimés par l'utilisateur (durée « 2 minutes » → targetDurationSec: 120, « format TikTok » → aspectRatio 9:16 + derivedTargets [tiktok_9_16], « en 4K », « musique énergique », « pour les adolescents »…) — n'invente JAMAIS un paramètre absent de la demande.",
           "La production complète (scénario, visuels, voix, musique, montage, rendu) est enchaînée AUTOMATIQUEMENT par la plateforme, avec progression en temps réel affichée dans la conversation. Ne réponds JAMAIS une demande de vidéo par du texte seul, et ne demande JAMAIS de passer par l'atelier vidéo : tu lances la production toi-même.",
         ].join("\n")
       : "",
@@ -609,7 +613,13 @@ export function buildIntentSystemPrompt(
     toolLines,
     "- image.generate (risque low) : génère une image réelle et photoréaliste à partir d'une description visuelle (input { prompt }).",
     catalogNames.has("video.create")
-      ? "- video.create (risque medium) : lance une production vidéo complète autonome — scénario, visuels de scènes, voix, musique, montage, rendu — avec progression en temps réel (input { prompt, title?, aspectRatio? })."
+      ? "- video.create (risque medium) : lance une production vidéo complète autonome — scénario, visuels de scènes, voix, musique, montage, rendu — avec progression en temps réel (input { prompt, title?, aspectRatio?: 16:9|9:16|1:1|4:5|21:9, targetDurationSec?, resolution?, language?, style?, audience?, platform?, musicMood?, derivedTargets? })."
+      : "",
+    catalogNames.has("video.status")
+      ? "- video.status (gratuit) : suit une production vidéo en cours — étape, progression réelle, avertissements, URL de lecture du master une fois terminé (input { jobId? | projectId? } — dernier lancement par défaut)."
+      : "",
+    catalogNames.has("video.revise")
+      ? "- video.revise : réviser/piloter une vidéo EXISTANTE en langage naturel — rythme, musique, voix (\"utilise ma voix\"), style de sous-titres, suppression/régénération de scène, pause/reprise/annulation du rendu, formats dérivés (input { projectId, action?: revise|pause_render|resume_render|cancel_render|add_exports, instruction?, targets? })."
       : "",
     "",
     project?.instructions ? `Instructions persistantes du projet « ${project.name} » (à respecter) :\n${project.instructions}` : "",
@@ -1596,25 +1606,38 @@ async function runVideoTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   try {
     const { createVideoProductionJob } = await import("@/lib/video/production-queue");
+    // Task 106-a — production OPTIMALE : durée, cadrage, plateforme et
+    // formats dérivés sont lus DÉTERMINISTEMENT dans la demande (zéro LLM)
+    // et relayés à la file de production (options validées côté pipeline).
+    const params = extractVideoParams(ctx.message);
     const job = await createVideoProductionJob({
       userId: ctx.userId,
       prompt: ctx.message.trim().slice(0, 4000),
       title: extractVideoTitle(ctx.message),
+      ...(Object.keys(params).length > 0 ? { options: params } : {}),
     });
     const studioUrl = `/studio/video/${job.projectId}`;
+    const paramsSummary = [
+      params.targetDurationSec ? `durée cible ${Math.floor(params.targetDurationSec / 60) > 0 ? `${Math.floor(params.targetDurationSec / 60)} min ${params.targetDurationSec % 60 || ""}`.trim() : `${params.targetDurationSec} s`}` : null,
+      params.aspectRatio ? `cadrage ${params.aspectRatio}` : null,
+      params.platform ? `plateforme ${params.platform}` : null,
+      params.derivedTargets?.length ? `formats dérivés (${params.derivedTargets.join(", ")})` : null,
+    ].filter(Boolean).join(" · ");
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
       userId: ctx.userId,
       role: "assistant",
       content: [
-        "Votre production vidéo est lancée. Voici ce qui se passe maintenant, étape par étape :",
+        "Votre production vidéo est lancée" + (paramsSummary ? ` — ${paramsSummary}.` : "."),
+        "Voici ce qui se passe maintenant, étape par étape :",
         "1. Plan du réalisateur et scénario complet (hook, chapitres, scènes, CTA) ;",
         "2. Génération des visuels de chaque scène avec un style cohérent ;",
-        "3. Narration vocale, musique et montage multicam ;",
-        "4. Rendu final avec contrôle qualité automatique (durée, audio, sous-titres).",
+        "3. Narration vocale, musique (ambiance adaptée) et montage multicam ;",
+        "4. Rendu final avec contrôle qualité automatique (durée, audio, sous-titres)",
+        params.derivedTargets?.length ? "5. Formats dérivés pour vos plateformes (TikTok/Shorts/Reels…)." : "",
         "",
-        "Le cadre ci-dessous affiche la progression RÉELLE en temps réel — il se met à jour tout seul jusqu'à la vidéo finie. Le projet complet (timeline, versions, exports) est disponible dans l'atelier vidéo : " + studioUrl,
-      ].join("\n"),
+        "Demandez-moi « où en est ma vidéo ? » à tout moment, ou des modifications (musique, rythme, pause…). Le cadre ci-dessous affiche la progression RÉELLE en temps réel — il se met à jour tout seul jusqu'à la vidéo finie. Le projet complet (timeline, versions, exports) est disponible dans l'atelier vidéo : " + studioUrl,
+      ].filter(Boolean).join("\n"),
       generationStatus: "complete",
     });
     const artifact = await createArtifact({
@@ -2551,14 +2574,23 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         const promptInput = typeof planned.toolInput?.prompt === "string" && planned.toolInput.prompt.trim() ? planned.toolInput.prompt.trim() : ctx.message;
         const aspectInput = planned.toolInput && typeof planned.toolInput === "object" && "aspectRatio" in planned.toolInput ? String((planned.toolInput as Record<string, unknown>).aspectRatio) : undefined;
         // Contrat aspectRatio (audit 103-f) : source unique — le constant
-        // partagé VIDEO_ASPECT_RATIOS du tool video.create remplace le
-        // littéral dupliqué (comportement identique : mêmes 3 valeurs).
+        // partagé VIDEO_ASPECT_RATIOS du tool video.create (Task 106-a :
+        // aligné sur le pipeline, 5 valeurs) valide l'entrée du planificateur.
         const aspectValide = VIDEO_ASPECT_RATIOS.find((ratio) => ratio === aspectInput);
+        // Task 106-a — RELAIS COMPLET des paramètres : duration/résolution/
+        // langue/style/audience/plateforme/musique/formats dérivés passés
+        // tels quels au filtre validé (clés inconnues écartées), puis
+        // DÉTECTION complémentaire déterministe depuis la demande (le LLM
+        // peut avoir oublié durée/format — l'extraction rattrape).
+        const relayed = sanitizeProductionOptions(planned.toolInput);
+        if (aspectValide) relayed.aspectRatio = aspectValide;
+        const detected = extractVideoParams(promptInput);
+        const options = { ...detected, ...relayed };
         const job = await createVideoProductionJob({
           userId: ctx.userId,
           prompt: promptInput.slice(0, 4000),
-          title: extractVideoTitle(promptInput),
-          options: aspectValide ? { aspectRatio: aspectValide } : undefined,
+          title: typeof planned.toolInput?.title === "string" && planned.toolInput.title.trim() ? planned.toolInput.title.trim().slice(0, 120) : extractVideoTitle(promptInput),
+          ...(Object.keys(options).length > 0 ? { options } : {}),
         });
         step.status = "done";
         step.startedAt = startedAt;
@@ -2586,6 +2618,84 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         step.output = error instanceof Error && /n.est pas disponible/.test(error.message)
           ? "La production vidéo n'est pas disponible sur cette plateforme actuellement."
           : "Le lancement de la production vidéo a échoué.";
+        anyFailure = true;
+      }
+      await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
+      continue;
+    }
+
+    // Task 106-a — SUIVI vidéo : l'étape video.status est interceptée AVANT
+    // le catalogue (même pattern que video.create) — exécution RÉELLE de
+    // l'outil, message d'état FR complet (stage, %, avertissements, URL).
+    if (planned.toolName === "video.status") {
+      const step = makeStep({
+        phase: "tools",
+        title: planned.title,
+        detail: planned.detail,
+        toolName: "video.status",
+        toolInput: planned.toolInput,
+        status: "in_progress",
+      });
+      steps.push(step);
+      await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
+      const startedAt = new Date().toISOString();
+      try {
+        const { videoStatusTool } = await import("@/lib/tools/media/video-status");
+        const input = planned.toolInput && typeof planned.toolInput === "object" ? planned.toolInput : {};
+        const parsed = videoStatusTool.inputSchema.parse(input);
+        const output = await videoStatusTool.execute(parsed, { userId: ctx.userId });
+        step.status = output.found ? "done" : "failed";
+        step.startedAt = startedAt;
+        step.finishedAt = new Date().toISOString();
+        step.output = output.message;
+        executedSomething = true;
+      } catch (error) {
+        step.status = "failed";
+        step.startedAt = startedAt;
+        step.finishedAt = new Date().toISOString();
+        step.output = error instanceof Error ? `Suivi vidéo impossible : ${error.message}` : "Suivi vidéo impossible.";
+        anyFailure = true;
+      }
+      await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
+      continue;
+    }
+
+    // Task 106-a — RÉVISION/PILOTAGE vidéo : pause/reprise/annulation du
+    // rendu, révisions conversationnelles (musique, rythme, voix…) et
+    // formats dérivés — exécution RÉELLE, message FR actionnable.
+    if (planned.toolName === "video.revise") {
+      const step = makeStep({
+        phase: "tools",
+        title: planned.title,
+        detail: planned.detail,
+        toolName: "video.revise",
+        toolInput: planned.toolInput,
+        status: "in_progress",
+      });
+      steps.push(step);
+      await onEvent({ type: "step_update", runId: run.id, step });
+      await persistSteps();
+      const startedAt = new Date().toISOString();
+      try {
+        const { videoReviseTool } = await import("@/lib/tools/media/video-revise");
+        const input = planned.toolInput && typeof planned.toolInput === "object" ? planned.toolInput : {};
+        const parsed = videoReviseTool.inputSchema.parse(input);
+        const output = await videoReviseTool.execute(parsed, { userId: ctx.userId });
+        step.status = output.applied ? "done" : "failed";
+        step.startedAt = startedAt;
+        step.finishedAt = new Date().toISOString();
+        step.output = output.message;
+        executedSomething = true;
+      } catch (error) {
+        step.status = "failed";
+        step.startedAt = startedAt;
+        step.finishedAt = new Date().toISOString();
+        step.output = error instanceof Error
+          ? `Révision impossible : ${error.message.replace(/\s+/g, " ").slice(0, 300)}`
+          : "Révision impossible.";
         anyFailure = true;
       }
       await onEvent({ type: "step_update", runId: run.id, step });

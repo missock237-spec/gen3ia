@@ -79,5 +79,7 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "network.read_inbox", description: "Lit la boîte de réception d'un agent (messages de ses coéquipiers).", risk: "read", permission: "tool.read", sideEffect: false },
   { name: "network.mark_read", description: "Marque un message d'équipe comme lu.", risk: "read", permission: "tool.read", sideEffect: false },
   { name: "image.generate", description: "Générer une image à partir d'une description texte, avec ratio et images de référence optionnels.", risk: "external", permission: "tool.external", sideEffect: false },
-  { name: "video.create", description: "Lancer une production vidéo complète autonome (script, images, voix, montage) et suivre sa progression.", risk: "external", permission: "tool.external", sideEffect: true },
+  { name: "video.create", description: "Lancer une production vidéo complète autonome (script, images, voix, montage) avec paramètres de production (durée, format, résolution, langue, style, audience, plateforme, musique, formats dérivés) et suivre sa progression.", risk: "external", permission: "tool.external", sideEffect: true },
+  { name: "video.status", description: "Suivre une production vidéo : étape en cours, progression réelle, avertissements, URL de lecture du master terminé.", risk: "read", permission: "tool.read", sideEffect: false },
+  { name: "video.revise", description: "Réviser ou piloter une vidéo existante : rythme, musique, voix, sous-titres, suppression de scène, pause/reprise/annulation du rendu, formats dérivés.", risk: "external", permission: "tool.external", sideEffect: true },
 ];

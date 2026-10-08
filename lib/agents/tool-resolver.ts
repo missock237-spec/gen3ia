@@ -95,6 +95,11 @@ const ALIAS_RULES: AliasRule[] = [
   //   « réel(s) » — jamais deviné seul. Idem pour « short » : le nom
   //   (« shorts », YouTube Shorts) mappe, pas l'adjectif anglais générique.
   { pattern: /\bimages?\b|\bphoto\w*\b|\bdessins?\b|\blogo\w*\b|\bbanni[èe]res?\b|\billustrations?\b|\bicones?\b|\bavatars?\b/, tools: ["image.generate"], label: "image.generate (génération d'image à partir d'un texte)" },
+  // Task 106-a — SUIVI/RÉVISION vidéo : AVANT la règle de création —
+  // « où en est ma vidéo », « ça avance ? » → suivi ; « pause »,
+  // « annule le rendu », « change la musique », « version TikTok » → révision.
+  { pattern: /\b(?:où en est|l'avancement de|l'état de|la progression de|suivre|suis|statut de)\b[^.?!]*\bvid[ée]os?\b|\bvid[ée]os?\b[^.?!]*\b(?:avance|finie|terminée|prête|statut|progression)\b/, tools: ["video.status"], label: "video.status (suivi de production vidéo)" },
+  { pattern: /\bvid[ée]os?\b[^.?!]*\b(?:pause|reprendre|annule|arrête|modifie|change|remplace|accélère|ralentit|musique|voix|sous[- ]titres|supprime|régénère|version)\b|\b(?:pause|annule|arrête)\b[^.?!]*\b(?:rendu|render|vid[ée]o)\b/, tools: ["video.revise"], label: "video.revise (révision/pilotage de vidéo)" },
   { pattern: /\bvid[ée]os?\b|\bclips?\b|\bmontage(s)? vid[ée]o\b|\b(?:instagram|tiktok|facebook|youtube)\s+reels?\b|\breels?\s+(?:instagram|tiktok|facebook|youtube)\b|\bshorts\b|\bvideo courte\b|\bvid[ée]o courte\b/, tools: ["video.create"], label: "video.create (production vidéo complète autonome)" },
   // — Réseaux sociaux & publicité
   { pattern: /\bgoogle ads\b|\bmeta ads\b|\btiktok ads\b|\badwords\b|\bpublicite\b|\bpublicités?\b|\badvertising\b|\bads\b/, tools: ["ads.read"], label: "ads.read (lecture publicitaire ; la publication reste une action approuvée)" },
