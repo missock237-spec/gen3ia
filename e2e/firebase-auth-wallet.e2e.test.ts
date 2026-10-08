@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, describe, expect, it } from "vitest";
+import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 
 const PROJECT_ID = "demo-gen3ia";
 const AUTH_EMULATOR = "127.0.0.1:9099";
@@ -11,6 +11,38 @@ process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = PROJECT_ID;
 process.env.FIREBASE_AUTH_EMULATOR_HOST = AUTH_EMULATOR;
 process.env.FIRESTORE_EMULATOR_HOST = FIRESTORE_EMULATOR;
 process.env.GCLOUD_PROJECT = PROJECT_ID;
+
+/**
+ * Task 108 — la base d'identités vit dans R2. L'environnement E2E (émulateurs
+ * Firebase) n'a PAS de bucket R2 : le CLIENT R2 (lib/storage/r2) est simulé
+ * EN MÉMOIRE — la logique d'identité (schéma, service, session) s'exécute
+ * RÉELLEMENT par-dessus. Clé simulée = objet Map « key → Buffer ».
+ */
+const r2Objects = new Map<string, Buffer>();
+vi.mock("@/lib/storage/r2", () => ({
+  putObject: vi.fn(async ({ key, body }: { key: string; body: Uint8Array | Buffer }) => {
+    r2Objects.set(key, Buffer.from(body));
+  }),
+  downloadFromR2: vi.fn(async (key: string): Promise<Buffer> => {
+    const hit = r2Objects.get(key);
+    if (!hit) {
+      const absence = new Error(`The specified key does not exist. (${key})`);
+      absence.name = "NoSuchKey";
+      throw absence;
+    }
+    return hit;
+  }),
+  deleteFromR2: vi.fn(async (key: string) => {
+    r2Objects.delete(key);
+  }),
+  listObjectsUnderPrefix: vi.fn(async (prefix: string) =>
+    [...r2Objects.keys()].filter((key) => key.startsWith(prefix)).map((key) => ({
+      key,
+      sizeBytes: r2Objects.get(key)?.byteLength ?? 0,
+      updatedAt: new Date().toISOString(),
+    })),
+  ),
+}));
 
 async function createAndSignIn(): Promise<{ idToken: string; localId: string }> {
   const createResponse = await fetch(
@@ -62,7 +94,7 @@ describe("Firebase E2E: inscription -> session -> portefeuille", () => {
     expect(idToken.split(".")).toHaveLength(3);
   });
 
-  it("établit la session via /api/auth/session et crée le profil Firestore", async () => {
+  it("établit la session via /api/auth/session et enregistre l'identité dans la base R2", async () => {
     const { idToken, localId } = await createAndSignIn();
     const token = await verifyFirebaseToken(`Bearer ${idToken}`);
     expect(token.uid).toBe(localId);
@@ -77,7 +109,8 @@ describe("Firebase E2E: inscription -> session -> portefeuille", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       authenticated: boolean;
-      user: { uid: string; email: string | null };
+      degraded?: boolean;
+      user: { uid: string; email: string | null; theme?: string };
       wallet: { currency: string; balanceMinor: number; availableMinor: number };
     };
 
@@ -85,11 +118,23 @@ describe("Firebase E2E: inscription -> session -> portefeuille", () => {
     expect(body.user.uid).toBe(localId);
     expect(body.user.email).toBe(TEST_EMAIL);
     expect(body.wallet.currency).toBe("XAF");
+    // Task 108 : le provisionnement identité (R2) a RÉUSSI — pas de mode
+    // dégradé, et le thème par défaut de la nouvelle identité est posé.
+    expect(body.degraded).toBeFalsy();
+    expect(body.user.theme).toBe("dark");
 
-    const profile = await adminDb.collection("users").doc(localId).get();
-    expect(profile.exists).toBe(true);
-    expect(profile.get("uid")).toBe(localId);
-    expect(profile.get("email")).toBe(TEST_EMAIL);
+    // La base d'identités = R2 (client simulé en mémoire) : le document
+    // identities/{uid}.json existe et porte l'identité provisionnée.
+    const { getIdentity } = await import("@/lib/identity/r2-identity-store");
+    const identity = await getIdentity(localId);
+    expect(identity).not.toBeNull();
+    expect(identity?.uid).toBe(localId);
+    expect(identity?.email).toBe(TEST_EMAIL);
+    expect(identity?.theme).toBe("dark");
+    // Le fournisseur d'identifiants du jeton est tracé (émulateur : « password »).
+    expect((identity?.providers ?? []).length).toBeGreaterThan(0);
+    // Le document R2 est bien matérialisé sous la clé canonique.
+    expect([...r2Objects.keys()].some((key) => key === `identities/${localId}.json`)).toBe(true);
   });
 
   it("initialise le portefeuille une seule fois avec le solde d'accueil", async () => {
