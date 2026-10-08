@@ -12,6 +12,25 @@ import { KNOWN_TOOL_SECURITY_NAMES } from "@/lib/security/tool-permissions";
  * Traduit un agent personnalise (record Firestore) en plan d'execution concret
  * pour AgentRuntime, et derive sa politique de securite. Un agent cree et
  * personnalise via le Studio doit pouvoir s'executer immediatement.
+ *
+ * NOUVEAU CONTRAT (Task 107 — « l'agent IA a accès à TOUS les outils ») :
+ * l'utilisateur ne désigne plus les outils — l'agent comprend seul et
+ * sélectionne automatiquement les bons outils dans le catalogue complet du
+ * projet. Les outils déclarés (`agent.tools`) restent un bonus de compat :
+ * ils sont fusionnés à la whitelist mais n'y restreignent plus rien.
+ * La whitelist émet la sentinelle "*" (catalogue complet — sémantique déjà
+ * supportée par isToolAllowed dans execution-policy.ts et par unified-agent
+ * depuis le lot C) SAUF quand une exception doit s'exprimer :
+ *  - niveau safe : lecture seule par design → liste réduite explicite, JAMAIS
+ *    la sentinelle ;
+ *  - caps persona désactivant une capacité (webSearch / codeExecution /
+ *    fileGeneration) : "*" ne sait pas dire « tout sauf X » → repasse en liste
+ *    explicite = registre complet moins les outils désactivés ;
+ *  - ui.components : outil EXCLUSIF des agents de type "code" (même logique
+ *    qu'avant) → liste explicite pour tout agent non-code.
+ * La barrière fine reste en aval : permissions + flags (authorizeTool), HITL
+ * (approval-policy), consentements + kill-switch (executor), existence réelle
+ * au registre exécutable.
  */
 
 const ROLE_BY_TYPE: Record<string, string> = {
@@ -31,47 +50,101 @@ const ROLE_BY_TYPE: Record<string, string> = {
  */
 const CODE_AGENT_TOOLS = ["terminal.execute", "code.execute", "code.simulate"];
 
+/**
+ * Sources canoniques des noms d'outils exécutables (Task 107) : l'UNION du
+ * catalogue statique GEN3IA_TOOLS et des définitions de sécurité
+ * KNOWN_TOOL_SECURITY_NAMES (qui couvre schedule.*, workflow.* — absents du
+ * catalogue) est LA source unique de vérité — toute évolution du registre se
+ * propage automatiquement à la whitelist explicite et à l'orchestrateur.
+ */
+const REGISTRY_TOOL_SET: ReadonlySet<string> = new Set([
+  ...GEN3IA_TOOLS.map((tool) => tool.name),
+  ...KNOWN_TOOL_SECURITY_NAMES,
+]);
+const FULL_TOOL_NAMES: readonly string[] = Object.freeze([...REGISTRY_TOOL_SET]);
+
 export function securityLevelForAgent(agent: AgentRecord): AgentSecurityLevel {
   return AGENT_TYPE_META[agent.type]?.securityLevel ?? "standard";
+}
+
+/**
+ * Résout la whitelist d'outils effective d'un agent (fonction pure, exportée
+ * pour tests) :
+ *  - safe → liste réduite explicite (outils déclarés valides uniquement),
+ *    JAMAIS la sentinelle "*" ;
+ *  - standard/power/admin → ["*"] (les outils déclarés restent fusionnés
+ *    au-dessus pour compat — inoffensifs avec la sentinelle) SAUF si une
+ *    exclusion s'applique (cap persona désactivée, ui.components hors agents
+ *    code) : dans ce cas, liste explicite = registre complet moins les
+ *    exclusions — sémantiquement équivalente pour unified-agent (filtre par
+ *    nom) tout en exprimant l'exception.
+ */
+export function resolveAllowedTools(level: AgentSecurityLevel, agent: AgentRecord): string[] {
+  const caps = agent.persona?.capabilities;
+  const isCodeAgent = agent.type === "code";
+
+  // Exclusions non négociables : leur présence force la liste explicite (la
+  // sentinelle "*" ne peut pas exprimer d'exception).
+  const exclusions = new Set<string>();
+  if (caps?.webSearch === false) exclusions.add("web.search");
+  if (caps?.codeExecution === false) {
+    // Couper l'exécution de code retire TOUT le panel code (exécution,
+    // simulation, terminal isolé) — intention historique des caps persona
+    // (CODE_AGENT_TOOLS n'était pas ajouté quand codeExecution === false).
+    exclusions.add("code.execute");
+    exclusions.add("code.simulate");
+    exclusions.add("terminal.execute");
+  }
+  if (caps?.fileGeneration === false) exclusions.add("artifact.create");
+  // ui.components est l'outil EXCLUSIF des agents de type "code" : aucun
+  // autre type ne peut l'obtenir, ni en le déclarant, ni via la sentinelle.
+  if (!isCodeAgent) exclusions.add("ui.components");
+
+  // Étape 7 (défense en profondeur) : seuls les outils RÉELLEMENT présents au
+  // registre Gen3ia rejoignent la whitelist — les records legacy contenant des
+  // outils fantômes (« gmail », « jira »…) ne déclenchent plus de whitelist
+  // morte, et les noms « en clair » (espaces, majuscules) ne sont plus
+  // silencieusement jetés sans traçabilité (résolus à la création par
+  // lib/agents/tool-resolver). Les outils exclus (caps / ui.components) ne
+  // peuvent pas être réintroduits par la déclaration.
+  const declared = agent.tools.filter(
+    (tool) => /^[a-z0-9_.]+$/.test(tool) && tool.length <= 80 && REGISTRY_TOOL_SET.has(tool) && !exclusions.has(tool),
+  );
+
+  // Niveau safe : lecture seule par design — whitelist réduite explicite,
+  // aucune sentinelle.
+  if (level === "safe") return Array.from(new Set(declared));
+
+  // standard/power/admin sans exclusion : sentinelle "*" = catalogue complet.
+  if (exclusions.size === 0) {
+    return ["*", ...new Set(declared)];
+  }
+
+  // Une exclusion s'applique : liste explicite = registre complet moins les
+  // exclusions (suit automatiquement toute évolution des deux sources).
+  const explicit = FULL_TOOL_NAMES.filter((tool) => !exclusions.has(tool));
+  // Les agents de code gardent le terminal isolé et la simulation : déjà
+  // couverts par le registre, l'ajout explicite préserve la parité avec
+  // l'ajout historique si le catalogue évolue ; retirés si la persona coupe
+  // l'exécution de code.
+  if (isCodeAgent && caps?.codeExecution !== false) {
+    for (const tool of CODE_AGENT_TOOLS) {
+      if (!exclusions.has(tool)) explicit.push(tool);
+    }
+  }
+  return Array.from(new Set([...explicit, ...declared]));
 }
 
 export function policyForAgent(agent: AgentRecord): ExecutionPolicy {
   const level = securityLevelForAgent(agent);
   const base = createAgentPolicy(level);
-  // Étape 7 (défense en profondeur) : seuls les outils RÉELLEMENT présents
-  // au registre Gen3ia rejoignent la whitelist — les records legacy contenant
-  // des outils fantômes (« gmail », « jira »…) ne déclenchent plus de
-  // whitelist morte, et les noms « en clair » (espaces, majuscules) ne sont
-  // plus silencieusement jetés sans traçabilité (résolus à la création par
-  // lib/agents/tool-resolver).
-  const REGISTRY_SET = new Set([...GEN3IA_TOOLS.map((tool) => tool.name), ...KNOWN_TOOL_SECURITY_NAMES]);
-  const declaredTools = agent.tools.filter(
-    (tool) => /^[a-z0-9_.]+$/.test(tool) && tool.length <= 80 && REGISTRY_SET.has(tool),
-  );
-  // Capacités activables de la persona : désactiver une capacité retire les
-  // outils correspondants de la whitelist, même s'ils étaient déclarés.
-  const caps = agent.persona?.capabilities;
-  const allowed = Array.from(new Set([...(base.allowedTools ?? []), ...declaredTools])).filter(
-    // ui.components est l'outil EXCLUSIF des agents de type "code" : un autre
-    // type d'agent ne peut pas l'obtenir en le declarant dans sa config.
-    (tool) => tool !== "ui.components" || agent.type === "code",
-  ).filter((tool) => {
-    if (caps?.webSearch === false && tool === "web.search") return false;
-    if (caps?.codeExecution === false && tool === "code.execute") return false;
-    if (caps?.fileGeneration === false && tool === "artifact.create") return false;
-    return true;
-  });
-  // Les agents de code reçoivent en plus le terminal isolé et la simulation :
-  // retirés si la persona coupe l'exécution de code.
-  if (agent.type === "code" && caps?.codeExecution !== false) {
-    for (const tool of CODE_AGENT_TOOLS) allowed.push(tool);
-  }
   return {
     ...base,
-    // Les outils declares par le proprietaire s'ajoutent a la whitelist de son
-    // niveau. Ils restent soumis aux garde-fous (authorizeTool, approval,
-    // metering) dans executeToolSecurely.
-    allowedTools: Array.from(new Set(allowed)),
+    // Whitelist résolue : sentinelle "*" ou liste explicite (caps persona /
+    // exclusivité ui.components) — cf. resolveAllowedTools. Les outils
+    // déclarés par le propriétaire restent soumis aux garde-fous aval
+    // (authorizeTool, approval, metering) dans executeToolSecurely.
+    allowedTools: resolveAllowedTools(level, agent),
   };
 }
 

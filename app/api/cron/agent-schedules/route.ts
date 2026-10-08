@@ -35,6 +35,11 @@ function isAuthorized(request: NextRequest) {
  *     étant idempotent par slot (claims transactionnels), le double
  *     déclencheur quotidien + boucle ne peut jamais exécuter deux fois
  *     une même planification.
+ *  5. Task 107-a — AUTO-RÉPARATION des files vidéo (production autopilote
+ *     + rendu) : les jobs orphelins (bail expiré, worker tué, tick perdu)
+ *     sont re-enfilés même quand le chat est fermé (mode sondage — la
+ *     continuation ne doit pas dépendre d'un client vivant). Best-effort :
+ *     un incident alimente `partialFailures` sans faire échouer la route.
  */
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
@@ -74,7 +79,26 @@ export async function GET(request: NextRequest) {
       return null;
     });
 
-    return NextResponse.json({ ok: true, ...result, renewals, reactivations, extensionRenewals, dispatchLoop: loop, ...(failures.length > 0 ? { partialFailures: failures } : {}) });
+    // Task 107-a — auto-réparation des files vidéo : sweep des jobs de
+    // production autopilote ORPHELINS (bail expiré → ré-enfilement via
+    // publishProductionTick + repli sondage) et des jobs de rendu dans le
+    // même état. Imports DYNAMIQUES (la machinerie vidéo — engines, FFmpeg —
+    // ne doit pas alourdir le démarrage de la route) et best-effort total :
+    // un incident (import, lecture, ré-file) alimente `partialFailures`.
+    const videoSweep = await (async () => {
+      try {
+        const production = await import("@/lib/video/production-queue");
+        const productionSweep = await production.sweepStaleProductionJobs();
+        const render = await import("@/lib/video/render-queue");
+        const renderSweep = await render.sweepStaleRenderJobs();
+        return { production: productionSweep, render: renderSweep };
+      } catch (error) {
+        failures.push(`video-sweep: ${error instanceof Error ? error.message : "erreur"}`);
+        return null;
+      }
+    })();
+
+    return NextResponse.json({ ok: true, ...result, renewals, reactivations, extensionRenewals, dispatchLoop: loop, videoSweep, ...(failures.length > 0 ? { partialFailures: failures } : {}) });
   } catch (error) {
     console.error("Agent schedule dispatcher failed", error);
     return NextResponse.json(

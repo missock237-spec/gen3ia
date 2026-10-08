@@ -1614,6 +1614,10 @@ async function runVideoTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       userId: ctx.userId,
       prompt: ctx.message.trim().slice(0, 4000),
       title: extractVideoTitle(ctx.message),
+      // Task 107-a — la conversation d'origine est PORTÉE PAR LE JOB : à la
+      // complétion, le résultat est livré DANS ce fil (message + artefact)
+      // même si l'utilisateur a fermé la page.
+      conversationId: ctx.conversationId,
       ...(Object.keys(params).length > 0 ? { options: params } : {}),
     });
     const studioUrl = `/studio/video/${job.projectId}`;
@@ -2590,6 +2594,9 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
           userId: ctx.userId,
           prompt: promptInput.slice(0, 4000),
           title: typeof planned.toolInput?.title === "string" && planned.toolInput.title.trim() ? planned.toolInput.title.trim().slice(0, 120) : extractVideoTitle(promptInput),
+          // Task 107-a — conversation d'origine portée par le job (livraison
+          // chat à la complétion, même contrat que le tour vidéo).
+          conversationId: ctx.conversationId,
           ...(Object.keys(options).length > 0 ? { options } : {}),
         });
         step.status = "done";

@@ -4,6 +4,7 @@ import type { AIProvider } from "@/lib/ai/models";
 import { preferFreeForUnderstanding } from "@/lib/ai/response-quality";
 import { GEN3IA_TOOLS } from "@/lib/tools/registry";
 import { AgentRuntime } from "./runner";
+import { detectToolIntents, formatToolIntentSection } from "./tool-intent";
 import { RuntimePlanSchema, type RuntimePlan } from "./types";
 import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/execution-policy";
 
@@ -15,6 +16,7 @@ const PLAN_SYSTEM = [
   "Every user request must be converted into a safe executable plan using only the capabilities listed below.",
   "STEP 0 (silent, mandatory): understand the user's TRUE intent. Read the objective together with any prior-conversation context provided, resolve pronouns and implicit references, and refine the request into an optimal execution brief BEFORE planning. What the user asked for is what the plan must deliver — nothing more, nothing less.",
   "Prefer the smallest SUFFICIENT number of steps and reuse previous outputs through dependencies. But when the task REQUIRES a capability, include the needed step: never skip a needed tool to save a step.",
+  "SÉLECTION DES OUTILS : l'utilisateur décrit un BESOIN, il ne choisit jamais un outil. À toi de comprendre le besoin et de sélectionner AUTOMATIQUEMENT les outils du catalogue les plus adaptés (ou de répondre directement si aucun outil n'est requis). En cas d'équivalence, préfère l'outil le plus simple et le moins risqué ; les outils externes risqués passent de toute façon par la validation humaine.",
   "Use an llm step for reasoning or drafting, a research step for web research, a media step to generate a REAL image via Agnes (input {prompt: detailed visual description}) whenever the user asks for an image/photo/logo/illustration, a tool step for registered tools, and a code step only when isolated computation is necessary.",
   "IMPORTANT — downloadable deliverables (report, PDF, Word, Excel, presentation): ALWAYS use a tool step with toolName='artifact.create' and input {title, format, blocks}. The runtime completes empty or missing blocks at execution time. A 'document' type step only drafts text and produces NO file — never use it as the final deliverable step.",
   "For current-information needs (trends, news, prices, competitors), ALWAYS include a research step (web.search) instead of answering from memory.",
@@ -206,9 +208,15 @@ export async function planUniversalAgent(
   const allowedTools = agentContext?.allowedTools;
   const subAgents = agentContext?.subAgents ?? [];
   const subAgentAllowlist = new Set(subAgents.map((sub) => sub.id));
-  const catalog = allowedTools
-    ? GEN3IA_TOOLS.filter((tool) => allowedTools.includes(tool.name))
-    : GEN3IA_TOOLS;
+  // CONTRAT INTER-LOTS 107 (worklog 107-0) : la sentinelle "*" dans
+  // allowedTools (émise par policyForAgent, lot B) signifie AUCUNE restriction
+  // déclarative → catalogue COMPLET GEN3IA_TOOLS, le planner choisit librement.
+  // allowedTools absent → comportement historique (catalogue complet) ; liste
+  // explicite sans "*" → filtrage historique. Le filtrage FIN de sécurité reste
+  // en aval (authorizeTool + permissions + HITL du secure-tool-executor).
+  const catalog = !allowedTools || allowedTools.includes("*")
+    ? GEN3IA_TOOLS
+    : GEN3IA_TOOLS.filter((tool) => allowedTools.includes(tool.name));
 
   const systemPrompt = agentContext?.charter
     ? [
@@ -275,7 +283,18 @@ export async function planUniversalAgent(
   } catch {
     evolutionSection = "";
   }
-  const finalSystemPromptWithEvolution = `${finalSystemPromptWithSkills}${evolutionSection}`;
+  // AUTO-SÉLECTION DES OUTILS (Task 107-c) : l'utilisateur décrit un BESOIN
+  // sans désigner d'outil — des indices d'intention déterministes (tool-intent)
+  // orientent le planner vers les outils adaptés du catalogue EFFECTIF (celui
+  // filtré par allowedTools / sentinelle "*"). Fail-soft : la détection est
+  // pure, le try/catch reste par discipline.
+  let toolIntentSection = "";
+  try {
+    toolIntentSection = formatToolIntentSection(detectToolIntents(trimmed), catalog.map((tool) => tool.name));
+  } catch {
+    toolIntentSection = "";
+  }
+  const finalSystemPromptWithEvolution = `${finalSystemPromptWithSkills}${evolutionSection}${toolIntentSection ? `\n\n${toolIntentSection}` : ""}`;
 
   const buildUserPrompt = (correctiveHint?: string) =>
     [
@@ -391,10 +410,15 @@ function finaliserPlan(userId: string, plan: RuntimePlan, objective: string, all
 
   // Application de la whitelist d'outils de l'agent : une étape tool hors
   // périmètre est dégradée en étape de raisonnement (résilient) plutôt que
-  // de faire échouer toute la mission.
-  if (allowedTools) {
+  // de faire échouer toute la mission. CONTRAT INTER-LOTS 107 (worklog 107-0) :
+  // sentinelle "*" ou allowedTools absent ⇒ AUCUN filtrage déclaratif (le
+  // planner choisit dans le catalogue complet) — la barrière fine reste en aval
+  // (authorizeTool + permissions + HITL du secure-tool-executor). Liste
+  // explicite sans "*" ⇒ filtrage historique.
+  const declarativeAllowlist = allowedTools && !allowedTools.includes("*") ? allowedTools : undefined;
+  if (declarativeAllowlist) {
     for (const step of normalized.steps) {
-      if (step.type === "tool" && step.toolName && !allowedTools.includes(step.toolName)) {
+      if (step.type === "tool" && step.toolName && !declarativeAllowlist.includes(step.toolName)) {
         step.type = "llm";
         step.toolName = undefined;
         step.description = `${step.description} (outil hors périmètre remplacé par une analyse textuelle)`.slice(0, 600);

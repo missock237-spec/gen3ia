@@ -190,7 +190,7 @@ describe("answerAsAgent", () => {
 });
 
 describe("planAgentTask", () => {
-  it("réserve le catalogue d'outils à la whitelist de l'agent", async () => {
+  it("présente le catalogue COMPLET à un agent de code (whitelist « * », Task 107)", async () => {
     mockedGenerate.mockResolvedValueOnce({
       text: JSON.stringify({
         executionId: "exec-1",
@@ -209,7 +209,32 @@ describe("planAgentTask", () => {
     const presented = JSON.parse(call.messages[1].content as string);
     expect(typeof presented.availableCapabilities).toBe("string");
     expect(presented.availableCapabilities).toContain("code.execute");
-    expect(presented.availableCapabilities).not.toContain("camera.capture");
+    // Task 107 (whitelist "*" pour les agents) : l'agent de code reçoit le
+    // catalogue COMPLET — l'ancienne assertion (camera.capture masquée)
+    // reflétait la whitelist réduite historique, obsolète avec le nouveau
+    // contrat ; la réservation fine reste en aval (permissions + flags).
+    expect(presented.availableCapabilities).toContain("camera.capture");
+    expect(plan.steps[0].type).toBe("tool");
+    expect(plan.steps[0].toolName).toBe("code.execute");
+  });
+
+  it("réserve ui.components aux agents de code (exclusivité conservée, Task 107)", async () => {
+    mockedGenerate.mockResolvedValueOnce({
+      text: JSON.stringify({
+        executionId: "exec-2",
+        objective: "Crée un bouton",
+        steps: [{ id: "s1", type: "tool", toolName: "code.execute", name: "Exécution", description: "Exécute" }],
+        maxConcurrency: 1,
+        maxIterations: 5,
+      }),
+    } as Awaited<ReturnType<typeof generate>>);
+    // Un agent NON code reçoit une liste explicite (registre complet moins
+    // ui.components) : le catalogue présenté reste réservé sur ce point.
+    const plan = await planAgentTask("user-1", { ...agent, type: "content" }, "Crée un bouton");
+    const call = mockedGenerate.mock.calls[0][0];
+    const presented = JSON.parse(call.messages[1].content as string);
+    expect(presented.availableCapabilities).toContain("code.execute");
+    expect(presented.availableCapabilities).not.toContain("ui.components");
     expect(plan.steps[0].type).toBe("tool");
     expect(plan.steps[0].toolName).toBe("code.execute");
   });

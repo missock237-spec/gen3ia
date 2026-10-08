@@ -141,6 +141,9 @@ vi.mock("@/lib/video/audio-engine", () => ({
 
 vi.mock("@/lib/video/storage", () => ({
   isOwnedVideoKey: vi.fn(() => true),
+  // Task 107-a — livraison chat : production-queue importe aussi la signature
+  // d'URL master (jamais appelée sans conversationId — mocké par complétude).
+  createVideoPlaybackUrl: vi.fn(async () => "https://r2.test/presigne/master.mp4"),
 }));
 
 vi.mock("@/lib/video/render-queue", () => ({

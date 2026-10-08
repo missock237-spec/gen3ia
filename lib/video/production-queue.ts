@@ -43,7 +43,10 @@ import { resolvePreferredVoice, generateSceneNarration, attachRecordingAsNarrati
 import { listAssets } from "@/lib/video/asset-service";
 import { syncVoiceTrack, applyTimelinePatch } from "@/lib/video/timeline-service";
 import { ensureMusicBed } from "@/lib/video/audio-engine";
-import { isOwnedVideoKey } from "@/lib/video/storage";
+// Task 107-a — createVideoPlaybackUrl : MÊME source que la carte client
+// (video-production-card → GET .../render → output.r2Key présigné) pour la
+// livraison du master dans le chat à la complétion.
+import { createVideoPlaybackUrl, isOwnedVideoKey } from "@/lib/video/storage";
 import { startRenderJob, getJob } from "@/lib/video/render-queue";
 import type { VideoExportTarget, VideoProject } from "@/lib/video/types";
 import {
@@ -157,6 +160,20 @@ export interface VideoProductionJob {
    * tick arrivant avant l'échéance est un no-op neutre.
    */
   nextAttemptAt?: string;
+  /**
+   * Task 107-a — conversation d'origine (chat IA) : portée par le job pour
+   * que la complétion « monte » le résultat DANS le fil (message + artefact),
+   * même si l'utilisateur a fermé la page. Absent = job lancé hors chat
+   * (studio, API) → aucune livraison.
+   */
+  conversationId?: string;
+  /**
+   * Task 107-a — horodatage ISO de la livraison chat (IDEMPOTENCE) : posé
+   * AVANT l'écriture du message, effacé si l'écriture échoue → jamais deux
+   * messages pour un même job, jamais de message perdu silencieusement
+   * (reprise au tick/sweep suivant).
+   */
+  chatDeliveredAt?: string;
   createdAt: string;
   updatedAt: string;
   timeline: ProductionStageTimelineEntry[];
@@ -347,6 +364,14 @@ export interface CreateVideoProductionJobParams {
   prompt: string;
   title?: string;
   options?: ProductionJobOptions;
+  /**
+   * Task 107-a — conversation d'origine (chat IA). Portée PAR L'APPELANT
+   * (intercept du chat, tour vidéo, contexte d'exécution de l'outil) —
+   * JAMAIS exposée comme entrée LLM (l'IA ne doit pas pouvoir l'inventer).
+   * Validation : trim, borné à 128 caractères ; invalide/vide → ignoré
+   * (le job se comporte exactement comme un job hors chat).
+   */
+  conversationId?: string;
 }
 
 export interface CreateVideoProductionJobResult {
@@ -356,6 +381,16 @@ export interface CreateVideoProductionJobResult {
   stage: ProductionStage;
   /** Mode de continuation effectif : QStash si configuré, sinon sondage. */
   queueMode: "qstash" | "poll";
+}
+
+/**
+ * Task 107-a — normalise la conversation d'origine : trim, bornée à 128
+ * caractères ; vide ou surdimensionnée → undefined (jamais de champ sale).
+ */
+function normalizeConversationId(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed.length > 128) return undefined;
+  return trimmed;
 }
 
 function deriveTitle(prompt: string): string {
@@ -392,6 +427,9 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
 
   const jobId = randomUUID();
   const now = nowIso();
+  // Task 107-a — conversation d'origine persistée SEULEMENT si valide
+  // (pas de champ undefined sale : Firestore les rejette, le miroir aussi).
+  const conversationId = normalizeConversationId(params.conversationId);
   const job: VideoProductionJob = {
     id: jobId,
     userId: params.userId,
@@ -399,6 +437,7 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
     prompt: brief,
     title,
     options: { ...(params.options ?? {}), derivedTargets },
+    ...(conversationId ? { conversationId } : {}),
     status: "queued",
     stage: "project",
     stageIndex: 0,
@@ -503,6 +542,10 @@ function normalizeJobDoc(stored: Partial<ProductionJobWithResume>, id: string): 
     ...(isSceneFailureRecord(stored.sceneFailures) ? { sceneFailures: stored.sceneFailures } : {}),
     ...(Array.isArray(stored.warnings) ? { warnings: stored.warnings.filter((w): w is string => typeof w === "string") } : {}),
     ...(typeof stored.nextAttemptAt === "string" ? { nextAttemptAt: stored.nextAttemptAt } : {}),
+    // Task 107-a — livraison chat : champs persistés, transités tels quels
+    // (compatibilité documents historiques : absents → non portés).
+    ...(typeof stored.conversationId === "string" && stored.conversationId ? { conversationId: stored.conversationId } : {}),
+    ...(typeof stored.chatDeliveredAt === "string" && stored.chatDeliveredAt ? { chatDeliveredAt: stored.chatDeliveredAt } : {}),
     createdAt: stored.createdAt ?? nowIso(),
     updatedAt: stored.updatedAt ?? nowIso(),
     timeline: Array.isArray(stored.timeline) ? stored.timeline : [],
@@ -1093,6 +1136,11 @@ export async function advanceProductionJob(jobId: string, options: { timeBudgetM
   }
   if (outcome.kind === "terminal") {
     const job = outcome.job;
+    // Task 107-a — filet de livraison : un job DÉJÀ terminal dont la
+    // livraison chat a échoué (marqueur absent) est relu à CHAQUE tick
+    // tardif (QStash planifié, sondage, GET) — la reprise ne dépend plus
+    // d'un worker vivant. deliverJobToConversation ne lève jamais.
+    await deliverJobToConversation(job);
     return {
       jobId,
       projectId: job.projectId,
@@ -1234,6 +1282,15 @@ async function concludeProductionTick(
     } else {
       await logSystem(job.projectId, `Production ${job.id.slice(0, 8)} TERMINÉE — vidéo livrée.`).catch(() => undefined);
     }
+    // Task 107-a — LIVRAISON CHAT AUTOMATIQUE à la transition terminale :
+    // message + artefact dans la conversation d'origine (idempotence par
+    // marqueur). La livraison absorbe ses propres erreurs — le tick
+    // terminal reste un succès quoi qu'il arrive.
+    await deliverJobToConversation({
+      ...job,
+      status: failed ? "failed" : "completed",
+      ...(failed ? { error: message } : {}),
+    });
     return {
       jobId: job.id,
       projectId: job.projectId,
@@ -1401,6 +1458,9 @@ async function failProductionJob(job: VideoProductionJob, error: Error, policy?:
       title: "Production vidéo échouée",
       body: `La production autopilote a échoué à l'étape « ${job.stage} » : ${message.slice(0, 200)} Les étapes déjà produites restent dans le studio vidéo.`,
     }).catch(() => undefined);
+    // Task 107-a — livraison chat de l'échec définitif (même contrat que la
+    // complétion : marqueur idempotent, jamais de double message).
+    await deliverJobToConversation({ ...job, status: "failed", error: message });
     return {
       jobId: job.id,
       projectId: job.projectId,
@@ -1421,6 +1481,186 @@ async function failProductionJob(job: VideoProductionJob, error: Error, policy?:
       "fail_production_requeue_failed",
     );
     throw requeueError;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Task 107-a — LIVRAISON CHAT à la complétion : le résultat « monte » dans
+// la conversation d'origine (message FR + artefact vidéo) même si la page
+// est fermée. Mêmes primitives que le lancement (appendMessage/createArtifact
+// via imports DYNAMIQUES — anti-cycle : la couche conversation importe cette
+// file, jamais l'inverse). Idempotence par marqueur chatDeliveredAt posé
+// AVANT l'écriture : jamais deux messages, jamais de perte silencieuse
+// (marqueur effacé en cas d'échec → reprise au tick/sweep suivant).
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Étiquettes FR des étapes pour les messages de livraison (ton video-status). */
+const DELIVERY_STAGE_LABELS: Record<ProductionStage, string> = {
+  project: "création du projet",
+  plan: "plan du réalisateur",
+  script: "écriture du scénario",
+  assets: "génération des visuels",
+  voice: "narration vocale",
+  render: "montage et rendu",
+  done: "finalisation",
+};
+
+export interface VideoDeliveryMessageParams {
+  /** Statut TERMINAL du job (completed / failed / cancelled). */
+  status: ProductionJobStatus;
+  title: string;
+  projectId: string;
+  /** Étape atteinte (précision du message d'échec). */
+  stage: ProductionStage;
+  /** Message d'erreur stocké (échec définitif) — tronqué à 200 caractères. */
+  error?: string;
+  /** Journal d'avertissements FR (tolérance par scène) — 3 lignes max. */
+  warnings?: string[];
+  /** URL de lecture présignée du master (complétion seulement, sinon absent). */
+  masterUrl?: string;
+}
+
+/**
+ * Message FR de livraison (PUR, testé) — même ton que le message de
+ * lancement du tour vidéo (runVideoTurn) : titre, avertissements éventuels
+ * (3 max), lien de lecture du master, atelier, relance via video.revise.
+ */
+export function buildVideoDeliveryMessage(params: VideoDeliveryMessageParams): string {
+  const lines: string[] = [];
+  if (params.status === "completed") {
+    lines.push("Votre vidéo est prête 🎬", "");
+    lines.push(`Titre : « ${params.title || "Vidéo Gen3ia"} »`);
+    const warnings = (params.warnings ?? []).slice(0, 3).map((w) => w.trim().slice(0, 200)).filter(Boolean);
+    if (warnings.length > 0) {
+      lines.push("Points d'attention pendant la production :");
+      for (const warning of warnings) lines.push(`- ${warning}`);
+    }
+    lines.push(params.masterUrl ? `Regardez votre vidéo ici : ${params.masterUrl}` : "La lecture est disponible dans la carte vidéo ci-dessous.");
+    lines.push(`Le projet complet (timeline, versions, exports) est disponible dans l'atelier vidéo : /studio/video/${params.projectId}`);
+    lines.push("Demandez-moi des modifications (musique, rythme, visuels…) : je relance une passe de révision (video.revise) sur ce projet.");
+    return lines.join("\n");
+  }
+  if (params.status === "failed") {
+    lines.push("Votre production vidéo n'a pas abouti.", "");
+    const label = DELIVERY_STAGE_LABELS[params.stage] ?? params.stage;
+    const error = params.error?.trim().slice(0, 200);
+    lines.push(`Étape : ${label}${error ? ` — ${error}` : "."}`);
+    lines.push(`Les étapes déjà produites restent consultables dans l'atelier vidéo : /studio/video/${params.projectId}`);
+    lines.push("Demandez-moi une relance ou des ajustements (video.revise) : la production repart du dernier point sauvegardé.");
+    return lines.join("\n");
+  }
+  lines.push("Votre production vidéo a bien été annulée.", "");
+  lines.push(`Le projet reste accessible dans l'atelier vidéo : /studio/video/${params.projectId} — vous pouvez relancer la production à tout moment.`);
+  return lines.join("\n");
+}
+
+/**
+ * Livre le résultat d'un job TERMINAL dans sa conversation d'origine :
+ * message assistant (contenu FR selon le statut) + artefact vidéo de
+ * livraison. NE LÈVE JAMAIS : un incident de livraison est journalisé et le
+ * marqueur chatDeliveredAt est effacé — le tick qui l'appelle reste un
+ * succès, la reprise se fera au prochain passage (tick tardif, sweep, GET).
+ *
+ * Idempotence : le marqueur est posé DÈS la décision de livrer (merge sur
+ * le doc job) — un tick concurrent qui lit le job après ce point ne
+ * double-jamais le message ; si l'écriture chat échoue, le marqueur est
+ * effacé (chatDeliveredAt: "") pour autoriser la reprise.
+ */
+export async function deliverJobToConversation(job: VideoProductionJob): Promise<void> {
+  // Conditions de livraison : conversation connue, pas déjà livré, statut
+  // terminal. Un job hors chat (studio/API) n'a RIEN à livrer.
+  if (!job.conversationId || job.chatDeliveredAt) return;
+  if (job.status !== "completed" && job.status !== "failed" && job.status !== "cancelled") return;
+
+  // 1) Marquage idempotent AVANT toute écriture chat (merge sur le doc job).
+  try {
+    await writeCheckpointSet(
+      PRODUCTION_JOBS_COLLECTION,
+      job.id,
+      { chatDeliveredAt: nowIso(), updatedAt: nowIso() },
+      job.userId,
+    );
+  } catch (markError) {
+    // Marquage impossible (quota aussi côté miroir) : livraison reportée au
+    // passage suivant — PAS d'incident bloquant, PAS de message perdu.
+    logger.warn(
+      { jobId: job.id, conversationId: job.conversationId, error: markError instanceof Error ? markError.message : String(markError) },
+      "video_delivery_mark_failed",
+    );
+    return;
+  }
+
+  try {
+    // Imports DYNAMIQUES (anti-cycle) : mêmes primitives que le lancement.
+    const { appendMessage } = await import("@/lib/chat/repository");
+    const { createArtifact, listArtifacts } = await import("@/lib/domain/artifacts/repository");
+
+    // URL de lecture du master : MÊME source que la carte client
+    // (video-production-card → GET .../render → output.r2Key présigné) —
+    // ici en direct : job de rendu rattaché (job.renderJobId) → clé R2 du
+    // master → URL présignée 900 s. L'URL est un PLUS : un incident de
+    // signature n'empêche jamais la livraison du message.
+    let masterUrl: string | undefined;
+    if (job.status === "completed" && job.renderJobId) {
+      try {
+        const renderJob = await getJob(job.renderJobId);
+        const r2Key = renderJob?.output?.r2Key;
+        if (r2Key) masterUrl = await createVideoPlaybackUrl(job.userId, r2Key, 900).catch(() => undefined);
+      } catch {
+        // Rendu introuvable / R2 indisponible : message livré sans URL.
+      }
+    }
+
+    const content = buildVideoDeliveryMessage({
+      status: job.status,
+      title: job.title,
+      projectId: job.projectId,
+      stage: job.stage,
+      ...(job.status === "failed" && job.error ? { error: job.error } : {}),
+      ...(job.status === "completed" && job.warnings?.length ? { warnings: job.warnings } : {}),
+      ...(masterUrl ? { masterUrl } : {}),
+    });
+    await appendMessage({
+      conversationId: job.conversationId,
+      userId: job.userId,
+      role: "assistant",
+      content,
+      generationStatus: "complete",
+    });
+
+    // Artefact de livraison (carte vidéo du chat) : AUCUN mécanisme de mise
+    // à jour d'artefact dans le dépôt (seulement addArtifactVersion) → on
+    // crée UNIQUEMENT si l'artefact de lancement n'existe pas déjà (même
+    // videoJobId ou videoProjectId) — la carte client se met à jour par
+    // SSE/poll, jamais par le nombre d'artefacts. Listing impossible → on
+    // s'abstient (jamais de doublon au hasard ; le message est le livrable).
+    const existing = await listArtifacts(job.userId, { conversationId: job.conversationId, type: "video", limit: 200 }).catch(() => null);
+    if (existing && !existing.some((a) => a.videoJobId === job.id || a.videoProjectId === job.projectId)) {
+      await createArtifact({
+        userId: job.userId,
+        conversationId: job.conversationId,
+        type: "video",
+        title: job.title || "Vidéo Gen3ia",
+        note: job.status === "completed" ? "Vidéo terminée" : job.status === "failed" ? "Production vidéo échouée" : "Production vidéo annulée",
+        videoProjectId: job.projectId,
+        videoJobId: job.id,
+      });
+    }
+  } catch (deliveryError) {
+    // 2) Échec de la livraison : marqueur EFFACÉ (reprise au passage suivant),
+    // incident journalisé — le tick n'échoue JAMAIS à cause de la livraison.
+    await writeCheckpointSet(
+      PRODUCTION_JOBS_COLLECTION,
+      job.id,
+      { chatDeliveredAt: "", updatedAt: nowIso() },
+      job.userId,
+    ).catch(() => undefined);
+    const detail = deliveryError instanceof Error ? deliveryError.message : String(deliveryError);
+    logger.warn(
+      { jobId: job.id, conversationId: job.conversationId, error: detail },
+      "video_delivery_failed",
+    );
+    await logSystem(job.projectId, `Livraison chat de la production ${job.id.slice(0, 8)} impossible (reprise automatique au prochain passage) : ${detail.slice(0, 200)}.`).catch(() => undefined);
   }
 }
 

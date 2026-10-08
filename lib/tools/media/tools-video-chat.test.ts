@@ -11,6 +11,12 @@ import { createVideoTool, sanitizeProductionOptions } from "./create-video";
 import { videoStatusTool } from "./video-status";
 import { videoReviseTool } from "./video-revise";
 
+// Task 107-a — mock hoisté au NIVEAU MODULE (vi.hoisted) : la file de
+// production est simulée pour tester le câblage de l'outil sans machinerie
+// vidéo. NB : nom distinct du mock video.status ci-dessous (deux fois le
+// même identifiant hoisté collerait).
+const productionQueueCreate = vi.hoisted(() => ({ createVideoProductionJob: vi.fn() }));
+
 describe("outil video.create — schéma enrichi (Task 106-a)", () => {
   it("accepte une entrée minimale valide", () => {
     const parsed = createVideoTool.inputSchema.parse({ prompt: "Vidéo de présentation de ma boutique de thé" });
@@ -206,5 +212,54 @@ describe("outil video.revise — schéma et exécution (Task 106-a)", () => {
     } finally {
       vi.doUnmock("@/lib/video/render-queue");
     }
+  });
+});
+
+describe("outil video.create — portage conversationId (Task 107-a)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.doMock("@/lib/video/production-queue", () => productionQueueCreate, { virtual: true });
+    productionQueueCreate.createVideoProductionJob.mockResolvedValue({
+      jobId: "job-9",
+      projectId: "proj-9",
+      status: "queued",
+      stage: "project",
+      queueMode: "poll",
+    });
+  });
+
+  afterEach(() => {
+    vi.doUnmock("@/lib/video/production-queue");
+  });
+
+  it("passe context.metadata.conversationId au job de production (livraison chat à la complétion)", async () => {
+    const output = await createVideoTool.execute(
+      { prompt: "Une vidéo de présentation de ma boutique de thé" },
+      { userId: "user-1", metadata: { conversationId: "conv-7" } },
+    );
+    expect(output.jobId).toBe("job-9");
+    const params = productionQueueCreate.createVideoProductionJob.mock.calls[0][0] as Record<string, unknown>;
+    expect(params.conversationId).toBe("conv-7");
+    expect(params.userId).toBe("user-1");
+  });
+
+  it("metadata SANS conversationId → job créé sans conversationId (job hors chat)", async () => {
+    await createVideoTool.execute({ prompt: "Une vidéo de présentation de ma boutique de thé" }, { userId: "user-1" });
+    const params = productionQueueCreate.createVideoProductionJob.mock.calls[0][0] as Record<string, unknown>;
+    expect("conversationId" in params).toBe(false);
+  });
+
+  it("conversationId blanche → ignorée (pas de champ sale)", async () => {
+    await createVideoTool.execute(
+      { prompt: "Une vidéo de présentation de ma boutique de thé" },
+      { userId: "user-1", metadata: { conversationId: "   " } },
+    );
+    const params = productionQueueCreate.createVideoProductionJob.mock.calls[0][0] as Record<string, unknown>;
+    expect("conversationId" in params).toBe(false);
+  });
+
+  it("conversationId N'EST PAS un champ du schéma d'entrée (l'LLM ne peut pas l'inventer)", () => {
+    const keys = Object.keys(createVideoTool.inputSchema.shape ?? {});
+    expect(keys).not.toContain("conversationId");
   });
 });

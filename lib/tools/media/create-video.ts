@@ -155,10 +155,16 @@ export const createVideoTool: ToolDefinition<
       );
     }
     const appliedOptions = sanitizeProductionOptions(input);
+    // Task 107-a — conversation d'origine : lue dans le CONTEXTE d'exécution
+    // (metadata remplie par l'appelant) — JAMAIS un champ d'entrée du schéma
+    // (l'LLM ne doit pas pouvoir l'inventer). Portée par le job pour la
+    // livraison du résultat dans le chat à la complétion.
+    const conversationId = context.metadata?.conversationId?.trim();
     const job = await productionQueue.createVideoProductionJob({
       userId: context.userId,
       prompt: input.prompt.trim(),
       ...(input.title?.trim() ? { title: input.title.trim() } : {}),
+      ...(conversationId ? { conversationId } : {}),
       options: appliedOptions as Parameters<typeof productionQueue.createVideoProductionJob>[0]["options"],
     });
     return {

@@ -125,7 +125,13 @@ function planPolicyForAgent(agent: AgentRecord, plan: RuntimePlan): ExecutionPol
   const planPolicy = buildPolicy(plan);
   return {
     ...planPolicy,
-    allowedTools: (planPolicy.allowedTools ?? []).filter((tool) => agentAllowed.has(tool)),
+    // CONTRAT Task 107 (lot B) : la sentinelle "*" émise par policyForAgent
+    // (niveaux standard/power) signifie « whitelist complète » — sans ce cas,
+    // l'intersection Set viderait allowedTools et chaque outil planifié
+    // échouerait en « Tool not allowed ». Les exclusions réelles (caps persona,
+    // ui.components) arrivent déjà sous forme de liste explicite : le filtrage
+    // ci-dessous continue de s'appliquer dans ce cas.
+    allowedTools: (planPolicy.allowedTools ?? []).filter((tool) => agentAllowed.has(tool) || agentAllowed.has("*")),
   };
 }
 

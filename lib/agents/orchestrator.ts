@@ -5,6 +5,8 @@ import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicy } from "@/lib/security/e
 import { getCustomerContext } from "@/lib/agents/memory/customer-context";
 import { assertUserWalletActive } from "@/lib/billing/wallet";
 import { buildExtensionPolicyAddendum } from "@/lib/extensions/agent-bridge";
+import { GEN3IA_TOOLS } from "@/lib/tools/registry";
+import { KNOWN_TOOL_SECURITY_NAMES } from "@/lib/security/tool-permissions";
 
 export type AgentRole = "customer_service" | "sales" | "content" | "admin" | "analytics";
 export interface AgentDefinition { id: AgentRole; name: string; mission: string; capabilities: string[]; policy: ExecutionPolicy; }
@@ -24,8 +26,65 @@ export function selectSkills(objective: string): DynamicSkill[] {
 }
 export interface OrchestratorResult { executionId: string; roles: AgentRole[]; state: Awaited<ReturnType<AgentRuntime["run"]>>; summary: string; }
 
-const AGENT_TOOLS = ["web.search", "file.read", "file.create", "zip.analyze", "zip.create", "zip.extract", "artifact.create", "artifact.download", "terminal.execute", "memory.read", "memory.write", "camera.capture", "video.create", "video.status", "video.revise"];
-const READ_POLICY: ExecutionPolicy = { ...DEFAULT_EXECUTION_POLICY, allowedTools: AGENT_TOOLS, permissions: ["tool.read", "tool.write", "file.read", "file.write", "file.create", "network.read", "terminal.execute", "memory.read", "memory.write", "camera.capture"], allowNetwork: true, allowFileWrite: true, allowAgentTerminal: true, allowCamera: true };
+/**
+ * DÉRIVATION AUTOMATIQUE (Task 107) : la liste des outils de l'équipe
+ * orchestrée n'est plus codée en dur — elle est dérivée des DEUX sources
+ * canoniques du projet (catalogue statique GEN3IA_TOOLS + définitions de
+ * sécurité KNOWN_TOOL_SECURITY_NAMES qui couvre schedule.*, workflow.* et les
+ * outils médias/externes). Source unique de vérité : toute évolution du
+ * registre (image.generate, email.send, voice.speak, schedules, workflows,
+ * networks, github, notion, jules, cloudflare, custom_api, web.api, mcp,
+ * composio, knowledge.search, web.open…) se propage désormais automatiquement,
+ * sans intervention ici.
+ */
+const AGENT_TOOLS: string[] = [
+  ...new Set([...GEN3IA_TOOLS.map((tool) => tool.name), ...KNOWN_TOOL_SECURITY_NAMES]),
+];
+/**
+ * Politique de l'équipe orchestrée (Task 107) :
+ *  - allowedTools = registre complet dérivé ci-dessus : les agents peuvent
+ *    utiliser TOUS les outils du projet. La barrière fine reste en AVAL :
+ *    permissions ci-dessous + flags + HITL (approval-policy, plancher
+ *    NEVER_BYPASSED) + consentements/kill-switch (executor). file.delete est
+ *    présent dans la whitelist dérivée MAIS volontairement REFUSÉ par les
+ *    permissions (destructif, aucun besoin d'orchestration — l'appel échoue
+ *    proprement sur « Permission denied »).
+ *  - Permissions élargies (Task 107) : tool.external + network.write (emails,
+ *    messages, connecteurs), ads.read/ads.write (lecture et publication pub),
+ *    code.execute + allowCodeExecution (sandbox). terminal.execute et
+ *    camera.capture conservés (flags déjà posés).
+ *  - allowExternalApps: true requis par authorizeTool pour tout outil classé
+ *    externalApp (mcp.call, composio.execute, github, notion.create_page…) :
+ *    sans lui, ces entrées de la whitelist dérivée seraient des listes mortes.
+ *    Le risque externe reste couvert par tool.external + HITL + consentements.
+ */
+const READ_POLICY: ExecutionPolicy = {
+  ...DEFAULT_EXECUTION_POLICY,
+  allowedTools: AGENT_TOOLS,
+  permissions: [
+    "tool.read",
+    "tool.write",
+    "tool.external",
+    "file.read",
+    "file.write",
+    "file.create",
+    "network.read",
+    "network.write",
+    "ads.read",
+    "ads.write",
+    "code.execute",
+    "terminal.execute",
+    "memory.read",
+    "memory.write",
+    "camera.capture",
+  ],
+  allowNetwork: true,
+  allowExternalApps: true,
+  allowFileWrite: true,
+  allowCodeExecution: true,
+  allowAgentTerminal: true,
+  allowCamera: true,
+};
 const AGENTS: Record<AgentRole, AgentDefinition> = {
   customer_service: { id: "customer_service", name: "Customer Service Agent", mission: "Gérer les demandes clients, FAQ, réclamations, qualification et escalade humaine.", capabilities: ["multilingual support", "FAQ", "customer context", "triage", "human escalation"], policy: READ_POLICY },
   sales: { id: "sales", name: "Sales Agent", mission: "Qualifier les prospects, préparer les suivis, rendez-vous, offres et recommandations commerciales.", capabilities: ["lead qualification", "follow-up", "appointment preparation", "offer drafting", "pipeline analysis"], policy: READ_POLICY },
