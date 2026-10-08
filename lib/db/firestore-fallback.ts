@@ -387,6 +387,43 @@ export async function resilientSet(
   }
 }
 
+/**
+ * Task 106-fix — écriture de CHECKPOINT, cohérente avec le CLAIM.
+ *
+ * Constat production (Task 106) : les checkpoints d'étape écrits via
+ * resilientSet partaient au MIROIR dès qu'un write dépassait la course de
+ * 6 s (le message de stall contient « quota » → classé quota par aiguille de
+ * message), tandis que le claim transactionnel — SANS course — réussissait
+ * sur Firestore. Résultat : le claim relisait l'ancien document
+ * (completedSegments vide) et re-rendait les mêmes segments à l'infini.
+ *
+ * Sémantique : Firestore D'ABORD avec la même primitive que le claim (pas de
+ * course temporelle — un write lent n'est PAS un quota) ; bascule miroir
+ * UNIQUEMENT sur incident quota RÉEL (RESOURCE_EXHAUSTED / daily limit) —
+ * exactement le régime où le claim bascule aussi (Task 106-fix, cohérence
+ * de régime). Les autres erreurs propagent (comme resilientSet).
+ */
+export async function writeCheckpointSet(
+  collection: string,
+  documentId: string,
+  payload: WritablePayload,
+  ownerId?: string,
+): Promise<void> {
+  try {
+    await adminDb.collection(collection).doc(documentId).set(payload, { merge: true });
+    noteFirestoreSuccess();
+    // Miroir best-effort (réconciliation + régime quota ultérieur).
+    await mirrorToSupabase(collection, documentId, payload, ownerId, { merge: true }).catch(
+      () => undefined,
+    );
+  } catch (error) {
+    if (!isFirestoreQuotaError(error)) throw error;
+    noteFirestoreQuotaError(error);
+    if (!fallbackEnabled()) throw error;
+    return writeFallbackSet(collection, documentId, payload, { ownerId });
+  }
+}
+
 export async function resilientGet<T>(
   collection: string,
   documentId: string,

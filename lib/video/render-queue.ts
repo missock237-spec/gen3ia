@@ -74,11 +74,10 @@ import {
   maybeReconcileQuotaRecovery,
   queryJobDocs,
   resumePolicyFor,
-  saveJobDoc,
   type RenderJobWithResume,
   type ResumePolicy,
 } from "@/lib/video/queue-resume";
-import { firestoreUsable } from "@/lib/db/firestore-fallback";
+import { firestoreUsable, writeCheckpointSet } from "@/lib/db/firestore-fallback";
 
 export const JOBS_COLLECTION = "videoRenderJobs";
 async function mirrorRenderProgress(job: Pick<RenderJob, "id" | "status" | "stage" | "progress">, extra?: Record<string, unknown>): Promise<void> {
@@ -692,7 +691,7 @@ async function moveToNextStage(jobId: string, job: RenderJob, fromStage: RenderS
   const index = STAGE_ORDER.indexOf(fromStage);
   const next = STAGE_ORDER[Math.min(index + 1, STAGE_ORDER.length - 1)];
   // Task 95-c — écriture via la couche résiliente (miroir chaud).
-  await saveJobDoc(
+  await writeCheckpointSet(
     JOBS_COLLECTION,
     jobId,
     { stage: next, progress: computeJobProgress(next, 0, 0), updatedAt: nowIso() },
@@ -754,7 +753,7 @@ async function failJob(job: RenderJob, error: Error, policy?: ResumePolicy, quot
         // Compteur d'incidents quota consécutifs (n'alimente PAS retryCount).
         patch.quotaFailures = quotaFailures;
       }
-      await saveJobDoc(JOBS_COLLECTION, job.id, patch, job.userId);
+      await writeCheckpointSet(JOBS_COLLECTION, job.id, patch, job.userId);
       // publishTickAndLog retourne la réussite RÉELLE du publish — le champ
       // « continued » reflète l'honnêteté du ré-enfilement (faux = sondage
       // en relais) au lieu de dériver d'un simple paramètre non vide.
@@ -768,7 +767,7 @@ async function failJob(job: RenderJob, error: Error, policy?: ResumePolicy, quot
     const retryCount = typeof job.retryCount === "number" ? job.retryCount : 0;
     // Reprise automatique : jusqu'à RENDER_RETRY_BUDGET relances (crash transitoire).
     if (retryCount < RENDER_RETRY_BUDGET) {
-      await saveJobDoc(
+      await writeCheckpointSet(
         JOBS_COLLECTION,
         job.id,
         {
@@ -786,7 +785,7 @@ async function failJob(job: RenderJob, error: Error, policy?: ResumePolicy, quot
       return { jobId: job.id, status: "queued", stage: job.stage, done: false, continued: enqueued, message };
     }
     // Échec définitif : libère la réservation, purge, notifie.
-    await saveJobDoc(
+    await writeCheckpointSet(
       JOBS_COLLECTION,
       job.id,
       {
@@ -801,7 +800,7 @@ async function failJob(job: RenderJob, error: Error, policy?: ResumePolicy, quot
     );
     if (job.billedMinor > 0) {
       await releaseRenderBudget(job.userId, job.id, job.billedMinor).catch(() => undefined);
-      await saveJobDoc(JOBS_COLLECTION, job.id, { billedMinor: 0 }, job.userId);
+      await writeCheckpointSet(JOBS_COLLECTION, job.id, { billedMinor: 0 }, job.userId);
     }
     await cleanupJobTmp(job.id);
     await setProjectStatus(job.userId, job.projectId, "failed").catch(() => undefined);
@@ -961,7 +960,7 @@ async function stagePlan(job: RenderJob, io: EngineIo): Promise<void> {
   });
   if (plan.segments.length === 0) throw new Error("Plan de rendu vide : aucune scène avec image.");
   // Task 95-c — écriture via la couche résiliente (miroir chaud).
-  await saveJobDoc(JOBS_COLLECTION, job.id, { plan, updatedAt: nowIso() }, job.userId);
+  await writeCheckpointSet(JOBS_COLLECTION, job.id, { plan, updatedAt: nowIso() }, job.userId);
   job.plan = plan;
   await io.log(`Plan de rendu établi : ${plan.segments.length} segments, ${plan.estimatedSec} s attendues.`);
 }
@@ -1013,7 +1012,7 @@ async function stageSegments(job: RenderJob, io: EngineIo, timeBudgetMs?: number
         completed.add(index);
         // Task 95-c — checkpoint via la couche résiliente (miroir chaud) : sous
         // quota l'écriture atterrit dans le miroir, le job reste reprenable.
-        await saveJobDoc(
+        await writeCheckpointSet(
           JOBS_COLLECTION,
           job.id,
           {
@@ -1066,7 +1065,7 @@ async function stageTransitions(job: RenderJob, io: EngineIo): Promise<StageOutc
       startPass: job.checkpoints.transitionPass,
       onPassDone: async (pass) => {
         // Task 95-c — checkpoint de passe via la couche résiliente.
-        await saveJobDoc(
+        await writeCheckpointSet(
           JOBS_COLLECTION,
           job.id,
           { "checkpoints.transitionPass": pass, updatedAt: nowIso() },
@@ -1090,7 +1089,7 @@ async function stageTransitions(job: RenderJob, io: EngineIo): Promise<StageOutc
       await copyFile(assembledFile, `${io.tmpDir}/video_noaudio.mp4`);
     }
   }
-  await saveJobDoc(JOBS_COLLECTION, job.id, { "checkpoints.transitionsDone": true, updatedAt: nowIso() }, job.userId);
+  await writeCheckpointSet(JOBS_COLLECTION, job.id, { "checkpoints.transitionsDone": true, updatedAt: nowIso() }, job.userId);
   await io.log(`Assemblage vidéo terminé (${Math.round(expectedSec)} s attendues).`);
   await moveToNextStage(job.id, job, "transitions");
   return { kind: "continue", stage: job.stage, message: "Transitions terminées." };
@@ -1118,12 +1117,12 @@ async function stageAudio(job: RenderJob, io: EngineIo): Promise<void> {
     }
     await io.log("Aucune entrée audio prévue — vidéo muette assumée (narration/musique absentes).");
   }
-  await saveJobDoc(JOBS_COLLECTION, job.id, { "checkpoints.audioDone": true, updatedAt: nowIso() }, job.userId);
+  await writeCheckpointSet(JOBS_COLLECTION, job.id, { "checkpoints.audioDone": true, updatedAt: nowIso() }, job.userId);
 }
 
 /** SUBTITLES : le fichier ASS est prêt (brûlé au finalize) — checkpoint. */
 async function stageSubtitles(job: RenderJob): Promise<void> {
-  await saveJobDoc(JOBS_COLLECTION, job.id, { "checkpoints.subtitlesDone": true, updatedAt: nowIso() }, job.userId);
+  await writeCheckpointSet(JOBS_COLLECTION, job.id, { "checkpoints.subtitlesDone": true, updatedAt: nowIso() }, job.userId);
 }
 
 /** QC : analyse réelle du master intermédiaire, boucle de correction. */
@@ -1171,7 +1170,7 @@ async function stageQc(job: RenderJob, io: EngineIo): Promise<StageOutcome> {
     subtitlesEnabled: Boolean(plan.subtitles?.assR2Key),
   });
   // Task 95-c — rapport QC via la couche résiliente (miroir chaud).
-  await saveJobDoc(
+  await writeCheckpointSet(
     JOBS_COLLECTION,
     job.id,
     { qcReport: report, "checkpoints.qcDone": true, updatedAt: nowIso() },
@@ -1186,7 +1185,7 @@ async function stageQc(job: RenderJob, io: EngineIo): Promise<StageOutcome> {
     // Task 95-c — patch d'autofix via la couche résiliente (la sentinelle
     // FieldValue.increment part telle quelle à Firestore, le miroir reçoit
     // une copie assainie — Task 95-b).
-    await saveJobDoc(
+    await writeCheckpointSet(
       JOBS_COLLECTION,
       job.id,
       {
@@ -1246,7 +1245,7 @@ async function stageExports(job: RenderJob, io: EngineIo): Promise<StageOutcome>
     job.exports[index] = { ...target, r2Key, sizeBytes, status: "done" };
     const doneCount = job.exports.filter((e) => e.status === "done").length;
     // Task 95-c — état des exports via la couche résiliente (miroir chaud).
-    await saveJobDoc(
+    await writeCheckpointSet(
       JOBS_COLLECTION,
       job.id,
       {
@@ -1275,7 +1274,7 @@ async function stageFinalize(job: RenderJob, io: EngineIo): Promise<StageOutcome
     if (job.billedMinor > 0) {
       await settleExportsBudget({ userId: job.userId, jobId: job.id, reservedMinor: job.billedMinor, targets: doneCount });
     }
-    await saveJobDoc(
+    await writeCheckpointSet(
       JOBS_COLLECTION,
       job.id,
       { status: "completed", stage: "finalize", progress: 1, leaseOwner: FieldValue.delete(), leaseExpiresAt: 0, updatedAt: nowIso() },
@@ -1298,7 +1297,7 @@ async function stageFinalize(job: RenderJob, io: EngineIo): Promise<StageOutcome
   // complété est (re)faite. Le premier passage garde le chemin nominal.
   const alreadyDelivered = Boolean(job.plan?.masterR2Key) || Boolean(job.output?.r2Key);
   if (alreadyDelivered) {
-    await saveJobDoc(
+    await writeCheckpointSet(
       JOBS_COLLECTION,
       job.id,
       { status: "completed", stage: "finalize", progress: 1, leaseOwner: FieldValue.delete(), leaseExpiresAt: 0, updatedAt: nowIso() },
@@ -1327,7 +1326,7 @@ async function stageFinalize(job: RenderJob, io: EngineIo): Promise<StageOutcome
     estimate: estimateRenderCost({ durationSec: plan.estimatedSec, resolution: plan.resolution }),
     actualDurationSec: uploaded.durationSec,
   });
-  await saveJobDoc(
+  await writeCheckpointSet(
     JOBS_COLLECTION,
     job.id,
     {
@@ -1425,7 +1424,7 @@ async function pathExists(path: string): Promise<boolean> {
  */
 async function resetToSegments(jobId: string, job: RenderJob, reason: string): Promise<void> {
   const totalSegments = job.plan?.segments?.length ?? 0;
-  await saveJobDoc(
+  await writeCheckpointSet(
     JOBS_COLLECTION,
     jobId,
     {

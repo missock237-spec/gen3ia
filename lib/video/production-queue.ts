@@ -54,10 +54,9 @@ import {
   maybeReconcileQuotaRecovery,
   queryJobDocs,
   resumePolicyFor,
-  saveJobDoc,
   type ResumePolicy,
 } from "@/lib/video/queue-resume";
-import { firestoreUsable } from "@/lib/db/firestore-fallback";
+import { firestoreUsable, writeCheckpointSet } from "@/lib/db/firestore-fallback";
 
 export const PRODUCTION_JOBS_COLLECTION = "videoProductionJobs";
 
@@ -607,7 +606,7 @@ async function claimProductionViaMirror(jobId: string, originalError?: unknown):
 
 async function releaseLease(jobId: string): Promise<void> {
   // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
-  await saveJobDoc(
+  await writeCheckpointSet(
     PRODUCTION_JOBS_COLLECTION,
     jobId,
     { leaseOwner: null, leaseExpiresAt: 0, updatedAt: nowIso() },
@@ -648,7 +647,7 @@ async function ensureStageEntry(job: VideoProductionJob): Promise<void> {
   const timeline: ProductionStageTimelineEntry[] = [...job.timeline, { stage: job.stage, startedAt: nowIso() }];
   job.timeline = timeline;
   // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
-  await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, { timeline, updatedAt: nowIso() }, job.userId).catch(() => undefined);
+  await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, { timeline, updatedAt: nowIso() }, job.userId).catch(() => undefined);
 }
 
 async function moveToNextProductionStage(job: VideoProductionJob, detail?: string): Promise<void> {
@@ -667,7 +666,7 @@ async function moveToNextProductionStage(job: VideoProductionJob, detail?: strin
     updatedAt: nowIso(),
   };
   // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
-  await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, patch, job.userId);
+  await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, patch, job.userId);
   job.stage = next;
   job.stageIndex = patch.stageIndex;
   job.progress = patch.progress;
@@ -776,7 +775,7 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
     job.sceneCursor = sceneIndex + 1;
     // Task 95-d — checkpoint via la couche résiliente (miroir chaud) —
     // porte AUSSI sceneFailures/warnings (tolérance par scène persistée).
-    await saveJobDoc(
+    await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
       {
@@ -801,7 +800,7 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
   // Task 106-c — TOLÉRANCE PARTIELLE : au moins une scène du lot a abouti →
   // les échecs fatals (sans checkpoint individuel) sont persistés ici.
   if (fatalInBatch > 0) {
-    await saveJobDoc(
+    await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
       {
@@ -827,7 +826,7 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
   const retryIndex = firstSceneNeedingRetry(scenes, sceneFailures, "assets");
   if (retryIndex >= 0 && retryIndex < job.sceneCursor && job.sceneCursor >= scenes.length) {
     job.sceneCursor = retryIndex;
-    await saveJobDoc(
+    await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
       { sceneCursor: retryIndex, sceneFailures, warnings, updatedAt: nowIso() },
@@ -958,7 +957,7 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
     job.sceneCursor = sceneIndex + 1;
     // Task 95-d — checkpoint via la couche résiliente (miroir chaud) —
     // porte AUSSI sceneFailures/warnings (tolérance par scène persistée).
-    await saveJobDoc(
+    await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
       {
@@ -980,7 +979,7 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
 
   // Task 106-c — TOLÉRANCE PARTIELLE : persistance des échecs fatals accumulés.
   if (fatalInBatch > 0) {
-    await saveJobDoc(
+    await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
       {
@@ -1003,7 +1002,7 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
   const retryIndex = firstSceneNeedingRetry(scenes, sceneFailures, "voice");
   if (retryIndex >= 0 && retryIndex < job.sceneCursor) {
     job.sceneCursor = retryIndex;
-    await saveJobDoc(
+    await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
       { sceneCursor: retryIndex, sceneFailures, warnings, updatedAt: nowIso() },
@@ -1068,7 +1067,7 @@ async function stageRender(job: VideoProductionJob): Promise<ProductionStageResu
   const render = await startRenderJob({ userId: job.userId, projectId: job.projectId, derivedTargets });
   // Rattaché AVANT le passage à l'étape done (visible même si le tick meurt ici).
   // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
-  await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, { renderJobId: render.jobId, updatedAt: nowIso() }, job.userId);
+  await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, { renderJobId: render.jobId, updatedAt: nowIso() }, job.userId);
   job.renderJobId = render.jobId;
   return { action: "advance", detail: `Rendu ${render.jobId.slice(0, 8)} en file.` };
 }
@@ -1137,7 +1136,7 @@ export async function advanceProductionJob(jobId: string, options: { timeBudgetM
   if (outcome.previousStatus === "queued") {
     const guard = evaluateNextAttemptAtGuard(job, Date.now());
     if (guard.skip) {
-      await saveJobDoc(
+      await writeCheckpointSet(
         PRODUCTION_JOBS_COLLECTION,
         job.id,
         {
@@ -1234,7 +1233,7 @@ async function concludeProductionTick(
       e.stage === "done" && !e.finishedAt ? { ...e, finishedAt: nowIso(), detail: message } : e,
     );
     // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
-    await saveJobDoc(
+    await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
       {
@@ -1289,7 +1288,7 @@ async function concludeProductionTick(
   // "stay" : travail partiel (lot de visuels/narrations) ou re-sondage du rendu.
   if (typeof stageResult.mirrorProgress === "number") {
     // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
-    await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, { progress: stageResult.mirrorProgress, updatedAt: nowIso() }, job.userId);
+    await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, { progress: stageResult.mirrorProgress, updatedAt: nowIso() }, job.userId);
     job.progress = stageResult.mirrorProgress;
   }
   const enqueued = await publishTickAndLog(job, stageResult.delaySeconds ?? 0);
@@ -1349,7 +1348,7 @@ async function failProductionJob(job: VideoProductionJob, error: Error, policy?:
         // Compteur d'incidents quota consécutifs (n'alimente PAS retryCount).
         patch.quotaFailures = quotaFailures;
       }
-      await saveJobDoc(PRODUCTION_JOBS_COLLECTION, job.id, patch, job.userId);
+      await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, patch, job.userId);
       // publishTickAndLog retourne la réussite RÉELLE du publish — « continued »
       // reflète l'honnêteté du ré-enfilement (faux = sondage en relais).
       const enqueued = await publishTickAndLog(job, policy.delaySeconds);
@@ -1373,7 +1372,7 @@ async function failProductionJob(job: VideoProductionJob, error: Error, policy?:
     // Régime legacy : jusqu'à PRODUCTION_RETRY_BUDGET relances (comportement
     // historique — budget retryCount consommé, relance à délai fixe).
     if (retryCount < PRODUCTION_RETRY_BUDGET) {
-      await saveJobDoc(
+      await writeCheckpointSet(
         PRODUCTION_JOBS_COLLECTION,
         job.id,
         {
@@ -1400,7 +1399,7 @@ async function failProductionJob(job: VideoProductionJob, error: Error, policy?:
         message,
       };
     }
-    await saveJobDoc(
+    await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
       {

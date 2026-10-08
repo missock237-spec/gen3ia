@@ -94,6 +94,19 @@ vi.mock("@/lib/video/queue-resume", async (importOriginal) => {
   };
 });
 
+
+// Task 106-fix — les checkpoints passent par writeCheckpointSet (firestore-fallback,
+// même primitive que le claim) : la file de tests le mocke sur le MÊME vi.fn que
+// saveJobDoc pour que les scénarios de reprise gardent leur contrat.
+vi.mock("@/lib/db/firestore-fallback", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/db/firestore-fallback")>();
+  return {
+    ...actual,
+    writeCheckpointSet: (...args: Parameters<typeof import("@/lib/video/queue-resume")["saveJobDoc"]>) =>
+      (queueResume.saveJobDoc as unknown as (...a: unknown[]) => Promise<void>)(...args),
+    firestoreUsable: actual.firestoreUsable,
+  };
+});
 vi.mock("@/lib/observability/logger", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
