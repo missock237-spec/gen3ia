@@ -10,7 +10,11 @@ import { getJobProgress } from "@/lib/infra/upstash";
 import { cacheGet, cacheSet } from "@/lib/cache/redis";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Task 106-fix — 120 s (au lieu de 60) : le premier tick d'une instance
+// froide inclut la résolution du binaire FFmpeg runtime (~70 Mo) ; un kill à
+// 60 s couperait le rendu du premier segment SANS checkpoint ni erreur
+// (reprise éternelle). Le budget de sondage reste 55 s par tick.
+export const maxDuration = 120;
 
 type Params = { params: Promise<{ projectId: string }> };
 

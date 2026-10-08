@@ -78,6 +78,7 @@ import {
   type RenderJobWithResume,
   type ResumePolicy,
 } from "@/lib/video/queue-resume";
+import { firestoreUsable } from "@/lib/db/firestore-fallback";
 
 export const JOBS_COLLECTION = "videoRenderJobs";
 async function mirrorRenderProgress(job: Pick<RenderJob, "id" | "status" | "stage" | "progress">, extra?: Record<string, unknown>): Promise<void> {
@@ -406,6 +407,16 @@ function leaseActive(job: RenderJob, now: number): boolean {
  * (redélivrance QStash après complétion), un bail vivant aussi.
  */
 async function claimJobForTick(jobId: string): Promise<ClaimOutcome> {
+  // Task 106-fix — COHÉRENCE DE RÉGIME : si le disjoncteur quota Firestore
+  // est OUVERT, les checkpoints d'étape (saveJobDoc) partent au MIROIR tandis
+  // qu'une transaction Firestore réussirait encore — le claim relirait
+  // l'ancien document Firestore (checkpoints absents) et re-rendrait les
+  // mêmes segments à l'infini (constaté en production, Task 106). On bascule
+  // donc le claim ENTIER vers le miroir dès l'ouverture du disjoncteur :
+  // claim, lecture et écritures vivent dans le MÊME régime.
+  if (!firestoreUsable()) {
+    return claimJobViaMirror(jobId);
+  }
   // Task 95-c — le claim reste TRANSACTIONNEL sur Firestore ; en cas d'erreur
   // de QUOTA, bascule sur un claim ATOMIQUE sur la ligne miroir Supabase
   // (failover en fin de fonction). Transitoire/fatal : propagation inchangée.
@@ -465,47 +476,60 @@ async function claimJobForTick(jobId: string): Promise<ClaimOutcome> {
     // transaction : « queued », ou « processing » au bail libre/expiré
     // (filtre lease exprimé dans claimJobViaFallback).
     if (classifyTickError(error) !== "quota") throw error;
-    const now = Date.now();
-    const leaseOwner = `${jobId}:${randomUUID()}`;
-    const leaseExpiresAt = now + TICK_DEADLINE_MS;
-    const expiresAtIso = new Date(leaseExpiresAt).toISOString();
-    // `attempts` n'est PAS patché (compteur informatif) : +1 appliqué sur la
-    // valeur miroir lue, comme le fait la transaction.
-    const payload = await claimJobViaFallback(
-      JOBS_COLLECTION,
-      jobId,
-      { owner: leaseOwner, expiresAtIso },
-      ["queued", "processing"],
-      { status: "processing", deadlineAt: expiresAtIso, updatedAt: nowIso() },
-    );
-    // Miroir absent, bail déjà pris ou Supabase indisponible : on propage
-    // l'erreur de quota d'origine (le tick sera republié par la route).
-    if (!payload) throw error;
-    const stored = payload as unknown as RenderJobWithResume;
-    const job: RenderJob = {
-      ...stored,
-      attempts: (typeof stored.attempts === "number" ? stored.attempts : 0) + 1,
-      retryCount: typeof stored.retryCount === "number" ? stored.retryCount : 0,
-      progress: normalizeStoredProgress(stored.progress),
-      checkpoints: stored.checkpoints ?? {
-        downloadedAssetIds: [],
-        completedSegments: [],
-        transitionPass: 0,
-        transitionsDone: false,
-        audioDone: false,
-        subtitlesDone: false,
-        qcDone: false,
-        exportsDone: [],
-      },
-      exports: Array.isArray(stored.exports) ? stored.exports : [],
-      billedMinor: typeof stored.billedMinor === "number" ? stored.billedMinor : 0,
-      status: "processing",
-      leaseOwner,
-      leaseExpiresAt,
-      deadlineAt: expiresAtIso,
-    };
-    return { kind: "claimed", job } as const;
+    return claimJobViaMirror(jobId, error);
   }
+}
+
+/**
+ * Task 106-fix — claim ATOMIQUE sur la ligne miroir Supabase (bail + statut
+ * posés dans un seul UPDATE conditionnel — deux workers ne peuvent pas
+ * gagner tous deux). Statuts réclamables = exactement les conditions de la
+ * transaction : « queued », ou « processing » au bail libre/expiré (filtre
+ * lease exprimé dans claimJobViaFallback).
+ */
+async function claimJobViaMirror(jobId: string, originalError?: unknown): Promise<ClaimOutcome> {
+  const now = Date.now();
+  const leaseOwner = `${jobId}:${randomUUID()}`;
+  const leaseExpiresAt = now + TICK_DEADLINE_MS;
+  const expiresAtIso = new Date(leaseExpiresAt).toISOString();
+  // `attempts` n'est PAS patché (compteur informatif) : +1 appliqué sur la
+  // valeur miroir lue, comme le fait la transaction.
+  const payload = await claimJobViaFallback(
+    JOBS_COLLECTION,
+    jobId,
+    { owner: leaseOwner, expiresAtIso },
+    ["queued", "processing"],
+    { status: "processing", deadlineAt: expiresAtIso, updatedAt: nowIso() },
+  );
+  // Miroir absent, bail déjà pris ou Supabase indisponible : propagation
+  // (erreur de quota d'origine le cas échéant — le tick sera republié).
+  if (!payload) {
+    throw originalError ?? new Error(`Claim miroir impossible pour ${jobId} (absent ou bail actif).`);
+  }
+  const stored = payload as unknown as RenderJobWithResume;
+  const job: RenderJob = {
+    ...stored,
+    attempts: (typeof stored.attempts === "number" ? stored.attempts : 0) + 1,
+    retryCount: typeof stored.retryCount === "number" ? stored.retryCount : 0,
+    progress: normalizeStoredProgress(stored.progress),
+    checkpoints: stored.checkpoints ?? {
+      downloadedAssetIds: [],
+      completedSegments: [],
+      transitionPass: 0,
+      transitionsDone: false,
+      audioDone: false,
+      subtitlesDone: false,
+      qcDone: false,
+      exportsDone: [],
+    },
+    exports: Array.isArray(stored.exports) ? stored.exports : [],
+    billedMinor: typeof stored.billedMinor === "number" ? stored.billedMinor : 0,
+    status: "processing",
+    leaseOwner,
+    leaseExpiresAt,
+    deadlineAt: expiresAtIso,
+  };
+  return { kind: "claimed", job } as const;
 }
 
 /** Libère le bail en fin de tick réussi — le tick suivant peut claimr aussitôt. */

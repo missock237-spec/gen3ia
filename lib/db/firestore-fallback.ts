@@ -59,7 +59,15 @@ function fallbackError(): Error {
  * oui. Ouvert : non. Mi-ouvert : une unique sonde est consommée via
  * beginFirestoreProbe() pour tenter de refermer le circuit sur un appel réel.
  */
-function firestoreUsable(): boolean {
+/**
+ * Task 106-fix — état du disjoncteur Firestore, exposé pour la COHÉRENCE DE
+ * RÉGIME des files : quand le disjoncteur est ouvert, les écritures
+ * résilientes (resilientSet) partent au MIROIR — les claims transactionnels
+ * (runTransaction Firestore direct) doivent donc AUSSI claimr sur le miroir,
+ * sinon ils relisent l'ancien document Firestore (checkpoints absents) et
+ * re-exécutent indéfiniment le même travail (segments re-rendus en boucle).
+ */
+export function firestoreUsable(): boolean {
   return !shouldShortCircuitFirestore() || beginFirestoreProbe();
 }
 

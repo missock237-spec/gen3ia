@@ -57,6 +57,7 @@ import {
   saveJobDoc,
   type ResumePolicy,
 } from "@/lib/video/queue-resume";
+import { firestoreUsable } from "@/lib/db/firestore-fallback";
 
 export const PRODUCTION_JOBS_COLLECTION = "videoProductionJobs";
 
@@ -517,6 +518,15 @@ function isSceneFailureRecord(value: unknown): value is Record<string, number> {
 }
 
 async function claimProductionJob(jobId: string): Promise<ProductionClaimOutcome> {
+  // Task 106-fix — COHÉRENCE DE RÉGIME (miroir du fix render-queue) : si le
+  // disjoncteur quota Firestore est OUVERT, les checkpoints de scène
+  // (sceneCursor/sceneFailures via saveJobDoc) partent au MIROIR tandis
+  // qu'une transaction Firestore réussirait encore — le claim relirait
+  // l'ancien document Firestore et re-trerait les mêmes scènes. Bascule du
+  // claim ENTIER vers le miroir dès l'ouverture du disjoncteur.
+  if (!firestoreUsable()) {
+    return claimProductionViaMirror(jobId);
+  }
   // Task 95-d — le claim reste TRANSACTIONNEL sur Firestore ; en cas d'erreur
   // de QUOTA, bascule sur un claim ATOMIQUE sur la ligne miroir Supabase
   // (failover en fin de fonction). Transitoire/fatal : propagation inchangée.
@@ -557,31 +567,42 @@ async function claimProductionJob(jobId: string): Promise<ProductionClaimOutcome
     // transaction : « queued », ou « processing » au bail libre/expiré (le
     // filtre de bail est exprimé dans claimJobViaFallback).
     if (classifyTickError(error) !== "quota") throw error;
-    const now = Date.now();
-    const leaseOwner = `${jobId}:${randomUUID()}`;
-    const leaseExpiresAt = now + PRODUCTION_LEASE_MS;
-    const expiresAtIso = new Date(leaseExpiresAt).toISOString();
-    // `attempts` n'est PAS patché (compteur informatif) : +1 appliqué sur la
-    // valeur miroir lue, comme le fait la transaction.
-    const payload = await claimJobViaFallback(
-      PRODUCTION_JOBS_COLLECTION,
-      jobId,
-      { owner: leaseOwner, expiresAtIso },
-      ["queued", "processing"],
-      { status: "processing", deadlineAt: expiresAtIso, updatedAt: nowIso() },
-    );
-    // Miroir absent, bail déjà pris ou Supabase indisponible : on propage
-    // l'erreur de quota d'origine (le tick sera republié par la route).
-    if (!payload) throw error;
-    const stored = payload as unknown as Partial<ProductionJobWithResume>;
-    const job = normalizeJobDoc(stored, jobId);
-    const previousStatus = job.status;
-    job.status = "processing";
-    job.leaseOwner = leaseOwner;
-    job.leaseExpiresAt = leaseExpiresAt;
-    job.attempts = (typeof stored.attempts === "number" ? stored.attempts : 0) + 1;
-    return { kind: "claimed", job, previousStatus } as const;
+    return claimProductionViaMirror(jobId, error);
   }
+}
+
+/**
+ * Task 106-fix — claim ATOMIQUE miroir (partagé par le disjoncteur ouvert et
+ * le failover quota) : bail + statut posés dans un seul UPDATE conditionnel
+ * — deux workers ne peuvent pas gagner tous deux.
+ */
+async function claimProductionViaMirror(jobId: string, originalError?: unknown): Promise<ProductionClaimOutcome> {
+  const now = Date.now();
+  const leaseOwner = `${jobId}:${randomUUID()}`;
+  const leaseExpiresAt = now + PRODUCTION_LEASE_MS;
+  const expiresAtIso = new Date(leaseExpiresAt).toISOString();
+  // `attempts` n'est PAS patché (compteur informatif) : +1 appliqué sur la
+  // valeur miroir lue, comme le fait la transaction.
+  const payload = await claimJobViaFallback(
+    PRODUCTION_JOBS_COLLECTION,
+    jobId,
+    { owner: leaseOwner, expiresAtIso },
+    ["queued", "processing"],
+    { status: "processing", deadlineAt: expiresAtIso, updatedAt: nowIso() },
+  );
+  // Miroir absent, bail déjà pris ou Supabase indisponible : propagation
+  // (erreur de quota d'origine le cas échéant — le tick sera republié).
+  if (!payload) {
+    throw originalError ?? new Error(`Claim miroir impossible pour ${jobId} (absent ou bail actif).`);
+  }
+  const stored = payload as unknown as Partial<ProductionJobWithResume>;
+  const job = normalizeJobDoc(stored, jobId);
+  const previousStatus = job.status;
+  job.status = "processing";
+  job.leaseOwner = leaseOwner;
+  job.leaseExpiresAt = leaseExpiresAt;
+  job.attempts = (typeof stored.attempts === "number" ? stored.attempts : 0) + 1;
+  return { kind: "claimed", job, previousStatus } as const;
 }
 
 async function releaseLease(jobId: string): Promise<void> {
