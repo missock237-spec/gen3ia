@@ -388,20 +388,43 @@ export async function resilientSet(
 }
 
 /**
+ * Task 106-fix (racine réelle) — convertit les clés pointées (« a.b ») en
+ * objets imbriqués. LE SDK FIRESTORE N'INTERPRÈTE PAS les clés avec points
+ * dans set() : `{ "checkpoints.completedSegments": [...] }` crée un champ
+ * LITTÉRAL nommé « checkpoints.completedSegments » à côté du champ imbriqué —
+ * l'écriture « réussit » sans jamais toucher le vrai champ (constaté en
+ * production : checkpoints jamais visibles du claim, re-rendu infini).
+ */
+export function nestDottedKeys(payload: Record<string, unknown>): Record<string, unknown> {
+  const nested: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (!key.includes(".")) {
+      nested[key] = value;
+      continue;
+    }
+    const parts = key.split(".");
+    let cursor = nested;
+    for (const part of parts.slice(0, -1)) {
+      const existing = cursor[part];
+      if (typeof existing !== "object" || existing === null || Array.isArray(existing)) {
+        cursor[part] = {};
+      }
+      cursor = cursor[part] as Record<string, unknown>;
+    }
+    cursor[parts[parts.length - 1]!] = value;
+  }
+  return nested;
+}
+
+/**
  * Task 106-fix — écriture de CHECKPOINT, cohérente avec le CLAIM.
  *
- * Constat production (Task 106) : les checkpoints d'étape écrits via
- * resilientSet partaient au MIROIR dès qu'un write dépassait la course de
- * 6 s (le message de stall contient « quota » → classé quota par aiguille de
- * message), tandis que le claim transactionnel — SANS course — réussissait
- * sur Firestore. Résultat : le claim relisait l'ancien document
- * (completedSegments vide) et re-rendait les mêmes segments à l'infini.
- *
  * Sémantique : Firestore D'ABORD avec la même primitive que le claim (pas de
- * course temporelle — un write lent n'est PAS un quota) ; bascule miroir
+ * course temporelle — un write lent n'est PAS un quota) ; clés pointées
+ * converties en chemins imbriqués (voir nestDottedKeys) ; bascule miroir
  * UNIQUEMENT sur incident quota RÉEL (RESOURCE_EXHAUSTED / daily limit) —
- * exactement le régime où le claim bascule aussi (Task 106-fix, cohérence
- * de régime). Les autres erreurs propagent (comme resilientSet).
+ * exactement le régime où le claim bascule aussi (cohérence de régime).
+ * Les autres erreurs propagent (comme resilientSet).
  */
 export async function writeCheckpointSet(
   collection: string,
@@ -409,18 +432,19 @@ export async function writeCheckpointSet(
   payload: WritablePayload,
   ownerId?: string,
 ): Promise<void> {
+  const nested = nestDottedKeys(payload as Record<string, unknown>);
   try {
-    await adminDb.collection(collection).doc(documentId).set(payload, { merge: true });
+    await adminDb.collection(collection).doc(documentId).set(nested, { merge: true });
     noteFirestoreSuccess();
     // Miroir best-effort (réconciliation + régime quota ultérieur).
-    await mirrorToSupabase(collection, documentId, payload, ownerId, { merge: true }).catch(
+    await mirrorToSupabase(collection, documentId, nested, ownerId, { merge: true }).catch(
       () => undefined,
     );
   } catch (error) {
     if (!isFirestoreQuotaError(error)) throw error;
     noteFirestoreQuotaError(error);
     if (!fallbackEnabled()) throw error;
-    return writeFallbackSet(collection, documentId, payload, { ownerId });
+    return writeFallbackSet(collection, documentId, nested, { ownerId });
   }
 }
 

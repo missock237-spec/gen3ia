@@ -939,3 +939,43 @@ describe("deadline anti-stall (Task 97)", () => {
     }
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Task 106-fix (racine réelle) — nestDottedKeys : le SDK Firestore ne lit PAS
+// les clés pointées dans set() — elles deviennent des champs LITTÉRAUX.
+// ────────────────────────────────────────────────────────────────────────────
+
+import { nestDottedKeys } from "./firestore-fallback";
+
+describe("nestDottedKeys (Task 106-fix — champ littéral ≠ champ imbriqué)", () => {
+  it("convertit une clé pointée en objet imbriqué", () => {
+    expect(nestDottedKeys({ "checkpoints.completedSegments": [0, 1, 2], progress: 0.75 })).toEqual({
+      checkpoints: { completedSegments: [0, 1, 2] },
+      progress: 0.75,
+    });
+  });
+
+  it("coexiste avec la même racine et plusieurs profondeurs", () => {
+    expect(
+      nestDottedKeys({
+        "checkpoints.completedSegments": [1],
+        "checkpoints.audioDone": true,
+        "a.b.c": 1,
+        top: "x",
+      }),
+    ).toEqual({
+      checkpoints: { completedSegments: [1], audioDone: true },
+      a: { b: { c: 1 } },
+      top: "x",
+    });
+  });
+
+  it("préserve les clés sans point et les valeurs non objets", () => {
+    expect(nestDottedKeys({ sceneCursor: 3, updatedAt: "2026-01-01T00:00:00.000Z" })).toEqual({
+      sceneCursor: 3,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    // Un tableau ne doit JAMAIS être traversé comme chemin.
+    expect(nestDottedKeys({ "exports.0": "x" })).toEqual({ exports: { "0": "x" } });
+  });
+});
