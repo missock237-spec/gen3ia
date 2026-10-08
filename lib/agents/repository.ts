@@ -54,12 +54,27 @@ const COUNT_CAP = 5;
 /* ------------------------------------------------------------------ */
 
 /** Segment de clé R2 sûr (même règle que la fondation user-data-store). */
+const SEGMENT_R2 = /^[A-Za-z0-9._-]{1,128}$/;
+
 function assertSegment(value: string, label: string): string {
   const clean = value.trim();
-  if (!/^[A-Za-z0-9._-]{1,128}$/.test(clean) || clean.includes("..")) {
+  if (!SEGMENT_R2.test(clean) || clean.includes("..")) {
     throw new Error(`Identifiant ${label} invalide pour une clé R2.`);
   }
   return clean;
+}
+
+/**
+ * Test NON-lançant d'un segment R2 valide : les points d'entrée atteignables
+ * par un id utilisateur hostile répondent fail-closed (null/false —
+ * indiscernable d'une ressource absente, anti-énumération) au lieu de lever.
+ */
+function estSegmentValide(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    SEGMENT_R2.test(value) &&
+    !value.includes("..")
+  );
 }
 
 /** Document agent chez son propriétaire : users/{uid}/agents/{agentId}.json */
@@ -118,6 +133,9 @@ function definedEntries(record: Record<string, unknown>): Record<string, unknown
  * incohérence — anti-énumération, indiscernable d'une ressource absente).
  */
 async function resolveAgentDocById(agentId: string): Promise<{ ownerId: string; doc: AgentDoc } | null> {
+  // Id hostile (vide, traversée, trop long) : fail-closed null — jamais
+  // transformé en clé, indiscernable d'une ressource absente.
+  if (!estSegmentValide(agentId)) return null;
   const pointer = await readJsonIfExists<{ ownerId?: unknown }>(globalIndexKey(agentId));
   const ownerId = typeof pointer?.ownerId === "string" ? pointer.ownerId.trim() : "";
   if (!ownerId) return null;
@@ -197,12 +215,14 @@ export async function listAgentsForUser(userId: string, projectId?: string): Pro
     logger.warn({ err: error }, "list_user_org_ids_failed_failsoft");
     return personal;
   }
-  if (orgIds.length === 0) return personal;
+  // Un orgId hostile ne doit JAMAIS être composé en préfixe de clés.
+  const orgIdsSains = orgIds.filter((orgId) => estSegmentValide(orgId));
+  if (orgIdsSains.length === 0) return personal;
 
   const byId = new Map<string, AgentRecord>();
   for (const record of personal) byId.set(record.id, record);
   try {
-    for (const orgId of orgIds) {
+    for (const orgId of orgIdsSains) {
       // Pointeurs de l'org (cap 500 par la fondation) ; un pointeur orphelin
       // (agent déjà supprimé) est simplement ignoré.
       const pointers = await listJson<{ ownerId?: unknown; agentId?: unknown }>(
@@ -211,7 +231,9 @@ export async function listAgentsForUser(userId: string, projectId?: string): Pro
       for (const pointer of pointers) {
         const ownerId = typeof pointer.ownerId === "string" ? pointer.ownerId : "";
         const agentId = typeof pointer.agentId === "string" ? pointer.agentId : "";
-        if (!ownerId || !agentId || byId.has(agentId)) continue;
+        // Pointeur hostile (orgId/agentId non conformes) : ignoré, jamais
+        // transformé en clé de lecture.
+        if (!estSegmentValide(ownerId) || !estSegmentValide(agentId) || byId.has(agentId)) continue;
         const doc = await readJsonIfExists<AgentDoc>(agentDocKey(ownerId, agentId));
         if (!doc || doc.status === "archived") continue;
         if (projectId && doc.projectId !== projectId) continue;
@@ -242,6 +264,9 @@ export async function getAgentById(agentId: string): Promise<AgentRecord | null>
 export async function getAgentForOwner(ownerId: string, agentId: string): Promise<AgentRecord | null> {
   // Lecture par clé directe chez le propriétaire déclaré : un autre uid
   // ne peut même pas localiser le document (cloisonnement par préfixe).
+  // Un agentId hostile → null (fail-closed, comportement observable de l'ère
+  // Firestore où un id invalide ne trouvait rien).
+  if (!estSegmentValide(agentId)) return null;
   const data = await readJsonIfExists<AgentDoc>(agentDocKey(ownerId, agentId));
   if (!data || data.ownerId !== ownerId) return null;
   return toRecord(agentId, data);
@@ -316,6 +341,10 @@ export async function deleteAgentForOwner(ownerId: string, agentId: string): Pro
 /** Mise à jour org-aware : écriture propriétaire OU owner/admin de l'org. */
 export async function updateAgentForUser(userId: string, agentId: string, patch: Partial<AgentRecordInput> & { orgId?: string }): Promise<AgentRecord | null> {
   const resolved = await resolveAgentDocById(agentId); if (!resolved) return null;
+  // Destination org hostile (non vide mais non conforme) : fail-closed null.
+  if (patch.orgId !== undefined && patch.orgId.trim() && !estSegmentValide(patch.orgId.trim())) {
+    return null;
+  }
   const { ownerId, doc: data } = resolved;
   try {
     await assertResourceWrite(userId, { ownerId: data.ownerId, orgId: typeof data.orgId === "string" ? data.orgId : null });

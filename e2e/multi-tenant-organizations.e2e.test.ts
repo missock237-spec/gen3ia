@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, describe, expect, it } from "vitest";
+import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 
 /**
  * E2E MULTI-TENANT (émulateurs Firebase —aucun mock Firestore).
@@ -17,6 +17,40 @@ import { beforeAll, afterAll, describe, expect, it } from "vitest";
  * Tout passe par les fonctions réelles de lib/tenants + lib/agents avec la
  * vraie persistance de l'émulateur Firestore.
  */
+
+// Task 109 — le plan de données utilisateur (agents, conversations, mémoire)
+// vit dans R2. L'environnement E2E (émulateurs Firebase) n'a PAS de bucket R2 :
+// le CLIENT R2 (lib/storage/r2) est simulé EN MÉMOIRE — même approche que
+// e2e/firebase-auth-wallet.e2e.test.ts (Task 108). Les parcours multi-tenant
+// restent testés contre les vrais émulateurs Firestore.
+const r2Objects = new Map<string, Buffer>();
+vi.mock("@/lib/storage/r2", () => ({
+  putObject: vi.fn(async ({ key, body }: { key: string; body: Uint8Array | Buffer }) => {
+    r2Objects.set(key, Buffer.from(body));
+  }),
+  downloadFromR2: vi.fn(async (key: string): Promise<Buffer> => {
+    const hit = r2Objects.get(key);
+    if (!hit) {
+      const absence = new Error(`The specified key does not exist. (${key})`);
+      absence.name = "NoSuchKey";
+      throw absence;
+    }
+    return hit;
+  }),
+  deleteObject: vi.fn(async (key: string) => {
+    r2Objects.delete(key);
+  }),
+  deleteFromR2: vi.fn(async (key: string) => {
+    r2Objects.delete(key);
+  }),
+  listObjectsUnderPrefix: vi.fn(async (prefix: string) =>
+    [...r2Objects.keys()].filter((key) => key.startsWith(prefix)).map((key) => ({
+      key,
+      sizeBytes: r2Objects.get(key)?.byteLength ?? 0,
+      updatedAt: new Date().toISOString(),
+    })),
+  ),
+}));
 
 const PROJECT_ID = "demo-gen3ia";
 const AUTH_EMULATOR = "127.0.0.1:9099";
@@ -156,8 +190,10 @@ describe("E2E multi-tenant : organisations → partage → isolation", () => {
     // ressource absente — anti-énumération).
     const deniedWrite = await agentsRepo.updateAgentForUser(member.localId, orgAgent.id, { description: "hack" } as never);
     expect(deniedWrite).toBeNull();
-    const unchanged = await adminDb.collection("agents").doc(orgAgent.id).get();
-    expect(unchanged.get("description")).toBe("Partagé avec l'organisation");
+    // Task 109 : les agents vivent dans R2 — la non-écriture se vérifie via
+    // le dépôt (lecture propriétaire), plus via Firestore.
+    const unchanged = await agentsRepo.getAgentForOwner(owner.localId, orgAgent.id);
+    expect(unchanged?.description).toBe("Partagé avec l'organisation");
 
     // L'owner voit les deux.
     const ownerList = await agentsRepo.listAgentsForUser(owner.localId);
@@ -165,9 +201,9 @@ describe("E2E multi-tenant : organisations → partage → isolation", () => {
     expect(ownerIds).toContain(orgAgent.id);
     expect(ownerIds).toContain(personalAgent.id);
 
-    // Nettoyage de l'agent personnel de test.
-    await adminDb.collection("agents").doc(personalAgent.id).delete();
-    await adminDb.collection("agents").doc(orgAgent.id).delete();
+    // Nettoyage de l'agent personnel de test (suppression via le dépôt R2).
+    await agentsRepo.deleteAgentForOwner(owner.localId, personalAgent.id);
+    await agentsRepo.deleteAgentForOwner(owner.localId, orgAgent.id);
   });
 
   it("4. isolation stricte entre deux organisations (anti-énumération)", async () => {
@@ -189,7 +225,7 @@ describe("E2E multi-tenant : organisations → partage → isolation", () => {
     // requireOrgContext refuse un non-membre.
     await expect(tenants.requireOrgContext(member.localId, orgB.id)).rejects.toThrow("introuvable ou accès refusé");
 
-    await adminDb.collection("agents").doc(bAgent.id).delete();
+    await agentsRepo.deleteAgentForOwner(outsider.localId, bAgent.id);
   });
 
   it("5. rattachement org refusé pour un non-membre (assertOrgAttach avant écriture)", async () => {
@@ -199,8 +235,9 @@ describe("E2E multi-tenant : organisations → partage → isolation", () => {
       skills: [],
     } as never, { orgId: orgA.id })).rejects.toThrow("introuvable ou accès refusé");
 
-    const intrusive = await adminDb.collection("agents").where("name", "==", "Agent Intrus").get();
-    expect(intrusive.empty).toBe(true); // aucune écriture fantôme
+    // Task 109 : aucune écriture fantôme dans R2 — le listing du non-membre
+    // reste vide (l'attachement a été refusé AVANT toute écriture).
+    expect(await agentsRepo.listAgentsByOwner(outsider.localId)).toHaveLength(0);
   });
 
   it("6. rôles : promotion admin → droit d'invitation ; retrait révoque l'accès", async () => {
