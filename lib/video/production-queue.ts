@@ -85,6 +85,14 @@ export const PRODUCTION_STAGE_WEIGHTS: Record<ProductionStage, [number, number]>
 export const PRODUCTION_RETRY_BUDGET = 3;
 /** Visuels/narrations traités par tick au maximum (bornage serverless). */
 export const ASSET_BATCH_SIZE = 4;
+/**
+ * Task 106-c — TOLÉRANCE PAR SCÈNE : nombre d'échecs d'une même scène
+ * (génération d'image / TTS) avant abandon définitif de CETTE scène. Les
+ * autres scènes continuent — le rendu ignore déjà les scènes sans visuel.
+ */
+export const MAX_SCENE_FAILURES = 3;
+/** Plafond du journal d'avertissements stocké sur le job (bornage document). */
+export const MAX_JOB_WARNINGS = 50;
 /** Bail d'un tick de production (mêmes échéances que le rendu). */
 export const PRODUCTION_LEASE_MS = 230_000;
 /** Budget de travail par défaut d'une avance « sondage » (GET responsive). */
@@ -135,6 +143,20 @@ export interface VideoProductionJob {
   attempts: number;
   /** Budget de relance après échec (sature à PRODUCTION_RETRY_BUDGET). */
   retryCount: number;
+  /**
+   * Task 106-c — tolérance par scène : compteur d'échecs par scène, clé
+   * `« ${stage}:${sceneId} »` (le comptage est PAR ÉTAPE : une scène qui a
+   * épuisé ses retentes d'image peut tout à fait réussir son TTS).
+   */
+  sceneFailures?: Record<string, number>;
+  /** Task 106-c — journal d'avertissements FR (scènes en échec, reprises…). */
+  warnings?: string[];
+  /**
+   * Échéance de reprise (backoff quota/transitoire, ISO 8601) — écrite par
+   * failProductionJob, HONORÉE par le garde nextAttemptAt (Task 106-c) : un
+   * tick arrivant avant l'échéance est un no-op neutre.
+   */
+  nextAttemptAt?: string;
   createdAt: string;
   updatedAt: string;
   timeline: ProductionStageTimelineEntry[];
@@ -188,6 +210,131 @@ export function nextAssetWindow<T>(items: readonly T[], cursor: number, batchSiz
   const batch = items.slice(safeCursor, safeCursor + safeBatch);
   const nextCursor = safeCursor + batch.length;
   return { batch, nextCursor, done: nextCursor >= items.length, remaining: Math.max(0, items.length - nextCursor) };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Task 106-c — tolérance par scène : helpers PURES (testés)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Clé de comptage d'échecs d'une scène pour une étape donnée. Le comptage
+ * est PAR ÉTAPE (« assets:s3 » ≠ « voice:s3 ») : échouer 3 fois en image ne
+ * doit pas pré-condamner la narration de la même scène.
+ */
+export function sceneFailureKey(stage: ProductionStage, sceneId: string): string {
+  return `${stage}:${sceneId}`;
+}
+
+/** true si la scène a atteint MAX_SCENE_FAILURES → définitivement ignorée. */
+export function shouldSkipScene(failures: Record<string, number> | undefined, sceneKey: string): boolean {
+  const count = failures?.[sceneKey];
+  return typeof count === "number" && count >= MAX_SCENE_FAILURES;
+}
+
+/**
+ * Incrémente le compteur d'échecs d'une scène (PUR : retourne un NOUVEAU
+ * record, jamais de mutation du document job).
+ */
+export function recordSceneFailure(failures: Record<string, number> | undefined, sceneKey: string): Record<string, number> {
+  return { ...(failures ?? {}), [sceneKey]: (failures?.[sceneKey] ?? 0) + 1 };
+}
+
+/** true si la scène a déjà échoué 1..MAX-1 fois → à retenter au prochain tick. */
+export function scenePendingRetry(failures: Record<string, number> | undefined, sceneKey: string): boolean {
+  const count = failures?.[sceneKey] ?? 0;
+  return count > 0 && count < MAX_SCENE_FAILURES;
+}
+
+/**
+ * Ajoute une warning FR au journal du job (PUR, borné : seules les
+ * MAX_JOB_WARNINGS dernières entrées sont conservées — bornage document).
+ */
+export function appendJobWarning(warnings: string[] | undefined, message: string): string[] {
+  const next = [...(warnings ?? []), message];
+  return next.length > MAX_JOB_WARNINGS ? next.slice(next.length - MAX_JOB_WARNINGS) : next;
+}
+
+/**
+ * Message FR de warning par scène (court, actionnable) :
+ * « Scène 3 : image non générée (erreur transitoire) — reprise au prochain
+tick » ou « … définitivement ignorée après 3 échecs ».
+ */
+export function sceneWarningMessage(params: {
+  /** Étiquette du travail concerné (« image » / « narration »). */
+  label: string;
+  /** Numéro lisible de la scène (1-based). */
+  sceneNumber: number;
+  /** Nombre d'échecs enregistrés APRÈS incrément. */
+  failures: number;
+  /** true → scène abandonnée définitivement. */
+  permanentlyIgnored: boolean;
+  /** Cause courte (message d'erreur tronqué). */
+  cause: string;
+}): string {
+  const cause = params.cause.trim().slice(0, 120) || "erreur inconnue";
+  if (params.permanentlyIgnored) {
+    return `Scène ${params.sceneNumber} : ${params.label} définitivement ignorée après ${params.failures} échecs (${cause}).`;
+  }
+  return `Scène ${params.sceneNumber} : ${params.label} non générée (${cause}) — reprise au prochain tick (échec ${params.failures}/${MAX_SCENE_FAILURES}).`;
+}
+
+/**
+ * Index (0-based) de la PREMIÈRE scène à retenter (échecs dans [1, MAX-1]),
+ * -1 si aucune. Sert à ramener le curseur au prochain tick pour retenter les
+ * scènes en échec sans re-générer celles qui ont réussi (idempotence).
+ */
+export function firstSceneNeedingRetry(
+  scenes: ReadonlyArray<{ id: string }>,
+  failures: Record<string, number> | undefined,
+  stage: ProductionStage,
+): number {
+  for (let i = 0; i < scenes.length; i += 1) {
+    if (scenePendingRetry(failures, sceneFailureKey(stage, scenes[i].id))) return i;
+  }
+  return -1;
+}
+
+/** Nombre de scènes définitivement ignorées (échecs ≥ MAX_SCENE_FAILURES). */
+export function countPermanentlyIgnoredScenes(
+  scenes: ReadonlyArray<{ id: string }>,
+  failures: Record<string, number> | undefined,
+  stage: ProductionStage,
+): number {
+  return scenes.filter((s) => shouldSkipScene(failures, sceneFailureKey(stage, s.id))).length;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Task 106-c — garde nextAttemptAt (helper PUR, testé)
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface NextAttemptGuardResult {
+  /** true → le tick doit être un no-op neutre (job en attente de reprise). */
+  skip: boolean;
+  /** Temps restant avant l'échéance (ms, 0 si pas de garde). */
+  waitMs: number;
+  /** Détail FR pour le résultat de tick. */
+  message: string;
+}
+
+/**
+ * Décide si un tick doit être RENDU NEUTRE parce que le job attend son
+ * `nextAttemptAt` (backoff quota/transitoire écrit par failProductionJob).
+ * nextAttemptAt absent, malformé ou déjà passé → tick normal.
+ */
+export function evaluateNextAttemptAtGuard(
+  job: Pick<VideoProductionJob, "nextAttemptAt">,
+  now: number,
+): NextAttemptGuardResult {
+  const raw = job.nextAttemptAt;
+  if (!raw) return { skip: false, waitMs: 0, message: "" };
+  const due = Date.parse(raw);
+  if (!Number.isFinite(due) || due <= now) return { skip: false, waitMs: 0, message: "" };
+  const waitMs = due - now;
+  return {
+    skip: true,
+    waitMs,
+    message: `Tick ignoré : reprise programmée dans ${Math.ceil(waitMs / 1000)} s (backoff en cours — budget de relance intact, checkpoints conservés).`,
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -319,7 +466,7 @@ async function publishTickAndLog(job: Pick<VideoProductionJob, "id" | "projectId
 // ────────────────────────────────────────────────────────────────────────────
 
 type ProductionClaimOutcome =
-  | { kind: "claimed"; job: VideoProductionJob }
+  | { kind: "claimed"; job: VideoProductionJob; previousStatus: ProductionJobStatus }
   | { kind: "missing" }
   | { kind: "terminal"; job: VideoProductionJob }
   | { kind: "lease-held"; job: VideoProductionJob };
@@ -351,11 +498,22 @@ function normalizeJobDoc(stored: Partial<ProductionJobWithResume>, id: string): 
     ...(stored.renderJobId ? { renderJobId: stored.renderJobId } : {}),
     attempts: typeof stored.attempts === "number" ? stored.attempts : 0,
     retryCount: typeof stored.retryCount === "number" ? stored.retryCount : 0,
+    // Task 106-c — tolérance par scène + garde nextAttemptAt : champs
+    // persistés, transités tels quels (compatibilité documents historiques).
+    ...(isSceneFailureRecord(stored.sceneFailures) ? { sceneFailures: stored.sceneFailures } : {}),
+    ...(Array.isArray(stored.warnings) ? { warnings: stored.warnings.filter((w): w is string => typeof w === "string") } : {}),
+    ...(typeof stored.nextAttemptAt === "string" ? { nextAttemptAt: stored.nextAttemptAt } : {}),
     createdAt: stored.createdAt ?? nowIso(),
     updatedAt: stored.updatedAt ?? nowIso(),
     timeline: Array.isArray(stored.timeline) ? stored.timeline : [],
     ...(typeof stored.quotaFailures === "number" ? { quotaFailures: stored.quotaFailures } : {}),
   };
+}
+
+/** Garde de forme pour sceneFailures (documents corrompus → champ ignoré). */
+function isSceneFailureRecord(value: unknown): value is Record<string, number> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  return Object.values(value).every((v) => typeof v === "number");
 }
 
 async function claimProductionJob(jobId: string): Promise<ProductionClaimOutcome> {
@@ -375,6 +533,7 @@ async function claimProductionJob(jobId: string): Promise<ProductionClaimOutcome
       if (job.status === "processing" && leaseActive(job, now)) {
         return { kind: "lease-held", job } as const;
       }
+      const previousStatus = job.status;
       const leaseOwner = `${jobId}:${randomUUID()}`;
       const leaseExpiresAt = now + PRODUCTION_LEASE_MS;
       tx.update(ref, {
@@ -387,6 +546,7 @@ async function claimProductionJob(jobId: string): Promise<ProductionClaimOutcome
       return {
         kind: "claimed",
         job: { ...job, status: "processing", leaseOwner, leaseExpiresAt, attempts: job.attempts + 1 },
+        previousStatus,
       } as const;
     });
   } catch (error) {
@@ -415,11 +575,12 @@ async function claimProductionJob(jobId: string): Promise<ProductionClaimOutcome
     if (!payload) throw error;
     const stored = payload as unknown as Partial<ProductionJobWithResume>;
     const job = normalizeJobDoc(stored, jobId);
+    const previousStatus = job.status;
     job.status = "processing";
     job.leaseOwner = leaseOwner;
     job.leaseExpiresAt = leaseExpiresAt;
     job.attempts = (typeof stored.attempts === "number" ? stored.attempts : 0) + 1;
-    return { kind: "claimed", job } as const;
+    return { kind: "claimed", job, previousStatus } as const;
   }
 }
 
@@ -446,6 +607,12 @@ export interface ProductionTickResult {
   continued: boolean;
   renderJobId?: string;
   message: string;
+  /**
+   * Task 106-c — true quand le tick a été rendu NEUTRE par le garde
+   * nextAttemptAt (job en attente de reprise) : aucun travail, aucune
+   * consommation de budget, état du job restauré.
+   */
+  skipped?: boolean;
 }
 
 type ProductionStageResult =
@@ -513,6 +680,16 @@ async function stageScript(job: VideoProductionJob): Promise<ProductionStageResu
  * existantes), sceneCursor checkpoint après CHAQUE scène — reprise là où
  * le tick s'est arrêté. Facturation existante honorée : billImageGeneration
  * sur les images NOUVELLEMENT générées (les réutilisations ne coûtent rien).
+ *
+ * Task 106-c — TOLÉRANCE PAR SCÈNE : chaque scène est traitée dans son
+ * propre try/catch. Un échec FATAL de génération (moteur d'image, HTTP,
+ * plafond projet…) est absorbé : compteur sceneFailures incrémenté, warning
+ * FR consignée, curseur avancé, le lot CONTINUE. Sous MAX_SCENE_FAILURES la
+ * scène est retentée au prochain tick (curseur ramené en fin d'étape) ; à
+ * MAX elle est définitivement ignorée — le rendu la saute déjà (pas de
+ * segment sans image). Les incidents QUOTA/TRANSITOIRES ne sont PAS des
+ * fautes de scène : ils remontent au régime de reprise du tick (backoff,
+ * budget intact).
  */
 async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Promise<ProductionStageResult> {
   let project = await getOwnedProjectOrThrow(job.userId, job.projectId);
@@ -523,36 +700,138 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
   const deadlineMs = typeof timeBudgetMs === "number" && timeBudgetMs > 0 ? Date.now() + timeBudgetMs : null;
   const window = nextAssetWindow(scenes, job.sceneCursor, ASSET_BATCH_SIZE);
   let generated = 0;
+  // Task 106-c — état de tolérance (persisté sur le job à chaque checkpoint).
+  let sceneFailures = job.sceneFailures ?? {};
+  let warnings = job.warnings ?? [];
+  // Task 106-c — détection SYSTÉMIQUE : aucune scène du lot n'aboutit →
+  // incident global (moteur de visuels indisponible…) → l'ancien régime de
+  // reprise du tick prévaut (re-file sous budget, échec définitif au budget)
+  // au lieu de la tolérance par scène qui ne doit pas masquer une panne.
+  let succeededInBatch = 0;
+  let fatalInBatch = 0;
+  let firstFatalError: unknown = null;
 
   for (const scene of window.batch) {
     if (deadlineMs !== null && Date.now() >= deadlineMs) break;
-    const result = await generateSceneImage({ userId: job.userId, project, scene });
-    if (result.generated) {
-      generated += 1;
-      // La bible évolue à chaque référence établie : la scène suivante
-      // bénéficie des références fraîches (même comportement que le lot client).
-      project = await getOwnedProjectOrThrow(job.userId, job.projectId);
+    const sceneIndex = scenes.findIndex((s) => s.id === scene.id);
+    const failureKey = sceneFailureKey("assets", scene.id);
+    if (shouldSkipScene(sceneFailures, failureKey)) {
+      // Déjà définitivement ignorée : sautée sans re-tenter (curseur avance).
+      job.sceneCursor = sceneIndex + 1;
+      continue;
     }
-    job.sceneCursor = scenes.findIndex((s) => s.id === scene.id) + 1;
-    // Task 95-d — checkpoint via la couche résiliente (miroir chaud).
+    try {
+      const result = await generateSceneImage({ userId: job.userId, project, scene });
+      if (result.generated) {
+        generated += 1;
+        // La bible évolue à chaque référence établie : la scène suivante
+        // bénéficie des références fraîches (même comportement que le lot client).
+        project = await getOwnedProjectOrThrow(job.userId, job.projectId);
+      }
+      succeededInBatch += 1;
+    } catch (error) {
+      // Task 106-c — quota/transitoire = incident d'infrastructure : PAS une
+      // faute de scène, on remonte au régime de reprise du tick.
+      if (classifyTickError(error) !== "fatal") throw error;
+      sceneFailures = recordSceneFailure(sceneFailures, failureKey);
+      const permanentlyIgnored = shouldSkipScene(sceneFailures, failureKey);
+      warnings = appendJobWarning(
+        warnings,
+        sceneWarningMessage({
+          label: "image",
+          sceneNumber: sceneIndex + 1,
+          failures: sceneFailures[failureKey],
+          permanentlyIgnored,
+          cause: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      fatalInBatch += 1;
+      if (firstFatalError === null) firstFatalError = error;
+      // Curseur avancé SANS checkpoint immédiat : en cas d'échec systémique
+      // (tout le lot), la ré-file legacy doit reprendre au DÉBUT du lot.
+      job.sceneCursor = sceneIndex + 1;
+      continue;
+    }
+    job.sceneCursor = sceneIndex + 1;
+    // Task 95-d — checkpoint via la couche résiliente (miroir chaud) —
+    // porte AUSSI sceneFailures/warnings (tolérance par scène persistée).
     await saveJobDoc(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
       {
         sceneCursor: job.sceneCursor,
         progress: computeProductionProgress("assets", job.sceneCursor, scenes.length),
+        sceneFailures,
+        warnings,
         updatedAt: nowIso(),
       },
       job.userId,
     );
   }
 
+  // Task 106-c — SYSTÉMIQUE : aucune réussite dans le lot + au moins un
+  // échec fatal → on RENVOIE la première erreur fatale : le régime de
+  // reprise du tick (failProductionJob) la traite exactement comme avant
+  // (re-file 20 s sous budget / échec définitif + notification au budget).
+  if (fatalInBatch > 0 && succeededInBatch === 0) {
+    throw firstFatalError instanceof Error ? firstFatalError : new Error(String(firstFatalError));
+  }
+
+  // Task 106-c — TOLÉRANCE PARTIELLE : au moins une scène du lot a abouti →
+  // les échecs fatals (sans checkpoint individuel) sont persistés ici.
+  if (fatalInBatch > 0) {
+    await saveJobDoc(
+      PRODUCTION_JOBS_COLLECTION,
+      job.id,
+      {
+        sceneCursor: job.sceneCursor,
+        progress: computeProductionProgress("assets", job.sceneCursor, scenes.length),
+        sceneFailures,
+        warnings,
+        updatedAt: nowIso(),
+      },
+      job.userId,
+    );
+  }
+
+  // Facturation EXISTANTE honorée : uniquement les images NOUVELLEMENT
+  // générées CE tick (les réutilisations et les scènes ignorées ne coûtent
+  // rien) — AVANT toute sortie de l'étape (retente ou terminaison incluse).
   if (generated > 0) {
     await billImageGeneration(job.userId, job.projectId, generated);
   }
 
+  // Fin de lot : retentes des scènes en échec (curseur ramené à la première
+  // scène à retenter — les réussies seront simplement réutilisées).
+  const retryIndex = firstSceneNeedingRetry(scenes, sceneFailures, "assets");
+  if (retryIndex >= 0 && retryIndex < job.sceneCursor && job.sceneCursor >= scenes.length) {
+    job.sceneCursor = retryIndex;
+    await saveJobDoc(
+      PRODUCTION_JOBS_COLLECTION,
+      job.id,
+      { sceneCursor: retryIndex, sceneFailures, warnings, updatedAt: nowIso() },
+      job.userId,
+    );
+    return {
+      action: "stay",
+      detail: `${job.sceneCursor}/${scenes.length} visuels — scène(s) en échec à reprendre au prochain tick (tolérance par scène).`,
+    };
+  }
+
   if (job.sceneCursor >= scenes.length) {
-    return { action: "advance", detail: `${scenes.length} visuel(s) prêt(s) (${generated} généré(s)).` };
+    const ignored = countPermanentlyIgnoredScenes(scenes, sceneFailures, "assets");
+    if (ignored >= scenes.length) {
+      // Task 106-c — TOUTES les scènes définitivement ignorées : échec clair,
+      // une vidéo sans aucun visuel n'a pas de sens.
+      return {
+        action: "terminal-failed",
+        message: `Production échouée : les ${scenes.length} scène(s) ont été définitivement ignorées après ${MAX_SCENE_FAILURES} échecs de génération d'image. Vérifiez le moteur de visuels ou réessayez plus tard.`,
+      };
+    }
+    return {
+      action: "advance",
+      detail: `${scenes.length} visuel(s) prêt(s) (${generated} généré(s)${ignored > 0 ? `, ${ignored} scène(s) ignorée(s)` : ""}).`,
+    };
   }
   return { action: "stay", detail: `${job.sceneCursor}/${scenes.length} visuels traités.` };
 }
@@ -564,6 +843,10 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
  * désactivée → avancement assumé (vidéo muette — le moteur de rendu la
  * gère explicitement) : une production autopilote ne doit pas mourir faute
  * de profil vocal, l'incident est consigné dans la timeline du job.
+ *
+ * Task 106-c — TOLÉRANCE PAR SCÈNE : même mécanique que l'étape assets.
+ * Task 106-c — IDEMPOTENCE : une scène qui possède DÉJÀ une narration n'est
+ * JAMAIS re-synthétisée (les retentes/reprises ne re-facturent pas le TTS).
  */
 async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promise<ProductionStageResult> {
   const project = await getOwnedProjectOrThrow(job.userId, job.projectId);
@@ -578,40 +861,112 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
     return { action: "advance", detail: "Aucune voix configurée — vidéo muette assumée (narrations ajoutables depuis le studio)." };
   }
 
+  // Task 106-c — narrations déjà prêtes (idempotence des reprises : jamais
+  // de double synthèse / double facturation lors des retentes par scène).
+  const existingNarrations = await listAssets(job.userId, job.projectId, "audio_narration");
+  const narratedSceneIds = new Set(existingNarrations.filter((a) => a.sceneId).map((a) => a.sceneId!));
+
   const deadlineMs = typeof timeBudgetMs === "number" && timeBudgetMs > 0 ? Date.now() + timeBudgetMs : null;
   const window = nextAssetWindow(scenes, job.sceneCursor, ASSET_BATCH_SIZE);
+  // Task 106-c — état de tolérance (persisté sur le job à chaque checkpoint).
+  let sceneFailures = job.sceneFailures ?? {};
+  let warnings = job.warnings ?? [];
+  // Task 106-c — détection SYSTÉMIQUE (même contrat que stageAssets).
+  let succeededInBatch = 0;
+  let fatalInBatch = 0;
+  let firstFatalError: unknown = null;
 
   for (const scene of window.batch) {
     if (deadlineMs !== null && Date.now() >= deadlineMs) break;
-    // Voie A : enregistrement utilisateur (usage direct de l'échantillon).
-    if (voice.origin === "recording" && voice.sampleR2Key && isOwnedVideoKey(job.userId, voice.sampleR2Key)) {
-      await attachRecordingAsNarration({
-        userId: job.userId,
-        projectId: job.projectId,
-        sceneId: scene.id,
-        sampleR2Key: voice.sampleR2Key,
-      });
-    } else {
-      // Voie B : synthèse ElevenLabs facturée au caractère réel.
-      const narration = await generateSceneNarration({
-        userId: job.userId,
-        projectId: job.projectId,
-        sceneId: scene.id,
-        narration: scene.narration,
-        voice,
-      });
-      if (narration.charactersUsed > 0) {
-        await billTts(job.userId, job.projectId, narration.charactersUsed);
-      }
+    const sceneIndex = scenes.findIndex((s) => s.id === scene.id);
+    const failureKey = sceneFailureKey("voice", scene.id);
+    if (shouldSkipScene(sceneFailures, failureKey)) {
+      // Définitivement ignorée (vidéo muette sur cette scène) : on saute.
+      job.sceneCursor = sceneIndex + 1;
+      continue;
     }
-    job.sceneCursor = scenes.findIndex((s) => s.id === scene.id) + 1;
-    // Task 95-d — checkpoint via la couche résiliente (miroir chaud).
+    try {
+      if (narratedSceneIds.has(scene.id)) {
+        // Déjà prête : no-op (idempotence — le checkpoint du curseur suffit).
+        succeededInBatch += 1;
+      } else if (voice.origin === "recording" && voice.sampleR2Key && isOwnedVideoKey(job.userId, voice.sampleR2Key)) {
+        // Voie A : enregistrement utilisateur (usage direct de l'échantillon).
+        await attachRecordingAsNarration({
+          userId: job.userId,
+          projectId: job.projectId,
+          sceneId: scene.id,
+          sampleR2Key: voice.sampleR2Key,
+        });
+        succeededInBatch += 1;
+      } else {
+        // Voie B : synthèse ElevenLabs facturée au caractère réel.
+        const narration = await generateSceneNarration({
+          userId: job.userId,
+          projectId: job.projectId,
+          sceneId: scene.id,
+          narration: scene.narration,
+          voice,
+        });
+        if (narration.charactersUsed > 0) {
+          await billTts(job.userId, job.projectId, narration.charactersUsed);
+        }
+        succeededInBatch += 1;
+      }
+    } catch (error) {
+      // Task 106-c — quota/transitoire = incident d'infrastructure : PAS une
+      // faute de scène, on remonte au régime de reprise du tick.
+      if (classifyTickError(error) !== "fatal") throw error;
+      sceneFailures = recordSceneFailure(sceneFailures, failureKey);
+      const permanentlyIgnored = shouldSkipScene(sceneFailures, failureKey);
+      warnings = appendJobWarning(
+        warnings,
+        sceneWarningMessage({
+          label: "narration",
+          sceneNumber: sceneIndex + 1,
+          failures: sceneFailures[failureKey],
+          permanentlyIgnored,
+          cause: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      fatalInBatch += 1;
+      if (firstFatalError === null) firstFatalError = error;
+      // Curseur avancé SANS checkpoint immédiat (détection systémique ensuite).
+      job.sceneCursor = sceneIndex + 1;
+      continue;
+    }
+    job.sceneCursor = sceneIndex + 1;
+    // Task 95-d — checkpoint via la couche résiliente (miroir chaud) —
+    // porte AUSSI sceneFailures/warnings (tolérance par scène persistée).
     await saveJobDoc(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
       {
         sceneCursor: job.sceneCursor,
         progress: computeProductionProgress("voice", job.sceneCursor, scenes.length),
+        sceneFailures,
+        warnings,
+        updatedAt: nowIso(),
+      },
+      job.userId,
+    );
+  }
+
+  // Task 106-c — SYSTÉMIQUE : aucune narration du lot n'aboutit → régime de
+  // reprise du tick (identique à l'étape assets).
+  if (fatalInBatch > 0 && succeededInBatch === 0) {
+    throw firstFatalError instanceof Error ? firstFatalError : new Error(String(firstFatalError));
+  }
+
+  // Task 106-c — TOLÉRANCE PARTIELLE : persistance des échecs fatals accumulés.
+  if (fatalInBatch > 0) {
+    await saveJobDoc(
+      PRODUCTION_JOBS_COLLECTION,
+      job.id,
+      {
+        sceneCursor: job.sceneCursor,
+        progress: computeProductionProgress("voice", job.sceneCursor, scenes.length),
+        sceneFailures,
+        warnings,
         updatedAt: nowIso(),
       },
       job.userId,
@@ -620,6 +975,32 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
 
   if (job.sceneCursor < scenes.length) {
     return { action: "stay", detail: `${job.sceneCursor}/${scenes.length} narration(s).` };
+  }
+
+  // Fin de lot : retentes des narrations en échec (curseur ramené à la
+  // première scène à retenter — les prêtes sont sautées par idempotence).
+  const retryIndex = firstSceneNeedingRetry(scenes, sceneFailures, "voice");
+  if (retryIndex >= 0 && retryIndex < job.sceneCursor) {
+    job.sceneCursor = retryIndex;
+    await saveJobDoc(
+      PRODUCTION_JOBS_COLLECTION,
+      job.id,
+      { sceneCursor: retryIndex, sceneFailures, warnings, updatedAt: nowIso() },
+      job.userId,
+    );
+    return {
+      action: "stay",
+      detail: `${job.sceneCursor}/${scenes.length} narrations — scène(s) en échec à reprendre au prochain tick (tolérance par scène).`,
+    };
+  }
+
+  const ignored = countPermanentlyIgnoredScenes(scenes, sceneFailures, "voice");
+  if (ignored >= scenes.length) {
+    // Task 106-c — TOUTES les narrations définitivement abandonnées.
+    return {
+      action: "terminal-failed",
+      message: `Production échouée : les ${scenes.length} narration(s) ont été définitivement abandonnées après ${MAX_SCENE_FAILURES} échecs de synthèse vocale. Vérifiez la configuration de la voix ou réessayez plus tard.`,
+    };
   }
 
   // Toutes les narrations prêtes : piste VOIX synchronisée + musique posée
@@ -645,7 +1026,10 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
     }
     await patchProject(job.userId, job.projectId, { timeline });
   }
-  return { action: "advance", detail: `${scenes.length} narration(s) prête(s) (voix : ${voice.name}).` };
+  return {
+    action: "advance",
+    detail: `${scenes.length} narration(s) prête(s) (voix : ${voice.name})${ignored > 0 ? `, ${ignored} ignorée(s)` : ""}.`,
+  };
 }
 
 /** RENDER : enfile le rendu réel (module 19) — il gère sa propre facturation. */
@@ -721,6 +1105,51 @@ export async function advanceProductionJob(jobId: string, options: { timeBudgetM
   }
 
   const job = outcome.job;
+
+  // Task 106-c — GARDE nextAttemptAt : un job en attente de reprise (backoff
+  // quota/transitoire écrit par failProductionJob) ne doit PAS avancer avant
+  // son échéance. Le tick est rendu NEUTRE : le claim vient de poser un bail
+  // et de muter le statut → on restaure l'état d'attente EXACT (statut
+  // « queued », bail libéré, compteur informatif d'attente), sans consommer
+  // retryCount ni marquer d'erreur. Aucune re-publication : le tick en retard
+  // (QStash planifié) ou le sondage suivant prendra le relais après l'échéance.
+  if (outcome.previousStatus === "queued") {
+    const guard = evaluateNextAttemptAtGuard(job, Date.now());
+    if (guard.skip) {
+      await saveJobDoc(
+        PRODUCTION_JOBS_COLLECTION,
+        job.id,
+        {
+          status: "queued",
+          leaseOwner: null,
+          leaseExpiresAt: 0,
+          attempts: Math.max(0, job.attempts - 1),
+          updatedAt: nowIso(),
+        },
+        job.userId,
+      ).catch((restoreError: unknown) => {
+        // Restauration impossible (quota aussi côté miroir) : le job reste
+        // « processing » au bail court — le sweep le remettra en file à
+        // l'expiration (230 s). Incident journalisé, jamais de faux échec.
+        logger.warn(
+          { jobId: job.id, error: restoreError instanceof Error ? restoreError.message : String(restoreError) },
+          "production_next_attempt_restore_failed",
+        );
+      });
+      return {
+        jobId: job.id,
+        projectId: job.projectId,
+        status: "queued",
+        stage: job.stage,
+        progress: job.progress,
+        done: false,
+        continued: false,
+        skipped: true,
+        message: guard.message,
+      };
+    }
+  }
+
   try {
     await ensureStageEntry(job);
     let stageResult: ProductionStageResult;
@@ -1053,6 +1482,29 @@ export async function maybeAdvancePendingProductionJob(jobId: string, options: {
   return null;
 }
 
+/**
+ * Task 106-c — Tick autonome PRODUCTION (worker standalone) : prend le
+ * prochain job en file et le réclame (MÊME claim transactionnel + bail que
+ * les ticks QStash/sondage — worker local et continuations serveur ne se
+ * doublent jamais). Les jobs en attente de reprise (nextAttemptAt futur,
+ * backoff quota/transitoire) sont sautés SANS claim — le garde
+ * evaluateNextAttemptAtGuard évite le cycle claim/restauration inutile.
+ * Miroir exact de claimNextQueuedJob (render-queue).
+ */
+export async function claimNextQueuedProductionJob(): Promise<VideoProductionJob | null> {
+  // Lecture via la couche résiliente (miroir chaud sous quota) ; tri mémoire
+  // par création identique à la requête du rendu (le plus ancien d'abord).
+  const jobs = await queryJobDocs<VideoProductionJob>(PRODUCTION_JOBS_COLLECTION, "status", "queued", { orderField: "createdAt" });
+  const now = Date.now();
+  for (const candidate of jobs) {
+    // Job en attente de backoff → pas encore réclamable (avancera à l'échéance).
+    if (evaluateNextAttemptAtGuard(candidate, now).skip) continue;
+    const outcome = await claimProductionJob(candidate.id).catch(() => null);
+    if (outcome?.kind === "claimed") return outcome.job;
+  }
+  return null;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Lectures (routes propriétaire-scopées)
 // ────────────────────────────────────────────────────────────────────────────
@@ -1062,6 +1514,45 @@ export async function getProductionJob(jobId: string): Promise<VideoProductionJo
   const stored = await loadJobDoc<Partial<ProductionJobWithResume>>(PRODUCTION_JOBS_COLLECTION, jobId);
   if (!stored) return null;
   return normalizeJobDoc(stored, jobId);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Task 106-c — événement de progression SSE (flux production/stream)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Événement « progress » du flux SSE (contrat du client chat/studio). */
+export interface ProductionProgressEvent {
+  type: "progress";
+  jobId: string;
+  projectId: string;
+  stage: ProductionStage;
+  status: ProductionJobStatus;
+  /** 0..1 — progression pondérée (contrat UI ×100). */
+  progress: number;
+  /** Curseur de lot (scène suivante à traiter — assets/voice). */
+  sceneCursor: number;
+  /** Journal d'avertissements FR (tolérance par scène) si non vide. */
+  warnings?: string[];
+  updatedAt: string;
+}
+
+/**
+ * Construit l'événement « progress » d'un job (PUR, testé) — même contrat
+ * que la réponse GET .../production : le flux SSE remplace le polling côté
+ * client sans changer la sémantique des champs.
+ */
+export function buildProductionProgressEvent(job: VideoProductionJob): ProductionProgressEvent {
+  return {
+    type: "progress",
+    jobId: job.id,
+    projectId: job.projectId,
+    stage: job.stage,
+    status: job.status,
+    progress: job.progress,
+    sceneCursor: job.sceneCursor,
+    ...(job.warnings && job.warnings.length > 0 ? { warnings: job.warnings } : {}),
+    updatedAt: job.updatedAt,
+  };
 }
 
 /** Dernier job de production du projet (le plus récent d'abord). */

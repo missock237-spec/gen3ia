@@ -27,6 +27,7 @@ import {
   buildAudioMixFfmpegArgs,
   buildExportFfmpegArgs,
   EXPORT_GEOMETRY,
+  type MusicTrackInput,
 } from "@/lib/video/render/planner";
 import { resolveFontFile } from "@/lib/video/render/fonts";
 
@@ -152,16 +153,34 @@ export async function mixAudio(params: {
       volume: item.volume,
     });
   }
+  // Task 106-b — MUSIQUE PAR SCÈNE : lit unique (historique, chemin
+  // inchangé) ou lits multiples posés à leurs fenêtres de mood avec
+  // crossfade aux jonctions (musicFiles → chemin dédié du planner).
+  const musicFiles: MusicTrackInput[] = [];
   let musicFile: string | undefined;
-  if (mix.music.length > 0) {
+  if (mix.music.length === 1) {
     const musicAsset = await params.io.getAsset(mix.music[0].assetId);
     if (musicAsset) musicFile = await params.io.materialize(musicAsset, "music_bed.wav");
+  } else if (mix.music.length > 1) {
+    for (const item of mix.music) {
+      const asset = await params.io.getAsset(item.assetId);
+      if (!asset) continue; // asset introuvable : lit sauté (QC signalera)
+      musicFiles.push({
+        file: await params.io.materialize(asset, `music_${item.id}.wav`),
+        startSec: item.startSec,
+        durationSec: item.durationSec,
+        volume: item.volume,
+        fadeInSec: item.fadeInSec,
+        fadeOutSec: item.fadeOutSec,
+      });
+    }
   }
 
   const args = buildAudioMixFfmpegArgs({
     narrationFiles,
     musicFile,
     musicVolume: mix.music[0]?.volume ?? 0.6,
+    musicFiles: musicFiles.length > 0 ? musicFiles : undefined,
     sfxFiles,
     ducking: mix.ducking,
     targetLoudnessDb: mix.targetLoudnessDb,
@@ -215,12 +234,36 @@ export async function finalizeMaster(params: {
   return outFile;
 }
 
+/**
+ * Résout la durée de référence du timeout FFmpeg d'un export dérivé
+ * (Task 106-b — EXPORT TIMEOUT RÉEL).
+ *
+ * Ordre de priorité :
+ *   1. `paramSec` — durée déjà connue par l'appelant (probe du master à
+ *      l'étape finalize / plan.estimatedSec) ;
+ *   2. `probedSec` — durée réelle mesurée par ffprobe sur le master local ;
+ *   3. repli historique : 60 s (comportement d'origine, master illisible).
+ *
+ * Auparavant la valeur était codée dur à 60 → timeout FFmpeg ≈ 4 min
+ * (ffmpegTimeoutSec(60)) et les exports de vidéos longues échouaient en
+ * TIMEOUT alors que le rendu était parfaitement sain.
+ */
+export function resolveExportTimeoutSec(paramSec: number | undefined, probedSec: number | undefined): number {
+  const isValid = (n: number | undefined): n is number =>
+    typeof n === "number" && Number.isFinite(n) && n > 0;
+  if (isValid(paramSec)) return paramSec;
+  if (isValid(probedSec)) return probedSec;
+  return 60;
+}
+
 /** Produit un format dérivé (9:16, 1:1…) depuis le master. */
 export async function renderExportFormat(params: {
   io: EngineIo;
   masterFile: string;
   target: string;
   assFileName?: string;
+  /** Durée réelle du master si déjà connue de l'appelant (alimente le timeout). */
+  outputDurationSec?: number;
 }): Promise<string> {
   const geometry = EXPORT_GEOMETRY[targetOf(params.target)];
   const outFile = join(params.io.tmpDir, `export_${params.target}.mp4`);
@@ -231,10 +274,22 @@ export async function renderExportFormat(params: {
     assFile: params.assFileName,
   });
   void geometry;
+  // Task 106-b — durée réelle du master : paramètre explicite, sinon sonde
+  // ffprobe locale (aucune URL réseau — fichier tmp déjà matérialisé),
+  // sinon repli historique 60 s. Le timeout FFmpeg suit donc la durée
+  // réelle au lieu d'un plafond arbitraire.
+  let probedSec: number | undefined;
+  if (
+    !(typeof params.outputDurationSec === "number" && Number.isFinite(params.outputDurationSec) && params.outputDurationSec > 0)
+  ) {
+    const probe = await probeMedia(params.masterFile, params.io.tmpDir).catch(() => null);
+    probedSec = probe?.durationSec;
+  }
+  const outputDurationSec = resolveExportTimeoutSec(params.outputDurationSec, probedSec);
   await runFfmpeg({
     args,
     cwd: params.io.tmpDir,
-    outputDurationSec: 60,
+    outputDurationSec,
     outputPaths: [outFile],
   });
   return outFile;

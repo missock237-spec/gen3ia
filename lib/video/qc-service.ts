@@ -15,13 +15,90 @@ import "server-only";
  * NOUVEAU RENDU de la spécification.
  */
 
-import type { QcIssue, QcReport, RenderPlan } from "@/lib/video/types";
+import type { QcIssue, QcReport, RenderPlan, RenderSegment, VideoProject } from "@/lib/video/types";
 import { runFfmpeg, probeMedia } from "@/lib/video/ffmpeg";
+import { loadJobDoc } from "@/lib/video/queue-resume";
+import { PROJECTS_COLLECTION } from "@/lib/video/project-service";
 
 const MAX_SCENE_SEC = 45;
 const MAX_SILENCE_RATIO = 0.35; // >35 % de silence total = problème
 const CLIPPING_DB = -0.5; // max_volume ≥ -0.5 dB = clipping probable
 const DURATION_TOLERANCE = 0.05; // ±5 %
+
+// ────────────────────────────────────────────────────────────────────────────
+// Task 106-c — QC missing_asset : scènes attendues sans segment rendu
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Scène attendue (dérivée du scénario du projet). */
+export interface ExpectedScene {
+  id: string;
+  /** Index 0-based dans le scénario (numérotation lisible = index + 1). */
+  index?: number;
+}
+
+/**
+ * Numéro lisible d'une scène (1-based) : champ `index` du scénario si
+ * présent, sinon sa position dans la liste attendue.
+ */
+export function expectedSceneNumber(scene: ExpectedScene, fallbackPosition: number): number {
+  if (typeof scene.index === "number" && Number.isFinite(scene.index) && scene.index >= 0) {
+    return scene.index + 1;
+  }
+  return fallbackPosition + 1;
+}
+
+/**
+ * Détecte les scènes attendues (scénario) ABSENTES des segments réellement
+ * rendus — buildRenderPlan ignore silencieusement les scènes sans image :
+ * cette passe rend le manque VISIBLE dans le rapport QC (Task 106-c).
+ *
+ * PURE et testée. Une SEULE issue `missing_asset` (severity warning) liste
+ * toutes les scènes manquantes : severity warning → passed inchangé (pas de
+ * boucle auto-fix) et suggestedFix SANS segmentIndex (aucun segment n'existe
+ * pour une scène absente — decideAutoFix ne re-rendra jamais un segment
+ * fantôme) : le payload porte les sceneIds pour l'agent/l'UI.
+ */
+export function detectMissingAssetIssues(
+  expectedScenes: ReadonlyArray<ExpectedScene>,
+  segments: ReadonlyArray<Pick<RenderSegment, "sceneId" | "index">>,
+): QcIssue[] {
+  if (expectedScenes.length === 0) return [];
+  const renderedSceneIds = new Set(segments.map((s) => s.sceneId));
+  const missing = expectedScenes
+    .map((scene, position) => ({ scene, number: expectedSceneNumber(scene, position) }))
+    .filter(({ scene }) => !renderedSceneIds.has(scene.id));
+  if (missing.length === 0) return [];
+  const numbers = missing.map(({ number }) => number);
+  const detail =
+    missing.length === 1
+      ? `Scène ${numbers[0]} sans visuel rendu : absente du montage final (image non générée ou scène ignorée).`
+      : `Scènes ${numbers.join(", ")} sans visuel rendu : absentes du montage final (images non générées ou scènes ignorées).`;
+  return [
+    {
+      kind: "missing_asset",
+      severity: "warning",
+      detail,
+      suggestedFix: { type: "regenerate_segment", payload: { sceneIds: missing.map(({ scene }) => scene.id) } },
+    },
+  ];
+}
+
+/**
+ * Charge les scènes attendues depuis le scénario du projet (best-effort via
+ * la couche résiliente —Firestore d'abord, miroir chaud sous quota). Retourne
+ * undefined si le projet/scénario est indisponible : la passe missing_asset
+ * est alors silencieusement ignorée (jamais de fausse alerte).
+ */
+async function loadExpectedScenes(projectId: string): Promise<ExpectedScene[] | undefined> {
+  try {
+    const project = await loadJobDoc<VideoProject>(PROJECTS_COLLECTION, projectId);
+    const scenes = project?.script?.scenes;
+    if (!scenes || scenes.length === 0) return undefined;
+    return scenes.map((scene) => ({ id: scene.id, index: scene.index }));
+  } catch {
+    return undefined;
+  }
+}
 
 /** Analyse complète du master rendu (fichier local tmp). */
 export async function analyzeRenderedMaster(params: {
@@ -31,6 +108,11 @@ export async function analyzeRenderedMaster(params: {
   expectedDurationSec: number;
   subtitlesEnabled: boolean;
   subtitleLastCueEndSec?: number;
+  /**
+   * Task 106-c — scènes attendues (scénario) pour la passe missing_asset.
+   * Absente → chargées depuis le projet (plan.projectId) en best-effort.
+   */
+  expectedScenes?: ReadonlyArray<ExpectedScene>;
 }): Promise<QcReport> {
   const issues: QcIssue[] = [];
 
@@ -141,6 +223,15 @@ export async function analyzeRenderedMaster(params: {
     if (!dimsOk) {
       issues.push({ kind: "bad_transition", severity: "warning", detail: `Résolution inhabituelle ${probe.width}×${probe.height}.` });
     }
+  }
+
+  // 9. Task 106-c — missing_asset : scènes du scénario absentes du montage
+  // (buildRenderPlan ignore les scènes sans image). Scènes explicites si
+  // fournies, sinon relecture best-effort du projet (plan.projectId) — un
+  // incident de lecture n'est jamais une fausse alerte QC.
+  const expectedScenes = params.expectedScenes ?? (await loadExpectedScenes(params.plan.projectId));
+  if (expectedScenes && expectedScenes.length > 0) {
+    issues.push(...detectMissingAssetIssues(expectedScenes, params.plan.segments));
   }
 
   const critical = issues.filter((i) => i.severity === "critical");

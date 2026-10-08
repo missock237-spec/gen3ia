@@ -21,20 +21,36 @@ const MAX_CUE_SEC = 5.5;
 /**
  * Découpe la narration d'une scène en cues synchronisées : la durée est
  * répartie proportionnellement au poids de chaque phrase dans la scène.
+ *
+ * Task 106-b — `realNarrationDurationSec` (durée ffprobe RÉELLE de la
+ * narration de la scène, optionnel) : si fournie, la fenêtre des cues se
+ * borne à [startSec, startSec + min(réel, durationSec)] — les cues
+ * suivent la voix réelle au lieu d'être étirées jusqu'à la fin théorique
+ * de la scène (une narration plus courte que la scène ne décale plus les
+ * sous-titres). La répartition INTERNE reste proportionnelle au nombre
+ * de caractères (meilleure estimation disponible par phrase). Absent →
+ * comportement historique strictement inchangé.
  */
-export function buildCuesForScene(scene: ScriptScene): SubtitleCue[] {
+export function buildCuesForScene(scene: ScriptScene, realNarrationDurationSec?: number): SubtitleCue[] {
   if (!scene.narration.trim() || !scene.captions) return [];
   const phrases = splitPhrases(scene.narration);
   if (phrases.length === 0) return [];
+
+  const realSec =
+    typeof realNarrationDurationSec === "number" && Number.isFinite(realNarrationDurationSec) && realNarrationDurationSec > 0
+      ? realNarrationDurationSec
+      : null;
+  // Fenêtre effective : la narration réelle, plafonnée par la scène.
+  const windowSec = realSec !== null ? Math.min(realSec, scene.durationSec) : scene.durationSec;
 
   const weights = phrases.map((p) => Math.max(p.length, 8));
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   const cues: SubtitleCue[] = [];
   let cursor = scene.startSec;
-  const sceneEnd = scene.startSec + scene.durationSec;
+  const sceneEnd = scene.startSec + windowSec;
 
   phrases.forEach((phrase, i) => {
-    let duration = (weights[i] / totalWeight) * scene.durationSec;
+    let duration = (weights[i] / totalWeight) * windowSec;
     duration = Math.min(MAX_CUE_SEC, Math.max(MIN_CUE_SEC, duration));
     const end = Math.min(sceneEnd, cursor + duration);
     if (cursor >= sceneEnd) return;
@@ -47,7 +63,8 @@ export function buildCuesForScene(scene: ScriptScene): SubtitleCue[] {
     cursor = end;
   });
 
-  // Bouche les trous : la dernière cue finit exactement à la fin de scène.
+  // Bouche les trous : la dernière cue finit exactement à la fin de la
+  // fenêtre (fin de la narration réelle, sinon fin de scène).
   if (cues.length > 0) cues[cues.length - 1].endSec = round2(sceneEnd);
   return cues;
 }
@@ -104,12 +121,24 @@ function emphasize(phrase: string): string[] {
     .slice(0, 3);
 }
 
-/** Construit la piste complète de sous-titres du projet. */
-export function buildSubtitleTrack(scenes: ScriptScene[], style: SubtitleStyleName, position: "bottom" | "center" | "top"): SubtitleTrackFile {
+/**
+ * Construit la piste complète de sous-titres du projet.
+ * Task 106-b — `realNarrationDurationByScene` (optionnel) : durées de
+ * narration réelles (ffprobe) par scène — les cues sont ancrées sur la
+ * voix réelle. Absent → comportement inchangé. Alimenté au branchement
+ * final par l'orchestrateur (les probes audio sont disponibles dans le
+ * render-queue au stade plan, via asset.media.durationSec).
+ */
+export function buildSubtitleTrack(
+  scenes: ScriptScene[],
+  style: SubtitleStyleName,
+  position: "bottom" | "center" | "top",
+  realNarrationDurationByScene?: Map<string, number>,
+): SubtitleTrackFile {
   return {
     style,
     position,
-    cues: scenes.flatMap((s) => buildCuesForScene(s)),
+    cues: scenes.flatMap((s) => buildCuesForScene(s, realNarrationDurationByScene?.get(s.id))),
   };
 }
 

@@ -13,6 +13,7 @@ import { buildMotion, interpolateMotion } from "@/lib/video/motion-service";
 import { buildEffectFilterChain, xfadeTransitionName, suggestTransition, defaultTransitionDurationSec } from "@/lib/video/effects-service";
 import { buildVisualBibleFromScript, composeScenePrompt, bindReference } from "@/lib/video/consistency-engine";
 import { buildCuesForScene, buildSubtitleTrack, toAssFile, toSrtFile } from "@/lib/video/subtitle-service";
+import { groupConsecutiveMoods } from "@/lib/video/audio-engine";
 import { assertDurationAllowed, assertResolutionAllowed, assertMediaSizeAllowed, assertMediaTypeAllowed, VideoQuotaError } from "@/lib/video/security";
 import { estimateRenderCost } from "@/lib/video/credits";
 import { parseIntentDeterministic } from "@/lib/video/revision-service";
@@ -184,6 +185,112 @@ describe("Subtitle Engine", () => {
     const ass = toAssFile(track, 1080, 1920);
     expect(ass).toContain(",1,0,0,0,100,100,0,0,1,"); // Bold=1
     expect(ass).toContain(",5,"); // alignment centre
+  });
+
+  // Task 106-b — sous-titres ancrés sur la durée RÉELLE de la narration.
+  it("Task 106-b : durée réelle plus courte → cues bornées à la voix (et non à la scène)", () => {
+    const scene = fakeScene("scene_001", "x", "Première phrase de narration. Deuxième phrase un peu plus longue. Troisième phrase finale.");
+    scene.durationSec = 6;
+    const withoutReal = buildCuesForScene(scene);
+    expect(withoutReal[withoutReal.length - 1].endSec).toBeCloseTo(6, 1); // historique
+
+    const withReal = buildCuesForScene(scene, 3);
+    expect(withReal.length).toBeGreaterThanOrEqual(2);
+    expect(withReal[0].startSec).toBe(0);
+    expect(withReal[withReal.length - 1].endSec).toBeCloseTo(3, 1); // ancré sur la voix
+    withReal.forEach((cue) => {
+      expect(cue.endSec).toBeGreaterThan(cue.startSec);
+      expect(cue.endSec).toBeLessThanOrEqual(3.01);
+    });
+  });
+
+  it("Task 106-b : durée réelle plus longue → plafonnée par la scène (inchangé)", () => {
+    const scene = fakeScene("scene_001", "x", "Première phrase. Deuxième phrase.");
+    scene.durationSec = 4;
+    const capped = buildCuesForScene(scene, 99);
+    expect(capped[capped.length - 1].endSec).toBeCloseTo(4, 1);
+    // Sans le paramètre : strictement identique.
+    const legacy = buildCuesForScene(scene);
+    expect(capped).toEqual(legacy);
+  });
+
+  it("Task 106-b : fenêtre décalée (startSec > 0) + map de durées dans buildSubtitleTrack", () => {
+    const scene = fakeScene("scene_002", "x", "Bonjour le monde. Deuxième ligne.");
+    scene.startSec = 10;
+    scene.durationSec = 4;
+    const track = buildSubtitleTrack([scene], "documentary", "bottom", new Map([["scene_002", 2]]));
+    expect(track.cues[0].startSec).toBe(10);
+    expect(track.cues[track.cues.length - 1].endSec).toBeCloseTo(12, 1); // 10 + 2 s réels
+  });
+
+  it("Task 106-b : durée réelle invalide (0, NaN, négatif) → comportement historique", () => {
+    const scene = fakeScene("scene_001", "x", "Première phrase. Deuxième phrase.");
+    scene.durationSec = 4;
+    const legacy = buildCuesForScene(scene);
+    expect(buildCuesForScene(scene, 0)).toEqual(legacy);
+    expect(buildCuesForScene(scene, Number.NaN)).toEqual(legacy);
+    expect(buildCuesForScene(scene, -3)).toEqual(legacy);
+  });
+});
+
+// ── Audio Engine — musique par scène (Task 106-b) ─────────────────────────
+
+describe("Audio Engine — groupConsecutiveMoods (Task 106-b)", () => {
+  function moodScene(id: string, startSec: number, durationSec: number, musicMood?: string): ScriptScene {
+    return {
+      id, chapterId: "ch1", index: 0, durationSec, narration: "n",
+      visualPrompt: "v", visualType: "image", cameraMotion: "static",
+      transitionIn: "fade", transitionOut: "cut", soundEffects: [], captions: false,
+      startSec, ...(musicMood !== undefined ? { musicMood } : {}),
+    };
+  }
+
+  it("3 moods consécutifs identiques → UN seul groupe étendu", () => {
+    const groups = groupConsecutiveMoods([
+      moodScene("s1", 0, 4, "tension"),
+      moodScene("s2", 4, 4, "tension"),
+      moodScene("s3", 8, 4, "tension"),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ mood: "tension", startSec: 0, durationSec: 12 });
+    expect(groups[0].sceneIds).toEqual(["s1", "s2", "s3"]);
+  });
+
+  it("moods alternés → 3 groupes distincts avec fenêtres exactes", () => {
+    const groups = groupConsecutiveMoods([
+      moodScene("s1", 0, 4, "tension"),
+      moodScene("s2", 4, 4, "tension"),
+      moodScene("s3", 8, 4, "energique"),
+      moodScene("s4", 12, 4, "tension"),
+    ]);
+    expect(groups).toHaveLength(3);
+    expect(groups[0]).toMatchObject({ mood: "tension", startSec: 0, durationSec: 8 });
+    expect(groups[1]).toMatchObject({ mood: "energique", startSec: 8, durationSec: 4 });
+    expect(groups[2]).toMatchObject({ mood: "tension", startSec: 12, durationSec: 4 });
+  });
+
+  it("fallback : mood projet appliqué aux scènes sans musicMood", () => {
+    const groups = groupConsecutiveMoods([
+      moodScene("s1", 0, 4),
+      moodScene("s2", 4, 4, "energique"),
+      moodScene("s3", 8, 4),
+    ], "emotionnel");
+    // Sémantique CONSÉCUTIVE : s1 (fallback projet) / s2 / s3 (fallback
+    // projet) = 3 fenêtres — s1 et s3 partagent le mood mais pas la
+    // continuité temporelle (2 lits distincts posés aux fenêtres 0-4 et 8-12).
+    expect(groups).toHaveLength(3);
+    expect(groups[0]).toMatchObject({ mood: "emotionnel", startSec: 0, durationSec: 4 });
+    expect(groups[1]).toMatchObject({ mood: "energique", startSec: 4, durationSec: 4 });
+    expect(groups[2]).toMatchObject({ mood: "emotionnel", startSec: 8, durationSec: 4 });
+  });
+
+  it("mood non reconnu → normalisé vers la valeur par défaut (documentaire)", () => {
+    const groups = groupConsecutiveMoods([moodScene("s1", 0, 4, "mood inconnu xyz")]);
+    expect(groups[0].mood).toBe("documentaire");
+  });
+
+  it("timeline vide → aucun groupe", () => {
+    expect(groupConsecutiveMoods([])).toEqual([]);
   });
 });
 
