@@ -49,8 +49,7 @@ const args = parseArgs({
 });
 
 const RUN_ONCE = args.values.once === true;
-/** Défaut : boucle continue (comportement historique du worker). */
-const RUN_LOOP = !RUN_ONCE;
+void args.values.loop; // --loop accepté pour lisibilité CLI : défaut = boucle
 const parsedInterval = Number(args.values.interval);
 const POLL_INTERVAL_MS =
   Number.isFinite(parsedInterval) && parsedInterval > 0
