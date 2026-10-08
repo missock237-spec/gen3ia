@@ -730,6 +730,12 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
   let succeededInBatch = 0;
   let fatalInBatch = 0;
   let firstFatalError: unknown = null;
+  // Task 106-fix — UN SEUL checkpoint par tick : Firestore plafonne à ~1
+  // écriture/seconde/DOCUMENT (claim + release + progression sur le même doc)
+  // — un checkpoint PAR SCÈNE dépassait ce plafond (RESOURCE_EXHAUSTED classé
+  // quota → déviation miroir silencieuse → re-traitement infini des scènes).
+  const cursorAtTickStart = job.sceneCursor;
+  const failuresAtTickStart = JSON.stringify(sceneFailures);
 
   for (const scene of window.batch) {
     if (deadlineMs !== null && Date.now() >= deadlineMs) break;
@@ -773,20 +779,6 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
       continue;
     }
     job.sceneCursor = sceneIndex + 1;
-    // Task 95-d — checkpoint via la couche résiliente (miroir chaud) —
-    // porte AUSSI sceneFailures/warnings (tolérance par scène persistée).
-    await writeCheckpointSet(
-      PRODUCTION_JOBS_COLLECTION,
-      job.id,
-      {
-        sceneCursor: job.sceneCursor,
-        progress: computeProductionProgress("assets", job.sceneCursor, scenes.length),
-        sceneFailures,
-        warnings,
-        updatedAt: nowIso(),
-      },
-      job.userId,
-    );
   }
 
   // Task 106-c — SYSTÉMIQUE : aucune réussite dans le lot + au moins un
@@ -797,9 +789,9 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
     throw firstFatalError instanceof Error ? firstFatalError : new Error(String(firstFatalError));
   }
 
-  // Task 106-c — TOLÉRANCE PARTIELLE : au moins une scène du lot a abouti →
-  // les échecs fatals (sans checkpoint individuel) sont persistés ici.
-  if (fatalInBatch > 0) {
+  // Task 106-fix — checkpoint CONSOLIDÉ (un par tick) : curseur, progression,
+  // tolérance par scène (sceneFailures/warnings) — persistés ensemble.
+  if (job.sceneCursor !== cursorAtTickStart || JSON.stringify(sceneFailures) !== failuresAtTickStart) {
     await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
@@ -895,6 +887,9 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
   let succeededInBatch = 0;
   let fatalInBatch = 0;
   let firstFatalError: unknown = null;
+  // Task 106-fix — UN SEUL checkpoint par tick (limite Firestore ~1 écriture/s/doc).
+  const cursorAtTickStart = job.sceneCursor;
+  const failuresAtTickStart = JSON.stringify(sceneFailures);
 
   for (const scene of window.batch) {
     if (deadlineMs !== null && Date.now() >= deadlineMs) break;
@@ -955,20 +950,6 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
       continue;
     }
     job.sceneCursor = sceneIndex + 1;
-    // Task 95-d — checkpoint via la couche résiliente (miroir chaud) —
-    // porte AUSSI sceneFailures/warnings (tolérance par scène persistée).
-    await writeCheckpointSet(
-      PRODUCTION_JOBS_COLLECTION,
-      job.id,
-      {
-        sceneCursor: job.sceneCursor,
-        progress: computeProductionProgress("voice", job.sceneCursor, scenes.length),
-        sceneFailures,
-        warnings,
-        updatedAt: nowIso(),
-      },
-      job.userId,
-    );
   }
 
   // Task 106-c — SYSTÉMIQUE : aucune narration du lot n'aboutit → régime de
@@ -977,8 +958,9 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
     throw firstFatalError instanceof Error ? firstFatalError : new Error(String(firstFatalError));
   }
 
-  // Task 106-c — TOLÉRANCE PARTIELLE : persistance des échecs fatals accumulés.
-  if (fatalInBatch > 0) {
+  // Task 106-fix — checkpoint CONSOLIDÉ (un par tick) : curseur, progression,
+  // tolérance par scène — persistés ensemble.
+  if (job.sceneCursor !== cursorAtTickStart || JSON.stringify(sceneFailures) !== failuresAtTickStart) {
     await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,

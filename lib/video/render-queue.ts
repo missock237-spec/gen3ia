@@ -999,6 +999,7 @@ async function stageSegments(job: RenderJob, io: EngineIo, timeBudgetMs?: number
   }
   const batch = pending.slice(0, MAX_SEGMENTS_PER_TICK);
   const deadlineMs = typeof timeBudgetMs === "number" && timeBudgetMs > 0 ? Date.now() + timeBudgetMs : null;
+  const completedAtTickStart = completed.size;
 
   for (const segment of batch) {
     if (deadlineMs !== null && Date.now() >= deadlineMs) break;
@@ -1008,22 +1009,32 @@ async function stageSegments(job: RenderJob, io: EngineIo, timeBudgetMs?: number
       io,
       userId: job.userId,
       completedSegments: [...completed],
+      // Task 106-fix — checkpoint en MÉMOIRE seulement : Firestore limite à
+      // ~1 écriture/seconde/DOCUMENT et un tick écrit déjà claim + checkpoints
+      // + release sur le même document — un checkpoint PAR SEGMENT dépassait
+      // ce plafond (RESOURCE_EXHAUSTED classé quota → déviation miroir
+      // silencieuse → re-rendu infini des mêmes segments, constaté en prod).
+      // Un SEUL checkpoint consolidé est écrit APRÈS la boucle du tick.
       onSegmentDone: async (index) => {
         completed.add(index);
-        // Task 95-c — checkpoint via la couche résiliente (miroir chaud) : sous
-        // quota l'écriture atterrit dans le miroir, le job reste reprenable.
-        await writeCheckpointSet(
-          JOBS_COLLECTION,
-          job.id,
-          {
-            "checkpoints.completedSegments": [...completed],
-            progress: computeJobProgress("segments", completed.size, plan.segments.length),
-            updatedAt: nowIso(),
-          },
-          job.userId,
-        );
       },
     });
+  }
+
+  // Task 106-fix — UN checkpoint par tick (consultation immédiate par le
+  // claim suivant ; les segments réellement rendus sont conservés en local
+  // tmp, le pire cas est un re-rendu des derniers segments du tick).
+  if (completed.size > completedAtTickStart) {
+    await writeCheckpointSet(
+      JOBS_COLLECTION,
+      job.id,
+      {
+        "checkpoints.completedSegments": [...completed],
+        progress: computeJobProgress("segments", completed.size, plan.segments.length),
+        updatedAt: nowIso(),
+      },
+      job.userId,
+    );
   }
 
   const remaining = plan.segments.length - completed.size;

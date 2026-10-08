@@ -292,20 +292,22 @@ describe("advanceProductionJob — erreur de quota sur un checkpoint", () => {
     expect(logSystem).toHaveBeenCalledWith("proj-1", expect.stringMatching(/incident quota Firestore.*reprise automatique dans/));
   });
 
-  it("le checkpoint sceneCursor déjà écrit survit à l'incident (ré-file sans l'écraser)", async () => {
+  it("le checkpoint consolidé déjà écrit survit à l'incident (ré-file sans l'écraser) — Task 106-fix : un checkpoint par tick", async () => {
     vi.mocked(queueResume.saveJobDoc)
-      .mockResolvedValueOnce(undefined) // checkpoint scène 1 → OK (persisté)
-      .mockRejectedValueOnce(quotaError()) // checkpoint scène 2 → QUOTA
-      .mockResolvedValue(undefined); // ré-file failProductionJob
+      .mockRejectedValueOnce(quotaError()) // checkpoint CONSOLIDÉ du tick → QUOTA (incident Firestore)
+      .mockResolvedValue(undefined); // ré-file failProductionJob → OK
 
     await advanceProductionJob("job-1");
 
     const calls = vi.mocked(queueResume.saveJobDoc).mock.calls;
-    // le checkpoint de la scène 1 a bien été persisté avant l'incident
-    expect(calls[0][2]).toMatchObject({ sceneCursor: 1 });
+    // Task 106-fix : UN SEUL checkpoint consolidé par tick (limite Firestore
+    // ~1 écriture/s/doc) — il porte le curseur après les scènes du lot.
+    const checkpointCalls = calls.filter((call) => "sceneCursor" in ((call[2] ?? {}) as Record<string, unknown>));
+    expect(checkpointCalls.length).toBe(1);
+    expect(checkpointCalls[0][2]).toMatchObject({ sceneCursor: 2 });
     // la ré-file ne touche NI sceneCursor NI stage : l'état persisté
     // (checkpoints conservés) sert de point de reprise au tick suivant
-    const requeuePatch = calls[2][2] as Record<string, unknown>;
+    const requeuePatch = calls[calls.length - 1][2] as Record<string, unknown>;
     expect("sceneCursor" in requeuePatch).toBe(false);
     expect("stage" in requeuePatch).toBe(false);
   });
