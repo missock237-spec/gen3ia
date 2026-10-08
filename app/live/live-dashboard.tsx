@@ -573,6 +573,16 @@ export function LiveDashboard() {
           Décrivez la mission : l’agent observe votre écran depuis le navigateur,
           analyse chaque étape et vous guide. Aucun téléchargement requis.
         </p>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(23,23,20,0.08)] bg-[var(--g3-elevated)] px-4 py-3">
+          <p className="text-sm text-[var(--g3-muted)]">
+            Envie de parler plutôt que de taper ? La conversation vocale en
+            temps réel est disponible (10 min par session, renouvellement
+            automatique).
+          </p>
+          <Link href="/live/voix" className="g3-btn g3-btn-ghost shrink-0">
+            Ouvrir Live Voix
+          </Link>
+        </div>
         <label className="mt-5 block text-xs uppercase tracking-widest text-[var(--g3-muted)]">Nom de la session</label>
         <input
           value={name}

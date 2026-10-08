@@ -258,3 +258,86 @@ export async function elevenLabsTextToSpeech(
     charactersUsed: options.text.length,
   };
 }
+
+export interface SpeechToTextResult {
+  text: string;
+  languageCode?: string;
+}
+
+/**
+ * Transcription vocale (STT) ElevenLabs — appendice Task 110-a (Live Voix) :
+ * POST {API_BASE}/speech-to-text en multipart/form-data (champ "file",
+ * model_id par défaut scribe_v1, language_code optionnel). Auth entête
+ * "xi-api-key" (même convention que le reste du client) ; erreur API →
+ * Error avec le statut inclus (repli du reste du client).
+ */
+export async function elevenLabsSpeechToText(
+  options: {
+    audioDataUri: string;
+    modelId?: string;
+    languageCode?: string;
+  },
+): Promise<SpeechToTextResult> {
+  const apiKey = getElevenLabsApiKey();
+
+  // Data URI -> Buffer : même découpage que addElevenLabsVoice ci-dessus.
+  const [header, base64 = ""] = options.audioDataUri.split(",");
+  const mimeType = header.slice(5).replace(/;base64$/, "") || "audio/wav";
+  const audio = Buffer.from(base64, "base64");
+  if (audio.byteLength === 0) {
+    throw new Error(
+      "La transcription exige un échantillon audio non vide.",
+    );
+  }
+
+  const extension = mimeType.includes("wav")
+    ? "wav"
+    : mimeType.includes("mpeg") || mimeType.includes("mp3")
+      ? "mp3"
+      : mimeType.includes("ogg")
+        ? "ogg"
+        : mimeType.includes("flac")
+          ? "flac"
+          : mimeType.includes("mp4")
+            ? "m4a"
+            : "webm"; // webm/opus (MediaRecorder navigateur) — accepté par le STT
+
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([new Uint8Array(audio)], { type: mimeType }),
+    `audio.${extension}`,
+  );
+  const modelId = options.modelId || process.env.ELEVENLABS_STT_MODEL || "scribe_v1";
+  form.append("model_id", modelId);
+  const languageCode = options.languageCode || process.env.ELEVENLABS_STT_LANGUAGE;
+  if (languageCode) {
+    form.append("language_code", languageCode);
+  }
+
+  // Un énoncé de tour de parole dure au plus ~25 s : timeout borné (60 s)
+  // pour ne jamais pendre (même politique que le TTS — audit 103-f).
+  const response = await fetch(`${API_BASE}/speech-to-text`, {
+    method: "POST",
+    headers: { "xi-api-key": apiKey },
+    body: form,
+    signal: AbortSignal.timeout(60_000),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(
+      `ElevenLabs speech-to-text returned ${response.status}: ${detail.slice(0, 200)}`,
+    );
+  }
+
+  const data = (await response.json()) as {
+    text?: string;
+    language_code?: string;
+  };
+
+  return {
+    text: typeof data.text === "string" ? data.text : "",
+    ...(typeof data.language_code === "string" ? { languageCode: data.language_code } : {}),
+  };
+}
