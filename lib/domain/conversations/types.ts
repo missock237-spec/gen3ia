@@ -8,9 +8,10 @@
  *  - Approval     : action sensible nécessitant une validation humaine.
  *  - Artifact     : document, code, image, rapport ou fichier produit.
  *
- * Les conversations réutilisent les collections `chatConversations` /
- * `chatMessages` existantes afin que TOUTE conversation créée avant la
- * refonte reste consultable et reprenable exactement où elle s'est arrêtée.
+ * Les conversations vivent dans la mémoire R2 PAR UTILISATEUR (Task 109) :
+ * méta `users/{uid}/conversations/{cid}.json` et messages
+ * `users/{uid}/conversations/{cid}/messages/{ulid}.json` (1 objet JSON par
+ * message, id = ULID).
  */
 
 /* ------------------------------------------------------------------ */

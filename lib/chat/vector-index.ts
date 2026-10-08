@@ -6,7 +6,8 @@
  * plus uniquement par correspondance littérale du titre.
  *
  * Architecture identique aux mémoires et à la base de connaissances :
- *  - Firestore (`chatMessages`) reste la SOURCE DE VÉRITÉ ;
+ *  - R2 (`users/{uid}/conversations`) reste la SOURCE DE VÉRITÉ (mémoire
+ *    par utilisateur, Task 109) ;
  *  - Qdrant (`gen3ia_conversations`) est un INDEX de recherche portant le
  *    vecteur d'embedding du message + un payload minimal de filtrage
  *    (userId obligatoire — sécurité multi-tenant, conversationId, messageId,
@@ -14,8 +15,8 @@
  *
  * Toute opération est « fail-soft » : Qdrant absent, quota HuggingFace
  * épuisé ou erreur réseau ne DOIVENT jamais casser l'envoi d'un message ni
- * la recherche (les appelants retombent sur la recherche textuelle
- * Firestore). La collection utilise la MÊME dimension que les autres
+ * la recherche (les appelants retombent sur la recherche textuelle des
+ * titres). La collection utilise la MÊME dimension que les autres
  * collections Gen3ia (MiniLM 384) — un seul modèle d'embedding pour tout le
  * projet, cohérence des vecteurs garantie.
  */
@@ -37,7 +38,7 @@ const GEN3IA_POINT_NAMESPACE = "6f1c2a34-9b7e-4d58-a1f0-2c9d4e7b8a11";
 /** Taille maximale du texte indexé (au-delà : troncation, pas de rejet). */
 const MAX_INDEXED_CHARS = 4_000;
 
-/** Aperçu stocké dans le payload pour afficher le hit sans relire Firestore. */
+/** Aperçu stocké dans le payload pour afficher le hit sans relire la mémoire R2. */
 const PREVIEW_CHARS = 240;
 
 export interface ConversationIndexInput {
@@ -73,8 +74,8 @@ export interface ConversationSearchHit {
 }
 
 /**
- * Indexe un message dans Qdrant. Appelé après la persistance Firestore de
- * chaque message (utilisateur ET assistant). Toute erreur est avalée et
+ * Indexe un message dans Qdrant. Appelé après la persistance R2 de chaque
+ * message (utilisateur ET assistant). Toute erreur est avalée et
  * journalisée : l'indexation est un enrichissement, jamais une dépendance.
  *
  * L'ID du point est déterministe (UUID v5 du messageId) : réindexer un
@@ -102,7 +103,7 @@ export async function indexConversationMessage(input: ConversationIndexInput): P
           projectId: input.projectId ?? null,
           role: input.role,
           createdAt: input.createdAt ?? new Date().toISOString(),
-          // Aperçu court pour afficher les hits sans re-lire Firestore.
+          // Aperçu court pour afficher les hits sans re-lire la mémoire R2.
           preview: content.slice(0, PREVIEW_CHARS),
         },
       },
@@ -150,7 +151,7 @@ export function bestHitPerConversation(hits: ConversationSearchHit[]): Conversat
 /**
  * Recherche sémantique dans les messages de l'utilisateur. Retourne null si
  * Qdrant/embeddings ne sont pas configurés ou en panne → l'appelant bascule
- * sur la recherche textuelle Firestore (comportement historique).
+ * sur la recherche textuelle des titres (couche R2, Task 109).
  */
 export async function searchConversationMessages(
   userId: string,

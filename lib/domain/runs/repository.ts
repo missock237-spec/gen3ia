@@ -1,18 +1,90 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { FieldValue } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import { isFirestoreMissingIndexError } from "@/lib/db/firestore-resilient";
+import {
+  listJson,
+  newUlid,
+  patchJson,
+  readJsonIfExists,
+  UserDataError,
+  userDir,
+  userKey,
+  writeJson,
+} from "@/lib/storage/user-data-store";
 import type { ConversationRun, RunPhase, RunStatus, RunStep, RunStepStatus } from "@/lib/domain/conversations/types";
 
 /**
  * Run — exécution d'un plan ou d'un outil dans une conversation.
  * La timeline (steps ordonnés par phase) est stockée dans le document :
  * lecture en une requête pour l'affichage inline repliable.
+ *
+ * Backend Cloudflare R2 (Task 109) : clé canonique
+ * `users/{uid}/runs/{runId}.json` — doc { v:1, id, userId, conversationId,
+ * …champs actuels }, runId = newUlid() (tri lexicographique des clés =
+ * ordre chronologique). Les runs sont des DONNÉES UTILISATEUR par
+ * utilisateur : aucune clé globale, aucun scan cross-tenant possible.
+ *
+ * Surface d'API STRICTEMENT identique au backend Firestore — zéro
+ * modification de route nécessaire.
  */
 
-const COLLECTION = "conversationRuns";
+/** Segment préfixe des runs sous l'espace utilisateur. */
+const RUNS_SEGMENT = "runs";
+
+/**
+ * Les payloads runtime compactés (lib/agents/conversation-run) montent à
+ * ~400 Ko ; le plafond d'écriture par défaut de la fondation (256 Ko) serait
+ * dépassé — les écritures de runs portent explicitement 512 Ko. Les lectures
+ * portent 1 Mo (mémoire du plafond Firestore) : un run écrit à 512 Ko se
+ * relit toujours, et aucun document lisible n'est silencieusement écarté
+ * des scans (listJson ignore les too_large).
+ */
+const RUN_WRITE_MAX_BYTES = 512 * 1024;
+const RUN_READ_MAX_BYTES = 1024 * 1024;
+
+/** Préfixe des runs d'un utilisateur : users/{uid}/runs */
+function runsPrefix(userId: string): string {
+  return userDir(userId, RUNS_SEGMENT);
+}
+
+/** Clé d'un run : users/{uid}/runs/{runId}.json */
+function runKey(userId: string, runId: string): string {
+  return userKey(userId, RUNS_SEGMENT, runId);
+}
+
+/** Horodatage lisible (ISO) d'une valeur stockée string | Date. */
+function isoTime(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string" && !Number.isNaN(Date.parse(value))) return value;
+  return new Date().toISOString();
+}
+
+interface RunDoc { [key: string]: unknown; id?: string; userId?: unknown; conversationId?: unknown; }
+
+function docFrom(id: string, data: RunDoc): ConversationRun {
+  const steps = Array.isArray(data.steps) ? (data.steps as RunStep[]) : [];
+  return {
+    id,
+    userId: String(data.userId ?? ""),
+    conversationId: String(data.conversationId ?? ""),
+    projectId: typeof data.projectId === "string" ? data.projectId : undefined,
+    executionId: typeof data.executionId === "string" ? data.executionId : undefined,
+    objective: String(data.objective ?? ""),
+    status: (data.status ?? "planning") as RunStatus,
+    steps: steps.map((s) => ({ ...s, id: String(s.id), phase: s.phase, title: String(s.title), status: s.status })),
+    runtime: data.runtime && typeof data.runtime === "object" ? (data.runtime as Record<string, unknown>) : undefined,
+    createdAt: isoTime(data.createdAt),
+    updatedAt: isoTime(data.updatedAt),
+    finishedAt: data.finishedAt instanceof Date || typeof data.finishedAt === "string" ? isoTime(data.finishedAt) : undefined,
+  };
+}
+
+/** Dédaine la lecture d'un lot de documents runs en ConversationRun triés createdAt desc. */
+function sortedRunsDesc(docs: RunDoc[]): ConversationRun[] {
+  return docs
+    .map((d) => docFrom(typeof d.id === "string" && d.id ? d.id : "", d))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+}
 
 export function makeStep(input: {
   phase: RunPhase;
@@ -33,24 +105,6 @@ export function makeStep(input: {
   };
 }
 
-function docFrom(id: string, data: FirebaseFirestore.DocumentData): ConversationRun {
-  const steps = Array.isArray(data.steps) ? (data.steps as RunStep[]) : [];
-  return {
-    id,
-    userId: String(data.userId ?? ""),
-    conversationId: String(data.conversationId ?? ""),
-    projectId: typeof data.projectId === "string" ? data.projectId : undefined,
-    executionId: typeof data.executionId === "string" ? data.executionId : undefined,
-    objective: String(data.objective ?? ""),
-    status: (data.status ?? "planning") as RunStatus,
-    steps: steps.map((s) => ({ ...s, id: String(s.id), phase: s.phase, title: String(s.title), status: s.status })),
-    runtime: data.runtime && typeof data.runtime === "object" ? (data.runtime as Record<string, unknown>) : undefined,
-    createdAt: data.createdAt instanceof Date ? data.createdAt.toISOString() : new Date().toISOString(),
-    updatedAt: data.updatedAt instanceof Date ? data.updatedAt.toISOString() : new Date().toISOString(),
-    finishedAt: data.finishedAt instanceof Date ? data.finishedAt.toISOString() : undefined,
-  };
-}
-
 export async function createRun(input: {
   userId: string;
   conversationId: string;
@@ -63,8 +117,11 @@ export async function createRun(input: {
   runtime?: Record<string, unknown>;
 }): Promise<ConversationRun> {
   const now = new Date();
-  const ref = adminDb.collection(COLLECTION).doc(randomUUID());
-  await ref.set({
+  // runId ULID : les clés du préfixe se lisent dans l'ordre chronologique.
+  const runId = newUlid();
+  await writeJson(runKey(input.userId, runId), {
+    v: 1,
+    id: runId,
     userId: input.userId,
     conversationId: input.conversationId,
     ...(input.projectId ? { projectId: input.projectId } : {}),
@@ -73,11 +130,11 @@ export async function createRun(input: {
     objective: input.objective.slice(0, 2000),
     status: "planning" as const,
     steps: input.steps,
-    createdAt: now,
-    updatedAt: now,
-  });
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+  }, { maxBytes: RUN_WRITE_MAX_BYTES });
   return {
-    id: ref.id,
+    id: runId,
     userId: input.userId,
     conversationId: input.conversationId,
     projectId: input.projectId,
@@ -91,17 +148,16 @@ export async function createRun(input: {
   };
 }
 
-/** Retrouve le run d'une conversation lié à une exécution runtime (mode agent). */
+/**
+ * Retrouve le run d'une conversation lié à une exécution runtime (mode
+ * agent). Scan préfixe borné (cap 500 clés — périmètre utilisateur) + filtre
+ * executionId + tri createdAt desc : le run LE PLUS RÉCENT gagne (les
+ * réconciliations successives d'une même exécution réécrivent le dernier).
+ */
 export async function findRunByExecution(userId: string, executionId: string): Promise<ConversationRun | null> {
-  const snap = await adminDb
-    .collection(COLLECTION)
-    .where("userId", "==", userId)
-    .where("executionId", "==", executionId)
-    .limit(1)
-    .get();
-  const doc = snap.docs[0];
-  if (!doc) return null;
-  return docFrom(doc.id, doc.data());
+  const docs = await listJson<RunDoc>(runsPrefix(userId), { maxBytesPerDoc: RUN_READ_MAX_BYTES });
+  const matches = sortedRunsDesc(docs).filter((run) => run.executionId === executionId);
+  return matches[0] ?? null;
 }
 
 /**
@@ -116,19 +172,22 @@ export async function updateRunByExecution(
 ): Promise<ConversationRun | null> {
   const existing = await findRunByExecution(userId, executionId);
   if (!existing) return null;
-  const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
-  if (patch.status) update.status = patch.status;
+  const now = new Date().toISOString();
+  const update: Partial<RunDoc> = { updatedAt: now };
+  if (patch.status) { update.status = patch.status; update.finishedAt = now; }
   if (patch.steps) update.steps = patch.steps;
   if (patch.runtime) update.runtime = patch.runtime;
-  if (patch.status) update.finishedAt = FieldValue.serverTimestamp();
-  await adminDb.collection(COLLECTION).doc(existing.id).update(update);
+  await patchJson<RunDoc>(runKey(userId, existing.id), update, { maxBytes: RUN_WRITE_MAX_BYTES });
+  // Forme de retour historique conservée : existant + champs fournis.
   return { ...existing, ...patch };
 }
 
 export async function getRun(userId: string, runId: string): Promise<ConversationRun | null> {
-  const snap = await adminDb.collection(COLLECTION).doc(runId).get();
-  if (!snap.exists || snap.data()?.userId !== userId) return null;
-  return docFrom(snap.id, snap.data()!);
+  // Clé directe chez l'utilisateur : un autre uid ne peut pas lire ce run
+  // (cloisonnement par préfixe + garde userId fail-closed conservée).
+  const data = await readJsonIfExists<RunDoc>(runKey(userId, runId), { maxBytes: RUN_READ_MAX_BYTES });
+  if (!data || String(data.userId ?? "") !== userId) return null;
+  return docFrom(runId, data);
 }
 
 export async function getRunForConversation(userId: string, runId: string, conversationId: string): Promise<ConversationRun | null> {
@@ -138,60 +197,43 @@ export async function getRunForConversation(userId: string, runId: string, conve
 }
 
 export async function listRunsForConversation(userId: string, conversationId: string, limit = 20): Promise<ConversationRun[]> {
-  const snap = await adminDb
-    .collection(COLLECTION)
-    .where("userId", "==", userId)
-    .where("conversationId", "==", conversationId)
-    .orderBy("createdAt", "desc")
-    .limit(Math.min(limit, 50))
-    .get();
-  return snap.docs.map((d) => docFrom(d.id, d.data()));
+  // Scan préfixe + filtre conversationId + tri createdAt desc (plafond 50) :
+  // même sémantique de fenêtre que la requête Firestore historique.
+  const docs = await listJson<RunDoc>(runsPrefix(userId), { maxBytesPerDoc: RUN_READ_MAX_BYTES });
+  return sortedRunsDesc(docs)
+    .filter((run) => run.conversationId === conversationId)
+    .slice(0, Math.min(limit, 50));
 }
 
 /**
  * Missions récentes TOUTES conversations confondues (étape 16) : la vue
- * globale de l'activité d'exécution de l'utilisateur.
- *
- * Task 101 (M3 — réduction quota) : le chemin nominal s'appuie sur l'index
- * composite (userId, createdAt DESC) — orderBy SERVEUR + limit EXACT, soit
- * N lectures au lieu des 80 lectures arbitraires re-triées en mémoire
- * (historique : « scan 80 pour en afficher 8 »). Si l'index n'est pas (encore)
- * déployé, le repli historique absorbe l'erreur (FAILED_PRECONDITION) : la
- * disponibilité ne dépend JAMAIS du déploiement d'index.
+ * globale de l'activité d'exécution de l'utilisateur. Sur R2, le préfixe
+ * `users/{uid}/runs/` EST l'index utilisateur — un seul listage (cap 500)
+ * puis tri createdAt desc et fenêtre exacte, sans dépendre d'aucun index
+ * composite déployé.
  */
 export async function listRecentRuns(userId: string, limit = 8): Promise<ConversationRun[]> {
   const capped = Math.min(limit, 20);
-  try {
-    const snap = await adminDb
-      .collection(COLLECTION)
-      .where("userId", "==", userId)
-      .orderBy("createdAt", "desc")
-      .limit(capped)
-      .get();
-    // Le serveur renvoie DIRECTEMENT les N plus récents (ordre garanti).
-    return snap.docs.map((d) => docFrom(d.id, d.data()));
-  } catch (error) {
-    if (!isFirestoreMissingIndexError(error)) throw error;
-    // Repli SANS index composite : filtre userId seul + tri en mémoire
-    // (comportement historique, scan plafonné à 80) — coût dégradé,
-    // disponibilité intacte, même sémantique de fenêtre.
-    const snap = await adminDb
-      .collection(COLLECTION)
-      .where("userId", "==", userId)
-      .limit(80)
-      .get();
-    return snap.docs
-      .map((d) => docFrom(d.id, d.data()))
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-      .slice(0, capped);
+  const docs = await listJson<RunDoc>(runsPrefix(userId), { maxBytesPerDoc: RUN_READ_MAX_BYTES });
+  return sortedRunsDesc(docs).slice(0, capped);
+}
+
+/**
+ * Vérifie l'existence du run avant patch : le .update() Firestore historique
+ * levait sur un document manquant, et patchJson (fondation 109-a) CRÉE en
+ * cas d'absence — un run fantôme sans userId ne doit jamais être créé.
+ */
+async function assertRunExists(userId: string, runId: string): Promise<void> {
+  const key = runKey(userId, runId);
+  const existing = await readJsonIfExists<RunDoc>(key, { maxBytes: RUN_READ_MAX_BYTES });
+  if (!existing) {
+    throw new UserDataError("not_found", `Run absent : ${key}`);
   }
 }
 
 export async function updateRunSteps(userId: string, runId: string, steps: RunStep[]): Promise<void> {
-  await adminDb.collection(COLLECTION).doc(runId).update({
-    steps,
-    updatedAt: FieldValue.serverTimestamp(),
-  });
+  await assertRunExists(userId, runId);
+  await patchJson<RunDoc>(runKey(userId, runId), { steps, updatedAt: new Date().toISOString() }, { maxBytes: RUN_WRITE_MAX_BYTES });
 }
 
 /** Statut dérivé de la timeline : la source de vérité reste les étapes. */
@@ -206,10 +248,7 @@ export function deriveRunStatus(steps: RunStep[]): RunStatus {
 }
 
 export async function finalizeRun(userId: string, runId: string, status: RunStatus, steps: RunStep[]): Promise<void> {
-  await adminDb.collection(COLLECTION).doc(runId).update({
-    status,
-    steps,
-    finishedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
+  await assertRunExists(userId, runId);
+  const now = new Date().toISOString();
+  await patchJson<RunDoc>(runKey(userId, runId), { status, steps, finishedAt: now, updatedAt: now }, { maxBytes: RUN_WRITE_MAX_BYTES });
 }

@@ -20,7 +20,10 @@ describe("Missions récentes — vue globale", () => {
 
     const repository = read("lib/domain/runs/repository.ts");
     expect(repository).toContain("export async function listRecentRuns");
-    expect(repository).toContain("filtre userId seul + tri en mémoire");
+    // Ère R2 (Task 109) : le listing scanne le préfixe runs/ de l'utilisateur
+    // (clé canonique users/{uid}/runs/) et trie en mémoire — plus d'index
+    // composite Firestore.
+    expect(repository).toContain("listJson<RunDoc>(runsPrefix(userId)");
   });
 
   it("le panneau de contexte expose l'onglet Missions avec saut vers la conversation", () => {

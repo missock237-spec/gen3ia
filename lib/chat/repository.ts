@@ -1,16 +1,17 @@
 import "server-only";
 
-import { FieldValue } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
 import {
-  resilientCreate,
-  resilientDelete,
-  resilientGet,
-  resilientQuery,
-  resilientSet,
-} from "@/lib/db/firestore-resilient";
-import { isFirestoreQuotaError, shouldShortCircuitFirestore } from "@/lib/db/quota-guard";
-import { CHUNKED_COMMIT_SIZE, commitOpsInChunks, type ChunkedWriteOp } from "@/lib/firestore/chunked-commit";
+  listKeys,
+  newUlid,
+  patchJson,
+  readJsonIfExists,
+  removeKey,
+  removePrefix,
+  userDir,
+  userKey,
+  writeJson,
+} from "@/lib/storage/user-data-store";
+
 import type {
   ConversationMessage,
   ConversationStatus,
@@ -23,28 +24,38 @@ import {
 } from "@/lib/chat/vector-index";
 
 /**
- * Dépôt conversation/messages (Task 96-c) — adossé à la couche résiliente
- * Firestore-only (lib/db/firestore-resilient, Task 108) : deadline anti-stall
- * + disjoncteur quota ; l'écriture décomposée ci-dessous sert de chemin de
- * sonde (half-open) et de compat quand la transaction n'a pas pu partir.
+ * Dépôt conversations/messages (Task 109-b) — adossé à la MÉMOIRE R2 PAR
+ * UTILISATEUR (lib/storage/user-data-store, contrat Task 109-a). Chaque
+ * conversation est un document JSON `users/{uid}/conversations/{cid}.json`
+ * et chaque message un objet PROPRE `users/{uid}/conversations/{cid}/
+ * messages/{ulid}.json` — l'identifiant du message est l'ULID de sa clé
+ * (tri lexicographique = ordre chronologique).
  *
- * Règles respectées :
- *  - écritures en `new Date()` (JAMAIS FieldValue.serverTimestamp) : le tri
- *    mémoire et les documents relis doivent rester cohérents ;
- *  - garde d'ownership (userId) reproduite à l'identique sur les chemins
- *    de repli — jamais la conversation d'un autre utilisateur ;
- *  - tri/limitation (Task 101 / C3a + m4bis) : les listes de CONVERSATIONS
- *    transmettent leur limite ET leur champ d'ordre à resilientQuery — le
- *    tri est porté par Firestore (index composites userId+updatedAt) et le
- *    limit demandé est appliqué CÔTÉ SERVEUR (la recherche textuelle ne lit
- *    plus que 20 conversations au lieu de 200). La lecture des MESSAGES
- *    garde le contrat RC3 verrouillé par les tests « repository.recent » :
- *    filtrage égalité seul, ordre du fil reconstitué EN MÉMOIRE sur un scan
- *    plafonné (aucun orderBy côté Firestore).
+ * Règles respectées (surface d'API strictement identique à l'ère
+ * précédente — zéro modification de route nécessaire) :
+ *  - horodatages normalisés en ISO strings à la lecture (`iso`, qui accepte
+ *    les chaînes ISO stockées) ;
+ *  - garde d'ownership (userId) reproduite sur tous les chemins — la
+ *    conversation d'un autre utilisateur est indiscernable d'une absente
+ *    (et les clés sont de toute façon scopées par uid) ;
+ *  - appendMessage : écriture du message = objet propre (pas de compteur
+ *    partagé) ; la méta conversation (compteur + dernier message +
+ *    horodatages) est patchée en BEST-EFFORT avec 1 retry — un échec de
+ *    patch n'annule JAMAIS le message déjà persisté ;
+ *  - listConversations : scan du préfixe (cap 500 clés), filtrage EXACT
+ *    `{cid}.json` (les messages ne sont jamais pris pour des
+ *    conversations), tri updatedAt desc en mémoire, slice sur la limite
+ *    demandée (cap 100) ;
+ *  - listMessages : tri lexicographique des clés ULID (= chronologique),
+ *    fenêtre demandée — "asc" : début du fil ; "recent" : fin du fil,
+ *    renvoyée en ordre chronologique (contrat RC3 conservé).
  */
 
-/** Cap de scan des MESSAGES — partagé avec resilientQuery (QUERY_DEFAULT_LIMIT). */
-const SCAN_LIMIT = 200;
+/** Cap de scan des préfixes (règle transverse Task 109). */
+const SCAN_MAX_OBJECTS = 500;
+
+/** Cap de la fenêtre de MESSAGES renvoyée (parité avec le contrat RC3). */
+const MESSAGES_RESULT_CAP = 200;
 
 export interface ChatConversation {
   id: string;
@@ -106,9 +117,18 @@ function citationsFrom(value: unknown): MessageCitation[] | undefined {
   return list.length > 0 ? list : undefined;
 }
 
-const conversationRef = (id: string) => adminDb.collection("chatConversations").doc(id);
+/* ------------------------------------------------------------------ */
+/* Clés canoniques (mémoire R2 par utilisateur)                        */
+/* ------------------------------------------------------------------ */
 
-/** Horodatage lisible : Date (écritures 96-c), Timestamp Firestore (lectures) ou chaîne ISO (miroir). */
+const JSON_SUFFIX = ".json";
+
+const conversationsPrefix = (uid: string) => `${userDir(uid, "conversations")}/`;
+const conversationKey = (uid: string, cid: string) => userKey(uid, "conversations", cid);
+const messagesPrefix = (uid: string, cid: string) => `${userDir(uid, "conversations", cid, "messages")}/`;
+const messageKey = (uid: string, cid: string, mid: string) => userKey(uid, "conversations", cid, "messages", mid);
+
+/** Horodatage lisible : chaîne ISO (documents R2) ou autre forme acceptée → ISO. */
 function iso(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "string" && !Number.isNaN(Date.parse(value))) return value;
@@ -141,22 +161,22 @@ export async function createConversation(
   title = "Nouvelle conversation",
   options: { projectId?: string; agentId?: string } = {},
 ) {
-  // Identifiant généré localement par le SDK (aucune I/O) : il alimente
-  // resilientCreate, qui tient Firestore ET le miroir à jour.
-  const id = adminDb.collection("chatConversations").doc().id;
+  // Identifiant ULID généré localement (aucune I/O) : tri lexicographique ≈
+  // ordre de création, mais la liste trie par updatedAt.
+  const id = newUlid();
   const now = new Date();
-  await resilientCreate(
-    "chatConversations",
+  await writeJson(conversationKey(userId, id), {
+    v: 1,
     id,
-    {
-      userId, title: title.slice(0, 120), messageCount: 0,
-      ...(options.projectId ? { projectId: options.projectId } : {}),
-      ...(options.agentId ? { agentId: options.agentId } : {}),
-      status: "active" as const,
-      createdAt: now, updatedAt: now,
-    },
     userId,
-  );
+    title: title.slice(0, 120),
+    messageCount: 0,
+    status: "active" as const,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    ...(options.projectId ? { projectId: options.projectId } : {}),
+    ...(options.agentId ? { agentId: options.agentId } : {}),
+  });
   return {
     id, userId, title, messageCount: 0,
     ...(options.projectId ? { projectId: options.projectId } : {}),
@@ -172,52 +192,58 @@ export async function listConversations(
   options: { projectId?: string; agentId?: string; query?: string } = {},
 ): Promise<ChatConversation[]> {
   const capped = Math.min(limit, 100);
-  const filters: Array<{ field: string; value: unknown }> = [{ field: "userId", value: userId }];
+  const prefix = conversationsPrefix(userId);
+  const objets = await listKeys(prefix, { maxObjects: SCAN_MAX_OBJECTS });
+  // Filtrage EXACT : `conversations/{cid}.json` — une seule extension, aucun
+  // sous-dossier (les messages vivent dans conversations/{cid}/messages/ et
+  // ne doivent JAMAIS être comptés comme des conversations).
+  const cles = objets
+    .map((objet) => objet.key)
+    .filter((key) =>
+      key.startsWith(prefix) &&
+      key.endsWith(JSON_SUFFIX) &&
+      !key.slice(prefix.length, key.length - JSON_SUFFIX.length).includes("/"),
+    );
+  // Lecture en lots (parallèle) des méta-documents ; les clés disparues
+  // entre le listage et la lecture (course avec une suppression) → null.
+  const docs = await Promise.all(cles.map((key) => readJsonIfExists<ConversationDoc>(key)));
+  let conversations: ChatConversation[] = [];
+  for (let index = 0; index < cles.length; index += 1) {
+    const doc = docs[index];
+    if (!doc) continue;
+    // Le cid vient de la CLÉ (identité stable), pas du document.
+    const cid = cles[index].slice(prefix.length, cles[index].length - JSON_SUFFIX.length);
+    conversations.push(conversationFrom(cid, doc));
+  }
+  // Filtres en mémoire (mêmes critères qu'historiquement).
   if (options.agentId) {
     // Historique scopé à un agent IA : seuls ses fils sont listés.
-    filters.push({ field: "agentId", value: options.agentId });
+    conversations = conversations.filter((c) => c.agentId === options.agentId);
   }
-  if (options.projectId) filters.push({ field: "projectId", value: options.projectId });
-  // Task 101 (C3a + m4bis) : le limit DEMANDÉ est transmis à resilientQuery —
-  // avec le champ d'ordre, il est appliqué CÔTÉ FIRESTORE (tri serveur sur les
-  // index composites userId(+agentId)+updatedAt) : la route de recherche qui
-  // demande 20 conversations ne lit plus que 20 documents (au lieu de 200).
-  // Le filtrage par titre reste ensuite en mémoire, sur le même sous-ensemble
-  // « N plus récents » qu'historiquement — sémantique inchangée, coût divisé.
-  const docs = await resilientQuery<ConversationDoc>(
-    "chatConversations",
-    filters,
-    { orderField: "updatedAt", descending: true, limit: capped, includeIds: true },
-  );
-  let conversations = docs.map((x) => conversationFrom(String(x.id), x));
-  if (conversations.length > capped) conversations = conversations.slice(0, capped);
+  if (options.projectId) conversations = conversations.filter((c) => c.projectId === options.projectId);
+  // Recherche textuelle : correspondance littérale sur le titre.
   const query = options.query?.trim().toLowerCase();
   if (query) {
     conversations = conversations.filter((c) => c.title.toLowerCase().includes(query));
   }
-  return conversations;
+  // Tri updatedAt desc (ISO comparables), puis fenêtre demandée.
+  conversations.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return conversations.slice(0, capped);
 }
 
 /** Dernière conversation de l'utilisateur (accueil « Reprendre »). */
 export async function findLatestConversation(userId: string): Promise<ChatConversation | null> {
-  // Task 101 (C3a) : tri serveur (index userId+updatedAt DESC) + limit 1 —
-  // UNE lecture au lieu d'un scan de 200 documents re-triés en mémoire.
-  const docs = await resilientQuery<ConversationDoc>(
-    "chatConversations",
-    [{ field: "userId", value: userId }],
-    { orderField: "updatedAt", descending: true, limit: 1, includeIds: true },
-  );
-  const first = docs[0];
-  if (!first) return null;
-  return conversationFrom(String(first.id), first);
+  // Réutilise listConversations(limit 1) : même scan borné, même tri.
+  const [latest] = await listConversations(userId, 1);
+  return latest ?? null;
 }
 
 export async function getConversation(userId: string, id: string) {
-  const x = await resilientGet<ConversationDoc>("chatConversations", id);
-  // Garde d'ownership identique au chemin Firestore historique : une
-  // conversation d'un autre utilisateur est indiscernable d'une absente.
-  if (!x || x.userId !== userId) return null;
-  return conversationFrom(id, x);
+  const doc = await readJsonIfExists<ConversationDoc>(conversationKey(userId, id));
+  // Garde d'ownership identique au chemin historique : une conversation d'un
+  // autre utilisateur est indiscernable d'une absente.
+  if (!doc || doc.userId !== userId) return null;
+  return conversationFrom(id, doc);
 }
 
 /**
@@ -260,107 +286,86 @@ export async function listMessages(
   options: { order?: ListMessagesOrder } = {},
 ): Promise<ChatMessage[]> {
   if (!(await getConversation(userId, conversationId))) throw new Error("Conversation introuvable.");
-  const capped = Math.min(limit, 200);
+  const capped = Math.min(limit, MESSAGES_RESULT_CAP);
   const recent = options.order === "recent";
-  const filters = [
-    { field: "conversationId", value: conversationId },
-    { field: "userId", value: userId },
-  ];
-  let docs: MessageDoc[];
-  try {
-    // Contrat RC3 (verrouillé par lib/chat/repository.recent.test.ts) : le
-    // filtrage Firestore reste par ÉGALITÉ seule — AUCUN orderBy côté serveur,
-    // l'ordre chronologique du fil est reconstitué en mémoire ci-dessous sur
-    // un scan plafonné (SCAN_LIMIT). Task 101 : la limite demandée n'est PAS
-    // poussée côté Firestore ici, car sans orderBy serveur elle renverrait un
-    // sous-ensemble ARBITRAIRE — le cap de scan reste la garantie de justesse.
-    docs = await resilientQuery<MessageDoc>("chatMessages", filters, {
-      limit: SCAN_LIMIT,
-      includeIds: true,
-    });
-  } catch {
-    // Repli (index en attente, incident SDK ponctuel) : nouvelle tentative
-    // identique — la couche résiliente gère déjà quota (erreur classifiée) et
-    // index manquant (scan + tri mémoire) ; le contexte LLM ne casse jamais.
-    docs = await resilientQuery<MessageDoc>("chatMessages", filters, { limit: SCAN_LIMIT, includeIds: true });
-  }
-  const messages = docs.map((x) => messageFrom(String(x.id), conversationId, userId, x));
-  // Tri chronologique déterministe, puis fenêtre demandée :
-  //  - "recent" : la FIN du fil (les N plus récents), réordonnée asc ;
+  const prefix = messagesPrefix(userId, conversationId);
+  // Tri lexicographique des clés = ordre chronologique (ULID) : le fil est
+  // reconstitué depuis les CLÉS, plus depuis les horodatages.
+  const cles = (await listKeys(prefix, { maxObjects: SCAN_MAX_OBJECTS }))
+    .map((objet) => objet.key)
+    .filter((key) => key.endsWith(JSON_SUFFIX))
+    .sort();
+  // Fenêtre demandée posée AVANT lecture :
+  //  - "recent" : la FIN du fil (les N plus récents) ;
   //  - "asc"    : le DÉBUT du fil (les N plus anciens).
-  messages.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  return recent && messages.length > capped ? messages.slice(-capped) : messages.slice(0, capped);
+  const fenetre = recent && cles.length > capped ? cles.slice(-capped) : cles.slice(0, capped);
+  const docs = await Promise.all(fenetre.map((key) => readJsonIfExists<ConversationDoc>(key)));
+  const messages: ChatMessage[] = [];
+  for (let index = 0; index < fenetre.length; index += 1) {
+    const doc = docs[index];
+    if (!doc) continue;
+    // L'id du message = l'ULID de sa clé (les deux sont identiques dans le
+    // document ; la clé fait foi).
+    const mid = fenetre[index].slice(prefix.length, fenetre[index].length - JSON_SUFFIX.length);
+    messages.push(messageFrom(mid, conversationId, userId, doc));
+  }
+  return messages;
 }
 
 export async function appendMessage(input: Omit<ChatMessage, "id" | "createdAt">) {
-  const ref = adminDb.collection("chatMessages").doc();
   const now = new Date();
-  // Rattachement projet de la conversation (capturé pendant la transaction,
-  // sans lecture Firestore supplémentaire) : sert au filtrage du miroir
-  // vectoriel par projet (recherche sémantique contextuelle).
-  let conversationProjectId: string | null = null;
-  let transactionDone = false;
+  // Garde d'ownership + capture du rattachement projet de la conversation :
+  // sert au filtrage du miroir vectoriel par projet (recherche sémantique
+  // contextuelle).
+  const meta = await readJsonIfExists<ConversationDoc>(conversationKey(input.userId, input.conversationId));
+  if (!meta || meta.userId !== input.userId) throw new Error("Conversation introuvable.");
+  const conversationProjectId =
+    typeof meta.projectId === "string" && meta.projectId.length > 0 ? meta.projectId : null;
+
+  // Message = objet PROPRE (pas de compteur partagé) : id = ULID de la clé.
+  const id = newUlid(now);
+  const saved: ChatMessage = {
+    ...input,
+    generationStatus: input.generationStatus ?? "complete",
+    id,
+    createdAt: now.toISOString(),
+  };
+  await writeJson(messageKey(input.userId, input.conversationId, id), {
+    v: 1,
+    ...saved,
+    ulid: id,
+  });
+
+  // Méta conversation : patch BEST-EFFORT (compteur + dernier message +
+  // horodatages). Le message ci-dessus est déjà persisté : un échec du
+  // patch (course concurrente, incident ponctuel) ne le remet JAMAIS en
+  // cause — 1 retry puis abandon silencieux (la lecture du fil liste les
+  // messages par clés, le compteur n'est qu'une indication d'affichage).
+  const metaKey = conversationKey(input.userId, input.conversationId);
+  const preview = (input.content ?? "").trim().slice(0, 120);
+  const patchMeta = () =>
+    patchJson<ConversationDoc>(metaKey, {
+      messageCount: Number(meta.messageCount ?? 0) + 1,
+      ...(preview ? { lastMessagePreview: preview } : {}),
+      lastMessageAt: saved.createdAt,
+      updatedAt: saved.createdAt,
+    });
   try {
-    // CHEMIN NOMINAL : transaction Firestore (atomicité message + compteur).
-    // Disjoncteur ouvert : ni transaction ni sonde gaspillée — chemin décomposé
-    // (qui tente la sonde half-open via la couche résiliente).
-    if (!shouldShortCircuitFirestore()) {
-      await adminDb.runTransaction(async tx => {
-        const conversation = conversationRef(input.conversationId);
-        const snap = await tx.get(conversation);
-        if (!snap.exists || snap.data()?.userId !== input.userId) throw new Error("Conversation introuvable.");
-        const data = snap.data();
-        if (typeof data?.projectId === "string" && data.projectId.length > 0) {
-          conversationProjectId = data.projectId;
-        }
-        tx.set(ref, {
-          ...input,
-          generationStatus: input.generationStatus ?? "complete",
-          createdAt: now,
-        });
-        const current = Number(snap.data()?.messageCount ?? 0);
-        tx.update(conversation, { messageCount: current + 1, updatedAt: now });
-      });
-      transactionDone = true;
+    await patchMeta();
+  } catch {
+    try {
+      await patchMeta();
+    } catch {
+      // Best-effort assumé : un seul retry, puis on continue sans la méta.
     }
-  } catch (error) {
-    // QUOTA (ou disjoncteur fraîchement ouvert) : décomposition résiliente.
-    // Les incidents TRANSITOIRES et métier restent rejetés (comportement
-    // historique : retry côté appelant).
-    if (!isFirestoreQuotaError(error) && !shouldShortCircuitFirestore()) throw error;
   }
-  if (!transactionDone) {
-    // QUOTA (ou disjoncteur ouvert) : décomposition résiliente Firestore —
-    // get (garde d'ownership) + create (message) + set merge (compteur
-    // incrémenté). Task 108 : plus de miroir secondaire — si Firestore est
-    // réellement sous quota, l'erreur est rejetée (la route répond 503
-    // actionnable) ; en régime half-open, la sonde referme le circuit.
-    const conversation = await resilientGet<ConversationDoc>("chatConversations", input.conversationId);
-    if (!conversation || conversation.userId !== input.userId) throw new Error("Conversation introuvable.");
-    if (typeof conversation.projectId === "string" && conversation.projectId.length > 0) {
-      conversationProjectId = conversation.projectId;
-    }
-    await resilientCreate(
-      "chatMessages",
-      ref.id,
-      { ...input, generationStatus: input.generationStatus ?? "complete", createdAt: now },
-      input.userId,
-    );
-    await resilientSet(
-      "chatConversations",
-      input.conversationId,
-      { messageCount: FieldValue.increment(1), updatedAt: now },
-      { merge: true, ownerId: input.userId },
-    );
-  }
-  const saved: ChatMessage = { ...input, generationStatus: input.generationStatus ?? "complete", id: ref.id, createdAt: now.toISOString() };
 
   // Miroir vectoriel (recherche sémantique de l'historique) : best-effort,
-  // après la persistance Firestore. L'indexation n'ajoute que l'appel
-  // d'embedding (~200-400 ms) à un tour de chat qui dure déjà plusieurs
-  // secondes ; elle ne peut JAMAIS faire échouer l'envoi du message.
-  // (Serveur : on attend — un travail « fire-and-forget » serait tué par
-  // la fin de l'invocation serverless avant d'être envoyé.)
+  // après la persistance R2. L'indexation n'ajoute que l'appel d'embedding
+  // à un tour de chat qui dure déjà plusieurs secondes ; elle ne peut
+  // JAMAIS faire échouer l'envoi du message. (Serveur : on attend — un
+  // travail « fire-and-forget » serait tué par la fin de l'invocation
+  // serverless avant d'être envoyé.)
   try {
     await indexConversationMessage({
       messageId: saved.id,
@@ -381,12 +386,10 @@ export async function appendMessage(input: Omit<ChatMessage, "id" | "createdAt">
 export async function renameConversation(userId: string, id: string, title: string) {
   const conversation = await getConversation(userId, id);
   if (!conversation) throw new Error("Conversation introuvable.");
-  await resilientSet(
-    "chatConversations",
-    id,
-    { title: title.trim().slice(0, 120), updatedAt: new Date() },
-    { merge: true, ownerId: userId },
-  );
+  await patchJson<ConversationDoc>(conversationKey(userId, id), {
+    title: title.trim().slice(0, 120),
+    updatedAt: new Date().toISOString(),
+  });
 }
 
 /** Mise à jour partielle (projet, agent, statut, modèle) d'une conversation. */
@@ -396,12 +399,12 @@ export async function updateConversation(
   patch: { projectId?: string | null; agentId?: string; status?: ConversationStatus; model?: string; provider?: string },
 ) {
   if (!(await getConversation(userId, id))) throw new Error("Conversation introuvable.");
-  const update: Record<string, unknown> = { updatedAt: new Date() };
+  const update: Record<string, unknown> = { updatedAt: new Date().toISOString() };
   if (patch.projectId !== undefined) {
-    // null détache le projet ; une chaîne non vide le rattache.
-    // FieldValue.delete() : la clé est retirée de Firestore proprement
-    // (sentinelle native) — pas de trace résiduelle du rattachement.
-    update.projectId = patch.projectId || FieldValue.delete();
+    // null détache le projet ; une chaîne non vide le rattache. La valeur
+    // `undefined` est omise à la sérialisation canonique : la clé disparaît
+    // proprement du document (pas de trace résiduelle du rattachement).
+    update.projectId = patch.projectId || undefined;
   }
   if (patch.agentId) {
     // Rattachement d'un fil à un agent IA : le backfill des fils legacy
@@ -411,33 +414,22 @@ export async function updateConversation(
   if (patch.status) update.status = patch.status;
   if (patch.model) update.model = patch.model;
   if (patch.provider) update.provider = patch.provider;
-  await resilientSet("chatConversations", id, update, { merge: true, ownerId: userId });
+  await patchJson<ConversationDoc>(conversationKey(userId, id), update);
   return getConversation(userId, id);
 }
 
 export async function deleteConversation(userId: string, id: string) {
   if (!(await getConversation(userId, id))) throw new Error("Conversation introuvable.");
-  // Purge des messages : Firestore-first (les identifiants de messages ne
-  // vivent que dans les ids de documents, hors payload). Sous quota, la purge
-  // est différée (aucune route n'expose les messages orphelins sans
-  // conversation) — la conversation, elle, est supprimée via resilientDelete
-  // ci-dessous.
-  try {
-    // Purge par lots de 450 jusqu'à épuisement (limite Firestore : 500 ops
-    // par batch) — l'ancien `.limit(500)` unique laissait des messages
-    // orphelins au-delà de 500.
-    for (;;) {
-      const messages = await adminDb.collection("chatMessages").where("conversationId", "==", id).where("userId", "==", userId).limit(CHUNKED_COMMIT_SIZE).get();
-      const messageDocs = messages.docs;
-      if (messageDocs.length === 0) break;
-      const ops: ChunkedWriteOp[] = messageDocs.map((d) => ({ kind: "delete" as const, ref: d.ref }));
-      await commitOpsInChunks(adminDb, ops);
-      if (messageDocs.length < CHUNKED_COMMIT_SIZE) break;
-    }
-  } catch (error) {
-    if (!isFirestoreQuotaError(error) && !shouldShortCircuitFirestore()) throw error;
-    // Quota : purge Firestore des messages différée — ne bloque JAMAIS la
-    // suppression de la conversation (pivot de l'historique).
+  // Purge des messages : le préfixe messages/ porte UN objet par message.
+  // removePrefix est borné (taille de page) : boucle jusqu'à épuisement
+  // pour ne laisser AUCUN message orphelin (parité avec l'ancienne purge
+  // par lots itérés).
+  const prefix = messagesPrefix(userId, id);
+  for (;;) {
+    const supprimes = await removePrefix(prefix, { maxObjects: SCAN_MAX_OBJECTS });
+    if (supprimes < SCAN_MAX_OBJECTS) break;
   }
-  await resilientDelete("chatConversations", id);
+  // La méta part en dernier : tant qu'elle existe, le fil reste cohérent
+  // (aucune route n'expose les messages orphelins sans conversation).
+  await removeKey(conversationKey(userId, id));
 }

@@ -8,12 +8,19 @@ import { clearSessionCookieHeader } from "@/lib/server/session-cookie";
 import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
 import { errorStatus } from "@/lib/security/http-errors";
 import { deleteIdentityForAccount } from "@/lib/identity/service";
+import { removePrefix, userDir } from "@/lib/storage/user-data-store";
 import { logger } from "@/lib/observability/logger";
 
 export const runtime = "nodejs";
 
 /** Taille maximale des lots de suppression Firestore (limite plateforme). */
 const BATCH_LIMIT = 400;
+
+/** Nombre maximal d'objets par passe removePrefix (taille de page R2). */
+const R2_PURGE_PAGE = 1000;
+
+/** Nombre maximal de passes de purge R2 (garde anti-dérive : 50 000 objets). */
+const R2_PURGE_MAX_PASSES = 50;
 
 const FIREBASE_IDENTITY_API = "https://identitytoolkit.googleapis.com/v1/accounts:delete";
 const FIREBASE_API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "";
@@ -64,13 +71,32 @@ async function deleteWhere(
 }
 
 /**
+ * Purge COMPLETE d'un préfixe R2 utilisateur : removePrefix est borné
+ * (taille de page) — on boucle jusqu'à ce qu'une passe ne ramène plus rien
+ * (parité avec l'ancienne purge par lots itérés). Une panne R2 se propage :
+ * la suppression du compte est interrompue, l'utilisateur peut réessayer
+ * (purges idempotentes) — aucune donnée ne doit survivre à un compte effacé.
+ */
+async function purgerPrefixeUtilisateur(prefix: string): Promise<number> {
+  let supprimes = 0;
+  for (let passe = 0; passe < R2_PURGE_MAX_PASSES; passe += 1) {
+    const supprimesDeLaPasse = await removePrefix(prefix, { maxObjects: R2_PURGE_PAGE });
+    supprimes += supprimesDeLaPasse;
+    if (supprimesDeLaPasse === 0) break;
+  }
+  return supprimes;
+}
+
+/**
  * DELETE /api/auth/account — droit a l'effacement (RGPD art. 17).
  *
  * Supprime l'ensemble des donnees personnelles rattachees a l'utilisateur :
  * identité (base R2, Task 108-b), profil, portefeuille, equipes, agents,
- * executions, documents, conversations de chat, puis le compte Firebase Auth
- * lui-meme. Les evenements d'audit (interet legitime securite) sont conserves
- * mais anonymises par la suppression du profil.
+ * executions, documents, memoire conversationnelle R2 (Task 109 :
+ * users/{uid}/conversations + memoire KV users/{uid}/memories et
+ * memory-items), puis le compte Firebase Auth lui-meme. Les evenements
+ * d'audit (interet legitime securite) sont conserves mais anonymises par la
+ * suppression du profil.
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -81,8 +107,19 @@ export async function DELETE(request: NextRequest) {
     const agents = await deleteWhere("agents", "ownerId", uid);
     const executions = await deleteWhere("executions", "userId", uid);
     const documents = await deleteWhere("documents", "ownerId", uid);
-    const conversations = await deleteWhere("chatConversations", "userId", uid);
-    const messages = await deleteWhere("chatMessages", "userId", uid);
+
+    // 1-bis. Mémoire R2 PAR UTILISATEUR (Task 109) : conversations + messages
+    // (un objet par message sous conversations/{cid}/messages/) et mémoire
+    // KV / items épisodiques. Les anciennes collections Firestore
+    // chatConversations/chatMessages ne sont plus lues ni écrites : rien à
+    // y supprimer (abandon des données legacy, directive « à partir de zéro »).
+    const conversations = await purgerPrefixeUtilisateur(`${userDir(uid, "conversations")}/`);
+    const memories = await purgerPrefixeUtilisateur(`${userDir(uid, "memories")}/`);
+    const memoryItems = await purgerPrefixeUtilisateur(`${userDir(uid, "memory-items")}/`);
+    // Les messages vivent DANS le préfixe conversations (plus de collection
+    // séparée) : compteur conservé à 0 pour la forme de réponse historique.
+    const messages = 0;
+
     const research = await deleteWhere("researchJobs", "userId", uid);
 
     // 2. Documents singleton (profil, portefeuille, equipes).
@@ -120,7 +157,7 @@ export async function DELETE(request: NextRequest) {
       executionId: `account_deletion_${Date.now()}`,
       toolName: "gdpr.account_deleted",
       event: "completed",
-      input: { agents, executions, documents, conversations, messages, researchJobs: research, identityDeleted },
+      input: { agents, executions, documents, conversations, messages, memories, memoryItems, researchJobs: research, identityDeleted },
     }).catch(() => undefined);
 
     return new NextResponse(

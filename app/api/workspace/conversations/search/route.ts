@@ -8,13 +8,13 @@
  *    SENS de son contenu, pas seulement par son titre.
  *  - mode "text" (repli) : Qdrant/embeddings indisponibles, requête trop
  *    courte, ou aucun hit — correspondance littérale historique sur les
- *    titres via Firestore.
+ *    titres via la couche R2 (mémoire par utilisateur).
  *
  * Sécurité : le filtre userId est OBLIGATOIRE côté Qdrant (aucune traversée
  * multi-tenant possible) et chaque conversation retournée est re-vérifiée
- * dans Firestore comme appartenant à l'utilisateur (défense en profondeur :
- * un payload Qdrant falsifié ne peut jamais exposer la conversation d'un
- * autre compte).
+ * via getConversation (clés R2 scopées par utilisateur, Task 109) comme
+ * appartenant à l'utilisateur (défense en profondeur : un payload Qdrant
+ * falsifié ne peut jamais exposer la conversation d'un autre compte).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -25,15 +25,13 @@ import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 import { securityHeaders } from "@/lib/security/request-security";
 
-import { adminDb } from "@/lib/firebase/admin";
-
 import {
   bestHitPerConversation,
   searchConversationMessages,
   type ConversationSearchHit,
 } from "@/lib/chat/vector-index";
 
-import { listConversations } from "@/lib/chat/repository";
+import { getConversation, listConversations } from "@/lib/chat/repository";
 
 export const dynamic = "force-dynamic";
 
@@ -74,25 +72,19 @@ async function chargerConversations(
   if (conversationIds.length === 0) return map;
 
   const unique = [...new Set(conversationIds)].slice(0, 20);
-  const refs = unique.map((id) => adminDb.collection("chatConversations").doc(id));
-  const snapshots = await adminDb.getAll(...refs);
+  // Task 109 : re-vérification via la couche R2 (getConversation) — la garde
+  // d'ownership y est structurelle (clés scopées par utilisateur) : même si
+  // le payload vectoriel prétendait le contraire, la conversation d'un
+  // autre compte ne peut jamais être exposée.
+  const conversations = await Promise.all(unique.map((id) => getConversation(userId, id)));
 
-  for (const snap of snapshots) {
-    if (!snap.exists) continue;
-    const data = snap.data();
-    // Défense en profondeur : ne JAMAIS retourner une conversation dont
-    // l'utilisateur authentifié n'est pas propriétaire (même si le payload
-    // vectoriel prétendait le contraire).
-    if (data?.userId !== userId) continue;
-    map.set(snap.id, {
-      title: typeof data?.title === "string" ? data.title : "Conversation",
-      updatedAt:
-        typeof data?.updatedAt?.toDate === "function"
-          ? data.updatedAt.toDate().toISOString()
-          : typeof data?.updatedAt === "string"
-            ? data.updatedAt
-            : new Date(0).toISOString(),
-      messageCount: Number(data?.messageCount ?? 0),
+  for (let index = 0; index < unique.length; index += 1) {
+    const conversation = conversations[index];
+    if (!conversation) continue;
+    map.set(unique[index], {
+      title: conversation.title,
+      updatedAt: conversation.updatedAt,
+      messageCount: conversation.messageCount,
     });
   }
   return map;
@@ -175,9 +167,9 @@ export async function GET(request: NextRequest) {
 
     // Repli textuel : Qdrant indisponible, aucun hit, ou requête courte.
     // On conserve le comportement historique (titres correspondants).
-    // Task 101 (m4bis) : le limit 20 est appliqué CÔTÉ FIRESTORE (tri serveur
-    // updatedAt desc via listConversations) — ce repli ne lit plus que les
-    // 20 conversations demandées au lieu de balayer 200 documents.
+    // Task 109 : le repli passe par la couche R2 (listConversations) — scan
+    // du préfixe utilisateurs, tri updatedAt desc en mémoire, puis filtre
+    // littéral sur les titres : sémantique inchangée pour l'appelant.
     if (mode === "text") {
       const conversations = await listConversations(user.uid, 20, {
         projectId,

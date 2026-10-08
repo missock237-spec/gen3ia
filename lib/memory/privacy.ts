@@ -1,6 +1,12 @@
 import "server-only";
 
-import { adminDb } from "@/lib/firebase/admin";
+import {
+  readJsonIfExists,
+  removeKey,
+  removePrefix,
+  userKey,
+  writeJson,
+} from "@/lib/storage/user-data-store";
 import { listMemories } from "./user-memory";
 import { exportFeedbackData, purgeFeedbackData } from "@/lib/ai/feedback";
 import { exportToolConsents, purgeToolConsents } from "@/lib/security/tool-consents";
@@ -26,9 +32,34 @@ import { exportToolConsents, purgeToolConsents } from "@/lib/security/tool-conse
  * Sécurité : chaque fonction opère STRICTEMENT sur le userId authentifié ;
  * la purge exige le drapeau `confirm: true` côté appelant (double
  * validation applicative en plus de l'UI).
+ *
+ * Task 109 : le drapeau de consentement vit dans R2
+ * (`users/{uid}/privacy/consent.json`) et la purge des souvenirs passe par
+ * `removePrefix` (RGPD) au lieu des batches Firestore.
  */
 
-const PRIVACY_COLLECTION = "userPrivacy";
+/** Document R2 du drapeau de consentement mémoire. */
+interface ConsentDoc {
+  v: 1;
+  userId: string;
+  memoryProcessing: boolean;
+  updatedAt: string;
+}
+
+/** Clé R2 du drapeau de consentement : « users/{uid}/privacy/consent.json ». */
+function consentKey(userId: string): string {
+  return userKey(userId, "privacy", "consent");
+}
+
+/**
+ * Préfixe R2 des souvenirs clé/valeur : « users/{uid}/memories/ ». Dérivé de
+ * userKey (contrat : userKey(uid, ...segments) =
+ * « users/{uid}/{segments.join("/")}.json ») pour rester aligné sur la
+ * composition canonique des clés et bénéficier de la validation du uid.
+ */
+function memoriesPrefix(userId: string): string {
+  return userKey(userId, "memories", "sonde").slice(0, -"sonde.json".length);
+}
 
 export interface MemoryConsentState {
   /** La mémoire personnalisée peut-elle être lue pour personnaliser les réponses ? */
@@ -39,12 +70,12 @@ export interface MemoryConsentState {
 export async function getMemoryConsent(userId: string): Promise<MemoryConsentState> {
   if (!userId?.trim()) return { memoryProcessing: true, updatedAtMs: null };
   try {
-    const snap = await adminDb.collection(PRIVACY_COLLECTION).doc(userId).get();
-    if (!snap.exists) return { memoryProcessing: true, updatedAtMs: null };
-    const updatedAt = snap.get("updatedAt");
+    const doc = await readJsonIfExists<ConsentDoc>(consentKey(userId));
+    if (!doc) return { memoryProcessing: true, updatedAtMs: null };
+    const updatedAtMs = typeof doc.updatedAt === "string" ? Date.parse(doc.updatedAt) : Number.NaN;
     return {
-      memoryProcessing: snap.get("memoryProcessing") !== false,
-      updatedAtMs: typeof updatedAt?.toMillis === "function" ? updatedAt.toMillis() : null,
+      memoryProcessing: doc.memoryProcessing !== false,
+      updatedAtMs: Number.isFinite(updatedAtMs) ? updatedAtMs : null,
     };
   } catch {
     return { memoryProcessing: true, updatedAtMs: null };
@@ -53,11 +84,12 @@ export async function getMemoryConsent(userId: string): Promise<MemoryConsentSta
 
 export async function setMemoryConsent(userId: string, memoryProcessing: boolean): Promise<MemoryConsentState> {
   if (!userId?.trim()) throw new Error("Consent requires userId.");
-  const { FieldValue } = await import("firebase-admin/firestore");
-  await adminDb
-    .collection(PRIVACY_COLLECTION)
-    .doc(userId)
-    .set({ userId, memoryProcessing, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await writeJson(consentKey(userId), {
+    v: 1,
+    userId,
+    memoryProcessing,
+    updatedAt: new Date().toISOString(),
+  } satisfies ConsentDoc);
   return { memoryProcessing, updatedAtMs: Date.now() };
 }
 
@@ -108,21 +140,13 @@ export interface PurgeReport {
 export async function purgeUserData(userId: string): Promise<PurgeReport> {
   if (!userId?.trim()) throw new Error("Purge requires userId.");
 
-  // Souvenirs : suppression par lots de 300 (limite transactionnelle
-  // confortable), bouclée jusqu'à épuisement.
+  // Souvenirs : suppression par lots (removePrefix, RGPD) bouclée jusqu'à
+  // épuisement — même stratégie que les batches Firestore historiques.
   let memoriesDeleted = 0;
   for (;;) {
-    const snap = await adminDb
-      .collection("userMemories")
-      .where("userId", "==", userId)
-      .limit(300)
-      .get();
-    if (snap.empty) break;
-    const batch = adminDb.batch();
-    for (const doc of snap.docs) batch.delete(doc.ref);
-    await batch.commit();
-    memoriesDeleted += snap.size;
-    if (snap.size < 300) break;
+    const supprimes = await removePrefix(memoriesPrefix(userId), { maxObjects: 300 });
+    memoriesDeleted += supprimes;
+    if (supprimes === 0) break;
   }
 
   const feedbackAndLessonsDeleted = await purgeFeedbackData(userId);
@@ -130,7 +154,7 @@ export async function purgeUserData(userId: string): Promise<PurgeReport> {
 
   // Réinitialisation du drapeau de consentement (état par défaut) après
   // purge — le compte repart sur les réglages d'usine.
-  await adminDb.collection(PRIVACY_COLLECTION).doc(userId).delete().catch(() => undefined);
+  await removeKey(consentKey(userId)).catch(() => undefined);
 
   return {
     memoriesDeleted,

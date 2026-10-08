@@ -1,26 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { protectRoute } from "@/lib/security/route-guard";
-import { adminDb } from "@/lib/firebase/admin";
+import { listJson, userKey } from "@/lib/storage/user-data-store";
 import { searchAgentMemories } from "@/lib/memory/episodic";
 import { listMemories } from "@/lib/memory/user-memory";
 import { searchKeyValueEntries, mergeMemoryResults, MERGED_RESULTS_MAX } from "@/lib/memory/keyvalue-search";
 import { createMemoryEmbedding } from "@/lib/memory/embeddings";
 import { cosineSimilarity } from "@/lib/memory/similarity";
 import { errorStatus } from "@/lib/security/http-errors";
+import type { MemoryRecord } from "@/lib/memory/types";
 
 /**
  * Recherche dans la mémoire de l'utilisateur :
- *  - souvenirs épisodiques / décisions / préférences (collection `memories`,
- *    similarité sémantique par embeddings) → source: "episodic" ;
- *  - souvenirs clé/valeur du panneau « Mémoire permanente » (collection
- *    `userMemories`, recherche sous-chaîne insensible à la casse sur clé et
- *    valeur, scoring exact > préfixe > sous-chaîne) → source: "keyvalue".
+ *  - souvenirs épisodiques / décisions / préférences (items R2
+ *    `users/{uid}/memory-items/`, similarité sémantique par embeddings)
+ *    → source: "episodic" ;
+ *  - souvenirs clé/valeur du panneau « Mémoire permanente » (souvenirs R2
+ *    `users/{uid}/memories/`, recherche sous-chaîne insensible à la casse sur
+ *    clé et valeur, scoring exact > préfixe > sous-chaîne) → source: "keyvalue".
  * Les deux univers étaient historiquement déconnectés (les k/v n'étaient
  * jamais retrouvés) : ils sont désormais fusionnés, dédupliqués et plafonnés.
- * La recherche k/v est fail-soft : une panne Firestore k/v ne casse jamais la
+ * La recherche k/v est fail-soft : une panne R2 k/v ne casse jamais la
  * recherche sémantique déjà disponible.
  */
+
+/**
+ * Préfixe R2 des items épisodiques : « users/{uid}/memory-items/ ». Dérivé de
+ * userKey (contrat : userKey(uid, ...segments) =
+ * « users/{uid}/{segments.join("/")}.json ») pour rester aligné sur la
+ * composition canonique des clés et bénéficier de la validation du uid.
+ */
+function memoryItemsPrefix(userId: string): string {
+  return userKey(userId, "memory-items", "sonde").slice(0, -"sonde.json".length);
+}
 
 const SearchSchema = z.object({
   query: z.string().trim().min(2).max(500),
@@ -65,22 +77,17 @@ async function runMemorySearch(userId: string, input: z.infer<typeof SearchSchem
   }
 
   // Portée globale : tous les souvenirs à embedding de l'utilisateur.
-  const [snapshot, queryEmbedding] = await Promise.all([
-    adminDb.collection("memories").where("userId", "==", userId).limit(300).get(),
+  // Task 109 : les items épisodiques vivent dans R2 (users/{uid}/memory-items/),
+  // scan préfixe borné à 300 docs — comme la requête Firestore historique.
+  const [items, queryEmbedding] = await Promise.all([
+    listJson<MemoryRecord>(memoryItemsPrefix(userId), { limit: 300 }),
     createMemoryEmbedding(input.query),
   ]);
 
-  const results = snapshot.docs
-    .map((doc) => {
-      const data = doc.data() as {
-        type?: string;
-        content?: string;
-        createdAt?: string;
-        agentId?: string;
-        embedding?: number[] | null;
-      };
+  const results = items
+    .map((data) => {
       return {
-        id: doc.id,
+        id: String(data.id ?? ""),
         type: String(data.type ?? "conversation"),
         content: String(data.content ?? ""),
         createdAt: typeof data.createdAt === "string" ? data.createdAt : "",

@@ -1,10 +1,3 @@
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import {
-  resilientCreate,
-  resilientGet,
-  resilientQuery,
-} from "@/lib/db/firestore-resilient";
 import { logger } from "@/lib/observability/logger";
 import { buildAgentCharter } from "./charter";
 import { AgentRecord, AgentRecordSchema, AgentRecordInput, AgentSummary } from "./schema";
@@ -15,17 +8,80 @@ import {
   assertResourceWrite,
   listUserOrgIds,
 } from "@/lib/tenants/resource-access";
-
-const COLLECTION = "agents";
-interface AgentDoc { [key: string]: unknown; ownerId: string; createdAt?: Timestamp | Date | string | FieldValue; updatedAt?: Timestamp | Date | string | FieldValue; }
+import {
+  listJson,
+  newUlid,
+  readJsonIfExists,
+  removeKey,
+  userDir,
+  userKey,
+  writeJson,
+} from "@/lib/storage/user-data-store";
 
 /**
- * Horodatage lisible d'un document agent : Timestamp Firestore (écritures
- * historiques serverTimestamp), Date (écritures 96-c via la couche
- * résiliente) ou chaîne ISO — jamais d'horodatage perdu.
+ * Dépôt agents — backend Cloudflare R2 (Task 109).
+ *
+ * Clés canoniques (CONTRAT TASK 109) :
+ *  - document agent      : `users/{uid}/agents/{agentId}.json` — doc { v:1, id, ownerId, …champs AgentRecord } ;
+ *  - index org           : `orgs/{orgId}/agents/{agentId}.json` — pointeur { v:1, ownerId, agentId },
+ *                          écrit/mis à jour/supprimé EN MÊME TEMPS que l'agent (pas de transaction R2 :
+ *                          séquence doc → pointeur → index, chaque écriture idempotente) ;
+ *  - index global léger  : `agents-index/{agentId}.json` — pointeur { v:1, ownerId, agentId },
+ *                          écrit à la création et nettoyé à la suppression.
+ *
+ * Pourquoi l'index global : getAgentById est appelé SANS contexte utilisateur
+ * par les deux seuls appelants réels (app/api/public/agents/[agentId] et
+ * app/api/public/commercial/[slug] — chats clients publics). Sur R2, aucune
+ * résolution par id seul n'est possible sans index ; un scan de `users/`
+ * (coût global, croisé multi-tenant) est interdit. L'index global est la
+ * contrepartie minimale : un objet de ~50 octets par agent, maintenu aux
+ * mêmes points que le pointeur org.
+ *
+ * Surface d'API STRICTEMENT identique au backend Firestore (Task 108) :
+ * mêmes exports, mêmes signatures, mêmes formes de retour — zéro
+ * modification de route nécessaire.
+ */
+
+interface AgentDoc { [key: string]: unknown; id?: string; ownerId: string; orgId?: string; createdAt?: string | Date; updatedAt?: string | Date; }
+
+/** Plafond du listing union (identique au LIST_CAP historique). */
+const AGENT_LIST_CAP = 100;
+/** Comportement Firestore conservé : la requête historique était plafonnée à limit(5). */
+const COUNT_CAP = 5;
+
+/* ------------------------------------------------------------------ */
+/* Clés R2                                                             */
+/* ------------------------------------------------------------------ */
+
+/** Segment de clé R2 sûr (même règle que la fondation user-data-store). */
+function assertSegment(value: string, label: string): string {
+  const clean = value.trim();
+  if (!/^[A-Za-z0-9._-]{1,128}$/.test(clean) || clean.includes("..")) {
+    throw new Error(`Identifiant ${label} invalide pour une clé R2.`);
+  }
+  return clean;
+}
+
+/** Document agent chez son propriétaire : users/{uid}/agents/{agentId}.json */
+function agentDocKey(ownerId: string, agentId: string): string {
+  return userKey(ownerId, "agents", assertSegment(agentId, "agentId"));
+}
+
+/** Pointeur d'org : orgs/{orgId}/agents/{agentId}.json */
+function orgPointerKey(orgId: string, agentId: string): string {
+  return `orgs/${assertSegment(orgId, "orgId")}/agents/${assertSegment(agentId, "agentId")}.json`;
+}
+
+/** Index global léger : agents-index/{agentId}.json → { ownerId, agentId }. */
+function globalIndexKey(agentId: string): string {
+  return `agents-index/${assertSegment(agentId, "agentId")}.json`;
+}
+
+/**
+ * Horodatage lisible d'un document agent : chaîne ISO (écritures R2) ou
+ * Date (défensive) — jamais d'horodatage perdu.
  */
 function recordTimestamp(value: unknown): string {
-  if (value instanceof Timestamp) return value.toDate().toISOString();
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "string" && !Number.isNaN(Date.parse(value))) return value;
   return new Date().toISOString();
@@ -45,6 +101,38 @@ function toRecord(id: string, data: AgentDoc): AgentRecord {
     updatedAt: recordTimestamp(data.updatedAt),
   };
 }
+
+/**
+ * Ignore les valeurs undefined d'une couche de fusion — réplique exacte de
+ * `ignoreUndefinedProperties: true` (lib/firebase/admin) + set(merge) :
+ * un champ fourni à undefined NE ÉCRASE PAS la valeur déjà stockée.
+ */
+function definedEntries(record: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
+}
+
+/**
+ * Résout un agent par son id SEUL via l'index global (appelants sans
+ * contexte utilisateur) : index → document chez son propriétaire. Le
+ * propriétaire du document doit coïncider avec l'index (fail-closed si
+ * incohérence — anti-énumération, indiscernable d'une ressource absente).
+ */
+async function resolveAgentDocById(agentId: string): Promise<{ ownerId: string; doc: AgentDoc } | null> {
+  const pointer = await readJsonIfExists<{ ownerId?: unknown }>(globalIndexKey(agentId));
+  const ownerId = typeof pointer?.ownerId === "string" ? pointer.ownerId.trim() : "";
+  if (!ownerId) return null;
+  const doc = await readJsonIfExists<AgentDoc>(agentDocKey(ownerId, agentId));
+  if (!doc || typeof doc.ownerId !== "string" || doc.ownerId !== ownerId) return null;
+  return { ownerId, doc };
+}
+
+/** Supprime le document + pointeur org + index global (dans cet ordre). */
+async function removeAgentArtifacts(ownerId: string, agentId: string, orgId?: string): Promise<void> {
+  await removeKey(agentDocKey(ownerId, agentId));
+  if (typeof orgId === "string" && orgId) await removeKey(orgPointerKey(orgId, agentId));
+  await removeKey(globalIndexKey(agentId));
+}
+
 /**
  * Crée un agent. Sans opts.orgId l'agent est personnel (comportement
  * historique) ; avec orgId, l'appelant doit être membre de l'organisation
@@ -64,46 +152,44 @@ export async function createAgentRecord(ownerId: string, input: AgentRecordInput
   if (!values.systemPrompt || values.systemPrompt.trim().length < 10) {
     values.systemPrompt = buildAgentCharter(values);
   }
-  // Couche résiliente (Task 96-c) : écriture Firestore bornée (deadline
-  // anti-stall + disjoncteur quota). ownerId EXPLICITE (les payloads
-  // `agents` portent ownerId, pas userId) — conservé pour compat de signature
-  // depuis la suppression du second backend (Task 108).
-  const id = adminDb.collection(COLLECTION).doc().id;
-  const now = new Date();
-  const payload = { ...values, ownerId, createdAt: now, updatedAt: now } satisfies AgentDoc;
-  await resilientCreate(COLLECTION, id, payload, ownerId);
+  // id ULID : tri lexicographique des clés R2 = ordre chronologique.
+  const id = newUlid();
+  const now = new Date().toISOString();
+  const payload = { v: 1, ...values, id, ownerId, createdAt: now, updatedAt: now } satisfies AgentDoc;
+  await writeJson(agentDocKey(ownerId, id), payload);
+  // Pointeur org écrit en même temps que l'agent.
+  if (orgId) await writeJson(orgPointerKey(orgId, id), { v: 1, ownerId, agentId: id });
+  // Index global léger : résolution par id seul (routes publiques).
+  await writeJson(globalIndexKey(id), { v: 1, ownerId, agentId: id });
   return toRecord(id, payload);
 }
+
 export async function listAgentsByOwner(ownerId: string, projectId?: string): Promise<AgentRecord[]> {
-  // Scan borné (cap 200) + tri mémoire createdAt desc : index-safe (aucun
-  // index composite requis).
-  const docs = await resilientQuery<AgentDoc>(
-    COLLECTION,
-    [{ field: "ownerId", value: ownerId }],
-    { orderField: "createdAt", descending: true, limit: 200, includeIds: true },
-  );
+  // Scan préfixe borné (cap 500 clés par la fondation R2) + filtres mémoire +
+  // tri createdAt desc + plafond 100 : index-safe par construction (aucun
+  // index composite requis, contrairement à Firestore).
+  const docs = await listJson<AgentDoc>(userDir(ownerId, "agents"));
   return docs
     .filter(d => d.status !== "archived")
     .filter(d => !projectId || d.projectId === projectId)
-    .slice(0, LIST_CAP)
-    .map(d => toRecord(String(d.id), d));
+    .map(d => toRecord(typeof d.id === "string" && d.id ? d.id : "", d))
+    .filter(r => r.id !== "")
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, AGENT_LIST_CAP);
 }
-
-/** Firestore limite l'opérateur `in` à 30 valeurs par requête. */
-const IN_QUERY_CHUNK = 30;
-const LIST_CAP = 100;
 
 /**
  * Liste union org-aware (recommandation C) : agents personnels + agents des
- * organisations dont l'utilisateur est membre. Deux familles de requêtes
- * bornées (ownerId == uid ; orgId in chunk≤30), fusion dédupliquée, tri
- * createdAt desc, plafond 100 — I/O Firestore maîtrisées et déterministes.
+ * organisations dont l'utilisateur est membre. Le listing des agents d'une
+ * org passe par les pointeurs `orgs/{orgId}/agents/` puis la lecture de
+ * chaque agent CHEZ SON PROPRIÉTAIRE ; fusion dédupliquée par id, tri
+ * createdAt desc, plafond 100.
  */
 export async function listAgentsForUser(userId: string, projectId?: string): Promise<AgentRecord[]> {
   const personal = await listAgentsByOwner(userId, projectId);
-  // Fail-soft QUOTA (Task 96-c) : si l'index d'appartenance aux organisations
-  // est injoignable (quota Firestore épuisé), on livre AU MOINS les agents
-  // personnels au lieu d'un 500 — la section Agent IA reste ouverte.
+  // Fail-soft conservé : si l'index d'appartenance aux organisations est
+  // injoignable, on livre AU MOINS les agents personnels au lieu d'un 500 —
+  // la section Agent IA reste ouverte.
   let orgIds: string[] = [];
   try {
     orgIds = await listUserOrgIds(userId);
@@ -113,38 +199,52 @@ export async function listAgentsForUser(userId: string, projectId?: string): Pro
   }
   if (orgIds.length === 0) return personal;
 
-  const chunks: string[][] = [];
-  for (let i = 0; i < orgIds.length; i += IN_QUERY_CHUNK) chunks.push(orgIds.slice(i, i + IN_QUERY_CHUNK));
-  // Type structurel (data() peut manquer de champs requis par AgentDoc — le
-  // cast AgentDoc est refait à la lecture de chaque doc).
-  let orgSnapshots: Array<{ docs: Array<{ id: string; data: () => Record<string, unknown> | undefined }> }>;
+  const byId = new Map<string, AgentRecord>();
+  for (const record of personal) byId.set(record.id, record);
   try {
-    orgSnapshots = await Promise.all(chunks.map((chunk) =>
-      adminDb.collection(COLLECTION).where("orgId", "in", chunk).limit(LIST_CAP).get())) as typeof orgSnapshots;
+    for (const orgId of orgIds) {
+      // Pointeurs de l'org (cap 500 par la fondation) ; un pointeur orphelin
+      // (agent déjà supprimé) est simplement ignoré.
+      const pointers = await listJson<{ ownerId?: unknown; agentId?: unknown }>(
+        `orgs/${assertSegment(orgId, "orgId")}/agents`,
+      );
+      for (const pointer of pointers) {
+        const ownerId = typeof pointer.ownerId === "string" ? pointer.ownerId : "";
+        const agentId = typeof pointer.agentId === "string" ? pointer.agentId : "";
+        if (!ownerId || !agentId || byId.has(agentId)) continue;
+        const doc = await readJsonIfExists<AgentDoc>(agentDocKey(ownerId, agentId));
+        if (!doc || doc.status === "archived") continue;
+        if (projectId && doc.projectId !== projectId) continue;
+        byId.set(agentId, toRecord(agentId, doc));
+      }
+    }
   } catch (error) {
     logger.warn({ err: error }, "list_org_agents_failed_failsoft");
     return personal;
   }
-
-  const byId = new Map<string, AgentRecord>();
-  for (const record of personal) byId.set(record.id, record);
-  for (const snapshot of orgSnapshots) {
-    for (const doc of snapshot.docs) {
-      const data = doc.data() as AgentDoc | undefined;
-      if (!data || data.status === "archived") continue;
-      if (projectId && data.projectId !== projectId) continue;
-      if (!byId.has(doc.id)) byId.set(doc.id, toRecord(doc.id, data));
-    }
-  }
   return [...byId.values()]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, LIST_CAP);
+    .slice(0, AGENT_LIST_CAP);
 }
+
+/**
+ * Lecture globale par id (SANS contexte utilisateur) : résolue via l'index
+ * global léger `agents-index/{agentId}.json` — les appelants réels sont les
+ * routes publiques (chats clients). Seul un agent `active` est renvoyé
+ * (comportement historique conservé).
+ */
 export async function getAgentById(agentId: string): Promise<AgentRecord | null> {
-  const data = await resilientGet<AgentDoc>(COLLECTION, agentId); if (!data || data.status !== "active") return null; return toRecord(agentId, data);
+  const resolved = await resolveAgentDocById(agentId);
+  if (!resolved || resolved.doc.status !== "active") return null;
+  return toRecord(agentId, resolved.doc);
 }
+
 export async function getAgentForOwner(ownerId: string, agentId: string): Promise<AgentRecord | null> {
-  const data = await resilientGet<AgentDoc>(COLLECTION, agentId); if (!data || data.ownerId !== ownerId) return null; return toRecord(agentId, data);
+  // Lecture par clé directe chez le propriétaire déclaré : un autre uid
+  // ne peut même pas localiser le document (cloisonnement par préfixe).
+  const data = await readJsonIfExists<AgentDoc>(agentDocKey(ownerId, agentId));
+  if (!data || data.ownerId !== ownerId) return null;
+  return toRecord(agentId, data);
 }
 
 /**
@@ -154,18 +254,19 @@ export async function getAgentForOwner(ownerId: string, agentId: string): Promis
  * renvoie null (indiscernable d'une ressource absente — anti-énumération).
  */
 export async function getAgentForUser(userId: string, agentId: string): Promise<AgentRecord | null> {
-  const data = await resilientGet<AgentDoc>(COLLECTION, agentId); if (!data) return null;
+  const resolved = await resolveAgentDocById(agentId);
+  if (!resolved) return null;
   try {
-    // Ressource personnelle : aucune I/O Firestore (ownerId === userId) —
-    // le chat avec SON agent survit au quota. Ressource d'org : le contexte
-    // org consulte Firestore ; son échec interne renvoie null (fail-closed,
-    // indiscernable d'une ressource absente).
-    await assertResourceRead(userId, { ownerId: data.ownerId, orgId: typeof data.orgId === "string" ? data.orgId : null });
+    // Ressource personnelle : la politique (ownerId === userId) tranche sans
+    // I/O org. Ressource d'org : le contexte org est consulté ; son échec
+    // interne renvoie null (fail-closed).
+    await assertResourceRead(userId, { ownerId: resolved.doc.ownerId, orgId: typeof resolved.doc.orgId === "string" ? resolved.doc.orgId : null });
   } catch {
     return null;
   }
-  return toRecord(agentId, data);
+  return toRecord(agentId, resolved.doc);
 }
+
 export async function updateAgentForOwner(ownerId: string, agentId: string, patch: Partial<AgentRecordInput>): Promise<AgentRecord | null> {
   const current = await getAgentForOwner(ownerId, agentId); if (!current) return null;
   const merged = AgentRecordSchema.parse({
@@ -192,18 +293,30 @@ export async function updateAgentForOwner(ownerId: string, agentId: string, patc
   if (patch.systemPrompt === undefined && (!merged.systemPrompt || merged.systemPrompt.trim().length < 10)) {
     merged.systemPrompt = buildAgentCharter(merged);
   }
-  await adminDb.collection(COLLECTION).doc(agentId).set({ ...merged, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  // Sémantique Firestore conservée : set(merge) + ignoreUndefinedProperties —
+  // les champs non fournis (persona, orgId, createdAt…) sont PRÉSERVÉS.
+  const nextDoc = {
+    v: 1,
+    ...current,
+    ...definedEntries(merged as unknown as Record<string, unknown>),
+    id: agentId,
+    ownerId,
+    createdAt: current.createdAt,
+    updatedAt: new Date().toISOString(),
+  } satisfies AgentDoc;
+  await writeJson(agentDocKey(ownerId, agentId), nextDoc);
   return getAgentForOwner(ownerId, agentId);
 }
+
 export async function deleteAgentForOwner(ownerId: string, agentId: string): Promise<boolean> {
   const current = await getAgentForOwner(ownerId, agentId); if (!current) return false;
-  await adminDb.collection(COLLECTION).doc(agentId).delete(); return true;
+  await removeAgentArtifacts(ownerId, agentId, current.orgId); return true;
 }
 
 /** Mise à jour org-aware : écriture propriétaire OU owner/admin de l'org. */
 export async function updateAgentForUser(userId: string, agentId: string, patch: Partial<AgentRecordInput> & { orgId?: string }): Promise<AgentRecord | null> {
-  const snap = await adminDb.collection(COLLECTION).doc(agentId).get(); if (!snap.exists) return null;
-  const data = snap.data() as AgentDoc | undefined; if (!data) return null;
+  const resolved = await resolveAgentDocById(agentId); if (!resolved) return null;
+  const { ownerId, doc: data } = resolved;
   try {
     await assertResourceWrite(userId, { ownerId: data.ownerId, orgId: typeof data.orgId === "string" ? data.orgId : null });
     // Transfert d'organisation : la destination doit être une org dont le
@@ -245,24 +358,49 @@ export async function updateAgentForUser(userId: string, agentId: string, patch:
   if (patch.systemPrompt === undefined && (!merged.systemPrompt || merged.systemPrompt.trim().length < 10)) {
     merged.systemPrompt = buildAgentCharter(merged);
   }
-  await adminDb.collection(COLLECTION).doc(agentId).set({ ...merged, ownerId: data.ownerId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  // Sémantique Firestore conservée (set(merge) + ignoreUndefinedProperties) :
+  // orgId n'est remplacé QUE si nextOrgId est défini — le détachement via
+  // "" conserve le rattachement courant, exactement comme avant la migration.
+  const nextDoc = {
+    v: 1,
+    ...data,
+    ...definedEntries(merged as unknown as Record<string, unknown>),
+    id: agentId,
+    ownerId: data.ownerId,
+    createdAt: recordTimestamp(data.createdAt),
+    updatedAt: new Date().toISOString(),
+  } satisfies AgentDoc;
+  await writeJson(agentDocKey(ownerId, agentId), nextDoc);
+  // Réindexation org sur les pointeurs R2 : l'ancien pointeur est retiré, le
+  // nouveau écrit — en même temps que le document (aucun pointeur résiduel
+  // vers un agent qui n'y est plus rattaché).
+  if (nextOrgId && nextOrgId !== data.orgId) {
+    if (typeof data.orgId === "string" && data.orgId) await removeKey(orgPointerKey(data.orgId, agentId));
+    await writeJson(orgPointerKey(nextOrgId, agentId), { v: 1, ownerId: data.ownerId, agentId });
+  }
   return getAgentForUser(userId, agentId);
 }
 
 /** Suppression org-aware : écriture propriétaire OU owner/admin de l'org. */
 export async function deleteAgentForUser(userId: string, agentId: string): Promise<boolean> {
-  const snap = await adminDb.collection(COLLECTION).doc(agentId).get(); if (!snap.exists) return false;
-  const data = snap.data() as AgentDoc | undefined; if (!data) return false;
+  const resolved = await resolveAgentDocById(agentId); if (!resolved) return false;
   try {
-    await assertResourceWrite(userId, { ownerId: data.ownerId, orgId: typeof data.orgId === "string" ? data.orgId : null });
+    await assertResourceWrite(userId, { ownerId: resolved.doc.ownerId, orgId: typeof resolved.doc.orgId === "string" ? resolved.doc.orgId : null });
   } catch {
     return false;
   }
-  await adminDb.collection(COLLECTION).doc(agentId).delete(); return true;
+  await removeAgentArtifacts(resolved.ownerId, agentId, typeof resolved.doc.orgId === "string" ? resolved.doc.orgId : undefined);
+  return true;
 }
+
 export async function countActiveAgentsOfType(ownerId: string, type: string): Promise<number> {
-  const snapshot = await adminDb.collection(COLLECTION).where("ownerId", "==", ownerId).where("type", "==", type).where("status", "==", "active").limit(5).get(); return snapshot.size;
+  // Comportement Firestore conservé : la requête historique était plafonnée
+  // à limit(5) — le compteur s'arrête donc à 5 (le seul appelant, la garde
+  // « agent de code », ne teste que count === 0).
+  const docs = await listJson<AgentDoc>(userDir(ownerId, "agents"));
+  return Math.min(docs.filter(d => d.type === type && d.status === "active").length, COUNT_CAP);
 }
+
 export function toSummary(record: AgentRecord): AgentSummary {
   return { id: record.id, name: record.name, description: record.description, type: record.type, typeLabel: record.typeLabel, skills: record.skills, agentMode: record.agentMode, memoryFile: record.memoryFile, projectId: record.projectId, orgId: record.orgId, status: record.status,
     modelStrategy: record.modelStrategy, preferredProvider: record.preferredProvider, preferredModel: record.preferredModel, autonomous: record.autonomous,
