@@ -61,7 +61,7 @@ npm run dev         # http://localhost:3000
 
 **Variables OBLIGATOIRES** (développement comme production) : `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (identités factices acceptées en local — le seed en génère).
 
-**Variables OPTIONNELLES** (chaque absence dégrade avec repli, jamais de panne) : `OPENAI_API_KEY`/`GROQ_API_KEY`/`GLM_API_KEY`/`AGNES_API_KEY` (LLM), `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` (cache), `QDRANT_URL`/`QDRANT_API_KEY` (recherche vectorielle), `R2_*` (stockage fichiers), `RESEND_API_KEY` (e-mail), `TWILIO_*` (téléphonie), `ELEVENLABS_API_KEY` (voix), `COMPOSIO_API_KEY` (connecteurs), `CHARIOW_*` (facturation), `SANDBOX_URL`/`SANDBOX_SHARED_SECRET` (exécution de code). La sonde `/api/health/infra` (auth requise) liste les groupes présents/absents par nom — jamais de valeur.
+**Variables OPTIONNELLES** (chaque absence dégrade avec repli, jamais de panne) : `OPENAI_API_KEY`/`GROQ_API_KEY`/`GLM_API_KEY`/`AGNES_API_KEY` (LLM), `QDRANT_URL`/`QDRANT_API_KEY` (recherche vectorielle), `R2_*` (stockage fichiers), `RESEND_API_KEY` (e-mail), `TWILIO_*` (téléphonie), `ELEVENLABS_API_KEY` (voix), `COMPOSIO_API_KEY` (connecteurs), `CHARIOW_*` (facturation), `SANDBOX_URL`/`SANDBOX_SHARED_SECRET` (exécution de code). La sonde `/api/health/infra` (auth requise) liste les groupes présents/absents par nom — jamais de valeur.
 
 **Qualité** : `make qa` = lint + typecheck + tests unitaires + build + budget bundle. Tests e2e contre émulateurs : `make test:e2e` (ne touche JAMAIS la production).
 
@@ -135,10 +135,6 @@ npm run build
 | `live:gateway` | `tsx lib/live/gateway-server.ts` | Lance le serveur Gateway WebSocket pour les sessions Live |
 | `analyze` | `ANALYZE=true next build` | Analyse la taille du bundle d'optimisation de build |
 | `check:bundle` | `node scripts/...` | Vérifie le budget First Load JS gzip par route (CI) |
-| `check:prod` | `node scripts/...` | Vérification production Task 40 (Sentry/AdSense/CSP/ads.txt) |
-| `supabase:start` / `stop` / `reset` | `npx supabase ...` | Environnement PostgreSQL local (migrations supabase/) |
-| `supabase:push` | `npx supabase db push` | Applique les migrations SQL au projet Supabase distant |
-| `supabase:types` | `npx supabase gen types ...` | Régénère les types TypeScript des tables (phase 2) |
 | `setup:hooks` | `cp scripts/git-hooks/...` | Installe le pre-commit gitleaks (scan des secrets) |
 | `seed` / `db:reset` | `tsx scripts/seed.ts` | Peuple les émulateurs Firebase (dev local) |
 
@@ -150,18 +146,17 @@ Pour en savoir plus sur l'architecture, la roadmap et les spécifications techni
 
 - 📖 **[Guide Technique & Référence API](docs/guide-technique.md)** : Cartographie complète des modules `lib/`, endpoints API, variables d'environnement et stack.
 - 🎯 **[Analyse du Projet](docs/analyse-projet.md)** : Rapport d'analyse d'architecture, forces de la plateforme et leviers d'amélioration.
-- 📐 **[Décisions d'Architecture (ADR)](docs/architecture-decisions.md)** : Journal des choix techniques structurants (Next.js API routes, state management, ADR-005 Sentry, ADR-006 Supabase, ADR-007 AdSense).
+- 📐 **[Décisions d'Architecture (ADR)](docs/architecture-decisions.md)** : Journal des choix techniques structurants (Next.js API routes, state management, ADR-005 Sentry, ADR-007 AdSense).
 - 🗺️ **[Feuille de Route SaaS (Roadmap)](docs/saas-roadmap.md)** : État d'implémentation de la couverture entreprise (Multi-tenant, Sécurité, Observabilité, Billing).
-- 🐘 **[Migration Supabase](docs/migration-supabase.md)** : Plan progressif Firestore → PostgreSQL (schéma, RLS, pont d'identité, phases, rollback).
 
-### Observabilité & données (Task 40)
+### Observabilité & données (Task 40 + 108)
 
 - **Sentry** : erreurs + traces (serveur 15 % / client 10 %) via le pont
   asynchrone (zéro coût First Load), tunnel anti-bloqueurs `/monitoring`,
   source maps au build (`SENTRY_AUTH_TOKEN`). Voir ADR-005.
-- **Supabase/PostgreSQL** : backend de données piloté (`DATA_BACKEND`),
-  schéma complet + RLS dans `supabase/migrations/`, Firebase Auth
-  conservé (pont d'identité). Voir ADR-006 et le guide de migration.
+- **Firestore (Firebase)** : unique moteur de données (Task 108 — le second
+  backend et son miroir ont été retirés, ADR-006 retirée) ; le stockage
+  d'objets/identité est Cloudflare R2.
 - **Google AdSense** : emplacements publicitaires confinés aux pages
   publiques (`AdSenseAd`), `ads.txt` à la racine, CSP étendue. Voir ADR-007.
 

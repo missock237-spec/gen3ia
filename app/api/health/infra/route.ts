@@ -7,9 +7,7 @@ import { CONVERSATION_VECTOR_COLLECTION } from "@/lib/chat/vector-index";
 import { isSandboxConfigured } from "@/lib/sandbox/simulation";
 import { pingR2, type R2HealthStatus } from "@/lib/storage/r2";
 import { summarizeEnv } from "@/lib/env/config-report";
-import { getDualWriteDomains, getDualWriteStats } from "@/lib/db/dual-write";
 import { getQuotaGuardStats } from "@/lib/db/quota-guard";
-import { isSupabaseAdminConfigured } from "@/lib/supabase/config";
 import { checkFfmpegAvailable, type FfmpegAvailability } from "@/lib/video/ffmpeg";
 import { qstashConfig } from "@/lib/queue/qstash";
 
@@ -19,7 +17,8 @@ export const runtime = "nodejs";
  * Diagnostics d'infrastructure (utilisateur authentifié) — complète la
  * sonde publique /api/public/health qui reste volontairement sans
  * dépendance. Signale l'état réel des couches d'accélération :
- *  - Redis Upstash (rate limit distribué + cache catalogue) ;
+ *  - cache process-local (rate limit + micro-caches — Task 108 : le service
+ *    externe Redis a été supprimé, la couche est toujours disponible) ;
  *  - Qdrant (recherche vectorielle mémoire/knowledge) ;
  *  - sandbox Docker (exécution réelle) vs simulation intégrée ;
  *  - stockage R2 (fichiers, pièces jointes, artefacts).
@@ -52,10 +51,10 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     layers: {
-      redis: {
+      cache: {
         configured: isRedisConfigured(),
         ping: redis,
-        role: "rate limit distribué + cache catalogue + quotas Gen",
+        role: "cache process-local (rate limit + micro-caches + quotas Gen) — Task 108 : en mémoire, toujours disponible",
       },
       qdrant: {
         configured: isVectorStoreConfigured(),
@@ -91,18 +90,11 @@ export async function GET(request: NextRequest) {
     // Présence par groupe de capacités (booléens + noms manquants, JAMAIS
     // de valeur) : supervision des fournisseurs sans exposition de secret.
     config: summarizeEnv(),
-    // P2 migration Supabase (ADR-006) : domaines en double-écriture et
-    // compteurs de miroir (tentatives/succès/échecs) — supervision de la
-    // santé de la réplication avant le cutover P3. Aucune donnée sensible.
-    dualWrite: {
-      domains: getDualWriteDomains(),
-      stats: getDualWriteStats(),
-    },
-    // Task 95-b : repli Firestore→Supabase — configuration et état du
-    // disjoncteur quota (ouvert = les files vidéo tournent sur le miroir
-    // jusqu'à la fin du cooldown). Aucune valeur sensible.
-    firestoreFallback: {
-      configured: isSupabaseAdminConfigured(),
+    // Task 95-b/108 : état du disjoncteur quota Firestore (ouvert = les
+    // appels sont court-circuités en erreur quota-classifiée jusqu'à la fin
+    // du cooldown ; les files vidéo appliquent leur backoff). Aucune valeur
+    // sensible.
+    firestoreQuotaGuard: {
       breaker: getQuotaGuardStats(),
     },
     timestamp: new Date().toISOString(),

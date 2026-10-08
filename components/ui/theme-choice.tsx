@@ -10,11 +10,27 @@ import { useCallback, useEffect, useState } from "react";
  */
 const STORAGE_KEY = "gen3ia-theme";
 
+/**
+ * Contrat lot 108-b : le profil serveur (base R2) porte le thème choisi.
+ * Après CHAQUE application d'un choix (sombre comme clair), on persiste en
+ * FIRE-AND-FORGET : jamais bloquant, jamais d'erreur visible — le serveur
+ * peut ne pas être provisionné (anonyme, hors-ligne, route absente).
+ * localStorage reste la source de vérité instantanée (anti-FOUC layout).
+ */
+function persistThemeOnServer(next: ThemeChoiceValue): void {
+  fetch("/api/auth/profile", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ theme: next }),
+    credentials: "same-origin",
+  }).catch(() => undefined);
+}
+
 type ThemeChoiceValue = "dark" | "light";
 
 const OPTIONS: Array<{ value: ThemeChoiceValue; label: string; description: string; icon: string }> = [
   { value: "dark", label: "Thème sombre", description: "Espace profond Aurora — identité Gen3ia.", icon: "🌙" },
-  { value: "light", label: "Thème clair", description: "Porcelaine lumineuse — toute l'app devient claire.", icon: "☀️" },
+  { value: "light", label: "Thème clair", description: "Porcelaine bleutée — toute l'app devient claire.", icon: "☀️" },
 ];
 
 export function ThemeChoice() {
@@ -34,6 +50,8 @@ export function ThemeChoice() {
     } catch {
       /* stockage indisponible : le thème reste appliqué pour la session */
     }
+    // Persistance profil (fire-and-forget, voir persistThemeOnServer).
+    persistThemeOnServer(next);
   }, []);
 
   return (

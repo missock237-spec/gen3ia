@@ -4,7 +4,7 @@ import {
   resilientCreate,
   resilientGet,
   resilientQuery,
-} from "@/lib/db/firestore-fallback";
+} from "@/lib/db/firestore-resilient";
 import { logger } from "@/lib/observability/logger";
 import { buildAgentCharter } from "./charter";
 import { AgentRecord, AgentRecordSchema, AgentRecordInput, AgentSummary } from "./schema";
@@ -22,7 +22,7 @@ interface AgentDoc { [key: string]: unknown; ownerId: string; createdAt?: Timest
 /**
  * Horodatage lisible d'un document agent : Timestamp Firestore (écritures
  * historiques serverTimestamp), Date (écritures 96-c via la couche
- * résiliente) ou chaîne ISO (miroir Supabase) — jamais d'horodatage perdu.
+ * résiliente) ou chaîne ISO — jamais d'horodatage perdu.
  */
 function recordTimestamp(value: unknown): string {
   if (value instanceof Timestamp) return value.toDate().toISOString();
@@ -64,10 +64,10 @@ export async function createAgentRecord(ownerId: string, input: AgentRecordInput
   if (!values.systemPrompt || values.systemPrompt.trim().length < 10) {
     values.systemPrompt = buildAgentCharter(values);
   }
-  // Couche résiliente (Task 96-c) : écriture Firestore + miroir Supabase en
-  // un seul appel ; sous quota, l'agent est créé sur le miroir seul — la
-  // section Agent IA reste utilisable. ownerId EXPLICITE (les payloads
-  // `agents` portent ownerId, pas userId : le sniff automatique ne voit rien).
+  // Couche résiliente (Task 96-c) : écriture Firestore bornée (deadline
+  // anti-stall + disjoncteur quota). ownerId EXPLICITE (les payloads
+  // `agents` portent ownerId, pas userId) — conservé pour compat de signature
+  // depuis la suppression du second backend (Task 108).
   const id = adminDb.collection(COLLECTION).doc().id;
   const now = new Date();
   const payload = { ...values, ownerId, createdAt: now, updatedAt: now } satisfies AgentDoc;
@@ -76,7 +76,7 @@ export async function createAgentRecord(ownerId: string, input: AgentRecordInput
 }
 export async function listAgentsByOwner(ownerId: string, projectId?: string): Promise<AgentRecord[]> {
   // Scan borné (cap 200) + tri mémoire createdAt desc : index-safe (aucun
-  // index composite requis) et quota-safe (repli miroir transparent).
+  // index composite requis).
   const docs = await resilientQuery<AgentDoc>(
     COLLECTION,
     [{ field: "ownerId", value: ownerId }],

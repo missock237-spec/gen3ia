@@ -18,7 +18,7 @@ import {
   resilientSet,
   resilientList,
   resilientListByPayloadField,
-} from "@/lib/db/firestore-fallback";
+} from "@/lib/db/firestore-resilient";
 import {
   type VideoProject,
   type VideoProjectStatus,

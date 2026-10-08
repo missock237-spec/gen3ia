@@ -103,7 +103,7 @@ describe("strongEtag (ETag fort RFC 7232)", () => {
     expect(strongEtag(corps)).not.toBe(strongEtag(`${corps} `));
   });
 
-  it("reste stable après un aller-retour JSON (sémantique Upstash cacheSet→cacheGet)", () => {
+  it("reste stable après un aller-retour JSON (sémantique cacheSet→cacheGet)", () => {
     // L'enveloppe stockée dans Redis est relue via JSON.parse : le corps
     // (chaîne) doit ressortir identique pour que l'ETag corresponde encore.
     const envelope: CatalogResponseEnvelope = { etag: strongEtag(corps), body: corps };

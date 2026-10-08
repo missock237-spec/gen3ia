@@ -8,12 +8,12 @@ import { HttpError } from "@/lib/security/http-errors";
  * (favoris/installations/achats = routes séparées) : il est mis en cache 90 s
  * pour éviter jusqu'à 200 lectures Firestore + un tri mémoire par requête.
  *
- * Briques externes mockées (auth Firebase, repository Firestore, Redis) : on
+ * Briques externes mockées (auth Firebase, repository Firestore, cache) : on
  * teste le COMPORTEMENT de la route — auth AVANT cache, forme de la clé (sans
- * donnée personnelle), TTL 90 s, hit qui évite le loader, dégradation gracieuse
- * sans Redis. Le contrat réel de cacheWrap est déjà couvert par
+ * donnée personnelle), TTL 90 s, hit qui évite le loader, dégradation
+ * gracieuse. Le contrat réel de cacheWrap est déjà couvert par
  * lib/cache/redis.test.ts — la copie locale ci-dessous n'existe que pour
- * découpler ce test du client Upstash.
+ * découpler ce test de la couche cache.
  */
 
 const verifyFirebaseAuthMock = vi.fn();

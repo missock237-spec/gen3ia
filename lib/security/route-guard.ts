@@ -99,9 +99,10 @@ export async function protectRoute(
     // Couche 1 — locale (instantanée, protège l'instance courante).
     const limit = rateLimit(limitKey, limitConfig);
 
-    // Couche 2 — distribuée (Redis Upstash, partagée par toutes les
-    // instances serverless). Absente/indisponible = repli transparent
-    // sur la décision locale uniquement (jamais de blocage pour autant).
+    // Couche 2 — rate limit process-local par clé (fenêtre fixe, même
+    // API conservée). Task 108 : le service externe Redis a été supprimé ;
+    // la protection reste réelle par instance (jamais de blocage pour
+    // autant).
     const distributed = await rateLimitDistributed(limitKey, limitConfig);
 
     const allowed = limit.allowed && distributed.allowed;

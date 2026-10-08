@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyFirebaseToken } from "@/lib/firebase/auth-server";
 import { clientIp, enforceRateLimit } from "@/lib/security/rate-limit";
-import { ensureUserProfile } from "@/lib/firebase/users";
+import { ensureIdentity, publicIdentity } from "@/lib/identity/service";
 import { getWallet } from "@/lib/billing/wallet";
 import {
   clearSessionCookieHeader,
@@ -21,7 +21,7 @@ interface SessionWallet {
 
 interface SessionResponseBody {
   authenticated: boolean;
-  /** true : jeton valide mais provisioning Firestore indisponible (mode dégradé). */
+  /** true : jeton valide mais provisioning indisponible (mode dégradé). */
   degraded?: boolean;
   /** true : session établie après un second facteur MFA vérifié (Task 63). */
   mfa?: boolean;
@@ -30,34 +30,50 @@ interface SessionResponseBody {
     email: string | null;
     name: string | null;
     picture: string | null;
+    /** Thème persisté dans l'identité R2 (contrat lot 108-c) — champ additionnel. */
+    theme?: string;
   };
   /** null uniquement en mode dégradé : le wallet se recharge plus tard. */
   wallet: SessionWallet | null;
 }
 
 /**
- * Provisionne profil + wallet. Chaque étape est isolée : une panne Firestore
- * NE DOIT PAS invalider une authentification Firebase par ailleurs valide
- * (bug historique : "database was deleted" rendait la connexion impossible
- * pour TOUS les utilisateurs). En mode dégradé la session est établie, le
- * profil/wallet seront provisionnés à la prochaine opportunité.
+ * Provisionne identité (base R2) + wallet. Chaque étape est isolée : une panne
+ * de la base d'identités ou du wallet NE DOIT PAS invalider une authentification
+ * Firebase par ailleurs valide (bug historique : "database was deleted" rendait
+ * la connexion impossible pour TOUS les utilisateurs). En mode dégradé la
+ * session est établie, l'identité/wallet seront provisionnés à la prochaine
+ * opportunité.
  */
 async function provisionnerUtilisateur(token: {
   uid: string;
   email?: string;
+  /** Claim Firebase email_verified : autorité serveur pour l'email. */
+  email_verified?: boolean;
   name?: string;
   picture?: string;
   firebase?: { sign_in_provider?: string };
-}): Promise<{ wallet: SessionWallet | null; degraded: boolean }> {
+}): Promise<{ wallet: SessionWallet | null; degraded: boolean; theme?: string }> {
   const provider = token.firebase?.sign_in_provider || "unknown";
   let degraded = false;
   let wallet: SessionWallet | null = null;
+  let theme: string | undefined;
 
   try {
-    await ensureUserProfile({ uid: token.uid, email: token.email, displayName: token.name, photoURL: token.picture, provider });
+    const identity = await ensureIdentity({
+      uid: token.uid,
+      email: token.email ?? null,
+      // Jeton portant un email vérifié → mutation serveur autorisée
+      // (l'email fait autorité, il écrase un email non vérifié antérieur).
+      emailVerified: token.email_verified === true,
+      displayName: token.name ?? null,
+      photoURL: token.picture ?? null,
+      provider,
+    });
+    theme = publicIdentity(identity).theme;
   } catch (error) {
     degraded = true;
-    logger.warn({ err: error, uid: token.uid }, "auth.session.profile_provision_failed_degraded");
+    logger.warn({ err: error, uid: token.uid }, "auth.session.identity_provision_failed_degraded");
   }
 
   try {
@@ -74,7 +90,7 @@ async function provisionnerUtilisateur(token: {
     logger.warn({ err: error, uid: token.uid }, "auth.session.wallet_read_failed_degraded");
   }
 
-  return { wallet, degraded };
+  return { wallet, degraded, theme };
 }
 
 export async function POST(request: NextRequest) {
@@ -94,13 +110,19 @@ export async function POST(request: NextRequest) {
     // surfaces sensibles (assertStrongAuth) s'y fient pour les sessions cookie.
     const mfaStatus = mfaStatusFromToken(token);
 
-    const { wallet, degraded } = await provisionnerUtilisateur(token);
+    const { wallet, degraded, theme } = await provisionnerUtilisateur(token);
 
     const body: SessionResponseBody = {
       authenticated: true,
       ...(degraded ? { degraded: true } : {}),
       mfa: mfaStatus.secondFactorUsed,
-      user: { uid: token.uid, email: token.email ?? null, name: token.name ?? null, picture: token.picture ?? null },
+      user: {
+        uid: token.uid,
+        email: token.email ?? null,
+        name: token.name ?? null,
+        picture: token.picture ?? null,
+        ...(theme ? { theme } : {}),
+      },
       wallet,
     };
 
@@ -130,8 +152,9 @@ export async function POST(request: NextRequest) {
  * Version cookie : repond a partir du cookie de session signe pose par POST.
  * Utilisee par les pages protegees lorsque l'etat Firebase client est
  * indisponible, afin que l'utilisateur authentifie accede quand meme au
- * tableau de bord. Une panne Firestore renvoie 200 + wallet:null (mode
- * dégradé) au lieu d'un 401 qui déconnecterait l'utilisateur.
+ * tableau de bord. Une panne de la base d'identités/wallet renvoie
+ * 200 + wallet:null (mode dégradé) au lieu d'un 401 qui déconnecterait
+ * l'utilisateur.
  */
 export async function GET(request: NextRequest) {
   const session = readSessionCookie(request.headers.get("cookie"));
@@ -139,7 +162,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
-  const { wallet, degraded } = await provisionnerUtilisateur({
+  const { wallet, degraded, theme } = await provisionnerUtilisateur({
     uid: session.uid,
     email: session.email ?? undefined,
     name: session.name ?? undefined,
@@ -150,7 +173,13 @@ export async function GET(request: NextRequest) {
   const body: SessionResponseBody = {
     authenticated: true,
     ...(degraded ? { degraded: true } : {}),
-    user: { uid: session.uid, email: session.email, name: session.name, picture: session.picture },
+    user: {
+      uid: session.uid,
+      email: session.email,
+      name: session.name,
+      picture: session.picture,
+      ...(theme ? { theme } : {}),
+    },
     wallet,
   };
   return NextResponse.json(body);

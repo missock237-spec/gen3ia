@@ -1,37 +1,33 @@
 import "server-only";
 
 /**
- * GEN3IA VIDEO AGENT — Task 95-c : reprise automatique QUOTA-AWARE des files
- * de rendu (render-queue / production-queue).
+ * GEN3IA VIDEO AGENT — reprise automatique QUOTA-AWARE des files de rendu
+ * (render-queue / production-queue, Task 95-c/d).
  *
- * Pendant une panne de QUOTA Firestore (RESOURCE_EXHAUSTED / 429), les jobs
- * vidéo ne doivent ni consommer leur budget de relance, ni échouer
- * définitivement, ni notifier l'utilisateur : ils basculent sur le MIROIR
- * chaud Supabase (firestore_fallback, couche résiliente de la Task 95-b) le
- * temps de la panne, avec un backoff exponentiel, puis sont ré-imbriqués
- * dans Firestore à la reprise.
+ * Un incident de QUOTA Firestore (RESOURCE_EXHAUSTED / 429) n'est pas un
+ * échec de production : les jobs vidéo ne consomment ni leur budget de
+ * relance, ni d'échec définitif, ni de notification — ils sont ré-enfilés
+ * avec un backoff exponentiel et reprennent à leur checkpoint quand le
+ * quota revient (Task 108 : Firestore est l'unique moteur ; le miroir du
+ * second backend a été supprimé — sous quota, les ticks sont neutralisés
+ * puis republiés, exactement le même régime de reprise).
  *
- * Ce module est l'interface GELÉE entre les files (render-queue.ts) et la
- * couche de persistance résiliente (lib/db/firestore-fallback) :
+ * Ce module est l'interface GELÉE entre les files (render-queue.ts,
+ * production-queue.ts) et la couche résiliente Firestore-only
+ * (lib/db/firestore-resilient) :
  *   - classifyTickError / resumePolicyFor : décision de reprise ;
- *   - claimJobViaFallback : claim atomique sur la ligne miroir ;
  *   - loadJobDoc / saveJobDoc / createJobDoc / queryJobDocs : documents job
- *     via la couche résiliente (Firestore d'abord, miroir sous quota) ;
- *   - maybeReconcileQuotaRecovery : ré-imblication opportuniste (throttle).
+ *     via la couche résiliente (deadline anti-stall + disjoncteur quota).
  */
 
-import { logger } from "@/lib/observability/logger";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { isFirestoreQuotaError, isFirestoreTransientError } from "@/lib/db/quota-guard";
 import {
   resilientCreate,
   resilientGet,
   resilientQuery,
   resilientSet,
-  reconcileFallbackToFirestore,
-  type FallbackQueryOptions,
-  type ReconcileResult,
-} from "@/lib/db/firestore-fallback";
+  type ResilientQueryOptions,
+} from "@/lib/db/firestore-resilient";
 import type { RenderJob } from "@/lib/video/types";
 
 // ---------------------------------------------------------------------------
@@ -106,113 +102,25 @@ export function resumePolicyFor(error: unknown, quotaFailures: number): ResumePo
 export type RenderJobWithResume = RenderJob & { quotaFailures?: number };
 
 // ---------------------------------------------------------------------------
-// Claim atomique sur la ligne miroir (Firestore sous quota)
+// Documents job — wrappers sur la couche résiliente Firestore-only
 // ---------------------------------------------------------------------------
 
-export interface FallbackLease {
-  /** `${jobId}:${uuid}` — même convention que le claim Firestore. */
-  owner: string;
-  /** Instant d'expiration du bail (ISO 8601) = now + leaseMs. */
-  expiresAtIso: string;
-}
-
-const FALLBACK_TABLE = "firestore_fallback";
-
-function describeError(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
-
-/**
- * Claim ATOMIQUE d'un job sur la ligne miroir Supabase quand Firestore est
- * sous quota. Le bail (leaseOwner/leaseExpiresAt) et le statut sont posés
- * dans un SEUL UPDATE conditionnel : il ne réussit que si le bail courant
- * est libre (absent ou expiré) ET le statut est réclamable — deux workers
- * concurrents ne peuvent pas tous deux gagner (Postgres sérialise).
- *
- * Retourne le payload fusionné à jour si le claim est gagné, sinon null
- * (bail déjà pris, ligne miroir absente, Supabase non configuré ou erreur —
- * journalisée pino warn, JAMAIS de levée).
- */
-export async function claimJobViaFallback(
-  collection: string,
-  jobId: string,
-  lease: FallbackLease,
-  claimableStatuses: string[],
-  extraPatch: Record<string, unknown>,
-): Promise<Record<string, unknown> | null> {
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return null;
-  try {
-    // 1) Lecture de la ligne miroir courante pour construire l'état fusionné
-    //    (le miroir est « chaud » : les patches resilientSet y sont mergés).
-    const read = await supabase
-      .from(FALLBACK_TABLE)
-      .select("payload")
-      .eq("collection", collection)
-      .eq("document_id", jobId)
-      .maybeSingle();
-    if (read.error) {
-      logger.warn({ collection, jobId, error: describeError(read.error) }, "fallback_claim_failed");
-      return null;
-    }
-    const current = (read.data?.payload ?? {}) as Record<string, unknown>;
-    const merged = {
-      ...current,
-      leaseOwner: lease.owner,
-      leaseExpiresAt: lease.expiresAtIso,
-      ...extraPatch,
-    };
-    // 2) UPDATE conditionnel — filtres : collection + document, bail libre
-    //    (`leaseOwner` null OU `leaseExpiresAt` < MAINTENANT — clés JSON
-    //    camelCase, la convention des documents job) et statut réclamable.
-    //    La comparaison au bail se fait contre l'instant COURANT pour
-    //    répliquer EXACTEMENT la condition transactionnelle Firestore
-    //    (`leaseExpiresAt > now` → bail vivant) : comparer au seuil du
-    //    NOUVEAU bail (now + leaseMs) permettrait à un second claim de voler
-    //    un bail encore actif. Comparaison lexicographique d'ISO 8601 =
-    //    chronologique. `.select("payload")` ne rend que la ligne réellement
-    //    mise à jour : 0 ligne = claim perdu.
-    const update = await supabase
-      .from(FALLBACK_TABLE)
-      .update({ payload: merged, updated_at: new Date().toISOString() })
-      .eq("collection", collection)
-      .eq("document_id", jobId)
-      .or(`payload->>leaseOwner.is.null,payload->>leaseExpiresAt.lt."${new Date().toISOString()}"`)
-      .in("payload->>status", claimableStatuses)
-      .select("payload");
-    if (update.error) {
-      logger.warn({ collection, jobId, error: describeError(update.error) }, "fallback_claim_failed");
-      return null;
-    }
-    const rows = (update.data ?? []) as Array<{ payload: Record<string, unknown> }>;
-    if (rows.length !== 1) return null;
-    return rows[0].payload;
-  } catch (error) {
-    logger.warn({ collection, jobId, error: describeError(error) }, "fallback_claim_failed");
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Documents job (miroir chaud) — wrappers sur la couche résiliente
-// ---------------------------------------------------------------------------
-
-/** Lit un document job (Firestore d'abord, miroir pendant la panne). */
+/** Lit un document job (couche résiliente : deadline anti-stall + disjoncteur). */
 export async function loadJobDoc<T>(collection: string, jobId: string): Promise<T | null> {
   return resilientGet<T>(collection, jobId);
 }
 
 /**
  * Écrit un patch MERGE sur un document job : Firestore reçoit le patch
- * INCHANGÉ (sentinelles FieldValue comprises), le miroir reçoit une copie
- * assainie (Task 95-b). Sous quota, l'écriture atterrit dans le miroir.
+ * INCHANGÉ (sentinelles FieldValue comprises). Une erreur de quota est
+ * propagée — la file la classe (classifyTickError) et applique son backoff
+ * sans consommer le budget de relance.
  */
 export async function saveJobDoc(collection: string, jobId: string, patch: object, ownerId?: string): Promise<void> {
   await resilientSet(collection, jobId, patch, { merge: true, ownerId });
 }
 
-/** Crée un document job (miroir alimenté dès la création). */
+/** Crée un document job (couche résiliente). */
 export async function createJobDoc(collection: string, jobId: string, payload: object, ownerId?: string): Promise<void> {
   await resilientCreate(collection, jobId, payload, ownerId);
 }
@@ -222,41 +130,7 @@ export async function queryJobDocs<T>(
   collection: string,
   field: string,
   value: unknown,
-  options?: FallbackQueryOptions,
+  options?: ResilientQueryOptions,
 ): Promise<T[]> {
   return resilientQuery<T>(collection, [{ field, value }], options);
-}
-
-// ---------------------------------------------------------------------------
-// Réconciliation opportuniste miroir → Firestore (après reprise)
-// ---------------------------------------------------------------------------
-
-/** Throttle process-local : au plus une passe de réconciliation toutes les 5 min. */
-const RECONCILE_THROTTLE_MS = 5 * 60_000;
-let lastReconcileAttemptMs = 0;
-
-/**
- * Réconciliation opportuniste : quand le disjoncteur est refermé (quota
- * revenu), ré-imbrique jusqu'à `limit` lignes miroir dans Firestore.
- * Throttle process-local 5 min ; NE LÈVE JAMAIS (incidents journalisés).
- * Retourne le dernier ReconcileResult, ou null si (throttle actif ou passe
- * impossible).
- */
-export async function maybeReconcileQuotaRecovery(limit = 25): Promise<ReconcileResult | null> {
-  const now = Date.now();
-  if (now - lastReconcileAttemptMs < RECONCILE_THROTTLE_MS) return null;
-  lastReconcileAttemptMs = now;
-  try {
-    // reconcileFallbackToFirestore saute la passe tant que le disjoncteur
-    // est ouvert (skipped=true) — on transmet tel quel.
-    return await reconcileFallbackToFirestore({ limit });
-  } catch (error) {
-    logger.warn({ error: describeError(error) }, "fallback_reconcile_failed");
-    return null;
-  }
-}
-
-/** Remet le throttle de réconciliation à zéro (tests uniquement). */
-export function resetQueueResumeForTests(): void {
-  lastReconcileAttemptMs = 0;
 }

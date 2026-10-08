@@ -6,7 +6,7 @@ import { startRenderJob, listJobs, pauseJob, resumeJob, cancelJob, sweepStaleRen
 import { checkFfmpegAvailable } from "@/lib/video/ffmpeg";
 import { qstashConfig } from "@/lib/queue/qstash";
 import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
-import { getJobProgress } from "@/lib/infra/upstash";
+import { getJobProgress } from "@/lib/video/progress-store";
 import { cacheGet, cacheSet } from "@/lib/cache/redis";
 
 export const runtime = "nodejs";

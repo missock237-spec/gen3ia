@@ -51,7 +51,8 @@ export const viewport: Viewport = {
   interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#05060C" },
-    { media: "(prefers-color-scheme: light)", color: "#F1F2F8" },
+    // Porcelaine bleutée (Task 108-c) : alignée sur --g3-bg du thème clair.
+    { media: "(prefers-color-scheme: light)", color: "#EFF7FB" },
   ],
 };
 
@@ -63,7 +64,7 @@ export const viewport: Viewport = {
  * Le meta theme-color (barre navigateur mobile) SUIT le choix utilisateur :
  * en son absence il reflète le thème réellement appliqué, pas le système.
  */
-const THEME_BOOTSTRAP = `(function(){try{var s=localStorage.getItem("gen3ia-theme");var t=s||"dark";document.documentElement.setAttribute("data-theme",t);var m=document.querySelector('meta[name="theme-color"]');if(m){m.setAttribute("content",t==="light"?"#F1F2F8":"#05060C");}}catch(e){document.documentElement.setAttribute("data-theme","dark");}})();`;
+const THEME_BOOTSTRAP = `(function(){try{var s=localStorage.getItem("gen3ia-theme");var t=s||"dark";document.documentElement.setAttribute("data-theme",t);var m=document.querySelector('meta[name="theme-color"]');if(m){m.setAttribute("content",t==="light"?"#EFF7FB":"#05060C");}}catch(e){document.documentElement.setAttribute("data-theme","dark");}})();`;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://gen3ia.online";
 

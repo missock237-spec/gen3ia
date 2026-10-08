@@ -48,8 +48,6 @@ describe("lib/env/config-report", () => {
       GROQ_API_KEY: "gsk-supersecret",
       GLM_API_KEY: "glm-secret",
       AGNES_API_KEY: "agnes-secret",
-      UPSTASH_REDIS_REST_URL: "https://redis.secret.upstash.io",
-      UPSTASH_REDIS_REST_TOKEN: "redis-secret-token",
       QDRANT_URL: "https://qdrant.secret.io",
       QDRANT_API_KEY: "qdrant-secret",
       R2_ACCOUNT_ID: "r2-id",

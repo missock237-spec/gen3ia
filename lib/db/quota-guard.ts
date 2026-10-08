@@ -11,9 +11,11 @@ import "server-only";
  *      transitoires qui ne doivent PAS ouvrir le disjoncteur) ;
  *   2. un DISJONCTEUR à trois états (closed / open / half-open) : après
  *      QUOTA_BREAKER_OPEN_THRESHOLD erreurs consécutives, les appels
- *      Firestore sont court-circuités vers le repli Supabase pendant un
+ *      Firestore sont court-circuités en erreur quota-classifiée pendant un
  *      cooldown (90 s quota logiciel, 10 min quota quotidien) ; une sonde
- *      unique est ensuite autorisée pour refermer le circuit.
+ *      unique est ensuite autorisée pour refermer le circuit (Task 108 :
+ *      Firestore unique moteur — les appelants appliquent leur politique de
+ *      reprise, ex. backoff des files vidéo).
  *
  * Contrat : AUCUNE I/O, état 100 % process-local (Node mono-thread, champs
  * simples), horloge Date.now() brute (compatible vi.useFakeTimers).
@@ -259,8 +261,8 @@ export function noteFirestoreQuotaError(error: unknown): void {
  * et quasi toujours synonyme de quota épuisé : on ouvre donc le disjoncteur
  * IMMÉDIATEMENT (cooldown SOFT) au lieu d'exiger QUOTA_BREAKER_OPEN_THRESHOLD
  * occurrences — le circuit s'auto-répare via la sonde half-open si le
- * diagnostic était faux (blip réseau long). Les calls suivants basculent
- * instantanément sur le repli Supabase.
+ * diagnostic était faux (blip réseau long). Les appels suivants sont
+ * court-circuités instantanément (erreur quota-classifiée).
  */
 export function noteFirestoreStall(detail: string): void {
   stalls += 1;
@@ -307,7 +309,7 @@ export function shouldShortCircuitFirestore(): boolean {
  * succès → noteFirestoreSuccess() (circuit refermé) ; nouvelle erreur de
  * quota → noteFirestoreQuotaError() (retour à ouvert, cooldown frais).
  * Si l'appelant ne rapporte jamais l'issue, la sonde reste consommée et les
- * appels restent court-circuités (fail-safe vers le repli Supabase).
+ * appels restent court-circuités (fail-safe : ne pas insister sous quota).
  */
 export function beginFirestoreProbe(): boolean {
   if (currentState() !== "half-open") return false;

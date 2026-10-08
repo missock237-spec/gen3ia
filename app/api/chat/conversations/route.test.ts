@@ -56,7 +56,7 @@ describe("GET /api/chat/conversations — statuts d'erreur (Task 96-c)", () => {
   });
 
   it("repli indisponible (message dégradé) → 503", async () => {
-    mockedList.mockRejectedValue(new Error("Firestore quota atteinte et Supabase fallback indisponible."));
+    mockedList.mockRejectedValue(new Error("Firestore sous quota : disjoncteur ouvert, appel court-circuité (reprise après cooldown)."));
     const response = await GET(getRequest());
     expect(response.status).toBe(503);
   });

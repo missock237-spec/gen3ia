@@ -24,13 +24,13 @@ type Params = { params: Promise<{ projectId: string }> };
 //    (app/api/video/worker/production-tick/route.ts) balaie déjà les
 //    orphelins à chaque délivrance.
 //  - mode sondage (QStash absent) : sweep THROTTLÉ à 1 exécution / minute /
-//    projet — clé Redis partagée `g3:sweep:production:{projectId}` (TTL
+//    projet — clé de throttle `g3:sweep:production:{projectId}` (TTL
 //    60 s), repli mémoire process-local défensif serverless.
 // ────────────────────────────────────────────────────────────────────────────
 
 const SWEEP_THROTTLE_MS = 60_000;
 
-/** Horodatage du dernier sweep par clé — repli local si Redis est absent. */
+/** Horodatage du dernier sweep par clé — cache process-local. */
 const localSweepAt = new Map<string, number>();
 
 async function sweepProductionJobsIfDue(projectId: string): Promise<void> {
@@ -43,7 +43,7 @@ async function sweepProductionJobsIfDue(projectId: string): Promise<void> {
   const sharedAt = await cacheGet<number>(throttleKey);
   if (typeof sharedAt === "number" && now - sharedAt < SWEEP_THROTTLE_MS) {
     // Synchronise l'horloge locale sur la décision partagée (évite de
-    // re-interroger Redis à chaque tick pendant la fenêtre).
+    // re-purger la Map à chaque tick pendant la fenêtre).
     localSweepAt.set(throttleKey, sharedAt);
     return;
   }

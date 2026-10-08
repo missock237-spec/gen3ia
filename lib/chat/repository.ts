@@ -8,7 +8,7 @@ import {
   resilientGet,
   resilientQuery,
   resilientSet,
-} from "@/lib/db/firestore-fallback";
+} from "@/lib/db/firestore-resilient";
 import { isFirestoreQuotaError, shouldShortCircuitFirestore } from "@/lib/db/quota-guard";
 import { CHUNKED_COMMIT_SIZE, commitOpsInChunks, type ChunkedWriteOp } from "@/lib/firestore/chunked-commit";
 import type {
@@ -23,14 +23,14 @@ import {
 } from "@/lib/chat/vector-index";
 
 /**
- * Dépôt conversation/messages (Task 96-c) — entièrement adossé à la couche
- * résiliente Firestore→Supabase (lib/db/firestore-fallback) : sous quota
- * Firestore épuisé, la section Agent IA ET le workspace continuent de
- * créer/lire/renommer/supprimer des conversations via le miroir chaud.
+ * Dépôt conversation/messages (Task 96-c) — adossé à la couche résiliente
+ * Firestore-only (lib/db/firestore-resilient, Task 108) : deadline anti-stall
+ * + disjoncteur quota ; l'écriture décomposée ci-dessous sert de chemin de
+ * sonde (half-open) et de compat quand la transaction n'a pas pu partir.
  *
  * Règles respectées :
- *  - écritures en `new Date()` (JAMAIS FieldValue.serverTimestamp) : les
- *    sentinelles sont écartées du miroir JSONB et casseraient le tri ;
+ *  - écritures en `new Date()` (JAMAIS FieldValue.serverTimestamp) : le tri
+ *    mémoire et les documents relis doivent rester cohérents ;
  *  - garde d'ownership (userId) reproduite à l'identique sur les chemins
  *    de repli — jamais la conversation d'un autre utilisateur ;
  *  - tri/limitation (Task 101 / C3a + m4bis) : les listes de CONVERSATIONS
@@ -280,7 +280,7 @@ export async function listMessages(
     });
   } catch {
     // Repli (index en attente, incident SDK ponctuel) : nouvelle tentative
-    // identique — la couche résiliente gère déjà quota (miroir Supabase) et
+    // identique — la couche résiliente gère déjà quota (erreur classifiée) et
     // index manquant (scan + tri mémoire) ; le contexte LLM ne casse jamais.
     docs = await resilientQuery<MessageDoc>("chatMessages", filters, { limit: SCAN_LIMIT, includeIds: true });
   }
@@ -302,7 +302,8 @@ export async function appendMessage(input: Omit<ChatMessage, "id" | "createdAt">
   let transactionDone = false;
   try {
     // CHEMIN NOMINAL : transaction Firestore (atomicité message + compteur).
-    // Disjoncteur ouvert : ni transaction ni sonde gaspillée — repli direct.
+    // Disjoncteur ouvert : ni transaction ni sonde gaspillée — chemin décomposé
+    // (qui tente la sonde half-open via la couche résiliente).
     if (!shouldShortCircuitFirestore()) {
       await adminDb.runTransaction(async tx => {
         const conversation = conversationRef(input.conversationId);
@@ -329,10 +330,11 @@ export async function appendMessage(input: Omit<ChatMessage, "id" | "createdAt">
     if (!isFirestoreQuotaError(error) && !shouldShortCircuitFirestore()) throw error;
   }
   if (!transactionDone) {
-    // QUOTA (ou disjoncteur ouvert) : décomposition résiliente sur le miroir
-    // Supabase — get (garde d'ownership) + create (message) + set merge
-    // (compteur incrémenté, résolu côté miroir). L'atomicité message/compteur
-    // cède devant la DISPONIBILITÉ du chat.
+    // QUOTA (ou disjoncteur ouvert) : décomposition résiliente Firestore —
+    // get (garde d'ownership) + create (message) + set merge (compteur
+    // incrémenté). Task 108 : plus de miroir secondaire — si Firestore est
+    // réellement sous quota, l'erreur est rejetée (la route répond 503
+    // actionnable) ; en régime half-open, la sonde referme le circuit.
     const conversation = await resilientGet<ConversationDoc>("chatConversations", input.conversationId);
     if (!conversation || conversation.userId !== input.userId) throw new Error("Conversation introuvable.");
     if (typeof conversation.projectId === "string" && conversation.projectId.length > 0) {
@@ -397,8 +399,8 @@ export async function updateConversation(
   const update: Record<string, unknown> = { updatedAt: new Date() };
   if (patch.projectId !== undefined) {
     // null détache le projet ; une chaîne non vide le rattache.
-    // FieldValue.delete() : la clé est retirée de Firestore ET écartée du
-    // miroir (assainissement) — pas de résurrection du projet côté repli.
+    // FieldValue.delete() : la clé est retirée de Firestore proprement
+    // (sentinelle native) — pas de trace résiduelle du rattachement.
     update.projectId = patch.projectId || FieldValue.delete();
   }
   if (patch.agentId) {
@@ -416,10 +418,10 @@ export async function updateConversation(
 export async function deleteConversation(userId: string, id: string) {
   if (!(await getConversation(userId, id))) throw new Error("Conversation introuvable.");
   // Purge des messages : Firestore-first (les identifiants de messages ne
-  // vivent que dans les ids de documents, hors payload). Sous quota, les
-  // messages orphelins restent en place (aucune route ne les expose sans
-  // conversation) — la conversation, elle, disparaît des DEUX stores via
-  // resilientDelete ci-dessous.
+  // vivent que dans les ids de documents, hors payload). Sous quota, la purge
+  // est différée (aucune route n'expose les messages orphelins sans
+  // conversation) — la conversation, elle, est supprimée via resilientDelete
+  // ci-dessous.
   try {
     // Purge par lots de 450 jusqu'à épuisement (limite Firestore : 500 ops
     // par batch) — l'ancien `.limit(500)` unique laissait des messages

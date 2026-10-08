@@ -2,7 +2,9 @@
  * Rapport de configuration environnement — observable, jamais secret.
  *
  * Chaque groupe décrit une capacité du produit (fournisseurs LLM,
- * téléphonie, voix, publicités, facturation, e-mail, stockage, caches).
+ * téléphonie, voix, publicités, facturation, e-mail, stockage).
+ * Task 108 : plus de groupe de cache externe ni de second backend — le cache
+ * est process-local (toujours disponible) et Firestore est l'unique moteur.
  * Le rapport n'expose QUE des booléens de présence et les noms des
  * variables manquantes : aucune valeur, jamais — même tronquée.
  *
@@ -66,12 +68,6 @@ const GROUPS: GroupSpec[] = [
     fallback: "bascule sur OpenAI / Groq",
   },
   {
-    group: "cache-redis",
-    role: "Redis Upstash (rate limit distribué, micro-caches, quotas Gen)",
-    required: ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
-    fallback: "repli en mémoire locale (mono-instance)",
-  },
-  {
     group: "vector-qdrant",
     role: "Qdrant (recherche vectorielle mémoires/connaissances/conversations)",
     required: ["QDRANT_URL", "QDRANT_API_KEY"],
@@ -131,12 +127,6 @@ const GROUPS: GroupSpec[] = [
     required: ["QSTASH_TOKEN", "QSTASH_CURRENT_SIGNING_KEY", "QSTASH_NEXT_SIGNING_KEY"],
     fallback: "exécution synchrone dans la requête (limitée par la fenêtre serverless)",
   },
-  {
-    group: "data-supabase",
-    role: "Supabase/PostgreSQL (backend de données piloté, ADR-006)",
-    required: ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"],
-    fallback: "Firestore (DATA_BACKEND=firebase) — état stable et supporté",
-  },
 ];
 
 /**
@@ -180,9 +170,6 @@ const OPTIONAL_RECOGNIZED = [
   "SENTRY_RELEASE",
   "NEXT_PUBLIC_ADSENSE_CLIENT",
   "NEXT_PUBLIC_ADSENSE_SLOT_HOME",
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY",
   // Pipeline vidéo (lib/video/security.ts, lib/video/render/fonts.ts,
   // lib/video/credits.ts) : binaires ffmpeg/ffprobe, police, release statique,
   // URL de binaires et coût de rendu — tous optionnels (replis par défaut).
@@ -195,7 +182,6 @@ const OPTIONAL_RECOGNIZED = [
   // Origine publique de l'app (callbacks planifiés, liens de reprise —
   // lib/agents/scheduler.ts, lib/video/production-queue.ts, routes de queue).
   "GEN3IA_APP_ORIGIN",
-  "DATA_BACKEND",
   "FIRESTORE_EMULATOR_HOST",
   "FIREBASE_AUTH_EMULATOR_HOST",
 ];

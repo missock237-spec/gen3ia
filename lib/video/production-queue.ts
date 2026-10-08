@@ -22,10 +22,11 @@ import "server-only";
  *   billTts (caractères ElevenLabs réels) — le rendu réserve/règle/libère
  *   son propre budget via startRenderJob.
  * - reprise QUOTA-AWARE (Task 95-d, miroir du rendu Task 95-c) : les
- *   documents job passent par la couche résiliente (miroir chaud Supabase),
- *   le claim bascule sur le miroir sous quota, et un incident QUOTA ne
- *   consomme PAS le budget de relance (backoff automatique, checkpoints
- *   conservés, aucune fausse notification d'échec).
+ *   documents job passent par la couche résiliente Firestore-only, et un
+ *   incident QUOTA ne consomme PAS le budget de relance (backoff
+ *   automatique, checkpoints conservés, aucune fausse notification
+ *   d'échec). Task 108 : le second backend est supprimé — sous quota, les
+ *   ticks sont neutralisés puis republiés (routes + sweep + cron).
  */
 
 import { randomUUID } from "node:crypto";
@@ -50,16 +51,14 @@ import { createVideoPlaybackUrl, isOwnedVideoKey } from "@/lib/video/storage";
 import { startRenderJob, getJob } from "@/lib/video/render-queue";
 import type { VideoExportTarget, VideoProject } from "@/lib/video/types";
 import {
-  claimJobViaFallback,
   classifyTickError,
   createJobDoc,
   loadJobDoc,
-  maybeReconcileQuotaRecovery,
   queryJobDocs,
   resumePolicyFor,
   type ResumePolicy,
 } from "@/lib/video/queue-resume";
-import { firestoreUsable, writeCheckpointSet } from "@/lib/db/firestore-fallback";
+import { firestoreUsable, writeCheckpointSet } from "@/lib/db/firestore-resilient";
 
 export const PRODUCTION_JOBS_COLLECTION = "videoProductionJobs";
 
@@ -196,7 +195,7 @@ function clamp01(value: number): number {
 
 /**
  * Progression d'un job de production (contrat 0..1) — interpolée DANS
- * l'étape courante : completed/total (scènes traitées, progression miroir
+ * l'étape courante : completed/total (scènes traitées, progression restituée
  * du rendu…) ; total = 0 → début d'étape (1 pour `done`).
  */
 export function computeProductionProgress(stage: ProductionStage, completed: number, total: number): number {
@@ -428,7 +427,7 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
   const jobId = randomUUID();
   const now = nowIso();
   // Task 107-a — conversation d'origine persistée SEULEMENT si valide
-  // (pas de champ undefined sale : Firestore les rejette, le miroir aussi).
+  // (pas de champ undefined sale : Firestore les rejette).
   const conversationId = normalizeConversationId(params.conversationId);
   const job: VideoProductionJob = {
     id: jobId,
@@ -449,8 +448,8 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
     updatedAt: now,
     timeline: [],
   };
-  // Task 95-d — création via la couche résiliente (miroir chaud Supabase :
-  // le job existe dès sa création, même Firestore sous quota). PAS de
+  // Task 95-d — création via la couche résiliente (Task 108 : Firestore
+  // unique moteur — un incident quota est propagé à l'appelant). PAS de
   // compensation : AUCUNE réservation wallet ne précède cette création — les
   // visuels/TTS sont facturés au réel au fil de l'eau pendant les ticks et
   // le rendu réserve/libère SON propre budget dans startRenderJob ; une
@@ -501,7 +500,7 @@ async function publishTickAndLog(job: Pick<VideoProductionJob, "id" | "projectId
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Claim transactionnel + bail (miroir exact du rendu)
+// Claim transactionnel + bail (structure exactement miroir du rendu)
 // ────────────────────────────────────────────────────────────────────────────
 
 type ProductionClaimOutcome =
@@ -560,95 +559,51 @@ function isSceneFailureRecord(value: unknown): value is Record<string, number> {
 }
 
 async function claimProductionJob(jobId: string): Promise<ProductionClaimOutcome> {
-  // Task 106-fix — COHÉRENCE DE RÉGIME (miroir du fix render-queue) : si le
-  // disjoncteur quota Firestore est OUVERT, les checkpoints de scène
-  // (sceneCursor/sceneFailures via saveJobDoc) partent au MIROIR tandis
-  // qu'une transaction Firestore réussirait encore — le claim relirait
-  // l'ancien document Firestore et re-trerait les mêmes scènes. Bascule du
-  // claim ENTIER vers le miroir dès l'ouverture du disjoncteur.
+  // Task 106-fix / Task 108 — COHÉRENCE DE RÉGIME : si le disjoncteur quota
+  // Firestore est OUVERT, les checkpoints de scène (saveJobDoc) échouent en
+  // erreur quota-classifiée — un claim transactionnel qui réussirait encore
+  // relirait l'ancien document (checkpoints absents) et re-trerait les mêmes
+  // scènes. Le claim renonce DONC aussi (erreur quota-classifiée propagée :
+  // le tick est republié avec délai, la reprise se fait après cooldown).
   if (!firestoreUsable()) {
-    return claimProductionViaMirror(jobId);
+    throw new Error(`Claim impossible : quota Firestore (disjoncteur ouvert) pour ${jobId} — tick reporté.`);
   }
-  // Task 95-d — le claim reste TRANSACTIONNEL sur Firestore ; en cas d'erreur
-  // de QUOTA, bascule sur un claim ATOMIQUE sur la ligne miroir Supabase
-  // (failover en fin de fonction). Transitoire/fatal : propagation inchangée.
-  try {
-    return await adminDb.runTransaction(async (tx) => {
-      const ref = adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(jobId);
-      const snapshot = await tx.get(ref);
-      if (!snapshot.exists) return { kind: "missing" } as const;
-      const job = normalizeJobDoc((snapshot.data() ?? {}) as Partial<ProductionJobWithResume>, jobId);
-      if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
-        return { kind: "terminal", job } as const;
-      }
-      const now = Date.now();
-      if (job.status === "processing" && leaseActive(job, now)) {
-        return { kind: "lease-held", job } as const;
-      }
-      const previousStatus = job.status;
-      const leaseOwner = `${jobId}:${randomUUID()}`;
-      const leaseExpiresAt = now + PRODUCTION_LEASE_MS;
-      tx.update(ref, {
-        status: "processing",
-        leaseOwner,
-        leaseExpiresAt,
-        attempts: job.attempts + 1,
-        updatedAt: nowIso(),
-      });
-      return {
-        kind: "claimed",
-        job: { ...job, status: "processing", leaseOwner, leaseExpiresAt, attempts: job.attempts + 1 },
-        previousStatus,
-      } as const;
+  // Task 95-d — le claim reste TRANSACTIONNEL sur Firestore. Une erreur de
+  // QUOTA est propagée telle quelle (Task 108 : plus de failover miroir) —
+  // transitoire/fatal : propagation inchangée.
+  return adminDb.runTransaction(async (tx) => {
+    const ref = adminDb.collection(PRODUCTION_JOBS_COLLECTION).doc(jobId);
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists) return { kind: "missing" } as const;
+    const job = normalizeJobDoc((snapshot.data() ?? {}) as Partial<ProductionJobWithResume>, jobId);
+    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+      return { kind: "terminal", job } as const;
+    }
+    const now = Date.now();
+    if (job.status === "processing" && leaseActive(job, now)) {
+      return { kind: "lease-held", job } as const;
+    }
+    const previousStatus = job.status;
+    const leaseOwner = `${jobId}:${randomUUID()}`;
+    const leaseExpiresAt = now + PRODUCTION_LEASE_MS;
+    tx.update(ref, {
+      status: "processing",
+      leaseOwner,
+      leaseExpiresAt,
+      attempts: job.attempts + 1,
+      updatedAt: nowIso(),
     });
-  } catch (error) {
-    // Task 95-d — FAILOVER QUOTA : Firestore sous quota (RESOURCE_EXHAUSTED)
-    // → claim ATOMIQUE sur la ligne miroir Supabase (bail + statut posés dans
-    // un seul UPDATE conditionnel — deux workers ne peuvent pas gagner tous
-    // deux). Statuts réclamables = exactement les conditions de la
-    // transaction : « queued », ou « processing » au bail libre/expiré (le
-    // filtre de bail est exprimé dans claimJobViaFallback).
-    if (classifyTickError(error) !== "quota") throw error;
-    return claimProductionViaMirror(jobId, error);
-  }
-}
-
-/**
- * Task 106-fix — claim ATOMIQUE miroir (partagé par le disjoncteur ouvert et
- * le failover quota) : bail + statut posés dans un seul UPDATE conditionnel
- * — deux workers ne peuvent pas gagner tous deux.
- */
-async function claimProductionViaMirror(jobId: string, originalError?: unknown): Promise<ProductionClaimOutcome> {
-  const now = Date.now();
-  const leaseOwner = `${jobId}:${randomUUID()}`;
-  const leaseExpiresAt = now + PRODUCTION_LEASE_MS;
-  const expiresAtIso = new Date(leaseExpiresAt).toISOString();
-  // `attempts` n'est PAS patché (compteur informatif) : +1 appliqué sur la
-  // valeur miroir lue, comme le fait la transaction.
-  const payload = await claimJobViaFallback(
-    PRODUCTION_JOBS_COLLECTION,
-    jobId,
-    { owner: leaseOwner, expiresAtIso },
-    ["queued", "processing"],
-    { status: "processing", deadlineAt: expiresAtIso, updatedAt: nowIso() },
-  );
-  // Miroir absent, bail déjà pris ou Supabase indisponible : propagation
-  // (erreur de quota d'origine le cas échéant — le tick sera republié).
-  if (!payload) {
-    throw originalError ?? new Error(`Claim miroir impossible pour ${jobId} (absent ou bail actif).`);
-  }
-  const stored = payload as unknown as Partial<ProductionJobWithResume>;
-  const job = normalizeJobDoc(stored, jobId);
-  const previousStatus = job.status;
-  job.status = "processing";
-  job.leaseOwner = leaseOwner;
-  job.leaseExpiresAt = leaseExpiresAt;
-  job.attempts = (typeof stored.attempts === "number" ? stored.attempts : 0) + 1;
-  return { kind: "claimed", job, previousStatus } as const;
+    return {
+      kind: "claimed",
+      job: { ...job, status: "processing", leaseOwner, leaseExpiresAt, attempts: job.attempts + 1 },
+      previousStatus,
+    } as const;
+  });
 }
 
 async function releaseLease(jobId: string): Promise<void> {
-  // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+  // Task 95-d — écriture via la couche résiliente (best-effort : un échec
+  // ici n'annule pas la re-file ; le bail expire de lui-même au pire).
   await writeCheckpointSet(
     PRODUCTION_JOBS_COLLECTION,
     jobId,
@@ -689,7 +644,7 @@ async function ensureStageEntry(job: VideoProductionJob): Promise<void> {
   if (job.timeline.some((e) => e.stage === job.stage)) return;
   const timeline: ProductionStageTimelineEntry[] = [...job.timeline, { stage: job.stage, startedAt: nowIso() }];
   job.timeline = timeline;
-  // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+  // Task 95-d — écriture via la couche résiliente (Firestore unique moteur, Task 108).
   await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, { timeline, updatedAt: nowIso() }, job.userId).catch(() => undefined);
 }
 
@@ -708,7 +663,7 @@ async function moveToNextProductionStage(job: VideoProductionJob, detail?: strin
     timeline,
     updatedAt: nowIso(),
   };
-  // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+  // Task 95-d — écriture via la couche résiliente (Firestore unique moteur, Task 108).
   await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, patch, job.userId);
   job.stage = next;
   job.stageIndex = patch.stageIndex;
@@ -776,7 +731,7 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
   // Task 106-fix — UN SEUL checkpoint par tick : Firestore plafonne à ~1
   // écriture/seconde/DOCUMENT (claim + release + progression sur le même doc)
   // — un checkpoint PAR SCÈNE dépassait ce plafond (RESOURCE_EXHAUSTED classé
-  // quota → déviation miroir silencieuse → re-traitement infini des scènes).
+  // quota → incohérence de régime → re-traitement infini des scènes).
   const cursorAtTickStart = job.sceneCursor;
   const failuresAtTickStart = JSON.stringify(sceneFailures);
 
@@ -1091,7 +1046,7 @@ async function stageRender(job: VideoProductionJob): Promise<ProductionStageResu
     : [];
   const render = await startRenderJob({ userId: job.userId, projectId: job.projectId, derivedTargets });
   // Rattaché AVANT le passage à l'étape done (visible même si le tick meurt ici).
-  // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+  // Task 95-d — écriture via la couche résiliente (Firestore unique moteur, Task 108).
   await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, { renderJobId: render.jobId, updatedAt: nowIso() }, job.userId);
   job.renderJobId = render.jobId;
   return { action: "advance", detail: `Rendu ${render.jobId.slice(0, 8)} en file.` };
@@ -1119,7 +1074,7 @@ async function stageDone(job: VideoProductionJob): Promise<ProductionStageResult
 
 /**
  * Fait avancer un job de production d'UNE étape. Claim transactionnel avec
- * bail (failover miroir Supabase sous quota — Task 95-d) ; en fin de tick
+ * bail + backoff quota-aware (Task 95-d/108) ; en fin de tick
  * réussi, le bail est libéré AVANT la re-file (le tick suivant — QStash ou
  * sondage — claimr aussitôt). Un incident QUOTA/transitoire ne consomme PAS
  * le budget de relance : re-file automatique avec backoff, checkpoints
@@ -1178,7 +1133,7 @@ export async function advanceProductionJob(jobId: string, options: { timeBudgetM
         },
         job.userId,
       ).catch((restoreError: unknown) => {
-        // Restauration impossible (quota aussi côté miroir) : le job reste
+        // Restauration impossible (quota aussi sur la ré-écriture) : le job reste
         // « processing » au bail court — le sweep le remettra en file à
         // l'expiration (230 s). Incident journalisé, jamais de faux échec.
         logger.warn(
@@ -1245,7 +1200,7 @@ export async function advanceProductionJob(jobId: string, options: { timeBudgetM
     // failProductionJob reçoit la politique : quota/transitoire ne
     // consomment PAS le budget, ne marquent JAMAIS failed, ne notifient PAS.
     // (failProductionJob peut propager si la ré-écriture échoue aussi côté
-    // miroir — la route tick republiera.)
+    // couche résiliente — la route tick republiera.)
     return await failProductionJob(job, error instanceof Error ? error : new Error(String(error)), policy, quotaFailures);
   }
 }
@@ -1262,7 +1217,7 @@ async function concludeProductionTick(
     const timeline: ProductionStageTimelineEntry[] = job.timeline.map((e) =>
       e.stage === "done" && !e.finishedAt ? { ...e, finishedAt: nowIso(), detail: message } : e,
     );
-    // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+    // Task 95-d — écriture via la couche résiliente (Firestore unique moteur, Task 108).
     await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
@@ -1326,7 +1281,7 @@ async function concludeProductionTick(
 
   // "stay" : travail partiel (lot de visuels/narrations) ou re-sondage du rendu.
   if (typeof stageResult.mirrorProgress === "number") {
-    // Task 95-d — écriture via la couche résiliente (miroir chaud sous quota).
+    // Task 95-d — écriture via la couche résiliente (Firestore unique moteur, Task 108).
     await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, { progress: stageResult.mirrorProgress, updatedAt: nowIso() }, job.userId);
     job.progress = stageResult.mirrorProgress;
   }
@@ -1360,7 +1315,7 @@ async function concludeProductionTick(
  *    `retryCount` (3), puis échec définitif notifié (comportement historique).
  *
  * Toute la fonction est protégée : si la RÉ-ÉCRITURE elle-même échoue
- * (quota aussi côté miroir — Supabase indisponible), on journalise et on
+ * (quota aussi sur la ré-écriture), on journalise et on
  * PROPAGE — la route tick ré-enfilera le job.
  */
 async function failProductionJob(job: VideoProductionJob, error: Error, policy?: ResumePolicy, quotaFailures?: number): Promise<ProductionTickResult> {
@@ -1473,8 +1428,8 @@ async function failProductionJob(job: VideoProductionJob, error: Error, policy?:
       message,
     };
   } catch (requeueError) {
-    // La ré-écriture elle-même a échoué (quota aussi côté miroir — Supabase
-    // indisponible) : on journalise et on PROPAGE — la route tick ré-enfilera
+    // La ré-écriture elle-même a échoué (quota aussi sur la ré-écriture) :
+    // on journalise et on PROPAGE — la route tick ré-enfilera
     // avec délai ; aucun budget consommé côté job.
     logger.warn(
       { jobId: job.id, stage: job.stage, error: requeueError instanceof Error ? requeueError.message : String(requeueError) },
@@ -1581,7 +1536,7 @@ export async function deliverJobToConversation(job: VideoProductionJob): Promise
       job.userId,
     );
   } catch (markError) {
-    // Marquage impossible (quota aussi côté miroir) : livraison reportée au
+    // Marquage impossible (quota aussi sur la ré-écriture) : livraison reportée au
     // passage suivant — PAS d'incident bloquant, PAS de message perdu.
     logger.warn(
       { jobId: job.id, conversationId: job.conversationId, error: markError instanceof Error ? markError.message : String(markError) },
@@ -1680,7 +1635,7 @@ export interface ProductionSweepResult {
  * touche jamais un job vivant.
  */
 export async function sweepStaleProductionJobs(): Promise<ProductionSweepResult> {
-  // Task 95-d — lecture via la couche résiliente (miroir chaud sous quota).
+  // Task 95-d — lecture via la couche résiliente (Firestore unique moteur).
   const stale = await queryJobDocs<VideoProductionJob>(PRODUCTION_JOBS_COLLECTION, "status", "processing");
   const now = Date.now();
   let requeued = 0;
@@ -1697,10 +1652,6 @@ export async function sweepStaleProductionJobs(): Promise<ProductionSweepResult>
     if (result.status === "queued") requeued += 1;
     else failed += 1;
   }
-  // Task 95-d — réconciliation opportuniste (throttle 5 min process-local) :
-  // quand le disjoncteur est refermé, ré-imbrique les lignes miroir dans
-  // Firestore. Ne lève jamais.
-  await maybeReconcileQuotaRecovery(25);
   return { scanned: stale.length, requeued, failed };
 }
 

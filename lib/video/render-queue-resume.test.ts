@@ -89,8 +89,6 @@ vi.mock("@/lib/video/queue-resume", async (importOriginal) => {
     saveJobDoc: vi.fn(),
     createJobDoc: vi.fn(),
     queryJobDocs: vi.fn(),
-    claimJobViaFallback: vi.fn(),
-    maybeReconcileQuotaRecovery: vi.fn(),
   };
 });
 
@@ -98,8 +96,8 @@ vi.mock("@/lib/video/queue-resume", async (importOriginal) => {
 // Task 106-fix — les checkpoints passent par writeCheckpointSet (firestore-fallback,
 // même primitive que le claim) : la file de tests le mocke sur le MÊME vi.fn que
 // saveJobDoc pour que les scénarios de reprise gardent leur contrat.
-vi.mock("@/lib/db/firestore-fallback", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/db/firestore-fallback")>();
+vi.mock("@/lib/db/firestore-resilient", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/db/firestore-resilient")>();
   return {
     ...actual,
     writeCheckpointSet: (...args: Parameters<typeof import("@/lib/video/queue-resume")["saveJobDoc"]>) =>
@@ -173,7 +171,7 @@ vi.mock("@/lib/queue/qstash", () => ({
   verifyUpstashSignature: vi.fn(() => true),
 }));
 
-vi.mock("@/lib/infra/upstash", () => ({
+vi.mock("@/lib/video/progress-store", () => ({
   setJobProgress: vi.fn(async () => undefined),
   getJobProgress: vi.fn(async () => null),
 }));
@@ -189,7 +187,7 @@ import { renderSegments, uploadMaster } from "@/lib/video/render/engine";
 import { createNotification } from "@/lib/notifications/repository";
 import { getOwnedProjectOrThrow } from "@/lib/video/project-service";
 import { listAssets } from "@/lib/video/asset-service";
-import { setJobProgress } from "@/lib/infra/upstash";
+import { setJobProgress } from "@/lib/video/progress-store";
 import { publishJsonDestination } from "@/lib/queue/qstash";
 
 function quotaError(message = "Quota exceeded for quota group 'default'."): Error {
@@ -247,8 +245,6 @@ beforeEach(() => {
   vi.mocked(queueResume.loadJobDoc).mockResolvedValue(null as never);
   vi.mocked(queueResume.createJobDoc).mockResolvedValue(undefined);
   vi.mocked(queueResume.queryJobDocs).mockResolvedValue([] as never);
-  vi.mocked(queueResume.claimJobViaFallback).mockResolvedValue(null);
-  vi.mocked(queueResume.maybeReconcileQuotaRecovery).mockResolvedValue(null);
   setDoc(baseJob());
 });
 
@@ -287,7 +283,7 @@ describe("advanceJob — erreur de quota sur un checkpoint", () => {
     // JAMAIS d'échec définitif ni de notification pour un quota
     expect(releaseRenderBudget).not.toHaveBeenCalled();
     expect(createNotification).not.toHaveBeenCalled();
-    // le miroir de progression (Upstash) reste alimenté côté catch
+    // l'instantané de progression (process-local) reste alimenté côté catch
     expect(setJobProgress).toHaveBeenCalled();
   });
 
@@ -355,52 +351,20 @@ function publishDelaySeconds(): number {
 }
 
 // ---------------------------------------------------------------------------
-// claim — failover transaction → miroir sous quota
+// claim — renonciation sous quota (Task 108 : plus de failover miroir)
 // ---------------------------------------------------------------------------
 
-describe("claimJobForTick — failover quota vers le miroir", () => {
-  it("transaction en quota → claimJobViaFallback appelé avec statuts réclamables", async () => {
+describe("claimJobForTick — renonciation sous quota (Task 108)", () => {
+  it("transaction en quota → erreur de quota PROPAGÉE (le tick est republié avec délai)", async () => {
     firestoreState.txError = quotaError();
-    const futureIso = new Date(Date.now() + 230_000).toISOString();
-    const payload = baseJob({
-      status: "processing",
-      leaseOwner: "job-1:miroir",
-      leaseExpiresAt: futureIso,
-      deadlineAt: futureIso,
-      attempts: 2,
-    });
-    vi.mocked(queueResume.claimJobViaFallback).mockResolvedValue(payload as never);
-    vi.mocked(renderSegments).mockResolvedValue([]);
-    vi.mocked(queueResume.loadJobDoc).mockResolvedValue(payload as never);
-
-    const result = await advanceJob("job-1");
-
-    const claimMock = vi.mocked(queueResume.claimJobViaFallback);
-    expect(claimMock).toHaveBeenCalledTimes(1);
-    const [collection, jobId, lease, statuses, extra] = claimMock.mock.calls[0];
-    expect(collection).toBe("videoRenderJobs");
-    expect(jobId).toBe("job-1");
-    expect(lease.owner).toMatch(/^job-1:/);
-    expect(typeof lease.expiresAtIso).toBe("string");
-    // exactement les conditions de la transaction : queued OU processing (bail libre)
-    expect(statuses).toEqual(["queued", "processing"]);
-    expect(extra).toMatchObject({ status: "processing", deadlineAt: expect.any(String) });
-    // le tick continue normalement sur le job réclamé
-    expect(result.status).toBe("processing");
-    expect(result.done).toBe(false);
+    await expect(advanceJob("job-1")).rejects.toThrow(/Quota exceeded/);
+    // aucune écriture de checkpoint au passage (rien n'a avancé)
+    expect(queueResume.saveJobDoc).not.toHaveBeenCalled();
   });
 
-  it("erreur transitoire de transaction : PAS de failover, propagation inchangée", async () => {
+  it("erreur transitoire de transaction : propagation inchangée", async () => {
     firestoreState.txError = Object.assign(new Error("Le service est actuellement indisponible."), { code: 14 });
     await expect(advanceJob("job-1")).rejects.toThrow(/indisponible/);
-    expect(queueResume.claimJobViaFallback).not.toHaveBeenCalled();
-  });
-
-  it("claim miroir perdu (bail pris) → erreur de quota d'origine propagée", async () => {
-    firestoreState.txError = quotaError();
-    vi.mocked(queueResume.claimJobViaFallback).mockResolvedValue(null);
-    await expect(advanceJob("job-1")).rejects.toThrow(/Quota exceeded/);
-    expect(queueResume.claimJobViaFallback).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -511,7 +475,7 @@ describe("stageFinalize — idempotence", () => {
 // ---------------------------------------------------------------------------
 
 describe("sweepStaleRenderJobs", () => {
-  it("utilise queryJobDocs, re-file les orphelins et déclenche la réconciliation", async () => {
+  it("utilise queryJobDocs et re-file les orphelins (chemin legacy, budget intact)", async () => {
     vi.mocked(queueResume.queryJobDocs).mockResolvedValue([
       baseJob({
         status: "processing",
@@ -528,7 +492,6 @@ describe("sweepStaleRenderJobs", () => {
     const patch = vi.mocked(queueResume.saveJobDoc).mock.calls[0][2] as Record<string, unknown>;
     expect(patch.status).toBe("queued");
     expect(patch.retryCount).toBeDefined();
-    expect(queueResume.maybeReconcileQuotaRecovery).toHaveBeenCalledWith(25);
   });
 
   it("un job au bail VIVANT n'est jamais touché", async () => {

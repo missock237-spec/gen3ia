@@ -180,7 +180,7 @@ function filtrerCatalogue(items: CatalogItem[], options: { search?: string; cate
  *     le cache ; l'agrégation continue en arrière-plan et alimentera les
  *     étages 1 et 2 pour les requêtes suivantes).
  *
- * Redis est une accélération, jamais une dépendance : cacheGet/cacheSet
+ * Le cache est une accélération, jamais une dépendance : cacheGet/cacheSet
  * retournent null/false en cas d'absence ou d'erreur → la route continue
  * (aucune 500 liée au cache).
  */

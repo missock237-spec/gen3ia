@@ -7,6 +7,8 @@ import { adminDb } from "@/lib/firebase/admin";
 import { clearSessionCookieHeader } from "@/lib/server/session-cookie";
 import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
 import { errorStatus } from "@/lib/security/http-errors";
+import { deleteIdentityForAccount } from "@/lib/identity/service";
+import { logger } from "@/lib/observability/logger";
 
 export const runtime = "nodejs";
 
@@ -65,10 +67,10 @@ async function deleteWhere(
  * DELETE /api/auth/account — droit a l'effacement (RGPD art. 17).
  *
  * Supprime l'ensemble des donnees personnelles rattachees a l'utilisateur :
- * profil, portefeuille, equipes, agents, executions, documents,
- * conversations de chat, puis le compte Firebase Auth lui-meme.
- * Les evenements d'audit (interet legitime securite) sont conserves mais
- * anonymises par la suppression du profil.
+ * identité (base R2, Task 108-b), profil, portefeuille, equipes, agents,
+ * executions, documents, conversations de chat, puis le compte Firebase Auth
+ * lui-meme. Les evenements d'audit (interet legitime securite) sont conserves
+ * mais anonymises par la suppression du profil.
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -88,7 +90,18 @@ export async function DELETE(request: NextRequest) {
     await adminDb.recursiveDelete(adminDb.collection("userWallets").doc(uid));
     await adminDb.recursiveDelete(adminDb.collection("users").doc(uid));
 
-    // 3. Compte d'authentification Firebase. Admin SDK d'abord ; en cas
+    // 3. Identité dans la base R2 (Task 108-b). Une panne R2 ne doit JAMAIS
+    // empêcher la suppression Auth/Firestore : l'utilisateur prime sur
+    // l'infrastructure — on journalise et on continue.
+    let identityDeleted = false;
+    try {
+      await deleteIdentityForAccount(uid);
+      identityDeleted = true;
+    } catch (error) {
+      logger.warn({ err: error, uid }, "auth.account.identity_delete_failed_continued");
+    }
+
+    // 4. Compte d'authentification Firebase. Admin SDK d'abord ; en cas
     // d'échec côté projet (ex. PROJECT_SOFT_DELETED), repli sur l'API
     // identitytoolkit avec le jeton ID présenté par l'utilisateur.
     const idToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
@@ -101,17 +114,17 @@ export async function DELETE(request: NextRequest) {
       }
     }
 
-    // 4. Trace d'audit de l'effacement (sans donnee personnelle).
+    // 5. Trace d'audit de l'effacement (sans donnee personnelle).
     await appendSecurityAuditEvent({
       userId: uid,
       executionId: `account_deletion_${Date.now()}`,
       toolName: "gdpr.account_deleted",
       event: "completed",
-      input: { agents, executions, documents, conversations, messages, researchJobs: research },
+      input: { agents, executions, documents, conversations, messages, researchJobs: research, identityDeleted },
     }).catch(() => undefined);
 
     return new NextResponse(
-      JSON.stringify({ success: true, deleted: { agents, executions, documents, conversations, messages, research } }),
+      JSON.stringify({ success: true, deleted: { agents, executions, documents, conversations, messages, research, identityDeleted } }),
       {
         status: 200,
         headers: {

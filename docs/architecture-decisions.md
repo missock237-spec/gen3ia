@@ -164,43 +164,19 @@ niveau « observabilité configurée ».
 
 ---
 
-## ADR-006 — Migration des données vers Supabase (PostgreSQL), Firebase Auth conservé
+## ADR-006 — Migration des données vers un second backend (PostgreSQL) — RETIRÉE
 
-**Statut :** Acceptée · **Date :** 2026-09-29
+**Statut :** Retirée (Task 108) · **Date initiale :** 2026-09-29
 
-### Contexte
+Décision initiale : second moteur de données PostgreSQL piloté par
+`DATA_BACKEND` avec double-écriture et repli sous quota (Task 40-101).
 
-Firestore impose le modèle documentaire (pas de jointures, agrégats
-limités, coûts par lecture), le repli vectoriel est artisanal, et la
-roadmap enterprise (Rec 7) requiert PostgreSQL. Le décisionnaire demande
-explicitement Supabase comme cible.
-
-### Décision
-
-1. **Supabase = base de données** (PostgreSQL 15 + RLS + Storage +
-   Realtime + pgvector). Schéma complet livré en migrations SQL
-   (`supabase/migrations/`), transposant firestore.rules en politiques
-   RLS (deny-all par défaut).
-2. **Firebase Auth reste l'IdP** en phases 1-2 : OAuth Google/GitHub
-   opérationnels et vérifiés RS256 en production ne sont pas rejoués.
-   Le pont `lib/supabase/auth-bridge.ts` résout uid → `profiles`
-   (upsert idempotent, cache 5 min). Bascule IdP optionnelle en phase 3.
-3. **Accès données toujours serveur-seul** (service-role + scoping
-   explicite par owner), identique au modèle firebase-admin : la RLS
-   gouverne la clé anon (présente/future), pas la surface service-role.
-4. **Migration progressive pilotée** : `DATA_BACKEND=firebase|supabase`
-   (garde anti-oubli : flag sans config = repli), pilote notifications
-   livré et testé, double-écriture puis cutover par domaine (P2/P3),
-   rollback = repasser le flag. Table `migration_mapping` pour la
-   traçabilité Firestore ⇄ Postgres.
-
-### Conséquences
-
-- Zéro big-bang : chaque domaine migre seul, vérifiable ligne à ligne.
-- Jointures, contraintes CHECK, index partiels et pgvector deviennent
-  disponibles aux moteurs d'agents (mémoires, connaissances, audit).
-- 28 tables nouvelles : `supabase gen types` régénèrera les types en P2.
-- Guide opérationnel complet : `docs/migration-supabase.md`.
+Retrait (Task 108) : le second backend et son miroir ont été SUPPRIMÉS du
+projet — Firestore est de nouveau l'unique moteur transactionnel (wallet,
+files vidéo, temps réel) et R2 le stockage d'objets/identité. Le cache et
+les compteurs sont process-local (`lib/cache/redis.ts` réimplémenté en
+mémoire). Le guide de migration et les migrations SQL correspondantes ont
+été retirés.
 
 ---
 

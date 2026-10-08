@@ -1245,14 +1245,14 @@ export async function POST(request: NextRequest) {
       body.error.includes("provider")
       || body.error.includes("planner")
       || body.error.includes("plan généré");
-    // Persistance indisponible (Task 96-c : quota Firestore épuisé, repli
-    // Supabase absent/en erreur, incident Firestore dégradé) : 503 actionnable
-    // — une panne de stockage ne doit JAMAIS ressembler à un simple échec de
-    // mission (400) ni masquer l'état réel derrière « Impossible de lancer ».
+    // Persistance indisponible (Task 96-c : quota Firestore épuisé, disjoncteur
+    // ouvert, incident Firestore dégradé) : 503 actionnable — une panne de
+    // stockage ne doit JAMAIS ressembler à un simple échec de mission (400)
+    // ni masquer l'état réel derrière « Impossible de lancer ».
     if (isFirestoreQuotaError(error) || (body.code === "PROVIDER_UNAVAILABLE" && !upstream)) {
       return NextResponse.json(
         {
-          error: "Persistance momentanément indisponible (quota de base de données atteint). Le repli Supabase prend le relais dès sa configuration — réessaie dans quelques instants.",
+          error: "Persistance momentanément indisponible (quota de base de données atteint). Réessaie dans quelques instants — la reprise est automatique.",
           code: "PROVIDER_UNAVAILABLE",
         },
         { status: 503 },

@@ -15,8 +15,8 @@ import { NextResponse } from "next/server";
  * - ULTRA-LÉGER : sondé toutes les ~90 s par chaque onglet ouvert. Aucun
  *   accès base de données, aucun SDK, aucune auth — une lecture de
  *   variables d'environnement système Vercel (injectées par la plateforme
- *   au runtime) et une réponse JSON. NE JAMAIS y brancher Firebase,
- *   Supabase ou autre dépendance : le coût du sondage resterait celui d'une
+ *   au runtime) et une réponse JSON. NE JAMAIS y brancher Firebase ou
+ *   toute autre dépendance : le coût du sondage resterait celui d'une
  *   vraie route applicative.
  * - JAMAIS CACHÉE : `no-store` — une empreinte servie depuis un cache
  *   navigateur/CDN ferait rater des déploiements (même raisonnement que

@@ -107,7 +107,7 @@ export interface EnforcedRateLimitResult {
 
 /**
  * Rate limit RENFORCÉ à utiliser dans les routes API : combine la décision
- * locale (instantanée, couche 1) et la décision DISTRIBUÉE Redis Upstash
+ * locale (instantanée, couche 1) et la décision PAR-INSTANCE (fenêtre fixe)
  * (partagée par toutes les instances serverless, couche 2).
  *
  * Sans cette combinaison, une limite définie en mémoire seule est contournée

@@ -83,13 +83,11 @@ vi.mock("@/lib/video/queue-resume", async (importOriginal) => {
     saveJobDoc: vi.fn(),
     createJobDoc: vi.fn(),
     queryJobDocs: vi.fn(),
-    claimJobViaFallback: vi.fn(),
-    maybeReconcileQuotaRecovery: vi.fn(),
   };
 });
 
-vi.mock("@/lib/db/firestore-fallback", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/db/firestore-fallback")>();
+vi.mock("@/lib/db/firestore-resilient", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/db/firestore-resilient")>();
   return {
     ...actual,
     writeCheckpointSet: (...args: Parameters<typeof import("@/lib/video/queue-resume")["saveJobDoc"]>) =>
@@ -253,8 +251,6 @@ beforeEach(() => {
     return (firestoreState.docs.get(`${collection}/${jobId}`) ?? null) as never;
   });
   vi.mocked(queueResume.queryJobDocs).mockResolvedValue([] as never);
-  vi.mocked(queueResume.claimJobViaFallback).mockResolvedValue(null);
-  vi.mocked(queueResume.maybeReconcileQuotaRecovery).mockResolvedValue(null);
   chatRepo.appendMessage.mockResolvedValue({ id: "msg-1" } as never);
   artifactRepo.createArtifact.mockResolvedValue({ id: "art-1" } as never);
   artifactRepo.listArtifacts.mockResolvedValue([] as never);

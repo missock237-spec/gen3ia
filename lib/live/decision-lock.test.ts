@@ -1,23 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Verrou de décision vision Live (Task 62) : distribué Redis quand il est
- * configuré, repli mémoire Task 45 sinon. Les deux chemins sont testés en
- * basculant le mock de getRedis.
+ * Verrou de décision vision Live (Task 62) — Task 108 : la garde est
+ * PROCESSUS-LOCAL (le service externe Redis a été supprimé du projet) ;
+ * sémantique Task 45 restaurée (Map + TTL), `distributed` reste exposé
+ * (toujours false) pour la compat d'observabilité.
  */
-
-const redisMock = vi.hoisted(() => ({
-  get: vi.fn(),
-  set: vi.fn(),
-  del: vi.fn(),
-  exists: vi.fn(),
-}));
-
-vi.mock("@/lib/cache/redis", () => ({
-  getRedis: () => (redisActive ? redisMock : null),
-}));
-
-let redisActive = false;
 
 import {
   acquireDecisionLock,
@@ -29,12 +17,10 @@ import {
 } from "./decision-lock";
 
 beforeEach(() => {
-  vi.clearAllMocks();
   resetDecisionLockForTests();
-  redisActive = false;
 });
 
-describe("repli mémoire (Redis absent — sémantique Task 45)", () => {
+describe("verrou de décision (process-local — Task 108)", () => {
   it("acquire → en vol → release → plus en vol", async () => {
     const first = await acquireDecisionLock("sess-1");
     expect(first).toEqual({ acquired: true, distributed: false });
@@ -57,52 +43,28 @@ describe("repli mémoire (Redis absent — sémantique Task 45)", () => {
     expect(await getPreviousFramePrint("sess-2")).toEqual({ hash: "abc", feedbackAt: 123 });
     expect(await getPreviousFramePrint("inconnu")).toBeNull();
   });
-});
 
-describe("chemin distribué Redis (configuré)", () => {
-  it("acquisition atomique via SET NX PX ; conflit si la clé existe", async () => {
-    redisActive = true;
-    redisMock.set.mockResolvedValueOnce("OK").mockResolvedValueOnce(null);
-
-    const first = await acquireDecisionLock("sess-r");
-    const second = await acquireDecisionLock("sess-r");
-
-    expect(first).toEqual({ acquired: true, distributed: true });
-    expect(second.acquired).toBe(false);
-    expect(redisMock.set).toHaveBeenCalledWith(
-      "live-lock:sess-r",
-      expect.any(Number),
-      { nx: true, px: 30_000 },
-    );
+  it("le verrou expire après son TTL (30 s) — vi.useFakeTimers", async () => {
+    vi.useFakeTimers();
+    try {
+      expect((await acquireDecisionLock("sess-ttl")).acquired).toBe(true);
+      vi.advanceTimersByTime(31_000);
+      expect(await isDecisionInFlight("sess-ttl")).toBe(false);
+      expect((await acquireDecisionLock("sess-ttl")).acquired).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it("isDecisionInFlight interroge Redis (read-only)", async () => {
-    redisActive = true;
-    redisMock.exists.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
-    expect(await isDecisionInFlight("sess-r2")).toBe(true);
-    expect(await isDecisionInFlight("sess-r2")).toBe(false);
-  });
-
-  it("empreinte partagée via Redis avec TTL 10 min ; repli local uniquement en ERREUR Redis", async () => {
-    redisActive = true;
-    redisMock.set.mockResolvedValueOnce("OK").mockRejectedValueOnce(new Error("down"));
-    // Redis répond : autorité. Clé absente = pas de dédup (TTL expiré), même si
-    // le local en a une — le local n'est consulté que quand Redis est injoignable.
-    redisMock.get.mockResolvedValueOnce({ hash: "h1", feedbackAt: 5 });
-
-    await setFramePrint("sess-r3", { hash: "h1", feedbackAt: 5 });
-    expect(await getPreviousFramePrint("sess-r3")).toEqual({ hash: "h1", feedbackAt: 5 });
-
-    await setFramePrint("sess-r3", { hash: "h2", feedbackAt: 9 }); // Redis KO → local seulement
-    redisMock.get.mockRejectedValueOnce(new Error("network down"));
-    expect(await getPreviousFramePrint("sess-r3")).toEqual({ hash: "h2", feedbackAt: 9 });
-  });
-
-  it("release supprime la clé Redis (fin de décision)", async () => {
-    redisActive = true;
-    redisMock.set.mockResolvedValueOnce("OK");
-    await acquireDecisionLock("sess-r4");
-    await releaseDecisionLock("sess-r4");
-    expect(redisMock.del).toHaveBeenCalledWith("live-lock:sess-r4");
+  it("la dédup d'écran inchangé expire après son TTL (10 min)", async () => {
+    vi.useFakeTimers();
+    try {
+      await setFramePrint("sess-ttl2", { hash: "h1", feedbackAt: 1 });
+      expect(await getPreviousFramePrint("sess-ttl2")).toEqual({ hash: "h1", feedbackAt: 1 });
+      vi.advanceTimersByTime(10 * 60_000 + 1_000);
+      expect(await getPreviousFramePrint("sess-ttl2")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

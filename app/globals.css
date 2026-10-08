@@ -33,6 +33,22 @@
 
 /* ============================================================
    1. TOKENS — thème sombre « Nebula » (défaut)
+   ------------------------------------------------------------
+   Task 108-c — affinage sans changement d'identité :
+   · hiérarchie de texte renforcée (contrastes mesurés sur --g3-surface
+     #0B0D17, luminance relative L ≈ 0.0042) :
+       --g3-text          #F4F5FB  ≈ 17.8:1 (≥ 4.5 exigé)
+       --g3-text-secondary#C7CBE4  ≈ 12.1:1 (≥ 4.5 exigé)
+       --g3-muted         #9AA0C2  ≈  7.5:1 (≥ 4.5 exigé — était 6.6)
+       --g3-faint         #6B7194  ≈  4.1:1 (méta ≥ 3:1 — était 3.3)
+   · surfaces affinées (elevated/deep plus profonds), hover/softs plus
+     subtils, ombres teintées indigo (moins de noir pur), glow-ring plus
+     discret. --g3-bg / --g3-surface / --g3-primary restent EXACTS :
+     verrouillés par app/offline-page.test.ts (#05060C/#0B0D17/#7C5CFF).
+   · NOUVEAUX tokens génériques --g3-info / --g3-info-soft / --g3-info-border
+     et --g3-warning-border / --g3-danger-border : valeurs ADAPTÉES PAR
+     THÈME dans les deux blocs (voir §2) — ils portent l'ambiance
+     « porcelaine bleutée + canard » du chat Agent IA sur toute l'app.
    ============================================================ */
 
 :root {
@@ -40,35 +56,41 @@
   /* Fond & surfaces : espace profond à teinte violette */
   --g3-bg: #05060C;
   --g3-surface: #0B0D17;
-  --g3-elevated: #121527;
-  --g3-deep: #070812;
-  --g3-hover: rgba(148, 153, 255, 0.07);
-  --g3-border: #1D2138;
-  --g3-border-strong: #2B3050;
-  /* Texte */
+  --g3-elevated: #101325;
+  --g3-deep: #060710;
+  --g3-hover: rgba(148, 153, 255, 0.06);
+  --g3-border: #1B1F35;
+  --g3-border-strong: #292E4D;
+  /* Texte (ratios documentés en tête de section) */
   --g3-text: #F4F5FB;
   --g3-text-secondary: #C7CBE4;
-  --g3-muted: #8F95B8;
-  --g3-faint: #5C6284;
+  --g3-muted: #9AA0C2;
+  --g3-faint: #6B7194;
   /* Signature Aurora */
   --g3-primary: #7C5CFF;
   --g3-primary-strong: #9E85FF;
-  --g3-primary-soft: rgba(124, 92, 255, 0.16);
+  --g3-primary-soft: rgba(124, 92, 255, 0.14);
   --g3-on-primary: #FFFFFF;
   --g3-secondary: #2AD4E8;
-  --g3-secondary-soft: rgba(42, 212, 232, 0.13);
+  --g3-secondary-soft: rgba(42, 212, 232, 0.11);
   --g3-magenta: #E14FEA;
-  --g3-magenta-soft: rgba(225, 79, 234, 0.14);
+  --g3-magenta-soft: rgba(225, 79, 234, 0.12);
+  /* Information « bleu-canard » (teinte info/lien fort du chat agent) */
+  --g3-info: #8FD8EC;
+  --g3-info-soft: rgba(143, 216, 236, 0.10);
+  --g3-info-border: rgba(143, 216, 236, 0.32);
   /* États */
   --g3-success: #2FD48A;
-  --g3-success-soft: rgba(47, 212, 138, 0.13);
+  --g3-success-soft: rgba(47, 212, 138, 0.11);
   --g3-success-strong: #6FE8B2;
   --g3-warning: #F5AE31;
-  --g3-warning-soft: rgba(245, 174, 49, 0.13);
+  --g3-warning-soft: rgba(245, 174, 49, 0.11);
   --g3-warning-strong: #FBC96B;
+  --g3-warning-border: rgba(245, 174, 49, 0.40);
   --g3-danger: #F6626E;
-  --g3-danger-soft: rgba(246, 98, 110, 0.13);
+  --g3-danger-soft: rgba(246, 98, 110, 0.11);
   --g3-danger-strong: #FB8E96;
+  --g3-danger-border: rgba(246, 98, 110, 0.42);
   /* Dégradés signature */
   --g3-gradient: linear-gradient(115deg, #7C5CFF 0%, #C44BFF 45%, #2AD4E8 100%);
   --g3-gradient-soft: linear-gradient(115deg, rgba(124,92,255,.22), rgba(196,75,255,.18) 45%, rgba(42,212,232,.20));
@@ -86,46 +108,69 @@
   --gen3ia-emerald: var(--g3-success);
   --gen3ia-amber: var(--g3-warning);
   --gen3ia-radius: 20px;
-  --gen3ia-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(124, 92, 255, 0.04);
-  --gen3ia-shadow-md: 0 24px 60px -24px rgba(0, 0, 0, 0.75);
-  --gen3ia-shadow-glow: 0 10px 44px -12px rgba(124, 92, 255, 0.55);
-  --g3-glow-ring: 0 0 0 1px rgba(124, 92, 255, 0.35), 0 8px 40px -8px rgba(124, 92, 255, 0.35);
+  --gen3ia-shadow-sm: 0 1px 2px rgba(3, 4, 12, 0.40), 0 0 0 1px rgba(124, 92, 255, 0.05);
+  --gen3ia-shadow-md: 0 24px 60px -26px rgba(4, 5, 16, 0.60);
+  --gen3ia-shadow-glow: 0 10px 44px -12px rgba(124, 92, 255, 0.48);
+  --g3-glow-ring: 0 0 0 1px rgba(124, 92, 255, 0.26), 0 8px 40px -8px rgba(124, 92, 255, 0.26);
 }
 
 /* ============================================================
-   2. TOKENS — thème clair « Porcelaine »
+   2. TOKENS — thème clair « Porcelaine bleutée » (Task 108-c)
+   ------------------------------------------------------------
+   Harmonisation sur l'ambiance de la section AGENT IA (porcelaine
+   bleutée + accents canard/ambre/rouge doux), demandée utilisateur :
+   « pour la couleur claire, sers-toi de la couleur de la fonctionnalité
+   agent IA ». Mêmes NOMS de tokens (contrat --g3-* / --gen3ia-*),
+   nouvelles valeurs :
+   · fonds bleutés : bg #EFF7FB (ex-porcelaine agent), surface blanche,
+     elevated #E3EEF5, deep bleu-nuit #101B26 (blocs de code).
+   · texte bleu-nuit/canard (contrastes mesurés sur #FFFFFF, L=1) :
+       --g3-text          #101B26  ≈ 17.4:1 (≥ 4.5 exigé)
+       --g3-text-secondary#1F4E5F  ≈  9.1:1 (≥ 4.5 exigé)
+       --g3-muted         #3E6478  ≈  6.4:1 (≥ 4.5 exigé)
+       --g3-faint         #6E8A9B  ≈  3.6:1 (méta ≥ 3:1)
+     (ratios ≈ 16.0 / 8.4 / 5.9 / 3.4 sur --g3-bg #EFF7FB — tous ≥ 4.5
+     pour text/text-secondary/muted sur les deux fonds.)
+   · accents : primaire violet #6C48FF conservé, info/lien canard profond
+     #1F4E5F, avertissement ambre-brun #B45309 (fort #6B5210), danger doux
+     #B33636 (fort #9B2C2C), bordures douces issues du panneau agent.
    ============================================================ */
 
 [data-theme="light"] {
   color-scheme: light;
-  --g3-bg: #F1F2F8;
+  --g3-bg: #EFF7FB;
   --g3-surface: #FFFFFF;
-  --g3-elevated: #E9EBF5;
-  --g3-deep: #12152B;
-  --g3-hover: rgba(28, 30, 65, 0.05);
-  --g3-border: #E2E4F0;
-  --g3-border-strong: #C9CCE2;
-  --g3-text: #14162B;
-  --g3-text-secondary: #3B3F5C;
-  --g3-muted: #6B7092;
-  --g3-faint: #9CA0BC;
+  --g3-elevated: #E3EEF5;
+  --g3-deep: #101B26;
+  --g3-hover: rgba(31, 78, 95, 0.06);
+  --g3-border: #D9E6EF;
+  --g3-border-strong: #B7D8E8;
+  --g3-text: #101B26;
+  --g3-text-secondary: #1F4E5F;
+  --g3-muted: #3E6478;
+  --g3-faint: #6E8A9B;
   --g3-primary: #6C48FF;
   --g3-primary-strong: #5633E8;
   --g3-primary-soft: rgba(108, 72, 255, 0.10);
   --g3-on-primary: #FFFFFF;
   --g3-secondary: #0899B4;
-  --g3-secondary-soft: rgba(42, 212, 232, 0.10);
+  --g3-secondary-soft: rgba(8, 153, 180, 0.10);
   --g3-magenta: #C026D3;
   --g3-magenta-soft: rgba(192, 38, 211, 0.10);
+  --g3-info: #1F4E5F;
+  --g3-info-soft: rgba(31, 78, 95, 0.07);
+  --g3-info-border: #B7D8E8;
   --g3-success: #16A34A;
-  --g3-success-soft: rgba(47, 212, 138, 0.11);
+  --g3-success-soft: rgba(22, 163, 74, 0.10);
   --g3-success-strong: #15803D;
-  --g3-warning: #D97706;
-  --g3-warning-soft: rgba(245, 174, 49, 0.12);
-  --g3-warning-strong: #B45309;
-  --g3-danger: #DC2626;
-  --g3-danger-soft: rgba(246, 98, 110, 0.11);
-  --g3-danger-strong: #B91C1C;
+  --g3-warning: #B45309;
+  --g3-warning-soft: rgba(180, 83, 9, 0.10);
+  --g3-warning-strong: #6B5210;
+  --g3-warning-border: #E4C88E;
+  --g3-danger: #B33636;
+  --g3-danger-soft: rgba(179, 54, 54, 0.10);
+  --g3-danger-strong: #9B2C2C;
+  --g3-danger-border: rgba(179, 54, 54, 0.45);
   --g3-gradient: linear-gradient(115deg, #6C48FF 0%, #C026D3 45%, #0899B4 100%);
   --g3-gradient-soft: linear-gradient(115deg, rgba(108,72,255,.14), rgba(192,38,211,.10) 45%, rgba(8,153,180,.12));
   --g3-gradient-line: linear-gradient(90deg, transparent, rgba(108,72,255,.7), rgba(192,38,211,.6), rgba(8,153,180,.7), transparent);
@@ -137,13 +182,13 @@
   --gen3ia-sky: var(--g3-primary);
   --gen3ia-sky-soft: var(--g3-primary-soft);
   --gen3ia-cream: var(--g3-elevated);
-  --gen3ia-dark: #14162B;
+  --gen3ia-dark: #101B26;
   --gen3ia-emerald: var(--g3-success);
   --gen3ia-amber: var(--g3-warning);
-  --gen3ia-shadow-sm: 0 1px 2px rgba(20, 22, 60, 0.06);
-  --gen3ia-shadow-md: 0 24px 60px -28px rgba(20, 22, 60, 0.28);
+  --gen3ia-shadow-sm: 0 1px 2px rgba(16, 27, 38, 0.07);
+  --gen3ia-shadow-md: 0 24px 60px -28px rgba(16, 27, 38, 0.24);
   --gen3ia-shadow-glow: 0 10px 40px -14px rgba(108, 72, 255, 0.40);
-  --g3-glow-ring: 0 0 0 1px rgba(108, 72, 255, 0.30), 0 8px 34px -10px rgba(108, 72, 255, 0.30);
+  --g3-glow-ring: 0 0 0 1px rgba(108, 72, 255, 0.26), 0 8px 34px -10px rgba(108, 72, 255, 0.26);
 }
 
 /* ============================================================
@@ -380,7 +425,7 @@ body {
   background:
     radial-gradient(ellipse 90% 68% at 50% -12%, rgba(108, 72, 255, 0.16), transparent 62%),
     radial-gradient(ellipse 55% 45% at 82% 4%, rgba(8, 153, 180, 0.10), transparent 60%),
-    linear-gradient(180deg, #FFFFFF 0%, #F4F5FB 70%);
+    linear-gradient(180deg, #FFFFFF 0%, #E9F3F9 70%);
 }
 
 /* Grille technique lumineuse */
@@ -393,8 +438,8 @@ body {
 }
 [data-theme="light"] .grid-bg {
   background-image:
-    linear-gradient(rgba(28, 30, 65, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(28, 30, 65, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(31, 78, 95, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 78, 95, 0.06) 1px, transparent 1px);
 }
 
 /* Ligne Aurora (séparateurs premium) */
@@ -418,9 +463,9 @@ body {
   backdrop-filter: blur(14px);
 }
 [data-theme="light"] .cream-card {
-  background: linear-gradient(165deg, #FFFFFF, #F7F7FD);
+  background: linear-gradient(165deg, #FFFFFF, #F4F9FC);
   border: 1px solid var(--g3-border);
-  box-shadow: 0 2px 12px rgba(20, 22, 60, 0.05);
+  box-shadow: 0 2px 12px rgba(16, 27, 38, 0.05);
 }
 
 /* Révélation au scroll */
@@ -1216,7 +1261,7 @@ textarea:focus-visible, [tabindex]:focus-visible {
   backdrop-filter: blur(10px);
   cursor: default;
 }
-[data-theme="light"] .g3-command-backdrop { background: rgba(30, 32, 70, 0.35); }
+[data-theme="light"] .g3-command-backdrop { background: rgba(16, 27, 38, 0.35); }
 .g3-command-panel {
   position: relative;
   width: min(620px, 100%);
@@ -2092,6 +2137,13 @@ textarea:focus-visible, [tabindex]:focus-visible {
 
 /* Le sélecteur de thème est aussi accessible depuis Paramètres. */
 [data-theme="light"] ::selection { background: rgba(108, 72, 255, 0.18); }
+
+/* Surfaces « code » : en clair, --g3-deep est un îlot bleu-nuit (#101B26) —
+   le texte secondaire du thème (canard profond) y serait illisible. On
+   impose une encre bleu-gris claire (≈ 12.5:1 sur #101B26). Task 108-c. */
+[data-theme="light"] :where(.g3-code, .g3-console-output, .g3-console-editor, .g3-console-input textarea, .g3-workspace-task-execution-result pre) {
+  color: #C9DEE8;
+}
 /* ============================================================
    THÈME SOMBRE — COUCHE DE COMPATIBILITÉ (pastels clairs en dur)
    « Si l'utilisateur choisit le thème sombre, TOUTE l'interface doit
@@ -2154,15 +2206,20 @@ textarea:focus-visible, [tabindex]:focus-visible {
   --g3-primary-strong: #C05B3D;
   --g3-primary-soft: rgba(217, 119, 87, 0.12);
   --g3-on-primary: #FFFFFF;
+  --g3-info: #1F4E5F;
+  --g3-info-soft: rgba(31, 78, 95, 0.07);
+  --g3-info-border: #B7D8E8;
   --g3-success: #3F7D44;
   --g3-success-soft: rgba(63, 125, 68, 0.12);
   --g3-success-strong: #2F5F33;
   --g3-warning: #B4801F;
   --g3-warning-soft: rgba(180, 128, 31, 0.12);
   --g3-warning-strong: #8A6117;
+  --g3-warning-border: #E8C97A;
   --g3-danger: #C24141;
   --g3-danger-soft: rgba(194, 65, 65, 0.10);
   --g3-danger-strong: #9F2F2F;
+  --g3-danger-border: rgba(194, 65, 65, 0.45);
   --g3-secondary: #2A7E8C;
   --g3-secondary-soft: rgba(42, 126, 140, 0.12);
   --g3-magenta: #B05590;

@@ -13,8 +13,8 @@ import { epochNow } from "./types";
  * `collection` logique (ex. `financeInvoices`) ; le moteur garantit :
  *  - l'isolation par propriétaire (`userId` obligatoire, vérifié au retour) ;
  *  - un nom de collection contraint (protection contre l'injection d'accès) ;
- *  - un cache Redis partagé sur les listes (TTL court, invalidé à l'écriture)
- *    — réutilise l'infrastructure Upstash mise en place en Task 14.
+ *  - un cache process-local sur les listes (TTL court, invalidé à l'écriture)
+ *    — API conservée depuis la suppression du service externe (Task 108).
  *
  * Les données libres du module vivent sous le champ `data` (objet validé par
  * le schéma zod du module avant l'appel — le moteur ne seconde-guess pas).
@@ -49,7 +49,7 @@ export interface ListRecordsOptions {
   filters?: ListRecordsFilter[];
   orderBy?: { field: string; direction: "asc" | "desc" };
   limit?: number;
-  /** Bypass du cache Redis (lecture fraîche, ex. juste après une écriture). */
+  /** Bypass du cache (lecture fraîche, ex. juste après une écriture). */
   fresh?: boolean;
 }
 
@@ -57,10 +57,10 @@ const LIST_CACHE_TTL_SECONDS = 30;
 const VERSION_TTL_SECONDS = 24 * 60 * 60;
 
 /**
- * Invalidations : Redis DEL ne supporte pas les patterns, on utilise donc un
+ * Invalidations : pas de suppression par motif, on utilise donc un
  * compteur de version par collection+utilisateur. Chaque écriture incrémente
  * la version — toutes les clés de liste antérieures deviennent inaccessibles
- * (et expirent seules). Si Redis est indisponible, le cache est simplement
+ * (et expirent seules). Si le cache est indisponible, il est simplement
  * court-circuité (dégradation gracieuse de lib/cache/redis).
  */
 async function bumpCollectionVersion(userId: string, collection: string): Promise<void> {

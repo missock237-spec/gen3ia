@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
-import { isFirestoreMissingIndexError } from "@/lib/db/firestore-fallback";
+import { isFirestoreMissingIndexError } from "@/lib/db/firestore-resilient";
 import type { ConversationRun, RunPhase, RunStatus, RunStep, RunStepStatus } from "@/lib/domain/conversations/types";
 
 /**

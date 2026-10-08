@@ -3,21 +3,6 @@ import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { pushPayloadFromNotification, sendPushToUser } from "@/lib/push/server";
 import { cacheDelete } from "@/lib/cache/redis";
-import { isSupabaseBackend, resolveProfileId } from "@/lib/db/driver";
-import {
-  mirrorAllNotificationsRead,
-  mirrorNotificationCreated,
-  mirrorNotificationRead,
-  mirrorNotificationsForApprovalRead,
-} from "./mirror";
-import {
-  createNotificationSupabase,
-  listNotificationsSupabase,
-  countUnreadSupabase,
-  markReadSupabase,
-  markAllReadSupabase,
-  markForApprovalReadSupabase,
-} from "./supabase-repository";
 
 /**
  * Centre de notifications persistantes Gen3ia (collection `notifications`).
@@ -29,6 +14,10 @@ import {
  *
  * Le module est server-only (Firebase Admin) et best-effort pour l'émetteur :
  * un échec de notification ne doit JAMAIS bloquer le flux métier.
+ *
+ * Task 108 : Firestore est l'unique moteur de données — le pilote de
+ * bascule (ADR-006 retirée) et le miroir secondaire ont été supprimés ; la
+ * sémantique des APPELS est inchangée (zod, micro-cache, best-effort).
  */
 
 const COLLECTION = "notifications";
@@ -67,22 +56,6 @@ export async function createNotification(input: CreateNotificationInput): Promis
   try {
     if (!input.userId?.trim()) return null;
 
-    // Backend piloté (ADR-006) : DATA_BACKEND=supabase → écriture Postgres,
-    // sémantique identique (best-effort, forme zod, invalidation cache).
-    if (isSupabaseBackend()) {
-      const created = await createNotificationSupabase(input, {
-        uid: input.userId,
-        provider: "firebase-bridge",
-      });
-      if (created) {
-        invalidateNotificationsCache(created.userId);
-        // Push serveur (Task 100) : fire-and-forget, JAMAIS bloquant — la
-        // notification in-app est déjà créée ; un échec push est silencieux.
-        void sendPushToUser(created.userId, pushPayloadFromNotification(created)).catch(() => undefined);
-      }
-      return created;
-    }
-
     const now = Date.now();
     const ref = adminDb.collection(COLLECTION).doc();
     const notification = NotificationSchema.parse({
@@ -116,9 +89,6 @@ export async function createNotification(input: CreateNotificationInput): Promis
     // notification NOUVELLE invalide la clé pour que le prochain poll la
     // voie immédiatement (latence réelle inchangée, charge Firestore −90 %).
     invalidateNotificationsCache(notification.userId);
-    // P2 (ADR-006) : miroir Supabase best-effort si le domaine est inscrit
-    // (DUAL_WRITE_DOMAINS). Firestore reste la vérité — voir mirror.ts.
-    mirrorNotificationCreated(notification);
     // Push serveur (Task 100) : alerte même APPLICATION FERMÉE (Web Push /
     // VAPID). Fire-and-forget strict — aucun échec push ne remonte ici ; no-op
     // silencieux si les clés VAPID ne sont pas configurées.
@@ -157,10 +127,11 @@ function docToNotification(id: string, data: FirebaseFirestore.DocumentData): Ge
  * DEUX requêtes Firestore (liste + compteur) : à 10 000 clients ouverts,
  * cela représente ~800 lectures Firestore/s pour afficher une cloche.
  *
- * Stratégie : cache Redis court (TTL 20 s = filet de sécurité) invalidé
- * PAR ÉVÉNEMENT à chaque mutation (création, lecture, tout-lu). Une
- * notification nouvelle apparaît donc au poll suivant SANS latence
- * ajoutée, et le cas nominal (rien de neuf) est servi par Redis.
+ * Stratégie : cache process-local court (TTL 20 s = filet de sécurité)
+ * invalidé PAR ÉVÉNEMENT à chaque mutation (création, lecture, tout-lu).
+ * Une notification nouvelle apparaît donc au poll suivant SANS latence
+ * ajoutée, et le cas nominal (rien de neuf) est servi depuis la mémoire
+ * (Task 108 : le cache lib/cache/redis.ts est en mémoire process-local).
  * La clé canonique est celle du seul appelant réel du produit
  * (NotificationCenter : limit=30, sans filtre unread) — toute autre
  * forme de requête contourne le cache côté route.
@@ -172,15 +143,11 @@ export function notificationsCacheKey(userId: string, limit: number, unreadOnly:
 /** Invalidation best-effort — jamais bloquante pour le flux métier. */
 export function invalidateNotificationsCache(userId: string): void {
   cacheDelete(notificationsCacheKey(userId, 30, false)).catch(() => {
-    /* Redis indisponible : le TTL de sécurité fait foi */
+    /* Cache indisponible : le TTL de sécurité fait foi */
   });
 }
 
 export async function listNotifications(userId: string, limit = 30, unreadOnly = false): Promise<Gen3iaNotification[]> {
-  if (isSupabaseBackend()) {
-    const profileId = await resolveProfileId({ uid: userId });
-    if (profileId) return listNotificationsSupabase(profileId, limit, unreadOnly);
-  }
   let query = adminDb
     .collection(COLLECTION)
     .where("userId", "==", userId)
@@ -194,23 +161,11 @@ export async function listNotifications(userId: string, limit = 30, unreadOnly =
 }
 
 export async function countUnreadNotifications(userId: string): Promise<number> {
-  if (isSupabaseBackend()) {
-    const profileId = await resolveProfileId({ uid: userId });
-    if (profileId) return countUnreadSupabase(profileId);
-  }
   const snapshot = await adminDb.collection(COLLECTION).where("userId", "==", userId).where("read", "==", false).count().get();
   return Number(snapshot.data().count ?? 0);
 }
 
 export async function markNotificationRead(userId: string, id: string): Promise<void> {
-  if (isSupabaseBackend()) {
-    const profileId = await resolveProfileId({ uid: userId });
-    if (profileId) {
-      await markReadSupabase(profileId, id);
-      invalidateNotificationsCache(userId);
-      return;
-    }
-  }
   const ref = adminDb.collection(COLLECTION).doc(id);
   await adminDb.runTransaction(async (tx) => {
     const snapshot = await tx.get(ref);
@@ -218,25 +173,15 @@ export async function markNotificationRead(userId: string, id: string): Promise<
     tx.update(ref, { read: true });
   });
   invalidateNotificationsCache(userId);
-  mirrorNotificationRead(userId, id);
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {
-  if (isSupabaseBackend()) {
-    const profileId = await resolveProfileId({ uid: userId });
-    if (profileId) {
-      await markAllReadSupabase(profileId);
-      invalidateNotificationsCache(userId);
-      return;
-    }
-  }
   const snapshot = await adminDb.collection(COLLECTION).where("userId", "==", userId).where("read", "==", false).limit(100).get();
   if (snapshot.empty) return;
   const batch = adminDb.batch();
   for (const doc of snapshot.docs) batch.update(doc.ref, { read: true });
   await batch.commit();
   invalidateNotificationsCache(userId);
-  mirrorAllNotificationsRead(userId);
 }
 
 /**
@@ -246,14 +191,6 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
  */
 export async function markNotificationsForApprovalRead(userId: string, approvalId: string): Promise<void> {
   try {
-    if (isSupabaseBackend()) {
-      const profileId = await resolveProfileId({ uid: userId });
-      if (profileId) {
-        await markForApprovalReadSupabase(profileId, approvalId);
-        invalidateNotificationsCache(userId);
-        return;
-      }
-    }
     const snapshot = await adminDb
       .collection(COLLECTION)
       .where("userId", "==", userId)
@@ -266,7 +203,6 @@ export async function markNotificationsForApprovalRead(userId: string, approvalI
     for (const doc of snapshot.docs) batch.update(doc.ref, { read: true });
     await batch.commit();
     invalidateNotificationsCache(userId);
-    mirrorNotificationsForApprovalRead(userId, approvalId);
   } catch (error) {
     console.warn("[notifications] marquage lu par approbation impossible (non bloquant):", error instanceof Error ? error.message : error);
   }

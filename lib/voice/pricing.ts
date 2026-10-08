@@ -7,7 +7,7 @@
  *
  * Sources :
  *  - Prix fournisseur réel : API Pricing Twilio (par pays, type Local),
- *    mise en cache Redis 24 h (le prix mensuel change rarement).
+ *    mise en cache 24 h (le prix mensuel change rarement).
  *  - Repli : GEN3IA_PHONE_PROVIDER_USD_MINOR (centièmes de dollar, défaut
  *    500 = 5,00 USD/mois) pour continuer à servir l'UI si l'API Pricing
  *    est indisponible.
@@ -88,7 +88,7 @@ const PRICING_CACHE_TTL_SECONDS = 24 * 60 * 60;
 
 /**
  * Tarification complète d'un numéro local du pays demandé — prix
- * fournisseur réel (cache Redis 24 h) + marge configurée.
+ * fournisseur réel (cache 24 h) + marge configurée.
  */
 export async function getNumberPricing(country: string): Promise<NumberPricing> {
   const normalized = country.trim().toUpperCase();

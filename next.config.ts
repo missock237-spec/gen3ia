@@ -177,7 +177,6 @@ const nextConfig: NextConfig = {
     "pdf-lib",
     "archiver",
     "yauzl",
-    "@supabase/supabase-js",
     // OpenTelemetry (Task 59) : SDK chargé dynamiquement UNIQUEMENT quand
     // OTEL_EXPORTER_OTLP_ENDPOINT est défini — reste externe au bundle pour
     // préserver les hooks de contexte Node (async_hooks) et la taille serverless.
