@@ -5,12 +5,23 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { adminDb } from "@/lib/firebase/admin";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 import { WorkflowSchema } from "@/lib/workflows/types";
 import { validateWorkflow } from "@/lib/workflows/validator";
 import { assertOrgAttach, listUserOrgIds } from "@/lib/tenants/resource-access";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+/**
+ * GARDE QUOTA (Task 110-e) : la création de workflow est une ÉCRITURE
+ * Firestore posée par l'utilisateur — sous quota quotidien épuisé elle
+ * pendait SANS lever (Task 97) et la requête était retenue jusqu'au kill de
+ * la fonction. runFirestoreGuarded (lib/queue/firestore-guard, partagé avec
+ * la file de missions 110-d) borne l'écriture à 6 s + disjoncteur : échec
+ * rapide quota-classifié (503 actionnable via errorStatus). Les lectures de
+ * liste échouent vite sous quota et restent honnêtes.
+ */
 
 /**
  * Workflows — graphes exécutables (nœuds agent/tool/condition/parallel/
@@ -69,7 +80,7 @@ export async function POST(request: NextRequest) {
     if (orgId) await assertOrgAttach(user.uid, orgId);
     const id = randomUUID();
     const now = new Date().toISOString();
-    await adminDb.collection("workflows").doc(id).set({
+    await runFirestoreGuarded(`workflow create ${id}`, () => adminDb.collection("workflows").doc(id).set({
       ...body,
       ...(orgId ? { orgId } : {}),
       id,
@@ -77,7 +88,7 @@ export async function POST(request: NextRequest) {
       userId: user.uid,
       createdAt: now,
       updatedAt: now,
-    } as Record<string, unknown>);
+    } as Record<string, unknown>));
     return NextResponse.json({ id, createdAt: now, requestId }, { status: 201 });
   } catch (error) {
     return NextResponse.json(errorBody(error, "Création du workflow impossible"), { status: errorStatus(error, 500) });

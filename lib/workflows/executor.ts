@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 
 import { adminDb } from "@/lib/firebase/admin";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { buildAgentCharter } from "@/lib/agents/charter";
 import { generateForUser } from "@/lib/billing/ai-execution";
@@ -27,6 +28,15 @@ import type { Workflow } from "./types";
  *  - parallel   : marqueur structurel — les successeurs directs partent
  *                 concurremment (le graphe est exécuté par vagues prêtes) ;
  *  - output     : agrège le résultat final de l'exécution.
+ *
+ * GARDE QUOTA (Task 110-e) : le checkpoint d'exécution (lecture de reprise,
+ * save() entre chaque vague, doc d'approbation) est écrit sur Firestore BRUT
+ * et la route POST /api/workflows/[id]/run (maxDuration 300) attend
+ * runWorkflowGraph — sous quota Firestore, save() pendaît SANS lever
+ * (Task 97) et retenait la requête utilisateur jusqu'au kill. Chaque touche
+ * passe par runFirestoreGuarded (deadline 6 s + disjoncteur) : l'échec est
+ * rapide, quota-classifié (503) et capté par le catch final (statut
+ * « failed » honnête sur le run) au lieu d'une pendule.
  */
 
 export const WORKFLOW_RUN_COLLECTION = "workflowRuns";
@@ -212,7 +222,7 @@ export async function runWorkflowGraph(params: {
   // État initial : reprise (runId fourni) ou création.
   let state: WorkflowRunState;
   if (params.runId) {
-    const doc = await adminDb.collection(WORKFLOW_RUN_COLLECTION).doc(params.runId).get();
+    const doc = await runFirestoreGuarded(`workflow run get ${params.runId}`, () => adminDb.collection(WORKFLOW_RUN_COLLECTION).doc(params.runId!).get());
     if (!doc.exists || (doc.data() as { userId?: string } | undefined)?.userId !== params.userId) {
       throw new Error("Exécution introuvable.");
     }
@@ -250,7 +260,7 @@ export async function runWorkflowGraph(params: {
   };
 
   const save = async () => {
-    await adminDb.collection(WORKFLOW_RUN_COLLECTION).doc(state.runId).set(state, { merge: true });
+    await runFirestoreGuarded(`workflow run save ${state.runId}`, () => adminDb.collection(WORKFLOW_RUN_COLLECTION).doc(state.runId).set(state, { merge: true }));
   };
 
   try {
@@ -292,7 +302,7 @@ export async function runWorkflowGraph(params: {
         state.approvalNodeId = approvalNode.id;
         const approvalId = randomUUID();
         state.approvalId = approvalId;
-        await adminDb.collection("workflowApprovals").doc(approvalId).set({
+        await runFirestoreGuarded(`workflow approval create ${approvalId}`, () => adminDb.collection("workflowApprovals").doc(approvalId).set({
           userId: params.userId,
           workflowId: workflow.id,
           runId: state.runId,
@@ -300,7 +310,7 @@ export async function runWorkflowGraph(params: {
           message: resolveTemplate(typeof approvalNode.config.message === "string" ? approvalNode.config.message : "Validation requise pour continuer.", state.nodeOutputs),
           status: "pending",
           createdAt: new Date().toISOString(),
-        });
+        }));
         await save();
         return state;
       }

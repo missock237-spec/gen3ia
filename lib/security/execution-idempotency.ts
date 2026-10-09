@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { createHash } from "node:crypto";
 import { adminDb } from "@/lib/firebase/admin";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 
 const COLLECTION = "executionIdempotency";
 const MAX_RESULT_CHARS = 200_000;
@@ -33,6 +34,18 @@ function stableSerialize(value: unknown): string {
 }
 function docId(userId: string, toolName: string, key: string): string { return digest(stableSerialize({ userId, toolName, key })).slice(0, 64); }
 
+/**
+ * GARDE QUOTA (Task 110-e) : le claim transactionnel est AWAITÉ par
+ * executeToolSecurely AVANT chaque outil à risque external/destructive —
+ * sur Firestore brut, sous quota quotidien épuisé la transaction pendaît
+ * SANS lever (Task 97) et l'étape outil pendait jusqu'à son timeout (120 s
+ * par défaut). completeExecutionIdempotency est aussi awaité sans catch
+ * après une exécution RÉUSSIE : sans garde, le succès était retenu par une
+ * écriture pendante. runFirestoreGuarded borne chaque touche à 6 s +
+ * disjoncteur ; la sémantique métier (claim exactement-une-fois, rejet des
+ * doublons vivants) est inchangée.
+ */
+
 /** Millis de `updatedAt` (Timestamp Firestore ou nombre) ; null si illisible. */
 function updatedAtMs(data: Record<string, unknown>): number | null {
   const value = data.updatedAt;
@@ -57,7 +70,7 @@ export async function claimExecutionIdempotency(params: { userId: string; toolNa
   const inputHash = digest(stableSerialize(params.input));
   const ref = adminDb.collection(COLLECTION).doc(id);
   const expireAt = new Date(Date.now() + CLAIMS_TTL_MS);
-  return adminDb.runTransaction(async (tx) => {
+  return runFirestoreGuarded(`idempotency claim ${params.toolName}`, () => adminDb.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (snap.exists) {
       const data = snap.data() ?? {};
@@ -86,12 +99,12 @@ export async function claimExecutionIdempotency(params: { userId: string; toolNa
     }
     tx.create(ref, { userId: params.userId, toolName: params.toolName, key: params.key, inputHash, state: "processing", createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), claimCount: 1, expireAt });
     return { key: id, state: "processing" };
-  });
+  }));
 }
 export async function completeExecutionIdempotency(params: { key: string; result: unknown }): Promise<void> {
   if (stableSerialize(params.result).length > MAX_RESULT_CHARS) throw new Error("Idempotency result exceeds persistence limit.");
-  await adminDb.collection(COLLECTION).doc(params.key).update({ state: "completed", result: params.result, updatedAt: FieldValue.serverTimestamp(), expireAt: new Date(Date.now() + CLAIMS_TTL_MS) });
+  await runFirestoreGuarded(`idempotency complete ${params.key.slice(0, 16)}`, () => adminDb.collection(COLLECTION).doc(params.key).update({ state: "completed", result: params.result, updatedAt: FieldValue.serverTimestamp(), expireAt: new Date(Date.now() + CLAIMS_TTL_MS) }));
 }
 export async function failExecutionIdempotency(params: { key: string; error: string }): Promise<void> {
-  await adminDb.collection(COLLECTION).doc(params.key).update({ state: "failed", error: params.error.slice(0, 4_000), updatedAt: FieldValue.serverTimestamp(), expireAt: new Date(Date.now() + CLAIMS_TTL_MS) });
+  await runFirestoreGuarded(`idempotency fail ${params.key.slice(0, 16)}`, () => adminDb.collection(COLLECTION).doc(params.key).update({ state: "failed", error: params.error.slice(0, 4_000), updatedAt: FieldValue.serverTimestamp(), expireAt: new Date(Date.now() + CLAIMS_TTL_MS) }));
 }

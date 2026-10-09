@@ -29,6 +29,22 @@
 import { FieldValue } from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/firebase/admin";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
+
+/**
+ * GARDE QUOTA (Task 110-e) : les demandes de pause/arrêt sont des ÉCRITURES
+ * Firestore posées par l'utilisateur via /api/agent/chat/stop (arrêt
+ * explicite d'une mission depuis le chat) et les routes workspace pause/stop.
+ * Sur Firestore brut, sous quota quotidien épuisé elles pendaient SANS lever
+ * (Task 97) : le bouton d'ARRÊT restait suspendu jusqu'au kill de la
+ * fonction — l'utilisateur ne pouvait plus reprendre la main sur un agent.
+ * runFirestoreGuarded (lib/queue/firestore-guard, partagé avec la file de
+ * missions 110-d) borne chaque écriture à 6 s + disjoncteur : échec rapide
+ * quota-classifié (503 actionnable) au lieu d'une pendule. Les LECTURES de
+ * contrôle (isExecutionPauseRequested / isExecutionStopRequested) restent
+ * fail-soft (catch → false) : elles ne doivent JAMAIS bloquer le runtime,
+ * et les lectures Firestore échouent vite sous quota (Task 97).
+ */
 
 const CONTROLS = "agentPauseControls";
 
@@ -69,7 +85,7 @@ function controlRef(executionId: string) {
  * (seul le propriétaire peut lever sa propre pause).
  */
 export async function requestExecutionPause(request: PauseRequest): Promise<void> {
-  await controlRef(request.executionId).set(
+  await runFirestoreGuarded(`pause control set ${request.executionId}`, () => controlRef(request.executionId).set(
     {
       userId: request.userId,
       executionId: request.executionId,
@@ -81,7 +97,7 @@ export async function requestExecutionPause(request: PauseRequest): Promise<void
       requestedAt: FieldValue.serverTimestamp(),
     },
     { merge: true },
-  );
+  ));
 }
 
 /**
@@ -92,7 +108,7 @@ export async function requestExecutionPause(request: PauseRequest): Promise<void
  * (le résultat partiels n'est pas persisté comme "completed").
  */
 export async function requestExecutionStop(request: PauseRequest): Promise<void> {
-  await controlRef(request.executionId).set(
+  await runFirestoreGuarded(`stop control set ${request.executionId}`, () => controlRef(request.executionId).set(
     {
       userId: request.userId,
       executionId: request.executionId,
@@ -104,7 +120,7 @@ export async function requestExecutionStop(request: PauseRequest): Promise<void>
       requestedAt: FieldValue.serverTimestamp(),
     },
     { merge: true },
-  );
+  ));
 }
 
 /** Lève la pause (reprise ou annulation de la demande). */
@@ -113,7 +129,7 @@ export async function clearExecutionPause(userId: string, executionId: string): 
   const snapshot = await ref.get();
   if (!snapshot.exists) return;
   if (snapshot.get("userId") !== userId) throw new Error("Pause control not found.");
-  await ref.delete();
+  await runFirestoreGuarded(`pause control clear ${executionId}`, () => ref.delete());
 }
 
 /**

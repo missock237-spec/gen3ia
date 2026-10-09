@@ -9,7 +9,27 @@ import { DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
 import { getWorkspaceTask } from "@/lib/agents/workspace";
 import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
 import { adminDb } from "@/lib/firebase/admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
+import { DocumentReference, FieldValue } from "firebase-admin/firestore";
+
+/**
+ * GARDE QUOTA (Task 110-e) : le claim transactionnel et les mises à jour de
+ * statut de la tâche workspace sont des écritures Firestore BRUTES sur un
+ * chemin utilisateur (exécution/reprise d'une tâche de l'agent) — sous
+ * quota quotidien épuisé elles pendaient SANS lever (Task 97) et retenaient
+ * la requête jusqu'au kill maxDuration 300. runFirestoreGuarded (lib/queue/
+ * firestore-guard, partagé avec la file de missions 110-d) borne chaque
+ * touche à 6 s + disjoncteur : échec rapide quota-classifié (503
+ * actionnable via errorStatus), sémantique de claim inchangée.
+ */
+const claimTask = (taskRef: DocumentReference, uid: string) =>
+  runFirestoreGuarded(`workspace task claim ${taskRef.id}`, () => adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(taskRef);
+    if (!snap.exists || snap.get("ownerId") !== uid) throw new Error("Task not found.");
+    if (snap.get("status") !== "approved") return false;
+    tx.update(taskRef, { status: "running", updatedAt: FieldValue.serverTimestamp() });
+    return true;
+  }));
 
 export const runtime = "nodejs";
 // Fenêtre bornée pour le repli synchrone : l'échéance de tranche coupe la
@@ -35,13 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!task.plan) return NextResponse.json({ error: "La tâche ne possède aucun plan exécutable." }, { status: 409 });
 
     const taskRef = adminDb.collection("agentWorkspaceTasks").doc(id);
-    const claimed = await adminDb.runTransaction(async (tx) => {
-      const snap = await tx.get(taskRef);
-      if (!snap.exists || snap.get("ownerId") !== user.uid) throw new Error("Task not found.");
-      if (snap.get("status") !== "approved") return false;
-      tx.update(taskRef, { status: "running", updatedAt: FieldValue.serverTimestamp() });
-      return true;
-    });
+    const claimed = await claimTask(taskRef, user.uid);
     if (!claimed) return NextResponse.json({ error: "Cette tâche est déjà en cours ou n'est plus approuvée." }, { status: 409 });
 
     try {
@@ -87,12 +101,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
       }
 
-      await taskRef.update({
+      await runFirestoreGuarded(`workspace task finalize ${id}`, () => taskRef.update({
         plan: state.plan,
         status: finalStatus === "completed" ? "completed" : finalStatus === "paused" ? "paused" : finalStatus === "cancelled" ? "cancelled" : "failed",
         ...(finalStatus === "paused" ? {} : { completedAt: FieldValue.serverTimestamp() }),
         updatedAt: FieldValue.serverTimestamp(),
-      });
+      }));
       return NextResponse.json({
         success: finalStatus === "completed",
         executionId: state.executionId,
@@ -104,9 +118,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       });
     } catch (error) {
       // Erreur réelle de la mission (PAS une déconnexion : le signal requête
-      // n'est plus propagé au runtime) — la tâche est marquée "failed" et le
-      // checkpoint reste disponible pour une reprise manuelle.
-      await taskRef.update({ status: "failed", updatedAt: FieldValue.serverTimestamp() });
+      // n'est plus propagé au runtime) — la tâche est marquée "failed" (best-
+      // effort, borné 6 s par le garde 110-e) et le checkpoint reste
+      // disponible pour une reprise manuelle. Un incident de statut ne
+      // remplace JAMAIS l'erreur réelle de la mission.
+      await runFirestoreGuarded(`workspace task fail ${id}`, () => taskRef.update({ status: "failed", updatedAt: FieldValue.serverTimestamp() })).catch(() => undefined);
       throw error;
     }
   } catch (error) {

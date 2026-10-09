@@ -5,10 +5,24 @@ import {
 import {
   adminDb,
 } from "@/lib/firebase/admin";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 
 import type {
   ToolResult,
 } from "./types";
+
+/**
+ * GARDE QUOTA (Task 110-e) : l'audit outil (`toolAuditLogs`) est AWAITÉ par
+ * lib/tools/executor (executeTool → auditToolExecutionSafe, ToolExecutor.
+ * execute) AVANT de retourner le RÉSULTAT de l'outil. Sur Firestore brut,
+ * sous quota quotidien épuisé l'écriture pendait SANS lever (Task 97) : un
+ * outil RÉUSSI voyait son résultat retenu par l'écriture d'audit jusqu'au
+ * timeout de l'étape (120 s par défaut) puis l'étape était marquée échec —
+ * travail réel perdu. runFirestoreGuarded (lib/queue/firestore-guard,
+ * partagé avec la file de missions 110-d) borne l'écriture à 6 s +
+ * disjoncteur : le fail-soft des appelants (try/catch) est conservé mais
+ * échoue VITE, le résultat réel est rendu immédiatement.
+ */
 
 export async function recordToolAudit(
   params: {
@@ -29,7 +43,7 @@ export async function recordToolAudit(
       .collection("toolAuditLogs")
       .doc();
 
-  await ref.set({
+  await runFirestoreGuarded(`tool audit ${params.toolId}`, () => ref.set({
     userId:
       params.userId,
 
@@ -69,7 +83,7 @@ export async function recordToolAudit(
 
     createdAt:
       FieldValue.serverTimestamp(),
-  });
+  }));
 
   return ref.id;
 }

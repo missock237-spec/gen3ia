@@ -1,4 +1,5 @@
 import { adminDb } from "@/lib/firebase/admin";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 
 export interface ArtifactRecord {
   artifactId: string;
@@ -21,21 +22,31 @@ export interface ArtifactRecord {
 
 const COLLECTION = "artifacts";
 
+/**
+ * GARDE QUOTA (Task 110-e) : createArtifactRecord est l'écriture du LIVRABLE
+ * de mission (outil artifact.create → storeArtifactBuffer, chemin runtime
+ * AgentRuntime → executeToolSecurely). Sur Firestore brut, sous quota
+ * quotidien épuisé l'écriture pendaît SANS lever (Task 97) : l'étape
+ * livrable pendait jusqu'à son timeout (120 s par défaut) puis échouait —
+ * le travail réalisé était perdu pour l'utilisateur. runFirestoreGuarded
+ * borne l'écriture à 6 s + disjoncteur : échec rapide, quota-classifié,
+ * mission finalisée honnêtement au lieu d'une pendule.
+ */
 export async function createArtifactRecord(
   artifact: ArtifactRecord,
 ): Promise<ArtifactRecord> {
-  await adminDb.collection(COLLECTION).doc(artifact.artifactId).create(artifact);
+  await runFirestoreGuarded(`artifact create ${artifact.artifactId}`, () => adminDb.collection(COLLECTION).doc(artifact.artifactId).create(artifact));
   return artifact;
 }
 
 export async function getArtifactRecord(
   artifactId: string,
 ): Promise<ArtifactRecord | null> {
-  const snapshot = await adminDb.collection(COLLECTION).doc(artifactId).get();
+  const snapshot = await runFirestoreGuarded(`artifact get ${artifactId}`, () => adminDb.collection(COLLECTION).doc(artifactId).get());
   if (!snapshot.exists) return null;
   return snapshot.data() as ArtifactRecord;
 }
 
 export async function deleteArtifactRecord(artifactId: string): Promise<void> {
-  await adminDb.collection(COLLECTION).doc(artifactId).delete();
+  await runFirestoreGuarded(`artifact delete ${artifactId}`, () => adminDb.collection(COLLECTION).doc(artifactId).delete());
 }

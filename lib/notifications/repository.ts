@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 import { pushPayloadFromNotification, sendPushToUser } from "@/lib/push/server";
 import { cacheDelete } from "@/lib/cache/redis";
 
@@ -14,6 +15,18 @@ import { cacheDelete } from "@/lib/cache/redis";
  *
  * Le module est server-only (Firebase Admin) et best-effort pour l'émetteur :
  * un échec de notification ne doit JAMAIS bloquer le flux métier.
+ *
+ * GARDE QUOTA (Task 110-e) : chaque touche Firestore passe par
+ * runFirestoreGuarded (lib/queue/firestore-guard) — deadline anti-stall 6 s
+ * (Task 97 : sous quota quotidien épuisé les écritures pendent SANS lever —
+ * sans garde, createNotification pendait la LIVRAISON des missions en
+ * arrière-plan — deliverMissionToConversation l'attend — jusqu'au kill du
+ * tick) + disjoncteur quota (Task 95-b). Le contrat best-effort est
+ * conservé : createNotification/markNotificationsForApprovalRead avalent
+ * l'erreur (mais échouent VITE au lieu de pendre) ; les lectures/écritures
+ * du centre de notifications (polling sonnette toutes les 25 s par client)
+ * lèvent quota-classifié → 503 actionnable au lieu d'un 500 ou d'une
+ * pendule.
  *
  * Task 108 : Firestore est l'unique moteur de données — le pilote de
  * bascule (ADR-006 retirée) et le miroir secondaire ont été supprimés ; la
@@ -72,7 +85,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
       ...(input.toolSlug ? { toolSlug: input.toolSlug.slice(0, 256) } : {}),
       createdAtMs: now,
     });
-    await ref.create({
+    await runFirestoreGuarded(`notification create ${ref.id}`, () => ref.create({
       userId: notification.userId,
       type: notification.type,
       title: notification.title,
@@ -84,7 +97,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
       ...(notification.executionId ? { executionId: notification.executionId } : {}),
       ...(notification.toolSlug ? { toolSlug: notification.toolSlug } : {}),
       createdAt: Timestamp.fromMillis(now),
-    });
+    }));
     // La sonnette est servie depuis un micro-cache (polling 25 s) : une
     // notification NOUVELLE invalide la clé pour que le prochain poll la
     // voie immédiatement (latence réelle inchangée, charge Firestore −90 %).
@@ -154,33 +167,33 @@ export async function listNotifications(userId: string, limit = 30, unreadOnly =
     .orderBy("createdAt", "desc")
     .limit(Math.min(Math.max(limit, 1), 50));
   if (unreadOnly) query = query.where("read", "==", false) as typeof query;
-  const snapshot = await query.get();
+  const snapshot = await runFirestoreGuarded(`notification list ${userId}`, () => query.get());
   return snapshot.docs
     .map((doc) => docToNotification(doc.id, doc.data()))
     .filter((item): item is Gen3iaNotification => item !== null);
 }
 
 export async function countUnreadNotifications(userId: string): Promise<number> {
-  const snapshot = await adminDb.collection(COLLECTION).where("userId", "==", userId).where("read", "==", false).count().get();
+  const snapshot = await runFirestoreGuarded(`notification count ${userId}`, () => adminDb.collection(COLLECTION).where("userId", "==", userId).where("read", "==", false).count().get());
   return Number(snapshot.data().count ?? 0);
 }
 
 export async function markNotificationRead(userId: string, id: string): Promise<void> {
   const ref = adminDb.collection(COLLECTION).doc(id);
-  await adminDb.runTransaction(async (tx) => {
+  await runFirestoreGuarded(`notification read ${id}`, () => adminDb.runTransaction(async (tx) => {
     const snapshot = await tx.get(ref);
     if (!snapshot.exists || snapshot.get("userId") !== userId) return;
     tx.update(ref, { read: true });
-  });
+  }));
   invalidateNotificationsCache(userId);
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {
-  const snapshot = await adminDb.collection(COLLECTION).where("userId", "==", userId).where("read", "==", false).limit(100).get();
+  const snapshot = await runFirestoreGuarded(`notification list unread ${userId}`, () => adminDb.collection(COLLECTION).where("userId", "==", userId).where("read", "==", false).limit(100).get());
   if (snapshot.empty) return;
   const batch = adminDb.batch();
   for (const doc of snapshot.docs) batch.update(doc.ref, { read: true });
-  await batch.commit();
+  await runFirestoreGuarded(`notification read-all ${userId}`, () => batch.commit());
   invalidateNotificationsCache(userId);
 }
 
@@ -191,17 +204,17 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
  */
 export async function markNotificationsForApprovalRead(userId: string, approvalId: string): Promise<void> {
   try {
-    const snapshot = await adminDb
+    const snapshot = await runFirestoreGuarded(`notification list approval ${approvalId}`, () => adminDb
       .collection(COLLECTION)
       .where("userId", "==", userId)
       .where("approvalId", "==", approvalId)
       .where("read", "==", false)
       .limit(20)
-      .get();
+      .get());
     if (snapshot.empty) return;
     const batch = adminDb.batch();
     for (const doc of snapshot.docs) batch.update(doc.ref, { read: true });
-    await batch.commit();
+    await runFirestoreGuarded(`notification read approval ${approvalId}`, () => batch.commit());
     invalidateNotificationsCache(userId);
   } catch (error) {
     console.warn("[notifications] marquage lu par approbation impossible (non bloquant):", error instanceof Error ? error.message : error);

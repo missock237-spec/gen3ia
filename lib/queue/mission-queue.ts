@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/firebase/admin";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import type { OutcomeContract } from "@/lib/agents/outcome-contract";
 import type { MissionDeliverable } from "@/lib/agents/deliverables";
@@ -28,6 +29,14 @@ import type { MissionDeliverable } from "@/lib/agents/deliverables";
  *
  * FAIL-SOFT : la progression/finalisation ne lèvent JAMAIS — une panne
  * Firestore de statut ne doit pas masquer un travail réel déjà accompli.
+ *
+ * GARDE QUOTA (Task 110-d) : chaque touche Firestore passe par
+ * runFirestoreGuarded (lib/queue/firestore-guard) — deadline anti-stall 6 s
+ * (Task 97 : sous quota quotidien épuisé, les écritures pendent SANS lever)
+ * + disjoncteur quota (Task 95-b). Cause racine 110-d : ces touches brutes
+ * faisaient pendre la requête chat (maxDuration 300) et fantomiser les
+ * missions « queued » sous quota Firestore, pendant que le chat (R2)
+ * répondait encore — « plus aucune tâche ne s'exécute ».
  */
 
 const COLLECTION = "missionQueue";
@@ -133,11 +142,11 @@ function docRef(runId: string) {
   return adminDb.collection(COLLECTION).doc(runId);
 }
 
-/** Crée l'entrée de file (statut initial « queued »). Lève si l'écriture échoue : l'appelant doit savoir qu'il n'y a AUCUN worker derrière. */
+/** Crée l'entrée de file (statut initial « queued »). Lève si l'écriture échoue : l'appelant doit savoir qu'il n'y a AUCUN worker derrière. Garde 110-d : une écriture SANS réponse en 6 s lève quota-classifié au lieu de pendre (repli synchrone du chat immédiat). */
 export async function createQueuedMission(input: CreateQueuedMissionInput): Promise<void> {
   const now = Date.now();
   const steps = input.plan.steps;
-  await docRef(input.runId).set({
+  await runFirestoreGuarded(`create ${COLLECTION}/${input.runId}`, () => docRef(input.runId).set({
     runId: input.runId,
     userId: input.userId,
     executionId: input.executionId,
@@ -154,7 +163,7 @@ export async function createQueuedMission(input: CreateQueuedMissionInput): Prom
     ...(input.conversationId ? { conversationId: input.conversationId } : {}),
     createdAtMs: now,
     updatedAtMs: now,
-  });
+  }));
 }
 
 export type ClaimOutcome =
@@ -170,7 +179,10 @@ export type ClaimOutcome =
  * sinon bail posé et tentatives incrémentées DANS le même commit.
  */
 export async function claimMissionTick(runId: string): Promise<ClaimOutcome> {
-  return adminDb.runTransaction(async (tx) => {
+  // Garde 110-d : le claim transactionnel reste EXACTEMENT-UNE-FOIS, mais
+  // sous deadline + disjoncteur — sous quota, le tick répond 500 (QStash
+  // re-tente) en ~6 s au lieu de pendre jusqu'au kill de la fonction.
+  return runFirestoreGuarded(`claim ${COLLECTION}/${runId}`, () => adminDb.runTransaction(async (tx) => {
     const ref = docRef(runId);
     const snapshot = await tx.get(ref);
     if (!snapshot.exists) return { kind: "missing" } as const;
@@ -215,7 +227,7 @@ export async function claimMissionTick(runId: string): Promise<ClaimOutcome> {
         updatedAtMs: now,
       } satisfies MissionQueueRecord,
     } as const;
-  });
+  }));
 }
 
 /** Progression (best-effort) : timeline compacte + compteur d'étapes restantes. */
@@ -225,14 +237,14 @@ export async function persistMissionProgress(
 ): Promise<void> {
   try {
     const pendingCount = steps.filter((step) => step.status === "pending").length;
-    await docRef(runId).set(
+    await runFirestoreGuarded(`progress ${COLLECTION}/${runId}`, () => docRef(runId).set(
       {
         timeline: steps.map((step) => compactQueueStep(step)),
         pendingCount,
         updatedAtMs: Date.now(),
       },
       { merge: true },
-    );
+    ));
   } catch (error) {
     console.error("[mission-queue] progression non persistée (fail-soft):", error instanceof Error ? error.message : error);
   }
@@ -245,7 +257,7 @@ export async function finalizeMissionRun(
   details: { error?: string; deliverables?: MissionDeliverable[] } = {},
 ): Promise<void> {
   try {
-    await docRef(runId).set(
+    await runFirestoreGuarded(`finalize ${COLLECTION}/${runId}`, () => docRef(runId).set(
       {
         status,
         leaseUntilMs: FieldValue.delete(),
@@ -255,7 +267,7 @@ export async function finalizeMissionRun(
         updatedAtMs: Date.now(),
       },
       { merge: true },
-    );
+    ));
   } catch (error) {
     console.error("[mission-queue] finalisation non persistée (fail-soft):", error instanceof Error ? error.message : error);
   }
@@ -264,7 +276,7 @@ export async function finalizeMissionRun(
 /** Marque un échec d'ENFILEMENT initial (la mission n'a jamais démarré). */
 export async function markMissionEnqueueFailed(runId: string, error: unknown): Promise<void> {
   try {
-    await docRef(runId).set(
+    await runFirestoreGuarded(`enqueue-failed ${COLLECTION}/${runId}`, () => docRef(runId).set(
       {
         status: "failed" satisfies MissionQueueStatus,
         lastError: `File d'attente indisponible : ${error instanceof Error ? error.message : String(error)}`.slice(0, 2_000),
@@ -272,7 +284,7 @@ export async function markMissionEnqueueFailed(runId: string, error: unknown): P
         updatedAtMs: Date.now(),
       },
       { merge: true },
-    );
+    ));
   } catch (secondaryError) {
     console.error("[mission-queue] échec d'enfilement non persisté:", secondaryError instanceof Error ? secondaryError.message : secondaryError);
   }
@@ -299,9 +311,9 @@ export function decideNextTick(input: {
   return "terminal";
 }
 
-/** Lecture propriétaire-scopée pour le polling / SSE du client. */
+/** Lecture propriétaire-scopée pour le polling / SSE du client. Garde 110-d : sous quota, la lecture répond 503 quota-classifié (actionnable) au lieu de pendre ou de ressembler à une mission introuvable. */
 export async function getMissionRun(userId: string, runId: string): Promise<MissionQueueRecord | null> {
-  const snapshot = await docRef(runId).get();
+  const snapshot = await runFirestoreGuarded(`get ${COLLECTION}/${runId}`, () => docRef(runId).get());
   if (!snapshot.exists) return null;
   const data = snapshot.data() as Partial<MissionQueueRecord> | undefined;
   if (!data || data.userId !== userId) return null; // 404 anti-énumération

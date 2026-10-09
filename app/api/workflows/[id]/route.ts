@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { adminDb } from "@/lib/firebase/admin";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 import { WorkflowSchema } from "@/lib/workflows/types";
 import { validateWorkflow } from "@/lib/workflows/validator";
 import { assertResourceRead, assertResourceWrite } from "@/lib/tenants/resource-access";
@@ -12,6 +13,14 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+/**
+ * GARDE QUOTA (Task 110-e) : mise à jour et suppression de workflow =
+ * ÉCRITURES Firestore posées par l'utilisateur — bornées 6 s + disjoncteur
+ * par runFirestoreGuarded (lib/queue/firestore-guard, partagé avec la file
+ * de missions 110-d) : échec rapide quota-classifié au lieu d'une pendule
+ * jusqu'au kill de la fonction (motivation complète : workflows/route.ts).
+ */
 
 /**
  *  GET    /api/workflows/[id]  → détail du workflow ;
@@ -70,11 +79,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: `Workflow invalide : ${validation.errors.join(" | ")}`, requestId }, { status: 422 });
     }
 
-    await adminDb.collection("workflows").doc(id).set({
+    await runFirestoreGuarded(`workflow update ${id}`, () => adminDb.collection("workflows").doc(id).set({
       ...parsed.data,
       userId: user.uid,
       updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    }, { merge: true }));
     return NextResponse.json({ ok: true, version: nextVersion, requestId });
   } catch (error) {
     return NextResponse.json(errorBody(error, "Mise à jour impossible"), { status: errorStatus(error, 500) });
@@ -87,7 +96,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const existing = await loadAccessible(user.uid, id, "write");
     if (!existing) return NextResponse.json({ error: "Workflow introuvable." }, { status: 404 });
-    await adminDb.collection("workflows").doc(id).delete();
+    await runFirestoreGuarded(`workflow delete ${id}`, () => adminDb.collection("workflows").doc(id).delete());
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(errorBody(error, "Suppression impossible"), { status: errorStatus(error, 500) });

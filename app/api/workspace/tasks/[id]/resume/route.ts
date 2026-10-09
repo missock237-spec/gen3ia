@@ -6,7 +6,24 @@ import { resumeWorkspaceTask } from "@/lib/agents/workspace";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
 import { adminDb } from "@/lib/firebase/admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
+import { DocumentReference, FieldValue } from "firebase-admin/firestore";
+
+/**
+ * GARDE QUOTA (Task 110-e) : claim transactionnel + mises à jour de statut
+ * bornés 6 s par le garde partagé (voir execute/route.ts pour la motivation
+ * complète) — sous quota Firestore, la reprise répond vite (503
+ * quota-classifié) au lieu de pendre jusqu'au kill de la fonction.
+ */
+function claimTask(taskRef: DocumentReference, uid: string) {
+  return runFirestoreGuarded(`workspace task claim ${taskRef.id}`, () => adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(taskRef);
+    if (!snap.exists || snap.get("ownerId") !== uid) throw new Error("Task not found.");
+    if (snap.get("status") !== "approved") return false;
+    tx.update(taskRef, { status: "running", updatedAt: FieldValue.serverTimestamp() });
+    return true;
+  }));
+}
 
 /**
  * Reprise d'une tâche en pause.
@@ -40,13 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!task.plan) return NextResponse.json({ error: "La tâche ne possède aucun plan exécutable." }, { status: 409 });
 
     const taskRef = adminDb.collection("agentWorkspaceTasks").doc(id);
-    const claimed = await adminDb.runTransaction(async (tx) => {
-      const snap = await tx.get(taskRef);
-      if (!snap.exists || snap.get("ownerId") !== user.uid) throw new Error("Task not found.");
-      if (snap.get("status") !== "approved") return false;
-      tx.update(taskRef, { status: "running", updatedAt: FieldValue.serverTimestamp() });
-      return true;
-    });
+    const claimed = await claimTask(taskRef, user.uid);
     if (!claimed) return NextResponse.json({ error: "La tâche n'est plus reprenable (état modifié entre-temps)." }, { status: 409 });
 
     try {
@@ -60,12 +71,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         ...(task.orgId ? { orgId: task.orgId } : {}),
       });
       const state = await runtime.run();
-      await taskRef.update({
+      await runFirestoreGuarded(`workspace task finalize ${id}`, () => taskRef.update({
         plan: state.plan,
         status: state.status === "completed" ? "completed" : state.status === "paused" ? "paused" : "failed",
         ...(state.status === "paused" ? {} : { completedAt: FieldValue.serverTimestamp() }),
         updatedAt: FieldValue.serverTimestamp(),
-      });
+      }));
       return NextResponse.json({
         success: state.status === "completed",
         executionId: state.executionId,
@@ -75,7 +86,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         billing: state.billing,
       });
     } catch (error) {
-      await taskRef.update({ status: "failed", updatedAt: FieldValue.serverTimestamp() });
+      // Best-effort borné 6 s (garde 110-e) : un incident de statut ne
+      // remplace JAMAIS l'erreur réelle de la mission.
+      await runFirestoreGuarded(`workspace task fail ${id}`, () => taskRef.update({ status: "failed", updatedAt: FieldValue.serverTimestamp() })).catch(() => undefined);
       throw error;
     }
   } catch (error) {

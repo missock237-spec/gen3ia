@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
+import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 import { createNotification, markNotificationsForApprovalRead } from "@/lib/notifications/repository";
 import type { ApprovalStatus, ConversationApproval } from "@/lib/domain/conversations/types";
 
@@ -13,6 +14,20 @@ import type { ApprovalStatus, ConversationApproval } from "@/lib/domain/conversa
  */
 
 const COLLECTION = "conversationApprovals";
+
+/**
+ * GARDE QUOTA (Task 110-e) : les approbations de la conversation workspace
+ * (créées par le moteur lib/domain/conversations/engine.ts quand une étape
+ * outil exige une validation, décidées par l'utilisateur depuis la
+ * conversation ou le centre de notifications) sont des ÉCRITURES Firestore.
+ * Sur Firestore brut, sous quota quotidien épuisé elles pendaient SANS lever
+ * (Task 97) : le streaming de la conversation restait suspendu à l'étape
+ * sensible et la décision de validation pendait. runFirestoreGuarded
+ * (lib/queue/firestore-guard, partagé avec la file de missions 110-d)
+ * borne chaque écriture à 6 s + disjoncteur : échec rapide quota-classifié
+ * (503 actionnable). Les lectures (getApproval, list*) échouent vite sous
+ * quota et restent honnêtes.
+ */
 
 /**
  * Durée de validité d'une validation en attente (24 h). Une action sensible
@@ -67,7 +82,7 @@ export async function createApproval(input: {
 }): Promise<ConversationApproval> {
   const now = new Date();
   const ref = adminDb.collection(COLLECTION).doc(randomUUID());
-  await ref.set({ ...input, status: "pending" as const, createdAt: now, expiresAt: new Date(now.getTime() + APPROVAL_TTL_MS) });
+  await runFirestoreGuarded(`conversation approval create ${ref.id}`, () => ref.set({ ...input, status: "pending" as const, createdAt: now, expiresAt: new Date(now.getTime() + APPROVAL_TTL_MS) }));
   // Notification in-app VALIDABLE À DISTANCE : l'utilisateur peut approuver
   // ou rejeter depuis le centre de notifications, même hors conversation.
   void createNotification({
@@ -96,7 +111,7 @@ export async function decideApproval(
   decision: Exclude<ApprovalStatus, "pending">,
 ): Promise<{ approval: ConversationApproval; alreadyDecided: boolean }> {
   const ref = adminDb.collection(COLLECTION).doc(approvalId);
-  const result = await adminDb.runTransaction(async (tx) => {
+  const result = await runFirestoreGuarded(`conversation approval decide ${approvalId}`, () => adminDb.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists || snap.data()?.userId !== userId) throw new Error("Validation introuvable.");
     const raw = snap.data()!;
@@ -114,7 +129,7 @@ export async function decideApproval(
     const approved = decision === "approved";
     tx.update(ref, { status: decision, decidedAt: FieldValue.serverTimestamp() });
     return { approval: { ...current, status: decision, decidedAt: new Date().toISOString() }, alreadyDecided: false, approved };
-  });
+  }));
   // La décision prise : les notifications rattachées ne sont plus actionnables.
   if (!result.alreadyDecided) void markNotificationsForApprovalRead(userId, approvalId);
   return { approval: result.approval, alreadyDecided: result.alreadyDecided };
