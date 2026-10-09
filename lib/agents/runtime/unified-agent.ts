@@ -329,22 +329,32 @@ export async function planUniversalAgent(
   const tentatives = 2;
   let dernierErreur = "";
   for (let essai = 1; essai <= tentatives; essai++) {
-    const response = await generate({
-      task: "agent",
-      messages: [
-        { role: "system", content: finalSystemPromptWithTwin },
-        { role: "user", content: buildUserPrompt(essai > 1 ? dernierErreur : undefined) },
-      ],
-      requiresStructuredOutput: true,
-      // Tâche de COMPRÉHENSION (le plan conditionne toute la mission) :
-      // routage par la politique de qualité — plus de gratuit forcé en
-      // mode premium (un planificateur médiocre dégrade la mission entière).
-      preferFree: preferFreeForUnderstanding(),
-      maxTokens: 6000,
-      provider: options?.provider,
-      model: options?.model,
-      metadata: { userId },
-    });
+    // RESILIENCE (Task 114) : une panne du fournisseur LLM ne doit JAMAIS
+    // faire échouer le lancement — l'utilisateur obtient le plan de repli
+    // déterministe (mission exécutable) au lieu d'une erreur brute.
+    let response: Awaited<ReturnType<typeof generate>>;
+    try {
+      response = await generate({
+        task: "agent",
+        messages: [
+          { role: "system", content: finalSystemPromptWithTwin },
+          { role: "user", content: buildUserPrompt(essai > 1 ? dernierErreur : undefined) },
+        ],
+        requiresStructuredOutput: true,
+        // Tâche de COMPRÉHENSION (le plan conditionne toute la mission) :
+        // routage par la politique de qualité — plus de gratuit forcé en
+        // mode premium (un planificateur médiocre dégrade la mission entière).
+        preferFree: preferFreeForUnderstanding(),
+        maxTokens: 6000,
+        provider: options?.provider,
+        model: options?.model,
+        metadata: { userId },
+      });
+    } catch (error) {
+      dernierErreur = error instanceof Error ? error.message : "planificateur indisponible";
+      console.warn(`[planner] Tentative ${essai}/${tentatives} échouée (fournisseur):`, dernierErreur);
+      continue;
+    }
 
     let parsed: unknown;
     try {
@@ -399,6 +409,13 @@ function finaliserPlan(userId: string, plan: RuntimePlan, objective: string, all
   forceSensitiveToolFlags(plan.steps, sensitiveTools);
   const normalized = RuntimePlanSchema.parse({
     ...plan,
+    // IDENTITÉ D'EXÉCUTION SERVEUR (Task 114) : l'executionId n'est JAMAIS
+    // celui proposé par le LLM (le planner observe des valeurs inventées
+    // type "exec-001" partagées par toutes les missions → documents de
+    // checkpoint `executions/{executionId}` en collision, missions bloquées
+    // en boucle sur le checkpoint d'une AUTRE mission). Un UUID frais par
+    // plan est la garantie d'unicité du checkpoint.
+    executionId: randomUUID(),
     objective,
     steps: plan.steps.slice(0, MAX_PLAN_STEPS),
     maxConcurrency: Math.min(plan.maxConcurrency ?? 10, 10),

@@ -202,3 +202,34 @@ describe("planUniversalAgent — jumeau créatif (Task 114-b)", () => {
     expect(systemPrompt).not.toContain("PROFIL DU JUMEAU");
   });
 });
+
+describe("planUniversalAgent — identité d'exécution serveur (Task 114)", () => {
+  it("l'executionId inventé par le LLM (« exec-001 ») n'arrive JAMAIS au plan final — UUID frais par plan", async () => {
+    // Scenario de production observé : le planner LLM renvoie un executionId
+    // générique partagé par toutes les missions → checkpoints en collision.
+    mockGenerate.mockResolvedValue({
+      text: JSON.stringify({
+        executionId: "exec-001",
+        objective: "objectif",
+        steps: [{ id: "step1", type: "llm", name: "G", description: "faire", dependencies: [] }],
+        maxConcurrency: 1,
+        maxIterations: 1,
+      }),
+    } as never);
+    const planA = await planUniversalAgent("user-1", "tâche A");
+    const planB = await planUniversalAgent("user-2", "tâche B");
+
+    expect(planA.executionId).not.toBe("exec-001");
+    expect(planB.executionId).not.toBe("exec-001");
+    expect(planA.executionId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(planB.executionId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(planA.executionId).not.toBe(planB.executionId);
+  });
+
+  it("le plan de repli déterministe porte aussi un executionId UUID unique", async () => {
+    mockGenerate.mockRejectedValue(new Error("provider down"));
+    const plan = await planUniversalAgent("user-1", "tâche de repli");
+    expect(plan.executionId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(plan.steps.length).toBeGreaterThan(0);
+  });
+});
