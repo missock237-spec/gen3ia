@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { DocumentReference, Timestamp } from "firebase-admin/firestore";
 
 import { requireAdmin } from "@/lib/security/admin-access";
-import { errorStatus } from "@/lib/security/http-errors";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { getAdminApp } from "@/lib/firebase/admin";
 import { rawPut } from "@/lib/r2fs/store";
 
@@ -163,6 +163,9 @@ export async function POST(request: NextRequest) {
         : {}),
     });
   } catch (error) {
-    return errorStatus(error);
+    // Pattern canonique des routes : réponse JSON complète avec le statut
+    // classifié (401/403/…) — `return errorStatus(error)` seul retournerait
+    // un NOMBRE et ferait planter Next (500 vide sans corps).
+    return NextResponse.json(errorBody(error, "Migration Firestore → R2 indisponible."), { status: errorStatus(error) });
   }
 }

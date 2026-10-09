@@ -3,7 +3,7 @@ import type { Timestamp } from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue, FsTimestamp } from "@/lib/r2fs";
-import { errorStatus } from "@/lib/security/http-errors";
+import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { timingSafeStringEqual } from "@/lib/security/timing-safe";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +49,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, scanned: snapshot.size, expired: expirees, at: (maintenant as Timestamp).toMillis() });
   } catch (error) {
-    return errorStatus(error);
+    // Pattern canonique : réponse JSON + statut classifié (un `return
+    // errorStatus(error)` seul retourne un NOMBRE → 500 vide de Next).
+    return NextResponse.json(errorBody(error, "Nettoyage des invitations indisponible."), { status: errorStatus(error) });
   }
 }
