@@ -11,6 +11,7 @@ import path from "node:path";
 
 import {
   DocumentPlanSchema,
+  sanitizeDocumentPlan,
 } from "./types";
 
 import {
@@ -44,8 +45,10 @@ export interface GenerateArtifactInput {
 export async function generateArtifact(
   input: GenerateArtifactInput,
 ) {
+  // SANITIZER (Task 114) : un écart de format du LLM (type de bloc inventé,
+  // URL malformée) ne fait JAMAIS échouer la génération — coercition d'abord.
   const plan =
-    DocumentPlanSchema.parse(input.plan);
+    DocumentPlanSchema.parse(sanitizeDocumentPlan(input.plan));
 
   let data: Buffer;
 

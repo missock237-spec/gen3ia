@@ -70,6 +70,125 @@ export const DocumentPlanSchema = z.object({
 
 export type DocumentPlan = z.infer<typeof DocumentPlanSchema>;
 
+/* ------------------------------------------------------------------ */
+/* SANITIZER (Task 114) — tolérance aux écarts de format du LLM        */
+/* ------------------------------------------------------------------ */
+
+/** Alias courants des types de blocs inventés par les modèles. */
+const BLOCK_TYPE_ALIASES: Record<string, DocumentBlock["type"]> = {
+  text: "paragraph", para: "paragraph", p: "paragraph", content: "paragraph",
+  title: "title", titre: "title", h1: "title", mainTitle: "title",
+  heading: "heading", subtitle: "heading", soustitre: "heading", section: "heading",
+  h2: "heading", h3: "heading", h4: "heading", h5: "heading", h6: "heading",
+  list: "list", bullets: "list", bullet: "list", ul: "list", ol: "list", puces: "list", listitems: "list",
+  table: "table", tableau: "table",
+  code: "code", snippet: "code", codesnippet: "code",
+  quote: "quote", citation: "quote",
+  image: "image", img: "image", picture: "image", photo: "image",
+  pagebreak: "pageBreak", page: "pageBreak", break: "pageBreak", saut: "pageBreak", sautpage: "pageBreak",
+};
+
+/** Normalise une URL : « www.x » → « https://www.x », invalide → undefined. */
+function urlNormalisee(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  let u = value.trim();
+  if (!u) return undefined;
+  if (/^www\./i.test(u)) u = `https://${u}`;
+  return /^https?:\/\/\S+$/i.test(u) ? u : undefined;
+}
+
+function texteBorné(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const s = typeof value === "string" ? value : JSON.stringify(value);
+  const t = s.trim();
+  return t ? t.slice(0, 20_000) : undefined;
+}
+
+function chaineListe(items: unknown): string[] | undefined {
+  if (!Array.isArray(items)) return undefined;
+  const out = items
+    .map((x) => texteBorné(x))
+    .filter((x): x is string => Boolean(x))
+    .slice(0, 500);
+  return out.length > 0 ? out : undefined;
+}
+
+/** Coercition d'un bloc brut vers un DocumentBlock valide (jamais d'exception). */
+function blocSanitisé(raw: unknown): DocumentBlock | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "string") {
+    const text = raw.trim().slice(0, 20_000);
+    return text ? ({ type: "paragraph", text } as DocumentBlock) : null;
+  }
+  if (typeof raw !== "object") {
+    const text = texteBorné(raw);
+    return text ? ({ type: "paragraph", text } as DocumentBlock) : null;
+  }
+  const src = raw as Record<string, unknown>;
+  const rawType = String(src.type ?? "paragraph").trim();
+  const normalisé = rawType.toLowerCase().replace(/[\s_-]/g, "");
+  const type = BLOCK_TYPE_ALIASES[normalisé] ?? "paragraph";
+  const block: Record<string, unknown> = { type };
+
+  const text = texteBorné(src.text) ?? texteBorné(src.content) ?? texteBorné(src.value);
+  if (text) block.text = text;
+
+  if (src.level !== undefined) {
+    const n = Number(src.level);
+    if (Number.isFinite(n)) block.level = Math.min(6, Math.max(1, Math.round(n)));
+  }
+  if (typeof src.ordered === "boolean") block.ordered = src.ordered;
+
+  const items = chaineListe(src.items);
+  if (items) block.items = items;
+  const columns = chaineListe(src.columns);
+  if (columns) block.columns = columns;
+  if (Array.isArray(src.rows)) {
+    const rows = src.rows
+      .map((row) => (Array.isArray(row) ? chaineListe(row) : undefined))
+      .filter((row): row is string[] => Boolean(row))
+      .slice(0, 500);
+    if (rows.length > 0) block.rows = rows;
+  }
+
+  const url = urlNormalisee(src.url) ?? urlNormalisee(src.src) ?? urlNormalisee(src.href);
+  if (url) block.url = url;
+
+  if ((block.type === "paragraph" || block.type === "quote") && !block.text && items) {
+    block.text = items.join(" • ");
+  }
+  if (block.type === "list" && !block.items && text) {
+    block.items = text.split(/\n+/).map((line) => line.replace(/^[-*•]\s*/, "")).filter(Boolean).slice(0, 500);
+  }
+  if ((block.type === "title" || block.type === "heading") && !block.text && typeof src.name === "string") {
+    block.text = texteBorné(src.name);
+  }
+  return block as DocumentBlock;
+}
+
+/**
+ * Coercition tolérante d'un plan de document produit par un LLM : types de
+ * blocs inconnus ramenés à « paragraph », URLs réparées, champs typés
+ * nettoyés, bloc vide garanti. Objectif : un écart de format du modèle ne
+ * fait JAMAIS échouer la mission (exigence « résultat plutôt qu'échec »).
+ */
+export function sanitizeDocumentPlan(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const src = { ...(raw as Record<string, unknown>) };
+  if (typeof src.title !== "string" || !src.title.trim()) {
+    src.title = typeof src.name === "string" && src.name.trim() ? src.name.trim().slice(0, 300) : "Document";
+  }
+  if (src.format === undefined && typeof src.type === "string") src.format = src.type;
+  const blocksRaw = Array.isArray(src.blocks) ? src.blocks : Array.isArray(src.content) ? src.content : [];
+  let blocks = blocksRaw.map(blocSanitisé).filter((b): b is DocumentBlock => Boolean(b));
+  if (blocks.length === 0) {
+    const fallback = texteBorné(src.description) ?? "Document généré.";
+    blocks = [{ type: "paragraph", text: fallback } as DocumentBlock];
+  }
+  src.blocks = blocks.slice(0, 400);
+  return src;
+}
+
 export const ArtifactInputSchema = z.object({
   filename: z.string().min(1).max(255),
 
