@@ -68,8 +68,30 @@ export async function GET(request: NextRequest) {
             lastError: typeof data.lastError === "string" ? data.lastError.slice(0, 300) : null,
             updatedAtMs: data.updatedAtMs,
             createdAtMs: data.createdAtMs,
+            executionId: typeof data.executionId === "string" ? data.executionId : null,
+            conversationId: typeof data.conversationId === "string" ? data.conversationId : null,
+            timeline: Array.isArray(data.timeline) ? data.timeline.slice(-4) : [],
+            planSteps: data.plan?.steps ? (data.plan.steps as Array<Record<string, unknown>>).map((s) => ({ id: s.id, type: s.type, status: s.status })) : null,
           }
         : { missing: true };
+      // Checkpoint runtime correspondant (exécution réelle)
+      if (typeof data?.executionId === "string") {
+        try {
+          const ck = await db.collection("executions").doc(data.executionId).get();
+          report.checkpoint = ck.exists
+            ? {
+                status: ck.data()?.status ?? null,
+                outputsKeys: Object.keys((ck.data()?.outputs ?? {}) as Record<string, unknown>).slice(0, 8),
+                billing: ck.data()?.billing ?? null,
+                steps: Array.isArray(ck.data()?.plan?.steps)
+                  ? (ck.data()?.plan?.steps as Array<Record<string, unknown>>).map((s) => ({ id: s.id, status: s.status }))
+                  : null,
+              }
+            : { missing: true };
+        } catch (e) {
+          report.checkpoint = { error: e instanceof Error ? e.message : String(e) };
+        }
+      }
     } catch (e) {
       report.mission = { error: e instanceof Error ? e.message : String(e) };
     }
