@@ -72,26 +72,25 @@ export async function GET(request: NextRequest) {
       const cfg = qstashConfig();
       if (cfg) {
         const headers = { Authorization: `Bearer ${cfg.token}` };
-        const events = await fetch("https://qstash.upstash.io/v2/events?count=20", { headers });
-        const eventsBody = events.ok ? await events.json() : null;
-        const simplified = Array.isArray(eventsBody?.events)
-          ? eventsBody.events.slice(0, 20).map((ev: Record<string, unknown>) => {
-              const req = (ev.request ?? {}) as Record<string, unknown>;
-              const resp = (ev.response ?? {}) as Record<string, unknown>;
-              return {
-                topic: ev.topic ?? null,
-                url: typeof ev.url === "string" ? new URL(ev.url).host + new URL(ev.url).pathname : ev.url,
-                messageId: ev.messageId ?? null,
-                state: ev.state ?? null,
-                createdAtMs: ev.createdAt ?? null,
-                nextAttemptMs: ev.nextAttempt ?? null,
-                method: req.method ?? null,
-                responseStatus: resp.status ?? null,
-                responseHeaderFinalDelivery: resp.headerFinalDelivery ?? null,
-              };
-            })
-          : { rawStatus: events.status, sample: typeof eventsBody === "string" ? eventsBody.slice(0, 300) : eventsBody };
-        report.qstashEvents = simplified;
+        const events = await fetch("https://qstash.upstash.io/v2/events?count=10", { headers });
+      const eventsBody = events.ok ? await events.json() : null;
+      const rawList = Array.isArray(eventsBody?.events) ? eventsBody.events.slice(0, 6) : [];
+      // Résumé compact + UN événement BRUT (échec de préférence) pour diagnostic
+      const simplified = rawList.map((ev: Record<string, unknown>) => {
+        const req = (ev.request ?? {}) as Record<string, unknown>;
+        const resp = (ev.response ?? {}) as Record<string, unknown>;
+        return {
+          messageId: ev.messageId ?? null,
+          state: ev.state ?? null,
+          url: typeof ev.url === "string" ? new URL(ev.url).host + new URL(ev.url).pathname : ev.url,
+          responseStatus: resp.status ?? ev.responseStatus ?? null,
+          check: ev.check ?? null,
+          nextAttemptMs: ev.nextAttempt ?? null,
+        };
+      });
+      report.qstashEvents = simplified;
+      const failed = rawList.find((ev: Record<string, unknown>) => ev.state === "FAILED" || ev.state === "ERROR");
+      report.qstashRawSample = failed ?? rawList[0] ?? null;
       }
     } catch (e) {
       report.publish = { published: false, error: e instanceof Error ? e.message : String(e) };
