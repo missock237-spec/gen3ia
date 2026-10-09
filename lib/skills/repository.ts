@@ -1,3 +1,4 @@
+import type { CollectionReference, Query } from "@/lib/r2fs";
 import {
   FieldValue,
   Timestamp,
@@ -12,9 +13,9 @@ import {
 
 // Collection references are created lazily so that importing this module
 // never triggers Firebase Admin initialization (build-time safety).
-let skillsCollection: FirebaseFirestore.CollectionReference | undefined;
-let versionsCollection: FirebaseFirestore.CollectionReference | undefined;
-let evaluationsCollection: FirebaseFirestore.CollectionReference | undefined;
+let skillsCollection: CollectionReference | undefined;
+let versionsCollection: CollectionReference | undefined;
+let evaluationsCollection: CollectionReference | undefined;
 
 function getSkillsCollection() {
   if (!skillsCollection) {
@@ -60,7 +61,7 @@ export async function listSkills(params?: {
   status?: string;
 }) {
   let query:
-    FirebaseFirestore.Query = getSkillsCollection();
+    Query = getSkillsCollection();
 
   if (params?.visibility) {
     query = query.where(

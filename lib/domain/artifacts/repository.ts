@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { FieldValue } from "@/lib/r2fs";
 import { adminDb } from "@/lib/firebase/admin";
+import type { DocumentData, Query } from "@/lib/r2fs";
 import type { ArtifactType, ArtifactVersion, ConversationArtifact } from "@/lib/domain/conversations/types";
 
 /**
@@ -19,7 +20,7 @@ export function isArtifactType(value: string): value is ArtifactType {
   return (ARTIFACT_TYPES as readonly string[]).includes(value);
 }
 
-function docFrom(id: string, data: FirebaseFirestore.DocumentData): ConversationArtifact {
+function docFrom(id: string, data: DocumentData): ConversationArtifact {
   const versions = Array.isArray(data.versions) ? (data.versions as ArtifactVersion[]) : [];
   return {
     id,
@@ -165,7 +166,7 @@ export async function listArtifacts(
   filters: { conversationId?: string; projectId?: string; type?: ArtifactType; runId?: string; limit?: number } = {},
 ): Promise<ConversationArtifact[]> {
   const limit = Math.min(filters.limit ?? 50, 200);
-  let query: FirebaseFirestore.Query = adminDb.collection(COLLECTION).where("userId", "==", userId);
+  let query: Query = adminDb.collection(COLLECTION).where("userId", "==", userId);
   if (filters.conversationId) query = query.where("conversationId", "==", filters.conversationId);
   if (filters.projectId) query = query.where("projectId", "==", filters.projectId);
   if (filters.runId) query = query.where("runId", "==", filters.runId);

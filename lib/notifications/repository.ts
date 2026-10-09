@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 import { pushPayloadFromNotification, sendPushToUser } from "@/lib/push/server";
 import { cacheDelete } from "@/lib/cache/redis";
+import type { DocumentData } from "@/lib/r2fs";
 
 /**
  * Centre de notifications persistantes Gen3ia (collection `notifications`).
@@ -113,7 +114,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
   }
 }
 
-function docToNotification(id: string, data: FirebaseFirestore.DocumentData): Gen3iaNotification | null {
+function docToNotification(id: string, data: DocumentData): Gen3iaNotification | null {
   const createdAt = data.createdAt;
   const parsed = NotificationSchema.safeParse({
     id,

@@ -1,3 +1,4 @@
+import type { DocumentSnapshot, Timestamp } from "@/lib/r2fs";
 import { randomUUID } from "node:crypto";
 import { FieldValue } from "@/lib/r2fs";
 import { adminDb } from "@/lib/firebase/admin";
@@ -120,7 +121,7 @@ type SessionDoc = {
   r2Key: string;
   r2UploadId: string;
   status: "active" | "committed" | "aborted";
-  createdAt: FirebaseFirestore.Timestamp | Date | null;
+  createdAt: Timestamp | Date | null;
 };
 
 /**
@@ -129,7 +130,7 @@ type SessionDoc = {
  * toute assertion de type au point d'écriture.
  */
 type SessionDocWrite = Omit<SessionDoc, "createdAt"> & {
-  createdAt: FirebaseFirestore.FieldValue;
+  createdAt: unknown;
 };
 
 function sessionRef(uploadId: string) { return adminDb.collection(SESSIONS_COLLECTION).doc(uploadId); }
@@ -255,7 +256,7 @@ export type PermanentFileEntry = {
   source: "memory" | "legacy";
 };
 
-function permanentFileFromDoc(uploadId: string, doc: FirebaseFirestore.DocumentSnapshot): PermanentFileEntry {
+function permanentFileFromDoc(uploadId: string, doc: DocumentSnapshot): PermanentFileEntry {
   const createdAt = doc.get("createdAt");
   const uploadedAt = typeof createdAt?.toMillis === "function" ? new Date(createdAt.toMillis()).toISOString() : String(createdAt ?? new Date().toISOString());
   return {

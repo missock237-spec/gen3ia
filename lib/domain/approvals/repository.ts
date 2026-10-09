@@ -6,6 +6,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 import { createNotification, markNotificationsForApprovalRead } from "@/lib/notifications/repository";
 import type { ApprovalStatus, ConversationApproval } from "@/lib/domain/conversations/types";
+import type { DocumentData } from "@/lib/r2fs";
 
 /**
  * Approval — action sensible nécessitant une validation humaine, affichée
@@ -44,7 +45,7 @@ function isExpired(status: ApprovalStatus, expiresAt?: string): boolean {
   return Number.isFinite(limit) && limit <= Date.now();
 }
 
-function docFrom(id: string, data: FirebaseFirestore.DocumentData): ConversationApproval {
+function docFrom(id: string, data: DocumentData): ConversationApproval {
   const status = (data.status ?? "pending") as ApprovalStatus;
   const expiresAt = data.expiresAt instanceof Date ? data.expiresAt.toISOString() : undefined;
   return {

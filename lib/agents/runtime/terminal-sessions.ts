@@ -4,6 +4,7 @@ import { FieldValue, type Firestore } from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { maskSecrets } from "@/lib/security/secret-masking";
+import type { DocumentData } from "@/lib/r2fs";
 
 /**
  * Sessions du terminal agent — « terminal partagé par projet ».
@@ -65,7 +66,7 @@ function cap(text: string | undefined): string | undefined {
   return `${text.slice(0, OUTPUT_CAP_CHARS)}\n[sortie tronquée : ${text.length - OUTPUT_CAP_CHARS} caractères supplémentaires]`;
 }
 
-function sessionFrom(id: string, data: FirebaseFirestore.DocumentData): TerminalSession {
+function sessionFrom(id: string, data: DocumentData): TerminalSession {
   return {
     id,
     userId: String(data.userId ?? ""),
@@ -80,7 +81,7 @@ function sessionFrom(id: string, data: FirebaseFirestore.DocumentData): Terminal
   };
 }
 
-function entryFrom(data: FirebaseFirestore.DocumentData): TerminalEntry {
+function entryFrom(data: DocumentData): TerminalEntry {
   return {
     index: Number(data.index ?? 0),
     command: String(data.command ?? ""),

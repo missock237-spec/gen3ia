@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/agent-schedules",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-invitations",
+      "schedule": "30 6 * * *"
     }
   ]
 }

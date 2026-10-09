@@ -1,4 +1,5 @@
 import { adminDb } from "@/lib/firebase/admin";
+import type { DocumentData, Query } from "@/lib/r2fs";
 
 /**
  * User-facing artifact repository.
@@ -28,7 +29,7 @@ function formatFromName(name: string): string {
   return extension;
 }
 
-function toView(id: string, data: FirebaseFirestore.DocumentData): UserArtifactView {
+function toView(id: string, data: DocumentData): UserArtifactView {
   const filename = String(data.name ?? data.filename ?? id);
   return {
     artifactId: String(data.artifactId ?? id),
@@ -52,7 +53,7 @@ export async function listUserArtifacts(
 ): Promise<UserArtifactView[]> {
   if (!userId) throw new Error("userId is required.");
 
-  let query: FirebaseFirestore.Query = adminDb
+  let query: Query = adminDb
     .collection(COLLECTION)
     .where("ownerId", "==", userId);
 

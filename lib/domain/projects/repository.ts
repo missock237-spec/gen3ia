@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { FieldValue } from "@/lib/r2fs";
+import { FieldValue, type DocumentData, type QueryDocumentSnapshot } from "@/lib/r2fs";
 import { adminDb } from "@/lib/firebase/admin";
 import { CHUNKED_COMMIT_SIZE, commitOpsInChunks, type ChunkedWriteOp } from "@/lib/firestore/chunked-commit";
 
@@ -54,7 +54,7 @@ export interface WorkspaceProject {
   updatedAt: string;
 }
 
-function docFrom(id: string, data: FirebaseFirestore.DocumentData): WorkspaceProject {
+function docFrom(id: string, data: DocumentData): WorkspaceProject {
   return {
     id,
     userId: String(data.userId ?? ""),
@@ -72,7 +72,7 @@ function docFrom(id: string, data: FirebaseFirestore.DocumentData): WorkspacePro
   };
 }
 
-function projectDocFrom(d: FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData>): WorkspaceProject {
+function projectDocFrom(d: QueryDocumentSnapshot): WorkspaceProject {
   return docFrom(d.id, d.data());
 }
 

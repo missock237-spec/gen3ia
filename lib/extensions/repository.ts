@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { encryptSecret, decryptSecret } from "@/lib/security/secret-envelope";
 import { compareSemver, type ExtensionManifest } from "./manifest";
 import { computeRevenueSplit } from "./pricing";
+import type { Query } from "@/lib/r2fs";
 
 /**
  * Firestore repository for the Gen3ia Extension Platform.
@@ -41,8 +42,8 @@ function entitlementRef(extensionId:string,userId:string){return adminDb.collect
 export async function ensureDeveloperProfile(userId:string,displayName:string){const ref=adminDb.collection(COL.developers).doc(userId);await ref.set({userId,displayName:displayName.slice(0,120),createdAt:now(),updatedAt:now(),deletedAt:null},{merge:true});const snap=await ref.get();return snap.data() as {userId:string;displayName:string;createdAt:number};}
 export async function createExtension(developer:{userId:string;displayName:string;projectId:string},manifest:ExtensionManifest):Promise<ExtensionDoc>{const ref=extensionRef(manifest.id);const batch=adminDb.batch();const timestamp=now();batch.create(ref,{id:manifest.id,name:manifest.name,description:manifest.description,category:manifest.category,tags:manifest.tags??[],developerId:developer.userId,developerName:developer.displayName.slice(0,120),projectId:developer.projectId,status:"draft",permissions:manifest.permissions,pricing:manifest.pricing,latestVersion:manifest.version,approvedVersion:null,stats:{installs:0,ratingSum:0,ratingCount:0,executions:0},createdAt:timestamp,updatedAt:timestamp,deletedAt:null});batch.create(versionRef(manifest.id,manifest.version),{id:`${manifest.id}@${manifest.version}`,extensionId:manifest.id,version:manifest.version,changelog:"Initial version.",status:"draft",manifest,submittedAt:null,reviewedAt:null,reviewNote:null,createdAt:timestamp});await batch.commit();const snap=await ref.get();return snap.data() as ExtensionDoc;}
 export async function getExtension(id:string){const snap=await extensionRef(id).get();return (snap.data() as ExtensionDoc|undefined)??null;}
-export async function listApprovedExtensions(options:{q?:string;category?:string;limit?:number}):Promise<ExtensionDoc[]>{let query:FirebaseFirestore.Query=adminDb.collection(COL.extensions).where("status","==","approved").where("deletedAt","==",null).orderBy("stats.installs","desc").limit(Math.min(options.limit??48,100));if(options.category)query=query.where("category","==",options.category);const snap=await query.get();const docs=snap.docs.map(d=>d.data() as ExtensionDoc);const needle=options.q?.trim().toLowerCase();if(!needle)return docs;return docs.filter(d=>d.name.toLowerCase().includes(needle)||d.description.toLowerCase().includes(needle)||d.tags.some(t=>t.toLowerCase().includes(needle)));}
-export async function listExtensionsByDeveloper(developerId:string,projectId?:string){let query:FirebaseFirestore.Query=adminDb.collection(COL.extensions).where("developerId","==",developerId);if(projectId)query=query.where("projectId","==",projectId);query=query.where("deletedAt","==",null).orderBy("createdAt","desc").limit(100);const snap=await query.get();return snap.docs.map(d=>d.data() as ExtensionDoc);}
+export async function listApprovedExtensions(options:{q?:string;category?:string;limit?:number}):Promise<ExtensionDoc[]>{let query:Query=adminDb.collection(COL.extensions).where("status","==","approved").where("deletedAt","==",null).orderBy("stats.installs","desc").limit(Math.min(options.limit??48,100));if(options.category)query=query.where("category","==",options.category);const snap=await query.get();const docs=snap.docs.map(d=>d.data() as ExtensionDoc);const needle=options.q?.trim().toLowerCase();if(!needle)return docs;return docs.filter(d=>d.name.toLowerCase().includes(needle)||d.description.toLowerCase().includes(needle)||d.tags.some(t=>t.toLowerCase().includes(needle)));}
+export async function listExtensionsByDeveloper(developerId:string,projectId?:string){let query:Query=adminDb.collection(COL.extensions).where("developerId","==",developerId);if(projectId)query=query.where("projectId","==",projectId);query=query.where("deletedAt","==",null).orderBy("createdAt","desc").limit(100);const snap=await query.get();return snap.docs.map(d=>d.data() as ExtensionDoc);}
 export async function softDeleteExtension(id:string,developerId:string,projectId?:string){const doc=await getExtension(id);if(!doc)throw new Error("Extension not found.");if(doc.developerId!==developerId)throw new Error("Only the developer may delete this extension.");if(projectId&&doc.projectId!==projectId)throw new Error("Extension is not linked to this Gen3ia project.");await extensionRef(id).update({deletedAt:now(),status:"suspended",updatedAt:now()});}
 export async function createVersion(developerId:string,projectId:string,manifest:ExtensionManifest,changelog:string):Promise<ExtensionVersionDoc>{const extension=await getExtension(manifest.id);if(!extension)throw new Error("Extension not found.");if(extension.developerId!==developerId)throw new Error("Only the developer may add versions.");if(extension.projectId!==projectId)throw new Error("Extension is not linked to this Gen3ia project.");const ref=versionRef(manifest.id,manifest.version);await adminDb.runTransaction(async tx=>{const snap=await tx.get(ref);if(snap.exists)throw new Error(`Version ${manifest.version} already exists.`);const timestamp=now();tx.create(ref,{id:`${manifest.id}@${manifest.version}`,extensionId:manifest.id,version:manifest.version,changelog:changelog.slice(0,2000),status:"draft",manifest,submittedAt:null,reviewedAt:null,reviewNote:null,createdAt:timestamp});if(!extension.latestVersion||compareSemver(manifest.version,extension.latestVersion)>0)tx.update(extensionRef(manifest.id),{latestVersion:manifest.version,updatedAt:timestamp});});const snap=await ref.get();return snap.data() as ExtensionVersionDoc;}
 export async function getVersion(extensionId:string,version:string){const snap=await versionRef(extensionId,version).get();return(snap.data() as ExtensionVersionDoc|undefined)??null;}
@@ -125,7 +126,7 @@ export async function listApprovedCatalogPage(options: {
 }): Promise<{ docs: ExtensionDoc[]; nextCursor: string | null; truncated: boolean; sort: CatalogSort }> {
   const sort: CatalogSort = options.sort ?? "popular";
   const limit = Math.min(Math.max(options.limit ?? 48, 1), 100);
-  let query: FirebaseFirestore.Query = adminDb.collection(COL.extensions)
+  let query: Query = adminDb.collection(COL.extensions)
     .where("status", "==", "approved").where("deletedAt", "==", null).limit(CATALOG_SCAN_CAP);
   if (options.category) query = query.where("category", "==", options.category);
   const snap = await query.get();
@@ -240,7 +241,7 @@ export async function listExtensionExecutions(params: {
   userId?: string;
   limit?: number;
 }): Promise<Array<Record<string, unknown>>> {
-  let query: FirebaseFirestore.Query = adminDb
+  let query: Query = adminDb
     .collection(COL.executions)
     .where("extensionId", "==", params.extensionId);
   if (params.userId) query = query.where("userId", "==", params.userId);
