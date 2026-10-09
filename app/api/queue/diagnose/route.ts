@@ -36,6 +36,10 @@ export async function GET(request: NextRequest) {
       currentSigningKey: Boolean(cfg?.currentSigningKey),
       nextSigningKey: Boolean(cfg?.nextSigningKey),
       queueConfigured: missionQueueConfigured(),
+      // Empreintes (10 premiers caractères) de ce que CE runtime voit —
+      // réconciliation directe avec /v2/keys (sonde temporaire Task 114).
+      currentFp: cfg?.currentSigningKey?.slice(0, 10) ?? null,
+      nextFp: cfg?.nextSigningKey?.slice(0, 10) ?? null,
     };
     // SONDE CLÉS ACTIVES (temporaire) : l'API QStash expose-t-elle les clés
     // de signature actives ? Si oui, on peut réaligner les env Vercel.
