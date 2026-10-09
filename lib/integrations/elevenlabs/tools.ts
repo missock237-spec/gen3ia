@@ -78,10 +78,28 @@ export const voiceSpeakTool: ToolDefinition<
     input,
     context,
   ): Promise<SpeakOutput> {
+    // Task 114-b — voix du jumeau : sans voiceId EXPLICITE dans l'appel,
+    // la voix par défaut de l'utilisateur est résolue (profil jumeau →
+    // bibliothèque vidéo, cache 120 s). Fail-soft total : voix absente ou
+    // panne → comportement historique (voix plateforme). Import dynamique :
+    // la pile vidéo n'est chargée que lorsque la résolution est nécessaire.
+    let voixEffective = input.voiceId;
+    if (!voixEffective && context.userId) {
+      try {
+        const { resolveUserVoiceId } = await import("@/lib/voice/user-voice");
+        voixEffective = (await resolveUserVoiceId(context.userId)) ?? undefined;
+      } catch (voiceError) {
+        console.warn(
+          "[voice.speak] résolution de la voix du jumeau impossible — voix plateforme conservée :",
+          voiceError instanceof Error ? voiceError.message : String(voiceError),
+        );
+      }
+    }
+
     const result =
       await elevenLabsTextToSpeech({
         text: input.text,
-        voiceId: input.voiceId,
+        voiceId: voixEffective,
         modelId: input.modelId,
       });
 

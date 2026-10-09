@@ -23,6 +23,13 @@ vi.mock("@/lib/skills/runtime-bridge", () => ({
 }));
 vi.mock("@/lib/agents/evolution", () => ({ getEvolutionBrief: vi.fn(async () => ({ text: "" })) }));
 
+// Task 114-b — Jumeau créatif (chemin universel du planner) : mocké pour
+// garder le test hermétique et vérifier l'injection SANS double avec charte.
+const twinDirectiveMock = vi.hoisted(() => vi.fn<() => Promise<string | undefined>>());
+vi.mock("@/lib/identity/twin", () => ({
+  twinDirectiveForUser: (...args: unknown[]) => twinDirectiveMock(...args),
+}));
+
 import { generate } from "@/lib/ai/router";
 import { planUniversalAgent } from "./unified-agent";
 
@@ -62,6 +69,7 @@ function lastCallPrompts(): { systemPrompt: string; userPrompt: string } {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  twinDirectiveMock.mockResolvedValue(undefined);
 });
 
 describe("planUniversalAgent — sentinelle allowedTools (contrat 107)", () => {
@@ -156,5 +164,41 @@ describe("planUniversalAgent — guidance d'auto-sélection (contrat 107)", () =
 
     const { systemPrompt } = lastCallPrompts();
     expect(systemPrompt).not.toContain("SÉLECTION AUTOMATIQUE DES OUTILS");
+  });
+});
+
+describe("planUniversalAgent — jumeau créatif (Task 114-b)", () => {
+  it("chemin UNIVERSEL (sans charte) : la directive du jumeau est injectée dans le prompt system", async () => {
+    twinDirectiveMock.mockResolvedValue(
+      "PROFIL DU JUMEAU CRÉATIF DE L'UTILISATEUR (à respecter dans tes réponses et livrables) :\n- Univers : Café de spécialité.",
+    );
+    mockGenerate.mockResolvedValue(plannerResponseWithVideoStep() as never);
+    await planUniversalAgent("user-1", "crée-moi une vidéo sur le café");
+
+    expect(twinDirectiveMock).toHaveBeenCalledWith("user-1");
+    const { systemPrompt } = lastCallPrompts();
+    expect(systemPrompt).toContain("PROFIL DU JUMEAU CRÉATIF");
+    expect(systemPrompt).toContain("Adapte le plan");
+  });
+
+  it("chemin AGENT (charte fournie) : PAS de double injection (la directive est déjà composée par planAgentTask)", async () => {
+    mockGenerate.mockResolvedValue(plannerResponseWithVideoStep() as never);
+    await planUniversalAgent("user-1", "crée-moi une vidéo sur le café", {
+      agent: { charter: "CHARTE PERSONNALISÉE", allowedTools: ["*"] },
+    });
+
+    expect(twinDirectiveMock).not.toHaveBeenCalled();
+    const { systemPrompt } = lastCallPrompts();
+    expect(systemPrompt).toContain("CHARTE PERSONNALISÉE");
+  });
+
+  it("jumeau vide/panne → prompt inchangé (fail-soft, comportement historique)", async () => {
+    twinDirectiveMock.mockRejectedValue(new Error("R2 indisponible"));
+    mockGenerate.mockResolvedValue(plannerResponseWithVideoStep() as never);
+    await planUniversalAgent("user-1", "crée-moi une vidéo sur le café");
+
+    expect(twinDirectiveMock).toHaveBeenCalled();
+    const { systemPrompt } = lastCallPrompts();
+    expect(systemPrompt).not.toContain("PROFIL DU JUMEAU");
   });
 });

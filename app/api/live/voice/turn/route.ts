@@ -13,6 +13,7 @@ import {
   verifyLiveVoiceSession,
 } from "@/lib/live/voice/session-token";
 import { runLiveVoiceTurn } from "@/lib/live/voice/turn-pipeline";
+import { resolveUserVoiceId } from "@/lib/voice/user-voice";
 import type { LiveVoiceTurnEvent } from "@/lib/live/voice/protocol";
 
 /**
@@ -144,6 +145,10 @@ export async function POST(request: Request) {
 
     const audioBuffer = Buffer.from(await audio.arrayBuffer());
     const audioDurationSec = durationSecFromForm(form) ?? parseWavDurationSec(audioBuffer);
+    // Jumeau Créatif (Task 114-b) : la voix clonée par défaut de l'utilisateur
+    // (s'il l'a configurée) parle à sa place. Fail-soft : sans configuration,
+    // la voix plateforme d'origine est conservée.
+    const sessionVoiceId = await resolveUserVoiceId(auth.uid).catch(() => null);
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
@@ -159,6 +164,7 @@ export async function POST(request: Request) {
             audioBuffer,
             audioMimeType: mimeType,
             audioDurationSec,
+            voiceId: sessionVoiceId ?? undefined,
           })) {
             send(event);
           }

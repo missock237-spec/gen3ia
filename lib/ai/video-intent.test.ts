@@ -116,3 +116,82 @@ describe("extractVideoParams (Task 106-a)", () => {
     expect(p.derivedTargets).toBeUndefined();
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Task 114-a — VOIX-OFF DIRECTE (intercept chat déterministe, zéro LLM)
+// ────────────────────────────────────────────────────────────────────────────
+
+import { extractVoiceRequestText, looksLikeVoiceRequest } from "./video-intent";
+
+describe("looksLikeVoiceRequest (Task 114-a)", () => {
+  it("détecte les demandes FR de voix-off", () => {
+    expect(looksLikeVoiceRequest("génère une voix off pour mon spot radio")).toBe(true);
+    expect(looksLikeVoiceRequest("fais-moi une voix off professionnelle du script")).toBe(true);
+    expect(looksLikeVoiceRequest("j'ai besoin d'une synthèse vocale de ce paragraphe")).toBe(true);
+    expect(looksLikeVoiceRequest("génère un audio qui dit bonjour à mes clients")).toBe(true);
+    expect(looksLikeVoiceRequest("mets ce texte en version audio pour la radio")).toBe(true);
+  });
+
+  it("détecte la lecture à voix haute explicite", () => {
+    expect(looksLikeVoiceRequest("Lis ce texte à voix haute : Bonjour à tous")).toBe(true);
+    expect(looksLikeVoiceRequest("lis à voix haute le paragraphe suivant")).toBe(true);
+  });
+
+  it("ne déclenche PAS sur une demande de VIDÉO (la production vidéo gagne)", () => {
+    expect(looksLikeVoiceRequest("crée une vidéo avec une voix off pour ma boulangerie")).toBe(false);
+    expect(looksLikeVoiceRequest("génère une vidéo TikTok avec narration audio")).toBe(false);
+  });
+
+  it("ne déclenche PAS sur les questions méta ni le texte général", () => {
+    expect(looksLikeVoiceRequest("c'est quoi une voix off ?")).toBe(false);
+    expect(looksLikeVoiceRequest("comment fonctionne la synthèse vocale ?")).toBe(false);
+    expect(looksLikeVoiceRequest("quel est le meilleur outil text-to-speech ?")).toBe(false);
+    expect(looksLikeVoiceRequest("bonjour, comment allez-vous ?")).toBe(false);
+    expect(looksLikeVoiceRequest("")).toBe(false);
+  });
+});
+
+describe("extractVoiceRequestText (Task 114-a)", () => {
+  it("extrait le texte après « voix off disant X »", () => {
+    expect(extractVoiceRequestText("voix off disant Bienvenue chez Gen3ia")).toEqual({
+      text2speak: "Bienvenue chez Gen3ia",
+    });
+  });
+
+  it("extrait le texte après « génère un audio qui dit X »", () => {
+    const result = extractVoiceRequestText("Génère un audio qui dit Bonjour le monde");
+    expect(result?.text2speak).toBe("Bonjour le monde");
+  });
+
+  it("extrait le texte après « lis ce texte à voix haute : X »", () => {
+    expect(extractVoiceRequestText("Lis ce texte à voix haute : Merci pour votre commande")).toEqual({
+      text2speak: "Merci pour votre commande",
+    });
+  });
+
+  it("extrait le texte après deux-points (« voix off : X »)", () => {
+    expect(extractVoiceRequestText("voix off : Bienvenue chez Gen3ia, la plateforme des agents IA")).toEqual({
+      text2speak: "Bienvenue chez Gen3ia, la plateforme des agents IA",
+    });
+  });
+
+  it("extrait le texte cité entre guillemets", () => {
+    const result = extractVoiceRequestText('fais une voix off avec "Solde insuffisant, veuillez recharger"');
+    expect(result?.text2speak).toBe("Solde insuffisant, veuillez recharger");
+  });
+
+  it("nettoie les guillemets autour du texte parlé", () => {
+    expect(extractVoiceRequestText("voix off disant « bienvenue à tous »")?.text2speak).toBe("bienvenue à tous");
+  });
+
+  it("retourne null sans texte exploitable (le flux normal prend le relais)", () => {
+    expect(extractVoiceRequestText("j'ai besoin d'une voix off pour mon spot")).toBeNull();
+    expect(extractVoiceRequestText("c'est quoi une voix off ?")).toBeNull();
+    expect(extractVoiceRequestText("")).toBeNull();
+  });
+
+  it("borne le texte à synthétiser (2 500 caractères)", () => {
+    const result = extractVoiceRequestText(`voix off disant ${"x".repeat(4000)}`);
+    expect(result?.text2speak.length).toBeLessThanOrEqual(2500);
+  });
+});

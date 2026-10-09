@@ -185,6 +185,16 @@ const OPTIONAL_RECOGNIZED = [
   // Origine publique de l'app (callbacks planifiés, liens de reprise —
   // lib/agents/scheduler.ts, lib/video/production-queue.ts, routes de queue).
   "GEN3IA_APP_ORIGIN",
+  // Escrow de mission (Task 114-a, lib/billing/mission-escrow.ts) : frais de
+  // résultat (minor + plafond) et TTL des holds — tous optionnels (défauts
+  // 5 000 / 50 000 minor, 7 jours).
+  "GEN3IA_MISSION_RESULT_FEE_MINOR",
+  "GEN3IA_MISSION_RESULT_FEE_MAX_MINOR",
+  "GEN3IA_ESCROW_TTL_MS",
+  // Marketplace d'agents (Task 114-c, lib/marketplace/hire.ts) : commission
+  // plateforme sur les locations, en points de base (défaut 2 000 = 20 %,
+  // clamp 0..5 000).
+  "GEN3IA_MARKETPLACE_FEE_BPS",
   "FIRESTORE_EMULATOR_HOST",
   "FIREBASE_AUTH_EMULATOR_HOST",
 ];

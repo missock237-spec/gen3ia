@@ -296,6 +296,25 @@ export async function planUniversalAgent(
   }
   const finalSystemPromptWithEvolution = `${finalSystemPromptWithSkills}${evolutionSection}${toolIntentSection ? `\n\n${toolIntentSection}` : ""}`;
 
+  // Task 114-b — Jumeau créatif (chemin UNIVERSEL UNIQUEMENT) : les missions
+  // lancées hors agent personnalisé passent directement par ce planner. Avec
+  // une charte d'agent, la directive est déjà composée par planAgentTask
+  // (chat-engine) — jamais en double. Fail-soft total : identité absente ou
+  // stockage indisponible = prompt inchangé.
+  let twinSection = "";
+  try {
+    if (!agentContext?.charter) {
+      const { twinDirectiveForUser } = await import("@/lib/identity/twin");
+      const directive = await twinDirectiveForUser(userId);
+      if (directive) {
+        twinSection = `\n\n${directive}\nAdapte le plan (rédaction, ton, livrables) à ce profil créatif.`;
+      }
+    }
+  } catch {
+    twinSection = "";
+  }
+  const finalSystemPromptWithTwin = `${finalSystemPromptWithEvolution}${twinSection}`;
+
   const buildUserPrompt = (correctiveHint?: string) =>
     [
       JSON.stringify({ objective: trimmed, availableCapabilities: toolCatalog(catalog) }),
@@ -313,7 +332,7 @@ export async function planUniversalAgent(
     const response = await generate({
       task: "agent",
       messages: [
-        { role: "system", content: finalSystemPromptWithEvolution },
+        { role: "system", content: finalSystemPromptWithTwin },
         { role: "user", content: buildUserPrompt(essai > 1 ? dernierErreur : undefined) },
       ],
       requiresStructuredOutput: true,

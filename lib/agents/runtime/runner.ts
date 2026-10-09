@@ -399,7 +399,7 @@ export class AgentRuntime {
     if (!isImageGenerationEnabled()) {
       return this.executeLLM(step);
     }
-    const { prompt } = await enhanceImagePrompt(rawPrompt);
+    const { prompt } = await enhanceImagePrompt(rawPrompt, { userId: this.state.userId });
     // Qualité « ultra réaliste » : génération en 2K (détail supérieur),
     // garde-fou de durée aligné sur la politique d'exécution des outils.
     const image = await generateImageWithAgnes({ prompt, size: "2K", timeoutMs: 60_000 });

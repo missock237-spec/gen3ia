@@ -10,6 +10,7 @@ import type { RuntimePlan } from "./runtime/types";
 import { policyForAgent } from "./personalized-plan";
 import { buildAgentCharter, labelForAgent } from "./charter";
 import { getAgentForUser } from "./repository";
+import { twinDirectiveForUser } from "../identity/twin";
 import type { AgentRecord } from "./schema";
 
 /**
@@ -208,6 +209,17 @@ export async function answerAsAgent(
     agentTypeLabel: agent.typeLabel,
     ...promptContext,
   }).text;
+  // Task 114-b — Jumeau créatif : la signature créative de l'UTILISATEUR
+  // (style d'écriture, univers, valeurs, ton) complète la charte dans le
+  // prompt système. Fail-soft total : une panne identité/R2 n'interrompt
+  // JAMAIS un chat (twinDirectiveForUser ne lève pas, garde en profondeur).
+  let charterAvecJumeau = charter;
+  try {
+    const jumeau = await twinDirectiveForUser(userId);
+    if (jumeau) charterAvecJumeau = `${charter}\n\n${jumeau}`;
+  } catch (error) {
+    console.warn("[agent-chat] directive du jumeau indisponible, chat sans jumeau :", error instanceof Error ? error.message : error);
+  }
   const truth = await buildTruthContext(userId, message, history);
   const grounding = formatTruthContext(truth);
   const userContent = `${grounding}${contextNote ? `\n\n${contextNote}` : ""}\n\nDEMANDE ACTUELLE :\n${message}`;
@@ -216,9 +228,10 @@ export async function answerAsAgent(
   // l'historique ENTIER est tenu dans la fenêtre du modèle — récents
   // verbatim + condensé extractif des plus anciens (aucune invention).
   const { messages } = assembleMessages({
-    // Task 52 : la charte est complétée par le contrat de présentation
-    // (structure markdown, précision selon le sujet, zéro invention).
-    system: withResponseStyle(charter + "\n\nCONTRAT DE FIABILITÉ:\n- Comprends la demande actuelle à la lumière de tout l'historique fourni.\n- N'invente jamais un fait, une action exécutée, un résultat ou une source.\n- Si une information manque, dis-le au lieu de la compléter par supposition.\n- Retourne uniquement le résultat demandé par l'utilisateur ; pas de raisonnement, plan ou commentaire méta non demandé."),
+    // Task 52 : la charte (complétée par la directive du jumeau) est
+    // complétée par le contrat de présentation (structure markdown,
+    // précision selon le sujet, zéro invention).
+    system: withResponseStyle(charterAvecJumeau + "\n\nCONTRAT DE FIABILITÉ:\n- Comprends la demande actuelle à la lumière de tout l'historique fourni.\n- N'invente jamais un fait, une action exécutée, un résultat ou une source.\n- Si une information manque, dis-le au lieu de la compléter par supposition.\n- Retourne uniquement le résultat demandé par l'utilisateur ; pas de raisonnement, plan ou commentaire méta non demandé."),
     history: history.map((item) => ({ role: item.role, content: item.content })),
     message: userContent,
     model: agent.preferredModel ?? null,
@@ -283,6 +296,16 @@ export async function planAgentTask(userId: string, agent: AgentRecord, objectiv
   // connexions effectivement vérifiées. Le planificateur doit donc pouvoir
   // proposer composio.execute quand un connecteur connecté est pertinent.
   const allowed = [...new Set([...(policy.allowedTools ?? []), "composio.execute"])];
+  // Task 114-b — Jumeau créatif : la directive est COMPOSÉE avec la charte
+  // dans le config passé à planUniversalAgent (chemin agent) — le chemin
+  // universel (sans charte) est couvert côté unified-agent, jamais en double.
+  let charterAvecJumeau = buildAgentCharter(agent);
+  try {
+    const jumeau = await twinDirectiveForUser(userId);
+    if (jumeau) charterAvecJumeau = `${charterAvecJumeau}\n\n${jumeau}`;
+  } catch (error) {
+    console.warn("[agent-chat] directive du jumeau indisponible, mission sans jumeau :", error instanceof Error ? error.message : error);
+  }
   // Fournisseur fixé par le propriétaire : le routeur valide la valeur (un
   // fournisseur inconnu est simplement ignoré par selectProvider).
   const fixedProvider = agent.modelStrategy === "fixed" && agent.preferredProvider
@@ -297,7 +320,7 @@ export async function planAgentTask(userId: string, agent: AgentRecord, objectiv
     : [];
   return planUniversalAgent(userId, objective, {
     agent: {
-      charter: buildAgentCharter(agent),
+      charter: charterAvecJumeau,
       allowedTools: allowed,
       subAgents,
     },

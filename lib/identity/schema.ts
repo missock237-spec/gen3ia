@@ -42,6 +42,35 @@ function boundedNullable(max: number) {
  * Les champs sans valeur restent explicitement `null` (pas d'absence) :
  * la forme du document est stable et diffable.
  */
+/**
+ * Task 114-b — profil « Jumeau Créatif » : la signature créative de
+ * l'UTILISATEUR (style d'écriture, univers, valeurs, ton) + sa voix
+ * (profil voix par défaut de la bibliothèque vidéo + interrupteur vocal).
+ *
+ * Donnée PRIVÉE : jamais exposée dans les projections publiques
+ * (publicIdentity l'exclut) — elle alimente uniquement les prompts
+ * système (chat, missions, images) et la résolution de voix TTS.
+ * Tous les champs sont optionnels : un jumeau « vide » est un objet absent.
+ */
+export const TwinProfileSchema = z.object({
+  /** Style d'écriture de l'utilisateur (phrases, vocabulaire, longueur…). */
+  writingStyle: z.string().max(2000).optional(),
+  /** Univers créatif (secteur, marque, thèmes récurrents, audience…). */
+  universe: z.string().max(2000).optional(),
+  /** Valeurs/messages de fond à respecter (max 12 × 200 caractères). */
+  values: z.array(z.string().max(200)).max(12).optional(),
+  /** Ton général (professionnel, chaleureux, percutant…). */
+  tone: z.string().max(200).optional(),
+  /** Profil voix par défaut (collection videoVoices) pour la synthèse vocale. */
+  defaultVoiceProfileId: z.string().max(200).optional(),
+  /** Interrupteur maître : la voix du jumeau est-elle active pour le TTS ? */
+  voiceEnabled: z.boolean().optional(),
+  /** Horodatage de la dernière mise à jour (ms epoch, posé par le service). */
+  updatedAtMs: z.number().optional(),
+});
+
+export type TwinProfile = z.infer<typeof TwinProfileSchema>;
+
 export const IdentitySchema = z.object({
   uid: UID_SCHEMA,
   email: Email.nullable(),
@@ -54,6 +83,8 @@ export const IdentitySchema = z.object({
   phoneNumber: boundedNullable(32),
   country: boundedNullable(60),
   bio: boundedNullable(500),
+  /** Task 114-b — jumeau créatif (PRIVÉ : exclu de publicIdentity). */
+  twinProfile: TwinProfileSchema.optional(),
   language: z.string().trim().max(30).default("fr"),
   timezone: z.string().trim().max(60).default("UTC"),
   /** CONTRAT lot 108-c : le thème persiste DANS l'identité (base R2). */
@@ -89,6 +120,9 @@ export const IdentityPatchSchema = z.strictObject({
   phoneNumber: boundedNullable(32).optional(),
   country: boundedNullable(60).optional(),
   bio: boundedNullable(500).optional(),
+  /** Task 114-b — jumeau créatif (l'objet complet remplace l'existant :
+   *  la fusion patch ⊕ existant est faite PAR le service twin). */
+  twinProfile: TwinProfileSchema.optional(),
   language: z.string().trim().max(30).optional(),
   timezone: z.string().trim().max(60).optional(),
   theme: z.enum(["light", "dark"]).optional(),

@@ -168,15 +168,17 @@ export default function BillingPage() {
     ({
       topup: "Recharge",
       welcome_grant: "Solde de bienvenue",
+      earning: "Gain marketplace",
       charge: "Consommation",
       reservation: "Réservation (mission en cours)",
       release: "Restitution de réservation",
     })[type] ?? type;
 
   // Signe par TYPE (le ledger stocke toujours un montant positif) :
-  // + recharge et bienvenue ; − consommation et réservation ; ↺ restitution.
+  // + recharge, bienvenue et gain marketplace ; − consommation et réservation ;
+  // ↺ restitution.
   const transactionSign = (type: string): string =>
-    type === "topup" || type === "welcome_grant" ? "+" : type === "charge" || type === "reservation" ? "−" : "↺";
+    type === "topup" || type === "welcome_grant" || type === "earning" ? "+" : type === "charge" || type === "reservation" ? "−" : "↺";
 
   const formatAmount = (minor: number): string =>
     (Math.abs(minor) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });

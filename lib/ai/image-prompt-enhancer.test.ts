@@ -1,7 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Task 114-b : le LLM et le jumeau sont mockés pour les tests asynchrones
+// (les fonctions pures restent testées sans mock).
+vi.mock("@/lib/ai/router", () => ({ generate: vi.fn() }));
+
+const twinImageHintMock = vi.hoisted(() => vi.fn<() => Promise<string | undefined>>());
+vi.mock("@/lib/identity/twin", () => ({
+  twinImageHintForUser: (...args: unknown[]) => twinImageHintMock(...args),
+}));
+
+import { generate } from "@/lib/ai/router";
 import {
   buildImageEnhancementMessages,
+  enhanceImagePrompt,
   isSaneEnhancement,
   MAX_ENHANCED_PROMPT_LENGTH,
 } from "./image-prompt-enhancer";
@@ -43,5 +54,61 @@ describe("isSaneEnhancement", () => {
 
   it("accepte un prompt d'origine très court enrichi sans dérive", () => {
     expect(isSaneEnhancement("un logo de café", "Un logo de café minimaliste, forme circulaire équilibrée, deux tons contrastés, rendu vectoriel net")).toBe(true);
+  });
+});
+
+describe("enhanceImagePrompt — jumeau créatif (Task 114-b)", () => {
+  const PROMPT = "un renard roux dans une forêt au lever du soleil";
+  const CANDIDATE =
+    "Un renard roux dans une forêt au lever du soleil, lumière dorée rasante, brume légère entre les arbres, profondeur de champ douce, photoréalisme";
+
+  beforeEach(() => {
+    vi.mocked(generate).mockReset();
+    twinImageHintMock.mockReset();
+    twinImageHintMock.mockResolvedValue(undefined);
+  });
+
+  it("avec userId : l'extrait du jumeau est ajouté au prompt final", async () => {
+    twinImageHintMock.mockResolvedValueOnce("Style : photographie argentique ; Ambiance : chaleureux");
+    vi.mocked(generate).mockResolvedValueOnce({ text: CANDIDATE } as never);
+
+    const result = await enhanceImagePrompt(PROMPT, { userId: "user-1" });
+    expect(twinImageHintMock).toHaveBeenCalledWith("user-1");
+    expect(result.enhanced).toBe(true);
+    expect(result.prompt).toContain(CANDIDATE);
+    expect(result.prompt).toContain("Style : photographie argentique");
+  });
+
+  it("twinHint explicite prioritaire sur la résolution par userId", async () => {
+    vi.mocked(generate).mockResolvedValueOnce({ text: CANDIDATE } as never);
+
+    const result = await enhanceImagePrompt(PROMPT, { twinHint: "Ambiance : minimaliste", userId: "user-1" });
+    expect(twinImageHintMock).not.toHaveBeenCalled();
+    expect(result.prompt).toContain("Ambiance : minimaliste");
+  });
+
+  it("sans jumeau (profil vide) : prompt identique au comportement historique", async () => {
+    vi.mocked(generate).mockResolvedValueOnce({ text: CANDIDATE } as never);
+
+    const result = await enhanceImagePrompt(PROMPT, { userId: "user-1" });
+    expect(result.prompt).toBe(CANDIDATE);
+  });
+
+  it("échec LLM : le prompt d'origine porte QUAND MÊME la signature du jumeau", async () => {
+    twinImageHintMock.mockResolvedValueOnce("Ambiance : chaleureux");
+    vi.mocked(generate).mockRejectedValueOnce(new Error("provider down"));
+
+    const result = await enhanceImagePrompt(PROMPT, { userId: "user-1" });
+    expect(result.enhanced).toBe(false);
+    expect(result.prompt).toContain(PROMPT);
+    expect(result.prompt).toContain("Ambiance : chaleureux");
+  });
+
+  it("une panne du module jumeau n'interrompt JAMAIS la génération (fail-soft)", async () => {
+    twinImageHintMock.mockRejectedValueOnce(new Error("R2 indisponible"));
+    vi.mocked(generate).mockResolvedValueOnce({ text: CANDIDATE } as never);
+
+    const result = await enhanceImagePrompt(PROMPT, { userId: "user-1" });
+    expect(result.prompt).toBe(CANDIDATE);
   });
 });

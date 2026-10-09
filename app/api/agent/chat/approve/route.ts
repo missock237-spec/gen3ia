@@ -19,6 +19,7 @@ import { reconcileAgentRun } from "@/lib/agents/conversation-run";
 import { buildFinalResponse } from "@/lib/agents/final-response";
 import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
 import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
+import { captureMissionEscrow } from "@/lib/billing/mission-escrow";
 import { errorCode, errorStatus } from "@/lib/security/http-errors";
 
 export const runtime = "nodejs";
@@ -194,6 +195,10 @@ export async function POST(request: NextRequest) {
           error: result.error,
         }).catch(() => undefined);
       }
+      // ESCROW V2 (Task 114-a) : capture (réussite) / libération (échec,
+      // annulation) du frais de résultat — idempotent, fail-soft, statut
+      // terminal uniquement (décision interne).
+      await captureMissionEscrow({ userId: user.uid, executionId: result.executionId, missionStatus: result.status }).catch(() => undefined);
       // Continuation arrière-plan si l'échéance de tranche a coupé la mission.
       let continuation: { queued: boolean; runId?: string; reason?: string } | undefined;
       if (result.status === "paused" && result.plan.steps.some((step) => step.status === "pending")) {
@@ -221,6 +226,9 @@ export async function POST(request: NextRequest) {
         ...(continuation ? { continuation } : {}),
       });
     } catch (error) {
+      // ESCROW V2 : exécution échue → le frais réservé est LIBÉRÉ (fail-soft ;
+      // idempotence : un capture déjà joué est un no-op).
+      await captureMissionEscrow({ userId: user.uid, executionId, missionStatus: "failed" }).catch(() => undefined);
       await Promise.all(claimed.map((id) => failAction(user.uid, id, error).catch(() => undefined)));
       throw error;
     }

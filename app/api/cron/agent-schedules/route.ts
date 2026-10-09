@@ -98,7 +98,21 @@ export async function GET(request: NextRequest) {
       }
     })();
 
-    return NextResponse.json({ ok: true, ...result, renewals, reactivations, extensionRenewals, dispatchLoop: loop, videoSweep, ...(failures.length > 0 ? { partialFailures: failures } : {}) });
+    // Task 114-a — purge des escrows de mission expirés : les holds encore
+    // « held » au-delà de leur TTL (GEN3IA_ESCROW_TTL_MS, défaut 7 jours) sont
+    // LIBÉRÉS (wallet + registre walletHolds). Best-effort total : un
+    // incident alimente `partialFailures` sans faire échouer la route.
+    const escrowSweep = await (async () => {
+      try {
+        const { releaseExpiredEscrows } = await import("@/lib/billing/mission-escrow");
+        return { released: await releaseExpiredEscrows(50) };
+      } catch (error) {
+        failures.push(`escrow-sweep: ${error instanceof Error ? error.message : "erreur"}`);
+        return null;
+      }
+    })();
+
+    return NextResponse.json({ ok: true, ...result, renewals, reactivations, extensionRenewals, dispatchLoop: loop, videoSweep, escrowSweep, ...(failures.length > 0 ? { partialFailures: failures } : {}) });
   } catch (error) {
     console.error("Agent schedule dispatcher failed", error);
     return NextResponse.json(

@@ -36,7 +36,9 @@ import {
   isImageGenerationEnabled,
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
-import { extractVideoTitle, looksLikeVideoRequest } from "@/lib/ai/video-intent";
+import { extractVideoTitle, extractVoiceRequestText, looksLikeVideoRequest, looksLikeVoiceRequest } from "@/lib/ai/video-intent";
+import { speakDirectForUser } from "@/lib/ai/voice-speak-direct";
+import { captureMissionEscrow, reserveMissionEscrow } from "@/lib/billing/mission-escrow";
 import { imagesForModel } from "@/lib/ai/vision-input";
 import type { AIImageAttachment } from "@/lib/ai/models";
 import { createR2DownloadUrl } from "@/lib/storage/r2";
@@ -295,6 +297,78 @@ async function respondWithImage(params: {
   }
 }
 
+/**
+ * VOIX-OFF DIRECTE (Task 114-a) : synthèse ElevenLabs immédiate — même
+ * mécanique d'archivage permanent R2 que l'outil voice.speak (clé réutilisable
+ * par le canal signé de l'application), facturation TTS au réel. Le message
+ * assistant porte le lien d'écoute (URL signée R2). Retourne spoken=false en
+ * échec de synthèse/facturation — l'appelant continue le flux normal (jamais
+ * d'échec visible brut).
+ */
+async function respondWithVoiceOff(params: {
+  userId: string;
+  conversationId: string;
+  text: string;
+}): Promise<{ spoken: boolean; reply?: string; audio?: { url?: string; storage: "r2" | "inline"; dataUri?: string } }> {
+  const executionId = `voice_direct_${params.conversationId}`;
+  const result = await speakDirectForUser({ userId: params.userId, text: params.text, executionId });
+  if (!result.ok) return { spoken: false };
+
+  // Lien d'écoute : URL signée R2 (6 h) quand l'audio est archivé. En repli
+  // inline, le data URI reste dans la réponse API (audio.dataUri) — la base64
+  // n'est jamais déversée dans le fil (rendu markdown du chat limité à https).
+  let playableUrl: string | undefined;
+  if (result.storage === "r2" && result.audioUrl) {
+    playableUrl = await createR2DownloadUrl(result.audioUrl, 6 * 3600).catch(() => undefined);
+  }
+  const reply = [
+    "Voici votre voix-off, synthétisée avec une voix naturelle ElevenLabs.",
+    result.storage === "r2"
+      ? "L'audio est archivé en permanence dans votre espace : il reste disponible et réutilisable."
+      : "L'archivage permanent est momentanément indisponible : l'audio est livré dans la réponse de cette conversation (version temporaire).",
+    ...(playableUrl ? ["", `[Écouter l'audio](${playableUrl})`] : []),
+  ].join("\n");
+  await appendMessage({ conversationId: params.conversationId, userId: params.userId, role: "assistant", content: reply });
+  return {
+    spoken: true,
+    reply,
+    audio: {
+      ...(result.audioUrl ? { url: result.audioUrl } : {}),
+      storage: result.storage ?? "inline",
+      ...(result.dataUri ? { dataUri: result.dataUri } : {}),
+    },
+  };
+}
+
+/**
+ * Intercept VOIX-OFF (Task 114-a) : une demande explicite de voix-off avec un
+ * texte identifiable est servie IMMÉDIATEMENT (synthèse + message assistant),
+ * avant tout routage de mission — miroir de l'intercept vidéo. Retourne la
+ * réponse à livrer, ou undefined pour laisser le flux normal continuer
+ * (demande vidéo, texte non extractible, synthèse/facturation indisponibles).
+ */
+async function interceptVoiceOff(params: {
+  userId: string;
+  conversationId: string;
+  message: string;
+}): Promise<{ reply: string; audio: { url?: string; storage: "r2" | "inline"; dataUri?: string } } | undefined> {
+  if (!looksLikeVoiceRequest(params.message)) return undefined;
+  const voiceRequest = extractVoiceRequestText(params.message);
+  if (!voiceRequest) return undefined;
+  try {
+    const spoken = await respondWithVoiceOff({
+      userId: params.userId,
+      conversationId: params.conversationId,
+      text: voiceRequest.text2speak,
+    });
+    if (!spoken.spoken || !spoken.audio) return undefined;
+    return { reply: spoken.reply ?? "Voici votre voix-off.", audio: spoken.audio };
+  } catch (voiceError) {
+    logger.warn({ err: voiceError instanceof Error ? voiceError.message : voiceError }, "agent_chat_voice_off_intercept_failed");
+    return undefined;
+  }
+}
+
 export const runtime = "nodejs";
 // Fenêtre du repli SYNCHRONE (file non configurée) : les missions longues
 // sont coupées PROPREMENT par batchDeadlineMs avant la fin de fenêtre, puis
@@ -333,11 +407,19 @@ async function launchQueuedTaskMission(input: {
   plan: RuntimePlan;
   projectId?: string;
   orgId?: string;
-}): Promise<{ queued: boolean; runId?: string; reason?: string }> {
+}): Promise<{ queued: boolean; runId?: string; reason?: string; escrowRejected?: boolean }> {
   if (!missionQueueConfigured()) {
     return { queued: false, reason: "File d'attente non configurée." };
   }
   const runId = randomUUID();
+  // ESCROW V2 (Task 114-a) : le frais de résultat est RÉSERVÉ au lancement —
+  // fonds insuffisants → la mission n'est PAS créée (l'appelant répond 402).
+  // Panne d'infrastructure → fail-soft : la mission démarre (capture en
+  // rattrapage prévue à la livraison).
+  const escrow = await reserveMissionEscrow({ userId: input.userId, executionId: input.plan.executionId, runId });
+  if (!escrow.ok) {
+    return { queued: false, escrowRejected: true, reason: "Solde insuffisant pour lancer cette mission." };
+  }
   try {
     await createQueuedMission({
       runId,
@@ -450,6 +532,22 @@ export async function POST(request: NextRequest) {
         content: body.message,
         ...(attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) ? { attachments: attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) } : {}),
       });
+      // VOIX-OFF DIRECTE (Task 114-a) : une demande explicite de voix-off
+      // avec texte identifiable est synthétisée IMMÉDIATEMENT (ElevenLabs +
+      // archivage permanent), avant tout routage de mission. Le flux normal
+      // continue si la synthèse n'est pas possible (jamais d'échec visible).
+      const voiceOff = await interceptVoiceOff({ userId: user.uid, conversationId, message: body.message });
+      if (voiceOff) {
+        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: voiceOff.reply, mode: "chat" }));
+        return NextResponse.json({
+          mode: "chat",
+          conversationId,
+          agentId: agent.id,
+          classification: { mode: "chat" as const, inScope: true, reason: "Voix-off" },
+          reply: voiceOff.reply,
+          audio: voiceOff.audio,
+        });
+      }
       // PRODUCTION VIDÉO (autopilote) : une demande explicite de vidéo lance
       // la file de production RÉELLE (projet → plan → scénario → visuels →
       // voix → rendu) — le client suit la progression via l'API production.
@@ -768,6 +866,13 @@ export async function POST(request: NextRequest) {
         projectId: agent.projectId,
         orgId: agent.orgId,
       });
+      // ESCROW V2 : fonds insuffisants au lancement → 402 canonique, la
+      // mission n'a PAS été créée. Message laissé sur le fil pour cohérence.
+      if (queuedLaunch.escrowRejected) {
+        const reply = "Solde insuffisant pour lancer cette mission. Rechargez votre portefeuille.";
+        await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply }).catch(() => undefined);
+        return NextResponse.json({ error: reply, reason: "insufficient_funds" }, { status: 402 });
+      }
       if (queuedLaunch.queued) {
         return NextResponse.json({
           mode: "agent",
@@ -834,6 +939,9 @@ export async function POST(request: NextRequest) {
       try {
         result = await runtime.run();
       } catch (error) {
+        // ESCROW V2 : mission échue → le frais de résultat réservé est LIBÉRÉ
+        // (fail-soft — l'échec visible reste inchangé).
+        await captureMissionEscrow({ userId: user.uid, executionId: plan.executionId, missionStatus: "failed" }).catch(() => undefined);
         return NextResponse.json({
           mode: "agent",
           status: "failed",
@@ -878,6 +986,11 @@ export async function POST(request: NextRequest) {
         ...(syncRunId ? { runId: syncRunId } : {}),
         ...(status === "waiting_approval" ? { overrideClosingText: "J'ai exécuté les étapes autorisées. Une ou plusieurs actions nécessitent maintenant votre confirmation." } : {}),
       }).catch(() => ({ finalText: undefined as string | undefined, deliverables: [], messageId: undefined }));
+
+      // ESCROW V2 : capture (réussite) / libération (échec/annulation) du
+      // frais de résultat — statut terminal uniquement (décision interne),
+      // idempotent et fail-soft (jamais bloquant pour la réponse).
+      await captureMissionEscrow({ userId: user.uid, executionId: result.executionId, missionStatus: result.status });
 
       // CONTINUATION ARRIÈRE-PLAN : la tranche synchrone a atteint son
       // échéance avec des étapes restantes → la suite part sur la file.
@@ -938,6 +1051,21 @@ export async function POST(request: NextRequest) {
       content: body.message,
       ...(attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) ? { attachments: attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) } : {}),
     });
+
+    // VOIX-OFF DIRECTE (Task 114-a) sur le chemin universel aussi, AVANT
+    // l'intercept vidéo (la production vidéo reste prioritaire sur sa propre
+    // demande ; looksLikeVoiceRequest la laisse déjà passer).
+    const voiceOff = await interceptVoiceOff({ userId: user.uid, conversationId, message: body.message });
+    if (voiceOff) {
+      return NextResponse.json({
+        mode: "chat",
+        status: "completed",
+        conversationId,
+        objective: body.message,
+        reply: voiceOff.reply,
+        audio: voiceOff.audio,
+      });
+    }
 
     // PRODUCTION VIDÉO (autopilote) sur le chemin universel aussi.
     if (looksLikeVideoRequest(body.message)) {
@@ -1092,6 +1220,13 @@ export async function POST(request: NextRequest) {
       objective: body.message,
       plan,
     });
+    // ESCROW V2 : fonds insuffisants au lancement → 402 canonique, la mission
+    // n'a PAS été créée. Message laissé sur le fil pour cohérence.
+    if (universalQueued.escrowRejected) {
+      const reply = "Solde insuffisant pour lancer cette mission. Rechargez votre portefeuille.";
+      await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply }).catch(() => undefined);
+      return NextResponse.json({ error: reply, reason: "insufficient_funds" }, { status: 402 });
+    }
     if (universalQueued.queued) {
       return NextResponse.json({
         mode: "agent",
@@ -1155,6 +1290,9 @@ export async function POST(request: NextRequest) {
     try {
       result = await runtime.run();
     } catch (error) {
+      // ESCROW V2 : mission échue → le frais de résultat réservé est LIBÉRÉ
+      // (fail-soft — l'échec visible reste inchangé).
+      await captureMissionEscrow({ userId: user.uid, executionId: plan.executionId, missionStatus: "failed" }).catch(() => undefined);
       return NextResponse.json({
         mode: "agent",
         status: "failed",
@@ -1192,6 +1330,11 @@ export async function POST(request: NextRequest) {
       state: result,
       ...(universalSyncRunId ? { runId: universalSyncRunId } : {}),
     }).catch(() => ({ finalText: undefined as string | undefined, deliverables: [], messageId: undefined }));
+
+    // ESCROW V2 : capture (réussite) / libération (échec/annulation) du
+    // frais de résultat — statut terminal uniquement (décision interne),
+    // idempotent et fail-soft (jamais bloquant pour la réponse).
+    await captureMissionEscrow({ userId: user.uid, executionId: result.executionId, missionStatus: result.status });
 
     // Continuation arrière-plan si l'échéance de tranche a coupé la mission.
     let universalContinuation: { queued: boolean; runId?: string; reason?: string } | undefined;

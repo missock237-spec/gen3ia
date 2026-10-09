@@ -1,6 +1,7 @@
 import "server-only";
 
 import { generate } from "@/lib/ai/router";
+import { twinImageHintForUser } from "@/lib/identity/twin";
 
 /**
  * Amélioration intelligente des prompts d'image (« compétence image » Gen3ia).
@@ -87,12 +88,58 @@ export interface EnhanceImagePromptResult {
 }
 
 /**
- * Réécrit le prompt visuel via LLM. Jamais bloquant : tout échec renvoie le
- * prompt d'origine (`enhanced: false`).
+ * Task 114-b — options du jumeau créatif (TOUTES optionnelles : aucun
+ * appelant existant n'est cassé) :
+ *  - `twinHint` : extrait déjà compilé par l'appelant (buildTwinImageHint) ;
+ *  - `userId`   : l'extrait est résolu ici (fail-soft, cache mémoire 60 s).
+ * Points de branchement à venir (hors périmètre 114-b — noyau) :
+ *  - lib/domain/conversations/engine.ts (produceConversationImage) ;
+ *  - lib/agents/runtime/runner.ts (executeMedia).
+ * Il suffit d'y passer `{ userId }` — la résolution est entièrement
+ * encapsulée ici (voir worklog Task 114-b).
  */
-export async function enhanceImagePrompt(rawPrompt: string): Promise<EnhanceImagePromptResult> {
+export interface EnhanceImagePromptOptions {
+  twinHint?: string;
+  userId?: string;
+}
+
+/**
+ * Résout l'extrait jumeau à utiliser (hint explicite prioritaire, sinon
+ * résolution par userId). JAMAIS bloquant : toute panne → undefined.
+ */
+async function twinHintEffectif(options?: EnhanceImagePromptOptions): Promise<string | undefined> {
+  if (options?.twinHint && options.twinHint.trim()) return options.twinHint.trim().slice(0, 300);
+  if (options?.userId) {
+    try {
+      return (await twinImageHintForUser(options.userId)) ?? undefined;
+    } catch (error) {
+      console.warn("[image-enhancer] extrait du jumeau indisponible, prompt sans jumeau :", error instanceof Error ? error.message : error);
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Ajoute la signature visuelle du jumeau AU PROMPT FINAL (jamais au prompt
+ * passé au garde-fou isSaneEnhancement : l'extrait ne doit pas fausser la
+ * vérification de fidélité du sujet).
+ */
+function avecJumeau(prompt: string, twinHint?: string): string {
+  return twinHint ? `${prompt}\n${twinHint}` : prompt;
+}
+
+/**
+ * Réécrit le prompt visuel via LLM. Jamais bloquant : tout échec renvoie le
+ * prompt d'origine (`enhanced: false`). La signature visuelle du jumeau
+ * (Task 114-b) est ajoutée au prompt final dans TOUS les cas.
+ */
+export async function enhanceImagePrompt(rawPrompt: string, options?: EnhanceImagePromptOptions): Promise<EnhanceImagePromptResult> {
   const trimmed = rawPrompt.trim();
   if (trimmed.length < 3) return { prompt: trimmed, enhanced: false };
+  // Résolu AVANT l'appel LLM (cache 60 s) : le jumeau n'ajoute aucune
+  // latence perceptible et n'interrompt jamais la génération.
+  const twinHint = await twinHintEffectif(options);
   try {
     const response = await generate({
       task: "agent",
@@ -102,12 +149,12 @@ export async function enhanceImagePrompt(rawPrompt: string): Promise<EnhanceImag
     });
     const candidate = response.text.trim().replace(/^["「«]+|["」»]+$/g, "").trim();
     if (isSaneEnhancement(trimmed, candidate)) {
-      return { prompt: candidate, enhanced: true };
+      return { prompt: avecJumeau(candidate, twinHint), enhanced: true };
     }
     console.warn("[image-enhancer] amélioration rejetée (garde-fou), prompt d'origine conservé");
-    return { prompt: trimmed, enhanced: false };
+    return { prompt: avecJumeau(trimmed, twinHint), enhanced: false };
   } catch (error) {
     console.warn("[image-enhancer] LLM indisponible, prompt d'origine conservé:", error instanceof Error ? error.message : error);
-    return { prompt: trimmed, enhanced: false };
+    return { prompt: avecJumeau(trimmed, twinHint), enhanced: false };
   }
 }

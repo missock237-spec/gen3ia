@@ -74,6 +74,14 @@ export interface LiveVoiceTurnInput {
   agentId?: string;
   /** Identifiant du tour (= executionId de facturation) ; défaut : ULID. */
   turnId?: string;
+  /**
+   * Task 114-b — voix ElevenLabs du JUMEAU pour la synthèse du tour (voix
+   * clonée/utilisateur résolue par l'appelant via lib/voice/user-voice.ts).
+   * Absent ou null → comportement historique (voix plateforme). La route
+   * live (app/api/live/voice/turn) branchera `voiceId: await
+   * resolveUserVoiceId(auth.uid)` — paramètre prêt, périmètre 114-b.
+   */
+  voiceId?: string;
 }
 
 /**
@@ -308,7 +316,8 @@ export async function* runLiveVoiceTurn(
   /* 4) Difficulté serveur (transcript + réponse), 5) découpe + TTS phrase par
    * phrase : chaque phrase émet `sentence` puis, si la synthèse réussit,
    * `audio`. Un échec TTS de phrase N'ARRÊTE PAS le tour (phrase émise sans
-   * audio, log) — le texte reste affiché côté client. */
+   * audio, log) — le texte reste affiché côté client. La voix du jumeau
+   * (Task 114-b) s'applique au tour ENTIER quand input.voiceId est fourni. */
   const difficulty = resolveDifficulty(transcript, reply);
   const sentences = splitSentences(reply);
   let ttsChars = 0;
@@ -317,7 +326,11 @@ export async function* runLiveVoiceTurn(
     const phrase = sentences[index]!;
     yield { type: "sentence", index, text: phrase };
     try {
-      const audio = await elevenLabsTextToSpeech({ text: phrase, modelId: TTS_MODEL });
+      const audio = await elevenLabsTextToSpeech({
+        text: phrase,
+        modelId: TTS_MODEL,
+        ...(input.voiceId ? { voiceId: input.voiceId } : {}),
+      });
       ttsChars += audio.charactersUsed;
       yield {
         type: "audio",

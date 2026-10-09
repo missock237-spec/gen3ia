@@ -21,6 +21,8 @@ import {
 } from "@/lib/queue/mission-queue";
 import type { RuntimeExecutionState } from "@/lib/agents/runtime/types";
 import { applyOutcomeCredit, shouldCreditOutcomeFailure } from "@/lib/billing/outcome-credits";
+import { captureMissionEscrow } from "@/lib/billing/mission-escrow";
+import { settleAgentHireByExecution } from "@/lib/marketplace/hire";
 import { recordFailureClusters } from "@/lib/agents/evolution";
 import { extractDeliverables } from "@/lib/agents/deliverables";
 import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
@@ -205,6 +207,23 @@ export async function POST(request: NextRequest) {
           error: state.error,
           ...(deliverables.length > 0 ? { deliverables } : {}),
         });
+        // ESCROW V2 (Task 114-a) : capture (réussite) / libération (échec,
+        // annulation) du frais de résultat réservé au lancement — idempotent
+        // et fail-soft (jamais bloquant pour la livraison ci-dessous).
+        await captureMissionEscrow({ userId: record.userId, executionId, missionStatus: queueStatus, runId });
+        // MARKETPLACE V2 (Task 114-c) : règlement de la location d'un agent
+        // publié — capture du loyer + gain du propriétaire (réussite) ou
+        // libération (échec/annulation). Fail-soft + idempotent (mapping
+        // absent = sortie immédiate : les missions ordinaires ne paient rien
+        // de plus) — un incident ne bloque JAMAIS la livraison ci-dessous.
+        try {
+          await settleAgentHireByExecution({ executionId, missionStatus: queueStatus });
+        } catch (error) {
+          console.error(
+            "[mission-tick] règlement marketplace non appliqué (fail-soft) :",
+            error instanceof Error ? error.message : error,
+          );
+        }
         // LIVRAISON À LA CONVERSATION (missions lancées depuis un chat) :
         // message final honnête + livrables + run réconcilié + notification.
         // La mission continue de vivre dans la file, jamais liée à l'onglet.
@@ -240,6 +259,19 @@ export async function POST(request: NextRequest) {
 
     // state === undefined → échec métier capté ci-dessus.
     await finalizeMissionRun(runId, "failed", { error: failure });
+    // ESCROW V2 : mission échue → le frais de résultat réservé est LIBÉRÉ
+    // (fail-soft — un incident d'escrow ne change jamais la réponse du tick).
+    await captureMissionEscrow({ userId: record.userId, executionId, missionStatus: "failed", runId }).catch(() => undefined);
+    // MARKETPLACE V2 : mission échouée (throw runtime) → le loyer d'une
+    // location éventuelle est LIBÉRÉ (fail-soft + idempotent, jamais bloquant).
+    try {
+      await settleAgentHireByExecution({ executionId, missionStatus: "failed" });
+    } catch (error) {
+      console.error(
+        "[mission-tick] règlement marketplace non appliqué (fail-soft) :",
+        error instanceof Error ? error.message : error,
+      );
+    }
     return NextResponse.json({ ok: true, runId, status: "failed" });
   } catch (error) {
     // Échec INFRASTRUCTURE (Firestore, publish) : laisser QStash re-tenter —

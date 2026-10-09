@@ -18,6 +18,9 @@ export const WalletTransactionTypeSchema = z.enum([
   "release",
   "adjustment",
   "welcome_grant",
+  // Task 114-c — Marketplace d'agents : gain du propriétaire à la capture
+  // d'une location (split commission plateforme / net propriétaire).
+  "earning",
 ]);
 export type WalletTransactionType = z.infer<typeof WalletTransactionTypeSchema>;
 
@@ -166,6 +169,56 @@ export async function applyTopup(params: {
       currency,
       provider: "chariow",
       providerReference: params.providerReference,
+      metadata: params.metadata ?? {},
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+
+  return getWallet(params.userId);
+}
+
+/**
+ * CRÉDIT ENTRANT « GAIN MARKETPLACE » (Task 114-c) : le net du propriétaire
+ * après split de commission, à la capture d'une location d'agent réussie.
+ *
+ * Même mécanique que applyTopup : transaction r2fs sur userWallets + écriture
+ * de ledger idempotente par doc-ID (`earning_<reference>` — un règlement déjà
+ * joué ne se rejoue jamais). Balance += amountMinor, réarmement du cycle
+ * d'alerte solde bas (de l'argent entre réellement). Réservé aux références
+ * de la marketplace (hire_<hireId>) — les recharges restent sur applyTopup.
+ */
+export async function applyEarning(params: {
+  userId: string;
+  amountMinor: number;
+  reference: string;
+  metadata?: Record<string, string>;
+}): Promise<WalletSnapshot> {
+  assertMinorAmount(params.amountMinor);
+  if (!params.reference.trim()) throw new Error("Earning reference is required.");
+
+  const wallet = walletRef(params.userId);
+  const ledger = adminDb.collection(LEDGER_COLLECTION).doc(`earning_${params.reference}`);
+
+  await adminDb.runTransaction(async (tx) => {
+    const [walletSnap, ledgerSnap] = await Promise.all([tx.get(wallet), tx.get(ledger)]);
+    if (ledgerSnap.exists) return;
+    const current = walletSnap.exists ? Number(walletSnap.get("balanceMinor") ?? 0) : 0;
+    tx.set(wallet, {
+      userId: params.userId,
+      currency: WALLET_CURRENCY,
+      balanceMinor: current + params.amountMinor,
+      reservedMinor: walletSnap.exists ? Number(walletSnap.get("reservedMinor") ?? 0) : 0,
+      // Réarmement du cycle d'alerte (comme applyTopup) : un gain réel
+      // réarme la prochaine notification de solde critique.
+      lowBalanceNotifiedAtMs: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    tx.create(ledger, {
+      userId: params.userId,
+      type: "earning" satisfies WalletTransactionType,
+      amountMinor: params.amountMinor,
+      currency: WALLET_CURRENCY,
+      reference: params.reference,
       metadata: params.metadata ?? {},
       createdAt: FieldValue.serverTimestamp(),
     });

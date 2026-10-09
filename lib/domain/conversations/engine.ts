@@ -1386,7 +1386,7 @@ async function produceConversationImage(
   // part avec le prompt d'origine plutôt que de dépasser le budget.
   await onProgress?.({ label: "Amélioration du prompt visuel…", stage: "enhance", percent: 15 });
   const enhancement = await withTimeout(
-    enhanceImagePrompt(rawPrompt).catch(() => ({ prompt: rawPrompt, enhanced: false })),
+    enhanceImagePrompt(rawPrompt, { userId: ctx.userId }).catch(() => ({ prompt: rawPrompt, enhanced: false })),
     32_000,
     "amélioration du prompt image",
   ).catch(() => ({ prompt: rawPrompt, enhanced: false }));

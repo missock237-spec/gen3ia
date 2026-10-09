@@ -202,3 +202,101 @@ export function extractVideoParams(text: string): VideoRequestParams {
   if (derived.length > 0) params.derivedTargets = derived.slice(0, 4);
   return params;
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Task 114-a — VOIX-OFF DIRECTE (intercept chat déterministe, zéro LLM).
+ * Miroir de looksLikeVideoRequest : un message demandant une voix-off est
+ * servi IMMÉDIATEMENT par synthèse vocale (speakDirectForUser) au lieu de
+ * partir dans un plan de mission. Même marqueur que VOICE_RE de
+ * lib/agents/runtime/tool-intent.ts (module PUR sans dépendance : regex
+ * copiée, tool-intent.ts n'est PAS édité) + garde vidéo (une demande vidéo
+ * contenant le mot « voix » reste une PRODUCTION VIDÉO).
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** Marqueurs voix (FR + EN), identiques à VOICE_RE (tool-intent.ts). */
+const VOICE_REQUEST_RE =
+  /\b(voix off|narration (?:audio|vocal\w*|sonore)|synth[èe]se vocale|voix synth[ée]tique|text[- ]to[- ]speech|text to speech|tts|locution|lire (?:à|a) voix haute|version audio|g[ée]n[èe]r\w* (?:une |la |de la )?voix)\b/i;
+
+/** Commandes audio explicites sans mot « voix » (audio parlé). */
+const AUDIO_SPEECH_RE =
+  /\b(g[ée]n[èe]re?|cr[ée]e?|fais)\s*(?:-|\s)?(moi\s+)?(un|une)\s+audio\b/i;
+
+/** Lecture à voix haute explicite (« lis ce texte à voix haute : X »). */
+const VOICE_READ_ALOUD_RE =
+  /\b(lis|lit|lire|lecture)\b[^.!?\n]{0,60}\bvoix haute\b/i;
+
+/** Impératif de production : une question méta n'est PAS une demande. */
+const VOICE_IMPERATIVE_RE =
+  /\b(g[ée]n[èe]r\w*|cr[ée]\w*|fais\w*|lis|lire|dit[s]?|dis)\b/i;
+
+/**
+ * La demande exprime-t-elle une synthèse vocale DIRECTE (voix-off) ?
+ * Une demande de production VIDÉO gagne TOUJOURS (la voix-off y est une
+ * étape interne, pas le produit demandé) — garde miroir de la route chat.
+ * Les questions méta sans impératif (« c'est quoi une voix off ? ») ne
+ * déclenchent pas de synthèse.
+ */
+export function looksLikeVoiceRequest(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 6) return false;
+  if (looksLikeVideoRequest(trimmed)) return false;
+  const isVoiceMarker = VOICE_REQUEST_RE.test(trimmed) || AUDIO_SPEECH_RE.test(trimmed) || VOICE_READ_ALOUD_RE.test(trimmed);
+  if (!isVoiceMarker) return false;
+  if (QUESTION_PREFIX_RE.test(trimmed) && !VOICE_IMPERATIVE_RE.test(trimmed)) return false;
+  return true;
+}
+
+export interface VoiceRequestText {
+  /** Texte à synthétiser, extrait de la demande (borné au quota outil : 2 500 caractères). */
+  text2speak: string;
+  /** Sujet court optionnel (nommage du résultat). */
+  title?: string;
+}
+
+/** Découpe la consigne d'un énoncé : guillemets > deux-points > fin de ligne. */
+function extraireTexteAParler(raw: string): string {
+  const cleaned = raw
+    .replace(/^[«"'\u201c\u2018\s]+/, "")
+    .replace(/[»"'\u201d\u2019\s]+$/, "")
+    .replace(/^(bon|bien|voici|ok|d'accord)[\s,:]+/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned;
+}
+
+/**
+ * Extrait le TEXTE À SYNTHÉTISER d'une demande de voix-off (« voix off
+ * disant X », « génère un audio qui dit X », « lis ce texte à voix haute :
+ * X »). PUR, zéro LLM. Retourne null quand la demande ne contient pas de
+ * texte exploitable (le flux normal — planificateur + outil voice.speak —
+ * prend alors le relais).
+ */
+export function extractVoiceRequestText(text: string): VoiceRequestText | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const patterns: RegExp[] = [
+    // « voix off disant X » / « voix off qui dit X » / « voix off sur X »
+    /(?:voix off|narration audio|synth[èe]se vocale|version audio|locution)\s*(?:disant|qui dit|avec le texte|sur|de)\s*[:\-—]?\s*(.+)$/i,
+    // « génère un audio qui dit X » / « un audio disant X » / « un audio avec le texte X »
+    /\baudio\s*(?:qui dit|disant|avec le texte|avec ce texte|de)\s*[:\-—]?\s*(.+)$/i,
+    // « lis ce texte à voix haute : X » / « lis à voix haute X »
+    /\b(?:lis|lit|lire)\s*(?:(?:ce|le|cette)\s+texte|moi|ceci|[cç]a|cela)?\s*(?:à|a)\s*voix haute\s*[:\-—]?\s*(.*)$/i,
+    // Deux-points direct après un marqueur voix (« tts : X », « voix off : X »)
+    /\b(?:voix off|narration audio|synth[èe]se vocale|version audio|text[- ]to[- ]speech|tts|locution)\s*[:：]\s*(.+)$/i,
+    // Texte cité entre guillemets n'importe où dans la demande
+    /[«"\u201c]([^»"\u201d]{4,})[»"\u201d]/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = trimmed.match(pattern);
+    const captured = match?.[1];
+    if (captured) {
+      const text2speak = extraireTexteAParler(captured);
+      if (text2speak.length >= 2) {
+        return { text2speak: text2speak.slice(0, 2500) };
+      }
+    }
+  }
+  return null;
+}

@@ -10,6 +10,13 @@ vi.mock("@/lib/chat/vector-index", () => ({
   searchConversationMessages: vi.fn(async () => []),
 }));
 
+// Task 114-b — Jumeau créatif : la directive est mockée pour garder le test
+// hermétique (aucun R2 réel) et vérifier l'injection dans le prompt système.
+const twinDirectiveMock = vi.hoisted(() => vi.fn<() => Promise<string | undefined>>());
+vi.mock("../identity/twin", () => ({
+  twinDirectiveForUser: (...args: unknown[]) => twinDirectiveMock(...args),
+}));
+
 import { generate } from "../ai/router";
 import { answerAsAgent, classifyRequest, heuristicClassification, unavailableCapabilityReply, planAgentTask } from "./chat-engine";
 import type { AgentRecord } from "./schema";
@@ -45,6 +52,8 @@ const agent = {
 
 beforeEach(() => {
   mockedGenerate.mockReset();
+  twinDirectiveMock.mockReset();
+  twinDirectiveMock.mockResolvedValue(undefined);
 });
 
 describe("classifyRequest", () => {
@@ -187,6 +196,36 @@ describe("answerAsAgent", () => {
     expect(call.messages.at(-1)?.content).toContain("[Fichier disponible : notes.pdf]");
     expect(call.messages.at(-1)?.content).toContain("Résume ce document.");
   });
+
+  it("injecte la directive du JUMEAU CRÉATIF dans le prompt système (Task 114-b)", async () => {
+    twinDirectiveMock.mockResolvedValueOnce(
+      "PROFIL DU JUMEAU CRÉATIF DE L'UTILISATEUR (à respecter dans tes réponses et livrables) :\n- Style d'écriture : Phrases courtes.\n- Ton : Chaleureux",
+    );
+    mockedGenerate.mockResolvedValueOnce({ text: "Réponse." } as Awaited<ReturnType<typeof generate>>);
+    await answerAsAgent("user-1", agent, [], "Bonjour");
+    expect(twinDirectiveMock).toHaveBeenCalledWith("user-1");
+    const call = mockedGenerate.mock.calls[0][0];
+    expect(call.messages[0].content).toContain("PROFIL DU JUMEAU CRÉATIF");
+    // La charte reste présente (le jumeau complète, ne remplace pas).
+    expect(call.messages[0].content).toContain("CodeMaster");
+  });
+
+  it("absence de jumeau → prompt inchangé (comportement historique conservé)", async () => {
+    twinDirectiveMock.mockResolvedValueOnce(undefined);
+    mockedGenerate.mockResolvedValueOnce({ text: "ok" } as Awaited<ReturnType<typeof generate>>);
+    await answerAsAgent("user-1", agent, [], "Bonjour");
+    const call = mockedGenerate.mock.calls[0][0];
+    expect(call.messages[0].content).not.toContain("PROFIL DU JUMEAU");
+  });
+
+  it("une panne du module jumeau ne casse JAMAIS le chat (fail-soft)", async () => {
+    twinDirectiveMock.mockRejectedValueOnce(new Error("R2 indisponible"));
+    mockedGenerate.mockResolvedValueOnce({ text: "Réponse de secours." } as Awaited<ReturnType<typeof generate>>);
+    const reply = await answerAsAgent("user-1", agent, [], "Bonjour");
+    expect(reply).toBe("Réponse de secours.");
+    const call = mockedGenerate.mock.calls[0][0];
+    expect(call.messages[0].content).toContain("CodeMaster");
+  });
 });
 
 describe("planAgentTask", () => {
@@ -237,5 +276,26 @@ describe("planAgentTask", () => {
     expect(presented.availableCapabilities).not.toContain("ui.components");
     expect(plan.steps[0].type).toBe("tool");
     expect(plan.steps[0].toolName).toBe("code.execute");
+  });
+
+  it("compose la charte AVEC la directive du jumeau dans le prompt du planificateur (Task 114-b)", async () => {
+    twinDirectiveMock.mockResolvedValueOnce(
+      "PROFIL DU JUMEAU CRÉATIF DE L'UTILISATEUR (à respecter dans tes réponses et livrables) :\n- Univers : Café de spécialité.",
+    );
+    mockedGenerate.mockResolvedValueOnce({
+      text: JSON.stringify({
+        executionId: "exec-twin",
+        objective: "Crée un bouton",
+        steps: [{ id: "s1", type: "llm", name: "Analyse", description: "Analyse" }],
+        maxConcurrency: 1,
+        maxIterations: 1,
+      }),
+    } as Awaited<ReturnType<typeof generate>>);
+    await planAgentTask("user-1", agent, "Crée un bouton");
+    const call = mockedGenerate.mock.calls[0][0];
+    // La charte ET la directive du jumeau sont présentes dans le même prompt.
+    expect(call.messages[0].content).toContain("AGENT PERSONNALISÉ — CHARTE OBLIGATOIRE");
+    expect(call.messages[0].content).toContain("CodeMaster");
+    expect(call.messages[0].content).toContain("PROFIL DU JUMEAU CRÉATIF");
   });
 });

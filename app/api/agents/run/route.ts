@@ -19,6 +19,7 @@ import {
 import { assertOrgAttach } from "@/lib/tenants/resource-access";
 import { OutcomeContractSchema } from "@/lib/agents/outcome-contract";
 import { applyOutcomeCredit, shouldCreditOutcomeFailure } from "@/lib/billing/outcome-credits";
+import { captureMissionEscrow, reserveMissionEscrow } from "@/lib/billing/mission-escrow";
 import { recordFailureClusters } from "@/lib/agents/evolution";
 
 /**
@@ -136,6 +137,21 @@ export async function POST(request: NextRequest) {
     const wantsAsync = parsed.data.mode === "async" || (parsed.data.mode !== "sync" && missionQueueConfigured());
     if (wantsAsync && missionQueueConfigured()) {
       const runId = randomUUID();
+      // ESCROW V2 (Task 114-a) : le frais de résultat est RÉSERVÉ au
+      // lancement — fonds insuffisants → 402 canonique, AUCUNE mission créée.
+      // Panne d'infrastructure → fail-soft (capture en rattrapage prévue).
+      const escrow = await reserveMissionEscrow({ userId: user.uid, executionId, runId });
+      if (!escrow.ok) {
+        executionLog.warn({ event: "execution.escrow.rejected", reason: escrow.reason }, "Escrow refusé — mission non créée");
+        return NextResponse.json(
+          {
+            error: "Solde insuffisant pour lancer cette mission. Rechargez votre portefeuille.",
+            reason: "insufficient_funds",
+            requestId,
+          },
+          { status: 402, headers: { "x-request-id": requestId } },
+        );
+      }
       try {
         await createQueuedMission({
           runId,
@@ -176,6 +192,9 @@ export async function POST(request: NextRequest) {
         // sache.
         if (parsed.data.mode === "async") {
           await markMissionEnqueueFailed(runId, error);
+          // ESCROW V2 : enfilement impossible → mission échue → le frais
+          // réservé est LIBÉRÉ (fail-soft).
+          await captureMissionEscrow({ userId: user.uid, executionId, missionStatus: "failed", runId }).catch(() => undefined);
           executionLog.error({ event: "execution.enqueue.failed", runId, error: safeError(error) }, "Enfilement impossible");
           return NextResponse.json(
             {
@@ -214,7 +233,18 @@ export async function POST(request: NextRequest) {
       ...(parsed.data.outcomeContract ? { outcomeContract: parsed.data.outcomeContract } : {}),
     });
 
-    const state = await runtime.run();
+    let state;
+    try {
+      state = await runtime.run();
+    } catch (error) {
+      // ESCROW V2 : mission échue → le frais réservé est LIBÉRÉ (fail-soft),
+      // puis l'erreur est re-propagée au catch central (contrat inchangé).
+      await captureMissionEscrow({ userId: user.uid, executionId, missionStatus: "failed" }).catch(() => undefined);
+      throw error;
+    }
+    // ESCROW V2 : capture (réussite) / libération (échec/annulation) du frais
+    // de résultat — idempotent et fail-soft (jamais bloquant pour la réponse).
+    await captureMissionEscrow({ userId: user.uid, executionId, missionStatus: state.status });
     const durationMs = Date.now() - startedAt;
 
     // Avoir automatique (concept #2) : mission sous contrat terminée en
