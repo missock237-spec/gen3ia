@@ -100,6 +100,17 @@ export async function GET(request: NextRequest) {
     report.publish = { skipped: "runId absent — probe config only" };
   }
 
-  report.probeId = randomUUID();
+  // 6) CLAIM DIRECT (test décisif) : exécuter claimMissionTick ici-même et
+  // retourner l'issue exacte ou l'erreur brute — sans passer par QStash.
+  if (runId) {
+    try {
+      const { claimMissionTick } = await import("@/lib/queue/mission-queue");
+      const t0 = Date.now();
+      const claim = await claimMissionTick(runId);
+      report.claim = { ms: Date.now() - t0, kind: claim.kind, ...(claim.kind === "terminal" ? { status: claim.status } : {}), ...(claim.kind === "missing" ? { note: "doc absent" } : {}) };
+    } catch (e) {
+      report.claim = { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? (e.stack ?? "").split("\n").slice(0, 4).join(" | ") : undefined };
+    }
+  }
   return NextResponse.json(report, { headers: { "cache-control": "no-store" } });
 }
