@@ -37,6 +37,17 @@ export async function GET(request: NextRequest) {
       nextSigningKey: Boolean(cfg?.nextSigningKey),
       queueConfigured: missionQueueConfigured(),
     };
+    // SONDE CLÉS ACTIVES (temporaire) : l'API QStash expose-t-elle les clés
+    // de signature actives ? Si oui, on peut réaligner les env Vercel.
+    if (cfg && request.nextUrl.searchParams.get("keys") === "1") {
+      try {
+        const r = await fetch("https://qstash.upstash.io/v2/keys", { headers: { Authorization: `Bearer ${cfg.token}` } });
+        const body = r.ok ? await r.json() : await r.text();
+        report.qstashKeysApi = { status: r.status, body: r.ok ? body : String(body).slice(0, 200) };
+      } catch (e) {
+        report.qstashKeysApi = { error: e instanceof Error ? e.message : String(e) };
+      }
+    }
   } catch (e) {
     report.qstash = { error: e instanceof Error ? e.message : String(e) };
   }
