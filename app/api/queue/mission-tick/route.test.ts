@@ -270,3 +270,42 @@ describe("POST /api/queue/mission-tick — tranche d'exécution", () => {
     expect(args).toHaveLength(2);
   });
 });
+
+describe("POST /api/queue/mission-tick — policy dérivée du plan (Task 114)", () => {
+  it("les outils prévus par le plan sont AUTORISÉS dans la policy du runtime (fix « Tool not allowed »)", async () => {
+    const planAvecOutils = {
+      ...PLAN,
+      steps: [
+        { ...PLAN.steps[0], id: "r1", type: "research" as const, toolName: "web.search", name: "Recherche web", description: "d", dependencies: [] as string[] },
+        { ...PLAN.steps[1], id: "t1", type: "tool" as const, toolName: "artifact.create", name: "Document", description: "d", dependencies: ["r1"] },
+      ],
+    };
+    mockedClaim.mockResolvedValue({
+      kind: "claimed",
+      record: { ...CLAIMED.record, plan: planAvecOutils, pendingCount: 2 },
+    } as never);
+    mockedLoadCheckpoint.mockResolvedValue(null);
+    mockRun.mockResolvedValue(pausedState());
+    await POST(tickRequest(JSON.stringify({ runId: RUN_ID })));
+
+    const options = mockConstructorCalls[0];
+    const policy = options.policy as { allowedTools: string[]; permissions: string[]; allowNetwork: boolean };
+    expect(Array.isArray(policy.allowedTools)).toBe(true);
+    expect(policy.allowedTools).toContain("web.search");
+    expect(policy.allowedTools).toContain("artifact.create");
+    expect(policy.allowedTools).toContain("file.create");
+    expect(policy.permissions).toContain("network.read");
+    expect(policy.allowNetwork).toBe(true);
+    // La policy ne doit JAMAIS être la liste vide par défaut
+    expect(policy.allowedTools.length).toBeGreaterThan(2);
+  });
+
+  it("mission sans outil → policy minimale mais services de base présents", async () => {
+    mockedClaim.mockResolvedValue(CLAIMED);
+    mockedLoadCheckpoint.mockResolvedValue(null);
+    mockRun.mockResolvedValue(pausedState());
+    await POST(tickRequest(JSON.stringify({ runId: RUN_ID })));
+    const policy = mockConstructorCalls[0].policy as { allowedTools: string[] };
+    expect(policy.allowedTools).toContain("file.read");
+  });
+});

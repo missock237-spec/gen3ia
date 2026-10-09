@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { safeError, executionLogger } from "@/lib/observability/logger";
 import { recordExecutionMetrics } from "@/lib/observability/otel";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
+import { buildPlanExecutionPolicy } from "@/lib/agents/runtime/plan-policy";
 import { loadCheckpoint } from "@/lib/agents/runtime/checkpoint";
 import { isExecutionPauseRequested } from "@/lib/agents/runtime/pause";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
@@ -141,6 +142,13 @@ export async function POST(request: NextRequest) {
       // Contrat de résultat (concepts #1/#2) : relayé depuis le document de
       // file — la porte d'acceptation s'applique à chaque tick final.
       ...(record.outcomeContract ? { outcomeContract: record.outcomeContract } : {}),
+      // POLICY DÉRIVÉE DU PLAN (Task 114) : les outils prévus par le
+      // planificateur sont exactement ceux autorisés. SANS cela, la policy
+      // par défaut (allowedTools: []) refuse toute étape tool/research
+      // (« Tool not allowed ») et toute mission en file contenant un outil
+      // échoue — le chemin synchrone construisait sa policy depuis le plan,
+      // le chemin enfilé non.
+      policy: buildPlanExecutionPolicy(plan),
       batchDeadlineMs: Date.now() + TICK_BUDGET_MS,
     });
 
