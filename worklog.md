@@ -2973,3 +2973,21 @@ Stage Summary:
 - Z-Image-Turbo prend AUTOMATIQUEMENT le relais quand Agnes renvoie une erreur de limite de crédit (402/message crédit), sur les trois voies de génération (chat, outil agent, scènes vidéo) — structure Hugging Face existante non modifiée (simple ajout de fonction), archivage permanent R2 inclus.
 - Analyses image/audio/vidéo RÉELLES opérationnelles et branchées aux deux extrémités : la CONVERSATION lit les médias joints (transcript + description injectés au tour, fail-soft) et l'AGENT dispose de l'outil media.analyze.
 - À surveiller en prod : HF_TOKEN doit être présent dans les variables Vercel (déjà requis par les embeddings) ; sans token, le repli reste désactivé et l'erreur Agnes d'origine est relancée (comportement honnête).
+
+---
+Task ID: 112-b
+Agent: principal (Super Z)
+Task: Smoke prod post-déploiement Task 112 — correction du second bug découvert (gates 500 vides) + déploiement final.
+
+Work Log:
+- SMOKE PROD (déploiement c7bc18c) : health 200, homepage 200, gates chat/workspace 401 ✓ — MAIS /api/admin/migrate-firestore-r2 = 500 CORPS VIDE au lieu de 401.
+- DIAGNOSTIC : le catch des deux routes Task 111 (migrate-firestore-r2:166, cleanup-invitations:52) faisait `return errorStatus(error)` — errorStatus retourne un NOMBRE, pas une NextResponse → Next plante → 500 vide. Le pattern canonique du projet (route reconcile, Task 104-b) est `NextResponse.json(errorBody(error, …), { status: errorStatus(error) })`.
+- FIX (2 fichiers) + 8 tests de contrat (route.test.ts : 401 JSON / 403 JSON / 500 AVEC corps / happy path) — mocking chaînable collectionGroup().where().get() pour le cron.
+- VALIDATION : tsc 0 ; eslint 0 (--max-warnings 0) ; vitest complet 2849 verts + 2 skipped (2851 total) ; sandbox 18/18.
+- DÉPLOIEMENT : commit 8f0e5e0 poussé → Vercel READY (dpl_99MvAk61F6QrGXYWYMNCJcMYpeeA). ENV Vercel vérifiée via API : HF_TOKEN PRÉSENT (fallback Z-Image-Turbo ACTIF en prod), AGNES_API_KEY PRÉSENT, ELEVENLABS_API_KEY PRÉSENT, HF_IMAGE_MODEL absente (défaut « Tongyi-MAI/Z-Image-Turbo » appliqué — aucune action requise).
+- SMOKE FINAL : health {"status":"ok"} ; migrate-firestore-r2 → 401 JSON AUTH_REQUIRED ✓ ; cron cleanup-invitations → 401 JSON ✓ ; chat 401 ✓ ; workspace tasks 401 ✓ ; homepage 200 ✓.
+
+Stage Summary:
+- Deux bugs corrigés et déployés en production : (1) moteur r2fs — sentinelles FieldValue imbriquées désormais résolues (fin de l'échec 49 % à chaque génération de vidéo) ; (2) routes Task 111 — gates d'auth répondent le bon statut JSON au lieu d'un 500 vide.
+- Fallback Hugging Face Z-Image-Turbo ACTIF en prod (HF_TOKEN présent) : reprise automatique uniquement sur erreur de limite de crédit Agnes (402/message crédit), sur chat + outil agent + scènes vidéo.
+- Analyses image/audio/vidéo opérationnelles et connectées : conversation (médias joints analysés — transcript Scribe + vision, fail-soft) et agent (outil media.analyze au registre).
