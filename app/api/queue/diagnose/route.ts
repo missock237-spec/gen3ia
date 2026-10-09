@@ -35,7 +35,6 @@ export async function GET(request: NextRequest) {
       token: Boolean(cfg?.token),
       currentSigningKey: Boolean(cfg?.currentSigningKey),
       nextSigningKey: Boolean(cfg?.nextSigningKey),
-      urlHost: cfg?.url ? new URL(cfg.url).host : null,
       queueConfigured: missionQueueConfigured(),
     };
   } catch (e) {
