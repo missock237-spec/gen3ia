@@ -64,9 +64,35 @@ export async function GET(request: NextRequest) {
     }
     // 4) Publication d'un tick réel pour cette mission
     try {
-      const { publishMissionTick } = await import("@/lib/queue/qstash");
+      const { publishMissionTick, qstashConfig } = await import("@/lib/queue/qstash");
       const pub = await publishMissionTick(runId);
       report.publish = pub ? { published: true, messageId: pub.messageId } : { published: false, reason: "non configuré" };
+      // 5) LIVRAISON réelle selon QStash : état du message + événements récents
+      // (lecture API QStash côté serveur — aucun secret retourné, états seulement)
+      const cfg = qstashConfig();
+      if (cfg) {
+        const headers = { Authorization: `Bearer ${cfg.token}` };
+        const events = await fetch("https://qstash.upstash.io/v2/events?count=20", { headers });
+        const eventsBody = events.ok ? await events.json() : null;
+        const simplified = Array.isArray(eventsBody?.events)
+          ? eventsBody.events.slice(0, 20).map((ev: Record<string, unknown>) => {
+              const req = (ev.request ?? {}) as Record<string, unknown>;
+              const resp = (ev.response ?? {}) as Record<string, unknown>;
+              return {
+                topic: ev.topic ?? null,
+                url: typeof ev.url === "string" ? new URL(ev.url).host + new URL(ev.url).pathname : ev.url,
+                messageId: ev.messageId ?? null,
+                state: ev.state ?? null,
+                createdAtMs: ev.createdAt ?? null,
+                nextAttemptMs: ev.nextAttempt ?? null,
+                method: req.method ?? null,
+                responseStatus: resp.status ?? null,
+                responseHeaderFinalDelivery: resp.headerFinalDelivery ?? null,
+              };
+            })
+          : { rawStatus: events.status, sample: typeof eventsBody === "string" ? eventsBody.slice(0, 300) : eventsBody };
+        report.qstashEvents = simplified;
+      }
     } catch (e) {
       report.publish = { published: false, error: e instanceof Error ? e.message : String(e) };
     }
