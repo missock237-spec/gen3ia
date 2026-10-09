@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   if (rawBody.length > MAX_BODY_BYTES) {
     return NextResponse.json({ error: "Corps trop volumineux" }, { status: 413 });
   }
-  if (!verifyUpstashSignature(config, rawBody, request.headers.get("upstash-signature"))) {
+  if (!verifyUpstashSignature(config, rawBody, request.headers.get("upstash-signature"), "/api/video/worker/production-tick")) {
     return NextResponse.json({ error: "Signature QStash invalide" }, { status: 401 });
   }
 

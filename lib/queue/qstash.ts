@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import { assertSafeDestinationUrl, resolveJobOrigin } from "./origin";
 
@@ -277,34 +277,29 @@ function egalTempsConstant(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-/** Encode un digeste HMAC en base64url (avec padding) et base64 standard. */
-function hmacEncodings(digest: Buffer): string[] {
-  return [
-    digest.toString("base64url"),
-    digest.toString("base64"),
-    digest.toString("hex"),
-  ];
-}
-
 /** HMAC-SHA256 brut d'une chaîne UTF-8. */
 function hmacRaw(key: string, value: string): Buffer {
   return createHmac("sha256", key).update(value, "utf8").digest();
 }
 
 /**
- * Vérifie une signature QStash au format JWT (schéma 2026) :
- * `base64url(headerJson).base64url(payloadJson).base64url(hmac)`.
- * Vérifications (clé courante OU suivante) :
- *  1. alg === HS256 (jamais « none ») ;
- *  2. le 3e segment = HMAC-SHA256(clé, `${header}.${payload}`) ;
- *  3. la claim `body` du payload = HMAC-SHA256(clé, corpsReçu) — c'est LE
- *     lien au corps réel de la requête (sans elle, le JWT serait rejouable
- *     avec un autre corps).
+ * Vérifie une signature QStash au format JWT (schéma 2026, DÉCODÉ SUR
+ * LIVRAISON RÉELLE) : `b64u(header).b64u(payload).b64u(hmac)` avec
+ *  - header  : {"alg":"HS256","typ":"JWT"} ;
+ *  - payload : {aud, body: base64url(SHA256(corpsReçu)), exp, iat,
+ *               iss:"Upstash", jti, sub:"<URL livrée>"} ;
+ *  - sig     : base64url(HMAC-SHA256(cléDeSignature, `header.payload`)).
+ * La claim `body` est un SHA-256 SANS clé : le lien anti-falsification vient
+ * de la signature HS256 qui couvre le payload ENTIER (body-hash inclus).
+ * Vérifications : alg HS256, signature (clé courante OU suivante), claim
+ * body == SHA-256 du corps reçu, fraîcheur exp (±60 s), et si `sub` présent
+ * le suffixe d'URL attendu (anti-replay inter-endpoints).
  */
 export function verifyUpstashSignatureJwt(
   config: QStashConfig,
   rawBody: string,
   signatureHeader: string,
+  expectedUrlSuffix?: string,
 ): boolean {
   const parts = signatureHeader.trim().split(".");
   if (parts.length !== 3 || parts.some((p) => !p)) return false;
@@ -321,18 +316,24 @@ export function verifyUpstashSignatureJwt(
   const bodyClaim = (payloadJson as Record<string, unknown>).body;
   if (typeof bodyClaim !== "string" || bodyClaim.length === 0) return false;
 
-  const signingInput = `${parts[0]}.${parts[1]}`;
-  for (const key of [config.currentSigningKey, config.nextSigningKey]) {
-    // 1) Signature du JWT elle-même (header.payload).
-    const jwtSigOk = egalTempsConstant(parts[2], hmacRaw(key, signingInput).toString("base64url"))
-      || egalTempsConstant(parts[2], hmacRaw(key, signingInput).toString("base64"));
-    if (!jwtSigOk) continue;
-    // 2) Lien au corps : la claim `body` doit valoir HMAC(clé, corpsReçu).
-    const digest = hmacRaw(key, rawBody);
-    const bodyOk = hmacEncodings(digest).some((enc) => egalTempsConstant(bodyClaim, enc));
-    if (bodyOk) return true;
+  // Lien au corps : SHA-256 du corps reçu (base64url, padding toléré).
+  const bodyDigest = createHash("sha256").update(rawBody, "utf8").digest();
+  const bodyExpected = bodyDigest.toString("base64url").replace(/=+$/, "");
+  if (!egalTempsConstant(bodyClaim.replace(/=+$/, ""), bodyExpected)) return false;
+
+  // Fraîcheur : exp (epoch s) avec tolérance horloge de 60 s.
+  const exp = (payloadJson as Record<string, unknown>).exp;
+  if (typeof exp === "number" && exp < Math.floor(Date.now() / 1000) - 60) return false;
+
+  // Anti-replay inter-endpoints : sub = URL livrée par QStash.
+  const sub = (payloadJson as Record<string, unknown>).sub;
+  if (typeof sub === "string" && sub.length > 0 && expectedUrlSuffix && !sub.includes(expectedUrlSuffix)) {
+    return false;
   }
-  return false;
+
+  const signingInput = `${parts[0]}.${parts[1]}`;
+  return egalTempsConstant(parts[2], hmacRaw(config.currentSigningKey, signingInput).toString("base64url").replace(/=+$/, ""))
+    || egalTempsConstant(parts[2], hmacRaw(config.nextSigningKey, signingInput).toString("base64url").replace(/=+$/, ""));
 }
 
 /**
@@ -345,13 +346,14 @@ export function verifyUpstashSignature(
   config: QStashConfig,
   rawBody: string,
   signatureHeader: string | null,
+  expectedUrlSuffix?: string,
 ): boolean {
   if (!signatureHeader) return false;
   // SCHÉMA 2026 (JWT HS256) : Upstash-Signature est un JWT portant la claim
-  // `body` (HMAC du corps). Détecté par la forme `<b64>.<b64>.<b64>` — le
+  // `body` (SHA-256 du corps). Détecté par la forme `<b64>.<b64>.<b64>` — le
   // schéma historique `v1,<hex>` ne contient jamais de point.
   if (signatureHeader.includes(".") && !signatureHeader.includes(",")) {
-    return verifyUpstashSignatureJwt(config, rawBody, signatureHeader);
+    return verifyUpstashSignatureJwt(config, rawBody, signatureHeader, expectedUrlSuffix);
   }
   const candidates = parseUpstashSignature(signatureHeader).filter((entry) => entry.version === "v1");
   if (candidates.length === 0) return false;

@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   if (rawBody.length > MAX_BODY_BYTES) {
     return NextResponse.json({ error: "Corps trop volumineux." }, { status: 413 });
   }
-  if (!verifyUpstashSignature(config, rawBody, request.headers.get("upstash-signature"))) {
+  if (!verifyUpstashSignature(config, rawBody, request.headers.get("upstash-signature"), "/api/queue/dispatch-tick")) {
     return NextResponse.json({ error: "Signature invalide." }, { status: 401 });
   }
 

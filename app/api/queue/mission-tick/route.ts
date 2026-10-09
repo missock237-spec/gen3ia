@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
   if (rawBody.length > MAX_BODY_BYTES) {
     return NextResponse.json({ error: "Corps trop volumineux" }, { status: 413 });
   }
-  if (!verifyUpstashSignature(config, rawBody, request.headers.get("upstash-signature"))) {
+  if (!verifyUpstashSignature(config, rawBody, request.headers.get("upstash-signature"), "/api/queue/mission-tick")) {
     log.warn({ event: "queue.tick.unauthorized" }, "Signature QStash invalide");
     // DIAGNOSTIC TEMPORAIRE (Task 114 — À RETIRER) : QStash enregistre le
     // corps de notre 401 dans ses événements de livraison ; y embarquer les

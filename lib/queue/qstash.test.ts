@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import {
   computeUpstashSignature,
   missionQueueConfigured,
@@ -128,10 +128,18 @@ describe("parse du header Upstash-Signature", () => {
 describe("schéma de signature JWT (2026)", () => {
   const config = { token: "tok", currentSigningKey: CURRENT_KEY, nextSigningKey: NEXT_KEY };
 
+  /** JWT QStash 2026 RÉEL : claim body = base64url(SHA256(corps)), sig = HMAC(clé, header.payload). */
   function construireJwt(key: string, body: string, opts?: { alg?: string; tamperBodyClaim?: boolean }): string {
     const header = Buffer.from(JSON.stringify({ alg: opts?.alg ?? "HS256", typ: "JWT" })).toString("base64url");
-    const digest = createHmac("sha256", key).update(body, "utf8").digest();
-    const payloadObj: Record<string, unknown> = { aud: "", body: digest.toString("base64url") };
+    const digest = createHash("sha256").update(body, "utf8").digest();
+    const payloadObj: Record<string, unknown> = {
+      aud: "",
+      body: digest.toString("base64url"),
+      exp: Math.floor(Date.now() / 1000) + 300,
+      iss: "Upstash",
+      jti: "jwt_test",
+      sub: "https://gen3ia.online/api/queue/mission-tick",
+    };
     if (opts?.tamperBodyClaim) payloadObj.body = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
     const payload = Buffer.from(JSON.stringify(payloadObj)).toString("base64url");
     const sig = createHmac("sha256", key).update(`${header}.${payload}`, "utf8").digest("base64url");
