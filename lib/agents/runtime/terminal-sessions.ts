@@ -1,6 +1,6 @@
 import "server-only";
 
-import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { maskSecrets } from "@/lib/security/secret-masking";

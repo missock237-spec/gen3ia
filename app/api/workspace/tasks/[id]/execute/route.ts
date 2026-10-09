@@ -10,7 +10,7 @@ import { getWorkspaceTask } from "@/lib/agents/workspace";
 import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
 import { adminDb } from "@/lib/firebase/admin";
 import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
-import { DocumentReference, FieldValue } from "firebase-admin/firestore";
+import { DocumentReference, FieldValue } from "@/lib/r2fs";
 
 /**
  * GARDE QUOTA (Task 110-e) : le claim transactionnel et les mises à jour de

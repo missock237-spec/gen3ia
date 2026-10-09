@@ -1,4 +1,4 @@
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { reserveFunds, settleReservation, WALLET_CURRENCY } from "@/lib/billing/wallet";

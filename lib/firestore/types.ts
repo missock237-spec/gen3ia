@@ -1,7 +1,7 @@
 import {
   Timestamp,
   FieldValue
-} from "firebase-admin/firestore";
+} from "@/lib/r2fs";
 
 export type TimestampValue =
   | Timestamp

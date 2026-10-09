@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "@/lib/r2fs";
 
 /**
  * Livraison Chariow résiliente (Task 104-b) : claim transactionnel (premier

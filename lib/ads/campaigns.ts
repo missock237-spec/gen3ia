@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { FieldValue, type DocumentData } from "firebase-admin/firestore";
+import { FieldValue, type DocumentData } from "@/lib/r2fs";
 import { adminDb } from "@/lib/firebase/admin";
 
 /**

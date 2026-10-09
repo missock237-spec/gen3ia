@@ -1,6 +1,6 @@
 import "server-only";
 
-import { type DocumentData, type Query } from "firebase-admin/firestore";
+import { type DocumentData, type Query } from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
 import {

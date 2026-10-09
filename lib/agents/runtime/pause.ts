@@ -26,7 +26,7 @@
  * possible sur la même exécution.
  */
 
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";

@@ -216,7 +216,7 @@ export async function deleteWorkflow(userId: string, workflowId: string): Promis
 }
 
 export async function listRuns(userId: string, workflowId?: string, limit = 40): Promise<WorkflowRun[]> {
-  let query = adminDb.collection(RUNS_COLLECTION).where("userId", "==", userId) as import("firebase-admin/firestore").Query;
+  let query = adminDb.collection(RUNS_COLLECTION).where("userId", "==", userId) as import("@/lib/r2fs").Query;
   if (workflowId) query = query.where("workflowId", "==", workflowId);
   query = query.orderBy("startedAt", "desc").limit(Math.min(limit, 100));
   const snap = await query.get();

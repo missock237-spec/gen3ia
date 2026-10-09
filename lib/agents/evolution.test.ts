@@ -27,7 +27,7 @@ vi.mock("@/lib/firebase/admin", () => ({
   },
 }));
 
-vi.mock("firebase-admin/firestore", () => ({
+vi.mock("@/lib/r2fs", () => ({
   FieldValue: { increment: (n: number) => ({ __increment: n }), serverTimestamp: () => ({ __ts: true }) },
 }));
 

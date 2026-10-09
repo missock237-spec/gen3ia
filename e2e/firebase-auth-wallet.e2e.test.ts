@@ -1,4 +1,5 @@
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
+import { creerMockR2Memoire } from "./helpers/r2-memoire";
 
 const PROJECT_ID = "demo-gen3ia";
 const AUTH_EMULATOR = "127.0.0.1:9099";
@@ -18,31 +19,9 @@ process.env.GCLOUD_PROJECT = PROJECT_ID;
  * EN MÉMOIRE — la logique d'identité (schéma, service, session) s'exécute
  * RÉELLEMENT par-dessus. Clé simulée = objet Map « key → Buffer ».
  */
-const r2Objects = new Map<string, Buffer>();
-vi.mock("@/lib/storage/r2", () => ({
-  putObject: vi.fn(async ({ key, body }: { key: string; body: Uint8Array | Buffer }) => {
-    r2Objects.set(key, Buffer.from(body));
-  }),
-  downloadFromR2: vi.fn(async (key: string): Promise<Buffer> => {
-    const hit = r2Objects.get(key);
-    if (!hit) {
-      const absence = new Error(`The specified key does not exist. (${key})`);
-      absence.name = "NoSuchKey";
-      throw absence;
-    }
-    return hit;
-  }),
-  deleteFromR2: vi.fn(async (key: string) => {
-    r2Objects.delete(key);
-  }),
-  listObjectsUnderPrefix: vi.fn(async (prefix: string) =>
-    [...r2Objects.keys()].filter((key) => key.startsWith(prefix)).map((key) => ({
-      key,
-      sizeBytes: r2Objects.get(key)?.byteLength ?? 0,
-      updatedAt: new Date().toISOString(),
-    })),
-  ),
-}));
+
+const mockR2 = creerMockR2Memoire();
+vi.mock("@/lib/storage/r2", () => mockR2);
 
 async function createAndSignIn(): Promise<{ idToken: string; localId: string }> {
   const createResponse = await fetch(
@@ -134,7 +113,7 @@ describe("Firebase E2E: inscription -> session -> portefeuille", () => {
     // Le fournisseur d'identifiants du jeton est tracé (émulateur : « password »).
     expect((identity?.providers ?? []).length).toBeGreaterThan(0);
     // Le document R2 est bien matérialisé sous la clé canonique.
-    expect([...r2Objects.keys()].some((key) => key === `identities/${localId}.json`)).toBe(true);
+    expect(mockR2.cles().some((key) => key === `identities/${localId}.json`)).toBe(true);
   });
 
   it("initialise le portefeuille une seule fois avec le solde d'accueil", async () => {

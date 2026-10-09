@@ -1,5 +1,5 @@
 import { randomUUID, randomBytes } from "crypto";
-import { FieldValue, Timestamp, type DocumentData } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, type DocumentData } from "@/lib/r2fs";
 import { z } from "zod";
 
 import { adminDb } from "@/lib/firebase/admin";

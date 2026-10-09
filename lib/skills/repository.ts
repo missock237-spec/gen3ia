@@ -1,7 +1,7 @@
 import {
   FieldValue,
   Timestamp,
-} from "firebase-admin/firestore";
+} from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
 import {

@@ -18,7 +18,7 @@ function docData(path: string): Record<string, unknown> {
   return docs.get(path) ?? {};
 }
 
-vi.mock("firebase-admin/firestore", () => ({
+vi.mock("@/lib/r2fs", () => ({
   FieldValue: {
     delete: () => "__DELETE__",
     increment: (n: number) => ({ __increment__: n }),

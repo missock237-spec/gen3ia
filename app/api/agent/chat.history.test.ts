@@ -1,6 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { NextRequest } from "next/server";
 
 /**
@@ -342,19 +340,6 @@ describe("POST /api/agent/chat — historique des conversations d'agent mémoris
   });
 });
 
-describe("Index Firestore du scoping par agent", () => {
-  it("l'index composite (userId, agentId, updatedAt DESC) est déclaré pour chatConversations", () => {
-    const raw = readFileSync(path.join(process.cwd(), "firestore.indexes.json"), "utf8");
-    const config = JSON.parse(raw) as { indexes: Array<{ collectionGroup: string; fields: Array<{ fieldPath: string; order: string }> }> };
-    const scoped = config.indexes.find((index) =>
-      index.collectionGroup === "chatConversations"
-      && index.fields.some((f) => f.fieldPath === "agentId")
-      && index.fields.some((f) => f.fieldPath === "userId")
-      && index.fields.some((f) => f.fieldPath === "updatedAt" && f.order === "DESCENDING"),
-    );
-    expect(scoped).toBeTruthy();
-  });
-});
 
 describe("POST /api/agent/chat — session absente/expirée", () => {
   it("renvoie 401 structuré (code AUTH_REQUIRED), pas un 400 trompeur", async () => {

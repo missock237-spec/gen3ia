@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "@/lib/r2fs";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { assertPublicHttpUrl } from "@/lib/security/url-safety";
@@ -139,7 +139,7 @@ export async function listOutgoingWebhooks(ownerId: string): Promise<OutgoingWeb
   if (!ownerId?.trim()) throw new Error("userId is required.");
   const snapshot = await adminDb.collection(COLLECTION).where("ownerId", "==", ownerId).get();
   return snapshot.docs
-    .map((doc) => toPublic(fromDoc({ id: doc.id, ...doc.data() })))
+    .map((doc) => toPublic(fromDoc({ id: doc.id, ...(doc.data() as object) })))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -163,7 +163,7 @@ export async function setOutgoingWebhookDisabled(ownerId: string, webhookId: str
 export async function listActiveEndpointsForEvent(ownerId: string, event: OutgoingWebhookEvent): Promise<Array<{ id: string; url: string; secret: string }>> {
   const snapshot = await adminDb.collection(COLLECTION).where("ownerId", "==", ownerId).get();
   return snapshot.docs
-    .map((doc) => fromDoc({ id: doc.id, ...doc.data() }))
+    .map((doc) => fromDoc({ id: doc.id, ...(doc.data() as object) }))
     .filter((endpoint) => !endpoint.disabled && endpoint.events.includes(event))
     .map((endpoint) => ({ id: endpoint.id, url: endpoint.url, secret: endpoint.secret }));
 }

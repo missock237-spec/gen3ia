@@ -13,7 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const docs = new Map<string, Record<string, unknown>>();
 
-vi.mock("firebase-admin/firestore", () => ({
+vi.mock("@/lib/r2fs", () => ({
   FieldValue: { delete: () => "__DELETE__", increment: (n: number) => ({ __increment__: n }) },
 }));
 vi.mock("@/lib/firebase/admin", () => ({

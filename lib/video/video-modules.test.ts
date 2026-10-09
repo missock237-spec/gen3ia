@@ -417,19 +417,6 @@ describe("Lot C4c — historique des versions plafonné et sans snapshots", () =
     expect(service).toMatch(/snapshot: _snapshot, \.\.\.meta/);
   });
 
-  it("l'index composite requis (projectId, versionNumber DESC) est déclaré et déployable", () => {
-    const indexes = JSON.parse(read("firestore.indexes.json")) as {
-      indexes: Array<{ collectionGroup: string; fields: Array<{ fieldPath: string; order: string }> }>;
-    };
-    const videoVersions = indexes.indexes.filter((idx) => idx.collectionGroup === "videoVersions");
-    expect(
-      videoVersions.some(
-        (idx) =>
-          idx.fields.some((f) => f.fieldPath === "projectId" && f.order === "ASCENDING") &&
-          idx.fields.some((f) => f.fieldPath === "versionNumber" && f.order === "DESCENDING"),
-      ),
-    ).toBe(true);
-  });
 
   it("la restauration relit les documents COMPLETS (snapshot disponible pour toute version)", () => {
     expect(service).toMatch(/restoreVersion[\s\S]*?resilientListByPayloadField<ProjectVersion>/);

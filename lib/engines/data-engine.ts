@@ -1,5 +1,5 @@
 import "server-only";
-import type { Query } from "firebase-admin/firestore";
+import type { Query } from "@/lib/r2fs";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { cacheGet, cacheSet } from "@/lib/cache/redis";

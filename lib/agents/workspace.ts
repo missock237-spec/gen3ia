@@ -1,4 +1,4 @@
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "@/lib/r2fs";
 import { randomUUID } from "node:crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
@@ -69,14 +69,14 @@ export async function listWorkspaceBranches(ownerId:string,taskId:string){
   // Task 101 (m3) : plafond 50 — les branches d'une tâche sont des actes
   // explicites de l'utilisateur, la liste intégrale ne sert que l'UI.
   const snap=await runFirestoreGuarded(`workspace branches list ${taskId}`,()=>adminDb.collection(BRANCHES).where("ownerId","==",ownerId).where("taskId","==",task.id).limit(50).get());
-  return snap.docs.map(doc=>({id:doc.id,...doc.data()} as {id:string;createdAt?:Timestamp|number;[key:string]:unknown})).sort((a,b)=>ms(b.createdAt)-ms(a.createdAt));
+  return snap.docs.map(doc=>({id:doc.id,...(doc.data() as object)} as {id:string;createdAt?:Timestamp|number;[key:string]:unknown})).sort((a,b)=>ms(b.createdAt)-ms(a.createdAt));
 }
 export async function listWorkspaceSnapshots(ownerId:string,taskId:string){
   const task=await getWorkspaceTask(ownerId,taskId);
   // Task 101 (m3) : plafond 50 — les snapshots s'accumulent à chaque mise à
   // jour de plan / événement : sans limite, la liste croissait sans borne.
   const snap=await runFirestoreGuarded(`workspace snapshots list ${taskId}`,()=>adminDb.collection(SNAPSHOTS).where("ownerId","==",ownerId).where("taskId","==",task.id).limit(50).get());
-  return snap.docs.map(doc=>({id:doc.id,...doc.data()} as {id:string;createdAt?:Timestamp|number;[key:string]:unknown})).sort((a,b)=>ms(b.createdAt)-ms(a.createdAt));
+  return snap.docs.map(doc=>({id:doc.id,...(doc.data() as object)} as {id:string;createdAt?:Timestamp|number;[key:string]:unknown})).sort((a,b)=>ms(b.createdAt)-ms(a.createdAt));
 }
 
 export async function createBranch(ownerId:string,taskId:string,name:string){const task=await getWorkspaceTask(ownerId,taskId);const branchId=randomUUID(),snapshotId=randomUUID(),now=Date.now();await runFirestoreGuarded(`workspace snapshot create ${snapshotId}`,()=>adminDb.collection(SNAPSHOTS).doc(snapshotId).create({ownerId,taskId,branchId,state:{plan:task.plan,status:task.status},createdAt:Timestamp.fromMillis(now)}));await runFirestoreGuarded(`workspace branch create ${branchId}`,()=>adminDb.collection(BRANCHES).doc(branchId).create({ownerId,taskId,name:name.trim().slice(0,80),parentBranchId:task.activeBranchId,snapshotId,active:false,createdAt:Timestamp.fromMillis(now)}));return {id:branchId,taskId,ownerId,name:name.trim().slice(0,80),parentBranchId:task.activeBranchId,snapshotId,createdAt:now,active:false};}

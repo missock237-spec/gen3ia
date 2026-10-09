@@ -5,15 +5,23 @@ import {
   type App,
 } from "firebase-admin/app";
 
-import {
-  getFirestore,
-  type Firestore,
-} from "firebase-admin/firestore";
+import { getR2Fs, type Firestore } from "@/lib/r2fs";
 
-import {
-  getStorage,
-  type Storage,
-} from "firebase-admin/storage";
+/**
+ * MIGRATION R2 TOTALE (Task 111) — ce module conserve son chemin d'import
+ * (@/lib/firebase/admin) et ses exports consommés par ~55 modules et 45
+ * fichiers de tests (adminDb, getAdminDb, getAdminApp) :
+ *
+ *  - adminDb est désormais le MOTEUR r2fs (lib/r2fs) : documents JSON dans
+ *    R2 sous fs/{collection}/{docId}.json, écritures conditionnelles S3
+ *    (If-Match ETag) pour les transactions — Firestore n'est PLUS utilisé
+ *    comme base de données (cause racine des pannes de quota du 4 oct. :
+ *    écritures qui pendent sans lever).
+ *  - getAdminApp conserve UNIQUEMENT le rôle de fournisseur d'identité
+ *    (Firebase Auth : vérification de tokens côté émulateur, suppression
+ *    de compte, recherche par email Chariow). Firebase Storage n'est plus
+ *    utilisé (adminStorage supprimé).
+ */
 
 function readServerEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
@@ -43,22 +51,19 @@ function getFirebaseAdmin() {
 
   const projectId = readServerEnv("FIREBASE_PROJECT_ID");
 
-  // Firebase Admin automatically routes Auth/Firestore calls to the local
+  // Firebase Admin automatically routes Auth calls to the local
   // emulators when these environment variables are present. No service
   // account credential is needed in that isolated test environment.
-  if (process.env.FIREBASE_AUTH_EMULATOR_HOST?.trim() || process.env.FIRESTORE_EMULATOR_HOST?.trim()) {
+  if (process.env.FIREBASE_AUTH_EMULATOR_HOST?.trim()) {
     return initializeApp({ projectId: projectId || "demo-gen3ia" });
   }
 
   return initializeApp({
     credential: cert(getFirebaseAdminConfig()),
-    storageBucket:
-      readServerEnv("FIREBASE_STORAGE_BUCKET") ??
-      readServerEnv("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"),
   });
 }
 
-/** Lazily initialized Firebase Admin app. */
+/** Lazily initialized Firebase Admin app (AUTH uniquement — pas de base de données). */
 let cachedApp: App | undefined;
 
 export function getAdminApp(): App {
@@ -68,54 +73,33 @@ export function getAdminApp(): App {
   return cachedApp;
 }
 
-function lazyService<T extends object>(create: () => T): T {
-  let instance: T | undefined;
-
-  return new Proxy({} as T, {
-    get(_target, property) {
-      if (!instance) instance = create();
-      const value = Reflect.get(instance as object, property);
-      return typeof value === "function" ? value.bind(instance) : value;
-    },
-    has(_target, property) {
-      if (!instance) instance = create();
-      return Reflect.has(instance as object, property);
-    },
-  });
-}
-
-export const adminDb: Firestore = lazyService(() => getAdminDb());
-
-export const adminStorage: Storage = lazyService(() =>
-  getStorage(getAdminApp()),
-);
-
 /**
- * Le projet peut utiliser une base Firestore nommée via
- * FIREBASE_FIRESTORE_DATABASE_ID.
+ * Le moteur de données r2fs partagé du process. Proxy paresseux : aucune
+ * connexion R2 n'est touchée tant qu'aucune méthode n'est appelée (le
+ * comportement lazy de l'ancien getFirestore est préservé, notamment pour
+ * les imports de modules en contexte build/test).
  */
-export function getAdminDb(): Firestore {
-  const app = getAdminApp();
-  const databaseId = process.env.FIREBASE_FIRESTORE_DATABASE_ID?.trim();
-  const db = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
-  // Les sorties d'outils/agents (resultats de recherche, observations, plans)
-  // contiennent parfois des champs undefined (ex. publishedAt absent d'un
-  // resultat). Firestore les refuse par defaut et fait echouer checkpoints,
-  // conversations et sauvegardes : on les ignore silencieusement.
-  // Serverless (Vercel) : REST au lieu de gRPC — les erreurs de QUOTA
-  // (RESOURCE_EXHAUSTED) échouent immédiatement et lisiblement au lieu de
-  // pendre en reconnexion gRPC jusqu'au timeout de la fonction (constaté
-  // en production le 4 oct. : quota lectures gratuit épuisé → 300 s figé).
-  // Jamais contre l'ÉMULATEUR (tests E2E) : le simulateur Firestore ne
-  // sert que le canal gRPC — preferRest y casse l'E2E (CI, commit a72dccd).
-  const usingEmulator = Boolean(process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_FIRESTORE_EMULATOR_ADDRESS);
-  db.settings({
-    ignoreUndefinedProperties: true,
-    ...(usingEmulator ? {} : { preferRest: true }),
-  });
-  return db;
+let cachedDb: Firestore | undefined;
+
+function buildR2Fs(): Firestore {
+  if (!cachedDb) {
+    cachedDb = getR2Fs();
+  }
+  return cachedDb;
 }
 
-export function getAdminStorage(): Storage {
-  return getStorage(getAdminApp());
+export const adminDb: Firestore = new Proxy({} as Firestore, {
+  get(_target, property) {
+    const instance = buildR2Fs();
+    const value = Reflect.get(instance as object, property);
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+  has(_target, property) {
+    return Reflect.has(buildR2Fs() as object, property);
+  },
+});
+
+/** Le moteur r2fs (anciennement Firestore) — même surface consommée. */
+export function getAdminDb(): Firestore {
+  return buildR2Fs();
 }

@@ -37,7 +37,7 @@ const dbSimulé = vi.hoisted(() => {
   return { docSimulé, adminDb };
 });
 
-vi.mock("firebase-admin/firestore", () => ({
+vi.mock("@/lib/r2fs", () => ({
   FieldValue: { serverTimestamp: () => firestoreSimulé.sentinelleServerTimestamp },
   Timestamp: firestoreSimulé.Timestamp,
 }));

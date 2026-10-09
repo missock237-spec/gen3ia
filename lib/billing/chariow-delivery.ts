@@ -1,6 +1,6 @@
 import { getApps } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { settleChariowExtensionPurchase } from "@/lib/extensions/entitlements";

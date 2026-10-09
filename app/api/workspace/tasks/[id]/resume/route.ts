@@ -7,7 +7,7 @@ import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
 import { adminDb } from "@/lib/firebase/admin";
 import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
-import { DocumentReference, FieldValue } from "firebase-admin/firestore";
+import { DocumentReference, FieldValue } from "@/lib/r2fs";
 
 /**
  * GARDE QUOTA (Task 110-e) : claim transactionnel + mises à jour de statut

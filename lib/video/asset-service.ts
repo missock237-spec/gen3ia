@@ -139,7 +139,7 @@ function extensionFor(contentType: string, kind: VideoAssetKind): string {
 }
 
 async function bumpAssetCount(projectId: string): Promise<void> {
-  const { FieldValue } = await import("firebase-admin/firestore");
+  const { FieldValue } = await import("@/lib/r2fs");
   await adminDb.collection("videoProjects").doc(projectId).set(
     { stats: { assetCount: FieldValue.increment(1) }, updatedAt: nowIso() },
     { merge: true },

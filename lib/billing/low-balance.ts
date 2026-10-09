@@ -1,4 +1,4 @@
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { createNotification } from "@/lib/notifications/repository";

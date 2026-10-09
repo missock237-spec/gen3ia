@@ -32,10 +32,12 @@ export default defineConfig({
       FIREBASE_PROJECT_ID: "demo-gen3ia",
       FIREBASE_CLIENT_EMAIL: "test@demo-gen3ia.iam.gserviceaccount.com",
       FIREBASE_PRIVATE_KEY: dummyPrivateKeyPem,
-      // Émulateurs Firebase (ports alignés sur firebase.json) — définis
+      // Émulateur Firebase AUTH (port aligné sur firebase.json) — défini
       // AVANT tout import : firebase-admin lit ces variables à l'init.
+      // MIGRATION R2 : les DONNÉES ne passent plus par Firestore (émulateur
+      // firestore supprimé) — le moteur r2fs est adossé au mock R2 mémoire
+      // de e2e/helpers/r2-memoire.ts.
       GCLOUD_PROJECT: "demo-gen3ia",
-      FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080",
       FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
     },
   },

@@ -1,4 +1,4 @@
-import { AggregateField, FieldValue } from "firebase-admin/firestore";
+import { AggregateField, FieldValue } from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { encryptSecret, decryptSecret } from "@/lib/security/secret-envelope";

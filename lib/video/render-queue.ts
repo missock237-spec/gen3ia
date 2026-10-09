@@ -30,7 +30,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { adminDb } from "@/lib/firebase/admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/r2fs";
 import type {
   RenderJob,
   RenderJobStatus,

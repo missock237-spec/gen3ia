@@ -361,7 +361,10 @@ function LocalMediaTile({ file, onDelete }: { file: LocalFileRecord; onDelete: (
       <div className="aspect-video bg-neutral-100">
         {url && media === "video" ? <video src={url} muted controls className="h-full w-full object-cover" /> : null}
         {url && media === "audio" ? <audio src={url} controls className="mt-4 w-full" /> : null}
-        {url && media === "image" ? <img src={url} alt={file.name} className="h-full w-full object-cover" /> : null}
+        {url && media === "image" ? (
+          // eslint-disable-next-line @next/next/no-img-element -- aperçu d'URL arbitraire (data/blob/CDN tiers), next/image sans domaine configuré casserait l'aperçu
+          <img src={url} alt={file.name} className="h-full w-full object-cover" />
+        ) : null}
       </div>
       <div className="p-2">
         <p className="truncate text-[11px] font-medium">{file.name}</p>
@@ -968,7 +971,10 @@ function LocalTimelineAsset({ file, selected, onAdd }: { file: LocalFileRecord; 
   return <div className={`overflow-hidden rounded-xl border bg-white ${selected ? "border-blue-500" : "border-neutral-200"}`}>
     <div className="aspect-video bg-neutral-100">
       {url && isVideo ? <video src={url} muted className="h-full w-full object-cover" /> : null}
-      {url && !isVideo && !isAudio ? <img src={url} alt={file.name} className="h-full w-full object-cover" /> : null}
+      {url && !isVideo && !isAudio ? (
+        // eslint-disable-next-line @next/next/no-img-element -- aperçu d'URL arbitraire (data/blob/CDN tiers), next/image sans domaine configuré casserait l'aperçu
+        <img src={url} alt={file.name} className="h-full w-full object-cover" />
+      ) : null}
       {url && isAudio ? <audio src={url} controls className="mt-5 w-full" /> : null}
     </div>
     <div className="p-2"><p className="truncate text-[11px] font-medium">{file.name}</p><button onClick={onAdd} className="mt-1 w-full rounded-lg bg-neutral-900 px-2 py-1.5 text-[11px] font-semibold text-white">Ajouter à la Timeline</button></div>

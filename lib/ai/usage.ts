@@ -1,6 +1,6 @@
 import {
   FieldValue,
-} from "firebase-admin/firestore";
+} from "@/lib/r2fs";
 
 import {
   adminDb,

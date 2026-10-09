@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { DocumentReference, Firestore, SetOptions } from "firebase-admin/firestore";
+import type { DocumentReference, Firestore, SetOptions } from "@/lib/r2fs";
 
 /**
  * Écritures Firestore par lots — la plateforme refuse tout batch de plus de

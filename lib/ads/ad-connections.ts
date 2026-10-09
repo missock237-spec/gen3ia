@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/r2fs";
 import { adminDb } from "@/lib/firebase/admin";
 
 export type AdsProvider = "google_ads" | "meta_ads" | "tiktok_ads";

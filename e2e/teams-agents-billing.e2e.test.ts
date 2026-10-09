@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { creerMockR2Memoire } from "./helpers/r2-memoire";
 
 /**
  * E2E Firebase ÉMULATEURS — parcours critiques multi-tenant (Task 39, Rec 2.2).
@@ -21,34 +22,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 // le CLIENT R2 (lib/storage/r2) est simulé EN MÉMOIRE — même approche que
 // e2e/firebase-auth-wallet.e2e.test.ts (Task 108). Les parcours métier restent
 // testés contre les vrais émulateurs Firestore.
-const r2Objects = new Map<string, Buffer>();
-vi.mock("@/lib/storage/r2", () => ({
-  putObject: vi.fn(async ({ key, body }: { key: string; body: Uint8Array | Buffer }) => {
-    r2Objects.set(key, Buffer.from(body));
-  }),
-  downloadFromR2: vi.fn(async (key: string): Promise<Buffer> => {
-    const hit = r2Objects.get(key);
-    if (!hit) {
-      const absence = new Error(`The specified key does not exist. (${key})`);
-      absence.name = "NoSuchKey";
-      throw absence;
-    }
-    return hit;
-  }),
-  deleteObject: vi.fn(async (key: string) => {
-    r2Objects.delete(key);
-  }),
-  deleteFromR2: vi.fn(async (key: string) => {
-    r2Objects.delete(key);
-  }),
-  listObjectsUnderPrefix: vi.fn(async (prefix: string) =>
-    [...r2Objects.keys()].filter((key) => key.startsWith(prefix)).map((key) => ({
-      key,
-      sizeBytes: r2Objects.get(key)?.byteLength ?? 0,
-      updatedAt: new Date().toISOString(),
-    })),
-  ),
-}));
+
+const mockR2 = creerMockR2Memoire();
+vi.mock("@/lib/storage/r2", () => mockR2);
 
 const PROJECT_ID = "demo-gen3ia";
 const AUTH_EMULATOR = "127.0.0.1:9099";

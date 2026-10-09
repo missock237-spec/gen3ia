@@ -81,7 +81,7 @@ jobs:
         run: npm run check:bundle
 
   e2e:
-    name: "E2E Firebase (émulateurs : auth · firestore · règles)"
+    name: "E2E Auth (émulateur Firebase auth · données sur R2 simulé)"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -108,8 +108,8 @@ jobs:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-${{ runner.os }}-v1
 
-      # firebase-tools exige un JDK >= 21 pour l'émulateur Firestore.
-      - name: Setup JDK 21 (émulateur Firestore)
+      # firebase-tools exige un JDK >= 21 pour l'émulateur Auth.
+      - name: Setup JDK 21 (émulateur Auth)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -120,7 +120,7 @@ jobs:
 
       # Les tests e2e ne touchent JAMAIS la production (émulateurs
       # locaux uniquement, projet demo-gen3ia).
-      - name: E2E contre émulateurs (auth + wallet, équipes/agents/facturation, règles Firestore)
+      - name: E2E contre émulateur auth (wallet, équipes/agents/facturation — données R2 simulées)
         run: npm run test:e2e
 
   a11y:

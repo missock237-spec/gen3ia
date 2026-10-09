@@ -1,4 +1,4 @@
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "@/lib/r2fs";
 import { adminDb } from "@/lib/firebase/admin";
 import { getTwilioConfig, isValidE164 } from "./voice";
 import { reserveFunds, releaseReservation, settleReservation } from "@/lib/billing/wallet";

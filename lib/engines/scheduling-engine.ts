@@ -104,7 +104,7 @@ export interface ListEventsOptions {
 }
 
 export async function listEvents(options: ListEventsOptions): Promise<CalendarEvent[]> {
-  let query = adminDb.collection(CALENDAR_COLLECTION).where("userId", "==", options.userId) as import("firebase-admin/firestore").Query;
+  let query = adminDb.collection(CALENDAR_COLLECTION).where("userId", "==", options.userId) as import("@/lib/r2fs").Query;
   if (options.status) query = query.where("status", "==", options.status);
   if (options.types && options.types.length === 1) query = query.where("type", "==", options.types[0]);
   if (options.from) query = query.where("startAt", ">=", options.from);

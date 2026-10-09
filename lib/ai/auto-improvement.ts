@@ -1,6 +1,6 @@
 import "server-only";
 
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/r2fs";
 import { adminDb } from "@/lib/firebase/admin";
 import { listRunsForConversation } from "@/lib/domain/runs/repository";
 import { remember, recall } from "@/lib/memory/user-memory";
