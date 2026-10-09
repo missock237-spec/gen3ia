@@ -60,16 +60,33 @@ export async function speakDirectForUser(params: {
   }
 
   // 1) Synthèse — échec TTS → fail-soft (flux normal de la route).
+  // RESILIENCE (Task 114) : 2 tentatives — les appels TTS simultanés
+  // (plusieurs comptes en parallèle) peuvent être rejetés transitoirement
+  // par ElevenLabs ; une seule tentative ferait basculer la demande vers le
+  // chemin mission (HITL) pour un simple accident de concurrence.
   let synthesis;
+  let lastSynthError: unknown;
   try {
     synthesis = await elevenLabsTextToSpeech({
       text,
       ...(params.voiceId ? { voiceId: params.voiceId } : {}),
     });
-  } catch (error) {
+  } catch (firstError) {
+    lastSynthError = firstError;
+    await new Promise((resolve) => setTimeout(resolve, 900)).catch(() => undefined);
+    try {
+      synthesis = await elevenLabsTextToSpeech({
+        text,
+        ...(params.voiceId ? { voiceId: params.voiceId } : {}),
+      });
+    } catch (secondError) {
+      lastSynthError = secondError;
+    }
+  }
+  if (!synthesis) {
     console.warn(
-      "[voice-speak-direct] synthèse ElevenLabs indisponible — flux normal conservé :",
-      error instanceof Error ? error.message : error,
+      "[voice-speak-direct] synthèse ElevenLabs indisponible (2 tentatives) — flux normal conservé :",
+      lastSynthError instanceof Error ? lastSynthError.message : lastSynthError,
     );
     return { ok: false, reason: "Synthèse vocale indisponible." };
   }
