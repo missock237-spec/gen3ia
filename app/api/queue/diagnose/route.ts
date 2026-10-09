@@ -126,7 +126,9 @@ export async function GET(request: NextRequest) {
         };
       });
       report.qstashEvents = simplified;
-      const failed = rawList.find((ev: Record<string, unknown>) => ev.state === "FAILED" || ev.state === "ERROR");
+      const avecReponse = (ev: Record<string, unknown>) => Boolean(ev.responseBody || (ev as Record<string, unknown>).responseStatus);
+      const failed = rawList.find((ev: Record<string, unknown>) => avecReponse(ev) && (ev.state === "FAILED" || ev.state === "ERROR"))
+        ?? rawList.find((ev: Record<string, unknown>) => avecReponse(ev));
       report.qstashRawSample = failed ?? rawList[0] ?? null;
       }
     } catch (e) {
