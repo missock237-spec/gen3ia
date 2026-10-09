@@ -143,6 +143,9 @@ const OPTIONAL_RECOGNIZED = [
   "OPENROUTER_API_KEY",
   "ANTHROPIC_API_KEY",
   "HF_TOKEN",
+  // Fallback image Hugging Face (lib/ai/hf-image-fallback.ts) : modèle
+  // Z-Image-Turbo par défaut — la variable ne sert qu'au changement de modèle.
+  "HF_IMAGE_MODEL",
   // Fournisseur LLM/image Agnes (lib/ai/config.ts, lib/ai/image-generation.ts,
   // lib/live/vision-decider.ts) : clé + surcharges modèle/endpoint.
   "AGNES_API_KEY",

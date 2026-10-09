@@ -203,6 +203,66 @@ describe("sentinelles FieldValue", () => {
   });
 });
 
+describe("sentinelles imbriquées (récursion moteur — bug vidéo 49 %)", () => {
+  it("set merge : increment IMBRIQUÉ dans une carte résout contre la valeur actuelle (bumpAssetCount)", async () => {
+    const ref = db.collection("videoProjects").doc("p1");
+    await ref.set({ title: "bébé qui marche", stats: { assetCount: 2 } });
+    // Forme exacte de lib/video/asset-service.ts:144 — CRASHAIT avant le fix.
+    await ref.set({ stats: { assetCount: FieldValue.increment(1) }, updatedAt: "2026-10-09T00:00:00Z" }, { merge: true });
+    expect((await ref.get()).data()?.stats).toEqual({ assetCount: 3 });
+  });
+
+  it("set merge : carte imbriquée remplacée + increments résolus (facturation render-queue)", async () => {
+    const ref = db.collection("videoProjects").doc("p2");
+    await ref.set({ stats: { assetCount: 5, billedMinor: 1000 } });
+    // Forme exacte de lib/video/render-queue.ts:1289 — CRASHAIT avant le fix.
+    await ref.set(
+      { stats: { renderedSeconds: 42, billedMinor: FieldValue.increment(2500) }, updatedAt: "2026-10-09T00:00:00Z" },
+      { merge: true },
+    );
+    // Carte `stats` remplacée (sémantique Firestore) ; increment résolu (1000 + 2500).
+    expect((await ref.get()).data()?.stats).toEqual({ renderedSeconds: 42, billedMinor: 3500 });
+  });
+
+  it("update : increment et serverTimestamp imbriqués", async () => {
+    const ref = db.collection("t").doc("n1");
+    await ref.set({ progress: { pct: 10 }, meta: { tries: 1 } });
+    await ref.update({ progress: { pct: FieldValue.increment(39) }, meta: { at: FieldValue.serverTimestamp() } });
+    const lu = (await ref.get()).data() as { progress: { pct: number }; meta: { at: FsTimestamp } };
+    expect(lu.progress.pct).toBe(49);
+    expect(lu.meta.at instanceof FsTimestamp).toBe(true);
+  });
+
+  it("delete imbriqué retire la clé de la carte entrante (set merge)", async () => {
+    const ref = db.collection("t").doc("n2");
+    await ref.set({ job: { leaseOwner: "w1", stage: "render" } });
+    await ref.set({ job: { leaseOwner: FieldValue.delete(), stage: "export" } }, { merge: true });
+    expect((await ref.get()).data()?.job).toEqual({ stage: "export" });
+  });
+
+  it("delete imbriqué interdit dans un set() écrasant", async () => {
+    await expect(
+      db.collection("t").doc("n3").set({ job: { leaseOwner: FieldValue.delete() } }),
+    ).rejects.toMatchObject({ code: "invalid_argument" });
+  });
+
+  it("sentinelle dans un tableau → invalid_argument (contrat Firestore), rien n'est écrit", async () => {
+    const ref = db.collection("t").doc("n4");
+    await ref.set({ a: 1 });
+    await expect(
+      ref.update({ items: [{ n: 1 }, { n: FieldValue.increment(2) }] }),
+    ).rejects.toMatchObject({ code: "invalid_argument" });
+    expect((await ref.get()).data()).toEqual({ a: 1 });
+  });
+
+  it("profondeur triple : increment dans une carte dans une carte", async () => {
+    const ref = db.collection("t").doc("n5");
+    await ref.set({ usage: { live: { seconds: 100 } } });
+    await ref.update({ usage: { live: { seconds: FieldValue.increment(20) } } });
+    expect((await ref.get()).data()?.usage).toEqual({ live: { seconds: 120 } });
+  });
+});
+
 /* ------------------------------------------------------------------ */
 /* Requêtes                                                            */
 /* ------------------------------------------------------------------ */

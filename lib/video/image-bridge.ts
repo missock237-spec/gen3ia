@@ -17,7 +17,8 @@ import "server-only";
  * l'autre.
  */
 
-import { generateImageWithAgnes, editImageWithAgnes, ImageGenerationError } from "@/lib/ai/image-generation";
+import { editImageWithAgnes, ImageGenerationError } from "@/lib/ai/image-generation";
+import { generateImageWithFallback } from "@/lib/ai/hf-image-fallback";
 import { composeScenePrompt, bindReference } from "@/lib/video/consistency-engine";
 import { registerAsset, getAsset } from "@/lib/video/asset-service";
 import { downloadAssetContent } from "@/lib/video/asset-service";
@@ -102,10 +103,12 @@ export async function generateSceneImage(params: {
       });
       imageUrl = edited.imageUrl;
     } else {
-      const generated = await generateImageWithAgnes({
+      // Reprise AUTOMATIQUE : limite de crédit Agnes (code d'erreur) →
+      // Hugging Face Z-Image-Turbo termine la scène (lib/ai/hf-image-fallback).
+      const generated = await generateImageWithFallback({
         prompt: composed.prompt,
-        size: sizeFor(project.resolution),
         ratio: agnesRatio(project.aspectRatio),
+        userId,
       });
       imageUrl = generated.imageUrl;
     }

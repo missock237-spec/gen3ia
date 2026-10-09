@@ -30,14 +30,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * behavioralement dans lib/media/persist.test.ts (fetch global stubé).
  */
 
-vi.mock("@/lib/ai/image-generation", () => ({
-  generateImageWithAgnes: vi.fn(),
-  editImageWithAgnes: vi.fn(),
-  isImageGenerationEnabled: () => Boolean(process.env.AGNES_API_KEY),
-  IMAGE_RATIOS: ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"],
-  IMAGE_SIZES: ["1K", "2K", "3K", "4K"],
-  AGNES_IMAGE_MODEL: "agnes-image-2.5-flash",
-}));
+vi.mock("@/lib/ai/image-generation", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/ai/image-generation")>();
+  return {
+    ...original,
+    generateImageWithAgnes: vi.fn(),
+    editImageWithAgnes: vi.fn(),
+    isImageGenerationEnabled: () => Boolean(process.env.AGNES_API_KEY),
+    IMAGE_RATIOS: ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"],
+    IMAGE_SIZES: ["1K", "2K", "3K", "4K"],
+    AGNES_IMAGE_MODEL: "agnes-image-2.5-flash",
+  };
+});
 
 const persistGeneratedImageMock = vi.fn();
 vi.mock("@/lib/media/persist", () => ({

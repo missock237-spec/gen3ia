@@ -122,6 +122,68 @@ function assertPasDeConflitDeChemins(keys: string[]): void {
 
 const ABSENT: unique symbol = Symbol("r2fs-absent");
 
+/** Carte ordinaire éligible à la résolution récursive (ni sentinelle, ni tableau, ni Timestamp/Date). */
+function estCarteOrdinaire(v: unknown): v is Record<string, unknown> {
+  return (
+    v !== null &&
+    typeof v === "object" &&
+    !Array.isArray(v) &&
+    !(v instanceof FsTimestamp) &&
+    !(v instanceof Date)
+  );
+}
+
+/** Détecte une sentinelle FieldValue à N'IMPORTE QUELLE profondeur (cartes et tableaux). */
+function contientSentinelle(v: unknown): boolean {
+  if (isSentinel(v)) return true;
+  if (Array.isArray(v)) return v.some(contientSentinelle);
+  if (estCarteOrdinaire(v)) return Object.values(v).some(contientSentinelle);
+  return false;
+}
+
+interface ResolutionRec {
+  valeur: unknown;
+  /** true = champ à retirer (FieldValue.delete() résolu). */
+  absent: boolean;
+}
+
+/**
+ * Résout RÉCURSIVEMENT une valeur de patch : sentinelles à toute profondeur
+ * (comme Firestore, qui accepte { carte: { champ: FieldValue.increment(x) } }),
+ * tableaux refusant toute sentinelle (contrat Firestore), cartes imbriquées
+ * parcourues en construisant le chemin pointé correspondant (champ lu contre
+ * l'état actuel du doc — `courant` — au chemin complet).
+ */
+function resoudreValeurRec(
+  courant: Record<string, unknown> | null,
+  chemin: string,
+  valeur: unknown,
+  nowMs: number,
+  mode: "set" | "merge",
+): ResolutionRec {
+  if (isSentinel(valeur)) {
+    const resolu = resoudreSentinelle(mode === "set" ? null : courant, chemin, valeur, nowMs, mode);
+    return resolu === ABSENT ? { valeur: undefined, absent: true } : { valeur: resolu, absent: false };
+  }
+  if (Array.isArray(valeur)) {
+    if (valeur.some(contientSentinelle)) {
+      throw new FsError("invalid_argument", `r2fs: FieldValue interdit dans un tableau (${chemin}) — Firestore le refuse aussi.`);
+    }
+    return { valeur, absent: false };
+  }
+  if (estCarteOrdinaire(valeur)) {
+    const sortie: Record<string, unknown> = {};
+    for (const [cle, v] of Object.entries(valeur)) {
+      if (v === undefined) continue; // ignoreUndefinedProperties
+      const resolu = resoudreValeurRec(courant, `${chemin}.${cle}`, v, nowMs, mode);
+      if (resolu.absent) continue; // delete imbriqué → clé absente de la carte entrante
+      sortie[cle] = resolu.valeur;
+    }
+    return { valeur: sortie, absent: false };
+  }
+  return { valeur, absent: false };
+}
+
 function resoudreSentinelle(
   courant: Record<string, unknown> | null,
   key: string,
@@ -165,6 +227,8 @@ function resoudreSentinelle(
  * Applique `patch` sur `courant` (null = doc absent) et retourne le doc
  * résultant. Mode « set » (écrasement) : part de zéro. Mode merge : copie du
  * courant + pose/retrait par chemins pointés + résolution des sentinelles.
+ * Les sentinelles sont résolues À TOUTE PROFONDEUR (cartes imbriquées —
+ * sémantique Firestore ; ex. { stats: { billedMinor: FieldValue.increment() } }).
  */
 function resoudrePatch(
   courant: Record<string, unknown> | null,
@@ -177,17 +241,13 @@ function resoudrePatch(
   assertPasDeConflitDeChemins(keys);
 
   for (const key of keys) {
-    let valeur: unknown = patch[key];
-    if (isSentinel(valeur)) {
-      const resolu = resoudreSentinelle(mode === "set" ? null : courant, key, valeur, nowMs, mode);
-      if (resolu === ABSENT) {
-        retireChamp(base, key);
-        continue;
-      }
-      valeur = resolu;
+    const resolu = resoudreValeurRec(courant, key, patch[key], nowMs, mode);
+    if (resolu.absent) {
+      retireChamp(base, key);
+      continue;
     }
-    if (valeur === undefined) continue; // ignoreUndefinedProperties
-    poseChamp(base, key, valeur);
+    if (resolu.valeur === undefined) continue; // ignoreUndefinedProperties
+    poseChamp(base, key, resolu.valeur);
   }
   return base;
 }

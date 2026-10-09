@@ -38,11 +38,17 @@ export interface GeneratedImage {
 
 export class ImageGenerationError extends Error {
   code: "NOT_CONFIGURED" | "UPSTREAM_ERROR" | "TIMEOUT" | "INVALID_PROMPT" | "INVALID_IMAGE";
+  /**
+   * Statut HTTP du fournisseur quand l'erreur vient d'une réponse non-OK
+   * (détection déterministe de la limite de crédit — fallback HF automatique).
+   */
+  httpStatus?: number;
 
-  constructor(code: ImageGenerationError["code"], message: string) {
+  constructor(code: ImageGenerationError["code"], message: string, options?: { httpStatus?: number }) {
     super(message);
     this.code = code;
     this.name = "ImageGenerationError";
+    if (typeof options?.httpStatus === "number") this.httpStatus = options.httpStatus;
   }
 }
 
@@ -270,7 +276,7 @@ export async function generateImageWithAgnes(options: {
         if (detail) message = `Agnes AI : ${detail.slice(0, 200)}`;
       }
       console.error(`[agnes-image] HTTP ${response.status} après ${latencyMs}ms:`, message);
-      throw new ImageGenerationError("UPSTREAM_ERROR", message);
+      throw new ImageGenerationError("UPSTREAM_ERROR", message, { httpStatus: response.status });
     }
 
     const payload = (await response.json()) as AgnesImageResponse;
@@ -401,7 +407,7 @@ export async function editImageWithAgnes(options: {
         if (detail) message = `Agnes AI : ${detail.slice(0, 200)}`;
       }
       console.error(`[agnes-image-edit] HTTP ${response.status} après ${latencyMs}ms:`, message);
-      throw new ImageGenerationError("UPSTREAM_ERROR", message);
+      throw new ImageGenerationError("UPSTREAM_ERROR", message, { httpStatus: response.status });
     }
 
     const payload = (await response.json()) as AgnesImageResponse;

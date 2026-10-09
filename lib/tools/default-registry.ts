@@ -61,6 +61,7 @@ import {
 } from "@/lib/agents/networks/tools";
 import { generateImageTool } from "@/lib/tools/media/generate-image";
 import { createVideoTool } from "@/lib/tools/media/create-video";
+import { analyzeMediaTool } from "@/lib/tools/media/analyze-media";
 import { videoStatusTool } from "@/lib/tools/media/video-status";
 import { videoReviseTool } from "@/lib/tools/media/video-revise";
 import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
@@ -145,6 +146,12 @@ export function createDefaultToolRegistry(): ToolRegistry {
     registry.register(generateImageTool);
     registry.register(createVideoTool);
   }
+  // Analyse média RÉELLE (image / audio / vidéo) — l'agent et la
+  // conversation sont connectés à la couche lib/media/analysis. Toujours
+  // enregistré : sans fournisseur, l'outil échoue HONNÊTEMENT en nommant la
+  // variable d'environnement manquante (aucune capacité fantôme — le
+  // contrat d'erreur est explicite).
+  registry.register(analyzeMediaTool);
   if (process.env.TWENTY_FIRST_API_KEY) registry.register(twentyFirstUiTool);
   if (process.env.NOTION_API_TOKEN) {
     registry.register(notionSearchTool);

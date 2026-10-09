@@ -4,8 +4,8 @@ import {
   IMAGE_RATIOS,
   IMAGE_SIZES,
   editImageWithAgnes,
-  generateImageWithAgnes,
 } from "@/lib/ai/image-generation";
+import { generateImageWithFallback, type FallbackImageResult, type ImageProvider } from "@/lib/ai/hf-image-fallback";
 import { persistGeneratedImage } from "@/lib/media/persist";
 
 /**
@@ -51,7 +51,8 @@ export interface GenerateImageToolOutput {
   url: string;
   /** URL Agnes d'ORIGINE (temporaire) — conservée pour diagnostic/audit. */
   providerUrl: string;
-  provider: "agnes";
+  /** "huggingface" quand le repli Z-Image-Turbo a repris la tâche (crédit Agnes épuisé). */
+  provider: ImageProvider;
   model: string;
   latencyMs: number;
   taskId?: string;
@@ -84,24 +85,30 @@ export const generateImageTool: ToolDefinition<
       ...(input.size ? { size: input.size } : {}),
     };
     // Voie édition/composition dès qu'au moins une image de référence est
-    // fournie — sinon génération text-to-image classique.
-    const image = input.refImageUrls && input.refImageUrls.length > 0
-      ? await editImageWithAgnes({ ...common, images: input.refImageUrls })
-      : await generateImageWithAgnes(common);
+    // fournie — sinon génération text-to-image classique AVEC reprise
+    // automatique Hugging Face (Z-Image-Turbo) si Agnes est à sa limite de
+    // crédit (code d'erreur 402/message crédit — lib/ai/hf-image-fallback).
+    const image: FallbackImageResult = input.refImageUrls && input.refImageUrls.length > 0
+      ? { ...(await editImageWithAgnes({ ...common, images: input.refImageUrls })), provider: "agnes" as const }
+      : await generateImageWithFallback({ ...common, userId: context.userId });
     // Persistance (Task 103-a, audit production 2026-10-07) : l'URL Agnes
     // est TEMPORAIRE — sans copie, l'image livrée à l'utilisateur
     // disparaissait à l'expiration. Parité avec le chat
     // (produceConversationImage) : copie en R2 permanent sous
     // users/<uid>/permanent/ai-images/. persistGeneratedImage ne lève
     // JAMAIS (dégradation gracieuse : storage:"provider" + URL d'origine).
-    const persisted = await persistGeneratedImage({
-      userId: context.userId,
-      imageUrl: image.imageUrl,
-    });
+    // Repli HF : l'archivage R2 est DÉJÀ fait par le fallback (storagePath)
+    // — pas de double copie.
+    const persisted = image.storagePath
+      ? { url: image.imageUrl, storage: "r2" as const, storagePath: image.storagePath }
+      : await persistGeneratedImage({
+          userId: context.userId,
+          imageUrl: image.imageUrl,
+        });
     return {
       url: persisted.url,
       providerUrl: image.imageUrl,
-      provider: "agnes",
+      provider: image.provider,
       model: image.model,
       latencyMs: image.latencyMs,
       storage: persisted.storage,
