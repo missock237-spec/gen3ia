@@ -260,6 +260,81 @@ export function computeUpstashSignature(signingKey: string, body: string): strin
   return createHmac("sha256", signingKey).update(`${signingKey}\n${body}`).digest("hex");
 }
 
+/* ---------------------------------------------------------------- */
+/* SCHÉMA JWT (2026) — Upstash-Signature: <header>.<payload>.<sig>    */
+/* ---------------------------------------------------------------- */
+
+/** Comparaison temps constante de deux chaînes (longueurs quelconques). */
+function egalTempsConstant(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) {
+    // Longueurs différentes : comparer quand même contre un buffer factice
+    // pour garder un temps ~constant, puis rejeter.
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
+
+/** Encode un digeste HMAC en base64url (avec padding) et base64 standard. */
+function hmacEncodings(digest: Buffer): string[] {
+  return [
+    digest.toString("base64url"),
+    digest.toString("base64"),
+    digest.toString("hex"),
+  ];
+}
+
+/** HMAC-SHA256 brut d'une chaîne UTF-8. */
+function hmacRaw(key: string, value: string): Buffer {
+  return createHmac("sha256", key).update(value, "utf8").digest();
+}
+
+/**
+ * Vérifie une signature QStash au format JWT (schéma 2026) :
+ * `base64url(headerJson).base64url(payloadJson).base64url(hmac)`.
+ * Vérifications (clé courante OU suivante) :
+ *  1. alg === HS256 (jamais « none ») ;
+ *  2. le 3e segment = HMAC-SHA256(clé, `${header}.${payload}`) ;
+ *  3. la claim `body` du payload = HMAC-SHA256(clé, corpsReçu) — c'est LE
+ *     lien au corps réel de la requête (sans elle, le JWT serait rejouable
+ *     avec un autre corps).
+ */
+export function verifyUpstashSignatureJwt(
+  config: QStashConfig,
+  rawBody: string,
+  signatureHeader: string,
+): boolean {
+  const parts = signatureHeader.trim().split(".");
+  if (parts.length !== 3 || parts.some((p) => !p)) return false;
+  let headerJson: Record<string, unknown>;
+  let payloadJson: Record<string, unknown>;
+  try {
+    headerJson = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
+    payloadJson = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+  } catch {
+    return false;
+  }
+  if (!headerJson || typeof headerJson !== "object") return false;
+  if ((headerJson as Record<string, unknown>).alg !== "HS256") return false;
+  const bodyClaim = (payloadJson as Record<string, unknown>).body;
+  if (typeof bodyClaim !== "string" || bodyClaim.length === 0) return false;
+
+  const signingInput = `${parts[0]}.${parts[1]}`;
+  for (const key of [config.currentSigningKey, config.nextSigningKey]) {
+    // 1) Signature du JWT elle-même (header.payload).
+    const jwtSigOk = egalTempsConstant(parts[2], hmacRaw(key, signingInput).toString("base64url"))
+      || egalTempsConstant(parts[2], hmacRaw(key, signingInput).toString("base64"));
+    if (!jwtSigOk) continue;
+    // 2) Lien au corps : la claim `body` doit valoir HMAC(clé, corpsReçu).
+    const digest = hmacRaw(key, rawBody);
+    const bodyOk = hmacEncodings(digest).some((enc) => egalTempsConstant(bodyClaim, enc));
+    if (bodyOk) return true;
+  }
+  return false;
+}
+
 /**
  * Vérifie la signature d'une délivrance QStash en TEMPS CONSTANT, contre la
  * clé courante OU la clé suivante (rotation). Aucune dépendance : le corps
@@ -271,6 +346,13 @@ export function verifyUpstashSignature(
   rawBody: string,
   signatureHeader: string | null,
 ): boolean {
+  if (!signatureHeader) return false;
+  // SCHÉMA 2026 (JWT HS256) : Upstash-Signature est un JWT portant la claim
+  // `body` (HMAC du corps). Détecté par la forme `<b64>.<b64>.<b64>` — le
+  // schéma historique `v1,<hex>` ne contient jamais de point.
+  if (signatureHeader.includes(".") && !signatureHeader.includes(",")) {
+    return verifyUpstashSignatureJwt(config, rawBody, signatureHeader);
+  }
   const candidates = parseUpstashSignature(signatureHeader).filter((entry) => entry.version === "v1");
   if (candidates.length === 0) return false;
   const expected = new Set(

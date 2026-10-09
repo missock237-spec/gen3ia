@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { createHmac } from "node:crypto";
 import {
   computeUpstashSignature,
   missionQueueConfigured,
@@ -121,5 +122,57 @@ describe("parse du header Upstash-Signature", () => {
   it("retourne un tableau vide sur null/chaîne vide", () => {
     expect(parseUpstashSignature(null)).toEqual([]);
     expect(parseUpstashSignature("")).toEqual([]);
+  });
+});
+
+describe("schéma de signature JWT (2026)", () => {
+  const config = { token: "tok", currentSigningKey: CURRENT_KEY, nextSigningKey: NEXT_KEY };
+
+  function construireJwt(key: string, body: string, opts?: { alg?: string; tamperBodyClaim?: boolean }): string {
+    const header = Buffer.from(JSON.stringify({ alg: opts?.alg ?? "HS256", typ: "JWT" })).toString("base64url");
+    const digest = createHmac("sha256", key).update(body, "utf8").digest();
+    const payloadObj: Record<string, unknown> = { aud: "", body: digest.toString("base64url") };
+    if (opts?.tamperBodyClaim) payloadObj.body = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    const payload = Buffer.from(JSON.stringify(payloadObj)).toString("base64url");
+    const sig = createHmac("sha256", key).update(`${header}.${payload}`, "utf8").digest("base64url");
+    return `${header}.${payload}.${sig}`;
+  }
+
+  it("un JWT signé avec la clé courante est accepté (corps réel)", () => {
+    const jwt = construireJwt(CURRENT_KEY, BODY);
+    expect(verifyUpstashSignature(config, BODY, jwt)).toBe(true);
+  });
+
+  it("un JWT signé avec la clé SUIVANTE est accepté (rotation)", () => {
+    const jwt = construireJwt(NEXT_KEY, BODY);
+    expect(verifyUpstashSignature(config, BODY, jwt)).toBe(true);
+  });
+
+  it("la claim body falsifiée est rejetée (JWT non rejouable avec un autre corps)", () => {
+    const jwt = construireJwt(CURRENT_KEY, BODY, { tamperBodyClaim: true });
+    expect(verifyUpstashSignature(config, BODY, jwt)).toBe(false);
+  });
+
+  it("un JWT signé par une clé INCONNUE est rejeté", () => {
+    const jwt = construireJwt("signkey_attacker", BODY);
+    expect(verifyUpstashSignature(config, BODY, jwt)).toBe(false);
+  });
+
+  it("alg !== HS256 est rejeté (jamais « none »)", () => {
+    const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({ aud: "", body: "x" })).toString("base64url");
+    expect(verifyUpstashSignature(config, BODY, `${header}.${payload}.abc`)).toBe(false);
+  });
+
+  it("un JWT avec une claim body ABSENTE est rejeté", () => {
+    const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({ aud: "" })).toString("base64url");
+    const sig = createHmac("sha256", CURRENT_KEY).update(`${header}.${payload}`, "utf8").digest("base64url");
+    expect(verifyUpstashSignature(config, BODY, `${header}.${payload}.${sig}`)).toBe(false);
+  });
+
+  it("le schéma historique v1,<hex> reste accepté (compatibilité)", () => {
+    const legacy = `v1,${computeUpstashSignature(CURRENT_KEY, BODY)}`;
+    expect(verifyUpstashSignature(config, BODY, legacy)).toBe(true);
   });
 });
