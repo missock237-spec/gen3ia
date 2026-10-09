@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     const sigHeader = request.headers.get("upstash-signature");
     const diag = {
       sigHeaderPresent: Boolean(sigHeader),
-      sigHeaderSample: typeof sigHeader === "string" ? sigHeader.slice(0, 120) : null,
+      sigHeaderSample: typeof sigHeader === "string" ? sigHeader.slice(0, 800) : null,
       bodyLen: rawBody.length,
       bodyPrefix: Buffer.from(rawBody, "utf8").toString("base64").slice(0, 44),
       expectedCurrentPrefix: computeUpstashSignature(config.currentSigningKey, rawBody).slice(0, 16),
