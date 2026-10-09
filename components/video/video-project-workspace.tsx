@@ -620,7 +620,7 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
 // Voix — MediaRecorder + bibliothèque + narrations
 // ────────────────────────────────────────────────────────────────────────────
 
-function VoicePanel({ project, voices, onRefresh, busy, runAction }: { project: VideoProject; voices: VoiceProfile[]; assets: VideoAsset[]; onRefresh: () => void; busy: string | null; runAction: (key: string, a: () => Promise<void>) => Promise<void> }) {
+function VoicePanel({ project, voices, assets: _assets, onRefresh, busy, runAction }: { project: VideoProject; voices: VoiceProfile[]; assets: VideoAsset[]; onRefresh: () => void; busy: string | null; runAction: (key: string, a: () => Promise<void>) => Promise<void> }) {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -628,6 +628,39 @@ function VoicePanel({ project, voices, onRefresh, busy, runAction }: { project: 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Task 113 — les narrations générées sont AUDIBLES : chaque entrée porte
+  // l'URL de lecture signée renvoyée par generate-voice (POST + GET).
+  const [narrations, setNarrations] = useState<Array<{ sceneId: string; assetId: string; audioUrl?: string; durationSec?: number }>>([]);
+
+  const sceneLabel = useCallback(
+    (sceneId: string) => {
+      const index = (project.script?.scenes ?? []).findIndex((s) => s.id === sceneId);
+      return index >= 0 ? `Scène ${index + 1}` : sceneId;
+    },
+    [project.script],
+  );
+
+  // Chargement des narrations existantes (URL signées fraîches) — le GET
+  // renvoie désormais audioUrl par narration ; échec silencieux (panneau
+  // vide, jamais de crash).
+  const refreshNarrations = useCallback(async () => {
+    try {
+      const response = await authFetch(`/api/video/projects/${project.id}/generate-voice`);
+      if (!response.ok) return;
+      const data = (await response.json()) as { narrations?: Array<{ id: string; sceneId?: string; audioUrl?: string; media?: { durationSec?: number } }> };
+      setNarrations(
+        (data.narrations ?? [])
+          .filter((n) => n.sceneId)
+          .map((n) => ({ sceneId: n.sceneId as string, assetId: n.id, audioUrl: n.audioUrl, durationSec: n.media?.durationSec })),
+      );
+    } catch {
+      /* narration list indisponible : panneau vide */
+    }
+  }, [project.id]);
+
+  useEffect(() => {
+    void refreshNarrations();
+  }, [refreshNarrations]);
 
   function startRecording() {
     void navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
@@ -685,6 +718,17 @@ function VoicePanel({ project, voices, onRefresh, busy, runAction }: { project: 
       });
       const data = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(data.error ?? "Génération impossible");
+      // Task 113 — le résultat est immédiatement audible : les URL signées
+      // renvoyées par le POST alimentent le lecteur sans rechargement.
+      const generated = (data as { generated?: Array<{ sceneId: string; assetId: string; audioUrl?: string; durationSec?: number }> }).generated ?? [];
+      if (generated.length > 0) {
+        setNarrations((prev) => [
+          ...prev.filter((n) => !generated.some((g) => g.sceneId === n.sceneId)),
+          ...generated.map((g) => ({ sceneId: g.sceneId, assetId: g.assetId, audioUrl: g.audioUrl, durationSec: g.durationSec })),
+        ]);
+      } else {
+        void refreshNarrations();
+      }
       onRefresh();
     });
   }
@@ -736,6 +780,24 @@ function VoicePanel({ project, voices, onRefresh, busy, runAction }: { project: 
           {busy === "narrations" ? "Génération des narrations…" : "Générer les narrations (4 scènes suivantes)"}
         </button>
         <p className="text-[11px] text-neutral-400">Voie A : votre enregistrement est utilisé directement. Voie B : narration ElevenLabs (facturée au caractère réel).</p>
+        {narrations.length > 0 ? (
+          <div className="space-y-2 border-t border-neutral-100 pt-3">
+            <p className="text-xs font-semibold text-neutral-700">Narrations générées ({narrations.length})</p>
+            {narrations.map((n) => (
+              <div key={n.assetId} className="rounded-xl bg-neutral-50 px-3 py-2">
+                <p className="mb-1 text-xs font-medium text-neutral-700">
+                  {sceneLabel(n.sceneId)}
+                  {n.durationSec ? <span className="ml-1 text-neutral-400">· {Math.round(n.durationSec)} s</span> : null}
+                </p>
+                {n.audioUrl ? (
+                  <audio controls src={n.audioUrl} className="h-8 w-full" preload="none" />
+                ) : (
+                  <p className="text-[11px] text-neutral-400">Écoute indisponible — régénérez la narration.</p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
     </div>
   );

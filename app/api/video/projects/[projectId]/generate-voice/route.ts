@@ -7,7 +7,7 @@ import { listAssets } from "@/lib/video/asset-service";
 import { resolvePreferredVoice, generateSceneNarration, attachRecordingAsNarration } from "@/lib/video/voice-service";
 import { billTts } from "@/lib/video/credits";
 import { syncVoiceTrack, applyTimelinePatch } from "@/lib/video/timeline-service";
-import { isOwnedVideoKey } from "@/lib/video/storage";
+import { createVideoPlaybackUrl, isOwnedVideoKey } from "@/lib/video/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -39,7 +39,10 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
 
     const scenes = project.script.scenes.filter((s) => !sceneIds || sceneIds.includes(s.id)).slice(0, 4);
-    const generated: Array<{ sceneId: string; assetId: string; durationSec?: number; charactersUsed: number; source: "tts" | "recording" }> = [];
+    // Task 113 — le RÉSULTAT est renvoyé à l'utilisateur : chaque narration
+    // porte une URL de LECTURE signée (900 s, canal propriétaire) en plus de
+    // l'identifiant d'asset — le client peut jouer l'audio immédiatement.
+    const generated: Array<{ sceneId: string; assetId: string; audioUrl?: string; durationSec?: number; charactersUsed: number; source: "tts" | "recording" }> = [];
 
     for (const scene of scenes) {
       // Enregistrement utilisateur : usage direct de l'échantillon (voie A).
@@ -50,7 +53,14 @@ export async function POST(request: NextRequest, { params }: Params) {
           sceneId: scene.id,
           sampleR2Key: voice.sampleR2Key,
         });
-        generated.push({ sceneId: scene.id, assetId: result.assetId, durationSec: result.durationSec, charactersUsed: 0, source: "recording" });
+        generated.push({
+          sceneId: scene.id,
+          assetId: result.assetId,
+          audioUrl: await createVideoPlaybackUrl(guard.context.userId, result.r2Key, 900).catch(() => undefined),
+          durationSec: result.durationSec,
+          charactersUsed: 0,
+          source: "recording",
+        });
         continue;
       }
       // Voie B : synthèse ElevenLabs (voix bibliothèque ou clonée confirmée).
@@ -64,7 +74,14 @@ export async function POST(request: NextRequest, { params }: Params) {
       if (narration.charactersUsed > 0) {
         await billTts(guard.context.userId, projectId, narration.charactersUsed);
       }
-      generated.push({ sceneId: scene.id, assetId: narration.assetId, durationSec: narration.durationSec, charactersUsed: narration.charactersUsed, source: "tts" });
+      generated.push({
+        sceneId: scene.id,
+        assetId: narration.assetId,
+        audioUrl: await createVideoPlaybackUrl(guard.context.userId, narration.r2Key, 900).catch(() => undefined),
+        durationSec: narration.durationSec,
+        charactersUsed: narration.charactersUsed,
+        source: "tts",
+      });
     }
 
     // Synchronisation de la piste VOIX de la timeline.
@@ -97,14 +114,22 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 }
 
-/** Bibliothèque d'assets narration du projet. */
+/** Bibliothèque d'assets narration du projet (URL de lecture signée incluse). */
 export async function GET(request: NextRequest, { params }: Params) {
   const guard = await protectRoute(request, { key: "video-voice-list", rateLimit: { limit: 120, windowMs: 60_000 } });
   if (!guard.ok) return guard.response;
   try {
     const { projectId } = await params;
     const narrations = await listAssets(guard.context.userId, projectId, "audio_narration");
-    return NextResponse.json({ narrations });
+    // Task 113 — le résultat est AUDIBLE : chaque narration porte une URL de
+    // lecture signée (900 s) construite depuis sa clé R2 propriétaire.
+    const withAudioUrl = await Promise.all(
+      narrations.map(async (asset) => ({
+        ...asset,
+        audioUrl: await createVideoPlaybackUrl(guard.context.userId, asset.r2Key, 900).catch(() => undefined),
+      })),
+    );
+    return NextResponse.json({ narrations: withAudioUrl });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Liste impossible" }, { status: errorStatus(error, 500) });
   }
@@ -124,7 +149,10 @@ export async function PUT(request: NextRequest, { params }: Params) {
       sceneId,
       sampleR2Key,
     });
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      audioUrl: await createVideoPlaybackUrl(guard.context.userId, result.r2Key, 900).catch(() => undefined),
+    });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Attachement impossible" }, { status: errorStatus(error, 400) });
   }

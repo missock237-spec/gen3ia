@@ -68,6 +68,16 @@ describe("isFirestoreQuotaError (table de détection)", () => {
   });
 
   it.each([
+    ["FsError 412 écriture conditionnelle perdue (Task 113)", "r2fs: écriture conditionnelle perdue (412) : fs/videoProductionJobs/j1.json"],
+    ["FsError contention transaction (Task 113)", "r2fs: transaction abandonnée après 5 tentatives (contention)."],
+    ["FsError code conflict", Object.assign(new Error("r2fs: écriture conditionnelle perdue (412) : fs/x"), { code: "conflict" })],
+    ["HTTP 409 précondition", Object.assign(new Error("precondition failed"), { code: 409 })],
+  ])("conflits CAS r2fs → transitoire:true (reprise des files) : %s", (_label, error) => {
+    expect(isFirestoreQuotaError(error)).toBe(false);
+    expect(isFirestoreTransientError(error)).toBe(true);
+  });
+
+  it.each([
     ["permission denied (métier)", new Error("Missing or insufficient permissions")],
     ["not found (métier)", { code: 5, message: "Document not found" }],
   ])("ne matche PAS les erreurs métier : %s", (_label, error) => {

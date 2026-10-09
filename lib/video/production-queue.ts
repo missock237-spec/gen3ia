@@ -996,10 +996,16 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
 
   const ignored = countPermanentlyIgnoredScenes(scenes, sceneFailures, "voice");
   if (ignored >= scenes.length) {
-    // Task 106-c — TOUTES les narrations définitivement abandonnées.
+    // Task 113 — « résultat plutôt qu'échec » : TOUTES les narrations ont
+    // été définitivement abandonnées (ElevenLabs indisponible, clé/quota,
+    // panne réseau) → la production est LIVRÉE EN MUET au lieu d'échouer :
+    // les visuels déjà générés (facturés) donnent une vidéo complète et le
+    // rendu gère explicitement les scènes sans narration. L'incident reste
+    // consigné (warnings + détail d'étape) et le studio permet de relancer
+    // la narration à tout moment (generate-voice).
     return {
-      action: "terminal-failed",
-      message: `Production échouée : les ${scenes.length} narration(s) ont été définitivement abandonnées après ${MAX_SCENE_FAILURES} échecs de synthèse vocale. Vérifiez la configuration de la voix ou réessayez plus tard.`,
+      action: "advance",
+      detail: `Narrations indisponibles (${scenes.length} scène(s) ignorée(s) après ${MAX_SCENE_FAILURES} échecs de synthèse) — vidéo muette livrée ; relancez la narration depuis le studio.`,
     };
   }
 
@@ -1034,6 +1040,21 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
 
 /** RENDER : enfile le rendu réel (module 19) — il gère sa propre facturation. */
 async function stageRender(job: VideoProductionJob): Promise<ProductionStageResult> {
+  // Task 113 — PRÉFLIGHT FFmpeg : résout (et met en cache) les binaires
+  // AVANT le startRenderJob — un environnement sans FFmpeg (échec du
+  // téléchargement runtime épinglé) est détecté ICI avec un message clair,
+  // sans réserver le budget rendu ni consommer les relances sur un échec
+  // de spawn cryptique. Le cache d'échec est réinitialisé pour que la
+  // relance suivante re-tente vraiment le téléchargement (blip réseau).
+  const { resolveFfmpegBinary, resolveFfprobeBinary, resetBinaryResolutionCache } = await import("@/lib/video/security");
+  const [ffmpeg, ffprobe] = await Promise.all([resolveFfmpegBinary(), resolveFfprobeBinary()]);
+  const diagnostics = [ffmpeg, ffprobe]
+    .map((b, i) => (b.diagnostic ? `${i === 0 ? "ffmpeg" : "ffprobe"} : ${b.diagnostic}` : null))
+    .filter((d): d is string => typeof d === "string");
+  if (diagnostics.length > 0) {
+    resetBinaryResolutionCache();
+    throw new Error(`Moteur de rendu indisponible sur cette plateforme (${diagnostics.join(" ; ")}) — le rendu sera retenté automatiquement ; aucune facturation tant qu'aucun rendu ne démarre.`);
+  }
   const project = await getOwnedProjectOrThrow(job.userId, job.projectId);
   // Option subtitlesEnabled:false → sous-titres coupés sur la timeline.
   if (job.options?.subtitlesEnabled === false && project.timeline?.captions?.enabled) {
@@ -1512,43 +1533,64 @@ export function buildVideoDeliveryMessage(params: VideoDeliveryMessageParams): s
 /**
  * Livre le résultat d'un job TERMINAL dans sa conversation d'origine :
  * message assistant (contenu FR selon le statut) + artefact vidéo de
- * livraison. NE LÈVE JAMAIS : un incident de livraison est journalisé et le
- * marqueur chatDeliveredAt est effacé — le tick qui l'appelle reste un
- * succès, la reprise se fera au prochain passage (tick tardif, sweep, GET).
+ * livraison. NE LÈVE JAMAIS — un incident de livraison est journalisé.
  *
- * Idempotence : le marqueur est posé DÈS la décision de livrer (merge sur
- * le doc job) — un tick concurrent qui lit le job après ce point ne
- * double-jamais le message ; si l'écriture chat échoue, le marqueur est
- * effacé (chatDeliveredAt: "") pour autoriser la reprise.
+ * Task 113 — ORDRE « LIVRER D'ABORD, MARQUER ENSUITE » : l'ancien ordre
+ * (marqueur posé AVANT le message, effacé en cas d'échec) perdait
+ * définitivement le message quand l'ÉCRITURE du marqueur AVAIT réussi mais
+ * l'effacement échouait (panne du magasin au même instant) — le job restait
+ * « livré » sans message et le filet de reprise sortait immédiatement.
+ * Désormais :
+ *   1. anti-doublon par LECTURE (les derniers messages de la conversation :
+ *      un message assistant de livraison pour ce projet prouve la livraison
+ *      — le contenu est déterministe sauf l'URL présignée) → re-pose le
+ *      marqueur au mieux et sort : jamais de doublon après un incident
+ *      « message écrit, marqueur pas écrit » ;
+ *   2. appendMessage (LE livrable) — en cas d'échec, AUCUN marqueur posé :
+ *     le prochain passage re-livre naturellement ;
+ *   3. artefact de livraison (si aucun artefact de lancement/vidéo) ;
+ *   4. marqueur chatDeliveredAt (best-effort) — son échec est compensé par
+ *      l'anti-doublon 1 (cosmétique : au pire un message en double, JAMAIS
+ *      un message perdu).
  */
 export async function deliverJobToConversation(job: VideoProductionJob): Promise<void> {
-  // Conditions de livraison : conversation connue, pas déjà livré, statut
-  // terminal. Un job hors chat (studio/API) n'a RIEN à livrer.
+  // Conditions de livraison : conversation connue, pas déjà livré (garde
+  // primaire rapide sur le marqueur), statut terminal. Un job hors chat
+  // (studio/API) n'a RIEN à livrer.
   if (!job.conversationId || job.chatDeliveredAt) return;
   if (job.status !== "completed" && job.status !== "failed" && job.status !== "cancelled") return;
 
-  // 1) Marquage idempotent AVANT toute écriture chat (merge sur le doc job).
-  try {
-    await writeCheckpointSet(
-      PRODUCTION_JOBS_COLLECTION,
-      job.id,
-      { chatDeliveredAt: nowIso(), updatedAt: nowIso() },
-      job.userId,
-    );
-  } catch (markError) {
-    // Marquage impossible (quota aussi sur la ré-écriture) : livraison reportée au
-    // passage suivant — PAS d'incident bloquant, PAS de message perdu.
-    logger.warn(
-      { jobId: job.id, conversationId: job.conversationId, error: markError instanceof Error ? markError.message : String(markError) },
-      "video_delivery_mark_failed",
-    );
-    return;
-  }
-
   try {
     // Imports DYNAMIQUES (anti-cycle) : mêmes primitives que le lancement.
-    const { appendMessage } = await import("@/lib/chat/repository");
+    const { appendMessage, listMessages: listRecent } = await import("@/lib/chat/repository");
     const { createArtifact, listArtifacts } = await import("@/lib/domain/artifacts/repository");
+
+    // 1) ANTI-DOUBLON par lecture du fil : le message de livraison contient
+    // toujours le lien studio du projet + une phrase-marker déterministe
+    // (l'URL présignée varie, le reste non). Les 40 derniers messages
+    // suffisent largement (la livraison suit de près la fin du tour).
+    const recent = await listRecent(job.userId, job.conversationId, 40, { order: "recent" }).catch(() => []);
+    const studioLink = `studio/video/${job.projectId}`;
+    const phrase =
+      job.status === "completed"
+        ? "Votre vidéo est prête"
+        : job.status === "failed"
+          ? "Votre production vidéo n'a pas abouti"
+          : "a bien été annulée";
+    const alreadyDelivered = recent.some(
+      (m) => m.role === "assistant" && m.content.includes(phrase) && m.content.includes(studioLink),
+    );
+    if (alreadyDelivered) {
+      // Déjà livré (le marqueur était absent — échec d'écriture antérieur) :
+      // re-pose le marqueur au mieux et sort — jamais de doublon.
+      await writeCheckpointSet(
+        PRODUCTION_JOBS_COLLECTION,
+        job.id,
+        { chatDeliveredAt: nowIso(), updatedAt: nowIso() },
+        job.userId,
+      ).catch(() => undefined);
+      return;
+    }
 
     // URL de lecture du master : MÊME source que la carte client
     // (video-production-card → GET .../render → output.r2Key présigné) —
@@ -1575,6 +1617,9 @@ export async function deliverJobToConversation(job: VideoProductionJob): Promise
       ...(job.status === "completed" && job.warnings?.length ? { warnings: job.warnings } : {}),
       ...(masterUrl ? { masterUrl } : {}),
     });
+
+    // 2) LE LIVRABLE : le message part AVANT tout marquage. Un échec ici ne
+    // laisse AUCUN marqueur → reprise garantie au prochain passage.
     await appendMessage({
       conversationId: job.conversationId,
       userId: job.userId,
@@ -1583,7 +1628,7 @@ export async function deliverJobToConversation(job: VideoProductionJob): Promise
       generationStatus: "complete",
     });
 
-    // Artefact de livraison (carte vidéo du chat) : AUCUN mécanisme de mise
+    // 3) Artefact de livraison (carte vidéo du chat) : AUCUN mécanisme de mise
     // à jour d'artefact dans le dépôt (seulement addArtifactVersion) → on
     // crée UNIQUEMENT si l'artefact de lancement n'existe pas déjà (même
     // videoJobId ou videoProjectId) — la carte client se met à jour par
@@ -1601,15 +1646,18 @@ export async function deliverJobToConversation(job: VideoProductionJob): Promise
         videoJobId: job.id,
       });
     }
-  } catch (deliveryError) {
-    // 2) Échec de la livraison : marqueur EFFACÉ (reprise au passage suivant),
-    // incident journalisé — le tick n'échoue JAMAIS à cause de la livraison.
+
+    // 4) Marqueur d'idempotence (best-effort) : accélère les passages suivants.
+    // Son échec n'est PAS une perte : l'anti-doublon 1 couvre la reprise.
     await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
-      { chatDeliveredAt: "", updatedAt: nowIso() },
+      { chatDeliveredAt: nowIso(), updatedAt: nowIso() },
       job.userId,
     ).catch(() => undefined);
+  } catch (deliveryError) {
+    // Incident de livraison journalisé — le tick n'échoue JAMAIS à cause de
+    // la livraison : le prochain passage (tick tardif, sweep, GET) re-livre.
     const detail = deliveryError instanceof Error ? deliveryError.message : String(deliveryError);
     logger.warn(
       { jobId: job.id, conversationId: job.conversationId, error: detail },

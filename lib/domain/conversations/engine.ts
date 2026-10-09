@@ -3116,9 +3116,19 @@ async function artifactFromToolOutput(params: {
   const audioDataUri = typeof outputRecord.audioDataUri === "string" && outputRecord.audioDataUri.startsWith("data:audio/")
     ? outputRecord.audioDataUri
     : undefined;
+  // Task 113 — l'outil voice.speak a DÉJÀ archivé l'audio en permanence
+  // (champ `url` = clé R2 users/<uid>/permanent/ai-audio/…) : on la RÉUTILISE
+  // comme storagePath de l'artefact au lieu de re-uploader une deuxième
+  // copie — moins d'I/O et surtout PLUS JAMAIS d'artefact audio sans clé
+  // résolvable (l'ancien catch muet produisait un artefact dont l'`url`
+  // brute n'était pas une URL : lecteur audio muet pour l'utilisateur).
+  const toolPermanentKey =
+    typeof outputRecord.url === "string" && outputRecord.url.startsWith(`users/${params.userId}/permanent/`)
+      ? outputRecord.url
+      : undefined;
   let audioStoragePath: string | undefined;
   let audioInlineContent: string | undefined;
-  if (audioDataUri) {
+  if (audioDataUri && !toolPermanentKey) {
     try {
       const [header, base64] = audioDataUri.split(",");
       const mime = header.slice(5).replace(/;base64$/, "") || "audio/mpeg";
@@ -3131,8 +3141,14 @@ async function artifactFromToolOutput(params: {
       } else if (buffer.length > 0 && audioDataUri.length <= 600_000) {
         audioInlineContent = audioDataUri;
       }
-    } catch {
-      // Audio non persistable : on ne crée pas d'artefact vide.
+    } catch (audioError) {
+      // Task 113 — incident JOURNALISÉ (plus de catch muet) : l'audio reste
+      // livrable via le data URI inline si la taille le permet.
+      console.warn(
+        "[conversation] persistance R2 de l'audio voice.speak échouée — repli inline si possible :",
+        audioError instanceof Error ? audioError.message : String(audioError),
+      );
+      if (audioDataUri.length <= 600_000) audioInlineContent = audioDataUri;
     }
   }
   // Les livrables de documents (artifact.create) exposent `storageKey` —
@@ -3146,14 +3162,15 @@ async function artifactFromToolOutput(params: {
         : typeof outputRecord.storageKey === "string"
           ? outputRecord.storageKey
           : undefined;
-  if (!content && !url && !storagePath && !audioStoragePath && !audioInlineContent) return null;
+  if (!content && !url && !storagePath && !audioStoragePath && !toolPermanentKey && !audioInlineContent) return null;
 
   const inputTitle = typeof params.toolInput.title === "string" ? params.toolInput.title : undefined;
   const inputFilename = typeof params.toolInput.filename === "string" ? params.toolInput.filename : typeof params.toolInput.name === "string" ? params.toolInput.name : undefined;
-  const type = audioStoragePath || audioInlineContent
+  const isAudioArtifact = Boolean(audioStoragePath || toolPermanentKey || audioInlineContent);
+  const type = isAudioArtifact
     ? "audio"
     : inferArtifactType(params.toolName, params.output ?? "");
-  const note = audioStoragePath || audioInlineContent
+  const note = isAudioArtifact
     ? "Audio généré par la voix IA"
     : `Produit par l'outil ${params.toolName}`;
   return createArtifact({
@@ -3166,7 +3183,9 @@ async function artifactFromToolOutput(params: {
     language: typeof params.toolInput.language === "string" ? params.toolInput.language : undefined,
     filename: inputFilename ?? (type === "audio" ? `voix-${Date.now()}.mp3` : undefined),
     content: audioInlineContent ?? content,
-    storagePath: audioStoragePath ?? storagePath,
+    // Task 113 — la clé permanente du tool (archivage à la source) prime :
+    // l'artefact est TOUJOURS résolvable via /api/storage/permanent.
+    storagePath: audioStoragePath ?? toolPermanentKey ?? storagePath,
     url,
     note,
   });

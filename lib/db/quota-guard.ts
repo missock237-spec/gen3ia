@@ -142,7 +142,10 @@ export function isFirestoreQuotaError(error: unknown): boolean {
 // Détection TRANSITOIRE (PAS quota : n'ouvre pas le disjoncteur)
 // ---------------------------------------------------------------------------
 
-/** gRPC 14 = UNAVAILABLE, 4 = DEADLINE_EXCEEDED ; 500/503 côté REST. */
+/** gRPC 14 = UNAVAILABLE, 4 = DEADLINE_EXCEEDED ; 500/503 côté REST.
+ *  CONFLICT (409) = conflit CAS r2fs (écriture conditionnelle perdue /
+ *  contention de transaction) : transitoire POUR LES FILES — la re-lecture
+ *  + ré-application du patch résout le conflit (Task 113). */
 const TRANSIENT_CODES = new Set([
   "14",
   "4",
@@ -150,6 +153,8 @@ const TRANSIENT_CODES = new Set([
   "DEADLINE_EXCEEDED",
   "500",
   "503",
+  "409",
+  "CONFLICT",
   "ETIMEDOUT",
   "ECONNRESET",
   "ECONNREFUSED",
@@ -163,6 +168,12 @@ const TRANSIENT_MESSAGE_NEEDLES = [
   "econnrefused",
   "internal error",
   "backend error",
+  // Conflits d'écriture conditionnelle r2fs (reprise naturelle par le tick
+  // suivant : re-lecture fraîche + ré-application — jamais un échec définitif).
+  "écriture conditionnelle perdue",
+  "transaction abandonnée",
+  "contention",
+  "precondition failed",
 ];
 
 /**

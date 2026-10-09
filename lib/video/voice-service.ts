@@ -190,6 +190,12 @@ export async function saveVoiceRecording(params: {
 
 export interface NarrationResult {
   assetId: string;
+  /**
+   * Task 113 — clé R2 de l'audio (canal vidéo propriétaire) : permet aux
+   * appelants (route generate-voice) de signer une URL de LECTURE et de
+   * renvoyer le RÉSULTAT audible à l'utilisateur, pas seulement un identifiant.
+   */
+  r2Key: string;
   voiceIdUsed: string;
   charactersUsed: number;
   durationSec?: number;
@@ -327,6 +333,7 @@ export async function generateSceneNarration(params: {
   });
   return {
     assetId: asset.id,
+    r2Key: asset.r2Key,
     voiceIdUsed: tts.voiceId,
     charactersUsed: tts.charactersUsed,
     durationSec: asset.media?.durationSec,
@@ -360,5 +367,5 @@ export async function attachRecordingAsNarration(params: {
     contentType: "audio/webm",
     body: audio,
   });
-  return { assetId: asset.id, voiceIdUsed: "user_recording", charactersUsed: 0, durationSec: asset.media?.durationSec };
+  return { assetId: asset.id, r2Key: asset.r2Key, voiceIdUsed: "user_recording", charactersUsed: 0, durationSec: asset.media?.durationSec };
 }

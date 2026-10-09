@@ -111,9 +111,14 @@ export const voiceSpeakTool: ToolDefinition<
         url = key;
         storage = "r2";
       }
-    } catch {
+    } catch (storageError) {
       // Stockage indisponible (R2 non configuré, panne, quota) : on garde
-      // le data URI inline — jamais d'échec de synthèse pour un échec de stockage.
+      // le data URI inline — jamais d'échec de synthèse pour un échec de
+      // stockage. Task 113 : l'incident est JOURNALISÉ (plus de catch muet).
+      console.warn(
+        "[voice.speak] archivage R2 permanent échoué — audio livré en data URI inline :",
+        storageError instanceof Error ? storageError.message : String(storageError),
+      );
     }
 
     return {

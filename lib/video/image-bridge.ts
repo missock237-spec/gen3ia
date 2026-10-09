@@ -18,7 +18,7 @@ import "server-only";
  */
 
 import { editImageWithAgnes, ImageGenerationError } from "@/lib/ai/image-generation";
-import { generateImageWithFallback } from "@/lib/ai/hf-image-fallback";
+import { generateImageWithFallback, isAgnesUnavailableError } from "@/lib/ai/hf-image-fallback";
 import { composeScenePrompt, bindReference } from "@/lib/video/consistency-engine";
 import { registerAsset, getAsset } from "@/lib/video/asset-service";
 import { downloadAssetContent } from "@/lib/video/asset-service";
@@ -95,16 +95,36 @@ export async function generateSceneImage(params: {
   let imageUrl: string;
   try {
     if (referenceUris.length > 0) {
-      const edited = await editImageWithAgnes({
-        prompt: composed.prompt,
-        images: referenceUris,
-        size: sizeFor(project.resolution),
-        ratio: agnesRatio(project.aspectRatio),
-      });
-      imageUrl = edited.imageUrl;
+      try {
+        const edited = await editImageWithAgnes({
+          prompt: composed.prompt,
+          images: referenceUris,
+          size: sizeFor(project.resolution),
+          ratio: agnesRatio(project.aspectRatio),
+        });
+        imageUrl = edited.imageUrl;
+      } catch (editError) {
+        // Repli AUTOMATIQUE « résultat plutôt qu'échec » : si la composition
+        // multi-images Agnes est indisponible (limite de crédit, clé rejetée,
+        // panne 5xx, rate-limit, timeout) — SEULEMENT dans ce cas — la scène
+        // est produite en text-to-image (repli Hugging Face Z-Image-Turbo
+        // inclus). La cohérence de référence est moins forte mais la vidéo
+        // aboutit au lieu de mourir à l'étape des visuels.
+        if (!isAgnesUnavailableError(editError)) throw editError;
+        console.warn(
+          `[image-bridge] composition Agnes indisponible pour ${scene.id} (${editError instanceof ImageGenerationError ? editError.code : "erreur"}) — repli text-to-image pour livrer la scène.`,
+        );
+        const generated = await generateImageWithFallback({
+          prompt: composed.prompt,
+          ratio: agnesRatio(project.aspectRatio),
+          userId,
+        });
+        imageUrl = generated.imageUrl;
+      }
     } else {
-      // Reprise AUTOMATIQUE : limite de crédit Agnes (code d'erreur) →
-      // Hugging Face Z-Image-Turbo termine la scène (lib/ai/hf-image-fallback).
+      // Reprise AUTOMATIQUE : limite de crédit OU indisponibilité technique
+      // d'Agnes (code d'erreur) → Hugging Face Z-Image-Turbo termine la scène
+      // (lib/ai/hf-image-fallback).
       const generated = await generateImageWithFallback({
         prompt: composed.prompt,
         ratio: agnesRatio(project.aspectRatio),

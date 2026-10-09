@@ -174,9 +174,14 @@ export async function persistGeneratedImage(
     // téléchargement immédiat) ; le handle durable reste storagePath.
     const url = await createR2DownloadUrl(key, SIGNED_URL_TTL_S);
     return { url, storage: "r2", storagePath: key };
-  } catch {
+  } catch (persistError) {
     // Dégradation gracieuse (parité avec le chat) : JAMAIS de throw — un
     // échec d'archivage ne doit pas annuler une génération réussie.
+    // Task 113 : l'incident est JOURNALISÉ (plus de catch muet).
+    console.warn(
+      "[media-persist] archivage permanent échoué — source d'origine conservée :",
+      persistError instanceof Error ? persistError.message : String(persistError),
+    );
     return { url: original, storage: "provider" };
   }
 }

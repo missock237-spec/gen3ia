@@ -79,6 +79,7 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
   const [versionIndex, setVersionIndex] = useState(0);
   const [copied, setCopied] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [resolveAttempt, setResolveAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [shareNote, setShareNote] = useState("");
 
@@ -123,7 +124,7 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
     return () => {
       cancelled = true;
     };
-  }, [previewPath, resolveFileUrl]);
+  }, [previewPath, resolveFileUrl, resolveAttempt]);
 
   const copy = async (text: string) => {
     try {
@@ -313,14 +314,38 @@ export function ArtifactPanel({ artifacts, resolveFileUrl, className = "", varia
               />
             )}
 
-            {selected.type === "audio" && (
-              <audio
-                controls
-                preload="metadata"
-                src={currentVersion.content?.startsWith("data:") ? currentVersion.content : previewUrl ?? currentVersion.url}
-                className="mt-2 w-full"
-              />
-            )}
+            {selected.type === "audio" && (() => {
+              // Task 113 — le lecteur ne reçoit QUE une URL réellement
+              // jouable (data URI, http(s), blob). Une CLÉ de stockage brute
+              // (repli historique) produisait un lecteur muet sans aucun
+              // message : désormais l'échec de résolution est VISIBLE avec
+              // une action de re-tentative.
+              const rawAudio = currentVersion.content?.startsWith("data:")
+                ? currentVersion.content
+                : previewUrl ?? currentVersion.url;
+              const playable =
+                typeof rawAudio === "string" &&
+                (rawAudio.startsWith("data:") || rawAudio.startsWith("http://") || rawAudio.startsWith("https://") || rawAudio.startsWith("blob:"));
+              if (playable) {
+                return <audio controls preload="metadata" src={rawAudio} className="mt-2 w-full" />;
+              }
+              return (
+                <div className="mt-2 flex items-center justify-between rounded-lg border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2.5">
+                  <p className="text-xs text-[var(--g3-text-secondary)]">
+                    {previewPath ? "Écoute indisponible pour le moment." : "Audio indisponible (aucun fichier attaché)."}
+                  </p>
+                  {previewPath ? (
+                    <button
+                      type="button"
+                      onClick={() => setResolveAttempt((n) => n + 1)}
+                      className="g3-btn g3-btn-ghost !min-h-0 !px-2 !py-1 text-[11px]"
+                    >
+                      Réessayer
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })()}
 
             {selected.type === "code" && currentVersion.content && (
               <pre className="g3-code mt-2 max-h-96 overflow-auto rounded-lg p-3 text-xs leading-relaxed" data-language={selected.language}>

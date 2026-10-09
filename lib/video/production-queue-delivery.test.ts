@@ -166,6 +166,7 @@ vi.mock("@/lib/queue/qstash", () => ({
 // aussi les import() dynamiques).
 const chatRepo = vi.hoisted(() => ({
   appendMessage: vi.fn(async (..._args: unknown[]) => ({ id: "msg-1" })),
+  listMessages: vi.fn(async (..._args: unknown[]) => [] as Array<{ role: string; content: string }>),
 }));
 
 const artifactRepo = vi.hoisted(() => ({
@@ -175,6 +176,7 @@ const artifactRepo = vi.hoisted(() => ({
 
 vi.mock("@/lib/chat/repository", () => ({
   appendMessage: chatRepo.appendMessage,
+  listMessages: chatRepo.listMessages,
 }));
 
 vi.mock("@/lib/domain/artifacts/repository", () => ({
@@ -252,6 +254,7 @@ beforeEach(() => {
   });
   vi.mocked(queueResume.queryJobDocs).mockResolvedValue([] as never);
   chatRepo.appendMessage.mockResolvedValue({ id: "msg-1" } as never);
+  chatRepo.listMessages.mockResolvedValue([] as never);
   artifactRepo.createArtifact.mockResolvedValue({ id: "art-1" } as never);
   artifactRepo.listArtifacts.mockResolvedValue([] as never);
   setDoc(baseJob());
@@ -392,7 +395,7 @@ describe("advanceProductionJob — livraison chat à la complétion (Task 107-a)
     expect(storedJob("job-1")).not.toHaveProperty("chatDeliveredAt");
   });
 
-  it("échec d'appendMessage → marqueur EFFACÉ (reprise possible), tick NON-FAILING", async () => {
+  it("échec d'appendMessage → AUCUN marqueur posé (reprise possible), tick NON-FAILING", async () => {
     jobAtDone();
     vi.mocked(getJob).mockResolvedValue(completedRenderJob as never);
     chatRepo.appendMessage.mockRejectedValueOnce(new Error("Conversation introuvable."));
@@ -402,8 +405,11 @@ describe("advanceProductionJob — livraison chat à la complétion (Task 107-a)
     // Le tick terminal reste un SUCCÈS : la livraison n'est jamais bloquante.
     expect(result.status).toBe("completed");
     expect(result.done).toBe(true);
-    // Le marqueur est effacé → la reprise est possible au passage suivant.
-    expect(storedJob("job-1").chatDeliveredAt).toBe("");
+    // Task 113 — LIVRER D'ABORD, MARQUER ENSUITE : l'échec du message laisse
+    // le marqueur ABSENT (jamais posé) → la reprise est garantie au passage
+    // suivant (l'ancien design posait puis effaçait — l'effacement pouvait
+    // lui-même échouer et perdre le message pour toujours).
+    expect(storedJob("job-1")).not.toHaveProperty("chatDeliveredAt");
     // Incident journalisé (logSystem, jamais de console.log ni de throw).
     expect(logSystem).toHaveBeenCalledWith("proj-1", expect.stringMatching(/Livraison chat/));
     // Reprise : le passage suivant livre bien le message.
@@ -411,6 +417,25 @@ describe("advanceProductionJob — livraison chat à la complétion (Task 107-a)
     await advanceProductionJob("job-1");
     expect(chatRepo.appendMessage).toHaveBeenCalledTimes(2);
     expect(String(storedJob("job-1").chatDeliveredAt).length).toBeGreaterThan(0);
+  });
+
+  it("anti-doublon par LECTURE : message déjà dans le fil + marqueur absent → PAS de doublon, marqueur re-posé", async () => {
+    // Cas « message écrit mais marqueur jamais posé » (panne du magasin à
+    // l'instant du marquage) : la lecture du fil prouve la livraison déjà
+    // faite — le message n'est PAS dupliqué et le marqueur est réparé.
+    jobAtDone();
+    vi.mocked(getJob).mockResolvedValue(completedRenderJob as never);
+    chatRepo.listMessages.mockResolvedValue([
+      { role: "assistant", content: "Votre vidéo est prête 🎬 ... /studio/video/proj-1 ..." },
+    ] as never);
+
+    const result = await advanceProductionJob("job-1");
+
+    expect(result.status).toBe("completed");
+    expect(chatRepo.appendMessage).not.toHaveBeenCalled();
+    expect(artifactRepo.createArtifact).not.toHaveBeenCalled();
+    // Le marqueur manquant a été réparé (best-effort).
+    expect(typeof storedJob("job-1").chatDeliveredAt).toBe("string");
   });
 
   it("échec du rendu rattaché → message d'échec FR livré (étape, atelier, relance)", async () => {
@@ -455,14 +480,25 @@ describe("deliverJobToConversation — garde de conditions", () => {
     expect(queueResume.saveJobDoc).not.toHaveBeenCalled();
   });
 
-  it("marquage impossible (quota aussi côté miroir) → livraison reportée, aucun message", async () => {
-    vi.mocked(queueResume.saveJobDoc).mockRejectedValueOnce(new Error("Quota épuisé"));
+  it("marquage final impossible (panne magasin au marquage) → message QUAND MÊME livré, réparation au passage suivant", async () => {
+    // Task 113 — le marquage est best-effort EN FIN de livraison : une panne
+    // du magasin à ce moment n'empêche plus la livraison du message.
+    vi.mocked(queueResume.saveJobDoc).mockRejectedValue(new Error("Panne magasin"));
     const job = baseJob({ status: "completed", conversationId: "conv-1" }) as unknown as VideoProductionJob;
 
     await expect(deliverJobToConversation(job)).resolves.toBeUndefined();
 
-    expect(chatRepo.appendMessage).not.toHaveBeenCalled();
+    expect(chatRepo.appendMessage).toHaveBeenCalledTimes(1);
     expect(storedJob("job-1")).not.toHaveProperty("chatDeliveredAt");
+    // Réparation au passage suivant : l'anti-doublon par LECTURE reconnaît
+    // le message déjà livré, pose le marqueur (récupéré du rejet) et sort.
+    chatRepo.listMessages.mockResolvedValue([
+      { role: "assistant", content: "Votre vidéo est prête 🎬 ... /studio/video/proj-1 ..." },
+    ] as never);
+    vi.mocked(queueResume.saveJobDoc).mockRejectedValueOnce(new Error("Panne magasin"));
+    const job2 = baseJob({ status: "completed", conversationId: "conv-1" }) as unknown as VideoProductionJob;
+    await expect(deliverJobToConversation(job2)).resolves.toBeUndefined();
+    expect(chatRepo.appendMessage).toHaveBeenCalledTimes(1); // pas de doublon
   });
 });
 

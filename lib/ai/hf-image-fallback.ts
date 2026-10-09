@@ -15,12 +15,18 @@ import { ImageGenerationError, generateImageWithAgnes, type ImageRatio } from ".
  * HF_TOKEN côté serveur) — ce module lui AJOUTE uniquement la fonction
  * générateur d'images, même schéma de client.
  *
- * ACTIVATION STRICTE (demande produit) : la génération Hugging Face
- * n'intervient QUE lorsque le générateur principal (Agnes AI) a atteint sa
- * LIMITE DE CRÉDIT et renvoie un code d'erreur correspondant — détecté par
- * isAgnesCreditLimitError (statut HTTP 402 ou message explicite crédit/
- * quota/solde/billing). Toute autre erreur (timeout, prompt invalide, panne
- * 5xx, rate-limit transitoire) reste un échec honnête SANS repli.
+ * ACTIVATION (demande produit) : la génération Hugging Face intervient
+ * lorsque le générateur principal (Agnes AI) renvoie un code d'erreur qui
+ * empêche la livraison du résultat :
+ *   - LIMITE DE CRÉDIT (isAgnesCreditLimitError) : statut HTTP 402 ou
+ *     message explicite crédit/quota/solde/billing ;
+ *   - INDISPONIBILITÉ TECHNIQUE (isAgnesUnavailableError) : clé absente ou
+ *     rejetée (NOT_CONFIGURED, 401/403), panne 5xx, rate-limit 429,
+ *     timeout, erreur upstream — Z-Image-Turbo reprend la tâche pour que
+ *     la demande de l'utilisateur aboutisse au lieu d'un échec.
+ * Les SEULES erreurs sans repli sont les fautes de SAISIE utilisateur
+ * (prompt vide/invalide, image source invalide) : le même prompt échouerait
+ * pareillement sur le repli.
  *
  * La reprise est AUTOMATIQUE et TRANSPARENTE : generateImageWithFallback
  * rejoue la tâche abandonnée par Agnes sur Z-Image-Turbo et retourne le
@@ -52,6 +58,29 @@ export function isAgnesCreditLimitError(error: unknown): boolean {
   if (error.httpStatus === 402) return true;
   if (error.code === "NOT_CONFIGURED" || error.code === "INVALID_PROMPT" || error.code === "INVALID_IMAGE") return false;
   return /(?:cr[ée]dit|solde|balance|quota|insufficient|payment|billing|exhaust|[ée]puis)/i.test(error.message);
+}
+
+/**
+ * Détection « générateur principal INDISPONIBLE » (extension additive) :
+ * la tâche de l'utilisateur ne peut pas aboutir sur Agnes pour une raison
+ * TECHNIQUE — crédit épuisé (ci-dessus), clé absente/rejetée, panne 5xx,
+ * rate-limit, timeout, erreur upstream. Le repli Hugging Face reprend la
+ * tâche pour livrer le résultat au lieu d'un échec.
+ * EXCLUSIONS : les fautes de saisie (INVALID_PROMPT / INVALID_IMAGE) — le
+ * même prompt échouerait pareillement sur le repli, elles restent des
+ * erreurs honnêtes sans génération de secours.
+ */
+export function isAgnesUnavailableError(error: unknown): boolean {
+  if (!(error instanceof ImageGenerationError)) return false;
+  if (error.code === "INVALID_PROMPT" || error.code === "INVALID_IMAGE") return false;
+  if (isAgnesCreditLimitError(error)) return true;
+  if (error.code === "NOT_CONFIGURED" || error.code === "UPSTREAM_ERROR" || error.code === "TIMEOUT") return true;
+  if (typeof error.httpStatus === "number") {
+    if (error.httpStatus === 401 || error.httpStatus === 403 || error.httpStatus === 408) return true;
+    if (error.httpStatus === 429) return true;
+    if (error.httpStatus >= 500) return true;
+  }
+  return false;
 }
 
 /** Dimensions Z-Image-Turbo par ratio (multiple de 16, plafond 1280 px). */
@@ -159,11 +188,11 @@ export interface FallbackImageResult {
 
 /**
  * Génération avec reprise automatique : Agnes AI d'abord (voie principale),
- * et UNIQUEMENT sur erreur de limite de crédit → Hugging Face Z-Image-Turbo
- * reprend la tâche abandonnée. L'image du repli est archivée en R2 PERMANENT
- * (users/<uid>/permanent/ai-images/) avec URL signée ; sans R2, data URI
- * inline si la taille le permet — sinon l'erreur Agnes d'origine est
- * relancée (honnêteté : jamais de promesse non tenable).
+ * et sur erreur de limite de crédit OU d'indisponibilité technique → Hugging
+ * Face Z-Image-Turbo reprend la tâche abandonnée. L'image du repli est
+ * archivée en R2 PERMANENT (users/<uid>/permanent/ai-images/) avec URL
+ * signée ; sans R2, data URI inline si la taille le permet — sinon l'erreur
+ * Agnes d'origine est relancée (honnêteté : jamais de promesse non tenable).
  */
 export async function generateImageWithFallback(options: {
   prompt: string;
@@ -182,10 +211,12 @@ export async function generateImageWithFallback(options: {
     });
     return { ...image, provider: "agnes" };
   } catch (error) {
-    if (!isAgnesCreditLimitError(error)) throw error;
+    if (!isAgnesUnavailableError(error)) throw error;
     if (!isHuggingFaceImageEnabled()) throw error;
+    const reason = isAgnesCreditLimitError(error) ? "limite de crédit" : "indisponibilité technique";
+    const detail = error instanceof ImageGenerationError ? `${error.code}${error.httpStatus ? ` HTTP ${error.httpStatus}` : ""}` : "erreur";
     console.warn(
-      `[hf-image-fallback] limite de crédit Agnes détectée — reprise automatique sur ${HF_IMAGE_MODEL}`,
+      `[hf-image-fallback] Agnes indisponible (${reason} — ${detail}) — reprise automatique sur ${HF_IMAGE_MODEL}`,
     );
   }
 

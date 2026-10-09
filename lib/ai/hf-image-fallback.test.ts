@@ -3,8 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * Tests du fallback Hugging Face (Z-Image-Turbo) :
  *  - détection DÉTERMINISTE de la limite de crédit Agnes (code d'erreur) ;
- *  - reprise AUTOMATIQUE de la tâche abandonnée (uniquement sur crédit) ;
- *  - aucun repli sur les autres erreurs (timeout, prompt, panne 5xx) ;
+ *  - détection ÉTENDUE (Task 113) : toute INDISPONIBILITÉ TECHNIQUE Agnes
+ *    (clé absente/rejetée, panne 5xx, rate-limit 429, timeout, upstream)
+ *    déclenche le repli — le résultat est livré au lieu d'un échec ;
+ *  - AUCUN repli sur les fautes de saisie (prompt/image invalide) ;
+ *  - reprise AUTOMATIQUE de la tâche abandonnée ;
  *  - archivage R2 permanent du résultat HF (ou data URI inline sans R2).
  */
 
@@ -38,6 +41,7 @@ import {
   generateImageWithFallback,
   generateImageWithHuggingFace,
   isAgnesCreditLimitError,
+  isAgnesUnavailableError,
 } from "@/lib/ai/hf-image-fallback";
 import { createR2DownloadUrl, isR2Configured, uploadToR2 } from "@/lib/storage/r2";
 
@@ -71,13 +75,32 @@ describe("détection de la limite de crédit Agnes", () => {
     expect(isAgnesCreditLimitError(new ImageGenerationError("UPSTREAM_ERROR", "Agnes AI : quota exceeded for billing period"))).toBe(true);
   });
 
-  it("les autres erreurs ne déclenchent JAMAIS le repli", () => {
+  it("les autres erreurs ne déclenchent JAMAIS le repli (contrat CRÉDIT strict)", () => {
     expect(isAgnesCreditLimitError(new ImageGenerationError("TIMEOUT", "trop de temps"))).toBe(false);
     expect(isAgnesCreditLimitError(new ImageGenerationError("INVALID_PROMPT", "prompt invalide"))).toBe(false);
     expect(isAgnesCreditLimitError(new ImageGenerationError("NOT_CONFIGURED", "AGNES_API_KEY manquante"))).toBe(false);
     expect(isAgnesCreditLimitError(new ImageGenerationError("UPSTREAM_ERROR", "Agnes AI a renvoyé une erreur HTTP 500.", { httpStatus: 500 }))).toBe(false);
     expect(isAgnesCreditLimitError(new ImageGenerationError("UPSTREAM_ERROR", "Agnes AI : rate limit, too many requests", { httpStatus: 429 }))).toBe(false);
     expect(isAgnesCreditLimitError(new Error("erreur quelconque"))).toBe(false);
+  });
+
+  it("détection ÉLARGIE indisponibilité (Task 113) : crédit + panne technique → repli", () => {
+    // Crédit (inclus).
+    expect(isAgnesUnavailableError(new ImageGenerationError("UPSTREAM_ERROR", "Agnes AI : insufficient credits"))).toBe(true);
+    // Clé absente / rejetée.
+    expect(isAgnesUnavailableError(new ImageGenerationError("NOT_CONFIGURED", "AGNES_API_KEY manquante"))).toBe(true);
+    expect(isAgnesUnavailableError(new ImageGenerationError("UPSTREAM_ERROR", "clé invalide", { httpStatus: 401 }))).toBe(true);
+    expect(isAgnesUnavailableError(new ImageGenerationError("UPSTREAM_ERROR", "interdit", { httpStatus: 403 }))).toBe(true);
+    // Panne 5xx / rate-limit / timeout / upstream.
+    expect(isAgnesUnavailableError(new ImageGenerationError("UPSTREAM_ERROR", "Agnes AI a renvoyé une erreur HTTP 500.", { httpStatus: 500 }))).toBe(true);
+    expect(isAgnesUnavailableError(new ImageGenerationError("UPSTREAM_ERROR", "too many requests", { httpStatus: 429 }))).toBe(true);
+    expect(isAgnesUnavailableError(new ImageGenerationError("TIMEOUT", "trop de temps"))).toBe(true);
+    expect(isAgnesUnavailableError(new ImageGenerationError("UPSTREAM_ERROR", "upstream broke"))).toBe(true);
+    // Fautes de saisie : JAMAIS de repli (le même prompt échouerait pareil).
+    expect(isAgnesUnavailableError(new ImageGenerationError("INVALID_PROMPT", "prompt invalide"))).toBe(false);
+    expect(isAgnesUnavailableError(new ImageGenerationError("INVALID_IMAGE", "image source invalide"))).toBe(false);
+    // Non-ImageGenerationError : pas de repli (le module ne masque rien).
+    expect(isAgnesUnavailableError(new Error("erreur quelconque"))).toBe(false);
   });
 
   it("dimensions par ratio (multiple de 16, plafond 1280)", () => {
@@ -121,9 +144,27 @@ describe("generateImageWithFallback", () => {
     expect(textToImageMock).not.toHaveBeenCalled();
   });
 
-  it("erreur NON crédit (timeout) → échec honnête, HF jamais appelé", async () => {
-    agnesMock.mockRejectedValue(new ImageGenerationError("TIMEOUT", "trop de temps"));
-    await expect(generateImageWithFallback({ prompt: "un logo", userId: "u1" })).rejects.toMatchObject({ code: "TIMEOUT" });
+  it("indisponibilité technique (timeout, 5xx, 401, 429) → HF reprend la tâche (Task 113)", async () => {
+    for (const agnesError of [
+      new ImageGenerationError("TIMEOUT", "trop de temps"),
+      new ImageGenerationError("UPSTREAM_ERROR", "Agnes AI a renvoyé une erreur HTTP 500.", { httpStatus: 500 }),
+      new ImageGenerationError("UPSTREAM_ERROR", "clé rejetée", { httpStatus: 401 }),
+      new ImageGenerationError("UPSTREAM_ERROR", "too many requests", { httpStatus: 429 }),
+      new ImageGenerationError("NOT_CONFIGURED", "AGNES_API_KEY manquante"),
+    ]) {
+      agnesMock.mockReset();
+      textToImageMock.mockReset();
+      agnesMock.mockRejectedValue(agnesError);
+      textToImageMock.mockResolvedValue(blobFrom([137, 80, 78, 71]));
+      const result = await generateImageWithFallback({ prompt: "un logo", userId: "u1" });
+      expect(result.provider).toBe("huggingface");
+      expect(textToImageMock).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("faute de saisie (prompt invalide) → échec honnête, HF jamais appelé", async () => {
+    agnesMock.mockRejectedValue(new ImageGenerationError("INVALID_PROMPT", "prompt invalide"));
+    await expect(generateImageWithFallback({ prompt: "un logo", userId: "u1" })).rejects.toMatchObject({ code: "INVALID_PROMPT" });
     expect(textToImageMock).not.toHaveBeenCalled();
   });
 
