@@ -9,7 +9,6 @@ import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import {
   qstashConfig,
   verifyUpstashSignature,
-  computeUpstashSignature,
   publishMissionTick,
 } from "@/lib/queue/qstash";
 import {
@@ -97,23 +96,7 @@ export async function POST(request: NextRequest) {
   }
   if (!verifyUpstashSignature(config, rawBody, request.headers.get("upstash-signature"), "/api/queue/mission-tick")) {
     log.warn({ event: "queue.tick.unauthorized" }, "Signature QStash invalide");
-    // DIAGNOSTIC TEMPORAIRE (Task 114 — À RETIRER) : QStash enregistre le
-    // corps de notre 401 dans ses événements de livraison ; y embarquer les
-    // empreintes nécessaires pour réconcilier signature envoyée vs attendue
-    // (HMAC tronqués de corps connus : non réutilisables).
-    const sigHeader = request.headers.get("upstash-signature");
-    const diag = {
-      sigHeaderPresent: Boolean(sigHeader),
-      sigHeaderSample: typeof sigHeader === "string" ? sigHeader.slice(0, 800) : null,
-      bodyLen: rawBody.length,
-      bodyPrefix: Buffer.from(rawBody, "utf8").toString("base64").slice(0, 44),
-      expectedCurrentPrefix: computeUpstashSignature(config.currentSigningKey, rawBody).slice(0, 16),
-      expectedNextPrefix: computeUpstashSignature(config.nextSigningKey, rawBody).slice(0, 16),
-      currentFp: config.currentSigningKey.slice(0, 10),
-      nextFp: config.nextSigningKey.slice(0, 10),
-    };
-    console.warn("[mission-tick][diag]", JSON.stringify(diag));
-    return NextResponse.json({ error: "Signature invalide", diag }, { status: 401 });
+    return NextResponse.json({ error: "Signature invalide" }, { status: 401 });
   }
 
   // 3) Charge utile minimale.
