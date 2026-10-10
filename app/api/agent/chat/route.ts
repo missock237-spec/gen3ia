@@ -1073,6 +1073,8 @@ export async function POST(request: NextRequest) {
         const { createVideoProductionJob } = await import("@/lib/video/production-queue");
         const job = await createVideoProductionJob({
           userId: user.uid,
+          // LIVRAISON CHAT (Task 114) : voir le commentaire du chemin agent.
+          conversationId,
           prompt: body.message.trim().slice(0, 4000),
           title: extractVideoTitle(body.message),
         });
