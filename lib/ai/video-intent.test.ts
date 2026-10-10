@@ -298,3 +298,19 @@ describe("resolveVoiceRequestFromContext (suivi de clarification — capture 1)"
     expect(isVoiceClarifyingQuestion("Quelle est la capitale du Cameroun ?")).toBe(false);
   });
 });
+
+describe("extractVoiceRequestText — durée rejetée comme texte à lire (fix suivi capture 1)", () => {
+  it("« un audio de 5s » n'a PAS de texte à lire → null (question de clarification)", () => {
+    expect(extractVoiceRequestText("Peut tu me générer un audio de 5s")).toBeNull();
+    expect(extractVoiceRequestText("génère un audio de 30 secondes")).toBeNull();
+  });
+
+  it("une durée suivie du texte réel conserve le texte", () => {
+    expect(extractVoiceRequestText("génère un audio de 5s qui dit bonjour à tous")?.text2speak).toBe("bonjour à tous");
+    expect(extractVoiceRequestText("un audio de 30 secondes disant bienvenue")?.text2speak).toBe("bienvenue");
+  });
+
+  it("une durée en minutes est également rejetée", () => {
+    expect(extractVoiceRequestText("fais-moi un audio de 2 min")).toBeNull();
+  });
+});

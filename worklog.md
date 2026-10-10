@@ -3195,3 +3195,18 @@ Work Log:
 Stage Summary:
 - Les 2 captures sont corrigées À LA RACINE : (1) l'audio est synthétisé et LIVRÉ dans le chat workspace (intercept + suivi contextuel + clarification déterministe — le LLM ne peut plus prétendre que la plateforme ne fait pas d'audio) ; (2) « Créé une vidéo de 5s… » lance RÉELLEMENT la production (détection unicode + durée bornée 5→10 s + défense en profondeur à l'entrée du pipeline).
 - Agent universel : les prompts (moteur conversationnel + planificateur missions) interdisent tout refus de cadre ; les outils image/vidéo/audio/analyse sont au catalogue (sans approbation) et l'agent doit demander les accès/outils manquants à l'utilisateur au lieu de refuser.
+
+---
+Task ID: 116-b (correctif de contenu audio — durée lue à voix haute)
+Agent: main (Super Z)
+Task: Vérification production post-25c5916 : la capture 1 (audio) livrait un audio disant littéralement « 5s » — l'extraction capturait la DURÉE (« un audio de 5s » → « 5s ») comme texte à synthétiser au lieu de poser la question de clarification.
+
+Work Log:
+- Constat (repro production) : « Peut tu me générer un audio de 5s » → artefact audio:5s livré (le contenu parlé était « 5s ») au lieu de la question déterministe « quel texte ? ».
+- FIX (lib/ai/video-intent.ts) : LEADING_DURATION_RE retire une phrase de DURÉE en tête de capture (5s / 30 secondes / 2 min / 1 h…) + connecteur de parole qui suit (qui dit / disant / avec le texte) ; capture vide après retrait → null → question de clarification déterministe ; « un audio de 5s qui dit bonjour » conserve « bonjour ».
+- TESTS (+3) : « audio de 5s »/« 30 secondes »/« 2 min » → null ; durée + texte réel → texte conservé ; connecteur retiré.
+- VALIDATION : tsc 0 ; eslint 0 ; vitest complet 287 fichiers / 3 022 verts + 2 skipped.
+- Redéploiement + repro final (les 3 tours : demande audio → question → réponse → audio livré ; vidéo 5s → lancée).
+
+Stage Summary:
+- Le scénario capture 1 devient exact : demande d'audio sans texte → question déterministe (jamais de synthèse d'une durée, jamais de refus, jamais de tuto) → réponse de l'utilisateur synthétisée et LIVRÉE (artefact R2 + lien signé).

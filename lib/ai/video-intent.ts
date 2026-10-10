@@ -403,11 +403,21 @@ function extraireTexteAParler(raw: string): string {
 }
 
 /**
+ * Phrases de DURÉE en tête de capture (« 5s », « 30 secondes », « 2 min… ») :
+ * « un audio de 5s » ne demande PAS de lire « 5s » à voix haute (capture
+ * 13:02 — l'audio livré disait littéralement « cinq secondes »). La durée est
+ * retirée de la capture ; s'il ne reste rien, la demande n'a PAS de texte
+ * identifiable → question de clarification déterministe.
+ */
+const LEADING_DURATION_RE =
+  /^\s*\d{1,4}\s*(?:s|sec\.?|secs?|secondes?|m|min\.?|mins?|minutes?|h|heures?)\b[\s,.:;—–-]*/i;
+
+/**
  * Extrait le TEXTE À SYNTHÉTISER d'une demande de voix-off (« voix off
  * disant X », « génère un audio qui dit X », « lis ce texte à voix haute :
  * X »). PUR, zéro LLM. Retourne null quand la demande ne contient pas de
- * texte exploitable (le flux normal — planificateur + outil voice.speak —
- * prend alors le relais).
+ * texte exploitable (le flux normal — question de clarification
+ * déterministe + planificateur + outil voice.speak — prend alors le relais).
  */
 export function extractVoiceRequestText(text: string): VoiceRequestText | null {
   const trimmed = text.trim();
@@ -430,7 +440,15 @@ export function extractVoiceRequestText(text: string): VoiceRequestText | null {
     const match = trimmed.match(pattern);
     const captured = match?.[1];
     if (captured) {
-      const text2speak = extraireTexteAParler(captured);
+      // Une DURÉE en tête de capture n'est pas un texte à faire entendre
+      // (« un audio de 5s » → capture « 5s » → rejetée ; « un audio de 5s
+      // disant bonjour » → « 5s » retiré → « bonjour » conservé). Le
+      // connecteur de parole qui suit la durée est retiré avec elle.
+      const sansDuree = captured
+        .replace(LEADING_DURATION_RE, "")
+        .replace(/^\s*(?:qui\s+dit|disant|avec\s+(?:le\s+|ce\s+)?texte)\s*[:\-—]?\s*/i, "")
+        .trim();
+      const text2speak = extraireTexteAParler(sansDuree);
       if (text2speak.length >= 2) {
         return { text2speak: text2speak.slice(0, 2500) };
       }
