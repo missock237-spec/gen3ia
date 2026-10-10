@@ -493,7 +493,12 @@ export class AgentRuntime {
       executionId: this.state.executionId,
       complexity,
       request: {
-        task: step.type === "document" ? "document" : "agent",
+        // TÂCHE LLM (Task 114) : la tâche "document" n'est déclarée chez
+        // AUCUN fournisseur dans lib/ai/config.ts — un step "document"
+        // échouait systématiquement (« No configured provider »). La
+        // rédaction de livrables est servie par la capacité "agent"
+        // (mêmes modèles, même contexte d'exécution).
+        task: "agent",
         ...(AgentRuntime.safeProvider(this.agentConfig?.provider) ? { provider: AgentRuntime.safeProvider(this.agentConfig?.provider) } : {}),
         ...(this.agentConfig?.model ? { model: this.agentConfig.model } : {}),
         ...(typeof this.agentConfig?.temperature === "number" && this.agentConfig.temperature >= 0 && this.agentConfig.temperature <= 2
