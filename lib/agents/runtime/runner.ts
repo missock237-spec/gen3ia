@@ -6,6 +6,7 @@ import { getAgentForUser } from "@/lib/agents/repository";
 import { executeToolSecurely } from "./secure-tool-executor";
 import { ExecutionPolicy, DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
 import { RuntimeExecutionState, RuntimePlan, RuntimeStep } from "./types";
+import { sanitizeDocumentPlan } from "@/lib/documents/types";
 import { createCheckpoint, saveCheckpoint } from "./checkpoint";
 import { getReadySteps, validateDAG } from "./dag";
 import { RuntimeScheduler } from "./scheduler";
@@ -575,7 +576,9 @@ export class AgentRuntime {
       executionId: this.state.executionId,
       complexity: 1,
       request: {
-        task: "document",
+        // TÂCHE (Task 114) : "document" n'est servie par aucun fournisseur —
+        // la capacité "agent" porte la rédaction de livrables.
+        task: "agent",
         ...(AgentRuntime.safeProvider(this.agentConfig?.provider) ? { provider: AgentRuntime.safeProvider(this.agentConfig?.provider) } : {}),
         ...(this.agentConfig?.model ? { model: this.agentConfig.model } : {}),
         messages: [
@@ -592,7 +595,9 @@ export class AgentRuntime {
 
     let documentPlan: z.infer<typeof ARTIFACT_PLAN_SCHEMA>;
     try {
-      documentPlan = ARTIFACT_PLAN_SCHEMA.parse(extractJsonCandidate(billed.response.text));
+      // SANITIZER (Task 114) : un écart de format du modèle (type de bloc
+      // inventé, URL malformée) ne fait JAMAIS échouer la rédaction.
+      documentPlan = ARTIFACT_PLAN_SCHEMA.parse(sanitizeDocumentPlan(extractJsonCandidate(billed.response.text)));
     } catch (error) {
       throw new Error(`Le contenu du livrable n'a pas pu être rédigé : ${error instanceof Error ? error.message.slice(0, 200) : "réponse non structurée"}`);
     }
