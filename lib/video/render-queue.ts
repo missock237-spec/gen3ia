@@ -1147,16 +1147,32 @@ async function stageQc(job: RenderJob, io: EngineIo): Promise<StageOutcome> {
 /** EXPORTS : formats dérivés (9:16 avec sous-titres Shorts, 1:1…). */
 async function stageExports(job: RenderJob, io: EngineIo): Promise<StageOutcome> {
   const plan = job.plan!;
+  const pending = job.exports.filter((e) => e.status === "pending");
   // Master présent dans le tmp ? Sinon (job d'export seul), matérialisation depuis R2.
   const { access } = await import("node:fs/promises");
   try {
     await access(`${io.tmpDir}/master.mp4`);
   } catch {
-    if (!plan.masterR2Key) throw new Error("Master absent du tmp et aucune clé R2 de référence.");
-    await io.materializeByName(plan.masterR2Key, "master.mp4");
-    await io.log("Master téléchargé depuis le stockage pour les exports.");
+    if (plan.masterR2Key) {
+      await io.materializeByName(plan.masterR2Key, "master.mp4");
+      await io.log("Master téléchargé depuis le stockage pour les exports.");
+    } else if (pending.length === 0) {
+      // Aucun export à produire : le master tmp n'est PAS nécessaire ici —
+      // l'étape finalize a sa propre garde cross-instance (resetToSegments).
+      // Lancé une erreur ici consommait le budget retryCount d'un job dont
+      // le rendu avait DÉJÀ réussi (QC validée) et le faisait échouer
+      // définitivement pour rien (incident constaté en production : tick
+      // interrompu pendant exports, tmp perdu, exports vides).
+      await io.log("Exports : aucun format dérivé à produire — étape franchie sans master tmp.");
+    } else {
+      // Exports PENDANTS mais master irrécupérable (tmp perdu par une
+      // interruption serverless, master pas encore téléversé — le téléverse
+      // n'a lieu qu'au finalize) : rollback déterministe vers les segments,
+      // le même garde que l'étape QC (re-rendu complet puis re-passage).
+      await resetToSegments(job.id, job, "master absent à l'étape exports (instance relais)");
+      return { kind: "continue", stage: "segments", message: "Reprise : master absent, rendu relancé." };
+    }
   }
-  const pending = job.exports.filter((e) => e.status === "pending");
   for (const target of pending) {
     const isVertical = target.target.endsWith("9_16");
     let assFileName: string | undefined;

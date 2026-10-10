@@ -471,6 +471,77 @@ describe("stageFinalize — idempotence", () => {
 });
 
 // ---------------------------------------------------------------------------
+// stageExports — garde cross-instance du master (incident production T117 :
+// tick interrompu pendant exports, tmp perdu, retryCount épuisé pour rien)
+// ---------------------------------------------------------------------------
+
+describe("stageExports — master tmp absent (reprise après interruption)", () => {
+  it("exports VIDES : aucun master requis, PAS d'erreur, PAS de budget consommé, étape franchie", async () => {
+    // Répertoire tmp EXISTANT mais VIDE (recréé par createJobTmpDir après
+    // l'interruption) : master.mp4 absent, masterR2Key non téléversé.
+    const { mkdir, rm } = await import("node:fs/promises");
+    await mkdir("/tmp/gen3ia-render-test", { recursive: true });
+    const job = baseJob({
+      status: "processing",
+      stage: "exports",
+      leaseOwner: null,
+      leaseExpiresAt: 0,
+      exports: [],
+      checkpoints: { ...baseJob().checkpoints, qcDone: true },
+    });
+    setDoc(job);
+    vi.mocked(queueResume.loadJobDoc).mockResolvedValue({ ...job, stage: "finalize" } as never);
+
+    try {
+      const result = await advanceJob("job-1");
+
+      // L'ancien code levait « Master absent du tmp et aucune clé R2 de
+      // référence » ici : 3 relances puis échec définitif d'un rendu qui
+      // avait DÉJÀ validé sa QC. Le nouveau garde franchit l'étape.
+      expect(result.done).toBe(false);
+      expect(result.status).not.toBe("failed");
+      const patches = vi.mocked(queueResume.saveJobDoc).mock.calls.map((c) => c[2] as Record<string, unknown>);
+      const consumedBudget = patches.some((p) => "retryCount" in p || p.status === "failed");
+      expect(consumedBudget).toBe(false);
+      const lastPatch = patches.at(-1);
+      expect(lastPatch).toMatchObject({ stage: "finalize" });
+    } finally {
+      await rm("/tmp/gen3ia-render-test", { recursive: true, force: true });
+    }
+  });
+
+  it("exports PENDANTES : rollback déterministe vers segments (même garde que QC), budget intact", async () => {
+    const { mkdir, rm } = await import("node:fs/promises");
+    await mkdir("/tmp/gen3ia-render-test", { recursive: true });
+    const job = baseJob({
+      status: "processing",
+      stage: "exports",
+      leaseOwner: null,
+      leaseExpiresAt: 0,
+      exports: [{ target: "shorts_9_16", r2Key: "", sizeBytes: 0, status: "pending" }],
+    });
+    setDoc(job);
+    vi.mocked(queueResume.loadJobDoc).mockResolvedValue({ ...job, stage: "segments" } as never);
+
+    try {
+      const result = await advanceJob("job-1");
+
+      expect(result.done).toBe(false);
+      expect(result.status).not.toBe("failed");
+      const patches = vi.mocked(queueResume.saveJobDoc).mock.calls.map((c) => c[2] as Record<string, unknown>);
+      // resetToSegments a écrit le rollback complet (étape + checkpoints purgés)
+      const rollback = patches.find((p) => p.stage === "segments" && "checkpoints.completedSegments" in p);
+      expect(rollback).toBeTruthy();
+      expect((rollback as Record<string, unknown>)["checkpoints.completedSegments"]).toEqual([]);
+      const consumedBudget = patches.some((p) => "retryCount" in p || p.status === "failed");
+      expect(consumedBudget).toBe(false);
+    } finally {
+      await rm("/tmp/gen3ia-render-test", { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // sweepStaleRenderJobs — couche résiliente + réconciliation opportuniste
 // ---------------------------------------------------------------------------
 
