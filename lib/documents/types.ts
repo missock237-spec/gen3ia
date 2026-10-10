@@ -189,6 +189,38 @@ export function sanitizeDocumentPlan(raw: unknown): unknown {
   return src;
 }
 
+
+
+/** Alias de formats LLM → formats canoniques (partagé runner + outil). */
+const FORMAT_ALIASES: Record<string, string> = {
+  word: "docx", doc: "docx", document: "docx",
+  excel: "xlsx", xls: "xlsx", spreadsheet: "xlsx", tableur: "xlsx",
+  powerpoint: "pptx", ppt: "pptx", slides: "pptx", presentation: "pptx", "présentation": "pptx",
+  markdown: "md",
+  text: "txt", texte: "txt", plain: "txt",
+  web: "html",
+};
+
+function formatCanonique(value: unknown): string {
+  const s = String(value ?? "pdf").trim().toLowerCase().replace(/^\./, "");
+  if (FORMAT_ALIASES[s]) return FORMAT_ALIASES[s];
+  return ["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html"].includes(s) ? s : "pdf";
+}
+
+/**
+ * Préparation complète de l'entrée de l'outil artifact.create (Task 114) :
+ * coercition de format + sanitizeDocumentPlan. À appliquer AVANT toute
+ * validation par le schéma de l'outil — notamment dans le runner (l'entrée
+ * est validée par lib/tools/executor AVANT tool.execute, une sanitisation
+ * uniquement DANS l'outil serait trop tardive).
+ */
+export function sanitizeArtifactToolInput(
+  input: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const base = input && typeof input === "object" ? { ...input } : {};
+  return sanitizeDocumentPlan({ ...base, format: formatCanonique(base.format) }) as Record<string, unknown>;
+}
+
 export const ArtifactInputSchema = z.object({
   filename: z.string().min(1).max(255),
 

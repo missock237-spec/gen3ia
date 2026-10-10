@@ -6,7 +6,7 @@ import { getAgentForUser } from "@/lib/agents/repository";
 import { executeToolSecurely } from "./secure-tool-executor";
 import { ExecutionPolicy, DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
 import { RuntimeExecutionState, RuntimePlan, RuntimeStep } from "./types";
-import { sanitizeDocumentPlan } from "@/lib/documents/types";
+import { sanitizeArtifactToolInput, sanitizeDocumentPlan } from "@/lib/documents/types";
 import { createCheckpoint, saveCheckpoint } from "./checkpoint";
 import { getReadySteps, validateDAG } from "./dag";
 import { RuntimeScheduler } from "./scheduler";
@@ -554,7 +554,11 @@ export class AgentRuntime {
       // Le contenu du livrable est finalisé juste avant la génération du
       // fichier — jamais de document vide ni d'échec zod opaque.
       const completedInput = await this.completeArtifactInput(step, input);
-      return executeToolSecurely({ userId: this.state.userId, projectId: this.projectId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName, input: completedInput, approvalId, policy: this.policy, signal: this.signal });
+      // SANITIZER (Task 114) : l'entrée est validée par lib/tools/executor
+      // AVANT tool.execute — la coercition doit donc précéder l'appel, sinon
+      // un écart de format du planificateur fait échouer la mission.
+      const preparedInput = sanitizeArtifactToolInput(completedInput as Record<string, unknown>);
+      return executeToolSecurely({ userId: this.state.userId, projectId: this.projectId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName, input: preparedInput, approvalId, policy: this.policy, signal: this.signal });
     }
     return executeToolSecurely({ userId: this.state.userId, projectId: this.projectId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName, input, approvalId, policy: this.policy, signal: this.signal });
   }
