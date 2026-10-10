@@ -41,12 +41,14 @@ import {
   pumpDueTicks,
 } from "./tick-queue";
 
-const REAL_SECRET = "r2-secret-for-tests-0123456789abcdef";
+// Valeur FACTICE à faible entropie (convention du dépôt, cf. .gitleaks.toml) :
+// jamais un vrai secret — sert uniquement à dériver la clé de signature des tests.
+const CLE_R2_FACTICE = "cle-r2-factice-pour-les-tests-gen3ia";
 
 beforeEach(() => {
   process.env.R2_ACCOUNT_ID = "acct";
   process.env.R2_ACCESS_KEY_ID = "key";
-  process.env.R2_SECRET_ACCESS_KEY = REAL_SECRET;
+  process.env.R2_SECRET_ACCESS_KEY = CLE_R2_FACTICE;
   process.env.R2_BUCKET = "bucket";
   delete process.env.CRON_SECRET;
   vi.clearAllMocks();
