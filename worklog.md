@@ -3297,3 +3297,19 @@ Work Log:
 Stage Summary:
 - Un rendu vidéo ne peut plus échouer définitivement à l'étape exports pour un master tmp absent : le cas « zéro export » est franchi, le cas « exports pendantes » repart en re-rendu déterministe (garde alignée sur QC), le budget retryCount n'est plus gaspillé.
 - Contexte : incident découvert par la validation production post-Task 117 (file de ticks R2 opérationnelle — la mission web.search, la narration ElevenLabs et les livrables de planification sont tous validés en production).
+---
+Task ID: 118-b (validation production post-fix)
+Agent: main (Super Z)
+Task: Valider en production le fix Task 118 + l'ensemble Task 117 (compte réel gen3ia.online, sonde multi-phases scripts/task117-phase*.mjs).
+
+Work Log:
+- DÉPLOIEMENT : CI + CodeQL verts sur 0eb8aa8 ; nouveau déploiement Vercel actif (dpl_42bSViWjdi…) ; /api/health/infra → queueMode=r2-queue, R2 ok, FFmpeg 6.0.
+- A1 (3 chemins) : mission web.search async (202, file R2, completed), sync (200, completed — le bug exact du rapport initial) et plan EXPLICITE web.search (200, completed) — AUCUN « Tool not allowed ».
+- A2/A3 : 2 productions vidéo réelles avec voix off. Vidéo 1 (pré-fix) : échec définitif exports (cause racine du fix T118). Vidéo 2 (post-fix) : pipeline complet plan→script→assets→voice→render→done, production COMPLETED progress=1, master 10 s / 2 Mo téléversé R2 (renders/master.mp4), message de livraison « Votre vidéo est prête 🎬 » avec URL signée + lien atelier.
+- A3 : étape voice complétée sur les DEUX productions, narrationR2Key par scène, piste voix (track_voice) dans la timeline projet — plus aucun 500 « aucune voix ».
+- A5 : planification one-shot sur agent outillé — run completed (~20 s via tick R2), outputPreview persisté (« Mini-rapport de veille… AI for Africa… ») ; avec plan explicite artifact.create → 1 livrable réel (PDF 1292 octets, artefact R2) exposé sur le run.
+- Note (connue, sans impact utilisateur) : course concurrente possible entre ticks d'une même file de rendu (mon polling client + chaîne R2) — un job livré peut régresser vers processing jusqu'au sweep du cron quotidien ; l'idempotence alreadyDelivered (masterR2Key/output) garantit la convergence vers completed SANS re-facturation. Suivi possible : garde CAS « ne jamais rétrograder un statut terminal » sur writeCheckpointSet des files vidéo.
+
+Stage Summary:
+- VALIDATION PRODUCTION GLOBALE : 18/20 vérifications vertes (les 2 restantes = le bug T118 découvert/puis corrigé, et un comportement normal de planificateur texte sans artefact).
+- QStash n'existe plus : l'arrière-plan (missions, rendus vidéo, planifications) tourne intégralement sur la file de ticks R2 en production, sans plafond journalier, avec livraison et narration vérifiées de bout en bout.
