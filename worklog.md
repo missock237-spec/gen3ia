@@ -3086,3 +3086,28 @@ Stage Summary:
 - MARKETPLACE D'AGENTS P2P opérationnelle bout-en-bout : un utilisateur publie un de ses agents actifs à la location (UN listing par agent, upsert idempotent, catalogue public trié paginé), un autre loue l'agent pour une mission — le loyer est RÉSERVÉ sur son wallet AVANT toute exécution, la mission tourne sous son uid avec la charte du propriétaire (sous-agents privés et données privées hermétiquement exclus), et au tick final le règlement CAPTURE le loyer et le SCINDE (commission plateforme GEN3IA_MARKETPLACE_FEE_BPS, défaut 20 %, plafond 50 % / gain propriétaire crédité en wallet via le nouveau type « earning ») ou LIBÈRE tout sur échec/annulation. Réputation : avis 1..5 du locataire d'une location réussie, un avis par location (modifiable), stats et note moyenne transactionnelles.
 - SÉCURITÉ/FIABILITÉ : toute écriture scopée par vérification propriétaire côté serveur ; 404 anti-énumération partout ; auto-location interdite ; file de missions vérifiée AVANT tout prélèvement ; compensations systématiques (toute erreur post-réservation libère le loyer) ; règlement IDEMPOTENT (doc-ID ledger + CAS hire/listing) et FAIL-SOFT TOTAL vers mission-tick (les missions ordinaires ne paient qu'un GET de mapping absent) ; hooks escrow 114-a et livraison de mission inchangés.
 - Points d'attention / suite : (1) l'UI marketplace (catalogue, publication, suivi location) n'est pas demandée dans ce lot — API complète prête (GET/POST/PATCH/DELETE/hire/rate + mine) ; (2) un listing suspendu/archive ne bloque pas une location déjà « held » (le règlement lit le hire, pas le listing) — suspendre AVANT l'encaissement nécessite d'agir entre les ticks, accepté ; (3) les fonds « held » d'une mission marketplace sans tick final (kill avant ré-enfilement) restent réservés sans reaper dédié — même exposition que les escrows 114-a (TTL 7 j) mais hors reaper existant (walletHolds) : à couvrir si observé en prod ; (4) commission figée par location au moment de la location (changements d'env non rétroactifs) ; (5) scan r2fs plafonné à 200 listings / 100 locations — repli naturel sous croissance (pagination par curseur d'index côté catalogue).
+
+---
+Task ID: 114 (validation production)
+Agent: principal (Super Z)
+Task: V2 validée en production réelle — cycles multi-comptes simultanés, corrections majeures découvertes par les tests, mesure de capacité.
+
+Work Log:
+- 3 CAUSES RACINES DE PRODUCTION DÉCOUVERTES PAR LES TESTS RÉELS :
+  1) SIGNATURES QSTASH 2026 : Upstash-Signature est désormais un JWT HS256 (claim body=base64url(SHA256(corps)), exp/iat/jti/sub, sig=HMAC(clé, header.payload)) et non plus « v1,<hex> » — TOUTES les livraisons de ticks étaient rejetées 401 (missions ET vidéo bloquées). Verifier étendu aux DEUX schémas + clés réalignées via /v2/keys + anti-replay sub (suffixe URL par endpoint) + fraîcheur exp. Sonde de diagnostic temporaire (réponse 401 instrumentée, événements QStash lus côté serveur) — RETIRÉE après usage.
+  2) EXECUTIONID SERVEUR : l'executionId inventé par le LLM (« exec-001 » partagé par toutes les missions) mettait les checkpoints executions/{id} en collision → missions en boucle infinie. UUID régénéré côté serveur dans finaliserPlan (+ panne fournisseur planner → plan de repli déterministe).
+  3) POLICY EN FILE : mission-tick exécutait avec la policy par défaut (allowedTools: []) — tout outil prévu par le plan levait « Tool not allowed ». buildPlanExecutionPolicy (plan-policy.ts) appliquée à chaque tick.
+- ROBUSTESSE RÉSULTAT-PLUTÔT-QU'ÉCHEC : sanitizer de plans de documents (types de blocs inconnus → paragraph, URLs réparées, formats aliasés word→docx…) appliqué AVANT la validation executor (sanitizeArtifactToolInput) + generateArtifact + ARTIFACT_PLAN_SCHEMA ; coercition query des étapes de recherche (description = requête de repli) ; tâche LLM « document » (servie par AUCUN fournisseur) → « agent » (2 émetteurs) ; normalisation WinAnsi du PDF (U+2011 etc.) ; retry ×2 TTS de l'intercept voix-off.
+- LIVRAISON VIDÉO CHAT : conversationId transmis aux 2 intercepts vidéo du chat (deliverJobToConversation publie le rendu final + artefact dans le fil).
+- AUTO-RÉPARATION : le polling du propriétaire (/api/agents/runs/[runId]) republie le tick d'une mission orpheline (>30 s sans lease) — aucune mission ne peut rester bloquée sur un incident QStash.
+- VALIDATION PRODUCTION RÉELLE (harness scripts/prod-v2-harness.mjs, comptes Firebase réels) :
+  * CYCLE 1 — 18/18 : 3 comptes simultanés (session+wallet 3000 bienvenue, chat→mission complétée, voix-off livrée (audio R2), images livrées).
+  * CYCLE 2 — 19/19 : jumeau (PATCH/GET), 3 missions complètes avec escrow (réservation 50 F au lancement, CAPTURE exacte à la livraison, remboursement intégral sur échec — « échec = 0 »).
+  * CYCLE 3 — 15/15 : marketplace P2P (publication, catalogue, 2 locations complétées, loyers débités, gain propriétaire 80/20, avis).
+  * CAPACITÉ — 9/9 : wallet 56 rps @50 concurrents (p95 1,4 s, 0 erreur/1263 req), edge 33 rps, 9 missions simultanées acceptées en 20 s.
+  * CYCLE 4 — vidéo complète (rendu FFmpeg réel, stages project→done) + livraison chat vérifiée.
+- Suite locale : tsc 0, eslint 0, vitest complet vert (3 013 tests), sandbox inclus.
+
+Stage Summary:
+- V2 (concepts 1+2+3+5 fusionnés) opérationnelle en production : missions exécutées et livrées, escrow RCP exact, jumeau injecté, marketplace P2P fonctionnelle, interface universelle (chat/voix/image/vidéo livrés).
+- Cause racine historique des « échecs totaux » identifiée : la rupture de signature QStash 2026 — corrigée définitivement + auto-réparation par sondage.
