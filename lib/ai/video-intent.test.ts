@@ -314,3 +314,23 @@ describe("extractVoiceRequestText — durée rejetée comme texte à lire (fix s
     expect(extractVoiceRequestText("fais-moi un audio de 2 min")).toBeNull();
   });
 });
+
+describe("isVoiceClarifyingQuestion — question déterministe (fin en point)", () => {
+  it("reconnaît la question déterministe même si elle ne finit pas par « ? »", () => {
+    const question = [
+      "Avec plaisir — je peux synthétiser votre audio dès maintenant (voix naturelle ElevenLabs, archivée dans votre espace).",
+      "Quel texte ou quel contenu souhaitez-vous entendre dans cet audio ? Répondez directement avec le texte : je le synthétise immédiatement.",
+    ].join("\n");
+    expect(isVoiceClarifyingQuestion(question)).toBe(true);
+  });
+
+  it("un lien d'écoute signé (avec « ? » d'URL) n'est PAS une clarification", () => {
+    const delivered = [
+      "Voici votre audio, synthétisé avec une voix naturelle ElevenLabs.",
+      "L'audio est archivé en permanence dans votre espace : il reste disponible et réutilisable.",
+      "",
+      "[Écouter l'audio](https://r2.example.com/users/u1/permanent/ai-audio/1-abc.mp3?sig=xyz&exp=1)",
+    ].join("\n");
+    expect(isVoiceClarifyingQuestion(delivered)).toBe(false);
+  });
+});

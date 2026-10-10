@@ -328,12 +328,19 @@ const VISUAL_NOUN_RE = new RegExp(
 
 /**
  * La question de l'assistant demande-t-elle le TEXTE à faire entendre ?
- * (finissant par « ? » et parlant de texte/contenu/voix/audio/entendre…)
+ * Contient un « ? » (partout dans le message — la question déterministe se
+ * termine par « …immédiatement. ») ET parle de texte/contenu/voix/audio/
+ * entendre… Les URLS sont retirées AVANT le test (un lien d'écoute signé
+ * peut contenir « ? » sans être une question).
  */
 export function isVoiceClarifyingQuestion(content: string): boolean {
-  const trimmed = content.trim();
-  if (!trimmed.endsWith("?")) return false;
-  return new RegExp(`(?:texte|contenu|message|paroles?|entendre|écouter|dire|lire|voix|audio|synth[ée]tis\\p{L}*)`, "iu").test(trimmed);
+  const sansUrls = content
+    // liens markdown [label](url) → label
+    .replace(/\[[^\]]*\]\([^)]*\)/g, " ")
+    // URLS nues
+    .replace(/https?:\/\/\S+/g, " ");
+  if (!sansUrls.includes("?")) return false;
+  return new RegExp(`(?:texte|contenu|message|paroles?|entendre|écouter|dire|lire|voix|audio|synth[ée]tis\\p{L}*)`, "iu").test(sansUrls);
 }
 
 /**

@@ -3210,3 +3210,18 @@ Work Log:
 
 Stage Summary:
 - Le scénario capture 1 devient exact : demande d'audio sans texte → question déterministe (jamais de synthèse d'une durée, jamais de refus, jamais de tuto) → réponse de l'utilisateur synthétisée et LIVRÉE (artefact R2 + lien signé).
+
+---
+Task ID: 116-c (suivi contextuel — question déterministe ratée)
+Agent: main (Super Z)
+Task: Vérification production post-ce96306 : le tour 2 du scénario audio (« Bjr je suis entrain de venir ») partait en MISSION au lieu de l'intercept contextuel — la question déterministe se termine par « …immédiatement. » (point) et isVoiceClarifyingQuestion exigeait endsWith("?").
+
+Work Log:
+- Constat (repro production) : tour 1 = question déterministe ✓ ; tour 2 → mission voice.speak (audio livré via mission, pas inline).
+- FIX (lib/ai/video-intent.ts isVoiceClarifyingQuestion) : « ? » CHERCHÉ dans le message (liens markdown et URLS retirés d'abord — un lien d'écoute signé contient des « ? » d'URL sans être une question) + mots-clés texte/contenu/entendre/voix/audio…
+- TESTS (+2) : la question déterministe complète est reconnue ; le message de livraison avec lien signé n'est PAS une clarification (fermeture du suivi contextuel conservée).
+- VALIDATION : tsc 0 ; eslint 0 ; vitest complet 287 fichiers / 3 024 verts + 2 skipped.
+- Redéploiement + repro final 3 tours.
+
+Stage Summary:
+- Scénario capture 1 complet et déterministe : demande d'audio → question → réponse utilisateur → audio synthétisé INLINE et livré (artefact R2 + lien signé), sans détour par une mission.
