@@ -39,9 +39,9 @@ vi.mock("@/lib/agents/mission-delivery", () => ({
 vi.mock("@/lib/queue/mission-queue", () => ({
   createQueuedMission: vi.fn(),
 }));
-vi.mock("@/lib/queue/qstash", () => ({
-  missionQueueConfigured: vi.fn(),
-  publishMissionTick: vi.fn(),
+vi.mock("@/lib/queue/tick-queue", () => ({
+  tickQueueConfigured: vi.fn(),
+  enqueueMissionTick: vi.fn(),
 }));
 vi.mock("@/lib/queue/mission-continuation", () => ({
   enqueueMissionContinuation: vi.fn(),
@@ -91,7 +91,7 @@ import { classifyRequest, planAgentTask } from "@/lib/agents/chat-engine";
 import { recordAgentRun } from "@/lib/agents/conversation-run";
 import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
 import { createQueuedMission } from "@/lib/queue/mission-queue";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 import { POST } from "./chat/route";
 
 const mockedRequireUser = vi.mocked(requireUser);
@@ -104,8 +104,8 @@ const mockedClassify = vi.mocked(classifyRequest);
 const mockedPlanTask = vi.mocked(planAgentTask);
 const mockedRecordRun = vi.mocked(recordAgentRun);
 const mockedCreateQueued = vi.mocked(createQueuedMission);
-const mockedConfigured = vi.mocked(missionQueueConfigured);
-const mockedPublish = vi.mocked(publishMissionTick);
+const mockedConfigured = vi.mocked(tickQueueConfigured);
+const mockedPublish = vi.mocked(enqueueMissionTick);
 
 const AGENT = {
   id: "agent-1",

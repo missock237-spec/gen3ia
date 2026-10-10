@@ -11,7 +11,8 @@ import {
 } from "@/lib/agents/runtime";
 import { executionLogger, safeError } from "@/lib/observability/logger";
 import { recordExecutionMetrics } from "@/lib/observability/otel";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { buildPlanExecutionPolicy } from "@/lib/agents/runtime/plan-policy";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 import {
   createQueuedMission,
   markMissionEnqueueFailed,
@@ -26,9 +27,9 @@ import { recordFailureClusters } from "@/lib/agents/evolution";
  * Exécution d'un agent (API développeur + interne).
  *
  * Deux modes (recommandation A de l'audit de production — file d'attente des
- * tâches longues) :
+ * tâches longues, désormais portée par la FILE DE TICKS R2) :
  *
- *  - ASYNC (défaut quand la file QStash est configurée) : la mission est
+ *  - ASYNC (défaut quand la file est configurée) : la mission est
  *    enregistrée (document `missionQueue`) et enfilée ; la réponse 202
  *    renvoie immédiatement `runId` + URLs de suivi (polling SSE/status).
  *    L'exécution se fait PAR TRANCHES dans /api/queue/mission-tick : une
@@ -134,8 +135,8 @@ export async function POST(request: NextRequest) {
     };
 
     // ---- File d'attente (mode async) --------------------------------
-    const wantsAsync = parsed.data.mode === "async" || (parsed.data.mode !== "sync" && missionQueueConfigured());
-    if (wantsAsync && missionQueueConfigured()) {
+    const wantsAsync = parsed.data.mode === "async" || (parsed.data.mode !== "sync" && tickQueueConfigured());
+    if (wantsAsync && tickQueueConfigured()) {
       const runId = randomUUID();
       // ESCROW V2 (Task 114-a) : le frais de résultat est RÉSERVÉ au
       // lancement — fonds insuffisants → 402 canonique, AUCUNE mission créée.
@@ -163,11 +164,11 @@ export async function POST(request: NextRequest) {
           ...(parsed.data.outcomeContract ? { outcomeContract: parsed.data.outcomeContract } : {}),
           plan: runtimePlan,
         });
-        // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishMissionTick
+        // ORIGINE CANONIQUE (fix CodeQL request-forgery) : enqueueMissionTick
         // résout GEN3IA_APP_ORIGIN en interne (allowlist serveur).
-        const published = await publishMissionTick(runId);
+        const published = await enqueueMissionTick(runId);
         executionLog.info(
-          { event: "execution.queued", runId, messageId: published?.messageId, steps: runtimePlan.steps.length },
+          { event: "execution.queued", runId, messageId: published.ok ? published.messageId : undefined, steps: runtimePlan.steps.length },
           "Mission enfilée (exécution par tranches)",
         );
         return NextResponse.json(
@@ -226,6 +227,12 @@ export async function POST(request: NextRequest) {
       objective: parsed.data.objective,
       plan: runtimePlan,
       signal: request.signal,
+      // FIX A1 (rapport de tests) — POLICY DÉRIVÉE DU PLAN sur le chemin
+      // SYNCHRONE aussi : sans elle, la policy par défaut (allowedTools: [])
+      // refuse toute étape tool/research (« Tool not allowed: web.search »)
+      // alors même que le chemin enfilé (mission-tick) applique cette
+      // politique depuis Task 114. Les deux chemins sont désormais alignés.
+      policy: buildPlanExecutionPolicy(runtimePlan),
       // Cloisonnement multi-tenant (Task 58) : mission d'organisation.
       orgId: parsed.data.orgId,
       // Contrat de résultat (concepts #1/#2) : la porte de sortie bloque

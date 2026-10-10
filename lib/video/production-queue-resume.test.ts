@@ -153,8 +153,8 @@ vi.mock("@/lib/notifications/repository", () => ({
   createNotification: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/lib/queue/qstash", () => ({
-  publishJsonDestination: vi.fn(async () => ({ ok: true, mode: "published", message: "" })),
+vi.mock("@/lib/queue/tick-queue", () => ({
+  enqueueVideoProductionTick: vi.fn(async () => ({ ok: true, mode: "r2-queue", messageId: "ticket-1" })),
 }));
 
 // ---------------------------------------------------------------------------
@@ -172,7 +172,7 @@ import { billImageGeneration, billTts } from "@/lib/video/credits";
 import { generateSceneImage } from "@/lib/video/image-bridge";
 import { createNotification } from "@/lib/notifications/repository";
 import { getOwnedProjectOrThrow, logSystem } from "@/lib/video/project-service";
-import { publishJsonDestination } from "@/lib/queue/qstash";
+import { enqueueVideoProductionTick } from "@/lib/queue/tick-queue";
 
 function quotaError(message = "Quota exceeded for quota group 'default'."): Error {
   return Object.assign(new Error(message), { code: 8 });
@@ -217,7 +217,7 @@ beforeEach(() => {
   firestoreState.txError = null;
   vi.clearAllMocks();
   // Origine canonique : publishProductionTick la résout AVANT d'appeler le
-  // mock publishJsonDestination (l'ancien paramètre origin a été supprimé).
+  // mock enqueueVideoProductionTick (l'ancien paramètre origin a été supprimé).
   process.env.GEN3IA_APP_ORIGIN = "https://gen3ia.online";
   delete process.env.GEN3IA_ALLOWED_ORIGINS;
   vi.mocked(queueResume.saveJobDoc).mockResolvedValue(undefined);
@@ -234,10 +234,10 @@ afterEach(() => {
   delete process.env.GEN3IA_ALLOWED_ORIGINS;
 });
 
-/** Délai QStash passé au dernier publish (helper de lisibilité). */
+/** Délai (s) passé au dernier enqueue de tick (helper de lisibilité). */
 function publishDelaySeconds(): number {
-  const last = vi.mocked(publishJsonDestination).mock.calls.at(-1);
-  return (last?.[2] as { delaySeconds?: number } | undefined)?.delaySeconds ?? -1;
+  const last = vi.mocked(enqueueVideoProductionTick).mock.calls.at(-1);
+  return typeof last?.[1] === "number" ? last[1] : -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -354,7 +354,7 @@ describe("failProductionJob — chemin legacy inchangé", () => {
     expect(result.status).toBe("failed");
     expect(result.done).toBe(true);
     // pas de re-file après un échec définitif
-    expect(publishJsonDestination).not.toHaveBeenCalled();
+    expect(enqueueVideoProductionTick).not.toHaveBeenCalled();
     // la production ne libère AUCUN budget (facturation au réel, rendu séparé)
     expect(billImageGeneration).not.toHaveBeenCalled();
     expect(billTts).not.toHaveBeenCalled();
@@ -429,7 +429,7 @@ describe("Lot C4 — GET production : sweep throttlé (structurel)", () => {
 
   it("le sweep n'est plus exécuté à chaque GET : helper throttlé avec sortie immédiate en mode QStash", () => {
     expect(route).toContain("async function sweepProductionJobsIfDue(");
-    expect(route).toMatch(/if \(qstashConfig\(\)\) return;/);
+    expect(route).toMatch(/if \(tickQueueConfigured\(\)\) return;/);
     // Le corps du GET (dernière fonction de la route) ne référence plus le
     // sweep direct : uniquement le helper throttlé (défini AVANT le GET,
     // l'ancien appel inconditionnel a disparu).

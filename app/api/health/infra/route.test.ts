@@ -31,6 +31,9 @@ vi.mock("@/lib/sandbox/simulation", () => ({
 
 vi.mock("@/lib/storage/r2", () => ({
   pingR2: vi.fn(),
+  // La file de ticks (ex-QStash) dérive son activation de R2 : le healthcheck
+  // la consulte (queueMode r2-queue/poll).
+  isR2Configured: vi.fn(() => false),
 }));
 
 import { protectRoute } from "@/lib/security/route-guard";

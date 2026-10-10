@@ -32,8 +32,11 @@ vi.mock("@/lib/queue/dispatch-loop", () => ({
   slotFor: vi.fn(() => "2025-01-01:start0"),
 }));
 
-vi.mock("@/lib/queue/qstash", () => ({
-  publishDispatchTick: vi.fn(async () => ({ ok: true, mode: "published", message: "" })),
+vi.mock("@/lib/queue/tick-queue", () => ({
+  // Enqueue du successeur de la boucle de dispatch : fichier R2 créé.
+  enqueueDispatchTick: vi.fn(async () => ({ ok: true, mode: "r2-queue", messageId: "ticket-1" })),
+  // Rattrapage des tickets dus : no-op contrôlé dans les tests.
+  pumpDueTicks: vi.fn(async () => ({ scanned: 0, delivered: 0, retried: 0, deadLettered: 0, purged: 0 })),
 }));
 
 vi.mock("@/lib/video/production-queue", () => ({

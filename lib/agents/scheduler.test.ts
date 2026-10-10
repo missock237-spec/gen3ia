@@ -157,3 +157,32 @@ describe("réveil indexé wakeAtMs (Task 102-b)", () => {
     expect(source).toContain("wakeAtMs: FieldValue.delete()");
   });
 });
+
+// ─── FIX A5 — exécution planifiée outillée et LISIBLE (source contract) ───
+// L'exécution planifiée tombait « completed » sans exécuter les outils du
+// plan (policy absente → « Tool not allowed ») et sans AUCUNE sortie visible
+// (notification sans contenu, run sans livrables). Le contrat ci-dessous
+// verrouille les trois briques du correctif au niveau source (même motif
+// que les gardes d'origine de lib/queue/origin.test.ts).
+describe("runSchedule — policy dérivée du plan + livrables (fix A5)", () => {
+  const source = readFileSync(path.resolve(__dirname, "scheduler.ts"), "utf8");
+
+  it("le runtime de runSchedule reçoit la policy DÉRIVÉE DU PLAN (outils autorisés)", () => {
+    expect(source).toMatch(/policy:\s*buildPlanExecutionPolicy\(\{ \.\.\.plan, executionId, objective \}\)/);
+  });
+
+  it("les livrables réels sont extraits des sorties et persistés sur le run", () => {
+    expect(source).toMatch(/const deliverables = extractDeliverables\(state\.plan, state\.outputs \?\? \{\}\)/);
+    expect(source).toMatch(/\{ deliverables, outputPreview \}/);
+    expect(source).toMatch(/\.\.\.\(details\.deliverables && details\.deliverables\.length > 0 \? \{ deliverables: details\.deliverables \} : \{\}\)/);
+  });
+
+  it("l'extrait textuel du résultat est embarqué dans la notification (fini la boîte noire)", () => {
+    expect(source).toMatch(/\.\.\.\(details\.outputPreview \? \{ outputPreview: details\.outputPreview \} : \{\}\)/);
+  });
+
+  it("le type ScheduleRun expose la sortie et les livrables au client", () => {
+    expect(source).toMatch(/outputPreview\?: string;/);
+    expect(source).toMatch(/deliverables\?: MissionDeliverable\[\];/);
+  });
+});

@@ -165,10 +165,10 @@ vi.mock("@/lib/notifications/repository", () => ({
   createNotification: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/lib/queue/qstash", () => ({
-  publishJsonDestination: vi.fn(async () => ({ ok: true, mode: "published", message: "" })),
-  qstashConfig: vi.fn(() => null),
-  verifyUpstashSignature: vi.fn(() => true),
+vi.mock("@/lib/queue/tick-queue", () => ({
+  enqueueVideoRenderTick: vi.fn(async () => ({ ok: true, mode: "r2-queue", messageId: "ticket-1" })),
+  tickQueueConfigured: vi.fn(() => false),
+  verifyTickRequest: vi.fn(() => true),
 }));
 
 vi.mock("@/lib/video/progress-store", () => ({
@@ -188,7 +188,7 @@ import { createNotification } from "@/lib/notifications/repository";
 import { getOwnedProjectOrThrow } from "@/lib/video/project-service";
 import { listAssets } from "@/lib/video/asset-service";
 import { setJobProgress } from "@/lib/video/progress-store";
-import { publishJsonDestination } from "@/lib/queue/qstash";
+import { enqueueVideoRenderTick } from "@/lib/queue/tick-queue";
 
 function quotaError(message = "Quota exceeded for quota group 'default'."): Error {
   return Object.assign(new Error(message), { code: 8 });
@@ -238,7 +238,7 @@ beforeEach(() => {
   firestoreState.txError = null;
   vi.clearAllMocks();
   // Origine canonique : publishVideoTick la résout AVANT d'appeler le mock
-  // publishJsonDestination (l'ancien paramètre origin a été supprimé).
+  // enqueueVideoRenderTick (l'ancien paramètre origin a été supprimé).
   process.env.GEN3IA_APP_ORIGIN = "https://gen3ia.online";
   delete process.env.GEN3IA_ALLOWED_ORIGINS;
   vi.mocked(queueResume.saveJobDoc).mockResolvedValue(undefined);
@@ -344,10 +344,10 @@ describe("failJob — chemin legacy inchangé", () => {
   });
 });
 
-/** Délai QStash passé au dernier publish (helper de lisibilité). */
+/** Délai (s) passé au dernier enqueue de tick (helper de lisibilité). */
 function publishDelaySeconds(): number {
-  const last = vi.mocked(publishJsonDestination).mock.calls.at(-1);
-  return (last?.[2] as { delaySeconds?: number } | undefined)?.delaySeconds ?? -1;
+  const last = vi.mocked(enqueueVideoRenderTick).mock.calls.at(-1);
+  return typeof last?.[1] === "number" ? last[1] : -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -522,7 +522,7 @@ describe("Lot C4 — GET render : sweep throttlé + relecture conditionnelle (st
     // La route ne balaie plus cross-user à chaque tick : en mode QStash le
     // worker tick (app/api/video/worker/tick/route.ts) est responsable.
     expect(route).toContain("async function sweepRenderJobsIfDue(");
-    expect(route).toMatch(/if \(qstashConfig\(\)\) return;/);
+    expect(route).toMatch(/if \(tickQueueConfigured\(\)\) return;/);
     // Le corps du GET ne référence plus le sweep direct : uniquement le
     // helper throttlé (l'ancien appel inconditionnel a disparu).
     const getBlock = route.slice(route.indexOf("export async function GET"), route.indexOf("export async function PATCH"));

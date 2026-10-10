@@ -7,14 +7,15 @@ import "server-only";
  * File de rendu avec états QUEUED/PROCESSING/PAUSED/FAILED/CANCELLED/
  * COMPLETED, étapes idempotentes, CHECKPOINTS (reprise au segment N après
  * un échec à 73 % — jamais de re-rendu complet), continuation arrière-plan
- * via QStash (le rendu survit aux fermetures d'onglets et aux échéances
- * serverless), annulation, pause/reprise, nettoyage du tmp, facturation
+ * via la FILE DE TICKS R2 (le rendu survit aux fermetures d'onglets et aux
+ * échéances serverless — aucun plafond journalier, l'ancienne file externe
+ * QStash est retirée du projet), annulation, pause/reprise, nettoyage du tmp, facturation
  * reserve→settle/release et notification de livraison.
  *
  * Task 1-a (rendu réellement fonctionnel) :
- * - publication QStash via le pattern partagé PATH BRUT → repli encodé
- *   (la build QStash du compte rejette les destinations encodées) avec
- *   résultat discriminé — plus aucun échec silencieux de continuation ;
+ * - publication via la file de ticks R2 (ticket durable + délivrance
+ *   immédiate du worker) avec résultat discriminé — plus aucun échec
+ *   silencieux de continuation ;
  * - timeline matérialisée AU RENDU (lazy-init partagée avec la route GET,
  *   lib/video/timeline-bootstrap) — plus d'échec « Timeline absente » ;
  * - `attempts` = compteur informatif de ticks, `retryCount` = budget de
@@ -25,7 +26,7 @@ import "server-only";
  *   ticks/polls concurrents ne peuvent plus travailler le même job ;
  * - sweepStaleRenderJobs (bails expirés → reprise/échec propre) et
  *   maybeAdvancePendingJob (continuation par SONDAGE : le rendu avance
- *   même sans QStash tant que le studio est ouvert).
+ *   même sans file tant que le studio est ouvert).
  */
 
 import { randomUUID } from "node:crypto";
@@ -61,8 +62,7 @@ import { assembleRecursive } from "@/lib/video/long-video-service";
 import { VIDEO_LIMITS, VideoQuotaError, MAX_AUTO_FIX_ROUNDS } from "@/lib/video/security";
 import { createNotification } from "@/lib/notifications/repository";
 import { ensureAudioAssetsForProject } from "@/lib/video/audio-engine";
-import { publishJsonDestination, type QStashPublishResult } from "@/lib/queue/qstash";
-import { resolveJobOrigin } from "@/lib/queue/origin";
+import { enqueueVideoRenderTick, type TickPublishResult } from "@/lib/queue/tick-queue";
 import { ensureProjectTimeline } from "@/lib/video/timeline-bootstrap";
 import { setJobProgress } from "@/lib/video/progress-store";
 import { logger } from "@/lib/observability/logger";
@@ -230,7 +230,7 @@ export async function startRenderJob(params: {
     // PAS d'échec bloquant : la continuation par sondage (GET render) et le
     // sweeper prennent le relais — mais l'incident est journalisé.
     if (published.mode === "error") {
-      await logSystem(params.projectId, `Continuation QStash indisponible (${published.message.slice(0, 200)}) — le rendu avancera par sondage du studio ou worker local.`);
+      await logSystem(params.projectId, `Continuation de file indisponible (${published.message.slice(0, 200)}) — le rendu avancera par sondage du studio ou worker local.`);
     }
   }
   return { jobId, queued: true, estimate };
@@ -245,7 +245,7 @@ async function countRunningRenders(userId: string): Promise<number> {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Publication QStash (continuation arrière-plan) — Task 1-a FIX 1
+// Publication dans la file de ticks R2 (continuation arrière-plan)
 // ────────────────────────────────────────────────────────────────────────────
 
 export function videoTickUrl(origin: string): string {
@@ -253,32 +253,28 @@ export function videoTickUrl(origin: string): string {
 }
 
 /**
- * Publie un tick de rendu via le pattern partagé de lib/queue/qstash :
- * PATH BRUT primaire (la build QStash du compte rejette les destinations
- * URL-encodées — 400 « invalid destination url ») + repli encodé pour les
- * builds historiques. ORIGINE CANONIQUE (fix CodeQL request-forgery) :
- * résolue en interne depuis GEN3IA_APP_ORIGIN (allowlist serveur) — jamais
- * depuis une origine de requête. Retourne un résultat DISCRIMINÉ :
- * « unconfigured » couvre QStash absent ET origine non résolue (la
- * continuation par sondage prend le relais), « error » est à journaliser
- * (jamais de fantôme « queued »).
+ * Publie un tick de rendu dans la FILE DE TICKS R2 (ex-QStash) : ticket
+ * durable sous queue/tickets/v1/ + délivrance immédiate du receiver. ORIGINE
+ * CANONIQUE (fix CodeQL request-forgery) : résolue en interne depuis
+ * GEN3IA_APP_ORIGIN (allowlist serveur) — jamais depuis une origine de
+ * requête. Retourne un résultat DISCRIMINÉ : « unconfigured » couvre R2
+ * absent ET origine non résolue (la continuation par sondage prend le
+ * relais), « error » est à journaliser (jamais de fantôme « queued »).
  */
-export async function publishVideoTick(jobId: string, delaySeconds = 1): Promise<QStashPublishResult> {
-  const resolved = resolveJobOrigin();
-  if (!resolved.ok) return { ok: false, mode: "unconfigured" } as const;
-  return publishJsonDestination(videoTickUrl(resolved.origin), JSON.stringify({ jobId }), { delaySeconds });
+export async function publishVideoTick(jobId: string, delaySeconds = 1): Promise<TickPublishResult> {
+  return enqueueVideoRenderTick(jobId, delaySeconds);
 }
 
 /**
  * Publication interne : renvoie true si le tick est enfilé ; journalise
- * les échecs RÉELS (mode error) — le mode unconfigured (QStash absent ou
+ * les échecs RÉELS (mode error) — le mode unconfigured (R2 absent ou
  * origine canonique non résolue) est le fonctionnement normal en
  * environnement sans file (continuation par sondage).
  */
 async function publishTickAndLog(job: Pick<RenderJob, "id" | "projectId">, delaySeconds = 0): Promise<boolean> {
   const published = await publishVideoTick(job.id, delaySeconds);
   if (!published.ok && published.mode === "error") {
-    await logSystem(job.projectId, `Continuation QStash échouée (${published.message.slice(0, 200)}) — reprise par sondage du studio ou worker local.`).catch(() => undefined);
+    await logSystem(job.projectId, `Continuation de file échouée (${published.message.slice(0, 200)}) — reprise par sondage du studio ou worker local.`).catch(() => undefined);
   }
   return published.ok;
 }
@@ -401,7 +397,7 @@ function leaseActive(job: RenderJob, now: number): boolean {
  * Prise de possession ATOMIQUE (transaction Firestore) : lit le statut ET
  * pose le bail dans le même commit — deux ticks / deux polls concurrents
  * ne peuvent pas tous deux « claimed ». Un statut terminal est un no-op
- * (redélivrance QStash après complétion), un bail vivant aussi.
+ * (redélivrance de file après complétion), un bail vivant aussi.
  */
 async function claimJobForTick(jobId: string): Promise<ClaimOutcome> {
   // Task 106-fix / Task 108 — COHÉRENCE DE RÉGIME : si le disjoncteur quota
@@ -477,7 +473,7 @@ async function releaseLease(jobId: string): Promise<void> {
 /**
  * Fait avancer un job d'une étape. Idempotent : chaque étape vérifie ses
  * checkpoints. En fin d'échéance (ou après MAX_SEGMENTS_PER_TICK), re-file
- * un tick QStash (continuation) — le rendu ne dépend d'aucun onglet ouvert.
+ * un tick de file (continuation) — le rendu ne dépend d'aucun onglet ouvert.
  *
  * `options.timeBudgetMs` (continuation par sondage, Task 1-a FIX 5b) borne
  * le travail DANS l'étape segments : l'échéance est vérifiée entre chaque
@@ -580,7 +576,7 @@ export async function advanceJob(jobId: string, options: { timeBudgetMs?: number
       return outcome.result;
     }
     // Le travail de CE tick est terminé : bail libéré AVANT toute re-file
-    // (le tick suivant — QStash ou sondage — doit pouvoir claimr aussitôt).
+    // (le tick suivant — file ou sondage — doit pouvoir claimr aussitôt).
     await releaseLease(jobId);
     if (outcome.kind === "next") {
       await moveToNextStage(jobId, job, startedStage);
@@ -804,9 +800,9 @@ export async function sweepStaleRenderJobs(): Promise<SweepResult> {
 /**
  * Continuation par SONDAGE (Task 1-a FIX 5b) : fait avancer d'UN tick un
  * job en attente DANS la requête de polling (GET render) — le rendu avance
- * même quand QStash n'est pas configuré ou qu'un publish échoue, tant que
+ * même quand la file n'est pas configurée ou qu'un publish échoue, tant que
  * le studio reste ouvert. Le claim transactionnel garantit qu'un sondage
- * concurrent ne peut pas doubler un tick QStash (bail). Ne fait rien si le
+ * concurrent ne peut pas doubler un tick de file (bail). Ne fait rien si le
  * job est terminal, en pause ou détenu par un worker vivant.
  */
 export async function maybeAdvancePendingJob(jobId: string, options: { timeBudgetMs?: number } = {}): Promise<TickResult | null> {
@@ -1408,7 +1404,7 @@ export async function getJob(jobId: string): Promise<RenderJob | null> {
 /**
  * Tick autonome : prend le prochain job en file et le fait avancer
  * (utilisé par le worker standalone scripts/video-worker.mts).
- * Le claim est le MÊME que celui des ticks QStash (transaction + bail) :
+ * Le claim est le MÊME que celui des ticks de file (transaction + bail) :
  * worker local et continuation serveur ne se doublent jamais.
  */
 export async function claimNextQueuedJob(): Promise<RenderJob | null> {

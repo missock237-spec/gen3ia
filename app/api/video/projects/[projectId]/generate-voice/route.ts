@@ -4,7 +4,7 @@ import { protectRoute } from "@/lib/security/route-guard";
 import { errorStatus } from "@/lib/security/http-errors";
 import { getOwnedProjectOrThrow, patchProject } from "@/lib/video/project-service";
 import { listAssets } from "@/lib/video/asset-service";
-import { resolvePreferredVoice, generateSceneNarration, attachRecordingAsNarration } from "@/lib/video/voice-service";
+import { resolvePreferredVoice, withPlatformVoiceFallback, generateSceneNarration, attachRecordingAsNarration } from "@/lib/video/voice-service";
 import { billTts } from "@/lib/video/credits";
 import { syncVoiceTrack, applyTimelinePatch } from "@/lib/video/timeline-service";
 import { createVideoPlaybackUrl, isOwnedVideoKey } from "@/lib/video/storage";
@@ -33,10 +33,11 @@ export async function POST(request: NextRequest, { params }: Params) {
     const project = await getOwnedProjectOrThrow(guard.context.userId, projectId);
     if (!project.script) throw new Error("Générez d'abord le scénario.");
 
-    const voice = await resolvePreferredVoice(guard.context.userId, project);
-    if (!voice) {
-      throw new Error("Aucune voix disponible : enregistrez votre voix ou choisissez une voix ElevenLabs dans l'onglet Voix.");
-    }
+    // FIX A3 : aucun profil vocal utilisateur n'est plus un échec — la
+    // narration retombe sur la VOIX PLATEFORME ElevenLabs (même chemin que
+    // la synthèse audio du chat). L'utilisateur peut toujours importer sa
+    // propre voix depuis l'onglet Voix pour la surcharger.
+    const voice = withPlatformVoiceFallback(await resolvePreferredVoice(guard.context.userId, project));
 
     const scenes = project.script.scenes.filter((s) => !sceneIds || sceneIds.includes(s.id)).slice(0, 4);
     // Task 113 — le RÉSULTAT est renvoyé à l'utilisateur : chaque narration

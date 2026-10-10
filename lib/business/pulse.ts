@@ -7,7 +7,7 @@ import { getWallet } from "@/lib/billing/wallet";
 import { listCampaigns } from "@/lib/ads/campaigns";
 import { getEvolutionBrief } from "@/lib/agents/evolution";
 import { createQueuedMission } from "@/lib/queue/mission-queue";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 
 /**
  * PULSE BUSINESS AUTONOME (concept post-SaaS #7 « Autonomous Business
@@ -112,8 +112,8 @@ export async function runBusinessPulse(input: { userId: string; orgId?: string; 
   if (input.dryRun) {
     return { kpis, objective, executed: false, reason: "dry-run" };
   }
-  if (!missionQueueConfigured()) {
-    return { kpis, objective, executed: false, reason: "File d'attente non configurée — le pulse nécessite la file QStash." };
+  if (!tickQueueConfigured()) {
+    return { kpis, objective, executed: false, reason: "File d'attente non configurée — le pulse nécessite la file de ticks R2." };
   }
 
   const executionId = randomUUID();
@@ -160,9 +160,9 @@ export async function runBusinessPulse(input: { userId: string; orgId?: string; 
     ...(input.orgId ? { orgId: input.orgId } : {}),
     plan: { ...plan, executionId },
   });
-  // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishMissionTick
+  // ORIGINE CANONIQUE (fix CodeQL request-forgery) : enqueueMissionTick
   // résout GEN3IA_APP_ORIGIN en interne (allowlist serveur).
-  await publishMissionTick(runId);
+  await enqueueMissionTick(runId);
 
   await adminDb.collection(COLLECTION).add({
     userId: input.userId,

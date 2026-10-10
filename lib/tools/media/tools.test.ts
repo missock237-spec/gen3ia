@@ -333,7 +333,7 @@ describe("outil video.create — exécution réelle (file de production)", () =>
       projectId: "proj-1",
       status: "queued",
       stage: "project",
-      queueMode: "qstash",
+      queueMode: "queue",
     });
     const output = await createVideoTool.execute(
       {
@@ -355,7 +355,7 @@ describe("outil video.create — exécution réelle (file de production)", () =>
       projectId: "proj-1",
       status: "queued",
       stage: "project",
-      queueMode: "qstash",
+      queueMode: "queue",
       studioUrl: "/studio/video/proj-1",
       appliedOptions: { aspectRatio: "9:16", voiceEnabled: true },
     });

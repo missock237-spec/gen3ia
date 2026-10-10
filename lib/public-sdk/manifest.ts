@@ -26,4 +26,4 @@ export const SDK_TARBALL_PUBLIC_PATH = `/sdk/${SDK_TARBALL_FILENAME}`;
 
 /** Description courte réutilisée par la route de métadonnées. */
 export const SDK_DESCRIPTION =
-  "SDK TypeScript officiel de l'API Gen3ia — exécution d'agents par clé développeur, missions longues (file QStash + suivi SSE), salons clients publics et déclencheurs webhook.";
+  "SDK TypeScript officiel de l'API Gen3ia — exécution d'agents par clé développeur, missions longues (file de ticks R2 + suivi SSE), salons clients publics et déclencheurs webhook.";

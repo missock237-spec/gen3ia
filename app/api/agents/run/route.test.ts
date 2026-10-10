@@ -11,9 +11,9 @@ import { NextRequest } from "next/server";
  */
 
 vi.mock("@/lib/security/authenticated-request", () => ({ requireUser: vi.fn() }));
-vi.mock("@/lib/queue/qstash", () => ({
-  missionQueueConfigured: vi.fn(),
-  publishMissionTick: vi.fn(),
+vi.mock("@/lib/queue/tick-queue", () => ({
+  tickQueueConfigured: vi.fn(),
+  enqueueMissionTick: vi.fn(),
 }));
 vi.mock("@/lib/queue/mission-queue", () => ({
   createQueuedMission: vi.fn(),
@@ -38,14 +38,14 @@ vi.mock("@/lib/observability/logger", () => {
 });
 
 import { requireUser } from "@/lib/security/authenticated-request";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 import { createQueuedMission, markMissionEnqueueFailed } from "@/lib/queue/mission-queue";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
 import { POST } from "./route";
 
 const mockedRequireUser = vi.mocked(requireUser);
-const mockedConfigured = vi.mocked(missionQueueConfigured);
-const mockedPublish = vi.mocked(publishMissionTick);
+const mockedConfigured = vi.mocked(tickQueueConfigured);
+const mockedPublish = vi.mocked(enqueueMissionTick);
 const mockedCreate = vi.mocked(createQueuedMission);
 const mockedEnqueueFailed = vi.mocked(markMissionEnqueueFailed);
 const mockRun = vi.fn();
@@ -73,7 +73,7 @@ beforeEach(() => {
   mockConstructorCalls.length = 0;
   mockedRequireUser.mockResolvedValue({ uid: "user-1" } as never);
   mockedConfigured.mockReturnValue(true);
-  mockedPublish.mockResolvedValue({ messageId: "msg-1" });
+  mockedPublish.mockResolvedValue({ ok: true, mode: "r2-queue", messageId: "msg-1" });
   mockedCreate.mockResolvedValue(undefined);
   mockRun.mockResolvedValue({ ...SUCCESS_STATE });
 });

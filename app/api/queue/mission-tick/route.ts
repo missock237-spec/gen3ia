@@ -8,10 +8,10 @@ import { loadCheckpoint } from "@/lib/agents/runtime/checkpoint";
 import { isExecutionPauseRequested } from "@/lib/agents/runtime/pause";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import {
-  qstashConfig,
-  verifyUpstashSignature,
-  publishMissionTick,
-} from "@/lib/queue/qstash";
+  tickQueueConfigured,
+  verifyTickRequest,
+  enqueueMissionTick,
+} from "@/lib/queue/tick-queue";
 import {
   claimMissionTick,
   persistMissionProgress,
@@ -29,27 +29,31 @@ import { extractDeliverables } from "@/lib/agents/deliverables";
 import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
 
 /**
- * Receiver de la file d'attente des missions (recommandation A de l'audit).
+ * Receiver de la file des missions (file de ticks R2 — ex-QStash).
  *
- * QStash délivre ici un POST signé { runId } : chaque délivrance exécute une
- * TRANCHE bornée du plan (bail + échéance horloge) puis, si des étapes
- * restent, se RÉ-ENFILE. La mission survit donc à n'importe quelle fenêtre
- * serverless : le checkpoint runtime (étapes complétées + sorties) est écrit
- * par le runtime lui-même après chaque lot, et le tick suivant reprend
- * exactement là (getReadySteps saute le terminé).
+ * Une délivrance POST ici un POST signé { runId } : chaque délivrance
+ * exécute une TRANCHE bornée du plan (bail + échéance horloge) puis, si des
+ * étapes restent, se RÉ-ENFILE. La mission survit donc à n'importe quelle
+ * fenêtre serverless : le checkpoint runtime (étapes complétées + sorties)
+ * est écrit par le runtime lui-même après chaque lot, et le tick suivant
+ * reprend exactement là (getReadySteps saute le terminé).
  *
- * SÉCURITÉ : l'authentification est la SIGNATURE QStash (HMAC-SHA256 temps
- * constant, clé courante OU suivante pendant une rotation). Pas de session
- * utilisateur ici — un appel non signé est rejeté 401 AVANT tout parsing
- * métier. Configuration absente → 503 (la file n'est pas activée).
+ * APPELANT : la délivrance immédiate de la file (deliverTickNow) est un
+ * fire-and-forget gracié — elle n'attend jamais cette réponse ; seul le PUMP
+ * attend la réponse complète (2xx = ticket consommé, 5xx = réessai backoff).
  *
- * RÉPONSES À QSTASH : 2xx = délivrance traitée (même « no-op » : bail déjà
- * détenu, mission terminée, document absent — arrêter les redélivrances est
- * le bon comportement) ; 5xx = échec TRANSITOIRE (QStash re-tentera, le bail
- * a expiré, le claim reprendra proprement). Un échec MÉTIER de mission
- * (étape failed) répond 2xx et fige la mission en « failed » : re-exécuter
- * automatiquement une mission facturée qui a échoué doublerait la facture
- * (même règle que les timeouts non-retryables, Task 45).
+ * SÉCURITÉ : authentification par SIGNATURE INTERNE (HMAC-SHA256 dérivé du
+ * secret R2, temps constant, fraîcheur ±300 s — lib/queue/tick-queue.ts)
+ * OU bearer CRON_SECRET. Un appel non signé est rejeté 401 AVANT tout
+ * parsing métier. File non configurée → 503 (contrat inchangé).
+ *
+ * RÉPONSES : 2xx = délivrance traitée (même « no-op » : bail déjà détenu,
+ * mission terminée, document absent — arrêter les redélivrances est le bon
+ * comportement) ; 5xx = échec TRANSITOIRE (le pump re-délivrera, le bail de
+ * mission aura expiré, le claim reprendra proprement). Un échec MÉTIER de
+ * mission (étape failed) répond 2xx et fige la mission en « failed » :
+ * re-exécuter automatiquement une mission facturée qui a échoué doublerait
+ * la facture (même règle que les timeouts non-retryables, Task 45).
  */
 
 export const dynamic = "force-dynamic";
@@ -80,12 +84,11 @@ function queueStatusFromRuntime(status: RuntimeExecutionState["status"]): Missio
 }
 
 export async function POST(request: NextRequest) {
-  const log = executionLogger({ requestId: request.headers.get("x-request-id")?.trim() || "qstash-tick" });
+  const log = executionLogger({ requestId: request.headers.get("x-request-id")?.trim() || "r2-tick" });
   const rawBody = await request.text();
 
   // 1) Configuration : la file doit être activée pour accepter un tick.
-  const config = qstashConfig();
-  if (!config) {
+  if (!tickQueueConfigured()) {
     log.warn({ event: "queue.tick.unconfigured" }, "Tick reçu alors que la file n'est pas configurée");
     return NextResponse.json({ error: "Queue non configurée" }, { status: 503 });
   }
@@ -95,8 +98,8 @@ export async function POST(request: NextRequest) {
   if (rawBody.length > MAX_BODY_BYTES) {
     return NextResponse.json({ error: "Corps trop volumineux" }, { status: 413 });
   }
-  if (!verifyUpstashSignature(config, rawBody, request.headers.get("upstash-signature"), "/api/queue/mission-tick")) {
-    log.warn({ event: "queue.tick.unauthorized" }, "Signature QStash invalide");
+  if (!verifyTickRequest(rawBody, request.headers.get("authorization"), request.headers.get("x-gen3a-tick"))) {
+    log.warn({ event: "queue.tick.unauthorized" }, "Signature de tick invalide");
     return NextResponse.json({ error: "Signature invalide" }, { status: 401 });
   }
 
@@ -191,18 +194,17 @@ export async function POST(request: NextRequest) {
 
       if (decision === "reenqueue") {
         // ORDRE CRITIQUE : libérer le statut/bail d'abord (document « paused »,
-        // bail supprimé → claimable), PUIS ré-enfiler. Si le publish échoue
-        // ensuite, QStash re-tentera la délivrance COURANTE : le claim
-        // réussira (bail relâché) et le ré-enfilement sera rejoué — la
-        // mission ne peut PAS rester bloquée. L'inverse (publish puis
-        // finalisation) laisserait, sur un échec de publish, un document
-        // « running » sans tick planifié : mission fantôme.
+        // bail supprimé → claimable), PUIS ré-enfiler. Si la délivrance
+        // échoue ensuite, le ticket R2 reste DÛ : le pump (polling du client,
+        // sentinelle cron) le re-délivrera — la mission ne peut PAS rester
+        // bloquée. L'inverse (publish puis finalisation) laisserait, sur un
+        // échec, un document « running » sans tick planifié : mission fantôme.
         await finalizeMissionRun(runId, "paused");
         // ORIGINE CANONIQUE (fix CodeQL request-forgery) : la route ne calcule
-        // AUCUNE origine — publishMissionTick résout GEN3IA_APP_ORIGIN en
-        // interne (allowlist serveur) et refuse de publier vers une cible
-        // non autorisée (retour null si non résolue : sondage en relais).
-        await publishMissionTick(runId, { delaySeconds: NEXT_TICK_DELAY_SECONDS });
+        // AUCUNE origine — enqueueMissionTick résout GEN3IA_APP_ORIGIN en
+        // interne (allowlist serveur) et refuse de publier vers une cible non
+        // autorisée (contrat « non configuré » : sondage en relais).
+        await enqueueMissionTick(runId, { delaySeconds: NEXT_TICK_DELAY_SECONDS });
         log.info({ event: "queue.tick.reenqueued", runId, executionId, pendingRemaining }, "Tranche terminée — suite ré-enfilée");
         return NextResponse.json({ ok: true, runId, status: state.status, reenqueued: true });
       }
@@ -282,9 +284,10 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ ok: true, runId, status: "failed" });
   } catch (error) {
-    // Échec INFRASTRUCTURE (Firestore, publish) : laisser QStash re-tenter —
-    // le bail expire et le claim reprendra depuis le dernier checkpoint.
-    log.error({ event: "queue.tick.infra", runId, executionId, error: safeError(error) }, "Échec infrastructure du tick — redélivrance attendue");
+    // Échec INFRASTRUCTURE (R2, délivrance) : répondre 5xx — le ticket R2
+    // reste DÛ et le pump le re-délivrera ; le bail de mission expire et le
+    // claim reprendra depuis le dernier checkpoint.
+    log.error({ event: "queue.tick.infra", runId, executionId, error: safeError(error) }, "Échec infrastructure du tick — rattrapage pump attendu");
     return NextResponse.json({ error: "Erreur infrastructure" }, { status: 500 });
   }
 }

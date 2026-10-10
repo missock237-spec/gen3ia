@@ -9,7 +9,7 @@ import { pingR2, type R2HealthStatus } from "@/lib/storage/r2";
 import { summarizeEnv } from "@/lib/env/config-report";
 import { getQuotaGuardStats } from "@/lib/db/quota-guard";
 import { checkFfmpegAvailable, type FfmpegAvailability } from "@/lib/video/ffmpeg";
-import { qstashConfig } from "@/lib/queue/qstash";
+import { tickQueueConfigured } from "@/lib/queue/tick-queue";
 
 export const runtime = "nodejs";
 
@@ -80,8 +80,8 @@ export async function GET(request: NextRequest) {
           ...(ffmpeg.ffmpegSource ? { source: ffmpeg.ffmpegSource } : {}),
           ...(ffmpeg.diagnostic ? { diagnostic: ffmpeg.diagnostic } : {}),
         },
-        queueMode: qstashConfig() ? ("qstash" as const) : ("poll" as const),
-        role: "rendu vidéo réel (FFmpeg sandboxé) + files rendu/production (QStash ou sondage)",
+        queueMode: tickQueueConfigured() ? ("r2-queue" as const) : ("poll" as const),
+        role: "rendu vidéo réel (FFmpeg sandboxé) + files rendu/production (file de ticks R2 ou sondage)",
       },
     },
     // La route reste 200 : le champ reflète la vérité du stockage,

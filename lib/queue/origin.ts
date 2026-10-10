@@ -133,7 +133,7 @@ export function resolveJobOrigin(): JobOriginResolution {
   if (!raw) {
     warnOnce(
       "unset",
-      "GEN3IA_APP_ORIGIN absente — aucune publication QStash (ticks) ne sera effectuée. Configurez l'origine canonique de l'app (ex. https://gen3ia.online) ; la continuation par sondage prend le relais.",
+      "GEN3IA_APP_ORIGIN absente — aucune délivrance de tick ne sera effectuée. Configurez l'origine canonique de l'app (ex. https://gen3ia.online) ; la continuation par sondage prend le relais.",
     );
     return { ok: false, reason: "unset" };
   }
@@ -141,7 +141,7 @@ export function resolveJobOrigin(): JobOriginResolution {
   if (!validated.ok) {
     warnOnce(
       `invalid:${raw}`,
-      `GEN3IA_APP_ORIGIN invalide (${validated.detail}) — publication QStash refusée. Hôtes autorisés : gen3ia.online, www.gen3ia.online, gen3ia.vercel.app, ou étendez GEN3IA_ALLOWED_ORIGINS.`,
+      `GEN3IA_APP_ORIGIN invalide (${validated.detail}) — publication de tick refusée. Hôtes autorisés : gen3ia.online, www.gen3ia.online, gen3ia.vercel.app, ou étendez GEN3IA_ALLOWED_ORIGINS.`,
     );
     return { ok: false, reason: "invalid", detail: validated.detail };
   }
@@ -159,13 +159,13 @@ export function assertSafeDestinationUrl(destinationUrl: string): void {
   try {
     url = new URL(destinationUrl);
   } catch {
-    throw new Error(`Destination QStash invalide (« ${destinationUrl.slice(0, 100)} ») — URL absolue attendue.`);
+    throw new Error(`Destination de tick invalide (« ${destinationUrl.slice(0, 100)} ») — URL absolue attendue.`);
   }
   const httpsOrLocal = url.protocol === "https:" || (url.protocol === "http:" && isLocalHost(url.hostname));
   if (!httpsOrLocal) {
-    throw new Error(`Destination QStash refusée : protocole ${url.protocol} non autorisé (https requis hors dev local).`);
+    throw new Error(`Destination de tick refusée : protocole ${url.protocol} non autorisé (https requis hors dev local).`);
   }
   if (!isAllowedJobHost(url.hostname)) {
-    throw new Error(`Destination QStash refusée : hôte « ${url.hostname} » non autorisé (allowlist serveur).`);
+    throw new Error(`Destination de tick refusée : hôte « ${url.hostname} » non autorisé (allowlist serveur).`);
   }
 }

@@ -11,19 +11,21 @@ import { adminDb } from "@/lib/firebase/admin";
  * PROBLÈME : la route /api/cron/agent-schedules est conçue pour une cadence
  * 5 minutes (claims transactionnels par slot de 5 min dans le scheduler),
  * mais Vercel plan Hobby n'autorise qu'un cron QUOTIDIEN (vercel.json
- * `0 6 * * *`) — les agents planifiés ne s'exécutaient qu'une fois par jour.
- * L'API Schedules de la build QStash de ce compte est inutilisable
- * (destination lue dans le path, corps ignoré — vérifié en sondes réelles).
+ * `0 6 * * *`) — les agents planifiés ne s'exécutaient qu'une fois par jour
+ * (l'API Schedules de l'ancienne file externe était de surcroît inutilisable
+ * sur ce compte — destination lue dans le path, corps ignoré, sondes réelles).
  *
- * SOLUTION : une boucle de ticks QStash auto-perpétuelle. Chaque tick du
- * slot S exécute le dispatch (idempotent par claims transactionnels du
- * scheduler) puis publie le tick du slot S+1 avec un délai QStash calé sur
- * la frontière de slot. Le cron Vercel quotidien sert de sentinelle de
- * résurrection : il publie un tick si le prochain slot n'a pas encore été
- * programmé — la boucle ne peut jamais rester morte plus de 24 h.
+ * SOLUTION : une boucle de ticks auto-perpétuelle sur la FILE DE TICKS R2
+ * (ex-QStash — retirée du projet). Chaque tick du slot S exécute le dispatch
+ * (idempotent par claims transactionnels du scheduler) puis publie le tick
+ * du slot S+1 (ticket R2 dû à la frontière de slot, réveillé par le pump
+ * opportuniste du polling client). Le cron Vercel quotidien sert de
+ * sentinelle de résurrection : il publie un tick si le prochain slot n'a pas
+ * encore été programmé et rattrape les tickets dus perdus — la boucle ne
+ * peut jamais rester morte plus de 24 h.
  *
- * EXACTEMENT-UN SUCCESSEUR (sans dédup QStash — absente de cette build,
- * vérifié en sondes) : la publication du successeur est contrôlée par un
+ * EXACTEMENT-UN SUCCESSEUR (le ticket R2 est unique par clé — UUID) : la
+ * publication du successeur est contrôlée par un
  * document Firestore `dispatchLoop/control` écrit en TRANSACTION :
  *  - `publishedSlotEpoch` : dernier slot dont le tick a ÉTÉ publié ;
  *  - `publishingSlotEpoch`/`publishingAtMs` : réservation pendant l'appel

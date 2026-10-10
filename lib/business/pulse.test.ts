@@ -35,9 +35,9 @@ const publishMissionTickMock = vi.fn();
 vi.mock("@/lib/queue/mission-queue", () => ({
   createQueuedMission: (...args: unknown[]) => createQueuedMissionMock(...args),
 }));
-vi.mock("@/lib/queue/qstash", () => ({
-  missionQueueConfigured: () => missionQueueConfiguredMock(),
-  publishMissionTick: (...args: unknown[]) => publishMissionTickMock(...args),
+vi.mock("@/lib/queue/tick-queue", () => ({
+  tickQueueConfigured: () => missionQueueConfiguredMock(),
+  enqueueMissionTick: (...args: unknown[]) => publishMissionTickMock(...args),
 }));
 
 import { buildPulseObjective, collectBusinessKpis, runBusinessPulse } from "./pulse";
@@ -56,7 +56,7 @@ beforeEach(() => {
   getEvolutionBriefMock.mockResolvedValue({ text: "", clusters: [] });
   missionQueueConfiguredMock.mockReturnValue(true);
   createQueuedMissionMock.mockResolvedValue(undefined);
-  publishMissionTickMock.mockResolvedValue({ messageId: "m1" });
+  publishMissionTickMock.mockResolvedValue({ ok: true, mode: "r2-queue", messageId: "m1" });
 });
 
 describe("collecte des KPIs", () => {

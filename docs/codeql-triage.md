@@ -54,7 +54,7 @@ Faux positif qualifié le 2026-10-08, quatre preuves visibles dans le code :
 
 | Alerte | Correctif |
 | --- | --- |
-| #54 `js/request-forgery` (critique) `lib/queue/qstash.ts` | Origine canonique serveur uniquement (`GEN3IA_APP_ORIGIN` + allowlist `lib/queue/origin.ts`), aucun repli sur l'origine requête, `assertSafeDestinationUrl` en défense en profondeur. |
+| #54 `js/request-forgery` (critique) `lib/queue/tick-queue.ts` (ex-qstash.ts) | Origine canonique serveur uniquement (`GEN3IA_APP_ORIGIN` + allowlist `lib/queue/origin.ts`), aucun repli sur l'origine requête, `assertSafeDestinationUrl` en défense en profondeur. |
 | #53 `js/polynomial-redos` (haute) `sdk/src/client.ts` | Regex `/\/+$/` remplacée par un trimage linéaire `endsWith/slice` ; test anti-backtracking (chaîne pathologique < 100 ms). |
 | #55 (haute) `lib/documents/file-engine.ts` | Écriture `rm` puis création exclusive `wx` mode `0600` dans un répertoire workspace `0700`. |
 | #69/#70 (haute/moyenne) `lib/video/security.ts` | Binaire FFmpeg runtime épinglé (`b6.0`) + SHA256 officiels vérifiés AVANT toute écriture (fail-closed), écriture en création exclusive `0700` puis renommage atomique. |

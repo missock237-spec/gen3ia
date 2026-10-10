@@ -10,7 +10,7 @@ import {
   sweepStaleProductionJobs,
   type VideoProductionJob,
 } from "@/lib/video/production-queue";
-import { qstashConfig } from "@/lib/queue/qstash";
+import { tickQueueConfigured } from "@/lib/queue/tick-queue";
 import { cacheGet, cacheSet } from "@/lib/cache/redis";
 
 export const runtime = "nodejs";
@@ -61,7 +61,7 @@ const SWEEP_THROTTLE_MS = 60_000;
 const localSweepAt = new Map<string, number>();
 
 async function sweepProductionJobsIfDue(projectId: string): Promise<void> {
-  if (qstashConfig()) return;
+  if (tickQueueConfigured()) return;
   const throttleKey = `sweep:production-stream:${projectId}`;
   const now = Date.now();
   const localAt = localSweepAt.get(throttleKey);

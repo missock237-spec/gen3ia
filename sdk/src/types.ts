@@ -45,7 +45,7 @@ export interface AgentRunResult {
   durationMs?: number;
 }
 
-// ─── Missions (API de session, file QStash) ──────────────────────────────────
+// ─── Missions (API de session, file de ticks R2) ─────────────────────────────
 
 /** Plan optionnel d'exécution — par défaut, un pas LLM unique est créé côté serveur. */
 export interface RuntimeStepInput {
@@ -76,7 +76,7 @@ export interface RunMissionInput {
   projectId?: string;
   /** Organisation propriétaire (Task 58) — l'appelant doit en être membre. */
   orgId?: string;
-  /** « auto » (défaut) : async si la file QStash est configurée, sinon sync. */
+  /** « auto » (défaut) : async si la file est configurée, sinon sync. */
   mode?: "auto" | "async" | "sync";
   /** Plan explicite — sinon un pas LLM unique exécute l'objectif. */
   plan?: RuntimePlanInput;

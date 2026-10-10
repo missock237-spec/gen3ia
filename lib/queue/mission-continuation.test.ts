@@ -4,18 +4,18 @@ vi.mock("@/lib/queue/mission-queue", () => ({
   createQueuedMission: vi.fn(),
   markMissionEnqueueFailed: vi.fn(),
 }));
-vi.mock("@/lib/queue/qstash", () => ({
-  missionQueueConfigured: vi.fn(),
-  publishMissionTick: vi.fn(),
+vi.mock("@/lib/queue/tick-queue", () => ({
+  tickQueueConfigured: vi.fn(),
+  enqueueMissionTick: vi.fn(),
 }));
 
 import { createQueuedMission, markMissionEnqueueFailed } from "@/lib/queue/mission-queue";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 import { enqueueMissionContinuation } from "./mission-continuation";
 
 const mockedCreate = vi.mocked(createQueuedMission);
-const mockedPublish = vi.mocked(publishMissionTick);
-const mockedConfigured = vi.mocked(missionQueueConfigured);
+const mockedPublish = vi.mocked(enqueueMissionTick);
+const mockedConfigured = vi.mocked(tickQueueConfigured);
 const mockedMarkFailed = vi.mocked(markMissionEnqueueFailed);
 
 const PLAN = {
@@ -69,7 +69,7 @@ describe("enqueueMissionContinuation", () => {
       conversationId: "conv-1",
       plan: PLAN,
     }));
-    // ORIGINE CANONIQUE : publishMissionTick ne reçoit PLUS d'origine —
+    // ORIGINE CANONIQUE : enqueueMissionTick ne reçoit PLUS d'origine —
     // elle est résolue en interne (GEN3IA_APP_ORIGIN, allowlist serveur).
     expect(mockedPublish).toHaveBeenCalledWith(expect.any(String));
   });

@@ -11,7 +11,7 @@ import { VIDEO_ASPECT_RATIOS as PIPELINE_ASPECT_RATIOS } from "@/lib/video/types
  * scénario → storyboard → assets → voix → montage → QC → rendu → export)
  * via la file de production réelle lib/video/production-queue.ts (Task 1-a)
  * — le MÊME chemin que POST /api/video/projects/plan (validation
- * VideoProjectCreateSchema + createProject + premier tick QStash).
+ * VideoProjectCreateSchema + createProject + premier tick de la file de ticks R2).
  *
  * Task 106-a — SURFACE COMPLÈTE : le pipeline (ProductionJobOptions)
  * acceptait déjà durée, résolution, langue, style, audience, plateforme,
@@ -89,8 +89,8 @@ export interface CreateVideoToolOutput {
   projectId: string;
   status: "queued";
   stage: ProductionStage;
-  /** Mode de continuation effectif du job (QStash si configuré, sinon sondage). */
-  queueMode: "qstash" | "poll";
+  /** Mode de continuation effectif du job (file de ticks R2 si configurée, sinon sondage). */
+  queueMode: "queue" | "poll";
   /** Atelier vidéo du projet (timeline, versions, exports, révisions). */
   studioUrl: string;
   /** Paramètres de production réellement retenus (traçabilité chat). */

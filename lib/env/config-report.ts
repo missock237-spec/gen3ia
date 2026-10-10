@@ -122,9 +122,9 @@ const GROUPS: GroupSpec[] = [
     fallback: "logs structurés pino seuls (aucune perte applicative)",
   },
   {
-    group: "queue-qstash",
-    role: "File d'attente QStash (missions agents longues, exécution par tranches — recommandation A)",
-    required: ["QSTASH_TOKEN", "QSTASH_CURRENT_SIGNING_KEY", "QSTASH_NEXT_SIGNING_KEY"],
+    group: "queue-r2",
+    role: "File de ticks R2 (missions agents longues, exécution par tranches — recommandation A) : dérivée de la configuration R2, aucune variable dédiée",
+    required: [],
     fallback: "exécution synchrone dans la requête (limitée par la fenêtre serverless)",
   },
 ];

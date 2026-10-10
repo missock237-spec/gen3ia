@@ -4,11 +4,14 @@ import { z } from "zod";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { AgentRuntime, RuntimePlanSchema } from "@/lib/agents/runtime";
+import { buildPlanExecutionPolicy } from "@/lib/agents/runtime/plan-policy";
+import { extractDeliverables } from "@/lib/agents/deliverables";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { checkWatchSource, type WatchSource } from "@/lib/agents/watch-sources";
 import { notifyScheduleRunCompleted } from "@/lib/integrations/messaging/notify";
 import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
 import { resolveJobOrigin } from "@/lib/queue/origin";
+import type { MissionDeliverable } from "@/lib/agents/deliverables";
 
 /** Budget de tranche pour une exécution planifiée (marge sous la fenêtre 60 s). */
 const SCHEDULE_SYNC_BUDGET_MS = 50_000;
@@ -92,6 +95,10 @@ export type ScheduleRun = {
   error?: string;
   attempt?: number;
   trigger?: "scheduled" | "manual" | "retry" | "catch_up" | "webhook" | "watch";
+  /** FIX A5 — aperçu du résultat (premier output textuel, borné). */
+  outputPreview?: string;
+  /** FIX A5 — manifest des livrables réellement produits par l'exécution. */
+  deliverables?: MissionDeliverable[];
 };
 
 const COLLECTION = "agentSchedules";
@@ -527,6 +534,13 @@ export async function runSchedule(schedule: AgentSchedule, executionId: string, 
       userId: schedule.userId,
       objective,
       plan: { ...plan, executionId, objective },
+      // FIX A5 (rapport de tests) — POLICY DÉRIVÉE DU PLAN : sans elle, la
+      // policy par défaut (allowedTools: []) refusait tout outil prévu par
+      // la planification (« Tool not allowed ») ; un planificateur en
+      // filait des étapes research/tool et l'exécution planifiée tombait
+      // « completed » SANS avoir exécuté le travail outillé. Alignement sur
+      // le chemin des missions en fil (/api/queue/mission-tick, Task 114).
+      policy: buildPlanExecutionPolicy({ ...plan, executionId, objective }),
       // ÉCHÉANCE DE TRANCHE (exigence production) : une planification longue
       // est coupée PROPREMENT avant la fin de la fenêtre serverless (au lieu
       // d'être tuée en pleine étape) puis la suite est enfilée dans la file
@@ -557,6 +571,14 @@ export async function runSchedule(schedule: AgentSchedule, executionId: string, 
       }
     }
 
+    // FIX A5 — LIVRABLES + SORTIE VISIBLE : l'exécution planifiée produisait
+    // un résultat que PERSONNE ne voyait (statut « completed », aucune
+    // sortie exposée, notification sans contenu). Désormais : manifest des
+    // livrables réels (artefacts, fichiers) + extrait du premier output
+    // textuel, persistés sur le run et prévenus dans la notification.
+    const deliverables = extractDeliverables(state.plan, state.outputs ?? {});
+    const outputPreview = summarizeOutputs(state.outputs ?? {});
+
     await finishScheduleRun(
       schedule.id,
       schedule.userId,
@@ -564,13 +586,37 @@ export async function runSchedule(schedule: AgentSchedule, executionId: string, 
       state.status,
       continuation && !continuation.queued && continuation.reason ? `Suite non enfilée : ${continuation.reason}` : undefined,
       slot,
+      { deliverables, outputPreview },
     );
-    return { executionId, status: state.status };
+    return { executionId, status: state.status, deliverables };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Scheduled execution failed";
     await finishScheduleRun(schedule.id, schedule.userId, executionId, "failed", message, slot);
     throw error;
   }
+}
+
+/**
+ * FIX A5 — extrait honnête du premier output textuel d'une exécution (aperçu
+ * borné, lisible dans la notification et le run) : la sortie d'une étape LLM
+ * est typiquement un texte long — on garde le début, proprement tronqué.
+ */
+function summarizeOutputs(outputs: Record<string, unknown>): string | undefined {
+  for (const value of Object.values(outputs)) {
+    if (typeof value === "string" && value.trim()) {
+      const flattened = value.replace(/\s+/g, " ").trim();
+      return flattened.length > 400 ? `${flattened.slice(0, 400)}…` : flattened;
+    }
+    if (value && typeof value === "object") {
+      try {
+        const json = JSON.stringify(value);
+        if (json.length > 2) return json.length > 400 ? `${json.slice(0, 400)}…` : json;
+      } catch {
+        /* sortie non sérialisable : essayer la suivante */
+      }
+    }
+  }
+  return undefined;
 }
 
 async function finishScheduleRun(
@@ -580,6 +626,7 @@ async function finishScheduleRun(
   status: string,
   error: string | undefined,
   slot: string,
+  details: { deliverables?: MissionDeliverable[]; outputPreview?: string } = {},
 ) {
   const now = Timestamp.now();
   const scheduleRef = adminDb.collection(COLLECTION).doc(scheduleId);
@@ -636,6 +683,8 @@ async function finishScheduleRun(
       status,
       completedAt: now,
       ...(error ? { error: error.slice(0, 4000) } : {}),
+      ...(details.outputPreview ? { outputPreview: details.outputPreview.slice(0, 2000) } : {}),
+      ...(details.deliverables && details.deliverables.length > 0 ? { deliverables: details.deliverables } : {}),
       slot,
       scheduleId,
       userId,
@@ -644,12 +693,16 @@ async function finishScheduleRun(
   });
 
   // Notification « toujours actif » : l'utilisateur est prévenu sur son canal
-  // de messagerie configuré — best effort, jamais bloquant.
+  // de messagerie configuré — best effort, jamais bloquant. FIX A5 : la
+  // notification embarque désormais un EXTRAIT du résultat (la sortie n'est
+  // plus invisible).
   void notifyScheduleRunCompleted({
     userId,
     scheduleId,
     status,
     error,
+    ...(details.outputPreview ? { outputPreview: details.outputPreview } : {}),
+    ...(details.deliverables && details.deliverables.length > 0 ? { deliverables: details.deliverables } : {}),
   });
 }
 
@@ -696,6 +749,8 @@ function serializeRun(id: string, data: DocumentData): ScheduleRun {
     startedAt: toIso(data.startedAt),
     completedAt: toIso(data.completedAt),
     error: typeof data.error === "string" ? data.error : undefined,
+    ...(typeof data.outputPreview === "string" && data.outputPreview ? { outputPreview: data.outputPreview } : {}),
+    ...(Array.isArray(data.deliverables) ? { deliverables: data.deliverables as MissionDeliverable[] } : {}),
   };
 }
 

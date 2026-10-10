@@ -157,8 +157,8 @@ vi.mock("@/lib/notifications/repository", () => ({
   createNotification: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/lib/queue/qstash", () => ({
-  publishJsonDestination: vi.fn(async () => ({ ok: true, mode: "published", message: "" })),
+vi.mock("@/lib/queue/tick-queue", () => ({
+  enqueueVideoProductionTick: vi.fn(async () => ({ ok: true, mode: "r2-queue", messageId: "ticket-1" })),
 }));
 
 // Task 107-a — primitives chat livrées par imports DYNAMIQUES dans
@@ -236,7 +236,7 @@ beforeEach(() => {
   firestoreState.txError = null;
   vi.clearAllMocks();
   // Origine canonique : publishProductionTick la résout AVANT d'appeler le
-  // mock publishJsonDestination.
+  // mock enqueueVideoProductionTick.
   process.env.GEN3IA_APP_ORIGIN = "https://gen3ia.online";
   delete process.env.GEN3IA_ALLOWED_ORIGINS;
   // Couche résiliente PERSISTANTE : les patches (statut terminal, marqueur

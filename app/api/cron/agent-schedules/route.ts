@@ -6,7 +6,7 @@ import { renewDueExtensionSubscriptions } from "@/lib/extensions/subscriptions";
 import { errorStatus } from "@/lib/security/http-errors";
 import { timingSafeStringEqual } from "@/lib/security/timing-safe";
 import { scheduleNextDispatchTick, slotFor } from "@/lib/queue/dispatch-loop";
-import { publishDispatchTick } from "@/lib/queue/qstash";
+import { enqueueDispatchTick, pumpDueTicks } from "@/lib/queue/tick-queue";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -29,9 +29,11 @@ function isAuthorized(request: NextRequest) {
  *  4. SENTINELLE de résurrection de la boucle de dispatch 5 minutes
  *     (Task 62) : le plan Vercel Hobby limite le cron à UNE exécution
  *     journalière (vercel.json `0 6 * * *`) — la cadence 5 minutes est
- *     assurée par la boucle auto-perpétuelle QStash
- *     (/api/queue/dispatch-tick), et CETTE route la relance si elle est
- *     morte (publish du tick du prochain slot si absent). Le dispatch
+ *     assurée par la boucle auto-perpétuelle de la FILE DE TICKS R2
+ *     (/api/queue/dispatch-tick + pump opportuniste sur le polling client),
+ *     et CETTE route la relance si elle est morte (publish du tick du
+ *     prochain slot si absent) et RATTRAPE les tickets dus non consommés
+ *     (délivrances interrompues pendant la nuit). Le dispatch
  *     étant idempotent par slot (claims transactionnels), le double
  *     déclencheur quotidien + boucle ne peut jamais exécuter deux fois
  *     une même planification.
@@ -67,15 +69,27 @@ export async function GET(request: NextRequest) {
 
     // Sentinelle de résurrection (Task 62) : le prochain slot de la boucle
     // doit TOUJOURS être programmé après ce passage — même si la boucle
-    // QStash est morte depuis la veille. NB (fix request-forgery) :
-    // publishDispatchTick résout l'ORIGINE CANONIQUE en interne ; le
+    // de dispatch est morte depuis la veille. NB (fix request-forgery) :
+    // enqueueDispatchTick résout l'ORIGINE CANONIQUE en interne ; le
     // paramètre origin de scheduleNextDispatchTick est ignoré par celle-ci
     // (signature conservée — voir lib/queue/dispatch-loop.ts).
     const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
     const loop = await scheduleNextDispatchTick(origin, slotFor(Date.now()), Date.now(), (options) =>
-      publishDispatchTick(options),
+      enqueueDispatchTick(options).then((published) =>
+        published.ok ? { messageId: published.messageId } : null,
+      ),
     ).catch((error: unknown) => {
       failures.push(`dispatch-loop: ${error instanceof Error ? error.message : "erreur"}`);
+      return null;
+    });
+
+    // RATTRAPAGE DES TICKETS DUS (file de ticks R2 — ex-QStash) : les
+    // délivrances interrompues pendant la nuit (fonction tuée, self-fetch
+    // perdu) sont re-délivrées ici ; les tickets sains ne sont pas dus ou
+    // sont sous bail → no-op. Best-effort : un incident alimente
+    // `partialFailures` sans faire échouer la route.
+    const queuePump = await pumpDueTicks().catch((error: unknown) => {
+      failures.push(`queue-pump: ${error instanceof Error ? error.message : "erreur"}`);
       return null;
     });
 
@@ -112,7 +126,7 @@ export async function GET(request: NextRequest) {
       }
     })();
 
-    return NextResponse.json({ ok: true, ...result, renewals, reactivations, extensionRenewals, dispatchLoop: loop, videoSweep, escrowSweep, ...(failures.length > 0 ? { partialFailures: failures } : {}) });
+    return NextResponse.json({ ok: true, ...result, renewals, reactivations, extensionRenewals, dispatchLoop: loop, queuePump, videoSweep, escrowSweep, ...(failures.length > 0 ? { partialFailures: failures } : {}) });
   } catch (error) {
     console.error("Agent schedule dispatcher failed", error);
     return NextResponse.json(

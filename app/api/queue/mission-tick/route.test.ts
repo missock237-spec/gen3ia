@@ -2,16 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 /**
- * Receiver QStash /api/queue/mission-tick (recommandation A de l'audit).
+ * Receiver /api/queue/mission-tick — file de ticks R2 (ex-QStash).
  * Tests COMPORTEMENTAUX : signature = authentification, claim = un seul
  * worker, échéance = ré-enfilement, échec métier = terminaison sans
  * redélivrance (jamais de double facturation), échec infra = 5xx (redélivrance).
  */
 
-vi.mock("@/lib/queue/qstash", () => ({
-  qstashConfig: vi.fn(),
-  verifyUpstashSignature: vi.fn(),
-  publishMissionTick: vi.fn(),
+vi.mock("@/lib/queue/tick-queue", () => ({
+  tickQueueConfigured: vi.fn(),
+  verifyTickRequest: vi.fn(),
+  enqueueMissionTick: vi.fn(),
 }));
 vi.mock("@/lib/queue/mission-queue", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/queue/mission-queue")>();
@@ -44,12 +44,12 @@ import {
   persistMissionProgress,
   NEXT_TICK_DELAY_SECONDS,
 } from "@/lib/queue/mission-queue";
-import { publishMissionTick, qstashConfig, verifyUpstashSignature } from "@/lib/queue/qstash";
+import { enqueueMissionTick, tickQueueConfigured, verifyTickRequest } from "@/lib/queue/tick-queue";
 import { POST } from "./route";
 
-const mockedQstashConfig = vi.mocked(qstashConfig);
-const mockedVerify = vi.mocked(verifyUpstashSignature);
-const mockedPublish = vi.mocked(publishMissionTick);
+const mockedTickConfigured = vi.mocked(tickQueueConfigured);
+const mockedVerify = vi.mocked(verifyTickRequest);
+const mockedPublish = vi.mocked(enqueueMissionTick);
 const mockedClaim = vi.mocked(claimMissionTick);
 const mockedProgress = vi.mocked(persistMissionProgress);
 const mockedFinalize = vi.mocked(finalizeMissionRun);
@@ -81,10 +81,10 @@ const CLAIMED = {
   },
 };
 
-function tickRequest(rawBody: string, signature = "v1,abc"): NextRequest {
+function tickRequest(rawBody: string, signature = "v1.1700000000000.abc"): NextRequest {
   return new NextRequest("https://gen3ia.local/api/queue/mission-tick", {
     method: "POST",
-    headers: { "content-type": "application/json", "upstash-signature": signature },
+    headers: { "content-type": "application/json", "x-gen3a-tick": signature },
     body: rawBody,
   });
 }
@@ -104,7 +104,7 @@ function pausedState(stepStatus: "pending" | "completed" = "pending") {
 beforeEach(() => {
   vi.clearAllMocks();
   mockConstructorCalls.length = 0;
-  mockedQstashConfig.mockReturnValue({ token: "tok", currentSigningKey: "k1", nextSigningKey: "k2" });
+  mockedTickConfigured.mockReturnValue(true);
   mockedVerify.mockReturnValue(true);
   mockedPublish.mockResolvedValue({ messageId: "msg-1" });
   mockedClaim.mockResolvedValue(structuredClone(CLAIMED));
@@ -117,7 +117,7 @@ beforeEach(() => {
 
 describe("POST /api/queue/mission-tick — sécurité du receiver", () => {
   it("503 quand la file n'est pas configurée (aucune signature vérifiable)", async () => {
-    mockedQstashConfig.mockReturnValue(null);
+    mockedTickConfigured.mockReturnValue(false);
     const response = await POST(tickRequest(JSON.stringify({ runId: RUN_ID })));
     expect(response.status).toBe(503);
     expect(mockedVerify).not.toHaveBeenCalled();
@@ -132,7 +132,7 @@ describe("POST /api/queue/mission-tick — sécurité du receiver", () => {
   });
 
   it("401 sans header de signature", async () => {
-    mockedVerify.mockImplementation((_config, _body, header) => header === "v1,valid");
+    mockedVerify.mockImplementation((_body, _auth, header) => header === "v1.1700000000000.valid");
     const response = await POST(new NextRequest("https://gen3ia.local/api/queue/mission-tick", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ runId: RUN_ID }),
     }));
@@ -241,15 +241,15 @@ describe("POST /api/queue/mission-tick — tranche d'exécution", () => {
     expect(mockedPublish).not.toHaveBeenCalled();
   });
 
-  it("échec INFRASTRUCTURE → 5xx pour redélivrance QStash (le bail expire, le claim reprend)", async () => {
+  it("échec INFRASTRUCTURE → 5xx pour rattrapage pump (le bail expire, le claim reprend)", async () => {
     mockedProgress.mockRejectedValue(new Error("Firestore unavailable"));
     const response = await POST(tickRequest(JSON.stringify({ runId: RUN_ID })));
     expect(response.status).toBe(500);
     expect(mockedFinalize).not.toHaveBeenCalledWith(RUN_ID, "failed", expect.anything());
   });
 
-  it("échec de publish pendant le ré-enfilement → 5xx (redélivrance rejouera le ré-enfilement)", async () => {
-    mockedPublish.mockRejectedValue(new Error("QStash 502"));
+  it("échec de publish pendant le ré-enfilement → 5xx (le pump rejouera le ré-enfilement)", async () => {
+    mockedPublish.mockRejectedValue(new Error("File R2 502"));
     const response = await POST(tickRequest(JSON.stringify({ runId: RUN_ID })));
     expect(response.status).toBe(500);
     // La finalisation (bail relâché) a DÉJÀ eu lieu : la redélivrance pourra claim.

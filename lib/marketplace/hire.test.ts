@@ -83,9 +83,9 @@ vi.mock("@/lib/queue/mission-queue", () => ({
   markMissionEnqueueFailed: mocks.markMissionEnqueueFailed,
 }));
 
-vi.mock("@/lib/queue/qstash", () => ({
-  missionQueueConfigured: mocks.missionQueueConfigured,
-  publishMissionTick: mocks.publishMissionTick,
+vi.mock("@/lib/queue/tick-queue", () => ({
+  tickQueueConfigured: mocks.missionQueueConfigured,
+  enqueueMissionTick: mocks.publishMissionTick,
 }));
 
 import {
@@ -97,7 +97,7 @@ import { applyEarning, releaseReservation, reserveFunds, settleReservation } fro
 import { getAgentForOwner } from "@/lib/agents/repository";
 import { planUniversalAgent } from "@/lib/agents/runtime/unified-agent";
 import { createQueuedMission, markMissionEnqueueFailed } from "@/lib/queue/mission-queue";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 
 function listingFixture(overrides: Record<string, unknown> = {}) {
   return {
@@ -176,7 +176,7 @@ beforeEach(() => {
   mocks.createQueuedMission.mockReset().mockResolvedValue(undefined);
   mocks.markMissionEnqueueFailed.mockReset().mockResolvedValue(undefined);
   mocks.missionQueueConfigured.mockReset().mockReturnValue(true);
-  mocks.publishMissionTick.mockReset().mockResolvedValue({ messageId: "msg-1" });
+  mocks.publishMissionTick.mockReset().mockResolvedValue({ ok: true, mode: "r2-queue", messageId: "msg-1" });
   delete process.env.GEN3IA_MARKETPLACE_FEE_BPS;
 });
 
@@ -296,7 +296,7 @@ describe("hireAgent", () => {
   });
 
   it("échec de publication du tick → loyer restitué + hire « failed » + erreur 503", async () => {
-    mocks.publishMissionTick.mockRejectedValue(new Error("QStash down"));
+    mocks.publishMissionTick.mockRejectedValue(new Error("File R2 down"));
     const result = await hireAgent("tenant-1", { listingId: "l1", objective: "Objectif" });
     expect(result).toMatchObject({ status: 503, error: expect.stringMatching(/restitu/i) });
     expect(mocks.releaseReservation).toHaveBeenCalledWith(
@@ -439,7 +439,7 @@ describe("imports consommés (contrat wallet)", () => {
     expect(typeof planUniversalAgent).toBe("function");
     expect(typeof createQueuedMission).toBe("function");
     expect(typeof markMissionEnqueueFailed).toBe("function");
-    expect(typeof missionQueueConfigured).toBe("function");
-    expect(typeof publishMissionTick).toBe("function");
+    expect(typeof tickQueueConfigured).toBe("function");
+    expect(typeof enqueueMissionTick).toBe("function");
   });
 });

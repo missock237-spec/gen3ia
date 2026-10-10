@@ -34,7 +34,7 @@ interface ProductionStatus {
   renderJobId: string | null;
   title?: string;
   createdAt?: string;
-  queueMode?: "qstash" | "poll";
+  queueMode?: "queue" | "poll";
   warnings?: string[];
 }
 

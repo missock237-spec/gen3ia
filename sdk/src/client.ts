@@ -9,7 +9,7 @@
  *  - CLÉ DÉVELOPPEUR (`apiKey` + `projectId`) : exécution d'agents
  *    personnalisés via /api/v1 — backends, n8n, scripts serveur ;
  *  - TOKEN FIREBASE (`firebaseToken`, statique ou fournisseur async) :
- *    missions longues avec file QStash (202 + runId + SSE) — l'appelant est
+ *    missions longues avec file de ticks R2 (202 + runId + SSE) — l'appelant est
  *    l'utilisateur lui-même (CLI, app mobile) ;
  *  - SANS AUTH : santé, agents publics, salons commerciaux.
  *

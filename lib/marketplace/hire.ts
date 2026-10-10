@@ -17,7 +17,7 @@ import { getAgentForOwner } from "@/lib/agents/repository";
 import { planUniversalAgent } from "@/lib/agents/runtime/unified-agent";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { createQueuedMission, markMissionEnqueueFailed } from "@/lib/queue/mission-queue";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 import type { AIProvider } from "@/lib/ai/models";
 
 /**
@@ -131,7 +131,7 @@ export async function hireAgent(tenantId: string, input: HireAgentInput): Promis
 
   // 3) La file de missions doit être activée (sinon la mission n'aurait
   //    AUCUN worker derrière — on refuse AVANT de prélever le moindre fonds).
-  if (!missionQueueConfigured()) {
+  if (!tickQueueConfigured()) {
     return { error: "File de missions indisponible : la location ne peut pas être lancée pour le moment.", status: 503 };
   }
 
@@ -240,8 +240,8 @@ export async function hireAgent(tenantId: string, input: HireAgentInput): Promis
       ...(input.conversationId?.trim() ? { conversationId: input.conversationId.trim() } : {}),
       plan,
     });
-    const published = await publishMissionTick(runId);
-    if (!published) {
+    const published = await enqueueMissionTick(runId);
+    if (!published.ok) {
       throw new Error("Publication du tick refusée (file non configurée ou origine non résolue).");
     }
   } catch (error) {

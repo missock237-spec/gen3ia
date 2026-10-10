@@ -32,15 +32,14 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import { logger } from "@/lib/observability/logger";
-import { publishJsonDestination, type QStashPublishResult } from "@/lib/queue/qstash";
-import { resolveJobOrigin } from "@/lib/queue/origin";
+import { enqueueVideoProductionTick, type TickPublishResult } from "@/lib/queue/tick-queue";
 import { createProject, getOwnedProjectOrThrow, patchProject, logSystem } from "@/lib/video/project-service";
 import { VideoProjectCreateSchema, DirectorBriefSchema, RenderRequestSchema, VIDEO_LIMITS } from "@/lib/video/security";
 import { applyProductionPlan } from "@/lib/video/director-service";
 import { generateScript } from "@/lib/video/script-service";
 import { generateSceneImage } from "@/lib/video/image-bridge";
 import { billImageGeneration, billTts } from "@/lib/video/credits";
-import { resolvePreferredVoice, generateSceneNarration, attachRecordingAsNarration } from "@/lib/video/voice-service";
+import { resolvePreferredVoice, withPlatformVoiceFallback, generateSceneNarration, attachRecordingAsNarration } from "@/lib/video/voice-service";
 import { listAssets } from "@/lib/video/asset-service";
 import { syncVoiceTrack, applyTimelinePatch } from "@/lib/video/timeline-service";
 import { ensureMusicBed } from "@/lib/video/audio-engine";
@@ -378,8 +377,8 @@ export interface CreateVideoProductionJobResult {
   projectId: string;
   status: "queued";
   stage: ProductionStage;
-  /** Mode de continuation effectif : QStash si configuré, sinon sondage. */
-  queueMode: "qstash" | "poll";
+  /** Mode de continuation effectif : file de ticks R2 si configurée, sinon sondage. */
+  queueMode: "queue" | "poll";
 }
 
 /**
@@ -487,14 +486,14 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
   if (!published.ok && published.mode === "error") {
     // PAS d'échec bloquant : continuation par sondage (GET production) —
     // mais l'incident est journalisé (jamais de fantôme silencieux).
-    await logSystem(project.id, `Continuation QStash indisponible (${published.message.slice(0, 200)}) — avancement par sondage du studio.`).catch(() => undefined);
+    await logSystem(project.id, `Continuation de file indisponible (${published.message.slice(0, 200)}) — avancement par sondage du studio.`).catch(() => undefined);
   }
 
-  return { jobId, projectId: project.id, status: "queued", stage: "project", queueMode: published.ok ? "qstash" : "poll" };
+  return { jobId, projectId: project.id, status: "queued", stage: "project", queueMode: published.ok ? "queue" : "poll" };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Publication QStash (même pattern corrigé que le rendu)
+// Publication dans la file de ticks R2 (même pattern que le rendu)
 // ────────────────────────────────────────────────────────────────────────────
 
 export function productionTickUrl(origin: string): string {
@@ -502,22 +501,20 @@ export function productionTickUrl(origin: string): string {
 }
 
 /**
- * Publie un tick de production via le pattern partagé de lib/queue/qstash.
+ * Publie un tick de production dans la FILE DE TICKS R2 (ex-QStash).
  * ORIGINE CANONIQUE (fix CodeQL request-forgery) : résolue en interne depuis
  * GEN3IA_APP_ORIGIN (allowlist serveur) — jamais depuis une origine de
- * requête. « unconfigured » couvre QStash absent ET origine non résolue
+ * requête. « unconfigured » couvre R2 absent ET origine non résolue
  * (la continuation par sondage prend le relais).
  */
-export async function publishProductionTick(jobId: string, delaySeconds = 1): Promise<QStashPublishResult> {
-  const resolved = resolveJobOrigin();
-  if (!resolved.ok) return { ok: false, mode: "unconfigured" } as const;
-  return publishJsonDestination(productionTickUrl(resolved.origin), JSON.stringify({ jobId }), { delaySeconds });
+export async function publishProductionTick(jobId: string, delaySeconds = 1): Promise<TickPublishResult> {
+  return enqueueVideoProductionTick(jobId, delaySeconds);
 }
 
 async function publishTickAndLog(job: Pick<VideoProductionJob, "id" | "projectId">, delaySeconds = 0): Promise<boolean> {
   const published = await publishProductionTick(job.id, delaySeconds);
   if (!published.ok && published.mode === "error") {
-    await logSystem(job.projectId, `Continuation QStash échouée (${published.message.slice(0, 200)}) — reprise par sondage du studio.`).catch(() => undefined);
+    await logSystem(job.projectId, `Continuation de file échouée (${published.message.slice(0, 200)}) — reprise par sondage du studio.`).catch(() => undefined);
   }
   return published.ok;
 }
@@ -889,10 +886,11 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
   if (job.options?.voiceEnabled === false) {
     return { action: "advance", detail: "Narration désactivée — vidéo muette assumée." };
   }
-  const voice = await resolvePreferredVoice(job.userId, project);
-  if (!voice) {
-    return { action: "advance", detail: "Aucune voix configurée — vidéo muette assumée (narrations ajoutables depuis le studio)." };
-  }
+  // FIX A3 : la production autopilote ne produit PLUS de vidéo muette faute
+  // de profil vocal — elle narrate avec la VOIX PLATEFORME ElevenLabs (repli
+  // du pont TTS, même chemin que le chat). Seule l'option explicite
+  // voiceEnabled:false garde la vidéo muette assumée.
+  const voice = withPlatformVoiceFallback(await resolvePreferredVoice(job.userId, project));
 
   // Task 106-c — narrations déjà prêtes (idempotence des reprises : jamais
   // de double synthèse / double facturation lors des retentes par scène).

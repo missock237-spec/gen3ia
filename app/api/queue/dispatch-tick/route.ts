@@ -3,10 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { safeError, executionLogger } from "@/lib/observability/logger";
 import { dispatchSchedules } from "@/lib/agents/scheduler";
 import {
-  qstashConfig,
-  verifyUpstashSignature,
-  publishDispatchTick,
-} from "@/lib/queue/qstash";
+  tickQueueConfigured,
+  verifyTickRequest,
+  enqueueDispatchTick,
+} from "@/lib/queue/tick-queue";
 import {
   scheduleNextDispatchTick,
   slotFor,
@@ -16,21 +16,27 @@ import { resolveJobOrigin } from "@/lib/queue/origin";
 /**
  * Receiver de la boucle de dispatch planifié (Task 62 — priorité #5).
  *
- * QStash délivre ici un POST signé { slotEpoch } toutes les 5 minutes :
- * le tick exécute le dispatcher d'agents (claims transactionnels par slot
- * — idempotent, aucune double exécution possible même en redélivrance)
- * puis programme le tick du slot suivant. Le cron Vercel quotidien
- * (/api/cron/agent-schedules) sert de sentinelle de résurrection.
+ * Une délivrance POST ici un POST signé { slotEpoch } toutes les 5 minutes :
+ * le tick exécute le dispatcher d'agents (claims transactionnels par slot —
+ * idempotent, aucune double exécution possible même en redélivrance) puis
+ * programme le tick du slot suivant. Le cron Vercel quotidien
+ * (/api/cron/agent-schedules) sert de sentinelle de résurrection et le
+ * pump opportuniste (polling client) réveille les tickets dus entre-temps.
  *
- * SÉCURITÉ : authentification par SIGNATURE QStash (HMAC-SHA256 temps
- * constant, clé courante OU suivante) — identique à mission-tick. Un appel
- * non signé est rejeté 401 AVANT tout parsing métier. Configuration
- * absente → 503.
+ * APPELANT : la délivrance immédiate de la file est un fire-and-forget
+ * gracié ; seul le PUMP attend la réponse complète (2xx = ticket consommé,
+ * 5xx = réessai backoff).
  *
- * RÉPONSES : 2xx = tick traité (le dispatch est idempotent, une
- * redélivrance est un no-op au niveau des claims) ; 5xx = échec du
- * publish du successeur UNIQUEMENT — la redélivrance QStash retentera
- * (la réservation transactionnelle est libérée avant le retour).
+ * SÉCURITÉ : authentification par SIGNATURE INTERNE (HMAC-SHA256 dérivé du
+ * secret R2, temps constant, fraîcheur ±300 s — lib/queue/tick-queue.ts)
+ * OU bearer CRON_SECRET. Un appel non signé est rejeté 401 AVANT tout
+ * parsing métier. File non configurée → 503.
+ *
+ * RÉPONSES : 2xx = tick traité (le dispatch est idempotent, une redélivrance
+ * est un no-op au niveau des claims) ; 5xx = échec du publish du successeur
+ * UNIQUEMENT — le pump re-délivrera ce ticket et retentera la programmation
+ * du successeur (la réservation transactionnelle est libérée avant le
+ * retour).
  */
 
 export const dynamic = "force-dynamic";
@@ -44,16 +50,15 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
   // 1) Configuration : la boucle exige la même config que la file missions.
-  const config = qstashConfig();
-  if (!config) {
+  if (!tickQueueConfigured()) {
     return NextResponse.json({ error: "File d'attente non configurée." }, { status: 503 });
   }
 
-  // 2) Signature QStash (temps constant, clé courante OU suivante).
+  // 2) Signature interne (temps constant) ou bearer CRON_SECRET.
   if (rawBody.length > MAX_BODY_BYTES) {
     return NextResponse.json({ error: "Corps trop volumineux." }, { status: 413 });
   }
-  if (!verifyUpstashSignature(config, rawBody, request.headers.get("upstash-signature"), "/api/queue/dispatch-tick")) {
+  if (!verifyTickRequest(rawBody, request.headers.get("authorization"), request.headers.get("x-gen3a-tick"))) {
     return NextResponse.json({ error: "Signature invalide." }, { status: 401 });
   }
 
@@ -72,7 +77,7 @@ export async function POST(request: NextRequest) {
   // uniquement — JAMAIS dérivée de la requête entrante (falsifiable).
   // scheduleNextDispatchTick attend une chaîne (paramètre qu'il ignore déjà) :
   // on lui passe l'origine canonique, ou chaîne vide si non résolue — dans ce
-  // cas publishDispatchTick retournera null, la réservation sera libérée et
+  // cas enqueueDispatchTick retournera un échec, la réservation sera libérée et
   // le cron quotidien (sentinelle) relancera la boucle.
   const canonicalOrigin = resolveJobOrigin();
   const origin = canonicalOrigin.ok ? canonicalOrigin.origin : "";
@@ -83,16 +88,18 @@ export async function POST(request: NextRequest) {
 
     // 5) Exactement un successeur pour le slot suivant (contrôle transactionnel).
     const scheduled = await scheduleNextDispatchTick(origin, slotEpoch, Date.now(), (options) =>
-      // publishDispatchTick résout l'origine canonique en interne.
-      publishDispatchTick(options),
+      enqueueDispatchTick(options).then((published) =>
+        published.ok ? { messageId: published.messageId } : null,
+      ),
     );
 
     if (scheduled.kind === "publish-failed") {
-      // Le travail a été fait ; le successeur manque → 5xx : QStash
-      // redélivre ce tick et retentera la programmation du successeur.
+      // Le travail a été fait ; le successeur manque : le ticket du slot
+      // courant reste DÛ dans R2 — le pump / la sentinelle le re-délivrera et
+      // la programmation du successeur sera retentée.
       log.error({ event: "dispatch.tick.publishFailed", slotEpoch, error: scheduled.error }, "Publish du successeur échoué");
       return NextResponse.json(
-        { error: "Programmation du tick suivant impossible — redélivrance attendue.", slotEpoch },
+        { error: "Programmation du tick suivant impossible — rattrapage attendu.", slotEpoch },
         { status: 502 },
       );
     }

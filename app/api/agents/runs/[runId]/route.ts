@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { getMissionRun } from "@/lib/queue/mission-queue";
+import { nudgePumpFromPolling } from "@/lib/queue/tick-queue";
 import { errorStatus } from "@/lib/security/http-errors";
 
 /**
@@ -14,9 +15,10 @@ import { errorStatus } from "@/lib/security/http-errors";
  *
  * AUTO-RÉPARATION (Task 114) : si une mission en cours semble orpheline
  * (aucun tick depuis > 30 s ET lease absent/expiré), le polling du
- * propriétaire REPUBLIE le tick QStash (fail-soft). Le claim transactionnel
+ * propriétaire REPUBLIE le tick (fail-soft). Le claim transactionnel
  * rend les doublons inoffensifs : aucune mission ne peut rester bloquée
- * parce qu'une livraison QStash a échoué (ex. rotation de clés de signature).
+ * parce qu'une délivrance de la file R2 a échoué (le ticket reste dû et
+ * le pump / cette republie le redélivrent).
  */
 
 export const dynamic = "force-dynamic";
@@ -34,8 +36,8 @@ function republierSiOrpheline(record: { status: string; leaseUntilMs?: number; u
   if (now - record.updatedAtMs < STALE_REPUBLISH_MS) return;
   void (async () => {
     try {
-      const { publishMissionTick } = await import("@/lib/queue/qstash");
-      await publishMissionTick(record.runId);
+      const { enqueueMissionTick } = await import("@/lib/queue/tick-queue");
+      await enqueueMissionTick(record.runId);
     } catch {
       // Fail-soft : le prochain sondage retentera ; le disjoncteur QStash
       // (origine non résolue) reste silencieux par design.
@@ -50,6 +52,11 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   }
   try {
     const user = await requireUser(request);
+    // PUMP OPPORTUNISTE (file de ticks R2) : chaque sondage du client est une
+    // occasion de rattraper les tickets dus non consommés (délivrance
+    // interrompue) — throttlé à 1/15 s par instance, fire-and-forget, aucun
+    // impact sur le temps de réponse.
+    nudgePumpFromPolling();
     const record = await getMissionRun(user.uid, runId);
     if (!record) {
       return NextResponse.json({ error: "Mission introuvable" }, { status: 404 });

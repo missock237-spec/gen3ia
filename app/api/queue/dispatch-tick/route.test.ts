@@ -13,10 +13,10 @@ vi.mock("@/lib/observability/logger", () => ({
   safeError: (error: unknown) => ({ message: error instanceof Error ? error.message : String(error) }),
 }));
 vi.mock("@/lib/agents/scheduler", () => ({ dispatchSchedules: vi.fn() }));
-vi.mock("@/lib/queue/qstash", () => ({
-  qstashConfig: vi.fn(),
-  verifyUpstashSignature: vi.fn(),
-  publishDispatchTick: vi.fn(),
+vi.mock("@/lib/queue/tick-queue", () => ({
+  tickQueueConfigured: vi.fn(),
+  verifyTickRequest: vi.fn(),
+  enqueueDispatchTick: vi.fn(async () => ({ ok: true, mode: "r2-queue", messageId: "ticket-1" })),
 }));
 vi.mock("@/lib/queue/dispatch-loop", () => ({
   scheduleNextDispatchTick: vi.fn(),
@@ -25,12 +25,12 @@ vi.mock("@/lib/queue/dispatch-loop", () => ({
 
 import { dispatchSchedules } from "@/lib/agents/scheduler";
 import { scheduleNextDispatchTick } from "@/lib/queue/dispatch-loop";
-import { publishDispatchTick, qstashConfig, verifyUpstashSignature } from "@/lib/queue/qstash";
+import { enqueueDispatchTick, tickQueueConfigured, verifyTickRequest } from "@/lib/queue/tick-queue";
 import { POST } from "./route";
 
-const mockedConfig = vi.mocked(qstashConfig);
-const mockedVerify = vi.mocked(verifyUpstashSignature);
-const mockedPublish = vi.mocked(publishDispatchTick);
+const mockedConfig = vi.mocked(tickQueueConfigured);
+const mockedVerify = vi.mocked(verifyTickRequest);
+const mockedPublish = vi.mocked(enqueueDispatchTick);
 const mockedDispatch = vi.mocked(dispatchSchedules);
 const mockedScheduleNext = vi.mocked(scheduleNextDispatchTick);
 
@@ -40,7 +40,7 @@ function request(body: string, signature: string | null = "v1,abc") {
     body,
     headers: {
       "Content-Type": "application/json",
-      ...(signature ? { "upstash-signature": signature } : {}),
+      ...(signature ? { "x-gen3a-tick": signature } : {}),
     },
   });
 }
@@ -51,7 +51,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockedConfig.mockReturnValue(CONFIG);
   // Origine canonique : la route la résout via lib/queue/origin (module réel,
-  // non mocké) pour scheduleNextDispatchTick — publishDispatchTick (mocké)
+  // non mocké) pour scheduleNextDispatchTick — enqueueDispatchTick (mocké)
   // la résoudrait de son côté en production.
   process.env.GEN3IA_APP_ORIGIN = "https://gen3ia.online";
   delete process.env.GEN3IA_ALLOWED_ORIGINS;
@@ -64,7 +64,7 @@ afterEach(() => {
 
 describe("POST /api/queue/dispatch-tick", () => {
   it("503 si la file n'est pas configurée (avant toute vérification)", async () => {
-    mockedConfig.mockReturnValue(null);
+    mockedConfig.mockReturnValue(false);
     const response = await POST(request("{}"));
     expect(response.status).toBe(503);
     expect(mockedVerify).not.toHaveBeenCalled();
@@ -88,7 +88,7 @@ describe("POST /api/queue/dispatch-tick", () => {
     mockedDispatch.mockResolvedValue({ checked: 3, due: 2, executed: [{ id: "s1" }] } as never);
     mockedScheduleNext.mockImplementation(async (_origin, _slot, _now, publish) => {
       // Exécute le vrai câblage : la callback fournie par la route doit
-      // appeler publishDispatchTick avec les options du contrôleur.
+      // appeler enqueueDispatchTick avec les options du contrôleur.
       await publish({ delaySeconds: 250, slotEpoch: 42 });
       return { kind: "published", slotEpoch: 42, delaySeconds: 250 };
     });
@@ -148,7 +148,7 @@ describe("POST /api/queue/dispatch-tick", () => {
     const forged = new NextRequest("https://attacker.example.net/api/queue/dispatch-tick", {
       method: "POST",
       body: "{}",
-      headers: { "Content-Type": "application/json", "upstash-signature": "v1,abc" },
+      headers: { "Content-Type": "application/json", "x-gen3a-tick": "v1,abc" },
     });
     const response = await POST(forged);
     expect(response.status).toBe(200);

@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorStatus } from "@/lib/security/http-errors";
 import { executionLogger, safeError } from "@/lib/observability/logger";
 import { recordExecutionMetrics } from "@/lib/observability/otel";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 import {
   createQueuedMission,
   markMissionEnqueueFailed,
@@ -58,8 +58,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const agentConfig = networkRuntimeAgentConfig(network);
 
     // ---- File d'attente (mode async) --------------------------------
-    const wantsAsync = parsed.data.mode === "async" || (parsed.data.mode !== "sync" && missionQueueConfigured());
-    if (wantsAsync && missionQueueConfigured()) {
+    const wantsAsync = parsed.data.mode === "async" || (parsed.data.mode !== "sync" && tickQueueConfigured());
+    if (wantsAsync && tickQueueConfigured()) {
       const runId = randomUUID();
       try {
         await createQueuedMission({
@@ -71,10 +71,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
           ...(parsed.data.outcomeContract ? { outcomeContract: parsed.data.outcomeContract } : {}),
           plan,
         });
-        // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishMissionTick
+        // ORIGINE CANONIQUE (fix CodeQL request-forgery) : enqueueMissionTick
         // résout GEN3IA_APP_ORIGIN en interne (allowlist serveur) — aucune
         // origine dérivée de la requête entrante (falsifiable).
-        const published = await publishMissionTick(runId);
+        const published = await enqueueMissionTick(runId);
         log.info({ event: "network.mission.queued", runId, networkId: network.id, steps: plan.steps.length }, "Mission d'équipe enfilée");
         return NextResponse.json(
           {
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
             statusUrl: `/api/agents/runs/${runId}`,
             streamUrl: `/api/agents/runs/${runId}/stream`,
             pollSeconds: 2,
-            ...(published?.messageId ? { messageId: published.messageId } : {}),
+            ...(published.ok ? { messageId: published.messageId } : {}),
           },
           { status: 202 },
         );

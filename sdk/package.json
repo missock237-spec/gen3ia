@@ -1,7 +1,7 @@
 {
   "name": "@gen3ia/sdk",
   "version": "1.0.0",
-  "description": "SDK TypeScript officiel de l'API Gen3ia — agents, missions longues (file QStash + SSE), salons clients publics et déclencheurs webhook.",
+  "description": "SDK TypeScript officiel de l'API Gen3ia — agents, missions longues (file de ticks R2 + SSE), salons clients publics et déclencheurs webhook.",
   "license": "MIT",
   "engines": {
     "node": ">=20"

@@ -64,7 +64,7 @@ vi.mock("@/lib/integrations/elevenlabs/client", () => ({
 
 // ---------------------------------------------------------------------------
 
-import { generateSceneNarration } from "@/lib/video/voice-service";
+import { generateSceneNarration, withPlatformVoiceFallback, PLATFORM_VOICE_PROFILE } from "@/lib/video/voice-service";
 import {
   addElevenLabsVoice,
   elevenLabsTextToSpeech,
@@ -237,5 +237,55 @@ describe("generateSceneNarration — clonage réel de la voix enregistrée", () 
 
     expect(mockedClone).not.toHaveBeenCalled();
     expect(mockedTts).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FIX A3 — repli sur la VOIX PLATEFORME quand aucun profil utilisateur
+// ---------------------------------------------------------------------------
+
+describe("withPlatformVoiceFallback — narration hors de la boîte (fix A3)", () => {
+  it("retourne le profil utilisateur quand il existe (priorité conservée)", () => {
+    const owned = recordingVoice();
+    expect(withPlatformVoiceFallback(owned)).toBe(owned);
+  });
+
+  it("retourne le profil plateforme quand AUCUN profil n'est configuré (plus de 500)", () => {
+    const fallback = withPlatformVoiceFallback(null);
+    expect(fallback).toBe(PLATFORM_VOICE_PROFILE);
+    expect(fallback.origin).toBe("elevenlabs");
+    expect(fallback.elevenLabsVoiceId).toBeUndefined();
+  });
+
+  it("le profil plateforme n'est PAS persisté (aucune écriture videoVoices)", async () => {
+    const before = voiceDocs.size;
+    const profile = withPlatformVoiceFallback(null);
+    expect(profile.id).toBe("platform-default");
+    expect(voiceDocs.size).toBe(before);
+  });
+
+  it("la narration avec le profil plateforme passe SANS voiceId au TTS (repli interne ElevenLabs)", async () => {
+    mockedTts.mockResolvedValueOnce({
+      audioBase64: Buffer.from("audio").toString("base64"),
+      mimeType: "audio/mpeg",
+      voiceId: "resolved-by-bridge",
+      modelId: "eleven_multilingual_v2",
+      charactersUsed: 7,
+    } as never);
+
+    const result = await generateSceneNarration({
+      userId: "user-1",
+      projectId: "proj-1",
+      sceneId: "scene-1",
+      narration: "Bonjour",
+      voice: withPlatformVoiceFallback(null),
+    });
+
+    // Le pont TTS reçoit voiceId indéfini → il résout sa voix plateforme
+    // (ELEVENLABS_VOICE_ID → bibliothèque → défaut) : MÊME chemin que le
+    // chat audio, qui fonctionne sans configuration.
+    expect(mockedTts).toHaveBeenCalledWith(expect.objectContaining({ voiceId: undefined }));
+    expect(result.voiceIdUsed).toBe("resolved-by-bridge");
+    expect(mockedClone).not.toHaveBeenCalled();
   });
 });

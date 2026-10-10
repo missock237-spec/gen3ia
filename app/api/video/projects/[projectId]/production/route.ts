@@ -13,7 +13,7 @@ import {
 } from "@/lib/video/production-queue";
 import { writeCheckpointSet } from "@/lib/db/firestore-resilient";
 import { getJob as getRenderJob } from "@/lib/video/render-queue";
-import { qstashConfig } from "@/lib/queue/qstash";
+import { tickQueueConfigured, nudgePumpFromPolling } from "@/lib/queue/tick-queue";
 import { cacheGet, cacheSet } from "@/lib/cache/redis";
 
 export const runtime = "nodejs";
@@ -38,8 +38,8 @@ const SWEEP_THROTTLE_MS = 60_000;
 const localSweepAt = new Map<string, number>();
 
 async function sweepProductionJobsIfDue(projectId: string): Promise<void> {
-  // Mode QStash : le worker production-tick est déjà responsable du sweep.
-  if (qstashConfig()) return;
+  // Mode file : le worker production-tick est déjà responsable du sweep.
+  if (tickQueueConfigured()) return;
   const throttleKey = `sweep:production:${projectId}`;
   const now = Date.now();
   const localAt = localSweepAt.get(throttleKey);
@@ -67,6 +67,10 @@ async function sweepProductionJobsIfDue(projectId: string): Promise<void> {
  * (bail) garantit qu'un sondage concurrent ne peut pas doubler un tick.
  */
 export async function GET(request: NextRequest, { params }: Params) {
+  // PUMP OPPORTUNISTE (file de ticks R2) : le sondage du studio vidéo est une
+  // occasion de rattraper les tickets dus non consommés — throttlé, sans
+  // impact sur le temps de réponse.
+  nudgePumpFromPolling();
   const guard = await protectRoute(request, { key: "video-production-status", rateLimit: { limit: 240, windowMs: 60_000 } });
   if (!guard.ok) return guard.response;
   try {
@@ -122,7 +126,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     // Relecture post-tick (le tick a pu avancer l'étape ou terminer le job).
     const current = pendingTicked ? (await listProductionJobs(guard.context.userId, projectId))[0] : job;
     if (!current) {
-      return NextResponse.json({ job: null, queueMode: qstashConfig() ? ("qstash" as const) : ("poll" as const) });
+      return NextResponse.json({ job: null, queueMode: tickQueueConfigured() ? ("queue" as const) : ("poll" as const) });
     }
     return NextResponse.json({
       jobId: current.id,
@@ -138,7 +142,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       title: current.title,
       createdAt: current.createdAt,
       updatedAt: current.updatedAt,
-      queueMode: qstashConfig() ? ("qstash" as const) : ("poll" as const),
+      queueMode: tickQueueConfigured() ? ("queue" as const) : ("poll" as const),
     });
   } catch (error) {
     return NextResponse.json(

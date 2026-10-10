@@ -154,7 +154,7 @@ describe("assertSafeDestinationUrl — défense en profondeur", () => {
   });
 
   it("lève une Error FR sur URL malformée", () => {
-    expect(() => assertSafeDestinationUrl("n'importe quoi")).toThrow(/Destination QStash invalide/);
+    expect(() => assertSafeDestinationUrl("n'importe quoi")).toThrow(/Destination de tick invalide/);
   });
 });
 
@@ -195,7 +195,7 @@ describe("garde : aucune destination dérivée de la requête (fix CodeQL reques
     "app/api/networks/[id]/run/route.ts",
     "lib/video/production-queue.ts",
     "lib/video/render-queue.ts",
-    "lib/queue/qstash.ts",
+    "lib/queue/tick-queue.ts",
   ];
 
   it("aucun fichier gardé ne référence request.nextUrl.origin (grep source)", () => {
@@ -217,14 +217,12 @@ describe("garde : aucune destination dérivée de la requête (fix CodeQL reques
   });
 
   it("les publishers résolvent l'origine canonique en interne (allowlist serveur)", () => {
-    const qstash = read("lib/queue/qstash.ts");
-    // Le publish haute positionne la défense en profondeur en première ligne.
-    expect(qstash).toContain("assertSafeDestinationUrl(destinationUrl);");
-    // Les deux publishers résolvent EN INTERNE (plus de paramètre origin).
-    expect(qstash).toMatch(/publishMissionTick\(\s*runId: string/);
-    expect(qstash).toMatch(/publishDispatchTick\(\s*options: \{ delaySeconds: number; slotEpoch: number \}/);
+    const tickQueue = read("lib/queue/tick-queue.ts");
+    // La délivrance positionne la défense en profondeur en première ligne.
+    expect(tickQueue).toContain("assertSafeDestinationUrl(destinationUrl);");
+    // Les enqueue résolvent EN INTERNE (plus de paramètre origin).
+    expect(tickQueue).toMatch(/enqueueMissionTick\(\s*runId: string/);
+    expect(tickQueue).toMatch(/enqueueDispatchTick\(\s*options: \{ delaySeconds: number; slotEpoch: number \}/);
     expect(read("lib/queue/origin.ts")).toContain('process.env.GEN3IA_APP_ORIGIN?.trim()');
-    expect(read("lib/video/render-queue.ts")).toContain("resolveJobOrigin()");
-    expect(read("lib/video/production-queue.ts")).toContain("resolveJobOrigin()");
   });
 });

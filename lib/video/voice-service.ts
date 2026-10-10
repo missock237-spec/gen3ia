@@ -104,6 +104,47 @@ export async function resolvePreferredVoice(userId: string, project: { voicePref
   return voices.find((v) => v.isDefault) ?? voices[0] ?? null;
 }
 
+/**
+ * FIX A3 (rapport de tests 2026-10) — VOIX PLATEFORME PAR DÉFAUT : la
+ * narration exigeait un profil vocal utilisateur (enregistrement ou voix
+ * ElevenLabs importée) ; un compte sans profil recevait un 500 « Aucune
+ * voix disponible » sur generate-voice et une vidéo MUETTE en production
+ * autopilote, alors même que le pont ElevenLabs sait retomber sur une voix
+ * de plateforme (resolveVoiceId : ELEVENLABS_VOICE_ID → bibliothèque du
+ * compte → voix par défaut) — le même chemin que la synthèse audio du chat,
+ * qui fonctionne hors de la boîte.
+ *
+ * Ce profil synthétique n'est PAS persisté (aucun document videoVoices) : il
+ * porte origin "elevenlabs" SANS identifiant — ensureElevenLabsClonedVoice
+ * retourne undefined et elevenLabsTextToSpeech résout la voix réelle via
+ * son repli interne. L'utilisateur peut toujours surcharger en important sa
+ * propre voix (le profil réel, lui, reste premier dans la résolution).
+ */
+export const PLATFORM_VOICE_PROFILE: VoiceProfile = {
+  id: "platform-default",
+  userId: "*",
+  name: "Voix plateforme (par défaut)",
+  language: "fr",
+  description: "Voix de narration par défaut de la plateforme (ElevenLabs)",
+  origin: "elevenlabs",
+  sampleR2Key: undefined,
+  elevenLabsVoiceId: undefined,
+  durationSec: undefined,
+  isDefault: false,
+  rightsConfirmedAt: undefined,
+  status: "active",
+  createdAt: "1970-01-01T00:00:00.000Z",
+};
+
+/**
+ * Résolution de la voix de narration AVEC REPLI PLATEFORME : profil
+ * utilisateur (préféré) sinon voix plateforme par défaut — la narration ne
+ * peut plus échouer (ni renvoyer 500) faute de profil vocal configuré.
+ */
+export function withPlatformVoiceFallback(voice: VoiceProfile | null): VoiceProfile {
+  return voice ?? PLATFORM_VOICE_PROFILE;
+}
+
 export async function deleteVoiceProfile(userId: string, voiceId: string): Promise<void> {
   const voice = await getVoiceProfile(userId, voiceId);
   if (!voice) throw new Error("Voix introuvable.");

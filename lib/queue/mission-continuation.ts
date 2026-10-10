@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 
 import { createQueuedMission, markMissionEnqueueFailed } from "@/lib/queue/mission-queue";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 import { resolveJobOrigin } from "@/lib/queue/origin";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import type { OutcomeContract } from "@/lib/agents/outcome-contract";
@@ -16,9 +16,9 @@ import type { OutcomeContract } from "@/lib/agents/outcome-contract";
  * Une mission lancée dans une requête HTTP (chat d'agent, tâche workspace,
  * planification) est bornée par la fenêtre serverless. Quand le runtime
  * s'arrête PROPREMENT sur son échéance de tranche (état « paused » avec des
- * étapes restantes), ce module enfile la suite dans la file QStash
- * existante : le tick suivant reprend depuis le checkpoint et la mission se
- * poursuit EN ARRIÈRE-PLAN — onglet fermé, actualisé ou supprimé.
+ * étapes restantes), ce module enfile la suite dans la FILE DE TICKS R2
+ * (ex-QStash) : le tick suivant reprend depuis le checkpoint et la mission
+ * se poursuit EN ARRIÈRE-PLAN — onglet fermé, actualisé ou supprimé.
  *
  * Le mécanisme est exactement celui des missions async (/api/agents/run) :
  * bail transactionnel, checkpoint, ré-enfilement. Aucun nouveau worker.
@@ -35,7 +35,7 @@ export interface MissionContinuationInput {
   /** Conversation à tenir informée (message final + run réconcilié au tick). */
   conversationId?: string;
   /**
-   * DÉPRÉCIÉ / IGNORÉ (fix CodeQL request-forgery) : la destination QStash
+   * DÉPRÉCIÉ / IGNORÉ (fix CodeQL request-forgery) : la destination du tick
    * est désormais dérivée de l'ORIGINE CANONIQUE du serveur
    * (GEN3IA_APP_ORIGIN, allowlist — lib/queue/origin.ts), jamais d'une
    * origine fournie par l'appelant (falsifiable). Champ conservé en option
@@ -57,7 +57,7 @@ export interface MissionContinuationResult {
  * (checkpoint + reprise manuelle).
  */
 export async function enqueueMissionContinuation(input: MissionContinuationInput): Promise<MissionContinuationResult> {
-  if (!missionQueueConfigured()) {
+  if (!tickQueueConfigured()) {
     return { queued: false, reason: "File d'attente non configurée — reprise manuelle disponible." };
   }
   // ORIGINE CANONIQUE AVANT TOUTE ÉCRITURE (fix request-forgery) : si
@@ -81,10 +81,10 @@ export async function enqueueMissionContinuation(input: MissionContinuationInput
       ...(input.conversationId ? { conversationId: input.conversationId } : {}),
       plan: input.plan,
     });
-    // publishMissionTick résout DÉJÀ l'origine canonique en interne ; le
+    // enqueueMissionTick résout DÉJÀ l'origine canonique en interne ; le
     // contrôle ci-dessus garantit seulement qu'aucun document n'est créé
     // quand la publication est vouée au refus.
-    await publishMissionTick(runId);
+    await enqueueMissionTick(runId);
     return { queued: true, runId };
   } catch (error) {
     // L'enfilement a échoué : la mission de file est marquée honnêtement en

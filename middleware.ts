@@ -41,7 +41,7 @@ const CONTENT_SECURITY_POLICY = [
   //     SENTRY_INGEST_HOSTS dans instrumentation.ts) ;
   //   - Google AdSense (Task 40) : beacons du loader et suivi de clic
   //     (googlesyndication, doubleclick, googleadservices) ;
-  //   - Composio, QStash/Upstash, Qdrant, Agnes/Groq, webhooks sortants :
+  //   - Composio, Upstash, Qdrant, Agnes/Groq, webhooks sortants :
   //     appels SERVEUR uniquement — volontairement ABSENTS de la CSP
   //     navigateur (aucun fetch direct depuis le client).
   "connect-src 'self' https://apis.google.com https://*.googleapis.com https://www.gstatic.com https://*.firebaseio.com wss://*.googleapis.com wss://*.firebaseio.com https://o4511820262473728.ingest.de.sentry.io https://ingest.de.sentry.io https://ingest.sentry.io https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com",

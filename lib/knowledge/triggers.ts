@@ -6,7 +6,7 @@ import { randomUUID } from "crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { createQueuedMission } from "@/lib/queue/mission-queue";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 import { assertOrgAttach } from "@/lib/tenants/resource-access";
 
 /**
@@ -180,7 +180,7 @@ export async function evaluateKnowledgeTriggers(input: {
     // l'absence de rattachement propre.
     const missionOrgId = trigger.orgId ?? input.orgId;
     try {
-      if (!missionQueueConfigured()) {
+      if (!tickQueueConfigured()) {
         result = { triggerId: trigger.id, triggerName: trigger.name, status: "matched_no_queue", detail: "File d'attente non configurée — mission non lancée." };
       } else {
         const agent = await getAgentForUser(input.userId, trigger.action.agentId);
@@ -237,7 +237,7 @@ export async function evaluateKnowledgeTriggers(input: {
           // ORIGINE CANONIQUE (fix CodeQL request-forgery) :
           // publishMissionTick résout GEN3IA_APP_ORIGIN en interne
           // (allowlist serveur) — plus aucune origine en paramètre.
-          await publishMissionTick(runId);
+          await enqueueMissionTick(runId);
           result = { triggerId: trigger.id, triggerName: trigger.name, status: "mission_queued", detail: "Mission enfilée.", runId };
         }
       }

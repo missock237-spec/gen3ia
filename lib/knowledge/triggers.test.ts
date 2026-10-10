@@ -35,9 +35,9 @@ const missionQueueConfiguredMock = vi.fn();
 vi.mock("@/lib/queue/mission-queue", () => ({
   createQueuedMission: (...args: unknown[]) => createQueuedMissionMock(...args),
 }));
-vi.mock("@/lib/queue/qstash", () => ({
-  missionQueueConfigured: () => missionQueueConfiguredMock(),
-  publishMissionTick: (...args: unknown[]) => publishMissionTickMock(...args),
+vi.mock("@/lib/queue/tick-queue", () => ({
+  tickQueueConfigured: () => missionQueueConfiguredMock(),
+  enqueueMissionTick: (...args: unknown[]) => publishMissionTickMock(...args),
 }));
 
 const assertOrgAttachMock = vi.fn();

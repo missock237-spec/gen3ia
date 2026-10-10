@@ -4,7 +4,7 @@ import { errorStatus } from "@/lib/security/http-errors";
 import { RenderRequestSchema } from "@/lib/video/security";
 import { startRenderJob, listJobs, pauseJob, resumeJob, cancelJob, sweepStaleRenderJobs, maybeAdvancePendingJob, POLL_ADVANCE_BUDGET_MS } from "@/lib/video/render-queue";
 import { checkFfmpegAvailable } from "@/lib/video/ffmpeg";
-import { qstashConfig } from "@/lib/queue/qstash";
+import { tickQueueConfigured } from "@/lib/queue/tick-queue";
 import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
 import { getJobProgress } from "@/lib/video/progress-store";
 import { cacheGet, cacheSet } from "@/lib/cache/redis";
@@ -42,9 +42,9 @@ const SWEEP_THROTTLE_MS = 60_000;
 const localSweepAt = new Map<string, number>();
 
 async function sweepRenderJobsIfDue(projectId: string): Promise<void> {
-  // Mode QStash : le worker tick est déjà responsable du sweep — aucun
+  // Mode file : le worker tick est déjà responsable du sweep — aucun
   // second balayage cross-user dans le GET.
-  if (qstashConfig()) return;
+  if (tickQueueConfigured()) return;
   const throttleKey = `sweep:render:${projectId}`;
   const now = Date.now();
   const localAt = localSweepAt.get(throttleKey);
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       derivedTargets,
     });
     return NextResponse.json(
-      { ...result, imagesEnabled: isImageGenerationEnabled(), queueMode: qstashConfig() ? ("qstash" as const) : ("poll" as const) },
+      { ...result, imagesEnabled: isImageGenerationEnabled(), queueMode: tickQueueConfigured() ? ("queue" as const) : ("poll" as const) },
       { status: 202 },
     );
   } catch (error) {
@@ -169,7 +169,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     );
     return NextResponse.json({
       jobs: jobsWithUrls,
-      queueMode: qstashConfig() ? ("qstash" as const) : ("poll" as const),
+      queueMode: tickQueueConfigured() ? ("queue" as const) : ("poll" as const),
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Liste impossible" }, { status: errorStatus(error, 500) });

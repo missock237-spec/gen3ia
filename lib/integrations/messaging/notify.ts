@@ -81,12 +81,20 @@ export async function notifyApprovalResolved(approval: ActionApproval, outcome: 
  * Notification « agent toujours actif » : prévient l'utilisateur sur son
  * canal préféré quand une exécution déclenchée automatiquement (planification,
  * webhook, veille) se termine. Best effort par construction.
+ *
+ * FIX A5 (rapport de tests 2026-10) : la notification embarque désormais un
+ * EXTRAIT du résultat (outputPreview) et la liste des livrables produits —
+ * l'exécution planifiée n'est plus une boîte noire « completed ».
  */
 export async function notifyScheduleRunCompleted(params: {
   userId: string;
   scheduleId: string;
   status: string;
   error?: string;
+  /** Aperçu borné du premier output textuel de l'exécution. */
+  outputPreview?: string;
+  /** Manifest des livrables réellement produits (artefacts, fichiers). */
+  deliverables?: Array<{ label?: string; kind?: string }>;
 }): Promise<void> {
   try {
     const preferences = await getMessagingPreferences(params.userId);
@@ -102,11 +110,15 @@ export async function notifyScheduleRunCompleted(params: {
     const outcome = outcomes[params.status] ?? `ℹ️ mission terminée (${params.status}).`;
     const scheduleName = params.scheduleId.slice(0, 8);
     const detail = params.error ? `\nErreur : ${params.error.slice(0, 200)}` : "";
+    const deliverableList = params.deliverables && params.deliverables.length > 0
+      ? `\nLivrables : ${params.deliverables.map((d) => d.label ?? d.kind ?? "livrable").slice(0, 5).join(", ")}${params.deliverables.length > 5 ? "…" : ""}`
+      : "";
+    const preview = params.outputPreview ? `\n\nRésultat (extrait) : ${params.outputPreview.slice(0, 500)}` : "";
     await sendAgentMessage({
       userId: params.userId,
       channel: preferences.channel,
       to: preferences.recipient,
-      text: `GEN3IA — Votre agent (planification ${scheduleName}) : ${outcome}${detail}`,
+      text: `GEN3IA — Votre agent (planification ${scheduleName}) : ${outcome}${detail}${deliverableList}${preview}`,
     });
   } catch {
     /* best effort : la notification ne doit jamais faire échouer l'exécution. */

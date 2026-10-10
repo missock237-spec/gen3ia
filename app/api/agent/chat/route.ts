@@ -24,7 +24,7 @@ import { answerAsAgent, classifyRequest, historyContextNote, unavailableCapabili
 import { recordAgentRun } from "@/lib/agents/conversation-run";
 import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
 import { createQueuedMission } from "@/lib/queue/mission-queue";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
 import { recallAgentContext, recordExchange, shouldSummarize, summarizeConversation } from "@/lib/memory/episodic";
 import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
@@ -429,7 +429,7 @@ function attachmentsForMessage(attachments?: Array<{ path: string; name: string;
 }
 
 /**
- * Lance une mission en mode task SUR LA FILE QStash quand elle est
+ * Lance une mission en mode task SUR LA FILE DE TICKS R2 quand elle est
  * disponible : l'exécution est 100 % serveur, par tranches de 50 s, et la
  * mission NE MEURT JAMAIS avec l'onglet (refresh, fermeture, suppression —
  * exigence production). Le run conversationnel est enregistré AVANT
@@ -444,7 +444,7 @@ async function launchQueuedTaskMission(input: {
   projectId?: string;
   orgId?: string;
 }): Promise<{ queued: boolean; runId?: string; reason?: string; escrowRejected?: boolean }> {
-  if (!missionQueueConfigured()) {
+  if (!tickQueueConfigured()) {
     return { queued: false, reason: "File d'attente non configurée." };
   }
   const runId = randomUUID();
@@ -483,10 +483,10 @@ async function launchQueuedTaskMission(input: {
     } catch (runError) {
       console.warn("[agent-chat] run initial non enregistré", runError instanceof Error ? runError.message : runError);
     }
-    // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishMissionTick
+    // ORIGINE CANONIQUE (fix CodeQL request-forgery) : enqueueMissionTick
     // résout GEN3IA_APP_ORIGIN en interne (allowlist serveur) — la
     // destination n'est jamais dérivée de la requête entrante.
-    await publishMissionTick(runId);
+    await enqueueMissionTick(runId);
     return { queued: true, runId };
   } catch (error) {
     console.warn("[agent-chat] enfilement impossible — repli synchrone", error instanceof Error ? error.message : error);

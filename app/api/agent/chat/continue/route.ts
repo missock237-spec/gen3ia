@@ -13,7 +13,7 @@ import { buildFinalResponse } from "@/lib/agents/final-response";
 import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
 import { captureMissionEscrow } from "@/lib/billing/mission-escrow";
 import { createQueuedMission } from "@/lib/queue/mission-queue";
-import { missionQueueConfigured, publishMissionTick } from "@/lib/queue/qstash";
+import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
 import { enqueueMissionContinuation } from "@/lib/queue/mission-continuation";
 import { errorStatus, errorBody } from "@/lib/security/http-errors";
 
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
     // configurée, la reprise s'exécute en arrière-plan, par tranches —
     // déconnecter, rafraîchir ou fermer l'onglet n'interrompt plus jamais la
     // reprise. Le tick final livre le message final + livrables + run.
-    if (missionQueueConfigured()) {
+    if (tickQueueConfigured()) {
       const runId = randomUUID();
       try {
         await createQueuedMission({
@@ -133,10 +133,10 @@ export async function POST(request: NextRequest) {
           ...(conversationId ? { conversationId } : {}),
           plan: resumedPlan,
         });
-        // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishMissionTick
+        // ORIGINE CANONIQUE (fix CodeQL request-forgery) : enqueueMissionTick
         // résout GEN3IA_APP_ORIGIN en interne — aucune origine dérivée de
         // la requête entrante (falsifiable).
-        await publishMissionTick(runId);
+        await enqueueMissionTick(runId);
         return NextResponse.json({
           mode: "agent",
           status: "queued",

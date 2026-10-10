@@ -3253,3 +3253,32 @@ Work Log:
 
 Stage Summary:
 - La livraison du résultat ne dépend plus de la santé d'écriture de la file : la vidéo terminée est TOUJOURS annoncée dans la conversation (R2), même Firestore indisponible ; le statut stocké rattrape à la reprise.
+
+---
+Task ID: 117 (corrections rapport de tests externe + suppression QStash → file de ticks R2)
+Agent: main (Super Z)
+Task: Corriger directement dans le dépôt les anomalies A1-A5 identifiées par le rapport de tests indépendant du 2026-10-10/11 (exécution missions 500 « Tool not allowed: web.search », rendu vidéo bloqué par la limite QStash 1000/jour, narration 500 « aucune voix », planifications sans livrable) ; SUPPRIMER QStash intégralement au profit d'une exécution des tâches en arrière-plan via R2 (stockage directement dans cet espace) ; valider par de nouveaux tests en production.
+
+Work Log:
+- AUDIT D'ARCHITECTURE : la migration des DONNÉES vers R2 existait déjà (Task 111 — adminDb = moteur r2fs, documents JSON sous fs/, écritures conditionnelles CAS). Le seul service externe restant était la file QStash (1 000 messages/jour — goulot qui bloquait les rendus vidéo longs).
+- NOUVEAU MOTEUR lib/queue/tick-queue.ts (remplacement intégral de lib/queue/qstash.ts, SUPPRIMÉ) :
+  * tickets R2 sous queue/tickets/v1/<dueAtMs-16chiffres>-<uuid>.json, création atomique If-None-Match:* ;
+  * signature interne HMAC-SHA256 DÉRIVÉE du secret R2 (aucune nouvelle variable d'environnement à poser — la file s'active dès que R2 l'est), header x-gen3a-tick, temps constant, fraîcheur ±300 s ;
+  * délivrance immédiate fire-and-forget gracié (300 ms) vers l'origine canonique (GEN3IA_APP_ORIGIN + allowlist, assertSafeDestinationUrl) ;
+  * PUMP de rattrapage : claim CAS par ETag, backoff exponentiel 30 s→240 s, quarantaine queue/dead/ après 5 tentatives, purge > 7 jours, réponse COMPLÈTE attendue (2xx = ticket consommé, 5xx = réessai) ;
+  * nudge opportuniste throttlé (1/15 s/instance) appelé par les routes de suivi (GET runs/[runId], GET production vidéo) — le polling client réveille les tickets dus.
+- RECEIVERS migrés (auth interne + bearer CRON_SECRET) : mission-tick, dispatch-tick, video worker tick, video worker production-tick — contrat 5xx-transitoire conservé (le pump remplace la redélivrance QStash).
+- PRODUCTEURS migrés (9 fichiers) : agents/run, agent/chat (+continue), marketplace/hire, networks/run, knowledge/triggers, business/pulse, mission-continuation, runs/[runId] republie, cron/agent-schedules (+ pumpDueTicks dans la sentinelle quotidienne).
+- FIX A1 (Tool not allowed: web.search) : le chemin SYNCHRONE de /api/agents/run ne passait AUCUNE policy au runtime (allowedTools: [] par défaut) — buildPlanExecutionPolicy(plan) appliqué aussi au repli sync ; le chemin enfilé l'appliquait déjà (Task 114).
+- FIX A2 (rendu bloqué 1000 msgs/jour) : QStash supprimé — publishVideoTick/publishProductionTick écrivent des tickets R2 + délivrance immédiate ; plafond journalier ÉLIMINÉ (R2 : aucune limite quotidienne).
+- FIX A3 (narration 500 « aucune voix ») : PLATFORM_VOICE_PROFILE (profil synthétique origin elevenlabs SANS id — ensureElevenLabsClonedVoice → undefined → resolveVoiceId repli plateforme ELEVENLABS_VOICE_ID→bibliothèque→défaut, même chemin que le chat audio) ; withPlatformVoiceFallback appliqué à generate-voice (plus de 500), stageVoice de la production autopilote (plus de vidéo muette par défaut), revision-service inchangé sur use_my_voice (intention explicite).
+- FIX A5 (planification sans livrable) : runSchedule reçoit policy: buildPlanExecutionPolicy (outils du plan autorisés), extractDeliverables + summarizeOutputs persistés sur le run (outputPreview + deliverables + ScheduleRun étendu), notification notifyScheduleRunCompleted enrichie de l'extrait et des livrables.
+- FILES VIDÉO : queueMode "qstash" → "queue" (production-queue, create-video, routes production/render, carte UI, health/infra queueMode r2-queue).
+- NETTOYAGE : lib/queue/qstash.ts + qstash.test.ts + qstash.publish.test.ts + scripts/setup_qstash_schedule.mjs SUPPRIMÉS ; messages d'erreur actifs (origin.ts), healthcheck, docs/sdk.md, description du SDK et en-têtes obsolètes dé-QStashés ; le worklog historique reste intact (append-only).
+- TESTS (+21 nouveaux / +12 adaptés) : tick-queue.test.ts (signature aller-retour, falsification, fraîcheur, bearer CRON_SECRET, écriture If-None-Match, claim CAS, réessai backoff, quarantaine, purge, throttle nudge) ; voice-service.test.ts +4 (repli plateforme : priorité utilisateur, plus de 500, non-persisté, TTS sans voiceId) ; scheduler.test.ts +4 (contrat source : policy dérivée du plan, livrables extraits et persistés, extrait dans la notification, type étendu) ; 14 fichiers de tests adaptés aux mocks tick-queue.
+- VALIDATION : tsc --noEmit = 0 ; eslint (fichiers modifiés) --max-warnings 0 = 0 ; vitest COMPLET = 286 fichiers / 3 018 verts + 2 skipped / 0 échec (npm ci racine + sandbox).
+
+Stage Summary:
+- QStash N'EXISTE PLUS dans le projet : l'exécution en arrière-plan repose entièrement sur R2 (tickets durables + self-délivrance immédiate + pump opportuniste + sentinelle cron quotidienne), AUCUN plafond journalier, AUCUNE variable d'environnement nouvelle à poser en production (la clé de signature dérive du secret R2 déjà présent).
+- Les 4 anomalies actionnables du rapport (A1 web.search, A2 quota vidéo, A3 narration, A5 livrables planification) sont corrigées À LA RACINE ; A4 (interruptions réponses longues) reste suivi — les corrections 116-b/c/d l'ont largement atténué et le retrait de QStash supprime la source des blocages.
+- Prochaine étape : push main → CI GitHub (12 checks) → déploiement Vercel → validation production par scripts de sondes (mission outillée, vidéo complète AVEC narration, planification avec livrable visible).

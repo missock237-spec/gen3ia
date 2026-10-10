@@ -12,7 +12,7 @@ typé (`@gen3ia/sdk`, zéro dépendance) :
 | Famille | Authentification | Usage typique |
 |---|---|---|
 | **API développeur** `/api/v1/agents/{agentId}/run` | Clé `g3x_…` + `X-Gen3ia-Project-Id` | Backend, n8n, script serveur : exécuter un agent personnalisé et récupérer le résultat |
-| **API de session** `/api/agents/run`, `/api/agents/runs/{runId}` (+ SSE) | Token ID Firebase (`Authorization: Bearer`) | Missions longues en file d'attente (QStash) : 202 immédiat, suivi par polling ou SSE |
+| **API de session** `/api/agents/run`, `/api/agents/runs/{runId}` (+ SSE) | Token ID Firebase (`Authorization: Bearer`) | Missions longues en file d'attente (ticks R2) : 202 immédiat, suivi par polling ou SSE |
 | **Surface publique** `/api/public/*`, `/api/webhooks/agent-triggers/{token}` | Aucune / token d'URL | Sonde de santé, chat client (agents publics, salons commerciaux), déclencheurs webhook |
 
 Le pipeline d'exécution est **le même partout** : plan personnalisé dérivé de
@@ -79,7 +79,7 @@ const queued = await client.missions.run({ objective: "Audit du site client.", m
 // → 202 { runId, statusUrl, streamUrl, pollSeconds }
 ```
 
-Le mode `async` (défaut quand la file QStash est configurée) enregistre la
+Le mode `async` (défaut quand la file est configurée) enregistre la
 mission, l'enfile et renvoie **202 immédiatement** : la mission s'exécute par
 tranches bornées dans `/api/queue/mission-tick`, survit aux fenêtres
 serverless de 60 s et n'est **pas** tuée si le client se déconnecte. Le mode
@@ -164,7 +164,7 @@ Réponses :
 ### 4.3 Étape 3 — exécution en arrière-plan
 
 La mission part dans le même pipeline que les exécutions internes (tranches
-QStash, checkpoint, notifications de fin à l'utilisateur). Le webhook ne
+file de ticks, checkpoint, notifications de fin à l'utilisateur). Le webhook ne
 bloque jamais sur la génération : il répond en quelques millisecondes.
 
 ### 4.4 Depuis le SDK
