@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolDefinition } from "../types";
 import { generateArtifact } from "@/lib/documents/engine";
+import { sanitizeDocumentPlan } from "@/lib/documents/types";
 import { storeArtifactBuffer } from "@/lib/documents/artifact-store";
 
 const inputSchema = z.object({
@@ -21,6 +22,22 @@ const inputSchema = z.object({
   ).min(1).max(10_000),
 });
 
+/** Alias de formats inventés par les LLM → formats canoniques (Task 114). */
+const FORMAT_ALIASES: Record<string, string> = {
+  word: "docx", doc: "docx", document: "docx",
+  excel: "xlsx", xls: "xlsx", spreadsheet: "xlsx", tableur: "xlsx",
+  powerpoint: "pptx", ppt: "pptx", slides: "pptx", presentation: "pptx", présentation: "pptx",
+  markdown: "md",
+  text: "txt", texte: "txt", plain: "txt",
+  web: "html",
+};
+
+function formatCanonique(value: unknown): string {
+  const s = String(value ?? "pdf").trim().toLowerCase().replace(/^\./, "");
+  if (FORMAT_ALIASES[s]) return FORMAT_ALIASES[s];
+  return ["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html"].includes(s) ? s : "pdf";
+}
+
 export const createArtifactTool: ToolDefinition = {
   id: "artifact.create",
   name: "artifact.create",
@@ -29,7 +46,12 @@ export const createArtifactTool: ToolDefinition = {
   risk: "medium",
   inputSchema,
   execute: async (input, context) => {
-    const parsed = inputSchema.parse(input);
+    // SANITIZER (Task 114) : un écart de format du LLM (type de bloc
+    // inventé, URL malformée, format « word »/« presentation ») ne fait
+    // JAMAIS échouer l'outil — coercition d'abord, validation ensuite.
+    const parsed = inputSchema.parse(
+      sanitizeDocumentPlan({ ...(input as Record<string, unknown>), format: formatCanonique((input as Record<string, unknown>).format) }),
+    );
     const generated = await generateArtifact({
       userId: context.userId,
       projectId: context.projectId,
