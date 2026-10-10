@@ -69,7 +69,7 @@
     "@axe-core/playwright": "^4.13.0",
     "@eslint/eslintrc": "^3.3.7",
     "@firebase/rules-unit-testing": "^5.0.2",
-    "@next/bundle-analyzer": "15.5.26",
+    "@next/bundle-analyzer": "16.4.0",
     "@types/archiver": "^6.0.4",
     "@types/node": "^24.13.6",
     "@types/react": "^19.3.0",
