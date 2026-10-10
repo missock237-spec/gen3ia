@@ -11,7 +11,8 @@ import { createCheckpoint, saveCheckpoint } from "./checkpoint";
 import { getReadySteps, validateDAG } from "./dag";
 import { RuntimeScheduler } from "./scheduler";
 import { assertNotPaused, assertNotStopped, PauseRequestedError } from "./pause";
-import { generateImageWithAgnes, isImageGenerationEnabled } from "@/lib/ai/image-generation";
+import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
+import { generateImageWithFallback } from "@/lib/ai/hf-image-fallback";
 import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
 import { RESPONSE_FORMAT_RULES } from "@/lib/ai/response-quality";
 import { applyPromptVariables } from "@/lib/ai/prompt-template";
@@ -401,9 +402,13 @@ export class AgentRuntime {
       return this.executeLLM(step);
     }
     const { prompt } = await enhanceImagePrompt(rawPrompt, { userId: this.state.userId });
-    // Qualité « ultra réaliste » : génération en 2K (détail supérieur),
-    // garde-fou de durée aligné sur la politique d'exécution des outils.
-    const image = await generateImageWithAgnes({ prompt, size: "2K", timeoutMs: 60_000 });
+    // REPRISE AUTOMATIQUE (directive permanente) + qualité « ultra réaliste »
+    // (2K, garde-fou de durée aligné sur la politique d'exécution des outils) :
+    // si Agnes est à sa limite de crédit (402), Hugging Face Z-Image-Turbo
+    // termine la tâche — même mécanique que le chat (lib/ai/hf-image-fallback).
+    // L'archivage R2 permanent est inclus dans le repli (storagePath) : l'URL
+    // de l'étape reste résolvable après expiration de l'URL fournisseur.
+    const image = await generateImageWithFallback({ prompt, size: "2K", timeoutMs: 60_000, userId: this.state.userId });
     const alt = step.name.replace(/[\[\]()"]/g, "").slice(0, 120) || "Image générée";
     return `![${alt}](${image.imageUrl})`;
   }

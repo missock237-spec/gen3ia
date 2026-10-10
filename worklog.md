@@ -3124,3 +3124,26 @@ Work Log:
 
 Stage Summary:
 - Les 4 exigences de livraison (réponse sans erreur, exécution réelle, livraison du résultat, contexte respecté) sont prouvées en production sur chat, missions, voix-off, image, vidéo, jumeau, marketplace, escrow.
+
+---
+Task ID: 115 (fix captures 07:24 + capacité)
+Agent: main (Super Z)
+Task: Corriger les 7 bugs des captures production du 10-10 07:24 (toMillis crash, approbations sur génération, R2 indisponible, <!DOCTYPE HTML), appliquer la directive « aucune approbation pour un outil interne — secrets uniquement », 100 req/min/utilisateur, actions simultanées, scalabilité 3M.
+
+Work Log:
+- DIAGNOSTIC (compte de test réel + inspection R2 directe) : (1) `d.createdAt.toMillis is not a function` = 7/8 documents fs/agentActionApprovals portent leurs timestamps sous la forme legacy brute {"millis": N} (écrits pendant le churn de déploiements 9-10 oct., sérialisation hors versStockage) — toute listActionApprovals plantait donc le chat ; (2) les 5 autres pages (marketplace/mémoire/teams/planifications/workspace) renvoient TOUTES du JSON 200 vérifié par sondes authentifiées — leurs erreurs de capture étaient des fonctions serverless TUÉES par timeout Vercel (S3 sans timeout → pend → page HTML d'erreur parseée en JSON) pendant le churn ; (3) image.generate/video.create bloqués « Confirmation requise » = classification risk:"external" dans GEN3IA_TOOLS + TOOL_SECURITY → forceSensitiveToolFlags + selectApprovalRequiredSteps les gate.
+- FIX toMillis (lib/r2fs/serialization.ts) : estLegacyTimestampMillis ({millis} unique + number fini) ; depuisStockage GUÉRIT la forme legacy en FsTimestamp (lecture réécrite au prochain PUT) ; versStockage duck-type tout Timestamp-like {millis} → sérialisation canonique {__fs_ts__} (aucune récidive possible, même cross-bundle).
+- FIX défense en profondeur (lib/agents/action-approvals.ts) : enMillis() tolérant (toMillis()/number/ISO string) sur getActionApproval/approveAction/claimActionExecution — plus aucune exception sur donnée historique.
+- RÉPARATION DONNÉES PROD : script scripts/fix_legacy_timestamps.py (CAS If-Match par doc) — 7/8 approbations réécrites au format canonique, vérifié par re-scan.
+- POLITIQUE D'APPROBATION (directive 10-10) : INTERNAL_ACTION_TOOLS étendu (image.generate, video.create/status/revise, media.analyze, voice.speak/list, email.send, file.delete…) ; GEN3IA_TOOLS + TOOL_SECURITY reclassifient les médias/voix external→write (plus de durcissement ni de flag HITL) ; NEVER_BYPASSED = ads.publish, phone.call, custom_api.write (secrets API utilisateur) — file.delete sortie (outil interne scopé+audité) ; autonomy-guard : INTERNAL → medium (exécution directe), custom_api.write ajouté EXTERNAL_MUTATION+CRITICAL ; authorization-mode : NEVER_AUTO_APPROVE idem ; planner (unified-agent) : règle explicite « outils internes requiresApproval=false » ; moteur conversationnel : INTERNAL_ACTION_TOOLS court-circuite sensitive ; risques d'outils vidéo high→medium.
+- FIX <!DOCTYPE (lib/storage/r2.ts) : NodeHttpHandler explicite (connexion 5 s, socket 20 s, maxAttempts 2) — les pannes R2 échouent AVANT le kill Vercel : erreurs JSON classifiées au lieu de pages HTML. @smithy/node-http-handler épinglé dans package.json.
+- QUOTA GLOBAL 100 req/min/USER (lib/security/authenticated-request.ts) : enforceGlobalUserQuota dans requireUser (deux couches locale+distribuée existantes, HttpError 429 RATE_LIMITED, HttpError repropage à travers le catch Bearer, fail-open sur panne du limiteur).
+- ACTIONS SIMULTANÉES (components/agent/agent-chat-panel.tsx) : submit ne gate plus sur loading (chaque envoi = sa propre mission serveur file QStash) ; composer disabled seulement pendant un upload ; compteur inFlightRef (loading retombe au DERNIER envoi).
+- CAPACITÉS : runner executeMedia passe de generateImageWithAgnes nu à generateImageWithFallback (reprise HF Z-Image-Turbo sur crédit Agnes épuisé + archivage R2 permanent) sur les étapes image de missions ; branchements jumeau image (engine.ts:1390, runner.ts:404) vérifiés déjà câblés {userId}.
+- TESTS mis à jour (politique nouvelle génération) : approval-policy (+test médias jamais approbés), authorization-mode (file.delete auto-approvable, custom_api.write au plancher), tool-resolver (médias ne durcissent plus), tools.test.ts (risques write/medium).
+- VALIDATION : npx tsc --noEmit = 0 ; npx eslint (20 fichiers touchés) --max-warnings 0 = 0 ; vitest COMPLET = 287 fichiers / 3 001 verts + 2 skipped / 0 échec (npm ci root+sandbox).
+
+Stage Summary:
+- Les 7 captures sont résolues à la racine : chat sans crash toMillis (code guérisseur + données réparées), génération image/vidéo/audio JAMAIS gated (interne), pages HTML Vercel éliminées (timeouts S3), planifications/teams/marketplace/mémoire confirmées JSON 200 par sondes authentifiées.
+- Nouvelle politique HITL : approbation UNIQUEMENT sur manipulation de secrets (custom_api.write) et actions externes critiques (ads.publish, phone.call) ou apps externes non connectées — tout outil interne s'exécute directement.
+- Socle capacité : 100 req/min/utilisateur au chemin d'auth central, envois simultanés UI, file QStash parallèle par mission, S3 borné en temps.

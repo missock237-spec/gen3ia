@@ -248,6 +248,10 @@ export function AgentChatPanel({
   // serveur, pas à l'onglet. Seul le bouton « Arrêter » exprime un arrêt
   // (contrôle Firestore via /api/agent/chat/stop).
   const requestAbortRef = React.useRef<AbortController | null>(null);
+  // ACTIONS SIMULTANÉES : compteur d'envois en vol — `loading` ne retombe
+  // que lorsque le DERNIER envoi se termine (l'ancien booléen basculait à
+  // false dès la première réponse, masquant les missions encore en course).
+  const inFlightRef = React.useRef(0);
 
   // PLEIN ÉCRAN (demande utilisateur) : le chat peut occuper TOUT l'écran —
   // overlay CSS « fixed inset-0 » (fonctionne partout, y compris iOS Safari)
@@ -582,6 +586,7 @@ export function AgentChatPanel({
   }
 
   async function sendMessage(objective: string) {
+    inFlightRef.current += 1;
     setLoading(true);
     setError("");
     setMediaProgress(null);
@@ -700,9 +705,12 @@ export function AgentChatPanel({
         setError(e instanceof Error ? e.message : "Erreur de l'agent.");
       }
     } finally {
-      requestAbortRef.current = null;
-      setLoading(false);
-      setMediaProgress(null);
+      inFlightRef.current = Math.max(0, inFlightRef.current - 1);
+      if (inFlightRef.current === 0) {
+        requestAbortRef.current = null;
+        setLoading(false);
+        setMediaProgress(null);
+      }
     }
   }
 
@@ -797,7 +805,13 @@ export function AgentChatPanel({
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const objective = message.trim();
-    if (!objective || loading) return;
+    if (!objective) return;
+    // ACTIONS SIMULTANÉES (directive 10-10) : l'utilisateur peut enchaîner
+    // plusieurs demandes pendant qu'une mission tourne — chaque envoi part
+    // sur sa PROPRE mission serveur (createQueuedMission par exécution, file
+    // QStash parallèle). L'ancien garde `loading` transformait la saisie en
+    // file d'attente locale artificielle : une génération bloquait toutes
+    // les suivantes. Le suivi live reste attaché au DERNIER run.
     setMessages((items) => [...items, { id: crypto.randomUUID(), role: "user", text: objective }]);
     setMessage("");
     void sendMessage(objective);
@@ -1181,7 +1195,7 @@ export function AgentChatPanel({
             value={message}
             onValueChange={setMessage}
             onSubmit={submit}
-            disabled={loading || uploading}
+            disabled={uploading}
             tone="light"
             placeholder={`Discuter avec ${agent.name}…`}
             loadMentions={loadMentions}

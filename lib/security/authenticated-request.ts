@@ -13,8 +13,44 @@ import {
 } from "./request-security";
 
 import {
+  HttpError,
   unauthorized,
 } from "./http-errors";
+
+import {
+  enforceRateLimit,
+} from "./rate-limit";
+
+/**
+ * Quota GLOBAL par utilisateur (exigence 10-10 : 100 requêtes/minute/
+ * utilisateur) appliqué AU CHEMIN D'AUTHENTIFICATION CENTRAL : toute route
+ * API qui passe par requireUser hérite de la limite, sans modification
+ * locale. Deux couches (locale instantanée + compteur Redis partagé entre
+ * instances serverless) ; panne Redis → repli local (jamais de blocage pour
+ * une panne d'infra). Fenêtre glissante fixe 60 s, clé `api-quota:{uid}`.
+ * Les routes qui posent leurs propres limites métier (chat 10/min,
+ * création d'orgs…) restent PLUS strictes que ce socle.
+ */
+export const GLOBAL_USER_RATE_LIMIT = { limit: 100, windowMs: 60_000 } as const;
+
+async function enforceGlobalUserQuota(uid: string): Promise<void> {
+  try {
+    const decision = await enforceRateLimit(`api-quota:${uid}`, GLOBAL_USER_RATE_LIMIT);
+    if (!decision.allowed) {
+      const secondes = Math.max(1, Math.ceil(decision.retryAfterMs / 1000));
+      throw new HttpError(
+        429,
+        `Trop de requêtes : vous avez atteint ${GLOBAL_USER_RATE_LIMIT.limit} requêtes par minute. Réessayez dans ${secondes} s.`,
+        "RATE_LIMITED",
+      );
+    }
+  } catch (error) {
+    // La limite ATTEINTE lève un HttpError 429 : il se propage tel quel.
+    if (error instanceof HttpError) throw error;
+    // Une panne du limiteur lui-même ne doit JAMAIS bloquer le trafic
+    // légitime : échec ouvert (repli local déjà appliqué par enforceRateLimit).
+  }
+}
 
 export interface AuthenticatedUser {
   uid: string;
@@ -67,6 +103,7 @@ export async function requireUser(
         );
 
       if (token) {
+        await enforceGlobalUserQuota(token.uid);
         return {
           uid:
             token.uid,
@@ -84,7 +121,11 @@ export async function requireUser(
             >,
         };
       }
-    } catch {
+    } catch (error) {
+      // Le quota global ATTEINT (HttpError 429) doit se propager TEL QUEL :
+      // l'utilisateur identifié a dépassé 100 req/min — retomber sur la
+      // session ou un 401 masquerait la vraie cause.
+      if (error instanceof HttpError) throw error;
       // Token invalide ou expire : on tente le cookie de session avant
       // d'echouer, pour survivre a la perte d'etat Firebase client.
     }
@@ -96,6 +137,7 @@ export async function requireUser(
     );
 
   if (session) {
+    await enforceGlobalUserQuota(session.uid);
     return {
       uid: session.uid,
 

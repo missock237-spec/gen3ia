@@ -62,17 +62,31 @@ describe("selectApprovalRequiredSteps — règle utilisateur (app connectée = a
     expect(approvalSteps).toHaveLength(0);
   });
 
-  it("préserve le plancher de sécurité (ads.publish, file.delete, phone.call)", async () => {
+  it("préserve le plancher de sécurité (ads.publish, phone.call, custom_api.write)", async () => {
     listHubConnectionsMock.mockResolvedValue([
       { toolkit: "github", label: "GitHub", status: "ACTIVE", connectionId: "c2" },
     ] as never);
     const steps = [
       { ...baseStep, toolName: "ads.publish", input: {} },
-      { ...baseStep, toolName: "file.delete", input: {} },
       { ...baseStep, toolName: "phone.call", input: {} },
+      { ...baseStep, toolName: "custom_api.write", input: {} },
     ];
     const approvalSteps = await selectApprovalRequiredSteps("user-1", steps);
-    expect(approvalSteps.map((step) => step.toolName).sort()).toEqual(["ads.publish", "file.delete", "phone.call"]);
+    expect(approvalSteps.map((step) => step.toolName).sort()).toEqual(["ads.publish", "custom_api.write", "phone.call"]);
+  });
+
+  it("ne demande JAMAIS d'approbation pour la génération média (directive 10-10)", async () => {
+    const steps = [
+      { ...baseStep, toolName: "image.generate", input: { prompt: "un bébé" } },
+      { ...baseStep, toolName: "video.create", input: { prompt: "une vidéo de 5 secondes" } },
+      { ...baseStep, toolName: "video.revise", input: { projectId: "p1" } },
+      { ...baseStep, toolName: "voice.speak", input: { text: "bonjour" } },
+      { ...baseStep, toolName: "media.analyze", input: {} },
+      { ...baseStep, toolName: "file.delete", input: {} },
+      { ...baseStep, toolName: "email.send", input: {} },
+    ];
+    const approvalSteps = await selectApprovalRequiredSteps("user-1", steps);
+    expect(approvalSteps).toHaveLength(0);
   });
 
   it("ignore les étapes sans effet de bord", async () => {

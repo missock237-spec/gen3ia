@@ -50,7 +50,6 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "ads.read", description: "Read data from an authorized advertising account.", risk: "read", permission: "ads.read", sideEffect: false },
   { name: "ads.publish", description: "Publish an advertising action to an authorized account.", risk: "external", permission: "ads.write", sideEffect: true },
   { name: "github.create_repository", description: "Create a GitHub repository for a generated project.", risk: "external", permission: "tool.external", sideEffect: true },
-  { name: "voice.speak", description: "Generate natural voice audio from text.", risk: "external", permission: "tool.external", sideEffect: false },
   { name: "voice.list", description: "List available voice profiles.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "phone.call", description: "Place a bounded outbound AI phone call.", risk: "external", permission: "tool.external", sideEffect: true },
   { name: "code.execute", description: "Execute code in the isolated sandbox.", risk: "external", permission: "code.execute", sideEffect: true },
@@ -78,8 +77,18 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "network.send_message", description: "Envoie un message à un agent coéquipier du MÊME réseau (collaboration agent-à-agent).", risk: "write", permission: "tool.write", sideEffect: true },
   { name: "network.read_inbox", description: "Lit la boîte de réception d'un agent (messages de ses coéquipiers).", risk: "read", permission: "tool.read", sideEffect: false },
   { name: "network.mark_read", description: "Marque un message d'équipe comme lu.", risk: "read", permission: "tool.read", sideEffect: false },
-  { name: "image.generate", description: "Générer une image à partir d'une description texte, avec ratio et images de référence optionnels.", risk: "external", permission: "tool.external", sideEffect: false },
-  { name: "video.create", description: "Lancer une production vidéo complète autonome (script, images, voix, montage) avec paramètres de production (durée, format, résolution, langue, style, audience, plateforme, musique, formats dérivés) et suivre sa progression.", risk: "external", permission: "tool.external", sideEffect: true },
+  // MÉDIAS & VOIX — OUTILS INTERNES (directive 10-10 : « aucune approbation
+  // pour une utilisation d'un outil interne ») : génération d'image Agnes,
+  // production vidéo (file interne payante), suivi/révision, synthèse vocale
+  // et analyse média opèrent UNIQUEMENT sur l'infrastructure Gen3ia — ils ne
+  // touchent NI app externe NI secret utilisateur → jamais de carte de
+  // validation. L'ancienne classification « external » forçait
+  // requiresApproval sur CHAQUE génération (captures 07:24 : image.generate
+  // et video.create bloqués par « Confirmation requise »).
+  { name: "image.generate", description: "Générer une image à partir d'une description texte, avec ratio et images de référence optionnels.", risk: "write", permission: "tool.write", sideEffect: false },
+  { name: "video.create", description: "Lancer une production vidéo complète autonome (script, images, voix, montage) avec paramètres de production (durée, format, résolution, langue, style, audience, plateforme, musique, formats dérivés) et suivre sa progression.", risk: "write", permission: "tool.write", sideEffect: true },
   { name: "video.status", description: "Suivre une production vidéo : étape en cours, progression réelle, avertissements, URL de lecture du master terminé.", risk: "read", permission: "tool.read", sideEffect: false },
-  { name: "video.revise", description: "Réviser ou piloter une vidéo existante : rythme, musique, voix, sous-titres, suppression de scène, pause/reprise/annulation du rendu, formats dérivés.", risk: "external", permission: "tool.external", sideEffect: true },
+  { name: "video.revise", description: "Réviser ou piloter une vidéo existante : rythme, musique, voix, sous-titres, suppression de scène, pause/reprise/annulation du rendu, formats dérivés.", risk: "write", permission: "tool.write", sideEffect: true },
+  { name: "media.analyze", description: "Analyser une image, un audio ou une vidéo fournie (description, transcription, extraction d'informations).", risk: "read", permission: "tool.read", sideEffect: false },
+  { name: "voice.speak", description: "Generate natural voice audio from text (plateforme ElevenLabs — outil interne).", risk: "write", permission: "tool.write", sideEffect: false },
 ];

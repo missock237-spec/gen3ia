@@ -6,10 +6,10 @@
  *  - le composer (client) affiche le sélecteur et envoie le mode choisi ;
  *  - /api/agent/chat (serveur) applique le mode au flux d'approbations.
  *
- * Plancher de sécurité INVARIABLE, quel que soit le mode : les outils
- * critiques (publicité payante, suppression de fichiers, appels téléphoniques)
- * exigent TOUJOURS une confirmation humaine explicite. Le mode « auto »
- * n'est jamais un blanc-seing global.
+ * Plancher de sécurité INVARIABLE, quel que soit le mode : les actions
+ * critiques externes (publicité payante, appels téléphoniques) et l'écriture
+ * via les secrets API utilisateur exigent TOUJOURS une confirmation humaine
+ * explicite. Le mode « auto » n'est jamais un blanc-seing global.
  */
 
 export type AuthorizationMode = "always_ask" | "ask_if_needed" | "auto_allow";
@@ -42,11 +42,14 @@ export function isAuthorizationMode(value: unknown): value is AuthorizationMode 
   return value === "always_ask" || value === "ask_if_needed" || value === "auto_allow";
 }
 
-/** Outils JAMAIS auto-approuvés, même en mode « Autoriser automatiquement ». */
+/** Outils JAMAIS auto-approuvés, même en mode « Autoriser automatiquement ».
+ * (audit 10-10) file.delete en est RETIRÉE : outil interne (directive « aucune
+ * approbation pour un outil interne »). custom_api.write y entre : l'action
+ * écrit via les identifiants/secrets API personnels de l'utilisateur. */
 export const NEVER_AUTO_APPROVE_TOOLS: ReadonlySet<string> = new Set([
   "ads.publish",
-  "file.delete",
   "phone.call",
+  "custom_api.write",
 ]);
 
 export function isNeverAutoApprove(toolSlug: string): boolean {
@@ -66,8 +69,9 @@ export const AUTO_APPROVAL_AUDIT_REASON = "Approuvé automatiquement — mode d'
 /**
  * Décide si une étape sensible peut s'exécuter SANS approbation humaine
  * (mode « Autoriser automatiquement » uniquement). Plancher de sécurité
- * INVARIABLE :  - les outils critiques listés (publicité payante, suppression
- * de fichiers, appels téléphoniques) exigent toujours une confirmation ;
+ * INVARIABLE :  - les actions critiques externes listées (publicité payante,
+ * appels téléphoniques) et custom_api.write (secrets API utilisateur)
+ * exigent toujours une confirmation ;
  *  - un risque « critical » n'est jamais contourné par le mode auto.
  * Partagé par /api/agent/chat et le moteur conversationnel (workspace).
  */

@@ -1,5 +1,23 @@
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client, HeadObjectCommand, ListObjectsV2Command, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, PutBucketCorsCommand } from "@aws-sdk/client-s3";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+/**
+ * Timeouts HTTP EXPLICITES (audit 10-10 — erreurs « <!DOCTYPE … is not valid
+ * JSON ») : sans timeout, un R2 qui ne répond pas fait PENDRE la fonction
+ * serverless jusqu'au kill Vercel, qui renvoie une page HTML d'erreur que le
+ * client tente de parser en JSON. Chaque appel est désormais borné :
+ *   - connexion TCP/TLS : 5 s ;
+ *   - réponse (socket) : 20 s — largement au-dessus d'un R2 sain (< 1 s),
+ *     assez bas pour échouer AVANT le maxDuration Vercel ;
+ *   - 2 tentatives SDK (repli rapide sur erreur transitoire).
+ * Les pannes deviennent des exceptions classifiées rapides (UserDataError /
+ * FsError « unavailable ») au lieu de pages HTML.
+ */
+const R2_HTTP_HANDLER = new NodeHttpHandler({
+  connectionTimeout: 5_000,
+  socketTimeout: 20_000,
+});
 
 function getConfig() {
   const accountId = process.env.R2_ACCOUNT_ID;
@@ -16,6 +34,8 @@ function getClient() {
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId, secretAccessKey },
+    requestHandler: R2_HTTP_HANDLER,
+    maxAttempts: 2,
   });
 }
 

@@ -62,8 +62,13 @@ const CONNECTION_AWARE_TOOLS = new Set([
   "github.create_repository",
 ]);
 
-/** Actions critiques : l'humain décide toujours, app connectée ou non. */
-export const NEVER_BYPASSED_TOOLS = new Set(["ads.publish", "file.delete", "phone.call"]);
+/** Actions critiques : l'humain décide toujours, app connectée ou non.
+ * (audit 10-10) file.delete en est RETIRÉE : outil INTERNE (stockage Gen3ia),
+ * la directive « aucune approbation pour un outil interne » s'applique —
+ * l'outil reste scopé propriétaire et audité. Restent les actions externes
+ * irréversibles/payantes et custom_api.write (manipule les secrets API de
+ * l'utilisateur). */
+export const NEVER_BYPASSED_TOOLS = new Set(["ads.publish", "phone.call", "custom_api.write"]);
 
 /** Résout le toolkit Composio correspondant à un hôte d'API. */
 export function toolkitFromUrlHost(host: string): string | null {

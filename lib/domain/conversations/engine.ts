@@ -33,6 +33,7 @@ import {
 } from "@/lib/security/authorization-mode";
 import { detectApiProvisioning, extractApiPathFromMessage, extractApiUsageName, looksLikeApiUsageRequest } from "@/lib/integrations/custom-apis/detect";
 import { isExternalAppConnected } from "@/lib/security/connected-apps";
+import { INTERNAL_ACTION_TOOLS } from "@/lib/agents/approval-policy";
 import {
   assessComplexity,
   buildEvolutionContext,
@@ -2742,7 +2743,15 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 
     let toolName = planned.toolName ?? undefined;
     const risk = toolEntry?.risk ?? "low";
-    let sensitive = planned.sensitive === true || (toolName ? stepRequiresApproval(risk) : false);
+    // OUTILS INTERNES (directive 10-10) : la génération d'image/vidéo/audio,
+    // les fichiers, mémoires et automatisations Gen3ia ne demandent JAMAIS
+    // d'approbation — même si le planificateur ou un risque résiduel les
+    // marque sensibles. La validation ne concerne que les apps externes non
+    // connectées et les actions manipulant des secrets utilisateur.
+    const internalTool = toolName ? INTERNAL_ACTION_TOOLS.has(toolName) : false;
+    let sensitive = internalTool
+      ? false
+      : planned.sensitive === true || (toolName ? stepRequiresApproval(risk) : false);
 
     // APPROBATION CONDITIONNELLE (demande utilisateur) : quand l'app externe
     // ciblée est DÉJÀ CONNECTÉE par l'utilisateur (statut actif), l'agent

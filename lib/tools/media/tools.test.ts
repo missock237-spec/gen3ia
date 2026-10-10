@@ -422,7 +422,9 @@ describe("enregistrement dans le registre par défaut (gated AGNES_API_KEY)", ()
     const video = registry.get("video.create");
     expect(video).toBeDefined();
     expect(video?.category).toBe("media");
-    expect(video?.risk).toBe("high");
+    // Outil INTERNE (directive 10-10) : plus de risque « high » (carte HITL)
+    // — exécution directe, facturée par l'escrow de mission.
+    expect(video?.risk).toBe("medium");
     // La liste déduplique par id : un seul outil logique par identifiant.
     expect(registry.list().filter((tool) => tool.id === "image.generate")).toHaveLength(1);
     expect(registry.list().filter((tool) => tool.id === "video.create")).toHaveLength(1);
@@ -437,11 +439,13 @@ describe("enregistrement dans le registre par défaut (gated AGNES_API_KEY)", ()
 });
 
 describe("couverture sécurité + catalogue + libellés", () => {
-  it("TOOL_SECURITY : image.generate = external + réseau (profil voice.speak)", () => {
+  it("TOOL_SECURITY : image.generate = écriture INTERNE + réseau (outil plateforme, directive 10-10)", () => {
     const definition = getToolSecurityDefinition("image.generate");
-    expect(definition.risk).toBe("external");
+    // Reclassification 10-10 : outil INTERNE (infrastructure Gen3ia) — plus de
+    // profil « external » (aucune app utilisateur ciblée, aucun secret).
+    expect(definition.risk).toBe("write");
     expect(definition.network).toBe(true);
-    expect(definition.requiredPermissions).toContain("tool.external");
+    expect(definition.requiredPermissions).toContain("tool.write");
     expect(definition.requiredPermissions).toContain("network.read");
   });
 
@@ -462,9 +466,10 @@ describe("couverture sécurité + catalogue + libellés", () => {
     expect(video?.description).toMatch(/production vid[ée]o/i);
     expect(video?.description).toMatch(/progression/i);
     expect(video?.sideEffect).toBe(true);
-    // Sensibles au durcissement : auto_allow + médias → ask_if_needed.
-    expect(["external", "destructive"]).toContain(image?.risk);
-    expect(["external", "destructive"]).toContain(video?.risk);
+    // Outils INTERNES (directive 10-10) : risque « write » — la génération
+    // ne déclenche plus le durcissement ni aucune carte de validation.
+    expect(image?.risk).toBe("write");
+    expect(video?.risk).toBe("write");
   });
 
   it("libellés FR : jamais le slug brut à l'utilisateur", () => {

@@ -1,13 +1,19 @@
 import { createHash } from "node:crypto";
 import { getActionApproval } from "@/lib/agents/action-approvals";
 import { isExternalAppConnected, NEVER_BYPASSED_TOOLS } from "@/lib/security/connected-apps";
+import { INTERNAL_ACTION_TOOLS } from "@/lib/agents/approval-policy";
 import { getToolSecurityDefinition, isExtensionToolName } from "./tool-permissions";
 
 export type AutonomyRisk = "low" | "medium" | "high" | "critical";
 
 const MAX_APPROVAL_ARGUMENTS_BYTES = 100_000;
-const EXTERNAL_MUTATION_TOOLS = new Set(["composio.execute", "ads.publish", "github.create_repository", "phone.call"]);
-const CRITICAL_TOOLS = new Set(["ads.publish", "file.delete"]);
+const EXTERNAL_MUTATION_TOOLS = new Set(["composio.execute", "ads.publish", "github.create_repository", "phone.call", "custom_api.write"]);
+/** (audit 10-10) file.delete est SORTIE de CRITICAL_TOOLS : outil interne
+ * (stockage Gen3ia, scopé propriétaire, audité) — directive « aucune
+ * approbation pour un outil interne ». Restent les actions externes qui
+ * engagent réellement l'utilisateur. custom_api.write manipule les secrets
+ * API de l'utilisateur → traité comme mutation externe sensible. */
+const CRITICAL_TOOLS = new Set(["ads.publish", "custom_api.write"]);
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -28,6 +34,12 @@ export function getAutonomyRisk(toolName: string): AutonomyRisk {
   if (EXTERNAL_MUTATION_TOOLS.has(toolName)) return "high";
   if (isExtensionToolName(toolName)) return "high";
   const definition = getToolSecurityDefinition(toolName);
+  // OUTILS INTERNES (directive 10-10) : file.delete et tout outil opérant
+  // sur les données Gen3ia du propriétaire — scopés propriétaire et audités
+  // → exécution directe (medium). La capacité « destructive » reste déclarée
+  // dans la définition de sécurité pour la policy d'exécution (allowFileDelete),
+  // elle ne déclenche PLUS de carte HITL.
+  if (INTERNAL_ACTION_TOOLS.has(toolName)) return "medium";
   if (definition.risk === "destructive") return "high";
   if (definition.risk === "external") return "medium";
   if (definition.risk === "write") return "medium";

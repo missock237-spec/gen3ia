@@ -27,9 +27,12 @@ import { VIDEO_ASPECT_RATIOS as PIPELINE_ASPECT_RATIOS } from "@/lib/video/types
  * indisponible (build sans pipeline vidéo), l'erreur est claire et FRANÇAISE
  * — jamais un « Cannot find module » brut ni un repli silencieux.
  *
- * Risque high : action longue (minutes) et payante (appels Agnes en aval) →
- * carte de validation humaine via la politique de permission (checkPermission
- * : high ⇒ requiresApproval par défaut).
+ * Risque medium (audit 10-10) : outil INTERNE — l'enchère part sur la file
+ * de production Gen3ia et le frais de résultat est réglé par l'escrow du
+ * portefeuille (RCP) ; aucune app externe ni secret utilisateur n'est
+ * manipulé par l'outil lui-même → AUCUNE carte de validation
+ * (directive « aucune approbation pour un outil interne », captures 07:24 :
+ * video.create bloqué par « Confirmation requise »).
  */
 
 /**
@@ -141,7 +144,7 @@ export const createVideoTool: ToolDefinition<
   description:
     "Start a fully autonomous REAL video production (script, storyboard, visuals, voice-over, editing, render) with full creative control (duration, resolution, aspect ratio, language, style, audience, platform, music mood, derived formats) and track its progress via the returned jobId/projectId.",
   category: "media",
-  risk: "high",
+  risk: "medium",
   inputSchema: CreateVideoInput,
   async execute(input, context): Promise<CreateVideoToolOutput> {
     let productionQueue: typeof import("@/lib/video/production-queue");

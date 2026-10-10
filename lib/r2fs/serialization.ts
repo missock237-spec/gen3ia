@@ -36,6 +36,28 @@ function estSerializedTimestamp(v: unknown): v is SerializedTimestamp {
 }
 
 /**
+ * FORME LEGACY « {millis: N} » (guérison lecture, audit 10-10).
+ *
+ * Des documents écrits pendant le churn de déploiement du 9-10 oct. portent
+ * leurs timestamps sous la forme brute {"millis": N} (FsTimestamp sérialisé
+ * hors versStockage). À la relecture, depuisStockage ne reconnaissait PAS
+ * cette forme : le champ restait un objet nu et tout appel
+ * `.toMillis()` levait « d.createdAt.toMillis is not a function » (captures
+ * production 07:24). La lecture GUÉRIT désormais cette forme — jamais
+ * écrite par le moteur courant, toujours réécrite au prochain PUT du doc.
+ *
+ * Garde : EXACTEMENT une clé `millis` de type number fini — un objet métier
+ * homonyme avec d'autres champs n'est JAMAIS transformé.
+ */
+function estLegacyTimestampMillis(v: unknown): v is { millis: number } {
+  if (typeof v !== "object" || v === null) return false;
+  const cles = Object.keys(v as Record<string, unknown>);
+  if (cles.length !== 1 || cles[0] !== "millis") return false;
+  const millis = (v as { millis?: unknown }).millis;
+  return typeof millis === "number" && Number.isFinite(millis);
+}
+
+/**
  * Timestamp Firestore-like : la surface réellement consommée par le projet
  * (now, fromMillis, fromDate, toMillis, toDate) + seconds/nanoseconds pour
  * compatibilité structurelle. L'égalité compare les millisecondes.
@@ -143,6 +165,12 @@ export function versStockage(valeur: unknown): unknown {
   if (valeur === null || typeof valeur !== "object") return valeur;
   if (valeur instanceof FsTimestamp) return { __fs_ts__: valeur.millis } satisfies SerializedTimestamp;
   if (valeur instanceof Date) return { __fs_ts__: valeur.getTime() } satisfies SerializedTimestamp;
+  // Duck-typing Timestamp-like (audit 10-10) : une valeur portant un champ
+  // `millis` numérique UNIQUE est un Timestamp d'une autre copie de module
+  // (bundle serverless distinct, dual-package) — instanceof échouerait et
+  // l'objet serait sérialisé BRUT ({"millis": N}), illisible au retour
+  // (« toMillis is not a function »). Sérialisation canonique imposée.
+  if (estLegacyTimestampMillis(valeur)) return { __fs_ts__: valeur.millis } satisfies SerializedTimestamp;
   if (isSentinel(valeur)) {
     throw new Error(
       `r2fs: sentinelle FieldValue(${(valeur as SentinelKind).__fs_sentinel__}) non résolue avant l'écriture — bug du moteur.`,
@@ -172,6 +200,10 @@ export function versStockage(valeur: unknown): unknown {
 export function depuisStockage(valeur: unknown): unknown {
   if (valeur === null || typeof valeur !== "object") return valeur;
   if (estSerializedTimestamp(valeur)) return new FsTimestamp(valeur.__fs_ts__);
+  // Guérison LEGACY (audit 10-10) : la forme brute {"millis": N} est
+  // reconstruite en FsTimestamp — les documents écrits par les déploiements
+  // du churn 9-10 oct. redeviennent lisibles SANS migration préalable.
+  if (estLegacyTimestampMillis(valeur)) return new FsTimestamp(valeur.millis);
   if (Array.isArray(valeur)) return valeur.map((v) => depuisStockage(v));
   const sortie: Record<string, unknown> = {};
   for (const [cle, v] of Object.entries(valeur as Record<string, unknown>)) {

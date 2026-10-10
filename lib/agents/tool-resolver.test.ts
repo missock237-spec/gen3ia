@@ -108,6 +108,15 @@ describe("hardenAuthorizationMode", () => {
     expect(result.sensitiveTools).toEqual(["email.send"]);
   });
 
+  it("ne durcit PLUS les outils médias (internes, directive 10-10)", () => {
+    // image.generate / video.create sont désormais « write » : la génération
+    // n'est plus une action sensible — auto_allow reste auto_allow.
+    const result = hardenAuthorizationMode(["image.generate", "video.create"], "auto_allow");
+    expect(result.hardened).toBe(false);
+    expect(result.mode).toBe("auto_allow");
+    expect(result.sensitiveTools).toEqual([]);
+  });
+
   it("traite destructive comme sensible (terminal.execute, code.execute)", () => {
     const result = hardenAuthorizationMode(["terminal.execute"], "auto_allow");
     expect(result.hardened).toBe(true);
@@ -204,11 +213,13 @@ describe("alias médias (image.generate / video.create) — audit outils médias
     expect(resolved).not.toContain("photo"); // jamais un nom hors registre
   });
 
-  it("les outils médias sensibles déclenchent le durcissement auto_allow → ask_if_needed", () => {
+  it("les outils médias INTERNES ne déclenchent plus le durcissement (directive 10-10)", () => {
     const { resolution, hardening } = resolveAndHarden(["générer une image", "montage vidéo"], "auto_allow");
     expect(resolution.resolved).toEqual(["image.generate", "video.create"]);
-    expect(hardening.hardened).toBe(true);
-    expect(hardening.mode).toBe("ask_if_needed");
-    expect(hardening.sensitiveTools).toEqual(["image.generate", "video.create"]);
+    // Génération = outil interne (risque write) : auto_allow reste auto_allow,
+    // aucune rétrogradation — la génération n'est jamais gated par le HITL.
+    expect(hardening.hardened).toBe(false);
+    expect(hardening.mode).toBe("auto_allow");
+    expect(hardening.sensitiveTools).toEqual([]);
   });
 });

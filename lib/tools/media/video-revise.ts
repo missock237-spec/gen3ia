@@ -65,7 +65,9 @@ export const videoReviseTool: ToolDefinition<
   description:
     "Revise or control an EXISTING video project from natural language: change pacing/music/voice/subtitle style, delete or regenerate scenes, pause/resume/cancel the render, or add derived export formats (TikTok, Shorts, Reels). Requires projectId.",
   category: "media",
-  risk: "high",
+  // Outil INTERNE (directive 10-10) : pilote le projet Gen3ia du propriétaire
+  // — jamais de carte de validation.
+  risk: "medium",
   inputSchema: VideoReviseInput,
   async execute(input, context): Promise<VideoReviseToolOutput> {
     const action = input.action ?? "revise";

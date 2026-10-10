@@ -32,8 +32,12 @@ describe("modes d'autorisation (sélecteur « Toujours demander ▼ »)", () => 
 
   it("protège les outils critiques, même en mode automatique", () => {
     expect(isNeverAutoApprove("ads.publish")).toBe(true);
-    expect(isNeverAutoApprove("file.delete")).toBe(true);
+    // audit 10-10 : file.delete est un outil INTERNE — plus de plancher
+    // (directive « aucune approbation pour un outil interne ») ;
+    // custom_api.write entre au plancher (manipule les secrets API utilisateur).
+    expect(isNeverAutoApprove("file.delete")).toBe(false);
     expect(isNeverAutoApprove("phone.call")).toBe(true);
+    expect(isNeverAutoApprove("custom_api.write")).toBe(true);
     // Outils non critiques : auto-approuvables en mode auto_allow.
     expect(isNeverAutoApprove("web.search")).toBe(false);
     expect(isNeverAutoApprove("composio.execute")).toBe(false);
@@ -60,7 +64,10 @@ describe("modes d'autorisation (sélecteur « Toujours demander ▼ »)", () => 
 
     it("respecte le plancher : outils critiques et risque critical jamais contournés", () => {
       expect(isAutoApprovable("auto_allow", "ads.publish", "high")).toBe(false);
-      expect(isAutoApprovable("auto_allow", "file.delete", "high")).toBe(false);
+      // audit 10-10 : file.delete (outil interne) est auto-approuvable ;
+      // custom_api.write (secrets utilisateur) reste au plancher.
+      expect(isAutoApprovable("auto_allow", "file.delete", "high")).toBe(true);
+      expect(isAutoApprovable("auto_allow", "custom_api.write", "high")).toBe(false);
       expect(isAutoApprovable("auto_allow", "phone.call", "high")).toBe(false);
       expect(isAutoApprovable("auto_allow", "composio.execute", "critical")).toBe(false);
       // Outil externe non critique : auto-approuvable.

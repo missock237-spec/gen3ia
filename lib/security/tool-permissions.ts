@@ -25,7 +25,7 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "ads.read": { name: "ads.read", risk: "read", requiredPermissions: ["tool.read", "ads.read", "network.read"], network: true, externalApp: true },
   "ads.publish": { name: "ads.publish", risk: "external", requiredPermissions: ["tool.external", "tool.write", "ads.write", "network.write"], network: true, externalApp: true },
   "github.create_repository": { name: "github.create_repository", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
-  "voice.speak": { name: "voice.speak", risk: "external", requiredPermissions: ["tool.external", "network.read"], network: true },
+  "voice.speak": { name: "voice.speak", risk: "write", requiredPermissions: ["tool.write", "network.read"], network: true },
   "voice.list": { name: "voice.list", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "phone.call": { name: "phone.call", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   "notion.search": { name: "notion.search", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
@@ -67,15 +67,13 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "network.send_message": { name: "network.send_message", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
   "network.read_inbox": { name: "network.read_inbox", risk: "read", requiredPermissions: ["tool.read"] },
   "network.mark_read": { name: "network.mark_read", risk: "read", requiredPermissions: ["tool.read"] },
-  // Médias générés (audit outils médias).
-  // image.generate : appel réseau SORTANT vers Agnes AI (AGNES_API_KEY) —
-  // même profil de capacité que voice.speak (génération de média via API
-  // externe, aucun effet de bord utilisateur : l'outil ne fait que renvoyer
-  // une URL). Décision : risque de sécurité « external » + network (la
-  // capacité est un appel externe) ; le risque HITL de la définition de
-  // l'outil dans lib/tools reste « medium » (exécution directe, parité avec
-  // le comportement conversationnel existant).
-  "image.generate": { name: "image.generate", risk: "external", requiredPermissions: ["tool.external", "network.read"], network: true },
+  // Médias générés (audit outils médias ; reclassification 10-10 — directive
+  // « aucune approbation pour un outil interne »).
+  // image.generate : génération d'image sur l'infrastructure Gen3ia (Agnes
+  // AI + repli Hugging Face) — outil INTERNE : aucune app utilisateur
+  // ciblée, aucun secret manipulé → jamais de carte de validation. Ancienne
+  // classification « external » la forçait dans le plan HITL (captures 07:24).
+  "image.generate": { name: "image.generate", risk: "write", requiredPermissions: ["tool.write", "network.read"], network: true },
   // video.create : l'outil se contente d'ENCHERIR un job dans la file de
   // production interne (lib/video/production-queue) — la capacité est une
   // écriture interne (Firestore), comme schedule.create ; les appels
