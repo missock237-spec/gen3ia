@@ -319,7 +319,10 @@ async function respondWithVoiceOff(params: {
   // n'est jamais déversée dans le fil (rendu markdown du chat limité à https).
   let playableUrl: string | undefined;
   if (result.storage === "r2" && result.audioUrl) {
-    playableUrl = await createR2DownloadUrl(result.audioUrl, 6 * 3600).catch(() => undefined);
+    // Lien d'écoute : URL signée R2 (1 h, plafond du presigneur — une
+    // expiration supérieure lève et faisait silencieusement DISPARAÎTRE le
+    // lien d'écoute). La clé R2 permanente reste la référence durable.
+    playableUrl = await createR2DownloadUrl(result.audioUrl, 3600).catch(() => undefined);
   }
   const reply = [
     "Voici votre voix-off, synthétisée avec une voix naturelle ElevenLabs.",

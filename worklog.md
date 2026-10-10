@@ -3225,3 +3225,17 @@ Work Log:
 
 Stage Summary:
 - Scénario capture 1 complet et déterministe : demande d'audio → question → réponse utilisateur → audio synthétisé INLINE et livré (artefact R2 + lien signé), sans détour par une mission.
+
+---
+Task ID: 116-d (lien d'écoute audio — expiration rejetée par le presigneur)
+Agent: main (Super Z)
+Task: Vérification production post-a22733c : l'audio est livré (artefact R2 permanent) mais le lien « Écouter l'audio » manque — createR2DownloadUrl lève pour expiresIn > 3600 et le catch avalait l'erreur.
+
+Work Log:
+- Constat (scripts/check_audio_link.mjs) : contenu du message sans lien ; artefact audio avec storagePath R2 présent.
+- CAUSE : createR2DownloadUrl(key, 6 * 3600) — validation expiresIn ≤ 3600 → throw → .catch(() => undefined) → lien silencieusement absent (même bug sur la route agent chat respondWithVoiceOff depuis Task 114-a).
+- FIX : createR2DownloadUrl(audioUrl, 3600) aux 2 sites (moteur runVoiceTurn + route agent chat) — la clé R2 permanente reste la référence durable (résolue par le canal signé de l'app au-delà du lien).
+- VALIDATION : tsc 0 ; eslint 0 ; vitest ciblés verts ; déploiement + repro final avec lien d'écoute vérifié.
+
+Stage Summary:
+- Livraison audio complète : synthèse ElevenLabs + archivage permanent R2 + artefact + LIEN D'ÉCOUTE signé (1 h) dans le message.

@@ -1809,11 +1809,13 @@ async function runVoiceTurn(ctx: TurnBase, resolution: ContextVoiceResolution): 
     };
   }
 
-  // Lien d'écoute : URL signée R2 (6 h) quand l'audio est archivé (rendu
-  // markdown du chat limité à https — la base64 n'est jamais déversée).
+  // Lien d'écoute : URL signée R2 (1 h, plafond du presigneur) quand l'audio
+  // est archivé (rendu markdown du chat limité à https — la base64 n'est
+  // jamais déversée). La clé R2 permanente reste la référence durable :
+  // l'application résout le fichier au-delà de l'expiration du lien.
   let playableUrl: string | undefined;
   if (spoken.storage === "r2" && spoken.audioUrl) {
-    playableUrl = await createR2DownloadUrl(spoken.audioUrl, 6 * 3600).catch(() => undefined);
+    playableUrl = await createR2DownloadUrl(spoken.audioUrl, 3600).catch(() => undefined);
   }
   const reply = [
     resolution.source === "context"
