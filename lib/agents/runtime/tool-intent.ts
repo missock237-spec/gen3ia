@@ -47,68 +47,122 @@ const MAX_HINTS = 4;
 
 /** Garde commun : une question méta / curiosité ne déclenche PAS de
  * production implicite (miroir de video-intent.ts) — sauf impératif direct. */
-const META_QUESTION_RE =
-  /\b(c['']est quoi|qu['']est[- ]ce que|signifie|veut dire|diff[ée]rence entre|conseils?|astuces?|meilleur (?:logiciel|outil|fa[çc]on)|comment (?:fonctionne|marche))\b/i;
-const QUESTION_PREFIX_RE =
-  /^(c['']est quoi|qu['']est[- ]ce|pourquoi|comment |qui |o[ùu] |quand |est[- ]ce que|what|why|how|who|where|which)\b/i;
-const DIRECT_IMPERATIVE_RE =
-  /\b(cr[ée]e?s?|g[ée]n[èe]re[rz]?|fais|dessine|monte|lance)\s+(moi\s+)?(une?|un|la|le|des)\b/i;
+const META_QUESTION_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])c[''’]est quoi|qu[''’]est[- ]ce que|signifie|veut dire|diff[ée]rence entre|conseils?|astuces?|meilleur (?:logiciel|outil|fa[çc]on)|comment (?:fonctionne|marche)(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const QUESTION_PREFIX_RE = new RegExp(
+  `^(?:c[''’]est quoi|qu[''’]est[- ]ce|pourquoi|comment|qui|o[ùu]|quand|est[- ]ce que|what|why|how|who|where|which)(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const DIRECT_IMPERATIVE_RE = new RegExp(
+  `(?<![\p{L}\p{N}_])(?:cr[ée](?:[ée]s?|ez)?|g[éèe]n[éèe]r(?:é[ée]?s?|e[zs]?|ez)?|fais(?:ez)?|dessin(?:e[zs]?|é[ée]?s?)|mont(?:e[zs]?|é[ée]?s?)|lanc(?:é[ée]?s?|e[zs]?|ez)?)\s+(?:moi\s+)?(?:une?|un|la|le|des)(?![\p{L}\p{N}_])`,
+  "iu",
+);
 
 /* VIDEO — créer/produire une vidéo, clip, reel, short, trailer, montage. */
-const VIDEO_NOUN_RE =
-  /\b(vid[ée]os?|videos?|clip|clips|reels?|shorts?|montage|montages|trailer|teaser|bande[- ]annonce|film|animation|pub vid[ée]o|vid[ée]o publicitaire)\b/i;
-const VIDEO_CREATE_RE =
-  /\b(cr[ée]\w*|g[ée]n[èe]r\w*|fais\w*|fabriqu\w*|produis\w*|produire|monte[rz]?|r[ée]alis\w*|lance[rz]?|veux|voudrais|aimerais|create|generate|produce|edit|render|make)\b/i;
+const VIDEO_NOUN_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])vid[ée]os?|videos?|clip|clips|reels?|shorts?|montages?|trailer|teaser|bande[- ]annonce|film|animation|pub vid[ée]o|vid[ée]o publicitaire(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const VIDEO_CREATE_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])cr[ée]\\p{L}*|g[éèe]n[éèe]r\\p{L}*|fais\\p{L}*|fabriqu\\p{L}*|produi\\p{L}*|monte[rz]?|mont[ée]\\p{L}*|r[ée]alis\\p{L}*|lanc[ée]\\p{L}*|lance[rz]?|veux|voudrais|aimerais|create|generate|produce|edit|render|make(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
 
 /* IMAGE — dessine/génère image, photo, logo, affiche, illustration, poster. */
-const IMAGE_NOUN_RE =
-  /\b(images?|photos?|photographies?|dessins?|logos?|affiches?|posters?|illustrations?|banni[èe]res?|avatars?|ic[ôo]nes?|miniatures?|visuels?|fond d'[ée]cran|wallpaper)\b/i;
-const IMAGE_CREATE_RE =
-  /\b(dessin\w*|cr[ée]\w*|g[ée]n[èe]r\w*|fais\w*|veux|voudrais|aimerais|fabriqu\w*|illustr\w*|draw|create|generate|design|make)\b/i;
-const DRAW_ALONE_RE = /\bdessin\w*\b/i;
+const IMAGE_NOUN_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])images?|photos?|photographies?|dessins?|logos?|affiches?|posters?|illustrations?|banni[èe]res?|avatars?|ic[ôo]nes?|miniatures?|visuels?|fond d'[ée]cran|wallpaper(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const IMAGE_CREATE_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])dessin\\p{L}*|cr[ée]\\p{L}*|g[éèe]n[éèe]r\\p{L}*|fais\\p{L}*|veux|voudrais|aimerais|fabriqu\\p{L}*|illustr\\p{L}*|draw|create|generate|design|make(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const DRAW_ALONE_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])dessin\\p{L}*(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
 
 /* VOICE — voix off, narration audio, text-to-speech. */
-const VOICE_RE =
-  /\b(voix off|narration (?:audio|vocal\w*|sonore)|synth[èe]se vocale|voix synth[ée]tique|text[- ]to[- ]speech|text to speech|tts|locution|lire (?:à|a) voix haute|version audio|g[ée]n[èe]r\w* (?:une |la |de la )?voix)\b/i;
+const VOICE_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])voix[- ]off|narration (?:audio|vocal\\p{L}*|sonore)|synth[èe]se vocale|voix synth[ée]tique|text[- ]to[- ]speech|text to speech|tts|locution|lire (?:à|a) voix haute|version audio|g[éèe]n[éèe]r\\p{L}* (?:une |la |de la |de l' )?voix(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
 
 /* EMAIL — envoyer un email (verbe + nom ou adresse énoncée). */
-const EMAIL_VERB_RE = /\b(envoi\w*|envoy\w*|expedi\w*|send)\b/i;
-const EMAIL_NOUN_RE = /\b(e[- ]?mails?|mails?|courriels?)\b/i;
+const EMAIL_VERB_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])envoi\\p{L}*|envoy\\p{L}*|expedi\\p{L}*|send(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const EMAIL_NOUN_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])e[- ]?mails?|mails?|courriels?(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
 const EMAIL_ADDRESS_RE = /[\w.+-]+@[\w-]+\.[\w-]{2,}/;
 
 /* SCHEDULE — planifier, tâche récurrente, chaque jour/semaine. */
-const SCHEDULE_RE =
-  /\b(planifi\w*|programme[rz]?|schedul\w*|t[âa]che r[ée]current\w*|r[ée]current\w*|chaque (?:jour|semaine|mois|matin|soir|heure|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)|tous les (?:jours|lundis|mardis|mercredis|jeudis|vendredis|samedis|dimanches|mois|matins|soirs)|quotidienn\w*|hebdomadair\w*|mensuel\w*|every (?:day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday|morning))\b/i;
+const SCHEDULE_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])planifi\\p{L}*|programme[rz]?|schedul\\p{L}*|t[âa]che r[ée]current\\p{L}*|r[ée]current\\p{L}*|chaque (?:jour|semaine|mois|matin|soir|heure|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)|tous les (?:jours|lundis|mardis|mercredis|jeudis|vendredis|samedis|dimanches|mois|matins|soirs)|quotidienn\\p{L}*|hebdomadair\\p{L}*|mensuel\\p{L}*|every (?:day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday|morning)(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
 
 /* WORKFLOW — enchaînement d'automatisation. */
-const WORKFLOW_RE =
-  /\b(workflows?|automatis\w*|automatisation|encha[îi]n\w*|pipeline d'actions|sc[ée]nario d'automatisation)\b/i;
+const WORKFLOW_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])workflows?|automatis\\p{L}*|automatisation|encha[îi]n\\p{L}*|pipeline d'actions|sc[ée]nario d'automatisation(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
 
 /* WEB_RESEARCH — recherche web/internet (verbe + cible). */
-const RESEARCH_VERB_RE =
-  /\b(recherch\w*|cherch\w*|trouv\w*|renseign\w*|surveill\w*|explor\w*|informe[- ]moi|documente[- ]toi|search|research|look ?up)\b/i;
-const RESEARCH_TARGET_RE =
-  /\b(web|internet|en ligne|google|actualit[ée]s?|news|concurrents?|concurrence|march[ée]|tendances?|nouveaut[ée]s?|prix|tarifs?|derni[èe]res? (?:infos|informations|nouvelles|versions?))\b/i;
+const RESEARCH_VERB_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])recherch\\p{L}*|cherch\\p{L}*|trouv\\p{L}*|renseign\\p{L}*|surveill\\p{L}*|explor\\p{L}*|informe[- ]moi|documente[- ]toi|search|research|look ?up(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const RESEARCH_TARGET_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])web|internet|en ligne|google|actualit[ée]s?|news|concurrents?|concurrence|march[ée]|tendances?|nouveaut[ée]s?|prix|tarifs?|derni[èe]res? (?:infos|informations|nouvelles|versions?)(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
 
 /* PUBLISH_SOCIAL — publier sur TikTok/Instagram/Facebook/LinkedIn… */
-const SOCIAL_VERB_RE = /\b(publi\w*|poste[rz]?|poster|partag\w*|diffus\w*|publish)\b/i;
-const SOCIAL_TARGET_RE =
-  /\b(tik[- ]?tok|instagram|facebook|linkedin|youtube|twitter|snapchat|pinterest|threads|r[ée]seaux? sociaux?|social media|stories?|page (?:facebook|linkedin))\b/i;
+const SOCIAL_VERB_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])publi\\p{L}*|poste[rz]?|poster|partag\\p{L}*|diffus\\p{L}*|publish(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const SOCIAL_TARGET_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])tik[- ]?tok|instagram|facebook|linkedin|youtube|twitter|snapchat|pinterest|threads|r[ée]seaux? sociaux?|social media|stories?|page (?:facebook|linkedin)(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
 
 /* API_CALL — URL d'API énoncée, ou mot « API » + verbe d'appel. */
-const API_WORD_RE = /\b(api|endpoints?|rest|graphql|webservice|web service)\b/i;
-const API_VERB_RE =
-  /\b(appel\w*|interrog\w*|requ[êe]t\w*|consomm\w*|r[ée]cup[èe]r\w*|fetch|call|query)\b/i;
+const API_WORD_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])api|endpoints?|rest|graphql|webservice|web service(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const API_VERB_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])appel\\p{L}*|interrog\\p{L}*|requ[êe]t\\p{L}*|consomm\\p{L}*|r[ée]cup[éèe]r\\p{L}*|fetch|call|query(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
 const URL_RE = /https?:\/\/[^\s"'<>]{4,}/i;
 
 /* KNOWLEDGE — chercher dans mes documents / base de connaissances. */
-const KNOWLEDGE_RE =
-  /\b(mes (?:documents?|fichiers?|notes?|docs?|archives?|donn[ée]es)|(?:la |ma |notre )?base de connaissances?|knowledge(?: ?base)?|documents? internes?|docs? internes?)\b/i;
+const KNOWLEDGE_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])mes (?:documents?|fichiers?|notes?|docs?|archives?|donn[ée]es)|(?:la |ma |notre )?base de connaissances?|knowledge(?: ?base)?|documents? internes?|docs? internes?(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
 
 /* FILE_ZIP — zip, archive (créer / extraire / analyser). */
-const ZIP_RE = /\b(zips?|zipper|compres\w*|d[ée]compres\w*|archiv\w*|extraction|extraire)\b/i;
-const ZIP_CREATE_RE = /\b(compres\w*|zipper|archiv\w*|cr[ée]\w*)\b/i;
-const ZIP_EXTRACT_RE = /\b(d[ée]compres\w*|extraire|extraction|extract)\b/i;
+const ZIP_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])zips?|zipper|compres\\p{L}*|d[ée]compres\\p{L}*|archiv\\p{L}*|extraction|extraire(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const ZIP_CREATE_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])compres\\p{L}*|zipper|archiv\\p{L}*|cr[ée]\\p{L}*(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const ZIP_EXTRACT_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])d[ée]compres\\p{L}*|extraire|extraction|extract(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
 
 /**
  * Une question méta / pure curiosité bloque la production implicite

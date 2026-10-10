@@ -195,3 +195,106 @@ describe("extractVoiceRequestText (Task 114-a)", () => {
     expect(result?.text2speak.length).toBeLessThanOrEqual(2500);
   });
 });
+
+/* ────────────────────────────────────────────────────────────────────────
+ * FIX CAPTURES 13:02 — non-régression des scénarios production EXACTS.
+ * 1) « Créé une vidéo de 5s d'un bébé qui marche » partait en MISSION
+ *    (échec) au lieu de l'intercept vidéo : le \b ASCII échouait sur le
+ *    « é » final de « Créé ».
+ * 2) « Peut tu me générer un audio de 5s » puis « Bjr je suis entrain de
+ *    venir » : la réponse à la clarification n'était pas reconnue comme
+ *    demande de voix-off → le LLM répondait « la plateforme ne fait que
+ *    des images ».
+ * ──────────────────────────────────────────────────────────────────────── */
+import { isVoiceClarifyingQuestion, resolveVoiceRequestFromContext } from "./video-intent";
+
+describe("captures 13:02 — détection unicode (verbes accentués)", () => {
+  it("CAPTURE 2 : « Créé une vidéo de 5s d'un bébé qui marche » déclenche la production vidéo", () => {
+    expect(looksLikeVideoRequest("Créé une vidéo de 5s d'un bébé qui marche")).toBe(true);
+  });
+
+  it("les participes/infinitifs accentués sont reconnus pour la vidéo", () => {
+    expect(looksLikeVideoRequest("Généré une vidéo sur Paris")).toBe(true);
+    expect(looksLikeVideoRequest("générer une vidéo de présentation")).toBe(true);
+    expect(looksLikeVideoRequest("Lancé une vidéo sur le café")).toBe(true);
+    expect(looksLikeVideoRequest("monté un clip de vacances")).toBe(true);
+  });
+
+  it("CAPTURE 1 : « Peut tu me générer un audio de 5s » déclenche la détection voix", () => {
+    expect(looksLikeVoiceRequest("Peut tu me générer un audio de 5s")).toBe(true);
+  });
+
+  it("les demandes audio accentuées sont reconnues", () => {
+    expect(looksLikeVoiceRequest("générer un audio qui dit bonjour")).toBe(true);
+    expect(looksLikeVoiceRequest("généré un audio de bienvenue")).toBe(true);
+    expect(looksLikeVoiceRequest("je veux un audio pour mon spot")).toBe(true);
+    expect(looksLikeVoiceRequest("créer un audio de 30 secondes")).toBe(true);
+  });
+
+  it("les questions méta restent exclues (pas de faux positifs)", () => {
+    expect(looksLikeVideoRequest("comment créer une vidéo professionnelle ?")).toBe(false);
+    expect(looksLikeVideoRequest("c'est quoi un bon montage vidéo ?")).toBe(false);
+    expect(looksLikeVoiceRequest("quel est le meilleur outil text-to-speech ?")).toBe(false);
+    expect(looksLikeVoiceRequest("c'est quoi une voix off ?")).toBe(false);
+  });
+});
+
+describe("resolveVoiceRequestFromContext (suivi de clarification — capture 1)", () => {
+  const filCapture1 = [
+    { role: "user" as const, content: "Peut tu me générer un audio de 5s" },
+    {
+      role: "assistant" as const,
+      content: "Quel texte ou quel contenu souhaitez-vous entendre dans cet audio de 5 secondes ?",
+    },
+  ];
+
+  it("la réponse à la clarification EST le texte à synthétiser", () => {
+    const resolution = resolveVoiceRequestFromContext("Bjr je suis entrain de venir", filCapture1);
+    expect(resolution).not.toBeNull();
+    expect(resolution?.source).toBe("context");
+    expect(resolution?.text2speak).toBe("Bjr je suis entrain de venir");
+  });
+
+  it("une demande directe avec texte reste prioritaire (source direct)", () => {
+    const resolution = resolveVoiceRequestFromContext("génère un audio qui dit bienvenue à tous", []);
+    expect(resolution?.source).toBe("direct");
+    expect(resolution?.text2speak).toBe("bienvenue à tous");
+  });
+
+  it("une demande vidéo dans le fil ne capte pas la réponse (production vidéo gagne)", () => {
+    const fil = [
+      { role: "user" as const, content: "génère un audio" },
+      { role: "assistant" as const, content: "Quel texte souhaitez-vous entendre ?" },
+    ];
+    expect(resolveVoiceRequestFromContext("Crée une vidéo de test", fil)).toBeNull();
+  });
+
+  it("un refus (« non », « annule ») n'est jamais synthétisé", () => {
+    expect(resolveVoiceRequestFromContext("non finalement", filCapture1)).toBeNull();
+    expect(resolveVoiceRequestFromContext("annule ma demande", filCapture1)).toBeNull();
+  });
+
+  it("sans demande audio préalable dans le fil, aucune synthèse contextuelle", () => {
+    const fil = [
+      { role: "user" as const, content: "bonjour" },
+      { role: "assistant" as const, content: "Bonjour ! Comment puis-je vous aider ?" },
+    ];
+    expect(resolveVoiceRequestFromContext("Bjr je suis entrain de venir", fil)).toBeNull();
+  });
+
+  it("une vraie réponse de l'assistant (audio déjà livré) ferme le suivi contextuel", () => {
+    const fil = [
+      { role: "user" as const, content: "génère un audio" },
+      { role: "assistant" as const, content: "Quel texte souhaitez-vous entendre ?" },
+      { role: "user" as const, content: "bienvenue" },
+      { role: "assistant" as const, content: "Voici votre audio, synthétisé avec une voix naturelle ElevenLabs. [Écouter l'audio](https://r2.example/sons/a.mp3)" },
+    ];
+    expect(resolveVoiceRequestFromContext("merci beaucoup", fil)).toBeNull();
+  });
+
+  it("isVoiceClarifyingQuestion ne reconnaît que les questions sur le texte à entendre", () => {
+    expect(isVoiceClarifyingQuestion("Quel texte ou quel contenu souhaitez-vous entendre dans cet audio ?")).toBe(true);
+    expect(isVoiceClarifyingQuestion("Voici votre audio. [Écouter l'audio](https://r2.example/a.mp3)")).toBe(false);
+    expect(isVoiceClarifyingQuestion("Quelle est la capitale du Cameroun ?")).toBe(false);
+  });
+});

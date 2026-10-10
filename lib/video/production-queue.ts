@@ -35,7 +35,7 @@ import { logger } from "@/lib/observability/logger";
 import { publishJsonDestination, type QStashPublishResult } from "@/lib/queue/qstash";
 import { resolveJobOrigin } from "@/lib/queue/origin";
 import { createProject, getOwnedProjectOrThrow, patchProject, logSystem } from "@/lib/video/project-service";
-import { VideoProjectCreateSchema, DirectorBriefSchema, RenderRequestSchema } from "@/lib/video/security";
+import { VideoProjectCreateSchema, DirectorBriefSchema, RenderRequestSchema, VIDEO_LIMITS } from "@/lib/video/security";
 import { applyProductionPlan } from "@/lib/video/director-service";
 import { generateScript } from "@/lib/video/script-service";
 import { generateSceneImage } from "@/lib/video/image-bridge";
@@ -407,14 +407,35 @@ function deriveTitle(prompt: string): string {
  * de continuation effectif (sondage) et l'appelant peut en informer l'IA.
  */
 export async function createVideoProductionJob(params: CreateVideoProductionJobParams): Promise<CreateVideoProductionJobResult> {
-  const brief = DirectorBriefSchema.parse({ brief: params.prompt }).brief;
-  const title = params.title?.trim() || deriveTitle(brief);
+  // ROBUSTESSE (fix capture 13:02) — bornes pipeline appliquées À L'ENTRÉE,
+  // DÉFENSE EN PROFONDEUR pour TOUS les appelants (chat, mission, outil,
+  // atelier) : une demande « 5 secondes » est servie à la durée minimale du
+  // pipeline (10 s) au lieu d'échouer en validation ; un brief trop court
+  // est enrichi du titre ; un titre trop court est déduit du brief. La
+  // plateforme AJUSTE ce qu'elle peut ajuster — elle ne refuse JAMAIS une
+  // demande réalisable pour un paramètre hors bornes.
+  const options = { ...(params.options ?? {}) };
+  const durationRaw = Number(options.targetDurationSec);
+  if (Number.isFinite(durationRaw) && durationRaw > 0) {
+    options.targetDurationSec = Math.min(VIDEO_LIMITS.maxDurationSec, Math.max(VIDEO_LIMITS.minDurationSec, Math.round(durationRaw)));
+  } else {
+    delete options.targetDurationSec;
+  }
+  const promptRaw = (params.prompt ?? "").trim();
+  const briefSource =
+    promptRaw.length >= 10
+      ? promptRaw
+      : [promptRaw, (params.title ?? "").trim()].filter((part) => part.length > 0).join(" — ");
+  const brief = DirectorBriefSchema.parse({
+    brief: (briefSource.length >= 10 ? briefSource : `Production vidéo : ${briefSource || "demande utilisateur"}`).slice(0, 4000),
+  }).brief;
+  const title = (params.title?.trim().length ?? 0) >= 3 ? params.title!.trim().slice(0, 200) : deriveTitle(brief);
 
   // Même validation que POST /api/video/projects (les clés inconnues comme
   // voiceEnabled/subtitlesEnabled sont retirées par le schéma — elles
   // restent portées par job.options pour les étapes voix/rendu).
   const projectInput = VideoProjectCreateSchema.parse({
-    ...(params.options ?? {}),
+    ...(options ?? {}),
     title,
     description: params.options?.audience ? `Brief : ${brief.slice(0, 1500)}` : brief.slice(0, 2000),
   });
@@ -435,7 +456,9 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
     projectId: project.id,
     prompt: brief,
     title,
-    options: { ...(params.options ?? {}), derivedTargets },
+    // Options BORNÉES (fix captures 13:02) : le job porte la même durée
+    // clampée que la validation — jamais la valeur hors bornes d'origine.
+    options: { ...options, derivedTargets },
     ...(conversationId ? { conversationId } : {}),
     status: "queued",
     stage: "project",

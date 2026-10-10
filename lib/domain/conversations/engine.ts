@@ -43,7 +43,9 @@ import {
 } from "@/lib/ai/auto-improvement";
 import { enhancePromptForExecution, languageDirective } from "@/lib/ai/prompt-enhancer";
 import { imagesForModel } from "@/lib/ai/vision-input";
-import { extractVideoParams, extractVideoTitle, looksLikeVideoRequest } from "@/lib/ai/video-intent";
+import { extractVideoParams, extractVideoTitle, looksLikeVideoRequest, looksLikeVoiceRequest, resolveVoiceRequestFromContext, extractVoiceRequestText, type ContextVoiceResolution } from "@/lib/ai/video-intent";
+import { speakDirectForUser } from "@/lib/ai/voice-speak-direct";
+import { createR2DownloadUrl } from "@/lib/storage/r2";
 import { sanitizeProductionOptions, VIDEO_ASPECT_RATIOS } from "@/lib/tools/media/create-video";
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
 import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
@@ -585,8 +587,17 @@ export function buildIntentSystemPrompt(
           "",
           "RÈGLE IMPÉRATIVE — VIDÉO : toute demande de CRÉATION/PRODUCTION d'une vidéo, clip, reel, short, trailer, bande-annonce ou montage vidéo est routée en mode=plan avec UN SEUL step :",
           '  { title: "Production vidéo", toolName: "video.create", toolInput: { prompt: "<la demande EXACTE de l\'utilisateur : sujet, ton, message — fidèle, sans rien inventer>", title?: "<titre court>", aspectRatio?: "16:9" | "9:16" | "1:1" | "4:5" | "21:9", targetDurationSec?: <durée en secondes si l\'utilisateur la précise>, resolution?: "480p" | "720p" | "1080p" | "1440p" | "4K", language?: "<langue>", style?: "<style visuel/narratif>", audience?: "<public cible>", platform?: "<plateforme>", musicMood?: "cinematographique" | "documentaire" | "tension" | "energique" | "emotionnel" | "neutre", derivedTargets?: ["shorts_9_16" | "tiktok_9_16" | "reels_9_16" | "youtube_16_9" | "square_1_1" | "facebook_16_9"] } }.',
-          "TRANSMETS FIDÈLEMENT les paramètres exprimés par l'utilisateur (durée « 2 minutes » → targetDurationSec: 120, « format TikTok » → aspectRatio 9:16 + derivedTargets [tiktok_9_16], « en 4K », « musique énergique », « pour les adolescents »…) — n'invente JAMAIS un paramètre absent de la demande.",
+          "TRANSMETS FIDÈLEMENT les paramètres exprimés par l'utilisateur (durée « 2 minutes » → targetDurationSec: 120, « format TikTok » → aspectRatio 9:16 + derivedTargets [tiktok_9_16], « en 4K », « musique énergique », « pour les adolescents »…) — n'invente JAMAIS un paramètre absent de la demande. Les bornes du pipeline (durée minimale 10 s) sont appliquées automatiquement : transmets la durée demandée telle quelle.",
           "La production complète (scénario, visuels, voix, musique, montage, rendu) est enchaînée AUTOMATIQUEMENT par la plateforme, avec progression en temps réel affichée dans la conversation. Ne réponds JAMAIS une demande de vidéo par du texte seul, et ne demande JAMAIS de passer par l'atelier vidéo : tu lances la production toi-même.",
+        ].join("\n")
+      : "",
+    catalogNames.has("voice.speak")
+      ? [
+          "",
+          "RÈGLE IMPÉRATIVE — AUDIO / VOIX-OFF (la plateforme SYNTHÉTISE l'audio — ne réponds JAMAIS que la plateforme ne fait pas d'audio) : toute demande de GÉNÉRATION d'un audio, d'une voix-off, d'une narration parlée, d'un texte lu ou d'une synthèse vocale est servie par la plateforme : mode=plan avec UN SEUL step :",
+          '  { title: "Synthèse vocale", toolName: "voice.speak", toolInput: { text: "<le texte EXACT à faire entendre, fidèle à la demande>", voiceId?: "<si l\'utilisateur en précise un>" } }.',
+          "Si le texte à faire entendre n'est pas encore connu (ex : « génère-moi un audio de 5s » sans contenu), réponds mode=chat avec UNE SEULE question demandant le texte à synthétiser — ne refuse JAMAIS, ne propose JAMAIS un service externe ni un tutoriel.",
+          "Si l'utilisateur répond ensuite avec le texte attendu, ce message EST le texte à synthétiser : route-le en voice.speak avec CE texte exact.",
         ].join("\n")
       : "",
   ]
@@ -601,6 +612,7 @@ export function buildIntentSystemPrompt(
   ].join("\n");
   const base = [
     "Tu es le moteur d'exécution de Gen3ia, une plateforme d'agents avec connecteurs.",
+    "AGENT UNIVERSEL (impératif) : tu peux TOUT réaliser sans exception — images, vidéos, audios/voix-off, documents, analyses de médias, applications, automatisations, connecteurs. Ne dis JAMAIS qu'une demande est « hors de ton cadre », « impossible » ou « non prise en charge » tant qu'elle est légale. Si un outil nécessaire manque au catalogue, explique ce qui doit être activé ou connecté et demande à l'utilisateur les accès/outils nécessaires (ex : « connectez l'application X ») — tu proposes toujours un CHEMIN pour réaliser la tâche, jamais un refus sec.",
     "Pour chaque demande utilisateur, tu décides :",
     '  mode="chat" : la demande se traite par une simple réponse textuelle (question, explication, rédaction courte). Remplis alors `reply`.',
     '  mode="plan" : la demande exige des actions réelles (recherche, fichiers, applications connectées, publication…). Remplis alors `objective` et 1 à 8 `steps`.',
@@ -909,6 +921,60 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     return result;
   }
 
+  // 2 quater bis) VOIX-OFF / AUDIO DIRECT (fix capture 13:02) : synthèse
+  // immédiate ElevenLabs (miroir du chemin agent chat Task 114-a) — demande
+  // directe AVEC texte, OU réponse de l'utilisateur à la question de
+  // clarification (suivi contextuel). La production vidéo reste prioritaire
+  // (looksLikeVoiceRequest la laisse déjà passer).
+  const contextVoice = resolveVoiceRequestFromContext(input.message, priorHistory);
+  if (contextVoice) {
+    await onEvent({ type: "status", phase: "execution", label: "Synthèse de l'audio en cours…" });
+    const result = await runVoiceTurn({ ...input, conversation, project, projectId, userMessage, priorHistory }, contextVoice);
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+  if (looksLikeVoiceRequest(input.message)) {
+    const directVoice = extractVoiceRequestText(input.message);
+    if (directVoice) {
+      await onEvent({ type: "status", phase: "execution", label: "Synthèse de l'audio en cours…" });
+      const result = await runVoiceTurn({ ...input, conversation, project, projectId, userMessage, priorHistory }, { ...directVoice, source: "direct" });
+      await onEvent({
+        type: "done",
+        assistantMessage: result.assistantMessage,
+        artifacts: result.artifacts,
+        approvals: result.approvals,
+      });
+      return result;
+    }
+    // Demande d'audio SANS texte identifiable : question de clarification
+    // DÉTERMINISTE (zéro LLM, zéro refus, zéro tuto externe) — la réponse de
+    // l'utilisateur sera synthétisée telle quelle par le suivi contextuel.
+    const question = await appendMessage({
+      conversationId: conversation.id,
+      userId: input.userId,
+      role: "assistant",
+      content: [
+        "Avec plaisir — je peux synthétiser votre audio dès maintenant (voix naturelle ElevenLabs, archivée dans votre espace).",
+        "Quel texte ou quel contenu souhaitez-vous entendre dans cet audio ? Répondez directement avec le texte : je le synthétise immédiatement.",
+      ].join("\n"),
+      generationStatus: "complete",
+    });
+    await onEvent({ type: "message_complete", message: question });
+    return {
+      conversationId: conversation.id,
+      userMessage,
+      assistantMessage: question,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Demande d'audio — texte à synthétiser demandé (clarification déterministe)." },
+    };
+  }
+
   // 2 bis) ARTEFACTS — création d'une page web / petite application :
   // le moteur produit un artefact HTML complet + un LIEN WEB (/preview/<id>)
   // qui rend le résultat directement dans le navigateur du client.
@@ -1193,7 +1259,8 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     RESPONSE_FORMAT_RULES,
     // Compréhension exacte : répondre dans la LANGUE du dernier message.
     languageDirective(ctx.message),
-    "La génération d'images est effectuée par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré, affiché ou décrit un visuel comme s'il était affiché, et n'invente jamais d'URL d'image.",
+    "La génération d'IMAGES, la production de VIDÉOS, la synthèse d'AUDIOS (voix-off ElevenLabs) et l'analyse de médias sont effectuées par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré un média comme s'il était affiché, et n'invente jamais d'URL.",
+    "POLITIQUE UNIVERSELLE (impérative) : la plateforme prend en charge TOUS les types de génération — ne dis JAMAIS qu'elle « ne prend en charge que les images », « ne fait pas d'audio » ou qu'une capacité manque. Si la production n'a pas été déclenchée automatiquement, demande les éléments manquants (ex : le TEXTE à faire entendre pour un audio) ou oriente vers la relance — ne propose JAMAIS un service externe ni un tutoriel à la place d'une capacité de la plateforme.",
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
     ctx.filesContext ? `Ces contenus proviennent de fichiers importés par l'utilisateur (conversion réelle stockée en base de données) — appuie-toi EXCLUSIVEMENT sur eux pour toute question les concernant, sans jamais inventer de données :${ctx.filesContext}` : "",
@@ -1703,6 +1770,95 @@ async function runVideoTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       intent: { mode: "chat", understanding: "Demande de production vidéo complète (échec du lancement)." },
     };
   }
+}
+
+/**
+ * VOIX-OFF / AUDIO DIRECT (fix capture 13:02 — moteur workspace) : synthèse
+ * ElevenLabs immédiate, mécanique identique au chemin agent chat (Task
+ * 114-a) : archivage permanent R2 + facturation au réel + lien d'écoute
+ * signé + artefact audio rattaché à la conversation. Échec de synthèse →
+ * réponse HONNÊTE avec relance (jamais de tuto externe ni de refus sec).
+ */
+async function runVoiceTurn(ctx: TurnBase, resolution: ContextVoiceResolution): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  const spoken = await speakDirectForUser({
+    userId: ctx.userId,
+    text: resolution.text2speak,
+    executionId: `voice_direct_${ctx.conversationId}`,
+  }).catch(() => null);
+
+  if (!spoken?.ok) {
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content: [
+        "La synthèse vocale n'a pas pu aboutir pour le moment (service momentanément indisponible).",
+        "Réessayez dans un instant : redites-moi simplement le texte à faire entendre et je le synthétise immédiatement en voix-off naturelle.",
+      ].join("\n"),
+      generationStatus: "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Synthèse vocale indisponible (relance possible)." },
+    };
+  }
+
+  // Lien d'écoute : URL signée R2 (6 h) quand l'audio est archivé (rendu
+  // markdown du chat limité à https — la base64 n'est jamais déversée).
+  let playableUrl: string | undefined;
+  if (spoken.storage === "r2" && spoken.audioUrl) {
+    playableUrl = await createR2DownloadUrl(spoken.audioUrl, 6 * 3600).catch(() => undefined);
+  }
+  const reply = [
+    resolution.source === "context"
+      ? "Voici votre audio, synthétisé à partir du texte que vous venez de donner :"
+      : "Voici votre audio, synthétisé avec une voix naturelle ElevenLabs.",
+    spoken.storage === "r2"
+      ? "L'audio est archivé en permanence dans votre espace : il reste disponible et réutilisable."
+      : "L'archivage permanent est momentanément indisponible : l'audio est livré dans la réponse de cette conversation (version temporaire).",
+    ...(playableUrl ? ["", `[Écouter l'audio](${playableUrl})`] : []),
+  ].join("\n");
+  const assistantMessage = await appendMessage({
+    conversationId: ctx.conversationId,
+    userId: ctx.userId,
+    role: "assistant",
+    content: reply,
+    generationStatus: "complete",
+  });
+  await onEvent({ type: "message_complete", message: assistantMessage });
+
+  // Artefact audio : la clé R2 permanente est la référence durable (réutilisable
+  // par l'atelier / le canal signé). Repli inline : pas d'artefact (data URI
+  // non rejouable depuis le fil) — le lien de la réponse reste le livrable.
+  let artifact: ConversationArtifact | null = null;
+  if (spoken.audioUrl) {
+    artifact = await createArtifact({
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      projectId: ctx.projectId,
+      type: "audio",
+      title: (resolution.title ?? resolution.text2speak).slice(0, 80),
+      url: playableUrl,
+      storagePath: spoken.audioUrl,
+      note: "Synthèse vocale ElevenLabs — audio permanent (R2)",
+    });
+    await onEvent({ type: "artifact_created", artifact });
+  }
+
+  return {
+    conversationId: ctx.conversationId,
+    userMessage: ctx.userMessage,
+    assistantMessage,
+    artifacts: artifact ? [artifact] : [],
+    approvals: [],
+    intent: { mode: "chat", understanding: "Voix-off synthétisée et livrée (ElevenLabs)." },
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -2592,7 +2748,19 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
       const startedAt = new Date().toISOString();
       try {
         const { createVideoProductionJob } = await import("@/lib/video/production-queue");
-        const promptInput = typeof planned.toolInput?.prompt === "string" && planned.toolInput.prompt.trim() ? planned.toolInput.prompt.trim() : ctx.message;
+        // BRIEF TROP COURT (fix capture 13:02) : DirectorBriefSchema exige
+        // 10 caractères minimum — un prompt du planificateur trop court est
+        // ENRICHI du message utilisateur (jamais d'échec de validation pour
+        // une valeur que la plateforme peut compléter).
+        const promptPlan = typeof planned.toolInput?.prompt === "string" ? planned.toolInput.prompt.trim() : "";
+        const promptInput =
+          promptPlan.length >= 10
+            ? promptPlan
+            : [promptPlan, ctx.message.trim()].filter((part) => part.length >= 10)[0] ?? `Production vidéo demandée : ${promptPlan || ctx.message.trim()}`;
+        // TITRE TROP COURT : VideoProjectCreateSchema exige 3 caractères
+        // minimum — repli sur le titre déduit de la demande (extrait vidéo).
+        const titlePlan = typeof planned.toolInput?.title === "string" ? planned.toolInput.title.trim() : "";
+        const titleInput = titlePlan.length >= 3 ? titlePlan.slice(0, 120) : extractVideoTitle(promptInput);
         const aspectInput = planned.toolInput && typeof planned.toolInput === "object" && "aspectRatio" in planned.toolInput ? String((planned.toolInput as Record<string, unknown>).aspectRatio) : undefined;
         // Contrat aspectRatio (audit 103-f) : source unique — le constant
         // partagé VIDEO_ASPECT_RATIOS du tool video.create (Task 106-a :
@@ -2607,10 +2775,22 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         if (aspectValide) relayed.aspectRatio = aspectValide;
         const detected = extractVideoParams(promptInput);
         const options = { ...detected, ...relayed };
+        // DURÉE HORS-BORNES (fix capture 13:02) : le planificateur transmet
+        // FIDÈLEMENT la demande (« une vidéo de 5s » → targetDurationSec: 5)
+        // mais le pipeline impose 10..3600 s — on BORNE au lieu d'échouer
+        // (la validation écrasait la valeur détectée déjà clampée et faisait
+        // échouer TOUTE demande de courte durée : « Le lancement de la
+        // production vidéo a échoué »).
+        const durationRaw = Number(options.targetDurationSec);
+        if (Number.isFinite(durationRaw) && durationRaw > 0) {
+          options.targetDurationSec = Math.min(3600, Math.max(10, Math.round(durationRaw)));
+        } else {
+          delete options.targetDurationSec;
+        }
         const job = await createVideoProductionJob({
           userId: ctx.userId,
           prompt: promptInput.slice(0, 4000),
-          title: typeof planned.toolInput?.title === "string" && planned.toolInput.title.trim() ? planned.toolInput.title.trim().slice(0, 120) : extractVideoTitle(promptInput),
+          title: titleInput,
           // Task 107-a — conversation d'origine portée par le job (livraison
           // chat à la complétion, même contrat que le tour vidéo).
           conversationId: ctx.conversationId,

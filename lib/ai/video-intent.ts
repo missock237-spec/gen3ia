@@ -14,23 +14,49 @@
 // Task 106-a — TYPES CANONIQUES du pipeline (source unique lib/video/types.ts)
 import { VIDEO_ASPECT_RATIOS, type VideoExportTarget } from "@/lib/video/types";
 
-const VIDEO_NOUN_RE =
-  /\b(vid[ée]os?|videos?|clip|clips|reels?|shorts?|short video|montage|montages|film|trailer|teaser|bande[- ]annonce|bande annonce|pub vid[ée]o|publicit[ée] vid[ée]o|vid[ée]o publicitaire|tutoriel vid[ée]o|animation)\b/i;
+/* ────────────────────────────────────────────────────────────────────────
+ * FRONTIÈRES DE MOT UNICODE (fix captures 13:02 — cause racine).
+ *
+ * JavaScript `\b` et `\w` sont ASCII : « é », « è », « à » ne sont PAS des
+ * caractères de mot → tout verbe français se terminant par un accent
+ * (« créé », « généré », « lancé ») faisait ÉCHOUER le `\b` final et toute
+ * la détection (« Créé une vidéo de 5s d'un bébé qui marche » partait en
+ * mission au lieu de l'intercept vidéo). Toutes les frontières utilisent
+ * désormais des garde-fous \p{L}/\p{N} avec le flag `u`.
+ * ──────────────────────────────────────────────────────────────────────── */
 
-const VIDEO_CREATION_VERB_RE =
-  /\b(cr[ée][eé]?[sr]?|cr[ée]er?|g[ée]n[èe]re[rz]?|g[ée]n[èe]rer?|fais[ez]?|fait|fabriqu\w*|produis\w*|produire|monte[rz]?|monter|montage|r[ée]alis\w*|r[ée]aliser|confectionn\w*|veux|voudrais|aimerais|lance[rz]?|make|create|generate|produce|edit|render|want)\b/i;
+/** Garde-fou gauche : le caractère précédent n'est PAS une lettre/chiffre. */
+const U_START = "(?<![\\p{L}\\p{N}_])";
+/** Garde-fou droit : le caractère suivant n'est PAS une lettre/chiffre. */
+const U_END = "(?![\\p{L}\\p{N}_])";
+
+const VIDEO_NOUN_RE = new RegExp(
+  `${U_START}(?:vid[ée]os?|videos?|clip|clips|reels?|shorts?|short video|montages?|film|trailer|teaser|bande[- ]annonce|bande annonce|pub vid[ée]o|publicit[ée] vid[ée]o|vid[ée]o publicitaire|tutoriel vid[ée]o|animation)${U_END}`,
+  "iu",
+);
+
+const VIDEO_CREATION_VERB_RE = new RegExp(
+  `${U_START}(?:cr[ée]\\p{L}*|g[éèe]n[éèe]r\\p{L}*|fais\\p{L}*|fait\\p{L}*|fabriqu\\p{L}*|produi\\p{L}*|monte[rz]?|mont[ée]\\p{L}*|r[ée]alis\\p{L}*|confectionn\\p{L}*|veux|voudrais|aimerais|lanc[ée]\\p{L}*|lance[rz]?|make|create|generate|produce|edit|render|want)${U_END}`,
+  "iu",
+);
 
 /** Amorce interrogative : une pure question méta ne produit pas de vidéo. */
-const QUESTION_PREFIX_RE =
-  /^(c['']est quoi|qu['']est[- ]ce|pourquoi|comment|qui (est|a)|o[ùu]|quand|quel(?:le)?s?(?:\s+\w+){0,3}\s|est[- ]ce que|what|why|how|who|where|which)\b/i;
+const QUESTION_PREFIX_RE = new RegExp(
+  `^(?:c[''’]est quoi|qu[''’]est[- ]ce|pourquoi|comment|qui (?:est|a)|o[ùu]|quand|quel(?:le)?s?(?:\\s+\\p{L}+){0,4}|est[- ]ce que|what|why|how|who|where|which)${U_END}`,
+  "iu",
+);
 
 /** Demandes de pages/web/app : routage artefact application, PAS vidéo. */
-const WEB_APP_CONTEXT_RE =
-  /\b(page (web|d['']accueil|de vente)|site (web|internet|vitrine)|landing|application (web|mobile)|page de|web app|html|site avec|page avec)\b/i;
+const WEB_APP_CONTEXT_RE = new RegExp(
+  `${U_START}(?:page (?:web|d[''’]accueil|de vente)|site (?:web|internet|vitrine)|landing|application (?:web|mobile)|page de|web app|html|site avec|page avec)${U_END}`,
+  "iu",
+);
 
 /** Question méta posée SUR le sujet vidéo (sans intention de production). */
-const META_QUESTION_RE =
-  /\b(c['']est quoi|qu['']est[- ]ce que|signifie|veut dire|diff[ée]rence|conseils?|astuces?|meilleur (logiciel|outil)|comment (fonctionne|marche))\b/i;
+const META_QUESTION_RE = new RegExp(
+  `${U_START}(?:c[''’]est quoi|qu[''’]est[- ]ce que|signifie|veut dire|diff[ée]rence|conseils?|astuces?|meilleur (?:logiciel|outil)|comment (?:fonctionne|marche))${U_END}`,
+  "iu",
+);
 
 /**
  * La demande exprime-t-elle une production vidéo COMPLÈTE à lancer ?
@@ -41,7 +67,7 @@ export function looksLikeVideoRequest(text: string): boolean {
   if (trimmed.length < 6) return false;
   const lower = trimmed.toLowerCase();
   if (WEB_APP_CONTEXT_RE.test(lower)) return false;
-  if (META_QUESTION_RE.test(lower) && !/\b(g[ée]n[èe]re|cr[ée]e|fais|monte|lance)\s+(moi\s+)?(une?|la|le|des)\b/i.test(lower)) {
+  if (META_QUESTION_RE.test(lower) && !/\b(g[éèe]n[éèe]re|cr[ée]e|fais|monte|lance)\s+(moi\s+)?(une?|la|le|des)\b/i.test(lower)) {
     return false;
   }
   if (QUESTION_PREFIX_RE.test(trimmed)) return false;
@@ -54,8 +80,8 @@ export function looksLikeVideoRequest(text: string): boolean {
  */
 export function extractVideoTitle(text: string): string {
   const cleaned = text
-    .replace(/^(fais[ez]?[- ]?moi|g[ée]n[èe]re[rz]?[- ]?moi|cr[ée][eé]?[sr]?[- ]?moi|peux[- ]tu|pourrais[- ]tu|pourriez[- ]tu|merci de|stp|s['']il (te|vous) pla[iî]t)\s+/i, "")
-    .replace(/^(cr[ée][eé]?[sr]?|g[ée]n[èe]re[rz]?|fais[ez]?|monte[rz]?|lance[rz]?|produis|je veux|je voudrais|j['']aimerais)\s+/i, "")
+    .replace(/^(fais[ez]?[- ]?moi|g[éèe]n[éèe]re[rz]?[- ]?moi|cr[ée][eé]?[sr]?[- ]?moi|peux[- ]tu|pourrais[- ]tu|pourriez[- ]tu|merci de|stp|s['']il (te|vous) pla[iî]t)\s+/i, "")
+    .replace(/^(cr[ée][eé]?[sr]?|g[éèe]n[éèe]re[rz]?|fais[ez]?|monte[rz]?|lance[rz]?|produis|je veux|je voudrais|j['']aimerais)\s+/i, "")
     .replace(/^(moi |nous )\s*/i, "")
     .replace(/^(une? |le |la |des |de la |du )\s*/i, "")
     .replace(/^(vid[ée]o|video|clip|reel|short|montage|film)\s+/i, "")
@@ -213,21 +239,34 @@ export function extractVideoParams(text: string): VideoRequestParams {
  * contenant le mot « voix » reste une PRODUCTION VIDÉO).
  * ──────────────────────────────────────────────────────────────────────── */
 
-/** Marqueurs voix (FR + EN), identiques à VOICE_RE (tool-intent.ts). */
-const VOICE_REQUEST_RE =
-  /\b(voix off|narration (?:audio|vocal\w*|sonore)|synth[èe]se vocale|voix synth[ée]tique|text[- ]to[- ]speech|text to speech|tts|locution|lire (?:à|a) voix haute|version audio|g[ée]n[èe]r\w* (?:une |la |de la )?voix)\b/i;
+/** Marqueurs voix (FR + EN), alignés VOICE_RE (tool-intent.ts) en unicode. */
+const VOICE_REQUEST_RE = new RegExp(
+  `${U_START}(?:voix[- ]off|narration (?:audio|vocal\\p{L}*|sonore)|synth[èe]se vocale|voix synth[ée]tique|text[- ]to[- ]speech|text to speech|tts|locution|lire (?:à|a) voix haute|version audio|g[éèe]n[éèe]r\\p{L}* (?:une |la |de la |de l' |de l’ )?voix)${U_END}`,
+  "iu",
+);
 
-/** Commandes audio explicites sans mot « voix » (audio parlé). */
-const AUDIO_SPEECH_RE =
-  /\b(g[ée]n[èe]re?|cr[ée]e?|fais)\s*(?:-|\s)?(moi\s+)?(un|une)\s+audio\b/i;
+/**
+ * Commandes audio explicites sans mot « voix » (audio parlé) — couvre les
+ * infinitifs/participes accentués (« générer un audio », « généré un audio »,
+ * « créé un audio ») que l'ancien pattern ASCII manquait (capture 13:02 :
+ * « Peut tu me générer un audio de 5s »).
+ */
+const AUDIO_SPEECH_RE = new RegExp(
+  `${U_START}(?:g[éèe]n[éèe]r\\p{L}*|cr[ée]\\p{L}*|fais\\p{L}*|produi\\p{L}*|lanc[ée]\\p{L}*|lance[rz]?|veux|voudrais|aimerais|besoin(?:\\s+d[e''’])?)\\s*(?:-|\\s)?(?:moi\\s+)?(?:un|une|du|des|de la|de l'|de l’|le|la)\\s*audio${U_END}`,
+  "iu",
+);
 
 /** Lecture à voix haute explicite (« lis ce texte à voix haute : X »). */
-const VOICE_READ_ALOUD_RE =
-  /\b(lis|lit|lire|lecture)\b[^.!?\n]{0,60}\bvoix haute\b/i;
+const VOICE_READ_ALOUD_RE = new RegExp(
+  `${U_START}(?:lis|lit|lire|lecture)${U_END}[^.!?\\n]{0,60}${U_START}voix haute${U_END}`,
+  "iu",
+);
 
 /** Impératif de production : une question méta n'est PAS une demande. */
-const VOICE_IMPERATIVE_RE =
-  /\b(g[ée]n[èe]r\w*|cr[ée]\w*|fais\w*|lis|lire|dit[s]?|dis)\b/i;
+const VOICE_IMPERATIVE_RE = new RegExp(
+  `${U_START}(?:g[éèe]n[éèe]r\\p{L}*|cr[ée]\\p{L}*|fais\\p{L}*|lis|lire|dit[s]?|dis)${U_END}`,
+  "iu",
+);
 
 /**
  * La demande exprime-t-elle une synthèse vocale DIRECTE (voix-off) ?
@@ -244,6 +283,105 @@ export function looksLikeVoiceRequest(text: string): boolean {
   if (!isVoiceMarker) return false;
   if (QUESTION_PREFIX_RE.test(trimmed) && !VOICE_IMPERATIVE_RE.test(trimmed)) return false;
   return true;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * SUIVI CONTEXTUEL (fix capture 13:02 — audio) : l'assistant demande le
+ * texte à faire entendre (« Quel texte ou quel contenu souhaitez-vous
+ * entendre dans cet audio ? ») et l'utilisateur répond « Bjr je suis
+ * entrain de venir » : AUCUN marqueur audio dans CE message → l'ancienne
+ * détection mono-message laissait filer la demande et le LLM répondait
+ * « la plateforme ne prend en charge que la génération d'images ». La
+ * résolution relie la réponse à la demande audio précédente.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export interface VoiceHistoryTurn {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
+export interface ContextVoiceResolution extends VoiceRequestText {
+  /** "direct" = texte extrait du message courant ; "context" = réponse à une clarification. */
+  source: "direct" | "context";
+}
+
+/**
+ * Le message exprime-t-il une intention de CRÉATION audio/voix ? (suiti
+ * contextuel : demande précédente de l'utilisateur dans le fil)
+ */
+const AUDIO_CREATION_INTENT_RE = new RegExp(
+  `${U_START}(?:g[éèe]n[éèe]r\\p{L}*|cr[ée]\\p{L}*|fais\\p{L}*|produi\\p{L}*|lanc[ée]\\p{L}*|lance[rz]?|veux|voudrais|aimerais|besoin(?:\\s+d[e''’])?)\\s*(?:-|\\s)?(?:moi\\s+)?(?:un|une|du|des|de la|de l'|de l’|le|la|mon|ma)\\s*(?:audio|son|voix(?:[- ]off)?|narration|locution)${U_END}`,
+  "iu",
+);
+
+/** Réponse qui annule le suivi contextuel (« non », « annule », « stop »…). */
+const VOICE_REFUSAL_RE = new RegExp(
+  `^(?:non|nan|annul\\p{L}*|stop|laisse\\p{L}*|oubli\\p{L}*|finalement|en fait)${U_END}`,
+  "iu",
+);
+
+/** Nom visuel : la réponse contextuelle ne doit jamais capter une demande d'image. */
+const VISUAL_NOUN_RE = new RegExp(
+  `${U_START}(?:images?|photos?|logo|logos?|illustrations?|dessins?|affiches?|posters?|vid[ée]os?|clips?|reels?|shorts?|miniatures?|avatars?|banni[èe]res?)${U_END}`,
+  "iu",
+);
+
+/**
+ * La question de l'assistant demande-t-elle le TEXTE à faire entendre ?
+ * (finissant par « ? » et parlant de texte/contenu/voix/audio/entendre…)
+ */
+export function isVoiceClarifyingQuestion(content: string): boolean {
+  const trimmed = content.trim();
+  if (!trimmed.endsWith("?")) return false;
+  return new RegExp(`(?:texte|contenu|message|paroles?|entendre|écouter|dire|lire|voix|audio|synth[ée]tis\\p{L}*)`, "iu").test(trimmed);
+}
+
+/**
+ * Résout une demande de voix-off à partir du message courant ET du fil :
+ *  - texte identifiable dans le message lui-même → source "direct" ;
+ *  - réponse de l'utilisateur à une question de clarification posée par
+ *    l'assistant après une demande audio → source "context".
+ * Retourne null quand il n'y a rien à synthétiser (demande d'audio sans
+ * texte → l'appelant pose la question de clarification déterministe).
+ */
+export function resolveVoiceRequestFromContext(
+  message: string,
+  priorHistory: VoiceHistoryTurn[] = [],
+): ContextVoiceResolution | null {
+  const trimmed = message.trim();
+  if (!trimmed) return null;
+
+  // 1) Demande directe : le message contient lui-même le texte à synthétiser.
+  if (looksLikeVoiceRequest(trimmed)) {
+    const direct = extractVoiceRequestText(trimmed);
+    return direct ? { ...direct, source: "direct" } : null;
+  }
+
+  // 2) Suivi contextuel : l'assistant vient de demander le texte à entendre.
+  if (VOICE_REFUSAL_RE.test(trimmed)) return null;
+  if (looksLikeVideoRequest(trimmed) || VISUAL_NOUN_RE.test(trimmed)) return null;
+
+  const history = priorHistory ?? [];
+  // La DERNIÈRE demande utilisateur du fil doit être une demande audio, et
+  // tous les messages assistant intervenus depuis doivent être des questions
+  // de clarification (aucun audio déjà livré entre-temps).
+  let userAskedAudio = false;
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const turn = history[index];
+    if (!turn || turn.role === "system") continue;
+    if (turn.role === "assistant") {
+      if (!isVoiceClarifyingQuestion(turn.content)) return null;
+      continue;
+    }
+    // Dernier message utilisateur : porte-t-il une intention audio ?
+    userAskedAudio = AUDIO_CREATION_INTENT_RE.test(turn.content) || looksLikeVoiceRequest(turn.content);
+    break;
+  }
+  if (!userAskedAudio) return null;
+
+  const text2speak = trimmed.slice(0, 2500);
+  if (text2speak.length < 2) return null;
+  return { text2speak, source: "context" };
 }
 
 export interface VoiceRequestText {

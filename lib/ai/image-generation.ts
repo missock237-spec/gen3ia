@@ -75,11 +75,22 @@ export function isImageGenerationEnabled(): boolean {
  * mockup? ») ne déclenchent PAS de génération — une demande polie avec
  * verbe de création (« Peux-tu générer un logo ? ») déclenche.
  */
-const IMAGE_VERBS =
-  /\b(g[éeè]n[éeè]re(?:r|z|s)?|g[ée]n[ée]ration|cr[ée]e(?:r|z|s)?|cr[ée]ation|cr[ée][ée]e?|dessine(?:r|z|s|\-moi)?|fais(?:-|\s)?moi|faisons|faire|fabrique(?:r|z|s)?|produis(?:-|\s)?moi|imagine(?:r|z|s)?|peins(?:-|\s)?(?:moi)?|veux|voudrais|aimerais|souhaite(?:r|z|s)?|besoin|render|generate|generating|create|draw|make|produce|design|illustrate)\b/i;
+/* FRONTIÈRES UNICODE (fix captures 13:02) : `\b`/`\w` ASCII ne connaissent
+ * PAS « é » — « Créé une image », « généré une image » échouaient sur le `\b`
+ * final et la demande partait en mission au lieu de l'intercept image.
+ * Garde-fous \p{L}/\p{N} (flag `u`) + stems consommant des lettres unicode. */
+const IMAGE_U_START = "(?<![\\p{L}\\p{N}_])";
+const IMAGE_U_END = "(?![\\p{L}\\p{N}_])";
 
-const IMAGE_NOUNS =
-  /\b(image|images|photo|photos|photographie|visuel|visuels|logo|logos|illustration|illustrations|dessin|dessins|paysage|paysages|affiche|affiches|poster|posters|banni[èe]re|banni[èe]res|banner|banners|bandeaux?|flyer|flyers|ic[ôo]ne|ic[ôo]nes|icone|icon|icons|avatar|avatars|fond d'[éé]cran|wallpaper|wallpapers|thumbnail|thumbnails|miniature|miniatures|sticker|stickers|picture|pictures|portrait|artwork|tableau|couverture|cover|covers|mockup|mockups|sketch|sketches|rendu|rendus|banni[èe]re publicitaire|image de couverture)\b/i;
+const IMAGE_VERBS = new RegExp(
+  `${IMAGE_U_START}(?:g[éeè]n[éeè]r\\p{L}*|dessin\\p{L}*|cr[ée]\\p{L}*|fais(?:-|\\s)?moi|faisons|faire|fabriqu\\p{L}*|produis(?:-|\\s)?moi|imagin\\p{L}*|peins(?:-|\\s)?(?:moi)?|veux|voudrais|aimerais|souhait\\p{L}*|besoin|render|generate|generating|create|draw|make|produce|design|illustrate)${IMAGE_U_END}`,
+  "iu",
+);
+
+const IMAGE_NOUNS = new RegExp(
+  `${IMAGE_U_START}(?:image|images|photo|photos|photographie|visuel|visuels|logo|logos|illustration|illustrations|dessin|dessins|paysage|paysages|affiche|affiches|poster|posters|banni[èe]re|banni[èe]res|banner|banners|bandeaux?|flyer|flyers|ic[ôo]ne|ic[ôo]nes|icone|icon|icons|avatar|avatars|fond d'[éé]cran|wallpaper|wallpapers|thumbnail|thumbnails|miniature|miniatures|sticker|stickers|picture|pictures|portrait|artwork|tableau|couverture|cover|covers|mockup|mockups|sketch|sketches|rendu|rendus|banni[èe]re publicitaire|image de couverture)${IMAGE_U_END}`,
+  "iu",
+);
 
 /**
  * Vraies questions méta : l'utilisateur demande une EXPLICATION ou une
@@ -105,8 +116,10 @@ const IMAGE_NON_GENERATION_VERBS =
   /\b(analys\w*|expliqu\w*|comprends?|comprendre|interpr[èe]t\w*|d[ée]cris|d[ée]crire|examin\w*|identifi\w*|ouvre[rz]?|ouvrir|t[ée]l[ée]charg\w*|supprim\w*|modifi\w*|renomme[rz]?|partag\w*|envoy\w*|ins[èe]r\w*|ajout\w*|retouch\w*|rogne[rz]?|redimensionn\w*)\b/i;
 
 /** Verbes de GÉNÉRATION explicites (lèvent le garde d'analyse/édition). */
-const IMAGE_GENERATION_VERBS =
-  /\b(g[éeè]n[éeè]re(?:r|z|s)?|dessine(?:r|z|s)?|peins?(?:-\s?moi)?|imagine(?:r|z|s)?|cr[ée]e(?:r|z|s)?|fabrique(?:r|z|s)?|produis(?:-\s?moi)?|draw|generate|create|illustrate|render)\b/i;
+const IMAGE_GENERATION_VERBS = new RegExp(
+  `${IMAGE_U_START}(?:g[éeè]n[éeè]r\\p{L}*|dessin\\p{L}*|peins?(?:-\\s?moi)?|imagin\\p{L}*|cr[ée]\\p{L}*|fabriqu\\p{L}*|produis(?:-\\s?moi)?|draw|generate|create|illustrate|render)${IMAGE_U_END}`,
+  "iu",
+);
 
 export function looksLikeImageRequest(message: string): boolean {
   const text = message.trim();
@@ -126,7 +139,12 @@ export function looksLikeImageRequest(message: string): boolean {
   // ce garde : seul un verbe de génération peut le faire.
   if (IMAGE_NON_GENERATION_VERBS.test(text) && !IMAGE_GENERATION_VERBS.test(text)) return false;
   const nounLead = new RegExp(
-    IMAGE_NOUN_LEAD.source.replace("IMAGE_NOUNS_PLACEHOLDER", IMAGE_NOUNS.source.slice(2, -2)),
+    // Extraction de l'ALTERNATION interne de IMAGE_NOUNS (sans ses garde-fous
+    // unicode ni son groupe) — l'ancien slice(2,-2) supposait \b(...)...\b.
+    IMAGE_NOUN_LEAD.source.replace(
+      "IMAGE_NOUNS_PLACEHOLDER",
+      IMAGE_NOUNS.source.replace(/^.*?\(\?:/, "").replace(/\)$/, ""),
+    ),
     "i",
   );
   // Verbe + nom visuel (ordre quelconque) OU visuel en tête de message.

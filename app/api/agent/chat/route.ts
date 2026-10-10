@@ -36,7 +36,7 @@ import {
   isImageGenerationEnabled,
   looksLikeImageRequest,
 } from "@/lib/ai/image-generation";
-import { extractVideoTitle, extractVoiceRequestText, looksLikeVideoRequest, looksLikeVoiceRequest } from "@/lib/ai/video-intent";
+import { extractVideoTitle, extractVoiceRequestText, looksLikeVideoRequest, looksLikeVoiceRequest, resolveVoiceRequestFromContext, type VoiceHistoryTurn } from "@/lib/ai/video-intent";
 import { speakDirectForUser } from "@/lib/ai/voice-speak-direct";
 import { captureMissionEscrow, reserveMissionEscrow } from "@/lib/billing/mission-escrow";
 import { imagesForModel } from "@/lib/ai/vision-input";
@@ -341,20 +341,53 @@ async function respondWithVoiceOff(params: {
 }
 
 /**
- * Intercept VOIX-OFF (Task 114-a) : une demande explicite de voix-off avec un
- * texte identifiable est servie IMMÉDIATEMENT (synthèse + message assistant),
- * avant tout routage de mission — miroir de l'intercept vidéo. Retourne la
- * réponse à livrer, ou undefined pour laisser le flux normal continuer
- * (demande vidéo, texte non extractible, synthèse/facturation indisponibles).
+ * Intercept VOIX-OFF (Task 114-a + fix capture 13:02) : une demande explicite
+ * de voix-off avec un texte identifiable est servie IMMÉDIATEMENT (synthèse +
+ * message assistant), avant tout routage de mission — miroir de l'intercept
+ * vidéo. SUIVI CONTEXTUEL : la réponse de l'utilisateur à une question de
+ * clarification (« quel texte ? ») est synthétisée telle quelle. Demande
+ * d'audio SANS texte → question de clarification DÉTERMINISTE (zéro LLM,
+ * zéro refus, zéro tuto externe). Retourne spoken/clarify à livrer, ou
+ * undefined pour laisser le flux normal continuer (demande vidéo, texte non
+ * extractible, synthèse/facturation indisponibles).
  */
 async function interceptVoiceOff(params: {
   userId: string;
   conversationId: string;
   message: string;
-}): Promise<{ reply: string; audio: { url?: string; storage: "r2" | "inline"; dataUri?: string } } | undefined> {
+  /** Fil AVANT le message courant (chronologique) pour le suivi contextuel. */
+  history?: VoiceHistoryTurn[];
+}): Promise<{ kind: "spoken"; reply: string; audio: { url?: string; storage: "r2" | "inline"; dataUri?: string } } | { kind: "clarify"; reply: string } | undefined> {
+  // 1) Suivi contextuel : réponse au « quel texte voulez-vous entendre ? ».
+  const contextVoice = resolveVoiceRequestFromContext(params.message, params.history ?? []);
+  if (contextVoice) {
+    try {
+      const spoken = await respondWithVoiceOff({
+        userId: params.userId,
+        conversationId: params.conversationId,
+        text: contextVoice.text2speak,
+      });
+      if (spoken.spoken && spoken.audio) {
+        return { kind: "spoken", reply: spoken.reply ?? "Voici votre audio.", audio: spoken.audio };
+      }
+    } catch (voiceError) {
+      logger.warn({ err: voiceError instanceof Error ? voiceError.message : voiceError }, "agent_chat_voice_context_failed");
+    }
+    // Synthèse impossible : le flux normal prend le relais (réponse LLM).
+    return undefined;
+  }
   if (!looksLikeVoiceRequest(params.message)) return undefined;
   const voiceRequest = extractVoiceRequestText(params.message);
-  if (!voiceRequest) return undefined;
+  if (!voiceRequest) {
+    // 2) Demande d'audio SANS texte identifiable : clarification déterministe
+    // (jamais de refus ni de tuto externe — la plateforme synthétise l'audio).
+    const reply = [
+      "Avec plaisir — je peux synthétiser votre audio dès maintenant (voix naturelle ElevenLabs, archivée dans votre espace).",
+      "Quel texte ou quel contenu souhaitez-vous entendre dans cet audio ? Répondez directement avec le texte : je le synthétise immédiatement.",
+    ].join("\n");
+    await appendMessage({ conversationId: params.conversationId, userId: params.userId, role: "assistant", content: reply });
+    return { kind: "clarify", reply };
+  }
   try {
     const spoken = await respondWithVoiceOff({
       userId: params.userId,
@@ -362,7 +395,7 @@ async function interceptVoiceOff(params: {
       text: voiceRequest.text2speak,
     });
     if (!spoken.spoken || !spoken.audio) return undefined;
-    return { reply: spoken.reply ?? "Voici votre voix-off.", audio: spoken.audio };
+    return { kind: "spoken", reply: spoken.reply ?? "Voici votre voix-off.", audio: spoken.audio };
   } catch (voiceError) {
     logger.warn({ err: voiceError instanceof Error ? voiceError.message : voiceError }, "agent_chat_voice_off_intercept_failed");
     return undefined;
@@ -532,11 +565,28 @@ export async function POST(request: NextRequest) {
         content: body.message,
         ...(attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) ? { attachments: attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) } : {}),
       });
-      // VOIX-OFF DIRECTE (Task 114-a) : une demande explicite de voix-off
-      // avec texte identifiable est synthétisée IMMÉDIATEMENT (ElevenLabs +
-      // archivage permanent), avant tout routage de mission. Le flux normal
+      // VOIX-OFF DIRECTE (Task 114-a + fix capture 13:02) : une demande
+      // explicite de voix-off (ou la réponse au « quel texte ? ») est
+      // synthétisée IMMÉDIATEMENT (ElevenLabs + archivage permanent), avant
+      // tout routage de mission. Demande d'audio SANS texte → clarification
+      // déterministe (jamais de refus ni de tuto externe). Le flux normal
       // continue si la synthèse n'est pas possible (jamais d'échec visible).
-      const voiceOff = await interceptVoiceOff({ userId: user.uid, conversationId, message: body.message });
+      const voiceOff = await interceptVoiceOff({
+        userId: user.uid,
+        conversationId,
+        message: body.message,
+        history: history.map((item) => ({ role: item.role, content: item.content })),
+      });
+      if (voiceOff?.kind === "clarify") {
+        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: voiceOff.reply, mode: "chat" }));
+        return NextResponse.json({
+          mode: "chat",
+          conversationId,
+          agentId: agent.id,
+          classification: { mode: "chat" as const, inScope: true, reason: "Voix-off" },
+          reply: voiceOff.reply,
+        });
+      }
       if (voiceOff) {
         after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: voiceOff.reply, mode: "chat" }));
         return NextResponse.json({
@@ -1052,10 +1102,25 @@ export async function POST(request: NextRequest) {
       ...(attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) ? { attachments: attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) } : {}),
     });
 
-    // VOIX-OFF DIRECTE (Task 114-a) sur le chemin universel aussi, AVANT
-    // l'intercept vidéo (la production vidéo reste prioritaire sur sa propre
-    // demande ; looksLikeVoiceRequest la laisse déjà passer).
-    const voiceOff = await interceptVoiceOff({ userId: user.uid, conversationId, message: body.message });
+    // VOIX-OFF DIRECTE (Task 114-a + fix capture 13:02) sur le chemin
+    // universel aussi, AVANT l'intercept vidéo (la production vidéo reste
+    // prioritaire sur sa propre demande) — suivi contextuel + clarification
+    // déterministe inclus.
+    const voiceOff = await interceptVoiceOff({
+      userId: user.uid,
+      conversationId,
+      message: body.message,
+      history: history.map((item) => ({ role: item.role, content: item.content })),
+    });
+    if (voiceOff?.kind === "clarify") {
+      return NextResponse.json({
+        mode: "chat",
+        status: "completed",
+        conversationId,
+        objective: body.message,
+        reply: voiceOff.reply,
+      });
+    }
     if (voiceOff) {
       return NextResponse.json({
         mode: "chat",

@@ -296,6 +296,78 @@ describe("createVideoProductionJob — portage de conversationId (Task 107-a)", 
 });
 
 // ---------------------------------------------------------------------------
+// 1 bis) createVideoProductionJob — ROBUSTESSE bornes (fix captures 13:02)
+// ---------------------------------------------------------------------------
+// Une demande « 5 secondes » est servie à la durée minimale du pipeline
+// (10 s) au lieu d'échouer en validation ; un brief trop court est enrichi
+// du titre ; un titre trop court est déduit du brief. La plateforme AJUSTE
+// ce qu'elle peut ajuster — elle ne refuse JAMAIS une demande réalisable
+// pour un paramètre hors bornes (exigence : chaque tâche réellement exécutée).
+describe("createVideoProductionJob — bornes pipeline appliquées à l'entrée (fix captures 13:02)", () => {
+  it("BORNE une durée inférieure au minimum (5 s → 10 s) au lieu d'échouer", async () => {
+    // AVANT le fix : VideoProjectCreateSchema.parse lève (min 10) →
+    // « Le lancement de la production vidéo a échoué » (capture 2).
+    const result = await createVideoProductionJob({
+      userId: "user-1",
+      prompt: "Créé une vidéo de 5s d'un bébé qui marche",
+      options: { targetDurationSec: 5 },
+    });
+
+    expect(storedJob(result.jobId).options).toMatchObject({ targetDurationSec: 10 });
+  });
+
+  it("BORNE une durée supérieure au plafond (> 3600 s → 3600 s)", async () => {
+    const result = await createVideoProductionJob({
+      userId: "user-1",
+      prompt: "Une longue vidéo documentaire sur l'histoire du café camerounais",
+      options: { targetDurationSec: 9999 },
+    });
+
+    expect(storedJob(result.jobId).options).toMatchObject({ targetDurationSec: 3600 });
+  });
+
+  it("CONSERVE une durée dans les bornes (180 s)", async () => {
+    const result = await createVideoProductionJob({
+      userId: "user-1",
+      prompt: "Une vidéo de présentation du produit",
+      options: { targetDurationSec: 180 },
+    });
+
+    expect(storedJob(result.jobId).options).toMatchObject({ targetDurationSec: 180 });
+  });
+
+  it("ENRICHIT un brief trop court du titre (DirectorBriefSchema min 10) au lieu de lever", async () => {
+    const result = await createVideoProductionJob({
+      userId: "user-1",
+      prompt: "bébé",
+      title: "Bébé qui marche tranquillement dans le salon",
+    });
+
+    expect(storedJob(result.jobId).prompt.length).toBeGreaterThanOrEqual(10);
+    expect(storedJob(result.jobId).prompt).toContain("bébé");
+  });
+
+  it("DÉDUIT le titre du brief quand le titre fourni fait moins de 3 caractères", async () => {
+    const result = await createVideoProductionJob({
+      userId: "user-1",
+      prompt: "Une vidéo de présentation du nouveau produit",
+      title: "a",
+    });
+
+    expect((storedJob(result.jobId).title as string).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("accepte un prompt exactement à la limite (10 caractères)", async () => {
+    const result = await createVideoProductionJob({
+      userId: "user-1",
+      prompt: "vidéo bébé", // exactement 10 caractères
+    });
+
+    expect(storedJob(result.jobId).prompt).toBe("vidéo bébé");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 2) advanceProductionJob — livraison chat à la transition terminale
 // ---------------------------------------------------------------------------
 
