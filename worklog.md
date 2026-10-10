@@ -3239,3 +3239,17 @@ Work Log:
 
 Stage Summary:
 - Livraison audio complète : synthèse ElevenLabs + archivage permanent R2 + artefact + LIEN D'ÉCOUTE signé (1 h) dans le message.
+
+---
+Task ID: 116-e (livraison chat vidéo bloquée par une panne Firestore — sonde sticky)
+Agent: main (Super Z)
+Task: Le job vidéo reste bloqué « processing/stage=done » : le pipeline complète (rendu terminé) mais l'écriture terminale Firestore échoue (quota/incident — QStash 429 « daily ratelimit 1000 exceeded » en parallèle) → le claim transactionnel échoue à chaque sondage → deliverJobToConversation (qui passe par R2 et FONCTIONNERAIT) n'est jamais appelé → aucun message de livraison dans le fil.
+
+Work Log:
+- Sonde sticky (scripts/sticky_video_probe.mjs) : pipeline complet en ~2 min (plan→script→assets→voice→render→done/progress=1), puis >10 min de sondage : status reste « processing », aucun message de livraison, aucun crash — le GET avance le job mais le claim/write terminal échoue silencieusement (catch absorbant).
+- CAUSE RACINE : la livraison était COUPLEE à l'écriture terminale Firestore (concludeProductionTick) — toute panne d'écriture Firestore bloque à la fois le statut ET la livraison, alors que la livraison chat (appendMessage) passe par le stockage R2, indépendant de Firestore.
+- FIX (app/api/video/projects/[projectId]/production/route.ts) : filet de récupération dans le GET — job « processing/stage=done » + rendu rattaché « completed » → (1) deliverJobToConversation IMMÉDIAT (anti-doublon interne par lecture du fil : jamais de second message) ; (2) écriture terminale best-effort (le tick finalisera le statut stocké à la reprise) ; (3) le client voit « completed »/progress=1.
+- VALIDATION : tsc 0 ; eslint 0 ; vitest delivery/resume 35 verts ; déploiement + sonde sticky de bout en bout (job vu completed + message « Votre vidéo est prête » dans le fil).
+
+Stage Summary:
+- La livraison du résultat ne dépend plus de la santé d'écriture de la file : la vidéo terminée est TOUJOURS annoncée dans la conversation (R2), même Firestore indisponible ; le statut stocké rattrape à la reprise.

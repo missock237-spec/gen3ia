@@ -3,12 +3,16 @@ import { protectRoute } from "@/lib/security/route-guard";
 import { errorStatus } from "@/lib/security/http-errors";
 import { getOwnedProjectOrThrow } from "@/lib/video/project-service";
 import {
+  deliverJobToConversation,
   listProductionJobs,
   sweepStaleProductionJobs,
   maybeAdvancePendingProductionJob,
   PRODUCTION_POLL_ADVANCE_BUDGET_MS,
+  PRODUCTION_JOBS_COLLECTION,
   type VideoProductionJob,
 } from "@/lib/video/production-queue";
+import { writeCheckpointSet } from "@/lib/db/firestore-resilient";
+import { getJob as getRenderJob } from "@/lib/video/render-queue";
 import { qstashConfig } from "@/lib/queue/qstash";
 import { cacheGet, cacheSet } from "@/lib/cache/redis";
 
@@ -76,7 +80,38 @@ export async function GET(request: NextRequest, { params }: Params) {
     await sweepProductionJobsIfDue(projectId);
 
     const jobs = await listProductionJobs(guard.context.userId, projectId);
-    const job: VideoProductionJob | undefined = jobs[0];
+    let job: VideoProductionJob | undefined = jobs[0];
+
+    // ROBUSTESSE LIVRAISON (sonde sticky — fix captures 13:02, exigence
+    // « chaque exécution réellement fournie à l'utilisateur ») : un job
+    // « processing / stage=done » dont le rendu rattaché est TERMINÉ est une
+    // vidéo FINIE dont l'écriture terminale (Firestore) est momentanément
+    // indisponible (quota/incident) — le job ne peut plus être « claimé »
+    // (transaction Firestore) et la livraison chat ne partait JAMAIS. La
+    // livraison (appendMessage = stockage R2, indépendant de Firestore) part
+    // IMMÉDIATEMENT, le client voit « completed », et l'écriture terminale
+    // reste best-effort (le tick finalisera le statut stocké à la reprise ;
+    // l'anti-doublon interne de la livraison empêche tout second message).
+    if (job && job.status === "processing" && job.stage === "done" && job.renderJobId) {
+      try {
+        const renderJob = await getRenderJob(job.renderJobId);
+        if (renderJob?.status === "completed") {
+          const effective: VideoProductionJob = { ...job, status: "completed", progress: 1 };
+          await deliverJobToConversation(effective);
+          await writeCheckpointSet(
+            PRODUCTION_JOBS_COLLECTION,
+            job.id,
+            { status: "completed", progress: 1, updatedAt: new Date().toISOString() },
+            job.userId,
+          ).catch(() => undefined);
+          job = effective;
+        }
+      } catch {
+        // Lecture rendu indisponible : statut stocké conservé (comportement
+        // antérieur) — la récupération retentera au prochain sondage.
+      }
+    }
+
     let pendingTicked = false;
     if (job && (job.status === "queued" || job.status === "processing")) {
       // UN tick borné par poll (~55 s max, checkpoint entre scènes).
