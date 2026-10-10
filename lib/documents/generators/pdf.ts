@@ -1,6 +1,34 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import type { DocumentPlan } from "../types";
 
+/**
+ * Normalisation WinAnsi (Task 114) : les polices standard PDF (Helvetica)
+ * encodent en CP1252 — un caractère hors jeu (trait d'union insécable
+ * U+2011, emoji, guillemet exotique…) fait échouer TOUTE la génération
+ * (« WinAnsi cannot encode »). Chaque caractère non encodable est remplacé
+ * par son équivalent lisible, au pire « ? » : le document part TOUJOURS.
+ */
+const CP1252_RE = /[\x00-\x7F\u20AC\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u017D\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u017E\u0178\u00A0-\u00FF\n\t\r]/;
+const PDF_CHAR_FALLBACK: Record<string, string> = {
+  "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2212": "-",
+  "\u2015": "\u2014", "\u2032": "'", "\u2033": '"',
+  "\u00AB": '"', "\u00BB": '"', "\u2E3A": "--", "\u2E3B": "---",
+  "\u2043": "\u2022", "\u00A0": " ", "\u202F": " ", "\u2009": " ", "\u200B": "",
+};
+
+function textePdfSafe(input: unknown): string {
+  const source = typeof input === "string" ? input : String(input ?? "");
+  let out = "";
+  for (const ch of source) {
+    if (CP1252_RE.test(ch)) {
+      out += ch;
+      continue;
+    }
+    out += PDF_CHAR_FALLBACK[ch] ?? "?";
+  }
+  return out;
+}
+
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 const MARGIN = 50;
@@ -89,7 +117,7 @@ export async function generatePdf(plan: DocumentPlan): Promise<Buffer> {
       for (const line of wrapped) {
         ensureSpace(size + spacing);
 
-        page.drawText(line, {
+        page.drawText(textePdfSafe(line), {
           x: MARGIN + indent,
           y,
           size,
@@ -109,7 +137,7 @@ export async function generatePdf(plan: DocumentPlan): Promise<Buffer> {
 
     ensureSpace(size + 20);
 
-    page.drawText(text, {
+    page.drawText(textePdfSafe(text), {
       x: MARGIN,
       y,
       size,
@@ -120,7 +148,7 @@ export async function generatePdf(plan: DocumentPlan): Promise<Buffer> {
     y -= size + 12;
   };
 
-  page.drawText(plan.title, {
+  page.drawText(textePdfSafe(plan.title), {
     x: MARGIN,
     y,
     size: 22,
@@ -208,7 +236,7 @@ export async function generatePdf(plan: DocumentPlan): Promise<Buffer> {
               borderWidth: 0.5,
             });
 
-            page.drawText(String(value ?? ""), {
+            page.drawText(textePdfSafe(String(value ?? "")), {
               x: MARGIN + index * columnWidth + 5,
               y: y - 13,
               size: 8,
