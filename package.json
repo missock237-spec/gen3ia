@@ -71,7 +71,7 @@
     "@firebase/rules-unit-testing": "^5.0.2",
     "@next/bundle-analyzer": "15.5.26",
     "@types/archiver": "^6.0.4",
-    "@types/node": "^24.13.6",
+    "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/web-push": "^3.6.4",
