@@ -520,6 +520,20 @@ export class AgentRuntime {
     const approvalId = typeof input.approvalId === "string" ? input.approvalId : undefined;
     delete input.approvalId;
     let toolName = step.toolName;
+    // COERCITION D'ENTRÉE (Task 114) : le planificateur met parfois la
+    // requête de recherche dans la DESCRIPTION sans remplir input.query —
+    // l'outil exigerait une chaîne et ferait échouer la mission
+    // (« expected string, received undefined »). La description EST la
+    // requête intentée : on l'utilise comme repli naturel.
+    if ((step.type === "research" || toolName === "web.search") && typeof input.query !== "string") {
+      const repli = typeof input.q === "string" ? input.q
+        : typeof input.search === "string" ? input.search
+        : typeof input.searchQuery === "string" ? input.searchQuery
+        : step.description;
+      if (typeof repli === "string" && repli.trim()) {
+        input.query = repli.trim().slice(0, 500);
+      }
+    }
     if (toolName.startsWith("composio:")) {
       const parts = toolName.split(":");
       const toolkit = parts[1];
