@@ -1,6 +1,59 @@
 import type { NextConfig } from "next";
 import bundleAnalyzer from "@next/bundle-analyzer";
 import { withSentryConfig } from "@sentry/nextjs";
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  // Optimisations production
+  compress: true,
+  poweredByHeader: false,
+  productionBrowserSourceMaps: false,
+  
+  // Optimisation des images
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    remotePatterns: [
+      { protocol: 'https', hostname: '**.r2.dev' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+    ],
+    minimumCacheTTL: 60 * 60 * 24 * 30, // 30 jours
+  },
+  
+  // Headers de cache
+  async headers() {
+    return [
+      {
+        source: '/_next/static/(.*)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        source: '/api/(.*)',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, must-revalidate' },
+        ],
+      },
+    ];
+  },
+  
+  // Bundle splitting intelligent
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+  },
+  
+  // Compiler optimizations
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' 
+      ? { exclude: ['error', 'warn'] } 
+      : false,
+  },
+  
+  // PWA pour offline support
+  ...(process.env.ENABLE_PWA === 'true' ? withPWA({}) : {}),
+};
+
+export default nextConfig;
 
 // Analyse du poids des bundles : ANALYZE=true npm run analyze
 const withBundleAnalyzer =
