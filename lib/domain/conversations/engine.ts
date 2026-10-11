@@ -44,6 +44,8 @@ import {
 import { enhancePromptForExecution, languageDirective } from "@/lib/ai/prompt-enhancer";
 import { imagesForModel } from "@/lib/ai/vision-input";
 import { extractVideoParams, extractVideoTitle, looksLikeVideoRequest, looksLikeVoiceRequest, resolveVoiceRequestFromContext, extractVoiceRequestText, type ContextVoiceResolution } from "@/lib/ai/video-intent";
+import { isJulesConfigured } from "@/lib/integrations/jules/client";
+import { resolveCodeRequestFromContext, type ContextCodeResolution } from "@/lib/ai/code-intent";
 import { speakDirectForUser } from "@/lib/ai/voice-speak-direct";
 import { createR2DownloadUrl } from "@/lib/storage/r2";
 import { sanitizeProductionOptions, VIDEO_ASPECT_RATIOS } from "@/lib/tools/media/create-video";
@@ -975,6 +977,54 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     };
   }
 
+  // 2 quinter) DEMANDE DE CODE (Task 121) : routage automatique vers l'agent
+  // de code Jules de Google (jules.google) — détection déterministe (zéro
+  // LLM, FR + EN) APRÈS les intercepts vidéo/audio (priorité média) et
+  // AVANT l'artefact application : une demande portant un dépôt GitHub
+  // reste une tâche de code réel, même si elle mentionne une « page »/« app »
+  // (elle vit DANS le dépôt). Trois régimes, tous sans refus de cadre :
+  //  a) clé JULES_API_KEY absente → réponse honnête (intégration en
+  //     préparation, relance via les outils internes au message suivant —
+  //     le garde isJulesPendingNotice empêche la répétition en boucle) ;
+  //  b) dépôt GitHub inconnu → question de clarification DÉTERMINISTE
+  //     (zéro LLM), la réponse owner/repo est reliée à la demande d'origine
+  //     par le suivi contextuel (resolveCodeRequestFromContext) ;
+  //  c) dépôt connu → création de session Jules (API v1alpha) + ticket de
+  //     suivi dans la file de ticks R2 : livraison idempotente du résultat
+  //     dans CE fil dès l'état terminal (miroir de la livraison vidéo).
+  const codeRequest = resolveCodeRequestFromContext(input.message, priorHistory);
+  if (codeRequest) {
+    if (!isJulesConfigured()) {
+      const result = await runJulesPendingTurn(baseCtx, codeRequest);
+      await onEvent({
+        type: "done",
+        assistantMessage: result.assistantMessage,
+        artifacts: result.artifacts,
+        approvals: result.approvals,
+      });
+      return result;
+    }
+    if (!codeRequest.repo) {
+      const result = await runJulesRepoClarificationTurn(baseCtx);
+      await onEvent({
+        type: "done",
+        assistantMessage: result.assistantMessage,
+        artifacts: result.artifacts,
+        approvals: result.approvals,
+      });
+      return result;
+    }
+    await onEvent({ type: "status", phase: "execution", label: "Création de la tâche Jules…" });
+    const result = await runJulesTurn(baseCtx, codeRequest);
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+
   // 2 bis) ARTEFACTS — création d'une page web / petite application :
   // le moteur produit un artefact HTML complet + un LIEN WEB (/preview/<id>)
   // qui rend le résultat directement dans le navigateur du client.
@@ -1861,6 +1911,209 @@ async function runVoiceTurn(ctx: TurnBase, resolution: ContextVoiceResolution): 
     approvals: [],
     intent: { mode: "chat", understanding: "Voix-off synthétisée et livrée (ElevenLabs)." },
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Tour « Jules en préparation » — clé absente (réponse honnête)        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * DEMANDE DE CODE SANS CLÉ JULES (Task 121) : réponse honnête 100 %
+ * déterministe (zéro LLM) — la plateforme prépare l'intégration de l'agent
+ * de code Jules (jules.google), la clé JULES_API_KEY reste à configurer
+ * côté hébergement. JAMAIS de refus de cadre : le message invite
+ * explicitement à renvoyer la demande pour qu'elle soit traitée par les
+ * outils internes de l'agent (le garde isJulesPendingNotice de
+ * code-intent.ts fait retomber le message suivant dans le flux normal —
+ * l'avis n'est jamais répété en boucle).
+ */
+async function runJulesPendingTurn(ctx: TurnBase, codeRequest: ContextCodeResolution): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  const assistantMessage = await appendMessage({
+    conversationId: ctx.conversationId,
+    userId: ctx.userId,
+    role: "assistant",
+    content: [
+      "Je comprends votre demande de développement de code.",
+      "",
+      "L'intégration de l'agent de code Jules (jules.google) est en préparation sur la plateforme : la clé d'API (JULES_API_KEY) reste à configurer côté hébergement. Dès qu'elle sera active, ce type de demande lancera automatiquement une session Jules sur votre dépôt GitHub (correctifs, pull requests).",
+      "",
+      "En attendant, je traite votre demande directement ici avec mes outils internes : renvoyez-la telle quelle (ou précisez le résultat attendu) et je m'en occupe immédiatement.",
+      "",
+      `Votre demande, conservée telle quelle : « ${codeRequest.promptExtraction.slice(0, 500)} »`,
+    ].join("\n"),
+    generationStatus: "complete",
+  });
+  await onEvent({ type: "message_complete", message: assistantMessage });
+  return {
+    conversationId: ctx.conversationId,
+    userMessage: ctx.userMessage,
+    assistantMessage,
+    artifacts: [],
+    approvals: [],
+    intent: { mode: "chat", understanding: "Demande de code — intégration Jules en préparation (clé absente), traitement via les outils internes proposé." },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Tour « clarification dépôt » — question déterministe (zéro LLM)     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * DEMANDE DE CODE SANS DÉPÔT CONNU : question de clarification
+ * DÉTERMINISTE (aucun LLM, aucune invention). La réponse de l'utilisateur
+ * (owner/repo ou URL GitHub) est reliée à la demande d'origine par le suivi
+ * contextuel de code-intent.ts (resolveCodeRequestFromContext, source
+ * "context") — le tour suivant lance la session Jules sans rien redemander.
+ * Les marqueurs « dépôt GitHub » et « owner/repo » sont le contrat de
+ * détection de isCodeRepoClarifyingQuestion : ne pas les reformuler.
+ */
+async function runJulesRepoClarificationTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  const assistantMessage = await appendMessage({
+    conversationId: ctx.conversationId,
+    userId: ctx.userId,
+    role: "assistant",
+    content: [
+      "Avec plaisir — je confie cette tâche à Jules, l'agent de code de Google : il clone votre dépôt GitHub, travaille sur la demande, puis propose ses changements (branche de correctif, pull request), et je vous livre le résultat ici.",
+      "",
+      "Sur quel dépôt GitHub dois-je travailler ? Répondez au format owner/repo (ex. : mon-compte/mon-projet), ou collez simplement l'URL GitHub du dépôt — je lance la session immédiatement.",
+    ].join("\n"),
+    generationStatus: "complete",
+  });
+  await onEvent({ type: "message_complete", message: assistantMessage });
+  return {
+    conversationId: ctx.conversationId,
+    userMessage: ctx.userMessage,
+    assistantMessage,
+    artifacts: [],
+    approvals: [],
+    intent: { mode: "chat", understanding: "Demande de code — dépôt GitHub demandé (clarification déterministe)." },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Tour « Jules » — création de session + surveillance asynchrone       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * DEMANDE DE CODE AVEC DÉPÔT CONNU (Task 121) : création RÉELLE d'une
+ * session Jules (POST /sessions, API v1alpha), persistance du suivi
+ * (collection julesSessions — la conversation d'origine est PORTÉE PAR LE
+ * DOCUMENT pour que la complétion « monte » le résultat DANS ce fil, même
+ * page fermée) et programmation du ticket de suivi dans la file de ticks
+ * R2 (boucle auto-perpétuée par pollJulesSessions ; replis : cron quotidien,
+ * polling client). La livraison terminale est idempotente (miroir de la
+ * livraison vidéo deliverJobToConversation — Task 113).
+ */
+async function runJulesTurn(ctx: TurnBase, codeRequest: ContextCodeResolution): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  // Garde typée : l'appelant a déjà vérifié le dépôt (branche c du routage).
+  if (!codeRequest.repo) {
+    return runJulesRepoClarificationTurn(ctx);
+  }
+  try {
+    // Imports DYNAMIQUES (miroir runVideoTurn) : la machinerie Jules (client
+    // fetch + file de suivi) n'alourdit pas le démarrage du moteur.
+    const { julesCreateSession } = await import("@/lib/integrations/jules/client");
+    const { createJulesSessionRecord, scheduleJulesFollowup } = await import("@/lib/integrations/jules/followup");
+
+    const repo = `${codeRequest.repo.owner}/${codeRequest.repo.repo}`;
+    const created = await julesCreateSession({
+      githubRepo: repo,
+      prompt: codeRequest.promptExtraction,
+    });
+    if (!created.session) {
+      throw new Error("Jules n'a pas renvoyé d'identifiant de session.");
+    }
+
+    const record = await createJulesSessionRecord({
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
+      session: created.session,
+      repo,
+      prompt: codeRequest.promptExtraction,
+      title: codeRequest.promptExtraction.slice(0, 80) || "Tâche Jules",
+    });
+
+    // Ticket de suivi : la file de ticks R2 délivre le premier passage au
+    // receiver /api/cron/jules-followup (échec non bloquant — les replis
+    // cron/polling reprennent la boucle).
+    const scheduled = await scheduleJulesFollowup();
+
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content: [
+        `Votre tâche Jules est lancée sur le dépôt ${repo}.`,
+        "",
+        `Jules (jules.google) a créé la session \`${created.session}\` : il clone le dépôt, travaille sur votre demande, puis propose ses changements (branche de correctif, pull request).`,
+        "Je surveille l'avancement automatiquement — dès que la session est terminée, je vous livre ici son état et les liens de ses sorties.",
+        scheduled.ok
+          ? ""
+          : "(La surveillance planifiée est momentanément indisponible : le contrôle régulier de la plateforme reprend le relais.)",
+        "",
+        `Votre demande, transmise telle quelle à Jules : « ${codeRequest.promptExtraction.slice(0, 500)} »`,
+      ].filter(Boolean).join("\n"),
+      generationStatus: "complete",
+    });
+
+    // Carte de suivi dans le fil (miroir vidéo) : la tâche et sa session
+    // restent visibles pendant tout le travail asynchrone.
+    const artifact = await createArtifact({
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
+      type: "code",
+      title: record.title,
+      language: "markdown",
+      content: [
+        `# Tâche Jules — ${repo}`,
+        "",
+        `Session Jules : ${created.session}`,
+        "",
+        codeRequest.promptExtraction,
+      ].join("\n"),
+      note: "Session Jules en cours — surveillance automatique",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    await onEvent({ type: "artifact_created", artifact });
+
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [artifact],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Demande de code — session Jules créée (jules.google), surveillance asynchrone lancée." },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "La création de la session Jules a échoué.";
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content: [
+        "Je n'ai pas réussi à créer la session Jules pour le moment.",
+        "",
+        `Cause remontée : ${message.slice(0, 300)}`,
+        "",
+        "Votre demande est conservée — réessayez dans un instant (renvoyez le message ou redonnez le dépôt), je relancerai la session immédiatement.",
+      ].join("\n"),
+      generationStatus: "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Demande de code — échec de la création de session Jules (relance proposée)." },
+    };
+  }
 }
 
 /* ------------------------------------------------------------------ */

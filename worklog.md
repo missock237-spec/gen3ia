@@ -3334,3 +3334,22 @@ Stage Summary:
 - Studio vidéo niveau « CapCut » : la vidéo suit la voix (synchro audio-réactive), karaoké ASS mot à mot, 6 nouvelles transitions/effets, et la QC bloque désormais tout écart au CONTRAT UTILISATEUR (durée ±10 %, ratio, captions, narration).
 - Pipeline ~2-3× plus rapide : assets générés en parallèle (pool borné), narration chevauchée sur les visuels, segments rendus en parallèle en veryfast, assemblage sans ré-encodage quand il n'y a que des coupes franches.
 - QA finale verte : tsc 0 erreur, eslint 0 erreur/0 warning, 264/264 tests verts. Pas de push (CI/déploiement au main agent).
+
+---
+Task ID: 121 (agent IA — détection auto des demandes de code → routage Jules)
+Agent: sous-agent Jules
+Task: Toute demande de code dans le chat IA est détectée automatiquement et routée vers une session Jules (jules.google, API v1alpha) : interception conversation, clarification repo déterministe, session asynchrone, suivi par ticks avec livraison idempotente.
+
+Work Log:
+- DÉTECTION : lib/ai/code-intent.ts — heuristique FR/EN déterministe (aucun LLM) sur la demande utilisateur : intention « code » (correctif, fonctionnalité, refacto, tests, commit…) + extraction repo GitHub (mention, contexte projet, question de clarification déterministe si ambigu — « owner/repo » attendu).
+- CLIENT API : lib/integrations/jules/client.ts — POST /sessions et GET /sessions/{name} (base https://jules.googleapis.com/v1alpha, X-Goog-Api-Key), sessions/sorties typées, erreurs honnêtes ; julesCreateSession / julesGetSession.
+- MOTEUR (lib/domain/conversations/engine.ts) : tour dédié AVANT le LLM chat — clé absente → réponse honnête « intégration en préparation » (garde isJulesPendingNotice anti-répétition, traitement via outils internes proposé au message suivant) ; clé présente + repo confirmé → session Jules lancée, message d'attente avec identifiant, suivi asynchrone. lib/integrations/jules/tools.ts allégé en conséquence (plus de double routage).
+- SUIVI ASYNCHRONE : lib/integrations/jules/followup.ts — persistance Firestore `julesSessions` (couche résiliente), tick auto-programmé dans la file R2 existante (aucune modification de tick-queue.ts), sondage GET /sessions/{name}, mapJulesState (tolérant aux variantes), livraison TERMINALE idempotente « livrer d'abord, marquer ensuite » (anti-doublon par phrase-marker + ligne session, miroir Task 113), borne anti-boucle 80 sondages → avis honnête « stalled ». Receiver/route : app/api/cron/jules-followup (GET bearer CRON_SECRET + POST signé file de ticks, 2xx/5xx contrat receivers).
+- .env.example : documentation JULES_API_KEY / JULES_API_BASE_URL + comportement sans clé.
+- TESTS : 4 nouveaux fichiers — code-intent.test.ts (36), client.test.ts (9), engine-jules-code.test.ts (7), route.test.ts (12).
+- VALIDATION (finalisation) : tsc --noEmit = 0 erreur ; eslint (8 cibles) --max-warnings 0 = 0 ; vitest nouveaux fichiers = 52/52 verts ; vitest lib/domain = 12 fichiers / 141 verts / 0 échec. Aucune pièce manquante (route complète, toutes fonctions référencées définies).
+
+Stage Summary:
+- Le chat IA route automatiquement les demandes de code vers Jules (jules.google) : clarification repo si besoin, session API v1alpha, et livraison du résultat (patch/PR) dans le fil d'origine de façon idempotente via la file de ticks R2 — sans nouvelle dépendance ni modification du module de file.
+- Sans JULES_API_KEY : réponse honnête « intégration en préparation » (anti-spam), puis traitement via les outils internes au message suivant — jamais de refus de cadre.
+- QA finale verte : tsc 0, eslint 0/0, 52/52 nouveaux tests + 141/141 domaine. Pas de push (CI/déploiement au main agent).

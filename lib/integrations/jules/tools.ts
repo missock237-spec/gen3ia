@@ -1,34 +1,15 @@
 import { z } from "zod";
 import type { ToolDefinition } from "@/lib/tools/types";
-
-const JULES_API = process.env.JULES_API_BASE_URL ?? "https://jules.googleapis.com/v1alpha";
-
-function apiKey(): string {
-  const value = process.env.JULES_API_KEY;
-  if (!value) throw new Error("JULES_API_KEY is not configured.");
-  return value;
-}
-
-async function julesFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${JULES_API}${path}`, {
-    ...init,
-    headers: {
-      "X-Goog-Api-Key": apiKey(),
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Jules API ${response.status}: ${body.slice(0, 400)}`);
-  }
-  return response.json() as Promise<T>;
-}
+import { julesCreateSession, julesGetSession } from "@/lib/integrations/jules/client";
 
 /**
  * Jules (Google) is an asynchronous coding agent: a session clones the
  * repository, works on the prompt, and produces outputs/PRs. Tasks are
  * fire-and-track, so the tool returns the session name for follow-up reads.
+ *
+ * Task 121 — le transport HTTP (X-Goog-Api-Key, base v1alpha) vit désormais
+ * dans le client service réutilisable `lib/integrations/jules/client.ts` :
+ * les tools délèuent et gardent un comportement strictement identique.
  */
 const JulesCreateTaskInput = z.object({
   githubRepo: z.string().min(3).max(200).describe("Repository in 'owner/repo' format"),
@@ -44,18 +25,8 @@ export const julesCreateTaskTool: ToolDefinition<z.infer<typeof JulesCreateTaskI
   risk: "high",
   inputSchema: JulesCreateTaskInput,
   async execute(input) {
-    const [owner, ...rest] = input.githubRepo.split("/");
-    const repo = rest.join("/");
-    if (!owner || !repo) throw new Error("githubRepo must use the 'owner/repo' format.");
-    const data = await julesFetch<{ name?: string; id?: string; state?: string }>("/sessions", {
-      method: "POST",
-      body: JSON.stringify({
-        sourceContext: { source: `repos/${owner}/${repo}`, githubRepo: { owner, repo } },
-        prompt: input.prompt,
-        ...(input.startingBranch ? { startingBranch: input.startingBranch } : {}),
-      }),
-    });
-    return { session: data.name ?? data.id, state: data.state };
+    const created = await julesCreateSession(input);
+    return { session: created.session, state: created.state };
   },
 };
 
@@ -71,10 +42,11 @@ export const julesGetTaskTool: ToolDefinition<z.infer<typeof JulesGetTaskInput>,
   risk: "low",
   inputSchema: JulesGetTaskInput,
   async execute(input) {
-    const name = input.session.replace(/^\/+/, "").replace(/^sessions\/?/, "");
-    const data = await julesFetch<{ state?: string; outputs?: Array<{ url?: string; type?: string }>; errorMessage?: string }>(
-      `/sessions/${encodeURIComponent(name)}`,
-    );
-    return { state: data.state, outputs: data.outputs ?? [], errorMessage: data.errorMessage ?? undefined };
+    const snapshot = await julesGetSession(input.session);
+    return {
+      state: snapshot.state,
+      outputs: snapshot.outputs ?? [],
+      errorMessage: snapshot.errorMessage ?? undefined,
+    };
   },
 };
