@@ -74,6 +74,15 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "cloudflare.zones.list", description: "List Cloudflare zones accessible to the integration.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "cloudflare.dns.list", description: "List DNS records of a Cloudflare zone.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "cloudflare.dns.create", description: "Create a DNS record in an authorized Cloudflare zone.", risk: "external", permission: "tool.external", sideEffect: true },
+  // Task 133 — connecteurs entreprise : Zendesk (tickets de support) et
+  // ServiceNow (incidents ITSM) via le hub de connexions Composio.
+  { name: "zendesk_ticket_create", description: "Créer un ticket Zendesk (sujet, description, priorité, demandeur) via la connexion de l'utilisateur.", risk: "external", permission: "tool.external", sideEffect: true },
+  { name: "zendesk_ticket_update", description: "Mettre à jour un ticket Zendesk (statut, priorité, assignation, commentaire public ou interne).", risk: "external", permission: "tool.external", sideEffect: true },
+  { name: "zendesk_ticket_list", description: "Lister les tickets ouverts d'un demandeur ou d'un assigné Zendesk.", risk: "read", permission: "network.read", sideEffect: false },
+  { name: "zendesk_ticket_search", description: "Rechercher des tickets Zendesk en plein texte.", risk: "read", permission: "network.read", sideEffect: false },
+  { name: "servicenow_incident_create", description: "Créer un incident ServiceNow (brève, urgence, impact, description).", risk: "external", permission: "tool.external", sideEffect: true },
+  { name: "servicenow_incident_update", description: "Mettre à jour un incident ServiceNow (état, notes de travail, résolution).", risk: "external", permission: "tool.external", sideEffect: true },
+  { name: "servicenow_incident_query", description: "Interroger les incidents ServiceNow filtrés par état ou urgence.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "custom_api.call", description: "Appelle RÉELLEMENT (GET) une API personnelle fournie par l'utilisateur et retourne la réponse réelle.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "custom_api.write", description: "Modifie RÉELLEMENT des données via une API personnelle de l'utilisateur (POST/PUT/PATCH/DELETE).", risk: "external", permission: "tool.external", sideEffect: true },
   { name: "web.api", description: "Appelle RÉELLEMENT (GET) une API publique désignée par URL et retourne la réponse réelle.", risk: "read", permission: "network.read", sideEffect: false },

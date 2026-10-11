@@ -50,6 +50,11 @@ export const CONNECTIONS_CATALOG: CatalogEntry[] = [
   { toolkit: "stripe", label: "Stripe", description: "Payments and billing automation.", category: "ecommerce", auth: "api_key" },
   { toolkit: "googlesheets", label: "Google Sheets", description: "Spreadsheets and data capture.", category: "data", auth: "oauth" },
   { toolkit: "airtable", label: "Airtable", description: "Databases, records and automations.", category: "data", auth: "oauth" },
+  // Task 133 — connecteurs entreprise : Zendesk (support client) et
+  // ServiceNow (ITSM). Catégories alignées sur la taxonomie Composio existante
+  // (« customer-support »/« support » → crm ; « it-operations » → developer).
+  { toolkit: "zendesk", label: "Zendesk", description: "Tickets, support client et base de connaissances.", category: "crm", auth: "oauth" },
+  { toolkit: "servicenow", label: "ServiceNow", description: "Incidents, requêtes et workflows ITSM.", category: "developer", auth: "oauth" },
 ];
 
 export const CONNECTION_CATEGORIES: ConnectionCategory[] = [

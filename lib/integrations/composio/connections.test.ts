@@ -39,6 +39,42 @@ describe("Connections Hub catalog", () => {
   it("normalise la casse", () => {
     expect(assertSupportedToolkit("GITHUB")).toBe("github");
   });
+
+  it("expose les connecteurs entreprise Zendesk et ServiceNow (Task 133)", () => {
+    const zendesk = getCatalogEntry("zendesk");
+    expect(zendesk, "toolkit zendesk manquant").toBeDefined();
+    expect(zendesk).toMatchObject({
+      toolkit: "zendesk",
+      label: "Zendesk",
+      description: "Tickets, support client et base de connaissances.",
+      category: "crm",
+      auth: "oauth",
+    });
+
+    const servicenow = getCatalogEntry("servicenow");
+    expect(servicenow, "toolkit servicenow manquant").toBeDefined();
+    expect(servicenow).toMatchObject({
+      toolkit: "servicenow",
+      label: "ServiceNow",
+      description: "Incidents, requêtes et workflows ITSM.",
+      category: "developer",
+      auth: "oauth",
+    });
+  });
+
+  it("garantit sur TOUT le catalogue des catégories de l'union, des auth valides et zéro doublon", () => {
+    const categoriesValides = new Set<string>(CONNECTION_CATEGORIES);
+    const authsValides = new Set(["oauth", "api_key", "no_auth"]);
+    const vus = new Set<string>();
+    for (const entry of CONNECTIONS_CATALOG) {
+      expect(categoriesValides.has(entry.category), `catégorie invalide pour ${entry.toolkit}`).toBe(true);
+      expect(authsValides.has(entry.auth), `auth invalide pour ${entry.toolkit}`).toBe(true);
+      expect(vus.has(entry.toolkit), `doublon de toolkit ${entry.toolkit}`).toBe(false);
+      vus.add(entry.toolkit);
+    }
+    expect(vus.has("zendesk")).toBe(true);
+    expect(vus.has("servicenow")).toBe(true);
+  });
 });
 
 describe("mapRawToolkitItem (client HTTP brut Composio)", () => {
