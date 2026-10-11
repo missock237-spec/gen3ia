@@ -20,11 +20,14 @@ export async function GET(request: NextRequest) {
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.floor(limitRaw), 1), 100) : 50;
     const projectId = params.get("projectId") ?? undefined;
     const query = params.get("q") ?? undefined;
-    if (projectId) {
-      const project = await getProject(user.uid, projectId);
-      if (!project) return NextResponse.json({ error: "Projet introuvable." }, { status: 404 });
-    }
-    const conversations = await listConversations(user.uid, limit, { projectId, query });
+    // Task 124 — chemin critique lecture : la vérification du projet et le
+    // listage sont indépendants → agrégés (le 404 projet reste décidé APRÈS
+    // par la garde, la réponse n'est construite qu'en cas de succès).
+    const [project, conversations] = await Promise.all([
+      projectId ? getProject(user.uid, projectId) : Promise.resolve(null),
+      listConversations(user.uid, limit, { projectId, query }),
+    ]);
+    if (projectId && !project) return NextResponse.json({ error: "Projet introuvable." }, { status: 404 });
     return NextResponse.json({ conversations });
   } catch (error) {
     return NextResponse.json(errorBody(error, "Impossible de charger les conversations."), { status: errorStatus(error, 500) });

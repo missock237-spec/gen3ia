@@ -37,12 +37,13 @@ import { recordFailureClusters } from "@/lib/agents/evolution";
  *    le client peut se déconnecter sans la tuer.
  *  - SYNC (fallback : file non configurée, ou `mode:"sync"` explicite) :
  *    exécution dans la requête comme avant — compatibilité totale avec les
- *    intégrations existantes. `maxDuration = 60` (au lieu du défaut
- *    plateforme 10 s, insuffisant pour un seul appel LLM outillé).
+ *    intégrations existantes. `maxDuration = 300` (Task 124 : 60 s coupaient
+ *    les missions synchrones multi-étapes ; le runtime checkpointe après
+ *    chaque étape, un kill plateforme ne perd jamais le travail payé).
  */
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const RunAgentSchema = z.object({
   objective: z.string().min(3).max(50_000),

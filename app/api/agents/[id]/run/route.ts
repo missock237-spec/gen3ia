@@ -24,11 +24,12 @@ const RunSchema = z.object({
  * le plan est construit depuis sa configuration, sa politique de securite
  * derive de son type, et son prompt systeme est injecte dans chaque step LLM.
  *
- * maxDuration = 60, aligne sur /api/agents/run : l'execution est synchrone
- * (AgentRuntime) et le defaut plateforme (10 s) est insuffisant meme pour
- * un seul appel LLM outille.
+ * Task 124 — maxDuration = 300 (exécution synchrone AgentRuntime ; le défaut
+ * plateforme 10 s est insuffisant pour un appel LLM outillé, et 60 s coupaient
+ * les missions multi-étapes). Le runtime persiste ses checkpoints après
+ * chaque étape : une coupure plateforme ne perd jamais le travail payé.
  */
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();

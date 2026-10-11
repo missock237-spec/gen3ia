@@ -32,11 +32,13 @@ import { assertSafeDestinationUrl, resolveJobOrigin } from "@/lib/queue/origin";
  *     signé vers l'origine canonique). Le receiver répond 202 APRÈS
  *     vérification et fait son travail dans after() — l'appelant n'attend
  *     pas le traitement (fenêtre serverless préservée).
- *  3. RATTRAPAGE (pump) : les tickets dus non complétés sont re-délivrés —
- *     opportunistement par les routes de suivi (polling client) et chaque
- *     jour par le cron sentinelle (/api/cron/agent-schedules). Une fonction
- *     tuée en pleine tranche laisse le ticket en place : il sera re-délivré
- *     après expiration du bail (même contrat que la redélivrance QStash).
+ *  3. RATTRAPAGE (pump — Task 124, vitesse maximale) : les tickets dus non
+ *     complétés sont rattrapés PAR LOTS PARALLÈLES (8 tickets / passe,
+ *     délivrances concurrentes) — opportunistement par les routes de suivi
+ *     (polling client, throttle 5 s/instance) et chaque jour par le cron
+ *     sentinelle (/api/cron/agent-schedules). Une fonction tuée en pleine
+ *     tranche laisse le ticket en place : il sera re-délivré après
+ *     expiration du bail (même contrat que la redélivrance QStash).
  *  4. CLAIM : le traitement d'un ticket commence par un compare-and-swap
  *     (If-Match ETag) qui pose un bail — deux délivrances concurrentes du
  *     même ticket ne peuvent pas doubler le travail.
@@ -66,8 +68,13 @@ const SIGNATURE_MAX_AGE_SEC = 300;
 /** Délai au-delà duquel la délivrance immédiate n'est PAS tentée (le pump s'en charge). */
 const IMMEDIATE_DELIVERY_MAX_DELAY_SEC = 5;
 
-/** Bail d'un ticket claimé par un worker (couvre une tranche complète + marge). */
-const TICKET_LEASE_MS = 120_000;
+/**
+ * Bail d'un ticket claimé par un worker : DOIT couvrir la fenêtre complète du
+ * receiver le plus long (mission-tick : maxDuration 300 s, tranche ~290 s)
+ * + la marge de finalisation, sinon une redélivrance pendant que le receiver
+ * travaille encore serait un no-op 2xx qui consommerait le ticket à tort.
+ */
+const TICKET_LEASE_MS = 330_000;
 
 /** Tentatives de délivrance avant mise en quarantaine (dead-letter). */
 const TICKET_MAX_ATTEMPTS = 5;
@@ -75,8 +82,20 @@ const TICKET_MAX_ATTEMPTS = 5;
 /** Âge de purge des tickets (terminés ou abandonnés). */
 const TICK_RETENTION_MS = 7 * 24 * 3600_000;
 
-/** Nombre maximal de tickets traités par passage de pump. */
-const PUMP_BATCH = 12;
+/** Nombre maximal de tickets traités par passe de pump (lot borné, Task 124). */
+const PUMP_BATCH = 8;
+
+/** Délivrances PARALLÈLES par passe : chaque délivrance attend la réponse du receiver. */
+const PUMP_DELIVERY_CONCURRENCY = 4;
+
+/** Plafond d'entrées examinées par passe (les clés sont ordonnées par échéance). */
+const PUMP_SCAN_LIMIT = 2 * PUMP_BATCH;
+
+/** Backoff initial d'un ticket en échec transitoire (10 s — Task 124). */
+const TICKET_RETRY_BACKOFF_MS = 10_000;
+
+/** Plafond conservateur du backoff exponentiel (15 min — la progression reste garantie). */
+const TICKET_RETRY_BACKOFF_MAX_MS = 900_000;
 
 /** Plafond défensif du corps d'un ticket (payloads minimaux { runId } / { jobId }). */
 const MAX_TICKET_BYTES = 8_192;
@@ -271,7 +290,9 @@ async function deliverTickAndAwait(path: string, body: string): Promise<void> {
       [TICK_SIGNATURE_HEADER]: signTickBody(body),
     },
     body,
-    signal: AbortSignal.timeout(120_000),
+    // Fenêtre receiver complète (mission-tick : tranche ~290 s sous
+    // maxDuration 300) — le pump attend la réponse, contrat 2xx/5xx.
+    signal: AbortSignal.timeout(300_000),
   });
   await response.body?.cancel().catch(() => undefined);
   if (!response.ok) {
@@ -362,10 +383,37 @@ function parseTicket(data: Buffer): TicketDocument | null {
   }
 }
 
+/** Exécute un worker sur chaque élément avec une concurrence bornée. */
+async function runBounded<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
+  let index = 0;
+  const lanes = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    while (index < items.length) {
+      const item = items[index];
+      index += 1;
+      await worker(item);
+    }
+  });
+  await Promise.all(lanes);
+}
+
+/** Un ticket dû, lu et prêt à être réclamé (claim CAS). */
+interface PumpCandidate {
+  key: string;
+  etag: string;
+  ticket: TicketDocument;
+}
+
 /**
- * Rattrape les tickets DUS : délivrance au receiver, retry avec backoff sur
- * échec, quarantaine après épuisement des tentatives, purge des vieux
- * tickets. Idempotent et SÛR en exécution concurrente (claim CAS par ETag).
+ * Rattrape les tickets DUS par LOTS PARALLÈLES (Task 124 — vitesse maximale) :
+ *  - EXAMEN borné (PUMP_SCAN_LIMIT entrées) : les lectures R2 des tickets
+ *    éligibles se font en parallèle (concurrence 8) ;
+ *  - TRAITEMENT borné (PUMP_BATCH tickets) : claim CAS + délivrance se font
+ *    en parallèle (concurrence PUMP_DELIVERY_CONCURRENCY) — une passe
+ *    rattrape jusqu'à 8 tickets au lieu d'un seul, sans jamais doubler le
+ *    travail (l'If-Match ETag d'un claim fait foi) ;
+ *  - CONTRAT RECEIVERS INCHANGÉ : 2xx = ticket consommé (delete), 5xx/réseau
+ *    = réessai backoff (10 s initial, ×2 par tentative, plafond 15 min),
+ *    épuisement → quarantaine, purge des vieux tickets.
  * Les chemins de receiver ne viennent QUE de tickets écrits par ce module —
  * mais la défense en profondeur revalide le chemin contre l'allowlist avant
  * tout fetch (un bucket compromis ne peut pas faire poster vers un tiers).
@@ -382,65 +430,82 @@ export async function pumpDueTicks(): Promise<PumpOutcome> {
     return outcome; // R2 indisponible : le prochain passage reprendra.
   }
 
-  for (const entry of entries.slice(0, PUMP_BATCH * 2)) {
+  // Phase 1 — EXAMEN parallèle borné : purger/quarantainer les tickets
+  // illisibles ou périmés, collecter les tickets DUS non balisés (au plus
+  // PUMP_BATCH). Les clés sont ordonnées par échéance : les premiers
+  // candidats sont les plus urgents.
+  const candidates: PumpCandidate[] = [];
+  await runBounded(entries.slice(0, PUMP_SCAN_LIMIT), PUMP_DELIVERY_CONCURRENCY * 2, async (entry) => {
     outcome.scanned += 1;
-    if (entry.key.endsWith("/") || !entry.key.endsWith(".json")) continue;
-    if (outcome.delivered + outcome.retried + outcome.deadLettered >= PUMP_BATCH) break;
+    if (entry.key.endsWith("/") || !entry.key.endsWith(".json")) return;
+    if (candidates.length >= PUMP_BATCH) return; // lot borné : la passe suivante prendra la suite.
 
     const object = await getObjectWithEtag(entry.key, MAX_TICKET_BYTES).catch(() => null);
-    if (!object) continue;
+    if (!object) return;
     const ticket = parseTicket(object.data);
     if (!ticket) {
       // Ticket illisible : quarantaine immédiate (jamais de re-traitement).
       await quarantineTicket(entry.key, object.data, "unreadable").catch(() => undefined);
       outcome.deadLettered += 1;
-      continue;
+      return;
     }
     // Purge des tickets trop vieux (créés > 7 j) : quelle que soit leur échéance.
     if (ticket.createdAtMs > 0 && now - ticket.createdAtMs > TICK_RETENTION_MS) {
       await deleteObject(entry.key).catch(() => undefined);
       outcome.purged += 1;
-      continue;
+      return;
     }
     const leaseActive = typeof ticket.leaseUntilMs === "number" && ticket.leaseUntilMs > now;
-    if (ticket.dueAtMs > now || leaseActive) continue;
+    if (ticket.dueAtMs > now || leaseActive) return;
 
+    candidates.push({ key: entry.key, etag: object.etag, ticket });
+  });
+
+  // Phase 2 — TRAITEMENT parallèle borné : claim CAS puis délivrance. Un
+  // concurrent plus rapide (If-Match refusé) passe son tour — zéro double
+  // envoi, le contrat d'exclusion reste exactement celui d'avant.
+  await runBounded(candidates, PUMP_DELIVERY_CONCURRENCY, async (candidate) => {
     // Claim CAS : marque la tentative AVANT la délivrance — deux pumps
     // concurrents ne peuvent pas doubler l'envoi (l'un reçoit null et passe).
-    const claimed: TicketDocument = { ...ticket, attempts: ticket.attempts + 1, leaseUntilMs: now + TICKET_LEASE_MS };
+    const claimed: TicketDocument = {
+      ...candidate.ticket,
+      attempts: candidate.ticket.attempts + 1,
+      leaseUntilMs: now + TICKET_LEASE_MS,
+    };
     const put = await putObjectConditional(
-      entry.key,
+      candidate.key,
       Buffer.from(JSON.stringify(claimed), "utf8"),
       "application/json",
-      { ifMatch: object.etag },
+      { ifMatch: candidate.etag },
     ).catch(() => null);
-    if (!put) continue; // concurrent plus rapide ou R2 indisponible.
+    if (!put) return; // concurrent plus rapide ou R2 indisponible.
 
     try {
-      await deliverTickAndAwait(ticket.path, ticket.body);
-      await deleteObject(entry.key).catch(() => undefined); // complété : ticket consommé.
+      await deliverTickAndAwait(claimed.path, claimed.body);
+      await deleteObject(candidate.key).catch(() => undefined); // complété : ticket consommé.
       outcome.delivered += 1;
     } catch {
       if (claimed.attempts >= TICKET_MAX_ATTEMPTS) {
-        await quarantineTicket(entry.key, Buffer.from(JSON.stringify(claimed), "utf8"), "max-attempts").catch(() => undefined);
+        await quarantineTicket(candidate.key, Buffer.from(JSON.stringify(claimed), "utf8"), "max-attempts").catch(() => undefined);
         outcome.deadLettered += 1;
       } else {
-        // Backoff exponentiel : 30 s, 60 s, 120 s, 240 s — réécriture à la
-        // nouvelle échéance (nouvelle clé, l'ancienne est supprimée après).
-        const backoffMs = 30_000 * 2 ** (claimed.attempts - 1);
+        // Backoff exponentiel : 10 s, 20 s, 40 s, 80 s, 160 s (plafond 15 min)
+        // — réécriture à la nouvelle échéance (nouvelle clé, l'ancienne est
+        // supprimée après).
+        const backoffMs = Math.min(TICKET_RETRY_BACKOFF_MS * 2 ** (claimed.attempts - 1), TICKET_RETRY_BACKOFF_MAX_MS);
         const retried: TicketDocument = { ...claimed, dueAtMs: now + backoffMs, leaseUntilMs: undefined };
-        const id = entry.key.slice(TICKETS_PREFIX.length).replace(/\.json$/, "");
+        const id = candidate.key.slice(TICKETS_PREFIX.length).replace(/\.json$/, "");
         await putObjectConditional(
           ticketKey(retried.dueAtMs, id.replace(/^\d+-/, "")),
           Buffer.from(JSON.stringify(retried), "utf8"),
           "application/json",
           { ifNoneMatch: "*" },
         ).catch(() => undefined);
-        await deleteObject(entry.key).catch(() => undefined);
+        await deleteObject(candidate.key).catch(() => undefined);
         outcome.retried += 1;
       }
     }
-  }
+  });
   return outcome;
 }
 
@@ -456,12 +521,18 @@ async function quarantineTicket(key: string, data: Buffer, reason: string): Prom
 /* Nudge opportuniste (throttlé par processus)                         */
 /* ------------------------------------------------------------------ */
 
-const NUDGE_INTERVAL_MS = 15_000;
+/**
+ * Fenêtre de throttle du nudge (Task 124 : 15 s → 5 s) : les routes de
+ * suivi (polling client) réveillent le pump jusqu'à une fois toutes les
+ * 5 s par instance — un file DUE est rattrapé sans attendre la sentinelle
+ * cron, tout en bornant la charge R2 par instance.
+ */
+const NUDGE_INTERVAL_MS = 5_000;
 let lastNudgeAtMs = 0;
 
 /**
  * Déclenche le pump depuis une route de suivi (polling client) — au plus une
- * fois toutes les 15 s par instance, en fire-and-forget : le temps de
+ * fois toutes les 5 s par instance, en fire-and-forget : le temps de
  * réponse de la route appelante n'est JAMAIS impacté. Les échecs sont
  * silencieux (le prochain sondage retentera).
  */

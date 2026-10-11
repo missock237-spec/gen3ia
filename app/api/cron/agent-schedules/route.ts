@@ -83,16 +83,6 @@ export async function GET(request: NextRequest) {
       return null;
     });
 
-    // RATTRAPAGE DES TICKETS DUS (file de ticks R2 — ex-QStash) : les
-    // délivrances interrompues pendant la nuit (fonction tuée, self-fetch
-    // perdu) sont re-délivrées ici ; les tickets sains ne sont pas dus ou
-    // sont sous bail → no-op. Best-effort : un incident alimente
-    // `partialFailures` sans faire échouer la route.
-    const queuePump = await pumpDueTicks().catch((error: unknown) => {
-      failures.push(`queue-pump: ${error instanceof Error ? error.message : "erreur"}`);
-      return null;
-    });
-
     // Task 107-a — auto-réparation des files vidéo : sweep des jobs de
     // production autopilote ORPHELINS (bail expiré → ré-enfilement via
     // publishProductionTick + repli sondage) et des jobs de rendu dans le
@@ -125,6 +115,22 @@ export async function GET(request: NextRequest) {
         return null;
       }
     })();
+
+    // RATTRAPAGE DES TICKETS DUS (file de ticks R2 — ex-QStash) : les
+    // délivrances interrompues pendant la nuit (fonction tuée, self-fetch
+    // perdu) sont re-délivrées ici ; les tickets sains ne sont pas dus ou
+    // sont sous bail → no-op. Best-effort : un incident alimente
+    // `partialFailures` sans faire échouer la route.
+    // Task 124 — le pump s'exécute en DERNIER : une délivrance mission-tick
+    // attend désormais la tranche complète du receiver (~290 s) ; les sweeps
+    // rapides ci-dessus (vidéo, escrows) ne doivent pas être privés de la
+    // fenêtre par un pump long. Un kill du cron en plein pump est SANS perte :
+    // le ticket reste sous bail, le receiver continue indépendamment et la
+    // redélivrance suivante no-oppe (claim mission déjà détenteur du bail).
+    const queuePump = await pumpDueTicks().catch((error: unknown) => {
+      failures.push(`queue-pump: ${error instanceof Error ? error.message : "erreur"}`);
+      return null;
+    });
 
     return NextResponse.json({ ok: true, ...result, renewals, reactivations, extensionRenewals, dispatchLoop: loop, queuePump, videoSweep, escrowSweep, ...(failures.length > 0 ? { partialFailures: failures } : {}) });
   } catch (error) {

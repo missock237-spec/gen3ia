@@ -41,8 +41,13 @@ import type { MissionDeliverable } from "@/lib/agents/deliverables";
 
 const COLLECTION = "missionQueue";
 
-/** Durée du bail d'exécution (ms) — couvre la fenêtre fonction + marge. */
-export const MISSION_LEASE_MS = 90_000;
+/**
+ * Durée du bail d'exécution (ms) — Task 124 : couvre la fenêtre COMPLETE du
+ * receiver mission-tick (maxDuration 300 s, tranche ~290 s) + marge. Un bail
+ * plus court que la tranche laisserait une redélivrance (pump) ré-claimer la
+ * mission en plein travail → double exécution facturée.
+ */
+export const MISSION_LEASE_MS = 330_000;
 
 /** Délai (s) avant la délivrance du tick suivant après une pause d'échéance. */
 export const NEXT_TICK_DELAY_SECONDS = 2;

@@ -186,7 +186,9 @@ function fallbackPlan(objective: string): RuntimePlan {
     executionId: randomUUID(),
     objective,
     steps,
-    maxConcurrency: 1,
+    // Task 124 — DAG : les branches indépendantes du repli s'exécutent en
+    // parallèle (concurrence bornée 3 ; l'ordre reste régi par les dépendances).
+    maxConcurrency: 3,
     maxIterations: Math.max(steps.length, 1),
   });
 }

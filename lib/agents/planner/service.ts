@@ -40,7 +40,9 @@ function planDeRepli(userId: string, objective: string): RuntimePlan {
     objective,
     reasoning: "Plan de repli : le moteur de planning n'a pas produit de plan validable.",
     steps: fallbackPlanSteps(objective),
-    maxConcurrency: 1,
+    // Task 124 — DAG : concurrence bornée 3 (l'ordre reste régi par les
+    // dépendances — les branches indépendantes partent en parallèle).
+    maxConcurrency: 3,
     maxIterations: 1,
     estimatedCredits: 0,
   });

@@ -57,10 +57,14 @@ import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
  */
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Task 124 — vitesse maximale : la fenêtre passe de 60 s à 300 s (maximum
+// prudent sous le plafond Vercel Node 800 s) — une tranche exécute ~290 s de
+// travail au lieu de ~50 s : 6× moins de ré-enfilements, 6× moins de frais
+// généraux de claim/checkpoint/reprise par mission longue.
+export const maxDuration = 300;
 
-/** Budget horloge d'une tranche — laisse ≥ 10 s de marge sous les 60 s. */
-const TICK_BUDGET_MS = 50_000;
+/** Budget horloge d'une tranche — laisse ≥ 10 s de marge sous les 300 s. */
+const TICK_BUDGET_MS = 290_000;
 
 /** Plafond défensif du corps attendu ({ runId } — jamais plus). */
 const MAX_BODY_BYTES = 4_096;

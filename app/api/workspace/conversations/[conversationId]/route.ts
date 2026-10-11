@@ -46,14 +46,17 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       });
     }
 
-    const [messages, runs, artifacts, approvals] = await Promise.all([
+    // Task 124 — chemin critique lecture : les CINQ lectures indépendantes
+    // (messages, runs, artefacts, validations, projet rattaché) sont
+    // agrégées en un seul Promise.all — le temps de réponse de la route
+    // passe de la SOMME des latences au MAXIMUM.
+    const [messages, runs, artifacts, approvals, project] = await Promise.all([
       listMessages(user.uid, conversationId, 200),
       listRunsForConversation(user.uid, conversationId, 20),
       listArtifacts(user.uid, { conversationId, limit: 100 }),
       listApprovalsForConversation(user.uid, conversationId, 50),
+      conversation.projectId ? getProject(user.uid, conversation.projectId) : Promise.resolve(null),
     ]);
-
-    const project = conversation.projectId ? await getProject(user.uid, conversation.projectId) : null;
 
     return NextResponse.json({ conversation, project, messages, runs, artifacts, approvals });
   } catch (error) {

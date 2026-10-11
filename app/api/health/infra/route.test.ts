@@ -27,6 +27,10 @@ vi.mock("@/lib/chat/vector-index", () => ({
 
 vi.mock("@/lib/sandbox/simulation", () => ({
   isSandboxConfigured: vi.fn(() => false),
+  // Task 122 — la sonde affiche le moteur terminal réel (docker | serverless |
+  // simulation) ; le mock doit l'exposer (sinon vi.mock lève sur l'absence
+  // d'export au moment de l'appel dans la route).
+  currentTerminalEngine: vi.fn(() => "simulation"),
 }));
 
 vi.mock("@/lib/storage/r2", () => ({

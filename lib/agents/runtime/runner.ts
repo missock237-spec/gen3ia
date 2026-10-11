@@ -195,12 +195,13 @@ export class AgentRuntime {
             throw new PauseRequestedError(this.state.executionId);
           }
           this.state.iteration++;
-          const completed = this.getCompletedSteps();
-          const running = new Set(this.scheduler.getRunning());
-          const ready = getReadySteps(this.state.plan, completed, running);
-          if (ready.length === 0 && this.scheduler.getRunning().length === 0) break;
-          const executable = ready.slice(0, this.scheduler.capacity);
-          await Promise.all(executable.map((step) => this.executeStep(step)));
+          // VAGUE CONTINUE (Task 124 — vitesse maximale) : les nœuds prêts du
+          // DAG partent en PARALLÈLE et un nouveau nœud démarre DÈS qu'un
+          // slot se libère (concurrence bornée par plan.maxConcurrency, ordre
+          // topologique et checkpoints par étape inchangés, budget de tranche
+          // vérifié avant CHAQUE démarrage).
+          const started = await this.drainReadySteps();
+          if (started === 0) break;
           await this.persistCheckpoint();
           if (this.areAllStepsFinished()) break;
         }
@@ -324,6 +325,76 @@ export class AgentRuntime {
   /** Consulte le contrôle d'arrêt définitif (tolérant aux pannes Firestore). */
   private async throwIfStopped(): Promise<void> {
     await assertNotStopped(this.state.executionId);
+  }
+
+  /**
+   * VAGUE CONTINUE (Task 124 — vitesse maximale) : les nœuds PRÊTS du DAG
+   * démarrent en PARALLÈLE (concurrence bornée par plan.maxConcurrency via
+   * le scheduler) et un nouveau nœud démarre DÈS qu'un slot se libère —
+   * l'ancienne barrière de fin de vague (Promise.all du lot) attendait le
+   * PLUS LENT avant d'ouvrir la vague suivante : une branche longue
+   * bloquait des branches indépendantes déjà prêtes.
+   *
+   * Garanties conservées :
+   *  - ORDRE TOPOLOGIQUE : un nœud ne démarre que si toutes ses dépendances
+   *    sont "completed" (getReadySteps, inchangé) ;
+   *  - CHECKPOINTS : le finally de executeStep persiste APRÈS CHAQUE étape
+   *    (reprise fine inchangée) ;
+   *  - BUDGET DE TRANCHE : l'échéance (batchDeadlineMs moins la réserve) est
+   *    vérifiée avant CHAQUE démarrage — plus fin qu'avant (par vague) :
+   *    aucun travail payant n'est démarré au-delà de l'échéance, la pause
+   *    propre survient après le ralliement des étapes en cours ;
+   *  - ERREURS : la première erreur terminale est propagée APRÈS le
+   *    ralliement des étapes en cours (aucun travail détaché en arrière-
+   *    plan, contrairement au Promise.all historique) et stoppe tout nouveau
+   *    démarrage.
+   *
+   * Retourne le nombre d'étapes démarrées (0 = rien de démarrable ni en
+   * cours : la boucle appelante termine la mission).
+   */
+  private async drainReadySteps(): Promise<number> {
+    let started = 0;
+    let firstError: { error: unknown } | undefined;
+    let deadlineHit = false;
+    const inflight = new Set<Promise<void>>();
+
+    const launchReady = (): number => {
+      if (firstError || deadlineHit) return 0;
+      const completed = this.getCompletedSteps();
+      const running = new Set(this.scheduler.getRunning());
+      const ready = getReadySteps(this.state.plan, completed, running);
+      if (ready.length === 0) return 0;
+      // Budget de tranche : ne JAMAIS démarrer un travail qui n'aurait pas la
+      // place de se terminer avant l'échéance (contrat batch-deadline) — la
+      // vague en cours se rallie proprement puis la boucle externe pause.
+      if (this.batchDeadline !== undefined && Date.now() + this.minBatchReserve > this.batchDeadline) {
+        deadlineHit = true;
+        return 0;
+      }
+      const launchable = ready.slice(0, this.scheduler.capacity);
+      for (const step of launchable) {
+        started += 1;
+        const execution: Promise<void> = this.executeStep(step)
+          .catch((error: unknown) => {
+            if (!firstError) firstError = { error };
+          })
+          .finally(() => {
+            inflight.delete(execution);
+          });
+        inflight.add(execution);
+      }
+      return launchable.length;
+    };
+
+    launchReady();
+    while (inflight.size > 0) {
+      // Un slot s'est libéré : les nœuds devenus prêts partent immédiatement.
+      await Promise.race(inflight);
+      launchReady();
+    }
+    if (firstError) throw firstError.error;
+    if (deadlineHit) throw new PauseRequestedError(this.state.executionId);
+    return started;
   }
 
   private async executeStep(step: RuntimeStep): Promise<void> {

@@ -235,14 +235,43 @@ describe("pumpDueTicks — rattrapage des tickets dus", () => {
 
     expect(outcome.delivered).toBe(0);
     expect(outcome.retried).toBe(1);
-    // Nouvelle clé = échéance retardée (backoff 30 s au premier essai).
+    // Nouvelle clé = échéance retardée (backoff 10 s au premier essai —
+    // Task 124 : 30 s → 10 s, la reprise transitoire est 3× plus rapide).
     const retryPut = r2Mocks.putObjectConditional.mock.calls.find(([key]) => String(key) !== ticket.key);
     expect(retryPut).toBeDefined();
     const retryKey = String(retryPut?.[0]);
     const retryDueAt = Number(retryKey.slice("queue/tickets/v1/".length).slice(0, 16));
     expect(retryDueAt).toBeGreaterThan(Date.now());
+    expect(retryDueAt).toBeLessThanOrEqual(Date.now() + 12_000); // ~10 s (marge d'horloge du test)
     // L'ancien ticket est supprimé après réécriture.
     expect(r2Mocks.deleteObject).toHaveBeenCalledWith(ticket.key);
+  });
+
+  it("rattrape PLUSIEURS tickets dus dans la MÊME passe (lot parallèle — Task 124)", async () => {
+    const tickets = [makeTicket(), makeTicket({}, Date.now() - 2_000), makeTicket({}, Date.now() - 3_000)];
+    r2Mocks.listObjectsUnderPrefix.mockResolvedValue(tickets.map((ticket) => ({ key: ticket.key, sizeBytes: 1, updatedAt: "" })));
+    r2Mocks.getObjectWithEtag.mockImplementation(async (key: string) => {
+      const found = tickets.find((ticket) => ticket.key === key);
+      return found ? { data: found.data, etag: found.etag } : null;
+    });
+    r2Mocks.putObjectConditional.mockResolvedValue({ etag: '"e2"' });
+    r2Mocks.deleteObject.mockResolvedValue(undefined);
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: { cancel: () => Promise.resolve() },
+    }) as unknown as typeof fetch;
+
+    const outcome = await pumpDueTicks();
+
+    expect(outcome.scanned).toBe(3);
+    expect(outcome.delivered).toBe(3);
+    expect(outcome.retried).toBe(0);
+    // Chaque ticket consommé est supprimé : les TROIS sont partis dans la passe.
+    for (const ticket of tickets) {
+      expect(r2Mocks.deleteObject).toHaveBeenCalledWith(ticket.key);
+    }
+    expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 
   it("met en quarantaine un ticket après épuisement des tentatives", async () => {
@@ -288,7 +317,7 @@ describe("pumpDueTicks — rattrapage des tickets dus", () => {
 });
 
 describe("nudgePumpFromPolling — throttle par processus", () => {
-  it("ne lance qu'un pump par fenêtre de 15 s (fire-and-forget)", () => {
+  it("ne lance qu'un pump par fenêtre (fire-and-forget)", () => {
     const calls: unknown[][] = [];
     r2Mocks.listObjectsUnderPrefix.mockImplementation((...args: unknown[]) => {
       calls.push(args);
@@ -299,5 +328,33 @@ describe("nudgePumpFromPolling — throttle par processus", () => {
     nudgePumpFromPolling();
     // Le nudge est asynchrone : la liste n'est appelée qu'UNE fois au maximum.
     expect(calls.length).toBeLessThanOrEqual(1);
+  });
+
+  it("relance le pump dès l'expiration de la fenêtre de 5 s (Task 124 : 15 s → 5 s)", async () => {
+    vi.useFakeTimers();
+    try {
+      // Garantit que la fenêtre posée par le test précédent est expirée.
+      await vi.advanceTimersByTimeAsync(20_000);
+      const calls: unknown[][] = [];
+      r2Mocks.listObjectsUnderPrefix.mockImplementation((...args: unknown[]) => {
+        calls.push(args);
+        return Promise.resolve([]);
+      });
+
+      nudgePumpFromPolling();
+      await vi.advanceTimersByTimeAsync(0);
+      nudgePumpFromPolling(); // encore dans la fenêtre de 5 s → PAS de second pump
+      await vi.advanceTimersByTimeAsync(4_000);
+      nudgePumpFromPolling(); // 4 s plus tard : toujours dans la fenêtre
+      await vi.advanceTimersByTimeAsync(0);
+      expect(calls.length).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(1_100); // 5,1 s écoulés depuis le premier nudge
+      nudgePumpFromPolling();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(calls.length).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
