@@ -3,6 +3,7 @@ import type { DocumentReference, Timestamp } from "firebase-admin/firestore";
 
 import { requireAdmin } from "@/lib/security/admin-access";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
+import { recordAuditEvent } from "@/lib/security/audit-events";
 import { getAdminApp } from "@/lib/firebase/admin";
 import { rawPut } from "@/lib/r2fs/store";
 
@@ -122,14 +123,27 @@ async function migrerCollection(
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdmin(request);
+    const admin = await requireAdmin(request);
+
+    const body = (await request.json().catch(() => ({}))) as { collections?: string[] };
+
+    // Journal d'audit (Task 126) : action destructrice majeure — QUI a lancé
+    // QUOI, AVANT l'effet (une interruption laisse une trace). Best-effort
+    // borné : jamais bloquant pour l'action déjà autorisée.
+    await recordAuditEvent({
+      actorId: admin.uid,
+      actorEmail: admin.email ?? null,
+      action: "admin.firestore_r2_migration",
+      outcome: "granted",
+      targetType: "collection",
+      targetId: body.collections?.join(",") ?? "*",
+    }).catch(() => undefined);
 
     // Import dynamique : Firestore n'est PLUS une dépendance du chemin de
     // données — ce module de migration seul l'utilise encore.
     const { getFirestore } = await import("firebase-admin/firestore");
     const db = getFirestore(getAdminApp());
 
-    const body = (await request.json().catch(() => ({}))) as { collections?: string[] };
     const echeance = Date.now() + BUDGET_MS;
 
     const cibles = body.collections?.length

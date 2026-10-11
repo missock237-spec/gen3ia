@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAdminAccess } from "@/lib/access/platform";
 import { extensionApiError } from "@/lib/extensions/api";
 import { decideDeveloperPayout, listAdminPayoutQueue } from "@/lib/extensions/payouts";
+import { recordAuditEvent } from "@/lib/security/audit-events";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await requireAdminAccess(request);
+    const admin = await requireAdminAccess(request);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const payoutId = typeof body.payoutId === "string" ? body.payoutId.trim() : "";
     const decision = body.decision;
@@ -35,6 +36,19 @@ export async function POST(request: Request) {
     if (decision !== "approve" && decision !== "reject" && decision !== "mark_paid") {
       return NextResponse.json({ error: "decision doit valoir approve, reject ou mark_paid." }, { status: 400 });
     }
+
+    // Journal d'audit (Task 126) : décision financière admin — trace AVANT
+    // l'effet (qui, quel mandat, quelle décision). Best-effort borné.
+    await recordAuditEvent({
+      actorId: admin.uid,
+      actorEmail: admin.email ?? null,
+      action: "admin.payout_decision",
+      outcome: "granted",
+      targetType: "payout",
+      targetId: payoutId,
+      metadata: { decision },
+    }).catch(() => undefined);
+
     const payout = await decideDeveloperPayout({
       payoutId,
       decision,

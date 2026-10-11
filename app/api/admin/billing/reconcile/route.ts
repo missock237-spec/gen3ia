@@ -10,6 +10,7 @@ import {
 } from "@/lib/billing/chariow-delivery";
 import { requireAdmin } from "@/lib/security/admin-access";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
+import { recordAuditEvent } from "@/lib/security/audit-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,14 +42,29 @@ interface ProblemDoc {
  * Avec { retry: true } : + { retried, recovered, stillFailed }.
  */
 export async function POST(request: NextRequest) {
+  let admin: { uid: string; email?: string } | null = null;
   try {
-    await requireAdmin(request);
+    admin = await requireAdmin(request);
   } catch (error) {
     return NextResponse.json(errorBody(error, "Administrator access required."), { status: errorStatus(error) });
   }
 
   const body = (await request.json().catch(() => null)) as { retry?: unknown } | null;
   const retryRequested = body?.retry === true;
+
+  // Journal d'audit (Task 126) : le mode { retry: true } RE-TRAITE des
+  // livraisons (effet financier) — trace AVANT l'effet. Best-effort borné.
+  if (retryRequested) {
+    await recordAuditEvent({
+      actorId: admin.uid,
+      actorEmail: admin.email ?? null,
+      action: "admin.billing_reconcile",
+      outcome: "granted",
+      targetType: "billing",
+      targetId: "chariowPulseDeliveries",
+      metadata: { retry: true },
+    }).catch(() => undefined);
+  }
 
   const { adminDb } = await import("@/lib/firebase/admin");
   const deliveries = adminDb.collection("chariowPulseDeliveries");

@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 
 import { authenticateDeveloper } from "@/lib/extensions/developer-keys";
+import { authenticateApiKey } from "@/lib/security/api-keys";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { getAgentForOwner } from "@/lib/agents/repository";
 import { createPersonalizedPlan, policyForAgent } from "@/lib/agents/personalized-plan";
@@ -20,8 +21,11 @@ export const maxDuration = 300;
  * personnalisé (créé via le Studio ou Agent gen) depuis n'importe quel
  * client externe : n8n, script, app mobile, webhook…
  *
- * Authentification (même chaîne que les endpoints développeur) :
- *   Authorization: Bearer g3x_…   +   X-Gen3ia-Project-Id: <projet lié>
+ * Authentification (deux chaînes acceptées) :
+ *   1. Clé API ENTREPRISE `g3a_…` (Task 126) : Authorization: Bearer g3a_…
+ *      ou X-API-Key: g3a_… — exige le scope « agents », quota PAR CLÉ ;
+ *   2. Chaîne développeur (extensions) : Authorization: Bearer g3x_…
+ *      + X-Gen3ia-Project-Id: <projet lié>.
  *
  * Le pipeline d'exécution est EXACTEMENT celui de la route session
  * (/api/agents/[id]/run) : plan personnalisé dérivé de la configuration de
@@ -51,8 +55,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const log = executionLogger({ requestId });
 
   try {
-    // 1) Authentification par clé API développeur (g3x_…, projet lié requis).
-    const identity = await authenticateDeveloper(request);
+    // 1) Authentification : clé API entreprise (g3a_, scope agents, quota
+    //    par clé) PRIORITAIRE, sinon chaîne développeur (g3x_ + projet lié).
+    const apiKeyIdentity = await authenticateApiKey(request, "agents");
+    const identity: { userId: string; via: string; displayName: string } = apiKeyIdentity
+      ? {
+          userId: apiKeyIdentity.userId,
+          via: "api_key",
+          displayName: `Clé API ${apiKeyIdentity.prefix}`,
+        }
+      : await authenticateDeveloper(request);
 
     const limit = await enforceRateLimit(`api-agent-run:${identity.userId}`, {
       limit: 30,
