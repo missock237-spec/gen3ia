@@ -1,0 +1,718 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Gen3ia API",
+    "version": "1.0.0",
+    "summary": "API publique de la plateforme d'agents IA autonomes Gen3ia",
+    "description": "API publique de la plateforme **Gen3ia** (production : https://gen3ia.online).\n\n## Authentification\n\nL'API publique v1 s'authentifie par **clé API entreprise `g3a_…`**, créée dans l'application sous **Paramètres → Clés API** (le préfixe `g3a_XXXXXX` seul reste listable ensuite — la clé complète n'est affichée qu'une fois, à la création). Deux en-têtes sont acceptés de manière équivalente :\n\n- `Authorization: Bearer g3a_…`\n- `X-API-Key: g3a_…`\n\nLa route `POST /api/v1/agents/{agentId}/run` accepte également la chaîne développeur extensions (`Authorization: Bearer g3x_…` + `X-Gen3ia-Project-Id: <projet lié>`), présentée en repli quand aucune clé `g3a_` n'est fournie. Le pipeline d'exécution est strictement identique : plan personnalisé dérivé de la configuration de l'agent, politique de sécurité dérivée de son type, mêmes garde-fous (HITL, quotas, facturation, audit, cloisonnement multi-tenant par `orgId`).\n\n## Scopes\n\nLes clés `g3a_` portent des scopes nominaux, au choix à la création :\n\n| Scope | Autorisation |\n|---|---|\n| `agents` | Exécuter des agents via `POST /api/v1/agents/{agentId}/run` |\n| `media` | Opérations médias (image, vidéo, audio) via `/api/v1/**` |\n| `terminal` | Exécution de commandes terminal via `/api/v1/**` |\n| `read` | Lectures seul (sans effet de bord) via `/api/v1/**` |\n\nUne clé présentée sans le scope requis reçoit `403`.\n\n## Quotas et limites\n\n- **Quota par clé** : `rateLimitPerMinute` requêtes/minute et par clé (défaut 60, configurable de 1 à 600 à la création). Au-delà : `429`.\n- **Taux limite d'exécution** : 30 exécutions / 5 minutes / compte sur `/api/v1/agents/{agentId}/run`. Au-delà : `429`.\n- **Limite d'hygiène** : 10 clés actives maximum par compte.\n\n## Sécurité\n\nSeul le hash SHA-256 de la clé est persisté côté serveur (jamais la clé en clair) ; la révocation est immédiate (soft delete auditable). N'utilisez jamais une clé `g3a_` côté navigateur ou application mobile — proxifiez toujours par votre backend.\n\n## Convention d'erreurs\n\nToutes les erreurs renvoient un JSON structuré `{ error, requestId }` (les erreurs de validation ajoutent `issues`). Le `requestId` est l'identifiant de corrélation serveur — joignez-le à tout ticket support. Un en-tête de réponse `x-request-id` est renvoyé sur toutes les réponses de l'API v1.",
+    "license": {
+      "name": "Propriétaire",
+      "url": "https://gen3ia.online"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://gen3ia.online",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Développement local"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Agents",
+      "description": "Exécution d'agents personnalisés via l'API publique v1 (clé g3a_ requise)."
+    },
+    {
+      "name": "Statut",
+      "description": "Sondes de disponibilité publiques, sans authentification (moniteurs d'uptime, checks CI)."
+    }
+  ],
+  "paths": {
+    "/api/v1/agents/{agentId}/run": {
+      "post": {
+        "tags": ["Agents"],
+        "operationId": "runAgent",
+        "summary": "Exécuter une mission sur un agent personnalisé",
+        "description": "Exécute une mission sur un agent personnalisé (créé via le Studio ou Agent gen) depuis n'importe quel client externe : n8n, script, app mobile, webhook…\n\nRequiert le scope **`agents`** sur la clé `g3a_`. L'agent doit appartenir au propriétaire de la clé (sinon `404`, réponse d'anti-énumération) et être **actif** (sinon `409`).\n\nLe pipeline d'exécution est exactement celui de l'application : plan personnalisé dérivé de la configuration réelle de l'agent (whitelist d'outils résolue), politique de sécurité dérivée de son type, HITL (les approbations humaines requises apparaissent dans les observations), quotas, facturation et audit. L'exécution est synchrone (jusqu'à 300 s) ; pour les missions longues, préférez l'API de session avec suivi SSE décrite dans `docs/sdk.md`.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de l'agent (doit appartenir au propriétaire de la clé).",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "x-request-id",
+            "in": "header",
+            "required": false,
+            "description": "Identifiant de corrélation fourni par l'appelant ; sinon un UUID est généré. Renvoyé dans le corps et l'en-tête de réponse.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              },
+              "examples": {
+                "veille": {
+                  "summary": "Mission de veille",
+                  "value": {
+                    "objective": "Surveille le marché des drones et rédige un résumé en 10 points."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exécution terminée (quel que soit le statut final de la mission — voir `status` dans le corps : `completed`, `failed`, `cancelled`…).",
+            "headers": {
+              "x-request-id": {
+                "description": "Identifiant de corrélation de la requête.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunResponse"
+                },
+                "examples": {
+                  "reussi": {
+                    "summary": "Mission réussie",
+                    "value": {
+                      "executionId": "0192f7c1-7b2e-7a41-9d3f-6f9c1d4b8e01",
+                      "requestId": "c14b0d5a-9f31-4d8a-b6e2-2b7a8c9d0e11",
+                      "agent": {
+                        "id": "agent_1",
+                        "name": "Veilleur",
+                        "type": "research"
+                      },
+                      "status": "completed",
+                      "outputs": {
+                        "s1": "Rapport de veille réel"
+                      },
+                      "observations": [
+                        {
+                          "stepId": "s1",
+                          "success": true,
+                          "output": "Rapport de veille réel",
+                          "latencyMs": 4210,
+                          "timestamp": "2026-10-12T09:41:22.000Z"
+                        }
+                      ],
+                      "billing": {
+                        "currency": "XAF",
+                        "totalChargeMinor": 12,
+                        "totalProviderCostEur": 0.0031,
+                        "llmInputTokens": 1840,
+                        "llmOutputTokens": 512
+                      },
+                      "durationMs": 4396
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Objectif invalide (3 à 20 000 caractères après nettoyage des espaces) ou corps JSON illisible.",
+            "headers": {
+              "x-request-id": {
+                "description": "Identifiant de corrélation de la requête.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                },
+                "examples": {
+                  "objectifCourt": {
+                    "summary": "Objectif trop court",
+                    "value": {
+                      "error": "Objectif invalide (3 à 20000 caractères).",
+                      "issues": {
+                        "formErrors": [],
+                        "fieldErrors": {
+                          "objective": ["Trop court : minimum 3 caractères."]
+                        }
+                      },
+                      "requestId": "c14b0d5a-9f31-4d8a-b6e2-2b7a8c9d0e11"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Clé API absente, invalide ou révoquée (`g3a_`), ou chaîne développeur (`g3x_`) invalide.",
+            "headers": {
+              "x-request-id": {
+                "description": "Identifiant de corrélation de la requête.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "cleRevoquee": {
+                    "summary": "Clé révoquée",
+                    "value": {
+                      "error": "Clé API invalide ou révoquée.",
+                      "requestId": "c14b0d5a-9f31-4d8a-b6e2-2b7a8c9d0e11"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Solde du portefeuille insuffisant — rechargez le wallet dans Facturation.",
+            "headers": {
+              "x-request-id": {
+                "description": "Identifiant de corrélation de la requête.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "soldeInsuffisant": {
+                    "summary": "Solde insuffisant",
+                    "value": {
+                      "error": "Solde du portefeuille insuffisant. Rechargez votre wallet dans Facturation.",
+                      "requestId": "c14b0d5a-9f31-4d8a-b6e2-2b7a8c9d0e11"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La clé ne porte pas le scope requis (`agents` pour cette route).",
+            "headers": {
+              "x-request-id": {
+                "description": "Identifiant de corrélation de la requête.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "horsScope": {
+                    "summary": "Scope manquant",
+                    "value": {
+                      "error": "La clé API (g3a_Exemp) n'autorise pas le scope « agents ».",
+                      "requestId": "c14b0d5a-9f31-4d8a-b6e2-2b7a8c9d0e11"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent introuvable ou inaccessible avec cette clé (réponse d'anti-énumération : un agent appartenant à un autre compte renvoie aussi 404).",
+            "headers": {
+              "x-request-id": {
+                "description": "Identifiant de corrélation de la requête.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "agentInconnu": {
+                    "summary": "Agent inconnu",
+                    "value": {
+                      "error": "Agent introuvable ou inaccessible avec cette clé.",
+                      "requestId": "c14b0d5a-9f31-4d8a-b6e2-2b7a8c9d0e11"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "L'agent n'est pas actif (en pause, archivé…) — activez-le avant de l'exécuter via l'API.",
+            "headers": {
+              "x-request-id": {
+                "description": "Identifiant de corrélation de la requête.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "agentEnPause": {
+                    "summary": "Agent en pause",
+                    "value": {
+                      "error": "L'agent est paused. Activez-le avant de l'exécuter via l'API.",
+                      "requestId": "c14b0d5a-9f31-4d8a-b6e2-2b7a8c9d0e11"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota dépassé — soit le quota de la clé (req/min configurable par clé), soit le taux limite d'exécution (30 exécutions / 5 minutes / compte). Réessayez dans quelques minutes.",
+            "headers": {
+              "x-request-id": {
+                "description": "Identifiant de corrélation de la requête.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "quotaCle": {
+                    "summary": "Quota de la clé dépassé",
+                    "value": {
+                      "error": "Quota de la clé API g3a_Exemp dépassé (60 req/min). Réessayez dans quelques secondes.",
+                      "requestId": "c14b0d5a-9f31-4d8a-b6e2-2b7a8c9d0e11"
+                    }
+                  },
+                  "tauxExecution": {
+                    "summary": "Taux d'exécution dépassé",
+                    "value": {
+                      "error": "Trop d'exécutions API rapprochées. Réessayez dans quelques minutes.",
+                      "requestId": "c14b0d5a-9f31-4d8a-b6e2-2b7a8c9d0e11"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erreur interne inattendue (le corps reste structuré, jamais de stack trace).",
+            "headers": {
+              "x-request-id": {
+                "description": "Identifiant de corrélation de la requête.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/status": {
+      "get": {
+        "tags": ["Statut"],
+        "operationId": "getStatus",
+        "summary": "Statut public de la plateforme",
+        "description": "Statut **public, non authentifié** destiné aux moniteurs d'uptime (Task 126). Aucune donnée sensible.\n\nSonde les services : `auth` (initialisation Firebase Admin), `r2` (sonde ListObjects bornée 3 s), `ticks` (file de ticks R2 configurée ET stockage joignable).\n\nRenvoie **200** quand tout va bien, **503 dès qu'un service est dégradé** — les moniteurs standards (ping HTTP) alertent sur le code sans parser le corps ; les corps JSON restent consommables par les sondes avancées. La réponse porte un cache CDN de 30 s (`s-maxage=30`, `stale-while-revalidate=15`) qui protège la sonde des rafales de polling.\n\nComplète `/api/health` (heartbeat ultra-léger sans dépendance) et `/api/health/infra` (détails complets, protégé).",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Plateforme opérationnelle (tous services sains).",
+            "headers": {
+              "Cache-Control": {
+                "description": "Cache CDN public de 30 s avec revalidation en arrière-plan.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                },
+                "examples": {
+                  "ok": {
+                    "summary": "Tout va bien",
+                    "value": {
+                      "status": "ok",
+                      "version": "dpl-4f8a1c2e9b",
+                      "services": {
+                        "auth": { "ok": true },
+                        "r2": { "ok": true },
+                        "ticks": { "ok": true }
+                      },
+                      "checkedAt": "2026-10-12T09:41:22.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Au moins un service est dégradé (voir `services.*.reason` : `not_configured`, `timeout`, `error`).",
+            "headers": {
+              "Cache-Control": {
+                "description": "Cache CDN public de 30 s avec revalidation en arrière-plan.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                },
+                "examples": {
+                  "degrade": {
+                    "summary": "R2 injoignable",
+                    "value": {
+                      "status": "degraded",
+                      "version": "dpl-4f8a1c2e9b",
+                      "services": {
+                        "auth": { "ok": true },
+                        "r2": { "ok": false, "reason": "timeout" },
+                        "ticks": { "ok": false, "reason": "timeout" }
+                      },
+                      "checkedAt": "2026-10-12T09:41:22.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": ["Statut"],
+        "operationId": "getHealth",
+        "summary": "Heartbeat ultra-léger",
+        "description": "Sonde de disponibilité publique, volontairement **minimaliste** : aucune dépendance externe (Firestore, Redis, providers), aucune authentification, aucune donnée sensible. Répond en quelques millisecondes et sert de heartbeat aux moniteurs externes (Vercel, UptimeRobot, checks CI). Les vérifications d'infrastructure détaillées restent dans `/api/health/infra` (protégé) ; le statut des services est dans `/api/status`.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Le processus répond (heartbeat OK).",
+            "headers": {
+              "Cache-Control": {
+                "description": "Aucun cache — réponse toujours fraîche (`no-store`).",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                },
+                "examples": {
+                  "ok": {
+                    "summary": "Heartbeat",
+                    "value": {
+                      "status": "ok",
+                      "timestamp": "2026-10-12T09:41:22.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Clé API entreprise Gen3ia `g3a_…` passée en jeton Bearer : `Authorization: Bearer g3a_…`. Créée dans Paramètres → Clés API ; porte des scopes nominaux (media, agents, terminal, read) et un quota par clé (req/min)."
+      },
+      "apiKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Clé API entreprise Gen3ia `g3a_…` passée dans l'en-tête `X-API-Key`. Strictement équivalente au Bearer `g3a_…`."
+      }
+    },
+    "schemas": {
+      "RunRequest": {
+        "type": "object",
+        "description": "Corps de la requête d'exécution — le contrat d'entrée minimal de l'API.",
+        "required": ["objective"],
+        "additionalProperties": false,
+        "properties": {
+          "objective": {
+            "type": "string",
+            "description": "Objectif de la mission confié à l'agent (nettoyé des espaces aux extrémités).",
+            "minLength": 3,
+            "maxLength": 20000,
+            "examples": ["Surveille le marché des drones et rédige un résumé en 10 points."]
+          }
+        }
+      },
+      "AgentRunResponse": {
+        "type": "object",
+        "description": "Résultat d'une exécution d'agent via l'API publique v1.",
+        "required": ["executionId", "requestId", "agent", "status", "outputs", "observations", "billing", "durationMs"],
+        "properties": {
+          "executionId": {
+            "type": "string",
+            "description": "Identifiant de l'exécution (UUID) — à conserver pour toute réclamation."
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Identifiant de corrélation de la requête (fourni via `x-request-id` ou généré)."
+          },
+          "agent": {
+            "$ref": "#/components/schemas/AgentSummary"
+          },
+          "status": {
+            "type": "string",
+            "description": "Statut final de l'exécution.",
+            "enum": ["completed", "failed", "cancelled"]
+          },
+          "outputs": {
+            "type": "object",
+            "description": "Sorties nommées de la mission (clé = identifiant d'étape du plan, valeur = livrable).",
+            "additionalProperties": true
+          },
+          "observations": {
+            "type": "array",
+            "description": "Observations d'exécution étape par étape — les approbations humaines requises (HITL) y apparaissent.",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeObservation"
+            }
+          },
+          "billing": {
+            "$ref": "#/components/schemas/BillingState"
+          },
+          "durationMs": {
+            "type": "integer",
+            "description": "Durée totale d'exécution en millisecondes.",
+            "minimum": 0
+          }
+        }
+      },
+      "AgentSummary": {
+        "type": "object",
+        "description": "Résumé de l'agent exécuté.",
+        "required": ["id", "name", "type"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifiant de l'agent."
+          },
+          "name": {
+            "type": "string",
+            "description": "Nom de l'agent."
+          },
+          "type": {
+            "type": "string",
+            "description": "Type de l'agent (dérivé de sa configuration Studio).",
+            "enum": ["universal", "code", "marketing", "teaching", "commercial", "vocal", "content", "research", "automation", "custom"]
+          }
+        }
+      },
+      "RuntimeObservation": {
+        "type": "object",
+        "description": "Observation d'une étape d'exécution du plan.",
+        "required": ["stepId", "success", "latencyMs", "timestamp"],
+        "properties": {
+          "stepId": {
+            "type": "string",
+            "description": "Identifiant de l'étape du plan."
+          },
+          "success": {
+            "type": "boolean",
+            "description": "L'étape a réussi."
+          },
+          "output": {
+            "description": "Sortie de l'étape (structure libre selon le type d'étape)."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Message d'erreur si l'étape a échoué."
+          },
+          "latencyMs": {
+            "type": "integer",
+            "description": "Latence de l'étape en millisecondes.",
+            "minimum": 0
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Horodatage ISO 8601 de l'observation."
+          }
+        }
+      },
+      "BillingState": {
+        "type": "object",
+        "description": "Facturation réelle de l'exécution (moteur de coûts Gen3ia).",
+        "required": ["currency", "totalChargeMinor", "totalProviderCostEur", "llmInputTokens", "llmOutputTokens"],
+        "properties": {
+          "currency": {
+            "type": "string",
+            "description": "Devise de facturation (ex. `XAF`)."
+          },
+          "totalChargeMinor": {
+            "type": "integer",
+            "description": "Charge totale facturée, en unités mineures (centimes).",
+            "minimum": 0
+          },
+          "totalProviderCostEur": {
+            "type": "number",
+            "description": "Coût fournisseur réel en euros."
+          },
+          "llmInputTokens": {
+            "type": "integer",
+            "description": "Tokens LLM consommés en entrée.",
+            "minimum": 0
+          },
+          "llmOutputTokens": {
+            "type": "integer",
+            "description": "Tokens LLM consommés en sortie.",
+            "minimum": 0
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Erreur structurée — jamais de stack trace ni de détail interne.",
+        "required": ["error", "requestId"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Message d'erreur lisible, en français."
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Identifiant de corrélation — joignez-le à tout ticket support."
+          }
+        }
+      },
+      "ValidationErrorResponse": {
+        "type": "object",
+        "description": "Erreur de validation avec détail des champs.",
+        "required": ["error", "issues", "requestId"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Message d'erreur lisible, en français."
+          },
+          "issues": {
+            "type": "object",
+            "description": "Détail zod aplati (`formErrors` / `fieldErrors`).",
+            "additionalProperties": true
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Identifiant de corrélation — joignez-le à tout ticket support."
+          }
+        }
+      },
+      "StatusResponse": {
+        "type": "object",
+        "description": "Statut public de la plateforme pour moniteurs d'uptime.",
+        "required": ["status", "version", "services", "checkedAt"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "État global : `ok` (200) ou `degraded` (503).",
+            "enum": ["ok", "degraded"]
+          },
+          "version": {
+            "type": "string",
+            "description": "Empreinte de version du déploiement (identifiant Vercel, SHA du commit ou repli `local-dev`)."
+          },
+          "services": {
+            "type": "object",
+            "description": "Santé par service.",
+            "required": ["auth", "r2", "ticks"],
+            "properties": {
+              "auth": {
+                "$ref": "#/components/schemas/ServiceHealth"
+              },
+              "r2": {
+                "$ref": "#/components/schemas/ServiceHealth"
+              },
+              "ticks": {
+                "$ref": "#/components/schemas/ServiceHealth"
+              }
+            }
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Horodatage ISO 8601 du sondage."
+          }
+        }
+      },
+      "ServiceHealth": {
+        "type": "object",
+        "description": "Santé d'un service sondé.",
+        "required": ["ok"],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "Le service est sain."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Raison stable de dégradation.",
+            "enum": ["not_configured", "timeout", "error"]
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "description": "Heartbeat minimaliste sans aucune dépendance.",
+        "required": ["status", "timestamp"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Toujours `ok` quand le processus répond.",
+            "enum": ["ok"]
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Horodatage ISO 8601 du heartbeat."
+          }
+        }
+      }
+    }
+  }
+}
