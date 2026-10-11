@@ -3670,3 +3670,16 @@ Stage Summary:
 - 5 axes d'amélioration du rapport livrés par sous-agents parallèles : référence API complète (OpenAPI 3.1 + docs humaine + changelog + runbooks), sécurité continue (ZAP hebdo + charge k6 + politiques), conversations longues maîtrisées (fenêtre glissante budgetée, résumé déterministe) + analytique par agent exposée, marketplace d'entreprise (essais plafonnés, compatibilité, 6 templates métier), connecteurs Zendesk/ServiceNow (7 outils FR au registry).
 - Hygiène renforcée au passage : .gitignore immunisé contre les symlinks node_modules.
 - QA finale verte sur l'ensemble : tsc 0, eslint 0/0, ~3 404 tests verts, build + budget bundle OK.
+---
+Task ID: 129-133/fix-1 (slug unifié agents)
+Agent: Super Z (principal)
+Task: Correction CI Accessibilité — le job « Démarre le serveur » crashait en boucle d'unhandledRejection : « You cannot use different slug names for the same dynamic path ('id' !== 'agentId') » — la route analytics de la Task 131 avait été créée sous app/api/agents/[agentId]/analytics alors que le niveau app/api/agents/* utilise [id] partout ailleurs.
+
+Work Log:
+- DIAGNOSTIC : jobs CI du commit 311eb4c — 5/6 verts, échec unique du job Accessibilité à l'étape de démarrage serveur (le build seul ne détecte pas le conflit de slug, c'est l'initialisation du routeur à l'exécution qui lève l'erreur).
+- FIX : déplacement app/api/agents/[agentId]/analytics → app/api/agents/[id]/analytics (git mv, historique préservé) ; route.ts — params typé { id: string } avec déstructuration renommée « const { id: agentId } » (le reste du code garde le sémantique agentId) ; route.test.ts — ROUTE_CONTEXT params { id: "agent-1" } + intitulés mis à jour.
+- VÉRIFICATIONS : tsc --noEmit = 0 (après purge du cache .next/types obsolète) ; eslint de la route = 0/0 ; vitest analytics = 7/7 verts ; rebuild complet OK ; next start réel — GET / = 200, GET /api/health = 200, 0 occurrence « different slug » dans les logs serveur, Ready en 1,2 s.
+- Contrôle des autres occurrences [agentId] : app/api/public/agents/[agentId], app/api/v1/agents/[agentId] et app/client/[agentId] sont à des niveaux de chemin DIFFÉRENTS (aucun conflit) ; les références textuelles restantes pointent vers ces chemins réels.
+
+Stage Summary:
+- CI rétablie : slug dynamique unifié sur [id] sous app/api/agents/*, serveur de production démarre proprement, tests analytics 7/7. Commit + push, surveillance CI.

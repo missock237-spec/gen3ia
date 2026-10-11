@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 /**
- * Route /api/agents/[agentId]/analytics (Task 131) — contrat HTTP :
+ * Route /api/agents/[id]/analytics (Task 131) — contrat HTTP :
  * session obligatoire (protectRoute), query ?days validée par zod (défaut 7,
  * max 90), propriété de l'agent vérifiée comme les autres routes agents
  * (404 si introuvable, 403 s'il existe sans être accessible), métriques
@@ -45,7 +45,7 @@ function request(query = ""): NextRequest {
   });
 }
 
-const ROUTE_CONTEXT = { params: Promise.resolve({ agentId: "agent-1" }) };
+const ROUTE_CONTEXT = { params: Promise.resolve({ id: "agent-1" }) };
 
 const AGENT = {
   id: "agent-1",
@@ -73,7 +73,7 @@ beforeEach(() => {
   getAnalyticsMock.mockResolvedValue(SUMMARY);
 });
 
-describe("GET /api/agents/[agentId]/analytics", () => {
+describe("GET /api/agents/[id]/analytics", () => {
   it("renvoie les métriques agrégées de l'agent (défaut 7 jours)", async () => {
     const response = await GET(request(), ROUTE_CONTEXT);
     expect(response.status).toBe(200);

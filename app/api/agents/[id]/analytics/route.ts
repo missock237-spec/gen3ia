@@ -9,7 +9,7 @@ import { getAgentAnalytics } from "@/lib/agents/analytics";
 /**
  * ANALYTIQUE PAR AGENT (Task 131 — axe « Analytique »).
  *
- *   GET /api/agents/[agentId]/analytics?days=7 — métriques de performance
+ *   GET /api/agents/[id]/analytics?days=7 — métriques de performance
  *   de l'agent sur les N derniers jours : totaux (messages, appels d'outils,
  *   erreurs, tokens), latence p50/p95 calculée depuis les échantillons stockés
  *   et série quotidienne chronologique.
@@ -25,7 +25,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 interface RouteContext {
-  params: Promise<{ agentId: string }>;
+  params: Promise<{ id: string }>;
 }
 
 const QuerySchema = z.object({
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   if (!guard.ok) return guard.response;
 
   try {
-    const { agentId } = await context.params;
+    const { id: agentId } = await context.params;
 
     // Query string validée par zod : ?days=7|30|…|90 (défaut 7).
     const params = new URL(request.url).searchParams;
