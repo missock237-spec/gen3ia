@@ -150,9 +150,9 @@ export function AgentQuickCreate({
             Fichier de référence <span className="font-medium normal-case text-[var(--g3-faint)]">(optionnel — importez seulement si nécessaire)</span>
           </span>
           {memoryFile ? (
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-300/40 bg-emerald-50 px-4 py-3">
-              <p className="min-w-0 truncate text-sm font-semibold text-emerald-700">{memoryFile.name}</p>
-              <button type="button" onClick={() => setMemoryFile(null)} className="shrink-0 rounded-full border border-emerald-300 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3">
+              <p className="min-w-0 truncate text-sm font-semibold text-[var(--g3-success-strong)]">{memoryFile.name}</p>
+              <button type="button" onClick={() => setMemoryFile(null)} className="shrink-0 rounded-full border border-[var(--g3-success-soft)] px-3 py-1 text-xs font-semibold text-[var(--g3-success-strong)] hover:bg-[var(--g3-success-soft)]">
                 Retirer
               </button>
             </div>
@@ -173,11 +173,11 @@ export function AgentQuickCreate({
             className="hidden"
             onChange={(event) => void handleFile(event.target.files?.[0])}
           />
-          {importError && <p className="mt-1.5 text-xs font-semibold text-red-600" role="alert">{importError}</p>}
+          {importError && <p className="mt-1.5 text-xs font-semibold text-[var(--g3-danger-strong)]" role="alert">{importError}</p>}
         </div>
 
         {error && (
-          <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700" role="alert">{error}</p>
+          <p className="rounded-xl bg-[var(--g3-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--g3-danger-strong)]" role="alert">{error}</p>
         )}
 
         <div className="flex items-center justify-end gap-2">

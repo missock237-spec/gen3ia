@@ -575,10 +575,10 @@ export function IdeWorkspace() {
               <span aria-hidden className="text-[10px] opacity-70">{tab.icon}</span>
               {tab.label}
               {tab.id === "code" && dirtyCount > 0 && (
-                <span className="rounded-full bg-amber-500/20 px-1.5 text-[9px] text-amber-300">{dirtyCount} non enreg.</span>
+                <span className="rounded-full bg-[var(--g3-warning-soft)] px-1.5 text-[9px] text-[var(--g3-warning-strong)]">{dirtyCount} non enreg.</span>
               )}
               {tab.id === "tests" && testRuns.length > 0 && (
-                <span className={"rounded-full px-1.5 text-[9px] " + (testRuns[testRuns.length - 1].passed === false ? "bg-red-500/20 text-red-300" : "bg-emerald-500/20 text-emerald-300")}>
+                <span className={"rounded-full px-1.5 text-[9px] " + (testRuns[testRuns.length - 1].passed === false ? "bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]" : "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]")}>
                   {testRuns.length}
                 </span>
               )}
@@ -589,7 +589,7 @@ export function IdeWorkspace() {
         <div className="ml-auto flex items-center gap-2">
           {saveNote && <span className="max-w-[320px] truncate text-[10px] text-[var(--g3-faint)]" role="status">{saveNote}</span>}
           <span className="flex items-center gap-1.5 rounded-full border border-[var(--g3-border)] px-2 py-1 text-[9px] text-[var(--g3-muted)]" title="État de la connexion aux sessions">
-            <span className={"inline-block size-1.5 rounded-full " + (online ? "bg-emerald-500" : "bg-red-500")} aria-hidden />
+            <span className={"inline-block size-1.5 rounded-full " + (online ? "bg-[var(--g3-success)]" : "bg-[var(--g3-danger)]")} aria-hidden />
             {online ? "En ligne" : "Hors ligne"}
           </span>
           <button
@@ -869,7 +869,7 @@ export function PreviewFrame({ compact: _compact, previewApps, previewAppId, onA
       <div className="grid min-h-0 flex-1 place-items-center overflow-auto bg-neutral-950 p-2">
         {previewLoading && <p className="text-xs text-[var(--g3-muted)]">Chargement de l&apos;aperçu…</p>}
         {previewError && (
-          <div className="rounded-lg border border-amber-900/60 bg-amber-950/40 p-3 text-[11px] text-amber-300" role="alert">
+          <div className="rounded-lg border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3 text-[11px] text-[var(--g3-warning-strong)]" role="alert">
             {previewError}
             <button type="button" onClick={onReload} className="mt-1 block underline underline-offset-2">
               Réessayer
@@ -895,8 +895,8 @@ export function PreviewFrame({ compact: _compact, previewApps, previewAppId, onA
 /* ================================================================== */
 
 function statusBadge(success: boolean | undefined) {
-  if (success) return <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400">OK</span>;
-  return <span className="rounded-full bg-red-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-red-400">ÉCHEC</span>;
+  if (success) return <span className="rounded-full bg-[var(--g3-success-soft)] px-1.5 py-0.5 text-[9px] font-semibold text-[var(--g3-success-strong)]">OK</span>;
+  return <span className="rounded-full bg-[var(--g3-danger-soft)] px-1.5 py-0.5 text-[9px] font-semibold text-[var(--g3-danger-strong)]">ÉCHEC</span>;
 }
 
 function LogsView({ entries, selected, onSelect, onOpenErrorRef }: { entries: TerminalEntry[]; selected: number | null; onSelect: (index: number) => void; onOpenErrorRef: (ref: ErrorRef) => void }) {
@@ -934,7 +934,7 @@ function LogsView({ entries, selected, onSelect, onOpenErrorRef }: { entries: Te
               {statusBadge(entry.success)}
               <code className="min-w-0 flex-1 truncate text-[var(--g3-faint)]">{entry.command}</code>
               {entry.mode && <span className="shrink-0 text-[9px] text-[var(--g3-muted)]">{entry.mode === "sandbox" ? "Docker" : entry.mode === "serverless" ? "réel" : entry.engine ?? "simulation"}</span>}
-              {typeof entry.exitCode === "number" && <span className={"shrink-0 " + (entry.exitCode === 0 ? "text-emerald-600" : "text-red-400")}>exit {entry.exitCode}</span>}
+              {typeof entry.exitCode === "number" && <span className={"shrink-0 " + (entry.exitCode === 0 ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-danger-strong)]")}>exit {entry.exitCode}</span>}
             </button>
           ))}
         </div>
@@ -944,7 +944,7 @@ function LogsView({ entries, selected, onSelect, onOpenErrorRef }: { entries: Te
           <h3 className="text-[10px] font-semibold uppercase tracking-widest text-[var(--g3-muted)]">Détail · #{selectedEntry.index}</h3>
           <pre className="mt-2 rounded-lg bg-[var(--g3-deep)] p-2.5 text-[11px] text-[var(--g3-faint)]">{maskSecrets(selectedEntry.command)}</pre>
           {selectedEntry.stdout && <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2.5 text-[11px] text-[var(--g3-faint)]">{maskSecrets(selectedEntry.stdout)}</pre>}
-          {selectedEntry.stderr && <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2.5 text-[11px] text-red-300">{maskSecrets(selectedEntry.stderr)}</pre>}
+          {selectedEntry.stderr && <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2.5 text-[11px] text-[var(--g3-danger-strong)]">{maskSecrets(selectedEntry.stderr)}</pre>}
           {(parseErrorRefs(selectedEntry.stderr).length > 0 || parseErrorRefs(selectedEntry.stdout).length > 0) && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {[...parseErrorRefs(selectedEntry.stderr), ...parseErrorRefs(selectedEntry.stdout)].slice(0, 6).map((ref) => (
@@ -952,7 +952,7 @@ function LogsView({ entries, selected, onSelect, onOpenErrorRef }: { entries: Te
                   key={`${ref.path}-${ref.line ?? ""}`}
                   type="button"
                   onClick={() => onOpenErrorRef(ref)}
-                  className="rounded-full border border-sky-900 bg-sky-950/50 px-2 py-0.5 text-[10px] text-sky-300 hover:bg-sky-900/60"
+                  className="rounded-full border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-2 py-0.5 text-[10px] text-[var(--g3-info)] hover:brightness-110"
                 >
                   ↗ {ref.path}{ref.line ? `:${ref.line}` : ""}
                 </button>
@@ -986,8 +986,8 @@ function TestsView({ testRuns, onOpenEntry }: { testRuns: ReturnType<typeof extr
           <li key={run.entryIndex}>
             <button type="button" onClick={() => onOpenEntry(run.entryIndex)} className="w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-deep)]/60 p-3 text-left transition hover:border-[var(--g3-border)]">
               <div className="flex items-center gap-2">
-                {run.passed === true && <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">RÉUSSI</span>}
-                {run.passed === false && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">ÉCHEC</span>}
+                {run.passed === true && <span className="rounded-full bg-[var(--g3-success-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--g3-success-strong)]">RÉUSSI</span>}
+                {run.passed === false && <span className="rounded-full bg-[var(--g3-danger-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--g3-danger-strong)]">ÉCHEC</span>}
                 {run.passed === null && <span className="rounded-full bg-[var(--g3-elevated)]/40 px-2 py-0.5 text-[10px] font-semibold text-[var(--g3-faint)]">INDÉTERMINÉ</span>}
                 {run.summary && <span className="text-[11px] text-[var(--g3-faint)]">{run.summary}</span>}
                 <span className="ml-auto text-[9px] text-[var(--g3-muted)]">{new Date(run.createdAt).toLocaleString("fr-FR")}</span>
@@ -1017,15 +1017,15 @@ function ExecutionPane({ entry, entries, onSelect, onOpenErrorRef }: { entry: Te
       </div>
       {typeof entry.exitCode === "number" && (
         <p className="text-[10px] text-[var(--g3-muted)]">
-          exit <span className={entry.exitCode === 0 ? "text-emerald-500" : "text-red-400"}>{entry.exitCode}</span> · {entry.durationMs} ms · {entry.mode === "sandbox" ? "Sandbox Docker (exécution réelle)" : entry.mode === "serverless" ? "Exécution réelle (serverless)" : entry.engine ?? "Simulation"}
+          exit <span className={entry.exitCode === 0 ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-danger-strong)]"}>{entry.exitCode}</span> · {entry.durationMs} ms · {entry.mode === "sandbox" ? "Sandbox Docker (exécution réelle)" : entry.mode === "serverless" ? "Exécution réelle (serverless)" : entry.engine ?? "Simulation"}
         </p>
       )}
       {entry.stdout && <pre className="max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2 text-[10px] text-[var(--g3-faint)]">{maskSecrets(entry.stdout)}</pre>}
-      {entry.stderr && <pre className="max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2 text-[10px] text-red-300">{maskSecrets(entry.stderr)}</pre>}
+      {entry.stderr && <pre className="max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2 text-[10px] text-[var(--g3-danger-strong)]">{maskSecrets(entry.stderr)}</pre>}
       {refs.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {refs.slice(0, 5).map((ref) => (
-            <button key={`${ref.path}-${ref.line ?? ""}`} type="button" onClick={() => onOpenErrorRef(ref)} className="rounded-full border border-sky-900 bg-sky-950/50 px-2 py-0.5 text-[10px] text-sky-300 hover:bg-sky-900/60">
+            <button key={`${ref.path}-${ref.line ?? ""}`} type="button" onClick={() => onOpenErrorRef(ref)} className="rounded-full border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-2 py-0.5 text-[10px] text-[var(--g3-info)] hover:brightness-110">
               ↗ {ref.path}{ref.line ? `:${ref.line}` : ""}
             </button>
           ))}
@@ -1038,7 +1038,7 @@ function ExecutionPane({ entry, entries, onSelect, onOpenErrorRef }: { entry: Te
             {entries.slice(-8, -1).reverse().map((e) => (
               <li key={e.index}>
                 <button type="button" onClick={() => onSelect(e.index)} className="w-full truncate rounded px-1.5 py-1 text-left text-[10px] text-[var(--g3-muted)] hover:bg-[var(--g3-deep)]/60 hover:text-[var(--g3-faint)]">
-                  <span className={e.success ? "text-emerald-600" : "text-red-400"}>●</span> {e.command}
+                  <span className={e.success ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-danger-strong)]"}>●</span> {e.command}
                 </button>
               </li>
             ))}
@@ -1057,7 +1057,7 @@ function MiniLogs({ entries, onSelect }: { entries: TerminalEntry[]; onSelect: (
         <li key={entry.index}>
           <button type="button" onClick={() => onSelect(entry.index)} className="w-full rounded px-2 py-1.5 text-left hover:bg-[var(--g3-deep)]/60">
             <div className="flex items-center gap-1.5">
-              <span className={"text-[8px] " + (entry.success ? "text-emerald-500" : "text-red-400")} aria-hidden>●</span>
+              <span className={"text-[8px] " + (entry.success ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-danger-strong)]")} aria-hidden>●</span>
               <code className="min-w-0 flex-1 truncate text-[10px] text-[var(--g3-faint)]">{entry.command}</code>
             </div>
             <span className="pl-3 text-[8px] text-[var(--g3-muted)]">{new Date(entry.createdAt).toLocaleTimeString("fr-FR")}</span>
@@ -1076,8 +1076,8 @@ function MiniTests({ testRuns, onOpenEntry }: { testRuns: ReturnType<typeof extr
         <li key={run.entryIndex}>
           <button type="button" onClick={() => onOpenEntry(run.entryIndex)} className="w-full rounded-lg border border-[var(--g3-border)] p-2 text-left hover:border-[var(--g3-border)]">
             <div className="flex items-center gap-1.5">
-              {run.passed === true && <span className="text-[9px] font-bold text-emerald-400">✓</span>}
-              {run.passed === false && <span className="text-[9px] font-bold text-red-400">✗</span>}
+              {run.passed === true && <span className="text-[9px] font-bold text-[var(--g3-success-strong)]">✓</span>}
+              {run.passed === false && <span className="text-[9px] font-bold text-[var(--g3-danger-strong)]">✗</span>}
               {run.passed === null && <span className="text-[9px] font-bold text-[var(--g3-muted)]">?</span>}
               <span className="min-w-0 flex-1 truncate text-[10px] text-[var(--g3-faint)]">{run.command}</span>
             </div>

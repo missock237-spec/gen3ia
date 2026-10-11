@@ -85,22 +85,22 @@ interface ObservationEntry {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700 border-amber-200",
-  connected: "bg-sky-100 text-sky-700 border-sky-200",
-  running: "bg-emerald-100 text-emerald-600 border-emerald-200",
+  pending: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)] border-[var(--g3-warning-soft)]",
+  connected: "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)] border-[var(--g3-secondary-soft)]",
+  running: "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)] border-[var(--g3-success-soft)]",
   paused: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
   disconnected: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
   stopped: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
-  failed: "bg-red-50 text-red-600 border-red-200",
+  failed: "bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)] border-[var(--g3-danger-soft)]",
 };
 
 const KIND_STYLES: Record<ObservationKind, string> = {
   observation: "text-[var(--g3-text-secondary)]",
-  action: "text-sky-700 font-medium",
+  action: "text-[var(--g3-info)] font-medium",
   result: "text-[var(--g3-muted)]",
-  pause: "text-amber-700",
-  info: "text-emerald-700",
-  error: "text-red-600",
+  pause: "text-[var(--g3-warning-strong)]",
+  info: "text-[var(--g3-success-strong)]",
+  error: "text-[var(--g3-danger-strong)]",
 };
 
 const FRAME_INTERVAL_MS = 3_000;
@@ -607,7 +607,7 @@ export function LiveDashboard() {
                 onClick={() => togglePermission(permission)}
                 className={`rounded-xl border px-4 py-2.5 text-left text-sm transition ${
                   permissions.includes(permission)
-                    ? "border-sky-200 bg-sky-100 text-sky-700"
+                    ? "border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] text-[var(--g3-info)]"
                     : "border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
                 }`}
               >
@@ -640,12 +640,12 @@ export function LiveDashboard() {
           {busy ? "Création…" : "Créer la session Live"}
         </button>
         {error && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">{error}</div>
+          <div className="mt-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] p-4 text-sm text-[var(--g3-danger-strong)]">{error}</div>
         )}
 
         {created && (
-          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-            <div className="text-sm font-semibold text-emerald-600">Session créée — {created.session.name}</div>
+          <div className="mt-5 rounded-2xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] p-5">
+            <div className="text-sm font-semibold text-[var(--g3-success-strong)]">Session créée — {created.session.name}</div>
             <div className="mt-1 text-xs text-[var(--g3-muted)]">ID : {created.session.id}</div>
             <button
               onClick={() => {
@@ -716,7 +716,7 @@ export function LiveDashboard() {
             )}
           </div>
           {browserError && (
-            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">{browserError}</div>
+            <div className="mt-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3 text-sm text-[var(--g3-warning-strong)]">{browserError}</div>
           )}
 
           <div className="mt-4">
@@ -737,7 +737,7 @@ export function LiveDashboard() {
             </div>
           </div>
 
-          <p className="mt-4 rounded-xl border border-amber-200 bg-amber-100 p-3 text-xs leading-5 text-amber-700">
+          <p className="mt-4 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3 text-xs leading-5 text-[var(--g3-warning-strong)]">
             En mode navigateur, l’agent observe, analyse et vous guide action par
             action — il ne contrôle pas votre clavier ni votre souris. Chaque
             action sensible exige de toute façon votre validation.
@@ -767,13 +767,13 @@ export function LiveDashboard() {
                     ))}
                   </div>
                   {session.pendingAction?.actionId && (
-                    <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3">
-                      <div className="text-xs font-semibold text-amber-700">Action sensible en attente de votre validation</div>
-                      <div className="mt-1 truncate font-mono text-[10px] text-amber-600">{actionLabel(session.pendingAction.action)}</div>
+                    <div className="mt-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3">
+                      <div className="text-xs font-semibold text-[var(--g3-warning-strong)]">Action sensible en attente de votre validation</div>
+                      <div className="mt-1 truncate font-mono text-[10px] text-[var(--g3-warning-strong)]">{actionLabel(session.pendingAction.action)}</div>
                       <div className="mt-2 flex gap-2">
                         <button
                           onClick={() => approveAction(session.id, session.pendingAction!.actionId)}
-                          className="rounded-lg border border-emerald-300 bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-200"
+                          className="rounded-lg border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-success-strong)] hover:bg-[var(--g3-success-soft)]"
                         >
                           Approuver
                         </button>
@@ -787,12 +787,12 @@ export function LiveDashboard() {
                     </div>
                   )}
                   {session.inFlightAction?.actionId && (
-                    <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3">
-                      <div className="text-xs font-semibold text-sky-700">Action en cours dont le résultat est inconnu</div>
-                      <div className="mt-1 truncate font-mono text-[10px] text-sky-600">{actionLabel(session.inFlightAction.action)}</div>
+                    <div className="mt-3 rounded-xl border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] p-3">
+                      <div className="text-xs font-semibold text-[var(--g3-info)]">Action en cours dont le résultat est inconnu</div>
+                      <div className="mt-1 truncate font-mono text-[10px] text-[var(--g3-info)]">{actionLabel(session.inFlightAction.action)}</div>
                       <button
                         onClick={() => retryAction(session.id, session.inFlightAction!.actionId)}
-                        className="mt-2 rounded-lg border border-sky-300 bg-[var(--g3-surface)] px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-100"
+                        className="mt-2 rounded-lg border border-[var(--g3-secondary-soft)] bg-[var(--g3-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-info)] hover:bg-[var(--g3-secondary-soft)]"
                       >
                         Réessayer
                       </button>
@@ -807,14 +807,14 @@ export function LiveDashboard() {
                               setObservations([]);
                               void startBrowserLive(session);
                             }}
-                            className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-100"
+                            className="rounded-lg border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-info)] hover:bg-[var(--g3-secondary-soft)]"
                           >
                             Tester dans le navigateur
                           </button>
                         )}
                         <button
                           onClick={() => stopSession(session.id)}
-                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100"
+                          className="rounded-lg border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]"
                         >
                           Stop
                         </button>

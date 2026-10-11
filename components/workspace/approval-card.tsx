@@ -34,14 +34,14 @@ export function ApprovalCard({ approval, onDecide, disabled = false }: ApprovalC
 
   return (
     <div
-      className={`my-2 rounded-xl border p-3.5 ${approval.status === "pending" ? "border-amber-300 bg-amber-50/60" : "border-[var(--g3-border)] bg-[var(--g3-surface)]"}`}
+      className={`my-2 rounded-xl border p-3.5 ${approval.status === "pending" ? "border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)]" : "border-[var(--g3-border)] bg-[var(--g3-surface)]"}`}
       data-approval-id={approval.id}
       data-status={approval.status}
       role={approval.status === "pending" ? "alert" : undefined}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="flex items-center gap-2 text-sm font-semibold text-[var(--g3-text)]">
-          <span aria-hidden className="grid size-6 place-items-center rounded-full bg-amber-100 text-xs text-amber-700">⚖</span>
+          <span aria-hidden className="grid size-6 place-items-center rounded-full bg-[var(--g3-warning-soft)] text-xs text-[var(--g3-warning-strong)]">⚖</span>
           {approval.title}
         </p>
         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${APPROVAL_STATUS_STYLES[approval.status]}`}>
@@ -97,10 +97,10 @@ export function ApprovalCard({ approval, onDecide, disabled = false }: ApprovalC
       )}
 
       {approval.status === "approved" && approval.decidedAt && (
-        <p className="mt-2 text-[11px] text-emerald-700">✓ Approuvée — l&apos;action a été exécutée dans cette conversation.</p>
+        <p className="mt-2 text-[11px] text-[var(--g3-success-strong)]">✓ Approuvée — l&apos;action a été exécutée dans cette conversation.</p>
       )}
       {approval.status === "rejected" && (
-        <p className="mt-2 text-[11px] text-red-600">✕ Rejetée — aucune donnée n&apos;a été transmise.</p>
+        <p className="mt-2 text-[11px] text-[var(--g3-danger-strong)]">✕ Rejetée — aucune donnée n&apos;a été transmise.</p>
       )}
     </div>
   );

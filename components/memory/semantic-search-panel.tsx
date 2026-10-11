@@ -120,7 +120,7 @@ export function SemanticSearchPanel() {
             results.map((hit) => (
               <article key={hit.id} className="g3-card p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-700">
+                  <span className="rounded-full border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--g3-info)]">
                     {TYPE_LABELS[hit.type] ?? hit.type}
                   </span>
                   {hit.key && (

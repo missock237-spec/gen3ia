@@ -318,9 +318,7 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
       chip: light
         ? "border-[#E5E1D5] bg-[var(--g3-surface)] text-[var(--g3-text-secondary)]"
         : "border-white/10 bg-[var(--g3-surface)]/5 text-[var(--g3-text-secondary)]",
-      chipAmber: light
-        ? "border-[#E5C88F] bg-[#FBF3DF] text-[#8A6117]"
-        : "border-amber-500/30 bg-amber-500/10 text-amber-200",
+      chipAmber: "border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]",
       chipIcon: light ? "bg-[#F0EEE6] text-[#83817A]" : "bg-[var(--g3-surface)]/5 text-[var(--g3-faint)]",
       send: light
         ? "bg-[#1F1E1A] text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-[#EAE5D9] disabled:text-[#A9A79E]"
@@ -478,7 +476,7 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
             aria-label={isListening ? "Saisie vocale en cours" : "Saisie vocale"}
             aria-pressed={isListening}
           >
-            {isListening ? <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-400" aria-hidden="true" /> : <MicIcon className="h-5 w-5" />}
+            {isListening ? <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[var(--g3-danger)]" aria-hidden="true" /> : <MicIcon className="h-5 w-5" />}
           </button>
 
           <button

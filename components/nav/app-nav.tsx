@@ -186,7 +186,7 @@ export function AppNav() {
                 <div className={"g3-account-menu " + (compact ? "is-compact" : "")}>
                   {confirmDelete ? (
                     <div className="space-y-1">
-                      <p className="px-2 py-1 text-[10px] font-semibold leading-4 text-red-600">
+                      <p className="px-2 py-1 text-[10px] font-semibold leading-4 text-[var(--g3-danger-strong)]">
                         Supprimer définitivement votre compte et toutes vos données ?
                       </p>
                       <button

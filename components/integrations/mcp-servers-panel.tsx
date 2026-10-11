@@ -139,8 +139,8 @@ export function McpServersPanel() {
         </button>
       </div>
 
-      {error ? <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-      {notice ? <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</div> : null}
+      {error ? <div className="mt-3 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-sm text-[var(--g3-danger-strong)]">{error}</div> : null}
+      {notice ? <div className="mt-3 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-sm text-[var(--g3-success-strong)]">{notice}</div> : null}
 
       {expanded && (
         <form onSubmit={addServer} className="mt-4 grid gap-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4 sm:grid-cols-2">
@@ -179,7 +179,7 @@ export function McpServersPanel() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">
                     {server.name}{" "}
-                    <span className={`ml-1 text-xs font-semibold ${server.enabled ? "text-emerald-600" : "text-[var(--g3-faint)]"}`}>
+                    <span className={`ml-1 text-xs font-semibold ${server.enabled ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-faint)]"}`}>
                       {server.enabled ? "● Actif" : "○ Désactivé"}
                     </span>
                   </p>
@@ -192,12 +192,12 @@ export function McpServersPanel() {
                   <button type="button" onClick={() => patchServer({ id: server.id, action: "refresh" })} className="rounded-lg border border-[var(--g3-border-strong)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--g3-elevated)]">
                     Rafraîchir
                   </button>
-                  <button type="button" onClick={() => deleteServer(server.id)} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50">
+                  <button type="button" onClick={() => deleteServer(server.id)} className="rounded-lg border border-[var(--g3-danger-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]">
                     Supprimer
                   </button>
                 </div>
               </div>
-              {server.lastError ? <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">Dernière erreur : {server.lastError}</p> : null}
+              {server.lastError ? <p className="mt-2 rounded-lg bg-[var(--g3-warning-soft)] px-3 py-2 text-xs text-[var(--g3-warning-strong)]">Dernière erreur : {server.lastError}</p> : null}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {(server.tools ?? []).slice(0, 8).map((tool) => (
                   <span key={tool.name} title={tool.description} className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--g3-muted)]">

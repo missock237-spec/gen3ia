@@ -38,9 +38,9 @@ interface TerminalViewProps {
 }
 
 function statusDot(connection: TerminalViewProps["connection"]) {
-  if (connection === "connected") return <span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-500" aria-hidden />;
+  if (connection === "connected") return <span className="inline-block size-1.5 animate-pulse rounded-full bg-[var(--g3-success)]" aria-hidden />;
   if (connection === "offline") return <span className="inline-block size-1.5 rounded-full bg-neutral-600" aria-hidden />;
-  return <span className="inline-block size-1.5 rounded-full bg-amber-500" aria-hidden />;
+  return <span className="inline-block size-1.5 rounded-full bg-[var(--g3-warning)]" aria-hidden />;
 }
 
 const CONNECTION_LABEL: Record<TerminalViewProps["connection"], string> = {
@@ -149,7 +149,7 @@ export function TerminalView({
           aria-pressed={live}
           className={
             "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition " +
-            (live ? "border-emerald-800 bg-emerald-950/50 text-emerald-300" : "border-[var(--g3-border)] text-[var(--g3-faint)] hover:text-[var(--g3-text-secondary)]")
+            (live ? "border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]" : "border-[var(--g3-border)] text-[var(--g3-faint)] hover:text-[var(--g3-text-secondary)]")
           }
         >
           {statusDot(connection)}
@@ -161,7 +161,7 @@ export function TerminalView({
             type="button"
             onClick={() => onStopSession(activeSession.id)}
             disabled={stopping}
-            className="rounded-full border border-amber-800 bg-amber-950/40 px-2.5 py-1 text-[11px] font-medium text-amber-300 transition hover:bg-amber-900/50 disabled:opacity-50"
+            className="rounded-full border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--g3-warning-strong)] transition hover:brightness-110 disabled:opacity-50"
             title="Empêche les agents d'exécuter de nouvelles commandes sur cette session"
           >
             {stopping ? "Arrêt…" : "Arrêter la session"}
@@ -172,7 +172,7 @@ export function TerminalView({
           <button
             type="button"
             onClick={onEmergencyStop}
-            className="rounded-full border border-red-800 bg-red-950/60 px-3 py-1 text-[11px] font-bold text-red-300 transition hover:bg-red-900/60"
+            className="rounded-full border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-3 py-1 text-[11px] font-bold text-[var(--g3-danger-strong)] transition hover:brightness-110"
             title="Interrompt immédiatement toutes les exécutions en cours de vos agents"
           >
             ⏹ Arrêt d&apos;urgence
@@ -187,7 +187,7 @@ export function TerminalView({
       </p>
 
       {error && (
-        <div className="mx-3 mt-2 rounded-lg border border-amber-900/60 bg-amber-950/40 p-2.5 text-[11px] text-amber-300" role="alert">
+        <div className="mx-3 mt-2 rounded-lg border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-2.5 text-[11px] text-[var(--g3-warning-strong)]" role="alert">
           {error}
           <button type="button" onClick={onRetry} className="ml-2 underline underline-offset-2">
             Réessayer
@@ -219,7 +219,7 @@ export function TerminalView({
                   </small>
                 )}
                 {typeof entry.exitCode === "number" && (
-                  <small className={entry.exitCode === 0 ? "text-emerald-500" : "text-red-400"}>
+                  <small className={entry.exitCode === 0 ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-danger-strong)]"}>
                     exit {entry.exitCode} · {entry.durationMs} ms
                   </small>
                 )}
@@ -227,9 +227,9 @@ export function TerminalView({
                   {new Date(entry.createdAt).toLocaleTimeString("fr-FR")}
                 </small>
               </div>
-              {entry.error && <pre className="mt-1 text-[11px] text-red-400">{maskSecrets(entry.error)}</pre>}
+              {entry.error && <pre className="mt-1 text-[11px] text-[var(--g3-danger-strong)]">{maskSecrets(entry.error)}</pre>}
               {entry.stdout && <pre className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--g3-faint)]">{maskSecrets(entry.stdout)}</pre>}
-              {entry.stderr && <pre className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-red-300/90">{maskSecrets(entry.stderr)}</pre>}
+              {entry.stderr && <pre className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--g3-danger-strong)]">{maskSecrets(entry.stderr)}</pre>}
               {refs.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {refs.map((ref) => (
@@ -237,7 +237,7 @@ export function TerminalView({
                       key={`${entry.index}-${ref.path}-${ref.line ?? ""}`}
                       type="button"
                       onClick={() => onOpenErrorRef(ref)}
-                      className="rounded-full border border-sky-900 bg-sky-950/50 px-2 py-0.5 text-[10px] text-sky-300 transition hover:bg-sky-900/60"
+                      className="rounded-full border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-2 py-0.5 text-[10px] text-[var(--g3-info)] transition hover:brightness-110"
                       title="Ouvrir à l'emplacement indiqué dans l'éditeur"
                     >
                       ↗ {ref.path}
@@ -284,7 +284,7 @@ export function TerminalView({
           {activeSession?.status === "stopped" && " · session arrêtée — les agents ne peuvent plus y exécuter de commandes"}
         </span>
         <span className="flex items-center gap-1.5">
-          <input type="checkbox" checked={followOutput} onChange={(event) => setFollowOutput(event.target.checked)} className="size-3 accent-emerald-500" />
+          <input type="checkbox" checked={followOutput} onChange={(event) => setFollowOutput(event.target.checked)} className="size-3 accent-[var(--g3-primary)]" />
           Suivre la sortie
         </span>
       </label>

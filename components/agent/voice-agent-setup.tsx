@@ -156,22 +156,22 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
           <h3 className="mt-1 text-xl font-bold">Attribuer un vrai numéro</h3>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--g3-muted)]">L’agent reste entièrement personnalisable comme les autres agents. Le numéro sert aux appels entrants et sortants selon les réglages ci-dessous.</p>
         </div>
-        <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">Voix active</span>
+        <span className="rounded-full border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-3 py-1 text-xs font-semibold text-[var(--g3-info)]">Voix active</span>
       </div>
 
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
         <div className="space-y-4">
           <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] p-4">
             <h4 className="font-semibold">1. Acheter un numéro Gen3ia</h4>
-            <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" className={`rounded-xl border px-3 py-2 text-left text-sm ${provider === "twilio" ? "border-sky-500 bg-sky-50" : "bg-[var(--g3-surface)]"}`} onClick={() => setProvider("twilio")}><b>Twilio</b><span className="block text-[11px] text-[var(--g3-muted)]">Réseau Twilio</span></button><button type="button" className={`rounded-xl border px-3 py-2 text-left text-sm ${provider === "plivo" ? "border-sky-500 bg-sky-50" : "bg-[var(--g3-surface)]"}`} onClick={() => setProvider("plivo")}><b>Plivo</b><span className="block text-[11px] text-[var(--g3-muted)]">Réseau Plivo</span></button></div>
-            {priceMinor !== null && <p className="mt-1 text-xs font-semibold text-sky-700">Prix d’attribution Gen3ia configuré : {(priceMinor / 100).toFixed(2)} {currency}</p>}
+            <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" className={`rounded-xl border px-3 py-2 text-left text-sm ${provider === "twilio" ? "border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)]" : "bg-[var(--g3-surface)]"}`} onClick={() => setProvider("twilio")}><b>Twilio</b><span className="block text-[11px] text-[var(--g3-muted)]">Réseau Twilio</span></button><button type="button" className={`rounded-xl border px-3 py-2 text-left text-sm ${provider === "plivo" ? "border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)]" : "bg-[var(--g3-surface)]"}`} onClick={() => setProvider("plivo")}><b>Plivo</b><span className="block text-[11px] text-[var(--g3-muted)]">Réseau Plivo</span></button></div>
+            {priceMinor !== null && <p className="mt-1 text-xs font-semibold text-[var(--g3-info)]">Prix d’attribution Gen3ia configuré : {(priceMinor / 100).toFixed(2)} {currency}</p>}
             <p className="mt-1 text-xs leading-5 text-[var(--g3-muted)]">Gen3ia cherche un numéro Twilio disponible puis l’attribue à cet agent. Le prix Gen3ia est débité du wallet.</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <input className="g3-input" value={country} onChange={(e) => setCountry(e.target.value.toUpperCase().slice(0, 2))} placeholder="US" maxLength={2} />
               <input className="g3-input" value={areaCode} onChange={(e) => setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 5))} placeholder="Indicatif régional (optionnel)" />
             </div>
             <button type="button" className="g3-btn g3-btn-primary mt-3" disabled={busy || country.length !== 2} onClick={search}>{busy ? "Recherche…" : "Rechercher des numéros"}</button>
-            {available.length > 0 && <div className="mt-3 max-h-48 space-y-2 overflow-auto">{available.map((item) => <div key={item.phoneNumber} className="flex items-center justify-between gap-2 rounded-xl border bg-[var(--g3-surface)] p-3"><div><div className="font-semibold">{item.phoneNumber}</div><div className="text-[10px] uppercase tracking-wide text-sky-700">{provider}</div><div className="text-[11px] text-[var(--g3-muted)]">{item.locality}{item.region ? ", " + item.region : ""}</div></div><button type="button" className="g3-btn g3-btn-cyan !px-3 !py-2 text-xs" disabled={busy} onClick={() => buy(item.phoneNumber)}>Acheter</button></div>)}</div>}
+            {available.length > 0 && <div className="mt-3 max-h-48 space-y-2 overflow-auto">{available.map((item) => <div key={item.phoneNumber} className="flex items-center justify-between gap-2 rounded-xl border bg-[var(--g3-surface)] p-3"><div><div className="font-semibold">{item.phoneNumber}</div><div className="text-[10px] uppercase tracking-wide text-[var(--g3-info)]">{provider}</div><div className="text-[11px] text-[var(--g3-muted)]">{item.locality}{item.region ? ", " + item.region : ""}</div></div><button type="button" className="g3-btn g3-btn-cyan !px-3 !py-2 text-xs" disabled={busy} onClick={() => buy(item.phoneNumber)}>Acheter</button></div>)}</div>}
           </div>
 
           <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-4">
@@ -180,7 +180,7 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
             <div className="mt-3 flex gap-2"><input className="g3-input flex-1" value={ownNumber} onChange={(e) => setOwnNumber(e.target.value)} placeholder="+14155551234" /><button type="button" className="g3-btn g3-btn-ghost" disabled={busy} onClick={attach}>Attribuer</button></div>
           </div>
 
-          {numbers.map((number) => <div key={number.id} className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div><div className="font-semibold text-emerald-800">{number.phoneNumber}</div><div className="text-xs text-emerald-700">{number.source === "gen3ia" ? "Numéro acheté par Gen3ia" : "Votre numéro"} · {number.provider ?? "twilio"} · actif</div></div><span className="text-lg">📞</span></div>)}
+          {numbers.map((number) => <div key={number.id} className="flex items-center justify-between rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] p-4"><div><div className="font-semibold text-[var(--g3-success-strong)]">{number.phoneNumber}</div><div className="text-xs text-[var(--g3-success-strong)]">{number.source === "gen3ia" ? "Numéro acheté par Gen3ia" : "Votre numéro"} · {number.provider ?? "twilio"} · actif</div></div><span className="text-lg">📞</span></div>)}
         </div>
 
         <div className="space-y-4">
@@ -195,16 +195,16 @@ export function VoiceAgentSetup({ agentId, onDone }: Props) {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-            <h4 className="font-semibold text-sky-900">4. Tester un vrai appel</h4>
-            <p className="mt-1 text-xs leading-5 text-sky-800">Le test utilise le numéro attribué à l’agent comme numéro appelant.</p>
+          <div className="rounded-2xl border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] p-4">
+            <h4 className="font-semibold text-[var(--g3-info)]">4. Tester un vrai appel</h4>
+            <p className="mt-1 text-xs leading-5 text-[var(--g3-info)]">Le test utilise le numéro attribué à l’agent comme numéro appelant.</p>
             <div className="mt-3 flex gap-2"><input className="g3-input flex-1" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="+14155551234" /><button type="button" className="g3-btn g3-btn-primary" disabled={busy || numbers.length === 0} onClick={testCall}>Appeler</button></div>
           </div>
         </div>
       </div>
 
-      {message && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div>}
-      {error && <div className="mt-4 rounded-xl border border-[rgba(246,98,110,0.35)] bg-[var(--g3-danger-soft)] p-3 text-sm text-[var(--g3-danger-strong)]">{error}</div>}
+      {message && <div className="mt-4 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] p-3 text-sm text-[var(--g3-success-strong)]">{message}</div>}
+      {error && <div className="mt-4 rounded-xl border border-[rgba(177,138,255,0.35)] bg-[var(--g3-danger-soft)] p-3 text-sm text-[var(--g3-danger-strong)]">{error}</div>}
       <div className="mt-5 flex justify-end"><button type="button" className="g3-btn g3-btn-ghost" onClick={() => void onDone()}>Terminer</button></div>
     </section>
   );

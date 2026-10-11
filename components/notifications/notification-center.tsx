@@ -266,7 +266,7 @@ export function NotificationCenter() {
       >
         <span aria-hidden="true">🔔</span>
         {unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[var(--g3-danger)] px-1 text-[10px] font-bold text-white">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -300,7 +300,7 @@ export function NotificationCenter() {
                 return (
                   <li key={item.id} className={`px-4 py-3 ${item.read ? "" : "bg-[var(--g3-elevated)]/50"}`}>
                     <div className="flex items-start gap-2">
-                      {!item.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-sky-500" aria-hidden="true" />}
+                      {!item.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--g3-secondary)]" aria-hidden="true" />}
                       <div className="min-w-0 flex-1">
                         <p className={`text-sm leading-5 text-[var(--g3-text)] ${item.read ? "" : "font-bold"}`}>{item.title}</p>
                         {item.body && <p className="mt-0.5 break-words text-[11px] leading-5 text-[var(--g3-muted)]">{item.body}</p>}
@@ -311,7 +311,7 @@ export function NotificationCenter() {
                               type="button"
                               onClick={() => void decide(item, "approve")}
                               disabled={deciding === item.id}
-                              className="rounded-full bg-emerald-600 px-3.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                              className="rounded-full bg-[var(--g3-success)] px-3.5 py-1.5 text-[11px] font-bold text-white transition hover:brightness-110 disabled:opacity-50"
                             >
                               {deciding === item.id ? "…" : "Approuver"}
                             </button>
@@ -319,7 +319,7 @@ export function NotificationCenter() {
                               type="button"
                               onClick={() => void decide(item, "reject")}
                               disabled={deciding === item.id}
-                              className="rounded-full border border-red-300/50 px-3.5 py-1.5 text-[11px] font-bold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                              className="rounded-full border border-[var(--g3-danger-soft)] px-3.5 py-1.5 text-[11px] font-bold text-[var(--g3-danger-strong)] transition hover:brightness-110 disabled:opacity-50"
                             >
                               Rejeter
                             </button>

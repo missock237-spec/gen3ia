@@ -166,9 +166,13 @@ const STYLE_TABLE: Record<SubtitleStyleName, AssStyle> = {
   documentary: { fontsize: 54, primary: "&H00FFFFFF", outline: "&H80000000", back: "&H60000000", bold: 0, outlineWidth: 2, shadow: 1, alignment: 2, marginV: 60 },
   minimal: { fontsize: 46, primary: "&H00F0F0F0", outline: "&H90000000", back: "&H40000000", bold: 0, outlineWidth: 1, shadow: 0, alignment: 2, marginV: 50 },
   shorts_bold: { fontsize: 72, primary: "&H00FFFFFF", outline: "&H00000000", back: "&H00000000", bold: 1, outlineWidth: 4, shadow: 2, alignment: 5, marginV: 0 },
-  cinematic_yellow: { fontsize: 58, primary: "&H0000D7FF", outline: "&HC0000000", back: "&H60000000", bold: 1, outlineWidth: 3, shadow: 1, alignment: 2, marginV: 80 },
-  /** Task 119 — karaoké : mot par mot (\k) sur surlignage vif, pop d'entrée. */
-  karaoke_pop: { fontsize: 76, primary: "&H00FFFFFF", secondary: "&H0000E5FF", outline: "&H00000000", back: "&H00000000", bold: 1, outlineWidth: 5, shadow: 2, alignment: 5, marginV: 0 },
+  /* Cinématique — Task 125 : identité 2 couleurs, l'ambre historique
+     devient le CYAN signature (ASS = &HAABBGGRR → #2AD4E8 = &H00E8D42A). */
+  cinematic_yellow: { fontsize: 58, primary: "&H00E8D42A", outline: "&HC0000000", back: "&H60000000", bold: 1, outlineWidth: 3, shadow: 1, alignment: 2, marginV: 80 },
+  /** Task 119 — karaoké : mot par mot (\k) sur surlignage vif, pop d'entrée.
+   *  Task 125 : surlignage VIOLET strong #9E85FF (&H00FF859E), blanc +
+   *  violet/cyan uniquement. */
+  karaoke_pop: { fontsize: 76, primary: "&H00FFFFFF", secondary: "&H00FF859E", outline: "&H00000000", back: "&H00000000", bold: 1, outlineWidth: 5, shadow: 2, alignment: 5, marginV: 0 },
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -233,7 +237,7 @@ export function toAssFile(track: SubtitleTrackFile, width: number, height: numbe
   const style = STYLE_TABLE[track.style] ?? STYLE_TABLE.documentary;
   const alignment = track.position === "bottom" || track.position === "center" || track.position === "top" ? alignmentFor(track.position) : style.alignment;
   const header = ASS_HEADER.replace("{W}", String(width)).replace("{H}", String(height)) +
-    `Style: Default,DejaVu Sans,${style.fontsize},${style.primary},${style.secondary ?? "&H000000FF"},${style.outline},${style.back},${style.bold},0,0,0,100,100,0,0,1,${style.outlineWidth},${style.shadow},${alignment},60,60,${style.marginV},1\n\n` +
+    `Style: Default,DejaVu Sans,${style.fontsize},${style.primary},${style.secondary ?? "&H00FF859E"},${style.outline},${style.back},${style.bold},0,0,0,100,100,0,0,1,${style.outlineWidth},${style.shadow},${alignment},60,60,${style.marginV},1\n\n` +
     "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
   const events = track.cues
     .map((cue) => {

@@ -68,7 +68,7 @@ export default function RemoteApprovalPage() {
         )}
 
         {status === "error" && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{message}</div>
+          <div className="mt-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-sm text-[var(--g3-danger-strong)]">{message}</div>
         )}
 
         <p className="mt-6 text-xs text-[var(--g3-faint)]">Identifiant de l&apos;action : {params.id?.slice(0, 12) ?? "?"}…</p>

@@ -103,7 +103,7 @@ export function MissionComposer({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-serif text-lg font-semibold text-[var(--g3-text)]">Nouvelle mission</h2>
-        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+        <span className="rounded-full border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--g3-success-strong)]">
           plan + validations automatiques
         </span>
       </div>
@@ -232,7 +232,7 @@ export function MissionComposer({
           </p>
         )}
         {error && (
-          <p className="mt-2.5 rounded-xl border border-[rgba(246,98,110,0.35)] bg-[var(--g3-danger-soft)] px-3.5 py-2.5 text-sm text-[var(--g3-danger-strong)]" role="alert">
+          <p className="mt-2.5 rounded-xl border border-[rgba(177,138,255,0.35)] bg-[var(--g3-danger-soft)] px-3.5 py-2.5 text-sm text-[var(--g3-danger-strong)]" role="alert">
             {error}
           </p>
         )}

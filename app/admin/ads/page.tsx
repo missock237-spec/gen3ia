@@ -156,7 +156,7 @@ export default function AdminAdsPage() {
           type="button"
           disabled={busy}
           onClick={() => void remove(ad)}
-          className="rounded-full border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-400/10 disabled:opacity-40"
+          className="rounded-full border border-[var(--g3-danger-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:brightness-110 disabled:opacity-40"
         >
           Supprimer
         </button>
@@ -166,8 +166,8 @@ export default function AdminAdsPage() {
 
   return (
     <div className="space-y-7">
-      {message && <div className="rounded-2xl border border-emerald-300/30 bg-emerald-300/10 p-4 text-sm text-emerald-200" role="status">{message}</div>}
-      {error && <div className="rounded-2xl border border-red-300/30 bg-red-300/10 p-4 text-sm text-red-300" role="alert">{error}</div>}
+      {message && <div className="rounded-2xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] p-4 text-sm text-[var(--g3-success-strong)]" role="status">{message}</div>}
+      {error && <div className="rounded-2xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] p-4 text-sm text-[var(--g3-danger-strong)]" role="alert">{error}</div>}
 
       {loading ? (
         <LoadingState rows={3} label="Chargement de l'inventaire…" />

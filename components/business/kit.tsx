@@ -33,10 +33,10 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 type PillTone = "neutral" | "green" | "amber" | "red" | "blue";
 const TONE_CLS: Record<PillTone, string> = {
   neutral: "bg-[var(--g3-elevated)] text-[var(--g3-muted)]",
-  green: "bg-emerald-50 text-emerald-700",
-  amber: "bg-amber-50 text-amber-700",
-  red: "bg-red-50 text-red-700",
-  blue: "bg-sky-50 text-sky-700",
+  green: "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]",
+  amber: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]",
+  red: "bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]",
+  blue: "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)]",
 };
 
 export function Pill({ tone = "neutral", children }: { tone?: PillTone; children: React.ReactNode }) {

@@ -39,12 +39,12 @@ interface AgentOption {
 
 const STATUS_STYLES: Record<string, string> = {
   queued: "bg-[var(--g3-elevated)] text-[var(--g3-muted)]",
-  ringing: "bg-amber-50 text-amber-700",
-  "in-progress": "bg-sky-50 text-sky-700",
-  completed: "bg-emerald-50 text-emerald-700",
-  failed: "bg-red-50 text-red-700",
+  ringing: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]",
+  "in-progress": "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)]",
+  completed: "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]",
+  failed: "bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]",
   "no-answer": "bg-[var(--g3-elevated)] text-[var(--g3-muted)]",
-  busy: "bg-amber-50 text-amber-700",
+  busy: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]",
   canceled: "bg-[var(--g3-elevated)] text-[var(--g3-muted)]",
 };
 
@@ -169,8 +169,8 @@ export default function StudioCallsPage() {
         description="Lancez des appels sortants avec vos agents vocaux, suivez les conversations en direct et obtenez un résumé IA de chaque appel."
       />
 
-      {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
-      {message && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{message}</div>}
+      {error && <div className="mb-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-sm text-[var(--g3-danger-strong)]" role="alert">{error}</div>}
+      {message && <div className="mb-4 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-sm text-[var(--g3-success-strong)]" role="status">{message}</div>}
 
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5">
@@ -237,24 +237,24 @@ export default function StudioCallsPage() {
                   {openId === session.id && (
                     <div className="mt-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-3">
                       {liveSession && LIVE_STATUSES.has(liveSession.status) && (
-                        <p className="mb-2 text-xs font-bold text-sky-700">● Appel {liveSession.status} — transcript en direct</p>
+                        <p className="mb-2 text-xs font-bold text-[var(--g3-info)]">● Appel {liveSession.status} — transcript en direct</p>
                       )}
-                      {liveSession?.lastError && <p className="mb-2 text-xs text-red-600">Erreur : {liveSession.lastError}</p>}
+                      {liveSession?.lastError && <p className="mb-2 text-xs text-[var(--g3-danger-strong)]">Erreur : {liveSession.lastError}</p>}
                       <div className="max-h-64 space-y-1.5 overflow-y-auto">
                         {(liveSession?.history ?? session.history ?? []).length === 0 && (
                           <p className="text-xs text-[var(--g3-muted)]">Aucun échange enregistré pour l&apos;instant.</p>
                         )}
                         {(liveSession?.history ?? session.history ?? []).map((item, index) => (
-                          <p key={index} className={"text-xs " + (item.role === "assistant" ? "text-emerald-800" : "text-[var(--g3-text)]")}>
+                          <p key={index} className={"text-xs " + (item.role === "assistant" ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-text)]")}>
                             <strong>{item.role === "assistant" ? "Agent" : "Correspondant"} :</strong> {item.text}
                           </p>
                         ))}
                       </div>
                       {summary && (
-                        <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3">
-                          <p className="mb-1 text-xs font-bold text-sky-900">Résumé IA</p>
-                          <p className="whitespace-pre-wrap text-xs text-sky-900">{summary}</p>
-                          <button type="button" onClick={() => void requestSummary(session.id, true)} disabled={summaryBusy} className="mt-2 text-[11px] font-semibold text-sky-700 underline">
+                        <div className="mt-3 rounded-lg border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] p-3">
+                          <p className="mb-1 text-xs font-bold text-[var(--g3-info)]">Résumé IA</p>
+                          <p className="whitespace-pre-wrap text-xs text-[var(--g3-info)]">{summary}</p>
+                          <button type="button" onClick={() => void requestSummary(session.id, true)} disabled={summaryBusy} className="mt-2 text-[11px] font-semibold text-[var(--g3-info)] underline">
                             {summaryBusy ? "…" : "Régénérer"}
                           </button>
                         </div>

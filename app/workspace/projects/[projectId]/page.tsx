@@ -196,8 +196,8 @@ export default function ProjectDetailPage() {
             <button type="button" onClick={() => void save()} disabled={saving} className="g3-btn g3-btn-primary text-xs">
               {saving ? "Enregistrement…" : "Enregistrer"}
             </button>
-            {savedNote && <span className="text-xs text-emerald-700">{savedNote}</span>}
-            {error && <span className="text-xs text-red-600">{error}</span>}
+            {savedNote && <span className="text-xs text-[var(--g3-success-strong)]">{savedNote}</span>}
+            {error && <span className="text-xs text-[var(--g3-danger-strong)]">{error}</span>}
           </div>
         </div>
       )}
@@ -249,7 +249,7 @@ export default function ProjectDetailPage() {
             <button type="button" onClick={() => void save()} disabled={saving} className="g3-btn g3-btn-primary text-xs">
               {saving ? "Enregistrement…" : "Enregistrer"}
             </button>
-            {savedNote && <span className="text-xs text-emerald-700">{savedNote}</span>}
+            {savedNote && <span className="text-xs text-[var(--g3-success-strong)]">{savedNote}</span>}
           </div>
           <div className="border-t border-[var(--g3-border)] pt-3">
             <button type="button" onClick={() => void remove()} className="g3-btn g3-btn-danger text-xs">

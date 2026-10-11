@@ -80,7 +80,7 @@ export function DeveloperShell({ children }: { children: ReactNode }) {
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--g3-faint)]">
               <Link href="/studio" className="transition hover:text-[var(--g3-text-secondary)]">Espace de travail</Link>
               <span aria-hidden="true">/</span>
-              <span className="font-medium text-sky-700">Développeur</span>
+              <span className="font-medium text-[var(--g3-info)]">Développeur</span>
               {current && current.href !== "/developer" && (
                 <>
                   <span aria-hidden="true">/</span>
@@ -96,14 +96,14 @@ export function DeveloperShell({ children }: { children: ReactNode }) {
           </header>
 
           {loadError && (
-            <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800" role="alert">
+            <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-4 text-sm text-[var(--g3-warning-strong)]" role="alert">
               <span>{loadError}</span>
-              <button type="button" onClick={() => void loadCore()} className="shrink-0 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-500">
+              <button type="button" onClick={() => void loadCore()} className="shrink-0 rounded-full bg-[var(--g3-warning)] px-4 py-2 text-xs font-semibold text-white hover:brightness-110">
                 Recharger
               </button>
             </div>
           )}
-          {message && <div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm" role="status">{message}</div>}
+          {message && <div className="mb-5 rounded-2xl border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] p-4 text-sm" role="status">{message}</div>}
 
           {children}
         </main>

@@ -115,13 +115,13 @@ export function TeamMembersPanel({ teamId }: { teamId: string }) {
           role="status"
           className={`rounded-2xl px-4 py-3 text-sm leading-6 ${
             feedback.kind === 'ok'
-              ? 'border border-emerald-200 bg-emerald-50 text-emerald-800'
-              : 'border border-red-200 bg-red-50 text-red-700'
+              ? 'border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]'
+              : 'border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]'
           }`}
         >
           <p>{feedback.text}</p>
           {feedback.kind === 'ok' && lastToken && (
-            <code className="mt-2 block truncate rounded-lg bg-[var(--g3-surface)]/80 px-2 py-1 text-xs text-emerald-900">
+            <code className="mt-2 block truncate rounded-lg bg-[var(--g3-surface)]/80 px-2 py-1 text-xs text-[var(--g3-success-strong)]">
               {`${typeof window !== 'undefined' ? window.location.origin : ''}/team/join?token=${lastToken}`}
             </code>
           )}
@@ -167,7 +167,7 @@ export function TeamMembersPanel({ teamId }: { teamId: string }) {
                   type="button"
                   onClick={() => handleRemove(member.userId)}
                   disabled={busyMember === member.userId}
-                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] transition hover:bg-[var(--g3-danger-soft)] disabled:opacity-50"
                 >
                   Retirer
                 </button>

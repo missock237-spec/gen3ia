@@ -75,7 +75,7 @@ export function ProjectsPanel() {
                 type="button"
                 onClick={() => setSelectedProject(project.id)}
                 className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left ${
-                  selectedProject === project.id ? "border-sky-400 bg-sky-50" : "bg-[var(--g3-surface)]"
+                  selectedProject === project.id ? "border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)]" : "bg-[var(--g3-surface)]"
                 }`}
               >
                 <div>

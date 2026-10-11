@@ -652,7 +652,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         </div>
 
         {error && detail && (
-          <p className="mx-3 mt-1.5 rounded-lg border border-[rgba(246,98,110,0.35)] bg-[var(--g3-danger-soft)] px-3 py-2 text-xs text-[var(--g3-danger-strong)] lg:mx-0" role="alert">
+          <p className="mx-3 mt-1.5 rounded-lg border border-[rgba(177,138,255,0.35)] bg-[var(--g3-danger-soft)] px-3 py-2 text-xs text-[var(--g3-danger-strong)] lg:mx-0" role="alert">
             {error}
           </p>
         )}
@@ -664,10 +664,10 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
                 <button
                   type="button"
                   onClick={stopCurrentTurn}
-                  className="flex items-center gap-2 rounded-full border border-[rgba(239,68,68,0.45)] bg-[rgba(239,68,68,0.12)] px-4 py-1.5 text-xs font-semibold text-[#f87171] transition hover:bg-[rgba(239,68,68,0.22)]"
+                  className="flex items-center gap-2 rounded-full border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] transition hover:brightness-110"
                   aria-label="Arrêter l'agent"
                 >
-                  <span className="inline-block h-2 w-2 rounded-[2px] bg-[#f87171]" aria-hidden="true" />
+                  <span className="inline-block h-2 w-2 rounded-[2px] bg-[var(--g3-danger)]" aria-hidden="true" />
                   Arrêter l&apos;agent
                 </button>
               </div>

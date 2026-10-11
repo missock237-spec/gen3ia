@@ -12,10 +12,10 @@ import type { ReactNode } from "react";
 export type CalloutTone = "info" | "success" | "warning" | "error" | "neutral";
 
 const TONE_STYLES: Record<CalloutTone, { box: string; iconColor: string }> = {
-  info: { box: "border-violet-200 bg-violet-100 text-violet-700", iconColor: "text-violet-600" },
-  success: { box: "border-emerald-200 bg-emerald-50 text-emerald-700", iconColor: "text-emerald-600" },
-  warning: { box: "border-amber-200 bg-amber-50 text-amber-800", iconColor: "text-amber-600" },
-  error: { box: "border-red-200 bg-red-50 text-red-700", iconColor: "text-red-600" },
+  info: { box: "border-[var(--g3-primary-soft)] bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]", iconColor: "text-[var(--g3-primary-strong)]" },
+  success: { box: "border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]", iconColor: "text-[var(--g3-success-strong)]" },
+  warning: { box: "border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]", iconColor: "text-[var(--g3-warning-strong)]" },
+  error: { box: "border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]", iconColor: "text-[var(--g3-danger-strong)]" },
   neutral: { box: "border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] text-[var(--g3-muted)]", iconColor: "text-[var(--g3-muted)]" },
 };
 

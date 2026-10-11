@@ -16,7 +16,7 @@ export function PcOnlyNotice({ deviceType }: { deviceType?: string }) {
   return (
     <div className="flex min-h-full items-center justify-center bg-[var(--g3-bg)] p-6 text-[var(--g3-text)]">
       <div className="anim-scale-in w-full max-w-lg rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)]">
-        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-100 text-xs font-bold uppercase tracking-widest text-amber-700">
+        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--g3-warning-soft)] text-xs font-bold uppercase tracking-widest text-[var(--g3-warning-strong)]">
           PC
         </div>
         <h1 className="mt-6 font-serif text-2xl font-semibold">Agent Live — PC uniquement</h1>

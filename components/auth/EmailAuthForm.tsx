@@ -83,8 +83,8 @@ export default function EmailAuthForm() {
       <input type="email" placeholder="Adresse e-mail" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required className={inputClasses} />
       <input type="password" placeholder="Mot de passe" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === "inscription" ? "new-password" : "current-password"} required minLength={6} className={inputClasses} />
       {mode === "inscription" && <input type="password" placeholder="Confirmer le mot de passe" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" required minLength={6} className={inputClasses} />}
-      {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-      {info && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{info}</p>}
+      {error && <p role="alert" className="rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-sm text-[var(--g3-danger-strong)]">{error}</p>}
+      {info && <p role="status" className="rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-sm text-[var(--g3-success-strong)]">{info}</p>}
       {/* Libellé conditionnel au mode : une CONNEXION n'a jamais « créé de profil » (audit UX 2-c). */}
       <button type="submit" disabled={pending} className={buttonClasses}>{pending ? (mode === "connexion" ? "Connexion…" : "Création du profil…") : mode === "connexion" ? "Se connecter" : "Créer mon compte"}</button>
       {/* Bouton (et non lien « # ») : le mot de passe oublié est une ACTION,

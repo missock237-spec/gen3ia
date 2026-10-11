@@ -287,8 +287,8 @@ export default function InterfaceLabPage() {
     return (
       <div className="mx-auto max-w-2xl py-10">
         <div className="g3-card anim-scale-in p-8 text-center md:p-12">
-          <div className="anim-float mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-sky-200 bg-sky-100">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-sky-700" aria-hidden="true"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6" /></svg>
+          <div className="anim-float mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)]">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-[var(--g3-info)]" aria-hidden="true"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6" /></svg>
           </div>
           <div className="g3-eyebrow mt-6">Acces exclusif</div>
           <h1 className="mt-2 font-serif text-2xl font-semibold md:text-3xl">Atelier réservé aux agents de code</h1>
@@ -396,7 +396,7 @@ export default function InterfaceLabPage() {
               </div>
               <div className="p-4">
                 <h3 className="truncate text-sm font-bold">{item.name}</h3>
-                <p className="text-xs text-sky-700">par {item.author}</p>
+                <p className="text-xs text-[var(--g3-info)]">par {item.author}</p>
                 {item.description && <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--g3-muted)]">{item.description}</p>}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {item.kind === "theme" || item.kind === "component" ? (
@@ -448,7 +448,7 @@ export default function InterfaceLabPage() {
               {adapted && (
                 <div className="anim-slide-up">
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-emerald-600">Version Gen3ia</h3>
+                    <h3 className="text-sm font-bold text-[var(--g3-success-strong)]">Version Gen3ia</h3>
                     <button type="button" className="g3-btn g3-btn-cyan !px-3 !py-1.5 text-xs" onClick={() => void copy(adapted, "adapted")}>{copied === "adapted" ? "Copie ✓" : "Copier"}</button>
                   </div>
                   <pre className="g3-code">{adapted}</pre>
@@ -473,7 +473,7 @@ export default function InterfaceLabPage() {
               {adapted && (
                 <div className="anim-slide-up">
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-emerald-600">Palette Gen3ia</h3>
+                    <h3 className="text-sm font-bold text-[var(--g3-success-strong)]">Palette Gen3ia</h3>
                     <button type="button" className="g3-btn g3-btn-cyan !px-3 !py-1.5 text-xs" onClick={() => void copy(adapted, "adapted")}>{copied === "adapted" ? "Copie ✓" : "Copier"}</button>
                   </div>
                   <pre className="g3-code">{adapted}</pre>

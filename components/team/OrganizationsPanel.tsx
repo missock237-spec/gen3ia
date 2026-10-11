@@ -156,14 +156,14 @@ export function OrganizationsPanel() {
         </span>
       </div>
 
-      {error && <p role="alert" className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</p>}
+      {error && <p role="alert" className="mt-4 rounded-2xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] px-4 py-3 text-sm text-[var(--g3-warning-strong)]">{error}</p>}
 
       {pendingInvitations.length > 0 && (
         <div className="mt-5 space-y-2">
           <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">Invitations en attente</p>
           {pendingInvitations.map((invitation) => (
-            <div key={invitation.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
-              <span className="min-w-0 flex-1 text-xs text-sky-900">
+            <div key={invitation.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-4 py-3">
+              <span className="min-w-0 flex-1 text-xs text-[var(--g3-info)]">
                 <strong className="block truncate text-sm">{invitation.orgName}</strong>
                 Rôle proposé : {ROLE_LABEL[invitation.role]}
               </span>
@@ -196,13 +196,13 @@ export function OrganizationsPanel() {
                 aria-expanded={expanded === org.id}
                 className="flex w-full items-center gap-4 p-4 text-left transition hover:bg-[var(--g3-elevated)]"
               >
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-100 font-serif text-lg font-semibold text-violet-700">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--g3-primary-soft)] font-serif text-lg font-semibold text-[var(--g3-primary-strong)]">
                   {org.name.charAt(0).toUpperCase()}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-semibold text-[var(--g3-text)]">{org.name}</span>
-                    <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-violet-700">{org.plan}</span>
+                    <span className="rounded-full border border-[var(--g3-primary-soft)] bg-[var(--g3-primary-soft)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--g3-primary-strong)]">{org.plan}</span>
                     <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--g3-muted)]">{ROLE_LABEL[org.myRole]}</span>
                   </span>
                   <span className="mt-0.5 block text-xs text-[var(--g3-muted)]">{org.memberCount} membre{org.memberCount > 1 ? "s" : ""} · isolation {org.isolation === "silo" ? "silo (dédiée)" : "pool (partagée)"}</span>
@@ -230,7 +230,7 @@ export function OrganizationsPanel() {
                               <span className="block truncate text-xs font-semibold text-[var(--g3-text)]">{member.displayName || member.email}</span>
                               <span className="block truncate text-[10px] text-[var(--g3-faint)]">{member.email}</span>
                             </span>
-                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${member.role === "owner" ? "bg-violet-100 text-violet-700" : member.role === "admin" ? "bg-sky-100 text-sky-700" : "bg-[var(--g3-elevated)] text-[var(--g3-muted)]"}`}>
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${member.role === "owner" ? "bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]" : member.role === "admin" ? "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)]" : "bg-[var(--g3-elevated)] text-[var(--g3-muted)]"}`}>
                               {ROLE_LABEL[member.role]}
                             </span>
                             {canManage(org) && member.role !== "owner" && (
@@ -249,7 +249,7 @@ export function OrganizationsPanel() {
                                   type="button"
                                   disabled={busy}
                                   onClick={() => void memberAction(org.id, { action: "remove", memberId: member.userId })}
-                                  className="rounded-lg border border-red-200 bg-[var(--g3-surface)] px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
+                                  className="rounded-lg border border-[var(--g3-danger-soft)] bg-[var(--g3-surface)] px-2 py-1 text-[10px] font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)] disabled:opacity-40"
                                 >
                                   Retirer
                                 </button>

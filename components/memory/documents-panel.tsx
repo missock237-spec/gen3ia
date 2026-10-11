@@ -136,7 +136,7 @@ export function DocumentsPanel(props: {
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         data-dragging={dragging || undefined}
-        className={`g3-card flex flex-col items-center justify-center border p-8 text-center transition ${dragging ? "border-sky-400 bg-sky-50" : "border-[rgba(23,23,20,0.09)]"}`}
+        className={`g3-card flex flex-col items-center justify-center border p-8 text-center transition ${dragging ? "border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)]" : "border-[rgba(23,23,20,0.09)]"}`}
       >
         <p className="font-serif text-lg font-semibold">Déposez vos documents ici</p>
         <p className="mt-1 max-w-md text-sm text-[var(--g3-muted)]">
@@ -175,7 +175,7 @@ export function DocumentsPanel(props: {
               <li key={item.id} className="min-w-0">
                 <div className="flex items-center justify-between gap-3 text-xs">
                   <span className="min-w-0 flex-1 truncate font-medium text-[var(--g3-text-secondary)]">{item.filename}</span>
-                  <span className={`shrink-0 font-semibold ${item.status === "error" ? "text-red-600" : item.status === "done" ? "text-emerald-600" : "text-[var(--g3-muted)]"}`}>
+                  <span className={`shrink-0 font-semibold ${item.status === "error" ? "text-[var(--g3-danger-strong)]" : item.status === "done" ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-muted)]"}`}>
                     {item.status === "pending" && "en attente"}
                     {item.status === "uploading" && `${Math.round(item.progress * 100)}%`}
                     {item.status === "done" && "stocké ✓"}
@@ -185,13 +185,13 @@ export function DocumentsPanel(props: {
                 </div>
                 <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--g3-elevated)]">
                   <div
-                    className={`h-full rounded-full transition-all ${item.status === "error" ? "bg-red-500" : item.status === "done" ? "bg-emerald-500" : "bg-sky-500"}`}
+                    className={`h-full rounded-full transition-all ${item.status === "error" ? "bg-[var(--g3-danger)]" : item.status === "done" ? "bg-[var(--g3-success)]" : "bg-[var(--g3-secondary)]"}`}
                     style={{ width: `${Math.max(Math.round(item.progress * 100), item.status === "pending" ? 0 : 4)}%` }}
                   />
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[var(--g3-faint)]">
                   <span>{formatBytes(item.sizeBytes)}</span>
-                  {item.error && <span className="truncate text-red-500">{item.error}</span>}
+                  {item.error && <span className="truncate text-[var(--g3-danger-strong)]">{item.error}</span>}
                 </div>
               </li>
             ))}
@@ -247,7 +247,7 @@ export function DocumentsPanel(props: {
                       <button
                         disabled={busyFile === file.path}
                         onClick={() => remove(file)}
-                        className="min-h-9 rounded-md border border-red-300 bg-red-50 px-3 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+                        className="min-h-9 rounded-md border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-3 text-[11px] font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]"
                       >
                         Supprimer définitivement
                       </button>
@@ -263,7 +263,7 @@ export function DocumentsPanel(props: {
                       disabled={busyFile === file.path}
                       onClick={() => setConfirmingPath(file.path)}
                       aria-label={`Supprimer ${file.filename}`}
-                      className="min-h-9 rounded-md border border-red-200 bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
+                      className="min-h-9 rounded-md border border-[var(--g3-danger-soft)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)] disabled:opacity-40"
                     >
                       Supprimer
                     </button>

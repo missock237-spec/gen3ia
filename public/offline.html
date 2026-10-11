@@ -41,7 +41,9 @@
         letter-spacing: 0.2em;
         text-transform: uppercase;
       }
-      /* Pastille d'état réseau : « Hors ligne » → « Reconnexion… ». */
+      /* Pastille d'état réseau : « Hors ligne » → « Reconnexion… ».
+         Task 125 : 2 couleurs — l'état hors ligne passe au violet danger
+         (#B18AFF/#C9AEFF), discernable par son libellé et son point. */
       .status {
         display: inline-flex;
         align-items: center;
@@ -49,8 +51,8 @@
         margin: 18px 0 0;
         padding: 6px 14px;
         border-radius: 999px;
-        background: rgba(246, 98, 110, 0.13);
-        color: #FB8E96;
+        background: rgba(177, 138, 255, 0.13);
+        color: #C9AEFF;
         font-size: 12px;
         font-weight: 600;
         letter-spacing: 0.08em;
@@ -60,7 +62,7 @@
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #F6626E;
+        background: #B18AFF;
       }
       .status.reconnexion {
         background: rgba(124, 92, 255, 0.16);
@@ -75,8 +77,8 @@
         margin-top: 16px;
         padding: 10px 14px;
         border-radius: 12px;
-        background: rgba(245, 174, 49, 0.13);
-        color: #FBC96B;
+        background: rgba(124, 92, 255, 0.13);
+        color: #B9A6FF;
         font-size: 13px;
       }
       button {

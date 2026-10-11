@@ -92,7 +92,7 @@ export default function ProjectsPage() {
             aria-label="Description du projet"
           />
         </div>
-        {error && <p className="text-xs text-red-600" role="alert">{error}</p>}
+        {error && <p className="text-xs text-[var(--g3-danger-strong)]" role="alert">{error}</p>}
         <button type="button" onClick={() => void create()} disabled={creating || !name.trim()} className="g3-btn g3-btn-primary text-xs">
           {creating ? "Création…" : "Créer le projet"}
         </button>
@@ -122,10 +122,10 @@ export default function ProjectsPage() {
               {project.description && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[var(--g3-muted)]">{project.description}</p>}
               <div className="mt-2.5 flex flex-wrap gap-1.5 text-[10px] text-[var(--g3-muted)]">
                 {project.instructions && (
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">instructions actives</span>
+                  <span className="rounded-full bg-[var(--g3-success-soft)] px-2 py-0.5 text-[var(--g3-success-strong)]">instructions actives</span>
                 )}
                 {project.privacyRules && (
-                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-700">confidentialité</span>
+                  <span className="rounded-full bg-[var(--g3-secondary-soft)] px-2 py-0.5 text-[var(--g3-info)]">confidentialité</span>
                 )}
                 {project.authorizedConnectors.length > 0 && (
                   <span className="rounded-full bg-[var(--g3-elevated)] px-2 py-0.5">

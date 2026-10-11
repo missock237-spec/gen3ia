@@ -47,7 +47,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ id: st
           </p>
           <Link
             href={`/login?next=${encodeURIComponent(`/preview/${id}`)}`}
-            className="mt-5 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#7C5CFF] to-[#E14FEA] px-5 py-2 text-sm font-semibold text-white transition hover:brightness-110"
+            className="mt-5 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#7C5CFF] to-[#2AD4E8] px-5 py-2 text-sm font-semibold text-white transition hover:brightness-110"
           >
             Se connecter
           </Link>
@@ -97,7 +97,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ id: st
     <PreviewShell title={artifact.title}>
       <div className="mx-auto flex h-full w-full max-w-[1400px] flex-col gap-3">
         <header className="flex flex-wrap items-center gap-3 rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-5 py-2.5">
-          <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-gradient-to-r from-[#7C5CFF] to-[#E14FEA]" />
+          <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-gradient-to-r from-[#7C5CFF] to-[#2AD4E8]" />
           <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--g3-text)]">{artifact.title}</p>
           <span className="rounded-full bg-[var(--g3-elevated)] px-2.5 py-0.5 text-[10px] font-medium text-[var(--g3-muted)]">
             v{latest?.version ?? 1} · rendu en direct

@@ -91,7 +91,7 @@ function TeamsContent() {
               </div>
 
               {loadError && (
-                <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <p className="mt-4 rounded-2xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] px-4 py-3 text-sm text-[var(--g3-warning-strong)]">
                   {loadError}
                 </p>
               )}
@@ -123,7 +123,7 @@ function TeamsContent() {
                         className="group flex items-center justify-between gap-4 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-4 transition hover:border-[var(--g3-border-strong)] hover:shadow-[0_10px_30px_-12px_rgba(15,23,42,0.18)]"
                       >
                         <span className="flex min-w-0 items-center gap-4">
-                          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-sky-100 font-serif text-lg font-semibold text-sky-700">
+                          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--g3-secondary-soft)] font-serif text-lg font-semibold text-[var(--g3-info)]">
                             {team.name.charAt(0).toUpperCase()}
                           </span>
                           <span className="min-w-0">
@@ -182,7 +182,7 @@ function TeamsContent() {
                   />
                 </div>
                 {createError && (
-                  <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
+                  <p role="alert" className="rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-3 py-2 text-xs leading-5 text-[var(--g3-danger-strong)]">
                     {createError}
                   </p>
                 )}

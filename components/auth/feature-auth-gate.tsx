@@ -74,7 +74,7 @@ export function FeatureAuthGate({ children, feature, description }: FeatureAuthG
       <div className="min-h-full bg-[var(--g3-bg)] p-8 text-[var(--g3-text)]">
         <div className="mx-auto flex min-h-[60vh] max-w-md items-center justify-center">
           <div className="w-full rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[var(--g3-border)] border-t-sky-500" />
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[var(--g3-border)] border-t-[color:var(--g3-secondary-soft)]" />
             <p className="mt-4 text-sm text-[var(--g3-muted)]">Vérification de votre session…</p>
           </div>
         </div>
@@ -87,8 +87,8 @@ export function FeatureAuthGate({ children, feature, description }: FeatureAuthG
       <div className="min-h-full bg-[var(--g3-bg)] p-5 text-[var(--g3-text)] md:p-8">
         <div className="mx-auto flex min-h-[70vh] max-w-lg items-center justify-center">
           <section className="anim-scale-in w-full rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)]">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-2xl">🔐</div>
-            <p className="mt-5 text-xs font-semibold uppercase tracking-[.25em] text-sky-600">Gen3ia · accès protégé</p>
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--g3-secondary-soft)] text-2xl">🔐</div>
+            <p className="mt-5 text-xs font-semibold uppercase tracking-[.25em] text-[var(--g3-info)]">Gen3ia · accès protégé</p>
             <h1 className="mt-3 font-serif text-2xl font-semibold">{feature}</h1>
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[var(--g3-muted)]">{description}</p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">

@@ -152,8 +152,8 @@ export default function SettingsNumbersPage() {
         description="Choisissez un numéro disponible, attribuez-le à un agent vocal et payez avec votre wallet. Le renouvellement mensuel est automatique (fournisseur + marge Gen3ia de 20 %)."
       />
 
-      {error && <div className="mb-4 rounded-xl border border-[rgba(246,98,110,0.35)] bg-[var(--g3-danger-soft)] px-4 py-3 text-sm text-[var(--g3-danger-strong)]" role="alert">{error}</div>}
-      {message && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{message}</div>}
+      {error && <div className="mb-4 rounded-xl border border-[rgba(177,138,255,0.35)] bg-[var(--g3-danger-soft)] px-4 py-3 text-sm text-[var(--g3-danger-strong)]" role="alert">{error}</div>}
+      {message && <div className="mb-4 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-sm text-[var(--g3-success-strong)]" role="status">{message}</div>}
 
       <section className="mb-6 rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5">
         <h2 className="mb-3 text-base font-bold">Mes numéros</h2>
@@ -170,9 +170,9 @@ export default function SettingsNumbersPage() {
                     {number.sellPriceUsdMinor ? ` · ${usd(number.sellPriceUsdMinor)}/mois` : ""}
                     {number.nextRenewalAt ? ` · renouvellement le ${new Date(number.nextRenewalAt).toLocaleDateString("fr-FR")}` : ""}
                   </p>
-                  {number.renewalNotice && <p className="text-xs text-amber-700">{number.renewalNotice}</p>}
+                  {number.renewalNotice && <p className="text-xs text-[var(--g3-warning-strong)]">{number.renewalNotice}</p>}
                 </div>
-                <button type="button" onClick={() => void release(number.id)} disabled={busy} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700">
+                <button type="button" onClick={() => void release(number.id)} disabled={busy} className="rounded-lg border border-[var(--g3-danger-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)]">
                   Libérer
                 </button>
               </li>
@@ -204,12 +204,12 @@ export default function SettingsNumbersPage() {
         </button>
 
         {pricing && (
-          <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <div className="mt-3 rounded-xl border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-4 py-3 text-sm text-[var(--g3-info)]">
             Prix mensuel : <strong>{usd(pricing.sellPriceUsdMinor)}</strong> (prix fournisseur {usd(pricing.providerPriceUsdMinor)} + marge Gen3ia {Math.round(pricing.markupBps / 100)} %). Débité depuis votre wallet, renouvellement automatique chaque mois.
           </div>
         )}
         {legacyPrice && !pricing && (
-          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="mt-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] px-4 py-3 text-sm text-[var(--g3-warning-strong)]">
             Tarification mensuelle : {legacyPrice.monthlyPriceMinor} minor {legacyPrice.currency} (tarification dégradée — prix fournisseur indisponible).
           </div>
         )}

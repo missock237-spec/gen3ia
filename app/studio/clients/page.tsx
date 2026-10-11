@@ -267,8 +267,8 @@ export default function StudioClientsPage() {
         description="Personnalisez un agent avec les informations de votre entreprise, puis partagez son lien client : vos clients discutent avec lui à votre place, avec exactitude."
       />
 
-      {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
-      {message && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{message}</div>}
+      {error && <div className="mb-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-sm text-[var(--g3-danger-strong)]" role="alert">{error}</div>}
+      {message && <div className="mb-4 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-sm text-[var(--g3-success-strong)]" role="status">{message}</div>}
 
       {loading ? (
         <p className="text-sm text-[var(--g3-muted)]">Chargement…</p>
@@ -294,14 +294,14 @@ export default function StudioClientsPage() {
             </div>
 
             {selectedConfig && (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <h3 className="text-sm font-bold text-emerald-800">Lien client</h3>
-                <code className="mt-2 block break-all rounded-lg bg-[var(--g3-surface)] px-2 py-2 text-[11px] text-emerald-900">{clientLink}</code>
+              <div className="rounded-2xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] p-4">
+                <h3 className="text-sm font-bold text-[var(--g3-success-strong)]">Lien client</h3>
+                <code className="mt-2 block break-all rounded-lg bg-[var(--g3-surface)] px-2 py-2 text-[11px] text-[var(--g3-success-strong)]">{clientLink}</code>
                 <div className="mt-2 flex gap-2">
-                  <button type="button" onClick={copyLink} className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white">{copied ? "Copié !" : "Copier le lien"}</button>
-                  <a href={clientLink} target="_blank" rel="noreferrer" className="rounded-xl border border-emerald-300 bg-[var(--g3-surface)] px-3 py-2 text-xs font-bold text-emerald-800">Ouvrir</a>
+                  <button type="button" onClick={copyLink} className="flex-1 rounded-xl bg-[var(--g3-success)] px-3 py-2 text-xs font-bold text-white">{copied ? "Copié !" : "Copier le lien"}</button>
+                  <a href={clientLink} target="_blank" rel="noreferrer" className="rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-surface)] px-3 py-2 text-xs font-bold text-[var(--g3-success-strong)]">Ouvrir</a>
                 </div>
-                <button type="button" onClick={() => void rotateSlug()} disabled={busy} className="mt-2 w-full rounded-xl border border-emerald-300 bg-[var(--g3-surface)] px-3 py-2 text-xs font-semibold text-emerald-800">
+                <button type="button" onClick={() => void rotateSlug()} disabled={busy} className="mt-2 w-full rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-surface)] px-3 py-2 text-xs font-semibold text-[var(--g3-success-strong)]">
                   Régénérer le lien
                 </button>
               </div>
@@ -317,7 +317,7 @@ export default function StudioClientsPage() {
                   <select className={inputClass} value={form.agentId || (agents[0]?.id ?? "")} onChange={(e) => setForm({ ...form, agentId: e.target.value })}>
                     {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name} ({agent.type})</option>)}
                   </select>
-                  {agents.length === 0 && <p className="mt-1 text-xs text-red-600">Créez d&apos;abord un agent dans le Studio.</p>}
+                  {agents.length === 0 && <p className="mt-1 text-xs text-[var(--g3-danger-strong)]">Créez d&apos;abord un agent dans le Studio.</p>}
                 </div>
                 {sharedFields()}
                 <button type="button" onClick={() => void createConfig()} disabled={busy || !form.companyName.trim() || !form.agentId} className="self-start rounded-xl bg-[var(--g3-deep)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">
@@ -349,7 +349,7 @@ export default function StudioClientsPage() {
                           </summary>
                           <div className="mt-2 flex max-h-56 flex-col gap-1 overflow-auto text-xs">
                             {chat.messages.slice(-12).map((entry, index) => (
-                              <p key={index} className={entry.role === "client" ? "text-[var(--g3-text)]" : "text-emerald-800"}>
+                              <p key={index} className={entry.role === "client" ? "text-[var(--g3-text)]" : "text-[var(--g3-success-strong)]"}>
                                 <strong>{entry.role === "client" ? "Client" : "Agent"} :</strong> {entry.content.slice(0, 400)}
                               </p>
                             ))}

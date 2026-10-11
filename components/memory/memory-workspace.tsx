@@ -104,25 +104,25 @@ export function MemoryWorkspace() {
               <p className="text-xs font-semibold text-[var(--g3-muted)]">{quotaPercent}%</p>
             </div>
             <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-[var(--g3-elevated)]" role="progressbar" aria-valuenow={quotaPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Quota de stockage utilisé">
-              <div className={`h-full rounded-full transition-all ${quotaPercent > 90 ? "bg-red-500" : quotaPercent > 70 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${Math.max(quotaPercent, 2)}%` }} />
+              <div className={`h-full rounded-full transition-all ${quotaPercent > 90 ? "bg-[var(--g3-danger)]" : quotaPercent > 70 ? "bg-[var(--g3-warning)]" : "bg-[var(--g3-success)]"}`} style={{ width: `${Math.max(quotaPercent, 2)}%` }} />
             </div>
             <p className="mt-2 text-xs text-[var(--g3-faint)]">{usage ? `${formatBytes(usage.usedBytes)} sur ${formatBytes(usage.quotaBytes)}` : "Chargement…"}</p>
           </div>
         </section>
 
         {globalMessage && (
-          <div className="anim-fade-in mt-4 rounded-xl border border-violet-200 bg-violet-100 p-4 text-sm text-violet-700" role="status">
+          <div className="anim-fade-in mt-4 rounded-xl border border-[var(--g3-primary-soft)] bg-[var(--g3-primary-soft)] p-4 text-sm text-[var(--g3-primary-strong)]" role="status">
             {globalMessage}
           </div>
         )}
 
         {loadError && (
-          <div className="anim-fade-in mt-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800" role="alert">
+          <div className="anim-fade-in mt-4 flex items-center justify-between gap-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-4 text-sm text-[var(--g3-warning-strong)]" role="alert">
             <span>Impossible de charger vos souvenirs pour le moment (serveur momentanément indisponible).</span>
             <button
               type="button"
               onClick={() => { setLoadError(false); void Promise.all([refreshMemories(), refreshFiles()]); }}
-              className="shrink-0 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-500"
+              className="shrink-0 rounded-full bg-[var(--g3-warning)] px-4 py-2 text-xs font-semibold text-white hover:brightness-110"
             >
               Réessayer
             </button>

@@ -47,7 +47,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     const link = /^\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)$/.exec(part);
     if (link) {
       return (
-        <a key={key} href={link[2]} target="_blank" rel="noopener noreferrer" className="text-sky-700 underline underline-offset-2">
+        <a key={key} href={link[2]} target="_blank" rel="noopener noreferrer" className="text-[var(--g3-info)] underline underline-offset-2">
           {link[1]}
         </a>
       );

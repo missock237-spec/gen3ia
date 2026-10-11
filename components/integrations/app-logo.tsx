@@ -21,7 +21,7 @@ export function AppLogo({
     return (
       <span
         aria-hidden
-        className="flex shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-100 to-indigo-100 text-[11px] font-black text-indigo-700"
+        className="flex shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--g3-secondary-soft)] to-[var(--g3-primary-soft)] text-[11px] font-black text-[var(--g3-primary-strong)]"
         style={{ width: size, height: size }}
       >
         {initials}

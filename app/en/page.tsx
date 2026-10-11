@@ -145,7 +145,7 @@ export default function EnglishHomePage() {
                 <Link
                   href="/"
                   hrefLang="fr"
-                  className="inline-flex items-center rounded-full border border-[rgba(148,153,255,0.3)] px-8 py-3.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.6)] hover:bg-white/[0.05] hover:text-white"
+                  className="inline-flex items-center rounded-full border border-[rgba(124,92,255,0.3)] px-8 py-3.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.6)] hover:bg-white/[0.05] hover:text-white"
                 >
                   Version française
                 </Link>
@@ -168,7 +168,7 @@ export default function EnglishHomePage() {
           <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {WHAT_CARDS.map((card) => (
               <article key={card.title} className="cream-card card-glow reveal rounded-3xl p-6">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[rgba(148,153,255,0.2)] bg-white/[0.05]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[rgba(124,92,255,0.2)] bg-white/[0.05]">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-[var(--g3-primary-strong)]">
                     <path d={card.icon} />
                   </svg>
@@ -213,7 +213,7 @@ export default function EnglishHomePage() {
           </div>
           <div className="mt-10 space-y-3">
             {FAQ_EN.map((item) => (
-              <details key={item.question} className="group rounded-2xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]">
+              <details key={item.question} className="group rounded-2xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]">
                 <summary className="cursor-pointer list-none font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--g3-text)] marker:hidden">
                   {item.question}
                 </summary>
@@ -246,7 +246,7 @@ export default function EnglishHomePage() {
               </Link>
               <Link
                 href="/login"
-                className="inline-flex items-center rounded-full border border-[rgba(148,153,255,0.3)] px-8 py-3.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.6)] hover:bg-white/[0.05] hover:text-white"
+                className="inline-flex items-center rounded-full border border-[rgba(124,92,255,0.3)] px-8 py-3.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.6)] hover:bg-white/[0.05] hover:text-white"
               >
                 I already have an account
               </Link>

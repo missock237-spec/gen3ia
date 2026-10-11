@@ -79,11 +79,11 @@ export default function HrTrainingPage() {
       />
 
       {error ? (
-        <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+        <p role="alert" className="mb-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-[13px] text-[var(--g3-danger-strong)]">
           {error} <button className="underline" onClick={() => setError(null)}>Fermer</button>
         </p>
       ) : null}
-      {notice ? <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700">{notice}</p> : null}
+      {notice ? <p className="mb-4 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-[13px] text-[var(--g3-success-strong)]">{notice}</p> : null}
 
       <div className="mb-6 grid gap-3 sm:grid-cols-4">
         <StatCard label="Formations" value={String(kpis.total)} />
@@ -144,7 +144,7 @@ export default function HrTrainingPage() {
 
               <div className="mt-3 flex items-center gap-3">
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--g3-elevated)]">
-                  <div className={`h-full rounded-full ${training.progress >= 100 ? "bg-emerald-500" : "bg-[var(--g3-deep)]"}`} style={{ width: `${training.progress}%` }} />
+                  <div className={`h-full rounded-full ${training.progress >= 100 ? "bg-[var(--g3-success)]" : "bg-[var(--g3-deep)]"}`} style={{ width: `${training.progress}%` }} />
                 </div>
                 <span className="w-12 text-right text-[12.5px] font-bold text-[var(--g3-text-secondary)]">{training.progress} %</span>
               </div>
@@ -156,7 +156,7 @@ export default function HrTrainingPage() {
                 <button className={btnGhostCls} disabled={busy || training.progress >= 100} onClick={() => setProgress(training.id, 100)}>
                   Terminer
                 </button>
-                <button className={`${btnGhostCls} text-red-600`} disabled={busy} onClick={() => remove(training.id)}>
+                <button className={`${btnGhostCls} text-[var(--g3-danger-strong)]`} disabled={busy} onClick={() => remove(training.id)}>
                   Supprimer
                 </button>
               </div>

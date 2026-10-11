@@ -19,7 +19,7 @@
    Version 2 de toute l'interface : identité premium née de zéro.
    ------------------------------------------------------------
    Langage : espace profond, surfaces de verre, frontière
-   lumineuse dégradée (violet → fuchsia → cyan), halos aurora,
+   lumineuse dégradée 2 stops (violet → cyan), halos aurora,
    typographie display Space Grotesk + Inter, micro-interactions
    précises. Sombre par défaut, thème clair « porcelaine ».
    Toutes les classes g3-* conservent leur nom (contrat API).
@@ -34,21 +34,30 @@
 /* ============================================================
    1. TOKENS — thème sombre « Nebula » (défaut)
    ------------------------------------------------------------
-   Task 108-c — affinage sans changement d'identité :
-   · hiérarchie de texte renforcée (contrastes mesurés sur --g3-surface
-     #0B0D17, luminance relative L ≈ 0.0042) :
+   Task 125 — IDENTITÉ 2 COULEURS : exactement deux teintes
+   chromatiques sur TOUTE la plateforme (contrat utilisateur) :
+   · VIOLET primaire   #7C5CFF (strong #9E85FF, soft rgba(124,92,255,.14))
+   · CYAN secondaire   #2AD4E8 (strong #7FE9F5, soft rgba(42,212,232,.11))
+   Tout le reste est neutre (fonds/textes/gris/noir/blanc). Les NOMS de
+   tokens --g3-magenta/info/success/warning/danger sont CONSERVÉS (contrat
+   API des composants) — seule leur VALEUR a migré de famille :
+   · magenta/warning/danger → famille VIOLET (danger = violet clair dédié
+     #B18AFF/#C9AEFF, discernable par icônes/libellés, pas par la teinte)
+   · info/success → famille CYAN (ratios ≥ 4.5:1 sur --g3-surface)
+   · dégradés → 2 stops violet → cyan (stop fuchsia intermédiaire retiré)
+   Hiérarchie de texte (contrastes mesurés sur --g3-surface #0B0D17,
+   luminance relative L ≈ 0.0042) :
        --g3-text          #F4F5FB  ≈ 17.8:1 (≥ 4.5 exigé)
        --g3-text-secondary#C7CBE4  ≈ 12.1:1 (≥ 4.5 exigé)
        --g3-muted         #9AA0C2  ≈  7.5:1 (≥ 4.5 exigé — était 6.6)
        --g3-faint         #6B7194  ≈  4.1:1 (méta ≥ 3:1 — était 3.3)
-   · surfaces affinées (elevated/deep plus profonds), hover/softs plus
-     subtils, ombres teintées indigo (moins de noir pur), glow-ring plus
-     discret. --g3-bg / --g3-surface / --g3-primary restent EXACTS :
-     verrouillés par app/offline-page.test.ts (#05060C/#0B0D17/#7C5CFF).
-   · NOUVEAUX tokens génériques --g3-info / --g3-info-soft / --g3-info-border
-     et --g3-warning-border / --g3-danger-border : valeurs ADAPTÉES PAR
-     THÈME dans les deux blocs (voir §2) — ils portent l'ambiance
-     « porcelaine bleutée + canard » du chat Agent IA sur toute l'app.
+   Couples état migrés (texte sur soft, mesurés sur #0B0D17) :
+       success-strong #7FE9F5 sur success-soft  ≈ 6.6:1
+       warning-strong #B9A6FF sur warning-soft ≈ 5.1:1
+       danger-strong  #C9AEFF sur danger-soft  ≈ 6.0:1
+       info           #7FE9F5 sur info-soft    ≈ 6.6:1
+   · --g3-bg / --g3-surface / --g3-primary restent EXACTS : verrouillés
+     par app/offline-page.test.ts (#05060C/#0B0D17/#7C5CFF).
    ============================================================ */
 
 :root {
@@ -58,7 +67,7 @@
   --g3-surface: #0B0D17;
   --g3-elevated: #101325;
   --g3-deep: #060710;
-  --g3-hover: rgba(148, 153, 255, 0.06);
+  --g3-hover: rgba(124, 92, 255, 0.06);
   --g3-border: #1B1F35;
   --g3-border-strong: #292E4D;
   /* Texte (ratios documentés en tête de section) */
@@ -73,28 +82,29 @@
   --g3-on-primary: #FFFFFF;
   --g3-secondary: #2AD4E8;
   --g3-secondary-soft: rgba(42, 212, 232, 0.11);
-  --g3-magenta: #E14FEA;
-  --g3-magenta-soft: rgba(225, 79, 234, 0.12);
-  /* Information « bleu-canard » (teinte info/lien fort du chat agent) */
-  --g3-info: #8FD8EC;
-  --g3-info-soft: rgba(143, 216, 236, 0.10);
-  --g3-info-border: rgba(143, 216, 236, 0.32);
-  /* États */
-  --g3-success: #2FD48A;
-  --g3-success-soft: rgba(47, 212, 138, 0.11);
-  --g3-success-strong: #6FE8B2;
-  --g3-warning: #F5AE31;
-  --g3-warning-soft: rgba(245, 174, 49, 0.11);
-  --g3-warning-strong: #FBC96B;
-  --g3-warning-border: rgba(245, 174, 49, 0.40);
-  --g3-danger: #F6626E;
-  --g3-danger-soft: rgba(246, 98, 110, 0.11);
-  --g3-danger-strong: #FB8E96;
-  --g3-danger-border: rgba(246, 98, 110, 0.42);
-  /* Dégradés signature */
-  --g3-gradient: linear-gradient(115deg, #7C5CFF 0%, #C44BFF 45%, #2AD4E8 100%);
-  --g3-gradient-soft: linear-gradient(115deg, rgba(124,92,255,.22), rgba(196,75,255,.18) 45%, rgba(42,212,232,.20));
-  --g3-gradient-line: linear-gradient(90deg, transparent, rgba(124,92,255,.85), rgba(225,79,234,.75), rgba(42,212,232,.85), transparent);
+  /* Magenta → famille VIOLET (strong/soft du primaire). */
+  --g3-magenta: #9E85FF;
+  --g3-magenta-soft: rgba(124, 92, 255, 0.14);
+  /* Information → famille CYAN (lien fort : strong du secondaire). */
+  --g3-info: #7FE9F5;
+  --g3-info-soft: rgba(42, 212, 232, 0.11);
+  --g3-info-border: rgba(42, 212, 232, 0.32);
+  /* États — 2 couleurs : succès → CYAN, avertissement/danger → VIOLET. */
+  --g3-success: #2AD4E8;
+  --g3-success-soft: rgba(42, 212, 232, 0.11);
+  --g3-success-strong: #7FE9F5;
+  --g3-warning: #9E85FF;
+  --g3-warning-soft: rgba(124, 92, 255, 0.14);
+  --g3-warning-strong: #B9A6FF;
+  --g3-warning-border: rgba(124, 92, 255, 0.40);
+  --g3-danger: #B18AFF;
+  --g3-danger-soft: rgba(177, 138, 255, 0.11);
+  --g3-danger-strong: #C9AEFF;
+  --g3-danger-border: rgba(177, 138, 255, 0.42);
+  /* Dégradés signature — 2 stops : violet → cyan */
+  --g3-gradient: linear-gradient(115deg, #7C5CFF, #2AD4E8);
+  --g3-gradient-soft: linear-gradient(115deg, rgba(124,92,255,.22), rgba(42,212,232,.20));
+  --g3-gradient-line: linear-gradient(90deg, transparent, rgba(124,92,255,.85), rgba(42,212,232,.85), transparent);
   /* Alias historiques --gen3ia-* (compatibilité composants) */
   --gen3ia-bg: var(--g3-bg);
   --gen3ia-panel: var(--g3-surface);
@@ -115,25 +125,19 @@
 }
 
 /* ============================================================
-   2. TOKENS — thème clair « Porcelaine bleutée » (Task 108-c)
+   2. TOKENS — thème clair « Porcelaine bleutée »
    ------------------------------------------------------------
-   Harmonisation sur l'ambiance de la section AGENT IA (porcelaine
-   bleutée + accents canard/ambre/rouge doux), demandée utilisateur :
-   « pour la couleur claire, sers-toi de la couleur de la fonctionnalité
-   agent IA ». Mêmes NOMS de tokens (contrat --g3-* / --gen3ia-*),
-   nouvelles valeurs :
-   · fonds bleutés : bg #EFF7FB (ex-porcelaine agent), surface blanche,
-     elevated #E3EEF5, deep bleu-nuit #101B26 (blocs de code).
-   · texte bleu-nuit/canard (contrastes mesurés sur #FFFFFF, L=1) :
-       --g3-text          #101B26  ≈ 17.4:1 (≥ 4.5 exigé)
-       --g3-text-secondary#1F4E5F  ≈  9.1:1 (≥ 4.5 exigé)
-       --g3-muted         #3E6478  ≈  6.4:1 (≥ 4.5 exigé)
-       --g3-faint         #6E8A9B  ≈  3.6:1 (méta ≥ 3:1)
-     (ratios ≈ 16.0 / 8.4 / 5.9 / 3.4 sur --g3-bg #EFF7FB — tous ≥ 4.5
-     pour text/text-secondary/muted sur les deux fonds.)
-   · accents : primaire violet #6C48FF conservé, info/lien canard profond
-     #1F4E5F, avertissement ambre-brun #B45309 (fort #6B5210), danger doux
-     #B33636 (fort #9B2C2C), bordures douces issues du panneau agent.
+   Task 125 — identité 2 COULEURS appliquée aussi au clair : mêmes
+   familles que le sombre, luminances inversées pour tenir les ratios
+   sur fonds clairs (mesures sur #FFFFFF / --g3-bg #EFF7FB) :
+   · texte : #101B26 ≈ 17.4:1, #1F4E5F ≈ 9.1:1, #3E6478 ≈ 6.4:1,
+     #6E8A9B ≈ 3.6:1 (méta) sur blanc.
+   · magenta/warning/danger → VIOLET foncé (magenta #5633E8 ≈ 6.9:1,
+     warning #6C48FF ≈ 5.2:1, danger #5B2BE0 ≈ 7.3:1 sur blanc).
+   · info/success → CYAN foncé (info #0E5F73 ≈ 7.2:1, success
+     #0A6E82 ≈ 5.9:1, success-strong #095E6F ≈ 7.4:1 sur blanc —
+     ≥ 4.5:1 également sur #EFF7FB).
+   · dégradés → 2 stops violet #6C48FF → cyan #0899B4.
    ============================================================ */
 
 [data-theme="light"] {
@@ -142,7 +146,7 @@
   --g3-surface: #FFFFFF;
   --g3-elevated: #E3EEF5;
   --g3-deep: #101B26;
-  --g3-hover: rgba(31, 78, 95, 0.06);
+  --g3-hover: rgba(8, 153, 180, 0.06);
   --g3-border: #D9E6EF;
   --g3-border-strong: #B7D8E8;
   --g3-text: #101B26;
@@ -155,25 +159,25 @@
   --g3-on-primary: #FFFFFF;
   --g3-secondary: #0899B4;
   --g3-secondary-soft: rgba(8, 153, 180, 0.10);
-  --g3-magenta: #C026D3;
-  --g3-magenta-soft: rgba(192, 38, 211, 0.10);
-  --g3-info: #1F4E5F;
-  --g3-info-soft: rgba(31, 78, 95, 0.07);
-  --g3-info-border: #B7D8E8;
-  --g3-success: #16A34A;
-  --g3-success-soft: rgba(22, 163, 74, 0.10);
-  --g3-success-strong: #15803D;
-  --g3-warning: #B45309;
-  --g3-warning-soft: rgba(180, 83, 9, 0.10);
-  --g3-warning-strong: #6B5210;
-  --g3-warning-border: #E4C88E;
-  --g3-danger: #B33636;
-  --g3-danger-soft: rgba(179, 54, 54, 0.10);
-  --g3-danger-strong: #9B2C2C;
-  --g3-danger-border: rgba(179, 54, 54, 0.45);
-  --g3-gradient: linear-gradient(115deg, #6C48FF 0%, #C026D3 45%, #0899B4 100%);
-  --g3-gradient-soft: linear-gradient(115deg, rgba(108,72,255,.14), rgba(192,38,211,.10) 45%, rgba(8,153,180,.12));
-  --g3-gradient-line: linear-gradient(90deg, transparent, rgba(108,72,255,.7), rgba(192,38,211,.6), rgba(8,153,180,.7), transparent);
+  --g3-magenta: #5633E8;
+  --g3-magenta-soft: rgba(108, 72, 255, 0.10);
+  --g3-info: #0E5F73;
+  --g3-info-soft: rgba(8, 153, 180, 0.09);
+  --g3-info-border: rgba(8, 153, 180, 0.35);
+  --g3-success: #0A6E82;
+  --g3-success-soft: rgba(8, 153, 180, 0.10);
+  --g3-success-strong: #095E6F;
+  --g3-warning: #6C48FF;
+  --g3-warning-soft: rgba(108, 72, 255, 0.10);
+  --g3-warning-strong: #3F22C4;
+  --g3-warning-border: rgba(108, 72, 255, 0.40);
+  --g3-danger: #5B2BE0;
+  --g3-danger-soft: rgba(91, 43, 224, 0.10);
+  --g3-danger-strong: #40159E;
+  --g3-danger-border: rgba(91, 43, 224, 0.45);
+  --g3-gradient: linear-gradient(115deg, #6C48FF, #0899B4);
+  --g3-gradient-soft: linear-gradient(115deg, rgba(108,72,255,.14), rgba(8,153,180,.12));
+  --g3-gradient-line: linear-gradient(90deg, transparent, rgba(108,72,255,.7), rgba(8,153,180,.7), transparent);
   --gen3ia-bg: var(--g3-bg);
   --gen3ia-panel: var(--g3-surface);
   --gen3ia-border: var(--g3-border);
@@ -350,9 +354,9 @@ body {
    5. SIGNATURES VISUELLES V2
    ============================================================ */
 
-/* Texte en dégradé Aurora animé */
+/* Texte en dégradé Aurora animé — 2 stops violet → cyan */
 .gradient-text {
-  background: linear-gradient(100deg, #9E85FF, #E14FEA 38%, #2AD4E8 78%, #9E85FF);
+  background: linear-gradient(100deg, #9E85FF, #2AD4E8 55%, #9E85FF);
   background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -360,7 +364,7 @@ body {
   animation: gen3ia-gradient-pan 7s ease infinite;
 }
 [data-theme="light"] .gradient-text {
-  background: linear-gradient(100deg, #6C48FF, #C026D3 38%, #0899B4 78%, #6C48FF);
+  background: linear-gradient(100deg, #6C48FF, #0899B4 55%, #6C48FF);
   background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -397,7 +401,7 @@ body {
   animation: gen3ia-aurora-drift 22s ease-in-out infinite reverse;
 }
 
-/* Halo magenta supplémentaire via un enfant optionnel */
+/* Halo violet supplémentaire via un enfant optionnel */
 .aurora-glow {
   position: absolute;
   left: 50%;
@@ -407,7 +411,7 @@ body {
   transform: translateX(-50%);
   border-radius: 9999px;
   filter: blur(130px);
-  background: radial-gradient(circle, rgba(225, 79, 234, 0.28), transparent 65%);
+  background: radial-gradient(circle, rgba(124, 92, 255, 0.28), transparent 65%);
   animation: gen3ia-pulse-glow 11s ease-in-out infinite;
   pointer-events: none;
 }
@@ -418,7 +422,7 @@ body {
   background:
     radial-gradient(ellipse 90% 68% at 50% -12%, rgba(124, 92, 255, 0.22), transparent 62%),
     radial-gradient(ellipse 55% 45% at 82% 4%, rgba(42, 212, 232, 0.12), transparent 60%),
-    radial-gradient(ellipse 60% 42% at 12% 10%, rgba(225, 79, 234, 0.10), transparent 60%),
+    radial-gradient(ellipse 60% 42% at 12% 10%, rgba(124, 92, 255, 0.10), transparent 60%),
     linear-gradient(180deg, #0A0B18 0%, var(--g3-bg) 62%);
 }
 [data-theme="light"] .sky-hero {
@@ -431,15 +435,15 @@ body {
 /* Grille technique lumineuse */
 .grid-bg {
   background-image:
-    linear-gradient(rgba(148, 153, 255, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 153, 255, 0.055) 1px, transparent 1px);
+    linear-gradient(rgba(124, 92, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 92, 255, 0.055) 1px, transparent 1px);
   background-size: 46px 46px;
   mask-image: radial-gradient(ellipse 82% 62% at 50% 0%, black 30%, transparent 78%);
 }
 [data-theme="light"] .grid-bg {
   background-image:
-    linear-gradient(rgba(31, 78, 95, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(31, 78, 95, 0.06) 1px, transparent 1px);
+    linear-gradient(rgba(8, 153, 180, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(8, 153, 180, 0.06) 1px, transparent 1px);
 }
 
 /* Ligne Aurora (séparateurs premium) */
@@ -459,7 +463,7 @@ body {
 /* Carte « verre » claire (storytelling vitrine) */
 .cream-card {
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
-  border: 1px solid rgba(148, 153, 255, 0.14);
+  border: 1px solid rgba(124, 92, 255, 0.14);
   backdrop-filter: blur(14px);
 }
 [data-theme="light"] .cream-card {
@@ -634,9 +638,9 @@ body {
 .g3-btn-danger {
   color: var(--g3-danger-strong);
   background: var(--g3-danger-soft);
-  border: 1px solid rgba(246, 98, 110, 0.35);
+  border: 1px solid rgba(177, 138, 255, 0.35);
 }
-.g3-btn-danger:hover:not(:disabled) { background: rgba(246, 98, 110, 0.2); }
+.g3-btn-danger:hover:not(:disabled) { background: rgba(177, 138, 255, 0.2); }
 
 .g3-btn-cyan {
   color: var(--g3-secondary);
@@ -648,9 +652,9 @@ body {
 .g3-btn-success {
   color: var(--g3-success-strong);
   background: var(--g3-success-soft);
-  border: 1px solid rgba(47, 212, 138, 0.35);
+  border: 1px solid rgba(42, 212, 232, 0.35);
 }
-.g3-btn-success:hover:not(:disabled) { background: rgba(47, 212, 138, 0.2); }
+.g3-btn-success:hover:not(:disabled) { background: rgba(42, 212, 232, 0.2); }
 
 /* ---------- Champs de formulaire ---------- */
 
@@ -806,7 +810,7 @@ body {
   line-height: 1.65;
   color: var(--g3-text-secondary);
   background: var(--g3-deep);
-  border: 1px solid rgba(148, 153, 255, 0.12);
+  border: 1px solid rgba(124, 92, 255, 0.12);
   border-radius: 14px;
   padding: 1rem 1.1rem;
   overflow: auto;
@@ -882,18 +886,18 @@ body {
   user-select: none;
   flex: none;
 }
-/* Pendant l'exécution d'une tâche d'agent : halo pulsé magenta-cyan */
+/* Pendant l'exécution d'une tâche d'agent : halo pulsé violet-cyan */
 .g3-logo--working {
   animation: g3-logo-working 1.5s ease-in-out infinite;
 }
 @keyframes g3-logo-working {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.45);
+    box-shadow: 0 0 0 0 rgba(124, 92, 255, 0.45);
   }
   50% {
     transform: scale(1.08);
-    box-shadow: 0 0 0 7px rgba(34, 211, 238, 0);
+    box-shadow: 0 0 0 7px rgba(42, 212, 232, 0);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1396,7 +1400,7 @@ textarea:focus-visible, [tabindex]:focus-visible {
   height: 5px;
   border-radius: 999px;
   background: var(--g3-success);
-  box-shadow: 0 0 8px rgba(47, 212, 138, 0.8);
+  box-shadow: 0 0 8px rgba(42, 212, 232, 0.8);
 }
 .g3-studio-tabs { padding: 10px 18px 0; }
 .g3-studio-canvas { width: min(1440px, 100%); margin: 0 auto; padding: 18px 18px 34px; }
@@ -1449,12 +1453,12 @@ textarea:focus-visible, [tabindex]:focus-visible {
   font-weight: 700;
   color: var(--g3-text-secondary);
 }
-.g3-workspace-task-status.status-awaiting_approval { border-color: rgba(245, 174, 49, .4); background: var(--g3-warning-soft); color: var(--g3-warning-strong); }
+.g3-workspace-task-status.status-awaiting_approval { border-color: rgba(124, 92, 255, .4); background: var(--g3-warning-soft); color: var(--g3-warning-strong); }
 .g3-workspace-task-status.status-approved,
-.g3-workspace-task-status.status-completed { border-color: rgba(47, 212, 138, .4); background: var(--g3-success-soft); color: var(--g3-success-strong); }
+.g3-workspace-task-status.status-completed { border-color: rgba(42, 212, 232, .4); background: var(--g3-success-soft); color: var(--g3-success-strong); }
 .g3-workspace-task-status.status-running { border-color: rgba(124, 92, 255, .45); background: var(--g3-primary-soft); color: var(--g3-primary-strong); }
-.g3-workspace-task-status.status-paused { border-color: rgba(245, 174, 49, .4); background: var(--g3-warning-soft); color: var(--g3-warning-strong); }
-.g3-workspace-task-status.status-failed { border-color: rgba(246, 98, 110, .4); background: var(--g3-danger-soft); color: var(--g3-danger-strong); }
+.g3-workspace-task-status.status-paused { border-color: rgba(124, 92, 255, .4); background: var(--g3-warning-soft); color: var(--g3-warning-strong); }
+.g3-workspace-task-status.status-failed { border-color: rgba(177, 138, 255, .4); background: var(--g3-danger-soft); color: var(--g3-danger-strong); }
 .g3-workspace-task-approve {
   border-radius: 12px;
   background: var(--g3-gradient);
@@ -1655,7 +1659,7 @@ textarea:focus-visible, [tabindex]:focus-visible {
 .g3-workspace-task-check input { width: 14px !important; height: 14px !important; accent-color: var(--g3-primary); }
 .g3-workspace-task-validation {
   margin: 0 26px 14px;
-  border: 1px solid rgba(246, 98, 110, .35);
+  border: 1px solid rgba(177, 138, 255, .35);
   border-radius: 12px;
   background: var(--g3-danger-soft);
   padding: 11px 13px;
@@ -1773,7 +1777,7 @@ textarea:focus-visible, [tabindex]:focus-visible {
 
 .g3-workspace-task-execution-result {
   margin: 0 26px 20px;
-  border: 1px solid rgba(47, 212, 138, .35);
+  border: 1px solid rgba(42, 212, 232, .35);
   border-radius: 14px;
   background: var(--g3-success-soft);
   padding: 12px;
@@ -1794,7 +1798,7 @@ textarea:focus-visible, [tabindex]:focus-visible {
 @media (max-width: 700px) { .g3-workspace-task-execution-result { margin-left: 18px; margin-right: 18px; } }
 
 .g3-workspace-task-pause {
-  border: 1px solid rgba(245, 174, 49, .4);
+  border: 1px solid rgba(124, 92, 255, .4);
   background: var(--g3-warning-soft);
   color: var(--g3-warning-strong);
   border-radius: 10px;
@@ -1806,11 +1810,12 @@ textarea:focus-visible, [tabindex]:focus-visible {
 .g3-workspace-task-pause:disabled { opacity: .5; cursor: not-allowed; }
 
 /* Arrêt définitif d'une exécution d'agent — action destructrice distincte
-   de la pause : rouge danger, halo au survol pour un repérage immédiat. */
+   de la pause : violet danger (identité 2 couleurs), halo au survol pour
+   un repérage immédiat. */
 .g3-workspace-task-stop {
-  border: 1px solid rgba(239, 68, 68, .45);
-  background: rgba(239, 68, 68, .12);
-  color: #f87171;
+  border: 1px solid rgba(177, 138, 255, .45);
+  background: rgba(177, 138, 255, .12);
+  color: var(--g3-danger-strong);
   border-radius: 10px;
   padding: 9px 14px;
   font-size: 12px;
@@ -1818,7 +1823,7 @@ textarea:focus-visible, [tabindex]:focus-visible {
   cursor: pointer;
   transition: background .15s ease, box-shadow .15s ease;
 }
-.g3-workspace-task-stop:hover:not(:disabled) { background: rgba(239, 68, 68, .22); box-shadow: 0 0 12px rgba(239, 68, 68, .25); }
+.g3-workspace-task-stop:hover:not(:disabled) { background: rgba(177, 138, 255, .22); box-shadow: 0 0 12px rgba(177, 138, 255, .25); }
 .g3-workspace-task-stop:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ============================================================
@@ -1863,8 +1868,8 @@ textarea:focus-visible, [tabindex]:focus-visible {
   border-radius: 999px;
   padding: 6px 10px;
 }
-.g3-console-backend.is-real { background: var(--g3-success-soft); color: var(--g3-success-strong); border: 1px solid rgba(47, 212, 138, .45); }
-.g3-console-backend.is-simulated { background: var(--g3-warning-soft); color: var(--g3-warning-strong); border: 1px solid rgba(245, 174, 49, .45); }
+.g3-console-backend.is-real { background: var(--g3-success-soft); color: var(--g3-success-strong); border: 1px solid rgba(42, 212, 232, .45); }
+.g3-console-backend.is-simulated { background: var(--g3-warning-soft); color: var(--g3-warning-strong); border: 1px solid rgba(124, 92, 255, .45); }
 .g3-console-terminal { display: flex; flex-direction: column; }
 .g3-console-output {
   max-height: 420px;
@@ -2003,8 +2008,8 @@ textarea:focus-visible, [tabindex]:focus-visible {
   flex-direction: column;
   gap: 8px;
 }
-.g3-console-sim-result.is-ok { border-color: rgba(47, 212, 138, .35); background: var(--g3-secondary-soft); }
-.g3-console-sim-result.is-fail { border-color: rgba(246, 98, 110, .35); background: var(--g3-danger-soft); }
+.g3-console-sim-result.is-ok { border-color: rgba(42, 212, 232, .35); background: var(--g3-secondary-soft); }
+.g3-console-sim-result.is-fail { border-color: rgba(177, 138, 255, .35); background: var(--g3-danger-soft); }
 .g3-console-sim-result header { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12px; }
 .g3-console-sim-result pre {
   background: var(--g3-deep);
@@ -2021,7 +2026,7 @@ textarea:focus-visible, [tabindex]:focus-visible {
 .g3-console-sim-warnings ul { margin: 4px 0 0; padding-left: 18px; font-size: 11.5px; color: var(--g3-warning-strong); }
 .g3-console-sim-error {
   background: var(--g3-danger-soft);
-  border: 1px solid rgba(246, 98, 110, .35);
+  border: 1px solid rgba(177, 138, 255, .35);
   color: var(--g3-danger-strong);
   border-radius: 10px;
   padding: 10px 12px;
@@ -2029,7 +2034,7 @@ textarea:focus-visible, [tabindex]:focus-visible {
 }
 .g3-console-error {
   background: var(--g3-danger-soft);
-  border-top: 1px solid rgba(246, 98, 110, .35);
+  border-top: 1px solid rgba(177, 138, 255, .35);
   color: var(--g3-danger-strong);
   padding: 10px 16px;
   font-size: 12px;
@@ -2115,17 +2120,14 @@ textarea:focus-visible, [tabindex]:focus-visible {
 /* hover:text-white (surfaces neutres) → texte du thème en clair. */
 [data-theme="light"] .hover\:text-white:hover { color: var(--g3-text) !important; }
 
-/* Textes pastel clairs conçus pour fond sombre → teintes foncées lisibles. */
-[data-theme="light"] :where(.text-emerald-200, .text-emerald-300, .text-emerald-400) { color: #15803d !important; }
-[data-theme="light"] :where(.text-sky-200, .text-sky-300, .text-sky-400) { color: #0369a1 !important; }
-[data-theme="light"] :where(.text-amber-200, .text-amber-300, .text-amber-400) { color: #b45309 !important; }
-[data-theme="light"] :where(.text-red-200, .text-red-300, .text-red-400) { color: #b91c1c !important; }
-[data-theme="light"] :where(.text-violet-200, .text-violet-300, .text-violet-400) { color: #6d28d9 !important; }
-[data-theme="light"] :where(.text-cyan-200, .text-cyan-300, .text-cyan-400) { color: #0e7490 !important; }
-[data-theme="light"] :where(.text-rose-200, .text-rose-300, .text-rose-400) { color: #be123c !important; }
-[data-theme="light"] :where(.text-indigo-200, .text-indigo-300, .text-indigo-400) { color: #4338ca !important; }
-[data-theme="light"] :where(.text-fuchsia-200, .text-fuchsia-300, .text-fuchsia-400) { color: #a21caf !important; }
-[data-theme="light"] :where(.text-lime-200, .text-lime-300, .text-lime-400) { color: #4d7c0f !important; }
+/* Textes pastel clairs conçus pour fond sombre → tokens sémantiques 2 couleurs
+   (filet de sécurité : après le sweep Task 125, aucun composant ne devrait
+   plus utiliser ces classes — le remap reste en famille violet/cyan). */
+[data-theme="light"] :where(.text-emerald-200, .text-emerald-300, .text-emerald-400, .text-lime-200, .text-lime-300, .text-lime-400) { color: var(--g3-success-strong) !important; }
+[data-theme="light"] :where(.text-sky-200, .text-sky-300, .text-sky-400, .text-cyan-200, .text-cyan-300, .text-cyan-400, .text-teal-200, .text-teal-300, .text-teal-400) { color: var(--g3-info) !important; }
+[data-theme="light"] :where(.text-amber-200, .text-amber-300, .text-amber-400, .text-yellow-200, .text-yellow-300, .text-yellow-400, .text-orange-200, .text-orange-300, .text-orange-400) { color: var(--g3-warning-strong) !important; }
+[data-theme="light"] :where(.text-red-200, .text-red-300, .text-red-400, .text-rose-200, .text-rose-300, .text-rose-400, .text-pink-200, .text-pink-300, .text-pink-400) { color: var(--g3-danger-strong) !important; }
+[data-theme="light"] :where(.text-violet-200, .text-violet-300, .text-violet-400, .text-indigo-200, .text-indigo-300, .text-indigo-400, .text-purple-200, .text-purple-300, .text-purple-400, .text-fuchsia-200, .text-fuchsia-300, .text-fuchsia-400) { color: var(--g3-primary-strong) !important; }
 [data-theme="light"] :where(.text-neutral-300, .text-neutral-400) { color: var(--g3-muted) !important; }
 [data-theme="light"] :where(.text-neutral-500) { color: var(--g3-faint) !important; }
 [data-theme="light"] :where(.text-white\/60, .text-white\/70, .text-white\/80) { color: var(--g3-text-secondary) !important; }
@@ -2183,11 +2185,14 @@ textarea:focus-visible, [tabindex]:focus-visible {
 /* ============================================================
    14. CHAT AGENT IA — THÈME « CRÈME » (refonte capture utilisateur)
    L'interface Agent IA adopte l'esthétique de la capture fournie :
-   fond crème chaud, cartes blanc chaud, accent terracotta, salutation
-   serif. Portée SCOPÉE à la racine .g3-agent-light (atelier Gen IA) :
-   le reste du Studio conserve son thème. Toutes les couleurs pastel
-   y sont écrites en valeurs arbitraires (jamais de classes bg-*-50)
-   pour échapper à la couche de remap sombre ci-dessus.
+   fond crème chaud, cartes blanc chaud, salutation serif. Portée SCOPÉE
+   à la racine .g3-agent-light (atelier Gen IA) : le reste du Studio
+   conserve son thème. Task 125 — identité 2 COULEURS : les surfaces
+   crème (neutres chauds) sont conservées, mais TOUS les accents
+   chromatiques migrent vers les familles violet/cyan (mêmes valeurs
+   que le thème clair, contrastes ≥ 4.5:1 sur les crèmes). Toutes les
+   couleurs pastel y sont écrites en valeurs arbitraires (jamais de
+   classes bg-*-50) pour échapper à la couche de remap sombre ci-dessus.
    ============================================================ */
 .g3-agent-light {
   color-scheme: light;
@@ -2202,38 +2207,38 @@ textarea:focus-visible, [tabindex]:focus-visible {
   --g3-text-secondary: #3D3B34;
   --g3-muted: #83817A;
   --g3-faint: #A9A79E;
-  --g3-primary: #D97757;
-  --g3-primary-strong: #C05B3D;
-  --g3-primary-soft: rgba(217, 119, 87, 0.12);
+  --g3-primary: #6C48FF;
+  --g3-primary-strong: #5633E8;
+  --g3-primary-soft: rgba(108, 72, 255, 0.10);
   --g3-on-primary: #FFFFFF;
-  --g3-info: #1F4E5F;
-  --g3-info-soft: rgba(31, 78, 95, 0.07);
-  --g3-info-border: #B7D8E8;
-  --g3-success: #3F7D44;
-  --g3-success-soft: rgba(63, 125, 68, 0.12);
-  --g3-success-strong: #2F5F33;
-  --g3-warning: #B4801F;
-  --g3-warning-soft: rgba(180, 128, 31, 0.12);
-  --g3-warning-strong: #8A6117;
-  --g3-warning-border: #E8C97A;
-  --g3-danger: #C24141;
-  --g3-danger-soft: rgba(194, 65, 65, 0.10);
-  --g3-danger-strong: #9F2F2F;
-  --g3-danger-border: rgba(194, 65, 65, 0.45);
-  --g3-secondary: #2A7E8C;
-  --g3-secondary-soft: rgba(42, 126, 140, 0.12);
-  --g3-magenta: #B05590;
-  --g3-magenta-soft: rgba(176, 85, 144, 0.12);
-  --g3-gradient: linear-gradient(115deg, #D97757 0%, #C05B3D 55%, #B4801F 100%);
-  --g3-gradient-soft: linear-gradient(115deg, rgba(217,119,87,.16), rgba(192,91,61,.12) 55%, rgba(180,128,31,.12));
-  --g3-gradient-line: linear-gradient(90deg, transparent, rgba(217,119,87,.85), rgba(192,91,61,.75), rgba(180,128,31,.85), transparent);
+  --g3-info: #0E5F73;
+  --g3-info-soft: rgba(8, 153, 180, 0.09);
+  --g3-info-border: rgba(8, 153, 180, 0.35);
+  --g3-success: #0A6E82;
+  --g3-success-soft: rgba(8, 153, 180, 0.10);
+  --g3-success-strong: #095E6F;
+  --g3-warning: #6C48FF;
+  --g3-warning-soft: rgba(108, 72, 255, 0.10);
+  --g3-warning-strong: #3F22C4;
+  --g3-warning-border: rgba(108, 72, 255, 0.40);
+  --g3-danger: #5B2BE0;
+  --g3-danger-soft: rgba(91, 43, 224, 0.10);
+  --g3-danger-strong: #40159E;
+  --g3-danger-border: rgba(91, 43, 224, 0.45);
+  --g3-secondary: #0899B4;
+  --g3-secondary-soft: rgba(8, 153, 180, 0.10);
+  --g3-magenta: #5633E8;
+  --g3-magenta-soft: rgba(108, 72, 255, 0.10);
+  --g3-gradient: linear-gradient(115deg, #6C48FF, #0899B4);
+  --g3-gradient-soft: linear-gradient(115deg, rgba(108,72,255,.14), rgba(8,153,180,.12));
+  --g3-gradient-line: linear-gradient(90deg, transparent, rgba(108,72,255,.7), rgba(8,153,180,.7), transparent);
   background: var(--g3-bg);
   color: var(--g3-text);
 }
 /* Le « carré parasite » ne doit jamais réapparaître ici non plus : le
    focus du textarea est porté par le focus-within de la carte composer. */
 .g3-agent-light textarea:focus-visible { outline: none; }
-.g3-agent-light ::selection { background: rgba(217, 119, 87, 0.22); }
+.g3-agent-light ::selection { background: rgba(108, 72, 255, 0.22); }
 /* Carte composer blanche (capture) : ombre douce et chaude. */
 .g3-agent-light .g3-composer-card {
   box-shadow: 0 10px 34px -16px rgba(59, 56, 45, 0.28), 0 1px 2px rgba(59, 56, 45, 0.06);

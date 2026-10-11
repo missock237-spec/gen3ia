@@ -147,7 +147,7 @@ export function CodeEditor({ tabs, activeId, markers, goto, onGotoHandled, onSel
           >
             <button type="button" onClick={() => onSelectTab(tab.artifactId)} className="min-w-0 truncate" title={tab.path}>
               {tab.path}
-              {tab.dirty && <span className="ml-1 inline-block size-1.5 rounded-full bg-amber-400 align-middle" aria-label="Modifications non enregistrées" />}
+              {tab.dirty && <span className="ml-1 inline-block size-1.5 rounded-full bg-[var(--g3-warning)] align-middle" aria-label="Modifications non enregistrées" />}
             </button>
             <button
               type="button"

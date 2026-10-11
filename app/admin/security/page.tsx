@@ -63,7 +63,7 @@ export default function AdminSecurityPage() {
   if (loading) return <LoadingState rows={5} label="Chargement du journal d'audit…" />;
 
   if (error) {
-    return <div className="rounded-2xl border border-red-300/30 bg-red-300/10 p-4 text-sm text-red-300" role="alert">{error}</div>;
+    return <div className="rounded-2xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] p-4 text-sm text-[var(--g3-danger-strong)]" role="alert">{error}</div>;
   }
 
   const failures = audit.filter((entry) => entry.status && entry.status !== "success").length;

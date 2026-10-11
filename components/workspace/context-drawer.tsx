@@ -155,7 +155,7 @@ export function ContextDrawer({
               <>
                 <RunTimeline run={latestRun} />
                 {pending.map((approval) => (
-                  <div key={approval.id} className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                  <div key={approval.id} className="rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3">
                     <p className="text-xs font-semibold text-[var(--g3-text)]">⚖ {approval.title}</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-[var(--g3-muted)]">{approval.impact}</p>
                     <p className="mt-1 text-[10px] text-[var(--g3-muted)]">{approvalToolLabel(approval.toolName)}</p>

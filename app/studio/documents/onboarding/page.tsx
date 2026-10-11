@@ -74,11 +74,11 @@ export default function DocumentsOnboardingPage() {
       />
 
       {error ? (
-        <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+        <p role="alert" className="mb-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-[13px] text-[var(--g3-danger-strong)]">
           {error} <button className="underline" onClick={() => setError(null)}>Fermer</button>
         </p>
       ) : null}
-      {notice ? <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700">{notice}</p> : null}
+      {notice ? <p className="mb-4 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-[13px] text-[var(--g3-success-strong)]">{notice}</p> : null}
 
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <StatCard label="Parcours" value={String(kpis.total)} />
@@ -133,11 +133,11 @@ export default function DocumentsOnboardingPage() {
                   {(flow.steps ?? []).map((step, index) => (
                     <li key={index}>
                       <button
-                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12.5px] transition ${step.done ? "bg-emerald-50 text-emerald-800" : "bg-[var(--g3-elevated)] text-[var(--g3-text-secondary)] hover:bg-[var(--g3-elevated)]"}`}
+                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12.5px] transition ${step.done ? "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]" : "bg-[var(--g3-elevated)] text-[var(--g3-text-secondary)] hover:bg-[var(--g3-elevated)]"}`}
                         onClick={() => toggleStep(flow, index)}
                         disabled={busy}
                       >
-                        <span className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${step.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-[var(--g3-border-strong)] bg-[var(--g3-surface)] text-[var(--g3-faint)]"}`}>
+                        <span className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${step.done ? "border-[var(--g3-success-soft)] bg-[var(--g3-success)] text-white" : "border-[var(--g3-border-strong)] bg-[var(--g3-surface)] text-[var(--g3-faint)]"}`}>
                           {step.done ? "✓" : index + 1}
                         </span>
                         <span className="flex-1">{step.title}</span>
@@ -148,7 +148,7 @@ export default function DocumentsOnboardingPage() {
                 </ul>
 
                 <div className="mt-3 flex justify-end">
-                  <button className={`${btnGhostCls} text-red-600`} disabled={busy} onClick={() => remove(flow.id)}>
+                  <button className={`${btnGhostCls} text-[var(--g3-danger-strong)]`} disabled={busy} onClick={() => remove(flow.id)}>
                     Supprimer
                   </button>
                 </div>

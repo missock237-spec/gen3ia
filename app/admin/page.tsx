@@ -55,7 +55,7 @@ export default function AdminPlatformPage() {
   if (loading) return <LoadingState rows={4} label="Chargement des indicateurs…" />;
 
   if (error) {
-    return <div className="rounded-2xl border border-red-300/30 bg-red-300/10 p-4 text-sm text-red-300" role="alert">{error}</div>;
+    return <div className="rounded-2xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] p-4 text-sm text-[var(--g3-danger-strong)]" role="alert">{error}</div>;
   }
 
   return (

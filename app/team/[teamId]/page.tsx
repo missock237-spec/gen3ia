@@ -16,14 +16,14 @@ export default function TeamPage() {
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-10 md:px-8 md:py-14">
         {loading && (
           <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[var(--g3-border)] border-t-sky-500" />
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[var(--g3-border)] border-t-[color:var(--g3-secondary-soft)]" />
             <p className="mt-4 text-sm text-[var(--g3-muted)]">Chargement de l&apos;équipe…</p>
           </div>
         )}
 
         {!loading && !team && (
           <div className="anim-scale-in mx-auto max-w-md rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-100 text-2xl">🔒</div>
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--g3-warning-soft)] text-2xl">🔒</div>
             <h1 className="mt-5 font-serif text-2xl font-semibold">Équipe introuvable ou accès refusé</h1>
             <p className="mt-3 text-sm leading-6 text-[var(--g3-muted)]">
               {error
@@ -40,7 +40,7 @@ export default function TeamPage() {
             <header className="anim-fade-up rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] md:p-8">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-4">
-                  <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-sky-100 font-serif text-2xl font-semibold text-sky-700">
+                  <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[var(--g3-secondary-soft)] font-serif text-2xl font-semibold text-[var(--g3-info)]">
                     {team.name.charAt(0).toUpperCase()}
                   </span>
                   <div>

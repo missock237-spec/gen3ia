@@ -215,7 +215,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
                   type="button"
                   onClick={() => void deleteConversation(conversation.id)}
                   aria-label={`Supprimer le chat ${conversation.title || ""}`}
-                  className="absolute right-2 top-2 hidden rounded-lg bg-[var(--g3-surface)] px-1.5 py-1 text-[9px] text-[var(--g3-faint)] transition hover:text-red-600 group-hover:block"
+                  className="absolute right-2 top-2 hidden rounded-lg bg-[var(--g3-surface)] px-1.5 py-1 text-[9px] text-[var(--g3-faint)] transition hover:text-[var(--g3-danger-strong)] group-hover:block"
                 >
                   Suppr.
                 </button>
@@ -246,7 +246,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
     <>
     <div className="g3-agent-light flex h-full min-h-0 flex-col gap-2 lg:gap-4">
       {sessionDisponible === false && <Callout tone="warning" className="rounded-2xl">Session expirée — reconnectez-vous pour discuter avec Gen IA.</Callout>}
-      {error && <Callout tone="error" className="rounded-2xl"><span className="flex items-center justify-between gap-3"><span>{error}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full border border-[rgba(246,98,110,0.45)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]">Réessayer</button></span></Callout>}
+      {error && <Callout tone="error" className="rounded-2xl"><span className="flex items-center justify-between gap-3"><span>{error}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full border border-[rgba(177,138,255,0.45)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]">Réessayer</button></span></Callout>}
 
       {/* Mode ZEN (plein écran avancé) : masque le rail historique sur desktop */}
       <div className="flex items-center justify-end">

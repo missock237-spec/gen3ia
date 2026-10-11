@@ -71,11 +71,11 @@ export default function HrLeavesPage() {
       />
 
       {error ? (
-        <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+        <p role="alert" className="mb-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-[13px] text-[var(--g3-danger-strong)]">
           {error} <button className="underline" onClick={() => setError(null)}>Fermer</button>
         </p>
       ) : null}
-      {notice ? <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700">{notice}</p> : null}
+      {notice ? <p className="mb-4 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-[13px] text-[var(--g3-success-strong)]">{notice}</p> : null}
 
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <StatCard label="Demandes en attente" value={String(pendingCount)} tone={pendingCount > 0 ? "amber" : "green"} hint={pendingCount > 0 ? "À traiter" : "Tout est traité"} />
@@ -151,12 +151,12 @@ export default function HrLeavesPage() {
                       <button className={btnGhostCls} disabled={busy} onClick={() => decide(leave.id, "approved")}>
                         Approuver
                       </button>
-                      <button className={`${btnGhostCls} text-red-600`} disabled={busy} onClick={() => decide(leave.id, "rejected")}>
+                      <button className={`${btnGhostCls} text-[var(--g3-danger-strong)]`} disabled={busy} onClick={() => decide(leave.id, "rejected")}>
                         Refuser
                       </button>
                     </>
                   ) : (
-                    <button className={`${btnGhostCls} text-red-600`} disabled={busy} onClick={() => remove(leave.id)}>
+                    <button className={`${btnGhostCls} text-[var(--g3-danger-strong)]`} disabled={busy} onClick={() => remove(leave.id)}>
                       Supprimer
                     </button>
                   )}

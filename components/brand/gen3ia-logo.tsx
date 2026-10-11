@@ -1,7 +1,7 @@
 /**
  * Logo officiel Gen3ia — SVG inline (lot C4, audit perf 2-a) : fond sombre
- * arrondi, lettre « G » stylée en dégradé de marque violet → magenta → cyan
- * (--g3-gradient de app/globals.css) et point d'orbite. ~2 Ko rendus au lieu
+ * arrondi, lettre « G » stylée en dégradé de marque violet → cyan
+ * (--g3-gradient de app/globals.css, 2 stops — Task 125) et point d'orbite. ~2 Ko rendus au lieu
  * de l'icône PNG 39 Ko (icon-192.png) — les PNG restent la source PWA /
  * manifest / favicon, ce composant ne sert plus que l'interface.
  *
@@ -36,10 +36,9 @@ export function Gen3iaLogo({
       style={{ width: size, height: size }}
     >
       <defs>
-        {/* Dégradé de marque (--g3-gradient, thème sombre) : violet → magenta → cyan. */}
+        {/* Dégradé de marque (--g3-gradient, thème sombre) : violet → cyan, 2 stops. */}
         <linearGradient id="g3-logo-gradient" x1="8" y1="6" x2="40" y2="42" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#7C5CFF" />
-          <stop offset="0.5" stopColor="#C44BFF" />
           <stop offset="1" stopColor="#2AD4E8" />
         </linearGradient>
       </defs>

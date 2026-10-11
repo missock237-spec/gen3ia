@@ -83,7 +83,7 @@ export function FileExplorer({ files, loading, error, openIds, activeId, favorit
           className="w-full rounded-lg border border-[var(--g3-border)] bg-[var(--g3-deep)] px-2.5 py-1.5 text-xs text-[var(--g3-text-secondary)] placeholder:text-[var(--g3-muted)] focus:border-neutral-600 focus:outline-none"
         />
         <label className="mt-2 flex items-center gap-1.5 text-[10px] text-[var(--g3-muted)]">
-          <input type="checkbox" checked={onlyFavorites} onChange={(event) => setOnlyFavorites(event.target.checked)} className="size-3 accent-amber-500" />
+          <input type="checkbox" checked={onlyFavorites} onChange={(event) => setOnlyFavorites(event.target.checked)} className="size-3 accent-[var(--g3-primary)]" />
           Favoris uniquement
         </label>
       </div>
@@ -91,7 +91,7 @@ export function FileExplorer({ files, loading, error, openIds, activeId, favorit
       <div className="mt-2 min-h-0 flex-1 overflow-y-auto px-1.5 pb-3" role="list">
         {loading && <p className="px-2 py-3 text-[11px] text-[var(--g3-muted)]">Chargement des fichiers…</p>}
         {error && (
-          <div className="mx-2 my-2 rounded-lg border border-amber-900/60 bg-amber-950/40 p-2 text-[11px] text-amber-300" role="alert">
+          <div className="mx-2 my-2 rounded-lg border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-2 text-[11px] text-[var(--g3-warning-strong)]" role="alert">
             {error}
             <button type="button" onClick={onReload} className="mt-1 block underline underline-offset-2">
               Réessayer
@@ -127,7 +127,7 @@ export function FileExplorer({ files, loading, error, openIds, activeId, favorit
                 onClick={() => onToggleFavorite(file.artifactId)}
                 aria-label={favoriteSet.has(file.artifactId) ? `Retirer ${file.path} des favoris` : `Ajouter ${file.path} aux favoris`}
                 aria-pressed={favoriteSet.has(file.artifactId)}
-                className={"shrink-0 text-[11px] leading-none " + (favoriteSet.has(file.artifactId) ? "text-amber-400" : "text-[var(--g3-muted)] hover:text-amber-400")}
+                className={"shrink-0 text-[11px] leading-none " + (favoriteSet.has(file.artifactId) ? "text-[var(--g3-warning-strong)]" : "text-[var(--g3-muted)] hover:text-[var(--g3-warning-strong)]")}
               >
                 {favoriteSet.has(file.artifactId) ? "★" : "☆"}
               </button>

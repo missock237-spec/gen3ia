@@ -19,9 +19,9 @@ export function PermissionNotice({
   actions?: React.ReactNode;
 }) {
   const tones = {
-    warning: "border-amber-200 bg-amber-50",
-    danger: "border-red-200 bg-red-50",
-    info: "border-sky-200 bg-sky-50",
+    warning: "border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)]",
+    danger: "border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)]",
+    info: "border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)]",
   } as const;
   const icons = { warning: "⚠", danger: "⛔", info: "ⓘ" } as const;
   return (

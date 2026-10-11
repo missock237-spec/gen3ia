@@ -47,7 +47,7 @@ function AnneauEpoch({ remainingMs }: { remainingMs: number }) {
     <div className="relative h-16 w-16 shrink-0">
       <svg
         viewBox="0 0 64 64"
-        className={`h-16 w-16 ${alerte ? "text-amber-700" : "text-[var(--g3-primary)]"}`}
+        className={`h-16 w-16 ${alerte ? "text-[var(--g3-warning-strong)]" : "text-[var(--g3-primary)]"}`}
         role="img"
         aria-label={`Temps restant avant renouvellement : ${minutes} minutes ${secondes} secondes`}
       >
@@ -67,7 +67,7 @@ function AnneauEpoch({ remainingMs }: { remainingMs: number }) {
       </svg>
       <span
         className={`absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums ${
-          alerte ? "text-amber-700" : "text-[var(--g3-text)]"
+          alerte ? "text-[var(--g3-warning-strong)]" : "text-[var(--g3-text)]"
         }`}
       >
         {minutes}:{String(secondes).padStart(2, "0")}
@@ -238,7 +238,7 @@ export function VoiceLiveDashboard() {
                 <span
                   className={`rounded-full border px-3 py-1 text-xs font-medium ${
                     voix.lastDifficulty === "avance"
-                      ? "border-amber-200 bg-amber-100 text-amber-700"
+                      ? "border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]"
                       : "border-[var(--g3-border)] bg-[var(--g3-elevated)] text-[var(--g3-muted)]"
                   }`}
                 >
@@ -249,7 +249,7 @@ export function VoiceLiveDashboard() {
           </div>
 
           {voix.status === "exhausted" && (
-            <p className="rounded-2xl border border-[var(--g3-border)] bg-amber-100 px-4 py-3 text-sm text-amber-700">
+            <p className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-warning-soft)] px-4 py-3 text-sm text-[var(--g3-warning-strong)]">
               Durée maximale atteinte : la conversation s&apos;est terminée après 60 minutes.
             </p>
           )}
@@ -313,7 +313,7 @@ export function VoiceLiveDashboard() {
                   onClick={voix.toggleMute}
                   className={
                     voix.muted
-                      ? "g3-btn rounded-full border border-amber-200 bg-amber-100 text-amber-700"
+                      ? "g3-btn rounded-full border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]"
                       : "g3-btn g3-btn-ghost rounded-full"
                   }
                 >
@@ -343,7 +343,7 @@ export function VoiceLiveDashboard() {
       {/* ------------------------------------------------ Erreur fatale --- */}
       {enErreur && (
         <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-8 text-center">
-          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-100 text-xs font-bold uppercase tracking-widest text-amber-700">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--g3-warning-soft)] text-xs font-bold uppercase tracking-widest text-[var(--g3-warning-strong)]">
             Live
           </div>
           <h2 className="mt-5 font-serif text-xl font-semibold">La conversation vocale s&apos;est arrêtée</h2>

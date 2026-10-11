@@ -227,7 +227,7 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div>
-        <Link href="/studio/video" className="text-xs text-blue-600 hover:underline">← Studio vidéo</Link>
+        <Link href="/studio/video" className="text-xs text-[var(--g3-info)] hover:underline">← Studio vidéo</Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
         <label className="cursor-pointer rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-neutral-50">
           + Média local
@@ -256,7 +256,7 @@ export function VideoProjectWorkspace({ projectId }: { projectId: string }) {
             role="tab"
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            className={`rounded-t-lg px-4 py-2 text-sm font-medium ${tab === t.id ? "border-b-2 border-blue-600 text-blue-700" : "text-neutral-500 hover:text-neutral-800"}`}
+            className={`rounded-t-lg px-4 py-2 text-sm font-medium ${tab === t.id ? "border-b-2 border-[var(--g3-secondary-soft)] text-[var(--g3-info)]" : "text-neutral-500 hover:text-neutral-800"}`}
           >
             {t.label}
           </button>
@@ -308,7 +308,7 @@ function LocalMediaPanel({ projectId }: { projectId: string }) {
   }
 
   return (
-    <section className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+    <section className="rounded-2xl border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-neutral-900">Médias de l’appareil</h2>
@@ -368,7 +368,7 @@ function LocalMediaTile({ file, onDelete }: { file: LocalFileRecord; onDelete: (
       </div>
       <div className="p-2">
         <p className="truncate text-[11px] font-medium">{file.name}</p>
-        <button onClick={() => void onDelete()} className="mt-1 text-[11px] text-rose-600 hover:underline">Supprimer de l’appareil</button>
+        <button onClick={() => void onDelete()} className="mt-1 text-[11px] text-[var(--g3-danger-strong)] hover:underline">Supprimer de l’appareil</button>
       </div>
     </div>
   );
@@ -409,7 +409,7 @@ function DirectorPanel({ project, busy, runAction }: { project: VideoProject; on
             placeholder="Ex. : la vidéo est trop rapide"
             className="flex-1 rounded-xl border border-neutral-300 px-4 py-2 text-sm"
           />
-          <button onClick={revise} disabled={busy === "revise" || instruction.trim().length < 3} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+          <button onClick={revise} disabled={busy === "revise" || instruction.trim().length < 3} className="rounded-xl bg-[var(--g3-secondary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
             {busy === "revise" ? "…" : "Appliquer"}
           </button>
         </div>
@@ -445,7 +445,7 @@ function ScriptPanel({ project, busy, runAction }: { project: VideoProject; onRe
             if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error ?? "Scénario impossible");
           })}
           disabled={busy === "script"}
-          className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="rounded-xl bg-[var(--g3-secondary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           {busy === "script" ? "Écriture du scénario…" : script ? "Régénérer le scénario" : "Écrire le scénario"}
         </button>
@@ -464,8 +464,8 @@ function ScriptPanel({ project, busy, runAction }: { project: VideoProject; onRe
         <p className="text-sm text-neutral-500">Aucun scénario — lancez l&apos;écriture (Hook → chapitres → scènes → conclusion → CTA).</p>
       ) : (
         <div className="space-y-4">
-          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-            <h3 className="text-xs font-bold uppercase tracking-wide text-amber-700">Hook</h3>
+          <section className="rounded-2xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-5">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-[var(--g3-warning-strong)]">Hook</h3>
             <p className="mt-1 text-sm text-neutral-800">{script.hook}</p>
           </section>
           <section className="rounded-2xl border border-neutral-200 bg-white p-5">
@@ -498,7 +498,7 @@ function ScriptPanel({ project, busy, runAction }: { project: VideoProject; onRe
           <section className="rounded-2xl border border-neutral-200 bg-white p-5">
             <h3 className="text-xs font-bold uppercase tracking-wide text-neutral-500">Conclusion</h3>
             <p className="mt-1 text-sm text-neutral-800">{script.conclusion}</p>
-            {script.callToAction ? <p className="mt-2 text-sm font-medium text-blue-700">{script.callToAction}</p> : null}
+            {script.callToAction ? <p className="mt-2 text-sm font-medium text-[var(--g3-info)]">{script.callToAction}</p> : null}
           </section>
         </div>
       )}
@@ -584,7 +584,7 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
         />
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => runAction("images", () => generateBatch(false))} disabled={busy === "images" || !project.script} className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">
+        <button onClick={() => runAction("images", () => generateBatch(false))} disabled={busy === "images" || !project.script} className="rounded-xl bg-[var(--g3-secondary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">
           {busy === "images" ? "Génération…" : `Générer les images (${Math.max(0, scenes.filter((s) => !images.some((img) => img.sceneId === s.id)).length)})`}
         </button>
         <button onClick={() => runAction("images-force", () => generateBatch(true))} disabled={busy === "images-force" || !project.script} className="rounded-xl border border-neutral-300 px-5 py-2 text-sm disabled:opacity-50">
@@ -603,7 +603,7 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
               <li key={entry.sceneId} className="rounded-2xl border border-neutral-200 bg-white p-4">
                 <div className="flex items-center justify-between text-xs text-neutral-500">
                   <span className="font-mono">SCÈNE {entry.sceneId.replace("scene_", "")} · {formatTimecode(entry.timecodeStartSec)} → {formatTimecode(entry.timecodeEndSec)}</span>
-                  <span className={image ? "text-emerald-600" : "text-neutral-400"}>{image ? "image prête" : "en attente"}</span>
+                  <span className={image ? "text-[var(--g3-success-strong)]" : "text-neutral-400"}>{image ? "image prête" : "en attente"}</span>
                 </div>
                 <p className="mt-2 text-sm text-neutral-800">{entry.imageBrief}</p>
                 <p className="mt-2 text-[11px] text-neutral-400">Animation : {entry.animation} · Entrée : {entry.transitionIn} · Voix : {entry.voiceBrief.slice(0, 80)}…</p>
@@ -739,12 +739,12 @@ function VoicePanel({ project, voices, assets: _assets, onRefresh, busy, runActi
         <h2 className="font-semibold text-neutral-900">Ma voix</h2>
         <div className="flex items-center gap-3">
           {!recording ? (
-            <button onClick={startRecording} className="flex items-center gap-2 rounded-full bg-rose-600 px-5 py-2 text-sm font-semibold text-white hover:bg-rose-700">
+            <button onClick={startRecording} className="flex items-center gap-2 rounded-full bg-[var(--g3-danger)] px-5 py-2 text-sm font-semibold text-white hover:brightness-110">
               <span className="h-2.5 w-2.5 rounded-full bg-white" /> Enregistrer
             </button>
           ) : (
             <button onClick={stopRecording} className="flex items-center gap-2 rounded-full bg-neutral-900 px-5 py-2 text-sm font-semibold text-white">
-              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-rose-500" /> Arrêter
+              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[var(--g3-danger)]" /> Arrêter
             </button>
           )}
           <span className="font-mono text-sm text-neutral-600">{String(Math.floor(seconds / 60)).padStart(2, "0")}:{String(seconds % 60).padStart(2, "0")}</span>
@@ -753,7 +753,7 @@ function VoicePanel({ project, voices, assets: _assets, onRefresh, busy, runActi
           <div className="space-y-2">
             <audio controls src={audioUrl} className="w-full" />
             <input value={voiceName} onChange={(e) => setVoiceName(e.target.value)} className="w-full rounded-lg border border-neutral-300 px-3 py-1.5 text-sm" placeholder="Nom de la voix" />
-            <button onClick={saveRecording} disabled={busy === "save-voice"} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            <button onClick={saveRecording} disabled={busy === "save-voice"} className="rounded-xl bg-[var(--g3-success)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
               Utiliser cette voix
             </button>
             <p className="text-[11px] text-neutral-400">En confirmant, vous attester détenir les droits sur cette voix.</p>
@@ -768,7 +768,7 @@ function VoicePanel({ project, voices, assets: _assets, onRefresh, busy, runActi
             {voices.map((v) => (
               <li key={v.id} className="flex items-center justify-between rounded-xl bg-neutral-50 px-4 py-2">
                 <div>
-                  <p className="text-sm font-medium text-neutral-800">{v.name} {v.isDefault ? <span className="ml-1 rounded bg-blue-100 px-1.5 text-[10px] text-blue-700">défaut</span> : null}</p>
+                  <p className="text-sm font-medium text-neutral-800">{v.name} {v.isDefault ? <span className="ml-1 rounded bg-[var(--g3-secondary-soft)] px-1.5 text-[10px] text-[var(--g3-info)]">défaut</span> : null}</p>
                   <p className="text-[11px] text-neutral-400">{v.origin === "recording" ? "Enregistrement" : "ElevenLabs"} · {v.language}{v.durationSec ? ` · ${Math.round(v.durationSec)} s` : ""}</p>
                 </div>
                 <span className="text-xs text-neutral-400">{v.status === "active" ? "" : v.status}</span>
@@ -776,7 +776,7 @@ function VoicePanel({ project, voices, assets: _assets, onRefresh, busy, runActi
             ))}
           </ul>
         )}
-        <button onClick={generateNarrations} disabled={busy === "narrations" || !project.script} className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+        <button onClick={generateNarrations} disabled={busy === "narrations" || !project.script} className="w-full rounded-xl bg-[var(--g3-secondary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
           {busy === "narrations" ? "Génération des narrations…" : "Générer les narrations (4 scènes suivantes)"}
         </button>
         <p className="text-[11px] text-neutral-400">Voie A : votre enregistrement est utilisé directement. Voie B : narration ElevenLabs (facturée au caractère réel).</p>
@@ -983,15 +983,15 @@ function TimelinePanel({ project, onRefresh, busy, runAction }: { project: Video
 
   if (!timeline) return <p className="text-sm text-neutral-500">{busy ? "Initialisation de la timeline…" : "Timeline indisponible (scénario requis)."}</p>;
 
-  const trackColors: Record<string, string> = { image: "bg-indigo-400", video: "bg-indigo-500", text: "bg-amber-400", voice: "bg-emerald-400", music: "bg-sky-400", sfx: "bg-rose-400" };
+  const trackColors: Record<string, string> = { image: "bg-[var(--g3-primary)]", video: "bg-[var(--g3-primary)]", text: "bg-[var(--g3-warning)]", voice: "bg-[var(--g3-success)]", music: "bg-[var(--g3-secondary)]", sfx: "bg-[var(--g3-danger)]" };
 
   return (
     <div className="space-y-4">
       {localFiles.length ? (
-        <section className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+        <section className="rounded-2xl border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] p-4">
           <div className="flex items-center justify-between gap-3">
             <div><h3 className="text-sm font-semibold text-neutral-900">Médias locaux disponibles</h3><p className="text-[11px] text-neutral-500">Ils restent sur l’appareil jusqu’au rendu. Ajouter à la Timeline ne déclenche aucun upload.</p></div>
-            <button onClick={() => void refreshLocal()} className="text-xs text-blue-700 hover:underline">Actualiser</button>
+            <button onClick={() => void refreshLocal()} className="text-xs text-[var(--g3-info)] hover:underline">Actualiser</button>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {localFiles.map((file) => <LocalTimelineAsset key={file.id} file={file} selected={selectedLocalId === file.id} onAdd={() => void runAction(`local-add-${file.id}`, () => addLocalToTimeline(file))} />)}
@@ -1030,7 +1030,7 @@ function LocalTimelineAsset({ file, selected, onAdd }: { file: LocalFileRecord; 
   }, [file.id]);
   const isVideo = file.type.startsWith("video/");
   const isAudio = file.type.startsWith("audio/");
-  return <div className={`overflow-hidden rounded-xl border bg-white ${selected ? "border-blue-500" : "border-neutral-200"}`}>
+  return <div className={`overflow-hidden rounded-xl border bg-white ${selected ? "border-[var(--g3-secondary-soft)]" : "border-neutral-200"}`}>
     <div className="aspect-video bg-neutral-100">
       {url && isVideo ? <video src={url} muted className="h-full w-full object-cover" /> : null}
       {url && !isVideo && !isAudio ? (
@@ -1172,7 +1172,7 @@ function RenderPanel({ project, jobs, onRefresh, busy, runAction }: { project: V
               </label>
             ))}
           </fieldset>
-          <button onClick={startRender} disabled={busy === "render-start" || !project.script} className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+          <button onClick={startRender} disabled={busy === "render-start" || !project.script} className="w-full rounded-xl bg-[var(--g3-secondary)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
             Rendre la vidéo (arrière-plan, reprise automatique)
           </button>
           <p className="text-[11px] text-neutral-400">Le rendu survit à la fermeture de l&apos;onglet. En cas d&apos;échec à 73 %, reprise au dernier checkpoint — jamais de re-rendu complet.</p>
@@ -1208,7 +1208,7 @@ function RenderPanel({ project, jobs, onRefresh, busy, runAction }: { project: V
                     onRetry={job.status === "failed" ? () => jobAction(job.id, "resume") : undefined}
                   />
                   {job.qcReport ? (
-                    <p className={`text-[11px] ${job.qcReport.passed ? "text-emerald-600" : "text-amber-600"}`}>
+                    <p className={`text-[11px] ${job.qcReport.passed ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-warning-strong)]"}`}>
                       QC : {job.qcReport.passed ? "validé" : `${job.qcReport.issues.length} problème(s)`}{job.qcReport.metrics?.durationSec ? ` · ${job.qcReport.metrics.durationSec.toFixed(1)} s` : ""}
                     </p>
                   ) : null}
@@ -1247,7 +1247,7 @@ function RenderPanel({ project, jobs, onRefresh, busy, runAction }: { project: V
             {versions.map((v) => (
               <li key={v.versionNumber} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2 text-xs">
                 <span><span className="font-semibold">v{v.versionNumber}</span> · {v.label}</span>
-                <button onClick={() => restore(v.versionNumber)} disabled={busy === `restore-${v.versionNumber}`} className="text-blue-600 hover:underline">Restaurer</button>
+                <button onClick={() => restore(v.versionNumber)} disabled={busy === `restore-${v.versionNumber}`} className="text-[var(--g3-info)] hover:underline">Restaurer</button>
               </li>
             ))}
           </ul>

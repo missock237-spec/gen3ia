@@ -56,9 +56,9 @@ function describeRecurrence(schedule: ScheduleItem): string {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  completed: "border-emerald-800 bg-emerald-950/50 text-emerald-300",
-  running: "border-sky-800 bg-sky-950/50 text-sky-300",
-  failed: "border-red-800 bg-red-950/50 text-red-300",
+  completed: "border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]",
+  running: "border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] text-[var(--g3-info)]",
+  failed: "border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]",
   paused: "border-neutral-700 bg-neutral-900 text-neutral-400",
 };
 
@@ -166,7 +166,7 @@ export default function SchedulesPage() {
       />
 
       {error && (
-        <p className="mt-4 rounded-lg border border-amber-900/60 bg-amber-950/40 p-3 text-xs text-amber-300" role="alert">
+        <p className="mt-4 rounded-lg border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3 text-xs text-[var(--g3-warning-strong)]" role="alert">
           {error}
         </p>
       )}
@@ -200,7 +200,7 @@ export default function SchedulesPage() {
                   </p>
                 )}
                 {schedule.lastError && (
-                  <p className="mt-1 line-clamp-2 text-[11px] text-red-400" title={schedule.lastError}>
+                  <p className="mt-1 line-clamp-2 text-[11px] text-[var(--g3-danger-strong)]" title={schedule.lastError}>
                     {schedule.lastError}
                   </p>
                 )}
@@ -247,7 +247,7 @@ export default function SchedulesPage() {
                             </span>
                             <span className="text-neutral-500">{run.slot}</span>
                             {run.startedAt && <span className="text-neutral-600">{new Date(run.startedAt).toLocaleString("fr-FR")}</span>}
-                            {run.error && <span className="line-clamp-1 text-red-400" title={run.error}>{run.error}</span>}
+                            {run.error && <span className="line-clamp-1 text-[var(--g3-danger-strong)]" title={run.error}>{run.error}</span>}
                           </li>
                         ))}
                       </ul>

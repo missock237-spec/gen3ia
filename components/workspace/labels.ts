@@ -20,10 +20,10 @@ export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
 
 export const RUN_STATUS_STYLES: Record<RunStatus, string> = {
   planning: "bg-[var(--g3-elevated)] text-[var(--g3-text-secondary)] border-[var(--g3-border)]",
-  awaiting_approval: "bg-amber-50 text-amber-800 border-amber-200",
-  running: "bg-sky-50 text-sky-800 border-sky-200",
-  completed: "bg-emerald-50 text-emerald-800 border-emerald-200",
-  failed: "bg-red-50 text-red-800 border-red-200",
+  awaiting_approval: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)] border-[var(--g3-warning-soft)]",
+  running: "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)] border-[var(--g3-secondary-soft)]",
+  completed: "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)] border-[var(--g3-success-soft)]",
+  failed: "bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)] border-[var(--g3-danger-soft)]",
   cancelled: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
 };
 
@@ -53,9 +53,9 @@ export const APPROVAL_STATUS_LABELS: Record<ApprovalStatus, string> = {
 };
 
 export const APPROVAL_STATUS_STYLES: Record<ApprovalStatus, string> = {
-  pending: "bg-amber-50 text-amber-800 border-amber-200",
-  approved: "bg-emerald-50 text-emerald-800 border-emerald-200",
-  rejected: "bg-red-50 text-red-700 border-red-200",
+  pending: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)] border-[var(--g3-warning-soft)]",
+  approved: "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)] border-[var(--g3-success-soft)]",
+  rejected: "bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)] border-[var(--g3-danger-soft)]",
   expired: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
 };
 

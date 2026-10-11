@@ -103,7 +103,7 @@ export default function FaqPage() {
               <details
                 key={item.question}
                 id={`faq-${index + 1}`}
-                className="group rounded-2xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]"
+                className="group rounded-2xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]"
                 open={index === 0}
               >
                 <summary className="cursor-pointer list-none font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--g3-text)] marker:hidden">
@@ -125,7 +125,7 @@ export default function FaqPage() {
               <Link
                 href="/en"
                 hrefLang="en"
-                className="rounded-full border border-[rgba(148,153,255,0.25)] bg-white/[0.04] px-5 py-2.5 text-sm font-medium text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"
+                className="rounded-full border border-[rgba(124,92,255,0.25)] bg-white/[0.04] px-5 py-2.5 text-sm font-medium text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"
               >
                 English version
               </Link>

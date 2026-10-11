@@ -51,11 +51,11 @@ export interface ObservabilityOverviewView {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  failed: "bg-red-50 text-red-700 border-red-200",
-  running: "bg-sky-50 text-sky-700 border-sky-200",
-  pending: "bg-sky-50 text-sky-700 border-sky-200",
-  waiting_approval: "bg-amber-50 text-amber-700 border-amber-200",
+  completed: "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)] border-[var(--g3-success-soft)]",
+  failed: "bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)] border-[var(--g3-danger-soft)]",
+  running: "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)] border-[var(--g3-secondary-soft)]",
+  pending: "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)] border-[var(--g3-secondary-soft)]",
+  waiting_approval: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)] border-[var(--g3-warning-soft)]",
   cancelled: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
 };
 
@@ -110,7 +110,7 @@ export function ObservabilityDashboard({ overview }: { overview: ObservabilityOv
             <div
               key={index}
               role="status"
-              className={`flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-sm ${alert.level === "critical" ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}
+              className={`flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-sm ${alert.level === "critical" ? "border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]" : "border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]"}`}
             >
               <span aria-hidden="true">{alert.level === "critical" ? "🚨" : "⚠️"}</span>
               <span>{alert.message}</span>
@@ -141,7 +141,7 @@ export function ObservabilityDashboard({ overview }: { overview: ObservabilityOv
               <div key={bucket.date} className="group relative flex-1">
                 <div className="flex h-24 items-end">
                   <div
-                    className={`w-full rounded-t-md ${bucket.failed > 0 ? "bg-red-400" : "bg-neutral-300"} transition-colors group-hover:bg-[var(--g3-deep)]`}
+                    className={`w-full rounded-t-md ${bucket.failed > 0 ? "bg-[var(--g3-danger)]" : "bg-neutral-300"} transition-colors group-hover:bg-[var(--g3-deep)]`}
                     style={{ height: `${Math.max(6, (bucket.count / maxDaily) * 100)}%` }}
                   />
                 </div>
@@ -164,7 +164,7 @@ export function ObservabilityDashboard({ overview }: { overview: ObservabilityOv
               <li key={tool.name} className="flex items-center gap-3">
                 <span className="w-40 shrink-0 truncate text-xs font-semibold text-[var(--g3-text-secondary)]" title={toolLabel(tool.name)}>{toolLabel(tool.name)}</span>
                 <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[var(--g3-elevated)]">
-                  <div className={`h-full rounded-full ${tool.failed > 0 ? "bg-amber-500" : "bg-[var(--g3-deep)]"}`} style={{ width: `${Math.max(4, (tool.count / maxTool) * 100)}%` }} />
+                  <div className={`h-full rounded-full ${tool.failed > 0 ? "bg-[var(--g3-warning)]" : "bg-[var(--g3-deep)]"}`} style={{ width: `${Math.max(4, (tool.count / maxTool) * 100)}%` }} />
                 </div>
                 <span className="w-24 shrink-0 text-right text-xs text-[var(--g3-muted)]">
                   {tool.count} appel{tool.count > 1 ? "s" : ""}{tool.failed > 0 ? ` · ${tool.failed} échec(s)` : ""}
@@ -211,7 +211,7 @@ export function ObservabilityDashboard({ overview }: { overview: ObservabilityOv
                         <div className="col-span-2 sm:col-span-3"><dt className="text-[var(--g3-faint)]">Outils appelés</dt><dd className="font-semibold">{Object.keys(execution.toolCounts).length > 0 ? Object.entries(execution.toolCounts).map(([name, count]) => `${name} ×${count}`).join(", ") : "aucun"}</dd></div>
                       </dl>
                       {execution.error ? (
-                        <p className="mt-2.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">Erreur : {execution.error}</p>
+                        <p className="mt-2.5 rounded-lg bg-[var(--g3-danger-soft)] px-3 py-2 text-xs text-[var(--g3-danger-strong)]">Erreur : {execution.error}</p>
                       ) : null}
                       <p className="mt-2.5 text-[11px] text-[var(--g3-faint)]">Trace {execution.id} · fin {formatDate(execution.completedAt ?? "")}</p>
                     </div>

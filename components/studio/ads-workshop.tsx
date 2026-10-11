@@ -111,7 +111,7 @@ export function AdsWorkshop() {
         <div className="g3-card p-6">
           <div className="flex items-center justify-between">
             <h2 className="font-serif text-xl font-semibold">Générateur publicitaire</h2>
-            <span className="rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-xs text-emerald-600">Sécurité active</span>
+            <span className="rounded-full border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-3 py-1 text-xs text-[var(--g3-success-strong)]">Sécurité active</span>
           </div>
           <p className="mt-2 text-sm text-[var(--g3-muted)]">Décrivez le résultat attendu. L&apos;orchestrateur sélectionne les compétences et outils nécessaires.</p>
           <textarea
@@ -137,7 +137,7 @@ export function AdsWorkshop() {
                 className="flex w-full items-center justify-between rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] p-4 text-left hover:bg-[var(--g3-elevated)]"
               >
                 <span>{PROVIDER_LABELS[provider]}</span>
-                <span className={connections.includes(provider) ? "text-emerald-600 text-sm" : "text-sky-700 text-sm"}>
+                <span className={connections.includes(provider) ? "text-[var(--g3-success-strong)] text-sm" : "text-[var(--g3-info)] text-sm"}>
                   {connections.includes(provider) ? "Connecté" : "Connecter"}
                 </span>
               </button>
@@ -156,8 +156,8 @@ export function AdsWorkshop() {
           <h3 className="font-serif text-lg font-semibold">Validation humaine</h3>
           <p className="mt-2 text-sm text-[var(--g3-muted)]">Aucune publication ne part sans votre décision explicite. Le coût de publication est débité du portefeuille après exécution.</p>
           {pendingApprovalId ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <span className="font-mono text-xs text-amber-800">Approbation en attente : {pendingApprovalId}</span>
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-4">
+              <span className="font-mono text-xs text-[var(--g3-warning-strong)]">Approbation en attente : {pendingApprovalId}</span>
               <button disabled={busy} onClick={() => decideApproval("approve")} className="g3-btn g3-btn-primary">Approuver &amp; publier</button>
               <button disabled={busy} onClick={() => decideApproval("reject")} className="rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-5 py-2.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:bg-[var(--g3-elevated)]">Rejeter</button>
             </div>
@@ -171,7 +171,7 @@ export function AdsWorkshop() {
         <FeatureCard title="Caméra & fichiers" text="La caméra fonctionne uniquement après autorisation explicite. Les captures et fichiers peuvent être conservés dans le stockage permanent." />
       </section>
 
-      <footer className="rounded-2xl border border-amber-200 bg-amber-100 p-4 text-xs text-amber-700">
+      <footer className="rounded-2xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-4 text-xs text-[var(--g3-warning-strong)]">
         Les actions externes, dépenses publicitaires et opérations sensibles restent soumises aux politiques de sécurité et à une confirmation humaine. Les agents ne peuvent pas contourner ces contrôles.
       </footer>
     </div>

@@ -192,14 +192,51 @@ describe("Deux thèmes et seulement deux (verrou 108-c)", () => {
     expect(lightTokens.get("--g3-text")).toBe("#101B26");
     expect(lightTokens.get("--g3-text-secondary")).toBe("#1F4E5F");
     expect(lightTokens.get("--g3-muted")).toBe("#3E6478");
-    expect(lightTokens.get("--g3-info")).toBe("#1F4E5F");
-    expect(lightTokens.get("--g3-warning")).toBe("#B45309");
-    expect(lightTokens.get("--g3-warning-strong")).toBe("#6B5210");
-    expect(lightTokens.get("--g3-danger")).toBe("#B33636");
-    // Sombre « Nebula » : identité violette intacte + info canard lisible.
+    // Task 125 — identité 2 COULEURS, clair : cyan foncé / violet foncé.
+    expect(lightTokens.get("--g3-secondary")).toBe("#0899B4");
+    expect(lightTokens.get("--g3-info")).toBe("#0E5F73");
+    expect(lightTokens.get("--g3-success")).toBe("#0A6E82");
+    expect(lightTokens.get("--g3-magenta")).toBe("#5633E8");
+    expect(lightTokens.get("--g3-warning")).toBe("#6C48FF");
+    expect(lightTokens.get("--g3-warning-strong")).toBe("#3F22C4");
+    expect(lightTokens.get("--g3-danger")).toBe("#5B2BE0");
+    // Sombre « Nebula » : identité violette intacte + cyan lisible.
     expect(darkTokens.get("--g3-bg")).toBe("#05060C");
     expect(darkTokens.get("--g3-surface")).toBe("#0B0D17");
-    expect(darkTokens.get("--g3-info")).toBe("#8FD8EC");
+    expect(darkTokens.get("--g3-secondary")).toBe("#2AD4E8");
+    expect(darkTokens.get("--g3-info")).toBe("#7FE9F5");
+    expect(darkTokens.get("--g3-success")).toBe("#2AD4E8");
+    expect(darkTokens.get("--g3-magenta")).toBe("#9E85FF");
+    expect(darkTokens.get("--g3-warning")).toBe("#9E85FF");
+    expect(darkTokens.get("--g3-danger")).toBe("#B18AFF");
+  });
+
+  it("Task 125 — les ANCIENNES teintes des 5 familles supprimées sont bannies des tokens", () => {
+    // marron/ambre/rouge/vert/magenta historiques : la migration doit être
+    // totale dans les DEUX blocs (magenta→violet, info/success→cyan,
+    // warning/danger→violet).
+    const css = read("app/globals.css");
+    for (const banned of [
+      "#C44BFF", "#E14FEA", "#C026D3", // fuchsia/magenta historique
+      "#2FD48A", "#6FE8B2", "#16A34A", "#15803D", // vert historique
+      "#F5AE31", "#FBC96B", "#B45309", "#6B5210", // ambre historique
+      "#F6626E", "#FB8E96", "#B33636", "#9B2C2C", // rouge historique
+      "#8FD8EC", // info canard historique (→ cyan #7FE9F5)
+    ]) {
+      expect(css, `ancienne teinte ${banned} encore présente`).not.toContain(banned);
+    }
+  });
+
+  it("Task 125 — dégradés signature : 2 stops violet → cyan (aucun stop intermédiaire)", () => {
+    const darkTokens = tokensOf(blockOf(css, /(?:^|\n):root\s*\{([^}]*)\}/));
+    const lightTokens = tokensOf(blockOf(css, /\[data-theme="light"\]\s*\{([^}]*)\}/));
+    expect(darkTokens.get("--g3-gradient")).toBe("linear-gradient(115deg, #7C5CFF, #2AD4E8)");
+    expect(lightTokens.get("--g3-gradient")).toBe("linear-gradient(115deg, #6C48FF, #0899B4)");
+    // Le stop fuchsia intermédiaire a disparu de tous les dégradés tokens.
+    for (const token of ["--g3-gradient", "--g3-gradient-soft", "--g3-gradient-line"]) {
+      expect(darkTokens.get(token)).not.toMatch(/45%/);
+      expect(lightTokens.get(token)).not.toMatch(/45%/);
+    }
   });
 });
 

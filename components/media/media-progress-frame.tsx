@@ -53,7 +53,8 @@ export interface MediaProgressFrameProps {
   startedAt?: number;
 }
 
-/* Thème dark = atelier par défaut ; light = palette hex crème (globals.css §14). */
+/* Thème dark = atelier par défaut ; light = thème crème .g3-agent-light
+   (globals.css §14 — Task 125 : accents 2 couleurs via tokens, crèmes neutres). */
 const TONE_CARD: Record<MediaProgressTone, string> = {
   dark: "border-neutral-200 bg-white",
   light: "border-[#E5E1D5] bg-[#FAF9F5]",
@@ -75,24 +76,24 @@ const TONE_TRACK: Record<MediaProgressTone, string> = {
   light: "bg-[#EAE5D9]",
 };
 const TONE_FILL: Record<MediaProgressTone, string> = {
-  dark: "bg-blue-500",
-  light: "bg-[#D97757]",
+  dark: "bg-[var(--g3-secondary)]",
+  light: "bg-[var(--g3-primary)]",
 };
 const TONE_DOT: Record<MediaProgressTone, string> = {
-  dark: "bg-blue-500",
-  light: "bg-[#D97757]",
+  dark: "bg-[var(--g3-secondary)]",
+  light: "bg-[var(--g3-primary)]",
 };
 const TONE_ERROR: Record<MediaProgressTone, string> = {
-  dark: "text-rose-600",
-  light: "text-[#9F2F2F]",
+  dark: "text-[var(--g3-danger-strong)]",
+  light: "text-[var(--g3-danger-strong)]",
 };
 const TONE_CANCEL: Record<MediaProgressTone, string> = {
   dark: "border-neutral-200 text-neutral-600 hover:bg-neutral-50",
   light: "border-[#D3CDBB] text-[#3D3B34] hover:bg-[#EAE5D9]",
 };
 const TONE_RETRY: Record<MediaProgressTone, string> = {
-  dark: "border-blue-200 text-blue-700 hover:bg-blue-50",
-  light: "border-[#D97757] text-[#C05B3D] hover:bg-[rgba(217,119,87,0.12)]",
+  dark: "border-[var(--g3-secondary-soft)] text-[var(--g3-info)] hover:bg-[var(--g3-secondary-soft)]",
+  light: "border-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)] hover:bg-[var(--g3-primary-soft)]",
 };
 const STATUS_PILL: Record<MediaProgressStatus, Record<MediaProgressTone, string>> = {
   queued: {
@@ -100,20 +101,20 @@ const STATUS_PILL: Record<MediaProgressStatus, Record<MediaProgressTone, string>
     light: "bg-[#EAE5D9] text-[#3D3B34]",
   },
   running: {
-    dark: "bg-blue-100 text-blue-700",
-    light: "bg-[rgba(217,119,87,0.12)] text-[#C05B3D]",
+    dark: "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)]",
+    light: "bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]",
   },
   paused: {
-    dark: "bg-amber-100 text-amber-700",
-    light: "bg-[rgba(180,128,31,0.12)] text-[#8A6117]",
+    dark: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]",
+    light: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]",
   },
   complete: {
-    dark: "bg-emerald-100 text-emerald-700",
-    light: "bg-[rgba(63,125,68,0.12)] text-[#2F5F33]",
+    dark: "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]",
+    light: "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]",
   },
   failed: {
-    dark: "bg-rose-100 text-rose-700",
-    light: "bg-[rgba(194,65,65,0.10)] text-[#9F2F2F]",
+    dark: "bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]",
+    light: "bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]",
   },
   cancelled: {
     dark: "bg-neutral-100 text-neutral-500",

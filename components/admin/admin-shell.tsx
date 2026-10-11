@@ -23,13 +23,13 @@ export function AdminShell({ children, role }: { children: ReactNode; role: stri
     <div className="min-h-full bg-[var(--g3-bg)] text-[var(--g3-text-secondary)]">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-8">
         {/* Bandeau de contexte d'élévation — toujours visible */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] px-4 py-3">
           <div className="flex items-center gap-3">
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-amber-300 text-sm font-bold text-[var(--g3-text)]" aria-hidden="true">⛨</span>
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--g3-warning)] text-sm font-bold text-[var(--g3-text)]" aria-hidden="true">⛨</span>
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[.25em] text-amber-200/80">Gen3ia · Administration</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[.25em] text-[var(--g3-warning-strong)]">Gen3ia · Administration</div>
               <div className="text-xs text-[var(--g3-faint)]">
-                Session élevée — rôle <span className="font-semibold text-amber-200">{role}</span>. Toutes les actions sont journalisées.
+                Session élevée — rôle <span className="font-semibold text-[var(--g3-warning-strong)]">{role}</span>. Toutes les actions sont journalisées.
               </div>
             </div>
           </div>

@@ -10,7 +10,7 @@ import { FAQ_FR, buildStructuredData } from "@/lib/geo/content";
  * Vitrine Gen3ia — VERSION 2 « Aurora OS ».
  *
  * Identité nouvelle née de zéro : espace profond, halos aurora animés,
- * verre dépoli, frontière lumineuse dégradée (violet → fuchsia → cyan),
+ * verre dépoli, frontière lumineuse dégradée (violet → cyan),
  * typographie display Space Grotesk. Le contenu référencable (FAQ,
  * données structurées schema.org, liens) est préservé intégralement :
  * la V2 change la peau, pas le fond GEO/SEO.
@@ -116,7 +116,7 @@ const STORY_CARDS = [
   {
     title: "Aïcha décrit son objectif en une phrase.",
     body: (
-      <div className="rounded-2xl border border-[rgba(148,153,255,0.14)] bg-[var(--g3-deep)]/80 p-4" aria-hidden="true">
+      <div className="rounded-2xl border border-[rgba(124,92,255,0.14)] bg-[var(--g3-deep)]/80 p-4" aria-hidden="true">
         <p className="rounded-xl bg-[var(--g3-gradient)] bg-[length:160%_100%] px-4 py-2.5 text-xs font-medium text-white shadow-[0_8px_24px_-10px_rgba(124,92,255,0.7)]">
           « Lance une veille concurrentielle chaque matin et prépare-moi un résumé. »
         </p>
@@ -129,7 +129,7 @@ const STORY_CARDS = [
   {
     title: "Son agent travaille, valide et exécute.",
     body: (
-      <div className="rounded-2xl border border-[rgba(148,153,255,0.14)] bg-[var(--g3-deep)]/80 p-4" aria-hidden="true">
+      <div className="rounded-2xl border border-[rgba(124,92,255,0.14)] bg-[var(--g3-deep)]/80 p-4" aria-hidden="true">
         <div className="flex items-center justify-between border-b border-[var(--g3-border)] pb-2.5">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--g3-faint)]">Exécution</span>
           <span className="rounded-full bg-[var(--g3-success-soft)] px-2 py-0.5 text-[10px] font-bold text-[var(--g3-success-strong)]">Validée</span>
@@ -145,7 +145,7 @@ const STORY_CARDS = [
   {
     title: "Le rapport l'attend, chaque matin.",
     body: (
-      <div className="rounded-2xl border border-[rgba(148,153,255,0.14)] bg-[var(--g3-deep)]/80 p-4" aria-hidden="true">
+      <div className="rounded-2xl border border-[rgba(124,92,255,0.14)] bg-[var(--g3-deep)]/80 p-4" aria-hidden="true">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--g3-faint)]">Résumés</p>
         <p className="gradient-text mt-1.5 font-[family-name:var(--font-display)] text-3xl font-semibold">+38 %</p>
         <p className="mt-1.5 text-xs text-[var(--g3-muted)]">Temps gagné sur la veille le premier mois.</p>
@@ -246,7 +246,7 @@ export default function HomePage() {
                   <li key={capability.label}>
                     <Link
                       href={capability.href}
-                      className="flex items-center justify-center gap-2 rounded-2xl border border-[rgba(148,153,255,0.16)] bg-white/[0.04] px-3 py-3 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:-translate-y-0.5 hover:border-[rgba(124,92,255,0.5)] hover:bg-white/[0.07] hover:text-white hover:shadow-[0_12px_34px_-16px_rgba(124,92,255,0.6)]"
+                      className="flex items-center justify-center gap-2 rounded-2xl border border-[rgba(124,92,255,0.16)] bg-white/[0.04] px-3 py-3 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:-translate-y-0.5 hover:border-[rgba(124,92,255,0.5)] hover:bg-white/[0.07] hover:text-white hover:shadow-[0_12px_34px_-16px_rgba(124,92,255,0.6)]"
                     >
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-[var(--g3-secondary)]">
                         <path d={capability.icon} />
@@ -278,7 +278,7 @@ export default function HomePage() {
               </article>
             ))}
           </div>
-          <figure className="reveal relative mx-auto mt-10 max-w-3xl overflow-hidden rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-8 text-center backdrop-blur">
+          <figure className="reveal relative mx-auto mt-10 max-w-3xl overflow-hidden rounded-3xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-8 text-center backdrop-blur">
             <div className="rainbow-line absolute inset-x-0 top-0" aria-hidden="true" />
             <blockquote className="font-[family-name:var(--font-display)] text-xl font-medium leading-relaxed text-[var(--g3-text)] sm:text-2xl">
               « C’est le premier outil qui travaille vraiment pendant que je dors. »
@@ -291,7 +291,7 @@ export default function HomePage() {
         <section aria-label="Chiffres clés" className="mx-auto max-w-6xl px-4 pb-4 sm:px-6">
           <dl className="reveal grid grid-cols-2 gap-3 sm:grid-cols-4">
             {STATS.map((stat) => (
-              <div key={stat.label} className="rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/70 p-5 text-center backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]">
+              <div key={stat.label} className="rounded-3xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/70 p-5 text-center backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]">
                 <dd className="order-1 gradient-text font-[family-name:var(--font-display)] text-2xl font-bold">{stat.value}</dd>
                 <dt className="order-2 mt-1.5 text-[11px] leading-4 text-[var(--g3-faint)]">{stat.label}</dt>
               </div>
@@ -357,7 +357,7 @@ export default function HomePage() {
             {PRODUCTS.map((product, index) => (
               <article
                 key={product.href}
-                className="card-glow reveal flex flex-col rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-7 backdrop-blur"
+                className="card-glow reveal flex flex-col rounded-3xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-7 backdrop-blur"
                 style={{ ["--reveal-delay" as string]: `${index * 0.12}s` }}
               >
                 <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--g3-gradient)] bg-[length:160%_100%] text-white shadow-[0_10px_28px_-10px_rgba(124,92,255,0.8)]">
@@ -385,7 +385,7 @@ export default function HomePage() {
                 </ul>
                 <Link
                   href={product.href}
-                  className="group mt-7 inline-flex w-fit items-center gap-1.5 rounded-full border border-[rgba(148,153,255,0.25)] bg-white/[0.04] px-5 py-2.5 text-sm font-semibold text-[var(--g3-text)] transition hover:border-transparent hover:bg-[var(--g3-gradient)] hover:bg-[length:160%_100%] hover:text-white hover:shadow-[0_10px_30px_-10px_rgba(124,92,255,0.7)]"
+                  className="group mt-7 inline-flex w-fit items-center gap-1.5 rounded-full border border-[rgba(124,92,255,0.25)] bg-white/[0.04] px-5 py-2.5 text-sm font-semibold text-[var(--g3-text)] transition hover:border-transparent hover:bg-[var(--g3-gradient)] hover:bg-[length:160%_100%] hover:text-white hover:shadow-[0_10px_30px_-10px_rgba(124,92,255,0.7)]"
                 >
                   {product.cta}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">
@@ -422,7 +422,7 @@ export default function HomePage() {
             </article>
 
             {/* Sécurité */}
-            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
@@ -435,7 +435,7 @@ export default function HomePage() {
             </article>
 
             {/* Atelier 21st.dev — tuile vedette */}
-            <article className="card-glow reveal relative flex flex-col overflow-hidden rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+            <article className="card-glow reveal relative flex flex-col overflow-hidden rounded-3xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
               <span className="absolute right-4 top-4 rounded-full bg-[var(--g3-primary-soft)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--g3-primary-strong)]">Nouveau</span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--g3-secondary-soft)] text-[var(--g3-secondary)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -448,7 +448,7 @@ export default function HomePage() {
             </article>
 
             {/* Facturation */}
-            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--g3-magenta-soft)] text-[var(--g3-magenta)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
@@ -461,7 +461,7 @@ export default function HomePage() {
             </article>
 
             {/* Planification */}
-            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -490,13 +490,13 @@ export default function HomePage() {
               </div>
               <div className="mt-5 flex flex-wrap gap-2" aria-hidden="true">
                 {["Android", "iOS", "Windows", "Linux", "Web PWA"].map((device) => (
-                  <span key={device} className="rounded-full border border-[rgba(148,153,255,0.18)] bg-white/[0.05] px-3.5 py-1.5 text-xs font-semibold text-[var(--g3-text-secondary)]">{device}</span>
+                  <span key={device} className="rounded-full border border-[rgba(124,92,255,0.18)] bg-white/[0.05] px-3.5 py-1.5 text-xs font-semibold text-[var(--g3-text-secondary)]">{device}</span>
                 ))}
               </div>
             </article>
 
             {/* Espace développeur */}
-            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
               <span className="grid h-10 w-10 place-items-center rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] text-[var(--g3-text-secondary)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m8 6-6 6 6 6M16 6l6 6-6 6" />
@@ -525,7 +525,7 @@ export default function HomePage() {
               {STEPS.map((step, index) => (
                 <li
                   key={step.number}
-                  className="card-glow reveal relative rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/70 p-7 backdrop-blur"
+                  className="card-glow reveal relative rounded-3xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/70 p-7 backdrop-blur"
                   style={{ ["--reveal-delay" as string]: `${index * 0.12}s` }}
                 >
                   <span className="gradient-text font-[family-name:var(--font-display)] text-4xl font-bold">{step.number}</span>
@@ -569,7 +569,7 @@ export default function HomePage() {
                 ))}
               </ul>
             </div>
-            <div className="reveal card-glow rounded-3xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-7 backdrop-blur" style={{ ["--reveal-delay" as string]: "0.15s" }}>
+            <div className="reveal card-glow rounded-3xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-7 backdrop-blur" style={{ ["--reveal-delay" as string]: "0.15s" }}>
               <div className="flex items-center justify-between">
                 <p className="text-sm font-bold">Journal d’activité (extrait)</p>
                 <span className="rounded-full bg-[var(--g3-success-soft)] px-3 py-1 text-[10px] font-bold uppercase text-[var(--g3-success-strong)]">Contrôle actif</span>
@@ -625,7 +625,7 @@ export default function HomePage() {
               </Link>
               <Link
                 href="/login"
-                className="inline-flex items-center rounded-full border border-[rgba(148,153,255,0.3)] px-8 py-3.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.6)] hover:bg-white/[0.05] hover:text-white"
+                className="inline-flex items-center rounded-full border border-[rgba(124,92,255,0.3)] px-8 py-3.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.6)] hover:bg-white/[0.05] hover:text-white"
               >
                 J’ai déjà un compte
               </Link>
@@ -649,7 +649,7 @@ export default function HomePage() {
           </div>
           <div className="mt-10 space-y-3">
             {FAQ_ITEMS.map((item) => (
-              <details key={item.question} className="group rounded-2xl border border-[rgba(148,153,255,0.16)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]">
+              <details key={item.question} className="group rounded-2xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]">
                 <summary className="cursor-pointer list-none font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--g3-text)] marker:hidden">
                   {item.question}
                 </summary>
@@ -662,7 +662,7 @@ export default function HomePage() {
           <div className="mt-8 text-center">
             <Link
               href="/faq"
-              className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(148,153,255,0.25)] bg-white/[0.04] px-6 py-2.5 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(124,92,255,0.25)] bg-white/[0.04] px-6 py-2.5 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"
             >
               Voir la page FAQ complète
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

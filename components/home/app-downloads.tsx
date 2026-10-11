@@ -33,7 +33,7 @@ export function AppDownloads() {
         className="mx-auto max-w-6xl rounded-[36px] p-4 sm:p-6"
         style={{
           background:
-            "linear-gradient(135deg, rgba(124,92,255,0.16) 0%, rgba(225,79,234,0.12) 34%, rgba(42,212,232,0.12) 68%, rgba(47,212,138,0.10) 100%)",
+            "linear-gradient(135deg, rgba(124,92,255,0.16) 0%, rgba(124,92,255,0.12) 34%, rgba(42,212,232,0.12) 68%, rgba(42,212,232,0.10) 100%)",
         }}
       >
         <div className="reveal rounded-[28px] border border-[var(--g3-border)] bg-[var(--g3-surface)]/90 p-7 backdrop-blur sm:p-10">
@@ -71,7 +71,7 @@ export function AppDownloads() {
                   {platform.key === "pc" ? (
                     <a
                       href="/live"
-                      className="shrink-0 rounded-full border border-[rgba(148,153,255,0.3)] bg-white/[0.05] px-4 py-2 text-sm font-semibold text-[var(--g3-text)] transition hover:border-[rgba(124,92,255,0.6)] hover:text-white"
+                      className="shrink-0 rounded-full border border-[rgba(124,92,255,0.3)] bg-white/[0.05] px-4 py-2 text-sm font-semibold text-[var(--g3-text)] transition hover:border-[rgba(124,92,255,0.6)] hover:text-white"
                     >
                       Ouvrir
                     </a>

@@ -72,8 +72,8 @@ export function ApiKeysPanel() {
           </button>
         </div>
         {newKey && (
-          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-            <div className="text-xs font-semibold text-emerald-700">À copier maintenant — affichée une seule fois</div>
+          <div className="mt-4 rounded-2xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] p-4">
+            <div className="text-xs font-semibold text-[var(--g3-success-strong)]">À copier maintenant — affichée une seule fois</div>
             <code className="mt-2 block break-all font-mono text-xs">{newKey}</code>
           </div>
         )}
@@ -100,7 +100,7 @@ export function ApiKeysPanel() {
                     <td className="p-3">{key.status}</td>
                     <td className="p-3 text-right">
                       {key.status === "active" && (
-                        <button type="button" onClick={() => void revoke(key.prefix)} className="text-red-600">
+                        <button type="button" onClick={() => void revoke(key.prefix)} className="text-[var(--g3-danger-strong)]">
                           Révoquer
                         </button>
                       )}

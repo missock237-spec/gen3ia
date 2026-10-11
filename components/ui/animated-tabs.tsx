@@ -66,7 +66,7 @@ export function AnimatedTabs({
         >
           {tab.label}
           {tab.badge && (
-            <span className="rounded-md border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700">
+            <span className="rounded-md border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--g3-warning-strong)]">
               {tab.badge}
             </span>
           )}

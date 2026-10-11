@@ -127,7 +127,7 @@ export function RunTimeline({ run, compact = false }: RunTimelineProps) {
                     <span className="text-[10px] font-normal text-[var(--g3-faint)]">({steps.length})</span>
                   </span>
                   <span className="flex items-center gap-2">
-                    <span className={`text-[10px] ${allDone ? "text-emerald-600" : "text-[var(--g3-faint)]"}`}>
+                    <span className={`text-[10px] ${allDone ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-faint)]"}`}>
                       {allDone ? "✓" : open ? "▾" : "▸"}
                     </span>
                   </span>
@@ -137,7 +137,7 @@ export function RunTimeline({ run, compact = false }: RunTimelineProps) {
                     {steps.map((step) => (
                       <li key={step.id} className="rounded-lg bg-[var(--g3-elevated)] px-3 py-2">
                         <p className="flex items-start gap-2 text-xs font-medium text-[var(--g3-text)]">
-                          <span aria-hidden className={step.status === "failed" ? "text-red-500" : step.status === "done" ? "text-emerald-600" : "text-amber-600"}>
+                          <span aria-hidden className={step.status === "failed" ? "text-[var(--g3-danger-strong)]" : step.status === "done" ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-warning-strong)]"}>
                             {STEP_STATUS_MARKS[step.status]}
                           </span>
                           <span className="flex-1">{step.title}</span>

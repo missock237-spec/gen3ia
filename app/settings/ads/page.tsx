@@ -92,7 +92,7 @@ function AdsSettingsContent() {
               <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${adsEnabled === true ? "left-6" : "left-1"}`} />
             </button>
           </div>
-          {error && <p className="mt-3 text-xs font-semibold text-red-600" role="alert">{error}</p>}
+          {error && <p className="mt-3 text-xs font-semibold text-[var(--g3-danger-strong)]" role="alert">{error}</p>}
         </section>
 
         <section className="mt-6" aria-labelledby="ads-current-title">

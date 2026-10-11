@@ -461,8 +461,8 @@ export function IntegrationsWorkspace() {
         </p>
       </header>
 
-      {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-      {notice ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</div> : null}
+      {error ? <div className="mt-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-sm text-[var(--g3-danger-strong)]">{error}</div> : null}
+      {notice ? <div className="mt-4 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-sm text-[var(--g3-success-strong)]">{notice}</div> : null}
 
       {loading ? (
         <p className="mt-10 text-sm text-[var(--g3-muted)]">Chargement des intégrations…</p>
@@ -483,7 +483,7 @@ export function IntegrationsWorkspace() {
               ].map((item) => (
                 <div key={item.label} className="rounded-xl border border-[var(--g3-border)] px-4 py-3">
                   <p className="text-sm font-medium">{item.label}</p>
-                  <p className={`mt-1 text-xs font-semibold ${item.ok ? "text-emerald-600" : "text-[var(--g3-faint)]"}`}>{item.ok ? "● Actif" : "○ Non configuré"}</p>
+                  <p className={`mt-1 text-xs font-semibold ${item.ok ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-faint)]"}`}>{item.ok ? "● Actif" : "○ Non configuré"}</p>
                 </div>
               ))}
             </div>
@@ -584,7 +584,7 @@ export function IntegrationsWorkspace() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-2">
                                 <p className="truncate text-sm font-semibold">{entry.label}</p>
-                                {connectedToolkits.has(entry.toolkit) ? <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Connecté</span> : null}
+                                {connectedToolkits.has(entry.toolkit) ? <span className="shrink-0 rounded-full bg-[var(--g3-success-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--g3-success-strong)]">Connecté</span> : null}
                               </div>
                               <p className="text-xs text-[var(--g3-faint)]">{entry.toolkit}</p>
                             </div>
@@ -680,11 +680,11 @@ export function IntegrationsWorkspace() {
             <button type="button" onClick={createWebhook} disabled={!webhookUrl.trim() || webhookEvents.length === 0} className="mt-3 rounded-xl bg-[var(--g3-deep)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--g3-elevated)] disabled:opacity-50">
               Ajouter l&apos;endpoint
             </button>
-            {webhookError ? <p className="mt-2 text-sm text-red-600">{webhookError}</p> : null}
+            {webhookError ? <p className="mt-2 text-sm text-[var(--g3-danger-strong)]">{webhookError}</p> : null}
             {webhookSecret ? (
-              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
-                <p className="font-semibold text-amber-800">Secret de signature (affiché une seule fois) :</p>
-                <code className="mt-1 block break-all text-xs text-amber-900">{webhookSecret}</code>
+              <div className="mt-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] px-4 py-3 text-sm">
+                <p className="font-semibold text-[var(--g3-warning-strong)]">Secret de signature (affiché une seule fois) :</p>
+                <code className="mt-1 block break-all text-xs text-[var(--g3-warning-strong)]">{webhookSecret}</code>
               </div>
             ) : null}
 
@@ -700,7 +700,7 @@ export function IntegrationsWorkspace() {
                       <button type="button" onClick={() => toggleWebhook(webhook)} className="rounded-lg border border-[var(--g3-border-strong)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--g3-elevated)]">
                         {webhook.disabled ? "Activer" : "Désactiver"}
                       </button>
-                      <button type="button" onClick={() => deleteWebhook(webhook.id)} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50">
+                      <button type="button" onClick={() => deleteWebhook(webhook.id)} className="rounded-lg border border-[var(--g3-danger-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]">
                         Supprimer
                       </button>
                     </div>

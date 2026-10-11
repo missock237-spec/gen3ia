@@ -51,9 +51,9 @@ const STATUS_LABELS: Record<PayoutDoc["status"], string> = {
 };
 
 const STATUS_CLASSES: Record<PayoutDoc["status"], string> = {
-  requested: "bg-amber-100 text-amber-900",
-  approved: "bg-sky-100 text-sky-900",
-  paid: "bg-emerald-100 text-emerald-900",
+  requested: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]",
+  approved: "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)]",
+  paid: "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]",
   rejected: "bg-neutral-200 text-neutral-700",
 };
 
@@ -215,8 +215,8 @@ export function PayoutsPanel() {
             </button>
           </div>
         </form>
-        {message && <p className="mt-3 text-xs text-emerald-700">{message}</p>}
-        {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+        {message && <p className="mt-3 text-xs text-[var(--g3-success-strong)]">{message}</p>}
+        {error && <p className="mt-3 text-xs text-[var(--g3-danger-strong)]">{error}</p>}
       </Panel>
 
       <Panel title="Historique des retraits" subtitle={`${data?.payouts.length ?? 0} mandat(s)`}>

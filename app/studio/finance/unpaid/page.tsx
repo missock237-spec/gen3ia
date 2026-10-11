@@ -105,11 +105,11 @@ export default function FinanceUnpaidPage() {
       />
 
       {error ? (
-        <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+        <p role="alert" className="mb-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-[13px] text-[var(--g3-danger-strong)]">
           {error} <button className="underline" onClick={() => setError(null)}>Fermer</button>
         </p>
       ) : null}
-      {notice ? <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700">{notice}</p> : null}
+      {notice ? <p className="mb-4 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-[13px] text-[var(--g3-success-strong)]">{notice}</p> : null}
 
       {kpis ? (
         <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -190,7 +190,7 @@ export default function FinanceUnpaidPage() {
                     <button className={btnGhostCls} disabled={busy} onClick={() => remind(invoice, "ferme")}>
                       Relance ferme
                     </button>
-                    <button className={`${btnGhostCls} text-red-600`} disabled={busy} onClick={() => remind(invoice, "mise_en_demeure")}>
+                    <button className={`${btnGhostCls} text-[var(--g3-danger-strong)]`} disabled={busy} onClick={() => remind(invoice, "mise_en_demeure")}>
                       Mise en demeure
                     </button>
                     <button className={btnPrimaryCls} disabled={busy} onClick={() => markPaid(invoice.id)}>
@@ -199,7 +199,7 @@ export default function FinanceUnpaidPage() {
                   </div>
                 ) : (
                   <div className="mt-3 flex justify-end">
-                    <button className={`${btnGhostCls} text-red-600`} disabled={busy} onClick={() => remove(invoice.id)}>
+                    <button className={`${btnGhostCls} text-[var(--g3-danger-strong)]`} disabled={busy} onClick={() => remove(invoice.id)}>
                       Supprimer
                     </button>
                   </div>

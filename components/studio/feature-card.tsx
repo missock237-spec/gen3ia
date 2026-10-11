@@ -31,7 +31,7 @@ export function FeatureLinkCard({
     <Link href={href} className="g3-card block p-5 transition hover:bg-[var(--g3-surface)]">
       <h3 className="font-semibold">{title}</h3>
       <p className="mt-2 text-sm leading-6 text-[var(--g3-muted)]">{text}</p>
-      <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-sky-700">{cta} →</span>
+      <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--g3-info)]">{cta} →</span>
     </Link>
   );
 }

@@ -164,7 +164,7 @@ const MessageRow = memo(function MessageRow({
               {message.citations.map((citation, index) => (
                 <li key={`${message.id}-cit-${index}`} className="text-[11px] text-[var(--g3-muted)]">
                   {citation.url ? (
-                    <a href={citation.url} target="_blank" rel="noopener noreferrer" className="text-sky-700 underline underline-offset-2">
+                    <a href={citation.url} target="_blank" rel="noopener noreferrer" className="text-[var(--g3-info)] underline underline-offset-2">
                       {citation.source}
                     </a>
                   ) : (

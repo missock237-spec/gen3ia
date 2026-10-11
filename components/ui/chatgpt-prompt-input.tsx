@@ -94,8 +94,8 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
 
         {active && (
           <div className="mb-1 flex items-center gap-2 px-2 pt-1">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-100 px-2.5 py-1 text-[11px] text-sky-700">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-500" />{active.name}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-2.5 py-1 text-[11px] text-[var(--g3-info)]">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--g3-secondary)]" />{active.name}
             </span>
             <button type="button" onClick={() => onToolChange?.(null)} className="text-[var(--g3-faint)] hover:text-[var(--g3-text)]" aria-label="Retirer l'outil"><XIcon className="h-3.5 w-3.5"/></button>
           </div>
@@ -128,7 +128,7 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
                 <div className="px-2 py-2 text-[10px] font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">Outil prioritaire</div>
                 {AGENT_TOOLS.map((tool) => (
                   <button key={tool.id} type="button" onClick={() => { onToolChange?.(tool.id); setOpen(false); }} className="flex w-full items-start gap-3 rounded-xl p-2.5 text-left transition hover:bg-[var(--g3-elevated)]">
-                    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-sky-100 text-sky-700">•</span>
+                    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[var(--g3-secondary-soft)] text-[var(--g3-info)]">•</span>
                     <span><span className="block text-xs font-semibold text-[var(--g3-text)]">{tool.name}</span><span className="mt-0.5 block text-[10px] leading-4 text-[var(--g3-faint)]">{tool.description}</span></span>
                   </button>
                 ))}

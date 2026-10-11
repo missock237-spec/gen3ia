@@ -86,11 +86,11 @@ export default function OperationsMaintenancePage() {
       />
 
       {error ? (
-        <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+        <p role="alert" className="mb-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-[13px] text-[var(--g3-danger-strong)]">
           {error} <button className="underline" onClick={() => setError(null)}>Fermer</button>
         </p>
       ) : null}
-      {notice ? <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700">{notice}</p> : null}
+      {notice ? <p className="mb-4 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-[13px] text-[var(--g3-success-strong)]">{notice}</p> : null}
 
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <StatCard label="Actifs suivis" value={String(kpis.total)} />
@@ -166,7 +166,7 @@ export default function OperationsMaintenancePage() {
                   <button className={btnPrimaryCls} disabled={busy} onClick={() => setRecordingId(asset.id)}>
                     Enregistrer une intervention
                   </button>
-                  <button className={`${btnGhostCls} text-red-600`} disabled={busy} onClick={() => remove(asset.id)}>
+                  <button className={`${btnGhostCls} text-[var(--g3-danger-strong)]`} disabled={busy} onClick={() => remove(asset.id)}>
                     Supprimer
                   </button>
                 </div>

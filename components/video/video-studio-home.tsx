@@ -31,13 +31,13 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-neutral-200 text-neutral-700",
-  planning: "bg-sky-100 text-sky-700",
-  scripted: "bg-indigo-100 text-indigo-700",
-  storyboarded: "bg-violet-100 text-violet-700",
-  assets_ready: "bg-amber-100 text-amber-700",
-  rendering: "bg-blue-100 text-blue-700 animate-pulse",
-  completed: "bg-emerald-100 text-emerald-700",
-  failed: "bg-rose-100 text-rose-700",
+  planning: "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)]",
+  scripted: "bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]",
+  storyboarded: "bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]",
+  assets_ready: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]",
+  rendering: "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)] animate-pulse",
+  completed: "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]",
+  failed: "bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]",
   archived: "bg-neutral-100 text-neutral-500",
 };
 
@@ -162,7 +162,7 @@ export function VideoStudioHome() {
           onChange={(e) => setBrief(e.target.value)}
           placeholder="Ex. : Crée un documentaire de 30 minutes sur l'évolution de l'intelligence artificielle, destiné à YouTube, en français, style documentaire cinématographique. Utilise ma voix, ajoute une musique documentaire, des sous-titres et une introduction accrocheuse."
           rows={4}
-          className="w-full rounded-xl border border-neutral-300 p-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-xl border border-neutral-300 p-4 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--g3-secondary)]"
         />
         <div className="flex flex-wrap gap-2">
           {TEMPLATES.map((t) => (
@@ -178,7 +178,7 @@ export function VideoStudioHome() {
           <button
             onClick={() => createProject()}
             disabled={creating || brief.trim().length < 10}
-            className="ml-auto rounded-xl bg-blue-600 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            className="ml-auto rounded-xl bg-[var(--g3-secondary)] px-6 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
           >
             {creating ? "Le Directeur planifie…" : "Lancer la production"}
           </button>
@@ -198,7 +198,7 @@ export function VideoStudioHome() {
               <li key={p.id}>
                 <Link
                   href={`/studio/video/${p.id}`}
-                  className="block rounded-2xl border border-neutral-200 bg-white p-5 hover:border-blue-400 hover:shadow-sm transition"
+                  className="block rounded-2xl border border-neutral-200 bg-white p-5 hover:border-[var(--g3-secondary-soft)] hover:shadow-sm transition"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_COLORS[p.status] ?? "bg-neutral-100"}`}>

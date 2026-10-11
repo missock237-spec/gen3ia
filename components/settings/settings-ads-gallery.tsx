@@ -66,7 +66,7 @@ export function SettingsAdsGallery() {
 
   if (error) {
     return (
-      <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5"><p className="text-sm text-amber-800">{error}</p></section>
+      <section className="rounded-3xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-5"><p className="text-sm text-[var(--g3-warning-strong)]">{error}</p></section>
     );
   }
 

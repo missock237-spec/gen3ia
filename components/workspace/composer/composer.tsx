@@ -288,7 +288,7 @@ export function Composer({
         </div>
       )}
 
-      {uploadError && <p className="text-[11px] text-red-600" role="alert">{uploadError}</p>}
+      {uploadError && <p className="text-[11px] text-[var(--g3-danger-strong)]" role="alert">{uploadError}</p>}
 
       {attachments.length > 0 && (
         <ul className="flex flex-wrap gap-1.5" aria-label="Pièces jointes">
@@ -299,7 +299,7 @@ export function Composer({
               <button
                 type="button"
                 onClick={() => setAttachments((current) => current.filter((_, i) => i !== index))}
-                className="text-[var(--g3-faint)] hover:text-red-500"
+                className="text-[var(--g3-faint)] hover:text-[var(--g3-danger-strong)]"
                 aria-label={`Retirer ${attachment.filename}`}
               >
                 ✕

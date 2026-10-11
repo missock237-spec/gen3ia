@@ -207,9 +207,9 @@ export function SouvenirsPanel(props: {
         </button>
       </div>
       {conflict && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="alert">
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] px-3 py-2 text-xs text-[var(--g3-warning-strong)]" role="alert">
           <span>Cette clé existe déjà avec une autre valeur. Remplacer l&apos;ancienne valeur ?</span>
-          <button disabled={busy} onClick={overwriteExisting} className="min-h-8 rounded-full bg-amber-600 px-3 font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
+          <button disabled={busy} onClick={overwriteExisting} className="min-h-8 rounded-full bg-[var(--g3-warning)] px-3 font-semibold text-white hover:brightness-110 disabled:opacity-40">
             Écraser et remplacer
           </button>
           <button disabled={busy} onClick={() => setConflict(null)} className="min-h-8 rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 font-semibold text-[var(--g3-muted)]">
@@ -234,7 +234,7 @@ export function SouvenirsPanel(props: {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate font-mono text-xs font-semibold text-[var(--g3-text-secondary)]">{entry.key}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${entry.source === "agent" ? "bg-sky-100 text-sky-700" : "bg-[var(--g3-elevated)] text-[var(--g3-muted)]"}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${entry.source === "agent" ? "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)]" : "bg-[var(--g3-elevated)] text-[var(--g3-muted)]"}`}>
                       {entry.source === "agent" ? "agent" : "vous"}
                     </span>
                   </div>
@@ -283,7 +283,7 @@ export function SouvenirsPanel(props: {
                         <button
                           disabled={busy}
                           onClick={() => forget(entry.key)}
-                          className="min-h-9 rounded-md border border-red-300 bg-red-50 px-2.5 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+                          className="min-h-9 rounded-md border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-2.5 text-[11px] font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]"
                         >
                           Confirmer
                         </button>
@@ -300,7 +300,7 @@ export function SouvenirsPanel(props: {
                         disabled={busy}
                         onClick={() => setConfirmingKey(entry.key)}
                         aria-label={`Oublier ${entry.key}`}
-                        className="min-h-9 rounded-md border border-red-200 bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
+                        className="min-h-9 rounded-md border border-[var(--g3-danger-soft)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)] disabled:opacity-40"
                       >
                         Oublier
                       </button>

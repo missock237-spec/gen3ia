@@ -213,8 +213,8 @@ export function CustomApisPanel() {
         </button>
       </div>
 
-      {error && <p className="mt-3 text-sm text-red-600" role="alert">{error}</p>}
-      {notice && <p className="mt-3 text-sm text-emerald-600">{notice}</p>}
+      {error && <p className="mt-3 text-sm text-[var(--g3-danger-strong)]" role="alert">{error}</p>}
+      {notice && <p className="mt-3 text-sm text-[var(--g3-success-strong)]">{notice}</p>}
 
       {expanded && (
         <form onSubmit={createApi} className="mt-4 grid gap-3 rounded-xl border border-[var(--g3-border)] p-4 sm:grid-cols-2">
@@ -282,7 +282,7 @@ export function CustomApisPanel() {
                 <p className="flex items-center gap-2 text-sm font-semibold">
                   <span aria-hidden className="grid size-5 place-items-center rounded bg-[var(--g3-deep)] text-[8px] font-bold text-white">API</span>
                   <span className="truncate">{api.name}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${api.enabled ? "bg-emerald-100 text-emerald-800" : "bg-neutral-200 text-neutral-700"}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${api.enabled ? "bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]" : "bg-neutral-200 text-neutral-700"}`}>
                     {api.enabled ? "active" : "désactivée"}
                   </span>
                 </p>
@@ -304,7 +304,7 @@ export function CustomApisPanel() {
                   {api.enabled ? "Désactiver" : "Activer"}
                 </button>
                 <button type="button" onClick={() => void removeApi(api)}
-                  className="rounded-lg border border-[var(--g3-border)] px-3 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-50">
+                  className="rounded-lg border border-[var(--g3-border)] px-3 py-1.5 text-xs text-[var(--g3-danger-strong)] transition-colors hover:bg-[var(--g3-danger-soft)]">
                   Supprimer
                 </button>
               </div>
@@ -312,10 +312,10 @@ export function CustomApisPanel() {
             {testResult?.id === api.id && (
               <div className="mt-3 rounded-lg bg-[var(--g3-elevated)] p-3 text-xs">
                 {testResult.error ? (
-                  <p className="text-red-600" role="alert">Échec de l&apos;appel réel : {testResult.error}</p>
+                  <p className="text-[var(--g3-danger-strong)]" role="alert">Échec de l&apos;appel réel : {testResult.error}</p>
                 ) : testResult.result ? (
                   <>
-                    <p className={testResult.result.ok ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>
+                    <p className={testResult.result.ok ? "font-semibold text-[var(--g3-success-strong)]" : "font-semibold text-[var(--g3-warning-strong)]"}>
                       Réponse réelle : HTTP {testResult.result.status} {testResult.result.statusText} — {testResult.result.latencyMs} ms
                     </p>
                     <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all text-[11px] text-[var(--g3-muted)]">

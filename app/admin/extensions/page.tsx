@@ -99,8 +99,8 @@ export default function AdminReviewPage() {
 
   return (
     <div>
-      {message && <div className="mb-5 rounded-xl border border-emerald-300/30 bg-emerald-300/10 p-4 text-sm text-emerald-200" role="status">{message}</div>}
-      {error && <div className="mb-5 rounded-xl border border-red-300/30 bg-red-300/10 p-4 text-sm text-red-300" role="alert">{error}</div>}
+      {message && <div className="mb-5 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] p-4 text-sm text-[var(--g3-success-strong)]" role="status">{message}</div>}
+      {error && <div className="mb-5 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] p-4 text-sm text-[var(--g3-danger-strong)]" role="alert">{error}</div>}
 
         {loading ? (
           <p className="text-sm text-[var(--g3-faint)]">Chargement de la file…</p>
@@ -120,9 +120,9 @@ export default function AdminReviewPage() {
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <button disabled={busy} onClick={() => review(item.extensionId, item.version, "approved")} className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-400 disabled:opacity-40">Approuver</button>
-                      <button disabled={busy} onClick={() => review(item.extensionId, item.version, "rejected")} className="rounded-full border border-red-400/40 bg-red-400/10 px-4 py-2 text-xs font-semibold text-red-300 hover:bg-red-400/20 disabled:opacity-40">Rejeter</button>
-                      <button disabled={busy} onClick={() => suspend(item.extensionId)} className="rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-400/20 disabled:opacity-40">Suspendre</button>
+                      <button disabled={busy} onClick={() => review(item.extensionId, item.version, "approved")} className="rounded-full bg-[var(--g3-success)] px-4 py-2 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-40">Approuver</button>
+                      <button disabled={busy} onClick={() => review(item.extensionId, item.version, "rejected")} className="rounded-full border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-2 text-xs font-semibold text-[var(--g3-danger-strong)] hover:brightness-110 disabled:opacity-40">Rejeter</button>
+                      <button disabled={busy} onClick={() => suspend(item.extensionId)} className="rounded-full border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] px-4 py-2 text-xs font-semibold text-[var(--g3-warning-strong)] hover:brightness-110 disabled:opacity-40">Suspendre</button>
                     </div>
                   </div>
                   {item.changelog && <p className="mt-3 text-sm text-[var(--g3-faint)]">{item.changelog}</p>}
@@ -136,7 +136,7 @@ export default function AdminReviewPage() {
                     placeholder="Note de modération (facultatif)"
                     aria-label={`Note pour ${noteKey}`}
                     maxLength={500}
-                    className="mt-3 w-full rounded-lg border border-white/10 bg-[var(--g3-deep)]/60 px-3 py-2 text-xs text-[var(--g3-text-secondary)] outline-none focus:border-sky-400/60"
+                    className="mt-3 w-full rounded-lg border border-white/10 bg-[var(--g3-deep)]/60 px-3 py-2 text-xs text-[var(--g3-text-secondary)] outline-none focus:border-[var(--g3-secondary-soft)]"
                   />
                 </li>
               );

@@ -113,8 +113,8 @@ export default function AdminPayoutsPage() {
 
   return (
     <div>
-      {message && <div className="mb-5 rounded-xl border border-emerald-300/30 bg-emerald-300/10 p-4 text-sm text-emerald-200" role="status">{message}</div>}
-      {error && <div className="mb-5 rounded-xl border border-red-300/30 bg-red-300/10 p-4 text-sm text-red-300" role="alert">{error}</div>}
+      {message && <div className="mb-5 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] p-4 text-sm text-[var(--g3-success-strong)]" role="status">{message}</div>}
+      {error && <div className="mb-5 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] p-4 text-sm text-[var(--g3-danger-strong)]" role="alert">{error}</div>}
 
       {loading ? (
         <p className="text-sm text-[var(--g3-faint)]">Chargement de la file…</p>
@@ -167,7 +167,7 @@ export default function AdminPayoutsPage() {
                     type="button"
                     disabled={busy}
                     onClick={() => void decide(payout.id, "approve")}
-                    className="rounded-full bg-sky-500/20 px-4 py-2 text-xs font-semibold text-sky-200 transition hover:bg-sky-500/30 disabled:opacity-40"
+                    className="rounded-full bg-[var(--g3-secondary-soft)] px-4 py-2 text-xs font-semibold text-[var(--g3-info)] transition hover:brightness-110 disabled:opacity-40"
                   >
                     Approuver
                   </button>
@@ -177,7 +177,7 @@ export default function AdminPayoutsPage() {
                     type="button"
                     disabled={busy || !providerRef[payout.id]?.trim()}
                     onClick={() => void decide(payout.id, "mark_paid")}
-                    className="rounded-full bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/30 disabled:opacity-40"
+                    className="rounded-full bg-[var(--g3-success-soft)] px-4 py-2 text-xs font-semibold text-[var(--g3-success-strong)] transition hover:brightness-110 disabled:opacity-40"
                   >
                     Marquer payé
                   </button>
@@ -186,7 +186,7 @@ export default function AdminPayoutsPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => void decide(payout.id, "reject")}
-                  className="rounded-full bg-red-500/20 px-4 py-2 text-xs font-semibold text-red-200 transition hover:bg-red-500/30 disabled:opacity-40"
+                  className="rounded-full bg-[var(--g3-danger-soft)] px-4 py-2 text-xs font-semibold text-[var(--g3-danger-strong)] transition hover:brightness-110 disabled:opacity-40"
                 >
                   Rejeter
                 </button>

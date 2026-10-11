@@ -85,12 +85,12 @@ export function CreateAgentDialog({ onCreated, onClose }: { onCreated: () => voi
 
         <label className="mt-5 block text-xs font-semibold text-[var(--g3-text-secondary)]">
           Nom de l’agent
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className="mt-2 w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2.5 text-sm outline-none focus:border-violet-500" placeholder="Ex. Mon agent commercial" />
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className="mt-2 w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2.5 text-sm outline-none focus:border-[var(--g3-primary-soft)]" placeholder="Ex. Mon agent commercial" />
         </label>
 
         <label className="mt-4 block text-xs font-semibold text-[var(--g3-text-secondary)]">
           Type
-          <select value={type} onChange={(e) => setType(e.target.value as AgentType)} className="mt-2 w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2.5 text-sm outline-none focus:border-violet-500">
+          <select value={type} onChange={(e) => setType(e.target.value as AgentType)} className="mt-2 w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2.5 text-sm outline-none focus:border-[var(--g3-primary-soft)]">
             {TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
         </label>
@@ -98,7 +98,7 @@ export function CreateAgentDialog({ onCreated, onClose }: { onCreated: () => voi
         {type === "custom" && (
           <label className="mt-4 block text-xs font-semibold text-[var(--g3-text-secondary)]">
             Type personnalisé
-            <input value={customType} onChange={(e) => setCustomType(e.target.value)} maxLength={80} className="mt-2 w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2.5 text-sm outline-none focus:border-violet-500" placeholder="Ex. Juridique, immobilier, support…" />
+            <input value={customType} onChange={(e) => setCustomType(e.target.value)} maxLength={80} className="mt-2 w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2.5 text-sm outline-none focus:border-[var(--g3-primary-soft)]" placeholder="Ex. Juridique, immobilier, support…" />
           </label>
         )}
 
@@ -108,11 +108,11 @@ export function CreateAgentDialog({ onCreated, onClose }: { onCreated: () => voi
         </label>
 
         {file && <p className="mt-2 text-[11px] text-[var(--g3-muted)]">Fichier sélectionné : {file.name}</p>}
-        {error && <p className="mt-4 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-300">{error}</p>}
+        {error && <p className="mt-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-3 py-2 text-xs text-[var(--g3-danger-strong)]">{error}</p>}
 
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onClose} disabled={busy} className="rounded-xl border border-[var(--g3-border)] px-4 py-2 text-xs font-semibold text-[var(--g3-muted)]">Annuler</button>
-          <button type="submit" disabled={busy} className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{busy ? "Création…" : "Créer l’agent"}</button>
+          <button type="submit" disabled={busy} className="rounded-xl bg-[var(--g3-primary)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{busy ? "Création…" : "Créer l’agent"}</button>
         </div>
       </form>
     </div>

@@ -225,7 +225,7 @@ export function buildChartHtml(input: {
   .actions { display: flex; gap: 10px; margin-bottom: 14px; }
   button {
     font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
-    color: #fff; background: linear-gradient(135deg, #7c5cff, #e14fea);
+    color: #fff; background: linear-gradient(135deg, #7c5cff, #2ad4e8);
     border: 0; border-radius: 999px; padding: 9px 18px;
   }
   button:hover { filter: brightness(1.08); }
@@ -253,7 +253,7 @@ export function buildChartHtml(input: {
 </div>
 <script>
   const payload = ${data};
-  const dark = { color: ["#7c5cff", "#e14fea", "#2ad4e8", "#ffc861", "#5effc4"], backgroundColor: "transparent" };
+  const dark = { color: ["#7c5cff", "#2ad4e8", "#9e85ff", "#7fe9f5", "#b18aff"], backgroundColor: "transparent" };
   const base = {
     textStyle: { color: "#c9cdf0", fontFamily: "Segoe UI, system-ui, sans-serif" },
     tooltip: { trigger: "axis", backgroundColor: "#151728", borderColor: "#2a2d4a", textStyle: { color: "#eef0ff" } },
@@ -276,9 +276,9 @@ export function buildChartHtml(input: {
         type: payload.chartType === "line" ? "line" : "bar",
         data: payload.values, smooth: true, barMaxWidth: 56,
         itemStyle: payload.chartType === "line"
-          ? { color: "#e14fea", lineWidth: 3 }
-          : { borderRadius: [8, 8, 0, 0], color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: "#7c5cff" }, { offset: 1, color: "#e14fea" }]) }
-      }, payload.chartType === "line" ? { areaStyle: { color: "rgba(225,79,234,.12)" } } : {
+          ? { color: "#9e85ff", lineWidth: 3 }
+          : { borderRadius: [8, 8, 0, 0], color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: "#7c5cff" }, { offset: 1, color: "#2ad4e8" }]) }
+      }, payload.chartType === "line" ? { areaStyle: { color: "rgba(124,92,255,.12)" } } : {
         label: { show: true, position: "top", color: "#9aa0c3", fontSize: 11 }
       })] };
   }
@@ -309,7 +309,7 @@ export const APP_SYSTEM_PROMPT = [
   "1. Ta réponse contient UNIQUEMENT le document HTML, commençant par <!DOCTYPE html> et se terminant par </html>. Aucun texte hors du document, aucun bloc markdown, aucune explication.",
   "2. Fichier unique autonome : CSS dans <style>, JavaScript dans <script>. Aucun fichier local, aucune variable d'environnement, aucune clé d'API.",
   "3. Si React est demandé : utilise React 18 + ReactDOM + Babel Standalone via CDN (unpkg.com) avec <script type=\"text/babel\">. Sinon, JavaScript vanilla moderne.",
-  "4. Design PREMIUM niveau produit fini : thème sombre par défaut (fond #07080f-#12081f, dégradés violet #7c5cff → fuchsia #e14fea → cyan #2ad4e8), surfaces translucides, coins arrondis 14-18px, ombres douces, transitions fluides ; thème clair si demandé. Typographie soignée (Segoe UI/system-ui), espacements cohérents, entièrement responsive (mobile inclus).",
+  "4. Design PREMIUM niveau produit fini : thème sombre par défaut (fond #07080f-#12081f, dégradés violet #7c5cff → cyan #2ad4e8 — 2 couleurs uniquement, le violet et le cyan de Gen3ia, aucun rouge/vert/orange), surfaces translucides, coins arrondis 14-18px, ombres douces, transitions fluides ; thème clair si demandé. Typographie soignée (Segoe UI/system-ui), espacements cohérents, entièrement responsive (mobile inclus).",
   "5. TOUT est fonctionnel : chaque bouton, chaque champ, chaque interaction agit réellement (ajout, suppression, édition, filtre, calcul…). Aucun élément décoratif mort, aucun « TODO ».",
   "6. Les données persistent EN MÉMOIRE uniquement (localStorage indisponible dans l'aperçu sandboxé — jamais d'accès direct sans try/catch). Partir d'un petit jeu de données d'exemple réaliste est permis.",
   "7. Interface en FRANÇAIS (titres, boutons, placeholders, messages). Attributs d'accessibilité de base (label, aria).",

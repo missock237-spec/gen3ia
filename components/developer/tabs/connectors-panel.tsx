@@ -67,7 +67,7 @@ export function ConnectorsPanel() {
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {projectConnectors.map((connection) => (
-            <span key={connection.id} className="rounded-full border bg-emerald-50 px-3 py-1.5 text-xs">
+            <span key={connection.id} className="rounded-full border bg-[var(--g3-success-soft)] px-3 py-1.5 text-xs">
               <b>{connection.toolkit}</b>
             </span>
           ))}
