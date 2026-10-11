@@ -2,6 +2,37 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { detectDeviceFromHeaders } from "@/lib/device/detect";
 
+import { NextResponse } from 'next/server';
+
+export function middleware(request: Request) {
+  const response = NextResponse.next();
+  
+  // CSP stricte
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: https: blob:",
+    "font-src 'self' https://fonts.gstatic.com",
+    "connect-src 'self' https://api.openai.com https://*.firebaseio.com wss://*.firebaseio.com",
+    "frame-src 'self' https://js.stripe.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ');
+  
+  response.headers.set('Content-Security-Policy', csp);
+  
+  // Headers de sécurité supplémentaires
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  
+  return response;
+}
+
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "base-uri 'self'",
