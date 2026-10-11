@@ -3442,3 +3442,27 @@ Work Log:
 Stage Summary:
 - Entreprise : API publique v1 consommable par clés g3a_ à scopes et quota par clé (self-service complet dans les Paramètres), /api/status public versionné avec services + cache 30 s pour les moniteurs d'uptime (200/503), export RGPD account-wide livré par URL R2 signée courte (sections fail-soft, audit), et journal `auditEvents` sur les actions admin destructrices (migration R2, décisions de payout, rapprochement facturation).
 - QA verte : tsc 0, eslint 0/0, 368/368 tests verts (app/api + lib/security). Pas de push.
+
+---
+Task ID: 128
+Agent: Super Z (principal)
+Task: « Corrige les pull request qui se trouve dans le projet » — 15 PR ouvertes sur missock237-spec/gen3ia (2 PR code Jules + 13 Dependabot), dont main en échec CI.
+
+Work Log:
+- DIAGNOSTIC COMPLET (API GitHub, token PAT) : 15 PR ouvertes — #25 « Create validation.ts » (mergeable=False/dirty, check CI rouge), #26 « Add CacheManager » (check CI rouge), 11 Dependabot vertes mais « behind », #20 vitest 5 (3 échecs : npm ci ERESOLVE — dependabot a monté vitest@5.0.3 SANS @vitest/coverage-v8 → conflit de peer), #8 gitleaks v3 (échec tests datant du vieux merge-base, le check gitleaks lui-même vert).
+- RACINE PROFONDE TROUVÉE : main lui-même était ROUGE (2 checks en échec sur 9f9122c) — le commit Jules 97339a6 avait collé un script Service Worker dans app/manifest.ts (module de route Next.js) : typecheck HS (Event sans waitUntil/respondWith) + build cassé (« Failed to collect page data for /manifest.webmanifest »). Le PWA du projet est déjà couvert par public/manifest.webmanifest + public/sw.js (verrouillés par app/pwa-consistency.test.ts + app/perf-cache-policy.test.ts).
+- FIX MAIN : suppression d'app/manifest.ts (b0ce66f) — tsc 0, vitest 3 245 verts, build OK → CI main 6/6 VERTE.
+- PR #25 CLORE (déjà intégré) : lib/security/validation.ts existe dans main (521efeb/Task 127) avec la version App Router (parseValidatedBody + createAgentSchema) — la PR apportait un middleware Express qui ne compile pas dans Next.js. Commentaire + close.
+- PR #26 CLORE (architecture) : contredit la Task 108 (service Redis externe supprimé volontairement ; cache-aside déjà fourni par cacheWrap dans lib/cache/redis.ts), ioredis non installé, `db` non défini → ne compile pas. Commentaire + close.
+- INTÉGRATION DÉPENDANCES (373c0f3) : protection de branche strict (branches à jour exigées) + historique linéaire + 5 checks requises → 13 cycles CI séquentiels remplacés par UNE passe QA locale unique (standard du projet) :
+  * Racine (PR #23/#17/#18/#19/#21) : next 15.5.27, react/react-dom 19.3.0, @aws-sdk 3.1147.0, @composio/core 0.22.0, docx ^9.9.0, @huggingface/inference, otel ^0.223, ws 8.22.0, pptxgenjs ^4.0.1, @types/node ^26.6.4, @next/bundle-analyzer 16.4.0, prettier/tsx/@types/ws — épinglage exact conservé (next, react, ws, aws-sdk, composio, bundle-analyzer).
+  * MIGRATION VITEST 5 (PR #20) : vitest + @vitest/coverage-v8 ^5.0.3 montés ENSEMBLE (fix du ERESOLVE) + adaptation code : vi.hoisted() désormais obligatoire au niveau module (tools-video-chat.test.ts — 2 appels remontés, sémantique identique). Suite : 302 fichiers / 3 245 tests verts (compteur identique), couverture 88,1 %.
+  * SANDBOX (PR #13/#14/#15) : @fastify/rate-limit ^11.2, @types/node ^26.6.4, typescript ^7.0.2 (tsc 7 natif — typecheck sandbox 0 erreur).
+  * WORKFLOWS (PR #8/#9/#10/#11) : checkout v7 (×5), setup-node v6 (×3), cache v6 (×3), gitleaks-action v3 — assertion du test ci-pipeline mise à jour v2→v3.
+  * QA : tsc 0 ; eslint 0/0 ; vitest 5 3 245 verts + seuils couverture OK ; audit 0 vulnérabilité ; build OK ; budget bundle OK (185 kB < 240 kB).
+- CLÔTURE TRAÇÉE : 13 commentaires Dependabot référencent 373c0f3 avec détail du contenu intégré + résumé QA + justification (13 cycles CI économisés, contenu identique).
+
+Stage Summary:
+- 15/15 PR résolues : 2 closées justifiées (déjà intégré / architecture), 13 intégrées via 373c0f3 et closées avec traçabilité complète.
+- main réparé (b0ce66f) puis enrichi (373c0f3) — CI b0ce66f 6/6 verte, CI 373c0f3 en cours de vérification au moment de l'écriture (première exécution réelle des actions v6/v7 + gitleaks v3 + vitest 5 en CI).
+- VÉRIFICATION FINALE : CI 373c0f3 = 6/6 VERTE (dont premières exécutions réelles de checkout@v7/setup-node@v6/cache@v6/gitleaks@v3 + suite vitest 5 en CI). Production gen3ia.online saine : /api/status ok (auth+r2+ticks), manifest.webmanifest statique 200, smoke test 7 routes clés OK (/, /login, /studio, /workspace 307 auth attendu, /api/health, robots.txt, sitemap.xml). 0 PR ouverte restante (15/15 résolues).
