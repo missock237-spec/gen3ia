@@ -3653,3 +3653,20 @@ Stage Summary:
 - 7 outils dérivés opérationnels (création/mise à jour/liste/recherche de tickets Zendesk ; création/mise à jour/interrogation d'incidents ServiceNow) visibles du planner (GEN3IA_TOOLS), enregistrés sous gate COMPOSIO_API_KEY, exécutés derrière le même verrou de connexion vérifiée que composio.execute (logique mutualisée via resolveVerifiedComposioAccount).
 - Validation verte : tsc 0 erreur, eslint 0/0, vitest composio 33/33 (anciens tests préservés), suite complète 3 262 tests verts.
 - 1 commit local : « Task 133 : connecteurs entreprise Zendesk (tickets) + ServiceNow (incidents ITSM) — catalogue, outils, tests, UI ».
+---
+Task ID: 129-133 (consolidation)
+Agent: Super Z (principal)
+Task: Déploiement de 5 sous-agents IA en parallèle (worktrees isolés) sur les axes d'amélioration restants du rapport utilisateur : documentation, sécurité/charge, contexte conversationnel + analytique, marketplace/templates, connecteurs entreprise. Fusion, QA intégrale et push.
+
+Work Log:
+- ÉTAT DES LIEUX : 0 PR ouverte (15/15 résolues Task 128), CI main 6/6 verte, commits Tasks 119-127 confirmés ancêtres de HEAD. Écarts rapport vs réel : bundle 185 kB (OK < 240), couverture 88,1 % (OK > 80), export RGPD/audit/statut déjà livrés (Task 126). Manquants retenus : OpenAPI, ZAP + charge, fenêtre de contexte (slice fixe 16), analytique par agent, sandbox marketplace, templates sectoriels, Zendesk/ServiceNow.
+- DÉPLOIEMENT PARALLÈLE : 5 worktrees (wt-129-docs…wt-133-connectors) + node_modules symlinky, briefs autonomes complets avec standards projet (tsc 0, eslint 0/0, vitest verts, 2 couleurs, zéro dépendance neuve, zéro push).
+- RÉSULTATS : Task 129 OpenAPI 3.1 + référence + CHANGELOG + runbooks (17 tests, commit 4e4bf59) ; Task 130 workflow security.yml ZAP baseline hebdo + k6 smoke/stress + pentest/bug-bounty (16 tests, commit 2a57832) ; Task 131 context-window budget 24 000 tokens déterministe + analytics Firestore agentAnalytics + route /api/agents/[id]/analytics via after() (20+10+7 tests, commit a9238b0) ; Task 132 sandbox essais 48 h plafonnés + compatibilité semver manuelle + 6 templates sectoriels + section marketplace (123 tests, commit 1c064cc — finalisé par le main agent après expiration du sous-agent) ; Task 133 Zendesk/ServiceNow catalogue + 7 outils + registry/labels (33 tests, commit 199aa54).
+- INCIDENT ET RÉPARATION : le commit initial de la Task 132 (git add -A) avait embarqué le symlink node_modules (le pattern .gitignore « node_modules/ » à barre oblique ne couvre pas un lien symbolique) et le premier merge avait écrasé le vrai node_modules. Historique reconstruit proprement AVANT push : reset main 9cbf3f0, amend du commit 132 (node_modules détracké + .gitignore corrigé « node_modules »), npm ci racine + npm ci --prefix sandbox réinstallés, 5 merges refaits.
+- QA INTÉGRALE SUR MAIN FUSIONNÉ : tsc --noEmit = 0 ; eslint . --max-warnings 0 = 0/0 ; vitest run = 310 fichiers / 3 396 verts / 2 skip (+ sandbox 8/8 après installation dédiée, échec d'import fastify préexistant documenté) ; next build = OK ; check:bundle = OK (pire route 185 kB < 240 kB).
+- PUSH : main → origin (5 merges + historique propre), vérification CI GitHub et smoke production en cours.
+
+Stage Summary:
+- 5 axes d'amélioration du rapport livrés par sous-agents parallèles : référence API complète (OpenAPI 3.1 + docs humaine + changelog + runbooks), sécurité continue (ZAP hebdo + charge k6 + politiques), conversations longues maîtrisées (fenêtre glissante budgetée, résumé déterministe) + analytique par agent exposée, marketplace d'entreprise (essais plafonnés, compatibilité, 6 templates métier), connecteurs Zendesk/ServiceNow (7 outils FR au registry).
+- Hygiène renforcée au passage : .gitignore immunisé contre les symlinks node_modules.
+- QA finale verte sur l'ensemble : tsc 0, eslint 0/0, ~3 404 tests verts, build + budget bundle OK.
