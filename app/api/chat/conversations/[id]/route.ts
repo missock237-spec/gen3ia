@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { deleteConversation, getConversation, listMessages, renameConversation } from "@/lib/chat/repository";
 import { listRunsForConversation } from "@/lib/domain/runs/repository";
+import { listArtifacts } from "@/lib/domain/artifacts/repository";
 import { errorStatus } from "@/lib/security/http-errors";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -21,8 +22,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     // Runs (timelines de mission) : la réouverture du fil ré-affiche les
     // exécutions passées — plan, étapes et livrables ne disparaissent plus.
-    const runs = await listRunsForConversation(user.uid, id, 20).catch(() => []);
-    return NextResponse.json({ conversation, messages: await listMessages(user.uid, id), runs });
+    // Task 123 — les ARTEFACTS AUDIO de la conversation sont renvoyés aussi :
+    // le lecteur intégré du chat agent les résout depuis la clé R2 permanente
+    // (livraison directe, survit au refresh). Task 124 — messages + runs +
+    // artefacts agrégés en un seul Promise.all (trois lectures indépendantes,
+    // au lieu de trois allers-retours séquentiels).
+    const [messages, runs, audioArtifacts] = await Promise.all([
+      listMessages(user.uid, id),
+      listRunsForConversation(user.uid, id, 20).catch(() => []),
+      listArtifacts(user.uid, { conversationId: id, type: "audio", limit: 50 }).catch(() => []),
+    ]);
+    return NextResponse.json({
+      conversation,
+      messages,
+      runs,
+      ...(audioArtifacts.length > 0 ? { artifacts: audioArtifacts } : {}),
+    });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur." }, { status: errorStatus(error, 400) }); }
 }
 

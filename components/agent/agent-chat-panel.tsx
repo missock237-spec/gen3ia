@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { CommandComposer, type CommandComposerHandle } from "@/components/ui/command-composer";
 import { MarkdownContent } from "@/components/workspace/markdown";
+import { AudioDelivery, attachAudioArtifactsToMessages } from "@/components/workspace/audio-delivery";
 import { MediaProgressFrame } from "@/components/media/media-progress-frame";
 import { VideoProductionCard } from "@/components/workspace/video-production-card";
 import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
@@ -18,6 +19,7 @@ import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import { useAuth } from "@/lib/firebase/auth-client";
 import type { AgentSummary } from "@/lib/agents/schema";
 import type { AuthorizationMode } from "@/lib/security/authorization-mode";
+import type { ConversationArtifact } from "@/lib/domain/conversations/types";
 
 /**
  * Chat d'un agent IA personnalisé. Chaque message passe par la classification
@@ -79,6 +81,9 @@ type Message = {
   imageUrl?: string;
   /** Production vidéo autopilotée lancée par l'agent (suivi temps réel). */
   videoProject?: { projectId: string };
+  /** AUDIO LIVRÉ DIRECTEMENT (Task 123) : source du lecteur intégré — clé R2
+   *  permanente (storagePath, résolue en URL signée à la demande) ou data URI. */
+  audio?: { title?: string; storagePath?: string; url?: string; dataUri?: string };
   result?: AgentResult;
 };
 
@@ -472,12 +477,24 @@ export function AgentChatPanel({
       const response = await fetch(`/api/chat/conversations/${id}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Conversation introuvable.");
-      const items = ((data.messages ?? []) as Array<{ id: string; role: string; content: string; imageUrl?: string }>).map((item): Message => ({
-        id: item.id,
-        role: item.role === "user" ? "user" : "agent",
-        text: item.content,
-        imageUrl: item.imageUrl,
-      }));
+      // AUDIO LIVRÉ DIRECTEMENT (Task 123) : les artefacts audio de la
+      // conversation (clé R2 permanente) sont rattachés aux messages qui les
+      // ont produits — le lecteur intégré survit au refresh de la page.
+      const rawItems = (data.messages ?? []) as Array<{ id: string; role: string; content: string; imageUrl?: string; runId?: string; createdAt?: string }>;
+      const audioByMessage = attachAudioArtifactsToMessages(
+        rawItems.map((item) => ({ ...item, role: item.role === "user" ? "user" : "assistant", createdAt: item.createdAt ?? "" })),
+        (data.artifacts ?? []) as ConversationArtifact[],
+      );
+      const items: Message[] = rawItems.map((item) => {
+        const audioArtifact = audioByMessage.get(item.id)?.[0];
+        return {
+          id: item.id,
+          role: item.role === "user" ? "user" : "agent",
+          text: item.content,
+          imageUrl: item.imageUrl,
+          ...(audioArtifact ? { audio: { title: audioArtifact.title, storagePath: audioArtifact.storagePath, url: audioArtifact.url } } : {}),
+        };
+      });
       rememberConversation(id);
       // Historique complet : le DERNIER run de mission enregistré sur le fil
       // restaure le panneau de mission (plan, étapes, sorties, coût) tel
@@ -669,6 +686,21 @@ export function AgentChatPanel({
           ...(data.imageUrl ? { imageUrl: String(data.imageUrl) } : {}),
           ...(data.videoProject && typeof data.videoProject === "object" && "projectId" in (data.videoProject as Record<string, unknown>)
             ? { videoProject: { projectId: String((data.videoProject as Record<string, unknown>).projectId) } }
+            : {}),
+          // AUDIO LIVRÉ DIRECTEMENT (Task 123) : la réponse porte l'audio
+          // synthétisé (clé R2 permanente ou data URI inline) → lecteur intégré.
+          ...(data.audio && typeof data.audio === "object"
+            ? {
+                audio: {
+                  title: String(data.reply ?? "Voix-off").slice(0, 80),
+                  ...((data.audio as { storage?: string }).storage === "r2" && (data.audio as { url?: string }).url
+                    ? { storagePath: String((data.audio as { url: string }).url) }
+                    : {}),
+                  ...(typeof (data.audio as { dataUri?: string }).dataUri === "string"
+                    ? { dataUri: (data.audio as { dataUri: string }).dataUri }
+                    : {}),
+                },
+              }
             : {}),
           mode: "chat",
         }]);
@@ -1048,6 +1080,20 @@ export function AgentChatPanel({
                 {item.videoProject && (
                   <div className="mt-2">
                     <VideoProductionCard videoProjectId={item.videoProject.projectId} tone="light" />
+                  </div>
+                )}
+
+                {/* AUDIO LIVRÉ DIRECTEMENT (Task 123) : VRAI lecteur HTML5 —
+                    source résolue depuis la clé R2 permanente (jamais de lien
+                    markdown expirable) + téléchargement direct. */}
+                {item.audio && (
+                  <div className="mt-2">
+                    <AudioDelivery
+                      title={item.audio.title ?? "Voix-off"}
+                      storagePath={item.audio.storagePath}
+                      url={item.audio.url}
+                      dataUri={item.audio.dataUri}
+                    />
                   </div>
                 )}
 

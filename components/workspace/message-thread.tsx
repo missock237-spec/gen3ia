@@ -7,6 +7,7 @@ import { RunTimeline } from "./run-timeline";
 import { MarkdownContent } from "./markdown";
 import { formatBytes } from "./labels";
 import { downloadUrl } from "@/lib/client/download";
+import { AudioDelivery, attachAudioArtifactsToMessages } from "./audio-delivery";
 import { LiveAppPreviewButton } from "./artifact-preview";
 import { MediaProgressFrame } from "@/components/media/media-progress-frame";
 import { VideoProductionCard } from "./video-production-card";
@@ -72,6 +73,8 @@ interface MessageRowProps {
   run: ConversationRun | undefined;
   runApprovals: ConversationApproval[];
   messageArtifacts: ConversationArtifact[];
+  /** Artefacts audio livrés DIRECTEMENT avec ce message (lecteur intégré). */
+  audioArtifacts: ConversationArtifact[];
   generating: boolean;
   onDecide: (approvalId: string, decision: "approved" | "rejected") => Promise<void>;
   onEditImage?: (image: { url?: string; path?: string; filename?: string }) => void;
@@ -84,6 +87,7 @@ const MessageRow = memo(function MessageRow({
   run,
   runApprovals,
   messageArtifacts,
+  audioArtifacts,
   generating,
   onDecide,
   onEditImage,
@@ -175,7 +179,9 @@ const MessageRow = memo(function MessageRow({
 
         {messageArtifacts.length > 0 && (
           <ul className="mt-2 flex flex-wrap gap-1.5">
-            {messageArtifacts.map((artifact) => (
+            {/* Les artefacts AUDIO ne sont PAS répétés en pastille : ils sont
+                livrés DIRECTEMENT ci-dessous en lecteur intégré (Task 123). */}
+            {messageArtifacts.filter((artifact) => artifact.type !== "audio").map((artifact) => (
               <li
                 key={artifact.id}
                 className="inline-flex max-w-[220px] items-center gap-1.5 rounded-full border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-2.5 py-1 text-[11px] text-[var(--g3-text-secondary)]"
@@ -186,6 +192,21 @@ const MessageRow = memo(function MessageRow({
             ))}
           </ul>
         )}
+
+        {/* LIVRAISON DIRECTE DE L'AUDIO (Task 123) : un VRAI lecteur HTML5
+            par artefact audio du message — source résolue à la demande depuis
+            la clé R2 permanente (storagePath), plus un téléchargement direct.
+            S'affiche même sans texte explicite : l'existence de l'artefact
+            audio EST la livraison. */}
+        {audioArtifacts.map((artifact) => (
+          <AudioDelivery
+            key={`audio-${artifact.id}`}
+            title={artifact.title}
+            storagePath={artifact.storagePath}
+            url={artifact.url}
+            filename={artifact.filename}
+          />
+        ))}
 
         {/* Application créée par l'agent → aperçu en direct dans la conversation */}
         {messageArtifacts.map((artifact) => (
@@ -240,6 +261,14 @@ export function MessageThread({
     return map;
   }, [runs, artifactsById]);
   const streaming = typeof streamingContent === "string";
+  // AUDIO LIVRÉ DIRECTEMENT (Task 123) : association message ↔ artefacts audio
+  // (tours vocaux SANS run, comme livrables d'étape d'un run) — le lecteur
+  // intégré apparaît dès que l'artefact arrive (événement de flux ou
+  // rechargement), sans rechargement de page.
+  const audioByMessageId = useMemo(
+    () => attachAudioArtifactsToMessages(messages, artifacts.filter((artifact) => artifact.type === "audio")),
+    [messages, artifacts],
+  );
   // Artefacts vidéo PERSISTÉS de la conversation (reprise après refresh :
   // la carte continue de suivre la production réelle et fait avancer la
   // file par sondage tant qu'elle est affichée).
@@ -254,6 +283,13 @@ export function MessageThread({
         const run = message.runId ? runsById.get(message.runId) : undefined;
         const runApprovals = run ? approvalsByRunId.get(run.id) ?? EMPTY_APPROVALS : EMPTY_APPROVALS;
         const messageArtifacts = run ? artifactsByRunId.get(run.id) ?? EMPTY_ARTIFACTS : EMPTY_ARTIFACTS;
+        // Union dédupliquée : audio lié au run + audio associé au message
+        // (tour vocal direct) — la pastille générique les omet, le lecteur les rend.
+        const rowAudio = audioByMessageId.get(message.id) ?? EMPTY_ARTIFACTS;
+        const messageAudio = messageArtifacts.filter((artifact) => artifact.type === "audio");
+        const audioArtifacts = messageAudio.length > 0
+          ? [...messageAudio, ...rowAudio.filter((artifact) => !messageAudio.some((a) => a.id === artifact.id))]
+          : rowAudio;
 
         return (
           <MessageRow
@@ -262,6 +298,7 @@ export function MessageThread({
             run={run}
             runApprovals={runApprovals}
             messageArtifacts={messageArtifacts}
+            audioArtifacts={audioArtifacts}
             generating={generating}
             onDecide={onDecide}
             onEditImage={onEditImage}

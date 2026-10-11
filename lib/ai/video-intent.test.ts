@@ -287,7 +287,9 @@ describe("resolveVoiceRequestFromContext (suivi de clarification — capture 1)"
       { role: "user" as const, content: "génère un audio" },
       { role: "assistant" as const, content: "Quel texte souhaitez-vous entendre ?" },
       { role: "user" as const, content: "bienvenue" },
-      { role: "assistant" as const, content: "Voici votre audio, synthétisé avec une voix naturelle ElevenLabs. [Écouter l'audio](https://r2.example/sons/a.mp3)" },
+      // Task 123 — nouveau contrat : PLUS de lien markdown, l'audio est livré
+      // DIRECTEMENT (lecteur intégré depuis l'artefact R2 permanent).
+      { role: "assistant" as const, content: "Voici votre audio, synthétisé avec une voix naturelle ElevenLabs — il est prêt ci-dessous, à écouter et à télécharger.\nL'audio est archivé en permanence dans votre espace : il reste disponible et réutilisable." },
     ];
     expect(resolveVoiceRequestFromContext("merci beaucoup", fil)).toBeNull();
   });
@@ -295,6 +297,9 @@ describe("resolveVoiceRequestFromContext (suivi de clarification — capture 1)"
   it("isVoiceClarifyingQuestion ne reconnaît que les questions sur le texte à entendre", () => {
     expect(isVoiceClarifyingQuestion("Quel texte ou quel contenu souhaitez-vous entendre dans cet audio ?")).toBe(true);
     expect(isVoiceClarifyingQuestion("Voici votre audio. [Écouter l'audio](https://r2.example/a.mp3)")).toBe(false);
+    // Task 123 — livraison directe (lecteur intégré, aucun lien markdown) :
+    // le message de livraison n'est PAS une question de clarification.
+    expect(isVoiceClarifyingQuestion("Voici votre voix-off, synthétisée avec une voix naturelle ElevenLabs — elle est prête ci-dessous, à écouter et à télécharger.\nL'audio est archivé en permanence dans votre espace : il reste disponible et réutilisable.")).toBe(false);
     expect(isVoiceClarifyingQuestion("Quelle est la capitale du Cameroun ?")).toBe(false);
   });
 });
@@ -330,6 +335,14 @@ describe("isVoiceClarifyingQuestion — question déterministe (fin en point)", 
       "L'audio est archivé en permanence dans votre espace : il reste disponible et réutilisable.",
       "",
       "[Écouter l'audio](https://r2.example.com/users/u1/permanent/ai-audio/1-abc.mp3?sig=xyz&exp=1)",
+    ].join("\n");
+    expect(isVoiceClarifyingQuestion(delivered)).toBe(false);
+  });
+
+  it("la livraison directe Task 123 (audio prêt ci-dessous, sans lien) n'est PAS une clarification", () => {
+    const delivered = [
+      "Voici votre audio, synthétisé avec une voix naturelle ElevenLabs — il est prêt ci-dessous, à écouter et à télécharger.",
+      "L'audio est archivé en permanence dans votre espace : il reste disponible et réutilisable.",
     ].join("\n");
     expect(isVoiceClarifyingQuestion(delivered)).toBe(false);
   });

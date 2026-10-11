@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-/** Vérification du LIEN D'ÉCOUTE dans la livraison audio (scénario 3 tours). */
+/** Vérification de la LIVRAISON DIRECTE audio (scénario 3 tours — Task 123) :
+ *  le message assistant ne porte PLUS de lien markdown (expirable) ; l'audio
+ *  est livré par l'ARTEFACT audio (storagePath = clé R2 permanente) que le
+ *  lecteur intégré du fil résout en URL signée à la demande. */
 const BASE = process.env.BASE_URL || "https://gen3ia.online";
 const API_KEY = "AIzaSyCWeyTdWPj0HjIfo0EyLPldAeRrSIyBJbQ";
 const EMAIL = `check-audio-${Date.now()}@gen3ia.test`;
@@ -15,7 +18,7 @@ const EMAIL = `check-audio-${Date.now()}@gen3ia.test`;
 
   const conv = await fetch(`${BASE}/api/workspace/conversations`, {
     method: "POST", headers: { "content-type": "application/json", cookie },
-    body: JSON.stringify({ title: "Check lien audio" }),
+    body: JSON.stringify({ title: "Check livraison audio directe" }),
   }).then((x) => x.json());
   const conversationId = conv.conversation?.id ?? conv.id;
 
@@ -30,6 +33,6 @@ const EMAIL = `check-audio-${Date.now()}@gen3ia.test`;
   const msg = tour2.assistantMessage ?? {};
   console.log("CONTENU COMPLET DU MESSAGE ASSISTANT:");
   console.log(JSON.stringify(msg.content, null, 2));
-  console.log("\nLien d'écoute présent:", /\[Écouter l'audio\]\(https?:\/\//.test(msg.content ?? ""));
-  console.log("Artefacts:", JSON.stringify((tour2.artifacts ?? []).map((x) => ({ type: x.type, url: x.url, storagePath: x.storagePath })), null, 2));
+  console.log("\nLien markdown expirable ABSENT (attendu):", !/\[Écouter l'audio\]\(https?:\/\//.test(msg.content ?? ""));
+  console.log("Artefacts audio (livraison directe — storagePath permanent):", JSON.stringify((tour2.artifacts ?? []).filter((x) => x.type === "audio").map((x) => ({ type: x.type, storagePath: x.storagePath })), null, 2));
 })();

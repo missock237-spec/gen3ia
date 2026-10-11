@@ -47,7 +47,6 @@ import { extractVideoParams, extractVideoTitle, looksLikeVideoRequest, looksLike
 import { isJulesConfigured } from "@/lib/integrations/jules/client";
 import { resolveCodeRequestFromContext, type ContextCodeResolution } from "@/lib/ai/code-intent";
 import { speakDirectForUser } from "@/lib/ai/voice-speak-direct";
-import { createR2DownloadUrl } from "@/lib/storage/r2";
 import { sanitizeProductionOptions, VIDEO_ASPECT_RATIOS } from "@/lib/tools/media/create-video";
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
 import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
@@ -1825,9 +1824,10 @@ async function runVideoTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
 /**
  * VOIX-OFF / AUDIO DIRECT (fix capture 13:02 — moteur workspace) : synthèse
  * ElevenLabs immédiate, mécanique identique au chemin agent chat (Task
- * 114-a) : archivage permanent R2 + facturation au réel + lien d'écoute
- * signé + artefact audio rattaché à la conversation. Échec de synthèse →
- * réponse HONNÊTE avec relance (jamais de tuto externe ni de refus sec).
+ * 114-a) : archivage permanent R2 + facturation au réel + artefact audio
+ * rattaché à la conversation, LIVRÉ DIRECTEMENT dans le fil par le lecteur
+ * intégré (Task 123 — plus aucun lien markdown expirable). Échec de synthèse
+ * → réponse HONNÊTE avec relance (jamais de tuto externe ni de refus sec).
  */
 async function runVoiceTurn(ctx: TurnBase, resolution: ContextVoiceResolution): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
@@ -1859,22 +1859,19 @@ async function runVoiceTurn(ctx: TurnBase, resolution: ContextVoiceResolution): 
     };
   }
 
-  // Lien d'écoute : URL signée R2 (1 h, plafond du presigneur) quand l'audio
-  // est archivé (rendu markdown du chat limité à https — la base64 n'est
-  // jamais déversée). La clé R2 permanente reste la référence durable :
-  // l'application résout le fichier au-delà de l'expiration du lien.
-  let playableUrl: string | undefined;
-  if (spoken.storage === "r2" && spoken.audioUrl) {
-    playableUrl = await createR2DownloadUrl(spoken.audioUrl, 3600).catch(() => undefined);
-  }
+  // LIVRAISON DIRECTE (Task 123) : PLUS AUCUN lien markdown dans le message —
+  // une URL signée expire (1 h, plafond du presigneur) et faisait de la
+  // livraison un lien mort. L'audio est rendu DIRECTEMENT dans le fil par un
+  // lecteur <audio> intégré (components/workspace/audio-delivery.tsx) qui
+  // résout à LA DEMANDE une URL signée fraîche depuis la clé R2 permanente
+  // (storagePath de l'artefact, canal /api/storage/permanent).
   const reply = [
     resolution.source === "context"
-      ? "Voici votre audio, synthétisé à partir du texte que vous venez de donner :"
-      : "Voici votre audio, synthétisé avec une voix naturelle ElevenLabs.",
+      ? "Voici votre audio, synthétisé à partir du texte que vous venez de donner — il est prêt ci-dessous, à écouter et à télécharger."
+      : "Voici votre audio, synthétisé avec une voix naturelle ElevenLabs — il est prêt ci-dessous, à écouter et à télécharger.",
     spoken.storage === "r2"
       ? "L'audio est archivé en permanence dans votre espace : il reste disponible et réutilisable."
       : "L'archivage permanent est momentanément indisponible : l'audio est livré dans la réponse de cette conversation (version temporaire).",
-    ...(playableUrl ? ["", `[Écouter l'audio](${playableUrl})`] : []),
   ].join("\n");
   const assistantMessage = await appendMessage({
     conversationId: ctx.conversationId,
@@ -1885,9 +1882,10 @@ async function runVoiceTurn(ctx: TurnBase, resolution: ContextVoiceResolution): 
   });
   await onEvent({ type: "message_complete", message: assistantMessage });
 
-  // Artefact audio : la clé R2 permanente est la référence durable (réutilisable
-  // par l'atelier / le canal signé). Repli inline : pas d'artefact (data URI
-  // non rejouable depuis le fil) — le lien de la réponse reste le livrable.
+  // Artefact audio : la clé R2 permanente est la référence durable (le lecteur
+  // du fil la résout en URL signée courte à chaque écoute). Repli inline :
+  // pas d'artefact (data URI non rejouable depuis le fil) — la réponse API
+  // porte alors le data URI pour lecture immédiate.
   let artifact: ConversationArtifact | null = null;
   if (spoken.audioUrl) {
     artifact = await createArtifact({
@@ -1896,7 +1894,6 @@ async function runVoiceTurn(ctx: TurnBase, resolution: ContextVoiceResolution): 
       projectId: ctx.projectId,
       type: "audio",
       title: (resolution.title ?? resolution.text2speak).slice(0, 80),
-      url: playableUrl,
       storagePath: spoken.audioUrl,
       note: "Synthèse vocale ElevenLabs — audio permanent (R2)",
     });

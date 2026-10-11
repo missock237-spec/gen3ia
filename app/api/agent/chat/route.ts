@@ -18,6 +18,7 @@ import { createActionApproval, listActionApprovals } from "@/lib/agents/action-a
 import { selectApprovalRequiredSteps } from "@/lib/agents/approval-policy";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage, createConversation, getConversation, listMessages, updateConversation, type ChatConversation } from "@/lib/chat/repository";
+import { createArtifact } from "@/lib/domain/artifacts/repository";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { policyForAgent } from "@/lib/agents/personalized-plan";
 import { answerAsAgent, classifyRequest, historyContextNote, unavailableCapabilityReply, planAgentTask } from "@/lib/agents/chat-engine";
@@ -298,12 +299,15 @@ async function respondWithImage(params: {
 }
 
 /**
- * VOIX-OFF DIRECTE (Task 114-a) : synthèse ElevenLabs immédiate — même
- * mécanique d'archivage permanent R2 que l'outil voice.speak (clé réutilisable
- * par le canal signé de l'application), facturation TTS au réel. Le message
- * assistant porte le lien d'écoute (URL signée R2). Retourne spoken=false en
- * échec de synthèse/facturation — l'appelant continue le flux normal (jamais
- * d'échec visible brut).
+ * VOIX-OFF DIRECTE (Task 114-a + Task 123) : synthèse ElevenLabs immédiate —
+ * même mécanique d'archivage permanent R2 que l'outil voice.speak (clé
+ * réutilisable par le canal signé de l'application), facturation TTS au réel.
+ * LIVRAISON DIRECTE : PLUS AUCUN lien markdown (une URL signée expire) — un
+ * artefact audio (storagePath = clé R2 permanente) est rattaché à la
+ * conversation et le lecteur intégré du fil le résout à la demande ; la
+ * réponse API porte le dataUri pour la lecture immédiate côté client. Retourne
+ * spoken=false en échec de synthèse/facturation — l'appelant continue le flux
+ * normal (jamais d'échec visible brut).
  */
 async function respondWithVoiceOff(params: {
   userId: string;
@@ -314,24 +318,36 @@ async function respondWithVoiceOff(params: {
   const result = await speakDirectForUser({ userId: params.userId, text: params.text, executionId });
   if (!result.ok) return { spoken: false };
 
-  // Lien d'écoute : URL signée R2 (6 h) quand l'audio est archivé. En repli
-  // inline, le data URI reste dans la réponse API (audio.dataUri) — la base64
-  // n'est jamais déversée dans le fil (rendu markdown du chat limité à https).
-  let playableUrl: string | undefined;
-  if (result.storage === "r2" && result.audioUrl) {
-    // Lien d'écoute : URL signée R2 (1 h, plafond du presigneur — une
-    // expiration supérieure lève et faisait silencieusement DISPARAÎTRE le
-    // lien d'écoute). La clé R2 permanente reste la référence durable.
-    playableUrl = await createR2DownloadUrl(result.audioUrl, 3600).catch(() => undefined);
-  }
+  // LIVRAISON DIRECTE (Task 123) : le message annonce l'audio PRÊT
+  // ci-dessous — jamais de lien markdown expirable. En repli inline, le data
+  // URI reste dans la réponse API (audio.dataUri) — la base64 n'est jamais
+  // déversée dans le fil (rendu markdown du chat limité à https).
   const reply = [
-    "Voici votre voix-off, synthétisée avec une voix naturelle ElevenLabs.",
+    "Voici votre voix-off, synthétisée avec une voix naturelle ElevenLabs — elle est prête ci-dessous, à écouter et à télécharger.",
     result.storage === "r2"
       ? "L'audio est archivé en permanence dans votre espace : il reste disponible et réutilisable."
       : "L'archivage permanent est momentanément indisponible : l'audio est livré dans la réponse de cette conversation (version temporaire).",
-    ...(playableUrl ? ["", `[Écouter l'audio](${playableUrl})`] : []),
   ].join("\n");
   await appendMessage({ conversationId: params.conversationId, userId: params.userId, role: "assistant", content: reply });
+
+  // Artefact audio (référence permanente) : la clé R2 est le storagePath —
+  // le lecteur intégré du fil la résout en URL signée fraîche à chaque
+  // écoute, et l'audio survit au refresh / à l'expiration d'un lien.
+  if (result.storage === "r2" && result.audioUrl) {
+    await createArtifact({
+      userId: params.userId,
+      conversationId: params.conversationId,
+      type: "audio",
+      title: params.text.trim().slice(0, 80) || "Voix-off",
+      storagePath: result.audioUrl,
+      note: "Synthèse vocale ElevenLabs — audio permanent (R2)",
+    }).catch((error) => {
+      logger.warn(
+        { err: error instanceof Error ? error.message : error },
+        "agent_chat_voice_artifact_failed",
+      );
+    });
+  }
   return {
     spoken: true,
     reply,
