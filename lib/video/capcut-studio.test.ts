@@ -200,8 +200,9 @@ describe("Task 119 — karaoké ASS (\\k) + entrées animées", () => {
   it("toAssFile style karaoke_pop : couleur de PRÉ-REMPLISSAGE secondaire + tags \\k dans les événements", () => {
     const track = buildSubtitleTrack([sceneWithNarration("Karaoké mot à mot sur cette scène.")], "karaoke_pop", "center");
     const ass = toAssFile(track, 1080, 1920);
-    // SecondaryColour = surlignage vif (avant que le \k ne « remplisse » le mot)
-    expect(ass).toContain("&H0000E5FF");
+    // SecondaryColour = surlignage vif (avant que le \k ne « remplisse » le
+    // mot) — Task 125 : violet signature #9E85FF (ASS &HAABBGGRR = &H00FF859E)
+    expect(ass).toContain("&H00FF859E");
     expect(ass).toContain("{\\k");
     expect(ass).toContain("{\\fad(120,60)}");
   });

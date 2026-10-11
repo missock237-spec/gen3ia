@@ -107,13 +107,17 @@ describe("Cadre de progression (structurel) — barres, thèmes, a11y, chronomè
     expect(frame).toContain("aria-valuenow={bounded}");
   });
 
-  it("deux thèmes : dark (atelier par défaut) et light (palette crème §14 : #D97757, #FAF9F5, #E5E1D5)", () => {
+  it("deux thèmes : dark (atelier par défaut) et light (crème neutre §14 + accents tokens 2 couleurs — Task 125)", () => {
     expect(frame).toContain('tone = "dark"');
     expect(frame).toContain('dark: "border-neutral-200 bg-white"');
     expect(frame).toContain('light: "border-[#E5E1D5] bg-[#FAF9F5]"');
-    expect(frame).toContain('light: "bg-[#D97757]"');
+    // Accents 2 couleurs : fill/dot dark = cyan secondaire, light = violet primaire.
+    expect(frame).toContain('dark: "bg-[var(--g3-secondary)]"');
+    expect(frame).toContain('light: "bg-[var(--g3-primary)]"');
     // Aucun pastel bg-*-50 dans la variante light (règle §14 : hex arbitraires).
     expect(frame).not.toMatch(/light:.*bg-(red|blue|green|emerald|amber|rose|neutral)-50/);
+    // Aucune teinte chromatique hors familles violet/cyan (Task 125 : #D97757 banni).
+    expect(frame).not.toContain("#D97757");
   });
 
   it("point pulsant pendant l'exécution + respect de prefers-reduced-motion (globals.css §15)", () => {
