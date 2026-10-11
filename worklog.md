@@ -3466,3 +3466,19 @@ Stage Summary:
 - 15/15 PR résolues : 2 closées justifiées (déjà intégré / architecture), 13 intégrées via 373c0f3 et closées avec traçabilité complète.
 - main réparé (b0ce66f) puis enrichi (373c0f3) — CI b0ce66f 6/6 verte, CI 373c0f3 en cours de vérification au moment de l'écriture (première exécution réelle des actions v6/v7 + gitleaks v3 + vitest 5 en CI).
 - VÉRIFICATION FINALE : CI 373c0f3 = 6/6 VERTE (dont premières exécutions réelles de checkout@v7/setup-node@v6/cache@v6/gitleaks@v3 + suite vitest 5 en CI). Production gen3ia.online saine : /api/status ok (auth+r2+ticks), manifest.webmanifest statique 200, smoke test 7 routes clés OK (/, /login, /studio, /workspace 307 auth attendu, /api/health, robots.txt, sitemap.xml). 0 PR ouverte restante (15/15 résolues).
+---
+Task ID: 132
+Agent: sous-agent marketplace & templates (finalisé par le main agent après expiration du délai d'exécution)
+Task: Sandbox d'évaluation d'extensions (essais 48 h plafonnés), matrice de compatibilité (semver manuel, zéro dépendance) et 6 templates d'agents sectoriels — section « Templates sectoriels » sur la marketplace.
+
+Work Log:
+- lib/marketplace/sandbox.ts (+test) : startExtensionTrial (mode ÉVALUATION trial:true, TTL depuis EXTENSION_TRIAL_HOURS sinon 48 h, plafonds 50 appels d'outils / 20 exécutions), assertTrialActive (erreur typée honnête à l'expiration), expireTrials idempotent, jamais deux essais simultanés du même extension.
+- lib/marketplace/compatibility.ts (+test) : REQUIRED_CAPABILITIES par catégorie, PLATFORM_VERSION, checkCompatibility({ok, reasons[]}) avec comparaison semver MANUELLE (zéro dépendance), COMPATIBILITY_MATRIX exporté pour l'UI et les tests.
+- lib/agents/templates/ : 6 templates typés en français (support-client, marketing-contenu, prospection-vente, screening-rh, veille-juridique, analyste-finance) — persona, allowlist d'outils, préférences modèle, amorces de connaissances ; index.ts (AGENT_TEMPLATES, getTemplate) + instantiate.ts (instantiateFromTemplate via la fabrique existante, validations jamais contournées) + types.ts.
+- app/marketplace/page.tsx : section « Templates sectoriels » (grille sobre 6 cartes, lien Studio ?template=<id>, branchement Studio complet laissé au main agent) — tokens --g3-* exclusivement, identité 2 couleurs.
+- .env.example : EXTENSION_TRIAL_HOURS=48 ajouté en fin de fichier avec commentaire dédié.
+- VALIDATION (main agent) : tsc --noEmit = 0 erreur ; eslint lib/marketplace lib/agents/templates app/marketplace --max-warnings 0 = 0/0 ; vitest run lib/marketplace lib/agents/templates = 5 fichiers / 123 tests verts / 0 échec (tests existants agent-listings + hire inchangés et verts).
+
+Stage Summary:
+- Marketplace : essais d'évaluation plafonnés et auto-expirants, matrice de compatibilité verrouillée par tests, 6 agents sectoriels instanciables via la fabrique, section UI sobre conforme à l'identité 2 couleurs.
+- QA verte : tsc 0, eslint 0/0, 123/123. Commit par le main agent, pas de push (CI/déploiement au main agent).
