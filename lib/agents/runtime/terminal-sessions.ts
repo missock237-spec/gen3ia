@@ -50,8 +50,9 @@ export interface TerminalEntry {
   stderr?: string;
   exitCode?: number;
   durationMs?: number;
-  /** Mode réellement employé : sandbox Docker ou simulation intégrée. */
-  mode?: "sandbox" | "simulation";
+  /** Mode réellement employé : sandbox Docker, exécution réelle serverless
+   * (Task 122) ou simulation intégrée. */
+  mode?: "sandbox" | "serverless" | "simulation";
   engine?: string | null;
   success?: boolean;
   error?: string;
@@ -89,7 +90,7 @@ function entryFrom(data: DocumentData): TerminalEntry {
     stderr: typeof data.stderr === "string" ? data.stderr : undefined,
     exitCode: typeof data.exitCode === "number" ? data.exitCode : undefined,
     durationMs: typeof data.durationMs === "number" ? data.durationMs : undefined,
-    mode: data.mode === "sandbox" ? "sandbox" : data.mode === "simulation" ? "simulation" : undefined,
+    mode: data.mode === "sandbox" ? "sandbox" : data.mode === "serverless" ? "serverless" : data.mode === "simulation" ? "simulation" : undefined,
     engine: typeof data.engine === "string" ? data.engine : null,
     success: Boolean(data.success),
     error: typeof data.error === "string" ? data.error : undefined,
@@ -171,7 +172,7 @@ export interface RecordTerminalExecutionInput {
   stderr?: string;
   exitCode?: number;
   durationMs?: number;
-  mode?: "sandbox" | "simulation";
+  mode?: "sandbox" | "serverless" | "simulation";
   engine?: string | null;
   error?: string;
 }

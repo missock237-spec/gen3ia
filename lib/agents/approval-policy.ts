@@ -53,6 +53,18 @@ export const INTERNAL_ACTION_TOOLS = new Set([
   "media.analyze",
   "voice.speak",
   "voice.list",
+  // TERMINAL INTÉGRÉ (Task 122) : terminal.run exécute des commandes réelles
+  // dans la microVM serverless DE LA PLATEFORME — environnement de subprocess
+  // NETTOYÉ (aucun secret hérité : PATH standard + HOME=/tmp + LANG, jamais
+  // process.env), cwd dans un workspace /tmp éphémère, deny-list durcie
+  // (lib/sandbox/policy.ts), timeout dur, sortie plafonnée. Il ne manipule
+  // NI secret utilisateur NI app externe → les règles d'approbation
+  // (directive 10-10 : validation UNIQUEMENT pour les secrets utilisateurs)
+  // ne l'exigent pas → OUTIL INTERNE, comme files. Les commandes dangereuses
+  // sont rejetées AVANT exécution par la politique partagée ; l'audit et la
+  // facturation restent appliqués. (terminal.execute, lui, reste l'ancien
+  // flux « commande autorisée » à validation explicite.)
+  "terminal.run",
   // Communications émises depuis l'infrastructure de la plateforme
   // (Resend côté serveur — aucune app utilisateur ciblée).
   "email.send",

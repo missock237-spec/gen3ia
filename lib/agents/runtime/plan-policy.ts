@@ -55,7 +55,7 @@ export function buildPlanExecutionPolicy(plan: RuntimePlan): ExecutionPolicy {
     if (definition.filesystemWrite) allowFileWrite = true;
     if (definition.destructive) allowFileDelete = true;
     if (tool === "code.execute") allowCodeExecution = true;
-    if (tool === "terminal.execute") allowAgentTerminal = true;
+    if (tool === "terminal.execute" || tool === "terminal.run") allowAgentTerminal = true;
     if (tool === "camera.capture") allowCamera = true;
     if (definition.externalApp) allowExternalApps = true;
   }

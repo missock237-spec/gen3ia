@@ -1,11 +1,19 @@
 /**
- * Moteur d'exécution de code à deux modes :
+ * Chaîne d'exécution de code (Task 122 — terminal FONCTIONNEL) :
  *
  *  1. « sandbox » — exécution Docker isolée (service sandbox/, réseau none,
  *     read-only) lorsque SANDBOX_URL + SANDBOX_SHARED_SECRET sont configurés.
  *
- *  2. « simulation » — repli intégré lorsque le service Docker n'est pas
- *     déployé (cas de la production serverless actuelle) :
+ *  2. « serverless » — EXÉCUTION RÉELLE en-processus (nouveau DÉFAUT lorsque
+ *     le service Docker n'est pas déployé) : lib/sandbox/serverless-exec.ts
+ *     exécute VRAIMENT la commande/le code via child_process dans la microVM
+ *     Vercel — env nettoyé (aucun secret hérité), cwd dans un workspace /tmp,
+ *     ulimit mémoire, timeout dur (kill du tree), sortie plafonnée, deny-list
+ *     durcie. Session de workspace /tmp par utilisateur, réutilisée à chaud,
+ *     recréée vide à froid — éphémérité serverless assumée et annoncée.
+ *
+ *  3. « simulation » — repli INTÉGRÉ en cas d'impossibilité locale (runtime
+ *     absent, ex. python3 indisponible dans l'image Node) :
  *       - node   : analyse statique structurée (littéraux et expressions
  *                  arithmétiques évalués sans eval, déclarations, flux,
  *                  constructions dangereuses rejetées) — JAMAIS
@@ -21,16 +29,18 @@
  *                  dangerosité), sans exécution.
  *
  * Le résultat porte TOUJOURS son mode : les agents (et l'UI) savent s'ils
- * regardent une exécution réelle ou une simulation — aucune réponse
- * trompeuse n'est acceptable.
+ * regardent une exécution réelle (Docker ou serverless) ou une simulation —
+ * aucune réponse trompeuse n'est acceptable.
  */
 
 import { executeSandbox } from "./client";
+import { isServerlessExecutionPossible, runServerlessExecution } from "./serverless-exec";
 import type { SandboxJob, SandboxResult } from "./types";
 
 export interface ExecutionOutput extends SandboxResult {
-  /** Mode réellement employé : exécution Docker ou simulation intégrée. */
-  mode: "sandbox" | "simulation";
+  /** Mode réellement employé : sandbox Docker, exécution serverless réelle
+   * ou simulation intégrée. */
+  mode: "sandbox" | "serverless" | "simulation";
 
   /** Détail optionnel du moteur de simulation (trace, analyse). */
   simulation?: {
@@ -48,6 +58,12 @@ export function isSandboxConfigured(): boolean {
   return Boolean(process.env.SANDBOX_URL?.trim() && process.env.SANDBOX_SHARED_SECRET?.trim());
 }
 
+/** Moteur d'exécution réel du terminal pour l'affichage honnête (routes/UI). */
+export function currentTerminalEngine(): "docker" | "serverless" | "simulation" {
+  if (isSandboxConfigured()) return "docker";
+  return isServerlessExecutionPossible("shell") ? "serverless" : "simulation";
+}
+
 const MAX_SIMULATION_CODE_LENGTH = 500_000;
 const MAX_SIMULATION_OUTPUT_CHARS = 200_000;
 const MAX_TRACE_LINES = 200;
@@ -58,8 +74,10 @@ function truncate(text: string, max = MAX_SIMULATION_OUTPUT_CHARS): string {
 }
 
 /**
- * Chaîne d'exécution complète : sandbox Docker si disponible (et retombée
- * simulation en cas d'incident réseau du service), sinon simulation.
+ * Chaîne d'exécution complète : sandbox Docker si configuré (et retombée
+ * serverless RÉELLE en cas d'incident du service) → sinon exécution réelle
+ * serverless en-processus (nouveau défaut) → en cas d'impossibilité locale
+ * (runtime absent), simulation annoncée honnêtement.
  */
 export async function runSandboxOrSimulation(job: SandboxJob): Promise<ExecutionOutput> {
   if (isSandboxConfigured()) {
@@ -67,15 +85,27 @@ export async function runSandboxOrSimulation(job: SandboxJob): Promise<Execution
       const result = await executeSandbox(job);
       return { ...result, mode: "sandbox" };
     } catch (error) {
-      // Le service sandbox est configuré mais indisponible : on dégrade en
-      // simulation plutôt que d'échouer — le mode est annoncé honnêtement.
+      // Le service sandbox est configuré mais indisponible : on tente
+      // l'exécution réelle serverless locale avant toute simulation — le mode
+      // employé reste annoncé honnêtement.
       const reason = error instanceof Error ? error.message : String(error);
+      if (isServerlessExecutionPossible(job.runtime)) {
+        const result = await runServerlessExecution(job);
+        return {
+          ...result,
+          stderr: `${result.stderr}\n[sandbox Docker indisponible — exécution réelle serverless locale ; cause : ${reason.slice(0, 200)}]`.trim(),
+        };
+      }
       const simulation = await simulateSandboxJob(job);
       return {
         ...simulation,
-        stderr: `${simulation.stderr}\n[sandbox indisponible, repli simulation — cause: ${reason.slice(0, 200)}]`.trim(),
+        stderr: `${simulation.stderr}\n[sandbox Docker indisponible (cause : ${reason.slice(0, 200)}) et exécution locale impossible — repli simulation annoncée]`.trim(),
       };
     }
+  }
+  // Nouveau DÉFAUT : EXÉCUTION RÉELLE en-processus (mode « serverless »).
+  if (isServerlessExecutionPossible(job.runtime)) {
+    return runServerlessExecution(job);
   }
   return simulateSandboxJob(job);
 }

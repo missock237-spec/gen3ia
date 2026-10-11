@@ -122,7 +122,7 @@ const ALIAS_RULES: AliasRule[] = [
   // — Code & terminal
   { pattern: /\bpython\b|\bjavascript\b|\bnode\b|\btypescript\b|\bcoder?\b|\bcode\b|\bprogramme\w*\b|\bcalcul\w*\b|\bscript\b/, tools: ["code.execute"], label: "code.execute (sandbox isolée)" },
   { pattern: /\bsimulation\b|\bsimuler\b|\bsimulate\b|\bvalider du code\b/, tools: ["code.simulate"], label: "code.simulate (simulation sans effet externe)" },
-  { pattern: /\bterminal\b|\bshell\b|\bbash\b|\bligne de commande\b|\bcommande\w*\b/, tools: ["terminal.execute"], label: "terminal.execute (terminal isolé)" },
+  { pattern: /\bterminal\b|\bshell\b|\bbash\b|\bligne de commande\b|\bcommande\w*\b/, tools: ["terminal.run"], label: "terminal.run (terminal agent — exécution réelle encadrée)" },
   // — Livrables & fichiers (après « code » : « créer un fichier » reste fichier)
   { pattern: /\bpdf\b|\bword\b|\bdocx?\b|\bexcel\b|\bxlsx?\b|\bpowerpoint\b|\bpptx?\b|\brapports?\b|\bpresentation\w*\b|\bdiaporama\b|\bslides?\b|\blivrables?\b|\bdocument\w*\b|\bartifact\b/, tools: ["artifact.create"], label: "artifact.create (document téléchargeable réel)" },
   { pattern: /\bfichier\w*\b|\bfiles?\b|\bcreation de fichier\b|\bcreer un fichier\b|\bexport\w*\b/, tools: ["file.create"], label: "file.create (fichier d'espace de travail)" },

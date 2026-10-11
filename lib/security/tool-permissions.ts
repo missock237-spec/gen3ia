@@ -19,6 +19,13 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "code.execute": { name: "code.execute", risk: "destructive", requiredPermissions: ["code.execute"] },
   "ui.components": { name: "ui.components", risk: "read", requiredPermissions: ["tool.external", "network.read"], network: true },
   "terminal.execute": { name: "terminal.execute", risk: "destructive", requiredPermissions: ["terminal.execute"] },
+  // Task 122 — terminal.run : exécution RÉELLE en-processus (microVM
+  // serverless de la plateforme : env NETTOYÉ, cwd /tmp, deny-list durcie,
+  // timeout/sortie plafonnés). Outil INTERNE au sens de la directive 10-10
+  // (aucune app externe, aucun secret utilisateur manipulé) → capacité
+  // d'écriture interne, comme schedule.*/video.* ; le flag terminal reste
+  // gated par allowAgentTerminal (défense en profondeur).
+  "terminal.run": { name: "terminal.run", risk: "write", requiredPermissions: ["tool.read", "tool.write"], filesystemWrite: true },
   "memory.read": { name: "memory.read", risk: "read", requiredPermissions: ["tool.read", "memory.read"] },
   "memory.write": { name: "memory.write", risk: "write", requiredPermissions: ["tool.write", "memory.write"] },
   "camera.capture": { name: "camera.capture", risk: "external", requiredPermissions: ["tool.external", "camera.capture"], externalApp: true },
@@ -132,6 +139,7 @@ export function authorizeTool(policy: ExecutionPolicy, toolName: string): ToolSe
   if (definition.destructive && !policy.allowFileDelete && !["code.execute", "terminal.execute"].includes(toolName)) throw new Error(`Destructive operation denied: ${toolName}`);
   if (toolName === "code.execute" && !policy.allowCodeExecution) throw new Error("Code execution denied by policy");
   if (toolName === "terminal.execute" && !policy.allowAgentTerminal) throw new Error("Agent terminal denied by policy");
+  if (toolName === "terminal.run" && !policy.allowAgentTerminal) throw new Error("Agent terminal denied by policy");
   if (toolName === "camera.capture" && !policy.allowCamera) throw new Error("Camera access denied by policy");
   return definition;
 }

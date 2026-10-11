@@ -99,12 +99,14 @@ describe("moteur de simulation de code", () => {
     expect(unsafe.simulation?.warnings.join(" ")).toContain("sécurité");
   });
 
-  it("runSandboxOrSimulation : sans SANDBOX_URL → simulation (mode annoncé)", async () => {
+  it("runSandboxOrSimulation : sans SANDBOX_URL → EXÉCUTION RÉELLE serverless (Task 122)", async () => {
     delete process.env.SANDBOX_URL;
     delete process.env.SANDBOX_SHARED_SECRET;
     const result = await runSandboxOrSimulation(job("node", "console.log('ok');"));
-    expect(result.mode).toBe("simulation");
+    expect(result.mode).toBe("serverless");
     expect(result.stdout).toContain("ok");
+    expect(result.exitCode).toBe(0);
+    expect(result.simulation).toBeUndefined();
   });
 
   it("sortie bornée (truncation)", async () => {

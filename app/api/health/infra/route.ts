@@ -4,7 +4,7 @@ import { protectRoute } from "@/lib/security/route-guard";
 import { isRedisConfigured, redisPing } from "@/lib/cache/redis";
 import { countVectorPoints, isVectorStoreConfigured, VECTOR_COLLECTION_KNOWLEDGE, VECTOR_COLLECTION_MEMORIES } from "@/lib/memory/vector-store";
 import { CONVERSATION_VECTOR_COLLECTION } from "@/lib/chat/vector-index";
-import { isSandboxConfigured } from "@/lib/sandbox/simulation";
+import { currentTerminalEngine, isSandboxConfigured } from "@/lib/sandbox/simulation";
 import { pingR2, type R2HealthStatus } from "@/lib/storage/r2";
 import { summarizeEnv } from "@/lib/env/config-report";
 import { getQuotaGuardStats } from "@/lib/db/quota-guard";
@@ -20,7 +20,8 @@ export const runtime = "nodejs";
  *  - cache process-local (rate limit + micro-caches — Task 108 : le service
  *    externe Redis a été supprimé, la couche est toujours disponible) ;
  *  - Qdrant (recherche vectorielle mémoire/knowledge) ;
- *  - sandbox Docker (exécution réelle) vs simulation intégrée ;
+ *  - sandbox Docker (exécution réelle) vs exécution réelle serverless
+ *    en-processus (Task 122) vs simulation intégrée ;
  *  - stockage R2 (fichiers, pièces jointes, artefacts).
  * Chaque couche dégradée dégrade le service avec repli — jamais de panne.
  *
@@ -67,8 +68,9 @@ export async function GET(request: NextRequest) {
       },
       sandbox: {
         deployed: isSandboxConfigured(),
-        mode: isSandboxConfigured() ? "docker" : "simulation-integree",
-        role: "exécution de code / terminal agent",
+        // Moteur réel honnête (Task 122) : docker | serverless | simulation.
+        mode: currentTerminalEngine(),
+        role: "exécution de code / terminal agent (env nettoyé, cwd /tmp, limites — cf. docs/terminal-execution.md)",
       },
       // Pipeline vidéo (Task 1-a, additif) : binaire FFmpeg réellement
       // exécutable + mode de continuation des files de rendu/production.

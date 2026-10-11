@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { errorStatus } from "@/lib/security/http-errors";
 import { executeUserTerminalCommand } from "@/lib/agents/runtime/user-terminal";
-import { isSandboxConfigured } from "@/lib/sandbox/simulation";
+import { currentTerminalEngine, isSandboxConfigured } from "@/lib/sandbox/simulation";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -74,7 +74,9 @@ export async function POST(request: NextRequest) {
 
 /** GET /api/terminal/exec — état du service (mode d'exécution annoncé).
  * Auth requise : ne révèle ni la configuration sandbox ni le moteur à un
- * demandeur anonyme (surface de reconnaissance réduite). */
+ * demandeur anonyme (surface de reconnaissance réduite).
+ * Moteur honnête (Task 122) : docker | serverless (exécution réelle
+ * en-processus) | simulation. */
 export async function GET(request: NextRequest) {
   try {
     await requireUser(request);
@@ -83,7 +85,7 @@ export async function GET(request: NextRequest) {
   }
   return NextResponse.json({
     sandboxDeployed: isSandboxConfigured(),
-    engine: isSandboxConfigured() ? "docker" : "simulation",
+    engine: currentTerminalEngine(),
     requestId: randomUUID(),
   });
 }

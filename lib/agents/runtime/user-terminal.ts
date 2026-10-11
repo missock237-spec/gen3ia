@@ -24,7 +24,9 @@ import {
  *    propriété ownerId exacte — anti-énumération par construction) ;
  *  - mêmes garde-fous que le terminal agent : deny-list de commandes
  *    dangereuses, bornes temps/mémoire/sortie, sandbox Docker si déployée
- *    sinon simulation annoncée honnêtement (mode renvoyé au client) ;
+ *    sinon EXÉCUTION RÉELLE serverless en-processus (Task 122 : env nettoyé,
+ *    cwd /tmp, ulimit, timeout dur, sortie plafonnée), sinon simulation
+ *    annoncée honnêtement (mode renvoyé au client) ;
  *  - session terminal dédiée (scope `workspace:<id>`) : audit + masquage
  *    de secrets + rétention, alimentant le Workshop IDE en temps réel ;
  *  - facturation : aucune (exécution utilisateur directe, hors agent) —

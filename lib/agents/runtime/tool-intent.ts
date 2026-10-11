@@ -70,6 +70,12 @@ const VIDEO_CREATE_RE = new RegExp(
   "iu",
 );
 
+/* TERMINAL — exécution explicite d'une commande / shell (Task 122). */
+const TERMINAL_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:terminal|shell|bash|ligne de commande|commande shell|ex[ée]cut(?:er|e|é|ée|ées|ion)(?:[- ]moi)?\\s+(?:la|le|une?|un|cette|ce)?\\s*commande)(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+
 /* IMAGE — dessine/génère image, photo, logo, affiche, illustration, poster. */
 const IMAGE_NOUN_RE = new RegExp(
   `(?<![\\p{L}\\p{N}_])images?|photos?|photographies?|dessins?|logos?|affiches?|posters?|illustrations?|banni[èe]res?|avatars?|ic[ôo]nes?|miniatures?|visuels?|fond d'[ée]cran|wallpaper(?![\\p{L}\\p{N}_])`,
@@ -250,6 +256,12 @@ export function detectToolIntents(objective: string): ToolIntentHint[] {
     push("file_zip", zipTools, "Les archives se manipulent réellement : zip.create pour compresser, zip.extract pour extraire, zip.analyze pour analyser sans risque.");
   }
 
+  // TERMINAL (Task 122) : exécution RÉELLE d'une commande dans le terminal
+  // intégré — l'agent dispose enfin d'un outil exécutable au registre.
+  if (TERMINAL_RE.test(text)) {
+    push("terminal", ["terminal.run"], "L'exécution réelle de commandes passe par terminal.run (terminal agent encadré : deny-list, limites temps/mémoire/sortie, mode d'exécution renvoyé honnêtement).");
+  }
+
   return hints.slice(0, MAX_HINTS);
 }
 
@@ -270,6 +282,7 @@ const INTENT_LABELS: Record<string, string> = {
   api_call: "appel d'une API",
   knowledge: "recherche dans les documents / connaissances",
   file_zip: "manipulation d'une archive ZIP",
+  terminal: "exécution d'une commande dans le terminal intégré",
 };
 
 /**

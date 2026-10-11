@@ -46,6 +46,11 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "memory.read", description: "Read the user memory available to the agent.", risk: "read", permission: "memory.read", sideEffect: false },
   { name: "memory.write", description: "Persist a non-secret memory for the user.", risk: "write", permission: "memory.write", sideEffect: true },
   { name: "terminal.execute", description: "Run an authorized command in the isolated agent terminal.", risk: "destructive", permission: "terminal.execute", sideEffect: true },
+  // Task 122 — terminal intégré FONCTIONNEL : version EXÉCUTABLE au registre
+  // d'outils (le planificateur la voit, l'exécuteur existe). Outil INTERNE
+  // (directive 10-10 : env nettoyé, workspace /tmp, deny-list durcie — aucun
+  // secret utilisateur manipulé) → risque « write », pas de forçage HITL.
+  { name: "terminal.run", description: "Run a REAL command in the Gen3ia agent terminal (cleaned environment, /tmp workspace, hardened deny-list, time/memory/output limits). Returns the honest execution mode (Docker sandbox, serverless in-process, or announced simulation).", risk: "write", permission: "tool.write", sideEffect: true },
   { name: "camera.capture", description: "Request an authorized camera capture.", risk: "external", permission: "camera.capture", sideEffect: true },
   { name: "ads.read", description: "Read data from an authorized advertising account.", risk: "read", permission: "ads.read", sideEffect: false },
   { name: "ads.publish", description: "Publish an advertising action to an authorized account.", risk: "external", permission: "ads.write", sideEffect: true },

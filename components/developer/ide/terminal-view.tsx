@@ -214,8 +214,8 @@ export function TerminalView({
                 <span className="g3-console-prompt" aria-hidden>$</span>
                 <code className="text-xs text-[var(--g3-text-secondary)]">{entry.command}</code>
                 {entry.mode && (
-                  <small className={"g3-console-mode " + (entry.mode === "sandbox" ? "is-real" : "is-simulated")}>
-                    {entry.mode === "sandbox" ? "exécution réelle" : entry.engine ?? "simulation"}
+                  <small className={"g3-console-mode " + (entry.mode === "sandbox" || entry.mode === "serverless" ? "is-real" : "is-simulated")}>
+                    {entry.mode === "sandbox" ? "Sandbox Docker (exécution réelle)" : entry.mode === "serverless" ? "Exécution réelle (serverless)" : entry.engine ?? "Simulation"}
                   </small>
                 )}
                 {typeof entry.exitCode === "number" && (

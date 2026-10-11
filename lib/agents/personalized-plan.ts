@@ -48,7 +48,7 @@ const ROLE_BY_TYPE: Record<string, string> = {
  * l'agent de code doit pouvoir, de sa propre initiative, exécuter ou
  * simuler le code qu'il produit (terminal, vérification, débogage).
  */
-const CODE_AGENT_TOOLS = ["terminal.execute", "code.execute", "code.simulate"];
+const CODE_AGENT_TOOLS = ["terminal.execute", "terminal.run", "code.execute", "code.simulate"];
 
 /**
  * Sources canoniques des noms d'outils exécutables (Task 107) : l'UNION du
@@ -94,6 +94,7 @@ export function resolveAllowedTools(level: AgentSecurityLevel, agent: AgentRecor
     exclusions.add("code.execute");
     exclusions.add("code.simulate");
     exclusions.add("terminal.execute");
+    exclusions.add("terminal.run");
   }
   if (caps?.fileGeneration === false) exclusions.add("artifact.create");
   // ui.components est l'outil EXCLUSIF des agents de type "code" : aucun
@@ -189,7 +190,7 @@ export function createPersonalizedPlan(agent: AgentRecord, objective: string, ex
       name: "Execution de la mission",
       description:
         agent.type === "code"
-          ? `${objective}\n\nConsignes d'agent de code : produis un code complet et prêt à exécuter. Utilise le terminal isolé (terminal.execute) pour explorer et vérifier, et code.simulate pour valider tout extrait de code sensible sans effet externe. Announce clairement le mode d'exécution utilisé.`
+          ? `${objective}\n\nConsignes d'agent de code : produis un code complet et prêt à exécuter. Utilise le terminal (terminal.run) pour explorer et vérifier par exécution réelle, et code.simulate pour valider tout extrait de code sensible sans effet externe. Annonce clairement le mode d'exécution utilisé (réel ou simulé).`
           : objective,
       agentRole: role,
       ...(steps.length > 0 ? { dependencies: [steps[0].id] } : {}),

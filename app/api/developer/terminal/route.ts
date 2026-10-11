@@ -6,7 +6,7 @@ import { requireCodeAgentOwner } from "@/lib/agents/code-agent-guard";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { executeAgentTerminal } from "@/lib/agents/runtime/agent-terminal";
-import { isSandboxConfigured } from "@/lib/sandbox/simulation";
+import { currentTerminalEngine, isSandboxConfigured } from "@/lib/sandbox/simulation";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -15,9 +15,10 @@ export const maxDuration = 60;
  * Terminal interactif de l'agent de code.
  *
  * Authentification : réservé aux propriétaires d'agent de code
- * (requireCodeAgentOwner). Exécution : sandbox Docker si déployé, sinon
- * dry-run simulé — le mode réel est retourné à l'UI (jamais de fausse
- * prétention d'exécution).
+ * (requireCodeAgentOwner). Exécution (Task 122) : sandbox Docker si déployé,
+ * SINON exécution RÉELLE serverless en-processus (env nettoyé, cwd /tmp,
+ * ulimit, timeout dur, sortie plafonnée), sinon simulation — le mode réel
+ * est retourné à l'UI (jamais de fausse prétention d'exécution).
  */
 const CommandSchema = z.object({
   command: z.string().min(1).max(50_000),
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
       durationMs: result.durationMs,
       mode: result.mode,
       simulation: result.simulation ?? null,
-      backend: { sandboxDeployed: isSandboxConfigured() },
+      backend: { sandboxDeployed: isSandboxConfigured(), engine: currentTerminalEngine() },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Terminal indisponible.";

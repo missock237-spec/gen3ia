@@ -59,7 +59,9 @@ export function consentCategoryForTool(toolName: string): ConsentCategory | null
     return toolName.startsWith("ext.") ? "external_apps" : null;
   }
   if (toolName === "camera.capture") return "camera";
-  if (toolName === "code.execute" || toolName === "terminal.execute") return "code_execution";
+  // Terminal intégré (Task 122) : terminal.run relève du consentement
+  // « exécution de code et terminal » au même titre que code.execute.
+  if (toolName === "code.execute" || toolName === "terminal.execute" || toolName === "terminal.run") return "code_execution";
   if (definition.destructive) return "destructive";
   if (definition.externalApp) return "external_apps";
   return null;

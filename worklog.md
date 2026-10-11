@@ -3353,3 +3353,22 @@ Stage Summary:
 - Le chat IA route automatiquement les demandes de code vers Jules (jules.google) : clarification repo si besoin, session API v1alpha, et livraison du résultat (patch/PR) dans le fil d'origine de façon idempotente via la file de ticks R2 — sans nouvelle dépendance ni modification du module de file.
 - Sans JULES_API_KEY : réponse honnête « intégration en préparation » (anti-spam), puis traitement via les outils internes au message suivant — jamais de refus de cadre.
 - QA finale verte : tsc 0, eslint 0/0, 52/52 nouveaux tests + 141/141 domaine. Pas de push (CI/déploiement au main agent).
+
+---
+Task ID: 122 (terminal intégré réel pour l'agent IA)
+Agent: sous-agent terminal
+Task: L'agent IA dispose enfin d'un terminal VRAIMENT exécutable : outil `terminal.run` fourni au registre, exécution réelle en-processus (mode serverless) quand Docker n'est pas déployé, simulation annoncée en dernier recours — chaîne honnête Docker > serverless > simulation.
+
+Work Log:
+- EXÉCUTION SERVERLESS RÉELLE : lib/sandbox/serverless-exec.ts (+test) — spawn en-processus avec env NETTOYÉ (PATH standard + HOME=/tmp + LANG, jamais process.env), cwd workspace /tmp éphémère, ulimit mémoire/temps, timeout dur, sortie plafonnée. lib/sandbox/policy.ts : deny-list durcie PARTAGÉE, réévaluée avant tout spawn (rm -rf, fork bomb, chmod 777, curl|sh, etc.).
+- CHAÎNE HONNÊTE : executeAgentTerminal résout Docker (sandbox déployée) > serverless (exécution réelle en-processus) > simulation annoncée — le MODE est renvoyé à l'agent ET à l'utilisateur, jamais de fausse exécution silencieuse.
+- OUTIL AGENT : lib/tools/terminal/run.ts (+test) — `terminal.run` (command, cwd, runtime node/python, timeoutMs, memoryMb) → executeAgentTerminal + journalisation session terminal (audit fail-soft). Enregistré dans default-registry.ts / registry / labels (category code, risk medium).
+- APPROBATION (directive 10-10) : `terminal.run` déclaré OUTIL INTERNE dans approval-policy.ts INTERNAL_ACTION_TOOLS — exécution directe SANS carte de validation (aucun secret utilisateur manipulé, aucune app externe ciblée, env nettoyé, deny-list pré-exécution). `terminal.execute` conserve l'ancien flux « commande autorisée » à validation explicite.
+- INTÉGRATION : routes terminal/exec + developer/terminal + agent chat (approve/continue) ; tool-intent / plan-policy / unified-agent / user-terminal / agent-terminal / terminal-sessions ; tool-permissions + tool-consents ; tool-resolver + bridge ; personalized-plan ; terminal-view.tsx + ide-workspace.tsx (Workshop IDE) ; health/infra (rapport du mode) ; .env.example.
+- TESTS : serverless-exec.test.ts + simulation.modes.test.ts + run.test.ts — env nettoyé, deny-list, timeout, modes Docker/serverless/simulation.
+- VALIDATION (finalisation) : tsc --noEmit = 0 erreur ; eslint (lib/sandbox, lib/tools, lib/agents, app/api/terminal, app/api/developer, app/api/agent, components/developer) --max-warnings 0 = 0 erreur/0 warning ; vitest lib/sandbox + lib/tools = 14 fichiers / 154 verts / 1 skip / 0 échec ; vitest lib/agents = 35 fichiers / 356 verts / 0 échec. Aucune pièce manquante (outil complet + enregistré).
+
+Stage Summary:
+- L'agent IA exécute maintenant de VRAIES commandes via `terminal.run` : sandbox Docker si déployée, sinon exécution réelle en-processus en microVM serverless (env nettoyé, /tmp, ulimit, deny-list durcie, timeout, sortie plafonnée), sinon simulation annoncée — le mode réel est toujours renvoyé honnêtement.
+- Approbation : outil interne (directive 10-10) — exécution directe sans carte de validation, car aucun secret utilisateur ni app externe ; les commandes dangereuses restent rejetées AVANT exécution.
+- QA finale verte : tsc 0, eslint 0/0, 510/511 tests verts (1 skip préexistant). Pas de push (CI/déploiement au main agent).

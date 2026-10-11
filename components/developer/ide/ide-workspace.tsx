@@ -312,7 +312,13 @@ export function IdeWorkspace() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Exécution impossible.");
-      setSaveNote(data.execution?.mode === "sandbox" ? "Commande exécutée (sandbox réelle)." : "Commande traitée (simulation — sandbox non déployée).");
+      setSaveNote(
+        data.execution?.mode === "sandbox"
+          ? "Commande exécutée (sandbox Docker réelle)."
+          : data.execution?.mode === "serverless"
+            ? "Commande exécutée (exécution réelle serverless)."
+            : "Commande traitée (simulation — exécution réelle impossible localement).",
+      );
     } catch (e) {
       setSaveNote(e instanceof Error ? e.message : "Exécution impossible.");
     } finally {
@@ -927,7 +933,7 @@ function LogsView({ entries, selected, onSelect, onOpenErrorRef }: { entries: Te
               <span className="w-[64px] shrink-0 text-[var(--g3-muted)]">{new Date(entry.createdAt).toLocaleTimeString("fr-FR")}</span>
               {statusBadge(entry.success)}
               <code className="min-w-0 flex-1 truncate text-[var(--g3-faint)]">{entry.command}</code>
-              {entry.mode && <span className="shrink-0 text-[9px] text-[var(--g3-muted)]">{entry.mode === "sandbox" ? "réel" : entry.engine ?? "simulation"}</span>}
+              {entry.mode && <span className="shrink-0 text-[9px] text-[var(--g3-muted)]">{entry.mode === "sandbox" ? "Docker" : entry.mode === "serverless" ? "réel" : entry.engine ?? "simulation"}</span>}
               {typeof entry.exitCode === "number" && <span className={"shrink-0 " + (entry.exitCode === 0 ? "text-emerald-600" : "text-red-400")}>exit {entry.exitCode}</span>}
             </button>
           ))}
@@ -1011,7 +1017,7 @@ function ExecutionPane({ entry, entries, onSelect, onOpenErrorRef }: { entry: Te
       </div>
       {typeof entry.exitCode === "number" && (
         <p className="text-[10px] text-[var(--g3-muted)]">
-          exit <span className={entry.exitCode === 0 ? "text-emerald-500" : "text-red-400"}>{entry.exitCode}</span> · {entry.durationMs} ms · {entry.mode === "sandbox" ? "exécution réelle" : entry.engine ?? "simulation"}
+          exit <span className={entry.exitCode === 0 ? "text-emerald-500" : "text-red-400"}>{entry.exitCode}</span> · {entry.durationMs} ms · {entry.mode === "sandbox" ? "Sandbox Docker (exécution réelle)" : entry.mode === "serverless" ? "Exécution réelle (serverless)" : entry.engine ?? "Simulation"}
         </p>
       )}
       {entry.stdout && <pre className="max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-[var(--g3-deep)] p-2 text-[10px] text-[var(--g3-faint)]">{maskSecrets(entry.stdout)}</pre>}

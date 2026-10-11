@@ -89,9 +89,9 @@ export const PROJECT_SERVICES: ProjectServiceDescriptor[] = [
     usage: "Valider du code sans effet externe : Node (VM restreinte), Python/Shell (analyse statique).",
   },
   {
-    tools: ["code.execute", "terminal.execute"],
+    tools: ["code.execute", "terminal.execute", "terminal.run"],
     service: "Exécution de code et terminal",
-    usage: "Exécuter du code dans le sandbox isolé ou des commandes dans le terminal agent (agents de code, ou si la politique le permet).",
+    usage: "Exécuter du code dans le sandbox isolé ou des commandes réelles dans le terminal intégré (terminal.run : Docker > serverless > simulation annoncée ; agents de code ou si la politique le permet).",
   },
   {
     tools: ["memory.read", "memory.write"],

@@ -1,6 +1,7 @@
 import { ToolRegistry } from "./registry";
 import { webSearchTool } from "./web/search";
 import { webOpenTool } from "./web/open";
+import { terminalRunTool } from "./terminal/run";
 import { knowledgeSearchTool } from "./knowledge/search";
 import { getArtifactTool } from "./files/get-artifact";
 import { createArtifactTool } from "./files/create-artifact";
@@ -71,6 +72,11 @@ export function createDefaultToolRegistry(): ToolRegistry {
   for (const tool of [
     webSearchTool,
     webOpenTool,
+    // Task 122 — terminal intégré FONCTIONNEL : outil agent d'exécution
+    // RÉELLE de commandes (Docker > serverless en-processus > simulation
+    // annoncée). Toujours enregistré : le repli simulation est un résultat
+    // honnête (mode renvoyé), pas une capacité fantôme.
+    terminalRunTool,
     knowledgeSearchTool,
     getArtifactTool,
     createArtifactTool,

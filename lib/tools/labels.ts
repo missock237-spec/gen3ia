@@ -24,6 +24,7 @@ const TOOL_LABELS: Record<string, string> = {
   "memory.read": "Consultation de la mémoire",
   "memory.write": "Enregistrement en mémoire",
   "terminal.execute": "Commande en environnement isolé",
+  "terminal.run": "Exécution de commande terminal",
   "camera.capture": "Prise de vue",
   "ads.read": "Consultation publicitaire",
   "ads.publish": "Publication publicitaire",
