@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -11,9 +11,19 @@ import { describe, expect, it } from "vitest";
  * (flux de données : injections, XSS, chemins non vérifiés) doit rester
  * acté en plus du scan de secrets gitleaks. Toute suppression de l'un de
  * ces étages doit être une décision explicite, pas un oubli.
+ *
+ * Task 130 : le DAST OWASP ZAP (security.yml — scan hebdomadaire exécuté
+ * contre la production) est couvert par les mêmes garde-fous structurels :
+ * l'étage ne doit pas disparaître silencieusement, ses versions d'actions
+ * suivent le standard du dépôt, et le rodage (continue-on-error) doit
+ * rester une décision documentée.
  */
 
 const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
+
+/** Extrait les versions (dédupliquées) d'une action GitHub dans un workflow. */
+const versionsAction = (contenu: string, action: string) =>
+  [...new Set([...contenu.matchAll(new RegExp(`${action}@(v\\d+)`, "g"))].map((m) => m[1]))];
 
 describe("Pipeline CI (.github/workflows/ci.yml)", () => {
   const ci = read(".github/workflows/ci.yml");
@@ -68,5 +78,80 @@ describe("SAST CodeQL (.github/workflows/codeql.yml)", () => {
     expect(codeql).toContain("github/codeql-action/autobuild@v3");
     expect(codeql).toContain("github/codeql-action/analyze@v3");
     expect(codeql).toContain('category: "/language:javascript-typescript"');
+  });
+});
+
+describe("Inventaire des workflows (.github/workflows/)", () => {
+  // Toute addition/suppression de workflow doit passer par la mise à jour
+  // explicite de cette liste — un workflow est une surface d'exécution
+  // (secrets, permissions, accès production), pas un fichier anodin.
+  it("exactement trois workflows : CI, CodeQL et Security", () => {
+    const workflows = readdirSync(path.join(process.cwd(), ".github/workflows"))
+      .filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"))
+      .sort();
+    expect(workflows).toEqual(["ci.yml", "codeql.yml", "security.yml"]);
+  });
+});
+
+describe("Scan OWASP ZAP (.github/workflows/security.yml)", () => {
+  const security = read(".github/workflows/security.yml");
+
+  it("déclencheurs : hebdomadaire (dimanche 03:20 UTC, décalé du scan CodeQL) + manuel", () => {
+    expect(security).toContain('cron: "20 3 * * 0"');
+    expect(security).toContain("workflow_dispatch:");
+    // Input target_url : cible surchargeable à la demande, production par défaut.
+    expect(security).toContain("target_url");
+    expect(security).toContain("type: string");
+    expect(security).toContain("https://gen3ia.online");
+  });
+
+  it("scan ZAP baseline épinglé, cible = input manuel avec repli production", () => {
+    // Action officielle OWASP ZAP — version épinglée, jamais une balise
+    // flottante (un scan de sécurité reproductible).
+    expect(security).toContain("zaproxy/action-baseline@v0.15.0");
+    expect(security).toContain(
+      "target: ${{ inputs.target_url || 'https://gen3ia.online' }}",
+    );
+    // Pas de ticket GitHub automatique : cohérent avec le moindre privilège
+    // `contents: read` (écrire des tickets exigerait `issues: write`).
+    expect(security).toContain("allow_issue_writing: false");
+  });
+
+  it("phase de rodage documentée : étape ZAP non bloquante (continue-on-error)", () => {
+    expect(security).toContain("continue-on-error: true");
+  });
+
+  it("charge maîtrisée sur la production : spider et plafond bornés", () => {
+    // -m : minutes de spider (défaut 1) ; -T : plafond global du scan passif.
+    expect(security).toContain('cmd_options: "-m 3 -T 8"');
+  });
+
+  it("permissions minimales contents: read + concurrency anti-chevauchement", () => {
+    expect(security).toContain("contents: read");
+    expect(security).toContain("group: security-zap");
+    expect(security).toContain("cancel-in-progress: true");
+  });
+
+  it("rapport ZAP publié en artefact via upload-artifact v6, même si le scan échoue", () => {
+    expect(security).toContain("actions/upload-artifact@v6");
+    // if: always() — le rapport est préservé pour triage même quand l'étape
+    // ZAP est en échec (rodage, continue-on-error).
+    expect(security).toContain("if: always()");
+    expect(security).toContain("name: rapport-zap");
+    expect(security).toContain("report_json.json");
+    expect(security).toContain("if-no-files-found: warn");
+  });
+
+  it("versions d'actions alignées sur le standard du dépôt (cf. ci.yml)", () => {
+    const ci = read(".github/workflows/ci.yml");
+    // checkout suit strictement la/les version(s) en vigueur dans ci.yml —
+    // une divergence (ex. v6 dans security.yml, v7 ailleurs) est une
+    // incohérence de maintenance à corriger immédiatement.
+    expect(versionsAction(security, "actions/checkout")).toEqual(
+      versionsAction(ci, "actions/checkout"),
+    );
+    // upload-artifact suit le standard v6/v7 du dépôt (l'action n'est pas
+    // référencée dans ci.yml : la version est donc verrouillée ici).
+    expect(versionsAction(security, "actions/upload-artifact")).toEqual(["v6"]);
   });
 });

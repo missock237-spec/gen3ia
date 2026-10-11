@@ -1,0 +1,86 @@
+name: Security
+
+# Scan dynamique OWASP ZAP (DAST) — Task 130, axe « Tests sécurité » du
+# rapport d'amélioration. Complète la chaîne existante :
+#   - ci.yml      → gitleaks (secrets dans le code et l'historique) ;
+#   - codeql.yml  → SAST (flux de données : injections, XSS, chemins non
+#                   vérifiés) — analyse du CODE ;
+#   - security.yml (ce workflow) → DAST baseline EXÉCUTÉ contre la cible :
+#     en-têtes de sécurité, cookies, TLS, formulaires, fuites passives et
+#     sondes actives modérées (spider borné). Rapport archivé en artefact
+#     pour triage selon docs/security/pentest-checklist.md.
+
+on:
+  schedule:
+    # Hebdomadaire, dimanche 03:20 UTC — heure creuse Europe. Décalé
+    # volontairement du scan CodeQL (lundi 03:00 UTC) pour ne jamais faire
+    # tourner deux jobs de sécurité lourds en même temps.
+    - cron: "20 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "URL cible du scan (production par défaut)"
+        required: false
+        default: "https://gen3ia.online"
+        type: string
+
+concurrency:
+  # Un seul scan ZAP à la fois : deux scans simultanés sur la même cible
+  # doubleraient la charge côté production et pollueraient leurs résultats
+  # respectifs. Un run en cours est annulé au profit du plus récent.
+  group: security-zap
+  cancel-in-progress: true
+
+permissions:
+  # Moindre privilège : le scan ne lit que le dépôt (aucune écriture
+  # nécessaire — pas de ticket GitHub automatique, cf. allow_issue_writing).
+  contents: read
+
+jobs:
+  zap:
+    name: "OWASP ZAP baseline (DAST passif + sondes actives modérées)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # PHASE DE RODAGE (Task 130) : `continue-on-error: true` — le scan
+      # hebdomadaire est informatif, NON bloquant. Les premiers rapports
+      # servent au triage manuel (déduplication des faux positifs via un
+      # futur fichier de règles ZAP `rules_file_name`, cf. doc de l'action).
+      # Passage en bloquant = décision explicite après stabilisation.
+      - name: Scan ZAP baseline
+        continue-on-error: true
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          # Cible : input manuel (workflow_dispatch) ou production par défaut.
+          target: ${{ inputs.target_url || 'https://gen3ia.online' }}
+          # Pas de ticket GitHub automatique pendant le rodage (évite un
+          # ticket hebdomadaire bruyant) — le suivi passe par l'artefact
+          # publié ci-dessous + le triage de la checklist pentest.
+          # Autoriser les tickets exigerait `issues: write`, incompatible
+          # avec le moindre privilège `contents: read` de ce workflow.
+          allow_issue_writing: false
+          # Charge maîtrisée sur la cible : spider 3 minutes maximum
+          # (-m, défaut 1) et plafond global de 8 minutes d'attente du scan
+          # passif (-T) — le baseline n'envoie jamais de charges agressives.
+          cmd_options: "-m 3 -T 8"
+
+      # L'action ZAP écrit ses rapports à la racine du workspace et publie
+      # déjà un artefact interne (`zap_scan`, via son upload-artifact v4).
+      # Cette étape project (upload-artifact v6, cohérente avec les
+      # versions v6/v7 du dépôt) garantit la publication du rapport même si
+      # l'action échoue en cours de route (continue-on-error ci-dessus) —
+      # d'où le `if: always()`. `if-no-files-found: warn` : un scan avorté
+      # très tôt (cible injoignable, exit 3) ne produit parfois AUCUN
+      # fichier — ce n'est pas une erreur de ce workflow.
+      - name: Publication du rapport ZAP (artefact)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rapport-zap
+          path: |
+            report_html.html
+            report_md.md
+            report_json.json
+          if-no-files-found: warn
