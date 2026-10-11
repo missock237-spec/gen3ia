@@ -3487,3 +3487,111 @@ Stage Summary:
 - Documentation livrée : spécification OpenAPI 3.1 machine (docs/api/openapi.json), référence humaine (docs/api-reference.md), CHANGELOG Keep a Changelog 1.1 à la racine, 2 runbooks opérationnels (incident-response, deployment), le tout en français et fidèle au code réel.
 - La spec est un artefact vivant : docs/openapi.test.ts (17 tests) verrouille en CI qu'aucun chemin documenté n'est orphelin, que chaque méthode documentée est réellement exportée par la route, et que la sécurité bearerAuth/apiKeyHeader est appliquée au path v1.
 - QA verte : tsc 0, eslint 0/0 (fichier cible et projet complet), 17/17 tests OpenAPI, suite complète inchangée (l'unique échec de collecte sandbox/fastify est préexistant et documenté). Un seul commit local, pas de push (CI/déploiement au main agent).
+---
+Task ID: 130
+Agent: sous-agent sécurité & charge
+Task: Couverture sécurité & performance continue manquante — scan OWASP ZAP
+hebdomadaire en CI, scripts de tests de charge k6, et runbooks sécurité
+(checklist pentest + politique de divulgation responsable / bug bounty).
+
+Work Log:
+- LECTURE PRÉALABLE : ci.yml (standard v7/v6 : checkout v7 ×5, setup-node v6,
+  cache v6, gitleaks-action v3), codeql.yml (SAST hebdo lundi 03:00 UTC),
+  lib/__tests__/ci-pipeline.test.ts (garde-fous structurels CI/SAST, string-
+  based), docs/enterprise-security.md, Makefile, app/api/health + /api/status
+  (cibles de charge publiques, 200/503, cache CDN 30 s sur status).
+- VÉRIFICATION ACTION ZAP EN LIGNE (réseau) : l'action officielle est
+  zaproxy/action-baseline (singulier — le « actions-baseline » du brief
+  n'existe pas, 404) ; tags sonde via codeload → dernière stable = v0.15.0
+  (v0.16+ inexistant) ; action.yml v0.15.0 lue en entier (inputs target/
+  cmd_options/allow_issue_writing/fail_action/artifact_name, runs node24,
+  docker ghcr.io/zaproxy:stable, rapports écrits à la racine du workspace
+  report_html.html/report_md.md/report_json.json, upload interne d'artefact
+  inconditionnel en fin de scan) ; flags zap-baseline.py -m/-T validés sur
+  la source officielle (spider minutes + plafond global).
+- .github/workflows/security.yml (NOUVEAU) — workflow « Security » : schedule
+  hebdo dimanche 03:20 UTC (décalé du CodeQL lundi 03:00 pour ne jamais
+  superposer deux jobs lourds) + workflow_dispatch input target_url (défaut
+  https://gen3ia.online) ; job zap : checkout v7 → zaproxy/action-baseline@
+  v0.15.0 (target = input||prod, allow_issue_writing: false — cohérent avec
+  le moindre privilège, pas de ticket auto pendant le rodage ; cmd_options
+  « -m 3 -T 8 » = charge maîtrisée sur la prod) avec continue-on-error: true
+  documenté en français (rodage non bloquant) ; publication du rapport via
+  actions/upload-artifact@v6 (if: always(), if-no-files-found: warn — un scan
+  avorté tôt ne produit parfois aucun fichier) ; permissions: contents: read
+  minimal ; concurrency group security-zap (un seul scan à la fois contre la
+  cible).
+- scripts/load/k6-smoke.js (NOUVEAU) — profil smoke : 5 VU × 30 s sur
+  /api/health, /api/status, /login ; thresholds p(95)<800 ms et http_req_
+  failed<1 % commentés en français ; checks par requête (200, JSON valide
+  champ status:« ok », services décrits, rendu HTML pour /login) via helper
+  jsonEstValide try/catch (un corps HTML d'erreur invalide le check sans
+  faire sauter le test) ; BASE_URL = __ENV.BASE_URL || prod.
+- scripts/load/k6-stress.js (NOUVEAU) — profil stress progressif : ramping-vus
+  5→50 VU (5 min), plateau 50 VU (5 min), descente 3 min (récupération) sur
+  /api/health + /api/status uniquement (routes métier exclues : coûts
+  LLM/R2/Firestore et non conçues pour du trafic synthétique massif) ;
+  thresholds p(95)<2000 ms et rate<2 % avec abortOnFail sur le taux d'échec
+  (garde-fou prod : arrêt immédiat si la cible échoue — continuer serait du
+  DoS, pas du test de charge) ; chaque seuil et chaque stage commentés.
+- docs/load-testing.md (NOUVEAU) — guide d'exécution français : prérequis
+  (binaire k6, zéro dépendance npm), tableau comparatif smoke/stress,
+  commandes (BASE_URL surchargeable, --out json, --quiet), lecture des
+  métriques k6 (duration, failed, checks, http_reqs, vus_max, connecting/
+  tls), interprétation de chaque threshold franchi + quoi faire, cadence
+  (smoke avant chaque gros déploiement, stress hebdomadaire + avant tout
+  changement d'archi trafic), et cadre éthique : ne tester QUE gen3ia.online
+  (propriété), respect des quotas Vercel, fenêtre communiquée, arrêt sur
+  /api/status degraded.
+- docs/security/pentest-checklist.md (NOUVEAU) — checklist pentest français :
+  périmètre concret (pages publiques, auth/MFA/SSO, API v1 g3a_ et scopes,
+  cloisonnement orgId, CSP middleware/preview, webhooks téléphonie Twilio/
+  Plivo answer|status|turn, surfaces monétaires) ; méthodologie OWASP Top 10
+  2021 point par point (objectif → tests concrets Gen3ia → critère de
+  passage) ; outils suggérés (ZAP déjà automatisé, nuclei, semgrep, k6,
+  Burp/ZAP manuel, gitleaks) ; critères de passage de session (0 critique/
+  élevé, ZAP trié, re-tests) ; fréquence (ZAP hebdo auto, pentest complet
+  trimestriel + avant surface majeure) ; livrable attendu (rapport daté,
+  PoC reproductibles, sévérités, recommandations).
+- docs/security/bug-bounty.md (NOUVEAU) — politique de divulgation responsable
+  française : engagement Gen3ia (ack 72 h, triage 7 j / critique 48 h,
+  correctifs 7/30/90 j, non-poursuite) ; périmètre éligible (gen3ia.online
+  uniquement, données propres) ; sévérités critique/élevé/moyen/faible avec
+  exemples Gen3ia concrets et délais ; exclusions explicites (DoS, tests de
+  charge non autorisés, rapports de scanners sans preuve — on fait déjà
+  tourner ZAP/CodeQL/gitleaks/audit nous-mêmes, vulns des tiers, social
+  engineering, exploitation au-delà de la preuve) ; règles de conduite +
+  safe harbor ; récompenses symboliques (hall of fame, accès offert) ;
+  contact security@gen3ia.online.
+- lib/__tests__/ci-pipeline.test.ts (ÉTENDU +8 tests) : nouvel inventaire
+  verrouillé .github/workflows = [ci.yml, codeql.yml, security.yml] (toute
+  ajout/suppression = décision explicite) + describe « Scan OWASP ZAP » :
+  déclencheurs (cron 20 3 * * 0 + workflow_dispatch target_url type string),
+  action épinglée v0.15.0 + target input||prod + allow_issue_writing: false,
+  continue-on-error (rodage documenté), charge bornée -m 3 -T 8, permissions
+  contents: read + concurrency, artefact upload-artifact@v6 (if: always(),
+  if-no-files-found: warn, rapport-zap), et cohérence des versions avec le
+  standard ci.yml (checkout v7 dynamiquement comparé, upload-artifact v6
+  verrouillé). Helper versionsAction (regex dédupliquée).
+- CORRECTIF LINT : export default anonyme interdit (import/no-anonymous-
+  default-export, projet 0 warning toléré) → fonctions nommées profilSmoke/
+  profilStress (sémantique k6 identique).
+- VALIDATION : YAML security.yml parsé via js-yaml (structure vérifiée :
+  triggers, inputs, permissions, concurrency, steps) ; tsc --noEmit = 0
+  erreur ; eslint (4 fichiers touchés) --max-warnings 0 = 0 erreur/0
+  warning ; vitest lib/__tests__/ci-pipeline.test.ts = 16/16 verts (8
+  existants + 8 nouveaux, inchangés) ; node --check k6-smoke.js et
+  k6-stress.js = OK (ESM détecté).
+
+Stage Summary:
+- Sécurité continue : DAST OWASP ZAP hebdomadaire en CI (security.yml — rodage
+  non bloquant, rapport en artefact, moindre privilège contents: read, cible
+  surchargeable à la demande), complétant gitleaks (secrets) et CodeQL (SAST).
+- Charge : deux profils k6 versionnés (smoke 5 VU/30 s p95<800 ms ;
+  stress 5→50 VU ~13 min p95<2000 ms, abortOnFail) + guide d'exécution et
+  d'interprétation complet avec cadre éthique (gen3ia.online uniquement).
+- Runbooks : checklist pentest OWASP Top 10 adaptée aux surfaces réelles de
+  la plateforme (MFA, clés g3a_, téléphonie, CSP preview) et politique de
+  divulgation responsable (sévérités, exclusions, safe harbor, délais).
+- QA verte : tsc 0, eslint 0/0, vitest pipeline 16/16, node --check OK.
+  Zéro dépendance npm ajoutée. Pas de push.
