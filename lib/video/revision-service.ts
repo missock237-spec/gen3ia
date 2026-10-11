@@ -20,7 +20,8 @@ import "server-only";
 import { z } from "zod";
 import { generate } from "@/lib/ai/router";
 import { extractJsonObject } from "@/lib/agents/planner/normalize";
-import type { VideoProject, SubtitleStyleName } from "@/lib/video/types";
+import type { VideoProject } from "@/lib/video/types";
+import { SUBTITLE_STYLES } from "@/lib/video/types";
 import { getOwnedProjectOrThrow, patchProject, snapshotVersion, restoreVersion, appendProductionLog } from "@/lib/video/project-service";
 import { applyTimelinePatch } from "@/lib/video/timeline-service";
 import { listVersions } from "@/lib/video/project-service";
@@ -51,7 +52,8 @@ const INTENT_SCHEMA = z.object({
   targetChapterTitle: z.string().max(200).optional().nullable(),
   paceFactor: z.number().min(0.5).max(2).optional().nullable(),
   musicMood: z.string().max(120).optional().nullable(),
-  subtitleStyle: z.enum(["documentary", "minimal", "shorts_bold", "cinematic_yellow"]).optional().nullable(),
+  // Task 119 — karaoké mot à mot ajouté au catalogue fermé SUBTITLE_STYLES.
+  subtitleStyle: z.enum(SUBTITLE_STYLES).optional().nullable(),
   text: z.string().max(300).optional().nullable(),
   versionNumber: z.number().int().min(1).optional().nullable(),
   reason: z.string().max(600),
@@ -79,7 +81,7 @@ export async function parseIntent(instruction: string, project: VideoProject): P
           content: `Tu es le Directeur de production Gen3ia. Classe l'instruction de modification de vidéo en intention JSON stricte :
 {"intent":"change_pace|change_music|use_my_voice|set_subtitle_style|toggle_captions|delete_scene|extend_chapter|cinematic_intro|regenerate_scene_images|add_text|shorts_version|goto_version|unsupported",
 "targetSceneId":"scene_XXX|null","targetChapterTitle":"string|null","paceFactor":nombre(0.5-2)|null,
-"musicMood":"string|null","subtitleStyle":"documentary|minimal|shorts_bold|cinematic_yellow|null",
+"musicMood":"string|null","subtitleStyle":"documentary|minimal|shorts_bold|cinematic_yellow|karaoke_pop|null",
 "text":"string|null","versionNumber":nombre|null,"reason":"explication courte en français"}
 Scènes existantes : ${project.script?.scenes.map((s) => s.id).join(", ") ?? "aucune"}.`,
         },
@@ -119,9 +121,12 @@ export function parseIntentDeterministic(instruction: string): z.infer<typeof IN
     const mood = /tension|drame/.test(lower) ? "tension" : /calme|pos[eé]|document/.test(lower) ? "documentaire" : /dynamique|[ée]nerg/.test(lower) ? "energique" : /[ée]motion/.test(lower) ? "emotionnel" : "cinematographique";
     return { intent: "change_music", targetSceneId, versionNumber: null, paceFactor: null, musicMood: mood, subtitleStyle: null, text: null, targetChapterTitle: null, reason };
   }
-  if (/sous-?titres?/.test(lower)) {
-    const style = /jaune/.test(lower) ? "cinematic_yellow" : /court|tiktok|shorts/.test(lower) ? "shorts_bold" : /discret|minimal/.test(lower) ? "minimal" : "documentary";
-    return { intent: "set_subtitle_style", targetSceneId, versionNumber: null, paceFactor: null, musicMood: null, subtitleStyle: style as SubtitleStyleName, text: null, targetChapterTitle: null, reason };
+  if (/sous-?titres?|karaok/.test(lower)) {
+    // Task 119 — « karaoké » (mot à mot) rejoint le catalogue fermé de styles.
+    const style = /karaok/.test(lower)
+      ? "karaoke_pop"
+      : /jaune/.test(lower) ? "cinematic_yellow" : /court|tiktok|shorts/.test(lower) ? "shorts_bold" : /discret|minimal/.test(lower) ? "minimal" : "documentary";
+    return { intent: "set_subtitle_style", targetSceneId, versionNumber: null, paceFactor: null, musicMood: null, subtitleStyle: style, text: null, targetChapterTitle: null, reason };
   }
   if (/trop (rapide|vite)|ralenti|slow/.test(lower)) {
     const factor = paceMatch ? Math.max(0.5, Math.min(2, 1 + Number(paceMatch[1]) / 100)) : 1.25;

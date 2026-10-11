@@ -35,9 +35,10 @@ import { FieldValue } from "@/lib/r2fs";
 import type {
   RenderJob,
   RenderJobStatus,
-  RenderPlan,
   RenderStage,
+  RenderUserContract,
   VideoAsset,
+  VideoProject,
   SfxName,
   VideoExportTarget,
 } from "@/lib/video/types";
@@ -56,10 +57,13 @@ import {
   type EngineIo,
 } from "@/lib/video/render/engine";
 import { materializeForRender, uploadVideoAsset } from "@/lib/video/storage";
-import { analyzeRenderedMaster, decideAutoFix } from "@/lib/video/qc-service";
+import { analyzeRenderedMaster, decideAutoFix, hasUserContractViolation } from "@/lib/video/qc-service";
+// Task 120 — QC ALLÉGÉE : sonde ffprobe du master (cache job, une seule par rendu).
+import { probeMedia } from "@/lib/video/ffmpeg";
 import { estimateRenderCost, reserveRenderBudget, settleRenderBudget, releaseRenderBudget, settleExportsBudget } from "@/lib/video/credits";
 import { assembleRecursive } from "@/lib/video/long-video-service";
 import { VIDEO_LIMITS, VideoQuotaError, MAX_AUTO_FIX_ROUNDS } from "@/lib/video/security";
+import { analyzeNarrationAmplitude, alignSceneBoundariesToSilences, type VoiceTimeline } from "@/lib/video/voice-sync";
 import { createNotification } from "@/lib/notifications/repository";
 import { ensureAudioAssetsForProject } from "@/lib/video/audio-engine";
 import { enqueueVideoRenderTick, type TickPublishResult } from "@/lib/queue/tick-queue";
@@ -108,8 +112,8 @@ const STAGE_ORDER: RenderStage[] = ["plan", "download", "segments", "transitions
 /** Budget de RELANCE après échec (distinct du compteur informatif `attempts`). */
 export const RENDER_RETRY_BUDGET = 3;
 
-/** Segments rendus par tick (bornage serverless — le reste via continuation). */
-const MAX_SEGMENTS_PER_TICK = 3;
+/** Segments rendus par tick (Task 120 : parallèles × maxParallelSegmentRenders). */
+const MAX_SEGMENTS_PER_TICK = 4;
 /** Échéance d'un tick au-delà de laquelle on re-file le job (continuation). */
 const TICK_DEADLINE_MS = 230_000;
 /** Budget de travail par défaut d'une avance « sondage » (route GET responsive). */
@@ -155,6 +159,12 @@ export async function startRenderJob(params: {
   userId: string;
   projectId: string;
   derivedTargets: VideoExportTarget[];
+  /**
+   * Task 119 — CONTRAT UTILISATEUR porté par le job (durée/voix/sous-titres
+   * demandés) : la QC le vérifie sur le master rendu. Absent → rendu lancé
+   * hors production autopilote (contrôles plan seuls).
+   */
+  contract?: RenderUserContract;
 }): Promise<{ jobId: string; queued: boolean; estimate: ReturnType<typeof estimateRenderCost> }> {
   const project = await getOwnedProjectOrThrow(params.userId, params.projectId);
   if (!project.script || project.script.scenes.length === 0) {
@@ -186,6 +196,7 @@ export async function startRenderJob(params: {
     status: "queued",
     stage: "plan",
     progress: 0,
+    ...(params.contract ? { contract: params.contract } : {}),
     checkpoints: {
       downloadedAssetIds: [],
       completedSegments: [],
@@ -857,10 +868,21 @@ async function stagePlan(job: RenderJob, io: EngineIo): Promise<void> {
   }
   const musicBedFinal = musicBedExplicit ?? musicAssets[0];
 
+  // Task 119 — SYNCHRO VOIX-VISUEL : analyse l'énergie réelle (RMS par
+  // fenêtres, astats) des narrations MATÉRIALISÉES dans le tmp — une par
+  // scène, bornée par VIDEO_LIMITS.maxVoiceSyncScenes (dégradation honnête :
+  // au-delà, les scènes restantes n'ont pas d'effets audio-réactifs).
+  const voiceSyncByScene = await buildVoiceSyncTimelines(job, io, narrationByScene, project.script.scenes);
+
+  // Task 119 — COUPES ALIGNÉES : le projet de travail reçoit les frontières
+  // ajustées sur les silences/fin de phrase (UNE source de vérité pour
+  // segments + mixage audio + sous-titres ; durée totale inchangée).
+  const planProject = applyAlignedScenes(project, voiceSyncByScene);
+
   const dims = renderDimensions(project);
   let assR2Key: string | undefined;
   if (timeline.captions.enabled) {
-    const ass = buildAssForRender(project, timeline, dims.width, dims.height);
+    const ass = buildAssForRender(planProject, timeline, dims.width, dims.height);
     if (ass) {
       const upload = await uploadVideoAsset({
         userId: job.userId,
@@ -875,7 +897,7 @@ async function stagePlan(job: RenderJob, io: EngineIo): Promise<void> {
   }
 
   const plan = buildRenderPlan({
-    project,
+    project: planProject,
     timeline,
     jobId: job.id,
     imageByScene,
@@ -884,12 +906,65 @@ async function stagePlan(job: RenderJob, io: EngineIo): Promise<void> {
     musicBedAsset: musicBedFinal,
     derivedTargets: job.exports.map((e) => e.target),
     assR2Key,
+    ...(voiceSyncByScene.size > 0 ? { voiceSyncByScene } : {}),
   });
   if (plan.segments.length === 0) throw new Error("Plan de rendu vide : aucune scène avec image.");
   // Task 95-c — écriture via la couche résiliente (checkpoint).
   await writeCheckpointSet(JOBS_COLLECTION, job.id, { plan, updatedAt: nowIso() }, job.userId);
   job.plan = plan;
-  await io.log(`Plan de rendu établi : ${plan.segments.length} segments, ${plan.estimatedSec} s attendues.`);
+  await io.log(`Plan de rendu établi : ${plan.segments.length} segments, ${plan.estimatedSec} s attendues${voiceSyncByScene.size > 0 ? `, ${voiceSyncByScene.size} narration(s) synchronisée(s) à la voix (pouls/coupes)` : ""}.`);
+}
+
+/**
+ * Task 119 — analyse l'énergie vocale des narrations du plan (voice-sync).
+ * Chaque narration est matérialisée puis analysée (astats RMS par fenêtres) :
+ * timeline d'amplitude → effets audio-réactifs + alignement des coupes.
+ * JAMAIS BLOQUANT : une analyse en échec est ignorée (rendu sans synchro
+ * plutôt que pas de rendu).
+ */
+async function buildVoiceSyncTimelines(
+  job: RenderJob,
+  io: EngineIo,
+  narrationByScene: Map<string, VideoAsset>,
+  scenes: ReadonlyArray<{ id: string; durationSec: number }>,
+): Promise<Map<string, VoiceTimeline>> {
+  void job;
+  const timelines = new Map<string, VoiceTimeline>();
+  const candidates = scenes
+    .filter((scene) => narrationByScene.has(scene.id))
+    .slice(0, Math.max(1, VIDEO_LIMITS.maxVoiceSyncScenes));
+  for (const scene of candidates) {
+    const asset = narrationByScene.get(scene.id)!;
+    try {
+      const ext = asset.r2Key.includes(".") ? asset.r2Key.split(".").pop()! : "mp3";
+      const audioFile = await io.materialize(asset, `vsync_${scene.id}.${ext}`);
+      const timeline = await analyzeNarrationAmplitude({
+        audioFile,
+        cwd: io.tmpDir,
+        durationSec: asset.media?.durationSec ?? scene.durationSec,
+      });
+      if (timeline && timeline.windows.length > 0) timelines.set(scene.id, timeline);
+    } catch {
+      // Analyse impossible pour CETTE scène : ignorée (jamais bloquant).
+    }
+  }
+  return timelines;
+}
+
+/**
+ * Task 119 — applique l'alignement des frontières aux scènes du projet de
+ * travail (copie — le projet PERSISTÉ n'est pas touché : l'alignement est un
+ * paramètre de RENDU, l'atelier garde les durées éditées par l'utilisateur).
+ */
+function applyAlignedScenes(project: VideoProject, voiceSyncByScene: Map<string, VoiceTimeline>): VideoProject {
+  if (voiceSyncByScene.size === 0 || !project.script) return project;
+  const aligned = new Map(alignSceneBoundariesToSilences(project.script.scenes, voiceSyncByScene).map((a) => [a.id, a]));
+  if (aligned.size === 0) return project;
+  const scenes = project.script.scenes.map((scene) => {
+    const adjusted = aligned.get(scene.id);
+    return adjusted ? { ...scene, durationSec: adjusted.durationSec, startSec: adjusted.startSec } : scene;
+  });
+  return { ...project, script: { ...project.script, scenes } };
 }
 
 /** DOWNLOAD : préflight — vérifie que TOUTES les entrées sont résolubles. */
@@ -912,9 +987,12 @@ async function stageDownload(job: RenderJob, io: EngineIo): Promise<void> {
 }
 
 /**
- * SEGMENTS : rend jusqu'à MAX_SEGMENTS_PER_TICK segments (un par un),
- * checkpoint chacun, en respectant le budget temps du tick (Task 1-a
- * FIX 5b : Date.now() vérifié entre chaque segment en mode sondage).
+ * SEGMENTS (Task 120 — PARALLÈLES) : rend jusqu'à MAX_SEGMENTS_PER_TICK
+ * segments en ≤ VIDEO_LIMITS.maxParallelSegmentRenders processus FFmpeg
+ * simultanés (mémoire bornée serverless), checkpoint UNIQUE consolidé après
+ * la vague (limite Firestore ~1 écriture/s/doc), budget temps du tick honoré
+ * AVANT chaque démarrage de segment (le pool marque « non démarré » → le
+ * prochain tick les prend, checkpoint maître).
  */
 async function stageSegments(job: RenderJob, io: EngineIo, timeBudgetMs?: number): Promise<StageOutcome> {
   const plan = job.plan!;
@@ -928,25 +1006,19 @@ async function stageSegments(job: RenderJob, io: EngineIo, timeBudgetMs?: number
   const deadlineMs = typeof timeBudgetMs === "number" && timeBudgetMs > 0 ? Date.now() + timeBudgetMs : null;
   const completedAtTickStart = completed.size;
 
-  for (const segment of batch) {
-    if (deadlineMs !== null && Date.now() >= deadlineMs) break;
-    const filteredPlan: RenderPlan = { ...plan, segments: [segment] };
-    await renderSegments({
-      plan: filteredPlan,
-      io,
-      userId: job.userId,
-      completedSegments: [...completed],
-      // Task 106-fix — checkpoint en MÉMOIRE seulement : Firestore limite à
-      // ~1 écriture/seconde/DOCUMENT et un tick écrit déjà claim + checkpoints
-      // + release sur le même document — un checkpoint PAR SEGMENT dépassait
-      // ce plafond (RESOURCE_EXHAUSTED classé quota → neutralisation
-      // silencieuse → re-rendu infini des mêmes segments, constaté en prod).
-      // Un SEUL checkpoint consolidé est écrit APRÈS la boucle du tick.
-      onSegmentDone: async (index) => {
-        completed.add(index);
-      },
-    });
-  }
+  await renderSegments({
+    plan: { ...plan, segments: batch },
+    io,
+    userId: job.userId,
+    completedSegments: [...completed],
+    concurrency: Math.max(1, VIDEO_LIMITS.maxParallelSegmentRenders),
+    deadlineMs,
+    // Task 106-fix — checkpoint en MÉMOIRE seulement (limite Firestore
+    // ~1 écriture/s/doc) : UN SEUL checkpoint consolidé APRÈS la vague.
+    onSegmentDone: async (index) => {
+      completed.add(index);
+    },
+  });
 
   // Task 106-fix — UN checkpoint par tick (consultation immédiate par le
   // claim suivant ; les segments réellement rendus sont conservés en local
@@ -1100,21 +1172,51 @@ async function stageQc(job: RenderJob, io: EngineIo): Promise<StageOutcome> {
     durationSec: plan.estimatedSec,
     burnAssFileName: plan.subtitles?.assR2Key ? "subtitles.ass" : undefined,
   });
+  // Task 120 — QC ALLÉGÉE : UNE SEULE sonde ffprobe du master, réutilisée par
+  // la QC (analyse), les exports (timeout) et le finalize (stats) — le
+  // résultat est mis en cache sur le job (le master ne change plus d'ici la
+  // livraison ; tout rollback segments PURGE ce cache).
+  const masterProbe = await probeMedia(masterTmp, io.tmpDir).catch(() => undefined);
   const report = await analyzeRenderedMaster({
     masterFile: masterTmp,
     tmpDir: io.tmpDir,
     plan,
     expectedDurationSec: plan.estimatedSec,
     subtitlesEnabled: Boolean(plan.subtitles?.assR2Key),
+    cachedProbe: masterProbe,
+    // Task 119 — CONTRAT UTILISATEUR : la volonté explicite de l'utilisateur
+    // (durée demandée, ratio, voix, sous-titres) est vérifiée sur le master
+    // réellement rendu — un écart est une issue CRITIQUE actionnable.
+    ...(job.contract
+      ? {
+          userContract: {
+            targetDurationSec: job.contract.targetDurationSec,
+            aspectRatio: plan.aspectRatio,
+            captionsRequired: job.contract.captionsRequired,
+            narrationRequired: job.contract.narrationRequired,
+          },
+        }
+      : {}),
   });
   // Task 95-c — rapport QC via la couche résiliente.
   await writeCheckpointSet(
     JOBS_COLLECTION,
     job.id,
-    { qcReport: report, "checkpoints.qcDone": true, updatedAt: nowIso() },
+    { qcReport: report, "checkpoints.qcDone": true, "checkpoints.masterProbe": masterProbe ?? null, updatedAt: nowIso() },
     job.userId,
   );
   await io.log(`QC : ${report.passed ? "OK" : `${report.issues.length} problème(s)`}.`);
+
+  // Task 119 — CONTRAT UTILISATEUR NON RESPECTÉ : échec QC immédiat avec
+  // message ACTIONNABLE (la reprise/resetToSegments existants s'appliquent).
+  // Un rendu qui ne livre pas ce que l'utilisateur a demandé n'est pas un
+  // « avertissement » : il ne doit pas partir en livraison.
+  if (hasUserContractViolation(report)) {
+    const violation = report.issues.find((i) => i.severity === "critical" && (i.kind === "aspect_ratio_mismatch" || i.kind === "captions_missing" || i.kind === "narration_missing" || (i.kind === "duration_mismatch" && i.detail.startsWith("Contrat utilisateur"))));
+    if (violation) {
+      throw new Error(`QC — contrat utilisateur non respecté : ${violation.detail}`);
+    }
+  }
 
   const decision = decideAutoFix(report, plan);
   if (decision.action === "fix" && job.autoFixRounds < MAX_AUTO_FIX_ROUNDS) {
@@ -1131,6 +1233,8 @@ async function stageQc(job: RenderJob, io: EngineIo): Promise<StageOutcome> {
         "checkpoints.completedSegments": [...completed],
         "checkpoints.audioDone": job.checkpoints.audioDone && !decision.rebuildAudio,
         "checkpoints.qcDone": false,
+        // Task 120 — le master va être RE-RENDU : le cache de sonde est purgé.
+        "checkpoints.masterProbe": null,
         stage: "segments",
         progress: computeJobProgress("segments", completed.size, plan.segments.length),
         updatedAt: nowIso(),
@@ -1190,6 +1294,10 @@ async function stageExports(job: RenderJob, io: EngineIo): Promise<StageOutcome>
       masterFile: join2(io.tmpDir, "master.mp4"),
       target: target.target,
       assFileName,
+      // Task 120 — QC/sonde ALLÉGÉE : la durée du master est DÉJÀ connue du
+      // job (sonde QC en cache, ou output posé au finalize des jobs
+      // d'exports seuls) — aucune re-sonde ffprobe inutile.
+      outputDurationSec: job.checkpoints.masterProbe?.durationSec ?? job.output?.durationSec,
     });
     const { readFile, stat } = await import("node:fs/promises");
     const body = await readFile(outFile);
@@ -1273,6 +1381,9 @@ async function stageFinalize(job: RenderJob, io: EngineIo): Promise<StageOutcome
     masterFile: join2(io.tmpDir, "master.mp4"),
     projectId: job.projectId,
     jobId: job.id,
+    // Task 120 — QC ALLÉGÉE : métadonnées du master déjà sondées à la QC
+    // (cache job) — le finalize ne re-sonde PAS le même fichier.
+    probe: job.checkpoints.masterProbe ?? undefined,
   });
   const actualMinor = await settleRenderBudget({
     userId: job.userId,
@@ -1389,6 +1500,8 @@ async function resetToSegments(jobId: string, job: RenderJob, reason: string): P
       "checkpoints.audioDone": false,
       "checkpoints.subtitlesDone": false,
       "checkpoints.qcDone": false,
+      // Task 120 — le master va être RE-RENDU : le cache de sonde est purgé.
+      "checkpoints.masterProbe": null,
       updatedAt: nowIso(),
     },
     job.userId,
@@ -1401,6 +1514,7 @@ async function resetToSegments(jobId: string, job: RenderJob, reason: string): P
     audioDone: false,
     subtitlesDone: false,
     qcDone: false,
+    masterProbe: null,
   };
   await logSystem(
     job.projectId,

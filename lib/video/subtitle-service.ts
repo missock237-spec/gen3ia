@@ -151,6 +151,8 @@ const ASS_HEADER = "[Script Info]\nScriptType: v4.00+\nPlayResX: {W}\nPlayResY: 
 interface AssStyle {
   fontsize: number;
   primary: string;   // &HAABBGGRR
+  /** Task 119 — couleur de pré-remplissage karaoké (tag \k). */
+  secondary?: string;
   outline: string;
   back: string;
   bold: number;
@@ -165,7 +167,62 @@ const STYLE_TABLE: Record<SubtitleStyleName, AssStyle> = {
   minimal: { fontsize: 46, primary: "&H00F0F0F0", outline: "&H90000000", back: "&H40000000", bold: 0, outlineWidth: 1, shadow: 0, alignment: 2, marginV: 50 },
   shorts_bold: { fontsize: 72, primary: "&H00FFFFFF", outline: "&H00000000", back: "&H00000000", bold: 1, outlineWidth: 4, shadow: 2, alignment: 5, marginV: 0 },
   cinematic_yellow: { fontsize: 58, primary: "&H0000D7FF", outline: "&HC0000000", back: "&H60000000", bold: 1, outlineWidth: 3, shadow: 1, alignment: 2, marginV: 80 },
+  /** Task 119 — karaoké : mot par mot (\k) sur surlignage vif, pop d'entrée. */
+  karaoke_pop: { fontsize: 76, primary: "&H00FFFFFF", secondary: "&H0000E5FF", outline: "&H00000000", back: "&H00000000", bold: 1, outlineWidth: 5, shadow: 2, alignment: 5, marginV: 0 },
 };
+
+// ────────────────────────────────────────────────────────────────────────────
+// Task 119 — karaoké + entrées animées (catalogue fermé de styles dynamiques)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Styles « dynamiques » : entrées/sorties animées (fad/pop) au rendu ASS. */
+const ANIMATED_STYLES: ReadonlySet<SubtitleStyleName> = new Set(["shorts_bold", "karaoke_pop"]);
+
+/**
+ * Texte d'une cue avec tags karaoké \k MOT PAR MOT (pur, testé) : la durée
+ * de la cue est répartie entre les mots au prorata de leur longueur (les
+ * mots courts gardent une borne lisible ≥ 4 cs, le DERNIER absorbe
+ * l'arrondi pour que la somme = la durée exacte). Chaque `\k` est en
+ * CENTISECONDES (convention ASS). Le préfixe \fad anime l'entrée/sortie.
+ */
+export function karaokeTaggedText(cue: SubtitleCue): string {
+  const durationSec = Math.max(0.4, cue.endSec - cue.startSec);
+  const lines = cue.text.split(/\n/).filter((l) => l.trim().length > 0);
+  if (lines.length === 0) return cue.text;
+  const wordsByLine = lines.map((line) => line.split(/\s+/).filter(Boolean));
+  const flat = wordsByLine.flat();
+  if (flat.length === 0) return cue.text;
+  // Poids = longueur du mot (borne basse : les petits mots gardent un temps
+  // lisible) ; durée totale = durée EXACTE de la cue en centisecondes.
+  const weights = flat.map((w) => Math.max(3, w.replace(/[^\p{L}\p{N}]/gu, "").length || 3));
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  const totalCs = Math.max(1, Math.round(durationSec * 100));
+  const perWord: number[] = weights.map((w) => Math.max(4, Math.floor((w / totalWeight) * totalCs)));
+  // Correction d'arrondi : le DERNIER mot absorbe l'écart (durée exacte).
+  const sum = perWord.reduce((a, b) => a + b, 0);
+  perWord[perWord.length - 1] = Math.max(4, perWord[perWord.length - 1] + (totalCs - sum));
+  let cursor = 0;
+  const taggedLines = wordsByLine.map((words) => {
+    const parts = words.map((word) => {
+      const cs = perWord[cursor] ?? 4;
+      cursor += 1;
+      return `{\\k${Math.max(4, cs)}}${word}`;
+    });
+    return parts.join(" ");
+  });
+  return `{\\fad(120,60)}${taggedLines.join("\\N")}`;
+}
+
+/**
+ * Texte d'une cue avec entrée animée (pop \t + fondu \fad) — styles
+ * dynamiques non karaoké (shorts_bold). PUR et testé.
+ */
+export function animatedEntryText(cue: SubtitleCue, pop: boolean): string {
+  const base = cue.text.replace(/\n/g, "\\N");
+  if (!pop) return `{\\fad(120,60)}${base}`;
+  // Pop d'entrée : 92 % → 100 % d'échelle sur 140 ms + fondu.
+  return `{\\fad(120,60)\\fscx92\\fscy92\\t(0,140,\\fscx100\\fscy100)}${base}`;
+}
 
 function alignmentFor(position: "bottom" | "center" | "top"): number {
   return position === "center" ? 5 : position === "top" ? 8 : 2;
@@ -176,11 +233,21 @@ export function toAssFile(track: SubtitleTrackFile, width: number, height: numbe
   const style = STYLE_TABLE[track.style] ?? STYLE_TABLE.documentary;
   const alignment = track.position === "bottom" || track.position === "center" || track.position === "top" ? alignmentFor(track.position) : style.alignment;
   const header = ASS_HEADER.replace("{W}", String(width)).replace("{H}", String(height)) +
-    `Style: Default,DejaVu Sans,${style.fontsize},${style.primary},&H000000FF,${style.outline},${style.back},${style.bold},0,0,0,100,100,0,0,1,${style.outlineWidth},${style.shadow},${alignment},60,60,${style.marginV},1\n\n` +
+    `Style: Default,DejaVu Sans,${style.fontsize},${style.primary},${style.secondary ?? "&H000000FF"},${style.outline},${style.back},${style.bold},0,0,0,100,100,0,0,1,${style.outlineWidth},${style.shadow},${alignment},60,60,${style.marginV},1\n\n` +
     "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
   const events = track.cues
     .map((cue) => {
-      const text = cue.text.replace(/\n/g, "\\N");
+      // Task 119 — styles dynamiques du catalogue fermé : karaoké mot à mot
+      // (\k + surlignage) ou entrée animée (\fad/\t). Les styles documentaires
+      // restent strictement inchangés (comportement historique).
+      let text: string;
+      if (track.style === "karaoke_pop") {
+        text = karaokeTaggedText(cue);
+      } else if (ANIMATED_STYLES.has(track.style)) {
+        text = animatedEntryText(cue, track.style === "shorts_bold");
+      } else {
+        text = cue.text.replace(/\n/g, "\\N");
+      }
       return `Dialogue: 0,${assTime(cue.startSec)},${assTime(cue.endSec)},Default,,0,0,0,,${text}`;
     })
     .join("\n");

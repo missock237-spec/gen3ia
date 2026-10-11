@@ -115,6 +115,15 @@ export interface ScriptChapter {
 
 export type SceneVisualType = "image" | "video" | "screen_recording";
 
+/**
+ * Task 119 — sujet principal d'une scène. "person" active les effets
+ * audio-réactifs de PRÉSENCE (voice-sync : pouls d'échelle/position,
+ * accélération caméra sur les pics d'énergie vocale). Alimenté par le
+ * Script Engine (champ LLM) avec repli heuristique (voice-sync.ts).
+ */
+export const SCENE_SUBJECTS = ["person", "place", "object", "abstract"] as const;
+export type SceneSubject = (typeof SCENE_SUBJECTS)[number];
+
 export interface ScriptScene {
   id: string;
   chapterId: string;
@@ -125,6 +134,8 @@ export interface ScriptScene {
   /** Prompt visuel brut — enrichi par le Consistency Engine à la génération. */
   visualPrompt: string;
   visualType: SceneVisualType;
+  /** Task 119 — sujet principal (person/place/object/abstract), voix-visuel. */
+  subject?: SceneSubject;
   cameraMotion: MotionPreset;
   transitionIn: TransitionName;
   transitionOut: TransitionName;
@@ -365,6 +376,15 @@ export const EFFECT_NAMES = [
   "cinematic_bars",
   "camera_shake",
   "motion_blur",
+  // Task 119 — studio « CapCut » : effets audio-réactifs + look cinéma.
+  "voice_pulse",
+  "punch_zoom",
+  "glitch",
+  "light_leak",
+  "parallax_depth",
+  "teal_orange",
+  "bleach_bypass",
+  "cinematic_flow",
 ] as const;
 export type EffectName = (typeof EFFECT_NAMES)[number];
 
@@ -390,6 +410,14 @@ export const TRANSITION_NAMES = [
   "glitch",
   "circle",
   "match",
+  // Task 119 — modes xfade natifs FFmpeg 6.0 uniquement (zoomin/hlwind
+  // n'existent qu'en FFmpeg 7.x : référencés nulle part, cf. effects-service).
+  "smooth_left",
+  "circle_close",
+  "sweep",
+  "whip",
+  "blur_dissolve",
+  "radial_wipe",
 ] as const;
 export type TransitionName = (typeof TRANSITION_NAMES)[number];
 
@@ -402,6 +430,8 @@ export const SUBTITLE_STYLES = [
   "minimal",
   "shorts_bold",
   "cinematic_yellow",
+  /** Task 119 — karaoké mot à mot (tags ASS \k) + entrées animées. */
+  "karaoke_pop",
 ] as const;
 export type SubtitleStyleName = (typeof SUBTITLE_STYLES)[number];
 
@@ -494,6 +524,15 @@ export interface RenderSegment {
   textOverlays: Array<{ text: string; style: SubtitleStyleName; position: "bottom" | "center" | "top" }>;
   transitionIn: TransitionName;
   transitionOut: TransitionName;
+  /**
+   * Task 119 — plan de synchro voix-visuel (courbe d'amplitude + pics de
+   * la narration) : alimente les effets audio-réactifs (voice_pulse,
+   * punch_zoom). Absent → aucun effet audio-réactif (comportement inchangé).
+   */
+  voiceSync?: {
+    amplitude: Array<{ tSec: number; value: number }>;
+    peakTimesSec: number[];
+  };
 }
 
 export const RENDER_JOB_STATUSES = [
@@ -519,6 +558,22 @@ export const RENDER_STAGES = [
 ] as const;
 export type RenderStage = (typeof RENDER_STAGES)[number];
 
+/**
+ * Task 119 — CONTRAT UTILISATEUR porté par le job de rendu : la volonté
+ * explicite de l'utilisateur (durée, voix, sous-titres) est vérifiée par
+ * la QC sur le master réellement livré. Champs optionnels : un rendu
+ * lancé hors production autopilote ne porte AUCUN contrat (la QC plan
+ * s'applique seule, comportement historique).
+ */
+export interface RenderUserContract {
+  /** Durée demandée par l'utilisateur (s) — vérifiée ±10 %. */
+  targetDurationSec?: number;
+  /** Narration demandée → un flux voix doit exister dans le master. */
+  narrationRequired?: boolean;
+  /** Sous-titres demandés → ils doivent être brûlés dans le master. */
+  captionsRequired?: boolean;
+}
+
 export interface RenderJob {
   id: string;
   projectId: string;
@@ -539,9 +594,18 @@ export interface RenderJob {
     subtitlesDone: boolean;
     qcDone: boolean;
     exportsDone: string[];
+    /**
+     * Task 120 — QC ALLÉGÉE : métadonnées ffprobe du master sondées À LA QC
+     * (cache job) — réutilisées par les exports (timeout) et le finalize
+     * (stats de livraison) au lieu de re-sonder le MÊME fichier. PURGÉ par
+     * tout rollback segments (resetToSegments/auto-fix : le master change).
+     */
+    masterProbe?: MediaProbe | null;
   };
   /** Job complet (production) ou exports seuls (formats dérivés d'un master existant). */
   mode?: "full" | "exports_only";
+  /** Task 119 — contrat utilisateur vérifié par la QC (durée/voix/sous-titres). */
+  contract?: RenderUserContract;
   qcReport?: QcReport;
   autoFixRounds: number;
   /**
@@ -586,6 +650,11 @@ export const QC_ISSUE_KINDS = [
   "volume_inconsistent",
   "bad_transition",
   "missing_audio_stream",
+  // Task 119 — CONTRAT UTILISATEUR (qc-service) : la volonté de
+  // l'utilisateur est vérifiée sur le master rendu, pas seulement le plan.
+  "aspect_ratio_mismatch",
+  "captions_missing",
+  "narration_missing",
 ] as const;
 export type QcIssueKind = (typeof QC_ISSUE_KINDS)[number];
 

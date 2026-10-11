@@ -19,12 +19,14 @@ import { extractJsonObject } from "@/lib/agents/planner/normalize";
 import { z } from "zod";
 import {
   type ScriptScene,
+  type SceneSubject,
   type VideoProject,
   type VideoScript,
   type StoryboardEntry,
   MOTION_PRESETS,
   TRANSITION_NAMES,
   SFX_NAMES,
+  SCENE_SUBJECTS,
 } from "@/lib/video/types";
 import { patchProject, snapshotVersion, appendProductionLog, getOwnedProjectOrThrow } from "@/lib/video/project-service";
 import { VIDEO_LIMITS } from "@/lib/video/security";
@@ -42,6 +44,8 @@ const SCENE_SCHEMA = z.object({
   onScreenText: z.string().max(200).optional().nullable(),
   visualPrompt: z.string().min(3).max(1200),
   visualType: z.enum(["image", "video", "screen_recording"]).default("image"),
+  /** Task 119 — sujet principal : "person" active les effets voix-visuel. */
+  subject: z.enum(SCENE_SUBJECTS).optional().nullable(),
   cameraMotion: z.enum(MOTION_PRESETS).default("slow_zoom"),
   transitionIn: z.enum(TRANSITION_NAMES).default("fade"),
   transitionOut: z.enum(TRANSITION_NAMES).default("cut"),
@@ -80,8 +84,9 @@ Tu réponds STRICTEMENT en JSON :
     "narration": string, "onScreenText": string|null,
     "visualPrompt": string (description visuelle précise, EN ANGLAIS pour le modèle d'images),
     "visualType": "image"|"video"|"screen_recording",
+    "subject": "person"|"place"|"object"|"abstract"|null,
     "cameraMotion": "static"|"slow_zoom"|"zoom_out"|"ken_burns"|"pan_left_right"|"pan_right_left"|"tilt_up"|"tilt_down"|"parallax"|"dramatic_push",
-    "transitionIn": "cut"|"fade"|"dissolve"|"wipe_left"|"wipe_right"|"slide_left"|"slide_right"|"zoom"|"blur"|"flash"|"glitch"|"circle"|"match",
+    "transitionIn": "cut"|"fade"|"dissolve"|"wipe_left"|"wipe_right"|"slide_left"|"slide_right"|"zoom"|"blur"|"flash"|"glitch"|"circle"|"match"|"smooth_left"|"circle_close"|"sweep"|"whip"|"blur_dissolve"|"radial_wipe",
     "transitionOut": idem, "musicMood": string|null,
     "soundEffects": ["whoosh"|"impact"|"click"|"ambient"|"cinematic_hit"|"riser"|"sub_bass"],
     "captions": boolean
@@ -92,6 +97,8 @@ Règles :
 - La somme des durationSec des scènes ≈ durée cible demandée (±10 %).
 - Les id de scènes suivent scene_001, scene_002… et chaque sceneIds de chapitre référence des scènes existantes.
 - La narration est en ${"langue demandée"} ; les visualPrompt sont en anglais, riches et précis (cadrage, lumière, sujet).
+- "subject" décrit le sujet PRINCIPAL du cadrage : "person" si une personne occupe l'image (orateur, personnage, portrait) — cela active les animations synchronisées à la voix ; "place" pour un lieu, "object" pour un objet, "abstract" sinon. null si indécis.
+- "captions" vaut true par défaut dès que la scène est narrée (false seulement pour une demande explicite sans sous-titres).
 - Transition d'entrée du premier plan = "fade", sortie du dernier = "fade".
 - Rythme : scènes de 6 à 10 s pour un documentaire, 3 à 5 s pour un Short.`;
 
@@ -152,6 +159,18 @@ export async function generateScript(userId: string, projectId: string): Promise
   return { script, scenes };
 }
 
+/**
+ * Task 119 — heuristique de sujet : détermine si le cadrage principal
+ * montre une PERSONNE quand le LLM n'a pas renseigné `subject` (repli
+ * déterministe — alimente la synchro voix-visuel, cf. voice-sync.ts).
+ */
+const SUBJECT_PERSON_RE = /\b(person|people|man|woman|men|women|girl|boy|child|portrait|face|speaker|host|presenter|narrator|character|chef|doctor|scientist|student|interviewee|anchor|reporter)\b/i;
+
+export function detectSceneSubject(visualPrompt: string | undefined): SceneSubject | undefined {
+  if (!visualPrompt) return undefined;
+  return SUBJECT_PERSON_RE.test(visualPrompt) ? "person" : "place";
+}
+
 /** Fusionne le contrat brut en script + scènes avec positions calculées. */
 function normalizeScript(
   raw: z.infer<typeof SCRIPT_SCHEMA>,
@@ -169,6 +188,7 @@ function normalizeScript(
       onScreenText: s.onScreenText ?? undefined,
       visualPrompt: s.visualPrompt,
       visualType: s.visualType,
+      subject: s.subject ?? detectSceneSubject(s.visualPrompt),
       cameraMotion: s.cameraMotion,
       transitionIn: s.transitionIn,
       transitionOut: s.transitionOut,

@@ -46,6 +46,12 @@ export const VIDEO_LIMITS = {
   maxGeneratedImages: envInt("VIDEO_MAX_GENERATED_IMAGES", 600),
   /** Caractères ElevenLabs maximum par projet. */
   maxTtsCharacters: envInt("VIDEO_MAX_TTS_CHARACTERS", 400_000),
+  /** Task 120 — générations d'images de scènes simultanées (assets ∥). */
+  maxParallelAssetGenerations: envInt("VIDEO_MAX_PARALLEL_ASSETS", 4),
+  /** Task 120 — processus FFmpeg de segments simultanés (rendu, mémoire bornée). */
+  maxParallelSegmentRenders: envInt("VIDEO_MAX_PARALLEL_SEGMENT_RENDERS", 2),
+  /** Task 119 — narrations analysées par la synchro voix-visuel (bornage tick). */
+  maxVoiceSyncScenes: envInt("VIDEO_MAX_VOICE_SYNC_SCENES", 150),
 } as const;
 
 export const RESOLUTION_RANK: Record<string, number> = {

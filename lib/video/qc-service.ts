@@ -23,7 +23,11 @@ import { PROJECTS_COLLECTION } from "@/lib/video/project-service";
 const MAX_SCENE_SEC = 45;
 const MAX_SILENCE_RATIO = 0.35; // >35 % de silence total = problème
 const CLIPPING_DB = -0.5; // max_volume ≥ -0.5 dB = clipping probable
-const DURATION_TOLERANCE = 0.05; // ±5 %
+const DURATION_TOLERANCE = 0.05; // ±5 % (contrat plan)
+/** Task 119 — CONTRAT UTILISATEUR : tolérance de la durée DEMANDÉE (±10 %). */
+export const USER_DURATION_TOLERANCE = 0.1;
+/** Task 119 — tolérance du ratio largeur/hauteur rendu vs demandé (±3 %). */
+export const ASPECT_RATIO_TOLERANCE = 0.03;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Task 106-c — QC missing_asset : scènes attendues sans segment rendu
@@ -100,6 +104,26 @@ async function loadExpectedScenes(projectId: string): Promise<ExpectedScene[] | 
   }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Task 119 — CONTRAT UTILISATEUR : la volonté de l'utilisateur est un CONTRAT
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Kinds d'issues qui traduisent une VIOLATION DU CONTRAT utilisateur. */
+const CONTRACT_ISSUE_KINDS: ReadonlySet<QcIssue["kind"]> = new Set([
+  "aspect_ratio_mismatch",
+  "captions_missing",
+  "narration_missing",
+]);
+
+/**
+ * Task 119 — true si le rapport contient au moins une violation CRITIQUE du
+ * contrat utilisateur : la QC doit alors ÉCHOUER avec message actionnable
+ * (le rendu ne livre pas ce que l'utilisateur a demandé).
+ */
+export function hasUserContractViolation(report: QcReport): boolean {
+  return report.issues.some((i) => i.severity === "critical" && CONTRACT_ISSUE_KINDS.has(i.kind));
+}
+
 /** Analyse complète du master rendu (fichier local tmp). */
 export async function analyzeRenderedMaster(params: {
   masterFile: string;
@@ -113,10 +137,20 @@ export async function analyzeRenderedMaster(params: {
    * Absente → chargées depuis le projet (plan.projectId) en best-effort.
    */
   expectedScenes?: ReadonlyArray<ExpectedScene>;
+  /**
+   * Task 119 — CONTRAT UTILISATEUR (durée/ratio/voix/sous-titres demandés) :
+   * vérifié sur le master rendu, en plus des contrôles plan.
+   */
+  userContract?: UserContractExpectations;
+  /**
+   * Task 120 — QC ALLÉGÉ : métadonnées ffprobe déjà obtenues au rendu (cache
+   * job / finalize) — évite une re-sonde du master. Absent → sonde locale.
+   */
+  cachedProbe?: Awaited<ReturnType<typeof probeMedia>>;
 }): Promise<QcReport> {
   const issues: QcIssue[] = [];
 
-  const probe = await probeMedia(params.masterFile, params.tmpDir).catch(() => undefined);
+  const probe = params.cachedProbe ?? (await probeMedia(params.masterFile, params.tmpDir).catch(() => undefined));
 
   // 1. Durée attendue vs réelle.
   if (probe?.durationSec) {
@@ -144,8 +178,12 @@ export async function analyzeRenderedMaster(params: {
     });
   }
 
-  // 3. Volume : clipping + cohérence (volumedetect).
-  const volume = await measureVolume(params.masterFile, params.tmpDir);
+  // 3-5. Task 120 — QC ALLÉGÉE : volume + silence + écrans noirs mesurés en
+  // UNE SEULE passe FFmpeg (mêmes seuils, mêmes parsages — 3× moins d'I/O).
+  const signals = await analyzeMasterSignals(params.masterFile, params.tmpDir);
+  const volume = signals.volume;
+  const silence = signals.silence;
+  const black = signals.black;
   if (volume) {
     if (volume.maxVolumeDb >= CLIPPING_DB) {
       issues.push({
@@ -166,7 +204,6 @@ export async function analyzeRenderedMaster(params: {
   }
 
   // 4. Silence excessif.
-  const silence = await measureSilence(params.masterFile, params.tmpDir);
   if (silence && probe?.durationSec) {
     const ratio = silence.totalSec / probe.durationSec;
     if (ratio > MAX_SILENCE_RATIO) {
@@ -180,7 +217,6 @@ export async function analyzeRenderedMaster(params: {
   }
 
   // 5. Écrans noirs.
-  const black = await measureBlack(params.masterFile, params.tmpDir);
   if (black && probe?.durationSec) {
     const ratio = black.totalSec / probe.durationSec;
     if (ratio > 0.12) {
@@ -234,6 +270,20 @@ export async function analyzeRenderedMaster(params: {
     issues.push(...detectMissingAssetIssues(expectedScenes, params.plan.segments));
   }
 
+  // 10. Task 119 — CONTRAT UTILISATEUR : durée demandée ±10 %, ratio, sous-
+  // titres brûlés, narration présente — sur les métriques RÉELLES du master.
+  if (params.userContract) {
+    issues.push(
+      ...detectUserContractIssues(params.userContract, {
+        durationSec: probe?.durationSec,
+        width: probe?.width,
+        height: probe?.height,
+        hasAudioStream: probe?.hasAudio,
+        subtitlesBurned: Boolean(params.plan.subtitles?.assR2Key),
+      }),
+    );
+  }
+
   const critical = issues.filter((i) => i.severity === "critical");
   return {
     passed: critical.length === 0,
@@ -254,59 +304,176 @@ export async function analyzeRenderedMaster(params: {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Mesures FFmpeg réelles (parsage des journaux d'analyse)
+// Task 119 — CONTRAT UTILISATEUR : la volonté de l'utilisateur est un CONTRAT
 // ────────────────────────────────────────────────────────────────────────────
 
-async function measureVolume(file: string, cwd: string): Promise<{ maxVolumeDb: number; meanVolumeDb: number } | null> {
-  try {
-    const result = await runFfmpeg({
-      args: ["-i", file, "-af", "volumedetect", "-vn", "-f", "null", "-"],
-      cwd,
-      outputDurationSec: 60,
-    });
-    const max = result.stderr.match(/max_volume:\s*(-?[\d.]+) dB/);
-    const mean = result.stderr.match(/mean_volume:\s*(-?[\d.]+) dB/);
-    if (!max) return null;
-    return { maxVolumeDb: Number(max[1]), meanVolumeDb: mean ? Number(mean[1]) : -70 };
-  } catch {
-    return null;
-  }
+/** Attentes explicites de l'utilisateur vérifiées sur le master rendu. */
+export interface UserContractExpectations {
+  /** Durée demandée (s) — vérifiée ± USER_DURATION_TOLERANCE. */
+  targetDurationSec?: number;
+  /** Ratio demandé (ex. "9:16") — comparé au ratio réel largeur/hauteur. */
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:5" | "21:9";
+  /** Sous-titres demandés → brûlés dans le master. */
+  captionsRequired?: boolean;
+  /** Narration demandée → un flux audio voix doit exister. */
+  narrationRequired?: boolean;
 }
 
-async function measureSilence(file: string, cwd: string): Promise<{ totalSec: number } | null> {
-  try {
-    const result = await runFfmpeg({
-      args: ["-i", file, "-af", "silencedetect=noise=-45dB:d=1.5", "-vn", "-f", "null", "-"],
-      cwd,
-      outputDurationSec: 60,
-    });
-    const starts = [...result.stderr.matchAll(/silence_start:\s*(-?[\d.]+)/g)].map((m) => Number(m[1]));
-    const ends = [...result.stderr.matchAll(/silence_end:\s*(-?[\d.]+)/g)].map((m) => Number(m[1]));
-    let total = 0;
-    starts.forEach((start, i) => {
-      const end = ends[i];
-      if (end !== undefined && end > start) total += end - start;
-    });
-    return { totalSec: Math.round(total * 100) / 100 };
-  } catch {
-    return null;
-  }
-}
+const ASPECT_VALUES: Record<NonNullable<UserContractExpectations["aspectRatio"]>, number> = {
+  "16:9": 16 / 9,
+  "9:16": 9 / 16,
+  "1:1": 1,
+  "4:5": 4 / 5,
+  "21:9": 21 / 9,
+};
 
-async function measureBlack(file: string, cwd: string): Promise<{ totalSec: number } | null> {
-  try {
-    const result = await runFfmpeg({
-      args: ["-i", file, "-vf", "blackdetect=d=0.5:pix_th=0.10", "-an", "-f", "null", "-"],
-      cwd,
-      outputDurationSec: 60,
-    });
-    let total = 0;
-    for (const match of result.stderr.matchAll(/black_start:\s*([\d.]+)\s*black_end:\s*([\d.]+)/g)) {
-      total += Number(match[2]) - Number(match[1]);
+/**
+ * Vérifie le CONTRAT UTILISATEUR sur les métriques réelles du master
+ * (PURE, testée) : durée demandée ±10 %, ratio conforme, sous-titres brûlés
+ * si demandés, narration présente si demandée. Chaque écart produit une
+ * issue CRITICAL au message actionnable — la volonté de l'utilisateur n'est
+ * pas négociable (échec QC → rollback/resetToSegments existant).
+ */
+export function detectUserContractIssues(
+  contract: UserContractExpectations,
+  metrics: {
+    durationSec?: number;
+    width?: number;
+    height?: number;
+    hasAudioStream?: boolean;
+    /** True si le rendu a brûlé un fichier ASS dans le master. */
+    subtitlesBurned: boolean;
+  },
+): QcIssue[] {
+  const issues: QcIssue[] = [];
+
+  // 1. Durée demandée (±10 %) — LE contrat principal.
+  if (typeof contract.targetDurationSec === "number" && Number.isFinite(contract.targetDurationSec) && contract.targetDurationSec > 0) {
+    if (typeof metrics.durationSec === "number" && Number.isFinite(metrics.durationSec)) {
+      const drift = Math.abs(metrics.durationSec - contract.targetDurationSec) / contract.targetDurationSec;
+      if (drift > USER_DURATION_TOLERANCE) {
+        const tooShort = metrics.durationSec < contract.targetDurationSec;
+        issues.push({
+          kind: "duration_mismatch",
+          severity: "critical",
+          detail: `Contrat utilisateur : durée demandée ${contract.targetDurationSec.toFixed(1)} s, vidéo rendue ${metrics.durationSec.toFixed(1)} s (${tooShort ? "trop courte" : "trop longue"}, écart ${(drift * 100).toFixed(1)} % > ${USER_DURATION_TOLERANCE * 100} % tolérés). Re-générez le scénario avec des scènes plus ${tooShort ? "longues" : "courtes"} ou relancez avec la durée demandée.`,
+          suggestedFix: { type: "retime_segment" },
+        });
+      }
     }
-    return { totalSec: Math.round(total * 100) / 100 };
+  }
+
+  // 2. Ratio/résolution demandés.
+  if (contract.aspectRatio && metrics.width && metrics.height) {
+    const expected = ASPECT_VALUES[contract.aspectRatio];
+    const actual = metrics.width / metrics.height;
+    if (Math.abs(actual - expected) / expected > ASPECT_RATIO_TOLERANCE) {
+      issues.push({
+        kind: "aspect_ratio_mismatch",
+        severity: "critical",
+        detail: `Contrat utilisateur : format ${contract.aspectRatio} demandé, rendu ${metrics.width}×${metrics.height} (ratio ${actual.toFixed(3)}). Relancez le rendu avec le bon format de projet.`,
+      });
+    }
+  }
+
+  // 3. Sous-titres demandés → brûlés.
+  if (contract.captionsRequired && !metrics.subtitlesBurned) {
+    issues.push({
+      kind: "captions_missing",
+      severity: "critical",
+      detail: "Contrat utilisateur : sous-titres demandés mais aucun sous-titre brûlé dans le master. Activez les sous-titres de la timeline et relancez le rendu (reburn_subtitles).",
+      suggestedFix: { type: "reburn_subtitles" },
+    });
+  }
+
+  // 4. Narration demandée → flux voix présent.
+  if (contract.narrationRequired && metrics.hasAudioStream === false) {
+    issues.push({
+      kind: "narration_missing",
+      severity: "critical",
+      detail: "Contrat utilisateur : narration demandée mais aucun flux audio dans le master. Régénérez la narration (generate-voice) puis relancez le rendu (rebuild_audio).",
+      suggestedFix: { type: "rebuild_audio" },
+    });
+  }
+
+  return issues;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Mesures FFmpeg réelles — UNE SEULE passe (Task 120 : QC allégée)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Parsage volumedetect (pur, testé). */
+export function parseVolumedetectStderr(stderr: string): { maxVolumeDb: number; meanVolumeDb: number } | null {
+  const max = stderr.match(/max_volume:\s*(-?[\d.]+) dB/);
+  const mean = stderr.match(/mean_volume:\s*(-?[\d.]+) dB/);
+  if (!max) return null;
+  return { maxVolumeDb: Number(max[1]), meanVolumeDb: mean ? Number(mean[1]) : -70 };
+}
+
+/** Parsage silencedetect (pur, testé) : durées de silence cumulées. */
+export function parseSilencedetectStderr(stderr: string): { totalSec: number } {
+  const starts = [...stderr.matchAll(/silence_start:\s*(-?[\d.]+)/g)].map((m) => Number(m[1]));
+  const ends = [...stderr.matchAll(/silence_end:\s*(-?[\d.]+)/g)].map((m) => Number(m[1]));
+  let total = 0;
+  starts.forEach((start, i) => {
+    const end = ends[i];
+    if (end !== undefined && end > start) total += end - start;
+  });
+  return { totalSec: Math.round(total * 100) / 100 };
+}
+
+/** Parsage blackdetect (pur, testé) : durée d'écrans noirs cumulée. */
+export function parseBlackdetectStderr(stderr: string): { totalSec: number } {
+  let total = 0;
+  for (const match of stderr.matchAll(/black_start:\s*([\d.]+)\s*black_end:\s*([\d.]+)/g)) {
+    total += Number(match[2]) - Number(match[1]);
+  }
+  return { totalSec: Math.round(total * 100) / 100 };
+}
+
+interface MasterSignals {
+  volume: { maxVolumeDb: number; meanVolumeDb: number } | null;
+  silence: { totalSec: number } | null;
+  black: { totalSec: number } | null;
+}
+
+/**
+ * Task 120 — UNE PASSE UNIQUE : volumedetect + silencedetect (audio) et
+ * blackdetect (vidéo) dans la MÊME commande FFmpeg (au lieu de trois — QC
+ * allégée). Master sans flux audio → repli passe vidéo seule.
+ */
+async function analyzeMasterSignals(file: string, cwd: string): Promise<MasterSignals> {
+  try {
+    const filterComplex =
+      "[0:v]blackdetect=d=0.5:pix_th=0.10[v];[0:a]volumedetect,silencedetect=noise=-45dB:d=1.5[a]";
+    const result = await runFfmpeg({
+      args: [
+        "-i", file,
+        "-filter_complex", filterComplex,
+        "-map", "[v]", "-map", "[a]",
+        "-f", "null", "-",
+      ],
+      cwd,
+      outputDurationSec: 60,
+    });
+    return {
+      volume: parseVolumedetectStderr(result.stderr),
+      silence: parseSilencedetectStderr(result.stderr),
+      black: parseBlackdetectStderr(result.stderr),
+    };
   } catch {
-    return null;
+    // Master sans flux audio (vidéo muette assumée) : passe vidéo uniquement.
+    try {
+      const result = await runFfmpeg({
+        args: ["-i", file, "-vf", "blackdetect=d=0.5:pix_th=0.10", "-an", "-f", "null", "-"],
+        cwd,
+        outputDurationSec: 60,
+      });
+      return { volume: null, silence: null, black: parseBlackdetectStderr(result.stderr) };
+    } catch {
+      return { volume: null, silence: null, black: null };
+    }
   }
 }
 

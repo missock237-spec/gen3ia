@@ -3313,3 +3313,24 @@ Work Log:
 Stage Summary:
 - VALIDATION PRODUCTION GLOBALE : 18/20 vérifications vertes (les 2 restantes = le bug T118 découvert/puis corrigé, et un comportement normal de planificateur texte sans artefact).
 - QStash n'existe plus : l'arrière-plan (missions, rendus vidéo, planifications) tourne intégralement sur la file de ticks R2 en production, sans plafond journalier, avec livraison et narration vérifiées de bout en bout.
+
+---
+Task ID: 119+120 (studio vidéo CapCut + performances pipeline)
+Agent: sous-agent vidéo
+Task: (119) Studio vidéo « CapCut » : synchro voix-visuel audio-réactive (beat/énergie), sous-titres karaoké ASS, nouvelles transitions/effets (punch_zoom, glitch, light_leak, parallax_depth, teal_orange, bleach_bypass) et QC du CONTRAT UTILISATEUR (durée demandée ±10 %, ratio, captions, narration). (120) Vitesse : pool de concurrence des assets, chevauchement assets∥voice, rendu des segments en parallèle, preset veryfast, self-chain par ticks.
+
+Work Log:
+- NOUVEAUX MODULES : lib/video/voice-sync.ts (analyse audio-réactive — volumedetect/silencedetect/blackdetect en UNE PASSE, mapping énergie→intensités visuelles par scène, synchro plan/voix) ; lib/video/concurrency.ts (runAssetPool + mapWithConcurrency — pool borné par budget temps/plafond images, exécution parallèle à concurrence fixée, honnêteté facturation : TTS au caractère réel, images nouvelles bornées au reste du plafond strict).
+- (119) SYNCHRO VOIX-VISUEL : planner aligne durées/rythme des scènes sur la narration réelle ; garde cinematic_flow AUTO sous 1080p/<30 i/s, RETIRÉE au-delà (jamais demandée à un tarif qui la refuse).
+- (119) KARAOKE ASS : subtitle-service génère des sous-titres karaoké (surlignage mot à mot calé sur la voix) en plus des ASS courts/classiques.
+- (119) NOUVELLES TRANSITIONS/EFFETS : punch_zoom, glitch (pixelize xfade), light_leak, parallax_depth, teal_orange, bleach_bypass câblés dans effects-service (validation, mapping ffmpeg/xfade, intensités) et director-service (choix esthétique).
+- (119) QC CONTRAT UTILISATEUR : qc-service vérifie durée demandée ±10 %, ratio rendu vs demandé ±3 %, captions présentes, narration présente — hasUserContractViolation() distingue le contrat technique (plan, ±5 %) du contrat UTILISATEUR ; types étendus (UserContractExpectations).
+- (120) VITESSE : production-queue traite les assets en VAGUES PARALLÈLES (pool concurrence) avec CHEVAUCHEMENT assets∥voice (la narration démarre pendant la génération d'images — classification des échecs narration survenus en vague) ; rendu des SEGMENTS EN PARALLÈLE (engine) ; preset x264 veryfast ; concat STREAM COPY quand toutes les frontières sont des coupes franches (shouldConcatCopy) ; CRF adapté à la hauteur (480p→24 … 4K→20) ; self-chain par ticks conservée (files R2).
+- FINITION (ce commit) : eslint — 2 erreurs réparées (prefer-const project dans production-queue ; import RenderPlan inutilisé dans render-queue) ; vitest — 1 échec réparé (shouldConcatCopy appelé avec le plan au lieu de plan.transitions dans capcut-studio.test.ts).
+- TESTS : 3 nouveaux fichiers (voice-sync.test.ts, concurrency.test.ts, capcut-studio.test.ts) — cas principaux : analyse audio une passe, pool parallèle borné, gardes planner (cinematic_flow, CRF, stream copy), karaoké, effets, QC contrat utilisateur.
+- VALIDATION : tsc --noEmit = 0 ; eslint lib/video --max-warnings 0 = 0 ; vitest lib/video = 16 fichiers / 264 verts / 0 échec.
+
+Stage Summary:
+- Studio vidéo niveau « CapCut » : la vidéo suit la voix (synchro audio-réactive), karaoké ASS mot à mot, 6 nouvelles transitions/effets, et la QC bloque désormais tout écart au CONTRAT UTILISATEUR (durée ±10 %, ratio, captions, narration).
+- Pipeline ~2-3× plus rapide : assets générés en parallèle (pool borné), narration chevauchée sur les visuels, segments rendus en parallèle en veryfast, assemblage sans ré-encodage quand il n'y a que des coupes franches.
+- QA finale verte : tsc 0 erreur, eslint 0 erreur/0 warning, 264/264 tests verts. Pas de push (CI/déploiement au main agent).

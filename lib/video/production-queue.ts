@@ -48,7 +48,8 @@ import { ensureMusicBed } from "@/lib/video/audio-engine";
 // livraison du master dans le chat à la complétion.
 import { createVideoPlaybackUrl, isOwnedVideoKey } from "@/lib/video/storage";
 import { startRenderJob, getJob } from "@/lib/video/render-queue";
-import type { VideoExportTarget, VideoProject } from "@/lib/video/types";
+import type { VideoExportTarget, VideoProject, ScriptScene, VoiceProfile } from "@/lib/video/types";
+import { mapWithConcurrency } from "@/lib/video/concurrency";
 import {
   classifyTickError,
   createJobDoc,
@@ -712,25 +713,158 @@ async function stageScript(job: VideoProductionJob): Promise<ProductionStageResu
   return { action: "advance", detail: `Scénario généré : ${sceneCount} scène(s).` };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Task 120 — chevauchement assets∥voice : helpers de la vague parallèle
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Résultat d'une promesse sans rejet (équivalent mono-promesse d'allSettled). */
+type Settled<T> = { status: "fulfilled"; value: T } | { status: "rejected"; reason: unknown };
+
+/** Exécute une tâche sans jamais la laisser rejeter (résultat discriminé). */
+async function settle<T>(task: () => Promise<T>): Promise<Settled<T>> {
+  try {
+    return { status: "fulfilled", value: await task() };
+  } catch (reason) {
+    return { status: "rejected", reason };
+  }
+}
+
+/** Sortie NARRATION d'une scène de la vague (classification locale). */
+type SceneNarrationOutcome =
+  | { status: "done" }
+  | { status: "disabled" }
+  | { status: "deferred" }
+  | { status: "fatal"; error: unknown };
+
 /**
- * ASSETS : visuels de scènes par lots de ≤ ASSET_BATCH_SIZE par tick
- * (per-scene via Image Bridge + Consistency Engine, réutilise les images
- * existantes), sceneCursor checkpoint après CHAQUE scène — reprise là où
- * le tick s'est arrêté. Facturation existante honorée : billImageGeneration
- * sur les images NOUVELLEMENT générées (les réutilisations ne coûtent rien).
+ * Classe un échec de narration SURVENU PENDANT la vague assets : fatal →
+ * tolérance par scène (« voice:… », retentée à l'étape voice) ; quota /
+ * transitoire → DIFFÉRÉ à l'étape voice (qui applique le régime adapté du
+ * tick) — un incident TTS ne bloque JAMAIS la vague des visuels.
+ */
+function narrationOutcome(reason: unknown): SceneNarrationOutcome {
+  return classifyTickError(reason) === "fatal" ? { status: "fatal", error: reason } : { status: "deferred" };
+}
+
+/** Sortie IMAGE + NARRATION d'une scène de la vague parallèle. */
+interface SceneWaveResult {
+  image: { status: "ok"; generated: boolean } | { status: "ignored" } | { status: "fatal"; error: unknown };
+  narration: SceneNarrationOutcome;
+}
+
+/** Voix résolue + narrations déjà posées (chevauchement assets∥voice). */
+interface VoiceOverlapPlan {
+  voice: VoiceProfile;
+  /** Scènes déjà narrées (idempotence : jamais de double synthèse). */
+  narratedSceneIds: Set<string>;
+}
+
+/**
+ * Prépare le chevauchement : résout la voix (repli plateforme inclus) et les
+ * narrations déjà posées. null → PAS de chevauchement (narration désactivée
+ * ou résolution impossible) : l'étape voice garde son comportement complet.
+ */
+async function prepareVoiceOverlap(job: VideoProductionJob, project: VideoProject): Promise<VoiceOverlapPlan | null> {
+  if (job.options?.voiceEnabled === false) return null;
+  try {
+    const voice = withPlatformVoiceFallback(await resolvePreferredVoice(job.userId, project));
+    const narrations = await listAssets(job.userId, job.projectId, "audio_narration");
+    return { voice, narratedSceneIds: new Set(narrations.filter((a) => a.sceneId).map((a) => a.sceneId!)) };
+  } catch {
+    return null; // voix/store indisponible : narration laissée à l'étape voice
+  }
+}
+
+/**
+ * Tickets de NOUVELLES images disponibles pour la vague (plafond strict du
+ * projet, VIDEO_LIMITS.maxGeneratedImages) : la vérification interne par
+ * scène (assertProjectImageBudget) ne voit pas les générations simultanées
+ * de la vague — les tickets bornent le départ des générations au RESTE du
+ * plafond. Store illisible → Infinity (la garde par scène tranche).
+ */
+async function remainingImageTickets(job: VideoProductionJob): Promise<number> {
+  try {
+    const images = await listAssets(job.userId, job.projectId, "image");
+    const generatedCount = images.filter((a) => a.origin === "generated").length;
+    return Math.max(0, VIDEO_LIMITS.maxGeneratedImages - generatedCount);
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+/**
+ * Tâche de narration d'UNE scène (voie A enregistrement / voie B TTS
+ * facturée au caractère réel) — partagée par l'étape voice et le
+ * chevauchement assets∥voice (Task 120). Retourne les caractères facturés.
+ */
+async function narrationTaskForScene(
+  job: VideoProductionJob,
+  scene: ScriptScene,
+  voice: VoiceProfile,
+  alreadyNarrated: boolean,
+): Promise<number> {
+  if (alreadyNarrated) return 0;
+  if (voice.origin === "recording" && voice.sampleR2Key && isOwnedVideoKey(job.userId, voice.sampleR2Key)) {
+    // Voie A : enregistrement utilisateur (usage direct de l'échantillon).
+    await attachRecordingAsNarration({
+      userId: job.userId,
+      projectId: job.projectId,
+      sceneId: scene.id,
+      sampleR2Key: voice.sampleR2Key,
+    });
+    return 0;
+  }
+  // Voie B : synthèse ElevenLabs facturée au caractère réel.
+  const narration = await generateSceneNarration({
+    userId: job.userId,
+    projectId: job.projectId,
+    sceneId: scene.id,
+    narration: scene.narration,
+    voice,
+  });
+  return narration.charactersUsed;
+}
+
+/**
+ * ASSETS (Task 120 — VAGUE PARALLÈLE + CHEVAUCHEMENT assets∥voice) :
+ * visuels de scènes par lots de ≤ ASSET_BATCH_SIZE par tick, chaque scène
+ * étant traitée par ≤ VIDEO_LIMITS.maxParallelAssetGenerations workers
+ * simultanés (pool maison concurrency.ts — aucune dépendance npm).
  *
- * Task 106-c — TOLÉRANCE PAR SCÈNE : chaque scène est traitée dans son
- * propre try/catch. Un échec FATAL de génération (moteur d'image, HTTP,
- * plafond projet…) est absorbé : compteur sceneFailures incrémenté, warning
- * FR consignée, curseur avancé, le lot CONTINUE. Sous MAX_SCENE_FAILURES la
- * scène est retentée au prochain tick (curseur ramené en fin d'étape) ; à
- * MAX elle est définitivement ignorée — le rendu la saute déjà (pas de
- * segment sans image). Les incidents QUOTA/TRANSITOIRES ne sont PAS des
- * fautes de scène : ils remontent au régime de reprise du tick (backoff,
- * budget intact).
+ * CHEVAUCHEMENT : la narration d'une scène ne dépend QUE du scénario (pas
+ * des images) — elle est générée DANS LA MÊME VAGUE que l'image de sa scène
+ * (image et TTS en parallèle par scène). L'étape « voice » suivante devient
+ * une finalisation idempotente : les scènes déjà narrées sont traversées
+ * sans re-synthèse ni re-facturation (listAssets), la piste voix + le lit
+ * musical y sont posés comme avant.
+ *
+ * CONTRATS PRÉSERVÉS (tests render-queue-resume / production-queue-resume) :
+ * - sceneCursor checkpoint UNIQUE consolidé après la vague (limite
+ *   Firestore ~1 écriture/s/doc) — la reprise reprend au curseur ;
+ * - tolérance PAR SCÈNE (clés « assets:… » / « voice:… » distinctes) : les
+ *   échecs FATALS d'image sont isolés par scène (compteur, warning, curseur
+ *   avancé, lot continu) ; les échecs QUOTA/TRANSITOIRES d'image
+ *   interrompent la vague SANS checkpoint (régime de reprise du tick,
+ *   budget intact) — re-traitement idempotent du lot au retour ;
+ * - détection SYSTÉMIQUE image : aucune réussite dans le lot + au moins un
+ *   échec fatal → la première erreur fatale remonte (panne moteur) ;
+ * - échecs de NARRATION : JAMAIS bloquants pour la vague (fatal → compteur
+ *   « voice:… » retenté à l'étape voice ; transitoire → différé à l'étape
+ *   voice qui le classera correctement) ;
+ * - budget images : porte de tickets locale — la vérification par scène
+ *   (assertProjectImageBudget) ne voit pas les générations simultanées de
+ *   la vague, les tickets bornent les NOUVELLES images au reste du plafond
+ *   strict sans jamais le dépasser ;
+ * - facturation : images NOUVELLES générées ce tick (billImageGeneration
+ *   une fois par vague), TTS au caractère réel PAR narration (billTts).
+ *
+ * HONNÊTETÉ : la bible visuelle (Consistency Engine) évolue au fil des
+ * références établies — en vague, les scènes simultanées partent du même
+ * instantané (les scènes démarrées APRÈS une génération bénéficient de la
+ * bible rafraîchie, comme le lot client séquentiel).
  */
 async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Promise<ProductionStageResult> {
-  let project = await getOwnedProjectOrThrow(job.userId, job.projectId);
+  const project = await getOwnedProjectOrThrow(job.userId, job.projectId);
   if (!project.script) throw new Error("Scénario absent à l'étape des visuels.");
   const scenes = project.script.scenes;
   if (scenes.length === 0) throw new Error("Scénario vide : aucune scène à illustrer.");
@@ -738,73 +872,159 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
   const deadlineMs = typeof timeBudgetMs === "number" && timeBudgetMs > 0 ? Date.now() + timeBudgetMs : null;
   const window = nextAssetWindow(scenes, job.sceneCursor, ASSET_BATCH_SIZE);
   let generated = 0;
+  let narrated = 0;
   // Task 106-c — état de tolérance (persisté sur le job à chaque checkpoint).
   let sceneFailures = job.sceneFailures ?? {};
   let warnings = job.warnings ?? [];
-  // Task 106-c — détection SYSTÉMIQUE : aucune scène du lot n'aboutit →
-  // incident global (moteur de visuels indisponible…) → l'ancien régime de
-  // reprise du tick prévaut (re-file sous budget, échec définitif au budget)
-  // au lieu de la tolérance par scène qui ne doit pas masquer une panne.
-  let succeededInBatch = 0;
-  let fatalInBatch = 0;
-  let firstFatalError: unknown = null;
-  // Task 106-fix — UN SEUL checkpoint par tick : Firestore plafonne à ~1
-  // écriture/seconde/DOCUMENT (claim + release + progression sur le même doc)
-  // — un checkpoint PAR SCÈNE dépassait ce plafond (RESOURCE_EXHAUSTED classé
-  // quota → incohérence de régime → re-traitement infini des scènes).
   const cursorAtTickStart = job.sceneCursor;
   const failuresAtTickStart = JSON.stringify(sceneFailures);
 
-  for (const scene of window.batch) {
-    if (deadlineMs !== null && Date.now() >= deadlineMs) break;
-    const sceneIndex = scenes.findIndex((s) => s.id === scene.id);
-    const failureKey = sceneFailureKey("assets", scene.id);
-    if (shouldSkipScene(sceneFailures, failureKey)) {
-      // Déjà définitivement ignorée : sautée sans re-tenter (curseur avance).
-      job.sceneCursor = sceneIndex + 1;
-      continue;
-    }
-    try {
-      const result = await generateSceneImage({ userId: job.userId, project, scene });
-      if (result.generated) {
-        generated += 1;
-        // La bible évolue à chaque référence établie : la scène suivante
-        // bénéficie des références fraîches (même comportement que le lot client).
-        project = await getOwnedProjectOrThrow(job.userId, job.projectId);
+  // Task 120 — préparation du CHEVAUCHEMENT voice : voix + narrations déjà
+  // posées (idempotence). Indisponible (voix irrésolvable, store illisible,
+  // narration désactivée) → pas de chevauchement, l'étape voice suivante
+  // garde son comportement historique complet.
+  const voicePlan = await prepareVoiceOverlap(job, project);
+
+  // Task 120 — porte de budget locale (plafond strict d'images) : tickets de
+  // NOUVELLES générations disponibles pour cette vague.
+  let newImageTickets = await remainingImageTickets(job);
+
+  // VAGUE PARALLÈLE : chaque worker traite UNE scène — son IMAGE et sa
+  // NARRATION démarrent ENSEMBLE (chevauchement assets∥voice) et leurs
+  // échecs sont classés séparément : image quota/transitoire → rejet du
+  // worker (propagation au régime du tick après la vague) ; image fatale →
+  // tolérance par scène ; narration → jamais bloquante pour la vague.
+  // NOTE bible visuelle : les scènes de la vague partent du même instantané
+  // (≤ maxParallelAssetGenerations ≤ ASSET_BATCH_SIZE démarrent ensemble) ;
+  // la bible rafraîchie profite au PROCHAIN lot (relecture à l'entrée du tick
+  // suivant — même moteur de cohérence, aucun contournement).
+  const outcomes = await mapWithConcurrency(
+    window.batch,
+    Math.max(1, VIDEO_LIMITS.maxParallelAssetGenerations),
+    async (scene): Promise<SceneWaveResult> => {
+      const imageTask = settle(async () => {
+        if (shouldSkipScene(sceneFailures, sceneFailureKey("assets", scene.id))) {
+          return { status: "ignored" as const };
+        }
+        if (newImageTickets > 0) {
+          newImageTickets -= 1; // ticket consommé AVANT la génération (course)
+        }
+        // Sinon : plus de ticket → assertProjectImageBudget tranche lui-même
+        // (VideoQuotaError fatal → tolérance par scène existante).
+        const result = await generateSceneImage({ userId: job.userId, project, scene });
+        if (result.generated) {
+          generated += 1;
+        } else {
+          newImageTickets += 1; // réutilisation : ticket rendu au reste du plafond
+        }
+        return { status: "ok" as const, generated: result.generated };
+      });
+      const narrationTask = voicePlan
+        ? settle(async () => {
+            const charactersUsed = await narrationTaskForScene(job, scene, voicePlan.voice, voicePlan.narratedSceneIds.has(scene.id));
+            if (charactersUsed > 0) {
+              // Facturation au caractère réel, PAR narration (comme la boucle
+              // historique de l'étape voice — référence unique par appel).
+              await billTts(job.userId, job.projectId, charactersUsed);
+            }
+            return { status: "done" as const };
+          })
+        : Promise.resolve({ status: "fulfilled" as const, value: { status: "disabled" as const } });
+      const imageSettled = await imageTask;
+      const narrationSettled = await narrationTask;
+      if (imageSettled.status === "rejected") {
+        // Image quota/transitoire → PROPAGATION (rejet du worker, isolé par
+        // le pool — la première dans l'ORDRE remonte après la vague).
+        if (classifyTickError(imageSettled.reason) !== "fatal") throw imageSettled.reason;
+        return {
+          image: { status: "fatal", error: imageSettled.reason },
+          narration: narrationSettled.status === "rejected" ? narrationOutcome(narrationSettled.reason) : narrationSettled.value,
+        };
       }
-      succeededInBatch += 1;
-    } catch (error) {
-      // Task 106-c — quota/transitoire = incident d'infrastructure : PAS une
-      // faute de scène, on remonte au régime de reprise du tick.
-      if (classifyTickError(error) !== "fatal") throw error;
-      sceneFailures = recordSceneFailure(sceneFailures, failureKey);
-      const permanentlyIgnored = shouldSkipScene(sceneFailures, failureKey);
+      return { image: imageSettled.value, narration: narrationSettled.status === "rejected" ? narrationOutcome(narrationSettled.reason) : narrationSettled.value };
+    },
+    {
+      // Budget temps du tick honoré AVANT chaque démarrage de scène (le
+      // checkpoint maître reprend les non-démarrées au prochain tick).
+      shouldStart: () => deadlineMs === null || Date.now() < deadlineMs,
+    },
+  );
+
+  // Application DÉTERMINISTE (ordre des scènes) des résultats de la vague.
+  let imageFatalInBatch = 0;
+  let imageSucceededInBatch = 0;
+  let firstImageFatal: unknown = null;
+  let firstTickError: unknown;
+  let haveTickError = false;
+  let cursor = cursorAtTickStart;
+  for (let i = 0; i < window.batch.length; i += 1) {
+    const outcome = outcomes[i];
+    const scene = window.batch[i];
+    const sceneIndex = cursorAtTickStart + i;
+    if (outcome.status === "skipped") break; // non démarrée (budget temps)
+    if (outcome.status === "rejected") {
+      // Erreur transitoire/quota image : le régime de reprise du tick prend
+      // le relais (comme l'interruption de la boucle historique) — les
+      // scènes suivantes (même réussies) seront re-traitées idempotemment.
+      if (!haveTickError) {
+        firstTickError = outcome.reason;
+        haveTickError = true;
+      }
+      break;
+    }
+    const result = outcome.value;
+    if (result.image.status === "fatal") {
+      sceneFailures = recordSceneFailure(sceneFailures, sceneFailureKey("assets", scene.id));
+      const permanentlyIgnored = shouldSkipScene(sceneFailures, sceneFailureKey("assets", scene.id));
       warnings = appendJobWarning(
         warnings,
         sceneWarningMessage({
           label: "image",
           sceneNumber: sceneIndex + 1,
-          failures: sceneFailures[failureKey],
+          failures: sceneFailures[sceneFailureKey("assets", scene.id)],
           permanentlyIgnored,
-          cause: error instanceof Error ? error.message : String(error),
+          cause: result.image.error instanceof Error ? result.image.error.message : String(result.image.error),
         }),
       );
-      fatalInBatch += 1;
-      if (firstFatalError === null) firstFatalError = error;
-      // Curseur avancé SANS checkpoint immédiat : en cas d'échec systémique
-      // (tout le lot), la ré-file legacy doit reprendre au DÉBUT du lot.
-      job.sceneCursor = sceneIndex + 1;
-      continue;
+      imageFatalInBatch += 1;
+      if (firstImageFatal === null) firstImageFatal = result.image.error;
+    } else if (result.image.status === "ok") {
+      imageSucceededInBatch += 1;
     }
-    job.sceneCursor = sceneIndex + 1;
+    if (result.narration.status === "fatal") {
+      // Tolérance PAR SCÈNE voix (clé « voice:… ») — retentée à l'étape voice.
+      sceneFailures = recordSceneFailure(sceneFailures, sceneFailureKey("voice", scene.id));
+      const permanentlyIgnored = shouldSkipScene(sceneFailures, sceneFailureKey("voice", scene.id));
+      warnings = appendJobWarning(
+        warnings,
+        sceneWarningMessage({
+          label: "narration",
+          sceneNumber: sceneIndex + 1,
+          failures: sceneFailures[sceneFailureKey("voice", scene.id)],
+          permanentlyIgnored,
+          cause: result.narration.error instanceof Error ? result.narration.error.message : String(result.narration.error),
+        }),
+      );
+    } else if (result.narration.status === "done") {
+      narrated += 1;
+    }
+    cursor = sceneIndex + 1;
+  }
+  job.sceneCursor = cursor;
+
+  // Erreur transitoire/quota image → régime de reprise du tick (le
+  // checkpoint N'EST PAS écrit : re-traitement idempotent du lot au retour,
+  // comportement historique de l'interruption immédiate).
+  if (haveTickError) {
+    throw firstTickError instanceof Error ? firstTickError : new Error(String(firstTickError));
   }
 
-  // Task 106-c — SYSTÉMIQUE : aucune réussite dans le lot + au moins un
-  // échec fatal → on RENVOIE la première erreur fatale : le régime de
-  // reprise du tick (failProductionJob) la traite exactement comme avant
-  // (re-file 20 s sous budget / échec définitif + notification au budget).
-  if (fatalInBatch > 0 && succeededInBatch === 0) {
-    throw firstFatalError instanceof Error ? firstFatalError : new Error(String(firstFatalError));
+  // Task 106-c — SYSTÉMIQUE image : aucune réussite dans le lot + au moins un
+  // échec fatal → on RENVOIE la première erreur fatale (moteur de visuels
+  // indisponible) : le régime de reprise du tick la traite exactement comme
+  // avant (re-file 20 s sous budget / échec définitif + notification).
+  if (imageFatalInBatch > 0 && imageSucceededInBatch === 0) {
+    throw firstImageFatal instanceof Error ? firstImageFatal : new Error(String(firstImageFatal));
   }
 
   // Task 106-fix — checkpoint CONSOLIDÉ (un par tick) : curseur, progression,
@@ -860,10 +1080,10 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
     }
     return {
       action: "advance",
-      detail: `${scenes.length} visuel(s) prêt(s) (${generated} généré(s)${ignored > 0 ? `, ${ignored} scène(s) ignorée(s)` : ""}).`,
+      detail: `${scenes.length} visuel(s) prêt(s) (${generated} généré(s)${ignored > 0 ? `, ${ignored} scène(s) ignorée(s)` : ""})${narrated > 0 ? ` ; ${narrated} narration(s) générée(s) en parallèle (chevauchement voix-visuels)` : ""}.`,
     };
   }
-  return { action: "stay", detail: `${job.sceneCursor}/${scenes.length} visuels traités.` };
+  return { action: "stay", detail: `${job.sceneCursor}/${scenes.length} visuels traités${narrated > 0 ? ` (+${narrated} narration(s) en parallèle)` : ""}.` };
 }
 
 /**
@@ -877,6 +1097,12 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
  * Task 106-c — TOLÉRANCE PAR SCÈNE : même mécanique que l'étape assets.
  * Task 106-c — IDEMPOTENCE : une scène qui possède DÉJÀ une narration n'est
  * JAMAIS re-synthétisée (les retentes/reprises ne re-facturent pas le TTS).
+ *
+ * Task 120 — FENÊTRE SUR LE TRAVAIL RÉEL : avec le chevauchement
+ * assets∥voice, la plupart des scènes arrivent DÉJÀ narrées à cette étape —
+ * elles sont TRAVERSÉES sans consommer le lot (aucun tick perdu en no-op),
+ * le lot ne compte que les scènes À narrer réellement. La finalisation
+ * (piste voix synchronisée + lit musical) reste le passage obligé ici.
  */
 async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promise<ProductionStageResult> {
   const project = await getOwnedProjectOrThrow(job.userId, job.projectId);
@@ -898,7 +1124,6 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
   const narratedSceneIds = new Set(existingNarrations.filter((a) => a.sceneId).map((a) => a.sceneId!));
 
   const deadlineMs = typeof timeBudgetMs === "number" && timeBudgetMs > 0 ? Date.now() + timeBudgetMs : null;
-  const window = nextAssetWindow(scenes, job.sceneCursor, ASSET_BATCH_SIZE);
   // Task 106-c — état de tolérance (persisté sur le job à chaque checkpoint).
   let sceneFailures = job.sceneFailures ?? {};
   let warnings = job.warnings ?? [];
@@ -910,42 +1135,36 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
   const cursorAtTickStart = job.sceneCursor;
   const failuresAtTickStart = JSON.stringify(sceneFailures);
 
-  for (const scene of window.batch) {
-    if (deadlineMs !== null && Date.now() >= deadlineMs) break;
-    const sceneIndex = scenes.findIndex((s) => s.id === scene.id);
-    const failureKey = sceneFailureKey("voice", scene.id);
-    if (shouldSkipScene(sceneFailures, failureKey)) {
-      // Définitivement ignorée (vidéo muette sur cette scène) : on saute.
-      job.sceneCursor = sceneIndex + 1;
-      continue;
+  // Task 120 — FENÊTRE : traverse les scènes déjà narrées/ignorées SANS les
+  // compter dans le lot ; le lot (≤ ASSET_BATCH_SIZE) ne contient que les
+  // scènes À NARRER (reprise du chevauchement assets∥voice ou reprise après
+  // incident — narratedSceneIds est le point de vérité idempotent).
+  const work: Array<{ scene: ScriptScene; sceneIndex: number }> = [];
+  let scan = Math.max(0, Math.min(job.sceneCursor, scenes.length));
+  while (scan < scenes.length && work.length < ASSET_BATCH_SIZE) {
+    const scene = scenes[scan];
+    const alreadyDone =
+      narratedSceneIds.has(scene.id) || shouldSkipScene(sceneFailures, sceneFailureKey("voice", scene.id));
+    if (!alreadyDone) work.push({ scene, sceneIndex: scan });
+    scan += 1;
+  }
+  // Les scènes traversées déjà prêtes comptent comme du PROGRÈS du lot pour
+  // la détection systémique (un no-op y comptait comme réussite avant).
+  succeededInBatch += Math.max(0, scan - cursorAtTickStart - work.length);
+
+  let processedAllWork = true;
+  for (const { scene, sceneIndex } of work) {
+    if (deadlineMs !== null && Date.now() >= deadlineMs) {
+      processedAllWork = false;
+      break;
     }
+    const failureKey = sceneFailureKey("voice", scene.id);
     try {
-      if (narratedSceneIds.has(scene.id)) {
-        // Déjà prête : no-op (idempotence — le checkpoint du curseur suffit).
-        succeededInBatch += 1;
-      } else if (voice.origin === "recording" && voice.sampleR2Key && isOwnedVideoKey(job.userId, voice.sampleR2Key)) {
-        // Voie A : enregistrement utilisateur (usage direct de l'échantillon).
-        await attachRecordingAsNarration({
-          userId: job.userId,
-          projectId: job.projectId,
-          sceneId: scene.id,
-          sampleR2Key: voice.sampleR2Key,
-        });
-        succeededInBatch += 1;
-      } else {
-        // Voie B : synthèse ElevenLabs facturée au caractère réel.
-        const narration = await generateSceneNarration({
-          userId: job.userId,
-          projectId: job.projectId,
-          sceneId: scene.id,
-          narration: scene.narration,
-          voice,
-        });
-        if (narration.charactersUsed > 0) {
-          await billTts(job.userId, job.projectId, narration.charactersUsed);
-        }
-        succeededInBatch += 1;
+      const charactersUsed = await narrationTaskForScene(job, scene, voice, narratedSceneIds.has(scene.id));
+      if (charactersUsed > 0) {
+        await billTts(job.userId, job.projectId, charactersUsed);
       }
+      succeededInBatch += 1;
     } catch (error) {
       // Task 106-c — quota/transitoire = incident d'infrastructure : PAS une
       // faute de scène, on remonte au régime de reprise du tick.
@@ -964,11 +1183,14 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
       );
       fatalInBatch += 1;
       if (firstFatalError === null) firstFatalError = error;
-      // Curseur avancé SANS checkpoint immédiat (détection systémique ensuite).
-      job.sceneCursor = sceneIndex + 1;
-      continue;
     }
     job.sceneCursor = sceneIndex + 1;
+  }
+  // Curseur : tout le travail examiné est franchi (narrées traversées ou
+  // scènes traitées) — l'échéance interrompue laisse le curseur à la
+  // dernière scène traitée (reprise au prochain tick).
+  if (processedAllWork) {
+    job.sceneCursor = Math.max(job.sceneCursor, scan);
   }
 
   // Task 106-c — SYSTÉMIQUE : aucune narration du lot n'aboutit → régime de
@@ -1086,7 +1308,21 @@ async function stageRender(job: VideoProductionJob): Promise<ProductionStageResu
   const derivedTargets = job.options?.derivedTargets
     ? RenderRequestSchema.parse({ derivedTargets: job.options.derivedTargets }).derivedTargets
     : [];
-  const render = await startRenderJob({ userId: job.userId, projectId: job.projectId, derivedTargets });
+  // Task 119 — CONTRAT UTILISATEUR porté par le job de rendu : la volonté
+  // explicite de l'utilisateur (durée demandée, narration, sous-titres) est
+  // vérifiée par la QC sur le master réellement livré (±10 %, flux voix,
+  // sous-titres brûlés). Un rendu lancé hors production autopilote ne porte
+  // AUCUN contrat (startRenderJob appelé sans ce champ).
+  const render = await startRenderJob({
+    userId: job.userId,
+    projectId: job.projectId,
+    derivedTargets,
+    contract: {
+      targetDurationSec: project.targetDurationSec,
+      narrationRequired: job.options?.voiceEnabled !== false,
+      captionsRequired: job.options?.subtitlesEnabled !== false && Boolean(project.timeline?.captions?.enabled),
+    },
+  });
   // Rattaché AVANT le passage à l'étape done (visible même si le tick meurt ici).
   // Task 95-d — écriture via la couche résiliente (Firestore unique moteur, Task 108).
   await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, { renderJobId: render.jobId, updatedAt: nowIso() }, job.userId);

@@ -23,15 +23,32 @@ import {
   type VideoProject,
   type VideoTimeline,
   type VideoAsset,
+  type VideoResolution,
   type SfxName,
   type MotionSpec,
   type MotionKeyframe,
   dimensionsFor,
 } from "@/lib/video/types";
+import { RESOLUTION_RANK } from "@/lib/video/security";
 import { buildAudioMixPlan } from "@/lib/video/audio-engine";
 import { buildSubtitleTrack, toAssFile } from "@/lib/video/subtitle-service";
 import { buildMotion } from "@/lib/video/motion-service";
-import { buildEffectFilterChain, xfadeTransitionName } from "@/lib/video/effects-service";
+import {
+  buildEffectFilterChain,
+  xfadeTransitionName,
+  VOICE_PULSE_AMPLITUDE,
+  PUNCH_ZOOM_AMPLITUDE,
+  type EffectFragmentContext,
+} from "@/lib/video/effects-service";
+import {
+  alignSceneBoundariesToSilences,
+  buildPunchZoomExpr,
+  buildSinusoidalExpr,
+  buildVoicePulseZoomExpr,
+  buildVoiceSyncPlan,
+  sceneHasSpeaker,
+  type VoiceTimeline,
+} from "@/lib/video/voice-sync";
 import {
   buildTransformFilters,
   extractSegmentTransform,
@@ -61,36 +78,71 @@ export interface BuildPlanInput {
   derivedTargets: RenderPlan["derivedTargets"];
   /** Clé R2 du fichier ASS de sous-titres (si activés). */
   assR2Key?: string;
+  /**
+   * Task 119 — timelines d'amplitude des narrations (voice-sync) : active
+   * les effets audio-réactifs (voice_pulse/punch_zoom sur les scènes avec
+   * PERSONNE) et l'alignement des coupes sur les silences de parole.
+   * Absent → comportement historique strictement inchangé.
+   */
+  voiceSyncByScene?: ReadonlyMap<string, VoiceTimeline>;
 }
 
 export function buildRenderPlan(input: BuildPlanInput): RenderPlan {
   const { project, timeline } = input;
-  const scenes = project.script?.scenes ?? [];
+  const scriptScenes = project.script?.scenes ?? [];
+
+  // Task 119 — COUPES ALIGNÉES SUR L'ÉNERGIE VOCALE : les frontières entre
+  // scènes glissent dans une marge bornée pour tomber sur les silences /
+  // fins de phrase (durée TOTALE inchangée — redistribution entre voisines).
+  // Les scènes ajustées servent AUX SEGMENTS, AU MIXAGE AUDIO et AUX
+  // SOUS-TITRES (une seule source de vérité temporelle).
+  const aligned = input.voiceSyncByScene && input.voiceSyncByScene.size > 0
+    ? new Map(alignSceneBoundariesToSilences(scriptScenes, input.voiceSyncByScene).map((a) => [a.id, a]))
+    : new Map(scriptScenes.map((s) => [s.id, { id: s.id, durationSec: s.durationSec, startSec: s.startSec }]));
+  const sceneDuration = (sceneId: string, fallback: number): number => aligned.get(sceneId)?.durationSec ?? fallback;
+
   // Task 106-b — segments extensibles : le transform du clip image de la
   // timeline (x/y/scale/opacity) accompagne le segment quand il est non
   // neutre (aucun champ ajouté sinon — sérialisation inchangée).
   const segments: TransformableRenderSegment[] = [];
   const transitions: RenderPlan["transitions"] = [];
 
-  scenes.forEach((scene) => {
+  scriptScenes.forEach((scene) => {
     const image = input.imageByScene.get(scene.id);
     if (!image) return; // scène sans asset visuel : pas de segment (QC le signalera)
     const narration = input.narrationByScene.get(scene.id);
     const transform: SegmentTransform | undefined = extractSegmentTransform(timeline, scene.id);
+    // Task 119 — plan de synchro voix (courbe d'amplitude + pics) embarqué
+    // quand la narration a pu être analysée.
+    const voiceTimeline = input.voiceSyncByScene?.get(scene.id);
+    const voiceSync = voiceTimeline
+      ? buildVoiceSyncPlan(voiceTimeline, sceneDuration(scene.id, scene.durationSec))
+      : undefined;
+    // Task 119 — POUls DE PRÉSENCE auto : une scène avec PERSONNE + narration
+    // reçoit voice_pulse (subtil) — synchronisation animation-voix (présence,
+    // PAS un lip-sync morphologique, cf. voice-sync.ts).
+    let effects = sceneEffects(project, scene.id);
+    if (voiceSync && sceneHasSpeaker(scene) && !effects.some((e) => e.name === "voice_pulse")) {
+      effects = [...effects, { name: "voice_pulse", intensity: "subtle" }];
+    }
+    // Task 119 — cinematic_flow protégé par la résolution (minterpolate est
+    // coûteuse : auto seulement ≤ 1080p et cadence < 30, retiré au-delà).
+    effects = applyCinematicFlowGuard(effects, project.resolution, project.fps);
     segments.push({
       index: segments.length,
       sceneId: scene.id,
-      durationSec: scene.durationSec,
+      durationSec: sceneDuration(scene.id, scene.durationSec),
       imageR2Keys: [image.r2Key],
       narrationR2Key: narration?.r2Key,
-      motion: resolveMotion(project, scene.id, scene.cameraMotion, scene.durationSec),
-      effects: sceneEffects(project, scene.id),
+      motion: resolveMotion(project, scene.id, scene.cameraMotion, sceneDuration(scene.id, scene.durationSec)),
+      effects,
       textOverlays: scene.onScreenText
         ? [{ text: scene.onScreenText, style: timeline.captions.style, position: timeline.aspectRatio === "9:16" ? "center" : "bottom" }]
         : [],
       transitionIn: scene.transitionIn,
       transitionOut: scene.transitionOut,
       ...(transform ? { transform } : {}),
+      ...(voiceSync ? { voiceSync } : {}),
     });
     if (segments.length > 1) {
       transitions.push({
@@ -101,8 +153,18 @@ export function buildRenderPlan(input: BuildPlanInput): RenderPlan {
     }
   });
 
+  // Task 119 — le mixage audio suit les MÊMES frontières ajustées (durées et
+  // positions de narration recalculées depuis les scènes alignées).
+  const planProject: VideoProject = scriptScenes.length > 0 && aligned.size > 0
+    ? {
+        ...project,
+        script: project.script
+          ? { ...project.script, scenes: project.script.scenes.map((s) => ({ ...s, durationSec: sceneDuration(s.id, s.durationSec), startSec: aligned.get(s.id)?.startSec ?? s.startSec })) }
+          : undefined,
+      }
+    : project;
   const audioMix = buildAudioMixPlan({
-    project,
+    project: planProject,
     timeline,
     narrationByScene: input.narrationByScene,
     sfxAssetByName: input.sfxAssetByName,
@@ -149,6 +211,45 @@ function sceneEffects(project: VideoProject, sceneId: string): RenderSegment["ef
     .find((t) => t.kind === "image" || t.kind === "video")
     ?.clips.find((c) => c.id === `clip_img_${sceneId}`);
   return clip?.effects ?? [];
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Task 119/120 — encodage : CRF adapté à la résolution + garde cinematic_flow
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Task 120 — CRF adapté à la hauteur : les basses résolutions tolèrent une
+ * compression plus agressive (moins de pixels à décrire), le 1440p/4K la
+ * resserre. PUR et testé.
+ */
+export function crfForHeight(height: number): number {
+  if (!Number.isFinite(height) || height <= 0) return 21;
+  if (height <= 480) return 24;
+  if (height <= 720) return 23;
+  if (height <= 1080) return 21;
+  return 20;
+}
+
+/**
+ * Task 119 — garde cinematic_flow (minterpolate, coûteuse) : ajoutée
+ * automatiquement quand la cadence est < 30 i/s ET la résolution ≤ 1080p ;
+ * RETIRÉE au-delà de 1080p même si demandée (le rendu ne doit pas exploser
+ * l'échéance serverless). PUR et testé.
+ */
+export function applyCinematicFlowGuard(
+  effects: RenderSegment["effects"],
+  resolution: VideoResolution,
+  fps: number,
+): RenderSegment["effects"] {
+  const affordable = (RESOLUTION_RANK[resolution] ?? 0) <= (RESOLUTION_RANK["1080p"] ?? 0);
+  const requested = effects.some((e) => e.name === "cinematic_flow");
+  if (affordable && fps < 30 && !requested) {
+    return [...effects, { name: "cinematic_flow", intensity: "normal" }];
+  }
+  if (!affordable && requested) {
+    return effects.filter((e) => e.name !== "cinematic_flow");
+  }
+  return effects;
 }
 
 function defaultTransition(name: RenderSegment["transitionIn"]): number {
@@ -339,7 +440,13 @@ export interface SegmentFilterContext {
  * expression linéaire par frame), rotation réelle (filtre rotate quand les
  * keyframes en portent), transform du clip image (x/y/scale/opacity de la
  * timeline, niveau canvas) + chaîne d'effets + format final.
- * Retourne la liste d'arguments FFmpeg complets du segment.
+ *
+ * Task 119 — SYNCHRO VOIX-VISUEL : quand le segment porte un plan de
+ * synchro (`voiceSync`) et l'effet voice_pulse, l'expression de zoom du
+ * zoompan est MODULÉE par la courbe d'amplitude vocale (pouls de présence,
+ * accélération de la caméra sur les pics). punch_zoom reçoit les
+ * gaussiennes des pics via le contexte d'effets. Retourne la liste
+ * d'arguments FFmpeg complets du segment.
  */
 export function buildSegmentFfmpegArgs(params: {
   segment: TransformableRenderSegment;
@@ -363,6 +470,48 @@ export function buildSegmentFfmpegArgs(params: {
   const zoompanExpr = buildZoompanExpression(segment.motion.keyframes, totalFrames, dims);
   const rotateExpr = buildRotateExpression(segment.motion.keyframes, totalFrames);
 
+  // Task 119 — pouls caméra audio-réactif : le zoom de base reçoit un
+  // terme ADDITIF borné piloté par l'énergie de la narration (recette
+  // déterministe — expressions sinusoïdales par segments, cf. voice-sync).
+  let zExpr = zoompanExpr.z;
+  let voicePulseZoomExpr: string | undefined;
+  const voicePulse = segment.effects.find((e) => e.name === "voice_pulse");
+  if (segment.voiceSync && voicePulse) {
+    const pulse = buildVoicePulseZoomExpr(segment.voiceSync, {
+      fps: ctx.fps,
+      durationSec: segment.durationSec,
+      amplitude: VOICE_PULSE_AMPLITUDE[voicePulse.intensity],
+    });
+    if (pulse) {
+      zExpr = `(${zoompanExpr.z})+(${pulse})`;
+      voicePulseZoomExpr = pulse;
+    }
+  }
+  const punchZoom = segment.effects.find((e) => e.name === "punch_zoom");
+  const voicePunchExpr = punchZoom && segment.voiceSync
+    ? buildPunchZoomExpr(segment.voiceSync.peakTimesSec, {
+        fps: ctx.fps,
+        amplitude: PUNCH_ZOOM_AMPLITUDE[punchZoom.intensity],
+      })
+    : undefined;
+  // Courbe d'amplitude en `t` (oscillations de chaîne — crop sway).
+  const voiceAmplitudeExpr = segment.voiceSync && segment.voiceSync.amplitude.length >= 2
+    ? buildSinusoidalExpr(
+        segment.voiceSync.amplitude.map((p) => ({ pos: p.tSec, value: p.value })),
+        "t",
+        3,
+      )
+    : undefined;
+  const effectCtx: EffectFragmentContext = {
+    width: dims.width,
+    height: dims.height,
+    fps: ctx.fps,
+    durationSec: segment.durationSec,
+    ...(voiceAmplitudeExpr ? { voiceAmplitudeExpr } : {}),
+    ...(voicePulseZoomExpr ? { voicePulseZoomExpr } : {}),
+    ...(voicePunchExpr ? { voicePunchExpr } : {}),
+  };
+
   const chain: string[] = [];
   if (rotateExpr) {
     // Rotation (Task 106-b) : pré-agrandissement couvrant l'angle maximal
@@ -380,14 +529,14 @@ export function buildSegmentFfmpegArgs(params: {
 
   // zoompan : z ∈ [1..10] ; x/y en pixels de l'IMAGE source (iw/ih = taille
   // après scale) ; on = numéro de frame de sortie.
-  chain.push(`zoompan=z='${zoompanExpr.z}':x='${zoompanExpr.x}':y='${zoompanExpr.y}':d=${totalFrames}:s=${dims.width}x${dims.height}:fps=${ctx.fps}`);
+  chain.push(`zoompan=z='${zExpr}':x='${zoompanExpr.x}':y='${zoompanExpr.y}':d=${totalFrames}:s=${dims.width}x${dims.height}:fps=${ctx.fps}`);
 
   // Task 106-b — transform du clip image (x/y/scale/opacity de la timeline),
   // appliqué au niveau canvas APRÈS la caméra et AVANT effets/textes.
   // Absent ou neutre → aucun filtre ajouté (comportement historique).
   chain.push(...buildTransformFilters(segment.transform, dims));
 
-  const effectChain = buildEffectFilterChain(segment.effects);
+  const effectChain = buildEffectFilterChain(segment.effects, effectCtx);
   if (effectChain) chain.push(effectChain);
 
   // Textes à l'écran (drawtext, fenêtre = début du segment).
@@ -409,7 +558,9 @@ export function buildSegmentFfmpegArgs(params: {
     "-vf", chain.join(","),
     "-t", segment.durationSec.toFixed(3),
     "-r", String(ctx.fps),
-    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+    // Task 120 — encodage : preset veryfast + CRF adapté à la résolution +
+    // threads auto (les segments sont des intermédiaires : pas de faststart).
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crfForHeight(dims.height)), "-pix_fmt", "yuv420p", "-threads", "0",
     "-an",
     params.outFile,
   ];
@@ -434,6 +585,20 @@ export interface TransitionPlanInput {
   transitions: RenderPlan["transitions"];
   outFile: string;
   fps: number;
+  /** Hauteur du canevas (Task 120 — CRF adapté à la résolution). */
+  height?: number;
+}
+
+/**
+ * Task 120 — concat STREAM COPY : true quand TOUTES les frontières sont des
+ * coupes franches (aucun xfade nécessaire) — l'assemblage copie alors les
+ * flux sans ré-encodage (les segments sortent du MÊME encodeur, mêmes
+ * codecs/paramètres). PUR et testé.
+ */
+export function shouldConcatCopy(transitions: RenderPlan["transitions"], segmentCount: number): boolean {
+  if (segmentCount <= 1) return false;
+  if (transitions.length === 0) return true;
+  return transitions.every((t) => t.name === "cut" || xfadeTransitionName(t.name) === null);
 }
 
 /**
@@ -476,7 +641,8 @@ export function buildTransitionFfmpegArgs(input: TransitionPlanInput): { args: s
       "-filter_complex", filterParts.join(";"),
       "-map", `[${prevLabel}]`,
       "-r", String(fps),
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+      // Task 120 — CRF adapté à la résolution + threads auto.
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crfForHeight(input.height ?? 1080)), "-pix_fmt", "yuv420p", "-threads", "0",
       "-an",
       input.outFile,
     ],
@@ -675,7 +841,8 @@ export function buildExportFfmpegArgs(params: { masterFile: string; target: stri
   return [
     "-i", params.masterFile,
     "-vf", filters.join(","),
-    "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p",
+    // Task 120 — CRF adapté + threads auto + faststart (fichier de diffusion).
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crfForHeight(geometry.height)), "-pix_fmt", "yuv420p", "-threads", "0", "-movflags", "+faststart",
     "-c:a", "copy",
     params.outFile,
   ];
