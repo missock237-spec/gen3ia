@@ -60,11 +60,23 @@ export interface ServerlessExecutionOutput extends SandboxResult {
  * Env MINIMAL du subprocess : PATH standard, HOME=/tmp, LANG, TMPDIR=/tmp.
  * Construit intentionnellement à la main — JAMAIS un spread de process.env
  * (une seule variable oubliée fuiterait un secret vers le code exécuté).
+ * Le PATH inclut le répertoire du binaire Node COURANT (dirname execPath) :
+ * sur les runtimes serverless (AWS Lambda / Vercel), node vit hors des chemins
+ * standard (/var/lang/bin) — sans cela, « node » serait introuvable depuis le
+ * subprocess (exit 127) alors même que l'exécuteur tourne sous Node.
  * Le cast est délibéré : l'augmentation globale Next marque NODE_ENV requis
  * dans ProcessEnv, mais le subprocess ne doit JUSTEMENT PAS l'hériter.
  */
 const MINIMAL_ENV: NodeJS.ProcessEnv = Object.freeze({
-  PATH: "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin",
+  PATH: [
+    path.dirname(process.execPath),
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+    "/usr/local/sbin",
+    "/usr/sbin",
+    "/sbin",
+  ].join(path.delimiter),
   HOME: "/tmp",
   LANG: "C.UTF-8",
   TMPDIR: "/tmp",
