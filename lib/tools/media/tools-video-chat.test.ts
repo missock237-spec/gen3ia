@@ -15,7 +15,11 @@ import { videoReviseTool } from "./video-revise";
 // production est simulée pour tester le câblage de l'outil sans machinerie
 // vidéo. NB : nom distinct du mock video.status ci-dessous (deux fois le
 // même identifiant hoisté collerait).
+// Vitest 5 : vi.hoisted DOIT être appelé au niveau module (les appels
+// imbriqués dans describe/it sont désormais une erreur de collecte).
 const productionQueueCreate = vi.hoisted(() => ({ createVideoProductionJob: vi.fn() }));
+const productionQueue = vi.hoisted(() => ({ getProductionJob: vi.fn(), listProductionJobs: vi.fn() }));
+const renderQueue = vi.hoisted(() => ({ listJobs: vi.fn(), getOwnedJobOrThrow: vi.fn() }));
 
 describe("outil video.create — schéma enrichi (Task 106-a)", () => {
   it("accepte une entrée minimale valide", () => {
@@ -91,8 +95,6 @@ describe("sanitizeProductionOptions (Task 106-a)", () => {
 });
 
 describe("outil video.status — schéma et exécution (Task 106-a)", () => {
-  const productionQueue = vi.hoisted(() => ({ getProductionJob: vi.fn(), listProductionJobs: vi.fn() }));
-
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.doMock("@/lib/video/production-queue", () => productionQueue, { virtual: true });
@@ -202,7 +204,6 @@ describe("outil video.revise — schéma et exécution (Task 106-a)", () => {
   });
 
   it("action de rendu sans job → message FR actionnable", async () => {
-    const renderQueue = vi.hoisted(() => ({ listJobs: vi.fn(), getOwnedJobOrThrow: vi.fn() }));
     vi.doMock("@/lib/video/render-queue", () => renderQueue, { virtual: true });
     renderQueue.listJobs.mockResolvedValue([]);
     try {

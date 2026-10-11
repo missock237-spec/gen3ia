@@ -40,7 +40,7 @@ describe("Pipeline CI (.github/workflows/ci.yml)", () => {
   });
 
   it("scan de secrets gitleaks toujours présent (historique complet)", () => {
-    expect(ci).toContain("gitleaks/gitleaks-action@v2");
+    expect(ci).toContain("gitleaks/gitleaks-action@v3");
     expect(ci).toContain("fetch-depth: 0");
   });
 });
