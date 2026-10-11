@@ -25,6 +25,11 @@ paths = [
   # Fixtures du test du module de chiffrement envelope : clés/secrets
   # volontairement factices (Task 98) — jamais de valeur réelle.
   '''lib/security/secret-envelope\.test\.ts$''',
+  # Fixtures des tests de gestion des clés API entreprise (Task 126) :
+  # chaînes « g3a_… » volontairement factices (jamais de valeur réelle) —
+  # le détecteur générique gitleaks (mot-clé key: + entropie) sinon
+  # fausse alerte inévitable sur ce fichier par nature.
+  '''app/api/settings/api-keys/route\.test\.ts$''',
 ]
 # Clés d'API Web Firebase NEXT_PUBLIC_* : par conception publiques
 # (identifient le projet, ne donnent aucun accès sans règles de sécurité).
