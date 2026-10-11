@@ -79,13 +79,13 @@ describe("POST /api/settings/api-keys", () => {
   it("crée une clé : 201, clé affichée une seule fois + audit", async () => {
     protectMock.mockResolvedValue(ok());
     createMock.mockResolvedValue({
-      key: "g3a_secretcomplet",
+      key: "g3a_cleDeTestAfficheeUneFois",
       view: { id: "h2", name: "prod", prefix: "g3a_Xy98Zw", scopes: ["agents"], rateLimitPerMinute: 60 },
     });
     const response = await POST(request("POST", { name: "prod", scopes: ["agents"] }));
     expect(response.status).toBe(201);
     const body = (await response.json()) as { key: string; warning: string };
-    expect(body.key).toBe("g3a_secretcomplet");
+    expect(body.key).toBe("g3a_cleDeTestAfficheeUneFois");
     expect(body.warning).toMatch(/jamais/);
     expect(createMock).toHaveBeenCalledWith({ ownerId: "user-1", name: "prod", scopes: ["agents"], rateLimitPerMinute: undefined });
     expect(auditMock).toHaveBeenCalledWith(expect.objectContaining({ action: "apikey.create", actorId: "user-1" }));
