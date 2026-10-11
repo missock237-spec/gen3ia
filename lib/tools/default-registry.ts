@@ -14,6 +14,17 @@ import { extractZipTool } from "./files/extract-zip";
 import { createComposioTool } from "@/lib/integrations/composio/adapter";
 import { mcpCallTool } from "@/lib/integrations/mcp/tool";
 import { adsReadTool } from "@/lib/integrations/composio/ads-tool";
+// Task 133 — connecteurs entreprise : outils Zendesk (tickets) et ServiceNow
+// (incidents ITSM) dérivés du hub de connexions Composio.
+import {
+  servicenowIncidentCreateTool,
+  servicenowIncidentQueryTool,
+  servicenowIncidentUpdateTool,
+  zendeskTicketCreateTool,
+  zendeskTicketListTool,
+  zendeskTicketSearchTool,
+  zendeskTicketUpdateTool,
+} from "@/lib/integrations/composio/tools";
 import { messagingSendTool } from "@/lib/integrations/messaging/tools";
 import { getMessagingChannelStatus } from "@/lib/integrations/messaging";
 import { emailSendTool } from "@/lib/integrations/email/tools";
@@ -99,6 +110,15 @@ export function createDefaultToolRegistry(): ToolRegistry {
   if (process.env.COMPOSIO_API_KEY) {
     registry.register(createComposioTool());
     registry.register(socialPublishTool);
+    // Task 133 — Zendesk & ServiceNow : mêmes garanties que composio.execute
+    // (connexion vérifiée obligatoire), avec schémas typés par action.
+    registry.register(zendeskTicketCreateTool);
+    registry.register(zendeskTicketUpdateTool);
+    registry.register(zendeskTicketListTool);
+    registry.register(zendeskTicketSearchTool);
+    registry.register(servicenowIncidentCreateTool);
+    registry.register(servicenowIncidentUpdateTool);
+    registry.register(servicenowIncidentQueryTool);
   }
   const messagingStatus = getMessagingChannelStatus();
   if (messagingStatus.whatsapp || messagingStatus.telegram || messagingStatus.slack) {

@@ -45,6 +45,14 @@ const TOOL_LABELS: Record<string, string> = {
   "video.create": "Production vidéo",
   "video.status": "Suivi vidéo",
   "video.revise": "Révision vidéo",
+  // Task 133 — connecteurs entreprise Zendesk & ServiceNow.
+  "zendesk_ticket_create": "Création de ticket Zendesk",
+  "zendesk_ticket_update": "Mise à jour de ticket Zendesk",
+  "zendesk_ticket_list": "Consultation des tickets Zendesk",
+  "zendesk_ticket_search": "Recherche de tickets Zendesk",
+  "servicenow_incident_create": "Création d'incident ServiceNow",
+  "servicenow_incident_update": "Mise à jour d'incident ServiceNow",
+  "servicenow_incident_query": "Consultation des incidents ServiceNow",
 };
 
 /** Libellés des familles d'outils identifiés par préfixe. */
