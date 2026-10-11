@@ -99,6 +99,7 @@ import type {
   RunStatus,
   RunStep,
 } from "./types";
+import { buildContextWindow, estimateTokens } from "./context-window";
 import { safeEmitter, type StreamEventEmitter } from "./stream-events";
 
 /**
@@ -717,6 +718,16 @@ const INTENT_BUDGET_MS = 25_000;
 const CHAT_BUDGET_MS = 35_000;
 const SUMMARY_BUDGET_MS = 15_000;
 
+/**
+ * Task 131 — budget de la fenêtre de contexte du tour conversationnel.
+ * 24 000 tokens : cohérent avec l'usage LLM du projet (les modèles routés par
+ * lib/ai/router acceptent 32k+ ; la marge restante couvre la réponse). En
+ * dessous de ce budget, le comportement du moteur reste EXACTEMENT celui
+ * d'avant (les 16 derniers messages) — la fenêtre glissante ne s'active que
+ * lorsque l'historique déborde réellement du budget.
+ */
+const CONTEXT_WINDOW_BUDGET_TOKENS = 24_000;
+
 /** Contexte des pièces jointes injecté au modèle (liste) + détails de conversion réelle. */
 function attachmentsContext(attachments?: MessageAttachment[]): string {
   if (!attachments || attachments.length === 0) return "";
@@ -1322,11 +1333,38 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   // modèles vision (parts image_url / blocs image selon le provider) —
   // « que voit-on sur cette photo ? » fonctionne enfin.
   const visionImages = imagesForModel(ctx.attachments);
+  // Task 131 — fenêtre glissante de contexte : en dessous du budget, le
+  // comportement est STRICTEMENT identique à l'ancien slice des 16 derniers
+  // messages (aucune régression pour les conversations courtes). Au-delà, la
+  // fenêtre préserve le prompt système (jamais tronqué), les messages les
+  // plus récents, l'intention d'origine (premier message utilisateur si
+  // possible) et remplace les messages évacués par un résumé déterministe
+  // injecté comme message système additionnel (zéro LLM, zéro latence).
+  const systemContent = systemParts.join("\n\n");
+  const recentHistory = historyForModel(ctx.priorHistory);
+  const turnTokens =
+    estimateTokens(systemContent) +
+    estimateTokens(ctx.message) +
+    recentHistory.reduce((somme, message) => somme + estimateTokens(message.content), 0);
+  let historyMessages = recentHistory;
+  let summaryPrefix: string | undefined;
+  if (turnTokens > CONTEXT_WINDOW_BUDGET_TOKENS) {
+    const window = buildContextWindow({
+      systemPrompt: systemContent,
+      history: ctx.priorHistory,
+      // La place du message courant est réservée au budget de la fenêtre
+      // (plancher 2 000 : un message très long ne doit pas vider la fenêtre).
+      budgetTokens: Math.max(2_000, CONTEXT_WINDOW_BUDGET_TOKENS - estimateTokens(ctx.message)),
+    });
+    historyMessages = window.messages.map((message) => ({ role: message.role, content: message.content }));
+    summaryPrefix = window.summaryPrefix;
+  }
   const requestMessages = [
     ...(systemParts.length > 0
-      ? [{ role: "system" as const, content: systemParts.join("\n\n") }]
+      ? [{ role: "system" as const, content: systemContent }]
       : []),
-    ...historyForModel(ctx.priorHistory),
+    ...(summaryPrefix ? [{ role: "system" as const, content: summaryPrefix }] : []),
+    ...historyMessages,
     { role: "user" as const, content: ctx.message, ...(visionImages ? { images: visionImages } : {}) },
   ];
 
