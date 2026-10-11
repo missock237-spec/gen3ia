@@ -3372,3 +3372,37 @@ Stage Summary:
 - L'agent IA exécute maintenant de VRAIES commandes via `terminal.run` : sandbox Docker si déployée, sinon exécution réelle en-processus en microVM serverless (env nettoyé, /tmp, ulimit, deny-list durcie, timeout, sortie plafonnée), sinon simulation annoncée — le mode réel est toujours renvoyé honnêtement.
 - Approbation : outil interne (directive 10-10) — exécution directe sans carte de validation, car aucun secret utilisateur ni app externe ; les commandes dangereuses restent rejetées AVANT exécution.
 - QA finale verte : tsc 0, eslint 0/0, 510/511 tests verts (1 skip préexistant). Pas de push (CI/déploiement au main agent).
+
+---
+Task ID: 123 (audio livré directement dans le fil — plus de lien expirable)
+Agent: sous-agent audio+vitesse
+Task: Un audio synthétisé devenait illisible dès l'expiration du lien signé markdown (1 h max). La livraison est maintenant DIRECTE : un vrai lecteur <audio> intégré au fil, résolu depuis la clé R2 PERMANENTE, plus de lien markdown.
+
+Work Log:
+- components/workspace/audio-delivery.tsx (NOUVEAU) : AudioDelivery — lecteur HTML5 <audio controls> dont la source est une URL signée résolue À LA DEMANDE depuis la clé R2 permanente (canal /api/storage/permanent), bouton « Télécharger », repli data URI/URL legacy, retry de résolution. attachAudioArtifactsToMessages (pur) : artefact lié à un run → message porteur ; tour vocal sans run → dernier message assistant précédent (le lecteur apparaît même sans texte explicite, survit au refresh).
+- Branchement COMPLET : message-thread.tsx (fil workspace) et agent-chat-panel.tsx (chat agent) rendent le lecteur pour chaque artefact audio rattaché.
+- engine.ts (workspace) + app/api/agent/chat/route.ts (agent chat) : PLUS AUCUN lien markdown d'écoute — le message annonce l'audio prêt ci-dessous ; l'artefact (storagePath permanent) EST le livrable ; le canal agent chat crée désormais l'artefact audio manquant (clé R2 → lecteur au refresh). createR2DownloadUrl retiré de ces chemins.
+- GET conversations chat : renvoie les artefacts audio du fil (clé permanente).
+- video-intent.test.ts : contrat de livraison directe (message sans lien ≠ clarification). scripts/check_audio_link.mjs : vérifie la clé permanente.
+- VALIDATION : tsc --noEmit = 0 ; eslint (8 fichiers) --max-warnings 0 = 0 ; vitest lib/ai inclus dans 576/576 verts (queue+domain+runtime+ai, 54 fichiers) ; app/api 239/239 verts.
+
+Stage Summary:
+- L'audio est livré DIRECTEMENT dans le fil : lecteur <audio> intégré (source résolue à la demande depuis la clé R2 permanente — plus jamais de lien mort après expiration) + téléchargement direct, dans le workspace ET le chat agent, y compris après refresh.
+- QA verte : tsc 0, eslint 0/0, 815/815 tests verts. Commit 8d88e2d, pas de push.
+
+---
+Task ID: 124 (vitesse de traitement globale)
+Agent: sous-agent audio+vitesse
+Task: Accélérer le traitement de bout en bout : file de ticks multi-tickets, exécution parallèle des étapes indépendantes, lectures agrégées, routes lourdes sans timeout prématuré.
+
+Work Log:
+- lib/queue/tick-queue.ts : pump multi-tickets — rattrapage des tickets dus PAR LOTS parallèles (passes bornées, délivrances concurrentes), backoff initial réduit à 10 s (plafond 15 min, progression garantie), nudge du drain plus fréquent, lease couvrant la fenêtre complète d'exécution (fin des no-op 2xx consommant un ticket à tort). tick-queue.test.ts étendu (pump multi-tickets, backoff, lease).
+- lib/agents/runtime/runner.ts (+unified-agent.ts, planner generator/service) : étapes INDÉPENDANTES du DAG exécutées en parallèle (concurrence ~3) — runner-parallel.test.ts (NOUVEAU) couvre l'ordonnancement.
+- Routes lecture : GET conversations + GET détail conversation — Promise.all (5 lectures agrégées) : latence somme → MAX.
+- Routes lourdes : maxDuration = 300 sur agents run (x2), queue/mission-tick, cron/agent-schedules.
+- app/api/health/infra/route.test.ts : mock currentTerminalEngine (export Task 122 manquant — vi.mock strict).
+- VALIDATION : tsc --noEmit = 0 ; eslint (15 fichiers) --max-warnings 0 = 0 ; vitest lib/queue+domain+agents/runtime+lib/ai = 54 fichiers / 576 verts / 0 échec ; vitest app/api = 239 verts / 0 échec.
+
+Stage Summary:
+- Vitesse : tickets rattrapés par lots parallèles avec backoff 10 s et nudge accéléré ; DAG missions exécuté en parallèle (concurrence ~3) ; GET agrégés (somme→MAX) ; exécutions lourdes autorisées jusqu'à 300 s.
+- QA verte : tsc 0, eslint 0/0, 815/815 tests verts. Commit 69dff6e, pas de push.
