@@ -3406,3 +3406,18 @@ Work Log:
 Stage Summary:
 - Vitesse : tickets rattrapés par lots parallèles avec backoff 10 s et nudge accéléré ; DAG missions exécuté en parallèle (concurrence ~3) ; GET agrégés (somme→MAX) ; exécutions lourdes autorisées jusqu'à 300 s.
 - QA verte : tsc 0, eslint 0/0, 815/815 tests verts. Commit 69dff6e, pas de push.
+---
+Task ID: 125 (identité 2 couleurs)
+Agent: sous-agent design
+Task: Palette réduite à EXACTEMENT 2 teintes chromatiques — violet #7C5CFF (strong #9E85FF) + cyan #2AD4E8 (strong #7FE9F5) — sur toute la plateforme (sombre + clair). Aucune nouvelle fonctionnalité.
+
+Work Log:
+- app/globals.css (tokens) : magenta/warning/danger → famille VIOLET (sombre magenta #9E85FF, warning #9E85FF/#B9A6FF, danger dédié #B18AFF/#C9AEFF ; clair magenta #5633E8, warning #6C48FF/#3F22C4, danger #5B2BE0) ; info/success → famille CYAN (sombre info #7FE9F5, success #2AD4E8/#7FE9F5 ; clair info #0E5F73, success #0A6E82/#095E6F). Noms de tokens --g3-* conservés (contrat API), neutres (fonds/textes/gris) conservés. Dégradés signature → 2 stops violet→cyan (stop fuchsia 45 % retiré des 3 dégradés + gradient-text). Ratios documentés ≥ 4.5:1 (strong sur soft : success 6.6, warning 5.1, danger 6.0).
+- Sweep 108 fichiers : app/ (45 pages) + components/ (61) : classes Tailwind des anciennes familles (emerald/green/lime/teal→cyan, amber/yellow/orange→violet, red/rose/pink/fuchsia→violet danger, sky/blue/indigo/purple→cyan/violet), SVG inline (logos, icônes), public/offline.html, lib/video/subtitle-service.ts (cinematic_yellow→cyan #2AD4E8 en ASS &H00E8D42A, karaoké magenta→violet strong &H00FF859E, défaut secondaire violet).
+- Complétude (fichiers oubliés par l'agent précédent, corrigés) : lib/domain/conversations/artefact-apps.ts (bouton + palette ECharts + prompt de génération d'apps : fuchsia #e14fea→violet/cyan, orange #ffc861→violet #9e85ff, vert #5effc4→cyan #7fe9f5, prompt « 2 couleurs uniquement, aucun rouge/vert/orange ») ; commentaires obsolètes « violet → fuchsia → cyan » de globals.css (en-tête + halo logo) et app/page.tsx. Couche de compat bithème :where(.bg-emerald-50…) conservée volontairement (remappe les pastels tiers vers les tokens).
+- Tests verrouillant la NOUVELLE palette (app/theme-consistency.test.ts) : « valeurs clés » migré vers les nouvelles valeurs des 2 familles (sombre : secondary/info/success #2AD4E8/#7FE9F5, magenta/warning #9E85FF, danger #B18AFF ; clair : info #0E5F73, success #0A6E82, magenta #5633E8, warning #6C48FF/#3F22C4, danger #5B2BE0) + 2 NOUVEAUX gardes : bannissement des 16 anciennes teintes (#E14FEA, #C44BFF, #2FD48A, #F5AE31, #F6626E, #8FD8EC, #B45309, #B33636…) et dégradés 2 stops exacts. offline-page.test.ts : inchangé (verrouillait déjà bg/surface/primary #05060C/#0B0D17/#7C5CFF).
+- VALIDATION : tsc --noEmit = 0 erreur ; eslint (theme-consistency.test.ts, artefact-apps.ts, page.tsx, subtitle-service.ts, public) --max-warnings 0 = 0 ; rg hex bannis + classes Tailwind résiduelles dans app/ components/ lib/ = vide ; vitest run app = 466/466 tests verts (seule exception : sandbox/src/app.behavior.test.ts échoue à la COLLECTE — package fastify absent de node_modules, préexistant, aucun fichier sandbox modifié).
+
+Stage Summary:
+- Identité 2 couleurs livrée : violet + cyan partout (sombre ET clair), états discernables par icônes/libellés (danger = violet clair dédié), dégradés 2 stops, neutres intacts. Oublis corrigés : artefact-apps.ts (charts + prompt) et commentaires fuchsia.
+- QA verte : tsc 0, eslint 0/0, 466/466. Commit a452951 (110 fichiers, +723/−675), pas de push.
