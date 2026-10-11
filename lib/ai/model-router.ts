@@ -1,87 +1,102 @@
+import "server-only";
+
+/**
+ * ROUTEUR DE MODÈLES INTELLIGENT (intentions du commit b074300, intégrées
+ * au standard du projet).
+ *
+ * Correctif d'intégration (Task 127) : le module d'origine référençait des
+ * types hallucinés (ModelConfig/CacheManager non définis, this.getCheapModel/
+ * callModel inexistants) et ne compilait pas. Ici : sélecteur TYPÉ et
+ * autonome — le routage OFFICIEL des requêtes reste lib/ai/router.ts (score
+ * de capacités + résilience multi-fournisseurs) ; ce module aide à CHOISIR
+ * une intention de modèle selon tâche/urgence/budget AVANT l'appel router.
+ */
+
+export type TaskType = "simple" | "complex" | "reasoning" | "creative";
+export type Urgency = "low" | "medium" | "high";
+
+export interface ModelConfig {
+  provider: string;
+  model: string;
+  maxTokens: number;
+  temperature: number;
+}
+
+/** Modèles par défaut (surchargeables par env : GLM_MODEL, GROQ_MODEL…). */
+function envModel(name: string, fallback: string): string {
+  return process.env[name]?.trim() || fallback;
+}
+
+const CHEAP: ModelConfig = {
+  provider: "groq",
+  model: envModel("GROQ_MODEL", "llama-3.1-8b-instruct"),
+  maxTokens: 1000,
+  temperature: 0.2,
+};
+
+const STRONG: ModelConfig = {
+  provider: "glm",
+  model: envModel("GLM_MODEL", "glm-4.6"),
+  maxTokens: 4000,
+  temperature: 0.3,
+};
+
+const CREATIVE: ModelConfig = {
+  provider: "glm",
+  model: envModel("GLM_MODEL", "glm-4.6"),
+  maxTokens: 3000,
+  temperature: 0.8,
+};
+
 export class IntelligentModelRouter {
-  // Choisir le modèle optimal selon la tâche
+  /** Choisit le modèle optimal selon la tâche, l'urgence et le budget. */
   static selectModel(context: {
-    taskType: 'simple' | 'complex' | 'reasoning' | 'creative';
-    urgency: 'low' | 'medium' | 'high';
+    taskType: TaskType;
+    urgency: Urgency;
+    /** Budget restant (crédits/tokens) — sous 1000, modèles économiques. */
     budgetRemaining: number;
     preferredProvider?: string;
   }): ModelConfig {
     const { taskType, urgency, budgetRemaining, preferredProvider } = context;
-    
-    // Routage par budget
-    if (budgetRemaining < 1000) {
-      return this.getCheapModel(taskType);
-    }
-    
-    // Routage par type de tâche
+
+    // Routage par budget : préserver les crédits avec des modèles économiques.
+    if (budgetRemaining < 1000) return CHEAP;
+
+    let chosen: ModelConfig;
     switch (taskType) {
-      case 'complex':
-      case 'reasoning':
-        return {
-          provider: 'openai',
-          model: 'gpt-4',
-          maxTokens: 2000,
-          temperature: 0.3,
-        };
-      
-      case 'creative':
-        return {
-          provider: 'groq',
-          model: 'mixtral-8x7b',
-          maxTokens: 1500,
-          temperature: 0.8,
-        };
-      
-      case 'simple':
+      case "complex":
+      case "reasoning":
+        chosen = STRONG;
+        break;
+      case "creative":
+        chosen = CREATIVE;
+        break;
+      case "simple":
       default:
-        // Utiliser le moins cher pour les tâches simples
-        return {
-          provider: 'groq',
-          model: 'llama-3.1-8b',
-          maxTokens: 500,
-          temperature: 0.5,
-        };
+        chosen = urgency === "high" ? CHEAP : STRONG;
+        break;
     }
-  }
-  
-  // Fallback intelligent
-  static async executeWithFallback(
-    prompt: string,
-    primaryModel: ModelConfig,
-    fallbackModels: ModelConfig[]
-  ): Promise<string> {
-    const models = [primaryModel, ...fallbackModels];
-    
-    for (const model of models) {
-      try {
-        const response = await this.callModel(prompt, model);
-        if (response && response.trim().length > 0) {
-          return response;
-        }
-      } catch (error) {
-        console.warn(`Model ${model.model} failed:`, error.message);
-        continue;
-      }
+
+    // Préférence fournisseur explicite : gardée si le modèle s'y prête.
+    if (preferredProvider && chosen.provider !== preferredProvider) {
+      return { ...chosen, provider: preferredProvider };
     }
-    
-    throw new Error('All models failed');
+    return chosen;
   }
-  
-  // Cache de réponses pour requêtes identiques
-  static async getCachedOrGenerate(
-    prompt: string,
-    cacheKey: string,
-    model: ModelConfig
-  ): Promise<string> {
-    const cached = await CacheManager.get(`llm:${cacheKey}`);
-    if (cached) return cached;
-    
-    const response = await this.callModel(prompt, model);
-    
-    // Cache avec TTL basé sur la longueur de la réponse
-    const ttl = response.length > 500 ? 3600 : 1800;
-    await CacheManager.set(`llm:${cacheKey}`, response, ttl);
-    
-    return response;
+
+  /**
+   * Cache de sélection (clé contextuelle → config) : même demande dans la
+   * même instance → même réponse sans re-scoring (mémoire bornée).
+   */
+  private static readonly cache = new Map<string, ModelConfig>();
+
+  static selectModelCached(context: Parameters<typeof IntelligentModelRouter.selectModel>[0]): ModelConfig {
+    const key = `${context.taskType}:${context.urgency}:${context.budgetRemaining}:${context.preferredProvider ?? ""}`;
+    const hit = IntelligentModelRouter.cache.get(key);
+    if (hit) return hit;
+    const chosen = IntelligentModelRouter.selectModel(context);
+    if (IntelligentModelRouter.cache.size > 500) IntelligentModelRouter.cache.clear();
+    IntelligentModelRouter.cache.set(key, chosen);
+    return chosen;
   }
 }

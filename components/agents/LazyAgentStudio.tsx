@@ -1,52 +1,32 @@
-import dynamic from 'next/dynamic';
-import { Suspense } from 'react';
-import { Loader2 } from 'lucide-react';
+"use client";
 
-// Chargement différé pour composants lourds
-const AgentChat = dynamic(() => import('./AgentChat'), {
-  loading: () => <ChatSkeleton />,
-  ssr: false, // Pas de SSR pour composants interactifs lourds
-});
+import dynamic from "next/dynamic";
 
-const LiveAgentPanel = dynamic(() => import('./LiveAgentPanel'), {
-  loading: () => <PanelSkeleton />,
-});
+import { ConversationColumnsSkeleton } from "@/components/workspace/skeletons";
 
-const MemoryGraph = dynamic(() => import('./MemoryGraph'), {
-  loading: () => <GraphSkeleton />,
-});
+/**
+ * ATELIER AGENT À CHARGEMENT DIFFÉRÉ (intentions du commit 6406a2d,
+ * intégrées aux composants RÉELS du projet).
+ *
+ * Correctif d'intégration (Task 127) : le module d'origine importait des
+ * composants inexistants (./AgentChat, ./LiveAgentPanel, ./MemoryGraph) et
+ * `lucide-react` (non installé). Ici : chargement différé du VRAI composant
+ * lourd de l'atelier — AgentChatWorkshop (components/agent/) — avec le
+ * squelette standard du workspace.
+ */
 
-export function LazyAgentStudio({ agentId }: { agentId: string }) {
+const AgentChatWorkshop = dynamic(
+  () => import("@/components/agent/agent-chat-workshop").then((mod) => mod.AgentChatWorkshop),
+  {
+    loading: () => <ConversationColumnsSkeleton />,
+    ssr: false,
+  },
+);
+
+export function LazyAgentStudio({ initialMessage = "" }: { initialMessage?: string }) {
   return (
     <div className="space-y-4">
-      <Suspense fallback={<StudioSkeleton />}>
-        <AgentChat agentId={agentId} />
-      </Suspense>
-      
-      <details className="group">
-        <summary className="cursor-pointer text-sm text-muted-foreground">
-          Voir l'agent live
-        </summary>
-        <LiveAgentPanel agentId={agentId} />
-      </details>
-      
-      <details className="group">
-        <summary className="cursor-pointer text-sm text-muted-foreground">
-          Graph de mémoire
-        </summary>
-        <MemoryGraph agentId={agentId} />
-      </details>
-    </div>
-  );
-}
-
-// Skeleton components pour meilleure UX
-function ChatSkeleton() {
-  return (
-    <div className="animate-pulse space-y-4">
-      <div className="h-10 bg-muted rounded-lg" />
-      <div className="h-20 bg-muted rounded-lg" />
-      <div className="h-10 w-2/3 bg-muted rounded-lg" />
+      <AgentChatWorkshop initialMessage={initialMessage} />
     </div>
   );
 }
