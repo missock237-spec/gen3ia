@@ -82,7 +82,7 @@ async function checkAudioDirect(cookie) {
     const convId = conv.conversation?.id ?? conv.id;
     if (!convId) throw new Error("conversation id manquant");
     const send = async (text) => {
-      const rr = await fetch(`${BASE}/api/workspace/conversations/${convId}/messages`, { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ text }) });
+      const rr = await fetch(`${BASE}/api/workspace/conversations/${convId}/messages`, { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ message: text }) });
       if (!rr.ok) throw new Error(`send message: ${rr.status}`);
       await new Promise((s) => setTimeout(s, 2500));
       const g = await fetch(`${BASE}/api/workspace/conversations/${convId}`, { headers: { cookie } });

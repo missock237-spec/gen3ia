@@ -587,6 +587,19 @@ export interface RenderJob {
   checkpoints: {
     downloadedAssetIds: string[];
     completedSegments: number[];
+    /**
+     * Task 127 — PERSISTANCE R2 DES ARTEFACTS DE RENDU : un tick serverless
+     * peut atterrir sur une instance relais SANS le /tmp de production. Chaque
+     * artefact (segments rendus, montage sans audio, master pré-livraison)
+     * est téléversé dans R2 DÈS sa production — une instance relais le
+     * RE-TÉLÉCHARGE au lieu de RE-RENDRE (fin des boucles de re-rendu).
+     */
+    /** Clé R2 de chaque segment rendu (index → clé). */
+    segmentsR2?: Record<string, string>;
+    /** Clé R2 du montage vidéo sans audio (après transitions). */
+    videoNoaudioR2?: string;
+    /** Clé R2 du master pré-chargé après QC (avant livraison). */
+    masterR2PreKey?: string;
     /** Passe courante de l'assemblage récursif (Long Video Engine). */
     transitionPass: number;
     transitionsDone: boolean;

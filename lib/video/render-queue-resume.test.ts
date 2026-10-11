@@ -183,7 +183,8 @@ vi.mock("@/lib/video/progress-store", () => ({
 import { JOBS_COLLECTION, RENDER_RETRY_BUDGET, advanceJob, startRenderJob, sweepStaleRenderJobs } from "./render-queue";
 import * as queueResume from "@/lib/video/queue-resume";
 import { releaseRenderBudget, reserveRenderBudget, settleRenderBudget } from "@/lib/video/credits";
-import { renderSegments, uploadMaster } from "@/lib/video/render/engine";
+import { renderSegments, uploadMaster, assembleTransitions } from "@/lib/video/render/engine";
+import { uploadVideoAsset, materializeForRender } from "@/lib/video/storage";
 import { createNotification } from "@/lib/notifications/repository";
 import { getOwnedProjectOrThrow } from "@/lib/video/project-service";
 import { listAssets } from "@/lib/video/asset-service";
@@ -535,6 +536,161 @@ describe("stageExports — master tmp absent (reprise après interruption)", () 
       expect((rollback as Record<string, unknown>)["checkpoints.completedSegments"]).toEqual([]);
       const consumedBudget = patches.some((p) => "retryCount" in p || p.status === "failed");
       expect(consumedBudget).toBe(false);
+    } finally {
+      await rm("/tmp/gen3ia-render-test", { recursive: true, force: true });
+    }
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Task 127 — PERSISTANCE R2 DES ARTEFACTS DE RENDU (instance relais)
+//
+// Production observée : chaque tick serverless peut atterrir sur une
+// instance SANS le /tmp du tick précédent — les segments rendus étaient
+// PERDUS et re-rendus en boucle (jusqu'à 5 re-rendus complets observés).
+// Fix : chaque artefact (segments, montage, master) est téléversé dans R2
+// dès sa production ; une instance relais le RE-TÉLÉCHARGE.
+// ---------------------------------------------------------------------------
+
+describe("Task 127 — persistance R2 des artefacts de rendu", () => {
+  it("stageSegments : chaque segment rendu est téléversé dans R2 + checkpoint segmentsR2", async () => {
+    const { mkdir, rm } = await import("node:fs/promises");
+    await mkdir("/tmp/gen3ia-render-test", { recursive: true });
+    // renderSegments rend les 2 segments et les déclare complétés.
+    vi.mocked(renderSegments).mockImplementation(async (params) => {
+      const { writeFile } = await import("node:fs/promises");
+      for (const segment of params.plan.segments) {
+        await writeFile(
+          `/tmp/gen3ia-render-test/segment_${String(segment.index).padStart(4, "0")}.mp4`,
+          Buffer.from(`seg-${segment.index}`),
+        );
+        await params.onSegmentDone(segment.index);
+      }
+      return [];
+    });
+    vi.mocked(uploadVideoAsset).mockImplementation(async (params) => ({
+      r2Key: `renders/job-1/segments/${params.fileName}`,
+      sizeBytes: 12,
+    }));
+    setDoc(baseJob({ status: "processing", stage: "segments" }));
+
+    try {
+      const result = await advanceJob("job-1");
+
+      // Chaque segment rendu est téléversé vers R2 (renders/<job>/segments/…).
+      expect(uploadVideoAsset).toHaveBeenCalledTimes(2);
+      const patches = vi.mocked(queueResume.saveJobDoc).mock.calls.map((c) => c[2] as Record<string, unknown>);
+      const ckpt = patches.find((p) => "checkpoints.segmentsR2" in p);
+      expect(ckpt).toBeTruthy();
+      expect(ckpt?.["checkpoints.segmentsR2"]).toEqual({
+        0: "renders/job-1/segments/segment_0000.mp4",
+        1: "renders/job-1/segments/segment_0001.mp4",
+      });
+      expect(result.status).not.toBe("failed");
+    } finally {
+      await rm("/tmp/gen3ia-render-test", { recursive: true, force: true });
+    }
+  });
+
+  it("stageTransitions sur instance relais (tmp ABSENT) : segments restaurés DEPUIS R2 — renderSegments JAMAIS appelé", async () => {
+    // Le répertoire tmp N'EXISTE PAS (instance relais) : la garde advanceJob
+    // restaure les segments depuis R2 au lieu de re-rendre.
+    const { rm } = await import("node:fs/promises");
+    await rm("/tmp/gen3ia-render-test", { recursive: true, force: true });
+    vi.mocked(materializeForRender).mockImplementation(async (params) => {
+      const { writeFile, mkdir } = await import("node:fs/promises");
+      await mkdir(params.tmpDir, { recursive: true });
+      const target = `${params.tmpDir}/${params.fileName}`;
+      await writeFile(target, Buffer.from(`restored-${params.fileName}`));
+      return target;
+    });
+    vi.mocked(assembleTransitions).mockImplementation(async (params) => {
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(`${params.io.tmpDir}/xf.mp4`, Buffer.from("assembled"));
+      return { file: `${params.io.tmpDir}/xf.mp4`, durationSec: 60 };
+    });
+    vi.mocked(uploadVideoAsset).mockImplementation(async (params) => ({
+      r2Key: `renders/job-1/${params.fileName}`,
+      sizeBytes: 20,
+    }));
+    const job = baseJob({
+      status: "processing",
+      stage: "transitions",
+      leaseOwner: null,
+      leaseExpiresAt: 0,
+      checkpoints: {
+        ...baseJob().checkpoints,
+        completedSegments: [0, 1],
+        segmentsR2: {
+          0: "renders/job-1/segments/segment_0000.mp4",
+          1: "renders/job-1/segments/segment_0001.mp4",
+        },
+      },
+    });
+    setDoc(job);
+    vi.mocked(queueResume.loadJobDoc).mockResolvedValue({ ...job, stage: "audio" } as never);
+
+    try {
+      const result = await advanceJob("job-1");
+
+      // La restauration R2 remplace le re-rendu : renderSegments jamais appelé.
+      expect(renderSegments).not.toHaveBeenCalled();
+      expect(materializeForRender).toHaveBeenCalledTimes(2);
+      expect(assembleTransitions).toHaveBeenCalledTimes(1);
+      // Le montage est PERSISTÉ : clé videoNoaudioR2 checkpointée.
+      const patches = vi.mocked(queueResume.saveJobDoc).mock.calls.map((c) => c[2] as Record<string, unknown>);
+      const ckpt = patches.find((p) => "checkpoints.videoNoaudioR2" in p);
+      expect(ckpt?.["checkpoints.videoNoaudioR2"]).toBe("renders/job-1/video_noaudio.mp4");
+      expect(ckpt?.["checkpoints.transitionsDone"]).toBe(true);
+      expect(result.status).not.toBe("failed");
+      // Aucun rollback n'a eu lieu (stage repart vers audio).
+      const rollback = patches.find((p) => p.stage === "segments" && "checkpoints.completedSegments" in p);
+      expect(rollback).toBeUndefined();
+    } finally {
+      await rm("/tmp/gen3ia-render-test", { recursive: true, force: true });
+    }
+  });
+
+  it("stageFinalize sur instance relais : master restauré depuis R2 (masterR2PreKey) — livraison SANS re-rendu", async () => {
+    const { rm } = await import("node:fs/promises");
+    await rm("/tmp/gen3ia-render-test", { recursive: true, force: true });
+    vi.mocked(materializeForRender).mockImplementation(async (params) => {
+      const { writeFile, mkdir } = await import("node:fs/promises");
+      await mkdir(params.tmpDir, { recursive: true });
+      const target = `${params.tmpDir}/${params.fileName}`;
+      await writeFile(target, Buffer.from("master"));
+      return target;
+    });
+    vi.mocked(uploadMaster).mockResolvedValue({
+      r2Key: "renders/job-1/master.mp4",
+      sizeBytes: 2048,
+      durationSec: 61,
+      width: 1280,
+      height: 720,
+    });
+    vi.mocked(settleRenderBudget).mockResolvedValue(1150);
+    const job = baseJob({
+      status: "processing",
+      stage: "finalize",
+      leaseOwner: "job-1:ancien",
+      leaseExpiresAt: 0,
+      checkpoints: {
+        ...baseJob().checkpoints,
+        qcDone: true,
+        masterR2PreKey: "renders/job-1/master.mp4",
+      },
+    });
+    setDoc(job);
+
+    try {
+      const result = await advanceJob("job-1");
+
+      expect(result.status).toBe("completed");
+      expect(uploadMaster).toHaveBeenCalledTimes(1);
+      // Restauration R2 — jamais de re-rendu des segments.
+      expect(renderSegments).not.toHaveBeenCalled();
+      expect(materializeForRender).toHaveBeenCalledWith(expect.objectContaining({ r2Key: "renders/job-1/master.mp4", fileName: "master.mp4" }));
     } finally {
       await rm("/tmp/gen3ia-render-test", { recursive: true, force: true });
     }

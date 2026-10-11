@@ -524,10 +524,11 @@ export async function advanceJob(jobId: string, options: { timeBudgetMs?: number
   // Reprise cross-instance : /tmp est LOCAL à chaque instance lambda. Si le
   // répertoire du job n'existe pas SUR CETTE INSTANCE, aucun fichier
   // intermédiaire (segments, video_noaudio, audio_final, master) n'est
-  // disponible — un tick au-delà de « segments » échouerait avec un ffmpeg
-  // code 1 (entrées absentes) et consommerait le budget de relance. Rollback
-  // déterministe : les images sont re-téléchargées depuis R2 et le rendu
-  // repart du début des segments (checkpoints remis à zéro).
+  // disponible.
+  // Task 127 — RESTAURATION R2 D'ABORD : les artefacts PERSISTÉS dans R2
+  // (segments rendus, montage, master pré-livraison) sont re-téléchargés —
+  // le re-rendu complet (resetToSegments) ne reste que pour l'inconnu.
+  const io = buildEngineIo(job, tmpDir);
   if (!(await pathExists(tmpDir))) {
     const { mkdir } = await import("node:fs/promises");
     await mkdir(tmpDir, { recursive: true });
@@ -535,11 +536,23 @@ export async function advanceJob(jobId: string, options: { timeBudgetMs?: number
       job.mode !== "exports_only" &&
       STAGE_ORDER.indexOf(job.stage) > STAGE_ORDER.indexOf("segments")
     ) {
-      await resetToSegments(jobId, job, "instance relais sans fichiers temporaires");
+      if (allCompletedSegmentsPersisted(job)) {
+        try {
+          const restored = await restoreRenderedArtifactsFromR2(job, io);
+          if (restored.segments > 0 || restored.videoNoaudio || restored.master) {
+            await logSystem(
+              job.projectId,
+              `Rendu ${job.id.slice(0, 8)} : ${restored.segments} segment(s) + montage ${restored.videoNoaudio ? "✓" : "—"} + master ${restored.master ? "✓" : "—"} restaurés depuis R2 (instance relais) — poursuite sans re-rendu.`,
+            ).catch(() => undefined);
+          }
+        } catch {
+          await resetToSegments(jobId, job, "restauration R2 impossible après incident");
+        }
+      } else {
+        await resetToSegments(jobId, job, "instance relais sans fichiers temporaires persistés");
+      }
     }
   }
-
-  const io = buildEngineIo(job, tmpDir);
   const startedStage = job.stage;
 
   try {
@@ -1023,12 +1036,32 @@ async function stageSegments(job: RenderJob, io: EngineIo, timeBudgetMs?: number
   // Task 106-fix — UN checkpoint par tick (consultation immédiate par le
   // claim suivant ; les segments réellement rendus sont conservés en local
   // tmp, le pire cas est un re-rendu des derniers segments du tick).
-  if (completed.size > completedAtTickStart) {
+  // Task 127 — PERSISTANCE R2 : chaque segment rendu est AUSSI téléversé
+  // dans R2 (renders/<jobId>/segments/…) — une instance relais le
+  // re-téléchargera au lieu de le re-rendre (fin des boucles de re-rendu
+  // observées en production : un tick par instance ≠ le /tmp du précédent).
+  const segmentsR2: Record<string, string> = { ...(job.checkpoints.segmentsR2 ?? {}) };
+  let uploadedSegments = 0;
+  for (const index of completed) {
+    if (segmentsR2[String(index)]) continue;
+    const file = `${io.tmpDir}/${segmentFileName(index)}`;
+    if (!(await pathExists(file))) continue;
+    const { readFile: readSegment } = await import("node:fs/promises");
+    const body = await readSegment(file);
+    segmentsR2[String(index)] = await io.uploadRender(
+      `renders/${job.id}/segments/${segmentFileName(index)}`,
+      body,
+      "renders",
+    );
+    uploadedSegments += 1;
+  }
+  if (completed.size > completedAtTickStart || uploadedSegments > 0) {
     await writeCheckpointSet(
       JOBS_COLLECTION,
       job.id,
       {
         "checkpoints.completedSegments": [...completed],
+        "checkpoints.segmentsR2": segmentsR2,
         progress: computeJobProgress("segments", completed.size, plan.segments.length),
         updatedAt: nowIso(),
       },
@@ -1054,14 +1087,26 @@ async function stageTransitions(job: RenderJob, io: EngineIo): Promise<StageOutc
     return { kind: "continue", stage: job.stage, message: "Transitions déjà assemblées." };
   }
   const plan = job.plan!;
-  const segmentFiles = plan.segments.map((s) => `${io.tmpDir}/segment_${String(s.index).padStart(4, "0")}.mp4`);
+  const segmentFiles = plan.segments.map((s) => `${io.tmpDir}/${segmentFileName(s.index)}`);
   // Garde cross-instance : un seul fichier de segment manquant ferait échouer
-  // ffmpeg en code 1 — rollback déterministe au lieu de consommer les relances.
-  for (const file of segmentFiles) {
-    if (!(await pathExists(file))) {
-      await resetToSegments(job.id, job, "segments absents sur cette instance (transitions)");
-      return { kind: "continue", stage: "segments", message: "Reprise : segments re-rendus sur cette instance." };
+  // ffmpeg en code 1 — Task 127 : restauration R2 du segment AVANT tout
+  // re-rendu (les segments rendus sont persistés dès leur production) ; le
+  // rollback déterministe ne reste que si la clé R2 est absente/cassée.
+  for (let i = 0; i < segmentFiles.length; i += 1) {
+    const file = segmentFiles[i];
+    if (await pathExists(file)) continue;
+    const index = plan.segments[i].index;
+    const key = job.checkpoints.segmentsR2?.[String(index)];
+    if (key) {
+      try {
+        await io.materializeByName(key, segmentFileName(index));
+        continue;
+      } catch {
+        // Clé R2 cassée/introuvable : re-rendu déterministe ci-dessous.
+      }
     }
+    await resetToSegments(job.id, job, "segments absents sur cette instance (transitions)");
+    return { kind: "continue", stage: "segments", message: "Reprise : segments re-rendus sur cette instance." };
   }
 
   let assembledFile: string;
@@ -1099,7 +1144,18 @@ async function stageTransitions(job: RenderJob, io: EngineIo): Promise<StageOutc
       await copyFile(assembledFile, `${io.tmpDir}/video_noaudio.mp4`);
     }
   }
-  await writeCheckpointSet(JOBS_COLLECTION, job.id, { "checkpoints.transitionsDone": true, updatedAt: nowIso() }, job.userId);
+  // Task 127 — PERSISTANCE R2 du montage : video_noaudio.mp4 est téléversé
+  // dès sa production — la QC sur une instance relais le re-télécharge au
+  // lieu de re-rendre tous les segments.
+  const { readFile: readAssembly } = await import("node:fs/promises");
+  const assemblyBody = await readAssembly(`${io.tmpDir}/video_noaudio.mp4`);
+  const videoNoaudioR2 = await io.uploadRender(`renders/${job.id}/video_noaudio.mp4`, assemblyBody, "renders");
+  await writeCheckpointSet(
+    JOBS_COLLECTION,
+    job.id,
+    { "checkpoints.transitionsDone": true, "checkpoints.videoNoaudioR2": videoNoaudioR2, updatedAt: nowIso() },
+    job.userId,
+  );
   await io.log(`Assemblage vidéo terminé (${Math.round(expectedSec)} s attendues).`);
   await moveToNextStage(job.id, job, "transitions");
   return { kind: "continue", stage: job.stage, message: "Transitions terminées." };
@@ -1142,12 +1198,25 @@ async function stageQc(job: RenderJob, io: EngineIo): Promise<StageOutcome> {
   const masterTmp = join2(io.tmpDir, "master.mp4");
   const videoFile = join2(io.tmpDir, "video_noaudio.mp4");
   // Garde cross-instance : chaque tick peut atterrir sur une instance lambda
-  // différente — les fichiers intermédiaires ne survivent pas. Le montage
-  // vidéo absent ici ne peut PAS être re-matérialisé (il n'est pas dans R2) :
-  // rollback déterministe plutôt qu'un ffmpeg code 1.
+  // différente. Task 127 — RESTAURATION R2 : le montage PERSISTÉ
+  // (videoNoaudioR2) est re-téléchargé ; le rollback déterministe ne reste
+  // que si la clé R2 est absente/cassée.
   if (!(await pathExists(videoFile))) {
-    await resetToSegments(job.id, job, "montage vidéo (video_noaudio) absent sur cette instance (QC)");
-    return { kind: "continue", stage: "segments", message: "Reprise : montage vidéo absent, rendu relancé." };
+    const assemblyKey = job.checkpoints.videoNoaudioR2;
+    let restored = false;
+    if (assemblyKey) {
+      try {
+        await io.materializeByName(assemblyKey, "video_noaudio.mp4");
+        restored = true;
+        await io.log("QC : montage restauré depuis R2 (instance relais) — pas de re-rendu.");
+      } catch {
+        restored = false;
+      }
+    }
+    if (!restored) {
+      await resetToSegments(job.id, job, "montage vidéo (video_noaudio) absent sur cette instance (QC)");
+      return { kind: "continue", stage: "segments", message: "Reprise : montage vidéo absent, rendu relancé." };
+    }
   }
   const audioPath = join2(io.tmpDir, "audio_final.m4a");
   let audioFile: string | null = (await pathExists(audioPath)) ? audioPath : null;
@@ -1199,10 +1268,16 @@ async function stageQc(job: RenderJob, io: EngineIo): Promise<StageOutcome> {
       : {}),
   });
   // Task 95-c — rapport QC via la couche résiliente.
+  // Task 127 — PERSISTANCE R2 DU MASTER : le master validé par la QC est
+  // téléversé AVANT la livraison — le finalize sur une instance relais le
+  // re-télécharge au lieu de re-rendre toute la chaîne.
+  const { readFile: readMaster } = await import("node:fs/promises");
+  const masterPreBody = await readMaster(masterTmp);
+  const masterR2PreKey = await io.uploadRender(`renders/${job.id}/master.mp4`, masterPreBody, "renders");
   await writeCheckpointSet(
     JOBS_COLLECTION,
     job.id,
-    { qcReport: report, "checkpoints.qcDone": true, "checkpoints.masterProbe": masterProbe ?? null, updatedAt: nowIso() },
+    { qcReport: report, "checkpoints.qcDone": true, "checkpoints.masterProbe": masterProbe ?? null, "checkpoints.masterR2PreKey": masterR2PreKey, updatedAt: nowIso() },
     job.userId,
   );
   await io.log(`QC : ${report.passed ? "OK" : `${report.issues.length} problème(s)`}.`);
@@ -1268,11 +1343,20 @@ async function stageExports(job: RenderJob, io: EngineIo): Promise<StageOutcome>
       // définitivement pour rien (incident constaté en production : tick
       // interrompu pendant exports, tmp perdu, exports vides).
       await io.log("Exports : aucun format dérivé à produire — étape franchie sans master tmp.");
+    } else if (job.checkpoints.masterR2PreKey) {
+      // Task 127 — RESTAURATION R2 : le master a été PERSISTÉ à la QC
+      // (masterR2PreKey) — re-téléchargé au lieu de re-rendre.
+      try {
+        await io.materializeByName(job.checkpoints.masterR2PreKey, "master.mp4");
+        await io.log("Exports : master restauré depuis R2 (instance relais) — pas de re-rendu.");
+      } catch {
+        await resetToSegments(job.id, job, "master absent à l'étape exports (clé R2 cassée)");
+        return { kind: "continue", stage: "segments", message: "Reprise : master absent, rendu relancé." };
+      }
     } else {
       // Exports PENDANTS mais master irrécupérable (tmp perdu par une
-      // interruption serverless, master pas encore téléversé — le téléverse
-      // n'a lieu qu'au finalize) : rollback déterministe vers les segments,
-      // le même garde que l'étape QC (re-rendu complet puis re-passage).
+      // interruption serverless, master pas encore téléversé) : rollback
+      // déterministe vers les segments, le même garde que l'étape QC.
       await resetToSegments(job.id, job, "master absent à l'étape exports (instance relais)");
       return { kind: "continue", stage: "segments", message: "Reprise : master absent, rendu relancé." };
     }
@@ -1371,10 +1455,24 @@ async function stageFinalize(job: RenderJob, io: EngineIo): Promise<StageOutcome
     return { kind: "terminal", result: { jobId: job.id, status: "completed", stage: "finalize", done: true, continued: false, message: "Rendu déjà livré — état final confirmé." } };
   }
   if (!(await pathExists(join2(io.tmpDir, "master.mp4")))) {
-    // Le master n'existe que sur l'instance qui a produit la QC — s'il manque
-    // ici, impossible à re-matérialiser (pas encore dans R2) : re-rendu.
-    await resetToSegments(job.id, job, "master absent sur cette instance avant livraison");
-    return { kind: "continue", stage: "segments", message: "Reprise : master absent, rendu relancé." };
+    // Task 127 — RESTAURATION R2 : le master a été PERSISTÉ à la QC
+    // (masterR2PreKey) — une instance relais le re-télécharge au lieu de
+    // re-rendre. Le re-rendu ne reste que sans clé/cassée.
+    const preKey = job.checkpoints.masterR2PreKey;
+    let restored = false;
+    if (preKey) {
+      try {
+        await io.materializeByName(preKey, "master.mp4");
+        restored = true;
+      } catch {
+        restored = false;
+      }
+    }
+    if (!restored) {
+      await resetToSegments(job.id, job, "master absent sur cette instance avant livraison");
+      return { kind: "continue", stage: "segments", message: "Reprise : master absent, rendu relancé." };
+    }
+    await io.log("Master restauré depuis R2 (instance relais) — livraison sans re-rendu.");
   }
   const uploaded = await uploadMaster({
     io,
@@ -1480,6 +1578,52 @@ async function pathExists(path: string): Promise<boolean> {
     return false;
   }
 }
+function segmentFileName(index: number): string {
+  return `segment_${String(index).padStart(4, "0")}.mp4`;
+}
+
+/**
+ * Task 127 — RESTAURATION R2 : matérialise depuis R2 les artefacts de rendu
+ * perdus par une instance relais (segments rendus, montage sans audio,
+ * master pré-livraison). Retourne le détail de ce qui a été restauré —
+ * l'appelant décide ensuite s'il peut poursuivre SANS re-rendu ou si le
+ * resetToSegments déterministe reste nécessaire.
+ */
+async function restoreRenderedArtifactsFromR2(
+  job: RenderJob,
+  io: EngineIo,
+): Promise<{ segments: number; videoNoaudio: boolean; master: boolean }> {
+  let segments = 0;
+  const map = job.checkpoints.segmentsR2 ?? {};
+  for (const index of job.checkpoints.completedSegments) {
+    const key = map[String(index)];
+    if (!key) continue;
+    const file = `${io.tmpDir}/${segmentFileName(index)}`;
+    if (await pathExists(file)) continue;
+    await io.materializeByName(key, segmentFileName(index));
+    segments += 1;
+  }
+  let videoNoaudio = false;
+  if (job.checkpoints.videoNoaudioR2 && !(await pathExists(`${io.tmpDir}/video_noaudio.mp4`))) {
+    await io.materializeByName(job.checkpoints.videoNoaudioR2, "video_noaudio.mp4");
+    videoNoaudio = true;
+  }
+  let master = false;
+  if (job.checkpoints.masterR2PreKey && !(await pathExists(`${io.tmpDir}/master.mp4`))) {
+    await io.materializeByName(job.checkpoints.masterR2PreKey, "master.mp4");
+    master = true;
+  }
+  return { segments, videoNoaudio, master };
+}
+
+/**
+ * Task 127 — TOUS les segments complétés ont-ils une clé R2 persistée ?
+ * (Condition pour éviter un re-rendu complet sur instance relais.)
+ */
+function allCompletedSegmentsPersisted(job: RenderJob): boolean {
+  const map = job.checkpoints.segmentsR2 ?? {};
+  return job.checkpoints.completedSegments.every((index) => Boolean(map[String(index)]));
+}
 
 /**
  * Remise déterministe au stage « segments » : les fichiers intermédiaires ne
@@ -1502,6 +1646,12 @@ async function resetToSegments(jobId: string, job: RenderJob, reason: string): P
       "checkpoints.qcDone": false,
       // Task 120 — le master va être RE-RENDU : le cache de sonde est purgé.
       "checkpoints.masterProbe": null,
+      // Task 127 — les artefacts persistés sont PÉRIMÉS après un rollback
+      // (les segments seront re-rendus) : les clés R2 sont purgées pour ne
+      // jamais restaurer un artefact obsolète.
+      "checkpoints.segmentsR2": {},
+      "checkpoints.videoNoaudioR2": FieldValue.delete(),
+      "checkpoints.masterR2PreKey": FieldValue.delete(),
       updatedAt: nowIso(),
     },
     job.userId,
@@ -1515,6 +1665,9 @@ async function resetToSegments(jobId: string, job: RenderJob, reason: string): P
     subtitlesDone: false,
     qcDone: false,
     masterProbe: null,
+    segmentsR2: {},
+    videoNoaudioR2: undefined,
+    masterR2PreKey: undefined,
   };
   await logSystem(
     job.projectId,
