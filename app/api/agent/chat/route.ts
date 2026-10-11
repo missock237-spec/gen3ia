@@ -23,6 +23,7 @@ import { getAgentForUser } from "@/lib/agents/repository";
 import { policyForAgent } from "@/lib/agents/personalized-plan";
 import { answerAsAgent, classifyRequest, historyContextNote, unavailableCapabilityReply, planAgentTask } from "@/lib/agents/chat-engine";
 import { recordAgentRun } from "@/lib/agents/conversation-run";
+import { recordAgentTurn } from "@/lib/agents/analytics";
 import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
 import { createQueuedMission } from "@/lib/queue/mission-queue";
 import { tickQueueConfigured, enqueueMissionTick } from "@/lib/queue/tick-queue";
@@ -800,6 +801,9 @@ export async function POST(request: NextRequest) {
         // VISION : les images jointes au message sont transmises au modèle
         // (URLs R2 signées — parts vision réelles).
         const visionImages = await visionImagesFor(body.attachments, body.attachmentPath ? { path: body.attachmentPath, name: body.attachmentName ?? body.attachmentPath } : null);
+        // Task 131 : latence du tour mesurée autour de la GÉNÉRATION seule
+        // (l'appel LLM), pas autour des lectures de contexte amont.
+        const chatTurnStartedAt = Date.now();
         const reply = await answerAsAgent(
           user.uid,
           agent,
@@ -815,8 +819,13 @@ export async function POST(request: NextRequest) {
           },
           visionImages,
         );
+        const chatLatencyMs = Date.now() - chatTurnStartedAt;
         await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
         after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: reply, mode: "chat" }));
+        // Task 131 : analytique par agent — fire-and-forget via after()
+        // (après l'envoi de la réponse), jamais attendue : un échec est avalé
+        // dans recordAgentTurn (log warn), le chat ne ralentit pas.
+        after(() => recordAgentTurn({ agentId: agent.id, conversationId, latencyMs: chatLatencyMs, mode: "chat" }));
         if (agent.memoryEnabled && shouldSummarize(priorMessageCount + 2)) {
           after(() => summarizeConversation({
             userId: user.uid,
@@ -1005,12 +1014,18 @@ export async function POST(request: NextRequest) {
       });
 
       let result;
+      // Task 131 : latence du tour de mission mesurée autour de l'EXÉCUTION
+      // (runtime.run()), du lancement à l'état terminal.
+      const taskTurnStartedAt = Date.now();
       try {
         result = await runtime.run();
       } catch (error) {
         // ESCROW V2 : mission échue → le frais de résultat réservé est LIBÉRÉ
         // (fail-soft — l'échec visible reste inchangé).
         await captureMissionEscrow({ userId: user.uid, executionId: plan.executionId, missionStatus: "failed" }).catch(() => undefined);
+        // Task 131 : l'échec d'exécution alimente AUSSI l'analytique
+        // (fire-and-forget, jamais bloquant).
+        after(() => recordAgentTurn({ agentId: agent.id, conversationId, latencyMs: Date.now() - taskTurnStartedAt, errors: 1, mode: "task" }));
         return NextResponse.json({
           mode: "agent",
           status: "failed",
@@ -1081,6 +1096,22 @@ export async function POST(request: NextRequest) {
         ? "J'ai exécuté les étapes autorisées. Une ou plusieurs actions nécessitent maintenant votre confirmation."
         : undefined;
       after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: taskReply ?? finalText ?? "", mode: "task" }));
+
+      // Task 131 : analytique par agent du tour de mission — même doctrine
+      // fail-soft (after(), jamais d'await bloquant, erreurs avalées).
+      const toolStepIds = new Set(result.plan.steps.filter((step) => step.toolName).map((step) => step.id));
+      const failedSteps = result.plan.steps.filter((step) => step.status === "failed").length;
+      const taskLatencyMs = Date.now() - taskTurnStartedAt;
+      after(() => recordAgentTurn({
+        agentId: agent.id,
+        conversationId,
+        latencyMs: taskLatencyMs,
+        tokensIn: result.billing.llmInputTokens,
+        tokensOut: result.billing.llmOutputTokens,
+        toolCalls: result.observations.filter((observation) => toolStepIds.has(observation.stepId)).length,
+        errors: failedSteps > 0 ? failedSteps : result.status === "failed" ? 1 : 0,
+        mode: "task",
+      }));
 
       return NextResponse.json({
         mode: "agent",
