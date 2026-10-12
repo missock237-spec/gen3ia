@@ -12,7 +12,7 @@
  */
 
 // Task 106-a — TYPES CANONIQUES du pipeline (source unique lib/video/types.ts)
-import { VIDEO_ASPECT_RATIOS, type VideoExportTarget } from "@/lib/video/types";
+import { VIDEO_ASPECT_RATIOS, type VideoExportTarget, type SubtitleStyleName, type VideoEffectPreset } from "@/lib/video/types";
 
 /* ────────────────────────────────────────────────────────────────────────
  * FRONTIÈRES DE MOT UNICODE (fix captures 13:02 — cause racine).
@@ -112,12 +112,24 @@ const NUMBER_WORDS: Record<string, number> = {
  * Paramètres de production détectés dans la demande (tous optionnels).
  * `derivedTargets` reprend les formats de diffusion dérivés du pipeline
  * (lib/video/types.ts) — ex. une demande TikTok produit un 9:16 + shorts.
+ * Task 134 — sous-titres (activation + style + position) et ambiance
+ * d'effets d'animation détectés DÉTERMINISTEMENT (zéro LLM).
  */
 export interface VideoRequestParams {
   targetDurationSec?: number;
   aspectRatio?: (typeof VIDEO_ASPECT_RATIOS)[number];
   platform?: string;
   derivedTargets?: VideoExportTarget[];
+  /** Task 134 — sous-titres explicitement demandés (« avec sous-titres »). */
+  subtitlesEnabled?: boolean;
+  /** Task 134 — style de sous-titres (« karaoké », « jaunes », « TikTok »…). */
+  subtitleStyle?: SubtitleStyleName;
+  /** Task 134 — position des sous-titres (« en haut », « centrés »…). */
+  subtitlePosition?: "bottom" | "center" | "top";
+  /** Task 134 — ambiance d'effets (« dynamique », « cinéma », « CapCut »…). */
+  effectPreset?: VideoEffectPreset;
+  /** Task 134 — narration explicitement refusée (« sans voix »). */
+  voiceEnabled?: boolean;
 }
 
 /** Durée cible en secondes lue dans le texte (bornée 10..3600), sinon undefined. */
@@ -226,6 +238,46 @@ export function extractVideoParams(text: string): VideoRequestParams {
   }
 
   if (derived.length > 0) params.derivedTargets = derived.slice(0, 4);
+
+  // Task 134 — SOUS-TITRES : activation, coupure, style et position lus
+  // DÉTERMINISTEMENT dans la demande (le pipeline applique style/position
+  // à la timeline au moment du rendu — défauts conservés sinon). Frontières
+  // UNICODE (U_START/U_END) : les styles finissent souvent par un accent
+  // (« karaoké ») que `\b` ASCII ne sait pas borner ; pluriels gérés
+  // explicitement (`\p{L}*` gourmand ferait échouer « jaunes »).
+  const re = (pattern: string) => new RegExp(pattern, "iu");
+  const SUB = "sous[- ]?titr\\p{L}*";
+  if (re(`${U_START}(?:sans|pas de) ${SUB}`).test(lower) || re(`${U_START}(?:no|without) subtitles?${U_END}`).test(lower)) {
+    params.subtitlesEnabled = false;
+  } else if (re(`${U_START}${SUB}`).test(lower) || re(`${U_START}subtitles?${U_END}`).test(lower)) {
+    params.subtitlesEnabled = true;
+  }
+  if (re(`${U_START}karaok[ée]${U_END}`).test(lower)) params.subtitleStyle = "karaoke_pop";
+  else if (re(`${SUB} jaunes?${U_END}`).test(lower)) params.subtitleStyle = "cinematic_yellow";
+  else if (re(`${SUB} (?:tr[èe]s )?(?:gros|bold|impact)s?${U_END}`).test(lower) || re(`${U_START}style tik[- ]?tok${U_END}`).test(lower)) params.subtitleStyle = "shorts_bold";
+  else if (re(`${SUB} (?:minima\\p{L}*|[ée]pur\\p{L}*|sobres?)${U_END}`).test(lower)) params.subtitleStyle = "minimal";
+  else if (re(`${SUB} documentaire\\p{L}*${U_END}`).test(lower)) params.subtitleStyle = "documentary";
+  if (re(`${SUB} en haut${U_END}`).test(lower) || re(`${U_START}subtitles? (?:at )?top${U_END}`).test(lower)) {
+    params.subtitlePosition = "top";
+  } else if (re(`${SUB} centr[ée]s?${U_END}`).test(lower) || re(`${U_START}subtitles? centered${U_END}`).test(lower)) {
+    params.subtitlePosition = "center";
+  } else if (re(`${SUB} en bas${U_END}`).test(lower)) {
+    params.subtitlePosition = "bottom";
+  }
+
+  // Task 134 — AMBIANCE D'EFFETS D'ANIMATION (preset → effets réels du
+  // catalogue fermé, fusionnés dans les clips image au rendu).
+  if (re(`${U_START}(?:comme|style|mode) capcut${U_END}`).test(lower)) params.effectPreset = "capcut";
+  else if (re(`${U_START}effets? cin[ée]matiques?${U_END}`).test(lower) || re(`${U_START}(?:style|look) cin[ée]matique${U_END}`).test(lower) || re(`${U_START}cin[ée]matique${U_END}`).test(lower) || re(`${U_START}filmique${U_END}`).test(lower)) params.effectPreset = "cinematic";
+  else if (re(`${U_START}effets? dynamiques?${U_END}`).test(lower) || re(`${U_START}montage dynamique${U_END}`).test(lower) || re(`${U_START}effets? (?:visuels? )?marqu[ée]s?${U_END}`).test(lower) || re(`${U_START}punchy${U_END}`).test(lower)) params.effectPreset = "dynamic";
+  else if (re(`${U_START}effets? (?:discrets?|subtils?|l[ée]gers?)${U_END}`).test(lower) || re(`${U_START}subtils?${U_END}`).test(lower)) params.effectPreset = "subtle";
+  else if (re(`${U_START}(?:sans|aucun) effets?${U_END}`).test(lower) || re(`${U_START}pas d[''’]effets?${U_END}`).test(lower) || re(`${U_START}no effects?${U_END}`).test(lower)) params.effectPreset = "none";
+
+  // Task 134 — narration refusée explicitement (« sans voix », « vidéo muette »).
+  if (re(`${U_START}sans voix${U_END}`).test(lower) || re(`${U_START}sans narration${U_END}`).test(lower) || re(`${U_START}vid[ée]o muette${U_END}`).test(lower) || re(`${U_START}no (?:voice ?-?over|narration)${U_END}`).test(lower)) {
+    params.voiceEnabled = false;
+  }
+
   return params;
 }
 

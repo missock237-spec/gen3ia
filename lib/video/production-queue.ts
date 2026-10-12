@@ -48,7 +48,9 @@ import { ensureMusicBed } from "@/lib/video/audio-engine";
 // livraison du master dans le chat à la complétion.
 import { createVideoPlaybackUrl, isOwnedVideoKey } from "@/lib/video/storage";
 import { startRenderJob, getJob } from "@/lib/video/render-queue";
-import type { VideoExportTarget, VideoProject, ScriptScene, VoiceProfile } from "@/lib/video/types";
+import type { VideoExportTarget, VideoProject, ScriptScene, VoiceProfile, SubtitleStyleName, VideoEffectPreset, VideoTimeline } from "@/lib/video/types";
+import { mergePresetEffects, PRESET_MOTION, parseEffectPreset } from "@/lib/video/effect-presets";
+import { buildMotion } from "@/lib/video/motion-service";
 import { mapWithConcurrency } from "@/lib/video/concurrency";
 import {
   classifyTickError,
@@ -119,6 +121,12 @@ export interface ProductionJobOptions {
   voiceEnabled?: boolean;
   /** false → sous-titres désactivés sur la timeline avant rendu. */
   subtitlesEnabled?: boolean;
+  /** Task 134 — style de sous-titres demandé à la création (karaoké…). */
+  subtitleStyle?: SubtitleStyleName;
+  /** Task 134 — position des sous-titres (bottom/center/top). */
+  subtitlePosition?: "bottom" | "center" | "top";
+  /** Task 134 — ambiance d'effets d'animation appliquée aux clips image. */
+  effectPreset?: VideoEffectPreset;
   /** Formats dérivés à produire après le master (validés RenderRequestSchema). */
   derivedTargets?: VideoExportTarget[];
 }
@@ -420,6 +428,33 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
     options.targetDurationSec = Math.min(VIDEO_LIMITS.maxDurationSec, Math.max(VIDEO_LIMITS.minDurationSec, Math.round(durationRaw)));
   } else {
     delete options.targetDurationSec;
+  }
+  // Task 134 — DÉFENSE EN PROFONDEUR sur les nouvelles options de création :
+  // style/position de sous-titres et preset d'effets sont validés (catalogues
+  // fermés) — une valeur invalide d'un LLM est écartée silencieusement plutôt
+  // que de faire échouer la production (l'utilisateur garde le défaut).
+  const styleRaw = options.subtitleStyle;
+  if (styleRaw !== undefined) {
+    const known = ["documentary", "minimal", "shorts_bold", "cinematic_yellow", "karaoke_pop"] as const;
+    if (typeof styleRaw === "string" && (known as readonly string[]).includes(styleRaw)) {
+      options.subtitleStyle = styleRaw as (typeof known)[number];
+    } else {
+      delete options.subtitleStyle;
+    }
+  }
+  const positionRaw = options.subtitlePosition;
+  if (positionRaw !== undefined) {
+    if (positionRaw === "bottom" || positionRaw === "center" || positionRaw === "top") {
+      options.subtitlePosition = positionRaw;
+    } else {
+      delete options.subtitlePosition;
+    }
+  }
+  const presetParsed = parseEffectPreset(options.effectPreset);
+  if (presetParsed) {
+    options.effectPreset = presetParsed;
+  } else if (options.effectPreset !== undefined) {
+    delete options.effectPreset;
   }
   const promptRaw = (params.prompt ?? "").trim();
   const briefSource =
@@ -1299,8 +1334,54 @@ async function stageRender(job: VideoProductionJob): Promise<ProductionStageResu
     throw new Error(`Moteur de rendu indisponible sur cette plateforme (${diagnostics.join(" ; ")}) — le rendu sera retenté automatiquement ; aucune facturation tant qu'aucun rendu ne démarre.`);
   }
   const project = await getOwnedProjectOrThrow(job.userId, job.projectId);
+  // Task 134 — PRÉPARATION TIMELINE AVANT RENDU : les options de création
+  // (sous-titres on/off + style + position, ambiance d'effets) sont
+  // appliquées sur la timeline AVANT startRenderJob. La timeline est
+  // matérialisée si nécessaire (ensureProjectTimeline, idempotent) — sinon
+  // un projet jamais ouvert dans l'atelier ne recevrait jamais les choix
+  // exprimés dans la demande (le bootstrap du rendu repart du scénario).
+  const wantsSubtitleTuning = Boolean(
+    job.options?.subtitleStyle || job.options?.subtitlePosition || job.options?.subtitlesEnabled === false,
+  );
+  const wantsEffectPreset = Boolean(job.options?.effectPreset && job.options.effectPreset !== "none");
+  if (wantsSubtitleTuning || wantsEffectPreset) {
+    const { ensureProjectTimeline } = await import("@/lib/video/timeline-bootstrap");
+    const ensured = await ensureProjectTimeline(job.userId, job.projectId);
+    let timeline = ensured.timeline;
+    // 1) Sous-titres : coupure ET style/position demandés à la création.
+    const captionsPatch: Partial<VideoTimeline["captions"]> = {};
+    if (job.options?.subtitlesEnabled === false) captionsPatch.enabled = false;
+    if (job.options?.subtitleStyle) captionsPatch.style = job.options.subtitleStyle;
+    if (job.options?.subtitlePosition) captionsPatch.position = job.options.subtitlePosition;
+    if (Object.keys(captionsPatch).length > 0) {
+      timeline = { ...timeline, captions: { ...timeline.captions, ...captionsPatch } };
+    }
+    // 2) Effets d'animation : le preset est FUSIONNÉ dans chaque clip image
+    // (les effets choisis par le scénario restent maîtres — merge sans
+    // doublon) + motion recommandée pour les clips sans mouvement explicite.
+    const preset = parseEffectPreset(job.options?.effectPreset);
+    if (preset && preset !== "none") {
+      const motionPreset = PRESET_MOTION[preset];
+      timeline = {
+        ...timeline,
+        tracks: timeline.tracks.map((track) =>
+          track.kind !== "image"
+            ? track
+            : {
+                ...track,
+                clips: track.clips.map((clip) => ({
+                  ...clip,
+                  effects: mergePresetEffects(clip.effects ?? [], preset),
+                  ...(!clip.motion && motionPreset ? { motion: buildMotion(motionPreset, clip.durationSec) } : {}),
+                })),
+              },
+        ),
+      };
+    }
+    await patchProject(job.userId, job.projectId, { timeline });
+  }
   // Option subtitlesEnabled:false → sous-titres coupés sur la timeline.
-  if (job.options?.subtitlesEnabled === false && project.timeline?.captions?.enabled) {
+  if (job.options?.subtitlesEnabled === false && project.timeline?.captions?.enabled && !wantsSubtitleTuning) {
     await patchProject(job.userId, job.projectId, {
       timeline: { ...project.timeline, captions: { ...project.timeline.captions, enabled: false } },
     });

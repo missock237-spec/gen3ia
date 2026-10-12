@@ -21,7 +21,10 @@ import { appendMessage, createConversation, getConversation, listMessages, updat
 import { createArtifact } from "@/lib/domain/artifacts/repository";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { policyForAgent } from "@/lib/agents/personalized-plan";
-import { answerAsAgent, classifyRequest, historyContextNote, unavailableCapabilityReply, planAgentTask } from "@/lib/agents/chat-engine";
+import { answerAsAgent, classifyRequest, historyContextNote, unavailableCapabilityReply, planAgentTask, CLARIFICATION_CONFIDENCE_THRESHOLD } from "@/lib/agents/chat-engine";
+// Task 135 — garde d'incompréhension : détection déterministe + marqueur de
+// clarification (suivi contextuel au tour suivant).
+import { detectAmbiguitySignals, deterministicClarifyingQuestion, markClarification, resolveClarifiedObjective } from "@/lib/ai/clarification-followup";
 import { recordAgentRun } from "@/lib/agents/conversation-run";
 import { recordAgentTurn } from "@/lib/agents/analytics";
 import { deliverMissionToConversation } from "@/lib/agents/mission-delivery";
@@ -695,7 +698,19 @@ export async function POST(request: NextRequest) {
       const attachmentsContext = chatAttachments.length > 0
         ? await loadAgentAttachmentsContext(user.uid, chatAttachments).catch(() => ({ note: "", files: [] }))
         : { note: "", files: [] };
-      const note = [attachmentsContext.note, memoryNoteFor(agent)].filter(Boolean).join("\n\n") || undefined;
+      // Task 135 — SUIVI CONTEXTUEL : si l'utilisateur RÉPOND à une question
+      // de clarification (🔄 Précision) posée au tour précédent, l'objectif
+      // recomposé (demande d'origine + précision) est injecté dans le
+      // contexte — la réponse n'est jamais traitée comme un nouveau sujet
+      // isolé, et le planificateur exécute la demande COMPLÈTE.
+      const clarificationFollowUp = resolveClarifiedObjective(
+        body.message,
+        history.map((item) => ({ role: item.role, content: item.content })),
+      );
+      const clarificationNote = clarificationFollowUp
+        ? `[L'utilisateur répond à votre question de clarification « ${clarificationFollowUp.question.slice(0, 200)} ». Demande d'origine : « ${clarificationFollowUp.originalRequest.slice(0, 400)} ». Traitez le message courant comme la PRÉCISION manquante de cette demande d'origine — exécutez la demande complète (origine + précision), pas la précision seule.]`
+        : undefined;
+      const note = [attachmentsContext.note, memoryNoteFor(agent), clarificationNote].filter(Boolean).join("\n\n") || undefined;
 
       // Classification AVEC l'historique récent ET le contexte réel des
       // pièces jointes : le classificateur résout les références implicites
@@ -785,16 +800,52 @@ export async function POST(request: NextRequest) {
       // entre deux actions matériellement différentes et qu'aucun choix par
       // défaut raisonnable n'existe — on la répond telle quelle au lieu de
       // deviner une action à exécuter (jamais pour une simple question).
-      if (classification.mode === "chat" && classification.clarifyingQuestion) {
-        const reply = classification.clarifyingQuestion;
-        await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: reply });
-        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: reply, mode: "chat" }));
+      //
+      // Task 135 — GARDE D'INCOMPRÉHENSION (amélioration #1) : la
+      // clarification s'applique désormais AUSSI au mode "task" — mieux
+      // vaut demander que lancer une mission coûteuse sur une demande mal
+      // comprise. Trois déclencheurs :
+      //  a) clarifyingQuestion fournie par le classificateur (LLM) ;
+      //  b) confiance < CLARIFICATION_CONFIDENCE_THRESHOLD en mode task ;
+      //  c) ambiguity "high" en mode task.
+      // En (b)/(c) sans question LLM, une question déterministe est posée
+      // (marqueur 🔄 pour le suivi contextuel au tour suivant).
+      let clarifyingQuestion = classification.clarifyingQuestion?.trim() || undefined;
+      let suggestions = classification.suggestions;
+      // ANTI-BOUCLE : si l'utilisateur répond DÉJÀ à une clarification (🔄
+      // détecté dans l'historique), le garde déterministe est désactivé —
+      // seule la question du classificateur LLM (qui voit la note de
+      // contexte du suivi) peut passer, jamais le repli mécanique.
+      if (
+        !clarifyingQuestion &&
+        !clarificationFollowUp &&
+        classification.mode === "task" &&
+        (classification.ambiguity === "high" ||
+          (typeof classification.confidence === "number" && classification.confidence < CLARIFICATION_CONFIDENCE_THRESHOLD))
+      ) {
+        // Détection déterministe d'abord (référent implicite, demande trop
+        // courte) — repli : question générique de reformulation.
+        const signals = detectAmbiguitySignals(body.message);
+        clarifyingQuestion =
+          deterministicClarifyingQuestion(signals, body.message) ??
+          `Je veux être sûr de bien comprendre votre demande avant d'agir : pouvez-vous reformuler ce que vous attendez de moi précisément (action, livrable, contexte) ? Voici ce que j'ai compris pour l'instant : « ${body.message.trim().slice(0, 140)} ».`;
+        suggestions = undefined;
+      }
+      if (clarifyingQuestion) {
+        const reply = markClarification(clarifyingQuestion);
+        const clarificationExtras = suggestions && suggestions.length > 0
+          ? "\n\nVous pouvez répondre directement, ou choisir :\n" + suggestions.map((s) => `- ${s}`).join("\n")
+          : "";
+        const content = reply + clarificationExtras;
+        await appendMessage({ conversationId, userId: user.uid, role: "assistant", content });
+        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: content, mode: "chat" }));
         return NextResponse.json({
           mode: "chat",
           conversationId,
           agentId: agent.id,
           classification,
-          reply,
+          reply: content,
+          ...(suggestions && suggestions.length > 0 ? { suggestions } : {}),
         });
       }
       if (classification.mode === "chat") {

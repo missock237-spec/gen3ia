@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ToolDefinition } from "@/lib/tools/types";
 import type { ProductionStage } from "@/lib/video/production-queue";
-import { VIDEO_ASPECT_RATIOS as PIPELINE_ASPECT_RATIOS } from "@/lib/video/types";
+import { VIDEO_ASPECT_RATIOS as PIPELINE_ASPECT_RATIOS, VIDEO_EFFECT_PRESETS, SUBTITLE_STYLES as PIPELINE_SUBTITLE_STYLES } from "@/lib/video/types";
 
 /**
  * Outil video.create — production vidéo complète RÉELLE (audit outils
@@ -49,6 +49,15 @@ export const VIDEO_ASPECT_RATIOS = PIPELINE_ASPECT_RATIOS;
 /** Ratio d'aspect vidéo valide (union des valeurs du constant partagé). */
 export type VideoAspectRatio = (typeof VIDEO_ASPECT_RATIOS)[number];
 
+/** Styles de sous-titres du pipeline (source unique lib/video/types.ts). */
+export const SUBTITLE_STYLES = PIPELINE_SUBTITLE_STYLES;
+
+/** Position des sous-titres à l'écran. */
+export const SUBTITLE_POSITIONS = ["bottom", "center", "top"] as const;
+
+/** Presets d'effets d'animation (source unique lib/video/types.ts). */
+export const VIDEO_PRESET_NAMES = VIDEO_EFFECT_PRESETS;
+
 const CreateVideoInput = z.object({
   /** Brief créatif complet : sujet, ton, durée visée, public, style. */
   prompt: z.string().min(10).max(4000),
@@ -74,6 +83,20 @@ const CreateVideoInput = z.object({
   voiceEnabled: z.boolean().optional(),
   /** Incruster les sous-titres. */
   subtitlesEnabled: z.boolean().optional(),
+  /**
+   * Task 134 — style de sous-titres à la création (karaoké, jaune cinéma,
+   * bold TikTok…) : appliqué à la timeline AVANT le rendu (l'ancien chemin
+   * n'exposait ce choix qu'en révision post-génération).
+   */
+  subtitleStyle: z.enum(PIPELINE_SUBTITLE_STYLES).optional(),
+  /** Position des sous-titres à l'écran (défaut pipeline : bottom). */
+  subtitlePosition: z.enum(SUBTITLE_POSITIONS).optional(),
+  /**
+   * Task 134 — ambiance d'effets d'animation (« subtle », « dynamic »,
+   * « cinematic », « capcut ») : traduite en effets réels du catalogue
+   * fermé et fusionnée dans les clips image de la timeline au rendu.
+   */
+  effectPreset: z.enum(VIDEO_EFFECT_PRESETS).optional(),
   /**
    * Formats dérivés à produire après le master (max 4 — ex : shorts_9_16,
    * tiktok_9_16). L'intercept du chat les déduit de la plateforme demandée.
@@ -109,6 +132,9 @@ const OPTION_KEYS = [
   "musicMood",
   "voiceEnabled",
   "subtitlesEnabled",
+  "subtitleStyle",
+  "subtitlePosition",
+  "effectPreset",
   "derivedTargets",
 ] as const;
 
@@ -142,7 +168,7 @@ export const createVideoTool: ToolDefinition<
   id: "video.create",
   name: "Video Production",
   description:
-    "Start a fully autonomous REAL video production (script, storyboard, visuals, voice-over, editing, render) with full creative control (duration, resolution, aspect ratio, language, style, audience, platform, music mood, derived formats) and track its progress via the returned jobId/projectId.",
+    "Start a fully autonomous REAL video production (script, storyboard, visuals, voice-over, editing, render) with full creative control (duration, resolution, aspect ratio, language, style, audience, platform, music mood, derived formats, animation effects preset, subtitle style/position) and track its progress via the returned jobId/projectId.",
   category: "media",
   risk: "medium",
   inputSchema: CreateVideoInput,

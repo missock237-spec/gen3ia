@@ -64,6 +64,7 @@ import { estimateRenderCost, reserveRenderBudget, settleRenderBudget, releaseRen
 import { assembleRecursive } from "@/lib/video/long-video-service";
 import { VIDEO_LIMITS, VideoQuotaError, MAX_AUTO_FIX_ROUNDS } from "@/lib/video/security";
 import { analyzeNarrationAmplitude, alignSceneBoundariesToSilences, type VoiceTimeline } from "@/lib/video/voice-sync";
+import { runSubAgentWave, shouldDeploySubAgents } from "@/lib/video/sub-agents";
 import { createNotification } from "@/lib/notifications/repository";
 import { ensureAudioAssetsForProject } from "@/lib/video/audio-engine";
 import { enqueueVideoRenderTick, type TickPublishResult } from "@/lib/queue/tick-queue";
@@ -869,23 +870,28 @@ async function stagePlan(job: RenderJob, io: EngineIo): Promise<void> {
   const neededSfx = [...new Set(project.script.scenes.flatMap((s) => s.soundEffects))];
   const missingSfx = neededSfx.filter((name) => !sfxByName.has(name));
   const musicBedExplicit = timeline.musicBed?.assetId ? await getAsset(job.userId, timeline.musicBed.assetId) : null;
-  if (missingSfx.length > 0 || (!musicBedExplicit && musicAssets.length === 0)) {
-    const ensured = await ensureAudioAssetsForProject({
-      userId: job.userId,
-      project,
-      totalDurationSec: project.script.estimatedDurationSec,
-      neededSfx: missingSfx,
-    });
-    for (const [name, asset] of ensured.sfxByName) sfxByName.set(name, asset);
-    if (ensured.musicBed) musicAssets.push(ensured.musicBed);
+  const needsAudioBackfill = missingSfx.length > 0 || (!musicBedExplicit && musicAssets.length === 0);
+
+  // Task 134 — SOUS-AGENTS : le backfill audio (SFX procéduraux + lit
+  // musical) et l'analyse voice-sync des narrations sont INDÉPENDANTS
+  // (fichiers tmp distincts, aucun shared state) — ils s'exécutent
+  // désormais EN PARALLÈLE au lieu d'enchaîner deux phases séquentielles.
+  const [audioBackfill, voiceSyncByScene] = await Promise.all([
+    needsAudioBackfill
+      ? ensureAudioAssetsForProject({
+          userId: job.userId,
+          project,
+          totalDurationSec: project.script.estimatedDurationSec,
+          neededSfx: missingSfx,
+        }).catch(() => null)
+      : Promise.resolve(null),
+    buildVoiceSyncTimelines(job, io, narrationByScene, project.script.scenes),
+  ]);
+  if (audioBackfill) {
+    for (const [name, asset] of audioBackfill.sfxByName) sfxByName.set(name, asset);
+    if (audioBackfill.musicBed) musicAssets.push(audioBackfill.musicBed);
   }
   const musicBedFinal = musicBedExplicit ?? musicAssets[0];
-
-  // Task 119 — SYNCHRO VOIX-VISUEL : analyse l'énergie réelle (RMS par
-  // fenêtres, astats) des narrations MATÉRIALISÉES dans le tmp — une par
-  // scène, bornée par VIDEO_LIMITS.maxVoiceSyncScenes (dégradation honnête :
-  // au-delà, les scènes restantes n'ont pas d'effets audio-réactifs).
-  const voiceSyncByScene = await buildVoiceSyncTimelines(job, io, narrationByScene, project.script.scenes);
 
   // Task 119 — COUPES ALIGNÉES : le projet de travail reçoit les frontières
   // ajustées sur les silences/fin de phrase (UNE source de vérité pour
@@ -934,6 +940,14 @@ async function stagePlan(job: RenderJob, io: EngineIo): Promise<void> {
  * timeline d'amplitude → effets audio-réactifs + alignement des coupes.
  * JAMAIS BLOQUANT : une analyse en échec est ignorée (rendu sans synchro
  * plutôt que pas de rendu).
+ *
+ * Task 134 — SOUS-AGENTS PARALLÈLES : l'analyse historique était
+ * SÉQUENTIELLE (jusqu'à maxVoiceSyncScenes = 150 analyses ffprobe/astats
+ * l'une après l'autre — goulot majeur du stagePlan). Chaque scène est
+ * désormais confiée à un sous-agent de synchro voix, exécutés en vague
+ * bornée par VIDEO_LIMITS.maxParallelVoiceSyncAnalyzes. Aucune écriture
+ * Firestore par sous-agent : la map est consolidée en mémoire (contrat
+ * inchangé pour l'appelant).
  */
 async function buildVoiceSyncTimelines(
   job: RenderJob,
@@ -946,19 +960,32 @@ async function buildVoiceSyncTimelines(
   const candidates = scenes
     .filter((scene) => narrationByScene.has(scene.id))
     .slice(0, Math.max(1, VIDEO_LIMITS.maxVoiceSyncScenes));
-  for (const scene of candidates) {
+  if (candidates.length === 0) return timelines;
+
+  const analyzeOne = async (scene: { id: string; durationSec: number }): Promise<void> => {
     const asset = narrationByScene.get(scene.id)!;
-    try {
-      const ext = asset.r2Key.includes(".") ? asset.r2Key.split(".").pop()! : "mp3";
-      const audioFile = await io.materialize(asset, `vsync_${scene.id}.${ext}`);
-      const timeline = await analyzeNarrationAmplitude({
-        audioFile,
-        cwd: io.tmpDir,
-        durationSec: asset.media?.durationSec ?? scene.durationSec,
-      });
-      if (timeline && timeline.windows.length > 0) timelines.set(scene.id, timeline);
-    } catch {
-      // Analyse impossible pour CETTE scène : ignorée (jamais bloquant).
+    const ext = asset.r2Key.includes(".") ? asset.r2Key.split(".").pop()! : "mp3";
+    const audioFile = await io.materialize(asset, `vsync_${scene.id}.${ext}`);
+    const timeline = await analyzeNarrationAmplitude({
+      audioFile,
+      cwd: io.tmpDir,
+      durationSec: asset.media?.durationSec ?? scene.durationSec,
+    });
+    if (timeline && timeline.windows.length > 0) timelines.set(scene.id, timeline);
+  };
+
+  if (shouldDeploySubAgents(candidates.length)) {
+    await runSubAgentWave("voice_sync", candidates, VIDEO_LIMITS.maxParallelVoiceSyncAnalyzes, analyzeOne, {
+      log: (message) => io.log(message),
+    });
+  } else {
+    // Petit lot : exécution directe inchangée (zéro overhead de vague).
+    for (const scene of candidates) {
+      try {
+        await analyzeOne(scene);
+      } catch {
+        // Analyse impossible pour CETTE scène : ignorée (jamais bloquant).
+      }
     }
   }
   return timelines;
@@ -980,7 +1007,9 @@ function applyAlignedScenes(project: VideoProject, voiceSyncByScene: Map<string,
   return { ...project, script: { ...project.script, scenes } };
 }
 
-/** DOWNLOAD : préflight — vérifie que TOUTES les entrées sont résolubles. */
+/** DOWNLOAD : préflight — vérifie que TOUTES les entrées sont résolubles.
+ * Task 134 — SOUS-AGENTS : les vérifications getAsset (une lecture par
+ * entrée audio) sont exécutées en vague parallèle bornée. */
 async function stageDownload(job: RenderJob, io: EngineIo): Promise<void> {
   const plan = job.plan;
   if (!plan) throw new Error("Plan absent.");
@@ -988,15 +1017,26 @@ async function stageDownload(job: RenderJob, io: EngineIo): Promise<void> {
   for (const item of plan.audioMix.narration) ids.add(item.assetId);
   for (const item of plan.audioMix.sfx) ids.add(item.assetId);
   for (const item of plan.audioMix.music) ids.add(item.assetId);
-  for (const id of ids) {
+  const idList = [...ids];
+  const checkOne = async (id: string): Promise<void> => {
     const asset = await io.getAsset(id);
     if (!asset) throw new Error(`Asset manquant avant rendu : ${id}`);
+  };
+  if (shouldDeploySubAgents(idList.length)) {
+    const wave = await runSubAgentWave("audio_preflight", idList, VIDEO_LIMITS.maxParallelPreflightChecks, checkOne);
+    // Une entrée manquante reste FATALE (contrat historique conservé).
+    const firstMissing = wave.outcomes.find((o) => o.status === "rejected");
+    if (firstMissing) throw firstMissing.reason;
+  } else {
+    for (const id of idList) {
+      await checkOne(id);
+    }
   }
   // Fichier ASS matérialisé en local pour le brûlage final.
   if (plan.subtitles?.assR2Key) {
     await io.materializeByName(plan.subtitles.assR2Key, "subtitles.ass");
   }
-  await io.log(`Préflight OK (${ids.size} entrées audio vérifiées).`);
+  await io.log(`Préflight OK (${idList.length} entrées audio vérifiées).`);
 }
 
 /**
@@ -1361,36 +1401,64 @@ async function stageExports(job: RenderJob, io: EngineIo): Promise<StageOutcome>
       return { kind: "continue", stage: "segments", message: "Reprise : master absent, rendu relancé." };
     }
   }
-  for (const target of pending) {
-    const isVertical = target.target.endsWith("9_16");
-    let assFileName: string | undefined;
-    if (plan.subtitles?.assR2Key) {
-      assFileName = "subtitles.ass";
-      if (isVertical) {
-        const project = await getOwnedProjectOrThrow(job.userId, job.projectId);
-        const shortsAss = buildShortsAss(project, 1080, 1920);
-        if (shortsAss) await io.writeTmp("subtitles_shorts.ass", shortsAss);
-        assFileName = shortsAss ? "subtitles_shorts.ass" : "subtitles.ass";
+  // Task 134 — SOUS-AGENTS D'EXPORT : les formats dérivés (Shorts, TikTok,
+  // Reels, carré…) sont indépendants (master figé, geometries distinctes,
+  // fichiers export_<target>.mp4 séparés) — ils sont rendus en vague
+  // parallèle bornée au lieu d'une boucle séquentielle. Le checkpoint est
+  // CONSOLIDÉ UNE SEULE FOIS après la vague (contrat Firestore ~1 écriture/s) :
+  // un export en échec reste "pending" et est repris au tick suivant.
+  // Fichier ASS Shorts partagé : préparé UNE fois AVANT la vague (aucune
+  // écriture concurrente du même fichier).
+  if (pending.length > 0) {
+    const planHasSubtitles = Boolean(plan.subtitles?.assR2Key);
+    let shortsAssPrepared = false;
+    if (planHasSubtitles && pending.some((t) => t.target.endsWith("9_16"))) {
+      const project = await getOwnedProjectOrThrow(job.userId, job.projectId);
+      const shortsAss = buildShortsAss(project, 1080, 1920);
+      if (shortsAss) {
+        await io.writeTmp("subtitles_shorts.ass", shortsAss);
+        shortsAssPrepared = true;
       }
     }
-    const outFile = await renderExportFormat({
-      io,
-      masterFile: join2(io.tmpDir, "master.mp4"),
-      target: target.target,
-      assFileName,
-      // Task 120 — QC/sonde ALLÉGÉE : la durée du master est DÉJÀ connue du
-      // job (sonde QC en cache, ou output posé au finalize des jobs
-      // d'exports seuls) — aucune re-sonde ffprobe inutile.
-      outputDurationSec: job.checkpoints.masterProbe?.durationSec ?? job.output?.durationSec,
-    });
     const { readFile, stat } = await import("node:fs/promises");
-    const body = await readFile(outFile);
-    const sizeBytes = (await stat(outFile)).size;
-    const r2Key = await io.uploadRender(`renders/${job.id}/export_${target.target}.mp4`, body, "renders");
-    const index = job.exports.findIndex((e) => e.target === target.target);
-    job.exports[index] = { ...target, r2Key, sizeBytes, status: "done" };
+    const renderOneExport = async (target: (typeof pending)[number]): Promise<{ target: string; r2Key: string; sizeBytes: number }> => {
+      const isVertical = target.target.endsWith("9_16");
+      const assFileName = !planHasSubtitles
+        ? undefined
+        : isVertical && shortsAssPrepared
+          ? "subtitles_shorts.ass"
+          : "subtitles.ass";
+      const outFile = await renderExportFormat({
+        io,
+        masterFile: join2(io.tmpDir, "master.mp4"),
+        target: target.target,
+        assFileName,
+        // Task 120 — QC/sonde ALLÉGÉE : la durée du master est DÉJÀ connue du
+        // job (sonde QC en cache, ou output posé au finalize des jobs
+        // d'exports seuls) — aucune re-sonde ffprobe inutile.
+        outputDurationSec: job.checkpoints.masterProbe?.durationSec ?? job.output?.durationSec,
+      });
+      const body = await readFile(outFile);
+      const sizeBytes = (await stat(outFile)).size;
+      const r2Key = await io.uploadRender(`renders/${job.id}/export_${target.target}.mp4`, body, "renders");
+      return { target: target.target, r2Key, sizeBytes };
+    };
+    const wave = await runSubAgentWave("export_render", pending, VIDEO_LIMITS.maxParallelExportRenders, renderOneExport);
+    // CONSOLIDATION UNIQUE : seuls les exports aboutis passent à "done" ;
+    // les échecs isolés restent "pending" (reprise au tick suivant, budget
+    // retryCount intact — un export raté ne fait pas échouer le rendu).
+    for (const outcome of wave.outcomes) {
+      if (outcome.status !== "fulfilled") continue;
+      const done = outcome.value;
+      const index = job.exports.findIndex((e) => e.target === done.target);
+      if (index >= 0) job.exports[index] = { ...job.exports[index], r2Key: done.r2Key, sizeBytes: done.sizeBytes, status: "done" };
+      await io.log(`Export ${done.target} livré (${Math.round(done.sizeBytes / 1024 / 1024)} Mo).`);
+    }
+    if (wave.rejected > 0) {
+      await io.log(`${wave.rejected} export(s) en échec isolé — repris automatiquement au cycle suivant.`);
+    }
     const doneCount = job.exports.filter((e) => e.status === "done").length;
-    // Task 95-c — état des exports via la couche résiliente.
+    // Task 95-c — état des exports via la couche résiliente (checkpoint consolidé).
     await writeCheckpointSet(
       JOBS_COLLECTION,
       job.id,
@@ -1401,7 +1469,6 @@ async function stageExports(job: RenderJob, io: EngineIo): Promise<StageOutcome>
       },
       job.userId,
     );
-    await io.log(`Export ${target.target} livré (${Math.round(sizeBytes / 1024 / 1024)} Mo).`);
   }
   const remaining = job.exports.filter((e) => e.status === "pending").length;
   if (remaining > 0) {

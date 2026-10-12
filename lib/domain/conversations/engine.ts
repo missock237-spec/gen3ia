@@ -44,6 +44,9 @@ import {
 import { enhancePromptForExecution, languageDirective } from "@/lib/ai/prompt-enhancer";
 import { imagesForModel } from "@/lib/ai/vision-input";
 import { extractVideoParams, extractVideoTitle, looksLikeVideoRequest, looksLikeVoiceRequest, resolveVoiceRequestFromContext, extractVoiceRequestText, type ContextVoiceResolution } from "@/lib/ai/video-intent";
+// Task 135 — clarification d'intention : marqueur 🔄, suivi contextuel et
+// garde déterministe d'ambiguïté (amélioration #1).
+import { markClarification, resolveClarifiedObjective, detectAmbiguitySignals, deterministicClarifyingQuestion } from "@/lib/ai/clarification-followup";
 import { isJulesConfigured } from "@/lib/integrations/jules/client";
 import { resolveCodeRequestFromContext, type ContextCodeResolution } from "@/lib/ai/code-intent";
 import { speakDirectForUser } from "@/lib/ai/voice-speak-direct";
@@ -287,11 +290,16 @@ const IntentSchema = z.object({
   reply: z.string().max(18000).optional().describe("Réponse directe si mode=chat"),
   objective: z.string().max(1000).optional().describe("Objectif du plan si mode=plan"),
   steps: z.array(IntentStepSchema).max(8).optional(),
-  /** Canal de clarification : vrai UNIQUEMENT si la demande est réellement
-   *  ambiguë entre deux actions matériellement différentes et qu'aucun
-   *  défaut raisonnable n'existe — alors poser UNE question précise. */
+  /** Canal de clarification (Task 135 — compréhension EXACTE) : vrai si
+   *  la compréhension n'est pas certaine (ambiguïté réelle, référent
+   *  implicite non résolvable, action coûteuse sur une interprétation
+   *  hasardeuse) — alors poser UNE question précise pour se rassurer. */
   needsClarification: z.boolean().optional(),
   clarifyingQuestion: z.string().max(600).optional().describe("Une seule question de clarification, si needsClarification"),
+  /** Confiance dans la compréhension de la demande (0.0..1.0). */
+  confidence: z.number().min(0).max(1).optional(),
+  /** Options de réponse rapides proposées à l'utilisateur (max 3). */
+  suggestions: z.array(z.string().max(60)).max(3).optional(),
 });
 
 export type TurnIntent = z.infer<typeof IntentSchema>;
@@ -588,8 +596,9 @@ export function buildIntentSystemPrompt(
       ? [
           "",
           "RÈGLE IMPÉRATIVE — VIDÉO : toute demande de CRÉATION/PRODUCTION d'une vidéo, clip, reel, short, trailer, bande-annonce ou montage vidéo est routée en mode=plan avec UN SEUL step :",
-          '  { title: "Production vidéo", toolName: "video.create", toolInput: { prompt: "<la demande EXACTE de l\'utilisateur : sujet, ton, message — fidèle, sans rien inventer>", title?: "<titre court>", aspectRatio?: "16:9" | "9:16" | "1:1" | "4:5" | "21:9", targetDurationSec?: <durée en secondes si l\'utilisateur la précise>, resolution?: "480p" | "720p" | "1080p" | "1440p" | "4K", language?: "<langue>", style?: "<style visuel/narratif>", audience?: "<public cible>", platform?: "<plateforme>", musicMood?: "cinematographique" | "documentaire" | "tension" | "energique" | "emotionnel" | "neutre", derivedTargets?: ["shorts_9_16" | "tiktok_9_16" | "reels_9_16" | "youtube_16_9" | "square_1_1" | "facebook_16_9"] } }.',
+          '  { title: "Production vidéo", toolName: "video.create", toolInput: { prompt: "<la demande EXACTE de l\'utilisateur : sujet, ton, message — fidèle, sans rien inventer>", title?: "<titre court>", aspectRatio?: "16:9" | "9:16" | "1:1" | "4:5" | "21:9", targetDurationSec?: <durée en secondes si l\'utilisateur la précise>, resolution?: "480p" | "720p" | "1080p" | "1440p" | "4K", language?: "<langue>", style?: "<style visuel/narratif>", audience?: "<public cible>", platform?: "<plateforme>", musicMood?: "cinematographique" | "documentaire" | "tension" | "energique" | "emotionnel" | "neutre", subtitlesEnabled?: boolean (sous-titres demandés/refusés), subtitleStyle?: "documentary" | "minimal" | "shorts_bold" | "cinematic_yellow" | "karaoke_pop", subtitlePosition?: "bottom" | "center" | "top", effectPreset?: "none" | "subtle" | "dynamic" | "cinematic" | "capcut", derivedTargets?: ["shorts_9_16" | "tiktok_9_16" | "reels_9_16" | "youtube_16_9" | "square_1_1" | "facebook_16_9"] } }.',
           "TRANSMETS FIDÈLEMENT les paramètres exprimés par l'utilisateur (durée « 2 minutes » → targetDurationSec: 120, « format TikTok » → aspectRatio 9:16 + derivedTargets [tiktok_9_16], « en 4K », « musique énergique », « pour les adolescents »…) — n'invente JAMAIS un paramètre absent de la demande. Les bornes du pipeline (durée minimale 10 s) sont appliquées automatiquement : transmets la durée demandée telle quelle.",
+          "EFFETS D'ANIMATION ET SOUS-TITRES (règle impérative) : si l'utilisateur demande des effets d'animation ou des sous-titres, transmets-les TOUJOURS — « avec sous-titres karaoké » → subtitlesEnabled: true + subtitleStyle 'karaoke_pop' ; « sous-titres jaunes » → 'cinematic_yellow' ; « sans sous-titres » → subtitlesEnabled: false ; « effets dynamiques » → effectPreset 'dynamic' ; « style cinématique » → 'cinematic' ; « comme CapCut » → 'capcut' ; « sans effets » → 'none'. La détection déterministe du serveur rattrape les oublis, mais transmets fidèlement dès le plan.",
           "La production complète (scénario, visuels, voix, musique, montage, rendu) est enchaînée AUTOMATIQUEMENT par la plateforme, avec progression en temps réel affichée dans la conversation. Ne réponds JAMAIS une demande de vidéo par du texte seul, et ne demande JAMAIS de passer par l'atelier vidéo : tu lances la production toi-même.",
         ].join("\n")
       : "",
@@ -607,10 +616,15 @@ export function buildIntentSystemPrompt(
     .join("\n");
   const clarificationSection = [
     "",
-    "CLARIFICATION (compréhension exacte) :",
+    "CLARIFICATION (compréhension exacte — MIEUX VAUT DEMANDER QUE MAL EXÉCUTER) :",
     "Avant de choisir le mode, reformule silencieusement la demande dans `understanding` — fidèle aux mots de l'utilisateur.",
-    "Si la demande est VRAIMENT ambiguë entre deux actions matériellement différentes (ex. « fais une vidéo sur X » sans durée ni format ET deux interprétations majeures), pose UNE seule question : needsClarification=true + clarifyingQuestion (une question courte, précise, en français).",
-    "Dans TOUS les autres cas, ne demande JAMAIS de clarification : choisis l'interprétation la plus probable et agis. Une question inutile est une erreur.",
+    "Pose UNE seule question (needsClarification=true + clarifyingQuestion, une question courte, précise, en français) QUAND LA COMPRÉHENSION N'EST PAS CERTAINE :",
+    "  - la demande est ambiguë entre deux actions matériellement différentes (ex. « fais une vidéo sur X » sans durée ni format ET deux interprétations majeures) ;",
+    "  - un référent est implicite et non résolvable par l'historique (« fais-le », « la même chose », « continue ») ;",
+    "  - une action coûteuse ou irréversible serait exécutée sur une interprétation hasardeuse (confidence < 0.55).",
+    "Renseigne `confidence` (0.0..1.0 — ta confiance dans ta compréhension EXACTE de la demande) et, si tu poses une question, `suggestions` (1-3 réponses courtes cliquables que l'utilisateur pourrait choisir).",
+    "IMPORTANT : si l'utilisateur RÉPOND à une question de clarification précédente (marquée 🔄 Précision dans l'historique), sa réponse EST l'information manquante — exécute la demande complète (origine + précision), ne re-demande JAMAIS la même information.",
+    "Dans tous les autres cas, agis : choisis l'interprétation la plus probable et exécute. Une question inutile reste une erreur — mais une mission mal comprise en est une plus grave.",
   ].join("\n");
   const base = [
     "Tu es le moteur d'exécution de Gen3ia, une plateforme d'agents avec connecteurs.",
@@ -629,7 +643,7 @@ export function buildIntentSystemPrompt(
     toolLines,
     "- image.generate (risque low) : génère une image réelle et photoréaliste à partir d'une description visuelle (input { prompt }).",
     catalogNames.has("video.create")
-      ? "- video.create (risque medium) : lance une production vidéo complète autonome — scénario, visuels de scènes, voix, musique, montage, rendu — avec progression en temps réel (input { prompt, title?, aspectRatio?: 16:9|9:16|1:1|4:5|21:9, targetDurationSec?, resolution?, language?, style?, audience?, platform?, musicMood?, derivedTargets? })."
+      ? "- video.create (risque medium) : lance une production vidéo complète autonome — scénario, visuels de scènes, voix, musique, montage, rendu — avec progression en temps réel (input { prompt, title?, aspectRatio?: 16:9|9:16|1:1|4:5|21:9, targetDurationSec?, resolution?, language?, style?, audience?, platform?, musicMood?, subtitlesEnabled?, subtitleStyle?: documentary|minimal|shorts_bold|cinematic_yellow|karaoke_pop, subtitlePosition?: bottom|center|top, effectPreset?: none|subtle|dynamic|cinematic|capcut, derivedTargets? })."
       : "",
     catalogNames.has("video.status")
       ? "- video.status (gratuit) : suit une production vidéo en cours — étape, progression réelle, avertissements, URL de lecture du master une fois terminé (input { jobId? | projectId? } — dernier lancement par défaut)."
@@ -921,6 +935,24 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   // QStash (repli : continuation par sondage). L'utilisateur suit la
   // progression RÉELLE dans la conversation (artefact vidéo) et dans
   // l'atelier vidéo.
+  // Task 135 — CLARIFICATION VIDÉO (amélioration #1) : si l'utilisateur
+  // RÉPOND à une question 🔄 posée après une demande de vidéo, la production
+  // démarre avec le BRIEF RECOMPOSÉ (origine + précision) — les paramètres
+  // (durée « 30 secondes », effets, sous-titres, format…) sont lus dans le
+  // texte complet, sans repasser par le classifieur.
+  const clarifiedVideo = resolveClarifiedObjective(input.message, priorHistory);
+  if (clarifiedVideo && looksLikeVideoRequest(clarifiedVideo.originalRequest)) {
+    await onEvent({ type: "status", phase: "execution", label: "Lancement de la production vidéo (demande précisée)…" });
+    const composedPrompt = `${clarifiedVideo.originalRequest} ${input.message.trim()}`;
+    const result = await runVideoTurn({ ...input, conversation, project, projectId, userMessage, priorHistory }, { effectivePrompt: composedPrompt });
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
   if (looksLikeVideoRequest(input.message)) {
     await onEvent({ type: "status", phase: "execution", label: "Lancement de la production vidéo…" });
     const result = await runVideoTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
@@ -1083,6 +1115,17 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const complexity = assessComplexity(input.message, evolution.masteredMaxScore);
   const enhancement = await enhancePromptForExecution({ userId: input.userId, message: input.message }).catch(() => ({ original: input.message, enhanced: input.message, improved: false, reason: "repli" }));
 
+  // Task 135 — SUIVI CONTEXTUEL des clarifications : si l'utilisateur
+  // RÉPOND à une question 🔄 Précision posée au tour précédent, la note de
+  // contexte rappelle la demande d'origine au classifieur d'intention — la
+  // réponse est traitée comme l'information manquante, jamais comme un
+  // nouveau sujet isolé. (clarifiedVideo est déjà calculé en amont —
+  // raccourci vidéo de la cascade d'intercepts.)
+  const clarificationFollowUp = clarifiedVideo;
+  const clarificationFollowNote = clarificationFollowUp
+    ? `\n\n[CONTEXTE DE CLARIFICATION : l'utilisateur répond à votre question « ${clarificationFollowUp.question.slice(0, 200)} » posée au tour précédent. Demande d'origine : « ${clarificationFollowUp.originalRequest.slice(0, 400)} ». Sa réponse EST l'information manquante — exécutez la demande COMPLETE (origine + précision), ne re-demandez pas cette information.]`
+    : "";
+
   await onEvent({ type: "status", phase: "intention", label: "Analyse de votre demande…" });
   let intent: TurnIntent;
   try {
@@ -1099,7 +1142,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
         }),
         prompt:
           `Historique récent :\n${priorHistory.slice(-6).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 500)}`).join("\n") || "(vide)"}` +
-          `\n\nNouvelle demande (optimisée par le système d'amélioration de prompts — demande d'origine intangible : « ${enhancement.original.slice(0, 400)} ») : ${enhancement.enhanced.slice(0, 4000)}${attachmentsContext(input.attachments)}${filesContextShort}${webContext ? `\n\nContenu réel des liens fournis (résumé) :${webContextShort}` : ""}`,
+          `\n\nNouvelle demande (optimisée par le système d'amélioration de prompts — demande d'origine intangible : « ${enhancement.original.slice(0, 400)} ») : ${enhancement.enhanced.slice(0, 4000)}${attachmentsContext(input.attachments)}${filesContextShort}${webContext ? `\n\nContenu réel des liens fournis (résumé) :${webContextShort}` : ""}${clarificationFollowNote}`,
         schema: IntentSchema,
         label: "intention-conversation",
         maxTokens: 2500,
@@ -1113,16 +1156,37 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     intent = { mode: "chat", understanding: "Réponse directe (planification indisponible)." };
   }
 
-  // Canal de CLARIFICATION : le classifieur a détecté une ambiguïté réelle
-  // entre deux actions matériellement différentes — une seule question
-  // précise est posée (réponse déterministe, aucun appel LLM supplémentaire).
-  if (intent.mode === "chat" && intent.needsClarification && intent.clarifyingQuestion?.trim()) {
+  // Canal de CLARIFICATION (Task 135 — compréhension EXACTE) : le
+  // classifieur a détecté une incompréhension possible — une seule question
+  // précise est posée, MARQUÉE 🔄 (suivi contextuel au tour suivant), avec
+  // des suggestions cliquables si fournies. Le garde s'applique AUSSI au
+  // mode "plan" (confiance basse ou ambiguïté haute AVANT une exécution
+  // coûteuse), avec protection anti-boucle : une réponse à une clarification
+  // ne redéclenche JAMAIS le garde déterministe.
+  let clarifyQuestion = intent.needsClarification && intent.clarifyingQuestion?.trim() ? intent.clarifyingQuestion.trim() : undefined;
+  let clarifySuggestions = intent.suggestions;
+  if (
+    !clarifyQuestion &&
+    !clarificationFollowUp &&
+    intent.mode === "plan" &&
+    (typeof intent.confidence === "number" ? intent.confidence < 0.55 : false)
+  ) {
+    const signals = detectAmbiguitySignals(input.message);
+    clarifyQuestion =
+      deterministicClarifyingQuestion(signals, input.message) ??
+      `Je veux être sûr de bien comprendre votre demande avant d'agir : pouvez-vous préciser ce que vous attendez exactement (action, livrable, contexte) ? Voici ce que j'ai compris pour l'instant : « ${input.message.trim().slice(0, 140)} ».`;
+    clarifySuggestions = undefined;
+  }
+  if (clarifyQuestion) {
     await onEvent({ type: "status", phase: "intention", label: "Clarification de votre demande…" });
+    const suggestionsBlock = clarifySuggestions && clarifySuggestions.length > 0
+      ? "\n\nVous pouvez répondre directement, ou choisir :\n" + clarifySuggestions.map((s) => `- ${s}`).join("\n")
+      : "";
     const assistantMessage = await appendMessage({
       conversationId: input.conversationId,
       userId: input.userId,
       role: "assistant",
-      content: intent.clarifyingQuestion.trim(),
+      content: markClarification(clarifyQuestion) + suggestionsBlock,
       generationStatus: "complete",
     });
     await onEvent({ type: "message_complete", message: assistantMessage });
@@ -1773,18 +1837,29 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
  * un artefact de type "video" portant projectId/jobId : le client sonde la
  * progression réelle (GET production) et affiche le rendu final.
  */
-async function runVideoTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
+/**
+ * Task 135 — tour vidéo après clarification : l'utilisateur a répondu à une
+ * question 🔄 posée à la suite d'une demande de vidéo — la production est
+ * lancée avec le BRIEF RECOMPOSÉ (demande d'origine + précision apportée),
+ * les paramètres déterministes (durée, format, effets, sous-titres…) étant
+ * lus dans le texte COMPLET.
+ */
+async function runVideoTurn(
+  ctx: TurnBase,
+  options: { effectivePrompt?: string } = {},
+): Promise<ConversationTurnResult> {
+  const promptText = options.effectivePrompt?.trim() || ctx.message;
   const onEvent = safeEmitter(ctx.onEvent);
   try {
     const { createVideoProductionJob } = await import("@/lib/video/production-queue");
     // Task 106-a — production OPTIMALE : durée, cadrage, plateforme et
     // formats dérivés sont lus DÉTERMINISTEMENT dans la demande (zéro LLM)
     // et relayés à la file de production (options validées côté pipeline).
-    const params = extractVideoParams(ctx.message);
+    const params = extractVideoParams(promptText);
     const job = await createVideoProductionJob({
       userId: ctx.userId,
-      prompt: ctx.message.trim().slice(0, 4000),
-      title: extractVideoTitle(ctx.message),
+      prompt: promptText.trim().slice(0, 4000),
+      title: extractVideoTitle(promptText),
       // Task 107-a — la conversation d'origine est PORTÉE PAR LE JOB : à la
       // complétion, le résultat est livré DANS ce fil (message + artefact)
       // même si l'utilisateur a fermé la page.
@@ -1797,6 +1872,9 @@ async function runVideoTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       params.aspectRatio ? `cadrage ${params.aspectRatio}` : null,
       params.platform ? `plateforme ${params.platform}` : null,
       params.derivedTargets?.length ? `formats dérivés (${params.derivedTargets.join(", ")})` : null,
+      params.subtitlesEnabled === false ? "sans sous-titres" : params.subtitleStyle ? `sous-titres ${params.subtitleStyle === "karaoke_pop" ? "karaoké" : params.subtitleStyle}` : null,
+      params.subtitlePosition ? `sous-titres positionnés ${params.subtitlePosition === "top" ? "en haut" : params.subtitlePosition === "center" ? "au centre" : "en bas"}` : null,
+      params.effectPreset ? ({ none: "sans effets", subtle: "effets discrets", dynamic: "effets dynamiques", cinematic: "style cinématique", capcut: "studio CapCut" } as Record<string, string>)[params.effectPreset] ?? null : null,
     ].filter(Boolean).join(" · ");
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
@@ -1820,7 +1898,7 @@ async function runVideoTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       conversationId: ctx.conversationId,
       projectId: ctx.projectId,
       type: "video",
-      title: extractVideoTitle(ctx.message),
+      title: extractVideoTitle(promptText),
       note: "Production vidéo autonome — progression en temps réel",
       videoProjectId: job.projectId,
       videoJobId: job.jobId,

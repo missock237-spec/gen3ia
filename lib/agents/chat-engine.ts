@@ -5,6 +5,7 @@ import type { AIImageAttachment, AIProvider } from "../ai/models";
 import { assembleMessages } from "../ai/context-window";
 import { applyPromptVariables, type PromptVariableContext } from "../ai/prompt-template";
 import { buildTruthContext, formatTruthContext, cleanRequestedResult } from "../ai/truth-context";
+import { detectAmbiguitySignals, deterministicClarifyingQuestion } from "../ai/clarification-followup";
 import { planUniversalAgent } from "./runtime/unified-agent";
 import type { RuntimePlan } from "./runtime/types";
 import { policyForAgent } from "./personalized-plan";
@@ -29,18 +30,36 @@ import type { AgentRecord } from "./schema";
 
 export type ChatRequestMode = "chat" | "task";
 
+/** Niveau d'ambiguïté de la demande (jugement du classificateur). */
+export type RequestAmbiguity = "none" | "low" | "high";
+
 export interface RequestClassification {
   mode: ChatRequestMode;
   inScope: boolean;
   reason: string;
   /**
+   * Confiance du classificateur dans sa compréhension de la demande
+   * (0.0..1.0). Task 135 : sous CONFIDENCE_THRESHOLD en mode "task", une
+   * question de clarification est posée AVANT d'exécuter — mieux vaut
+   * demander que mal exécuter.
+   */
+  confidence?: number;
+  /** Ambiguïté perçue (« high » force une clarification). */
+  ambiguity?: RequestAmbiguity;
+  /**
    * Question de clarification (français, max 1) : proposée par le
-   * classificateur UNIQUEMENT quand la demande est réellement ambiguë entre
-   * deux actions matériellement différentes ET qu'aucun choix par défaut
-   * raisonnable n'existe. Jamais pour une simple question.
+   * classificateur quand la compréhension de la demande n'est pas
+   * certaine (ambiguïté réelle entre deux actions matériellement
+   * différentes, référent implicite, demande trop courte) ET qu'aucun
+   * choix par défaut raisonnable n'existe.
    */
   clarifyingQuestion?: string;
+  /** Options de réponse rapides (max 3) proposées à l'utilisateur. */
+  suggestions?: string[];
 }
+
+/** Seuil de confiance sous lequel une clarification est exigée (Task 135). */
+export const CLARIFICATION_CONFIDENCE_THRESHOLD = 0.55;
 
 const CLASSIFIER_SYSTEM = [
   "Tu es le classificateur de requêtes des agents IA Gen3ia.",
@@ -54,8 +73,11 @@ const CLASSIFIER_SYSTEM = [
   "   - Les agents Gen3ia sont POLYVALENTS : une demande hors de la spécialité principale de l'agent n'est JAMAIS hors périmètre pour autant — inScope: true dès que le besoin peut être servi par une réponse LLM de qualité ou par les outils, connecteurs et services disponibles.",
   "   - inScope: false UNIQUEMENT si la demande est matériellement impossible à servir même avec les outils, connecteurs et services disponibles (exemple : passer un appel téléphonique alors qu'aucun connecteur de téléphonie n'est disponible). En cas de doute, inScope: true.",
   "3. reason: une courte justification en français.",
-  "4. clarifyingQuestion (OPTIONNEL, en français) : UNE question de clarification, UNIQUEMENT si le besoin réel est ambigu entre DEUX ACTIONS MATERIELLEMENT DIFFÉRENTES (exemple : « prépare le lancement » = rédiger un plan ? envoyer une campagne ? créer une page ?) ET qu'aucun choix par défaut raisonnable n'existe. Laisse le champ ABSENT dans tous les autres cas : jamais pour une salutation, une simple question, une demande déjà claire ou lorsque l'historique lève l'ambiguïté.",
-  "Réponds STRICTEMENT en JSON : {\"mode\":\"chat|task\",\"inScope\":true|false,\"reason\":\"...\",\"clarifyingQuestion\":\"... (optionnel)\"}",
+  "4. confidence: ta confiance dans ta compréhension EXACTE de la demande, entre 0.0 et 1.0 (1.0 = demande parfaitement claire et non équivoque ; 0.5 = interprétation plausible mais incertaine ; 0.0 = incompréhension totale).",
+  "5. ambiguity: \"none\" (demande claire), \"low\" (légère hésitation sans conséquence sur l'action), \"high\" (la demande peut vouloir dire des choses matériellement différentes).",
+  "6. clarifyingQuestion (OPTIONNEL, en français) : UNE question de clarification à poser à l'utilisateur POUR TE RASSURER avant d'agir. Pose-la quand : (a) la demande est ambiguë entre deux actions matériellement différentes (exemple : « prépare le lancement » = rédiger un plan ? envoyer une campagne ? créer une page ?) ET qu'aucun choix par défaut raisonnable n'existe ; (b) un référent est implicite et non résolvable par l'historique (« fais-le », « la même chose », « continue ») ; (c) une action coûteuse ou irréversible serait exécutée sur une compréhension incertaine (confidence < 0.55 ou ambiguity high). Mieux vaut DEMANDER que mal exécuter. Néanmoins, ne pose JAMAIS de question pour une salutation, une simple question, ou une demande déjà claire — et si l'historique lève l'ambiguïté, agis.",
+  "7. suggestions: OPTIONNEL, 1 à 3 réponses courtes (chacune ≤ 60 caractères) que l'utilisateur pourrait cliquer pour répondre à ta clarifyingQuestion (ex : [\"Rédiger le plan\", \"Envoyer la campagne\"]). Uniquement si clarifyingQuestion est présent.",
+  "Réponds STRICTEMENT en JSON : {\"mode\":\"chat|task\",\"inScope\":true|false,\"reason\":\"...\",\"confidence\":0.0,\"ambiguity\":\"none|low|high\",\"clarifyingQuestion\":\"... (optionnel)\",\"suggestions\":[\"...\"] (optionnel)}",
 ].join(" ");
 
 /**
@@ -93,7 +115,17 @@ export function heuristicClassification(message: string): RequestClassification 
   const hasActionVerb = EXPLICIT_ACTION_VERB_RE.test(lower);
   const shortConversational = lower.length <= 1200 && !hasActionVerb;
   const mode: ChatRequestMode = isQuestion && shortConversational ? "chat" : "task";
-  return { mode, inScope: true, reason: "Classification heuristique (classificateur IA indisponible)." };
+  // Task 135 — repli avec AMBIGUÏTÉ DÉTERMINISTE : si les signaux
+  // d'ambiguïté (référent implicite, demande trop courte) sont présents en
+  // mode task, le repli propose DÉJÀ la question (aucun LLM requis).
+  const signals = detectAmbiguitySignals(text);
+  const question = mode === "task" ? deterministicClarifyingQuestion(signals, text) : null;
+  return {
+    mode,
+    inScope: true,
+    reason: "Classification heuristique (classificateur IA indisponible).",
+    ...(question ? { clarifyingQuestion: question, confidence: 0.4, ambiguity: "high" as const } : {}),
+  };
 }
 
 function normalizeMode(value: unknown): ChatRequestMode | null {
@@ -147,13 +179,22 @@ export async function classifyRequest(
       const record = parsed as Record<string, unknown>;
       const mode = normalizeMode(record.mode);
       if (mode) {
+        const confidenceRaw = Number(record.confidence);
+        const confidence = Number.isFinite(confidenceRaw) ? Math.min(1, Math.max(0, confidenceRaw)) : undefined;
+        const ambiguity = record.ambiguity === "high" || record.ambiguity === "low" || record.ambiguity === "none" ? record.ambiguity : undefined;
+        const suggestions = Array.isArray(record.suggestions)
+          ? record.suggestions.filter((s): s is string => typeof s === "string" && s.trim().length > 0).slice(0, 3).map((s) => s.trim().slice(0, 60))
+          : undefined;
         return {
           mode,
           inScope: record.inScope !== false,
           reason: typeof record.reason === "string" ? record.reason.slice(0, 300) : "",
+          ...(confidence !== undefined ? { confidence } : {}),
+          ...(ambiguity ? { ambiguity } : {}),
           ...(typeof record.clarifyingQuestion === "string" && record.clarifyingQuestion.trim()
             ? { clarifyingQuestion: record.clarifyingQuestion.trim().slice(0, 500) }
             : {}),
+          ...(suggestions && suggestions.length > 0 ? { suggestions } : {}),
         };
       }
     }

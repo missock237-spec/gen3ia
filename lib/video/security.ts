@@ -52,6 +52,12 @@ export const VIDEO_LIMITS = {
   maxParallelSegmentRenders: envInt("VIDEO_MAX_PARALLEL_SEGMENT_RENDERS", 2),
   /** Task 119 — narrations analysées par la synchro voix-visuel (bornage tick). */
   maxVoiceSyncScenes: envInt("VIDEO_MAX_VOICE_SYNC_SCENES", 150),
+  /** Task 134 — SOUS-AGENTS : analyses voice-sync (ffprobe/astats) simultanées. */
+  maxParallelVoiceSyncAnalyzes: envInt("VIDEO_MAX_PARALLEL_VOICE_SYNC", 3),
+  /** Task 134 — SOUS-AGENTS : exports dérivés (FFmpeg) simultanés. */
+  maxParallelExportRenders: envInt("VIDEO_MAX_PARALLEL_EXPORT_RENDERS", 2),
+  /** Task 134 — SOUS-AGENTS : vérifications de préflight audio simultanées. */
+  maxParallelPreflightChecks: envInt("VIDEO_MAX_PARALLEL_PREFLIGHTS", 6),
 } as const;
 
 export const RESOLUTION_RANK: Record<string, number> = {

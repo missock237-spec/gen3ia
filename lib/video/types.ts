@@ -396,6 +396,36 @@ export interface EffectInstance {
   intensity: EffectIntensity;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Task 134 — PRESETS D'EFFETS D'ANIMATION (amélioration #2 : la demande
+// utilisateur exprime une AMBIANCE d'animation, pas une liste d'effets
+// techniques). Presets déterministes → combinaisons réelles du catalogue
+// fermé EFFECT_NAMES (aucune valeur hors catalogue ne sort d'ici).
+// ────────────────────────────────────────────────────────────────────────────
+
+export const VIDEO_EFFECT_PRESETS = [
+  /** Aucun effet ajouté (les choix du scénario restent). */
+  "none",
+  /** Rendu sobre : léger vignettage + grain discret. */
+  "subtle",
+  /** Montage nerveux : glitch + punch zoom + transitions franches. */
+  "dynamic",
+  /** Look cinéma : teal&orange + barres + flow. */
+  "cinematic",
+  /** Studio social complet : audio-réactif + karaoké + parallaxe (Task 119). */
+  "capcut",
+] as const;
+export type VideoEffectPreset = (typeof VIDEO_EFFECT_PRESETS)[number];
+
+/** Libellés FR des presets (journaux + réponses chat). */
+export const EFFECT_PRESET_LABELS: Record<VideoEffectPreset, string> = {
+  none: "aucun effet",
+  subtle: "effets discrets",
+  dynamic: "effets dynamiques",
+  cinematic: "style cinématique",
+  capcut: "studio CapCut complet",
+};
+
 export const TRANSITION_NAMES = [
   "cut",
   "fade",

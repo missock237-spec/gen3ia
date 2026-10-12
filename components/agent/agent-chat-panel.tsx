@@ -1027,7 +1027,10 @@ export function AgentChatPanel({
               <div key={item.id} className={item.role === "user" ? "ml-auto max-w-[88%] md:max-w-[78%]" : "mr-auto max-w-[96%]"}>
                 <div className="mb-1.5 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">
                   <span>{item.role === "user" ? "Vous" : agent.name}</span>
-                  {item.role === "agent" && item.mode === "chat" && (
+                  {item.role === "agent" && item.text?.trim().startsWith("🔄 Précision") && (
+                    <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[8px] font-bold tracking-wider text-amber-600 normal-case dark:text-amber-400">Précision demandée</span>
+                  )}
+                  {item.role === "agent" && item.mode === "chat" && !item.text?.trim().startsWith("🔄 Précision") && (
                     <span className="rounded-full bg-[var(--g3-hover)] px-2 py-0.5 text-[8px] font-bold tracking-wider text-[var(--g3-muted)] normal-case">Réponse directe</span>
                   )}
                   {item.role === "agent" && item.mode === "task" && (

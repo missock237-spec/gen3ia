@@ -119,10 +119,14 @@ async function renderTick(): Promise<boolean> {
   return true;
 }
 
-/** UN cycle : d'abord la production, puis le rendu. true si du travail a été fait. */
+/** UN cycle (Task 134 — FILES PARALLÈLES) : production ET rendu sont
+ * traités EN PARALLÈLE au lieu d'être enchaînés séquentiellement — les deux
+ * files sont indépendantes (claims transactionnels distincts, bails
+ * séparés) : une production d'assets pendant qu'un rendu compile ses
+ * segments, c'est deux sous-agents de file qui avancent en même temps.
+ * true si du travail a été fait. */
 async function cycle(): Promise<boolean> {
-  const productionWorked = await productionTick();
-  const renderWorked = await renderTick();
+  const [productionWorked, renderWorked] = await Promise.all([productionTick(), renderTick()]);
   return productionWorked || renderWorked;
 }
 

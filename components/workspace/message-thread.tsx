@@ -104,6 +104,14 @@ const MessageRow = memo(function MessageRow({
       >
         {message.role === "assistant" ? (
           <div className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+            {/* Task 135 — question de clarification 🔄 : encart distinct pour que
+                l'utilisateur comprenne qu'une RÉPONSE est attendue (jamais
+                confondue avec un livrable ou une réponse finale). */}
+            {message.content.trim().startsWith("🔄 Précision") && (
+              <p className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                <span aria-hidden>🔄</span> Précision demandée — votre réponse est attendue
+              </p>
+            )}
             <MemoizedMarkdown content={message.content} />
           </div>
         ) : (
