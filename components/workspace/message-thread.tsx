@@ -12,6 +12,7 @@ import { LiveAppPreviewButton } from "./artifact-preview";
 import { MediaProgressFrame } from "@/components/media/media-progress-frame";
 import { VideoProductionCard } from "./video-production-card";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
+import { ResponseAdSlot } from "@/components/ads/response-ad-slot";
 import type {
   ConversationApproval,
   ConversationArtifact,
@@ -221,6 +222,12 @@ const MessageRow = memo(function MessageRow({
           <LiveAppPreviewButton key={`live-${artifact.id}`} artifact={artifact} />
         ))}
       </article>
+
+      {/* GEN ADS — publicité d'annonceur sous chaque RÉPONSE résolue par
+          l'IA (demande utilisateur) : emplacement compact « response_inline »,
+          pool partagé + choix déterministe par message, préférence adsEnabled
+          respectée, aucune requête par message. */}
+      {message.role === "assistant" && <ResponseAdSlot slotKey={`msg:${message.id}`} />}
 
       {run && <RunTimeline run={run} />}
       {runApprovals.filter((a) => a.status === "pending").map((approval) => (

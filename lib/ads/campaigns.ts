@@ -47,6 +47,8 @@ export interface AdCampaign {
   id: string;
   ownerId: string;
   name: string;
+  /** Nom d'annonceur affiché au public (Gen Ads : mis en avant par l'utilisateur). */
+  advertiserName?: string;
   objective: CampaignObjective;
   status: CampaignStatus;
   /** Budget journalier en mineurs (ex. centimes). */
@@ -93,6 +95,8 @@ function assertHttpUrl(value: string, field: string): string {
 export function validateCampaignInput(input: AdCampaignInput): AdCampaignInput {
   const name = input.name?.trim() ?? "";
   if (name.length < 3 || name.length > 120) throw new Error("Le nom de campagne doit contenir entre 3 et 120 caractères.");
+  const advertiserName = input.advertiserName?.trim();
+  if (advertiserName !== undefined && (advertiserName.length < 2 || advertiserName.length > 120)) throw new Error("Le nom d'annonceur doit contenir entre 2 et 120 caractères.");
   if (!["traffic", "conversions", "awareness", "engagement"].includes(input.objective)) throw new Error("Objectif de campagne invalide.");
   if (!["draft", "active", "paused", "completed"].includes(input.status)) throw new Error("Statut de campagne invalide.");
   if (!Number.isFinite(input.dailyBudgetMinor) || input.dailyBudgetMinor < 0) throw new Error("Le budget journalier doit être positif.");
@@ -128,6 +132,7 @@ export function validateCampaignInput(input: AdCampaignInput): AdCampaignInput {
   return {
     ownerId: input.ownerId,
     name,
+    ...(advertiserName ? { advertiserName } : {}),
     objective: input.objective,
     status: input.status,
     dailyBudgetMinor: Math.round(input.dailyBudgetMinor),
@@ -156,6 +161,7 @@ function serializeCampaign(id: string, data: DocumentData): AdCampaign {
     id,
     ownerId: String(data.ownerId ?? ""),
     name: String(data.name ?? ""),
+    ...(typeof data.advertiserName === "string" && data.advertiserName.trim() ? { advertiserName: data.advertiserName.trim().slice(0, 120) } : {}),
     objective: (data.objective ?? "traffic") as CampaignObjective,
     status: (data.status ?? "draft") as CampaignStatus,
     dailyBudgetMinor: Number(data.dailyBudgetMinor ?? 0),
@@ -223,6 +229,7 @@ export async function updateCampaign(ownerId: string, id: string, patch: Partial
   const merged = validateCampaignInput({
     ownerId,
     name: patch.name ?? current.name,
+    advertiserName: patch.advertiserName ?? current.advertiserName,
     objective: patch.objective ?? current.objective,
     status: patch.status ?? current.status,
     dailyBudgetMinor: patch.dailyBudgetMinor ?? current.dailyBudgetMinor,

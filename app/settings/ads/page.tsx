@@ -5,17 +5,22 @@ import { useEffect, useState } from "react";
 
 import { FeatureAuthGate } from "@/components/auth/feature-auth-gate";
 import { SettingsAdsGallery } from "@/components/settings/settings-ads-gallery";
+import { UserAdsManager } from "@/components/settings/user-ads-manager";
 import { authFetch } from "@/lib/firebase/auth-client";
 
 /**
- * Paramètres › Publicité.
+ * Paramètres › Publicité (Gen Ads).
  *
- * L'utilisateur visualise ici les annonces diffusées sur la plateforme et
- * contrôle leur affichage via une préférence persistée côté serveur
- * (Firestore `userSettings/{uid}` via /api/settings/preferences).
- * La diffusion réelle repose sur l'inventaire existant (`platformAds`,
- * administré depuis l'espace Admin › Publicités) : dès qu'une campagne est
- * mise en place, elle apparaît sur cette page et dans l'espace prévu.
+ * TROIS sections :
+ *  1. GEN ADS (self-service) — chaque utilisateur MET EN AVANT SA PROPRE
+ *     publicité dans le projet : création de campagnes (annonceur, budget,
+ *     ciblage, créations) publiées dans l'inventaire de diffusion.
+ *  2. Préférence d'affichage — l'utilisateur contrôle s'il voit les espaces
+ *     publicitaires (userSettings/{uid}).
+ *  3. Galerie des annonces en cours de diffusion sur la plateforme.
+ *
+ * Demande utilisateur : « dans paramètres gen ads les utilisateurs doivent
+ * pouvoir mettre en avant leur pub dans le projet ».
  */
 function AdsSettingsContent() {
   const [adsEnabled, setAdsEnabled] = useState<boolean | null>(null);
@@ -66,12 +71,16 @@ function AdsSettingsContent() {
           <Link href="/settings" className="text-xs font-semibold text-[var(--g3-muted)] transition hover:text-[var(--g3-text)]">
             ← Retour aux paramètres
           </Link>
-          <h1 className="mt-3 font-serif text-3xl font-semibold tracking-tight md:text-4xl">Publicité</h1>
+          <h1 className="mt-3 font-serif text-3xl font-semibold tracking-tight md:text-4xl">Publicité — Gen Ads</h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--g3-muted)]">
-            Visualisez toutes les annonces diffusées sur Gen3ia et choisissez de les afficher ou non. Chaque campagne
-            active apparaît ici pour tous les utilisateurs, avec un contrôle par compte.
+            Mettez en avant votre publicité dans Gen3ia et contrôlez les annonces que vous voyez. Vos campagnes actives
+            apparaissent dans le projet — y compris sous chaque réponse ou résultat de l&apos;IA.
           </p>
         </header>
+
+        <div className="mt-8">
+          <UserAdsManager />
+        </div>
 
         <section className="mt-8 rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6" aria-labelledby="ads-pref-title">
           <div className="flex items-start justify-between gap-4">

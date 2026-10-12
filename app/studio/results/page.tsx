@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { SectionHeader } from "@/components/shells/section-header";
 import { ResourceList, type ResourceRow } from "@/components/shells/resource-list";
 import { EmptyState, LoadingState, MetricCard } from "@/components/shells/states";
 import { PermissionNotice } from "@/components/shells/permission-notice";
+import { ResponseAdSlot } from "@/components/ads/response-ad-slot";
 import { authFetch } from "@/lib/firebase/auth-client";
 
 /**
@@ -152,6 +153,18 @@ export default function ResultsPage() {
 
   const totalBytes = files.reduce((sum, file) => sum + (file.sizeBytes || 0), 0);
 
+  // GEN ADS — densité native : une publicité d'annonceur intercalée sous chaque
+  // groupe de 4 résultats (demande utilisateur : des pubs apparaissent avec
+  // chaque réponse/résultat résolu par le projet). Le pool est partagé avec les
+  // autres emplacements de la page — choix déterministe par groupe.
+  const fileChunks = useMemo(() => {
+    const chunks: ResourceRow[][] = [];
+    for (let index = 0; index < fileRows.length; index += 4) {
+      chunks.push(fileRows.slice(index, index + 4));
+    }
+    return chunks;
+  }, [fileRows]);
+
   return (
     <div className="space-y-7">
       <SectionHeader
@@ -198,22 +211,31 @@ export default function ResultsPage() {
         <>
           <section aria-label="Fichiers et livrables">
             <h2 className="mb-3 font-serif text-lg font-semibold text-[var(--g3-text)]">Fichiers & livrables</h2>
-            <ResourceList
-              rows={fileRows}
-              ariaLabel="Fichiers générés"
-              emptyState={
-                <EmptyState
-                  icon="▣"
-                  title="Aucun livrable pour le moment"
-                  description="Les fichiers générés par vos missions apparaissent ici automatiquement."
-                  action={
-                    <Link href="/studio/create" className="g3-btn g3-btn-primary text-xs">
-                      Lancer une mission
-                    </Link>
-                  }
-                />
-              }
-            />
+            {fileChunks.length > 0 ? (
+              fileChunks.map((chunk, chunkIndex) => (
+                <Fragment key={`files-chunk-${chunkIndex}`}>
+                  <ResourceList rows={chunk} ariaLabel="Fichiers générés" />
+                  <ResponseAdSlot slotKey={`results:files:${chunkIndex}`} />
+                </Fragment>
+              ))
+            ) : (
+              <ResourceList
+                rows={[]}
+                ariaLabel="Fichiers générés"
+                emptyState={
+                  <EmptyState
+                    icon="▣"
+                    title="Aucun livrable pour le moment"
+                    description="Les fichiers générés par vos missions apparaissent ici automatiquement."
+                    action={
+                      <Link href="/studio/create" className="g3-btn g3-btn-primary text-xs">
+                        Lancer une mission
+                      </Link>
+                    }
+                  />
+                }
+              />
+            )}
           </section>
 
           <section aria-label="Missions terminées">
@@ -223,6 +245,7 @@ export default function ResultsPage() {
               ariaLabel="Missions terminées"
               emptyState={<EmptyState icon="◈" title="Aucune mission terminée récemment" description="Les missions achevées restent consultables ici avec leurs livrables." />}
             />
+            {missionRows.length > 0 && <div className="mt-2.5"><ResponseAdSlot slotKey="results:missions" /></div>}
           </section>
         </>
       )}
