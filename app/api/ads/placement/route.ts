@@ -10,6 +10,12 @@ const Query = z.object({
   placement: z.string().trim().min(1).max(80).default("settings"),
   /** mode=all : renvoie TOUTES les annonces éligibles (galerie de l'espace publicitaire). */
   mode: z.enum(["single", "all"]).default("single"),
+  /**
+   * record=none : le pool est chargé pour un CIBLAGE CONTEXTUEL côté client —
+   * les impressions sont enregistrées par la surface d'affichage elle-même,
+   * uniquement pour l'annonce RÉELLEMENT affichée (métriques véridiques).
+   */
+  record: z.enum(["all", "none"]).default("all"),
 });
 
 const EventSchema = z.object({
@@ -27,9 +33,10 @@ export async function GET(request: NextRequest) {
     const parsed = Query.safeParse({
       placement: url.searchParams.get("placement") ?? "settings",
       mode: url.searchParams.get("mode") ?? "single",
+      record: url.searchParams.get("record") ?? "all",
     });
     if (!parsed.success) return NextResponse.json({ error: "Placement invalide." }, { status: 400 });
-    const { placement, mode } = parsed.data;
+    const { placement, mode, record } = parsed.data;
     // Mots-clés du contexte de diffusion (ciblage sémantique des campagnes) :
     // fournis par la surface d'affichage via ?context=mot1,mot2 (10 max).
     const keywords = (url.searchParams.get("context") ?? "")
@@ -41,11 +48,16 @@ export async function GET(request: NextRequest) {
     if (mode === "all") {
       const ads = await listEligiblePlatformAds(placement);
       const list = ads.length > 0 ? ads : [await choosePlatformAd(placement, { userId: user.uid, keywords })];
-      await Promise.all(
-        list.map((ad) =>
-          recordPlatformAdEvent({ adId: ad.id, placement, type: "impression", userId: user.uid }).catch(() => undefined),
-        ),
-      );
+      // record=none (ciblage contextuel) : la surface d'affichage enregistre
+      // elle-même l'impression de l'annonce qu'elle affiche réellement — on ne
+      // compte pas ici des annonces que le ciblage va écarter.
+      if (record === "all") {
+        await Promise.all(
+          list.map((ad) =>
+            recordPlatformAdEvent({ adId: ad.id, placement, type: "impression", userId: user.uid }).catch(() => undefined),
+          ),
+        );
+      }
       return NextResponse.json({ ads: list }, { headers: { "cache-control": "no-store" } });
     }
 

@@ -156,7 +156,8 @@ export default function ResultsPage() {
   // GEN ADS — densité native : une publicité d'annonceur intercalée sous chaque
   // groupe de 4 résultats (demande utilisateur : des pubs apparaissent avec
   // chaque réponse/résultat résolu par le projet). Le pool est partagé avec les
-  // autres emplacements de la page — choix déterministe par groupe.
+  // autres emplacements de la page — CIBLAGE CONTEXTUEL : l'annonce affichée
+  // présente une SIMILITUDE avec les livrables du groupe (titres, types).
   const fileChunks = useMemo(() => {
     const chunks: ResourceRow[][] = [];
     for (let index = 0; index < fileRows.length; index += 4) {
@@ -164,6 +165,29 @@ export default function ResultsPage() {
     }
     return chunks;
   }, [fileRows]);
+
+  // Contexte de ciblage par groupe : les titres des fichiers du groupe —
+  // la publicité doit présenter un trait de ressemblance avec eux.
+  const fileChunkContexts = useMemo(() => {
+    const contexts: string[] = [];
+    for (let index = 0; index < files.length; index += 4) {
+      contexts.push(
+        files
+          .slice(index, index + 4)
+          .map((file) => `${file.filename} ${file.contentType}`)
+          .join(" ")
+          .slice(0, 1200),
+      );
+    }
+    return contexts;
+  }, [files]);
+
+  // Contexte de ciblage des missions : les objectifs des missions closes
+  // affichées (l'annonce doit être en rapport avec ces sujets).
+  const missionsAdContext = useMemo(
+    () => missions.slice(0, 12).map((mission) => mission.objective).join(" ").slice(0, 1200),
+    [missions],
+  );
 
   return (
     <div className="space-y-7">
@@ -215,7 +239,7 @@ export default function ResultsPage() {
               fileChunks.map((chunk, chunkIndex) => (
                 <Fragment key={`files-chunk-${chunkIndex}`}>
                   <ResourceList rows={chunk} ariaLabel="Fichiers générés" />
-                  <ResponseAdSlot slotKey={`results:files:${chunkIndex}`} />
+                  <ResponseAdSlot slotKey={`results:files:${chunkIndex}`} context={fileChunkContexts[chunkIndex]} />
                 </Fragment>
               ))
             ) : (
@@ -245,7 +269,11 @@ export default function ResultsPage() {
               ariaLabel="Missions terminées"
               emptyState={<EmptyState icon="◈" title="Aucune mission terminée récemment" description="Les missions achevées restent consultables ici avec leurs livrables." />}
             />
-            {missionRows.length > 0 && <div className="mt-2.5"><ResponseAdSlot slotKey="results:missions" /></div>}
+            {missionRows.length > 0 && (
+              <div className="mt-2.5">
+                <ResponseAdSlot slotKey="results:missions" context={missionsAdContext} />
+              </div>
+            )}
           </section>
         </>
       )}

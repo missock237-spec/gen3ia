@@ -3720,3 +3720,24 @@ Stage Summary:
 - Gen Ads self-service opérationnel : tout utilisateur connecté crée ses campagnes depuis Paramètres › Publicité — une campagne ACTIVE est publiée automatiquement dans l'inventaire de diffusion (platformAds) et mise en avant dans le projet.
 - Diffusion « chaque réponse/résultat » livrée : publicité d'annonceur sous chaque réponse de l'IA dans les conversations, et intercalée parmi les livrables de la page Résultats — respect de la préférence opt-out, budget/plafond de fréquence/rotation pondérée PRO réutilisés, anti-fraude conservée.
 - Sécurité : quota 10 campagnes/utilisateur, emplacements bridés au catalogue public, propriétaire vérifié à chaque mutation, annonces jamais orphelines (sync complète à chaque changement d'état).
+
+---
+Task ID: 137 (Gen Ads : ciblage contextuel — similitude requête ↔ publicité)
+Agent: Super Z (principal)
+Task: L'affichage des publicités ne doit PAS se faire de manière aléatoire à chaque requête — la pub affichée doit être une pub qui présente une similitude / un trait de ressemblance avec la demande de l'utilisateur.
+
+Work Log:
+- NOUVEAU MOTEUR lib/ads/context-matcher.ts (PUR, zéro IO, partagé client/serveur) : normalisation NFD (accents/casse/ponctuation), tokenisation avec mots vides FR/EN (~250), racinisation légère itérative (marqueur pluriel s/x d'abord, puis 45 terminaisons FR/EN, radical min 4 — banques→banque→banqu convergent, prix/page intacts, journaux→journal), 26 familles de synonymes thématiques FR/EN (tech, IA, web, business, marketing, finance, immobilier, auto, santé, cuisine, voyage, éducation, mode, musique, vidéo, image, jeux, agriculture, juridique, emploi, sécurité, énergie, téléphonie, événementiel, animaux, art) indexées mot + radical ; scoring scoreAdRelevance (mots-clés déclarés : exact 3 > radical 2,5 > synonyme 2 > sous-chaîne 1 ; recouvrement créa plafonné : titre+annonceur 1,5×2, description 0,75×2 ; mot-clé multi-mots = maillon faible) ; rankAdsByRelevance (seuil CONTEXTUAL_MIN_SCORE=2, contexte vide = aucune annonce) ; pickContextualAd (déterministe : ex æquo départagés par hachage FNV-1a de la clé — zéro aléatoire, stable au re-render, null si AUCUNE similitude).
+- INVENTAIRE : PlatformAd += keywords (validation normalisée 30×60 minuscules, sérialisation, merge updatePlatformAd) ; buildInventoryEntries transporte les mots-clés de ciblage de la campagne jusqu'à chaque annonce publiée (une campagne Gen Ads avec mots-clés diffuse SON ciblage) ; admin placement API accepte keywords (zod).
+- API /api/ads/placement : paramètre record=none — le pool chargé pour ciblage contextuel n'enregistre PLUS d'impressions en masse ; la surface d'affichage compte elle-même l'impression de l'annonce RÉELLEMENT affichée (métriques véridiques, galerie settings inchangée).
+- components/ads/response-ad-slot.tsx : nouvelle prop context — CIBLAGE CONTEXTUEL STRICT : l'annonce affichée est celle de meilleure similitude avec la demande ; si AUCUNE annonce ne présente de ressemblance, RIEN ne s'affiche (l'aléatoire est éliminé, pas remplacé) ; impression POSTée au montage effectif ; sans contexte = rotation déterministe historique (compatibilité).
+- components/workspace/message-thread.tsx : contexte publicitaire par réponse = question utilisateur déclenchante + extrait de la réponse (adContextByMessageId mémoïsé O(n)).
+- app/studio/results/page.tsx : contexte par groupe de livrables = titres + types MIME des fichiers du groupe ; contexte missions = objectifs des missions closes.
+- components/settings/user-ads-manager.tsx : champ « Mots-clés de ciblage contextuel » (virgules, 30 max) avec aide explicite (« s'affiche uniquement lorsqu'une requête présente une similitude — jamais au hasard ») ; badges #mot-clé sur chaque campagne de la liste.
+- TESTS : lib/ads/context-matcher.test.ts (24 tests : normalisation, stopwords, racinisation symétrique, familles synonymes voiture↔automobile / cuisine↔cuisiner, maillon faible multi-mots, seuil strict, déterminisme ex æquo, exigence métier « jamais aléatoire ») ; user-campaigns.test.ts += propagation des mots-clés vers l'inventaire (1 test).
+- VALIDATION : tsc --noEmit 0 ; eslint 10 fichiers 0/0 ; vitest complet 3 469 tests verts (+25) ; next build OK (206/206 pages).
+
+Stage Summary:
+- Fini l'aléatoire : chaque emplacement response_inline/results affiche désormais l'annonce la plus SIMILAIRE à la requête résolue (question + réponse, ou titres des livrables) — et n'affiche RIEN si aucune annonce du pool ne présente de trait de ressemblance.
+- Les annonceurs contrôlent leur ciblage : mots-clés contextuels déclarés dans le formulaire Gen Ads, transportés jusqu'à l'inventaire de diffusion, badgés dans la liste des campagnes.
+- Métriques honnêtes : impressions comptées uniquement à l'affichage réel (record=none sur le pool contextuel, anti-fraude conservée).

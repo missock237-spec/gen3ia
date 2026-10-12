@@ -20,6 +20,12 @@ export interface PlatformAd {
   videoUrl?: string;
   targetUrl: string;
   ctaLabel?: string;
+  /**
+   * Mots-clés de ciblage contextuel (ciblage sémantique) : l'annonce n'est
+   * diffusée sous une réponse/résultat que si la requête de l'utilisateur
+   * présente une SIMILITUDE avec ces mots-clés (cf. lib/ads/context-matcher).
+   */
+  keywords?: string[];
   enabled: boolean;
   startsAtMs?: number;
   endsAtMs?: number;
@@ -44,6 +50,14 @@ function assertHttpUrl(value: string, field: string): string {
   return parsed.toString();
 }
 
+/** Normalise les mots-clés de ciblage contextuel (30 max, minuscules). */
+function normalizeKeywords(keywords: string[] | undefined): string[] {
+  return (keywords ?? [])
+    .map((keyword) => String(keyword).trim().toLowerCase().slice(0, 60))
+    .filter(Boolean)
+    .slice(0, 30);
+}
+
 export function validatePlatformAdInput(input: PlatformAdInput): PlatformAdInput {
   if (!input.placement.trim() || input.placement.length > 80) throw new Error("Placement publicitaire invalide.");
   if (!["image", "video", "link"].includes(input.format)) throw new Error("Format publicitaire invalide.");
@@ -53,6 +67,8 @@ export function validatePlatformAdInput(input: PlatformAdInput): PlatformAdInput
   if (input.text && input.text.length > 2_000) throw new Error("Le texte publicitaire est trop long.");
   if (input.ctaLabel && input.ctaLabel.length > 60) throw new Error("Le libellé CTA est trop long.");
   if (!Number.isFinite(input.priority) || input.priority < -1000 || input.priority > 1000) throw new Error("Priorité invalide.");
+
+  const keywordList = normalizeKeywords(input.keywords);
 
   const normalized: PlatformAdInput = {
     ...input,
@@ -65,6 +81,7 @@ export function validatePlatformAdInput(input: PlatformAdInput): PlatformAdInput
     ctaLabel: input.ctaLabel?.trim() || undefined,
     imageUrl: input.imageUrl ? assertHttpUrl(input.imageUrl.trim(), "imageUrl") : undefined,
     videoUrl: input.videoUrl ? assertHttpUrl(input.videoUrl.trim(), "videoUrl") : undefined,
+    ...(keywordList.length > 0 ? { keywords: keywordList } : {}),
     enabled: input.enabled !== false,
     startsAtMs: input.startsAtMs && Number.isFinite(input.startsAtMs) ? input.startsAtMs : undefined,
     endsAtMs: input.endsAtMs && Number.isFinite(input.endsAtMs) ? input.endsAtMs : undefined,
@@ -250,6 +267,7 @@ export async function updatePlatformAd(id: string, patch: Partial<PlatformAdInpu
     videoUrl: patch.videoUrl ?? current.videoUrl,
     targetUrl: patch.targetUrl ?? current.targetUrl,
     ctaLabel: patch.ctaLabel ?? current.ctaLabel,
+    keywords: patch.keywords ?? current.keywords,
     enabled: patch.enabled ?? current.enabled,
     startsAtMs: patch.startsAtMs ?? current.startsAtMs,
     endsAtMs: patch.endsAtMs ?? current.endsAtMs,
@@ -280,6 +298,9 @@ function serializeAd(id: string, data: DocumentData): PlatformAd {
     videoUrl: typeof data.videoUrl === "string" ? data.videoUrl : undefined,
     targetUrl: String(data.targetUrl ?? "https://gen3ia.online/marketplace"),
     ctaLabel: typeof data.ctaLabel === "string" ? data.ctaLabel : undefined,
+    ...(Array.isArray(data.keywords) && data.keywords.length > 0
+      ? { keywords: data.keywords.map((keyword) => String(keyword).trim().toLowerCase().slice(0, 60)).filter(Boolean).slice(0, 30) }
+      : {}),
     enabled: data.enabled !== false,
     startsAtMs: Number.isFinite(Number(data.startsAtMs)) ? Number(data.startsAtMs) : undefined,
     endsAtMs: Number.isFinite(Number(data.endsAtMs)) ? Number(data.endsAtMs) : undefined,

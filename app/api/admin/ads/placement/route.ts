@@ -21,6 +21,7 @@ const Input = z.object({
   videoUrl: z.string().url().max(2000).optional(),
   targetUrl: z.string().url().max(2000),
   ctaLabel: z.string().trim().max(60).optional(),
+  keywords: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
   enabled: z.boolean().default(true),
   startsAtMs: z.number().finite().optional(),
   endsAtMs: z.number().finite().optional(),

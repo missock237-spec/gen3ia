@@ -213,6 +213,19 @@ describe("buildInventoryEntries — publication placements × créations", () =>
     expect(buildInventoryEntries(campaign())[0].advertiser).toBe("Ma Boutique SARL");
     expect(buildInventoryEntries(campaign({ advertiserName: undefined }))[0].advertiser).toBe("Ma campagne boutique");
   });
+
+  it("transporte les mots-clés de ciblage contextuel jusqu'à l'inventaire (Gen Ads contextuel)", () => {
+    const entries = buildInventoryEntries(
+      campaign({ targeting: { placements: ["response_inline"], keywords: ["Cuisine ", "RECETTE", "restaurant"] } }),
+    );
+    expect(entries.length).toBeGreaterThan(0);
+    // Mots-clés normalisés (minuscules, sans blancs) sur CHAQUE annonce publiée.
+    for (const entry of entries) {
+      expect(entry.keywords).toEqual(["cuisine", "recette", "restaurant"]);
+    }
+    // Sans mots-clés déclarés : la clé est absente (pas de tableau vide).
+    expect(buildInventoryEntries(campaign())[0].keywords).toBeUndefined();
+  });
 });
 
 /* ------------------------------------------------------------------ */

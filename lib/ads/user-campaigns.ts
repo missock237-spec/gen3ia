@@ -140,6 +140,13 @@ export type UserInventoryEntry = PlatformAdInput & { ownerUserId: string };
 export function buildInventoryEntries(campaign: AdCampaign): UserInventoryEntry[] {
   const advertiser = (campaign.advertiserName?.trim() || campaign.name).slice(0, 120);
   const enabled = campaign.status === "active";
+  // Mots-clés de ciblage contextuel : transportés jusqu'à l'inventaire de
+  // diffusion — l'annonce ne s'affiche sous une réponse/résultat que si la
+  // requête de l'utilisateur présente une SIMILITUDE avec eux.
+  const keywords = (campaign.targeting.keywords ?? [])
+    .map((keyword) => keyword.trim().toLowerCase().slice(0, 60))
+    .filter(Boolean)
+    .slice(0, 30);
   const entries: UserInventoryEntry[] = [];
 
   for (const placement of campaign.targeting.placements.slice(0, MAX_USER_PLACEMENTS)) {
@@ -153,6 +160,7 @@ export function buildInventoryEntries(campaign: AdCampaign): UserInventoryEntry[
         targetUrl: creative.targetUrl,
         ...(creative.imageUrl ? { imageUrl: creative.imageUrl } : {}),
         ...(creative.ctaLabel ? { ctaLabel: creative.ctaLabel } : {}),
+        ...(keywords.length > 0 ? { keywords } : {}),
         enabled,
         priority: USER_AD_PRIORITY,
         campaignId: campaign.id,

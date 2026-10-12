@@ -3,25 +3,33 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { authFetch } from "@/lib/firebase/auth-client";
+import { pickContextualAd, stableHash } from "@/lib/ads/context-matcher";
 
 /**
  * PUBLICITÉ INLINE — sous chaque réponse ou résultat résolu par Gen3ia.
  *
  * Demande utilisateur : « chaque utilisateur doit pouvoir avoir des pubs
  * d'annonceurs qui apparaissent dans chaque réponse ou résultat que le
- * projet résout ».
+ * projet résout » — puis « l'affichage ne doit PAS se faire de manière
+ * aléatoire : la pub qui doit s'afficher doit avoir une similitude / un
+ * trait de ressemblance avec la demande ».
  *
  * Comportement :
  *  - respecte la préférence `adsEnabled` (opt-out dans Paramètres › Publicité) ;
  *  - charge UNE FOIS par fenêtre (pool partagé, TTL 2 min) l'inventaire du
  *    placement `response_inline` : aucune requête par message, aucune
  *    tempête de requêtes dans une conversation longue ;
- *  - chaque emplacement choisit DÉTERMINISTEMENT son annonce (hachage
- *    stable de la clé fournie) : la variété vient du pool, la stabilité
- *    du re-render vient du hachage — une ligne ne change pas d'annonce
- *    quand React re-rend le fil ;
- *  - impressions enregistrées côté serveur au chargement du pool, clics
- *    mesurés au clic réel (anti-fraude : doc-id déterministe serveur).
+ *  - CIBLAGE CONTEXTUEL : la prop `context` transporte la demande de
+ *    l'utilisateur (question posée + réponse) — l'annonce retenue est celle
+ *    qui présente la MEILLEURE SIMILITUDE SÉMANTIQUE avec cette demande
+ *    (mots-clés déclarés, racines, familles de synonymes) ;
+ *  - STRICT : si AUCUNE annonce du pool ne présente de ressemblance avec la
+ *    demande, RIEN ne s'affiche — jamais de choix aléatoire de substitution ;
+ *  - à score ÉGAL en tête, le choix est déterministe (hachage stable de la
+ *    clé) : un re-render ne change jamais l'annonce d'une ligne donnée ;
+ *  - impressions enregistrées uniquement pour l'annonce RÉELLEMENT affichée
+ *    (POST au montage — anti-fraude : doc-id déterministe serveur), clics
+ *    mesurés au clic réel.
  */
 
 interface InlineAd {
@@ -33,6 +41,7 @@ interface InlineAd {
   imageUrl?: string;
   targetUrl: string;
   ctaLabel?: string;
+  keywords?: string[];
 }
 
 const POOL_TTL_MS = 120_000;
@@ -54,7 +63,11 @@ async function fetchPreferenceEnabled(): Promise<boolean> {
 
 async function fetchAdPool(): Promise<{ ads: InlineAd[]; error: boolean }> {
   try {
-    const response = await authFetch("/api/ads/placement?placement=response_inline&mode=all", { cache: "no-store" });
+    // record=none : les impressions sont comptées à l'affichage RÉEL (le
+    // ciblage contextuel n'affiche qu'une annonce du pool — pas toutes).
+    const response = await authFetch("/api/ads/placement?placement=response_inline&mode=all&record=none", {
+      cache: "no-store",
+    });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Publicité indisponible.");
     return { ads: Array.isArray(data.ads) ? data.ads : [], error: false };
@@ -81,32 +94,38 @@ function loadPool(force = false): Promise<{ ads: InlineAd[]; error: boolean }> {
   return poolPromise;
 }
 
-/** Hachage stable (FNV-1a) : la même clé → la même annonce, à jamais. */
-function stableHash(value: string): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash >>> 0;
-}
-
-export function ResponseAdSlot({ slotKey }: { slotKey: string }) {
+export function ResponseAdSlot({ slotKey, context }: { slotKey: string; context?: string }) {
   const [ad, setAd] = useState<InlineAd | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const query = typeof context === "string" ? context.trim() : "";
     void loadPool().then((pool) => {
       if (cancelled || pool.ads.length === 0) return;
-      // Choix déterministe : le fil peut être re-rendu (streaming, mémo),
-      // l'annonce d'une ligne donnée reste TOUJOURS la même.
-      const index = stableHash(slotKey) % pool.ads.length;
-      setAd(pool.ads[index]);
+      let selected: InlineAd | null;
+      if (query.length > 0) {
+        // CIBLAGE CONTEXTUEL : seule une annonce PRÉSENTANT UNE SIMILITUDE
+        // avec la demande est diffusée — sinon RIEN (jamais d'aléatoire).
+        selected = pickContextualAd(pool.ads, query, slotKey);
+      } else {
+        // Sans contexte disponible : rotation déterministe historique
+        // (hachage stable — pas de changement d'annonce au re-render).
+        selected = pool.ads[stableHash(slotKey) % pool.ads.length];
+      }
+      if (!selected) return;
+      setAd(selected);
+      // Impression RÉELLE : comptée au montage effectif de l'annonce affichée
+      // (le pool est chargé avec record=none pour ne rien compter en avance).
+      void authFetch("/api/ads/placement", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "impression", adId: selected.id, placement: "response_inline" }),
+      }).catch(() => undefined);
     });
     return () => {
       cancelled = true;
     };
-  }, [slotKey]);
+  }, [slotKey, context]);
 
   const trackClick = useMemo(
     () => (adId: string) => {
@@ -128,6 +147,7 @@ export function ResponseAdSlot({ slotKey }: { slotKey: string }) {
       aria-label="Publicité sponsorisée"
       className="mr-auto w-full max-w-[92%] overflow-hidden rounded-xl border border-dashed border-[var(--g3-border)] bg-[var(--g3-surface)]/60"
       data-placement="response_inline"
+      data-contextual={typeof context === "string" && context.trim().length > 0 ? "true" : "false"}
     >
       <a
         href={ad.targetUrl}

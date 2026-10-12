@@ -117,6 +117,7 @@ export function UserAdsManager() {
   const [dailyBudget, setDailyBudget] = useState("5000");
   const [frequencyCap, setFrequencyCap] = useState("");
   const [selectedPlacements, setSelectedPlacements] = useState<string[]>(["response_inline"]);
+  const [keywordsInput, setKeywordsInput] = useState("");
   const [creatives, setCreatives] = useState<CreativeDraft[]>([{ ...EMPTY_CREATIVE }]);
   const [activateNow, setActivateNow] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -190,6 +191,14 @@ export function UserAdsManager() {
       return;
     }
 
+    // Mots-clés de ciblage contextuel : séparés par des virgules, normalisés
+    // (minuscules, 60 caractères max, 30 maximum — parité campagnes).
+    const keywords = keywordsInput
+      .split(",")
+      .map((keyword) => keyword.trim().toLowerCase().slice(0, 60))
+      .filter(Boolean)
+      .slice(0, 30);
+
     setSubmitting(true);
     try {
       const response = await authFetch("/api/ads/my-campaigns", {
@@ -204,7 +213,7 @@ export function UserAdsManager() {
           currency: "XAF",
           bidStrategy,
           ...(frequency !== undefined ? { frequencyCapPerDay: frequency } : {}),
-          targeting: { placements: selectedPlacements },
+          targeting: { placements: selectedPlacements, ...(keywords.length > 0 ? { keywords } : {}) },
           creatives: validCreatives,
         }),
       });
@@ -217,6 +226,7 @@ export function UserAdsManager() {
       );
       setName("");
       setAdvertiserName("");
+      setKeywordsInput("");
       setCreatives([{ ...EMPTY_CREATIVE }]);
       setFormOpen(false);
       await loadCampaigns();
@@ -450,6 +460,23 @@ export function UserAdsManager() {
             </div>
           </fieldset>
 
+          <label className="block text-sm">
+            <span className="font-medium text-[var(--g3-text)]">Mots-clés de ciblage contextuel</span>
+            <input
+              type="text"
+              value={keywordsInput}
+              onChange={(event) => setKeywordsInput(event.target.value)}
+              maxLength={600}
+              placeholder="Ex. cuisine, recette, restaurant, menu"
+              className="mt-1.5 w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3.5 py-2.5 text-sm text-[var(--g3-text)] outline-none transition focus:border-[var(--g3-primary)]"
+            />
+            <span className="mt-1.5 block text-xs leading-5 text-[var(--g3-muted)]">
+              Séparés par des virgules (30 max). Votre annonce s&apos;affiche uniquement lorsqu&apos;une requête ou un
+              résultat présente une <strong className="font-semibold text-[var(--g3-text-secondary)]">similitude</strong> avec
+              ces mots-clés — jamais au hasard. Sans mots-clés, seule une ressemblance avec le texte de l&apos;annonce est prise en compte.
+            </span>
+          </label>
+
           <fieldset className="space-y-4">
             <legend className="text-sm font-medium text-[var(--g3-text)]">Création(s) publicitaire(s)</legend>
             {creatives.map((creative, index) => (
@@ -608,6 +635,20 @@ export function UserAdsManager() {
                         {placementLabel(placement)}
                       </span>
                     ))}
+                    {(campaign.targeting.keywords ?? []).slice(0, 6).map((keyword) => (
+                      <span
+                        key={`${campaign.id}-keyword-${keyword}`}
+                        title="Mots-clés de ciblage contextuel — l'annonce s'affiche sur les requêtes similaires"
+                        className="rounded-full border border-dashed border-[var(--g3-border)] bg-[var(--g3-primary-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--g3-text-secondary)]"
+                      >
+                        #{keyword}
+                      </span>
+                    ))}
+                    {(campaign.targeting.keywords?.length ?? 0) > 6 && (
+                      <span className="text-[10px] text-[var(--g3-faint)]">
+                        +{(campaign.targeting.keywords?.length ?? 0) - 6}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

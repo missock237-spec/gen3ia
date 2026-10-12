@@ -79,6 +79,12 @@ interface MessageRowProps {
   generating: boolean;
   onDecide: (approvalId: string, decision: "approved" | "rejected") => Promise<void>;
   onEditImage?: (image: { url?: string; path?: string; filename?: string }) => void;
+  /**
+   * Contexte de ciblage publicitaire (Gen Ads contextuel) : la demande qui a
+   * déclenché cette réponse + un extrait de la réponse — la publicité
+   * affichée doit présenter une SIMILITUDE avec ce contexte.
+   */
+  adContext?: string;
 }
 
 /** Ligne de message mémoïsée : pendant le streaming, seule la bulle en cours
@@ -92,6 +98,7 @@ const MessageRow = memo(function MessageRow({
   generating,
   onDecide,
   onEditImage,
+  adContext,
 }: MessageRowProps) {
   return (
     <Fragment>
@@ -225,9 +232,12 @@ const MessageRow = memo(function MessageRow({
 
       {/* GEN ADS — publicité d'annonceur sous chaque RÉPONSE résolue par
           l'IA (demande utilisateur) : emplacement compact « response_inline »,
-          pool partagé + choix déterministe par message, préférence adsEnabled
-          respectée, aucune requête par message. */}
-      {message.role === "assistant" && <ResponseAdSlot slotKey={`msg:${message.id}`} />}
+          pool partagé + CIBLAGE CONTEXTUEL — l'annonce affichée présente une
+          similitude sémantique avec la demande de l'utilisateur (question +
+          réponse) ; sans annonce pertinente, RIEN ne s'affiche. */}
+      {message.role === "assistant" && (
+        <ResponseAdSlot slotKey={`msg:${message.id}`} context={adContext} />
+      )}
 
       {run && <RunTimeline run={run} />}
       {runApprovals.filter((a) => a.status === "pending").map((approval) => (
@@ -276,6 +286,25 @@ export function MessageThread({
     return map;
   }, [runs, artifactsById]);
   const streaming = typeof streamingContent === "string";
+  // GEN ADS — CIBLAGE CONTEXTUEL : pour chaque réponse assistant, le contexte
+  // publicitaire = la demande de l'utilisateur qui l'a déclenchée + un extrait
+  // de la réponse elle-même. La publicité affichée doit présenter une
+  // SIMILITUDE avec ce contexte (jamais un choix aléatoire).
+  const adContextByMessageId = useMemo(() => {
+    const contexts = new Map<string, string>();
+    let lastUserQuery = "";
+    for (const message of messages) {
+      if (message.role === "user") {
+        lastUserQuery = message.content;
+      } else if (message.role === "assistant") {
+        contexts.set(
+          message.id,
+          `${lastUserQuery} ${message.content.slice(0, 400)}`.trim().slice(0, 1200),
+        );
+      }
+    }
+    return contexts;
+  }, [messages]);
   // AUDIO LIVRÉ DIRECTEMENT (Task 123) : association message ↔ artefacts audio
   // (tours vocaux SANS run, comme livrables d'étape d'un run) — le lecteur
   // intégré apparaît dès que l'artefact arrive (événement de flux ou
@@ -317,6 +346,7 @@ export function MessageThread({
             generating={generating}
             onDecide={onDecide}
             onEditImage={onEditImage}
+            adContext={adContextByMessageId.get(message.id)}
           />
         );
       })}
