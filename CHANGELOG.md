@@ -14,6 +14,19 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Ajouté
 
+- **Appels vocaux IA pilotés par Bland AI (Task 139)** : refonte complète du
+  système d'appel vocal — suppression de l'infrastructure Twilio/Plivo
+  (webhooks, numéros virtuels, renouvellements) et migration vers Bland AI.
+  Synchronisation automatique agent Gen3ia ⇄ agent Bland (création v2,
+  snapshot prompt/personnalité/langue/voix, publish + promote, resynchro
+  dès que la config change), Call App reconstruite (suivi live Bland,
+  transcript, enregistrement, résumé IA, arrêt d'appel), webhook
+  post-appel signé (X-Webhook-Signature HMAC-SHA256), tool `phone.call`
+  rebranché sur Bland, facturation miroir à la minute (wallet) et quota
+  journalier. Variables : `BLAND_API_KEY`, `BLAND_WEBHOOK_SECRET`,
+  `BLAND_WEBHOOK_BASE_URL`, `GEN3IA_MAX_DAILY_VOICE_CALLS`,
+  `GEN3IA_VOICE_CALL_MIN_BALANCE_MINOR`.
+
 - **Studio vidéo « CapCut » (Task 119)** : synchro voix-visuel audio-réactive
   (beat/énergie — la vidéo suit la voix), sous-titres **karaoké ASS** (surlignage
   mot à mot calé sur la voix), 6 nouvelles transitions/effets (`punch_zoom`,

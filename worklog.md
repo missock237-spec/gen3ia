@@ -3764,3 +3764,30 @@ Stage Summary:
 - Volet 2 (facultés d'exécution) : déjà largement couvert par l'architecture (Planner-Executor-Evaluator, DAG parallèle, registre d'outils + sandbox, checkpoints/mémoire épisodique) — consolidé, non dupliqué.
 - Volet 3 (robustesse/auto-correction) : les réponses visibles sont auto-critiquées avant livraison (self-reflection bornée), et les échecs d'exécution ne sont PLUS rejoués à l'aveugle : l'erreur est classée, journalisée, et la reprise corrige le code ou l'entrée d'outil d'après le journal réel ; les erreurs sans espoir (budget, permission) échouent immédiatement sans brûler de tentative.
 - QA verte : tsc 0, eslint 0/0, 3 538 tests verts (+62 nouveaux fichiers dédiés), build production OK.
+
+---
+Task ID: 139
+Agent: Super Z (agent principal)
+Task: Système d'appel vocal des agents IA — suppression de l'infrastructure existante (Twilio/Plivo) et reconstruction complète pilotée par Bland AI, avec synchronisation agent Gen3ia ⇄ agent Bland, clé API dans les environnements Vercel, système de production prêt à l'emploi (pas une démo).
+
+Work Log:
+- Exploré l'infrastructure vocale : 4 sous-systèmes identifiés — (A) appels Twilio+Plivo (Call App), (B) Live Voix navigateur, (C) TTS chat, (D) voix-off vidéo. Le « système d'appel vocal des agents » = sous-système A ; surface de suppression complète cartographiée.
+- Vérifié l'API Bland réelle (docs.bland.ai/llms.txt) : auth Bearer ; v1 POST /v1/calls (agent_id, first_sentence, record, webhook, webhook_events, metadata) ; GET /v1/calls/{id} (completed, status, answered_by, transcripts, recording_url, call_length, price) ; POST /v1/calls/{id}/stop ; v2 Agents : création → publish (snapshot behavior/settings/contact + bump semver) → promote (production). Webhook post-appel signé X-Webhook-Signature (HMAC-SHA256 hex du corps brut).
+- Clé API utilisateur testée : valide (org avec 1 agent + 3 appels historiques).
+- Env : .env.local avec BLAND_API_KEY (gitignoré), .env.example (bloc Bland remplaçant Twilio/Plivo), config-report (groupe telephony → BLAND_API_KEY) + test adapté, scripts/vercel-env-bland.mjs (injection API Vercel v9/v10 — production/preview/development).
+- NOUVEAU lib/integrations/bland/client.ts : client complet (auth Bearer, timeout 30 s, erreurs v1/v2 → BlandError, createBlandAgent/listBlandAgents/getBlandAgent/deleteBlandAgent/publishBlandAgentSnapshot/promoteBlandAgent/sendBlandCall/getBlandCall/stopBlandCall/normalizeBlandCallDetails/verifyBlandWebhookSignature).
+- Schéma agent étendu : VoiceConfigSchema + blandAgentId/blandSyncedAt/blandSemver/blandVoice (optionnels, backward-compatible R2).
+- NOUVEAU lib/voice/bland-agent-sync.ts — LA synchronisation : buildBlandSystemPrompt (persona + garde-fous + règles orales anti-Markdown), buildBlandSnapshot (graphe start→scénario, settings voix/langues/memory, contact), isBlandSyncStale (updatedAt > blandSyncedAt ⇒ obsolète), syncAgentToBland (création → publish → promote → persistance du mapping), ensureAgentSynced (resynchro automatique si et seulement si obsolète).
+- NOUVEAU lib/voice/bland-calls.ts : registre voiceCalls (id = call_id Bland — webhook et polling convergent idempotemment), quota journalier voiceCallDaily (transaction), applyBlandCallDetails (fusion + facturation miroir billUsage kind voice_call UNE SEULE fois, fail-soft), syncVoiceCallFromBland, saveVoiceCallSummary.
+- Routes : GET/POST /api/voice/calls (garde wallet plancher 1 € → ensureAgentSynced → quota → sendBlandCall avec webhook+record) ; GET /api/voice/calls/[id] (rafraîchissement direct Bland si non terminal) ; …/summary (résumé IA caché, repli summary Bland) ; …/stop (arrêt réel) ; GET/POST /api/agents/[id]/voice/sync ; GET /api/voice/status ; POST /api/voice/webhook/bland (HMAC si secret, appels inconnus ignorés sans rejeu).
+- Tool phone.call réécrit sur Bland ; sales-call-intelligence adapté à listVoiceCalls ; cron agent-schedules nettoyé (renouvellements numéros supprimés) ; page confidentialité et docs mises à jour ; e2e corrigé.
+- SUPPRESSIONS : lib/integrations/{twilio,plivo}/*, lib/voice/{pricing,renewals}.ts, app/api/voice/{numbers,twilio,plivo}, app/api/agents/[id]/voice/call, app/settings/numbers, components/agent/voice-agent-setup.tsx.
+- Call App /studio/calls reconstruite : badge de synchro (⟳/✓ v{semver}) + bouton Resynchroniser, formulaire d'appel, suivi live 4 s, transcript, lecteur d'enregistrement, résumé IA, arrêt d'appel.
+- Tests : 3 nouvelles suites (client 9, agent-sync 12, calls 8) — auth/erreurs, normalisation transcripts (robot→user), snapshot, staleness, cycle publish/promote, facturation idempotente, quota. Validation : tsc 0 erreur ; eslint 0/0 ; vitest 322/323 fichiers 3 559 tests verts (seul échec sandbox/fastify préexistant) ; next build 200/200.
+- Smoke test API RÉELLE (scripts/bland-smoke-test.sh côté workspace) : création agent → publish v0.1.0 → promote production (staging=production) → suppression douce — cycle complet VALIDÉ sans passer d'appel.
+
+Stage Summary:
+- Appels vocaux 100 % Bland AI : zéro dépendance Twilio/Plivo (17 fichiers supprimés), remplacés par un pipeline synchronisé de production.
+- Synchronisation garantie : l'agent Bland est (re)créé/publié/promu à chaque changement de config Gen3ia avant tout appel — l'appel exécute toujours la version production de l'agent Bland correspondant.
+- Livré : client Bland (v1+v2), 7 routes API (webhook signé), registre voiceCalls avec facturation miroir à la minute et quota journalier, Call App complète, tool phone.call, docs/tests à jour.
+- Action utilisateur restante : définir BLAND_API_KEY dans Vercel (scripts/vercel-env-bland.mjs ou dashboard) puis redéployer ; optionnels BLAND_WEBHOOK_SECRET (dashboard Bland › Settings › Keys) et BLAND_WEBHOOK_BASE_URL=https://gen3ia.online.

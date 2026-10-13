@@ -7,16 +7,16 @@ import { createRecord, listRecords, deleteRecord, unfoldRecord } from "@/lib/eng
 import { runAIJSON } from "@/lib/engines/ai-engine";
 import { createEvent } from "@/lib/engines/scheduling-engine";
 import { emitBusinessEvent } from "@/lib/engines/events";
-import { listPhoneCallSessions } from "@/lib/integrations/twilio/calls";
+import { listVoiceCalls } from "@/lib/voice/bland-calls";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 /**
  * Module Sales — Call Intelligence.
- * S'appuie sur la Call App évoluée (Task 14) : chaque appel téléphonique
- * terminé peut être analysé par l'AI Engine — résumé, sentiment, objections,
- * prochaines actions, score d'opportunité — puis un rendez-vous de suivi est
+ * S'appuie sur la Call App Bland AI : chaque appel vocal terminé peut
+ * être analysé par l'AI Engine — résumé, sentiment, objections, prochaines
+ * actions, score d'opportunité — puis un rendez-vous de suivi est
  * automatiquement planifié via le Scheduling Engine.
  */
 
@@ -50,8 +50,8 @@ export async function GET(request: NextRequest) {
     if (!limit.allowed) return NextResponse.json({ error: "Trop de requêtes, réessayez dans un instant." }, { status: 429 });
 
     const records = await listRecords({ userId: user.uid, collection: COLLECTION, orderBy: { field: "createdAt", direction: "desc" }, limit: 50 });
-    // Appels téléphoniques éligibles : terminés, avec un historique exploitable.
-    const sessions = await listPhoneCallSessions(user.uid, undefined, 30);
+    // Appels vocaux éligibles : terminés, avec un historique exploitable.
+    const sessions = await listVoiceCalls(user.uid, undefined, 30);
     const analyzed = new Set(records.map((r) => (r.data as { callSessionId?: string }).callSessionId));
     const available = sessions
       .filter((s) => s.status === "completed" && s.history.length > 0 && !analyzed.has(s.id))
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     const parsed = PostSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Requête invalide.", details: parsed.error.flatten().fieldErrors }, { status: 400 });
 
-    const sessions = await listPhoneCallSessions(user.uid, undefined, 50);
+    const sessions = await listVoiceCalls(user.uid, undefined, 50);
     const session = sessions.find((s) => s.id === parsed.data.callSessionId);
     if (!session || session.userId !== user.uid) return NextResponse.json({ error: "Appel introuvable." }, { status: 404 });
     if (session.history.length === 0) return NextResponse.json({ error: "Cet appel n'a aucune transcription à analyser." }, { status: 400 });

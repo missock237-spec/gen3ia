@@ -1,55 +1,79 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
+
 import type { ToolDefinition } from "@/lib/tools/types";
-import { createPhoneCallSession, startPhoneCall } from "@/lib/integrations/twilio/calls";
 import { getAgentForUser } from "@/lib/agents/repository";
-import { listAgentPhoneNumbers } from "@/lib/integrations/twilio/numbers";
+import { sendBlandCall } from "@/lib/integrations/bland/client";
+import { ensureAgentSynced, mapGen3iaLanguageToBland } from "@/lib/voice/bland-agent-sync";
+import { createVoiceCallRecord, reserveDailyVoiceCallSlot } from "@/lib/voice/bland-calls";
 
 const PhoneCallInput = z.object({
   agentId: z.string().min(1).optional(),
   to: z.string().regex(/^\+[1-9]\d{7,14}$/),
   objective: z.string().min(3).max(4000),
-  opening: z.string().min(2).max(800).default("Bonjour, je vous appelle au nom de Gen3ia."),
-  language: z.enum(["fr-FR", "en-US", "en-GB", "es-ES", "de-DE"]).default("fr-FR"),
-  maxTurns: z.number().int().min(1).max(20).default(8),
-  maxDurationSeconds: z.number().int().min(30).max(900).default(300),
+  firstSentence: z.string().min(2).max(800).optional(),
 });
 
-export const phoneCallTool: ToolDefinition<z.infer<typeof PhoneCallInput>, {
-  sessionId: string;
-  callSid: string;
-  status: string;
-}> = {
+/**
+ * Tool « phone.call » — appel vocal réel via Bland AI.
+ *
+ * L'agent Gen3ia exécutant le tool est synchronisé vers son agent Bland
+ * (création/mise à jour si la config a changé), l'appel part en mode
+ * agent_id : c'est la version production de l'agent Bland qui conduit la
+ * conversation. Le résultat est matérialisé dans « voiceCalls » avec le
+ * même cycle de vie que les appels lancés depuis la Call App.
+ */
+export const phoneCallTool: ToolDefinition<
+  z.infer<typeof PhoneCallInput>,
+  {
+    callId: string;
+    status: string;
+    blandAgentId: string;
+  }
+> = {
   id: "phone.call",
-  name: "AI Phone Call",
-  description: "Place a controlled outbound phone call and let a Gen3ia voice agent conduct a bounded conversation.",
+  name: "AI Phone Call (Bland)",
+  description:
+    "Place a real outbound phone call conducted by the synced Bland AI voice agent. Returns the call id for live tracking.",
   category: "system",
   risk: "high",
   inputSchema: PhoneCallInput,
   async execute(input, context) {
     const selectedAgentId = input.agentId ?? context.agentId;
-    const agent = selectedAgentId ? await getAgentForUser(context.userId, selectedAgentId) : null;
-    if (input.agentId && !agent) throw new Error("Voice agent not found.");
-    if (agent && !agent.voiceEnabled) throw new Error("Voice calls are disabled for this agent.");
-    const assignedNumber = agent ? (await listAgentPhoneNumbers(context.userId, agent.id)).find((item) => item.status === "active") : null;
-    if (agent && !assignedNumber) throw new Error("This voice agent has no active phone number.");
-    const session = await createPhoneCallSession({
+    if (!selectedAgentId) {
+      throw new Error("No voice agent context: provide agentId or run this tool from an agent.");
+    }
+    const agent = await getAgentForUser(context.userId, selectedAgentId);
+    if (!agent) throw new Error("Voice agent not found.");
+    if (!agent.voiceEnabled || agent.voiceConfig?.outboundEnabled === false) {
+      throw new Error("Voice calls are disabled for this agent.");
+    }
+
+    // Synchronisation config Gen3ia → agent Bland (au besoin), puis appel.
+    const sync = await ensureAgentSynced(context.userId, agent);
+    await reserveDailyVoiceCallSlot(context.userId);
+
+    const call = await sendBlandCall({
+      phoneNumber: input.to,
+      agentId: sync.blandAgentId,
+      firstSentence: input.firstSentence ?? agent.voiceConfig?.greeting,
+      language: mapGen3iaLanguageToBland(agent.voiceConfig?.language),
+      maxDurationMinutes: Math.max(1, Math.ceil((agent.voiceConfig?.maxDurationSeconds ?? 300) / 60)),
+      record: true,
+      metadata: { userId: context.userId, agentId: agent.id, origin: "gen3ia-tool" },
+      requestData: { objective: input.objective },
+    });
+
+    const record = await createVoiceCallRecord({
+      callId: call.callId,
       userId: context.userId,
-      agentId: agent?.id,
-      systemPrompt: agent?.systemPrompt,
-      executionId: context.executionId ?? randomUUID(),
+      agentId: agent.id,
+      agentName: agent.name,
+      blandAgentId: sync.blandAgentId,
       to: input.to,
       objective: input.objective,
-      opening: agent?.voiceConfig?.greeting ?? input.opening,
-      language: agent?.voiceConfig?.language ?? input.language,
-      maxTurns: agent?.voiceConfig?.maxTurns ?? input.maxTurns,
-      maxDurationSeconds: agent?.voiceConfig?.maxDurationSeconds ?? input.maxDurationSeconds,
+      language: agent.voiceConfig?.language ?? "fr-FR",
     });
-    try {
-      const call = await startPhoneCall(session.id);
-      return { sessionId: session.id, callSid: call.callSid, status: call.status };
-    } catch (error) {
-      throw error;
-    }
+
+    return { callId: record.id, status: record.status, blandAgentId: sync.blandAgentId };
   },
 };

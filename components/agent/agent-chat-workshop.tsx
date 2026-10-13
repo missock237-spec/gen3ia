@@ -5,7 +5,6 @@ import * as React from "react";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import { AgentChatPanel } from "@/components/agent/agent-chat-panel";
 import { CreateAgentDialog } from "@/components/agent/create-agent-dialog";
-import { VoiceAgentSetup } from "@/components/agent/voice-agent-setup";
 import { Callout } from "@/components/studio/callout";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import type { AgentSummary } from "@/lib/agents/schema";
@@ -76,7 +75,6 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
   // d'une liste vide : sous quota de base de données l'utilisateur ne doit
   // pas croire qu'il n'a AUCUN chat (Task 96-c).
   const [historyUnavailable, setHistoryUnavailable] = React.useState(false);
-  const [voiceSetupAgentId, setVoiceSetupAgentId] = React.useState<string | null>(null);
   const [showCreateAgent, setShowCreateAgent] = React.useState(false);
 
   const refreshConversations = React.useCallback(async () => {
@@ -294,10 +292,6 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
           )}
         </div>
       </div>
-
-      {voiceSetupAgentId && (
-        <VoiceAgentSetup agentId={voiceSetupAgentId} onDone={() => { setVoiceSetupAgentId(null); void refresh(); }} />
-      )}
     </div>
     {showCreateAgent && <CreateAgentDialog onClose={() => setShowCreateAgent(false)} onCreated={() => void refresh()} />}
     </>

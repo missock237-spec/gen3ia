@@ -75,7 +75,7 @@ await timed("API protégée (sans session)", async () => {
     ["GET", "/api/ai/image"],
     ["GET", "/api/live/sessions"],
     ["GET", "/api/voice/calls"],
-    ["GET", "/api/voice/numbers"],
+    ["GET", "/api/voice/status"],
     ["GET", "/api/commercial"],
     ["GET", "/api/admin/platform"],
     ["GET", "/api/admin/users"],

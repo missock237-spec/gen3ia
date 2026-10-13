@@ -87,9 +87,9 @@ const GROUPS: GroupSpec[] = [
   },
   {
     group: "telephony",
-    role: "Téléphonie Twilio (appels sortants/entrants)",
-    required: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
-    fallback: "outils phone.* indisponibles (jamais planifiés)",
+    role: "Téléphonie Bland AI (appels vocaux des agents)",
+    required: ["BLAND_API_KEY"],
+    fallback: "appels vocaux indisponibles (message explicite à l'utilisateur)",
   },
   {
     group: "voice",
@@ -156,7 +156,7 @@ const OPTIONAL_RECOGNIZED = [
   // (lib/integrations/twentyfirst/client.ts).
   "ELEVENLABS_VOICE_ID",
   "TWENTY_FIRST_API_KEY",
-  "TWILIO_WEBHOOK_BASE_URL",
+  "BLAND_WEBHOOK_BASE_URL",
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ACCOUNT_ID",
   "GOOGLE_ADS_DEVELOPER_TOKEN",

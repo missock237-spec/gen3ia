@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { FieldValue } from "@/lib/r2fs";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
-import { assertPhoneCallOwner, getPhoneCallSession } from "@/lib/integrations/twilio/calls";
-import type { PhoneCallSession } from "@/lib/integrations/twilio/voice";
 import { generateForUser } from "@/lib/billing/ai-execution";
-import { adminDb } from "@/lib/firebase/admin";
+import { assertVoiceCallOwner, saveVoiceCallSummary, syncVoiceCallFromBland } from "@/lib/voice/bland-calls";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -15,12 +12,13 @@ export const maxDuration = 60;
 type Context = { params: Promise<{ id: string }> };
 
 /**
- * Résumé IA d'un appel (Call App).
+ * Résumé IA d'un appel vocal Bland.
  *
  * Le transcript est résumé par le routeur IA facturé au propriétaire ; le
- * résumé est mis en cache sur la session (resume) — régénérable via
+ * résumé est mis en cache sur l'enregistrement (resume) — régénérable via
  * ?refresh=1. Un appel sans transcript retourne une réponse explicite
- * (pas de résumé inventé).
+ * (pas de résumé inventé). Bland fournit aussi son propre « summary »
+ * post-appel : il sert de repli si le transcript est trop court.
  */
 export async function POST(request: NextRequest, context: Context) {
   try {
@@ -29,21 +27,27 @@ export async function POST(request: NextRequest, context: Context) {
     const limit = await enforceRateLimit(`call-summary:${user.uid}`, { limit: 30, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Trop de demandes de résumé." }, { status: 429 });
 
-    await assertPhoneCallOwner(user.uid, id);
-    const session = await getPhoneCallSession(id);
-    if (!session) return NextResponse.json({ error: "Appel introuvable." }, { status: 404 });
-    const cached = (session as PhoneCallSession & { resume?: string }).resume;
+    await assertVoiceCallOwner(user.uid, id);
+    // Un appel encore en cours n'a pas de transcript final : on force un
+    // rafraîchissement (fail-soft) avant de conclure à l'absence de contenu.
+    const record = (await syncVoiceCallFromBland(id)) ?? (await assertVoiceCallOwner(user.uid, id));
 
     const refresh = request.nextUrl.searchParams.get("refresh") === "1";
-    if (cached && !refresh) {
-      return NextResponse.json({ summary: cached, cached: true });
+    if (record.resume && !refresh) {
+      return NextResponse.json({ summary: record.resume, cached: true });
     }
 
-    const transcript = (session.history ?? [])
+    const transcript = record.history
       .map((item) => `${item.role === "assistant" ? "Agent" : "Correspondant"} : ${item.text}`)
       .join("\n");
     if (transcript.trim().length < 20) {
-      return NextResponse.json({ error: "Aucun transcript exploitable pour cet appel (pas encore connecté, ou trop court)." }, { status: 409 });
+      if (record.summary) {
+        return NextResponse.json({ summary: record.summary, cached: false, source: "bland" });
+      }
+      return NextResponse.json(
+        { error: "Aucun transcript exploitable pour cet appel (pas encore connecté, ou trop court)." },
+        { status: 409 },
+      );
     }
 
     const billed = await generateForUser({
@@ -60,13 +64,13 @@ export async function POST(request: NextRequest, context: Context) {
             content:
               "Tu résumes des appels téléphoniques passés par des agents IA Gen3ia. Produis : (1) un résumé en 2 à 4 phrases ; (2) les points clés en liste ; (3) toute demande ou réclamation du correspondant ; (4) l'action de suivi recommandée. Sois factuel : n'invente RIEN qui ne figure pas au transcript.",
           },
-          { role: "user", content: `Objectif de l'appel : ${session.objective}\n\nTranscript :\n${transcript.slice(0, 12_000)}` },
+          { role: "user", content: `Objectif de l'appel : ${record.objective}\n\nTranscript :\n${transcript.slice(0, 12_000)}` },
         ],
       },
     });
 
     const summary = billed.response.text;
-    await adminDb.collection("agentPhoneCalls").doc(id).update({ resume: summary, summarizedAt: FieldValue.serverTimestamp() }).catch(() => undefined);
+    await saveVoiceCallSummary(id, summary);
     return NextResponse.json({ summary, cached: false });
   } catch (error) {
     return NextResponse.json(errorBody(error, "Résumé indisponible."), { status: errorStatus(error) });

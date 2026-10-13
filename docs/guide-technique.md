@@ -12,7 +12,7 @@ Ce document fournit un aperçu complet des modules techniques, des routes API, d
 - **Stockage Objets** : Cloudflare R2 / AWS S3 (via `@aws-sdk/client-s3`)
 - **Moteur IA & LLM** : Routeur multi-fournisseurs (`lib/ai/router.ts`) supportant OpenAI, Groq, Anthropic, Hugging Face, OpenRouter
 - **Connecteurs d'outils** : Composio (`@composio/core`, 800+ intégrations), MCP (Model Context Protocol)
-- **Téléphonie & Voix** : Twilio, Plivo, ElevenLabs TTS
+- **Téléphonie & Voix** : Bland AI (appels vocaux), ElevenLabs TTS
 - **Exécution de code & composant UI** : Intégration 21st.dev (`lib/integrations/twentyfirst`)
 - **Génération de documents** : DOCX (`docx`), XLSX (`exceljs`), PDF (`pdf-lib`), PPTX (`pptxgenjs`), Archives (`archiver`)
 - **Observabilité & Métriques** : Logger Pino (`lib/observability/logger.ts`), Tracing d'exécutions (`execution-tracer.ts`), Moteur de coûts (`cost-engine.ts`)
@@ -33,7 +33,7 @@ Ce document fournit un aperçu complet des modules techniques, des routes API, d
 | **Live / Vision** | `lib/live/` | Moteur de vision avec repli multi-modèles (`vision-decider.ts`), gateway WebSocket (`gateway.ts`), gestionnaire de sessions live (`repository.ts`). |
 | **Mémoire & RAG** | `lib/memory/` | Mémoire épisodique (`episodic.ts`), découpage de documents (`chunker.ts`), recherche sémantique (`search.ts`), mémoire utilisateur (`user-memory.ts`). |
 | **Documents** | `lib/documents/` | Moteur de génération multi-format (PDF, DOCX, XLSX, PPTX, ZIP), gestion des artefacts et validation de schémas (`engine.ts`, `artifact-store.ts`). |
-| **Intégrations** | `lib/integrations/` | Connecteurs Composio, Twilio, Plivo, ElevenLabs, GitHub, Notion, 21st.dev, Webhooks. |
+| **Intégrations** | `lib/integrations/` | Connecteurs Composio, Bland AI, ElevenLabs, GitHub, Notion, 21st.dev, Webhooks. |
 
 ---
 
@@ -58,10 +58,14 @@ Ce document fournit un aperçu complet des modules techniques, des routes API, d
 - `GET/DELETE /api/agents/schedules/[id]` : Modification ou suppression d'un schedule.
 - `POST /api/cron/agent-schedules` : Déclencheur automatique de cron (à appeler via Vercel Cron ou Cloud Scheduler).
 
-### Téléphonie & Voix
-- `POST /api/voice/twilio/answer` & `/turn` : Webhooks d'appel entrant et de dialogue interactif Twilio.
-- `POST /api/voice/plivo/answer` & `/turn` : Webhooks d'appel entrant et de dialogue interactif Plivo.
-- `POST /api/agents/[id]/voice/call` : Iniation d'un appel téléphonique sortant via un agent.
+### Téléphonie & Voix (Bland AI)
+- `GET/POST /api/voice/calls` : Historique des appels vocaux / lancement d'un appel sortant piloté par l'agent Bland synchronisé.
+- `GET /api/voice/calls/[id]` : Suivi d'un appel (rafraîchi en direct depuis Bland tant qu'il est actif).
+- `POST /api/voice/calls/[id]/summary` : Résumé IA post-appel (mis en cache).
+- `POST /api/voice/calls/[id]/stop` : Arrêt d'un appel en cours.
+- `GET/POST /api/agents/[id]/voice/sync` : État / synchronisation manuelle de l'agent Gen3ia vers son agent Bland (publish + promote).
+- `GET /api/voice/status` : Disponibilité Bland + état de synchronisation des agents vocaux.
+- `POST /api/voice/webhook/bland` : Webhook post-appel Bland (statut, transcripts, enregistrement, facturation miroir — signature HMAC X-Webhook-Signature).
 
 ### Publicité & Marketing (Ads)
 - `POST /api/ads/generate` : Génération de contenu publicitaire multi-canal.
@@ -115,10 +119,8 @@ OPENROUTER_API_KEY=
 
 # Intégrations Tierces
 COMPOSIO_API_KEY=
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-PLIVO_AUTH_ID=
-PLIVO_AUTH_TOKEN=
+BLAND_API_KEY=
+BLAND_WEBHOOK_SECRET=
 ELEVENLABS_API_KEY=
 TWENTYFIRST_API_KEY=
 

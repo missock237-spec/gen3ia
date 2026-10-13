@@ -14,6 +14,16 @@ export const VoiceConfigSchema = z.object({
   inboundEnabled: z.boolean().default(true),
   outboundEnabled: z.boolean().default(true),
   voiceEnabled: z.boolean().default(true),
+  // ── Bland AI (appels vocaux) — champs gérés par la synchronisation ──
+  // Identifiant de l'agent Bland correspondant (collection v2/agents) ;
+  // écrit uniquement par lib/voice/bland-agent-sync.ts.
+  blandAgentId: z.string().trim().min(8).max(128).optional(),
+  // Horodatage ISO de la dernière synchronisation réussie vers Bland.
+  blandSyncedAt: z.string().trim().max(40).optional(),
+  // Semver de la dernière version publiée/promue côté Bland.
+  blandSemver: z.string().trim().max(32).optional(),
+  // Voix Bland optionnelle (preset ou voice ID cloné ; défaut « nat »).
+  blandVoice: z.string().trim().min(1).max(120).optional(),
 });
 export type VoiceConfig = z.infer<typeof VoiceConfigSchema>;
 

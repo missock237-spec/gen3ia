@@ -38,7 +38,7 @@ const SECTIONS: Array<{ title: string; body: string[] }> = [
       "Firebase (Google) : authentification et bases de données. Les identifiants de connexion et le contenu applicatif transitent par l'infrastructure Google Cloud.",
       "Chariow : traitement des paiements de rechargement de portefeuille. Les informations de paiement sont traitées directement par le prestataire.",
       "Fournisseurs d'IA : vos demandes sont transmises aux fournisseurs de modèles (OpenAI, Anthropic, Groq, OpenRouter, Google, Hugging Face) strictement nécessaires à l'exécution de vos missions. Nous ne leur transmettons ni votre mot de passe ni vos moyens de paiement.",
-      "Twilio / Plivo : lorsqu'un agent téléphonique est activé, le numéro attribué et les échanges vocaux transitent par le prestataire de téléphonie choisi.",
+      "Bland AI : lorsqu'un agent vocal est activé, les appels et les échanges vocaux transitent par ce prestataire de téléphonie IA (transcription, enregistrement).",
     ],
   },
   {

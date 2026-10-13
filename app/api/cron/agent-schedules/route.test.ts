@@ -18,11 +18,6 @@ vi.mock("@/lib/agents/scheduler", () => ({
   dispatchSchedules: vi.fn(async () => ({ checked: 0, due: 0, executed: [] })),
 }));
 
-vi.mock("@/lib/voice/renewals", () => ({
-  renewDueNumbers: vi.fn(async () => ({ renewed: 0 })),
-  reactivateNumbersInGrace: vi.fn(async () => ({ reactivated: 0 })),
-}));
-
 vi.mock("@/lib/extensions/subscriptions", () => ({
   renewDueExtensionSubscriptions: vi.fn(async () => ({ renewed: 0 })),
 }));

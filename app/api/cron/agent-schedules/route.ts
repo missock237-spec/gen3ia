@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { dispatchSchedules } from "@/lib/agents/scheduler";
-import { renewDueNumbers, reactivateNumbersInGrace } from "@/lib/voice/renewals";
 import { renewDueExtensionSubscriptions } from "@/lib/extensions/subscriptions";
 import { errorStatus } from "@/lib/security/http-errors";
 import { timingSafeStringEqual } from "@/lib/security/timing-safe";
@@ -24,9 +23,7 @@ function isAuthorized(request: NextRequest) {
  * Dispatcher d'arrière-plan (déclencheurs) :
  *  1. planifications d'agents arrivées à échéance (claim transactionnel + bail) ;
  *  2. veille RSS/web des agents « toujours actifs » ;
- *  3. renouvellement mensuel des numéros virtuels (débit wallet, grâce,
- *     libération) — idempotent par période de facturation ;
- *  4. SENTINELLE de résurrection de la boucle de dispatch 5 minutes
+ *  3. SENTINELLE de résurrection de la boucle de dispatch 5 minutes
  *     (Task 62) : le plan Vercel Hobby limite le cron à UNE exécution
  *     journalière (vercel.json `0 6 * * *`) — la cadence 5 minutes est
  *     assurée par la boucle auto-perpétuelle de la FILE DE TICKS R2
@@ -37,11 +34,13 @@ function isAuthorized(request: NextRequest) {
  *     étant idempotent par slot (claims transactionnels), le double
  *     déclencheur quotidien + boucle ne peut jamais exécuter deux fois
  *     une même planification.
- *  5. Task 107-a — AUTO-RÉPARATION des files vidéo (production autopilote
+ *  4. Task 107-a — AUTO-RÉPARATION des files vidéo (production autopilote
  *     + rendu) : les jobs orphelins (bail expiré, worker tué, tick perdu)
  *     sont re-enfilés même quand le chat est fermé (mode sondage — la
  *     continuation ne doit pas dépendre d'un client vivant). Best-effort :
  *     un incident alimente `partialFailures` sans faire échouer la route.
+ *     NB : le renouvellement des numéros virtuels a disparu avec la
+ *     migration des appels vocaux vers Bland AI (numéros gérés par Bland).
  */
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
@@ -52,14 +51,6 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await dispatchSchedules(new Date());
-    const renewals = await renewDueNumbers(new Date()).catch((error: unknown) => {
-      failures.push(`renewals: ${error instanceof Error ? error.message : "erreur"}`);
-      return null;
-    });
-    const reactivations = await reactivateNumbersInGrace(new Date()).catch((error: unknown) => {
-      failures.push(`reactivations: ${error instanceof Error ? error.message : "erreur"}`);
-      return null;
-    });
     // Renouvellement auto des abonnements d'extensions (Task 80) :
     // débit wallet dans la fenêtre d'avance, grâce 7 jours, expiration finale.
     const extensionRenewals = await renewDueExtensionSubscriptions(new Date()).catch((error: unknown) => {
@@ -132,7 +123,7 @@ export async function GET(request: NextRequest) {
       return null;
     });
 
-    return NextResponse.json({ ok: true, ...result, renewals, reactivations, extensionRenewals, dispatchLoop: loop, queuePump, videoSweep, escrowSweep, ...(failures.length > 0 ? { partialFailures: failures } : {}) });
+    return NextResponse.json({ ok: true, ...result, extensionRenewals, dispatchLoop: loop, queuePump, videoSweep, escrowSweep, ...(failures.length > 0 ? { partialFailures: failures } : {}) });
   } catch (error) {
     console.error("Agent schedule dispatcher failed", error);
     return NextResponse.json(
