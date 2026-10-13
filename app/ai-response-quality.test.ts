@@ -153,9 +153,17 @@ describe("moteur conversationnel — chemins visibles sans préférence gratuite
 });
 
 describe("route /api/chat/message — chat générique (visible)", () => {
-  it("possède un system prompt de qualité dès la première réponse", () => {
-    expect(CHAT_MESSAGE_SOURCE).toContain("withResponseStyle()");
+  it("possède un system prompt STRUCTURÉ de qualité dès la première réponse (Task 138)", () => {
+    // Le squelette normalisé remplace l'assemblage ad-hoc : rôle → méthode
+    // (CoT) → contraintes → format → exemples few-shot.
+    expect(CHAT_MESSAGE_SOURCE).toContain("composeStructuredPrompt(");
     expect(CHAT_MESSAGE_SOURCE).toContain("@/lib/ai/response-quality");
+    expect(CHAT_MESSAGE_SOURCE).toContain("REASONING_DIRECTIVE");
+    expect(CHAT_MESSAGE_SOURCE).toContain("RESPONSE_FORMAT_RULES");
+    // Few-shot : exemples de qualité sélectionnés selon la demande.
+    expect(CHAT_MESSAGE_SOURCE).toContain("buildFewShotSection(");
+    // Self-reflection : critique de la proposition avant livraison.
+    expect(CHAT_MESSAGE_SOURCE).toContain("reviewVisibleAnswer(");
   });
 
   it("assemble l'historique dans la fenêtre du modèle (plus d'empilement brut)", () => {

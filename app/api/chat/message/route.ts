@@ -3,7 +3,10 @@ import { z } from "zod";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { generate } from "@/lib/ai/router";
 import { stripThinkTags } from "@/lib/ai/think-filter";
-import { withResponseStyle, preferFreeForVisibleAnswers } from "@/lib/ai/response-quality";
+import { preferFreeForVisibleAnswers, RESPONSE_FORMAT_RULES } from "@/lib/ai/response-quality";
+import { REASONING_DIRECTIVE, composeStructuredPrompt } from "@/lib/ai/prompt-composer";
+import { buildFewShotSection } from "@/lib/ai/few-shot";
+import { reviewVisibleAnswer } from "@/lib/ai/self-review";
 import { assembleMessages } from "@/lib/ai/context-window";
 import {
   enhanceImagePrompt,
@@ -70,17 +73,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Task 52 (qualité comparable à ChatGPT à chaque requête) :
-    //  - un SYSTEM PROMPT de qualité existe DÈS LA PREMIÈRE réponse (l'absence
-    //    totale de consignes était le premier écart : le modèle brut répondait
-    //    sans cadre de clarté, de structure ni d'honnêteté) ;
+    // Task 52 (qualité comparable à ChatGPT à chaque requête) + Task 138
+    // (ingénierie de prompt structurée) :
+    //  - un SYSTEM PROMPT STRUCTURÉ (rôle → méthode de raisonnement par
+    //    étapes → contraintes strictes → format de sortie → exemples
+    //    few-shot) existe DÈS LA PREMIÈRE réponse — le squelette normalisé
+    //    remplace l'assemblage ad-hoc ;
     //  - l'historique est assemblé dans la FENÊTRE DU MODÈLE (compression
     //    extractive au lieu d'un empilement brut de 100 messages) ;
     //  - le routage suit la politique de qualité des réponses visibles
     //    (meilleur fournisseur configuré, sauf choix explicite du client) ;
-    //  - le texte est débarrassé des balises de raisonnement <think>.
+    //  - une passe de SELF-REFLECTION critique la proposition avant
+    //    livraison (réponses substantielles uniquement, fail-soft) ;
+    //  - le texte est débarrassé des balises de raisonnement interne.
+    const systemPrompt = composeStructuredPrompt({
+      role: "Tu es l'assistant IA universel de Gen3ia. À CHAQUE requête, quelle que soit sa longueur, tu produis une réponse d'exigence professionnelle : claire, précise et adaptée au sujet saisi — la même qualité qu'un assistant de premier plan. Tu réponds à toutes les questions générales, techniques, créatives ou professionnelles.",
+      method: REASONING_DIRECTIVE,
+      constraints: [
+        "Comprends la demande actuelle à la lumière de tout l'historique fourni.",
+        "N'invente jamais un fait, une action exécutée, un résultat ou une source.",
+        "Si une information manque, dis-le au lieu de la compléter par supposition.",
+        "Retourne uniquement le résultat demandé par l'utilisateur ; ta réflexion préparatoire reste interne.",
+      ],
+      outputFormat: RESPONSE_FORMAT_RULES,
+      examples: buildFewShotSection(body.message),
+    });
     const { messages } = assembleMessages({
-      system: withResponseStyle(),
+      system: systemPrompt,
       history: history.map((item) => ({ role: item.role, content: item.content })),
       message: body.message,
       model: body.model ?? null,
@@ -97,8 +116,14 @@ export async function POST(request: NextRequest) {
       metadata: { userId: user.uid, conversationId },
     });
 
+    // Task 138 — SELF-REFLECTION : la proposition est critiquée (exactitude,
+    // complétude, fiabilité, structure) avant d'être persistée et livrée.
+    // Une seule passe, réponses substantielles uniquement ; fail-soft total —
+    // une panne du réviseur livre la proposition d'origine.
+    const reviewed = await reviewVisibleAnswer({ question: body.message, answer: stripThinkTags(response.text) });
+
     const assistant = await appendMessage({
-      conversationId, userId: user.uid, role: "assistant", content: stripThinkTags(response.text),
+      conversationId, userId: user.uid, role: "assistant", content: reviewed.text,
       provider: response.provider, model: response.model, usage: response.usage,
     });
     return NextResponse.json({ conversationId, message: assistant, response: { id: response.id, provider: response.provider, model: response.model, usage: response.usage, latencyMs: response.latencyMs, finishReason: response.finishReason } });

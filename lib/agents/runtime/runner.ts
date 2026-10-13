@@ -18,6 +18,7 @@ import { RESPONSE_FORMAT_RULES } from "@/lib/ai/response-quality";
 import { applyPromptVariables } from "@/lib/ai/prompt-template";
 import { verifyOutcomeCriteria, type OutcomeContract } from "@/lib/agents/outcome-contract";
 import { buildReplan } from "./replan";
+import { buildRecoveryDirective, classifyExecutionError, repairGeneratedCode, repairToolInput } from "./error-recovery";
 
 /* ------------------------------------------------------------------ */
 /* Completion des livrables document (artifact.create)                 */
@@ -124,6 +125,10 @@ export class AgentRuntime {
   // lieu d'une seule : la mission tente deux stratégies complètes avant de
   // déclarer un échec honnête.
   private static readonly REPLAN_MAX_ROUNDS = 2;
+  // BOUCLE DE RÉTROACTION (Task 138) : journal d'erreurs PAR ÉTAPE — chaque
+  // tentative suivante reçoit le journal réel des échecs précédents et une
+  // consigne d'ajustement (plus JAMAIS de réessai aveugle à l'identique).
+  private readonly recoveryNotes = new Map<string, string[]>();
 
   constructor(options: RuntimeRunnerOptions) {
     const validation = validateDAG(options.plan);
@@ -431,7 +436,21 @@ export class AgentRuntime {
         step.status = "failed";
         throw error;
       }
+      // Task 138 — CLASSIFICATION DE L'ERREUR : les erreurs SANS espoir
+      // (budget épuisé, permission refusée, erreur permanente) ne consomment
+      // PLUS de tentative — l'échec est immédiat et honnête (économie de
+      // latence et de budget pour l'utilisateur).
+      const failure = classifyExecutionError(message);
+      if (!failure.retryable) {
+        step.status = "failed";
+        throw error;
+      }
       if (step.sideEffect || step.maxRetries <= 0 || this.state.totalRetries >= this.state.maxTotalRetries) { step.status = "failed"; throw error; }
+      // Task 138 — BOUCLE DE RÉTROACTION : l'échec est journalisé pour
+      // l'étape ; la tentative SUIVANTE recevra le journal d'erreurs réel
+      // et corrigera sa stratégie (code réparé, entrée corrigée, prompt
+      // informé) au lieu de rejouer l'identique.
+      this.recordRecoveryNote(step.id, message);
       this.state.totalRetries++;
       step.maxRetries--;
       step.status = "pending";
@@ -452,6 +471,22 @@ export class AgentRuntime {
       case "agent": return this.executeSubAgent(step);
       default: throw new Error(`Unsupported runtime step: ${step.type}`);
     }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Task 138 — boucle de rétroaction : journal de reprise par étape   */
+  /* ---------------------------------------------------------------- */
+
+  /** Journalise un échec d'étape pour la tentative suivante (journal borné). */
+  private recordRecoveryNote(stepId: string, error: string): void {
+    const notes = this.recoveryNotes.get(stepId) ?? [];
+    notes.push((error ?? "").trim().slice(0, 800));
+    this.recoveryNotes.set(stepId, notes.slice(-3));
+  }
+
+  /** Directive de reprise de l'étape (vide si aucune tentative échouée). */
+  private recoveryDirectiveFor(stepId: string): string {
+    return buildRecoveryDirective(this.recoveryNotes.get(stepId) ?? []);
   }
 
   private static readonly SAFETY_CONTRACT =
@@ -565,6 +600,13 @@ export class AgentRuntime {
     // visible de la mission — il respecte le contrat de présentation (clarté,
     // précision, structure markdown, langue de l'utilisateur).
     const systemWithStyle = `${systemContent}\n\n${RESPONSE_FORMAT_RULES}`;
+    // Task 138 — BOUCLE DE RÉTROACTION : si une tentative précédente de CETTE
+    // étape a échoué, son journal d'erreur réel est injecté — la nouvelle
+    // tentative SAIT pourquoi elle a échoué et AJUSTE sa stratégie au lieu
+    // de reproduire la même production.
+    const recovery = this.recoveryDirectiveFor(step.id);
+    const stepPayload = JSON.stringify({ objective: this.state.objective, agentRole: role, step: { id: step.id, name: step.name, description: step.description, input: step.input }, dependencies: dependencyContext });
+    const userContent = recovery ? `${stepPayload}\n\n${recovery}` : stepPayload;
     const billed = await generateForUser({
       userId: this.state.userId,
       executionId: this.state.executionId,
@@ -583,7 +625,7 @@ export class AgentRuntime {
           : {}),
         messages: [
           { role: "system", content: systemWithStyle },
-          { role: "user", content: JSON.stringify({ objective: this.state.objective, agentRole: role, step: { id: step.id, name: step.name, description: step.description, input: step.input }, dependencies: dependencyContext }) },
+          { role: "user", content: userContent },
         ],
         maxTokens: 4096,
       },
@@ -598,10 +640,23 @@ export class AgentRuntime {
   private async executeTool(step: RuntimeStep): Promise<unknown> {
     if (!step.toolName) throw new Error(`Tool step ${step.id} has no toolName`);
     const dependencies = this.getDependencyOutputs(step);
-    const input: Record<string, unknown> = Object.keys(dependencies).length > 0 ? { ...step.input, dependencies } : { ...step.input };
+    let input: Record<string, unknown> = Object.keys(dependencies).length > 0 ? { ...step.input, dependencies } : { ...step.input };
     const approvalId = typeof input.approvalId === "string" ? input.approvalId : undefined;
     delete input.approvalId;
     let toolName = step.toolName;
+    // Task 138 — BOUCLE DE RÉTROACTION (exigence : « retour d'API invalide →
+    // l'agent analyse le journal d'erreur, ajuste sa stratégie et réessaie ») :
+    // si la tentative précédente a échoué sur une entrée INVALIDE, l'entrée
+    // est CORRIGÉE par LLM d'après le journal d'erreur et le contrat de
+    // l'outil AVANT le nouvel essai — l'appel fautif n'est jamais rejoué tel
+    // quel. Fail-soft : une panne du réparateur conserve l'entrée d'origine.
+    const previousErrors = this.recoveryNotes.get(step.id);
+    if (previousErrors && previousErrors.length > 0) {
+      const classification = classifyExecutionError(previousErrors[previousErrors.length - 1] ?? "");
+      if (classification.kind === "invalid_input" || classification.kind === "unknown") {
+        input = await repairToolInput({ toolName, input, error: previousErrors.join("\n") });
+      }
+    }
     // COERCITION D'ENTRÉE (Task 114) : le planificateur met parfois la
     // requête de recherche dans la DESCRIPTION sans remplir input.query —
     // l'outil exigerait une chaîne et ferait échouer la mission
@@ -690,8 +745,18 @@ export class AgentRuntime {
   }
 
   private async executeCode(step: RuntimeStep): Promise<unknown> {
-    const code = typeof step.input.code === "string" ? step.input.code : null;
+    let code = typeof step.input.code === "string" ? step.input.code : null;
     if (!code) throw new Error("Code execution requires input.code");
+    // Task 138 — BOUCLE DE RÉTROACTION (exigence : « échec de compilation →
+    // l'agent analyse le journal d'erreur, ajuste sa stratégie et réessaie ») :
+    // après un échec d'exécution, le code est CORRIGÉ par LLM à partir du
+    // journal d'erreur réel AVANT la nouvelle tentative — plus de réexécution
+    // du même code fautif. Fail-soft : une panne du réparateur retombe sur le
+    // code d'origine (le réessai historique garde ses chances en transitoire).
+    const previousErrors = this.recoveryNotes.get(step.id);
+    if (previousErrors && previousErrors.length > 0) {
+      code = await repairGeneratedCode({ code, error: previousErrors.join("\n"), objective: this.state.objective });
+    }
     return executeToolSecurely({ userId: this.state.userId, agentId: this.agentConfig?.agentId, executionId: this.state.executionId, toolName: "code.execute", input: { ...step.input, code }, policy: this.policy, signal: this.signal });
   }
 

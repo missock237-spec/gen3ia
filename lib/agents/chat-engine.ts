@@ -1,6 +1,9 @@
 import { generate } from "../ai/router";
 import { stripThinkTags } from "../ai/think-filter";
-import { preferFreeForUnderstanding, preferFreeForVisibleAnswers, withResponseStyle } from "../ai/response-quality";
+import { preferFreeForUnderstanding, preferFreeForVisibleAnswers, RESPONSE_FORMAT_RULES } from "../ai/response-quality";
+import { REASONING_DIRECTIVE, composeStructuredPrompt } from "../ai/prompt-composer";
+import { buildFewShotSection } from "../ai/few-shot";
+import { reviewVisibleAnswer } from "../ai/self-review";
 import type { AIImageAttachment, AIProvider } from "../ai/models";
 import { assembleMessages } from "../ai/context-window";
 import { applyPromptVariables, type PromptVariableContext } from "../ai/prompt-template";
@@ -264,15 +267,32 @@ export async function answerAsAgent(
   const truth = await buildTruthContext(userId, message, history);
   const grounding = formatTruthContext(truth);
   const userContent = `${grounding}${contextNote ? `\n\n${contextNote}` : ""}\n\nDEMANDE ACTUELLE :\n${message}`;
+  // Task 138 — INGÉNIERIE DE PROMPT STRUCTURÉE : le prompt système suit
+  // désormais le squelette normalisé RÔLE → MÉTHODE (raisonnement par
+  // étapes) → CONTRAINTES → FORMAT → EXEMPLES, au lieu d'un empilement
+  // ad-hoc. La charte (complétée par le jumeau) reste la section RÔLE —
+  // les instructions métier restent en tête.
+  const structuredSystem = composeStructuredPrompt({
+    role: charterAvecJumeau,
+    method: REASONING_DIRECTIVE,
+    constraints: [
+      "Comprends la demande actuelle à la lumière de tout l'historique fourni.",
+      "N'invente jamais un fait, une action exécutée, un résultat ou une source.",
+      "Si une information manque, dis-le au lieu de la compléter par supposition.",
+      "Retourne uniquement le résultat demandé par l'utilisateur ; ta réflexion préparatoire reste interne.",
+    ],
+    outputFormat: RESPONSE_FORMAT_RULES,
+    // Few-shot : 1 à 2 exemples de qualité supérieure, sélectionnés
+    // DÉTERMINISTEMENT selon la famille de la demande (aucun exemple pour
+    // les échanges triviaux — le prompt reste court).
+    examples: buildFewShotSection(message),
+  });
   // Fenêtre de contexte (Task 42, axe 1) : au lieu d'une troncature brutale
   // aux 12 derniers messages (qui perdait le fil des longues conversations),
   // l'historique ENTIER est tenu dans la fenêtre du modèle — récents
   // verbatim + condensé extractif des plus anciens (aucune invention).
   const { messages } = assembleMessages({
-    // Task 52 : la charte (complétée par la directive du jumeau) est
-    // complétée par le contrat de présentation (structure markdown,
-    // précision selon le sujet, zéro invention).
-    system: withResponseStyle(charterAvecJumeau + "\n\nCONTRAT DE FIABILITÉ:\n- Comprends la demande actuelle à la lumière de tout l'historique fourni.\n- N'invente jamais un fait, une action exécutée, un résultat ou une source.\n- Si une information manque, dis-le au lieu de la compléter par supposition.\n- Retourne uniquement le résultat demandé par l'utilisateur ; pas de raisonnement, plan ou commentaire méta non demandé."),
+    system: structuredSystem,
     history: history.map((item) => ({ role: item.role, content: item.content })),
     message: userContent,
     model: agent.preferredModel ?? null,
@@ -301,7 +321,13 @@ export async function answerAsAgent(
   });
   // Anti-balises : le raisonnement interne de certains modèles (<think>…)
   // ne doit jamais atteindre l'utilisateur.
-  return cleanRequestedResult(stripThinkTags(response.text.trim()));
+  const draft = cleanRequestedResult(stripThinkTags(response.text.trim()));
+  // Task 138 — SELF-REFLECTION : l'agent critique sa propre production
+  // AVANT livraison (exactitude, complétude, fiabilité, structure). Une
+  // seule passe, uniquement sur les réponses substantielles ; fail-soft
+  // total — une panne du réviseur rend la proposition d'origine.
+  const reviewed = await reviewVisibleAnswer({ question: message, answer: draft, contextNote });
+  return reviewed.text;
 }
 
 /**
