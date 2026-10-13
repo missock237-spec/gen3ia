@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo, useMemo } from "react";
+import { Fragment, memo, useCallback, useMemo, useState } from "react";
 
 import { ApprovalCard } from "./approval-card";
 import { RunTimeline } from "./run-timeline";
@@ -57,6 +57,10 @@ interface MessageThreadProps {
    * parent injecte l'image comme attachment réel du composer.
    */
   onEditImage?: (image: { url?: string; path?: string; filename?: string }) => void;
+  /** Task 141 — injecte un texte dans le composer (chip de suivi, « Réutiliser »). */
+  onPrefill?: (text: string) => void;
+  /** Task 141 — régénère la dernière réponse (renvoie le dernier message utilisateur). */
+  onRegenerate?: () => void;
 }
 
 /** Références stables pour les lignes sans run/approval/artefact (memo). */
@@ -79,6 +83,11 @@ interface MessageRowProps {
   generating: boolean;
   onDecide: (approvalId: string, decision: "approved" | "rejected") => Promise<void>;
   onEditImage?: (image: { url?: string; path?: string; filename?: string }) => void;
+  onPrefill?: (text: string) => void;
+  onRegenerate?: () => void;
+  /** Dernière réponse résolue du fil : c'est là que vivent « Régénérer » et
+   * les chips de suivi (Task 141) — jamais sur les anciennes réponses. */
+  isLastResolvedAssistant?: boolean;
   /**
    * Contexte de ciblage publicitaire (Gen Ads contextuel) : la demande qui a
    * déclenché cette réponse + un extrait de la réponse — la publicité
@@ -98,8 +107,23 @@ const MessageRow = memo(function MessageRow({
   generating,
   onDecide,
   onEditImage,
+  onPrefill,
+  onRegenerate,
+  isLastResolvedAssistant = false,
   adContext,
 }: MessageRowProps) {
+  // Task 141 — retour visuel du bouton « Copier » (✓ pendant 1,5 s).
+  const [copied, setCopied] = useState(false);
+  const copyContent = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* presse-papiers indisponible : aucune action */
+    }
+  }, [message.content]);
+
   return (
     <Fragment>
       <article
@@ -110,6 +134,13 @@ const MessageRow = memo(function MessageRow({
         }
         data-role={message.role}
       >
+        {/* Task 141 — badge de l'agent dédié qui a rédigé cette réponse : la
+            traçabilité visuelle de QUI a répondu, tour après tour. */}
+        {message.role === "assistant" && message.agentName && (
+          <p className="mb-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--g3-primary-border)] bg-[var(--g3-primary-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--g3-primary-strong)]">
+            <span aria-hidden>◈</span> {message.agentName}
+          </p>
+        )}
         {message.role === "assistant" ? (
           <div className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
             {/* Task 135 — question de clarification 🔄 : encart distinct pour que
@@ -239,6 +270,66 @@ const MessageRow = memo(function MessageRow({
         <ResponseAdSlot slotKey={`msg:${message.id}`} context={adContext} />
       )}
 
+      {/* Task 141 — ACTIONS RAPIDES sous chaque réponse : Copier (presse-
+          papiers), Réutiliser (injecte le texte dans le composer pour le
+          transformer), Régénérer (dernière réponse uniquement — renvoie le
+          dernier message utilisateur). */}
+      {message.role === "assistant" && message.generationStatus !== "failed" && (
+        <div className="mr-auto mt-1 flex max-w-[92%] flex-wrap items-center gap-1 pl-0.5">
+          <button
+            type="button"
+            onClick={() => void copyContent()}
+            className="inline-flex items-center gap-1 rounded-full border border-[var(--g3-border)] bg-transparent px-2 py-0.5 text-[10px] font-medium text-[var(--g3-muted)] transition hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
+            aria-label="Copier la réponse"
+            title="Copier la réponse dans le presse-papiers"
+          >
+            <span aria-hidden>{copied ? "✓" : "⧉"}</span> {copied ? "Copié" : "Copier"}
+          </button>
+          {onPrefill && (
+            <button
+              type="button"
+              onClick={() => onPrefill(message.content)}
+              className="inline-flex items-center gap-1 rounded-full border border-[var(--g3-border)] bg-transparent px-2 py-0.5 text-[10px] font-medium text-[var(--g3-muted)] transition hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
+              aria-label="Réutiliser cette réponse dans le composer"
+              title="Injecter cette réponse dans le composer pour la transformer"
+            >
+              <span aria-hidden>↺</span> Réutiliser
+            </button>
+          )}
+          {isLastResolvedAssistant && onRegenerate && !generating && (
+            <button
+              type="button"
+              onClick={onRegenerate}
+              className="inline-flex items-center gap-1 rounded-full border border-[var(--g3-border)] bg-transparent px-2 py-0.5 text-[10px] font-medium text-[var(--g3-muted)] transition hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
+              aria-label="Régénérer la réponse"
+              title="Renvoyer le dernier message pour une nouvelle réponse"
+            >
+              <span aria-hidden>⟳</span> Régénérer
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Task 141 — CHIPS DE SUIVI sous la DERNIÈRE réponse résolue : les
+          suggestions générées avec la réponse deviennent des actions d'un
+          clic — le texte est injecté dans le composer (l'utilisateur garde
+          la main, la suggestion n'est jamais envoyée seule). */}
+      {message.role === "assistant" && isLastResolvedAssistant && !generating && (message.suggestions ?? []).length > 0 && onPrefill && (
+        <div className="mr-auto mt-1.5 flex max-w-[92%] flex-wrap items-center gap-1.5" aria-label="Suggestions de suivi">
+          {(message.suggestions ?? []).map((suggestion) => (
+            <button
+              key={`${message.id}-sug-${suggestion}`}
+              type="button"
+              onClick={() => onPrefill(suggestion)}
+              className="g3-chip text-[11px]"
+              title="Insérer cette suggestion dans le composer"
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      )}
+
       {run && <RunTimeline run={run} />}
       {runApprovals.filter((a) => a.status === "pending").map((approval) => (
         <ApprovalCard key={approval.id} approval={approval} onDecide={onDecide} disabled={generating} />
@@ -261,6 +352,8 @@ export function MessageThread({
   liveRun,
   onDecide,
   onEditImage,
+  onPrefill,
+  onRegenerate,
 }: MessageThreadProps) {
   // Index précalculés (O(n)) : fin du approvals.filter imbriqué dans la map
   // (O(n²)) — chaque ligne reçoit des props à identité stable (memo efficace).
@@ -320,6 +413,19 @@ export function MessageThread({
     () => artifacts.filter((artifact) => artifact.type === "video" && artifact.videoProjectId),
     [artifacts],
   );
+  // Task 141 — dernière réponse RÉSOLUE du fil (hors échec) : c'est sous
+  // elle que vivent « Régénérer » et les chips de suivi. Les id « local-… »
+  // (messages optimistes) ne comptent pas : seules les réponses persistées
+  // portent des suggestions.
+  const lastResolvedAssistantId = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === "assistant" && !message.id.startsWith("local-") && message.generationStatus !== "failed") {
+        return message.id;
+      }
+    }
+    return null;
+  }, [messages]);
 
   return (
     <div className="space-y-4">
@@ -346,6 +452,9 @@ export function MessageThread({
             generating={generating}
             onDecide={onDecide}
             onEditImage={onEditImage}
+            onPrefill={onPrefill}
+            onRegenerate={onRegenerate}
+            isLastResolvedAssistant={message.id === lastResolvedAssistantId}
             adContext={adContextByMessageId.get(message.id)}
           />
         );

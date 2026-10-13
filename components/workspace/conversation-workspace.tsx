@@ -27,6 +27,8 @@ import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-
 import { safeClientTimezone, streamConversationTurn } from "@/lib/domain/conversations/stream-client";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 import type { AuthorizationMode } from "@/lib/security/authorization-mode";
+import { findModelOption } from "@/lib/ui/composer-models";
+import type { ComposerAgentOption } from "./composer/agent-picker";
 import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
 /**
@@ -119,6 +121,13 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   // des conversations, tiroir de contexte) deviennent des feuilles
   // superposées OUVRABLES — le même contenu, jamais une version amputée.
   const [mobileListOpen, setMobileListOpen] = useState(false);
+  // Task 141 — pilotage du prochain message : agent dédié (QUI répond),
+  // moteur IA (QUEL modèle rédige), pré-remplissage externe (chips de suivi,
+  // « Réutiliser ») consommé par le composer.
+  const [agents, setAgents] = useState<ComposerAgentOption[]>([]);
+  const [agentId, setAgentId] = useState<string | undefined>(undefined);
+  const [modelId, setModelId] = useState<string | undefined>(undefined);
+  const [prefill, setPrefill] = useState<{ text: string } | null>(null);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   // Arrêt à tout moment : l'AbortController du tour en cours — le bouton
   // « Arrêter » interrompt le flux et l'agent cesse de travailler.
@@ -148,6 +157,26 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
     } finally {
       setLoadingList(false);
     }
+  }, []);
+
+  // Task 141 — agents dédiés de l'utilisateur (sélecteur du composer).
+  // Chargement best-effort : une indisponibilité masque simplement le
+  // sélecteur (repli silencieux sur Gen IA universel).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/agents", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as { agents?: ComposerAgentOption[] };
+        if (!cancelled && Array.isArray(data.agents)) setAgents(data.agents);
+      } catch {
+        /* sélecteur masqué : comportement universel inchangé */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const loadDetail = useCallback(async (id: string, silent = false) => {
@@ -348,6 +377,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           projectId,
           connectors,
           authorizationMode,
+          ...(options?.agentId ? { agentId: options.agentId } : {}),
+          ...(options?.provider ? { provider: options.provider, model: options.model } : {}),
           timezone: safeClientTimezone(),
           signal: controller.signal,
           onEvent: consumeEvent,
@@ -374,6 +405,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               projectId,
               ...(connectors.length > 0 ? { connectors } : {}),
               ...(authorizationMode ? { authorizationMode } : {}),
+              ...(options?.agentId ? { agentId: options.agentId } : {}),
+              ...(options?.provider ? { provider: options.provider, model: options.model } : {}),
               ...(safeClientTimezone() ? { timezone: safeClientTimezone() } : {}),
             }),
           });
@@ -428,6 +461,31 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
     });
   }, []);
 
+  // Task 141 — injection externe dans le composer : chips de suivi et bouton
+  // « Réutiliser ». Identité STABLE (mémoïsation des lignes du fil, lot C1).
+  const handlePrefill = useCallback((text: string) => {
+    setPrefill({ text });
+  }, []);
+
+  // Task 141 — régénération de la dernière réponse : renvoie le DERNIER
+  // message utilisateur (avec ses pièces jointes) avec le pilotage actuel
+  // (agent choisi, moteur choisi) — l'agent produit une nouvelle réponse.
+  const handleRegenerate = useCallback(() => {
+    if (!detail || generating) return;
+    for (let index = detail.messages.length - 1; index >= 0; index -= 1) {
+      const message = detail.messages[index];
+      if (message.role === "user") {
+        const modelChoice = findModelOption(modelId);
+        void sendMessage(message.content, message.attachments ?? [], {
+          authorizationMode: readAuthorizationMode(),
+          ...(agentId ? { agentId } : {}),
+          ...(modelChoice?.provider ? { provider: modelChoice.provider, model: modelChoice.model } : {}),
+        });
+        return;
+      }
+    }
+  }, [agentId, detail, generating, modelId, sendMessage]);
+
   const createConversation = useCallback(async () => {
     const response = await fetch("/api/workspace/conversations", {
       method: "POST",
@@ -448,8 +506,21 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
     if (!raw) return;
     sessionStorage.removeItem(key);
     try {
-      const pending = JSON.parse(raw) as { message: string; attachments?: MessageAttachment[]; authorizationMode?: AuthorizationMode };
-      if (pending.message) void sendMessage(pending.message, pending.attachments ?? [], { authorizationMode: pending.authorizationMode });
+      const pending = JSON.parse(raw) as {
+        message: string;
+        attachments?: MessageAttachment[];
+        authorizationMode?: AuthorizationMode;
+        agentId?: string;
+        provider?: string;
+        model?: string;
+      };
+      if (pending.message) {
+        void sendMessage(pending.message, pending.attachments ?? [], {
+          authorizationMode: pending.authorizationMode,
+          ...(pending.agentId ? { agentId: pending.agentId } : {}),
+          ...(pending.provider ? { provider: pending.provider, model: pending.model } : {}),
+        });
+      }
     } catch {
       /* marqueur illisible : ignoré */
     }
@@ -494,7 +565,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         </div>
         <div className="w-full max-w-xl">
           <Composer
-            onSend={async (message, attachments) => {
+            onSend={async (message, attachments, options) => {
               // Crée la conversation puis transmet le premier message au
               // nouveau rendu (hand-off) pour le même streaming que la suite.
               const response = await fetch("/api/workspace/conversations", {
@@ -513,7 +584,13 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               try {
                 sessionStorage.setItem(
                   `${PENDING_MESSAGE_PREFIX}${data.conversation.id}`,
-                  JSON.stringify({ message, attachments, authorizationMode: readAuthorizationMode() }),
+                  JSON.stringify({
+                    message,
+                    attachments,
+                    authorizationMode: readAuthorizationMode(),
+                    ...(options?.agentId ? { agentId: options.agentId } : {}),
+                    ...(options?.provider ? { provider: options.provider, model: options.model } : {}),
+                  }),
                 );
               } catch {
                 /* stockage indisponible : le message sera simplement renvoyé */
@@ -527,11 +604,18 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
             connectors={connectors}
             onConnectorsChange={setConnectors}
             suggestions={STARTER_SUGGESTIONS}
+            agents={agents}
+            agentId={agentId}
+            onAgentChange={setAgentId}
+            modelId={modelId}
+            onModelIdChange={setModelId}
+            prefill={prefill}
+            onPrefillConsumed={() => setPrefill(null)}
           />
         </div>
       </div>
     ),
-    [connectors, projectId, projects, router],
+    [agentId, agents, connectors, modelId, prefill, projectId, projects, router],
   );
 
   // Fusion des entités vivantes (tour en cours) avec l'état serveur.
@@ -647,6 +731,8 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               liveVideoArtifacts={live?.artifacts.filter((artifact) => artifact.type === "video" && artifact.videoProjectId) ?? []}
               onDecide={decideApproval}
               onEditImage={handleEditImage}
+              onPrefill={handlePrefill}
+              onRegenerate={handleRegenerate}
             />
           ) : null}
         </div>
@@ -683,6 +769,13 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               autoFocus
               injected={injectedEdit}
               onInjectedConsumed={() => setInjectedEdit(null)}
+              agents={agents}
+              agentId={agentId}
+              onAgentChange={setAgentId}
+              modelId={modelId}
+              onModelIdChange={setModelId}
+              prefill={prefill}
+              onPrefillConsumed={() => setPrefill(null)}
             />
           </div>
         )}

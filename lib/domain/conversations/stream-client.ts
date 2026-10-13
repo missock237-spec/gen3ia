@@ -21,6 +21,8 @@ export interface StreamTurnPayload {
   connectors?: string[];
   /** Mode d'autorisation HITL choisi dans le composer. */
   authorizationMode?: AuthorizationMode;
+  /** Task 141 — agent dédié choisi dans le composer (sélecteur Gen IA ⇄ agents). */
+  agentId?: string;
   /** Fuseau horaire du client (IANA) pour les sous-services pilotés en langage naturel. */
   timezone?: string;
   signal?: AbortSignal;
@@ -51,6 +53,7 @@ export async function streamConversationTurn(payload: StreamTurnPayload): Promis
       ...(payload.projectId ? { projectId: payload.projectId } : {}),
       ...(payload.connectors && payload.connectors.length > 0 ? { connectors: payload.connectors } : {}),
       ...(payload.authorizationMode ? { authorizationMode: payload.authorizationMode } : {}),
+      ...(payload.agentId ? { agentId: payload.agentId } : {}),
       ...(payload.timezone ? { timezone: payload.timezone } : {}),
     }),
     signal: payload.signal,

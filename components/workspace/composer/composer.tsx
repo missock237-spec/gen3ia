@@ -13,8 +13,12 @@ import {
   type AuthorizationMode,
 } from "@/lib/security/authorization-mode";
 import type { ComposerCommand, MentionItem } from "@/lib/ui/command-composer-helpers";
+import { findModelOption } from "@/lib/ui/composer-models";
 import type { MessageAttachment } from "@/lib/domain/conversations/types";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
+import { AgentPicker, type ComposerAgentOption } from "./agent-picker";
+import { TemplateMenu } from "./template-menu";
+import { ModelMenu } from "./model-menu";
 
 /**
  * Composer de conversation — réplique EXACTE de la maquette unifiée
@@ -24,18 +28,29 @@ import type { WorkspaceProject } from "@/lib/domain/projects/repository";
  *    compétences ou connecteurs, ou / pour les commandes » ;
  *  - bouton « + » = pièce jointe RÉELLE (stockage permanent Gen3ia) ;
  *  - « @ » = applications connectées activables pour ce message ;
- *  - « / » = commandes (fichier, connecteurs, projet de contexte) ;
+ *  - « / » = commandes (fichier, connecteurs, projet, agent, modèles,
+ *    moteur) ;
  *  - « Toujours demander ▼ » = mode d'autorisation HITL transmis au moteur
  *    (préférence partagée avec tous les chats, clé localStorage commune) ;
  *  - 🎙 saisie vocale fr-FR, bouton circulaire ↑ d'envoi.
  *
- * Les capacités propres à la conversation (pièces jointes multi-fichiers,
- * projet de contexte) sont proposées SANS dénaturer la maquette.
+ * Task 141 — utilisation SIMPLE et FLEXIBLE :
+ *  - sélecteur d'agent (pill + /agent) : QUI répond au prochain message ;
+ *  - sélecteur de moteur IA (pill + /moteur) : QUEL modèle rédige ;
+ *  - bibliothèque de modèles de prompts (pill + /modèle) : formulations
+ *    réutilisables, enregistrables depuis le brouillon en cours ;
+ *  - glisser-déposer de fichiers sur toute la zone du composer ;
+ *  - pré-remplissage externe (chips de suivi, bouton « Réutiliser »).
  */
 
 export interface ComposerSendOptions {
   /** Mode d'autorisation lu dans la préférence partagée au moment de l'envoi. */
   authorizationMode?: AuthorizationMode;
+  /** Task 141 — agent dédié choisi pour ce tour (undefined = Gen IA). */
+  agentId?: string;
+  /** Task 141 — modèle IA choisi pour ce tour (undefined = automatique). */
+  provider?: string;
+  model?: string;
 }
 
 interface ComposerProps {
@@ -57,6 +72,17 @@ interface ComposerProps {
    */
   injected?: { attachment: MessageAttachment; text?: string } | null;
   onInjectedConsumed?: () => void;
+  /** Task 141 — agents actifs de l'utilisateur (sélecteur du composer). */
+  agents?: ComposerAgentOption[];
+  /** Agent dédié choisi pour le prochain message (undefined = Gen IA). */
+  agentId?: string;
+  onAgentChange?: (agentId: string | undefined) => void;
+  /** Identifiant du moteur IA choisi (cf. lib/ui/composer-models). */
+  modelId?: string;
+  onModelIdChange?: (modelId: string | undefined) => void;
+  /** Task 141 — texte injecté de l'extérieur (chips de suivi, « Réutiliser »). */
+  prefill?: { text: string } | null;
+  onPrefillConsumed?: () => void;
 }
 
 /** Lit la préférence de mode d'autorisation (partagée avec tous les chats). */
@@ -82,6 +108,13 @@ export function Composer({
   autoFocus = false,
   injected = null,
   onInjectedConsumed,
+  agents = [],
+  agentId,
+  onAgentChange,
+  modelId,
+  onModelIdChange,
+  prefill = null,
+  onPrefillConsumed,
 }: ComposerProps) {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
@@ -91,6 +124,16 @@ export function Composer({
   // Libellés lisibles des connecteurs déjà vus dans le sélecteur « @ » (état,
   // pas une ref : ils servent au rendu des puces activées).
   const [mentionLabels, setMentionLabels] = useState<Map<string, MentionItem>>(() => new Map());
+  // Task 141 — menus pilotés par les commandes « /agent », « /modèle » et
+  // « /moteur » (ouverture contrôlée des pills au-dessus du composer).
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  // Task 141 — glisser-déposer : compteur de profondeur (les événements
+  // dragenter/dragleave se déclenchent sur CHAQUE enfant — le compteur
+  // distingue l'entrée réelle du survol interne, l'overlay ne clignote pas).
+  const [dragActive, setDragActive] = useState(false);
+  const dragDepthRef = useRef(0);
   const composerRef = useRef<CommandComposerHandle | null>(null);
 
   useEffect(() => {
@@ -115,6 +158,21 @@ export function Composer({
     composerRef.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [injectedKey]);
+
+  // Task 141 — pré-remplissage externe (chip de suivi, « Réutiliser ») : le
+  // texte s'ajoute À LA SUITE du brouillon en cours (rien n'est écrasé),
+  // le curseur revient au composer.
+  const prefillKey = prefill ? prefill.text : "";
+  useEffect(() => {
+    if (!prefill) return;
+    const text = prefill.text.trim();
+    if (text) {
+      setValue((current) => (current.trim().length === 0 ? text : `${current}\n\n${text}`));
+      composerRef.current?.focus();
+    }
+    onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillKey]);
 
   const uploadFile = async (file: File) => {
     setUploadError("");
@@ -190,7 +248,12 @@ export function Composer({
     setValue("");
     const sent = attachments;
     setAttachments([]);
-    await onSend(message, sent, { authorizationMode: readAuthorizationMode() });
+    const modelChoice = findModelOption(modelId);
+    await onSend(message, sent, {
+      authorizationMode: readAuthorizationMode(),
+      ...(agentId ? { agentId } : {}),
+      ...(modelChoice?.provider ? { provider: modelChoice.provider, model: modelChoice.model } : {}),
+    });
   };
 
   /* « @ » — applications connectées (même API de mentions que les autres chats). */
@@ -233,8 +296,9 @@ export function Composer({
     onConnectorsChange?.(connectors.filter((item) => item !== toolkit));
   };
 
-  /* « / » — commandes rapides : fichier, connecteurs, projet de contexte
-     (littéral unique + épandages, comme dans les autres chats Gen3ia). */
+  /* « / » — commandes rapides : fichier, connecteurs, projet de contexte,
+     agent, modèles de prompts, moteur IA (littéral unique + épandages,
+     comme dans les autres chats Gen3ia). */
   const projectCommands: ComposerCommand[] = projects
     .slice(0, 8)
     .filter((project) => project.id !== projectId)
@@ -251,6 +315,32 @@ export function Composer({
       description: "CSV, JSON, XLSX, DOCX, PDF, TXT… — réellement converti et stocké en base de données.",
       run: () => composerRef.current?.openFilePicker(),
     },
+    ...(onAgentChange
+      ? [
+          {
+            id: "agent",
+            label: "Choisir l'agent qui répond",
+            description: "Gen IA universel ou l'un de vos agents dédiés (persona, compétences, garde-fous).",
+            run: () => setAgentMenuOpen(true),
+          },
+        ]
+      : []),
+    {
+      id: "modeles",
+      label: "Modèles de prompts",
+      description: "Insérez une formulation réutilisable, ou enregistrez le brouillon actuel comme modèle.",
+      run: () => setTemplateMenuOpen(true),
+    },
+    ...(onModelIdChange
+      ? [
+          {
+            id: "moteur",
+            label: "Choisir le moteur IA",
+            description: "Le modèle qui rédige les réponses (automatique, GLM, GPT-4o, Claude…).",
+            run: () => setModelMenuOpen(true),
+          },
+        ]
+      : []),
     ...(onConnectorsChange
       ? [
           {
@@ -276,8 +366,85 @@ export function Composer({
 
   const activeProject = projects.find((project) => project.id === projectId) ?? null;
 
+  /* Task 141 — glisser-déposer de fichiers : l'ENTIÈRE zone du composer est
+     une zone de dépôt ; chaque fichier déposé passe par le MÊME canal que le
+     bouton « + » (upload R2 + conversion réelle + garde 10 × 50 Mo). */
+  const onDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer?.types?.includes("Files")) return;
+    event.preventDefault();
+  };
+  const onDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer?.types?.includes("Files")) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setDragActive(true);
+  };
+  const onDragLeave = () => {
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDragActive(false);
+  };
+  const onDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer?.files?.length) return;
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDragActive(false);
+    for (const file of Array.from(event.dataTransfer.files)) void uploadFile(file);
+  };
+
   return (
-    <div className="space-y-2">
+    <div
+      className="relative space-y-2"
+      onDragOver={onDragOver}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {/* Overlay de dépôt — feedback immédiat, ferme au relâchement. */}
+      {dragActive && (
+        <div
+          className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-[var(--g3-primary)] bg-[var(--g3-bg)]/85"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="rounded-full border border-[var(--g3-primary-border)] bg-[var(--g3-primary-soft)] px-4 py-2 text-xs font-semibold text-[var(--g3-primary-strong)]">
+            Déposez vos fichiers — ils seront joints au prochain message
+          </p>
+        </div>
+      )}
+
+      {/* Task 141 — pills de pilotage : QUI répond (agent), avec QUEL moteur
+          (modèle IA), et la bibliothèque de formulations (modèles). */}
+      {(onAgentChange || onModelIdChange) && (
+        <div className="flex flex-wrap items-center gap-1.5" aria-label="Pilotage du prochain message">
+          {onAgentChange && (
+            <AgentPicker
+              agents={agents}
+              agentId={agentId}
+              onChange={onAgentChange}
+              disabled={disabled}
+              open={agentMenuOpen}
+              onOpenChange={setAgentMenuOpen}
+            />
+          )}
+          <TemplateMenu
+            onInsert={(body) => setValue((current) => (current.trim().length === 0 ? body : `${current}\n\n${body}`))}
+            draft={value}
+            disabled={disabled}
+            open={templateMenuOpen}
+            onOpenChange={setTemplateMenuOpen}
+          />
+          {onModelIdChange && (
+            <ModelMenu
+              modelId={modelId}
+              onChange={onModelIdChange}
+              disabled={disabled}
+              open={modelMenuOpen}
+              onOpenChange={setModelMenuOpen}
+            />
+          )}
+        </div>
+      )}
+
       {suggestions && suggestions.length > 0 && value === "" && attachments.length === 0 && (
         <div className="flex flex-wrap gap-1.5" aria-label="Suggestions de départ">
           {suggestions.slice(0, 4).map((suggestion) => (

@@ -43,6 +43,8 @@ const BodySchema = z.object({
   model: z.string().trim().max(200).optional(),
   connectors: z.array(ConnectorSchema).max(8).optional(),
   authorizationMode: z.enum(["always_ask", "ask_if_needed", "auto_allow"]).optional(),
+  // Task 141 — agent dédié choisi dans le composer (sélecteur Gen IA ⇄ agents).
+  agentId: z.string().trim().min(1).max(128).optional(),
   // Fuseau horaire du client (IANA) : utilisé par les sous-services pilotés
   // en langage naturel (tâches planifiées).
   timezone: z.string().trim().max(100).optional(),
@@ -103,6 +105,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
             model: body.model,
             connectors: body.connectors,
             authorizationMode: body.authorizationMode,
+            agentId: body.agentId,
             timezone: body.timezone,
             onEvent: send,
           });

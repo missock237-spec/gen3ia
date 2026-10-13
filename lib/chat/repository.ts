@@ -117,6 +117,19 @@ function citationsFrom(value: unknown): MessageCitation[] | undefined {
   return list.length > 0 ? list : undefined;
 }
 
+/**
+ * Task 141 — suggestions de suivi cliquables attachées à une réponse :
+ * liste plate de chaînes courtes, filtrée et plafonnée (4 max, 160 caractères).
+ */
+function suggestionsFrom(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const list = value
+    .filter((x): x is string => typeof x === "string" && x.trim().length > 0 && x.trim().length <= 160)
+    .map((x) => x.trim())
+    .slice(0, 4);
+  return list.length > 0 ? list : undefined;
+}
+
 /* ------------------------------------------------------------------ */
 /* Clés canoniques (mémoire R2 par utilisateur)                        */
 /* ------------------------------------------------------------------ */
@@ -274,6 +287,10 @@ function messageFrom(id: string, conversationId: string, userId: string, x: Mess
     connectors: Array.isArray(x.connectors)
       ? x.connectors.filter((c: unknown): c is string => typeof c === "string" && c.length > 0 && c.length <= 60)
       : undefined,
+    // Task 141 — agent dédié du tour + suggestions de suivi cliquables.
+    agentId: typeof x.agentId === "string" && x.agentId.length > 0 ? x.agentId : undefined,
+    agentName: typeof x.agentName === "string" && x.agentName.length > 0 ? x.agentName : undefined,
+    suggestions: suggestionsFrom(x.suggestions),
     usage: x.usage,
     createdAt: iso(x.createdAt),
   } as ChatMessage;

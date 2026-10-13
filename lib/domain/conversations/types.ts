@@ -87,6 +87,12 @@ export interface ConversationMessage {
   runId?: string;
   /** Connecteurs activés par l'utilisateur pour ce tour (slugs Composio). */
   connectors?: string[];
+  /** Agent dédié choisi dans le composer pour ce tour (sélecteur Gen IA ⇄ agents). */
+  agentId?: string;
+  /** Libellé lisible de l'agent dédié (affiché dans le fil sans rechargement). */
+  agentName?: string;
+  /** Suggestions de suivi générées avec la réponse (chips cliquables). */
+  suggestions?: string[];
   usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
   createdAt: string;
 }

@@ -34,6 +34,9 @@ import {
 import { detectApiProvisioning, extractApiPathFromMessage, extractApiUsageName, looksLikeApiUsageRequest } from "@/lib/integrations/custom-apis/detect";
 import { isExternalAppConnected } from "@/lib/security/connected-apps";
 import { INTERNAL_ACTION_TOOLS } from "@/lib/agents/approval-policy";
+import { getAgentForUser } from "@/lib/agents/repository";
+import { buildAgentCharter } from "@/lib/agents/charter";
+import { buildFollowUpSuggestions } from "./follow-ups";
 import {
   assessComplexity,
   buildEvolutionContext,
@@ -719,10 +722,44 @@ export interface ConversationTurnInput {
   connectors?: string[];
   /** Mode d'autorisation HITL choisi dans le composer (« Toujours demander ▼ »). */
   authorizationMode?: AuthorizationMode;
+  /** Task 141 — agent dédié choisi dans le composer (sélecteur Gen IA ⇄ agents). */
+  agentId?: string;
   /** Fuseau horaire du client (IANA) pour les tâches planifiées créées en langage naturel. */
   timezone?: string;
   /** Émetteur d'événements de flux (streaming NDJSON) — absent = API classique. */
   onEvent?: StreamEventEmitter;
+}
+
+/**
+ * Task 141 — contexte d'agent dédié résolu pour un tour : charte injectée au
+ * prompt système + préférences de modèle (uniquement si l'utilisateur n'a pas
+ * fait un choix explicite dans le composer — le composer gagne toujours).
+ */
+export interface AgentTurnContext {
+  id: string;
+  name: string;
+  charter: string;
+  provider?: string;
+  model?: string;
+}
+
+/** Charge l'agent dédié d'un tour (null silencieux : agent inconnu/inactif). */
+async function loadTurnAgent(userId: string, agentId: string): Promise<AgentTurnContext | null> {
+  try {
+    const record = await getAgentForUser(userId, agentId);
+    if (!record || record.status !== "active") return null;
+    return {
+      id: record.id,
+      name: record.name,
+      charter: buildAgentCharter(record),
+      provider: record.modelStrategy === "fixed" ? record.preferredProvider : undefined,
+      model: record.modelStrategy === "fixed" ? record.preferredModel : undefined,
+    };
+  } catch {
+    // Agent illisible (stockage indisponible…) : repli silencieux sur Gen IA
+    // universel — le tour ne doit JAMAIS échouer pour un sélecteur.
+    return null;
+  }
 }
 
 export interface ConversationTurnResult {
@@ -792,6 +829,16 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const conversation: ChatConversation | null = await getConversation(input.userId, input.conversationId);
   if (!conversation) throw new Error("Conversation introuvable.");
 
+  // Task 141 — agent dédié choisi dans le composer : la charte de l'agent
+  // (persona, compétences, garde-fous) est injectée au tour de chat et ses
+  // préférences de modèle s'appliquent SAUF si l'utilisateur a fait un choix
+  // explicite (le sélecteur de modèle du composer gagne toujours). Un agent
+  // introuvable/inactif ne bloque JAMAIS le tour : repli sur Gen IA.
+  const agent = input.agentId ? await loadTurnAgent(input.userId, input.agentId) : null;
+  if (agent && !input.provider && agent.provider) {
+    input = { ...input, provider: agent.provider, model: input.model ?? agent.model };
+  }
+
   const projectId = input.projectId ?? conversation.projectId;
   const project = projectId ? await getProject(input.userId, projectId) : null;
   if (projectId && !project) throw new Error("Projet introuvable pour cette conversation.");
@@ -834,7 +881,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   // DÉTERMINISTEMENT dans le langage naturel, exécutés via les outils RÉELS
   // (mêmes services que le Studio). Aucune invention : ce qui est créé en
   // base reprend exactement la demande.
-  const baseCtx: TurnBase = { ...input, conversation, project, projectId, userMessage, priorHistory };
+  const baseCtx: TurnBase = { ...input, conversation, project, projectId, userMessage, priorHistory, agent };
   const controle = detectServiceControlIntent(input.message);
   if (controle) {
     const result = await runServiceControlTurn(baseCtx, controle);
@@ -1382,6 +1429,8 @@ interface TurnBase extends ConversationTurnInput {
   project: WorkspaceProject | null;
   userMessage: ConversationMessage;
   priorHistory: ChatMessage[];
+  /** Task 141 — agent dédié résolu pour ce tour (null = Gen IA universel). */
+  agent?: AgentTurnContext | null;
   /** Contenu réel des fichiers importés (convertis + stockés en base). */
   filesContext?: string;
   /** Contenu réel des liens fournis par l'utilisateur (pages récupérées). */
@@ -1401,8 +1450,15 @@ interface TurnContext extends TurnBase {
 async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   const streaming = Boolean(ctx.onEvent);
+  // Task 141 — agent dédié : quand l'utilisateur a choisi un agent dans le
+  // composer, la charte de CET agent prime sur l'identité universelle (nom,
+  // mission, compétences, persona, garde-fous) — les règles de plateforme
+  // (formats, médias, honnêteté) restent inchangées et prévalent en dernier.
+  const identityPart = ctx.agent
+    ? `Tu réponds actuellement sous l'identité de l'agent dédié « ${ctx.agent.name} ». La charte de cet agent prime sur ton identité par défaut — respecte son ton, son périmètre et ses garde-fous tout en gardant toutes tes capacités d'exécution :\n\n${ctx.agent.charter}`
+    : "Tu es Gen IA, l'agent IA universel de Gen3ia, capable de tout réaliser : tu réponds de façon directe, structurée et actionnable. Pour une tâche très complexe, tu peux déployer jusqu'à 10 sous-agents spécialisés (orchestration).";
   const systemParts = [
-    "Tu es Gen IA, l'agent IA universel de Gen3ia, capable de tout réaliser : tu réponds de façon directe, structurée et actionnable. Pour une tâche très complexe, tu peux déployer jusqu'à 10 sous-agents spécialisés (orchestration).",
+    identityPart,
     // Task 52 : contrat de présentation visible (clarté, précision selon le
     // sujet saisi, structure markdown, zéro invention) — aligné sur l'exigence
     // « qualité ChatGPT à chaque requête ».
@@ -1588,6 +1644,10 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     model,
     generationStatus,
     usage,
+    // Task 141 — traçabilité de l'agent dédié du tour + suggestions de
+    // suivi cliquables (heuristique déterministe, cf. follow-ups.ts).
+    ...(ctx.agent ? { agentId: ctx.agent.id, agentName: ctx.agent.name } : {}),
+    ...(generationStatus === "complete" ? { suggestions: buildFollowUpSuggestions(ctx.message, content) } : {}),
   });
   await onEvent({ type: "message_complete", message: assistantMessage });
 
