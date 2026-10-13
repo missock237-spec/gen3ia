@@ -77,6 +77,24 @@ import { analyzeMediaTool } from "@/lib/tools/media/analyze-media";
 import { videoStatusTool } from "@/lib/tools/media/video-status";
 import { videoReviseTool } from "@/lib/tools/media/video-revise";
 import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
+// Task 140 — suite « outils pilotés par les agents IA » (16 outils) :
+// les imports sont groupés par lot d'implémentation (sous-agents 140-a/b/c/d).
+import { handoverComposeTool } from "@/lib/tools/agent-suite/handover-compose";
+import { terminalShieldTool } from "@/lib/tools/agent-suite/terminal-shield";
+import { registryFindTool } from "@/lib/tools/agent-suite/registry-find";
+import { buildAutofixTool } from "@/lib/tools/agent-suite/build-autofix";
+import { simulationRunTool } from "@/lib/tools/agent-suite/simulation-run";
+import { browserNavigateTool } from "@/lib/tools/agent-suite/browser-navigate";
+import { schemaExtractTool } from "@/lib/tools/agent-suite/schema-extract";
+import { voicemailRespondTool } from "@/lib/tools/agent-suite/voicemail-respond";
+import { transcriptRedactTool } from "@/lib/tools/agent-suite/transcript-redact";
+import { ivrNavigateTool } from "@/lib/tools/agent-suite/ivr-navigate";
+import { webhookHealTool } from "@/lib/tools/agent-suite/webhook-heal";
+import { watchdogTrackTool } from "@/lib/tools/agent-suite/watchdog-track";
+import { terminalGuideTool } from "@/lib/tools/agent-suite/terminal-guide";
+import { contentPackageTool } from "@/lib/tools/agent-suite/content-package";
+import { knowledgeGraphTool } from "@/lib/tools/agent-suite/knowledge-graph";
+import { decisionAnalyzeTool } from "@/lib/tools/agent-suite/decision-analyze";
 
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -192,5 +210,32 @@ export function createDefaultToolRegistry(): ToolRegistry {
     registry.register(cloudflareDnsListTool);
     registry.register(cloudflareDnsCreateTool);
   }
+  // Task 140 — SUITE « OUTILS PILOTÉS PAR LES AGENTS IA » (16 outils).
+  //
+  // 15 outils INTERNES à la plateforme (LLM facturé via generateStructuredForUser,
+  // fetchs publics SSRF-gardés, calcul déterministe, livrables persistés) :
+  // TOUJOURS enregistrés — sans fournisseur configuré, ils échouent
+  // honnêtement en nommant la variable d'environnement manquante (aucune
+  // capacité fantôme). Aucune carte de validation (directive 10-10) pour les
+  // outils internes : voir lib/agents/approval-policy.ts.
+  registry.register(handoverComposeTool);
+  registry.register(terminalShieldTool);
+  registry.register(registryFindTool);
+  registry.register(simulationRunTool);
+  registry.register(browserNavigateTool);
+  registry.register(schemaExtractTool);
+  registry.register(voicemailRespondTool);
+  registry.register(transcriptRedactTool);
+  registry.register(ivrNavigateTool);
+  registry.register(webhookHealTool);
+  registry.register(watchdogTrackTool);
+  registry.register(terminalGuideTool);
+  registry.register(contentPackageTool);
+  registry.register(knowledgeGraphTool);
+  registry.register(decisionAnalyzeTool);
+  // build.autofix : crée une PULL REQUEST GitHub réelle — gated par le token
+  // de la plateforme (comme github.create_repository) ; sans token, l'outil
+  // n'est ni enregistré ni annoncé au planner.
+  if (process.env.GITHUB_TOKEN) registry.register(buildAutofixTool);
   return registry;
 }

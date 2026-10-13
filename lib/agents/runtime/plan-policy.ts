@@ -55,7 +55,9 @@ export function buildPlanExecutionPolicy(plan: RuntimePlan): ExecutionPolicy {
     if (definition.filesystemWrite) allowFileWrite = true;
     if (definition.destructive) allowFileDelete = true;
     if (tool === "code.execute") allowCodeExecution = true;
-    if (tool === "terminal.execute" || tool === "terminal.run") allowAgentTerminal = true;
+    // Task 140 — terminal.shield : même canal sécurisé que terminal.run
+    // (gated allowAgentTerminal en défense en profondeur).
+    if (tool === "terminal.execute" || tool === "terminal.run" || tool === "terminal.shield") allowAgentTerminal = true;
     if (tool === "camera.capture") allowCamera = true;
     if (definition.externalApp) allowExternalApps = true;
   }

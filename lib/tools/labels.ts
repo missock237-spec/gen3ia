@@ -53,6 +53,23 @@ const TOOL_LABELS: Record<string, string> = {
   "servicenow_incident_create": "Création d'incident ServiceNow",
   "servicenow_incident_update": "Mise à jour d'incident ServiceNow",
   "servicenow_incident_query": "Consultation des incidents ServiceNow",
+  // Task 140 — suite « outils pilotés par les agents IA » (16 libellés FR).
+  "handover.compose": "Brief de relais IA vers humain",
+  "terminal.shield": "Terminal protégé avec auto-réparation",
+  "registry.find": "Recherche de packages en direct",
+  "build.autofix": "Pipeline d'auto-correction de build",
+  "simulation.run": "Studio de simulation utilisateur",
+  "browser.navigate": "Navigation web adaptative",
+  "schema.extract": "Extraction de données structurées",
+  "voicemail.respond": "Répondeur vocal asynchrone",
+  "transcript.redact": "Masquage de données sensibles",
+  "ivr.navigate": "Navigation de serveur vocal (IVR)",
+  "webhook.heal": "Passerelle webhooks auto-réparatrice",
+  "watchdog.track": "Veille des changements web",
+  "terminal.guide": "Guide interactif depuis le terminal",
+  "content.package": "Pipeline de contenu automatisé",
+  "knowledge.graph": "Graphe de connaissances",
+  "decision.analyze": "Moteur de décision probabiliste",
 };
 
 /** Libellés des familles d'outils identifiés par préfixe. */

@@ -76,6 +76,57 @@ const TERMINAL_RE = new RegExp(
   "iu",
 );
 
+/* ── Task 140 — marqueurs de la SUITE « OUTILS PILOTÉS PAR LES AGENTS IA ».
+   Regex linéaires (aucun quantificateur imbriqué), garde-fous identiques. */
+
+/* HANDOVER — reprise de relais humain d'une conversation IA. */
+const HANDOVER_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:pass(?:age|er) (?:de|en) relais|reprend(?:s|re|rz)? (?:la|cette|mon)? ?(?:main|conversation)|pr[ée]pare?[- ](?:moi )?(?:le|la|un)? ?(?:relais|passage de t[ée]moin)|brief de relais|handover|r[ée]sum[ée] de reprise|fiche de reprise|prise en main humaine|reprendre le client)(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+
+/* REGISTRY_FIND — package/bibliothèque à vérifier, comparer, installer
+   (détection en deux parties : nom de package + intention de vérification —
+   miroir du style verbe+nom des sections EMAIL / WEB_RESEARCH). */
+const PACKAGE_NOUN_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:packages?|librairies?|libs?|biblioth[èe]qu\\p{L}*|d[ée]pendanc\\p{L}*|npm|pypi|modules?|d[ée]p[ôo]ts? npm)(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+const PACKAGE_CHECK_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:v[ée]rifi\\p{L}*|existe|exist\\p{L}*|dispo\\p{L}*|obsol[èe]t\\p{L}*|derni[èe]re? version|version (?:la )?plus r[ée]cent\\p{L}*|encore (?:maintenu|utilis\\p{L}*)|compare\\p{L}*|quell?e? (?:librairie|lib|package|version))(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+
+/* BUILD_AUTOFIX — log de build en échec à corriger (dépôt GitHub). */
+const BUILD_AUTOFIX_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:corrige[- ](?:moi )?(?:ce|le|cette)? ?(?:build|log d'erreur|log)|build (?:qui )?[ée]chou\\p{L}*|[ée]chec de build|log d'erreur|error TS\\d|failed to compile|module not found|corrige (?:l'erreur|les erreurs)|fix (?:the )?(?:build|error|failing)|pull request (?:corrective|de correction)|r[ée]pare[- ](?:moi )?(?:le|ce|la)? ?(?:build|d[ée]p[ôo]t|repo))(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+
+/* SIMULATION — test utilisateur par personas / parcours stress-testé. */
+const SIMULATION_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:simul\\p{L}*|persona|personas|faux? (?:utilisateurs?|clients?)|utilisateurs? (?:fictifs?|simul[ée]s?|test\\p{L}*)|test(?:er|e[- ]moi)? (?:l'|le |la |mon |notre )?(?:interface|parcours|tunnel|page d'accueil|inscription|checkout)|stress[- ]test\\p{L}*|audit d'utilisabilit\\p{L}*|recette utilisateurs?)(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+
+/* TRANSCRIPT_REDACT — anonymisation / masquage de données sensibles. */
+const REDACT_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:anonymis\\p{L}*|masqu\\p{L}* (?:les? |la? |l')?(?:donn[ée]es|infos?|num[ée]ro|carte|iban|t[ée]l[ée]phone)|censur\\p{L}*|effac\\p{L}* (?:les? |la? )?(?:donn[ée]es|coordonn[ée]es)|rend\\p{L}* (?:anonyme|confidentiel)|masque?[- ](?:moi )?(?:ce|le|la|les)? ?(?:transcript|transcription)|scrub|redact|r[ée]dact\\p{L}* (?:les? )?donn[ée]es)(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+
+/* DECISION — décision probabiliste chiffrée (options, probabilités, risques). */
+const DECISION_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:esp[ée]rance de gain|probabilit\\p{L}* de|quelle? (?:option|d[ée]cision|choix) (?:est |choisir|retenir)|vaut[- ]il mieux (?:miser|prendre|choisir)|rapport risque|prise de risque|VaR|CVaR|Monte[- ]Carlo|sc[ée]narios? probabilis\\p{L}*|analyse (?:de )?risque|risque r[ée]compense|quel pari|quelles? (?:chances?|odds))(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+
+/* WATCHDOG — surveillance des changements d'une page / d'un concurrent. */
+const WATCHDOG_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:surveill\\p{L}* (?:les? |la? |l'|ce|cette)? ?(?:changements?|modifications?|page|site|prix|concurrent|offre)|veille (?:sur|strat[ée]gique)|alerte[- ]moi (?:si|d[èe]s)|pr[ée]viens[- ]moi (?:si|d[èe]s)|notifi\\p{L}* (?:si|d[èe]s)|d[ée]tect\\p{L}* (?:les? )?changements?|watchdog|change monitoring)(?![\\p{L}\\p{N}_])`,
+  "iu",
+);
+
 /* IMAGE — dessine/génère image, photo, logo, affiche, illustration, poster. */
 const IMAGE_NOUN_RE = new RegExp(
   `(?<![\\p{L}\\p{N}_])images?|photos?|photographies?|dessins?|logos?|affiches?|posters?|illustrations?|banni[èe]res?|avatars?|ic[ôo]nes?|miniatures?|visuels?|fond d'[ée]cran|wallpaper(?![\\p{L}\\p{N}_])`,
@@ -262,6 +313,45 @@ export function detectToolIntents(objective: string): ToolIntentHint[] {
     push("terminal", ["terminal.run"], "L'exécution réelle de commandes passe par terminal.run (terminal agent encadré : deny-list, limites temps/mémoire/sortie, mode d'exécution renvoyé honnêtement).");
   }
 
+  // ── Task 140 — indices d'intention de la SUITE « OUTILS PILOTÉS PAR LES
+  // AGENTS IA » (détection déterministe, mêmes garde-fous : regex linéaires,
+  // max 4 indices au total).
+
+  // HANDOVER : reprise en main humaine d'une conversation IA (relais).
+  if (HANDOVER_RE.test(text)) {
+    push("handover", ["handover.compose"], "Une reprise de relais humain exige un brief structuré réel (intention, état émotionnel, blocages, données collectées) produit par handover.compose, jamais un résumé improvisé.");
+  }
+
+  // REGISTRY_FIND : package/bibliothèque à vérifier ou comparer (nom + intention).
+  if (PACKAGE_NOUN_RE.test(text) && PACKAGE_CHECK_RE.test(text)) {
+    push("registry_find", ["registry.find"], "Toute recommandation de package/bibliothèque doit être vérifiée EN DIRECT (existence, version, fraîcheur, dépréciation) via registry.find — jamais de mémoire.");
+  }
+
+  // BUILD_AUTOFIX : log de build en erreur + dépôt GitHub à corriger.
+  if (BUILD_AUTOFIX_RE.test(text)) {
+    push("build_autofix", ["build.autofix"], "Un log de build en échec sur un dépôt GitHub se corrige par build.autofix (localisation de la ligne fautive, correctif écrit, pull request créée automatiquement).");
+  }
+
+  // SIMULATION : test utilisateur / personas / parcours stress-testé.
+  if (SIMULATION_RE.test(text)) {
+    push("simulation", ["simulation.run"], "Le test de parcours par des utilisateurs simulés (personas novice/hacker/acheteur pressé…) se matérialise par simulation.run avec rapport de bugs comportementaux persisté.");
+  }
+
+  // TRANSCRIPT_REDACT : anonymisation / masquage de données sensibles.
+  if (REDACT_RE.test(text)) {
+    push("transcript_redact", ["transcript.redact"], "Le masquage de données sensibles (cartes, mots de passe, IBAN, téléphones) s'effectue via transcript.redact — déterministe et fiable, jamais à la main.");
+  }
+
+  // DECISION : comparaison d'options probabilistes / pari / risque chiffré.
+  if (DECISION_RE.test(text)) {
+    push("decision", ["decision.analyze"], "Toute décision sous incertitude chiffrable (probabilités, gains/pertes) passe par decision.analyze (espérance, Monte-Carlo, VaR/CVaR, recommandation) — jamais un calcul mental.");
+  }
+
+  // WATCHDOG : surveillance des changements d'une page stratégique.
+  if (WATCHDOG_RE.test(text)) {
+    push("watchdog", ["watchdog.track"], "La surveillance d'une page (changements stratégiques vs cosmétiques) s'enregistre et se vérifie via watchdog.track — pas de re-vérification manuelle.");
+  }
+
   return hints.slice(0, MAX_HINTS);
 }
 
@@ -283,6 +373,14 @@ const INTENT_LABELS: Record<string, string> = {
   knowledge: "recherche dans les documents / connaissances",
   file_zip: "manipulation d'une archive ZIP",
   terminal: "exécution d'une commande dans le terminal intégré",
+  // Task 140 — suite « outils pilotés par les agents IA ».
+  handover: "brief de relais IA vers humain",
+  registry_find: "vérification de packages en direct",
+  build_autofix: "auto-correction d'un build en échec",
+  simulation: "simulation d'utilisateurs (personas)",
+  transcript_redact: "masquage de données sensibles",
+  decision: "décision probabiliste chiffrée",
+  watchdog: "veille des changements d'une page",
 };
 
 /**

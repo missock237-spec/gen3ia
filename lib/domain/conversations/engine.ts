@@ -204,6 +204,11 @@ export function estimatedCostForTool(toolName: string): string {
   if (toolName === "image.generate") return "~0,01–0,04 € / image (facturée à l'usage)";
   if (toolName === "video.create") return "production complète facturée selon durée/résolution + visuels et voix";
   if (toolName === "video.revise") return "gratuit (révisions facturées au réel : visuels/voix régénérés le cas échéant)";
+  // Task 140 — suite « outils pilotés par les agents IA ».
+  if (toolName === "build.autofix") return "appels LLM facturés à l'usage (analyse du log + correctif)";
+  if (toolName === "voicemail.respond") return "appels LLM facturés à l'usage + envoi email/SMS selon canal";
+  if (toolName === "webhook.heal") return "appels LLM facturés à l'usage (adaptation du payload)";
+  if (toolName === "handover.compose" || toolName === "terminal.guide" || toolName === "content.package" || toolName === "knowledge.graph" || toolName === "simulation.run" || toolName === "schema.extract" || toolName === "ivr.navigate" || toolName === "watchdog.track") return "appels LLM facturés à l'usage";
   return "gratuit";
 }
 
@@ -248,6 +253,27 @@ export function dataScopeForTool(toolName: string, input: unknown): string {
   if (toolName === "video.revise") return "Révision/pilotage de votre vidéo (musique, rythme, voix, pause, exports)";
   if (toolName.startsWith("cloudflare.")) return "Zones DNS Cloudflare autorisées";
   if (toolName.startsWith("notion.")) return "Espace Notion autorisé";
+  // Task 140 — suite « outils pilotés par les agents IA ».
+  if (toolName === "build.autofix") return "Log de build fourni + contenu du dépôt GitHub ciblé (lecture, puis pull request corrective)";
+  if (toolName === "voicemail.respond") {
+    const target = input && typeof input === "object" && "destinationEmail" in (input as Record<string, unknown>) ? String((input as Record<string, unknown>).destinationEmail) : undefined;
+    return `Transcription du message vocal + destinataire${target ? ` (${target})` : " de la réponse"}`;
+  }
+  if (toolName === "webhook.heal") {
+    const url = input && typeof input === "object" && "endpointUrl" in (input as Record<string, unknown>) ? String((input as Record<string, unknown>).endpointUrl) : undefined;
+    return `Re-soumission du payload vers votre endpoint${url ? ` ${url}` : ""}`;
+  }
+  if (toolName === "handover.compose") return "Transcription de la conversation (brief de relais stocké dans votre espace)";
+  if (toolName === "terminal.shield") return "Commande exécutée dans le terminal agent isolé (workspace /tmp éphémère)";
+  if (toolName === "simulation.run") {
+    const url = input && typeof input === "object" && "targetUrl" in (input as Record<string, unknown>) ? String((input as Record<string, unknown>).targetUrl) : undefined;
+    return `Simulation multi-personas de la cible décrite${url ? ` (${url} lu en direct)` : ""} — rapport stocké dans votre espace`;
+  }
+  if (toolName === "watchdog.track") {
+    const url = input && typeof input === "object" && "url" in (input as Record<string, unknown>) ? String((input as Record<string, unknown>).url) : undefined;
+    return `Page surveillée${url ? ` (${url})` : ""} — référence et historique stockés dans votre compte`;
+  }
+  if (toolName === "transcript.redact") return "Transcription transformée en mémoire (aucune donnée stockée)";
   return "Données transmises dans la demande";
 }
 

@@ -97,6 +97,53 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   // rendu et les exports — capacité d'écriture interne (Firestore), appels
   // externes éventuels (LLM de révision) effectués par le SERVICE aval.
   "video.revise": { name: "video.revise", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  // Task 140 — SUITE « OUTILS PILOTÉS PAR LES AGENTS IA » (16 outils).
+  // Convention du dépôt : le profil de sécurité décrit la CAPABILITÉ ; le
+  // risque HITL (carte de validation) est porté par la définition de l'outil
+  // dans lib/tools + la politique d'approbation (directive 10-10 : les outils
+  // internes ne déclenchent JAMAIS de carte).
+  // Brief de relais IA → humain : LLM facturé + artefact persisté (stockage
+  // Gen3ia) — opération INTERNE.
+  "handover.compose": { name: "handover.compose", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  // Terminal protégé : MÊME canal sécurisé que terminal.run (deny-list durcie,
+  // env nettoyé, /tmp éphémère) avec pré-analyse + auto-réparation bornée —
+  // capacité d'écriture interne, gated par allowAgentTerminal (défense en
+  // profondeur, identique à terminal.run).
+  "terminal.shield": { name: "terminal.shield", risk: "write", requiredPermissions: ["tool.read", "tool.write"], filesystemWrite: true },
+  // Recherche de packages en direct (registres npm/PyPI publics) : lecture
+  // réseau pure, comme web.search.
+  "registry.find": { name: "registry.find", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  // Auto-correction de build : crée une PULL REQUEST réelle sur GitHub avec
+  // le token de la plateforme — action externe.
+  "build.autofix": { name: "build.autofix", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  // Studio de simulation : LLM facturé + fetch optionnel de la page cible
+  // (lecture) + rapport persisté — opération interne.
+  "simulation.run": { name: "simulation.run", risk: "write", requiredPermissions: ["tool.read", "tool.write", "network.read"], network: true },
+  // Navigation adaptative : lecture réseau (SSRF-gardée) comme web.open.
+  "browser.navigate": { name: "browser.navigate", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  // Extraction structurée : fetch optionnel (lecture) + LLM facturé.
+  "schema.extract": { name: "schema.extract", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  // Répondeur vocal : expédie email/SMS réels au nom de la plateforme —
+  // action externe (gated validation humaine du flux HITL).
+  "voicemail.respond": { name: "voicemail.respond", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  // Masquage déterministe : transformation pure en mémoire, aucun stockage.
+  "transcript.redact": { name: "transcript.redact", risk: "read", requiredPermissions: ["tool.read"] },
+  // Navigation IVR : analyse + plan DTMF (LLM facturé) — aucune écriture.
+  "ivr.navigate": { name: "ivr.navigate", risk: "read", requiredPermissions: ["tool.read"] },
+  // Webhook auto-réparateur : re-soumission POST vers un endpoint externe —
+  // action externe (gated validation humaine du flux HITL).
+  "webhook.heal": { name: "webhook.heal", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  // Watchdog : registre interne (Firestore) + fetch de la page surveillée
+  // (lecture) — opération interne propriétaire-scopée.
+  "watchdog.track": { name: "watchdog.track", risk: "write", requiredPermissions: ["tool.read", "tool.write", "network.read"], network: true },
+  // Guide terminal : LLM facturé + artefact persisté — opération interne.
+  "terminal.guide": { name: "terminal.guide", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  // Pipeline de contenu : LLM facturé + artefact persisté — opération interne.
+  "content.package": { name: "content.package", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  // Graphe de connaissances : LLM facturé + artefact persisté — interne.
+  "knowledge.graph": { name: "knowledge.graph", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
+  // Moteur de décision : calcul pur déterministe en mémoire.
+  "decision.analyze": { name: "decision.analyze", risk: "read", requiredPermissions: ["tool.read"] },
 };
 
 export function getToolSecurityDefinition(toolName: string): ToolSecurityDefinition { const definition = TOOL_SECURITY[toolName]; if (!definition) throw new Error(`Unknown tool security definition: ${toolName}`); return definition; }
@@ -140,6 +187,7 @@ export function authorizeTool(policy: ExecutionPolicy, toolName: string): ToolSe
   if (toolName === "code.execute" && !policy.allowCodeExecution) throw new Error("Code execution denied by policy");
   if (toolName === "terminal.execute" && !policy.allowAgentTerminal) throw new Error("Agent terminal denied by policy");
   if (toolName === "terminal.run" && !policy.allowAgentTerminal) throw new Error("Agent terminal denied by policy");
+  if (toolName === "terminal.shield" && !policy.allowAgentTerminal) throw new Error("Agent terminal denied by policy");
   if (toolName === "camera.capture" && !policy.allowCamera) throw new Error("Camera access denied by policy");
   return definition;
 }

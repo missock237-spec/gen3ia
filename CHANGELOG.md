@@ -14,6 +14,40 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Ajouté
 
+- **Suite « outils pilotés par les agents IA » — 16 nouveaux outils (Task 140)** :
+  `handover.compose` (brief de relais IA → humain : intention, état émotionnel,
+  blocages, données collectées — livrable persisté), `terminal.shield` (terminal
+  protégé : pré-analyse des chemins, interception des erreurs de build,
+  auto-réparation bornée), `registry.find` (vérification EN DIRECT des packages
+  npm/PyPI : existence, version, fraîcheur, dépréciation, MCP), `build.autofix`
+  (log de build → localisation de la ligne fautive → correctif → pull request
+  GitHub automatique, gated `GITHUB_TOKEN`), `simulation.run` (studio de
+  simulation multi-personas — novice, hacker, acheteur pressé… — rapport de bugs
+  comportementaux), `browser.navigate` (navigation adaptative anti-robots : UA
+  rotatifs, backoff, détection honnête des challenges), `schema.extract` (pages
+  non structurées → tableaux JSON typés selon schéma cible ou auto-détection),
+  `voicemail.respond` (répondeur vocal : extraction du besoin + réponses
+  rédigées + expédition email/SMS via canaux configurés), `transcript.redact`
+  (masquage déterministe temps réel : cartes Luhn, IBAN, CVV, mots de passe,
+  téléphones, NIR), `ivr.navigate` (analyse d'arbre SVI + plan DTMF optimal),
+  `webhook.heal` (passerelle auto-réparatrice : diagnostic, payload adapté,
+  re-soumission signée HMAC), `watchdog.track` (veille de pages : référence
+  hashée, diff, classification stratégique vs cosmétique), `terminal.guide`
+  (session terminal → guide interactif pas-à-pas persisté), `content.package`
+  (idée → pack complet : angles, script scène par scène, SEO, miniature),
+  `knowledge.graph` (documents → graphe de concepts pondérés + SVG déterministe),
+  `decision.analyze` (moteur probabiliste déterministe : espérance, Monte-Carlo
+  seedé, VaR/CVaR, sensibilité, recommandation par tolérance au risque).
+  Chaque outil est enregistré au registre exécutable, annoncé au catalogue du
+  planificateur (`GEN3IA_TOOLS`), couvert par `TOOL_SECURITY`, labellisé FR et
+  pilotable depuis les missions agents, le chat et la console — les 7 outils
+  internes ne déclenchent aucune carte de validation (directive 10-10), les 3
+  externes (`build.autofix`, `voicemail.respond`, `webhook.heal`) passent par la
+  validation humaine. Indices d'intention déterministes FR (tool-intent) pour
+  l'auto-sélection par le planner. Socle partagé : `generateStructuredForUser`
+  (LLM facturé wallet + zod + relance corrective) et `persistMarkdownDeliverable`
+  (livrables persistés dans le stockage privé).
+
 - **Appels vocaux IA pilotés par Bland AI (Task 139)** : refonte complète du
   système d'appel vocal — suppression de l'infrastructure Twilio/Plivo
   (webhooks, numéros virtuels, renouvellements) et migration vers Bland AI.

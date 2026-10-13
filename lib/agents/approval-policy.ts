@@ -65,6 +65,20 @@ export const INTERNAL_ACTION_TOOLS = new Set([
   // facturation restent appliqués. (terminal.execute, lui, reste l'ancien
   // flux « commande autorisée » à validation explicite.)
   "terminal.run",
+  // Task 140 — SUITE « OUTILS PILOTÉS PAR LES AGENTS IA » : les outils
+  // INTERNES de la suite (LLM facturé, artefacts, registres, calcul pur —
+  // aucune app externe ciblée, aucun secret utilisateur manipulé) suivent
+  // la directive 10-10 : JAMAIS de carte de validation. Les trois outils
+  // EXTERNES de la suite (build.autofix : PR GitHub réelle ;
+  // voicemail.respond : envoi email/SMS ; webhook.heal : re-soumission
+  // POST) restent hors de cet ensemble → validation humaine du flux HITL.
+  "handover.compose",
+  "terminal.shield",
+  "simulation.run",
+  "watchdog.track",
+  "terminal.guide",
+  "content.package",
+  "knowledge.graph",
   // Communications émises depuis l'infrastructure de la plateforme
   // (Resend côté serveur — aucune app utilisateur ciblée).
   "email.send",

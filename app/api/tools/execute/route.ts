@@ -53,6 +53,35 @@ const CONSOLE_MEDIA_TOOLS = [
 ] as const;
 
 /**
+ * Task 140 — suite « outils pilotés par les agents IA » : la console permet
+ * d'exécuter MANUELLEMENT les 16 nouveaux outils (test utilisateur direct).
+ * Les outils internes et de lecture y sont tous autorisés ; les trois
+ * externes (build.autofix, voicemail.respond, webhook.heal) y figurent aussi
+ * — l'appel MANUEL de la console EST la validation humaine (authentification
+ * + rate-limit 30/min + gardes aval du pipeline d'exécution standard).
+ * build.autofix n'est exposé que si le token GitHub de la plateforme est
+ * présent (aucune capacité fantôme).
+ */
+const CONSOLE_AGENT_SUITE_TOOLS = [
+  "handover.compose",
+  "terminal.shield",
+  "registry.find",
+  "simulation.run",
+  "browser.navigate",
+  "schema.extract",
+  "voicemail.respond",
+  "transcript.redact",
+  "ivr.navigate",
+  "webhook.heal",
+  "watchdog.track",
+  "terminal.guide",
+  "content.package",
+  "knowledge.graph",
+  "decision.analyze",
+  ...(process.env.GITHUB_TOKEN ? (["build.autofix"] as const) : []),
+] as const;
+
+/**
  * Copie de la politique standard étendue aux outils médias — jamais la
  * politique partagée elle-même (les agents autonomes gardent leur liste).
  *
@@ -77,6 +106,8 @@ function createConsolePolicy(): ExecutionPolicy {
       ...base.allowedTools,
 
       ...CONSOLE_MEDIA_TOOLS,
+
+      ...CONSOLE_AGENT_SUITE_TOOLS,
     ],
 
     permissions: [
@@ -84,6 +115,11 @@ function createConsolePolicy(): ExecutionPolicy {
 
       "tool.external",
     ],
+
+    // Task 140 — terminal.shield dans la console : même garde que le runtime
+    // (le canal d'exécution sécurisé reste appliqué en aval, deny-list durcie
+    // comprise — ce flag n'ouvre QUE le passage de la politique).
+    allowAgentTerminal: true,
   };
 }
 
