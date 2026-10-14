@@ -416,6 +416,58 @@ describe("runLiveVoiceTurn — anomalies du protocole", () => {
   });
 });
 
+
+/* ------------------------------------------------------------------ */
+/* Task 143 — axe 2 : vision écran temps réel (frame jointe au tour)    */
+/* ------------------------------------------------------------------ */
+
+describe("runLiveVoiceTurn — vision écran (screenFrame)", () => {
+  it("attache la frame comme image vision à answerAsAgent", async () => {
+    const events = await collect(baseInput({
+      screenFrame: { data: Buffer.from("jpeg-factice"), mimeType: "image/jpeg" },
+    }));
+
+    expect(events[events.length - 1]).toMatchObject({ type: "done" });
+    const answerCall = answerAsAgentMock.mock.calls[0] as unknown[];
+    // answerAsAgent(userId, agent, history, message, contextNote, promptContext, images)
+    const images = answerCall[6] as Array<{ mediaType: string; source: { type: string; data: string } }>;
+    expect(images).toBeDefined();
+    expect(images).toHaveLength(1);
+    expect(images[0]!.mediaType).toBe("image/jpeg");
+    expect(images[0]!.source.type).toBe("base64");
+    expect(images[0]!.source.data).toBe(Buffer.from("jpeg-factice").toString("base64"));
+    // La note de contexte cadre l'usage de l'image écran.
+    const contextNote = String(answerCall[4]);
+    expect(contextNote).toContain("partage son écran");
+  });
+
+  it("frame invalide (format) → tour SANS vision, jamais d'échec", async () => {
+    const events = await collect(baseInput({
+      screenFrame: { data: Buffer.from("pas-une-image"), mimeType: "image/bmp" },
+    }));
+
+    expect(events[events.length - 1]).toMatchObject({ type: "done" });
+    const answerCall = answerAsAgentMock.mock.calls[0] as unknown[];
+    expect(answerCall[6]).toBeUndefined();
+  });
+
+  it("échec du provider vision → repli SANS image (le tour réussit)", async () => {
+    answerAsAgentMock.mockImplementation(async (...args: unknown[]) => {
+      // Première tentative (avec images) : panne provider vision.
+      if (Array.isArray(args[6]) && (args[6] as unknown[]).length > 0) {
+        throw new Error("provider vision indisponible");
+      }
+      return REPLY_DEUX_PHRASES;
+    });
+    const events = await collect(baseInput({
+      screenFrame: { data: Buffer.from("jpeg-factice"), mimeType: "image/jpeg" },
+    }));
+
+    expect(events[events.length - 1]).toMatchObject({ type: "done" });
+    expect(answerAsAgentMock).toHaveBeenCalledTimes(2);
+  });
+});
+
 /** helper : complexité portée par l'appel billUsage. */
 function complexityOf(call: Record<string, unknown>): number {
   return call.complexity as number;

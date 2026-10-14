@@ -1,10 +1,17 @@
 /**
- * Client MCP (Model Context Protocol) minimal de Gen3ia.
+ * Client MCP (Model Context Protocol) de Gen3ia.
  *
  * Transport : « Streamable HTTP » — chaque appel est un POST JSON-RPC 2.0
  * vers l'endpoint déclaré par l'utilisateur. La réponse peut être du JSON
  * pur ou un flux SSE : les deux formes sont normalisées ici.
  * Implémente initialize → notifications/initialized → tools/list → tools/call.
+ *
+ * Task 143 — axe 4 : le client capture et RÉUTILISE l'identifiant de session
+ * `Mcp-Session-Id` renvoyé par les serveurs stateful (spec Streamable HTTP) :
+ * une seule poignée de main suffit pour la durée de vie du client, les
+ * serveurs qui l'exigent fonctionnent enfin. Le timeout reste configurable
+ * (défaut 20 s) et les headers utilisateur ne peuvent plus écraser
+ * `content-type`/`accept` (garde d'intégrité du protocole).
  */
 
 const PROTOCOL_VERSION = "2025-03-26";
@@ -45,9 +52,21 @@ export interface McpClientOptions {
 export class McpClient {
   private nextId = 1;
   private readonly fetchImpl: typeof fetch;
+  /** Session Streamable HTTP (si le serveur en émet une) — renvoyée à chaque appel. */
+  private sessionId: string | null = null;
 
   constructor(private readonly options: McpClientOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
+  }
+
+  /** Headers protocole — les headers utilisateur ne peuvent PAS les écraser. */
+  private requestHeaders(): Record<string, string> {
+    return {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+      ...(this.sessionId ? { "mcp-session-id": this.sessionId } : {}),
+      ...sanitizeUserHeaders(this.options.headers),
+    };
   }
 
   private async request<T>(method: string, params?: unknown): Promise<T> {
@@ -60,11 +79,7 @@ export class McpClient {
     try {
       response = await this.fetchImpl(this.options.url, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json, text/event-stream",
-          ...(this.options.headers ?? {}),
-        },
+        headers: this.requestHeaders(),
         body,
         signal: controller.signal,
       });
@@ -77,6 +92,10 @@ export class McpClient {
     } finally {
       clearTimeout(timer);
     }
+
+    // Session stateful : capture de l'identifiant (spec Streamable HTTP).
+    const sessionHeader = response.headers.get("mcp-session-id");
+    if (sessionHeader && sessionHeader.trim()) this.sessionId = sessionHeader.trim();
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
@@ -95,7 +114,7 @@ export class McpClient {
     try {
       await this.fetchImpl(this.options.url, {
         method: "POST",
-        headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(this.options.headers ?? {}) },
+        headers: this.requestHeaders(),
         body,
       });
     } catch {
@@ -104,7 +123,7 @@ export class McpClient {
   }
 
   /** Poignée de main obligatoire avant tout usage : valide l'URL et les credentials. */
-  async initialize(): Promise<{ serverName: string; protocolVersion: string }> {
+  async initialize(): Promise<{ serverName: string; protocolVersion: string; sessionId: string | null }> {
     const result = await this.request<{ serverInfo?: { name?: string }; protocolVersion?: string }>("initialize", {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: {},
@@ -114,6 +133,7 @@ export class McpClient {
     return {
       serverName: result.serverInfo?.name ?? "serveur MCP",
       protocolVersion: result.protocolVersion ?? PROTOCOL_VERSION,
+      sessionId: this.sessionId,
     };
   }
 
@@ -147,6 +167,19 @@ export class McpClient {
       isError: result.isError === true,
     };
   }
+}
+
+/** Retire les headers protocole des headers utilisateur (jamais écrasables). */
+function sanitizeUserHeaders(headers: Record<string, string> | undefined): Record<string, string> {
+  if (!headers) return {};
+  const sanitized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    const normalized = key.trim().toLowerCase();
+    if (normalized === "content-type" || normalized === "accept" || normalized === "mcp-session-id") continue;
+    if (!key.trim() || !value) continue;
+    sanitized[key.trim()] = value;
+  }
+  return sanitized;
 }
 
 /** Normalise la réponse : JSON direct ou flux SSE (lignes « data: {...} »). */

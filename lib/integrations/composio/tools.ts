@@ -9,6 +9,7 @@ import {
   getComposio,
 } from "./client";
 import { listHubConnections } from "./connections";
+import { ConnectorMissingError } from "./errors";
 
 export interface ComposioToolInfo {
   slug: string;
@@ -125,7 +126,10 @@ export async function resolveVerifiedComposioAccount(
     (item) => item.toolkit === normalized && item.verified && item.enabled,
   );
   if (!verifiedHub) {
-    throw new Error(`Composio toolkit "${normalized}" n'est pas connecté ou vérifié pour ce compte Gen3ia.`);
+    // Task 143 — erreur TYLÉE : le moteur conversationnel reconnaît ce cas
+    // et attache la carte « Connecter <App> » (bouton OAuth) à la réponse au
+    // lieu de noyer l'échec dans la timeline (voir composio/errors.ts).
+    throw new ConnectorMissingError(normalized);
   }
 
   let connectedAccountId = verifiedHub.id;

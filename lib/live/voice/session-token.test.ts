@@ -53,7 +53,7 @@ describe("signLiveVoiceSession / verifyLiveVoiceSession", () => {
   it("durée de session par défaut : 10 minutes (600 000 ms)", () => {
     expect(LIVE_VOICE_SESSION_MS).toBe(600_000);
     expect(LIVE_VOICE_GRACE_MS).toBe(60_000);
-    expect(LIVE_VOICE_MAX_EPOCHS).toBe(6);
+    expect(LIVE_VOICE_MAX_EPOCHS).toBe(12);
   });
 
   it("grâce de 60 s : un jeton expiré récemment reste vérifiable", () => {
@@ -79,10 +79,10 @@ describe("signLiveVoiceSession / verifyLiveVoiceSession", () => {
     expect(verifyLiveVoiceSession(token, { allowExpired: true }).uid).toBe("user-1");
   });
 
-  it("epoch : un jeton au plafond (6) reste valide", () => {
+  it("epoch : un jeton au plafond (12 par défaut) reste valide", () => {
     const { token, payload } = signLiveVoiceSession({ ...PARAMS, epoch: LIVE_VOICE_MAX_EPOCHS });
     expect(verifyLiveVoiceSession(token).epoch).toBe(LIVE_VOICE_MAX_EPOCHS);
-    expect(payload.epoch).toBe(6);
+    expect(payload.epoch).toBe(12);
   });
 
   it("jeton falsifié (charge utile modifiée) → LIVE_SESSION_INVALID", () => {

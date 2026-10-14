@@ -88,18 +88,37 @@ export interface LiveVoiceState {
   errorCode: LiveVoiceClientErrorCode | null;
   muted: boolean;
   conversationId: string | null;
+  /** Task 143 — axe 2 : écran actuellement partagé avec l'agent (vision). */
+  screenShared: boolean;
   start: () => Promise<void>;
   stop: () => void;
   toggleMute: () => void;
+  /** Task 143 — axe 2 : démarre le partage d'écran (getDisplayMedia). */
+  startScreenShare: () => Promise<void>;
+  /** Task 143 — axe 2 : arrête le partage d'écran. */
+  stopScreenShare: () => void;
 }
 
 export interface UseLiveVoiceOptions {
   /** Notification de renouvellement réussi (toast discret côté UI). */
   onRenewed?: (epoch: number, maxEpochs: number) => void;
+  /**
+   * Task 143 — axe 3 : agent dédié de la session (sélecteur du dashboard
+   * ou lien depuis la fiche agent). Passé à CHAQUE tour au serveur ; la
+   * charte/mémoire de l'agent pilotent ses réponses vocales.
+   */
+  agentId?: string;
+  /** Notification quand le partage d'écran démarre/s'arrête (toast UI). */
+  onScreenShareChange?: (shared: boolean) => void;
 }
 
 /** Durée d'énoncé minimale pour déclencher un tour (anti-bruit résiduel). */
 const MIN_UTTERANCE_MS = 250;
+
+/** Task 143 — axe 2 : largeur maximale d'une frame d'écran (hauteur
+ * proportionnelle) avant envoi — au-delà, downscale canvas (qualité 0.7). */
+const SCREEN_FRAME_MAX_WIDTH = 1280;
+const SCREEN_FRAME_JPEG_QUALITY = 0.7;
 
 /** Petit utilitaire : démarre un Audio HTML et retourne sa promesse de lecture. */
 function jouerAudio(src: string): HTMLAudioElement {
@@ -121,6 +140,8 @@ export function useLiveVoice(options: UseLiveVoiceOptions = {}): LiveVoiceState 
   const [errorCode, setErrorCodeState] = useState<LiveVoiceClientErrorCode | null>(null);
   const [muted, setMutedState] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  /** Task 143 — axe 2 : écran partagé (vision temps réel de l'agent). */
+  const [screenShared, setScreenShared] = useState(false);
 
   /* --------------------------- Réfs d'exécution --------------------------- */
 
@@ -153,6 +174,94 @@ export function useLiveVoice(options: UseLiveVoiceOptions = {}): LiveVoiceState 
   useEffect(() => {
     onRenewedRef.current = options.onRenewed;
   });
+  /** Task 143 — agent dédié + notification de partage d'écran (refs stables). */
+  const agentIdRef = useRef(options.agentId);
+  useEffect(() => {
+    agentIdRef.current = options.agentId;
+  });
+  const onScreenShareChangeRef = useRef(options.onScreenShareChange);
+  useEffect(() => {
+    onScreenShareChangeRef.current = options.onScreenShareChange;
+  });
+
+  /* Task 143 — axe 2 : PARTAGE D'ÉCRAN (visions temps réel).
+   *
+   * getDisplayMedia → <video> cachée (source de frames) ; à chaque énoncé
+   * (flush VAD), la frame COURANTE est capturée en JPEG (canvas, downscale
+   * 1280px, qualité 0.7) et jointe au tour : l'agent VOIT l'écran au moment
+   * où l'utilisateur parle. L'utilisateur peut couper le partage à tout
+   * moment (bouton navigateur OU bouton UI) — la session vocale continue. */
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  /** Capture la frame courante de l'écran partagé (JPEG blob) — null si
+   * le partage est coupé ou la frame indisponible (fail-soft). */
+  const captureScreenFrame = useCallback((): Blob | null => {
+    const video = screenVideoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return null;
+    try {
+      const scale = Math.min(1, SCREEN_FRAME_MAX_WIDTH / video.videoWidth);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      const context = canvas.getContext("2d");
+      if (!context) return null;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", SCREEN_FRAME_JPEG_QUALITY);
+      const base64 = dataUrl.split(",")[1];
+      if (!base64) return null;
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      return new Blob([bytes], { type: "image/jpeg" });
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /** Arrête le partage d'écran (coupure navigateur ou bouton UI). */
+  const stopScreenShare = useCallback(() => {
+    const stream = screenStreamRef.current;
+    if (stream) {
+      for (const track of stream.getTracks()) track.stop();
+    }
+    screenStreamRef.current = null;
+    const video = screenVideoRef.current;
+    if (video) {
+      video.srcObject = null;
+      video.removeAttribute("src");
+      screenVideoRef.current = null;
+    }
+    setScreenShared(false);
+    onScreenShareChangeRef.current?.(false);
+  }, []);
+
+  /** Démarre le partage d'écran (bouton UI, pendant une session active). */
+  const startScreenShare = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    if (screenStreamRef.current) return; // déjà actif
+    if (!navigator.mediaDevices?.getDisplayMedia) return; // navigateur incapable
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 2 },
+        audio: false,
+      });
+      screenStreamRef.current = stream;
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = stream;
+      screenVideoRef.current = video;
+      await video.play().catch(() => undefined);
+      // Coupure depuis la barre navigateur (bouton « Arrêter le partage »).
+      stream.getVideoTracks()[0]?.addEventListener("ended", () => stopScreenShare());
+      setScreenShared(true);
+      onScreenShareChangeRef.current?.(true);
+    } catch {
+      // Refus ou annulation du sélecteur d'écran : rien ne change.
+      stopScreenShare();
+    }
+  }, [stopScreenShare]);
 
   const setStatus = useCallback((next: LiveVoiceStatus) => {
     statusRef.current = next;
@@ -229,6 +338,8 @@ export function useLiveVoice(options: UseLiveVoiceOptions = {}): LiveVoiceState 
       timerRef.current = null;
     }
     arreterLecture();
+    // Task 143 — le partage d'écran vit avec la session : coupé à l'arrêt.
+    stopScreenShare();
     const node = nodeRef.current;
     if (node) {
       node.port.onmessage = null;
@@ -261,7 +372,7 @@ export function useLiveVoice(options: UseLiveVoiceOptions = {}): LiveVoiceState 
     startedAtRef.current = 0;
     expiresAtRef.current = 0;
     lastRenewAtRef.current = undefined;
-  }, [arreterLecture]);
+  }, [arreterLecture, stopScreenShare]);
 
   /** Clôture serveur best-effort (audit) — jamais bloquante pour l'UI. */
   const cloreCoteServeur = useCallback((token: string) => {
@@ -308,6 +419,12 @@ export function useLiveVoice(options: UseLiveVoiceOptions = {}): LiveVoiceState 
         formulaire.append("token", token);
         formulaire.append("durationSec", String(pcm.length / (sampleRate || 16_000)));
         formulaire.append("meta", JSON.stringify({ clientEpoch: epochRef.current }));
+        // Task 143 — axe 3 : agent dédié de la session (charte + mémoire).
+        if (agentIdRef.current) formulaire.append("agentId", agentIdRef.current);
+        // Task 143 — axe 2 : frame d'écran COURANTE jointe au tour quand le
+        // partage est actif — l'agent voit l'écran au moment de la parole.
+        const screenFrame = captureScreenFrame();
+        if (screenFrame) formulaire.append("frame", screenFrame, "ecran.jpg");
 
         const response = await authFetch("/api/live/voice/turn", {
           method: "POST",
@@ -425,6 +542,7 @@ export function useLiveVoice(options: UseLiveVoiceOptions = {}): LiveVoiceState 
       }
     },
     [
+      captureScreenFrame,
       cloreCoteServeur,
       diffuser,
       nettoyerRessources,
@@ -754,8 +872,11 @@ export function useLiveVoice(options: UseLiveVoiceOptions = {}): LiveVoiceState 
     errorCode,
     muted,
     conversationId,
+    screenShared,
     start: demarrer,
     stop: arreter,
     toggleMute: basculerMuet,
+    startScreenShare,
+    stopScreenShare,
   };
 }

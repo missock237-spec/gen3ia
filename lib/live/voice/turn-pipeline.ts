@@ -11,6 +11,7 @@ import {
   type ChatMessage,
 } from "@/lib/chat/repository";
 import { answerAsAgent, type ChatHistoryMessage } from "@/lib/agents/chat-engine";
+import type { AIImageAttachment } from "@/lib/ai/models";
 import { getAgentForUser, listAgentsForUser } from "@/lib/agents/repository";
 import type { AgentRecord } from "@/lib/agents/schema";
 import { recallAgentContext, recordExchange } from "@/lib/memory/episodic";
@@ -49,6 +50,12 @@ const HISTORY_WINDOW = 20;
 /** Modèle TTS du Live Voix (flash : latence minimale, FR correct). */
 const TTS_MODEL = "eleven_flash_v2_5";
 
+/** Taille maximale d'une frame d'écran embarquée dans un tour (octets). */
+const SCREEN_FRAME_MAX_BYTES = 1_500_000;
+
+/** Formats d'image acceptés pour la frame d'écran (mêmes bornes vision). */
+const SCREEN_FRAME_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 /** Identifiant mémoire de l'agent « plateforme » synthétique (sans id R2). */
 const PLATFORM_AGENT_MEMORY_ID = "live-voice-universal";
 
@@ -82,6 +89,17 @@ export interface LiveVoiceTurnInput {
    * resolveUserVoiceId(auth.uid)` — paramètre prêt, périmètre 114-b.
    */
   voiceId?: string;
+  /**
+   * Task 143 — axe 2 : capture d'écran TEMPS RÉEL jointe au tour. Quand
+   * l'utilisateur partage son écran pendant la session vocale, la frame
+   * courante est envoyée avec l'énoncé : l'agent VOIT l'écran et répond
+   * en connaissance de cause (vision réelle via answerAsAgent… images).
+   * Optionnel : absent → conversation vocale classique (rétrocompatible).
+   */
+  screenFrame?: {
+    data: Buffer;
+    mimeType: string;
+  };
 }
 
 /**
@@ -164,6 +182,27 @@ async function persistStep(label: string, step: () => Promise<void>): Promise<vo
       "[live-voice] persistance du tour en échec",
     );
   }
+}
+
+/**
+ * Task 143 — axe 2 : convertit la frame d'écran du tour en attachment vision
+ * (data URI base64 — contrat AIImageAttachment consommé par les providers).
+ * Retourne null si la frame est absente/invalide/trop grande : la session
+ * vocale continue SANS vision (fail-soft, jamais bloquant).
+ */
+function buildScreenImageAttachments(
+  frame: LiveVoiceTurnInput["screenFrame"],
+): AIImageAttachment[] | null {
+  if (!frame || !frame.data || frame.data.length === 0) return null;
+  if (frame.data.length > SCREEN_FRAME_MAX_BYTES) return null;
+  const mediaType = (frame.mimeType || "").split(";")[0]?.trim().toLowerCase() ?? "";
+  if (!SCREEN_FRAME_MEDIA_TYPES.has(mediaType)) return null;
+  return [
+    {
+      mediaType: mediaType as AIImageAttachment["mediaType"],
+      source: { type: "base64", data: frame.data.toString("base64") },
+    },
+  ];
 }
 
 /**
@@ -286,8 +325,30 @@ export async function* runLiveVoiceTurn(
       ? await recallAgentContext(input.userId, agent.id, transcript)
       : undefined;
     const charter = voiceCharterNote();
-    const contextNote = memoryNote ? `${charter}\n\n${memoryNote}` : charter;
-    reply = await answerAsAgent(input.userId, agent, history, transcript, contextNote);
+    const memoryContext = memoryNote ? `${charter}\n\n${memoryNote}` : charter;
+    // Task 143 — axe 2 : VISION TEMPS RÉEL. La frame d'écran partagé (si
+    // fournie) est jointe comme image vision — l'agent VOIT ce que voit
+    // l'utilisateur et répond en connaissance de cause. Une note explicite
+    // cadre l'usage ; en cas d'échec du provider vision, repli SANS image
+    // (la conversation vocale ne doit jamais être coupée par la vision).
+    const screenImages = buildScreenImageAttachments(input.screenFrame);
+    const screenNote = screenImages
+      ? "\n\n[Contexte visuel : l'utilisateur partage son écran en direct. L'image jointe est la capture de SON ÉCRAN au moment où il parle — décris/analyse ce qui est pertinent pour SA demande, ne la mentionne que si c'est utile.]"
+      : "";
+    const contextNote = `${memoryContext}${screenNote}`;
+    try {
+      reply = await answerAsAgent(input.userId, agent, history, transcript, contextNote, undefined, screenImages ?? undefined);
+    } catch (visionError) {
+      if (!screenImages) throw visionError;
+      logger.warn(
+        {
+          err: visionError instanceof Error ? visionError.message : String(visionError),
+          turnId,
+        },
+        "[live-voice] réponse vision échouée — repli sans image",
+      );
+      reply = await answerAsAgent(input.userId, agent, history, transcript, memoryContext);
+    }
   } catch (error) {
     logger.error(
       {

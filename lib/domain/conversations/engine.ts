@@ -33,6 +33,8 @@ import {
 } from "@/lib/security/authorization-mode";
 import { detectApiProvisioning, extractApiPathFromMessage, extractApiUsageName, looksLikeApiUsageRequest } from "@/lib/integrations/custom-apis/detect";
 import { isExternalAppConnected } from "@/lib/security/connected-apps";
+import { parseConnectorMissing, uniqueToolkits } from "@/lib/integrations/composio/errors";
+import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import { INTERNAL_ACTION_TOOLS } from "@/lib/agents/approval-policy";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { buildAgentCharter } from "@/lib/agents/charter";
@@ -556,6 +558,8 @@ export function buildIntentSystemPrompt(
   connectors?: string[],
   customApis?: CustomApiRecord[],
   meta?: IntentPromptMeta,
+  /** Task 143 — axe 4 : note des serveurs MCP actifs (outils + arguments). */
+  mcpNote?: string,
 ): string {
   const toolLines = catalog
     .map((t) => `- ${t.name} (risque ${t.risk}${t.requiresApproval ? ", validation requise" : ""}) : ${t.description}`)
@@ -689,6 +693,10 @@ export function buildIntentSystemPrompt(
     sousServicesSection,
     artefactsSection,
     emailSection,
+    // Task 143 — axe 4 : les serveurs MCP de l'utilisateur sont des outils
+    // RÉELS (serverId + arguments documentés) — injectés après les sections
+    // connecteurs/API pour que le planificateur les utilise à bon escient.
+    mcpNote ?? "",
     "Réponds UNIQUEMENT avec l'objet JSON conforme au schéma.",
   ]
     .filter(Boolean)
@@ -928,6 +936,11 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   // PAS des toolkits Composio et ne doivent pas rejoindre cette section.
   const composioConnectors = (input.connectors ?? []).filter((slug) => !slug.startsWith("api-"));
   const hasSelectedApis = (input.connectors ?? []).some((slug) => slug.startsWith("api-"));
+
+  // Task 143 — axe 4 : serveurs MCP ACTIFS de l'utilisateur (outils réels +
+  // arguments documentés) injectés au classifieur d'intention — le
+  // planificateur workspace voit les mêmes capacités que le chat agent.
+  const mcpNote = await describeServersForPrompt(input.userId).catch(() => undefined);
 
   // 1 quater) Contenu RÉEL des fichiers importés (conversion stockée en base).
   // Deux budgets : raccourci pour la classification (latence), complet pour
@@ -1212,7 +1225,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
           runHistoryContext: runHistory,
           complexity,
           languageDirective: languageDirective(input.message),
-        }),
+        }, mcpNote),
         prompt:
           `Historique récent :\n${priorHistory.slice(-6).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 500)}`).join("\n") || "(vide)"}` +
           `\n\nNouvelle demande (optimisée par le système d'amélioration de prompts — demande d'origine intangible : « ${enhancement.original.slice(0, 400)} ») : ${enhancement.enhanced.slice(0, 4000)}${attachmentsContext(input.attachments)}${filesContextShort}${webContext ? `\n\nContenu réel des liens fournis (résumé) :${webContextShort}` : ""}${clarificationFollowNote}`,
@@ -3125,6 +3138,11 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   let anyFailure = false;
   /** Image générée pendant ce tour (affichée sur le message final). */
   let turnImageUrl: string | undefined;
+  /** Task 143 — connecteurs Composio requis mais NON connectés par
+   * l'utilisateur : collectés pendant l'exécution (erreur typée
+   * CONNECTOR_MISSING) pour attacher la carte « Connecter <App> » au
+   * message final — l'agent propose alors le bouton de connexion OAuth. */
+  const missingConnectors: string[] = [];
 
   for (const planned of plannedSteps) {
     // Compétence image : l'étape image.generate est interceptée AVANT le
@@ -3543,6 +3561,12 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         step.status = "failed";
         step.output = result.error;
         anyFailure = true;
+        // Task 143 — connecteur manquant : le toolkit est proposé à la
+        // connexion (bouton OAuth sous la réponse), pas seulement signalé.
+        const missing = parseConnectorMissing(result.error);
+        if (missing && !missingConnectors.includes(missing.toolkit)) {
+          missingConnectors.push(missing.toolkit);
+        }
       }
       await onEvent({ type: "step_update", runId: run.id, step });
       await persistSteps();
@@ -3606,6 +3630,9 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     runId: run.id,
     generationStatus: "complete",
     ...(turnImageUrl ? { imageUrl: turnImageUrl } : {}),
+    // Task 143 — connecteurs manquants détectés pendant l'exécution : la
+    // carte « Connecter <App> » (bouton OAuth) est rendue sous la réponse.
+    ...(missingConnectors.length > 0 ? { missingConnectors: uniqueToolkits(missingConnectors) } : {}),
   });
   await onEvent({ type: "message_complete", message: assistantMessage });
 

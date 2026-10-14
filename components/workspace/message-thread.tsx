@@ -4,6 +4,7 @@ import { Fragment, memo, useCallback, useMemo, useState } from "react";
 
 import { ApprovalCard } from "./approval-card";
 import { RunTimeline } from "./run-timeline";
+import { ConnectorConnectCard } from "./connector-connect-card";
 import { MarkdownContent } from "./markdown";
 import { formatBytes } from "./labels";
 import { downloadUrl } from "@/lib/client/download";
@@ -328,6 +329,10 @@ const MessageRow = memo(function MessageRow({
             </button>
           ))}
         </div>
+      )}
+
+      {message.role === "assistant" && (message.missingConnectors ?? []).length > 0 && (
+        <ConnectorConnectCard toolkits={message.missingConnectors ?? []} />
       )}
 
       {run && <RunTimeline run={run} />}

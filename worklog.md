@@ -3791,3 +3791,44 @@ Stage Summary:
 - Synchronisation garantie : l'agent Bland est (re)créé/publié/promu à chaque changement de config Gen3ia avant tout appel — l'appel exécute toujours la version production de l'agent Bland correspondant.
 - Livré : client Bland (v1+v2), 7 routes API (webhook signé), registre voiceCalls avec facturation miroir à la minute et quota journalier, Call App complète, tool phone.call, docs/tests à jour.
 - Action utilisateur restante : définir BLAND_API_KEY dans Vercel (scripts/vercel-env-bland.mjs ou dashboard) puis redéployer ; optionnels BLAND_WEBHOOK_SECRET (dashboard Bland › Settings › Keys) et BLAND_WEBHOOK_BASE_URL=https://gen3ia.online.
+
+---
+Task ID: 143
+Agent: Super Z (agent principal)
+Task: « Travailler sur le live agent IA et le système d'appel d'API des agents IA : 1) les agents utilisent les connecteurs pour toutes les APIs autorisées + bouton de connexion au service quand l'accès manque, 2) le live agent fait de VRAIES captures d'écran temps réel et parle réellement, 3) conversation vocale des agents IA, 4) améliorer le système des connecteurs et MCP. »
+
+Work Log:
+- Exploration complète (3 sous-agents) : Composio (OAuth hub, composio.execute, verrou resolveVerifiedComposioAccount), live voix (VAD+STT Scribe+TTS flash, NDJSON), live écran (getDisplayMedia+frames POST, vision-decider), MCP (client maison streamable HTTP, mcpServers Firestore, outil unique mcp.call) — points d'extension exacts identifiés.
+- AXE 1 — Connecteurs ↔ agents :
+  * NOUVEAU lib/integrations/composio/errors.ts : ConnectorMissingError (code CONNECTOR_MISSING + toolkit, marqueur sérialisable [CONNECTOR_MISSING:<toolkit>] qui survit à la stringification d'executeTool) + parseConnectorMissing + uniqueToolkits.
+  * resolveVerifiedComposioAccount lève l'erreur typée (au lieu d'un message brut) → tous les outils dérivés (zendesk/servicenow/social/ads) en héritent.
+  * ConversationMessage.missingConnectors?: string[] — collectés dans la boucle d'exécution des steps du moteur conversationnel, dédupliqués, persistés sur le message assistant final (R2).
+  * NOUVEAU components/workspace/connector-connect-card.tsx : carte « Connecter <App> » dans le fil (libellés lisibles 28 services), bouton → POST /api/integrations/composio/connect → redirection OAuth Composio → retour conversation ; rendu sous les réponses avec missingConnectors.
+  * Le message d'erreur guide le LLM de synthèse : « l'utilisateur voit un bouton de connexion sous cette réponse ».
+  * ConnectorPicker enrichi : quand aucune connexion active, suggestions de services populaires (Gmail/Drive/Agenda/Slack/Notion/GitHub/WhatsApp/Telegram, max 4) avec connexion OAuth DIRECTE depuis le chat.
+- AXE 2 — Live agent écran + voix :
+  * LiveVoiceTurnInput.screenFrame (jpeg/png/webp ≤ 1,5 Mo) : la frame d'écran est convertie en AIImageAttachment vision et jointe à answerAsAgent — l'agent VOIT l'écran au moment où l'utilisateur parle ; note de contexte dédiée ; repli SANS image si le provider vision échoue (fail-soft, le tour réussit toujours).
+  * Route /api/live/voice/turn : champ multipart frame validé (taille+mime) + champ agentId (borné) — ignorés silencieusement si invalides.
+  * use-live-voice.ts : startScreenShare/stopScreenShare (getDisplayMedia, <video> cachée, capture à la demande), captureScreenFrame (canvas JPEG 1280px q0.7) jointe à CHAQUE tour, état screenShared exposé, coupure navigateur (« ended ») gérée, partage coupé à l'arrêt de session.
+  * voice-live-dashboard : bouton « Partager mon écran », badge « ◉ Écran partagé », note explicative, toast start/stop.
+  * Sessions prolongées : LIVE_VOICE_MAX_EPOCHS 6 → 12 (2 heures, garde de solde inchangée) + textes UI à jour.
+- AXE 3 — Conversation vocale par agent :
+  * agentId câblé de bout en bout (hook → FormData → route → pipeline resolveTurnAgent existant : charte + mémoire épisodique + persona de l'agent dédié).
+  * Sélecteur d'agent dans le dashboard vocal (GET /api/agents, agents actifs, préselection /live/voix?agent=<id>, verrouillé pendant la session).
+  * Liens « Parler avec cet agent (vocal) » : agent-picker du composer (chaque agent + Gen IA) et rail du workshop /studio/agents.
+- AXE 4 — Connecteurs + MCP améliorés :
+  * Client MCP : capture et RENVOI de Mcp-Session-Id (serveurs stateful fonctionnent), headers utilisateur ne peuvent plus écraser content-type/accept/mcp-session-id.
+  * Store : inputSchema des outils PERSISTÉ (borné 1 Mo/outil) — le planificateur ne devine plus les arguments.
+  * Service : erreurs TYLÉES McpServiceError (codes invalid_url/limit_reached/unreachable/not_found/disabled → statuts HTTP propres, fini le matching de chaînes FR), re-validation SSRF à l'exécution (cache 60 s, anti-TOCTOU/DNS rebinding), clients RÉUTILISÉS par serveur (TTL 10 min), invalidation sur échec + lastError mis à jour.
+  * describeServersForPrompt enrichi : descriptions (160 c) + arguments (types + requis, 240 c, 20 outils) — injecté AUSSI dans le moteur conversationnel workspace (buildIntentSystemPrompt + mcpNote), pas seulement le chat agent.
+  * connected-apps : mcp.call rejoint le régime « connecté = agir » (serveur actif + outillé = pas de carte de validation par étape) — cache TTL 60 s, panne → approbation conservée.
+  * Route /api/integrations/mcp : GET ?id=<serverId> → détail complet des outils (viewer UI) ; mcpErrorStatus typé.
+  * Panel MCP : paires d'en-têtes MULTIPLES (jusqu'à 5, ajout/retrait), viewer d'outils dépliable (nom + description + arguments formatés), chips compactes conservées.
+- Tests : 4 nouvelles suites/assertions — errors.test.ts (9 : round-trip marqueur, slugs, dédupe), client MCP session-id + headers (2), connected-apps mcp.call (4 : actif/désactivé/vide/inconnu + panne), turn-pipeline vision (3 : image attachée, format invalide → sans vision, repli provider) ; 2 assertions tools.test.ts mises au marqueur ; maxEpochs 12 dans session-token/session-route.
+- Validation : tsc 0 erreur ; eslint 0/0 sur les 23 fichiers touchés ; vitest 3844/3844 (seul échec : sandbox/fastify PRÉEXISTANT, paquet non installé — déjà documenté Task 139) ; next build 201/201 pages.
+
+Stage Summary:
+- Les agents UTILISENT les connecteurs autorisés et PROPOSENT la connexion : erreur typée → carte « Connecter <App> » avec bouton OAuth sous la réponse + suggestions directes dans le composer — plus jamais un simple message d'échec.
+- Live agent complet : l'agent vocal VOIT l'écran partagé en temps réel (frame par tour) et PARLE VRAIMENT (ElevenLabs flash phrase par phrase, voix du jumeau) — sessions jusqu'à 2 h.
+- Chaque agent dédié est joignable vocalement (sélecteur + liens) avec sa charte et sa mémoire.
+- MCP production-grade : sessions stateful, schémas d'outils persistés et injectés au planificateur, HITL aligné « connecté = agir », SSRF re-validée, erreurs typées, UI multi-headers + viewer d'outils.

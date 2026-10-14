@@ -93,6 +93,12 @@ export interface ConversationMessage {
   agentName?: string;
   /** Suggestions de suivi générées avec la réponse (chips cliquables). */
   suggestions?: string[];
+  /**
+   * Task 143 — connecteurs requis par le tour mais NON connectés par
+   * l'utilisateur : l'UI affiche une carte « Connecter <App> » avec le
+   * bouton de connexion OAuth direct (slugs Composio, dédupliqués).
+   */
+  missingConnectors?: string[];
   usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
   createdAt: string;
 }

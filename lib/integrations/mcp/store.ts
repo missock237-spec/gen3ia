@@ -24,13 +24,22 @@ export const McpServerSchema = z.object({
 
 export type McpServerInput = z.infer<typeof McpServerSchema>;
 
+export interface McpServerTool {
+  name: string;
+  description: string;
+  /** Task 143 — axe 4 : schéma d'entrée JSON réel de l'outil MCP (tels que
+   * déclarés par le serveur) — sert au prompt du planificateur (arguments
+   * corrects) et au viewer d'outils côté UI. Absent sur les documents anciens. */
+  inputSchema?: unknown;
+}
+
 export interface McpServer {
   id: string;
   userId: string;
   name: string;
   url: string;
   enabled: boolean;
-  tools: Array<{ name: string; description: string }>;
+  tools: McpServerTool[];
   lastSyncAt?: string;
   lastError?: string;
   createdAt?: string;
@@ -51,7 +60,7 @@ export async function countUserServers(userId: string): Promise<number> {
   return snap.data().count;
 }
 
-export async function saveServer(userId: string, input: McpServerInput, tools: Array<{ name: string; description: string }>): Promise<string> {
+export async function saveServer(userId: string, input: McpServerInput, tools: McpServerTool[]): Promise<string> {
   const id = randomUUID();
   const now = FieldValue.serverTimestamp();
   await adminDb.collection(COLLECTION).doc(id).set({
@@ -89,7 +98,7 @@ export async function getServerWithHeaders(userId: string, id: string): Promise<
   };
 }
 
-export async function updateServerTools(userId: string, id: string, tools: Array<{ name: string; description: string }>): Promise<void> {
+export async function updateServerTools(userId: string, id: string, tools: McpServerTool[]): Promise<void> {
   await adminDb.collection(COLLECTION).doc(id).update({
     tools,
     lastSyncAt: new Date().toISOString(),
@@ -129,13 +138,26 @@ function serialize(id: string, data: DocumentData): McpServer {
     url: String(data.url ?? ""),
     enabled: data.enabled !== false,
     tools: tools
-      .filter((tool): tool is { name: string; description: string } =>
+      .filter((tool): tool is McpServerTool =>
         Boolean(tool) && typeof (tool as { name?: unknown }).name === "string")
       .map((tool) => ({
         name: String(tool.name),
         description: typeof tool.description === "string" ? tool.description : "",
+        // Schéma conservé borné (1 Mo) : un serveur hostile ne gonfle pas Firestore.
+        ...(safeInputSchema(tool.inputSchema) ? { inputSchema: tool.inputSchema } : {}),
       })),
     lastSyncAt: typeof data.lastSyncAt === "string" ? data.lastSyncAt : undefined,
     lastError: typeof data.lastError === "string" ? data.lastError : undefined,
   };
+}
+
+/** Le schéma d'entrée est un objet JSON borné (sinon ignoré). */
+function safeInputSchema(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  try {
+    const serialized = JSON.stringify(value);
+    return serialized.length > 0 && serialized.length <= 1_000_000;
+  } catch {
+    return false;
+  }
 }

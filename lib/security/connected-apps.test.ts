@@ -6,10 +6,17 @@ vi.mock("@/lib/integrations/composio/connections", () => ({
   listHubConnections: vi.fn(),
 }));
 
+vi.mock("@/lib/integrations/mcp/service", () => ({
+  listUserServers: vi.fn(),
+}));
+
+import { listUserServers } from "@/lib/integrations/mcp/service";
+
 import { listHubConnections } from "@/lib/integrations/composio/connections";
 import { isExternalAppConnected } from "./connected-apps";
 
 const listHubConnectionsMock = vi.mocked(listHubConnections);
+const listUserServersMock = vi.mocked(listUserServers);
 
 describe("toolkitFromUrlHost", () => {
   it("résout les hôtes d'API connus", () => {
@@ -92,5 +99,43 @@ describe("isExternalAppConnected — approbation conditionnelle", () => {
     await isExternalAppConnected("user-1", "web.api.write", { url: "https://api.github.com/a" });
     await isExternalAppConnected("user-1", "web.api.write", { url: "https://github.com/b" });
     expect(listHubConnectionsMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("isExternalAppConnected — mcp.call (Task 143 : connecté = agir)", () => {
+  beforeEach(() => {
+    resetConnectedAppsCache();
+    listHubConnectionsMock.mockReset();
+    listUserServersMock.mockReset();
+  });
+
+  it("true quand le serveur MCP désigné est actif et outillé", async () => {
+    listUserServersMock.mockResolvedValue([
+      { id: "srv-1", name: "Drive", url: "https://mcp.exemple.com", enabled: true, tools: [{ name: "search", description: "" }] },
+      { id: "srv-2", name: "Vide", url: "https://mcp2.exemple.com", enabled: true, tools: [] },
+      { id: "srv-3", name: "Off", url: "https://mcp3.exemple.com", enabled: false, tools: [{ name: "x", description: "" }] },
+    ] as never);
+    expect(await isExternalAppConnected("user-1", "mcp.call", { serverId: "srv-1", tool: "search" })).toBe(true);
+  });
+
+  it("false quand le serveur est désactivé, vide ou inconnu", async () => {
+    listUserServersMock.mockResolvedValue([
+      { id: "srv-2", name: "Vide", url: "https://mcp2.exemple.com", enabled: true, tools: [] },
+      { id: "srv-3", name: "Off", url: "https://mcp3.exemple.com", enabled: false, tools: [{ name: "x", description: "" }] },
+    ] as never);
+    expect(await isExternalAppConnected("user-1", "mcp.call", { serverId: "srv-2", tool: "t" })).toBe(false);
+    expect(await isExternalAppConnected("user-1", "mcp.call", { serverId: "srv-3", tool: "t" })).toBe(false);
+    expect(await isExternalAppConnected("user-1", "mcp.call", { serverId: "srv-inconnu", tool: "t" })).toBe(false);
+  });
+
+  it("false sans serverId résoluble (approbation conservée)", async () => {
+    listUserServersMock.mockResolvedValue([] as never);
+    expect(await isExternalAppConnected("user-1", "mcp.call", {})).toBe(false);
+    expect(await isExternalAppConnected("user-1", "mcp.call", { serverId: "  ", tool: "t" })).toBe(false);
+  });
+
+  it("panne de lecture Firestore → false (approbation conservée)", async () => {
+    listUserServersMock.mockRejectedValue(new Error("Firestore down"));
+    expect(await isExternalAppConnected("user-1", "mcp.call", { serverId: "srv-1", tool: "search" })).toBe(false);
   });
 });

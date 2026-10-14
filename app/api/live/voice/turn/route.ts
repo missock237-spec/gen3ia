@@ -36,6 +36,13 @@ const AUDIO_MAX_BYTES = 15 * 1024 * 1024;
 /** Formats audio acceptés (mime normalisé, paramètres `;codecs=` retirés). */
 const ALLOWED_AUDIO_MIME = new Set(["audio/wav", "audio/x-wav", "audio/mpeg", "audio/webm"]);
 
+/** Task 143 — axe 2 : frame d'écran temps réel jointe au tour (jpeg/png/webp). */
+const FRAME_MAX_BYTES = 1_500_000;
+const ALLOWED_FRAME_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+/** Task 143 — axe 3 : agent dédié demandé pour la session vocale (slug R2). */
+const AGENT_ID_MAX = 128;
+
 /** Borne haute de la durée d'un énoncé (secondes) — anti-facturation folle. */
 const MAX_AUDIO_SECONDS = 600;
 
@@ -145,6 +152,28 @@ export async function POST(request: Request) {
 
     const audioBuffer = Buffer.from(await audio.arrayBuffer());
     const audioDurationSec = durationSecFromForm(form) ?? parseWavDurationSec(audioBuffer);
+
+    // Task 143 — axe 3 : agent dédié de la session vocale (sélecteur du
+    // dashboard / lien depuis la fiche agent). Validé borné ; le pipeline
+    // replie sur l'agent actif par défaut si l'id est inconnu.
+    const agentIdRaw = form.get("agentId");
+    const agentId =
+      typeof agentIdRaw === "string" && agentIdRaw.trim()
+        ? agentIdRaw.trim().slice(0, AGENT_ID_MAX)
+        : undefined;
+
+    // Task 143 — axe 2 : frame d'écran TEMPS RÉEL partagée par l'utilisateur
+    // (optionnelle). Validée taille + format, sinon ignorée silencieusement
+    // — la conversation vocale ne doit jamais échouer à cause de la vision.
+    let screenFrame: { data: Buffer; mimeType: string } | undefined;
+    const frame = form.get("frame");
+    if (frame instanceof File && frame.size > 0 && frame.size <= FRAME_MAX_BYTES) {
+      const frameMime = (frame.type || "").split(";")[0]?.trim().toLowerCase() ?? "";
+      if (ALLOWED_FRAME_MIME.has(frameMime)) {
+        screenFrame = { data: Buffer.from(await frame.arrayBuffer()), mimeType: frameMime };
+      }
+    }
+
     // Jumeau Créatif (Task 114-b) : la voix clonée par défaut de l'utilisateur
     // (s'il l'a configurée) parle à sa place. Fail-soft : sans configuration,
     // la voix plateforme d'origine est conservée.
@@ -165,6 +194,8 @@ export async function POST(request: Request) {
             audioMimeType: mimeType,
             audioDurationSec,
             voiceId: sessionVoiceId ?? undefined,
+            ...(agentId ? { agentId } : {}),
+            ...(screenFrame ? { screenFrame } : {}),
           })) {
             send(event);
           }

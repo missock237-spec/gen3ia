@@ -89,7 +89,8 @@ describe("POST /api/live/voice/session", () => {
     const data = await response.json();
 
     expect(data.epoch).toBe(1);
-    expect(data.maxEpochs).toBe(6);
+    // Task 143 : sessions vocales prolongées (12 epochs = 2 h).
+    expect(data.maxEpochs).toBe(12);
     expect(data.conversationId).toBe("conv-new");
     expect(data.expiresAt).toBeGreaterThan(Date.now());
     expect(verifyLiveVoiceSession(data.token)).toMatchObject({

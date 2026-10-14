@@ -22,7 +22,7 @@ export const LIVE_VOICE_SESSION_MS = positiveIntEnv("LIVE_VOICE_SESSION_MS", 600
 export const LIVE_VOICE_GRACE_MS = 60_000;
 
 /** Nombre maximal de renouvellements (epochs) d'une session — défaut 6 (= 60 min). */
-export const LIVE_VOICE_MAX_EPOCHS = positiveIntEnv("LIVE_VOICE_MAX_EPOCHS", 6);
+export const LIVE_VOICE_MAX_EPOCHS = positiveIntEnv("LIVE_VOICE_MAX_EPOCHS", 12);
 
 function positiveIntEnv(name: string, fallback: number): number {
   const parsed = Number(process.env[name]);

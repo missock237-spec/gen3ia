@@ -8,14 +8,15 @@ import {
   removeUserServer,
   toggleUserServer,
   McpServiceError,
+  mcpServiceErrorStatus,
 } from "@/lib/integrations/mcp/service";
-import { maskHeaders } from "@/lib/integrations/mcp/store";
 import { errorStatus } from "@/lib/security/http-errors";
-void maskHeaders; // réservé à un affichage détaillé ultérieur
 
 /**
  * Gestion des serveurs MCP (Model Context Protocol) de l'utilisateur :
- *  - GET    : liste des serveurs (en-têtes masqués) + leurs outils découverts ;
+ *  - GET    : liste des serveurs (en-têtes masqués) + leurs outils découverts.
+ *             ?id=<serverId> → DÉTAIL des outils du serveur (Task 143 : viewer
+ *             UI avec descriptions et schémas d'entrée) ;
  *  - POST   : ajout d'un serveur — poignée de main MCP + découverte des outils ;
  *  - PATCH  : activer/désactiver ou rafraîchir (re-découverte des outils) ;
  *  - DELETE : suppression (?id=...).
@@ -34,10 +35,8 @@ const PatchSchema = z.union([
   z.object({ id: z.string().trim().min(1).max(128), action: z.literal("refresh") }),
 ]);
 
-function mcpErrorStatus(message: string): number {
-  if (message.includes("injoignable") || message.includes("répondu") || message.includes("à temps") || message.includes("explosable") || message.includes("valide") || message.includes("URL")) return 502;
-  if (message.includes("introuvable") || message.includes("Limite")) return message.includes("introuvable") ? 404 : 409;
-  return 400;
+function mcpErrorStatusOf(error: McpServiceError): number {
+  return mcpServiceErrorStatus(error.code);
 }
 
 function toClient(server: Awaited<ReturnType<typeof listUserServers>>[number]) {
@@ -48,6 +47,18 @@ export async function GET(request: NextRequest) {
   const guard = await protectRoute(request, { key: "mcp", rateLimit: { limit: 120, windowMs: 5 * 60 * 1000 } });
   if (!guard.ok) return guard.response;
   try {
+    // Task 143 — axe 4 : détail des outils d'UN serveur (viewer UI) — les
+    // schémas d'entrée réels sont exposés au propriétaire (jamais les headers).
+    const detailId = new URL(request.url).searchParams.get("id")?.trim();
+    if (detailId) {
+      const servers = await listUserServers(guard.context.userId);
+      const server = servers.find((item) => item.id === detailId);
+      if (!server) return NextResponse.json({ error: "Serveur MCP introuvable." }, { status: 404 });
+      return NextResponse.json(
+        { server: { ...server, toolCount: server.tools.length } },
+        { headers: { "cache-control": "no-store" } },
+      );
+    }
     const servers = await listUserServers(guard.context.userId);
     return NextResponse.json({ servers: servers.map(toClient) }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
@@ -63,7 +74,7 @@ export async function POST(request: NextRequest) {
     const server = await addUserServer(guard.context.userId, input);
     return NextResponse.json({ server: toClient(server) }, { status: 201 });
   } catch (error) {
-    if (error instanceof McpServiceError) return NextResponse.json({ error: error.message }, { status: mcpErrorStatus(error.message) });
+    if (error instanceof McpServiceError) return NextResponse.json({ error: error.message }, { status: mcpErrorStatusOf(error) });
     if (error instanceof z.ZodError) return NextResponse.json({ error: "Données de serveur invalides (nom, URL, en-têtes)." }, { status: 400 });
     return NextResponse.json({ error: error instanceof Error ? error.message : "Ajout du serveur MCP impossible." }, { status: errorStatus(error, 500) });
   }
@@ -81,7 +92,7 @@ export async function PATCH(request: NextRequest) {
     const server = await refreshUserServer(guard.context.userId, input.id);
     return NextResponse.json({ server: toClient(server) });
   } catch (error) {
-    if (error instanceof McpServiceError) return NextResponse.json({ error: error.message }, { status: mcpErrorStatus(error.message) });
+    if (error instanceof McpServiceError) return NextResponse.json({ error: error.message }, { status: mcpErrorStatusOf(error) });
     if (error instanceof z.ZodError) return NextResponse.json({ error: "Requête de mise à jour invalide." }, { status: 400 });
     return NextResponse.json({ error: error instanceof Error ? error.message : "Mise à jour impossible." }, { status: errorStatus(error, 500) });
   }
@@ -96,7 +107,7 @@ export async function DELETE(request: NextRequest) {
     await removeUserServer(guard.context.userId, id);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    if (error instanceof McpServiceError) return NextResponse.json({ error: error.message }, { status: errorStatus(error.message) });
+    if (error instanceof McpServiceError) return NextResponse.json({ error: error.message }, { status: mcpErrorStatusOf(error) });
     return NextResponse.json({ error: "Suppression impossible." }, { status: 500 });
   }
 }

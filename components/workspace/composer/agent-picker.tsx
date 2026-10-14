@@ -171,6 +171,20 @@ export function AgentPicker({ agents, agentId, onChange, disabled = false, open:
               })
             )}
           </div>
+
+          {/* Task 143 — axe 3 : conversation VOCALE avec l'agent choisi —
+              session micro temps réel (STT + réponse + TTS), partage d'écran
+              optionnel : l'agent voit l'écran ET parle. */}
+          <div className="mt-1 border-t border-[var(--g3-border)] px-2.5 pb-1 pt-2">
+            <a
+              href={agentId ? `/live/voix?agent=${encodeURIComponent(agentId)}` : "/live/voix"}
+              className="flex items-center gap-2 rounded-xl px-1 py-1.5 text-[11px] font-semibold text-[var(--g3-primary-strong)] transition hover:bg-[var(--g3-hover)]"
+              title="Ouvrir une session vocale en direct avec cet agent"
+            >
+              <span aria-hidden>🎙</span>
+              {agentId ? "Parler avec cet agent (vocal)" : "Mode vocal (Gen IA)"}
+            </a>
+          </div>
         </div>
       )}
     </div>

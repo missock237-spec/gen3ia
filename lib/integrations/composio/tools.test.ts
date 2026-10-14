@@ -331,20 +331,20 @@ describe("verrou d'exécution partagé (resolveVerifiedComposioAccount)", () => 
     );
   });
 
-  it("refuse un toolkit sans connexion hub vérifiée", async () => {
+  it("refuse un toolkit sans connexion hub vérifiée (erreur TYLÉE ConnectorMissingError — Task 143)", async () => {
     mocks.listHubConnections.mockResolvedValue([]);
     await expect(
       resolveVerifiedComposioAccount("user-133", "zendesk"),
-    ).rejects.toThrow(/n'est pas connecté ou vérifié/);
+    ).rejects.toThrow(/\[CONNECTOR_MISSING:zendesk\]/);
     await expect(
       servicenowIncidentCreateTool.execute({ shortDescription: "Serveur mail indisponible" }, CONTEXTE),
-    ).rejects.toThrow(/n'est pas connecté ou vérifié/);
+    ).rejects.toThrow(/\[CONNECTOR_MISSING:servicenow\]/);
   });
 
   it("ignore une connexion vérifiée mais désactivée", async () => {
     const desactivee = { ...connexionHub("zendesk"), enabled: false };
     mocks.listHubConnections.mockResolvedValue([desactivee]);
-    await expect(resolveVerifiedComposioAccount("user-133", "zendesk")).rejects.toThrow(/n'est pas connecté ou vérifié/);
+    await expect(resolveVerifiedComposioAccount("user-133", "zendesk")).rejects.toThrow(/\[CONNECTOR_MISSING:zendesk\]/);
   });
 
   it("consulte les connecteurs du projet développeur quand un projectId est fourni", async () => {

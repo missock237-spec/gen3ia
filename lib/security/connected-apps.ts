@@ -1,4 +1,5 @@
 import { listHubConnections } from "@/lib/integrations/composio/connections";
+import { listUserServers } from "@/lib/integrations/mcp/service";
 
 /**
  * Apps externes connectées — base de la règle d'approbation conditionnelle
@@ -60,6 +61,10 @@ const CONNECTION_AWARE_TOOLS = new Set([
   "social.publish",
   "messaging.send",
   "github.create_repository",
+  // Task 143 — axe 4 : mcp.call suit le régime « connecté = agir » — un
+  // serveur MCP ACTIF (activé par l'utilisateur, outil découvert) n'exige
+  // pas de carte de validation par étape, comme les toolkits Composio.
+  "mcp.call",
 ]);
 
 /** Actions critiques : l'humain décide toujours, app connectée ou non.
@@ -117,6 +122,7 @@ function writeCache(userId: string, toolkits: Set<string>): void {
 /** Vide le cache (tests). */
 export function resetConnectedAppsCache(): void {
   cache.clear();
+  mcpCache.clear();
 }
 
 /**
@@ -140,6 +146,34 @@ export async function listConnectedToolkits(userId: string): Promise<Set<string>
   }
   writeCache(userId, toolkits);
   return toolkits;
+}
+
+/* ------------------------------------------------------------------ */
+/* Task 143 — axe 4 : serveurs MCP connectés (mêmes TTL/cache que Composio). */
+/* ------------------------------------------------------------------ */
+
+const mcpCache = new Map<string, { at: number; serverIds: Set<string> }>();
+
+/** Identifiants des serveurs MCP ACTIFS (enabled + outils découverts). */
+async function isMcpServerConnected(userId: string, input: Record<string, unknown>): Promise<boolean> {
+  const serverId = typeof input.serverId === "string" ? input.serverId.trim() : "";
+  if (!serverId) return false;
+  const cached = mcpCache.get(userId);
+  if (cached && Date.now() - cached.at <= CACHE_TTL_MS) {
+    return cached.serverIds.has(serverId);
+  }
+  try {
+    const servers = await listUserServers(userId);
+    const active = new Set(servers.filter((server) => server.enabled && server.tools.length > 0).map((server) => server.id));
+    mcpCache.set(userId, { at: Date.now(), serverIds: active });
+    if (mcpCache.size > 500) {
+      const oldest = [...mcpCache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      if (oldest) mcpCache.delete(oldest[0]);
+    }
+    return active.has(serverId);
+  } catch {
+    return false; // panne de lecture : approbation conservée
+  }
 }
 
 /**
@@ -166,6 +200,10 @@ export async function isExternalAppConnected(
     toolkit = typeof platform === "string" ? platform.trim().toLowerCase() : null;
     if (toolkit === "whatsapp_business") toolkit = "whatsapp";
     if (toolkit === "x" || toolkit === "twitter") toolkit = "x";
+  } else if (toolName === "mcp.call") {
+    // Le « connecteur » d'un appel MCP est le SERVEUR désigné par serverId :
+    // activé et outillé = connecté (l'utilisateur l'a déclaré lui-même).
+    return isMcpServerConnected(userId, input);
   } else {
     const url = extractTargetUrl(input);
     if (!url) return false;

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { AppLogo } from "@/components/integrations/app-logo";
-import { authFetch } from "@/lib/firebase/auth-client";
+import { authFetch, readJsonSafely } from "@/lib/firebase/auth-client";
 
 /**
  * Sélecteur de connecteurs du composer (directive Conversation-first,
@@ -37,6 +37,20 @@ interface PersonalApi {
   baseUrl: string;
   enabled: boolean;
 }
+
+/** Services populaires proposés à la connexion directe depuis le chat
+ * (Task 143 — axe 1) : l'agent doit pouvoir amener l'utilisateur à autoriser
+ * un service en un clic, sans quitter la conversation. */
+const SUGGESTED_TOOLKITS = [
+  "gmail",
+  "googledrive",
+  "googlecalendar",
+  "slack",
+  "notion",
+  "github",
+  "whatsapp",
+  "telegram",
+] as const;
 
 interface ConnectorPickerProps {
   selected: string[];
@@ -121,6 +135,35 @@ export function ConnectorPicker({ selected, onChange, disabled = false }: Connec
 
   const activeConnections = (connections ?? []).filter((connection) => connection.enabled && connection.verified);
 
+  /** Services populaires NON encore connectés (max 4) — bouton de connexion
+   * OAuth direct dans le panneau, même logique que la carte du fil. */
+  const connectSuggestions = activeConnections.length
+    ? []
+    : SUGGESTED_TOOLKITS.filter((toolkit) => !activeConnections.some((c) => c.toolkit === toolkit)).slice(0, 4);
+
+  const [connecting, setConnecting] = useState<string | null>(null);
+
+  /** Lance la connexion OAuth d'un service depuis le picker (redirection). */
+  const connectService = async (toolkit: string) => {
+    if (connecting) return;
+    setConnecting(toolkit);
+    try {
+      const response = await authFetch("/api/integrations/composio/connect", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ toolkit }),
+      });
+      const body = await readJsonSafely<{ authorizationUrl?: string }>(response);
+      if (response.ok && body?.authorizationUrl) {
+        window.location.assign(body.authorizationUrl);
+        return;
+      }
+    } catch {
+      /* redirection impossible : on reste sur place */
+    }
+    setConnecting(null);
+  };
+
   const toggle = (toolkit: string) => {
     if (selected.includes(toolkit)) {
       onChange(selected.filter((item) => item !== toolkit));
@@ -165,6 +208,25 @@ export function ConnectorPicker({ selected, onChange, disabled = false }: Connec
           {!loading && activeConnections.length === 0 && (
             <div className="px-1.5 py-2 text-[11px] leading-relaxed text-[var(--g3-muted)]">
               {loadError ? "Connexions indisponibles pour l'instant." : "Aucune application connectée."}
+              {connectSuggestions.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <p className="font-semibold text-[var(--g3-text-secondary)]">Services populaires :</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {connectSuggestions.map((toolkit) => (
+                      <button
+                        key={toolkit}
+                        type="button"
+                        onClick={() => void connectService(toolkit)}
+                        disabled={connecting !== null}
+                        className="g3-chip !text-[10px] font-semibold"
+                        title={`Connecter ${toolkit} — redirection vers la page d'autorisation`}
+                      >
+                        {connecting === toolkit ? "…" : `+ ${toolkit}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <a href="/integrations" className="ml-1 font-semibold text-[var(--g3-text)] underline underline-offset-2">
                 Connecter une app
               </a>

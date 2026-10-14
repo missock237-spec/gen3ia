@@ -174,6 +174,15 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
       <button type="button" className="mt-2 w-full rounded-xl border border-[var(--g3-border)] px-3 py-2 text-xs font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]" onClick={() => setShowCreateAgent(true)}>
         + Créer un agent
       </button>
+      {/* Task 143 — axe 3 : conversation VOCALE en direct avec l'agent du
+          workshop (STT + réponse + TTS, écran partageable). */}
+      <a
+        href={agent ? `/live/voix?agent=${encodeURIComponent(agent.id)}` : "/live/voix"}
+        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--g3-primary)] px-3 py-2 text-xs font-semibold text-[var(--g3-primary-strong)] transition hover:bg-[var(--g3-hover)]"
+        title="Ouvrir une session vocale en direct avec cet agent (micro, réponse parlée, écran partageable)"
+      >
+        <span aria-hidden>🎙</span> Parler avec cet agent
+      </a>
 
       <p className="mt-4 text-[10px] font-black uppercase tracking-[.24em] text-[var(--g3-muted)]">Historique des chats</p>
       <div className="mt-2 max-h-[420px] min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5 lg:max-h-none">

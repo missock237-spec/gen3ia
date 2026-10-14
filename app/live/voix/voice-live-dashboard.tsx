@@ -1,11 +1,20 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { useToast } from "@/components/ui/toast";
 import { formatXAF } from "@/lib/ui/money";
+import { authFetch } from "@/lib/firebase/auth-client";
 import { useLiveVoice } from "@/lib/live/voice/use-live-voice";
+
+/** Résumé d'agent tel que servi par GET /api/agents (toSummary). */
+interface AgentOption {
+  id: string;
+  name: string;
+  typeLabel?: string;
+  status: string;
+}
 
 /**
  * Console « Live Voix » (Task 110-b) — composant client de /live/voix.
@@ -113,11 +122,52 @@ function OndeEcoute() {
 }
 
 export function VoiceLiveDashboard() {
-  const { success } = useToast();
+  const { success, info } = useToast();
+
+  /* Task 143 — axe 3 : agent dédié de la conversation vocale.
+   *
+   * Sélecteur alimenté par GET /api/agents (agents actifs) ; préselection
+   * par l'URL /live/voix?agent=<id> (lien « Parler avec cet agent » de la
+   * fiche agent). L'id passe à CHAQUE tour — charte, mémoire et persona de
+   * l'agent pilotent ses réponses vocales. */
+  const [agents, setAgents] = useState<AgentOption[] | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    // Préselection depuis l'URL (montage côté client uniquement).
+    const preset = new URLSearchParams(window.location.search).get("agent") ?? "";
+    void (async () => {
+      try {
+        const response = await authFetch("/api/agents", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as { agents?: AgentOption[] };
+        if (cancelled || !Array.isArray(data.agents)) return;
+        const active = data.agents.filter((agent) => agent.status === "active");
+        setAgents(active);
+        if (preset && active.some((agent) => agent.id === preset)) {
+          setSelectedAgentId(preset);
+        } else if (!preset && active.length > 0) {
+          setSelectedAgentId(active[0]!.id);
+        }
+      } catch {
+        /* liste indisponible : session vocale plateforme par défaut */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const voix = useLiveVoice({
     onRenewed: (epochCourante, maxEpoques) =>
       success(`Session renouvelée (${epochCourante}/${maxEpoques})`, { id: "live-voice-renew", durationMs: 4000 }),
+    ...(selectedAgentId ? { agentId: selectedAgentId } : {}),
+    onScreenShareChange: (shared) =>
+      info(
+        shared ? "Écran partagé : l'agent voit ce que vous voyez." : "Partage d'écran arrêté.",
+        { id: "live-voice-screen", durationMs: 3500 },
+      ),
   });
 
   const filRef = useRef<HTMLDivElement | null>(null);
@@ -148,12 +198,32 @@ export function VoiceLiveDashboard() {
             Conversez à voix haute avec votre agent — transcription et réponse vocales en direct.
           </p>
         </div>
-        <Link
-          href="/live"
-          className="text-xs text-[var(--g3-muted)] underline-offset-4 transition-colors hover:text-[var(--g3-text)] hover:underline"
-        >
-          Agent Live — partage d&apos;écran →
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Task 143 — axe 3 : agent dédié de la session vocale. */}
+          <label className="flex items-center gap-2 text-xs text-[var(--g3-muted)]">
+            <span className="sr-only">Agent de la conversation</span>
+            <select
+              value={selectedAgentId}
+              onChange={(event) => setSelectedAgentId(event.target.value)}
+              disabled={enSession || agents === null}
+              className="g3-card !rounded-full !px-3 !py-1.5 text-xs text-[var(--g3-text)] disabled:opacity-60"
+              title={enSession ? "Arrêtez la session pour changer d'agent" : "Agent qui répondra à la voix"}
+            >
+              <option value="">{agents === null ? "Chargement…" : agents.length === 0 ? "Agent plateforme Gen3ia" : "Choisir un agent…"}</option>
+              {(agents ?? []).map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}{agent.typeLabel ? ` — ${agent.typeLabel}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Link
+            href="/live"
+            className="text-xs text-[var(--g3-muted)] underline-offset-4 transition-colors hover:text-[var(--g3-text)] hover:underline"
+          >
+            Agent Live — partage d&apos;écran →
+          </Link>
+        </div>
       </header>
 
       {/* ------------------------------------------------ Bannière erreur - */}
@@ -194,10 +264,13 @@ export function VoiceLiveDashboard() {
           </p>
           <ul className="mx-auto mt-5 max-w-md space-y-2 text-left text-sm text-[var(--g3-muted)]">
             <li className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-4 py-2.5">
-              Sessions de 10 minutes, renouvelées automatiquement jusqu&apos;à 6 époques (60 minutes au total).
+              Sessions de 10 minutes, renouvelées automatiquement jusqu&apos;à 12 époques (2 heures au total).
             </li>
             <li className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-4 py-2.5">
               L&apos;agent répond phrase par phrase : parlez pendant sa réponse pour l&apos;interrompre (barge-in).
+            </li>
+            <li className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-4 py-2.5">
+              Partagez votre écran pendant la conversation : l&apos;agent le voit en temps réel et répond en connaissance de cause.
             </li>
             <li className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-4 py-2.5">
               Réservé aux ordinateurs (PC) : Chrome ou Edge — autorisez le micro quand le navigateur le demande.
@@ -228,6 +301,11 @@ export function VoiceLiveDashboard() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {voix.screenShared && (
+                <span className="rounded-full border border-[var(--g3-primary)] bg-[var(--g3-elevated)] px-3 py-1 text-xs font-medium text-[var(--g3-primary)]">
+                  ◉ Écran partagé — l&apos;agent voit votre écran
+                </span>
+              )}
               <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-1 text-xs font-medium text-[var(--g3-muted)]">
                 Epoch {voix.epoch}/{voix.maxEpochs}
               </span>
@@ -250,7 +328,7 @@ export function VoiceLiveDashboard() {
 
           {voix.status === "exhausted" && (
             <p className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-warning-soft)] px-4 py-3 text-sm text-[var(--g3-warning-strong)]">
-              Durée maximale atteinte : la conversation s&apos;est terminée après 60 minutes.
+              Durée maximale atteinte : la conversation s&apos;est terminée après 2 heures.
             </p>
           )}
           {voix.status === "stopped" && (
@@ -308,6 +386,20 @@ export function VoiceLiveDashboard() {
             <div className="flex flex-col items-center gap-4">
               {voix.status === "listening" && !voix.muted && <OndeEcoute />}
               <div className="flex flex-wrap items-center justify-center gap-3">
+                {/* Task 143 — axe 2 : partage d'écran temps réel (vision de
+                    l'agent vocal) — activable/arrêtable à tout moment. */}
+                <button
+                  type="button"
+                  onClick={() => (voix.screenShared ? voix.stopScreenShare() : void voix.startScreenShare())}
+                  className={
+                    voix.screenShared
+                      ? "g3-btn rounded-full border border-[var(--g3-primary)] text-[var(--g3-primary)]"
+                      : "g3-btn g3-btn-ghost rounded-full"
+                  }
+                  title={voix.screenShared ? "Arrêter le partage d'écran" : "Partager votre écran : l'agent verra ce que vous voyez"}
+                >
+                  {voix.screenShared ? "Arrêter l'écran" : "Partager mon écran"}
+                </button>
                 <button
                   type="button"
                   onClick={voix.toggleMute}

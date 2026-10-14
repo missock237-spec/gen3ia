@@ -89,3 +89,43 @@ describe("client MCP", () => {
     await expect(networkError.listTools()).rejects.toThrowError("injoignable");
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* Task 143 — axe 4 : session Streamable HTTP + protection des headers   */
+/* ------------------------------------------------------------------ */
+
+describe("client MCP — Mcp-Session-Id (Task 143)", () => {
+  it("capture la session du serveur et la renvoie sur les appels suivants", async () => {
+    const fetchImpl = vi
+      .fn()
+      // initialize (retourne la session) puis notifications/initialized (best effort)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { serverInfo: { name: "Drive" } } }), { status: 200, headers: { "content-type": "application/json", "mcp-session-id": "sess-123" } }))
+      .mockResolvedValueOnce(new Response("", { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ jsonrpc: "2.0", id: 2, result: { tools: [{ name: "a", description: "", inputSchema: {} }] } }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    const client = new McpClient({ url: "https://exemple.com/mcp", fetchImpl });
+    const init = await client.initialize();
+    expect(init.sessionId).toBe("sess-123");
+
+    await client.listTools();
+    const [, secondCall] = fetchImpl.mock.calls[1] as [string, RequestInit];
+    expect((secondCall.headers as Record<string, string>)["mcp-session-id"]).toBe("sess-123");
+  });
+
+  it("les headers utilisateur ne peuvent PAS écraser content-type/accept", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ jsonrpc: "2.0", id: 1, result: { tools: [] } }));
+
+    const client = new McpClient({
+      url: "https://exemple.com/mcp",
+      headers: { "Content-Type": "text/html", Accept: "*/*", "X-Token": "secret" },
+      fetchImpl,
+    });
+    await client.listTools();
+
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers["content-type"]).toBe("application/json");
+    expect(headers["accept"]).toBe("application/json, text/event-stream");
+    expect(headers["X-Token"]).toBe("secret");
+  });
+});
