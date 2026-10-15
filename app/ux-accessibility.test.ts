@@ -14,8 +14,17 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf
 describe("D1 — Formulaire auth : libellé pending fidèle au mode", () => {
   const form = read("components/auth/EmailAuthForm.tsx");
 
-  it("une CONNEXION n'affiche plus « Création du profil… » (libellé conditionnel au mode)", () => {
-    expect(form).toContain('pending ? (mode === "connexion" ? "Connexion…" : "Création du profil…")');
+  it("une CONNEXION n'affiche jamais « Création du profil… » (libellé conditionnel au mode)", () => {
+    // Task 151 : trois modes (connexion / inscription / reset) — le libellé
+    // pending Suit le mode : « Connexion… » pour une connexion, jamais la
+    // création de profil.
+    expect(form).toContain('mode === "connexion" ? "Connexion…"');
+    expect(form).toContain('mode === "inscription" ? "Création du profil…"');
+    // Le libellé « Connexion… » précède toute mention de création :
+    const connexion = form.indexOf('mode === "connexion" ? "Connexion…"');
+    const creation = form.indexOf('mode === "inscription" ? "Création du profil…"');
+    expect(connexion).toBeGreaterThan(-1);
+    expect(creation).toBeGreaterThan(connexion);
   });
 });
 

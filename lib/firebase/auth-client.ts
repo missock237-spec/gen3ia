@@ -424,6 +424,17 @@ function invaliderSondeSession(): void {
 }
 
 /**
+ * Invalide la sonde de session partagée — export public (Task 151) : les
+ * flux d'authentification natifs R2 (lib/auth/r2-auth-client.ts) posent la
+ * session serveur par cookie et doivent, comme establishSession, rendre
+ * périmée toute réponse 401 mise en cache par la déduplication avant la
+ * redirection vers le tableau de bord.
+ */
+export function invalidateSessionProbe(): void {
+  invaliderSondeSession();
+}
+
+/**
  * Indique si l'utilisateur dispose d'une session utilisable, soit via l'etat
  * Firebase client, soit via le cookie de session serveur. Retourne :
  * - true : session presente (l'une ou l'autre) ;
