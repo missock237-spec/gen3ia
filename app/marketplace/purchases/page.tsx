@@ -119,7 +119,7 @@ function PurchasesContent() {
     <div className="min-h-full bg-[var(--g3-bg)] px-4 py-6 text-[var(--g3-text)] sm:px-6 lg:px-10">
       <div className="mx-auto max-w-6xl">
         <Link href="/marketplace" className="text-xs text-[var(--g3-info)] hover:text-[var(--g3-info)]">← Marketplace</Link>
-        <div className="mt-5 rounded-[30px] border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-7 shadow-[0_2px_10px_rgba(15,23,42,0.05)] sm:p-9">
+        <div className="mt-5 rounded-[30px] border border-[var(--g3-border)] bg-[var(--g3-surface)] p-7 shadow-[0_2px_10px_rgba(15,23,42,0.05)] sm:p-9">
           <p className="text-[10px] font-bold tracking-[.28em] text-[var(--g3-info)]">GEN3IA / MES ACHATS</p>
           <h1 className="mt-3 font-serif text-3xl font-bold tracking-tight">Achats, licences et accès</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--g3-muted)]">Retrouvez vos transactions et vos licences activées. Les droits d’utilisation sont déterminés côté serveur après validation du paiement.</p>
@@ -127,10 +127,10 @@ function PurchasesContent() {
 
         {error && <div className="mt-5 rounded-2xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] p-4 text-sm text-[var(--g3-danger-strong)]">{error}</div>}
         {notice && !error && <div className="mt-5 rounded-2xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] p-4 text-sm text-[var(--g3-success-strong)]">{notice}</div>}
-        {loading ? <div className="mt-6 grid gap-4 md:grid-cols-2"><div className="h-48 animate-pulse rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)]" /><div className="h-48 animate-pulse rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)]" /></div> : (
+        {loading ? <div className="mt-6 grid gap-4 md:grid-cols-2"><div className="h-48 animate-pulse rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)]" /><div className="h-48 animate-pulse rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)]" /></div> : (
           <div className="mt-6 space-y-6">
             {entitlements.length > 0 && (
-            <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+            <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
               <div className="flex items-center justify-between"><div><h2 className="font-serif font-semibold">Abonnements</h2><p className="mt-1 text-xs text-[var(--g3-faint)]">Le renouvellement automatique débite votre wallet dans les 36 h précédant le terme.</p></div><span className="rounded-full bg-[var(--g3-secondary-soft)] px-3 py-1 text-[10px] text-[var(--g3-info)]">Auto-renew</span></div>
               <div className="mt-5 space-y-3">
                 {entitlements.map((entitlement) => (
@@ -157,7 +157,7 @@ function PurchasesContent() {
             </section>
             )}
           <div className="grid gap-6 lg:grid-cols-2">
-            <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+            <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
               <div className="flex items-center justify-between"><div><h2 className="font-serif font-semibold">Licences actives</h2><p className="mt-1 text-xs text-[var(--g3-faint)]">{licenses.length} licence{licenses.length > 1 ? "s" : ""}</p></div><span className="rounded-full bg-[var(--g3-success-soft)] px-3 py-1 text-[10px] text-[var(--g3-success-strong)]">Serveur</span></div>
               <div className="mt-5 space-y-3">
                 {licenses.length === 0 ? <p className="p-6 text-center text-sm text-[var(--g3-faint)]">Aucune licence enregistrée.</p> : licenses.map((license) => (
@@ -170,7 +170,7 @@ function PurchasesContent() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+            <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
               <div><h2 className="font-serif font-semibold">Historique des achats</h2><p className="mt-1 text-xs text-[var(--g3-faint)]">{purchases.length} transaction{purchases.length > 1 ? "s" : ""}</p></div>
               <div className="mt-5 space-y-3">
                 {purchases.length === 0 ? <p className="p-6 text-center text-sm text-[var(--g3-faint)]">Aucun achat enregistré.</p> : purchases.map((purchase) => (

@@ -79,6 +79,7 @@
   --g3-primary: #7C5CFF;
   --g3-primary-strong: #9E85FF;
   --g3-primary-soft: rgba(124, 92, 255, 0.14);
+  --g3-primary-border: rgba(124, 92, 255, 0.35);
   --g3-on-primary: #FFFFFF;
   --g3-secondary: #2AD4E8;
   --g3-secondary-soft: rgba(42, 212, 232, 0.11);
@@ -156,6 +157,7 @@
   --g3-primary: #6C48FF;
   --g3-primary-strong: #5633E8;
   --g3-primary-soft: rgba(108, 72, 255, 0.10);
+  --g3-primary-border: rgba(108, 72, 255, 0.35);
   --g3-on-primary: #FFFFFF;
   --g3-secondary: #0899B4;
   --g3-secondary-soft: rgba(8, 153, 180, 0.10);

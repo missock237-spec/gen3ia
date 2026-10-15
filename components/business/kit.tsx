@@ -18,7 +18,7 @@ export const btnPrimaryCls =
   "inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--g3-deep)] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[var(--g3-elevated)] disabled:cursor-not-allowed disabled:opacity-40";
 export const btnGhostCls =
   "inline-flex items-center justify-center gap-1.5 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3 py-2 text-[12.5px] font-semibold text-[var(--g3-text-secondary)] transition hover:border-neutral-400 hover:text-[var(--g3-text)] disabled:opacity-40";
-export const cardCls = "rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]";
+export const cardCls = "rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-5 shadow-[0_2px_10px_rgba(15,23,42,0.05)]";
 
 export function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (

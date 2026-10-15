@@ -136,7 +136,7 @@ export function DocumentsPanel(props: {
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         data-dragging={dragging || undefined}
-        className={`g3-card flex flex-col items-center justify-center border p-8 text-center transition ${dragging ? "border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)]" : "border-[rgba(23,23,20,0.09)]"}`}
+        className={`g3-card flex flex-col items-center justify-center border p-8 text-center transition ${dragging ? "border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)]" : "border-[var(--g3-border)]"}`}
       >
         <p className="font-serif text-lg font-semibold">Déposez vos documents ici</p>
         <p className="mt-1 max-w-md text-sm text-[var(--g3-muted)]">
@@ -220,7 +220,7 @@ export function DocumentsPanel(props: {
         {props.loaded && filtered.length > 0 && (
           <ul className="mt-4 space-y-2">
             {filtered.map((file) => (
-              <li key={file.path} className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] px-4 py-3">
+              <li key={file.path} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-4 py-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--g3-deep)] font-mono text-[10px] font-bold text-white" aria-hidden="true">
                     {fileBadge(file)}
@@ -238,7 +238,7 @@ export function DocumentsPanel(props: {
                   <button
                     disabled={busyFile === file.path}
                     onClick={() => download(file)}
-                    className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 text-[11px] font-semibold text-[var(--g3-text-secondary)] hover:bg-[var(--g3-elevated)] disabled:opacity-40"
+                    className="min-h-9 rounded-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3 text-[11px] font-semibold text-[var(--g3-text-secondary)] hover:bg-[var(--g3-elevated)] disabled:opacity-40"
                   >
                     Télécharger
                   </button>
@@ -253,7 +253,7 @@ export function DocumentsPanel(props: {
                       </button>
                       <button
                         onClick={() => setConfirmingPath(null)}
-                        className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)]"
+                        className="min-h-9 rounded-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)]"
                       >
                         Annuler
                       </button>

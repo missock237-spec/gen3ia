@@ -86,7 +86,7 @@ export default function DashboardPage() {
       {/* Halo Aurora d'accueil */}
       <div className="aurora opacity-50" aria-hidden="true" />
       <header className="relative text-center">
-        <p className="mx-auto inline-flex items-center gap-2 rounded-full border border-[rgba(124,92,255,0.35)] bg-[var(--g3-primary-soft)] px-3.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--g3-primary-strong)]">
+        <p className="mx-auto inline-flex items-center gap-2 rounded-full border border-[var(--g3-primary-border)] bg-[var(--g3-primary-soft)] px-3.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--g3-primary-strong)]">
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--g3-gradient)]" aria-hidden /> Interface V2 · Aurora
         </p>
         <h1 className="mt-4 font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-[var(--g3-text)] md:text-4xl">
@@ -136,7 +136,7 @@ export default function DashboardPage() {
                 <li key={conversation.id}>
                   <Link
                     href={`/workspace/conversations/${conversation.id}`}
-                    className="g3-card flex items-center justify-between gap-3 !p-3.5 transition-all hover:-translate-y-0.5 hover:border-[rgba(124,92,255,0.45)] hover:shadow-[0_12px_36px_-18px_rgba(124,92,255,0.5)]"
+                    className="g3-card flex items-center justify-between gap-3 !p-3.5 transition-all hover:-translate-y-0.5 hover:border-[var(--g3-primary)] hover:shadow-[0_12px_36px_-18px_var(--g3-primary)]"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-[var(--g3-text)]">{conversation.title || "Sans titre"}</p>
@@ -173,7 +173,7 @@ export default function DashboardPage() {
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="list">
           {quickLinks.map((link) => (
             <li key={link.href}>
-              <Link href={link.href} className="g3-card flex flex-col gap-0.5 !p-3 transition-all hover:-translate-y-0.5 hover:border-[rgba(124,92,255,0.45)] hover:shadow-[0_12px_36px_-18px_rgba(124,92,255,0.5)]">
+              <Link href={link.href} className="g3-card flex flex-col gap-0.5 !p-3 transition-all hover:-translate-y-0.5 hover:border-[var(--g3-primary)] hover:shadow-[0_12px_36px_-18px_var(--g3-primary)]">
                 <span className="text-sm font-medium text-[var(--g3-text)]">
                   <span aria-hidden className="mr-1.5 text-[var(--g3-primary-strong)]">{link.icon}</span>
                   {link.label}

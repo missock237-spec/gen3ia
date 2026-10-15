@@ -134,7 +134,7 @@ export function AdsWorkshop() {
                 disabled={busy}
                 onClick={() => connectAds(provider)}
                 aria-label={connections.includes(provider) ? `${PROVIDER_LABELS[provider]} connecté` : `Connecter ${PROVIDER_LABELS[provider]}`}
-                className="flex w-full items-center justify-between rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] p-4 text-left hover:bg-[var(--g3-elevated)]"
+                className="flex w-full items-center justify-between rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4 text-left hover:bg-[var(--g3-elevated)]"
               >
                 <span>{PROVIDER_LABELS[provider]}</span>
                 <span className={connections.includes(provider) ? "text-[var(--g3-success-strong)] text-sm" : "text-[var(--g3-info)] text-sm"}>
@@ -159,10 +159,10 @@ export function AdsWorkshop() {
             <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-4">
               <span className="font-mono text-xs text-[var(--g3-warning-strong)]">Approbation en attente : {pendingApprovalId}</span>
               <button disabled={busy} onClick={() => decideApproval("approve")} className="g3-btn g3-btn-primary">Approuver &amp; publier</button>
-              <button disabled={busy} onClick={() => decideApproval("reject")} className="rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-5 py-2.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:bg-[var(--g3-elevated)]">Rejeter</button>
+              <button disabled={busy} onClick={() => decideApproval("reject")} className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-5 py-2.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:bg-[var(--g3-elevated)]">Rejeter</button>
             </div>
           ) : (
-            <p className="mt-4 rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] p-4 text-sm text-[var(--g3-faint)]">Aucune publication en attente de validation.</p>
+            <p className="mt-4 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4 text-sm text-[var(--g3-faint)]">Aucune publication en attente de validation.</p>
           )}
           {publishResult && <Callout tone="success" className="mt-3">{publishResult}</Callout>}
         </div>

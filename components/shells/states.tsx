@@ -32,7 +32,7 @@ export function LoadingState({ label = "Chargement…", rows = 3 }: { label?: st
   return (
     <div className="space-y-3" role="status" aria-live="polite" aria-label={label}>
       {Array.from({ length: rows }).map((_, index) => (
-        <div key={index} className="flex items-center gap-4 rounded-2xl border border-[rgba(23,23,20,0.07)] bg-[var(--g3-surface)] p-4">
+        <div key={index} className="flex items-center gap-4 rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-4">
           <div className="h-9 w-9 shrink-0 animate-pulse rounded-xl bg-[var(--g3-elevated)]" />
           <div className="min-w-0 flex-1 space-y-2">
             <div className="h-3.5 w-1/3 animate-pulse rounded-full bg-[var(--g3-elevated)]" />
@@ -49,7 +49,7 @@ export function LoadingState({ label = "Chargement…", rows = 3 }: { label?: st
 /** petite carte de métrique partagée (developer + admin). */
 export function MetricCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <div className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_10px_30px_-20px_rgba(28,27,24,0.25)]">
+    <div className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-5 shadow-[0_10px_30px_-20px_rgba(28,27,24,0.25)]">
       <div className="text-xs font-medium uppercase tracking-[.14em] text-[var(--g3-faint)]">{label}</div>
       <div className="mt-2 text-2xl font-bold tracking-tight text-[var(--g3-text)]">{value}</div>
       {hint && <div className="mt-1 text-xs text-[var(--g3-faint)]">{hint}</div>}

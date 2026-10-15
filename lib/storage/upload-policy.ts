@@ -25,8 +25,13 @@ export const MAX_FILE_BYTES = envLimit("GEN3IA_MAX_PERMANENT_FILE_BYTES", 50 * 1
 /** 10 fichiers max par lot de televersement. */
 export const MAX_FILES_PER_BATCH = envLimit("GEN3IA_MAX_PERMANENT_BATCH_FILES", 10);
 
-/** Quota total par utilisateur (defaut : 2 Go). */
-export const MAX_USER_QUOTA_BYTES = envLimit("GEN3IA_MAX_PERMANENT_QUOTA_BYTES", 2 * 1024 * 1024 * 1024);
+/**
+ * Quota du plan gratuit — 1 Go offert à chaque compte (Task 150).
+ * Remplacé à l'exécution par le quota du plan souscrit (5 Go / 10 Go) via
+ * lib/storage/plans.ts ; cette constante reste le socle du plan free et la
+ * limite utilisée quand aucun plan n'est encore enregistré.
+ */
+export const MAX_USER_QUOTA_BYTES = envLimit("GEN3IA_MAX_PERMANENT_QUOTA_BYTES", 1024 ** 3);
 
 /**
  * Taille d'une partie multipart : 8 Mo. Contrainte double :
@@ -106,7 +111,7 @@ export function isExtensionAllowed(filename: string): boolean {
 /** Valide un lot de fichiers avant tout stockage (client comme serveur). */
 export function validateUploadBatch(
   intents: Array<UploadIntent | ValidatedUploadIntent>,
-  options: { alreadyUsedBytes?: number } = {},
+  options: { alreadyUsedBytes?: number; quotaBytes?: number } = {},
 ): BatchValidation {
   const rejections: PolicyRejection[] = [];
 
@@ -162,13 +167,14 @@ export function validateUploadBatch(
   if (rejections.length > 0) return { ok: false, rejections };
 
   const alreadyUsed = Math.max(0, options.alreadyUsedBytes ?? 0);
-  if (alreadyUsed + totalBytes > MAX_USER_QUOTA_BYTES) {
+  const quotaBytes = Math.max(1, options.quotaBytes ?? MAX_USER_QUOTA_BYTES);
+  if (alreadyUsed + totalBytes > quotaBytes) {
     return {
       ok: false,
       rejections: [{
         index: 0,
         filename: "",
-        reason: `Quota depasse : ${formatBytes(alreadyUsed)} utilises, ${formatBytes(totalBytes)} demandes, quota ${formatBytes(MAX_USER_QUOTA_BYTES)}.`,
+        reason: `Quota depasse : ${formatBytes(alreadyUsed)} utilises, ${formatBytes(totalBytes)} demandes, quota ${formatBytes(quotaBytes)}.`,
       }],
     };
   }

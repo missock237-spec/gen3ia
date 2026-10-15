@@ -22,7 +22,7 @@ function TemplatesSectoriels() {
       aria-labelledby="titre-templates-sectoriels"
       className="mx-auto max-w-[1480px] px-3 pb-10 sm:px-5 lg:px-7"
     >
-      <div className="rounded-[30px] border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] sm:p-8">
+      <div className="rounded-[30px] border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] sm:p-8">
         <div className="text-[10px] font-bold tracking-[.28em] text-[var(--g3-info)]">GEN3IA / TEMPLATES</div>
         <h2 id="titre-templates-sectoriels" className="mt-3 font-serif text-2xl font-bold tracking-tight">
           Templates sectoriels
@@ -35,7 +35,7 @@ function TemplatesSectoriels() {
           {AGENT_TEMPLATES.map((template) => (
             <article
               key={template.id}
-              className="flex flex-col rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--g3-border)]"
+              className="flex flex-col rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--g3-border)]"
             >
               <div className="flex items-start gap-3">
                 <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--g3-secondary-soft)] text-xs font-bold text-[var(--g3-info)]">

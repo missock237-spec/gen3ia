@@ -94,7 +94,7 @@ export default function AuthButtons() {
       <button
         type="button"
         onClick={() => authenticate("github")}
-        className="flex w-full items-center justify-center gap-3 rounded-xl border border-[var(--g3-border)] bg-[#24292f] px-4 py-3 text-sm font-medium text-white transition hover:bg-[var(--g3-elevated)]"
+        className="flex w-full items-center justify-center gap-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-text)] px-4 py-3 text-sm font-medium text-white transition hover:bg-[var(--g3-elevated)]"
       >
         <GitHubLogo />
         Continuer avec GitHub

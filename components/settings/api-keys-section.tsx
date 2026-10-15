@@ -125,13 +125,13 @@ export function ApiKeysSection() {
       </p>
 
       {error && (
-        <p className="mt-3 rounded-xl border border-[rgba(124,92,255,0.5)] bg-[var(--g3-primary-soft)] px-3 py-2 text-sm" role="alert">
+        <p className="mt-3 rounded-xl border border-[var(--g3-primary)] bg-[var(--g3-primary-soft)] px-3 py-2 text-sm" role="alert">
           {error}
         </p>
       )}
 
       {freshKey && (
-        <div className="mt-4 rounded-2xl border border-[rgba(42,212,232,0.5)] bg-[var(--g3-elevated)]/60 p-4">
+        <div className="mt-4 rounded-2xl border border-[var(--g3-secondary)] bg-[var(--g3-elevated)]/60 p-4">
           <p className="text-sm font-semibold">Clé « {freshKey.prefix} » créée — copiez-la maintenant</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <code className="max-w-full truncate rounded-lg bg-[var(--g3-bg)] px-3 py-2 text-xs text-[var(--g3-text)]">
@@ -140,7 +140,7 @@ export function ApiKeysSection() {
             <button
               type="button"
               onClick={copyKey}
-              className="rounded-full border border-[rgba(42,212,232,0.6)] px-3 py-1.5 text-xs font-semibold transition hover:bg-[var(--g3-primary-soft)]"
+              className="rounded-full border border-[var(--g3-secondary)] px-3 py-1.5 text-xs font-semibold transition hover:bg-[var(--g3-primary-soft)]"
             >
               {copied ? "Copiée ✓" : "Copier"}
             </button>
@@ -158,7 +158,7 @@ export function ApiKeysSection() {
             onChange={(event) => setName(event.target.value)}
             placeholder="Nom de la clé (ex. n8n production)"
             maxLength={100}
-            className="w-full rounded-xl border border-[rgba(124,92,255,0.35)] bg-[var(--g3-bg)] px-3 py-2 text-sm text-[var(--g3-text)] outline-none focus:border-[rgba(124,92,255,0.8)]"
+            className="w-full rounded-xl border border-[var(--g3-primary-border)] bg-[var(--g3-bg)] px-3 py-2 text-sm text-[var(--g3-text)] outline-none focus:border-[var(--g3-primary)]"
           />
           <button
             type="button"
@@ -183,8 +183,8 @@ export function ApiKeysSection() {
                   className={
                     "rounded-full border px-3 py-1.5 text-xs font-semibold transition " +
                     (active
-                      ? "border-[rgba(42,212,232,0.8)] bg-[var(--g3-primary-soft)] text-[var(--g3-text)]"
-                      : "border-[rgba(124,92,255,0.3)] text-[var(--g3-muted)] hover:border-[rgba(124,92,255,0.6)]")
+                      ? "border-[var(--g3-secondary)] bg-[var(--g3-primary-soft)] text-[var(--g3-text)]"
+                      : "border-[var(--g3-primary-border)] text-[var(--g3-muted)] hover:border-[var(--g3-primary)]")
                   }
                 >
                   {scope}
@@ -208,8 +208,8 @@ export function ApiKeysSection() {
                 className={
                   "flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 " +
                   (key.revokedAt
-                    ? "border-[rgba(124,92,255,0.2)] opacity-60"
-                    : "border-[rgba(124,92,255,0.35)] bg-[var(--g3-elevated)]/40")
+                    ? "border-[var(--g3-primary-soft)] opacity-60"
+                    : "border-[var(--g3-primary-border)] bg-[var(--g3-elevated)]/40")
                 }
               >
                 <div className="min-w-0">
@@ -226,7 +226,7 @@ export function ApiKeysSection() {
                   <button
                     type="button"
                     onClick={() => revoke(key.id)}
-                    className="shrink-0 rounded-full border border-[rgba(124,92,255,0.5)] px-3 py-1.5 text-xs font-semibold transition hover:bg-[var(--g3-primary-soft)]"
+                    className="shrink-0 rounded-full border border-[var(--g3-primary)] px-3 py-1.5 text-xs font-semibold transition hover:bg-[var(--g3-primary-soft)]"
                   >
                     Révoquer
                   </button>

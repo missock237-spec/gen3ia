@@ -118,10 +118,10 @@ export function UpdateBanner() {
       aria-live="polite"
       className="anim-scale-in fixed left-1/2 top-3 z-[110] w-[min(26rem,calc(100vw-1.5rem))] -translate-x-1/2"
     >
-      <div className="g3-card flex items-center gap-3 rounded-2xl border border-[rgba(23,23,20,0.1)] px-4 py-3 shadow-[0_14px_36px_-16px_rgba(28,27,24,0.45)]">
+      <div className="g3-card flex items-center gap-3 rounded-2xl border border-[var(--g3-border)] px-4 py-3 shadow-[0_14px_36px_-16px_rgba(28,27,24,0.45)]">
         <span
           aria-hidden
-          className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--g3-primary-soft,rgba(124,92,255,0.14))] text-sm text-[var(--g3-primary,#7C5CFF)]"
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--g3-primary-soft,var(--g3-primary-soft))] text-sm text-[var(--g3-primary,#7C5CFF)]"
         >
           ✦
         </span>

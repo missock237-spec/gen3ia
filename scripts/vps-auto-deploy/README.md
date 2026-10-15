@@ -1,0 +1,58 @@
+# Mise à jour automatique Gen3ia (VPS AlmaLinux)
+
+Système de déploiement continu : chaque push sur `main` est détecté et
+déployé sur le VPS **sans interruption de service ni perte d'état**.
+
+## Fonctionnement
+
+```
+GitHub (main) ──▶ poller (toutes les 2 min, PM2 « updater ») ──▶ deploy.sh
+                                                                    │
+                              .─────────────────────────────────────┴──────────┐
+                              │                                                 │
+                    1. git fetch (rien de neuf → silence)                      │
+                    2. worktree STAGING ← reset --hard origin/main              │
+                       (.env.production de la prod : symlink, jamais touché)    │
+                    3. npm ci UNIQUEMENT si package-lock.json a changé          │
+                    4. next build DANS LE STAGING (l'app en ligne continue       │
+                       de servir — zéro interruption pendant ~15 min)           │
+                    5. swap atomique .next (l'ancienne version conservée)       │
+                       + git reset prod (code + public/) + pm2 restart          │
+                    6. health check 6×15 s ── échec ──▶ ROLLBACK .next.old     │
+                       + blacklist du commit (jamais de boucle de crash)        │
+                    7. succès ──▶ last-deployed.txt mis à jour                 │
+```
+
+## Installation (une seule fois, root)
+
+```bash
+# depuis ce dossier du repo :
+cp deploy.sh auto-update.sh /opt/gen3ia-updater/   # après mkdir -p /opt/gen3ia-updater/state
+bash install.sh   # installe le poller PM2 + état initial
+```
+
+`install.sh` attend les scripts dans `/opt/deploy.sh` et `/opt/auto-update.sh`
+(chemins de transfert) — voir le script.
+
+## État & supervision
+
+| Fichier | Rôle |
+|---|---|
+| `state/last-deployed.txt` | SHA en production |
+| `state/failed_commits.txt` | Commits dont le build/démarrage a échoué (jamais retentés) |
+| `state/deploy.log` | Journal complet des déploiements |
+| `pm2 logs updater` | Sortie du poller |
+
+## Garanties « sans destruction d'état »
+
+- `.env.production` est gitignored : aucun `git reset` ne peut le modifier.
+- Le build échoue → l'app courante n'a pas bougé d'un octet.
+- Le nouveau build démarre mal → rollback automatique sur la version
+  précédente en moins de 90 secondes.
+- Les données (R2) sont externes au VPS : jamais touchées.
+
+## Déclencher un déploiement manuel
+
+```bash
+bash /opt/gen3ia-updater/deploy.sh   # déploie origin/main si différent
+```

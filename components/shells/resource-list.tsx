@@ -88,8 +88,8 @@ export function ResourceList({
     <ul className={`space-y-2.5 ${className}`} aria-label={ariaLabel}>
       {rows.map((row) => {
         const interactive = Boolean(row.href || row.onClick) && !row.disabled;
-        const classes = `flex w-full items-center gap-3.5 rounded-2xl border border-[rgba(23,23,20,0.08)] bg-[var(--g3-surface)] p-4 text-left shadow-[0_8px_24px_-20px_rgba(28,27,24,0.3)] transition ${
-          interactive ? "hover:border-[rgba(23,23,20,0.2)] hover:shadow-[0_12px_28px_-18px_rgba(28,27,24,0.35)]" : ""
+        const classes = `flex w-full items-center gap-3.5 rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-4 text-left shadow-[0_8px_24px_-20px_rgba(28,27,24,0.3)] transition ${
+          interactive ? "hover:border-[var(--g3-border)] hover:shadow-[0_12px_28px_-18px_rgba(28,27,24,0.35)]" : ""
         }`;
         return (
           <li key={row.id}>

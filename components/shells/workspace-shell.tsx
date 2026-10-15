@@ -59,7 +59,7 @@ export function WorkspaceShell() {
                 aria-current={active(route.href) ? "page" : undefined}
                 className={`flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 text-[13px] font-semibold transition-colors ${
                   active(route.href)
-                    ? "bg-[var(--g3-gradient)] bg-[length:160%_100%] text-white shadow-[0_8px_22px_-8px_rgba(124,92,255,0.65)]"
+                    ? "bg-[var(--g3-gradient)] bg-[length:160%_100%] text-white shadow-[0_8px_22px_-8px_var(--g3-primary)]"
                     : "text-[var(--g3-muted)] hover:bg-[var(--g3-hover)] hover:text-[var(--g3-text)]"
                 }`}
               >
@@ -80,7 +80,7 @@ export function WorkspaceShell() {
                 aria-current={active(tool.href) ? "page" : undefined}
                 className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                   active(tool.href)
-                    ? "border-[rgba(124,92,255,0.5)] bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]"
+                    ? "border-[var(--g3-primary)] bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]"
                     : "border-[var(--g3-border)] bg-[var(--g3-surface)]/70 text-[var(--g3-muted)] hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
                 }`}
               >

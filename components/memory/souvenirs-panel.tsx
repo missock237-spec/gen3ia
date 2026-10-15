@@ -212,7 +212,7 @@ export function SouvenirsPanel(props: {
           <button disabled={busy} onClick={overwriteExisting} className="min-h-8 rounded-full bg-[var(--g3-warning)] px-3 font-semibold text-white hover:brightness-110 disabled:opacity-40">
             Écraser et remplacer
           </button>
-          <button disabled={busy} onClick={() => setConflict(null)} className="min-h-8 rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 font-semibold text-[var(--g3-muted)]">
+          <button disabled={busy} onClick={() => setConflict(null)} className="min-h-8 rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3 font-semibold text-[var(--g3-muted)]">
             Annuler
           </button>
         </div>
@@ -228,7 +228,7 @@ export function SouvenirsPanel(props: {
           {filtered.map((entry) => (
             <li
               key={entry.key}
-              className="rounded-xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] px-4 py-3"
+              className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-4 py-3"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -250,7 +250,7 @@ export function SouvenirsPanel(props: {
                       />
                       <div className="flex gap-2">
                         <button disabled={busy} onClick={() => saveEdit(entry.key)} className="g3-btn g3-btn-primary min-h-9 px-3 text-xs">Enregistrer</button>
-                        <button disabled={busy} onClick={() => { setEditingKey(null); setEditValue(""); }} className="min-h-9 rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 text-xs font-semibold text-[var(--g3-muted)]">Annuler</button>
+                        <button disabled={busy} onClick={() => { setEditingKey(null); setEditValue(""); }} className="min-h-9 rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3 text-xs font-semibold text-[var(--g3-muted)]">Annuler</button>
                       </div>
                     </div>
                   ) : (
@@ -266,7 +266,7 @@ export function SouvenirsPanel(props: {
                       disabled={busy}
                       onClick={() => copyValue(entry)}
                       aria-label={`Copier la valeur de ${entry.key}`}
-                      className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
+                      className="min-h-9 rounded-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
                     >
                       Copier
                     </button>
@@ -274,7 +274,7 @@ export function SouvenirsPanel(props: {
                       disabled={busy}
                       onClick={() => { setEditingKey(entry.key); setEditValue(String(entry.value)); }}
                       aria-label={`Modifier ${entry.key}`}
-                      className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
+                      className="min-h-9 rounded-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
                     >
                       Modifier
                     </button>
@@ -290,7 +290,7 @@ export function SouvenirsPanel(props: {
                         <button
                           disabled={busy}
                           onClick={() => setConfirmingKey(null)}
-                          className="min-h-9 rounded-md border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)]"
+                          className="min-h-9 rounded-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2.5 text-[11px] font-semibold text-[var(--g3-muted)]"
                         >
                           Non
                         </button>

@@ -256,7 +256,7 @@ export default function StudioClientsPage() {
     setTimeout(() => setCopied(false), 2_000);
   }
 
-  const inputClass = "w-full rounded-xl border border-[rgba(23,23,20,0.12)] bg-[var(--g3-surface)] px-3 py-2 text-sm";
+  const inputClass = "w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3 py-2 text-sm";
   const labelClass = "block text-xs font-semibold text-[var(--g3-muted)] mb-1";
 
   return (
@@ -275,7 +275,7 @@ export default function StudioClientsPage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
           <aside className="flex flex-col gap-3">
-            <div className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-4">
+            <div className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-4">
               <h2 className="mb-2 text-sm font-bold">Mes agents commerciaux</h2>
               {configs.length === 0 && <p className="text-xs text-[var(--g3-muted)]">Aucun agent commercial. Créez-en un ci-contre.</p>}
               <div className="flex flex-col gap-2">
@@ -284,7 +284,7 @@ export default function StudioClientsPage() {
                     key={config.id}
                     type="button"
                     onClick={() => void selectConfig(config)}
-                    className={"rounded-xl border px-3 py-2 text-left text-sm " + (selectedId === config.id ? "border-[var(--g3-border)] bg-[var(--g3-deep)] text-white" : "border-[rgba(23,23,20,0.1)] bg-[var(--g3-elevated)]")}
+                    className={"rounded-xl border px-3 py-2 text-left text-sm " + (selectedId === config.id ? "border-[var(--g3-border)] bg-[var(--g3-deep)] text-white" : "border-[var(--g3-border)] bg-[var(--g3-elevated)]")}
                   >
                     <span className="block font-semibold">{config.companyName}</span>
                     <span className={"text-xs " + (selectedId === config.id ? "text-[var(--g3-faint)]" : "text-[var(--g3-muted)]")}>{config.active ? "actif" : "désactivé"}</span>
@@ -308,7 +308,7 @@ export default function StudioClientsPage() {
             )}
           </aside>
 
-          <section className="rounded-2xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5">
+          <section className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-5">
             {configs.length === 0 ? (
               <div className="flex flex-col gap-4">
                 <h2 className="text-base font-bold">Nouvel agent commercial</h2>
@@ -339,11 +339,11 @@ export default function StudioClientsPage() {
                 </div>
 
                 {chats.length > 0 && (
-                  <div className="mt-2 border-t border-[rgba(23,23,20,0.08)] pt-4">
+                  <div className="mt-2 border-t border-[var(--g3-border)] pt-4">
                     <h3 className="mb-2 text-sm font-bold">Conversations clients récentes</h3>
                     <div className="flex flex-col gap-2">
                       {chats.map((chat) => (
-                        <details key={chat.id} className="rounded-xl border border-[rgba(23,23,20,0.1)] bg-[var(--g3-elevated)] px-3 py-2">
+                        <details key={chat.id} className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2">
                           <summary className="cursor-pointer text-sm font-semibold">
                             {chat.clientName || "Client"} {chat.clientContact ? `· ${chat.clientContact}` : ""} — {new Date(chat.updatedAt).toLocaleString("fr-FR")}
                           </summary>

@@ -225,7 +225,7 @@ export default function InterfaceLabPage() {
       const isTheme = detail.kind === "theme";
       const sourceBlock = source
         ? (isTheme
-          ? `Adapte ces tokens CSS a la palette Gen3ia (fond #f6f4ef, panneaux #ffffff, bordures rgba(23,23,20,0.09), encre #1c1b18, accent sky #0ea5e9) en gardant la structure :\n\n${source.slice(0, 14_000)}`
+          ? `Adapte ces tokens CSS a la palette Gen3ia (fond #f6f4ef, panneaux #ffffff, bordures var(--g3-border), encre #1c1b18, accent sky #0ea5e9) en gardant la structure :\n\n${source.slice(0, 14_000)}`
           : `Adapte ce composant au design system Gen3ia decrit ci-dessus. Supprime les imports externes non essentiels (lucide-react remplace par des SVG inline, shadcn/ui remplace par du Tailwind pur) :\n\n${source.slice(0, 14_000)}`)
         : `Le code source original n'est pas disponible (quota du catalogue). Cree une variante Gen3ia du composant « ${detail.name} »${detail.author ? ` (par ${detail.author})` : ""} a partir de cette description : ${detail.description ?? "aucune description"}. Respecte strictement le design system decrit ci-dessus.`;
       const response = await authFetch("/api/ai/generate", {
@@ -237,7 +237,7 @@ export default function InterfaceLabPage() {
             {
               role: "system",
               content:
-                "Tu es un ingenieur frontend senior de l'agence Gen3ia. Gen3ia est une plateforme SaaS a theme clair style Runable : fond creme #f6f4ef, panneaux blancs #ffffff, bordures rgba(23,23,20,0.09), encre #1c1b18, texte secondaire #6f6d66, accent sky #0ea5e9 (+ #0284c7), touches emerald #10b981 et amber #f59e0b, blocs de code sombres #211d19, coins arrondis 18-24px (cartes 24-32px, boutons pilules), typographie Inter pour le texte et Source Serif 4 pour les titres, ombres douces (0 2px 10px rgba(15,23,42,0.05)) et animations douces (cubic-bezier(0.22,1,0.36,1)). Tu adaptes ou crees du code externe conforme a CE design system, sans dependances externes payantes, en React + Tailwind CSS v4 strictement compatibles Next.js App Router (composants client 'use client' si besoin). Reponds UNIQUEMENT avec le code final, sans explication.",
+                "Tu es un ingenieur frontend senior de l'agence Gen3ia. Gen3ia est une plateforme SaaS a theme clair style Runable : fond creme #f6f4ef, panneaux blancs #ffffff, bordures var(--g3-border), encre #1c1b18, texte secondaire #6f6d66, accent sky #0ea5e9 (+ #0284c7), touches emerald #10b981 et amber #f59e0b, blocs de code sombres #211d19, coins arrondis 18-24px (cartes 24-32px, boutons pilules), typographie Inter pour le texte et Source Serif 4 pour les titres, ombres douces (0 2px 10px rgba(15,23,42,0.05)) et animations douces (cubic-bezier(0.22,1,0.36,1)). Tu adaptes ou crees du code externe conforme a CE design system, sans dependances externes payantes, en React + Tailwind CSS v4 strictement compatibles Next.js App Router (composants client 'use client' si besoin). Reponds UNIQUEMENT avec le code final, sans explication.",
             },
             { role: "user", content: sourceBlock },
           ],
@@ -313,7 +313,7 @@ export default function InterfaceLabPage() {
         description="Recherchez des composants, themes et logos professionnels dans le catalogue 21st.dev, recuperez leur code source, puis faites-les adapter au design system Gen3ia par vos propres agents."
         meta={
           usage && (
-            <span className="rounded-full border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--g3-muted)]">
+            <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--g3-muted)]">
               21st.dev · {usage.tier} · {usage.freeRetrievalsRemaining ?? "?"}/{usage.freeRetrievalsPerDay ?? "?"} recuperations aujourd&apos;hui
             </span>
           )
@@ -404,7 +404,7 @@ export default function InterfaceLabPage() {
                       {item.kind === "theme" ? "Voir le theme" : "Voir le code"}
                     </button>
                   ) : (
-                    <span className="rounded-lg border border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] px-3 py-2 text-xs text-[var(--g3-faint)]">Metadata uniquement</span>
+                    <span className="rounded-lg border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2 text-xs text-[var(--g3-faint)]">Metadata uniquement</span>
                   )}
                   {item.pageUrl && (
                     <a href={item.pageUrl} target="_blank" rel="noopener noreferrer" className="g3-btn g3-btn-ghost !px-3 !py-2 text-xs">Page</a>

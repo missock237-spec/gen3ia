@@ -103,7 +103,7 @@ export default function FaqPage() {
               <details
                 key={item.question}
                 id={`faq-${index + 1}`}
-                className="group rounded-2xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]"
+                className="group rounded-2xl border border-[var(--g3-primary-soft)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur transition hover:border-[var(--g3-primary)]"
                 open={index === 0}
               >
                 <summary className="cursor-pointer list-none font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--g3-text)] marker:hidden">
@@ -125,13 +125,13 @@ export default function FaqPage() {
               <Link
                 href="/en"
                 hrefLang="en"
-                className="rounded-full border border-[rgba(124,92,255,0.25)] bg-white/[0.04] px-5 py-2.5 text-sm font-medium text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"
+                className="rounded-full border border-[var(--g3-primary-border)] bg-white/[0.04] px-5 py-2.5 text-sm font-medium text-[var(--g3-text-secondary)] transition hover:border-[var(--g3-primary)] hover:text-white"
               >
                 English version
               </Link>
               <Link
                 href="/signup"
-                className="rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_10px_28px_-10px_rgba(124,92,255,0.8)] transition hover:-translate-y-0.5 hover:brightness-110"
+                className="rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_10px_28px_-10px_var(--g3-primary)] transition hover:-translate-y-0.5 hover:brightness-110"
               >
                 Commencer gratuitement
               </Link>

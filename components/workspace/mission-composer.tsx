@@ -99,7 +99,7 @@ export function MissionComposer({
   return (
     <section
       aria-label="Composer une mission"
-      className="rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-5 shadow-[0_14px_40px_-24px_rgba(28,27,24,0.35)] md:p-6"
+      className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-5 shadow-[0_14px_40px_-24px_rgba(28,27,24,0.35)] md:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-serif text-lg font-semibold text-[var(--g3-text)]">Nouvelle mission</h2>
@@ -121,7 +121,7 @@ export function MissionComposer({
                 className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                   category === item
                     ? "border-[var(--g3-border)] bg-[var(--g3-deep)] text-white"
-                    : "border-[rgba(23,23,20,0.12)] bg-[var(--g3-surface)] text-[var(--g3-muted)] hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
+                    : "border-[var(--g3-border)] bg-[var(--g3-surface)] text-[var(--g3-muted)] hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
                 }`}
               >
                 {item}
@@ -143,7 +143,7 @@ export function MissionComposer({
                   className={`rounded-2xl border p-3.5 text-left transition ${
                     selected
                       ? "border-[var(--g3-border)] bg-[var(--g3-deep)] text-white shadow-[0_10px_26px_-14px_rgba(28,27,24,0.55)]"
-                      : "border-[rgba(23,23,20,0.1)] bg-[var(--g3-surface)] text-[var(--g3-text-secondary)] hover:border-[var(--g3-border-strong)]"
+                      : "border-[var(--g3-border)] bg-[var(--g3-surface)] text-[var(--g3-text-secondary)] hover:border-[var(--g3-border-strong)]"
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -180,7 +180,7 @@ export function MissionComposer({
                 className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                   templateId === candidate.id
                     ? "border-[var(--g3-border)] bg-[var(--g3-deep)] text-white"
-                    : "border-[rgba(23,23,20,0.12)] bg-[var(--g3-surface)] text-[var(--g3-muted)] hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
+                    : "border-[var(--g3-border)] bg-[var(--g3-surface)] text-[var(--g3-muted)] hover:border-[var(--g3-border-strong)] hover:text-[var(--g3-text)]"
                 }`}
               >
                 <span aria-hidden="true" className="mr-1">{candidate.icon}</span>
@@ -189,7 +189,7 @@ export function MissionComposer({
             ))}
           <a
             href="/studio/create"
-            className="rounded-full border border-[rgba(23,23,20,0.14)] px-3 py-1.5 text-xs font-medium text-[var(--g3-muted)] transition hover:text-[var(--g3-text)]"
+            className="rounded-full border border-[var(--g3-border)] px-3 py-1.5 text-xs font-medium text-[var(--g3-muted)] transition hover:text-[var(--g3-text)]"
           >
             Tous les modèles →
           </a>
@@ -210,7 +210,7 @@ export function MissionComposer({
           placeholder={template.placeholder}
           rows={compact ? 3 : 4}
           autoFocus={autoFocus}
-          className="w-full resize-y rounded-2xl border border-[rgba(23,23,20,0.12)] bg-[var(--g3-elevated)] p-4 text-sm leading-6 text-[var(--g3-text)] outline-none focus-visible:outline-none focus-visible:ring-0 transition placeholder:text-[var(--g3-faint)] focus:border-neutral-500 focus:bg-[var(--g3-surface)]"
+          className="w-full resize-y rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4 text-sm leading-6 text-[var(--g3-text)] outline-none focus-visible:outline-none focus-visible:ring-0 transition placeholder:text-[var(--g3-faint)] focus:border-neutral-500 focus:bg-[var(--g3-surface)]"
         />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-[var(--g3-faint)]">
@@ -232,7 +232,7 @@ export function MissionComposer({
           </p>
         )}
         {error && (
-          <p className="mt-2.5 rounded-xl border border-[rgba(177,138,255,0.35)] bg-[var(--g3-danger-soft)] px-3.5 py-2.5 text-sm text-[var(--g3-danger-strong)]" role="alert">
+          <p className="mt-2.5 rounded-xl border border-[var(--g3-danger-border)] bg-[var(--g3-danger-soft)] px-3.5 py-2.5 text-sm text-[var(--g3-danger-strong)]" role="alert">
             {error}
           </p>
         )}

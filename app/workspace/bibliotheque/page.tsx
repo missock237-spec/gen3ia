@@ -247,7 +247,7 @@ export default function LibraryPage() {
       </div>
 
       {error && (
-        <p className="rounded-lg border border-[rgba(177,138,255,0.35)] bg-[var(--g3-danger-soft)] px-3 py-2 text-xs text-[var(--g3-danger-strong)]" role="alert">
+        <p className="rounded-lg border border-[var(--g3-danger-border)] bg-[var(--g3-danger-soft)] px-3 py-2 text-xs text-[var(--g3-danger-strong)]" role="alert">
           {error}
         </p>
       )}

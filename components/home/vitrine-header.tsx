@@ -72,7 +72,7 @@ export function VitrineHeader({ lang = "fr" }: { lang?: "fr" | "en" }) {
               <a
                 key={item.href}
                 href={item.href}
-                className="rounded-full border border-[rgba(124,92,255,0.16)] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"
+                className="rounded-full border border-[var(--g3-primary-soft)] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[var(--g3-primary)] hover:text-white"
               >
                 {item.label}
               </a>
@@ -80,7 +80,7 @@ export function VitrineHeader({ lang = "fr" }: { lang?: "fr" | "en" }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className="rounded-full border border-[rgba(124,92,255,0.16)] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"
+                className="rounded-full border border-[var(--g3-primary-soft)] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[var(--g3-primary)] hover:text-white"
               >
                 {item.label}
               </Link>
@@ -88,7 +88,7 @@ export function VitrineHeader({ lang = "fr" }: { lang?: "fr" | "en" }) {
           )}
           <Link
             href={labels.faq.href}
-            className="rounded-full border border-[rgba(124,92,255,0.16)] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"
+            className="rounded-full border border-[var(--g3-primary-soft)] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[var(--g3-primary)] hover:text-white"
           >
             {labels.faq.label}
           </Link>
@@ -101,13 +101,13 @@ export function VitrineHeader({ lang = "fr" }: { lang?: "fr" | "en" }) {
           </div>
           <Link
             href="/login"
-            className="rounded-full border border-[rgba(124,92,255,0.25)] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[rgba(124,92,255,0.5)] hover:text-white"
+            className="rounded-full border border-[var(--g3-primary-border)] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[var(--g3-text-secondary)] backdrop-blur transition hover:border-[var(--g3-primary)] hover:text-white"
           >
             {labels.login}
           </Link>
           <Link
             href="/signup"
-            className="rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_28px_-10px_rgba(124,92,255,0.8)] transition hover:-translate-y-0.5 hover:brightness-110"
+            className="rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_28px_-10px_var(--g3-primary)] transition hover:-translate-y-0.5 hover:brightness-110"
           >
             {labels.signup}
           </Link>

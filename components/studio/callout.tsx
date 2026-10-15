@@ -16,7 +16,7 @@ const TONE_STYLES: Record<CalloutTone, { box: string; iconColor: string }> = {
   success: { box: "border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] text-[var(--g3-success-strong)]", iconColor: "text-[var(--g3-success-strong)]" },
   warning: { box: "border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]", iconColor: "text-[var(--g3-warning-strong)]" },
   error: { box: "border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)]", iconColor: "text-[var(--g3-danger-strong)]" },
-  neutral: { box: "border-[rgba(23,23,20,0.09)] bg-[var(--g3-elevated)] text-[var(--g3-muted)]", iconColor: "text-[var(--g3-muted)]" },
+  neutral: { box: "border-[var(--g3-border)] bg-[var(--g3-elevated)] text-[var(--g3-muted)]", iconColor: "text-[var(--g3-muted)]" },
 };
 
 function ToneIcon({ tone }: { tone: CalloutTone }) {

@@ -68,7 +68,7 @@ export function ThemeChoice() {
             onClick={() => apply(option.value)}
             className={`flex items-start gap-3 rounded-2xl p-4 text-left transition ${
               selected
-                ? "bg-[var(--g3-primary-soft)] shadow-[0_12px_34px_-18px_rgba(124,92,255,0.55)]"
+                ? "bg-[var(--g3-primary-soft)] shadow-[0_12px_34px_-18px_var(--g3-primary)]"
                 : "bg-[var(--g3-elevated)] hover:bg-[var(--g3-hover)]"
             }`}
           >

@@ -31,7 +31,7 @@ function SettingsContent() {
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
               href="/settings/ads"
-              className="inline-flex items-center gap-2 rounded-full border border-[rgba(124,92,255,0.35)] bg-[var(--g3-primary-soft)] px-4 py-2.5 text-sm font-semibold text-[var(--g3-text)] transition hover:border-[rgba(124,92,255,0.6)] hover:shadow-[0_10px_30px_-14px_rgba(124,92,255,0.6)]"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--g3-primary-border)] bg-[var(--g3-primary-soft)] px-4 py-2.5 text-sm font-semibold text-[var(--g3-text)] transition hover:border-[var(--g3-primary)] hover:shadow-[0_10px_30px_-14px_var(--g3-primary)]"
             >
               <span aria-hidden="true">📣</span> Publicité — préférences et annonces
             </Link>

@@ -118,7 +118,7 @@ export default function EnglishHomePage() {
           <div className="grid-bg absolute inset-0" aria-hidden="true" />
           <div className="relative mx-auto max-w-6xl px-4 pb-24 pt-20 sm:px-6 sm:pt-28">
             <div className="mx-auto max-w-3xl text-center">
-              <p className="anim-fade-up mx-auto inline-flex items-center gap-2 rounded-full border border-[rgba(124,92,255,0.4)] bg-[var(--g3-primary-soft)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--g3-primary-strong)] shadow-[0_0_24px_-6px_rgba(124,92,255,0.6)]">
+              <p className="anim-fade-up mx-auto inline-flex items-center gap-2 rounded-full border border-[var(--g3-primary-border)] bg-[var(--g3-primary-soft)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--g3-primary-strong)] shadow-[0_0_24px_-6px_var(--g3-primary)]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--g3-gradient)]" aria-hidden />
                 Autonomous AI agents
               </p>
@@ -135,7 +135,7 @@ export default function EnglishHomePage() {
               <div className="anim-fade-up anim-delay-3 mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link
                   href="/signup"
-                  className="inline-flex items-center gap-2 rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-8 py-3.5 text-sm font-bold text-white shadow-[0_14px_40px_-12px_rgba(124,92,255,0.8)] transition hover:-translate-y-0.5 hover:brightness-110"
+                  className="inline-flex items-center gap-2 rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-8 py-3.5 text-sm font-bold text-white shadow-[0_14px_40px_-12px_var(--g3-primary)] transition hover:-translate-y-0.5 hover:brightness-110"
                 >
                   Start for free
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -145,7 +145,7 @@ export default function EnglishHomePage() {
                 <Link
                   href="/"
                   hrefLang="fr"
-                  className="inline-flex items-center rounded-full border border-[rgba(124,92,255,0.3)] px-8 py-3.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.6)] hover:bg-white/[0.05] hover:text-white"
+                  className="inline-flex items-center rounded-full border border-[var(--g3-primary-border)] px-8 py-3.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:border-[var(--g3-primary)] hover:bg-white/[0.05] hover:text-white"
                 >
                   Version française
                 </Link>
@@ -168,7 +168,7 @@ export default function EnglishHomePage() {
           <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {WHAT_CARDS.map((card) => (
               <article key={card.title} className="cream-card card-glow reveal rounded-3xl p-6">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[rgba(124,92,255,0.2)] bg-white/[0.05]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--g3-primary-soft)] bg-white/[0.05]">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-[var(--g3-primary-strong)]">
                     <path d={card.icon} />
                   </svg>
@@ -213,7 +213,7 @@ export default function EnglishHomePage() {
           </div>
           <div className="mt-10 space-y-3">
             {FAQ_EN.map((item) => (
-              <details key={item.question} className="group rounded-2xl border border-[rgba(124,92,255,0.16)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur transition hover:border-[rgba(124,92,255,0.45)]">
+              <details key={item.question} className="group rounded-2xl border border-[var(--g3-primary-soft)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur transition hover:border-[var(--g3-primary)]">
                 <summary className="cursor-pointer list-none font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--g3-text)] marker:hidden">
                   {item.question}
                 </summary>
@@ -237,7 +237,7 @@ export default function EnglishHomePage() {
             <div className="relative mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2 rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-8 py-3.5 text-sm font-bold text-white shadow-[0_14px_40px_-12px_rgba(124,92,255,0.8)] transition hover:-translate-y-0.5 hover:brightness-110"
+                className="inline-flex items-center gap-2 rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-8 py-3.5 text-sm font-bold text-white shadow-[0_14px_40px_-12px_var(--g3-primary)] transition hover:-translate-y-0.5 hover:brightness-110"
               >
                 Start for free
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -246,7 +246,7 @@ export default function EnglishHomePage() {
               </Link>
               <Link
                 href="/login"
-                className="inline-flex items-center rounded-full border border-[rgba(124,92,255,0.3)] px-8 py-3.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:border-[rgba(124,92,255,0.6)] hover:bg-white/[0.05] hover:text-white"
+                className="inline-flex items-center rounded-full border border-[var(--g3-primary-border)] px-8 py-3.5 text-sm font-semibold text-[var(--g3-text-secondary)] transition hover:border-[var(--g3-primary)] hover:bg-white/[0.05] hover:text-white"
               >
                 I already have an account
               </Link>

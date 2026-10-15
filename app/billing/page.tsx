@@ -222,7 +222,7 @@ export default function BillingPage() {
       ) : (
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
           {transactions.map((transaction) => (
-            <li key={transaction.id} style={{ display: "flex", alignItems: "baseline", gap: 12, padding: "10px 12px", borderRadius: 12, border: "1px solid rgba(23,23,20,0.08)", background: "#faf9f6" }}>
+            <li key={transaction.id} style={{ display: "flex", alignItems: "baseline", gap: 12, padding: "10px 12px", borderRadius: 12, border: "1px solid var(--g3-border)", background: "#faf9f6" }}>
               <span style={{ fontWeight: 800, minWidth: 28, color: transactionSign(transaction.type) === "+" ? "#0A6E82" : transactionSign(transaction.type) === "−" ? "#5B2BE0" : "#0E5F73" }}>
                 {transactionSign(transaction.type)}{formatAmount(transaction.amountMinor)}
               </span>
@@ -245,7 +245,7 @@ export default function BillingPage() {
 
 const styles: Record<string, CSSProperties> = {
   main: { minHeight: "100%", display: "grid", placeItems: "center", padding: 24, background: "#f6f4ef", color: "#171717" },
-  card: { width: "100%", maxWidth: 620, padding: 32, borderRadius: 24, border: "1px solid rgba(23,23,20,0.09)", background: "#ffffff", boxShadow: "0 14px 40px -18px rgba(28,27,24,0.22)" },
+  card: { width: "100%", maxWidth: 620, padding: 32, borderRadius: 24, border: "1px solid var(--g3-border)", background: "#ffffff", boxShadow: "0 14px 40px -18px rgba(28,27,24,0.22)" },
   eyebrow: { fontSize: 12, letterSpacing: 2, opacity: .65, marginBottom: 10 },
   welcome: { marginTop: 18, padding: 14, borderRadius: 12, background: "#E9F5F8", border: "1px solid rgba(8,153,180,0.35)", color: "#0A6E82", fontSize: 14, lineHeight: 1.5 },
   balance: { fontSize: 44, fontWeight: 800, margin: "24px 0 8px" },
@@ -254,7 +254,7 @@ const styles: Record<string, CSSProperties> = {
   note: { marginTop: 20, fontSize: 13, lineHeight: 1.6, opacity: .6 },
   phoneForm: { marginTop: 24, display: "grid", gap: 10 },
   label: { fontSize: 13, opacity: .75 },
-  input: { width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 10, border: "1px solid rgba(23,23,20,0.09)", background: "#ffffff", color: "#171717", fontSize: 15 },
+  input: { width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 10, border: "1px solid var(--g3-border)", background: "#ffffff", color: "#171717", fontSize: 15 },
   button: { marginTop: 8, width: "100%", border: 0, borderRadius: 999, padding: "14px 18px", fontWeight: 700, cursor: "pointer", background: "#171717", color: "white" },
   success: { marginTop: 16, padding: 12, borderRadius: 10, background: "#E9F5F8", border: "1px solid rgba(8,153,180,0.35)", color: "#0A6E82", lineHeight: 1.5 },
   notice: { marginTop: 16, padding: 12, borderRadius: 10, background: "#E9F5F8", border: "1px solid rgba(8,153,180,0.35)", color: "#0E5F73", lineHeight: 1.5 },

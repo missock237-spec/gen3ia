@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const usage = await getUserStorageUsage(guard.context.userId);
     const validation = validateUploadBatch(
       input.files.map((file) => ({ filename: file.filename, contentType: file.contentType ?? "", sizeBytes: file.sizeBytes })),
-      { alreadyUsedBytes: usage.usedBytes },
+      { alreadyUsedBytes: usage.usedBytes, quotaBytes: usage.quotaBytes },
     );
     if (!validation.ok) {
       return NextResponse.json({ error: validation.rejections[0]?.reason ?? "Lot refuse.", rejections: validation.rejections }, { status: 400 });

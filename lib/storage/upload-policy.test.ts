@@ -71,6 +71,29 @@ describe("upload policy", () => {
     if (!result.ok) expect(result.rejections[0]?.reason).toContain("Quota");
   });
 
+  it("applique le quota du plan (5 Go / 10 Go) quand il est fourni — Task 150", () => {
+    // 2 Go utilisés : dépasse le plan free (1 Go) mais PAS le plan 5 Go.
+    const free = validateUploadBatch(
+      [{ filename: "a.pdf", contentType: "application/pdf", sizeBytes: 10 * 1024 * 1024 }],
+      { alreadyUsedBytes: 2 * 1024 ** 3 },
+    );
+    expect(free.ok).toBe(false);
+    if (!free.ok) expect(free.rejections[0]?.reason).toContain("1 Go");
+
+    const pro5 = validateUploadBatch(
+      [{ filename: "a.pdf", contentType: "application/pdf", sizeBytes: 10 * 1024 * 1024 }],
+      { alreadyUsedBytes: 2 * 1024 ** 3, quotaBytes: 5 * 1024 ** 3 },
+    );
+    expect(pro5.ok).toBe(true);
+
+    // Le quota paramétré borne aussi les plans 10 Go.
+    const pro10 = validateUploadBatch(
+      [{ filename: "a.zip", contentType: "application/zip", sizeBytes: 100 * 1024 * 1024 }],
+      { alreadyUsedBytes: 9.95 * 1024 ** 3, quotaBytes: 10 * 1024 ** 3 },
+    );
+    expect(pro10.ok).toBe(false);
+  });
+
   it("calcule le nombre de chunks", () => {
     expect(chunkCountFor(0)).toBe(0);
     expect(chunkCountFor(1)).toBe(1);

@@ -15,13 +15,13 @@ import {
 } from "@/lib/storage/r2";
 import {
   MAX_FILE_BYTES,
-  MAX_USER_QUOTA_BYTES,
   PART_SIZE_BYTES,
   SESSION_TTL_MS,
   partCountFor,
   sanitizeFilename,
   type ValidatedUploadIntent,
 } from "@/lib/storage/upload-policy";
+import { getQuotaBytesForUser } from "@/lib/storage/plans";
 
 const bucketName = () => process.env.R2_BUCKET || "gen3ia-artifacts";
 const FILES_COLLECTION = "permanentFiles";
@@ -45,6 +45,13 @@ function isOwnedPermanentKey(userId: string, key: string) {
 export async function storePermanentFile(params: { userId: string; filename: string; content: Buffer; contentType?: string; metadata?: Record<string, string> }) {
   if (!params.userId?.trim()) throw new Error("Permanent storage requires userId.");
   if (params.content.length === 0 || params.content.length > MAX_FILE_BYTES) throw new Error("File exceeds the permanent storage limit.");
+  // Quota effectif du plan (free 1 Go / 5 Go / 10 Go — Task 150) : le chemin
+  // direct (piece jointe chat, capture camera) est soumis au meme plafond
+  // que les televersements multipart.
+  const usage = await getUserStorageUsage(params.userId);
+  if (usage.usedBytes + params.content.length > usage.quotaBytes) {
+    throw new Error(`Quota de stockage depasse (${Math.round(usage.quotaBytes / 1024 ** 3)} Go). Supprimez des fichiers ou passez a un plan superieur.`);
+  }
   const filename = safeName(params.filename);
   const key = objectKey(params.userId, params.filename);
   await putObject({ key, body: params.content, contentType: params.contentType || "application/octet-stream" });
@@ -81,14 +88,15 @@ export async function deletePermanentFile(userId: string, path: string) {
 export type StorageUsage = { usedBytes: number; quotaBytes: number; fileCount: number };
 
 export async function getUserStorageUsage(userId: string): Promise<StorageUsage> {
-  const [filesSnap, sessionsSnap] = await Promise.all([
+  const [filesSnap, sessionsSnap, quotaBytes] = await Promise.all([
     adminDb.collection(FILES_COLLECTION).where("userId", "==", userId).get(),
     adminDb.collection(SESSIONS_COLLECTION).where("userId", "==", userId).where("status", "==", "active").get(),
+    getQuotaBytesForUser(userId),
   ]);
   let usedBytes = 0;
   filesSnap.forEach((doc) => { usedBytes += Number(doc.get("sizeBytes") ?? 0); });
   sessionsSnap.forEach((doc) => { usedBytes += Number(doc.get("sizeBytes") ?? 0); });
-  return { usedBytes, quotaBytes: MAX_USER_QUOTA_BYTES, fileCount: filesSnap.size };
+  return { usedBytes, quotaBytes, fileCount: filesSnap.size };
 }
 
 /* ------------------------------------------------------------------ */
@@ -142,8 +150,8 @@ function sessionRef(uploadId: string) { return adminDb.collection(SESSIONS_COLLE
  */
 export async function createUploadSessions(params: { userId: string; intents: ValidatedUploadIntent[] }): Promise<UploadSessionView[]> {
   const usage = await getUserStorageUsage(params.userId);
-  if (usage.usedBytes + params.intents.reduce((sum, intent) => sum + intent.sizeBytes, 0) > MAX_USER_QUOTA_BYTES) {
-    throw new Error("Quota de stockage depasse. Supprimez des fichiers ou reduisez le lot.");
+  if (usage.usedBytes + params.intents.reduce((sum, intent) => sum + intent.sizeBytes, 0) > usage.quotaBytes) {
+    throw new Error("Quota de stockage depasse. Supprimez des fichiers ou passez a un plan superieur.");
   }
 
   const views: UploadSessionView[] = [];

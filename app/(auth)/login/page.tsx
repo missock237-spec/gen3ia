@@ -26,7 +26,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <div className="g3-gradient-border p-6 shadow-[0_30px_90px_-40px_rgba(124,92,255,0.55)]">
+          <div className="g3-gradient-border p-6 shadow-[0_30px_90px_-40px_var(--g3-primary)]">
             <EmailAuthForm />
 
             <div className="my-6 flex items-center gap-3 text-xs text-[var(--g3-muted)]">

@@ -109,7 +109,7 @@ export function PwaInstallButton({ align = "end" }: { align?: "start" | "end" })
           const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
           setGuide(isIos ? "ios" : "generique");
         }}
-        className="rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-4 py-2 text-sm font-semibold text-white shadow-[0_8px_22px_-8px_rgba(124,92,255,0.7)] transition hover:brightness-110"
+        className="rounded-full bg-[var(--g3-gradient)] bg-[length:160%_100%] px-4 py-2 text-sm font-semibold text-white shadow-[0_8px_22px_-8px_var(--g3-primary)] transition hover:brightness-110"
       >
         Installer
       </button>

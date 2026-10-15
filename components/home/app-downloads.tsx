@@ -33,7 +33,7 @@ export function AppDownloads() {
         className="mx-auto max-w-6xl rounded-[36px] p-4 sm:p-6"
         style={{
           background:
-            "linear-gradient(135deg, rgba(124,92,255,0.16) 0%, rgba(124,92,255,0.12) 34%, rgba(42,212,232,0.12) 68%, rgba(42,212,232,0.10) 100%)",
+            "linear-gradient(135deg, var(--g3-primary-soft) 0%, var(--g3-primary-soft) 34%, var(--g3-secondary-soft) 68%, var(--g3-secondary-soft) 100%)",
         }}
       >
         <div className="reveal rounded-[28px] border border-[var(--g3-border)] bg-[var(--g3-surface)]/90 p-7 backdrop-blur sm:p-10">
@@ -58,7 +58,7 @@ export function AppDownloads() {
                   className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)]/70 p-4"
                 >
                   <span className="flex min-w-0 items-center gap-3">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--g3-gradient)] bg-[length:160%_100%] text-white shadow-[0_8px_22px_-8px_rgba(124,92,255,0.7)]">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--g3-gradient)] bg-[length:160%_100%] text-white shadow-[0_8px_22px_-8px_var(--g3-primary)]">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                         <path d={platform.icon} />
                       </svg>
@@ -71,7 +71,7 @@ export function AppDownloads() {
                   {platform.key === "pc" ? (
                     <a
                       href="/live"
-                      className="shrink-0 rounded-full border border-[rgba(124,92,255,0.3)] bg-white/[0.05] px-4 py-2 text-sm font-semibold text-[var(--g3-text)] transition hover:border-[rgba(124,92,255,0.6)] hover:text-white"
+                      className="shrink-0 rounded-full border border-[var(--g3-primary-border)] bg-white/[0.05] px-4 py-2 text-sm font-semibold text-[var(--g3-text)] transition hover:border-[var(--g3-primary)] hover:text-white"
                     >
                       Ouvrir
                     </a>

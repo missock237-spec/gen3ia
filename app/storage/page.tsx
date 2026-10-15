@@ -6,6 +6,9 @@ import { authFetch, readJsonSafely, useSessionAvailable } from "@/lib/firebase/a
 
 type PermanentFile = { path: string; filename: string; sizeBytes: number };
 type CameraRequest = { id: string; reason: string; facingMode: string };
+type StoragePlanInfo = { id: "free" | "storage-pro5" | "storage-pro10"; label: string; quotaBytes: number; priceMinor: number; priceLabel: string; highlight?: boolean };
+type StorageProfile = { plan: StoragePlanInfo; renewalAt: number | null; lastRenewalError: string | null };
+type StorageUsage = { usedBytes: number; quotaBytes: number; fileCount: number };
 
 /** Tailles en unités FR canoniques (Ko/Mo — aligné sur formatBytes du workspace). */
 function formatBytesFr(bytes: number): string {
@@ -19,6 +22,7 @@ function formatBytesFr(bytes: number): string {
 export default function StoragePage() {
   const [_user, setUser] = useState<User | null>(null); const [files, setFiles] = useState<PermanentFile[]>([]); const [requests, setRequests] = useState<CameraRequest[]>([]); const [busy, setBusy] = useState(false); const videoRef = useRef<HTMLVideoElement>(null);
   const [loaded, setLoaded] = useState(false); const [loadError, setLoadError] = useState<string | null>(null); const [actionError, setActionError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<StorageUsage | null>(null); const [profile, setProfile] = useState<StorageProfile | null>(null); const [plans, setPlans] = useState<StoragePlanInfo[]>([]); const [planBusy, setPlanBusy] = useState(false); const [planDone, setPlanDone] = useState<string | null>(null);
   const sessionDisponible = useSessionAvailable();
 
   // Chargement robuste : une panne réseau/Firestore affiche un état d'erreur
@@ -26,12 +30,14 @@ export default function StoragePage() {
   const refresh = useCallback(async () => {
     setLoadError(null);
     try {
-      const [f, r] = await Promise.all([
+      const [f, r, p] = await Promise.all([
         authFetch("/api/storage/permanent", { cache: "no-store" }),
         authFetch("/api/camera/requests", { cache: "no-store" }),
+        authFetch("/api/storage/plan", { cache: "no-store" }),
       ]);
-      if (f.ok) setFiles((await readJsonSafely<{ files?: PermanentFile[] }>(f))?.files ?? []);
+      if (f.ok) { const data = await readJsonSafely<{ files?: PermanentFile[]; usage?: StorageUsage }>(f); setFiles(data?.files ?? []); if (data?.usage) setUsage(data.usage); }
       if (r.ok) setRequests((await readJsonSafely<{ requests?: CameraRequest[] }>(r))?.requests ?? []);
+      if (p.ok) { const data = await readJsonSafely<{ profile?: StorageProfile; usage?: StorageUsage; plans?: StoragePlanInfo[] }>(p); if (data?.profile) setProfile(data.profile); if (data?.usage) setUsage(data.usage); if (data?.plans) setPlans(data.plans); }
       if (!f.ok || !r.ok) {
         setLoadError(f.status === 401 || r.status === 401 ? "Session expirée : reconnectez-vous." : "Impossible de charger vos fichiers pour le moment.");
       }
@@ -46,7 +52,7 @@ export default function StoragePage() {
 
   const upload = async (file: File) => {
     if (sessionDisponible === false) return;
-    setBusy(true); setActionError(null);
+    setBusy(true); setActionError(null); setPlanDone(null);
     try {
       const form = new FormData(); form.append("file", file);
       const response = await authFetch("/api/storage/permanent", { method: "POST", body: form }, { timeoutMs: 120_000 });
@@ -58,6 +64,40 @@ export default function StoragePage() {
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Échec de l'import : le fichier n'a pas été enregistré.");
     } finally { setBusy(false); }
+  };
+
+  /** Suppression DÉFINITIVE (R2 + métadonnées) — libère le quota immédiatement. */
+  const removeFile = async (path: string) => {
+    if (sessionDisponible === false) return;
+    setBusy(true); setActionError(null); setPlanDone(null);
+    try {
+      const response = await authFetch("/api/storage/permanent", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ path }) });
+      if (!response.ok) {
+        const detail = (await readJsonSafely<{ error?: string }>(response))?.error;
+        throw new Error(detail ?? `La suppression a échoué (erreur ${response.status}).`);
+      }
+      setPlanDone("Fichier supprimé définitivement — espace libéré.");
+      await refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "La suppression définitive a échoué.");
+    } finally { setBusy(false); }
+  };
+
+  /** Achat / changement de plan (5 Go à 2,5 €/mois, 10 Go à 5 €/mois). */
+  const choosePlan = async (planId: StoragePlanInfo["id"]) => {
+    if (sessionDisponible === false || planBusy) return;
+    setPlanBusy(true); setActionError(null); setPlanDone(null);
+    try {
+      const response = await authFetch("/api/storage/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ planId }) });
+      if (!response.ok) {
+        const detail = (await readJsonSafely<{ error?: string }>(response))?.error;
+        throw new Error(detail ?? `Le changement de plan a échoué (erreur ${response.status}).`);
+      }
+      setPlanDone(planId === "free" ? "Plan de base activé — quota ramené à 1 Go." : "Plan activé — votre quota est étendu immédiatement.");
+      await refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Le changement de plan a échoué.");
+    } finally { setPlanBusy(false); }
   };
 
   const capture = async (requestId: string, facingMode: "user" | "environment") => {
@@ -76,10 +116,51 @@ export default function StoragePage() {
     } finally { setBusy(false); }
   };
 
+  const usedRatio = usage && usage.quotaBytes > 0 ? Math.min(1, usage.usedBytes / usage.quotaBytes) : 0;
+  const quotaFull = usage ? usage.usedBytes >= usage.quotaBytes : false;
+
   return <div className="min-h-full bg-[var(--g3-bg)] text-[var(--g3-text)] p-6"><div className="mx-auto max-w-6xl"><h1 className="font-serif text-3xl font-bold">Stockage permanent</h1><p className="mt-2 text-[var(--g3-muted)]">Vos fichiers restent associés à votre compte. Les agents peuvent les lire et les manipuler uniquement selon leurs permissions.</p>
-    {actionError && <div className="mt-4 rounded-2xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] p-4 text-sm text-[var(--g3-danger-strong)]">{actionError}</div>}
-    <div className="mt-6 rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]"><label className="inline-flex cursor-pointer rounded-full bg-[var(--g3-deep)] px-5 py-3 font-semibold text-white hover:bg-[var(--g3-deep)]"><input type="file" className="hidden" disabled={busy} onChange={e => e.target.files?.[0] && upload(e.target.files[0])}/>Importer un fichier</label>
-    {loadError && <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-4 text-sm text-[var(--g3-warning-strong)]"><span>{loadError}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full bg-[var(--g3-warning)] px-4 py-2 text-xs font-semibold text-white hover:brightness-110">Réessayer</button></div>}
-    {!loadError && !loaded && <p className="mt-4 text-sm text-[var(--g3-faint)]">Chargement de vos fichiers…</p>}
-    <div className="mt-6 space-y-2">{files.map(file => <div key={file.path} className="flex items-center justify-between rounded-xl border border-[var(--g3-border)] p-4"><span>{file.filename}</span><span className="text-xs text-[var(--g3-muted)]">{formatBytesFr(file.sizeBytes)}</span></div>)}{loaded && !loadError && !files.length && <p className="text-sm text-[var(--g3-faint)]">Aucun fichier permanent.</p>}</div></div><div className="mt-6 rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]"><h2 className="font-serif text-xl font-semibold">Demandes caméra des agents</h2><p className="mt-2 text-sm text-[var(--g3-muted)]">La caméra n’est jamais activée silencieusement. Une demande d’agent doit être acceptée par l’utilisateur et expire automatiquement.</p><video ref={videoRef} className="mt-4 hidden w-full max-w-xl rounded-xl" playsInline muted /> <div className="mt-5 space-y-3">{requests.map(r => <div key={r.id} className="rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-4"><p className="text-sm">{r.reason}</p><button disabled={busy} onClick={() => capture(r.id, r.facingMode === "user" ? "user" : "environment")} className="mt-3 rounded-full bg-[var(--g3-success)] px-4 py-2 text-sm font-semibold text-white hover:brightness-110">Autoriser et prendre la photo</button></div>)}{loaded && !requests.length && <p className="text-sm text-[var(--g3-faint)]">Aucune demande en attente.</p>}</div></div></div></div>;
+    {actionError && <div className="mt-4 rounded-2xl border border-[var(--g3-danger-border)] bg-[var(--g3-danger-soft)] p-4 text-sm text-[var(--g3-danger-strong)]">{actionError}</div>}
+    {planDone && <div className="mt-4 rounded-2xl border border-[var(--g3-success-border,var(--g3-info-border))] bg-[var(--g3-success-soft)] p-4 text-sm text-[var(--g3-success-strong)]">{planDone}</div>}
+
+    <div className="mt-6 rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[var(--gen3ia-shadow-md)]">
+      {/* Barre d'utilisation du quota (Task 150) */}
+      {usage && <div className="mb-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-sm text-[var(--g3-text-secondary)]">Espace utilisé — plan <span className="font-semibold text-[var(--g3-text)]">{profile?.plan.label ?? "Base"}</span></p>
+          <p className="font-mono text-sm text-[var(--g3-muted)]">{formatBytesFr(usage.usedBytes)} / {formatBytesFr(usage.quotaBytes)}</p>
+        </div>
+        <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-[var(--g3-elevated)]" role="progressbar" aria-valuenow={Math.round(usedRatio * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Quota de stockage utilisé">
+          <div className={`h-full rounded-full transition-all ${quotaFull ? "bg-[var(--g3-danger)]" : "bg-[var(--g3-gradient)]"}`} style={{ width: `${Math.max(2, Math.round(usedRatio * 100))}%` }} />
+        </div>
+        {profile?.renewalAt && <p className="mt-2 text-xs text-[var(--g3-faint)]">Prochain renouvellement le {new Date(profile.renewalAt).toLocaleDateString("fr-FR")} — débité automatiquement sur votre portefeuille Gen3ia.</p>}
+        {profile?.lastRenewalError && <p className="mt-2 text-xs text-[var(--g3-warning-strong)]">Dernier renouvellement impossible : {profile.lastRenewalError} Le compte est repassé sur le plan de base — vos fichiers sont conservés.</p>}
+        {quotaFull && <p className="mt-2 text-sm text-[var(--g3-warning-strong)]">Stockage plein : supprimez des fichiers ci-dessous ou étendez votre quota avec un plan payant.</p>}
+      </div>}
+
+      <label className="inline-flex cursor-pointer rounded-full bg-[var(--g3-primary)] px-5 py-3 font-semibold text-[var(--g3-on-primary)] hover:bg-[var(--g3-primary-strong)]"><input type="file" className="hidden" disabled={busy} onChange={e => e.target.files?.[0] && upload(e.target.files[0])}/>Importer un fichier</label>
+      {loadError && <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[var(--g3-warning-border)] bg-[var(--g3-warning-soft)] p-4 text-sm text-[var(--g3-warning-strong)]"><span>{loadError}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full bg-[var(--g3-warning)] px-4 py-2 text-xs font-semibold text-[var(--g3-on-primary)] hover:brightness-110">Réessayer</button></div>}
+      {!loadError && !loaded && <p className="mt-4 text-sm text-[var(--g3-faint)]">Chargement de vos fichiers…</p>}
+      <div className="mt-6 space-y-2">{files.map(file => <div key={file.path} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4"><span className="min-w-0 truncate" title={file.filename}>{file.filename}</span><span className="flex shrink-0 items-center gap-3"><span className="text-xs text-[var(--g3-muted)]">{formatBytesFr(file.sizeBytes)}</span><button type="button" disabled={busy} onClick={() => void removeFile(file.path)} className="rounded-full border border-[var(--g3-danger-border)] bg-[var(--g3-danger-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:brightness-110 disabled:opacity-50">Supprimer définitivement</button></span></div>)}{loaded && !loadError && !files.length && <p className="text-sm text-[var(--g3-faint)]">Aucun fichier permanent.</p>}</div>
+    </div>
+
+    {/* Plans de stockage — 1 Go inclus, 5 Go à 2,5 €/mois, 10 Go à 5 €/mois */}
+    <div className="mt-6 rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[var(--gen3ia-shadow-md)]">
+      <h2 className="font-serif text-xl font-semibold">Étendre mon stockage</h2>
+      <p className="mt-2 text-sm text-[var(--g3-muted)]">Chaque compte dispose de 1 Go offert. Les plans payants sont débités chaque mois sur votre portefeuille Gen3ia et peuvent être annulés à tout moment — vos fichiers sont toujours conservés.</p>
+      <div className="mt-5 grid gap-4 md:grid-cols-3">{plans.map(plan => {
+        const active = profile?.plan.id === plan.id;
+        return <div key={plan.id} className={`rounded-2xl border p-5 ${active ? "border-[var(--g3-primary)] bg-[var(--g3-primary-soft)]" : "border-[var(--g3-border)] bg-[var(--g3-elevated)]"}`}>
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="font-semibold">{plan.label}</h3>
+            {active && <span className="rounded-full bg-[var(--g3-primary)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--g3-on-primary)]">Actif</span>}
+          </div>
+          <p className="mt-2 font-serif text-2xl font-bold text-[var(--g3-primary-strong)]">{plan.priceLabel}</p>
+          <p className="mt-1 text-xs text-[var(--g3-muted)]">{formatBytesFr(plan.quotaBytes)} de stockage permanent</p>
+          <button type="button" disabled={busy || planBusy || active} onClick={() => void choosePlan(plan.id)} className="mt-4 w-full rounded-full bg-[var(--g3-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--g3-on-primary)] hover:bg-[var(--g3-primary-strong)] disabled:cursor-not-allowed disabled:opacity-50">{active ? "Plan actuel" : plan.id === "free" ? "Revenir au plan de base" : `Passer à ${plan.label.split(" ").pop()}`}</button>
+        </div>;
+      })}{!plans.length && loaded && <p className="text-sm text-[var(--g3-faint)]">Offres indisponibles pour le moment.</p>}</div>
+    </div>
+
+    <div className="mt-6 rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[var(--gen3ia-shadow-md)]"><h2 className="font-serif text-xl font-semibold">Demandes caméra des agents</h2><p className="mt-2 text-sm text-[var(--g3-muted)]">La caméra n’est jamais activée silencieusement. Une demande d’agent doit être acceptée par l’utilisateur et expire automatiquement.</p><video ref={videoRef} className="mt-4 hidden w-full max-w-xl rounded-xl" playsInline muted /> <div className="mt-5 space-y-3">{requests.map(r => <div key={r.id} className="rounded-xl border border-[var(--g3-warning-border)] bg-[var(--g3-warning-soft)] p-4"><p className="text-sm">{r.reason}</p><button disabled={busy} onClick={() => capture(r.id, r.facingMode === "user" ? "user" : "environment")} className="mt-3 rounded-full bg-[var(--g3-success)] px-4 py-2 text-sm font-semibold text-[var(--g3-on-primary)] hover:brightness-110">Autoriser et prendre la photo</button></div>)}{loaded && !requests.length && <p className="text-sm text-[var(--g3-faint)]">Aucune demande en attente.</p>}</div></div></div></div>;
 }

@@ -103,7 +103,7 @@ function JoinTeamContent() {
     const nextUrl = token ? `/team/join?token=${encodeURIComponent(token)}` : "/team";
     return (
       <div className="grid min-h-full place-items-center bg-[var(--g3-bg)] px-4">
-        <div className="anim-scale-in w-full max-w-md rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+        <div className="anim-scale-in w-full max-w-md rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--g3-secondary-soft)] text-2xl">✉️</div>
           <h1 className="mt-5 font-serif text-2xl font-semibold text-[var(--g3-text)]">Invitation d&apos;équipe</h1>
           <p className="mt-3 text-sm leading-6 text-[var(--g3-muted)]">
@@ -126,7 +126,7 @@ function JoinTeamContent() {
   if (authLoading || status === "loading" || status === "joining") {
     return (
       <div className="grid min-h-full place-items-center bg-[var(--g3-bg)] px-4">
-        <div className="w-full max-w-md rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+        <div className="w-full max-w-md rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[var(--g3-border)] border-t-[color:var(--g3-secondary-soft)]" />
           <p className="mt-4 text-sm text-[var(--g3-muted)]">
             {status === "joining" ? "Adhésion à l'équipe…" : "Vérification de l'invitation…"}
@@ -140,7 +140,7 @@ function JoinTeamContent() {
   if (status === "notfound") {
     return (
       <div className="grid min-h-full place-items-center bg-[var(--g3-bg)] px-4">
-        <div className="anim-scale-in w-full max-w-md rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+        <div className="anim-scale-in w-full max-w-md rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--g3-warning-soft)] text-2xl">⏳</div>
           <h1 className="mt-5 font-serif text-2xl font-semibold text-[var(--g3-text)]">
             Invitation invalide ou expirée
@@ -159,7 +159,7 @@ function JoinTeamContent() {
   if (status === "error") {
     return (
       <div className="grid min-h-full place-items-center bg-[var(--g3-bg)] px-4">
-        <div className="anim-scale-in w-full max-w-md rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+        <div className="anim-scale-in w-full max-w-md rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--g3-danger-soft)] text-2xl">⚠️</div>
           <h1 className="mt-5 font-serif text-2xl font-semibold text-[var(--g3-text)]">Une erreur est survenue</h1>
           <p className="mt-3 text-sm leading-6 text-[var(--g3-muted)]">{errorMessage}</p>
@@ -177,7 +177,7 @@ function JoinTeamContent() {
   if (status === "joined") {
     return (
       <div className="grid min-h-full place-items-center bg-[var(--g3-bg)] px-4">
-        <div className="anim-scale-in w-full max-w-md rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+        <div className="anim-scale-in w-full max-w-md rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--g3-success-soft)] text-2xl">🎉</div>
           <h1 className="mt-5 font-serif text-2xl font-semibold text-[var(--g3-text)]">Vous avez rejoint l&apos;équipe !</h1>
           <p className="mt-3 text-sm text-[var(--g3-muted)]">Redirection vers l&apos;espace de l&apos;équipe…</p>
@@ -189,7 +189,7 @@ function JoinTeamContent() {
   // Prêt : récapitulatif de l'invitation.
   return (
     <div className="grid min-h-full place-items-center bg-[var(--g3-bg)] px-4">
-      <div className="anim-scale-in w-full max-w-md rounded-3xl border border-[rgba(23,23,20,0.09)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+      <div className="anim-scale-in w-full max-w-md rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-8 text-center shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--g3-secondary-soft)] font-serif text-xl font-semibold text-[var(--g3-info)]">
           {invitation?.teamName?.charAt(0).toUpperCase() || "G"}
         </div>
