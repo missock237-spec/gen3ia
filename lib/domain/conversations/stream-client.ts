@@ -3,6 +3,9 @@
 import type { MessageAttachment } from "./types";
 import type { ConversationStreamEvent } from "./stream-events";
 import type { AuthorizationMode } from "@/lib/security/authorization-mode";
+// Task 153 — un 402 (solde insuffisant) du portillon de facturation doit
+// être reconnaissable côté UI (invite de recharge) au lieu d'un échec générique.
+import { errorFromResponse } from "@/lib/billing/insufficient-funds-client";
 
 /**
  * Client de consommation du flux conversationnel (NDJSON) : envoie le
@@ -61,8 +64,7 @@ export async function streamConversationTurn(payload: StreamTurnPayload): Promis
   });
 
   if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? "Le message n'a pas pu être traité.");
+    throw await errorFromResponse(response, "Le message n'a pas pu être traité.");
   }
   if (!response.body) {
     throw new Error("Flux indisponible.");

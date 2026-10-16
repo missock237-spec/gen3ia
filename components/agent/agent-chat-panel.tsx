@@ -12,6 +12,9 @@ import type { MentionItem } from "@/lib/ui/command-composer-helpers";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import { ATTACHMENT_MAX_FILES, attachmentLimitLabel, validateAttachment } from "@/lib/files/attachment-policy";
 import { Callout } from "@/components/studio/callout";
+// Task 153 — blocage « fonds insuffisants » (402 du portillon de facturation).
+import { InsufficientFundsError, isInsufficientFundsError } from "@/lib/billing/insufficient-funds-client";
+import { RechargeCallout } from "@/components/billing/recharge-callout";
 import { labelForAgent } from "@/lib/agents/charter";
 import { approvalToolLabel, toolLabel } from "@/lib/tools/labels";
 import { downloadUrl } from "@/lib/client/download";
@@ -225,6 +228,8 @@ export function AgentChatPanel({
   const [active, setActive] = React.useState<AgentResult | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  // Task 153 — blocage paiement : invite de recharge au lieu de l'erreur générique.
+  const [paymentError, setPaymentError] = React.useState<string | null>(null);
   /** Progression RÉELLE des générations médias (flux NDJSON serveur). */
   const [mediaProgress, setMediaProgress] = React.useState<{ label: string; percent: number | null } | null>(null);
   // Pièces jointes MULTIPLES (politique unifiée : 10 fichiers × 50 Mo).
@@ -606,6 +611,7 @@ export function AgentChatPanel({
     inFlightRef.current += 1;
     setLoading(true);
     setError("");
+    setPaymentError(null);
     setMediaProgress(null);
     const controller = new AbortController();
     requestAbortRef.current = controller;
@@ -635,7 +641,15 @@ export function AgentChatPanel({
       } else {
         data = await response.json();
       }
-      if (!response.ok) throw new Error(String(data.error) || "L'agent n'a pas pu répondre.");
+      if (!response.ok) {
+        // Task 153 — solde insuffisant (portillon de facturation) : erreur
+        // typée pour l'invite de recharge, pas la bannière générique.
+        const message = String(data.error) || "L'agent n'a pas pu répondre.";
+        if (response.status === 402 || data.code === "PAYMENT_REQUIRED" || data.reason === "insufficient_funds") {
+          throw new InsufficientFundsError(message);
+        }
+        throw new Error(message);
+      }
 
       // File hors-ligne (SW 202) : la mission PARTIRA au retour du réseau —
       // on l'annonce honnêtement au lieu d'un faux « en cours d'exécution ».
@@ -734,7 +748,14 @@ export function AgentChatPanel({
         }]);
         setActive(null);
       } else {
-        setError(e instanceof Error ? e.message : "Erreur de l'agent.");
+        // Task 153 — fonds insuffisant : invite de recharge dédiée.
+        if (isInsufficientFundsError(e)) {
+          setError("");
+          setPaymentError(e instanceof Error ? e.message : "Solde insuffisant. Rechargez votre portefeuille Gen3ia pour continuer.");
+        } else {
+          setPaymentError(null);
+          setError(e instanceof Error ? e.message : "Erreur de l'agent.");
+        }
       }
     } finally {
       inFlightRef.current = Math.max(0, inFlightRef.current - 1);
@@ -1238,7 +1259,8 @@ export function AgentChatPanel({
             blanche flottante sur le fond crème, sans séparation rectangulaire
             — collée en bas, au-dessus de la zone sûre (encoche/barre iOS) */}
         <div className="shrink-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:p-4 md:pb-[max(1rem,env(safe-area-inset-bottom))]">
-          {error && <Callout tone="error" className="mb-3 rounded-2xl">{error}</Callout>}
+          {paymentError && <div className="mb-3"><RechargeCallout message={paymentError} /></div>}
+          {error && !paymentError && <Callout tone="error" className="mb-3 rounded-2xl">{error}</Callout>}
           <CommandComposer
             ref={composerRef}
             value={message}

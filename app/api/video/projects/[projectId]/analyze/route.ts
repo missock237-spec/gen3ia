@@ -8,6 +8,9 @@ import { analyzeRenderedMaster } from "@/lib/video/qc-service";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+// Task 153 — paiement par exécution : l'analyse QC consomme du compute
+// (téléchargement R2 + analyse ffmpeg) — réservation puis règlement.
+import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -32,17 +35,26 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const dir = await mkdtemp(join(tmpdir(), "gen3ia-qc-"));
     try {
-      const master = await downloadVideoAsset(guard.context.userId, job.output!.r2Key);
-      const masterPath = join(dir, "master.mp4");
-      await writeFile(masterPath, master);
-      const report = await analyzeRenderedMaster({
-        masterFile: masterPath,
-        tmpDir: dir,
-        plan: job.plan!,
-        expectedDurationSec: job.plan!.estimatedSec,
-        subtitlesEnabled: Boolean(job.plan!.subtitles?.assR2Key),
+      // Task 153 — portillon de facturation de l'analyse QC (compute + vision).
+      const { result, billing } = await runWithExecutionBilling({
+        userId: guard.context.userId,
+        label: "video-analyze",
+        estimate: { task: "automation", inputTokens: 1_000, outputTokens: 500, calls: 1, complexity: 1 },
+        fn: async () => {
+          const master = await downloadVideoAsset(guard.context.userId, job.output!.r2Key);
+          const masterPath = join(dir, "master.mp4");
+          await writeFile(masterPath, master);
+          const report = await analyzeRenderedMaster({
+            masterFile: masterPath,
+            tmpDir: dir,
+            plan: job.plan!,
+            expectedDurationSec: job.plan!.estimatedSec,
+            subtitlesEnabled: Boolean(job.plan!.subtitles?.assR2Key),
+          });
+          return { report, jobId: job.id };
+        },
       });
-      return NextResponse.json({ report, jobId: job.id });
+      return NextResponse.json({ ...result, billing });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

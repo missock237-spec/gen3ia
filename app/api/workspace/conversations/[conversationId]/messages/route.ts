@@ -7,6 +7,9 @@ import { clientIp } from "@/lib/security/rate-limit";
 import { rateLimitDistributed } from "@/lib/cache/redis";
 import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
 import { runConversationTurn } from "@/lib/domain/conversations/engine";
+// Task 153 — paiement par exécution : réservation avant le tour complet
+// (intention + plan + synthèse), règlement au coût réel après.
+import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
 
 export const runtime = "nodejs";
 // Conversation turns may orchestrate multiple providers/tools; 5 minutes avoids
@@ -67,20 +70,41 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     }
 
     const body = BodySchema.parse(await request.json());
-    const result = await runConversationTurn({
+
+    // ── Task 153 — PORTILLON DE FACTURATION ──
+    // Un tour de conversation peut enchaîner détection d'intention, plan et
+    // synthèse finale : la réservation couvre le pire cas multi-appels.
+    const inputTokens = Math.min(
+      24_000,
+      Math.max(64, Math.ceil(body.message.length / 3) + 2_000),
+    );
+    const { result, billing } = await runWithExecutionBilling({
       userId: user.uid,
-      conversationId,
-      message: body.message,
-      attachments: body.attachments,
-      projectId: body.projectId,
-      provider: body.provider,
-      model: body.model,
-      connectors: body.connectors,
-      authorizationMode: body.authorizationMode,
-      agentId: body.agentId,
-      timezone: body.timezone,
+      label: "conversation-turn",
+      estimate: {
+        task: "agent",
+        inputTokens,
+        outputTokens: 2_048,
+        toolCalls: 3,
+        calls: 3,
+        complexity: 1.5,
+      },
+      fn: () =>
+        runConversationTurn({
+          userId: user.uid,
+          conversationId,
+          message: body.message,
+          attachments: body.attachments,
+          projectId: body.projectId,
+          provider: body.provider,
+          model: body.model,
+          connectors: body.connectors,
+          authorizationMode: body.authorizationMode,
+          agentId: body.agentId,
+          timezone: body.timezone,
+        }),
     });
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, billing });
   } catch (error) {
     return NextResponse.json(errorBody(error, "Le message n'a pas pu être traité."), { status: errorStatus(error, 400) });
   }

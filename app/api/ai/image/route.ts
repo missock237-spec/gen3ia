@@ -14,6 +14,20 @@ import {
   MAX_EDIT_IMAGES,
 } from "@/lib/ai/image-generation";
 
+// Task 153 — paiement par exécution : l'image est réservée puis débitée au
+// coût externe (génération/édition Agnes) + marge projet.
+import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
+import { recordExternalCostForBilling } from "@/lib/billing/execution-meter";
+
+function imageExternalCostEur(edit: boolean, sourceCount: number): number {
+  const env = (name: string, fallback: number): number => {
+    const parsed = Number(process.env[name]);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  };
+  return env(edit ? "COST_IMAGE_EDIT_EUR_PER_IMAGE" : "COST_IMAGE_GENERATION_EUR_PER_IMAGE", edit ? 0.05 : 0.04)
+    * (edit ? Math.max(1, sourceCount) : 1);
+}
+
 /**
  * Génération d'images réelle (Agnes AI) — endpoint dédié.
  *
@@ -59,16 +73,35 @@ export async function POST(request: NextRequest) {
     }
 
     const body = Body.parse(await request.json());
-    const image = body.images && body.images.length > 0
-      ? await editImageWithAgnes({ prompt: body.prompt, images: body.images, size: body.size, ratio: body.ratio })
-      : await generateImageWithAgnes(body);
+    const isEdit = Boolean(body.images && body.images.length > 0);
+    const externalCostEur = imageExternalCostEur(isEdit, body.images?.length ?? 0);
+
+    // ── Task 153 — PORTILLON DE FACTURATION ──
+    const { result: image, billing } = await runWithExecutionBilling({
+      userId: user.uid,
+      label: isEdit ? "image-edit" : "image-generation",
+      estimate: {
+        task: "image",
+        externalToolCostEur: externalCostEur,
+        toolCalls: 1,
+        calls: 1,
+      },
+      fn: async () => {
+        // Coût externe réel compté dans l'exécution (marge appliquée ensuite).
+        recordExternalCostForBilling({ eur: externalCostEur, label: isEdit ? "image-edit" : "image-generation" });
+        return isEdit
+          ? editImageWithAgnes({ prompt: body.prompt, images: body.images!, size: body.size, ratio: body.ratio })
+          : generateImageWithAgnes(body);
+      },
+    });
 
     return NextResponse.json({
       imageUrl: image.imageUrl,
       model: image.model,
       taskId: image.taskId,
       latencyMs: image.latencyMs,
-      ...(body.images && body.images.length > 0 ? { edited: true, sourceCount: body.images.length } : {}),
+      ...(isEdit ? { edited: true, sourceCount: body.images!.length } : {}),
+      billing,
     });
   } catch (error) {
     if (error instanceof ImageGenerationError) {

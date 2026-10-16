@@ -3,6 +3,9 @@ import { protectRoute } from "@/lib/security/route-guard";
 import { errorStatus } from "@/lib/security/http-errors";
 import { RevisionRequestSchema } from "@/lib/video/security";
 import { applyRevision } from "@/lib/video/revision-service";
+// Task 153 — paiement par exécution : réservation avant révision,
+// règlement au coût réel (coûts externes + marge projet) après.
+import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -21,13 +24,20 @@ export async function POST(request: NextRequest, { params }: Params) {
     const { projectId } = await params;
     const { instruction } = RevisionRequestSchema.parse(await request.json());
     const origin = process.env.GEN3IA_APP_ORIGIN?.trim() || request.nextUrl.origin;
-    const result = await applyRevision({
+    // Task 153 — portillon de facturation de la révision (LLM Directeur).
+    const { result, billing } = await runWithExecutionBilling({
       userId: guard.context.userId,
-      projectId,
-      instruction,
-      origin,
+      label: "video-revise",
+      estimate: { task: "reasoning", inputTokens: 8_000, outputTokens: 2_000, calls: 2, complexity: 1.2 },
+      fn: () =>
+        applyRevision({
+          userId: guard.context.userId,
+          projectId,
+          instruction,
+          origin,
+        }),
     });
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, billing });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Révision impossible" }, { status: errorStatus(error, 400) });
   }

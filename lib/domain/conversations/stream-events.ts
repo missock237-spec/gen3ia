@@ -49,6 +49,20 @@ export type ConversationStreamEvent =
       artifacts: ConversationArtifact[];
       approvals: ConversationApproval[];
     }
+  /** Task 153 — facturation du tour : coût réellement débité (coût externe
+   *  + marge projet). Émis juste avant « done », le client peut l'afficher. */
+  | {
+      type: "billing";
+      label: string;
+      currency: string;
+      chargeMinor: number;
+      reservedMinor: number;
+      providerCostEur: number;
+      marginEur: number;
+      llmCalls: number;
+      inputTokens: number;
+      outputTokens: number;
+    }
   /** Erreur en cours de tour (le client affiche une erreur inline). */
   | { type: "error"; message: string };
 

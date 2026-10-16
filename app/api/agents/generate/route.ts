@@ -9,6 +9,9 @@ import { AGENT_TYPES, AGENT_TONES, AGENT_VERBOSITY_LEVELS } from "@/lib/agents/s
 import { generate } from "@/lib/ai/router";
 import { extractJsonObject } from "@/lib/agents/planner/normalize";
 import { resolveAndHarden } from "@/lib/agents/tool-resolver";
+// Task 153 — paiement par exécution : réservation avant génération,
+// règlement au coût réel (coûts externes + marge projet) après.
+import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -91,15 +94,31 @@ export async function POST(request: NextRequest) {
 
     const body = BODY_SCHEMA.parse(await request.json());
 
-    const response = await generate({
-      task: "reasoning",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildUserPrompt(body.description) },
-      ],
-      requiresStructuredOutput: true,
-      maxTokens: 3500,
-      metadata: { userId: user.uid },
+    // ── Task 153 — PORTILLON DE FACTURATION ──
+    const inputTokens = Math.max(
+      64,
+      Math.ceil((SYSTEM_PROMPT.length + buildUserPrompt(body.description).length) / 3),
+    );
+    const { result: response, billing } = await runWithExecutionBilling({
+      userId: user.uid,
+      label: "agent-proposal",
+      estimate: {
+        task: "reasoning",
+        inputTokens,
+        outputTokens: 3_500,
+        calls: 1,
+      },
+      fn: () =>
+        generate({
+          task: "reasoning",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: buildUserPrompt(body.description) },
+          ],
+          requiresStructuredOutput: true,
+          maxTokens: 3500,
+          metadata: { userId: user.uid },
+        }),
     });
 
     const raw = extractJsonObject(response.text);
@@ -123,7 +142,7 @@ export async function POST(request: NextRequest) {
     const proposal = { ...parsed.data, tools: resolution.resolved, authorizationMode: hardening.mode };
 
     return NextResponse.json(
-      { proposal, toolReport: report, requestId },
+      { proposal, toolReport: report, requestId, billing },
       { headers: { "x-request-id": requestId } },
     );
   } catch (error) {

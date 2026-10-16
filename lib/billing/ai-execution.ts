@@ -2,6 +2,10 @@ import type { AIRequest, AIResponse } from "@/lib/ai/models";
 import { generate, selectProvider } from "@/lib/ai/router";
 import { estimateExecutionCost, costFromAIResponse } from "./cost-engine";
 import { getWallet, reserveFunds, settleReservation, releaseReservation } from "./wallet";
+// Task 153 — marqueur anti double facturation : ces appels sont réservés et
+// réglés ICI (réservation dédiée) ; le compteur du portillon d'exécution les
+// ignore pour ne pas les compter une seconde fois.
+import { SELF_BILLED_METADATA_KEY, SELF_BILLED_METADATA_VALUE } from "./execution-meter";
 
 function conservativeInputTokens(request: AIRequest): number {
   const text = [request.system ?? "", ...request.messages.map((message) => message.content)].join("\n");
@@ -74,7 +78,15 @@ export async function generateForUser(params: {
   });
 
   try {
-    const response = await generate(params.request);
+    const response = await generate({
+      ...params.request,
+      // Task 153 — le portillon d'exécution ne doit pas recompter cet appel :
+      // il est réservé et réglé par la présente fonction (réservation dédiée).
+      metadata: {
+        ...params.request.metadata,
+        [SELF_BILLED_METADATA_KEY]: SELF_BILLED_METADATA_VALUE,
+      },
+    });
     const actual = costFromAIResponse(params.request, response);
 
     await settleReservation({

@@ -11,6 +11,20 @@ const PLATFORM_MARGIN = Math.max(0, n(process.env.GEN3IA_PLATFORM_MARGIN_RATE, 0
 const RESERVE_MULTIPLIER = Math.max(1, n(process.env.GEN3IA_RESERVE_MULTIPLIER, 2));
 const MIN_CHARGE_EUR = Math.max(0, n(process.env.GEN3IA_MIN_EXECUTION_CHARGE_EUR, 0.001));
 
+/**
+ * CONVERSION EUR → XAF (Task 153) : le portefeuille Gen3ia est libellé en
+ * XAF minor (100 minor = 1 FCFA — voir lib/billing/wallet.ts) alors que les
+ * coûts externes (tokens, médias, outils) sont exprimés en EUR. Sans cette
+ * conversion, 1 € de coût fournisseur ne débitait que 1 FCFA du solde :
+ * la déduction serait symbolique et le modèle économique perdant. La parité
+ * CFA est fixe (1 € = 655,957 FCFA) ; surchargeable via GEN3IA_EUR_TO_XAF
+ * (par exemple 1 pour retrouver l'ancienne parité de test).
+ */
+const EUR_TO_XAF_RATE = Math.max(0, n(process.env.GEN3IA_EUR_TO_XAF, 655.957));
+export function eurToXafRate(): number { return EUR_TO_XAF_RATE; }
+/** Convertit un montant EUR en unités mineures du wallet (XAF × 100), plafonné par excès. */
+export function eurToMinor(eur: number): number { if (!Number.isFinite(eur)) return 0; return Math.max(0, Math.ceil(eur * 100 * EUR_TO_XAF_RATE)); }
+
 interface ModelRate { provider: AIProvider; model: string; inputEurPer1M: number; outputEurPer1M: number; cachedInputEurPer1M?: number; reasoningOutputEurPer1M?: number; }
 function modelRates(): ModelRate[] { try { const parsed = JSON.parse(process.env.GEN3IA_MODEL_PRICING_JSON ?? "[]"); return Array.isArray(parsed) ? parsed.filter((x): x is ModelRate => x && typeof x.provider === "string" && typeof x.model === "string" && Number.isFinite(Number(x.inputEurPer1M)) && Number.isFinite(Number(x.outputEurPer1M))) : []; } catch { return []; } }
 function rateFor(provider: AIProvider, model?: string): ModelRate { const match = modelRates().find((x) => x.provider === provider && (!model || x.model === model)); const fallback: ModelRate = { provider, model: model ?? "auto", inputEurPer1M: DEFAULT_INPUT_PER_MILLION[provider], outputEurPer1M: DEFAULT_OUTPUT_PER_MILLION[provider] };
@@ -23,7 +37,7 @@ function rateFor(provider: AIProvider, model?: string): ModelRate { const match 
   return { ...match, inputEurPer1M: input, outputEurPer1M: output };
 }
 function clampComplexity(value: number | undefined): number { const parsed = Number(value); if (!Number.isFinite(parsed)) return 1; return Math.min(5, Math.max(0.5, parsed)); }
-function ceilMinor(eur: number): number { if (!Number.isFinite(eur)) return 0; return Math.max(0, Math.ceil(eur * 100)); }
+function ceilMinor(eur: number): number { return eurToMinor(eur); }
 
 export interface ExecutionCostInput { task: TaskType; provider?: AIProvider; model?: string; inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; reasoningTokens?: number; durationMs?: number; storageBytes?: number; networkBytes?: number; computeUnits?: number; externalToolCostEur?: number; toolCalls?: number; complexity?: number; }
 export interface ExecutionCostBreakdown { providerCostEur: number; platformOverheadEur: number; computeCostEur: number; storageCostEur: number; networkCostEur: number; externalToolCostEur: number; complexityMultiplier: number; marginEur: number; chargeEur: number; reserveEur: number; chargeMinor: number; reserveMinor: number; }

@@ -25,6 +25,9 @@ import {
 } from "@/lib/ui/screen-adapter";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
 import { safeClientTimezone, streamConversationTurn } from "@/lib/domain/conversations/stream-client";
+// Task 153 — blocage « fonds insuffisants » (402 du portillon de facturation).
+import { isInsufficientFundsError, errorFromResponse } from "@/lib/billing/insufficient-funds-client";
+import { RechargeCallout } from "@/components/billing/recharge-callout";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 import type { AuthorizationMode } from "@/lib/security/authorization-mode";
 import { findModelOption } from "@/lib/ui/composer-models";
@@ -108,6 +111,9 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+  // Task 153 — message de blocage paiement (402) : affiché avec l'invite de
+  // recharge au lieu de la bannière d'erreur générique.
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [listCollapsed, setListCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -351,6 +357,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
       const authorizationMode = options?.authorizationMode ?? readAuthorizationMode();
       setGenerating(true);
       setError("");
+      setPaymentError(null);
       // Affichage immédiat du message utilisateur (optimiste, résilient).
       const optimistic: ConversationMessage = {
         id: `local-${Date.now()}`,
@@ -394,6 +401,19 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           await finishTurn(conversationId);
           return;
         }
+        // Task 153 — solde insuffisant (402 du portillon) : blocage DÉFINITIF,
+        // pas de repli — la route classique réserverait en vain. Le message
+        // optimiste est retiré et l'invite de recharge s'affiche.
+        if (isInsufficientFundsError(streamError)) {
+          setDetail((current) =>
+            current ? { ...current, messages: current.messages.filter((m) => m.id !== optimistic.id) } : current,
+          );
+          setError("");
+          setPaymentError(streamError instanceof Error ? streamError.message : "Solde insuffisant. Rechargez votre portefeuille Gen3ia pour continuer.");
+          setLive(null);
+          setGenerating(false);
+          return;
+        }
         // 2) Repli : route classique (résultat complet, même persistance).
         try {
           const response = await fetch(`/api/workspace/conversations/${conversationId}/messages`, {
@@ -411,8 +431,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
             }),
           });
           if (!response.ok) {
-            const data = (await response.json().catch(() => ({}))) as { error?: string };
-            throw new Error(data.error ?? (streamError instanceof Error ? streamError.message : "Le message n'a pas pu être traité."));
+            throw await errorFromResponse(response, streamError instanceof Error ? streamError.message : "Le message n'a pas pu être traité.");
           }
         } catch (fallbackError) {
           // Échec définitif du tour : le message optimiste (id « local-… »)
@@ -420,8 +439,17 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           setDetail((current) =>
             current ? { ...current, messages: current.messages.filter((m) => m.id !== optimistic.id) } : current,
           );
+          // Task 153 — fonds insuffisant au repli : invite de recharge.
+          if (isInsufficientFundsError(fallbackError)) {
+            setError("");
+            setPaymentError(fallbackError instanceof Error ? fallbackError.message : "Solde insuffisant. Rechargez votre portefeuille Gen3ia pour continuer.");
+            setLive(null);
+            setGenerating(false);
+            return;
+          }
           // Erreurs réseau bas niveau : message FR actionnable, jamais
           // l'erreur navigateur brute (« Failed to fetch ») dans le chat.
+          setPaymentError(null);
           setError(
             isNetworkError(streamError) || isNetworkError(fallbackError)
               ? NETWORK_INTERRUPTED_MESSAGE
@@ -737,7 +765,13 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           ) : null}
         </div>
 
-        {error && detail && (
+        {paymentError && detail && (
+          <div className="mx-3 mt-1.5 lg:mx-0" role="alert">
+            <RechargeCallout message={paymentError} />
+          </div>
+        )}
+
+        {error && detail && !paymentError && (
           <p className="mx-3 mt-1.5 rounded-lg border border-[var(--g3-danger-border)] bg-[var(--g3-danger-soft)] px-3 py-2 text-xs text-[var(--g3-danger-strong)] lg:mx-0" role="alert">
             {error}
           </p>

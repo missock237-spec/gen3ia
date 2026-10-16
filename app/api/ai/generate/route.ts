@@ -21,7 +21,11 @@ import {
 
 import {
   recordAIUsage,
-} from "@/lib/ai/usage"; 
+} from "@/lib/ai/usage";
+
+// Task 153 — paiement par exécution : réservation avant génération,
+// règlement au coût réel (coûts externes + marge projet) après.
+import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
 
 const RequestSchema =
   z.object({
@@ -100,14 +104,36 @@ export async function POST(
     const input =
       RequestSchema.parse(body);
 
-    const response =
-      await generate({
-        ...input,
+    // ── Task 153 — PORTILLON DE FACTURATION ──
+    // Estimation conservatrice des tokens d'entrée (≈ 3 caractères/token).
+    const inputTokens = Math.min(
+      60_000,
+      Math.max(
+        64,
+        Math.ceil(input.messages.reduce((total, message) => total + message.content.length, 0) / 3),
+      ),
+    );
+    const { result: response, billing } = await runWithExecutionBilling({
+      userId: user.uid,
+      label: "ai-generate",
+      estimate: {
+        task: input.task,
+        provider: input.provider,
+        model: input.model,
+        inputTokens,
+        outputTokens: input.maxTokens ?? 2_048,
+        toolCalls: 1,
+        calls: 1,
+      },
+      fn: () =>
+        generate({
+          ...input,
 
-        metadata: {
-          userId: user.uid,
-        },
-      });
+          metadata: {
+            userId: user.uid,
+          },
+        }),
+    });
 
     await recordAIUsage({
       userId: user.uid,
@@ -117,6 +143,7 @@ export async function POST(
 
     return NextResponse.json({
       response,
+      billing,
     });
   } catch (error) {
     return NextResponse.json(

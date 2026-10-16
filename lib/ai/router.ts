@@ -13,6 +13,10 @@ import type {
 import { validateImageAttachments } from "./content-filter";
 import { isProviderAvailable, recordProviderFailure, recordProviderSuccess } from "./resilience";
 
+// Task 153 — paiement par exécution : chaque réponse réussie est comptée dans
+// l'exécution facturée en cours (AsyncLocalStorage) s'il y en a une. Fail-soft.
+import { recordLLMCallForBilling } from "@/lib/billing/execution-meter";
+
 import {
   callProvider,
   callProviderStream,
@@ -219,6 +223,8 @@ export async function generate(
         },
       );
       recordProviderSuccess(candidate.provider);
+      // Task 153 — comptage du coût réel dans l'exécution facturée en cours.
+      recordLLMCallForBilling(request, response);
       return response;
     } catch (error) {
       recordProviderFailure(candidate.provider);
@@ -308,6 +314,8 @@ export async function generateStream(
       // Le premier fragment passe par onProviderSelected : transmettons-le
       // aussi à onDelta pour que le texte émis soit complet.
       recordProviderSuccess(candidate.provider);
+      // Task 153 — même comptage du coût réel sur le chemin en flux.
+      recordLLMCallForBilling(request, response);
       return response;
     } catch (error) {
       recordProviderFailure(candidate.provider);

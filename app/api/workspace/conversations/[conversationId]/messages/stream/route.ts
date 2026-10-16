@@ -8,6 +8,9 @@ import { rateLimitDistributed } from "@/lib/cache/redis";
 import { runConversationTurn } from "@/lib/domain/conversations/engine";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
 import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
+// Task 153 — paiement par exécution : réservation AVANT le flux (402
+// immédiat si solde insuffisant), règlement au réel à la fin du tour.
+import { openExecutionBilling } from "@/lib/billing/execution-gate";
 
 export const runtime = "nodejs";
 // Conversation turns may orchestrate multiple providers/tools; 5 minutes avoids
@@ -76,6 +79,27 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     const body = BodySchema.parse(await request.json());
 
+    // ── Task 153 — PORTILLON DE FACTURATION (session à complétion différée) ──
+    // La réservation est prise AVANT l'ouverture du flux : un solde
+    // insuffisant renvoie un 402 JSON classique, avant tout token consommé.
+    // Le règlement au réel survient quand le tour s'achève dans le flux.
+    const inputTokens = Math.min(
+      24_000,
+      Math.max(64, Math.ceil(body.message.length / 3) + 2_000),
+    );
+    const billingSession = await openExecutionBilling({
+      userId: user.uid,
+      label: "conversation-turn",
+      estimate: {
+        task: "agent",
+        inputTokens,
+        outputTokens: 2_048,
+        toolCalls: 3,
+        calls: 3,
+        complexity: 1.5,
+      },
+    });
+
     // Le flux démarre après les vérifications d'accès : les événements
     // arrivent dès que le moteur les émet, sans buffer intermédiaire.
     const encoder = new TextEncoder();
@@ -94,43 +118,72 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           }
         };
 
-        try {
-          const result = await runConversationTurn({
-            userId: user.uid,
-            conversationId,
-            message: body.message,
-            attachments: body.attachments,
-            projectId: body.projectId,
-            provider: body.provider,
-            model: body.model,
-            connectors: body.connectors,
-            authorizationMode: body.authorizationMode,
-            agentId: body.agentId,
-            timezone: body.timezone,
-            onEvent: send,
-          });
-          // L'événement « done » est émis par le moteur lui-même : le flux
-          // se referme proprement ici.
-          void result;
-          closed = true;
-          controller.close();
-        } catch (error) {
-          if (!closed) {
-            send({
-              type: "error",
-              message: error instanceof Error ? error.message : "Le message n'a pas pu être traité.",
-            });
-          }
-          closed = true;
+        // Tout le tour s'exécute DANS la session de facturation : chaque
+        // appel LLM du moteur est compté au réel (AsyncLocalStorage).
+        await billingSession.run(async () => {
           try {
+            const result = await runConversationTurn({
+              userId: user.uid,
+              conversationId,
+              message: body.message,
+              attachments: body.attachments,
+              projectId: body.projectId,
+              provider: body.provider,
+              model: body.model,
+              connectors: body.connectors,
+              authorizationMode: body.authorizationMode,
+              agentId: body.agentId,
+              timezone: body.timezone,
+              onEvent: send,
+            });
+            void result;
+
+            // Règlement au réel, puis événement facturation pour l'UI.
+            try {
+              const summary = await billingSession.settle();
+              send({
+                type: "billing",
+                label: summary.label,
+                currency: summary.currency,
+                chargeMinor: summary.chargeMinor,
+                reservedMinor: summary.reservedMinor,
+                providerCostEur: summary.providerCostEur,
+                marginEur: summary.marginEur,
+                llmCalls: summary.llmCalls,
+                inputTokens: summary.inputTokens,
+                outputTokens: summary.outputTokens,
+              });
+            } catch (settleError) {
+              console.error("[messages/stream] règlement impossible (fail-soft) :", settleError instanceof Error ? settleError.message : settleError);
+            }
+
+            // L'événement « done » est émis par le moteur lui-même : le flux
+            // se referme proprement ici.
+            closed = true;
             controller.close();
-          } catch {
-            /* déjà fermé */
+          } catch (error) {
+            // Échec du tour : réservation libérée (jamais facturé).
+            await billingSession.release();
+            if (!closed) {
+              send({
+                type: "error",
+                message: error instanceof Error ? error.message : "Le message n'a pas pu être traité.",
+              });
+            }
+            closed = true;
+            try {
+              controller.close();
+            } catch {
+              /* déjà fermé */
+            }
           }
-        }
+        });
       },
       cancel() {
         closed = true;
+        // Annulation client : la réservation sera libérée si le tour
+        // échoue, réglée au réel s'il aboutit (la persistance reste
+        // autoritaire — on ne coupe pas le moteur ici).
       },
     });
 

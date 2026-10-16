@@ -20,6 +20,7 @@ export type ApiErrorCode =
   | "INVALID_REQUEST"
   | "RATE_LIMITED"
   | "QUOTA_EXCEEDED"
+  | "PAYMENT_REQUIRED"
   | "PROVIDER_UNAVAILABLE"
   | "CONFLICT"
   | "INTERNAL";
@@ -40,7 +41,9 @@ function defaultCodeFor(status: number): ApiErrorCode {
   switch (status) {
     case 400: return "INVALID_REQUEST";
     case 401: return "AUTH_REQUIRED";
-    case 402: return "QUOTA_EXCEEDED";
+    // Task 153 — 402 = paiement requis (solde insuffisant) : le client
+    // affiche l'invite de recharge (lien /billing) au lieu d'une erreur générique.
+    case 402: return "PAYMENT_REQUIRED";
     case 403: return "FORBIDDEN";
     case 404: return "NOT_FOUND";
     case 409: return "CONFLICT";
@@ -70,11 +73,22 @@ export function forbidden(message = "Accès refusé."): HttpError {
   return new HttpError(403, message, "FORBIDDEN");
 }
 
+/**
+ * 402 — paiement requis : solde du portefeuille insuffisant pour lancer
+ * l'exécution demandée (Task 153). L'UI réagit par l'invite de recharge.
+ */
+export function paymentRequired(message = "Solde insuffisant. Rechargez votre portefeuille Gen3ia pour continuer."): HttpError {
+  return new HttpError(402, message, "PAYMENT_REQUIRED");
+}
+
 const AUTH_MESSAGE_RE =
   /\bauthorization\b|\bscheme\b|\btoken\b|revoked|authentification requise|authentication required|unauthorized|jeton invalide|invalid[_ ]token|token expired|pas de session/i;
 const NOT_FOUND_MESSAGE_RE = /\bnot found\b|introuvable/i;
 const DEGRADED_MESSAGE_RE =
   /failed precondition|unavailable|firestore|deadline exceeded|quota exceeded|resource.exhausted|backend error|service.*(indisponible|unavailable)/i;
+/** Empreinte « fonds insuffisants » (Task 153) : les erreurs du portefeuille remontent en 402. */
+const INSUFFICIENT_FUNDS_MESSAGE_RE =
+  /insufficient (wallet )?balance|wallet balance is 0|solde insuffisant|recharge your gen3ia wallet|rechargez votre portefeuille/i;
 
 /**
  * Détection par empreinte (duck-typing) d'une ZodError : chaque route qui
@@ -110,6 +124,7 @@ export function errorStatus(error: unknown, fallback = 500): number {
   if (isZodErrorLike(error)) return 422;
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (AUTH_MESSAGE_RE.test(message)) return 401;
+  if (INSUFFICIENT_FUNDS_MESSAGE_RE.test(message)) return 402;
   if (NOT_FOUND_MESSAGE_RE.test(message)) return 404;
   if (DEGRADED_MESSAGE_RE.test(message)) return 503;
   return fallback;
@@ -124,6 +139,7 @@ export function errorCode(error: unknown): ApiErrorCode {
   if (isZodErrorLike(error)) return "INVALID_REQUEST";
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (AUTH_MESSAGE_RE.test(message)) return "AUTH_REQUIRED";
+  if (INSUFFICIENT_FUNDS_MESSAGE_RE.test(message)) return "PAYMENT_REQUIRED";
   if (NOT_FOUND_MESSAGE_RE.test(message)) return "NOT_FOUND";
   if (DEGRADED_MESSAGE_RE.test(message)) return "PROVIDER_UNAVAILABLE";
   return "INTERNAL";

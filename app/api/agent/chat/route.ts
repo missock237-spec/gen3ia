@@ -2,7 +2,12 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { randomUUID } from "crypto";
 import { errorStatus } from "@/lib/security/http-errors";
 import { z } from "zod";
-import { requireUser } from "@/lib/security/authenticated-request";
+import { requireUser, type AuthenticatedUser } from "@/lib/security/authenticated-request";
+// Task 153 — paiement par exécution : réservation AVANT toute réponse/mission
+// (classification, génération, image), règlement au coût réel après ; les
+// missions du runner restent facturées par leur propre canal (escrow +
+// generateForUser — marqueur self-billed anti double comptage).
+import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
 import { errorBody } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { isFirestoreQuotaError } from "@/lib/db/quota-guard";
@@ -517,6 +522,49 @@ async function launchQueuedTaskMission(input: {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireUser(request);
+
+    // ── Task 153 — PORTILLON DE FACTURATION ──────────────────────
+    // Le pire coût de l'interaction (classification + réponse directe ou
+    // plan de mission) est RÉSERVÉ sur le portefeuille AVANT toute
+    // exécution : solde insuffisant → 402 immédiat, aucun token consommé.
+    // Le règlement final reprend le coût EXTERNE réel (tokens consommés
+    // par la classification/la réponse/le plan) + marge projet. Les LLM du
+    // runner de mission sont déjà facturés par leur propre réservation.
+    const { result } = await runWithExecutionBilling({
+      userId: user.uid,
+      label: "agent-chat",
+      estimate: {
+        task: "agent",
+        inputTokens: 6_000,
+        outputTokens: 2_048,
+        toolCalls: 2,
+        calls: 3,
+        complexity: 1.4,
+      },
+      fn: () => handleAgentChat(request, user),
+    });
+    return result;
+  } catch (error) {
+    // Erreur structurée : un code machine (PAYMENT_REQUIRED,
+    // PROVIDER_UNAVAILABLE, INTERNAL…) permet à l'UI d'afficher l'état réel
+    // (recharger vs réessayer vs reconnecter) au lieu de deviner.
+    const body = errorBody(error, "Agent request failed.");
+    // Session absente/expirée : 401 explicite (l'UI propose la reconnexion
+    // au lieu d'un « réessayez » sans fin).
+    if (body.code === "AUTH_REQUIRED") {
+      return NextResponse.json({ error: body.error, code: body.code }, { status: 401 });
+    }
+    // Solde insuffisant (Task 153) : 402 avec invite de recharge.
+    if (body.code === "PAYMENT_REQUIRED") {
+      return NextResponse.json({ error: body.error, code: body.code, reason: "insufficient_funds" }, { status: 402 });
+    }
+    return NextResponse.json({ error: body.error, code: body.code }, { status: errorStatus(error, 500) });
+  }
+}
+
+/** Logique métier du chat d'agent, exécutée derrière le portillon de facturation. */
+async function handleAgentChat(request: NextRequest, user: AuthenticatedUser) {
+  try {
     const chatLimit = await enforceRateLimit(`agent-chat:${user.uid}`, { limit: 60, windowMs: 5 * 60 * 1000 });
     if (!chatLimit.allowed) {
       return NextResponse.json({ error: "Trop de messages rapproches. Reessayez dans quelques instants." }, { status: 429, headers: { "retry-after": String(Math.max(1, Math.ceil(chatLimit.retryAfterMs / 1000))) } });

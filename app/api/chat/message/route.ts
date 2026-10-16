@@ -17,6 +17,15 @@ import {
 import { appendMessage, createConversation, getConversation, listMessages } from "@/lib/chat/repository";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { errorStatus } from "@/lib/security/http-errors";
+// Task 153 — paiement par exécution : réservation AVANT toute génération,
+// règlement au réel après (coûts externes + marge projet).
+import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
+import { recordExternalCostForBilling } from "@/lib/billing/execution-meter";
+
+function imageExternalCostEur(): number {
+  const parsed = Number(process.env.COST_IMAGE_GENERATION_EUR_PER_IMAGE);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0.04;
+}
 
 const Body = z.object({
   conversationId: z.string().min(1).max(128).optional(),
@@ -43,33 +52,74 @@ export async function POST(request: NextRequest) {
       );
     }
     const body = Body.parse(await request.json());
+    const imageRequest = looksLikeImageRequest(body.message);
+
+    // ── Task 153 — PORTILLON DE FACTURATION ────────────────────────────
+    // Le pire coût de l'interaction est RÉSERVÉ sur le portefeuille AVANT
+    // toute exécution (solde insuffisant → 402 immédiat, aucun token
+    // consommé) ; le règlement final reprend le coût EXTERNE réel (tokens
+    // consommés + coût image éventuel) majoré de la marge du projet.
+    const inputTokens = Math.min(
+      24_000,
+      Math.max(64, Math.ceil(body.message.length / 3) + 2_500 /* system + fenêtre d'historique */),
+    );
+    const { result, billing } = await runWithExecutionBilling({
+      userId: user.uid,
+      label: "chat-message",
+      estimate: {
+        task: "chat",
+        inputTokens,
+        outputTokens: body.maxTokens ?? 4_096,
+        toolCalls: 1,
+        calls: imageRequest ? 1 : 2,
+        ...(imageRequest ? { externalToolCostEur: imageExternalCostEur() } : {}),
+      },
+      fn: () => handleChatMessage(user.uid, body, imageRequest),
+    });
+
+    // Le résumé de facturation accompagne CHAQUE réponse : l'UI peut
+    // afficher ce que l'exécution a réellement coûté.
+    return NextResponse.json({ ...result.payload, billing }, { status: result.status });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "La génération IA a échoué." }, { status: errorStatus(error, 400) });
+  }
+}
+
+/** Logique métier du tour de chat, exécutée derrière le portillon de facturation. */
+async function handleChatMessage(
+  userId: string,
+  body: z.infer<typeof Body>,
+  imageRequest: boolean,
+): Promise<{ status: number; payload: Record<string, unknown> }> {
     let conversationId = body.conversationId;
-    if (conversationId && !(await getConversation(user.uid, conversationId))) return NextResponse.json({ error: "Conversation introuvable." }, { status: 404 });
-    if (!conversationId) conversationId = (await createConversation(user.uid, body.message.slice(0, 60))).id;
+    if (conversationId && !(await getConversation(userId, conversationId))) return { status: 404, payload: { error: "Conversation introuvable." } };
+    if (!conversationId) conversationId = (await createConversation(userId, body.message.slice(0, 60))).id;
 
     // Historique AVANT l'ajout du message courant — les PLUS RÉCENTS
     // (ordre chronologique) : une conversation longue garde sa fin.
-    const history = await listMessages(user.uid, conversationId, 100, { order: "recent" });
-    await appendMessage({ conversationId, userId: user.uid, role: "user", content: body.message });
+    const history = await listMessages(userId, conversationId, 100, { order: "recent" });
+    await appendMessage({ conversationId, userId, role: "user", content: body.message });
 
     // Génération d'images réelle (Agnes AI) : une demande explicite d'image
     // est servie directement — pas de réponse textuelle en guise d'image.
-    if (looksLikeImageRequest(body.message)) {
+    if (imageRequest) {
+      // Task 153 — le coût externe de l'image est compté dans l'exécution.
+      recordExternalCostForBilling({ eur: imageExternalCostEur(), label: "image-generation" });
       try {
         const image = await generateImageWithAgnes({ prompt: enhanceImagePrompt(body.message) });
         const reply = `Voici l'image que j'ai générée pour vous.`;
         const assistant = await appendMessage({
-          conversationId, userId: user.uid, role: "assistant", content: reply,
+          conversationId, userId, role: "assistant", content: reply,
           imageUrl: image.imageUrl, provider: "agnes", model: image.model,
         });
-        return NextResponse.json({ conversationId, message: assistant, response: { provider: "agnes", model: image.model, latencyMs: image.latencyMs, finishReason: "stop" } });
+        return { status: 200, payload: { conversationId, message: assistant, response: { provider: "agnes", model: image.model, latencyMs: image.latencyMs, finishReason: "stop" } } };
       } catch (error) {
         // Panne image : on ne masque pas l'échec derrière une réponse textuelle.
         const message = error instanceof ImageGenerationError
           ? error.message
           : "La génération d'image a échoué. Réessayez dans un instant.";
-        const assistant = await appendMessage({ conversationId, userId: user.uid, role: "assistant", content: message });
-        return NextResponse.json({ conversationId, message: assistant, response: { provider: "agnes", model: "image", finishReason: "error" } });
+        const assistant = await appendMessage({ conversationId, userId, role: "assistant", content: message });
+        return { status: 200, payload: { conversationId, message: assistant, response: { provider: "agnes", model: "image", finishReason: "error" } } };
       }
     }
 
@@ -113,7 +163,7 @@ export async function POST(request: NextRequest) {
       provider: body.provider, model: body.model, temperature: body.temperature,
       maxTokens: body.maxTokens ?? 4_096,
       preferFree: body.preferFree ?? preferFreeForVisibleAnswers(),
-      metadata: { userId: user.uid, conversationId },
+      metadata: { userId, conversationId },
     });
 
     // Task 138 — SELF-REFLECTION : la proposition est critiquée (exactitude,
@@ -123,11 +173,8 @@ export async function POST(request: NextRequest) {
     const reviewed = await reviewVisibleAnswer({ question: body.message, answer: stripThinkTags(response.text) });
 
     const assistant = await appendMessage({
-      conversationId, userId: user.uid, role: "assistant", content: reviewed.text,
+      conversationId, userId, role: "assistant", content: reviewed.text,
       provider: response.provider, model: response.model, usage: response.usage,
     });
-    return NextResponse.json({ conversationId, message: assistant, response: { id: response.id, provider: response.provider, model: response.model, usage: response.usage, latencyMs: response.latencyMs, finishReason: response.finishReason } });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "La génération IA a échoué." }, { status: errorStatus(error, 400) });
-  }
+    return { status: 200, payload: { conversationId, message: assistant, response: { id: response.id, provider: response.provider, model: response.model, usage: response.usage, latencyMs: response.latencyMs, finishReason: response.finishReason } } };
 }

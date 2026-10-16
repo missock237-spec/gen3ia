@@ -3,6 +3,9 @@ import { protectRoute } from "@/lib/security/route-guard";
 import { errorStatus } from "@/lib/security/http-errors";
 import { DirectorBriefSchema } from "@/lib/video/security";
 import { applyProductionPlan } from "@/lib/video/director-service";
+// Task 153 — paiement par exécution : réservation avant planification,
+// règlement au coût réel (coûts externes + marge projet) après.
+import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -16,8 +19,14 @@ export async function POST(request: NextRequest, { params }: Params) {
   try {
     const { projectId } = await params;
     const { brief } = DirectorBriefSchema.parse(await request.json());
-    const result = await applyProductionPlan(guard.context.userId, projectId, brief);
-    return NextResponse.json(result);
+    // Task 153 — portillon de facturation du plan de production (LLM Directeur).
+    const { result, billing } = await runWithExecutionBilling({
+      userId: guard.context.userId,
+      label: "video-plan",
+      estimate: { task: "reasoning", inputTokens: 8_000, outputTokens: 3_000, calls: 2, complexity: 1.3 },
+      fn: () => applyProductionPlan(guard.context.userId, projectId, brief),
+    });
+    return NextResponse.json({ ...result, billing });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Planification impossible" }, { status: errorStatus(error, 500) });
   }
