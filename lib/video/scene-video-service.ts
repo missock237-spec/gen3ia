@@ -67,31 +67,53 @@ export async function findSceneVideo(userId: string, projectId: string, sceneId:
 // Prompt cinéma — structure recommandée Agnes Video (doc officielle) :
 // 1 sujet/cadre → 2 action/évolution → 3 langage caméra → 4 style visuel →
 // 5 son/rythme → 6 exigences de cohérence.
+// Task 158 — recherche industrie 2026 (guides prompts Veo 3 / Kling 3 /
+// Runway + doc Agnes) : le réalisme perçu provient de (a) un ancrage du
+// mouvement À PARTIR de la première frame (mode keyframe), (b) du vocabulaire
+// d'optique/éclairage de chef opérateur, (c) d'exigences de physique et de
+// stabilité temporelle explicites — cibles n°1 des artefacts « vidéo IA ».
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Vocabulaire cinéma professionnel par preset de mouvement (EN — standard industriel). */
 const CAMERA_LANGUAGE: Record<ScriptScene["cameraMotion"], string> = {
-  static: "locked-off static shot on a heavy tripod, perfectly stable framing",
-  slow_zoom: "slow, smooth camera push-in (dolly in) with gentle easing, no jitter",
-  zoom_out: "slow camera pull-back (dolly out) progressively revealing the environment",
-  ken_burns: "gentle cinematic pan combined with a slow zoom, classic Ken Burns drift",
-  pan_left_right: "smooth lateral tracking pan from left to right, gimbal-stabilized",
-  pan_right_left: "smooth lateral tracking pan from right to left, gimbal-stabilized",
-  tilt_up: "slow tilt-up reveal moving from the lower part of the frame to the top",
-  tilt_down: "slow tilt-down reveal moving from the top of the frame to the bottom",
-  parallax: "subtle parallax camera drift conveying depth between foreground and background",
-  dramatic_push: "dramatic dolly push-in with slight acceleration building tension",
+  static: "locked-off static shot on a heavy tripod, perfectly stable framing, only the subject and environment move naturally inside the frame",
+  slow_zoom: "slow, smooth camera push-in (dolly in) with gentle easing, no jitter, fluid gear-driven motion",
+  zoom_out: "slow camera pull-back (dolly out) progressively revealing the environment, steady rails-mounted motion",
+  ken_burns: "gentle cinematic pan combined with a slow zoom, classic Ken Burns drift, steady and perfectly controlled",
+  pan_left_right: "smooth lateral tracking pan from left to right, gimbal-stabilized, constant speed",
+  pan_right_left: "smooth lateral tracking pan from right to left, gimbal-stabilized, constant speed",
+  tilt_up: "slow tilt-up reveal moving from the lower part of the frame to the top, controlled crane-like motion",
+  tilt_down: "slow tilt-down reveal moving from the top of the frame to the bottom, controlled crane-like motion",
+  parallax: "subtle parallax camera drift conveying depth between foreground and background, slow dolly on a camera slider",
+  dramatic_push: "dramatic dolly push-in with slight acceleration building tension, deliberate cinematic urgency",
 };
 
 const PROFESSIONAL_STYLE_BLOCK = [
-  "photorealistic cinematic footage",
-  "professional film lighting with motivated practical sources",
-  "shallow depth of field, creamy bokeh",
-  "natural motion blur",
-  "high dynamic range, rich yet natural skin tones",
-  "professional color grading",
-  "high detail, realistic textures and materials",
+  "photorealistic cinematic footage, indistinguishable from real camera capture",
+  "shot on a full-frame cinema camera with high-end prime lenses",
+  "professional three-point film lighting with motivated practical sources",
+  "natural volumetric light, soft ambient occlusion",
+  "shallow depth of field, creamy bokeh with smooth focus falloff",
+  "natural motion blur following the 180-degree shutter rule",
+  "high dynamic range, rich yet natural skin tones, true-to-life colors",
+  "professional color grading, subtle film grain, gentle highlight roll-off",
+  "ultra-detailed micro-textures — skin pores, fabric weave, surface imperfections",
+  "physically accurate reflections and shadows, realistic atmospheric depth",
 ].join(", ");
+
+/**
+ * Task 158 — physique du mouvement & stabilité temporelle : le mode keyframe
+ * doit ancrer l'action DANS la pose de la première frame (exemple officiel
+ * Agnes : « The person turns naturally from the first-frame pose… ») et les
+ * artefacts IA (métamorphose, scintillement, anatomie) sont contrés
+ * explicitement — ce sont les trois premiers marqueurs de « fausse vidéo ».
+ */
+const MOTION_PHYSICS_BLOCK = [
+  "movement starts naturally from the exact pose, composition and lighting of the first frame, then unfolds continuously",
+  "realistic body mechanics with natural weight, momentum and follow-through in every gesture",
+  "anatomically correct humans and animals, natural hand and finger articulation",
+  "temporally stable: consistent faces, clothing and lighting from frame to frame, no flicker, no warping, no melting textures",
+].join("; ");
 
 const CONSISTENCY_BLOCK = [
   "strictly preserve the exact appearance, proportions, clothing and environment shown in the first frame",
@@ -101,10 +123,32 @@ const CONSISTENCY_BLOCK = [
 ].join("; ");
 
 /**
+ * Graine déterministe par scène (FNV-1a 32 bits) : la ré-génération d'une
+ * même scène (révision, retry) part de la même base aléatoire côté Agnes —
+ * reproductibilité du rendu, doc : « Reusing a seed can improve
+ * reproducibility ».
+ */
+export function sceneSeed(sceneId: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < sceneId.length; i++) {
+    hash ^= sceneId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  const seed = Math.abs(hash | 0);
+  return seed === 0 ? 1 : seed;
+}
+
+/**
  * Construit le prompt cinéma d'une scène : le visualPrompt du scénario
- * (sujet/cadre) + narration comme indication d'action + caméra + style +
- * cohérence. Bilingue par nature : le scénario reste dans sa langue, le
- * vocabulaire technique caméra/style est en anglais (standard modèle).
+ * (sujet/cadre) + narration comme indication d'action + ancrage mouvement
+ * première frame + caméra + style + son + cohérence. Bilingue par nature :
+ * le scénario reste dans sa langue, le vocabulaire technique caméra/style
+ * est en anglais (standard modèle).
+ *
+ * Budget de caractères : les blocs REALISME (mouvement, caméra, style, son,
+ * cohérence) sont TOUJOURS retenus intégralement — seul le bloc sujet
+ * absorbe la réduction, avec un plancher garanti de 600 caractères (bug
+ * latent corrigé : le slice final pouvait tronquer la cohérence).
  */
 export function buildSceneMotionPrompt(project: VideoProject, scene: ScriptScene): string {
   const composed = composeScenePrompt(project, scene);
@@ -114,15 +158,19 @@ export function buildSceneMotionPrompt(project: VideoProject, scene: ScriptScene
     ? `subtle, realistic ambient sound matching: ${scene.soundEffects.join(", ")}`
     : "subtle, realistic ambient sound of the environment";
 
-  const blocks = [
-    `Subject and setting: ${composed.prompt}`,
+  const fixedBlocks = [
     narrationHint ? `On-screen moment: ${narrationHint}` : "",
+    `Motion: ${MOTION_PHYSICS_BLOCK}`,
     `Camera: ${camera}`,
     `Visual style: ${PROFESSIONAL_STYLE_BLOCK}${project.style ? `, overall tone: ${project.style}` : ""}`,
     `Sound: ${sound}`,
     `Consistency: ${CONSISTENCY_BLOCK}`,
   ].filter(Boolean);
-  return blocks.join(". ").slice(0, 3500);
+  const fixedText = fixedBlocks.join(". ");
+
+  const subjectBudget = Math.max(600, 3480 - fixedText.length);
+  const subject = `Subject and setting: ${composed.prompt.slice(0, subjectBudget)}`;
+  return [subject, fixedText].join(". ");
 }
 
 /** Durée du clip à générer pour couvrir la scène (bornes API 4–12 s). */
@@ -257,6 +305,7 @@ export async function startSceneVideoTask(params: {
       seconds: clipSeconds,
       size,
       aspectRatio: videoAspectRatioFor(project.aspectRatio),
+      seed: sceneSeed(scene.id),
     });
   } catch (error) {
     // Échec au démarrage → RIEN n'est débité (libération intégrale).

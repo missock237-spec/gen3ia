@@ -97,7 +97,8 @@ Tu réponds STRICTEMENT en JSON :
 Règles :
 - La somme des durationSec des scènes ≈ durée cible demandée (±10 %).
 - Les id de scènes suivent scene_001, scene_002… et chaque sceneIds de chapitre référence des scènes existantes.
-- La narration est en ${"langue demandée"} ; les visualPrompt sont en anglais, riches et précis (cadrage, lumière, sujet).
+- La narration est en ${"langue demandée"}.
+- Chaque visualPrompt est EN ANGLAIS et suit la STRUCTURE PROFESSIONNELLE d'un prompt cinéma (recherche industrie 2026, guides Veo/Kling) : (1) SUJET et décor précis avec détails concrets et reconnaissables, (2) ACTION visible du sujet (mouvement lisible, pas d'abstraction), (3) CADRAGE explicite — shot size (extreme close-up, close-up, medium shot, wide establishing shot, aerial), (4) LENTILLE et profondeur (ex. 35mm wide, 85mm portrait, shallow depth of field), (5) LUMIÈRE cinématographique motivée (ex. golden hour backlight, soft window light, neon practicals, overcast diffusion), (6) ATMOSPHÈRE et textures réalistes (brume, poussière en suspension, imperfections de matière, micro-détails). Langage visuel CONCRET, ancré photoréalisme documentaire — jamais de mots vagues sans ancrage visuel.
 - "subject" décrit le sujet PRINCIPAL du cadrage : "person" si une personne occupe l'image (orateur, personnage, portrait) — cela active les animations synchronisées à la voix ; "place" pour un lieu, "object" pour un objet, "abstract" sinon. null si indécis.
 - "captions" vaut true par défaut dès que la scène est narrée (false seulement pour une demande explicite sans sous-titres).
 - Transition d'entrée du premier plan = "fade", sortie du dernier = "fade".

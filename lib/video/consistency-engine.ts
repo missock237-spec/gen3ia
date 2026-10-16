@@ -29,7 +29,9 @@ export function buildVisualBibleFromScript(script: VideoScript, scenes: ScriptSc
   return {
     styleDescriptors:
       "cinematic photography, photorealistic, natural volumetric lighting, shallow depth of field, "
-      + "ultra-detailed textures, film-like color grading, high dynamic range, professional documentary quality, "
+      + "shot on a full-frame cinema camera with high-end prime lenses, "
+      + "ultra-detailed textures and micro-details, film-like color grading with subtle grain, high dynamic range, "
+      + "professional documentary quality, physically accurate light transport (reflections, caustics, shadows), "
       + "consistent art direction across all scenes",
     palette: "cohérente sur tout le projet (dérivée des premières scènes)",
     characters: characters.map((name) => ({
@@ -42,7 +44,7 @@ export function buildVisualBibleFromScript(script: VideoScript, scenes: ScriptSc
       name,
       appearancePrompt: `${name} — lieu à décrire précisément et à conserver sur toutes les scènes`,
     })),
-    negativePrompt: "texte illisible, artefacts, membres déformés, watermark, changement d'apparence entre scènes",
+    negativePrompt: "texte illisible, artefacts, membres déformés, mains incorrectes, visages instables, scintillement, watermark, changement d'apparence entre scènes",
   };
 }
 

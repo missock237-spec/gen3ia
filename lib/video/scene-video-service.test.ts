@@ -213,6 +213,39 @@ describe("buildSceneMotionPrompt — prompt cinéma structuré", () => {
     expect(buildSceneMotionPrompt(project, makeScene({ cameraMotion: "static" }))).toContain("locked-off static shot");
     expect(buildSceneMotionPrompt(project, makeScene({ cameraMotion: "tilt_up" }))).toContain("tilt-up reveal");
   });
+
+  it("Task 158 — ancre le mouvement dans la première frame et exige la stabilité temporelle (réalisme)", () => {
+    const prompt = buildSceneMotionPrompt(makeProject(), makeScene());
+    expect(prompt).toContain("Motion:");
+    expect(prompt).toContain("movement starts naturally from the exact pose, composition and lighting of the first frame");
+    expect(prompt).toContain("no flicker, no warping, no melting textures");
+    expect(prompt).toContain("anatomically correct humans and animals");
+    expect(prompt).toContain("shot on a full-frame cinema camera with high-end prime lenses");
+  });
+
+  it("Task 158 — le bloc cohérence n'est JAMAIS tronqué, même avec un sujet très long", () => {
+    const longSubject = "A".repeat(3700);
+    const project = makeProject();
+    const scene = makeScene({ visualPrompt: longSubject });
+    const prompt = buildSceneMotionPrompt(project, scene);
+    // Les blocs réalisme vivent à la FIN du prompt : ils doivent rester entiers.
+    expect(prompt).toContain("no text overlays, no watermark, no subtitles, no logo");
+    expect(prompt).toContain("plausible physics, no impossible movements");
+    expect(prompt.endsWith("plausible physics, no impossible movements")).toBe(true);
+    // Le sujet garde un plancher de 600 caractères.
+    expect(prompt).toContain(`Subject and setting: ${"A".repeat(600)}`);
+  });
+});
+
+describe("sceneSeed — graine déterministe par scène (reproductibilité Agnes)", () => {
+  it("renvoie la même graine pour la même scène, stable et positive", async () => {
+    const { sceneSeed } = await import("./scene-video-service");
+    const first = sceneSeed("scene_001");
+    expect(first).toBeGreaterThan(0);
+    expect(first).toBeLessThanOrEqual(2_147_483_647);
+    expect(sceneSeed("scene_001")).toBe(first);
+    expect(sceneSeed("scene_002")).not.toBe(first);
+  });
 });
 
 describe("clipSecondsForScene — bornes API 4–12 s", () => {
