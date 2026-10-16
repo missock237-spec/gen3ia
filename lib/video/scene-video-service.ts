@@ -40,6 +40,9 @@ import {
   MAX_CLIP_SECONDS,
   MIN_CLIP_SECONDS,
   isVideoUnavailableError,
+  awaitVideoTask,
+  createVideoTask,
+  type VideoSize,
 } from "@/lib/ai/video-generation";
 import { registerAsset, listAssets } from "@/lib/video/asset-service";
 import { adminDb } from "@/lib/firebase/admin";
@@ -194,6 +197,190 @@ export interface SceneVideoResult {
   providerCostEur: number;
 }
 
+/**
+ * Tâche vidéo VIVANTE d'une scène — sérialisée sur le job de production
+ * (reprise INTER-TICKS) : la génération mûrit côté Agnes, le tick suivant
+ * RE-SONDE la même tâche au lieu de re-générer (idempotence économique :
+ * jamais deux coûts fournisseur pour une même scène).
+ */
+export interface SceneVideoTaskState {
+  videoId: string;
+  taskId: string;
+  /** Référence de réservation wallet OUVERTE (à régler/libérer à la terminaison). */
+  billingReference: string;
+  reserveMinor: number;
+  chargeMinor: number;
+  seconds: number;
+  size: string;
+  startedAt: string;
+}
+
+/**
+ * DÉMARRAGE du clip d'une scène : image (first frame) + réservation wallet
+ * + création de tâche Agnes (PAS de sondage). Retourne l'état SÉRIALISABLE
+ * à persister IMMÉDIATEMENT sur le job (survie aux crashes) — l'appelant
+ * sonde ensuite via awaitSceneVideoTask avec SON budget de tick.
+ */
+export async function startSceneVideoTask(params: {
+  userId: string;
+  project: VideoProject;
+  scene: ScriptScene;
+  /** Image de scène déjà résolue par l'appelant (vague assets). */
+  image: VideoAsset;
+}): Promise<SceneVideoTaskState> {
+  const { userId, project, scene } = params;
+  if (!isSceneVideoServiceEnabled()) {
+    throw new SceneVideoUnavailableError("Génération de clips vidéo IA désactivée sur cette plateforme.");
+  }
+  await assertSceneVideoBudget(userId, project.id);
+
+  const prompt = buildSceneMotionPrompt(project, scene);
+  const clipSeconds = clipSecondsForScene(scene);
+  const size = videoSizeForResolution(project.resolution);
+  const externalCostEur = agnesVideoCostEur(clipSeconds, size);
+
+  const reservation = await reserveSceneVideoBilling({
+    userId,
+    projectId: project.id,
+    sceneId: scene.id,
+    seconds: clipSeconds,
+    externalCostEur,
+  });
+
+  let created: { videoId: string; taskId: string; status: string };
+  try {
+    const firstFrameUrl = await createVideoPlaybackUrl(userId, params.image.r2Key, 3600);
+    created = await createVideoTask({
+      prompt,
+      mode: "keyframe",
+      firstFrameUrl,
+      seconds: clipSeconds,
+      size,
+      aspectRatio: videoAspectRatioFor(project.aspectRatio),
+    });
+  } catch (error) {
+    // Échec au démarrage → RIEN n'est débité (libération intégrale).
+    await releaseReservation({ userId, reference: reservation.reference, reservedMinor: reservation.reserveMinor })
+      .catch(() => undefined);
+    if (isVideoUnavailableError(error)) {
+      throw new SceneVideoUnavailableError(error instanceof Error ? error.message : "Génération vidéo IA indisponible.");
+    }
+    throw error;
+  }
+
+  return {
+    videoId: created.videoId,
+    taskId: created.taskId,
+    billingReference: reservation.reference,
+    reserveMinor: reservation.reserveMinor,
+    chargeMinor: reservation.chargeMinor,
+    seconds: clipSeconds,
+    size,
+    startedAt: new Date().toISOString(),
+  };
+}
+
+/** Résultat du re-sondage d'une tâche vivante. */
+export type AwaitSceneVideoOutcome =
+  | { status: "completed"; assetId: string; clipSeconds: number; chargeMinor: number; providerCostEur: number }
+  /** Échéance atteinte SANS terminaison : la tâche vit toujours côté Agnes —
+   * reprise au tick suivant (état à CONSERVER tel quel sur le job). */
+  | { status: "pending" }
+  | { status: "failed"; error: string; unavailable: boolean };
+
+/**
+ * FINALISATION d'une tâche vivante : re-sondage borné par l'échéance de
+ * l'appelant (budget du tick), téléchargement + enregistrement + règlement
+ * au réel. Idempotence : un clip DÉJÀ enregistré (crash entre register et
+ * checkpoint du tick précédent) → rattrapage du règlement et completed.
+ */
+export async function awaitSceneVideoTask(params: {
+  userId: string;
+  project: VideoProject;
+  scene: ScriptScene;
+  task: SceneVideoTaskState;
+  /** Échéance absolue (Date.now()) du sondage ; défaut = timeout du client. */
+  deadlineMs?: number;
+}): Promise<AwaitSceneVideoOutcome> {
+  const { userId, project, scene, task } = params;
+
+  // Rattrapage idempotent : finalisé par un tick précédent mort avant checkpoint.
+  const alreadyRegistered = await findSceneVideo(userId, project.id, scene.id);
+  if (alreadyRegistered) {
+    await settleReservation({
+      userId,
+      reference: task.billingReference,
+      reservedMinor: task.reserveMinor,
+      actualChargeMinor: Math.min(task.chargeMinor, task.reserveMinor),
+    }).catch(() => undefined);
+    return { status: "completed", assetId: alreadyRegistered.id, clipSeconds: alreadyRegistered.media?.durationSec ?? task.seconds, chargeMinor: 0, providerCostEur: 0 };
+  }
+
+  const polled = await awaitVideoTask({ videoId: task.videoId, deadlineMs: params.deadlineMs });
+  if (polled.status === "pending") {
+    return { status: "pending" };
+  }
+  if (polled.status === "failed") {
+    // Échec définitif côté Agnes → libération intégrale (rien n'est débité).
+    await releaseReservation({ userId, reference: task.billingReference, reservedMinor: task.reserveMinor })
+      .catch(() => undefined);
+    return { status: "failed", error: polled.error ?? "Génération vidéo échouée côté Agnes.", unavailable: true };
+  }
+
+  // completed → téléchargement + enregistrement + règlement au réel.
+  let asset: VideoAsset;
+  try {
+    const response = await fetch(polled.videoUrl!, { signal: AbortSignal.timeout(120_000) });
+    if (!response.ok) throw new Error(`Téléchargement du clip : HTTP ${response.status}`);
+    const contentType = response.headers.get("content-type") ?? "video/mp4";
+    if (!/^video\//.test(contentType)) throw new Error("Le contenu téléchargé n'est pas une vidéo.");
+    const body = Buffer.from(await response.arrayBuffer());
+    asset = await registerAsset({
+      userId,
+      projectId: project.id,
+      kind: "video",
+      label: `Clip IA ${scene.id}`,
+      role: sceneVideoRole(scene.id),
+      sceneId: scene.id,
+      origin: "generated",
+      contentType,
+      body,
+    });
+  } catch (error) {
+    // Coût engagé chez le fournisseur : règlement de la réservation puis
+    // remontée de l'erreur d'enregistrement (pas de livraison, pas de vol).
+    await settleReservation({
+      userId,
+      reference: task.billingReference,
+      reservedMinor: task.reserveMinor,
+      actualChargeMinor: task.chargeMinor,
+    }).catch(() => undefined);
+    return { status: "failed", error: error instanceof Error ? error.message : String(error), unavailable: false };
+  }
+
+  const actualSeconds = polled.seconds && polled.seconds > 0 ? polled.seconds : task.seconds;
+  const actualExternalEur = agnesVideoCostEur(actualSeconds, task.size as VideoSize);
+  const actual = estimateExecutionCost({ task: "automation", complexity: 1, externalToolCostEur: actualExternalEur, toolCalls: 1 });
+  const settleMinor = Math.min(actual.chargeMinor, task.reserveMinor);
+  await settleReservation({
+    userId,
+    reference: task.billingReference,
+    reservedMinor: task.reserveMinor,
+    actualChargeMinor: settleMinor,
+    metadata: {
+      kind: "video_generation",
+      provider: "agnes",
+      projectId: project.id,
+      sceneId: scene.id,
+      seconds: String(actualSeconds),
+      size: task.size,
+      model: "agnes-video-2.5",
+    },
+  }).catch(() => undefined); // fail-soft : la vidéo est livrée, le règlement est journalisé
+
+  return { status: "completed", assetId: asset.id, clipSeconds: actualSeconds, chargeMinor: settleMinor, providerCostEur: actualExternalEur };
+}
+
 export interface GenerateSceneVideoParams {
   userId: string;
   project: VideoProject;
@@ -222,7 +409,11 @@ async function assertSceneVideoBudget(userId: string, projectId: string): Promis
 }
 
 /**
- * Génère (ou réutilise) le clip vidéo IA d'une scène :
+ * Génère (ou réutilise) le clip vidéo IA d'une scène — orchestration complète
+ * (démarrage + sondage à fond de budget) pour les appels DIRECTS (route
+ * generate-videos, tests). La file de production utilise les deux moitiés
+ * séparément (startSceneVideoTask + awaitSceneVideoTask) pour reprendre les
+ * tâches vivantes entre les ticks sans jamais re-générer.
  * - un clip déjà lié à la scène → réutilisé (idempotence, révisions) ;
  * - l'image cohérente de la scène devient la FIRST FRAME du clip ;
  * - facturation : réservation avant, règlement au réel après ;
@@ -260,108 +451,32 @@ export async function generateSceneVideo(params: GenerateSceneVideoParams): Prom
     throw new SceneVideoUnavailableError(`Image de la scène ${scene.id} indisponible pour animer le clip.`);
   }
 
-  // 2) URL publique signée de la first frame (valide pendant toute la tâche).
-  const firstFrameUrl = await createVideoPlaybackUrl(userId, image.r2Key, 3600);
-
-  // 3) Prompt cinéma + paramètres.
-  const prompt = buildSceneMotionPrompt(project, scene);
-  const clipSeconds = clipSecondsForScene(scene);
-  const size = videoSizeForResolution(project.resolution);
-  const externalCostEur = agnesVideoCostEur(clipSeconds, size);
-
-  // 4) Réservation du coût AVANT la génération (402 si solde insuffisant).
-  const reservation = await reserveSceneVideoBilling({
-    userId,
-    projectId: project.id,
-    sceneId: scene.id,
-    seconds: clipSeconds,
-    externalCostEur,
-  });
-
-  let generated;
-  try {
-    generated = await generateVideo({
-      prompt,
-      mode: "keyframe",
-      firstFrameUrl,
-      seconds: clipSeconds,
-      size,
-      aspectRatio: videoAspectRatioFor(project.aspectRatio),
-    });
-  } catch (error) {
-    // Échec → RIEN n'est débité (libération intégrale de la réservation).
-    await releaseReservation({ userId, reference: reservation.reference, reservedMinor: reservation.reserveMinor })
-      .catch(() => undefined);
-    if (isVideoUnavailableError(error)) {
-      throw new SceneVideoUnavailableError(
-        error instanceof Error ? error.message : "Génération vidéo IA indisponible.",
-      );
+  // 2) Démarrage + sondage complet (client Agnes, timeout configurable).
+  const startedAt = Date.now();
+  const task = await startSceneVideoTask({ userId, project, scene, image });
+  const outcome = await awaitSceneVideoTask({ userId, project, scene, task });
+  if (outcome.status === "pending") {
+    // Ne devrait pas arriver (deadline illimitée par défaut) — traité en
+    // indisponibilité pour l'appelant direct, la réservation est libérée.
+    await releaseReservation({ userId, reference: task.billingReference, reservedMinor: task.reserveMinor }).catch(() => undefined);
+    throw new SceneVideoUnavailableError("Clip vidéo IA : délai d'attente dépassé.");
+  }
+  if (outcome.status === "failed") {
+    if (outcome.unavailable) {
+      throw new SceneVideoUnavailableError(outcome.error);
     }
-    throw error;
+    throw new Error(outcome.error);
   }
-
-  // 5) Téléchargement du MP4 + enregistrement comme asset projet (ffprobe).
-  let asset: VideoAsset;
-  try {
-    const response = await fetch(generated.videoUrl, { signal: AbortSignal.timeout(120_000) });
-    if (!response.ok) throw new Error(`Téléchargement du clip : HTTP ${response.status}`);
-    const contentType = response.headers.get("content-type") ?? "video/mp4";
-    if (!/^video\//.test(contentType)) throw new Error("Le contenu téléchargé n'est pas une vidéo.");
-    const body = Buffer.from(await response.arrayBuffer());
-    asset = await registerAsset({
-      userId,
-      projectId: project.id,
-      kind: "video",
-      label: `Clip IA ${scene.id}`,
-      role: sceneVideoRole(scene.id),
-      sceneId: scene.id,
-      origin: "generated",
-      contentType,
-      body,
-    });
-  } catch (error) {
-    // Le clip est généré et facturé chez le fournisseur : on règle la
-    // réservation (le coût a bien été engagé) puis on remonte l'erreur
-    // d'enregistrement — pas de livraison, mais pas de vol non plus.
-    await settleReservation({
-      userId,
-      reference: reservation.reference,
-      reservedMinor: reservation.reserveMinor,
-      actualChargeMinor: reservation.chargeMinor,
-    }).catch(() => undefined);
-    throw error;
-  }
-
-  // 6) Règlement au réel (durée de sortie réelle si connue, sinon demandée).
-  const actualSeconds = generated.seconds > 0 ? generated.seconds : clipSeconds;
-  const actualExternalEur = agnesVideoCostEur(actualSeconds, size);
-  const actual = estimateExecutionCost({ task: "automation", complexity: 1, externalToolCostEur: actualExternalEur, toolCalls: 1 });
-  const settleMinor = Math.min(actual.chargeMinor, reservation.reserveMinor); // jamais au-delà du réservé
-  await settleReservation({
-    userId,
-    reference: reservation.reference,
-    reservedMinor: reservation.reserveMinor,
-    actualChargeMinor: settleMinor,
-    metadata: {
-      kind: "video_generation",
-      provider: "agnes",
-      projectId: project.id,
-      sceneId: scene.id,
-      seconds: String(actualSeconds),
-      size,
-      model: generated.model,
-    },
-  }).catch(() => undefined); // fail-soft : la vidéo est livrée, le règlement est journalisé
 
   return {
     sceneId: scene.id,
-    assetId: asset.id,
+    assetId: outcome.assetId,
     generated: true,
     reused: false,
-    clipSeconds: actualSeconds,
-    latencyMs: generated.latencyMs,
-    chargeMinor: settleMinor,
-    providerCostEur: actualExternalEur,
+    clipSeconds: outcome.clipSeconds,
+    latencyMs: Date.now() - startedAt,
+    chargeMinor: outcome.chargeMinor,
+    providerCostEur: outcome.providerCostEur,
   };
 }
 

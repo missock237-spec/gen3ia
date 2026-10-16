@@ -287,6 +287,61 @@ export async function generateVideo(input: CreateVideoTaskInput): Promise<Genera
   );
 }
 
+/** Résultat du sondage borné d'une tâche existante. */
+export interface AwaitVideoTaskResult {
+  status: "completed" | "pending" | "failed";
+  videoUrl?: string;
+  seconds?: number;
+  error?: string;
+  lastProgress: number;
+}
+
+/**
+ * REPRISE INTER-TICKS — sonde une tâche DÉJÀ CRÉÉE jusqu'à terminaison
+ * (completed/failed) OU échéance de l'appelant. `pending` = échéance atteinte
+ * SANS terminaison : la tâche vit toujours côté Agnes, l'appelant la re-sonde
+ * au tick suivant SANS re-générer (idempotence économique : jamais deux
+ * coûts fournisseur pour une même scène). 429 → backoff doux, hoquets réseau
+ * tolérés jusqu'à l'échéance.
+ */
+export async function awaitVideoTask(params: {
+  videoId: string;
+  /** Échéance absolue (Date.now()) ; défaut = timeout global du client. */
+  deadlineMs?: number;
+}): Promise<AwaitVideoTaskResult> {
+  const deadline = typeof params.deadlineMs === "number" && params.deadlineMs > 0
+    ? params.deadlineMs
+    : Date.now() + pollTimeoutMs();
+  let intervalMs = pollIntervalMs();
+  let lastProgress = 0;
+
+  while (Date.now() < deadline) {
+    await sleep(intervalMs);
+    let status: VideoTaskStatus;
+    try {
+      status = await retrieveVideoTask(params.videoId);
+    } catch (error) {
+      if (error instanceof VideoGenerationError && error.code === "RATE_LIMITED") {
+        intervalMs = Math.min(intervalMs * 2, 10_000);
+        continue;
+      }
+      continue; // hoquet réseau/5xx : re-sondage tant que l'échéance tient
+    }
+    lastProgress = status.progress;
+    if (status.status === "failed") {
+      return {
+        status: "failed",
+        error: `Agnes Video : génération échouée — ${status.error?.message ?? "raison inconnue"}`,
+        lastProgress,
+      };
+    }
+    if (status.status === "completed" && status.url) {
+      return { status: "completed", videoUrl: status.url, seconds: status.seconds, lastProgress };
+    }
+  }
+  return { status: "pending", lastProgress };
+}
+
 /**
  * Indisponibilité technique (pour repli automatique « résultat plutôt
  * qu'échec ») : clé absente, 5xx, 429 persistant, timeout de génération.

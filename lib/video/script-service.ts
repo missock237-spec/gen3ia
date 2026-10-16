@@ -31,6 +31,7 @@ import {
 import { patchProject, snapshotVersion, appendProductionLog, getOwnedProjectOrThrow } from "@/lib/video/project-service";
 import { VIDEO_LIMITS } from "@/lib/video/security";
 import { buildVisualBibleFromScript } from "@/lib/video/consistency-engine";
+import { isSceneVideoServiceEnabled } from "@/lib/video/scene-video-service";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Contrats de sortie stricts
@@ -100,7 +101,7 @@ Règles :
 - "subject" décrit le sujet PRINCIPAL du cadrage : "person" si une personne occupe l'image (orateur, personnage, portrait) — cela active les animations synchronisées à la voix ; "place" pour un lieu, "object" pour un objet, "abstract" sinon. null si indécis.
 - "captions" vaut true par défaut dès que la scène est narrée (false seulement pour une demande explicite sans sous-titres).
 - Transition d'entrée du premier plan = "fade", sortie du dernier = "fade".
-- Rythme : scènes de 6 à 10 s pour un documentaire, 3 à 5 s pour un Short.`;
+- Rythme : ${"rythme des scènes"}.`;
 
 export interface ScriptResult {
   script: VideoScript;
@@ -115,11 +116,17 @@ export async function generateScript(userId: string, projectId: string): Promise
 
   const chapters = project.status === "planning" && project.description ? project.description : "";
   const sceneTarget = Math.max(3, Math.min(VIDEO_LIMITS.maxScenes, Math.round(project.targetDurationSec / 8)));
+  // Task 154 — rythme aligné sur les clips vidéo IA quand ils sont actifs :
+  // durée native 4–12 s par scène → le rendu évite ralentis et gels de fin
+  // (chaque scène est couverte par un clip généré sur mesure).
+  const scenePace = isSceneVideoServiceEnabled()
+    ? "scènes de 4 à 12 s (durée native des clips vidéo IA), idéalement 6 à 10 s — un temps de lecture naturel"
+    : "scènes de 6 à 10 s pour un documentaire, 3 à 5 s pour un Short";
 
   const response = await generate({
     task: "reasoning",
     messages: [
-      { role: "system", content: SCRIPT_SYSTEM_PROMPT.replace("langue demandée", project.language) },
+      { role: "system", content: SCRIPT_SYSTEM_PROMPT.replace("langue demandée", project.language).replace("rythme des scènes", scenePace) },
       {
         role: "user",
         content: [

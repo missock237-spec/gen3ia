@@ -27,7 +27,10 @@ export function buildVisualBibleFromScript(script: VideoScript, scenes: ScriptSc
     LOCATION_HINTS,
   );
   return {
-    styleDescriptors: "cinematic photography, consistent art direction, high detail, professional color grading",
+    styleDescriptors:
+      "cinematic photography, photorealistic, natural volumetric lighting, shallow depth of field, "
+      + "ultra-detailed textures, film-like color grading, high dynamic range, professional documentary quality, "
+      + "consistent art direction across all scenes",
     palette: "cohérente sur tout le projet (dérivée des premières scènes)",
     characters: characters.map((name) => ({
       id: `char_${slug(name)}`,

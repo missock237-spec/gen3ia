@@ -33,6 +33,8 @@ vi.mock("@/lib/ai/video-generation", () => ({
   MAX_CLIP_SECONDS: 12,
   MIN_CLIP_SECONDS: 4,
   isVideoUnavailableError: vi.fn(() => false),
+  createVideoTask: vi.fn(),
+  awaitVideoTask: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase/admin", () => ({
@@ -51,6 +53,8 @@ import { findSceneImage, generateSceneImage } from "@/lib/video/image-bridge";
 import { createVideoPlaybackUrl } from "@/lib/video/storage";
 import {
   generateVideo as agnesGenerateVideo,
+  createVideoTask as agnesCreateVideoTask,
+  awaitVideoTask as agnesAwaitVideoTask,
   isVideoGenerationEnabled,
   isVideoUnavailableError,
 } from "@/lib/ai/video-generation";
@@ -61,6 +65,8 @@ import {
   generateSceneVideo,
   generateAllSceneVideos,
   sceneVideoRole,
+  startSceneVideoTask,
+  awaitSceneVideoTask,
 } from "./scene-video-service";
 import type { ScriptScene, VideoProject } from "@/lib/video/types";
 
@@ -70,6 +76,8 @@ const imageBridgeMock = vi.mocked({ findSceneImage, generateSceneImage });
 const storageMock = vi.mocked({ createVideoPlaybackUrl });
 const agnesMock = vi.mocked({
   generateVideo: agnesGenerateVideo,
+  createVideoTask: agnesCreateVideoTask,
+  awaitVideoTask: agnesAwaitVideoTask,
   isVideoGenerationEnabled,
   isVideoUnavailableError,
 });
@@ -156,6 +164,13 @@ beforeEach(() => {
     size: "1080P",
     latencyMs: 42_000,
   } as never);
+  agnesMock.createVideoTask.mockResolvedValue({ videoId: "video_1", taskId: "task_1", status: "queued" } as never);
+  agnesMock.awaitVideoTask.mockResolvedValue({
+    status: "completed",
+    videoUrl: "https://cdn.example.com/clip.mp4",
+    seconds: 8,
+    lastProgress: 100,
+  } as never);
   globalThis.fetch = vi.fn(async () => new Response(
     Buffer.from("fake-mp4-bytes"),
     { status: 200, headers: { "content-type": "video/mp4" } },
@@ -223,7 +238,7 @@ describe("generateSceneVideo — cycle facturé clé en main", () => {
   it("réserve AVANT de générer, puis règle au réel (ordre escrow)", async () => {
     const order: string[] = [];
     walletMock.reserveFunds.mockImplementation(async () => { order.push("reserve"); return {}; });
-    agnesMock.generateVideo.mockImplementation(async () => { order.push("generate"); return { videoUrl: "https://cdn.example.com/clip.mp4", model: "agnes-video-2.5", videoId: "v", taskId: "t", seconds: 8, size: "1080P", latencyMs: 1000 }; });
+    agnesMock.createVideoTask.mockImplementation(async () => { order.push("generate"); return { videoId: "v", taskId: "t", status: "queued" }; });
     walletMock.settleReservation.mockImplementation(async () => { order.push("settle"); return {}; });
 
     const result = await generateSceneVideo({ userId: "user-1", project: makeProject(), scene: makeScene() });
@@ -232,7 +247,7 @@ describe("generateSceneVideo — cycle facturé clé en main", () => {
     expect(result.clipSeconds).toBe(8);
 
     // Appel Agnes : mode keyframe avec l'image signée en première frame.
-    const call = agnesMock.generateVideo.mock.calls[0][0] as Record<string, unknown>;
+    const call = agnesMock.createVideoTask.mock.calls[0][0] as Record<string, unknown>;
     expect(call.mode).toBe("keyframe");
     expect(call.firstFrameUrl).toContain("https://r2.example.com/signed");
     expect(call.seconds).toBe(8);
@@ -246,7 +261,7 @@ describe("generateSceneVideo — cycle facturé clé en main", () => {
 
   it("échec fournisseur → libération INTÉGRALE de la réservation (rien débité) + erreur typée", async () => {
     agnesMock.isVideoUnavailableError.mockReturnValue(true);
-    agnesMock.generateVideo.mockRejectedValue(new Error("Agnes Video : HTTP 500"));
+    agnesMock.createVideoTask.mockRejectedValue(new Error("Agnes Video : HTTP 500"));
 
     await expect(
       generateSceneVideo({ userId: "user-1", project: makeProject(), scene: makeScene() }),
@@ -262,7 +277,7 @@ describe("generateSceneVideo — cycle facturé clé en main", () => {
     await expect(
       generateSceneVideo({ userId: "user-1", project: makeProject(), scene: makeScene() }),
     ).rejects.toThrow(/Insufficient wallet balance/);
-    expect(agnesMock.generateVideo).not.toHaveBeenCalled();
+    expect(agnesMock.createVideoTask).not.toHaveBeenCalled();
     expect(walletMock.settleReservation).not.toHaveBeenCalled();
   });
 
@@ -278,6 +293,57 @@ describe("generateSceneVideo — cycle facturé clé en main", () => {
     const result = await generateSceneVideo({ userId: "user-1", project: makeProject(), scene: makeScene() });
     expect(imageBridgeMock.generateSceneImage).toHaveBeenCalledTimes(1);
     expect(result.generated).toBe(true);
+  });
+});
+
+describe("startSceneVideoTask / awaitSceneVideoTask — reprise inter-ticks (jamais deux coûts)", () => {
+  it("pending à l'échéance du tick → tâche CONSERVÉE, re-sondage SANS nouveau createVideoTask au tick suivant", async () => {
+    const project = makeProject();
+    const scene = makeScene();
+    const image = makeImageAsset() as never;
+
+    // TICK 1 : démarrage OK, sondage interrompu par l'échéance (pending).
+    agnesMock.awaitVideoTask.mockResolvedValueOnce({ status: "pending", lastProgress: 42 } as never);
+    const task = await startSceneVideoTask({ userId: "user-1", project, scene, image });
+    expect(task.videoId).toBe("video_1");
+    expect(task.billingReference).toBeTruthy();
+    const tick1 = await awaitSceneVideoTask({ userId: "user-1", project, scene, task, deadlineMs: Date.now() + 1_000 });
+    expect(tick1.status).toBe("pending");
+    // La réservation n'est NI réglée NI libérée : l'escrow tient jusqu'à la terminaison.
+    expect(walletMock.settleReservation).not.toHaveBeenCalled();
+    expect(walletMock.releaseReservation).not.toHaveBeenCalled();
+
+    // TICK 2 : RE-SONDAGE de la MÊME tâche (jamais de second createVideoTask).
+    agnesMock.awaitVideoTask.mockResolvedValueOnce({ status: "completed", videoUrl: "https://cdn.example.com/clip.mp4", seconds: 8, lastProgress: 100 } as never);
+    const tick2 = await awaitSceneVideoTask({ userId: "user-1", project, scene, task, deadlineMs: Date.now() + 1_000 });
+    expect(tick2.status).toBe("completed");
+    expect(agnesMock.createVideoTask).toHaveBeenCalledTimes(1); // UN SEUL coût fournisseur
+    expect(agnesMock.awaitVideoTask).toHaveBeenCalledTimes(2); // deux sondages, une génération
+    expect(walletMock.settleReservation).toHaveBeenCalledTimes(1); // règlement au réel à la complétion
+  });
+
+  it("échec définitif côté Agnes → libération INTÉGRALE (rien débité)", async () => {
+    agnesMock.awaitVideoTask.mockResolvedValueOnce({ status: "failed", error: "Agnes Video : génération échouée — média invalide", lastProgress: 100 } as never);
+    const project = makeProject();
+    const scene = makeScene();
+    const task = await startSceneVideoTask({ userId: "user-1", project, scene, image: makeImageAsset() as never });
+    const outcome = await awaitSceneVideoTask({ userId: "user-1", project, scene, task });
+    expect(outcome.status).toBe("failed");
+    expect(walletMock.releaseReservation).toHaveBeenCalledTimes(1);
+    expect(walletMock.settleReservation).not.toHaveBeenCalled();
+  });
+
+  it("clip déjà enregistré (crash entre register et checkpoint) → rattrapage du règlement, PAS de re-téléchargement", async () => {
+    assetServiceMock.listAssets.mockResolvedValue([
+      { id: "already-there", kind: "video", role: sceneVideoRole("scene_001"), sceneId: "scene_001", media: { durationSec: 8 } },
+    ] as never);
+    const project = makeProject();
+    const scene = makeScene();
+    const task = await startSceneVideoTask({ userId: "user-1", project, scene, image: makeImageAsset() as never });
+    const outcome = await awaitSceneVideoTask({ userId: "user-1", project, scene, task });
+    expect(outcome.status).toBe("completed");
+    expect(agnesMock.awaitVideoTask).not.toHaveBeenCalled(); // pas même un sondage : l'asset est là
+    expect(walletMock.settleReservation).toHaveBeenCalledTimes(1); // rattrapage du règlement
   });
 });
 

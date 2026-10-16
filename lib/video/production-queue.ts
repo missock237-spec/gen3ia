@@ -37,8 +37,8 @@ import { createProject, getOwnedProjectOrThrow, patchProject, logSystem } from "
 import { VideoProjectCreateSchema, DirectorBriefSchema, RenderRequestSchema, VIDEO_LIMITS, VideoQuotaError } from "@/lib/video/security";
 import { applyProductionPlan } from "@/lib/video/director-service";
 import { generateScript } from "@/lib/video/script-service";
-import { generateSceneImage } from "@/lib/video/image-bridge";
-import { generateSceneVideo, isSceneVideoServiceEnabled, SceneVideoUnavailableError } from "@/lib/video/scene-video-service";
+import { generateSceneImage, findSceneImage } from "@/lib/video/image-bridge";
+import { generateSceneVideo, isSceneVideoServiceEnabled, SceneVideoUnavailableError, startSceneVideoTask, awaitSceneVideoTask, findSceneVideo, type SceneVideoTaskState } from "@/lib/video/scene-video-service";
 import { billImageGeneration, billTts } from "@/lib/video/credits";
 import { resolvePreferredVoice, withPlatformVoiceFallback, generateSceneNarration, attachRecordingAsNarration } from "@/lib/video/voice-service";
 import { listAssets } from "@/lib/video/asset-service";
@@ -90,6 +90,12 @@ export const PRODUCTION_STAGE_WEIGHTS: Record<ProductionStage, [number, number]>
 export const PRODUCTION_RETRY_BUDGET = 3;
 /** Visuels/narrations traités par tick au maximum (bornage serverless). */
 export const ASSET_BATCH_SIZE = 4;
+/**
+ * Task 154 (reprise inter-ticks) — budget minimal pour DÉMARRER un clip IA
+ * (maturation 60–180 s côté Agnes) : les ticks « sondage » courts (20–55 s)
+ * ne démarrent rien, le tick worker (bail 230 s) prend le relais.
+ */
+export const SCENE_VIDEO_MIN_START_BUDGET_MS = 120_000;
 /**
  * Task 106-c — TOLÉRANCE PAR SCÈNE : nombre d'échecs d'une même scène
  * (génération d'image / TTS) avant abandon définitif de CETTE scène. Les
@@ -152,6 +158,13 @@ export interface VideoProductionJob {
   progress: number;
   /** Curseur de lot : index de la PROCHAINE scène à traiter (assets/voice). */
   sceneCursor: number;
+  /**
+   * Task 154 (reprise inter-ticks) — tâches Agnes Video VIVANTES par scène
+   * (clé sceneId) : la génération mûrit côté Agnes, le tick suivant re-sonde
+   * la MÊME tâche au lieu de re-générer (jamais deux coûts fournisseur pour
+   * une même scène). Absent = {} (compatibilité documents historiques).
+   */
+  sceneVideoTasks?: Record<string, SceneVideoTaskState>;
   error?: string;
   leaseOwner?: string;
   leaseExpiresAt?: number;
@@ -611,6 +624,7 @@ function normalizeJobDoc(stored: Partial<ProductionJobWithResume>, id: string): 
     // Task 106-c — tolérance par scène + garde nextAttemptAt : champs
     // persistés, transités tels quels (compatibilité documents historiques).
     ...(isSceneFailureRecord(stored.sceneFailures) ? { sceneFailures: stored.sceneFailures } : {}),
+    ...(isSceneVideoTaskRecord(stored.sceneVideoTasks) ? { sceneVideoTasks: stored.sceneVideoTasks } : {}),
     ...(Array.isArray(stored.warnings) ? { warnings: stored.warnings.filter((w): w is string => typeof w === "string") } : {}),
     ...(typeof stored.nextAttemptAt === "string" ? { nextAttemptAt: stored.nextAttemptAt } : {}),
     // Task 107-a — livraison chat : champs persistés, transités tels quels
@@ -628,6 +642,18 @@ function normalizeJobDoc(stored: Partial<ProductionJobWithResume>, id: string): 
 function isSceneFailureRecord(value: unknown): value is Record<string, number> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   return Object.values(value).every((v) => typeof v === "number");
+}
+
+/** Garde de forme des tâches vidéo vivantes (documents corrompus → ignorées). */
+function isSceneVideoTaskRecord(value: unknown): value is Record<string, SceneVideoTaskState> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  return Object.values(value).every(
+    (v) =>
+      typeof v === "object" && v !== null &&
+      typeof (v as SceneVideoTaskState).videoId === "string" && (v as SceneVideoTaskState).videoId.length > 0 &&
+      typeof (v as SceneVideoTaskState).billingReference === "string" &&
+      typeof (v as SceneVideoTaskState).seconds === "number",
+  );
 }
 
 async function claimProductionJob(jobId: string): Promise<ProductionClaimOutcome> {
@@ -805,8 +831,13 @@ interface SceneWaveResult {
    * Task 154 — clip vidéo IA (Agnes Video, mode keyframe). JAMAIS bloquant
    * pour la production : un échec (indisponibilité, crédit, quota) dégrade
    * la scène en animation image Ken Burns avec avertissement utilisateur.
+   *
+   * `pending` = la tâche Agnes vit toujours (échéance du tick atteinte) :
+   * le curseur s'ARRÊTE sur cette scène, le tick suivant RE-SONDE la même
+   * tâche (reprise inter-ticks — jamais de re-génération). `not_started` =
+   * budget trop court pour DÉMARRER (ticks « sondage » 20–55 s) : idem.
    */
-  video: { status: "generated" | "reused" | "skipped" | "failed"; error?: string };
+  video: { status: "generated" | "reused" | "skipped" | "failed" | "pending" | "not_started"; error?: string };
 }
 
 /** Voix résolue + narrations déjà posées (chevauchement assets∥voice). */
@@ -933,6 +964,10 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
   // Task 106-c — état de tolérance (persisté sur le job à chaque checkpoint).
   let sceneFailures = job.sceneFailures ?? {};
   let warnings = job.warnings ?? [];
+  // Task 154 (reprise inter-ticks) — tâches Agnes Video vivantes : re-sondées
+  // au lieu d'être re-générées (idempotence économique par scène).
+  const sceneVideoTasks: Record<string, SceneVideoTaskState> = { ...(job.sceneVideoTasks ?? {}) };
+  const sceneVideoTasksAtStart = JSON.stringify(job.sceneVideoTasks ?? {});
   const cursorAtTickStart = job.sceneCursor;
   const failuresAtTickStart = JSON.stringify(sceneFailures);
 
@@ -992,7 +1027,15 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
       // l'image cohérente devient la first frame du clip) et se poursuit en
       // parallèle de la narration. Échec → dégradation Ken Burns (jamais
       // bloquant) : le rendu n'a simplement pas de videoR2Key pour la scène.
-      const videoTask: Promise<{ status: "fulfilled"; value: { status: "generated" | "reused" | "skipped" | "failed"; error?: string } } | { status: "rejected"; reason: unknown }> =
+      //
+      // REPRISE INTER-TICKS : une tâche Agnes DÉMARRÉE mais non terminée à
+      // l'échéance du tick reste dans sceneVideoTasks (persistée sur le job)
+      // — le tick suivant RE-SONDE la même tâche au lieu de re-générer
+      // (jamais deux coûts fournisseur pour une même scène). Les ticks
+      // « sondage » courts (20–55 s) ne DÉMARRENT rien : sans budget minimal
+      // ils attendent le tick worker (bail 230 s).
+      const videoDeadlineMs = deadlineMs !== null ? deadlineMs - 10_000 : null; // marge avant l'échéance du tick
+      const videoTask: Promise<{ status: "fulfilled"; value: { status: "generated" | "reused" | "skipped" | "failed" | "pending" | "not_started"; error?: string } } | { status: "rejected"; reason: unknown }> =
         imageSettled.status === "rejected"
           ? Promise.resolve({ status: "fulfilled" as const, value: { status: "skipped" as const } })
           : settle(async () => {
@@ -1000,8 +1043,67 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
                 return { status: "skipped" as const };
               }
               try {
-                const clip = await generateSceneVideo({ userId: job.userId, project, scene });
-                return clip.reused ? { status: "reused" as const } : { status: "generated" as const };
+                // 1. Tâche vivante → RE-SONDAGE (jamais de re-génération).
+                const live = sceneVideoTasks[scene.id];
+                if (live) {
+                  const outcome = await awaitSceneVideoTask({
+                    userId: job.userId,
+                    project,
+                    scene,
+                    task: live,
+                    ...(videoDeadlineMs !== null ? { deadlineMs: videoDeadlineMs } : {}),
+                  });
+                  if (outcome.status === "pending") {
+                    return { status: "pending" as const };
+                  }
+                  delete sceneVideoTasks[scene.id];
+                  if (outcome.status === "failed") {
+                    return { status: "failed" as const, error: outcome.error };
+                  }
+                  return { status: "generated" as const };
+                }
+                // 2. Clip déjà finalisé ? (idempotence — y compris par un tick
+                // précédent mort entre register et checkpoint).
+                const existing = await findSceneVideo(job.userId, project.id, scene.id);
+                if (existing) {
+                  return { status: "reused" as const };
+                }
+                // 3. NOUVELLE tâche : budget minimal requis (maturation 60–180 s
+                // côté Agnes) — un tick trop court ne démarre rien.
+                if (videoDeadlineMs !== null && Date.now() > videoDeadlineMs - SCENE_VIDEO_MIN_START_BUDGET_MS) {
+                  return { status: "not_started" as const };
+                }
+                const image = imageSettled.status === "fulfilled" && imageSettled.value.status === "ok"
+                  ? await findSceneImage(job.userId, project.id, scene.id)
+                  : null;
+                if (!image) {
+                  return { status: "skipped" as const };
+                }
+                const task = await startSceneVideoTask({ userId: job.userId, project, scene, image });
+                sceneVideoTasks[scene.id] = task;
+                // Persistance IMMÉDIATE (survie aux crashes) : la tâche
+                // démarrée est connue du job AVANT le premier sondage.
+                await writeCheckpointSet(
+                  PRODUCTION_JOBS_COLLECTION,
+                  job.id,
+                  { sceneVideoTasks, updatedAt: nowIso() },
+                  job.userId,
+                ).catch(() => undefined);
+                const outcome = await awaitSceneVideoTask({
+                  userId: job.userId,
+                  project,
+                  scene,
+                  task,
+                  ...(videoDeadlineMs !== null ? { deadlineMs: videoDeadlineMs } : {}),
+                });
+                if (outcome.status === "pending") {
+                  return { status: "pending" as const };
+                }
+                delete sceneVideoTasks[scene.id];
+                if (outcome.status === "failed") {
+                  return { status: "failed" as const, error: outcome.error };
+                }
+                return { status: "generated" as const };
               } catch (error) {
                 if (error instanceof SceneVideoUnavailableError || error instanceof VideoQuotaError) {
                   return { status: "failed" as const, error: error.message };
@@ -1049,6 +1151,7 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
   let firstImageFatal: unknown = null;
   let firstTickError: unknown;
   let haveTickError = false;
+  let pendingSceneVideos = 0;
   let cursor = cursorAtTickStart;
   for (let i = 0; i < window.batch.length; i += 1) {
     const outcome = outcomes[i];
@@ -1109,6 +1212,14 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
         `Clip vidéo IA de la scène ${sceneIndex + 1} non généré (${(result.video.error ?? "raison inconnue").slice(0, 160)}) — animation image utilisée.`,
       );
     }
+    // Task 154 (reprise inter-ticks) — tâche vivante ou non démarrée : le
+    // curseur S'ARRÊTE sur cette scène (sa vidéo mûrit côté Agnes, le tick
+    // suivant re-sonde la même tâche — les scènes suivantes, même réussies,
+    // seront re-validées idempotemment, sans re-génération).
+    if (result.video.status === "pending" || result.video.status === "not_started") {
+      pendingSceneVideos += 1;
+      break;
+    }
     cursor = sceneIndex + 1;
   }
   job.sceneCursor = cursor;
@@ -1129,8 +1240,13 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
   }
 
   // Task 106-fix — checkpoint CONSOLIDÉ (un par tick) : curseur, progression,
-  // tolérance par scène (sceneFailures/warnings) — persistés ensemble.
-  if (job.sceneCursor !== cursorAtTickStart || JSON.stringify(sceneFailures) !== failuresAtTickStart) {
+  // tolérance par scène (sceneFailures/warnings) et tâches vidéo vivantes —
+  // persistés ensemble.
+  if (
+    job.sceneCursor !== cursorAtTickStart ||
+    JSON.stringify(sceneFailures) !== failuresAtTickStart ||
+    JSON.stringify(sceneVideoTasks) !== sceneVideoTasksAtStart
+  ) {
     await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
       job.id,
@@ -1139,10 +1255,12 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
         progress: computeProductionProgress("assets", job.sceneCursor, scenes.length),
         sceneFailures,
         warnings,
+        sceneVideoTasks,
         updatedAt: nowIso(),
       },
       job.userId,
     );
+    job.sceneVideoTasks = sceneVideoTasks;
   }
 
   // Facturation EXISTANTE honorée : uniquement les images NOUVELLEMENT
@@ -1179,12 +1297,27 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
         message: `Production échouée : les ${scenes.length} scène(s) ont été définitivement ignorées après ${MAX_SCENE_FAILURES} échecs de génération d'image. Vérifiez le moteur de visuels ou réessayez plus tard.`,
       };
     }
+    // Task 154 (reprise inter-ticks) — des clips mûrissent ENCORE côté Agnes :
+    // l'étape reste ouverte, le tick suivant les finalise (re-sondage des
+    // MÊMES tâches — jamais de re-génération) avant de passer à la voix.
+    const activeVideoTasks = Object.keys(sceneVideoTasks).length;
+    if (activeVideoTasks > 0 || pendingSceneVideos > 0) {
+      return {
+        action: "stay",
+        detail: `${scenes.length} visuel(s) prêt(s) — ${activeVideoTasks} clip(s) vidéo IA en cours de génération côté Agnes (reprise au tick suivant).`,
+      };
+    }
     return {
       action: "advance",
       detail: `${scenes.length} visuel(s) prêt(s) (${generated} généré(s)${ignored > 0 ? `, ${ignored} scène(s) ignorée(s)` : ""})${narrated > 0 ? ` ; ${narrated} narration(s) générée(s) en parallèle (chevauchement voix-visuels)` : ""}.`,
     };
   }
-  return { action: "stay", detail: `${job.sceneCursor}/${scenes.length} visuels traités${narrated > 0 ? ` (+${narrated} narration(s) en parallèle)` : ""}.` };
+  return {
+    action: "stay",
+    detail: pendingSceneVideos > 0
+      ? `${job.sceneCursor}/${scenes.length} visuels — clip(s) vidéo IA en cours côté Agnes (reprise au tick suivant).`
+      : `${job.sceneCursor}/${scenes.length} visuels traités${narrated > 0 ? ` (+${narrated} narration(s) en parallèle)` : ""}.`,
+  };
 }
 
 /**
