@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { generateForUser } from "@/lib/billing/ai-execution";
-import { getWallet, WALLET_CURRENCY } from "@/lib/billing/wallet";
+import { assertUserWalletActive, WALLET_CURRENCY } from "@/lib/billing/wallet";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { executeToolSecurely } from "./secure-tool-executor";
 import { ExecutionPolicy, DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
@@ -175,8 +175,10 @@ export class AgentRuntime {
   async run(): Promise<RuntimeExecutionState> {
     this.state.status = "running";
     this.state.startedAt = new Date().toISOString();
-    const wallet = await getWallet(this.state.userId);
-    if (wallet.availableMinor <= 0) throw new Error(`Insufficient wallet balance. Add funds before starting an AI execution.`);
+    // MODE LIBRE : jamais de blocage d'exécution pour solde insuffisant —
+    // la facturation à l'usage est désactivée (R2 porte toute l'usage). En
+    // mode facturé, assertWalletActive applique le blocage historique.
+    await assertUserWalletActive(this.state.userId);
     await createCheckpoint(this.state);
     try {
       // Boucle externe = tours de critic. Après une exécution en échec, le

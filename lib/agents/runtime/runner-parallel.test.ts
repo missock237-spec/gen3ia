@@ -41,6 +41,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 vi.mock("@/lib/billing/wallet", () => ({
+  assertUserWalletActive: vi.fn(async () => ({ availableMinor: 500_000, currency: "XAF" })),
   getWallet: vi.fn(async () => ({ availableMinor: 500_000, currency: "XAF" })),
   WALLET_CURRENCY: "XAF",
 }));

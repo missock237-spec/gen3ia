@@ -8,6 +8,7 @@ import { captureServerException } from "@/lib/observability/sentry";
 import { detectDeviceFromHeaders } from "@/lib/device/detect";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { getWallet } from "@/lib/billing/wallet";
+import { BILLING_ENABLED } from "@/lib/billing/billing-mode";
 import { createConversation, getConversation } from "@/lib/chat/repository";
 import {
   LIVE_VOICE_MAX_EPOCHS,
@@ -67,16 +68,19 @@ export async function POST(request: Request) {
     }
     const body = CreateSchema.parse(await request.json());
 
-    // Garde de solde AVANT toute écriture : le Live Voix est facturé par tour.
-    const wallet = await getWallet(token.uid);
-    if (wallet.availableMinor < LIVE_VOICE_MIN_BALANCE_MINOR) {
-      return NextResponse.json(
-        {
-          error: "Crédit insuffisant pour démarrer une session Live Voix. Rechargez votre portefeuille.",
-          code: "LIVE_INSUFFICIENT_FUNDS",
-        },
-        { status: 402 },
-      );
+    // Garde de solde AVANT toute écriture : le Live Voix est facturé par
+    // tour. MODE LIBRE : garde sautée — aucune session bloquée pour solde.
+    if (BILLING_ENABLED) {
+      const wallet = await getWallet(token.uid);
+      if (wallet.availableMinor < LIVE_VOICE_MIN_BALANCE_MINOR) {
+        return NextResponse.json(
+          {
+            error: "Crédit insuffisant pour démarrer une session Live Voix. Rechargez votre portefeuille.",
+            code: "LIVE_INSUFFICIENT_FUNDS",
+          },
+          { status: 402 },
+        );
+      }
     }
 
     let conversationId = body.conversationId;

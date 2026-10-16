@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 vi.mock("@/lib/billing/wallet", () => ({
+  assertUserWalletActive: vi.fn(async () => ({ availableMinor: 500_000, currency: "XAF" })),
   getWallet: vi.fn(async () => ({ availableMinor: 500_000, currency: "XAF" })),
   WALLET_CURRENCY: "XAF",
 }));

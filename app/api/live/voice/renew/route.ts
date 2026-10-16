@@ -6,6 +6,7 @@ import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
 import { captureServerException } from "@/lib/observability/sentry";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { getWallet } from "@/lib/billing/wallet";
+import { BILLING_ENABLED } from "@/lib/billing/billing-mode";
 import {
   LIVE_VOICE_MAX_EPOCHS,
   LiveVoiceSessionError,
@@ -53,16 +54,19 @@ export async function POST(request: Request) {
     }
 
     // Même garde de solde qu'à la création : une session se prolonge si le
-    // portefeuille permet encore des tours facturés.
-    const wallet = await getWallet(auth.uid);
-    if (wallet.availableMinor < LIVE_VOICE_MIN_BALANCE_MINOR) {
-      return NextResponse.json(
-        {
-          error: "Crédit insuffisant pour poursuivre la session Live Voix. Rechargez votre portefeuille.",
-          code: "LIVE_INSUFFICIENT_FUNDS",
-        },
-        { status: 402 },
-      );
+    // portefeuille permet encore des tours facturés. MODE LIBRE : garde
+    // sautée — aucune session interrompue pour solde insuffisant.
+    if (BILLING_ENABLED) {
+      const wallet = await getWallet(auth.uid);
+      if (wallet.availableMinor < LIVE_VOICE_MIN_BALANCE_MINOR) {
+        return NextResponse.json(
+          {
+            error: "Crédit insuffisant pour poursuivre la session Live Voix. Rechargez votre portefeuille.",
+            code: "LIVE_INSUFFICIENT_FUNDS",
+          },
+          { status: 402 },
+        );
+      }
     }
 
     const { token, payload } = signLiveVoiceSession({
