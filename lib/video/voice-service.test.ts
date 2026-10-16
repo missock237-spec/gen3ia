@@ -55,6 +55,7 @@ vi.mock("@/lib/video/ffmpeg", () => ({
 
 vi.mock("@/lib/video/asset-service", () => ({
   registerAsset: vi.fn(),
+  countGeneratedProjectAssets: vi.fn(async () => 0),
 }));
 
 vi.mock("@/lib/integrations/elevenlabs/client", () => ({

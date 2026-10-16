@@ -118,6 +118,7 @@ vi.mock("@/lib/video/project-service", () => ({
 vi.mock("@/lib/video/asset-service", () => ({
   getAsset: vi.fn(async () => null),
   listAssets: vi.fn(async () => []),
+  countGeneratedProjectAssets: vi.fn(async () => 0),
 }));
 
 vi.mock("@/lib/video/credits", () => ({

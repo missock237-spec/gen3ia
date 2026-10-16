@@ -182,17 +182,11 @@ async function patchAssetMediaBible(userId: string, projectId: string, bible: Vi
   await patchProject(userId, projectId, { visualBible: bible });
 }
 
-/** Budget d'images par projet (coûteux — plafond strict, spec §28). */
+/** Budget d'images par projet (plafond strict, spec §28) — Task 159 : lecture
+ * d'index SEULE (1 doc), plus AUCUN scan de collection utilisateur. */
 async function assertProjectImageBudget(userId: string, projectId: string): Promise<void> {
-  const { adminDb } = await import("@/lib/firebase/admin");
-  const snap = await adminDb
-    .collection("videoAssets")
-    .where("userId", "==", userId)
-    .get();
-  const count = snap.docs.filter((d) => {
-    const data = d.data();
-    return data?.projectId === projectId && data?.kind === "image" && data?.origin === "generated";
-  }).length;
+  const { countGeneratedProjectAssets } = await import("@/lib/video/asset-service");
+  const count = await countGeneratedProjectAssets(userId, projectId, "image");
   if (count >= VIDEO_LIMITS.maxGeneratedImages) {
     throw new VideoQuotaError(`Plafond de ${VIDEO_LIMITS.maxGeneratedImages} images générées atteint pour ce projet.`);
   }

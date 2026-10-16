@@ -12,6 +12,7 @@ vi.mock("@/lib/billing/wallet", () => ({
 vi.mock("@/lib/video/asset-service", () => ({
   registerAsset: vi.fn(),
   listAssets: vi.fn(async () => [] as unknown[]),
+  countGeneratedProjectAssets: vi.fn(async () => 0),
 }));
 
 vi.mock("@/lib/video/image-bridge", () => ({

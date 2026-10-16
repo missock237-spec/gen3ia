@@ -16,6 +16,7 @@ import type { MediaProbe, VideoAsset, VideoAssetKind } from "@/lib/video/types";
 import { uploadVideoAsset, deleteVideoObject, isOwnedVideoKey, downloadVideoAsset } from "@/lib/video/storage";
 import { probeMedia } from "@/lib/video/ffmpeg";
 import { assertMediaTypeAllowed, assertMediaSizeAllowed } from "@/lib/video/security";
+import { mapWithConcurrency } from "@/lib/video/concurrency";
 
 export const ASSETS_COLLECTION = "videoAssets";
 
@@ -94,7 +95,17 @@ export async function registerAsset(input: RegisterAssetInput): Promise<VideoAss
     sceneId: input.sceneId,
     createdAt: nowIso(),
   };
+  // Task 159 — doc D'ABORD, index ENSUITE : l'index ne peut référencer un
+  // doc absent que le temps d'un échec (annulé par le retrait best-effort
+  // ci-dessous) ; listAssets élague de toute façon les résidus (doc disparu).
   await adminDb.collection(ASSETS_COLLECTION).doc(asset.id).create({ ...asset });
+  try {
+    await upsertAssetIndexEntry(input.userId, input.projectId, asset.id, entryOf(asset));
+  } catch (error) {
+    // État incohérent interdit : l'asset serait invisible des lectures.
+    await adminDb.collection(ASSETS_COLLECTION).doc(asset.id).delete().catch(() => undefined);
+    throw error;
+  }
   await bumpAssetCount(input.projectId);
   return asset;
 }
@@ -147,12 +158,47 @@ async function bumpAssetCount(projectId: string): Promise<void> {
 }
 
 export async function listAssets(userId: string, projectId: string, kind?: VideoAssetKind): Promise<VideoAsset[]> {
-  const snap = await adminDb.collection(ASSETS_COLLECTION).where("userId", "==", userId).get();
-  const assets = snap.docs
-    .map((d) => d.data() as VideoAsset)
-    .filter((a) => a.projectId === projectId && (!kind || a.kind === kind));
+  const index = await ensureAssetIndex(userId, projectId);
+  const ids = Object.entries(index.entries)
+    .filter(([, entry]) => !kind || entry.k === kind)
+    .sort(([, a], [, b]) => (a.c < b.c ? 1 : -1))
+    .map(([id]) => id);
+
+  // Lecture des SEULS docs du projet (fini le scan « toute la collection,
+  // tous utilisateurs confondus »), concurrence bornée, élagage des ids
+  // référençant des docs disparus (auto-réparation de l'index).
+  const outcomes = await mapWithConcurrency(ids, 10, (id) =>
+    adminDb.collection(ASSETS_COLLECTION).doc(id).get());
+  const pruned: string[] = [];
+  const assets: VideoAsset[] = [];
+  outcomes.forEach((outcome, i) => {
+    const snap = outcome.status === "fulfilled" ? outcome.value : null;
+    if (!snap || !snap.exists) {
+      pruned.push(ids[i]);
+      return;
+    }
+    const asset = snap.data() as VideoAsset;
+    if (asset.userId === userId && asset.projectId === projectId) assets.push(asset);
+  });
+  if (pruned.length > 0) {
+    await removeFromAssetIndex(userId, projectId, pruned).catch(() => undefined);
+  }
   assets.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   return assets;
+}
+
+/**
+ * Compte les assets GÉNÉRÉS d'un kind pour le projet — SANS LIRE AUCUN
+ * document : l'index porte (kind, origin). Remplace les scans utilisateur
+ * complet des plafonds images/clips (spec §28) par 1 lecture d'index.
+ */
+export async function countGeneratedProjectAssets(
+  userId: string,
+  projectId: string,
+  kind: VideoAssetKind,
+): Promise<number> {
+  const index = await ensureAssetIndex(userId, projectId);
+  return Object.values(index.entries).filter((e) => e.k === kind && e.o === "generated").length;
 }
 
 export async function getAsset(userId: string, assetId: string): Promise<VideoAsset | null> {
@@ -179,10 +225,134 @@ export async function deleteAsset(userId: string, assetId: string): Promise<void
   const asset = await getAssetOrThrow(userId, assetId);
   await deleteVideoObject(userId, asset.r2Key);
   await adminDb.collection(ASSETS_COLLECTION).doc(assetId).delete();
+  // Best-effort : si le retrait échoue, l'entrée référence un doc disparu —
+  // la prochaine lecture l'élimine (auto-réparation).
+  await removeFromAssetIndex(userId, asset.projectId, [assetId]).catch(() => undefined);
 }
 
 /** Met à jour les métadonnées média d'un asset (post-traitement). */
 export async function patchAssetMedia(userId: string, assetId: string, media: MediaProbe): Promise<void> {
   const asset = await getAssetOrThrow(userId, assetId);
   await adminDb.collection(ASSETS_COLLECTION).doc(assetId).set({ media: { ...asset.media, ...media } }, { merge: true });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Task 159 — INDEX PAR PROJET (efficacité). Chaque requête r2fs = scan de
+// collection + téléchargement des documents (plafond 2000 docs, cf. db.ts).
+// Les 19 points d'appel de listAssets sont TOUS bornés (userId, projectId) :
+// un index documentaire par projet réduit chaque lecture de « TOUTE la
+// collection videoAssets — tous utilisateurs — en 2 pages de listing +
+// jusqu'à 2000 GET » à « 1 doc d'index + les assets du projet ». Les compteurs
+// de plafond (images/clips générés) ne lisent PLUS AUCUN document : l'index
+// porte (kind, origin, createdAt) par asset.
+//
+// Cohérence : doc créé PUIS indexé (jamais l'inverse) — l'index ne peut pas
+// référencer durablement un doc absent ; les résidus sont élagués à la
+// lecture. L'index absent (données antérieures) est reconstruit par le scan
+// historique UNE fois, en fusion concurrente (aucune perte).
+// ────────────────────────────────────────────────────────────────────────────
+
+const ASSET_INDEX_COLLECTION = "videoAssetIndex";
+
+interface AssetIndexEntry {
+  /** kind — filtrage sans lecture du doc. */
+  k: VideoAssetKind;
+  /** origin — comptage des générés sans lecture du doc. */
+  o: VideoAsset["origin"];
+  /** createdAt — tri sans lecture du doc. */
+  c: string;
+}
+
+interface AssetIndexData {
+  userId: string;
+  projectId: string;
+  entries: Record<string, AssetIndexEntry>;
+  updatedAt: string;
+}
+
+/** Id de doc d'index : segments sûrs r2fs ([A-Za-z0-9._-]), séparateur « __ ». */
+function assetIndexDocId(userId: string, projectId: string): string {
+  const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, "_");
+  return `${safe(userId)}__${safe(projectId)}`;
+}
+
+function entryOf(asset: Pick<VideoAsset, "kind" | "origin" | "createdAt">): AssetIndexEntry {
+  return { k: asset.kind, o: asset.origin ?? "uploaded", c: asset.createdAt };
+}
+
+async function readAssetIndex(userId: string, projectId: string): Promise<AssetIndexData | null> {
+  const snap = await adminDb.collection(ASSET_INDEX_COLLECTION).doc(assetIndexDocId(userId, projectId)).get();
+  if (!snap.exists) return null;
+  const data = snap.data() as Partial<AssetIndexData> | undefined;
+  if (!data || typeof data.entries !== "object" || data.entries === null) return null;
+  return { userId, projectId, entries: data.entries as Record<string, AssetIndexEntry>, updatedAt: data.updatedAt ?? nowIso() };
+}
+
+/** Ajoute (ou met à jour) l'entrée d'un asset — transaction CAS (conflits rejoués). */
+async function upsertAssetIndexEntry(
+  userId: string,
+  projectId: string,
+  assetId: string,
+  entry: AssetIndexEntry,
+): Promise<void> {
+  await adminDb.runTransaction(async (tx) => {
+    const ref = adminDb.collection(ASSET_INDEX_COLLECTION).doc(assetIndexDocId(userId, projectId));
+    const snap = await tx.get(ref);
+    const existing = snap.exists ? ((snap.data() as Partial<AssetIndexData>)?.entries ?? {}) : {};
+    tx.set(ref, {
+      userId,
+      projectId,
+      entries: { ...existing, [assetId]: entry },
+      updatedAt: nowIso(),
+    });
+  });
+}
+
+/** Retire des ids de l'index (idempotent, transaction CAS). */
+async function removeFromAssetIndex(userId: string, projectId: string, assetIds: string[]): Promise<void> {
+  if (assetIds.length === 0) return;
+  await adminDb.runTransaction(async (tx) => {
+    const ref = adminDb.collection(ASSET_INDEX_COLLECTION).doc(assetIndexDocId(userId, projectId));
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    const existing = ((snap.data() as Partial<AssetIndexData>)?.entries ?? {}) as Record<string, AssetIndexEntry>;
+    let changed = false;
+    for (const id of assetIds) {
+      if (existing[id]) {
+        delete existing[id];
+        changed = true;
+      }
+    }
+    if (changed) {
+      tx.set(ref, { userId, projectId, entries: existing, updatedAt: nowIso() });
+    }
+  });
+}
+
+/**
+ * Reconstruit l'index par le scan historique (migration des données
+ * antérieures) puis le persiste. Fusion concurrente : si l'index a été créé
+ * entre-temps, les entrées sont unies (aucune perte).
+ */
+async function backfillAssetIndex(userId: string, projectId: string): Promise<AssetIndexData> {
+  const snap = await adminDb.collection(ASSETS_COLLECTION).where("userId", "==", userId).get();
+  const entries: Record<string, AssetIndexEntry> = {};
+  for (const doc of snap.docs) {
+    const data = doc.data() as VideoAsset;
+    if (data?.projectId !== projectId) continue;
+    entries[doc.id] = entryOf(data);
+  }
+  await adminDb.runTransaction(async (tx) => {
+    const ref = adminDb.collection(ASSET_INDEX_COLLECTION).doc(assetIndexDocId(userId, projectId));
+    const current = await tx.get(ref);
+    const existing = current.exists ? ((current.data() as Partial<AssetIndexData>)?.entries ?? {}) : {};
+    tx.set(ref, { userId, projectId, entries: { ...existing, ...entries }, updatedAt: nowIso() });
+  });
+  return { userId, projectId, entries, updatedAt: nowIso() };
+}
+
+/** Index du projet — lecture, ou reconstruction par scan historique si absent. */
+async function ensureAssetIndex(userId: string, projectId: string): Promise<AssetIndexData> {
+  const existing = await readAssetIndex(userId, projectId);
+  return existing ?? backfillAssetIndex(userId, projectId);
 }

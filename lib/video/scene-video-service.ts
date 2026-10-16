@@ -44,8 +44,7 @@ import {
   createVideoTask,
   type VideoSize,
 } from "@/lib/ai/video-generation";
-import { registerAsset, listAssets } from "@/lib/video/asset-service";
-import { adminDb } from "@/lib/firebase/admin";
+import { registerAsset, listAssets, countGeneratedProjectAssets } from "@/lib/video/asset-service";
 import { createVideoPlaybackUrl } from "@/lib/video/storage";
 import { estimateExecutionCost } from "@/lib/billing/cost-engine";
 import { reserveFunds, settleReservation, releaseReservation } from "@/lib/billing/wallet";
@@ -443,13 +442,10 @@ export function isSceneVideoServiceEnabled(): boolean {
   return isVideoGenerationEnabled() && areSceneClipsEnabled();
 }
 
-/** Budget de clips IA par projet (plafond strict, spec §28). */
+/** Budget de clips IA par projet (plafond strict, spec §28) — Task 159 :
+ * lecture d'index SEULE (1 doc), plus AUCUN scan de collection. */
 async function assertSceneVideoBudget(userId: string, projectId: string): Promise<void> {
-  const snap = await adminDb.collection("videoAssets").where("userId", "==", userId).get();
-  const count = snap.docs.filter((d) => {
-    const data = d.data();
-    return data?.projectId === projectId && data?.kind === "video" && data?.origin === "generated";
-  }).length;
+  const count = await countGeneratedProjectAssets(userId, projectId, "video");
   if (count >= VIDEO_LIMITS.maxGeneratedSceneVideos) {
     throw new VideoQuotaError(
       `Plafond de ${VIDEO_LIMITS.maxGeneratedSceneVideos} clips vidéo IA atteint pour ce projet.`,
