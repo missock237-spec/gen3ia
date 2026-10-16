@@ -1,3 +1,4 @@
+import { BILLING_ENABLED } from "./billing-mode";
 import { estimateExecutionCost } from "./cost-engine";
 import { getWallet, reserveFunds, settleReservation, releaseReservation } from "./wallet";
 
@@ -33,6 +34,13 @@ export function estimateUsageCharge(params: { kind: BillableUsageKind; quantity:
 
 export async function billUsage(params: { userId: string; executionId: string; kind: BillableUsageKind; quantity: number; complexity?: number; externalCostEur?: number; metadata?: Record<string, string> }) {
   if (!Number.isFinite(params.quantity) || params.quantity <= 0) throw new Error("Billable usage quantity must be positive.");
+  // MODE LIBRE : estimation conservée pour l'observabilité, mais débit nul —
+  // aucune réservation, aucun blocage « solde insuffisant », aucune écriture
+  // ledger de consommation.
+  if (!BILLING_ENABLED) {
+    const estimate = estimateUsageCharge(params);
+    return { reference: `free_${params.executionId}_${crypto.randomUUID()}`, ...estimate, chargeMinor: 0, reserveMinor: 0 };
+  }
   const estimate = estimateUsageCharge(params); const reserveMinor = Math.max(1, estimate.reserveMinor); const reference = `usage_${params.executionId}_${crypto.randomUUID()}`;
   const wallet = await getWallet(params.userId); if (wallet.availableMinor < reserveMinor) throw new Error("Insufficient wallet balance for this operation.");
   await reserveFunds({ userId: params.userId, amountMinor: reserveMinor, reference, metadata: { kind: params.kind, quantity: String(params.quantity), ...(params.metadata ?? {}) } });

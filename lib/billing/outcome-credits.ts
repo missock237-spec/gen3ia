@@ -1,6 +1,7 @@
 import { FieldValue } from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
+import { BILLING_ENABLED } from "./billing-mode";
 import { getWallet, WALLET_CURRENCY } from "./wallet";
 
 /**
@@ -53,6 +54,8 @@ export async function applyOutcomeCredit(params: {
   /** Motif factuel journalisé (état de fin de mission). */
   missionStatus?: string;
 }): Promise<OutcomeCreditResult> {
+  // MODE LIBRE : aucun frais n'ayant été débité, aucun avoir à appliquer.
+  if (!BILLING_ENABLED) return { credited: false, amountMinor: 0, reason: "Facturation désactivée (mode libre)." };
   try {
     const capMinor = outcomeCreditCapMinor();
     const chargeMinor = Number.isFinite(params.totalChargeMinor) && (params.totalChargeMinor ?? 0) > 0

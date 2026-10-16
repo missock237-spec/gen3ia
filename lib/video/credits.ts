@@ -11,6 +11,7 @@ import "server-only";
  */
 
 import { estimateUsageCharge, billUsage } from "@/lib/billing/media-meter";
+import { BILLING_ENABLED } from "@/lib/billing/billing-mode";
 import { reserveFunds, settleReservation, releaseReservation } from "@/lib/billing/wallet";
 import { RESOLUTION_RANK } from "@/lib/video/security";
 
@@ -96,7 +97,8 @@ export async function releaseRenderBudget(userId: string, jobId: string, reserve
 
 /** Facturation d'une image générée (kind existant : image_generation). */
 export async function billImageGeneration(userId: string, projectId: string, count: number): Promise<number> {
-  if (count <= 0) return 0;
+  // MODE LIBRE : aucune facturation d'image — retourne 0 sans toucher le wallet.
+  if (!BILLING_ENABLED || count <= 0) return 0;
   const charge = estimateUsageCharge({ kind: "image_generation", quantity: count });
   await billUsage({
     userId,
@@ -110,7 +112,8 @@ export async function billImageGeneration(userId: string, projectId: string, cou
 
 /** Facturation TTS (caractères ElevenLabs réellement consommés). */
 export async function billTts(userId: string, projectId: string, charactersUsed: number): Promise<number> {
-  if (charactersUsed <= 0) return 0;
+  // MODE LIBRE : aucune facturation TTS — retourne 0 sans toucher le wallet.
+  if (!BILLING_ENABLED || charactersUsed <= 0) return 0;
   const charge = estimateUsageCharge({ kind: "tts", quantity: charactersUsed });
   await billUsage({
     userId,

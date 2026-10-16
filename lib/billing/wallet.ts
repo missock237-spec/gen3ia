@@ -2,6 +2,7 @@ import { FieldValue, Timestamp } from "@/lib/r2fs";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { cooldownElapsed, fireLowBalanceAlert, isLowBalance, markLowBalanceNotified } from "./low-balance";
+import { BILLING_ENABLED } from "./billing-mode";
 
 export const WALLET_CURRENCY = (process.env.GEN3IA_WALLET_CURRENCY ?? "XAF").toUpperCase();
 const WALLET_COLLECTION = "userWallets";
@@ -122,6 +123,8 @@ export async function getWallet(userId: string): Promise<WalletSnapshot> {
 }
 
 export function assertWalletActive(wallet: WalletSnapshot): void {
+  // Mode libre : jamais de blocage d'agents, quel que soit le solde.
+  if (!BILLING_ENABLED) return;
   if (wallet.availableMinor <= 0) {
     throw new Error("AI agents are stopped because the wallet balance is 0. Recharge your Gen3ia wallet to resume all agents.");
   }
@@ -227,12 +230,32 @@ export async function applyEarning(params: {
   return getWallet(params.userId);
 }
 
+/**
+ * Snapshot neutre du mode libre : ZÉRO I/O R2 — aucune lecture, aucune
+ * transaction, aucune latence. Les débits étant désactivés, aucune
+ * exécution ne doit dépendre de l'état du wallet (même indisponible).
+ */
+function freeWalletSnapshot(userId: string): WalletSnapshot {
+  return {
+    userId,
+    currency: WALLET_CURRENCY,
+    balanceMinor: 0,
+    reservedMinor: 0,
+    availableMinor: 0,
+    updatedAt: Date.now(),
+    welcomeGranted: true,
+    welcomeAmountMinor: 0,
+  };
+}
+
 export async function reserveFunds(params: {
   userId: string;
   amountMinor: number;
   reference: string;
   metadata?: Record<string, string>;
 }): Promise<WalletSnapshot> {
+  // Mode libre : aucune réservation, aucun blocage, aucune écriture ledger.
+  if (!BILLING_ENABLED) return freeWalletSnapshot(params.userId);
   assertMinorAmount(params.amountMinor);
   if (!params.reference.trim()) throw new Error("Reservation reference is required.");
   await ensureWallet(params.userId);
@@ -314,6 +337,8 @@ export async function settleReservation(params: {
   actualChargeMinor: number;
   metadata?: Record<string, string>;
 }): Promise<WalletSnapshot> {
+  // Mode libre : aucun règlement (aucune réservation n'a été prise).
+  if (!BILLING_ENABLED) return freeWalletSnapshot(params.userId);
   assertMinorAmount(params.reservedMinor);
   assertMinorAmount(params.actualChargeMinor, true);
 
@@ -366,6 +391,8 @@ export async function releaseReservation(params: {
   reference: string;
   reservedMinor: number;
 }): Promise<WalletSnapshot> {
+  // Mode libre : rien à libérer (aucune réservation n'a été prise).
+  if (!BILLING_ENABLED) return freeWalletSnapshot(params.userId);
   assertMinorAmount(params.reservedMinor);
   const wallet = walletRef(params.userId);
   const release = adminDb.collection(LEDGER_COLLECTION).doc(`release_${params.reference}`);

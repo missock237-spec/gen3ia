@@ -1,5 +1,6 @@
 import { adminDb } from "@/lib/firebase/admin";
 
+import { BILLING_ENABLED } from "./billing-mode";
 import { reserveFunds, releaseReservation, settleReservation } from "./wallet";
 
 /**
@@ -150,6 +151,8 @@ export async function reserveMissionEscrow(params: {
   executionId: string;
   runId?: string;
 }): Promise<MissionEscrowReservation> {
+  // MODE LIBRE : pas de frais de résultat — la mission démarre toujours.
+  if (!BILLING_ENABLED) return { ok: true, holdMinor: 0, reason: "Facturation désactivée (mode libre)." };
   if (!params.userId?.trim() || !params.executionId?.trim()) {
     return { ok: false, reason: "Paramètres d'escrow invalides (userId/executionId requis)." };
   }
@@ -257,6 +260,8 @@ export async function captureMissionEscrow(params: {
   missionStatus: string;
   runId?: string;
 }): Promise<MissionEscrowCaptureResult> {
+  // MODE LIBRE : aucune capture — rien n'a été réservé au lancement.
+  if (!BILLING_ENABLED) return { action: "skipped", reason: "Facturation désactivée (mode libre)." };
   try {
     const holdRef = adminDb.collection(HOLDS_COLLECTION).doc(params.executionId);
     const snap = await holdRef.get();
@@ -359,6 +364,8 @@ export async function captureMissionEscrow(params: {
  * journalisé et retenté au prochain passage.
  */
 export async function releaseExpiredEscrows(limit = 50): Promise<number> {
+  // MODE LIBRE : aucun hold n'est créé, le reaper n'a rien à purger.
+  if (!BILLING_ENABLED) return 0;
   let released = 0;
   try {
     const capped = Math.max(1, Math.min(200, Math.floor(limit)));

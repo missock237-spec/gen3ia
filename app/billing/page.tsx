@@ -14,6 +14,9 @@ interface Wallet {
   welcomeAmountMinor: number;
 }
 
+/** Mode libre (GEN3IA_BILLING_ENABLED=false) : la plateforme ne facture plus l'usage (R2 porte tout). */
+const FREE_MODE_BANNER = "Accès libre : Gen3ia ne débite plus de crédits. Toutes les exécutions d'agents, missions et générations sont gratuites tant que ce mode est actif.";
+
 const COUNTRY_CODES = [
   { code: "CM", label: "Cameroun (+237)" },
   { code: "CI", label: "Côte d'Ivoire (+225)" },
@@ -50,6 +53,7 @@ export default function BillingPage() {
   // Étape 20 — historique des transactions RÉELLEMENT affiché : le solde
   // seul ne dit pas où va l'argent (recharges, consommations, réservations).
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [billingEnabled, setBillingEnabled] = useState(true);
   const sessionDisponible = useSessionAvailable();
 
   const loadWallet = useCallback(async () => {
@@ -57,9 +61,10 @@ export default function BillingPage() {
     // readJsonSafely : un 502 HTML du proxy ne doit pas masquer l'erreur
     // réelle par une SyntaxError sur response.json().
     const response = await authFetch("/api/billing/wallet", { cache: "no-store" });
-    const data = (await readJsonSafely<{ error?: string; wallet?: Wallet | null }>(response)) ?? {};
+    const data = (await readJsonSafely<{ error?: string; wallet?: Wallet | null; billingEnabled?: boolean }>(response)) ?? {};
     if (!response.ok) throw new Error(data.error ?? "Impossible de charger le solde.");
     setWallet(data.wallet ?? null);
+    setBillingEnabled(data.billingEnabled !== false);
   }, []);
 
   const loadTransactions = useCallback(async () => {
@@ -157,6 +162,7 @@ export default function BillingPage() {
   }
 
   const currency = wallet?.currency ?? "XAF";
+  const free = billingEnabled === false;
   const amount = wallet ? (wallet.balanceMinor / 100).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : "0";
   const reserved = wallet ? (wallet.reservedMinor / 100).toLocaleString("fr-FR") : "0";
   const available = wallet ? (wallet.availableMinor / 100).toLocaleString("fr-FR") : "0";
@@ -189,12 +195,13 @@ export default function BillingPage() {
     <section style={styles.card}>
       <div style={styles.eyebrow}>GEN3IA WALLET</div>
       <h1 className="font-serif">Solde de votre compte</h1>
-      {wallet?.welcomeGranted && <div style={styles.welcome}>Solde de démonstration : {welcome} {currency} offerts une seule fois à l&apos;ouverture du compte.</div>}
+      {free && <div style={styles.freeBanner}>{FREE_MODE_BANNER}</div>}
+      {wallet?.welcomeGranted && !free && <div style={styles.welcome}>Solde de démonstration : {welcome} {currency} offerts une seule fois à l&apos;ouverture du compte.</div>}
       <div style={styles.balance}>{loading ? "…" : `${amount} ${currency}`}</div>
       <p style={styles.muted}>Disponible : {available} {currency} · Réservé : {reserved} {currency}</p>
-      {empty && <div style={styles.locked}><strong>Agents IA arrêtés</strong><br />Votre solde disponible est à 0. Rechargez votre portefeuille pour reprendre les exécutions.</div>}
+      {empty && !free && <div style={styles.locked}><strong>Agents IA arrêtés</strong><br />Votre solde disponible est à 0. Rechargez votre portefeuille pour reprendre les exécutions.</div>}
 
-      {phase === "phone"
+      {!free && (phase === "phone"
         ? <form onSubmit={submitPhone} style={styles.phoneForm}>
             <label style={styles.label} htmlFor="country">Pays du numéro</label>
             <select id="country" value={countryCode} onChange={(e) => setCountryCode(e.target.value)} style={styles.input}>
@@ -204,12 +211,12 @@ export default function BillingPage() {
             <input id="phone" inputMode="numeric" autoComplete="tel-national" placeholder="6 90 00 00 00" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} style={styles.input} />
             <button type="submit" disabled={busy} style={styles.button}>{busy ? "Ouverture du paiement…" : "Payer avec Chariow (Mobile Money)"}</button>
           </form>
-        : <button onClick={() => startTopup()} disabled={busy || loading} style={styles.button}>{busy ? "Ouverture du paiement…" : "Recharger avec Chariow"}</button>}
+        : <button onClick={() => startTopup()} disabled={busy || loading} style={styles.button}>{busy ? "Ouverture du paiement…" : "Recharger avec Chariow"}</button>)}
 
       {success && <p style={styles.success}>{success}</p>}
       {notice && <p style={styles.notice}>{notice}</p>}
-      <p style={styles.note}>Le paiement s&apos;effectue via la boutique Chariow (Mobile Money, carte ou wallet selon votre pays). Le solde est crédité après confirmation du paiement par Chariow — automatiquement via le webhook signé, ou à votre retour sur cette page.</p>
-      <p style={styles.note}>Le solde de démonstration est accordé une seule fois. Après épuisement, vous devez recharger votre portefeuille. Les exécutions sont facturées selon l&apos;utilisation réelle et aucune nouvelle allocation gratuite n&apos;est créée automatiquement.</p>
+      {!free && <p style={styles.note}>Le paiement s&apos;effectue via la boutique Chariow (Mobile Money, carte ou wallet selon votre pays). Le solde est crédité après confirmation du paiement par Chariow — automatiquement via le webhook signé, ou à votre retour sur cette page.</p>}
+      {!free && <p style={styles.note}>Le solde de démonstration est accordé une seule fois. Après épuisement, vous devez recharger votre portefeuille. Les exécutions sont facturées selon l&apos;utilisation réelle et aucune nouvelle allocation gratuite n&apos;est créée automatiquement.</p>}
       {error && <p style={styles.error}>{error}</p>}
     </section>
 
@@ -238,7 +245,7 @@ export default function BillingPage() {
           ))}
         </ul>
       )}
-      <p style={styles.note}>Chaque exécution d&apos;outil ou de mission est facturée selon l&apos;utilisation réelle — une réservation est prise au démarrage puis ajustée au coût final (restitution visible en ↺).</p>
+      <p style={styles.note}>{free ? "Historique conservé pour mémoire — aucune nouvelle consommation n&apos;est débitée en mode accès libre." : "Chaque exécution d&apos;outil ou de mission est facturée selon l&apos;utilisation réelle — une réservation est prise au démarrage puis ajustée au coût final (restitution visible en ↺)."}</p>
     </section>
   </div>;
 }
@@ -247,6 +254,7 @@ const styles: Record<string, CSSProperties> = {
   main: { minHeight: "100%", display: "grid", placeItems: "center", padding: 24, background: "#f6f4ef", color: "#171717" },
   card: { width: "100%", maxWidth: 620, padding: 32, borderRadius: 24, border: "1px solid var(--g3-border)", background: "#ffffff", boxShadow: "0 14px 40px -18px rgba(28,27,24,0.22)" },
   eyebrow: { fontSize: 12, letterSpacing: 2, opacity: .65, marginBottom: 10 },
+  freeBanner: { marginTop: 18, padding: 16, borderRadius: 12, background: "#E9F8EE", border: "1px solid rgba(26,148,74,0.35)", color: "#1A944A", fontSize: 14, lineHeight: 1.5, fontWeight: 600 },
   welcome: { marginTop: 18, padding: 14, borderRadius: 12, background: "#E9F5F8", border: "1px solid rgba(8,153,180,0.35)", color: "#0A6E82", fontSize: 14, lineHeight: 1.5 },
   balance: { fontSize: 44, fontWeight: 800, margin: "24px 0 8px" },
   muted: { opacity: .7 },

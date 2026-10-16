@@ -1,6 +1,7 @@
 import type { AIRequest, AIResponse } from "@/lib/ai/models";
 import { generate, selectProvider } from "@/lib/ai/router";
 import { estimateExecutionCost, costFromAIResponse } from "./cost-engine";
+import { BILLING_ENABLED } from "./billing-mode";
 import { getWallet, reserveFunds, settleReservation, releaseReservation } from "./wallet";
 // Task 153 — marqueur anti double facturation : ces appels sont réservés et
 // réglés ICI (réservation dédiée) ; le compteur du portillon d'exécution les
@@ -54,6 +55,13 @@ export async function generateForUser(params: {
   request: AIRequest;
   complexity?: number;
 }): Promise<BilledAIResponse> {
+  // MODE LIBRE : génération directe — aucune réservation, aucun débit, aucun
+  // blocage pour solde insuffisant. Le LLM reste facturé côté fournisseur,
+  // mais le wallet utilisateur n'est plus touché (R2 porte tout l'usage).
+  if (!BILLING_ENABLED) {
+    const response = await generate(params.request);
+    return { response, chargeMinor: 0, providerCostEur: 0 };
+  }
   const complexity = params.complexity ?? (params.request.requiresTools ? 1.15 : 1);
   const reserveMinor = worstCaseReserve(params.request, complexity);
   const wallet = await getWallet(params.userId);
