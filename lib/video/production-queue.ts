@@ -34,10 +34,11 @@ import { adminDb } from "@/lib/firebase/admin";
 import { logger } from "@/lib/observability/logger";
 import { enqueueVideoProductionTick, type TickPublishResult } from "@/lib/queue/tick-queue";
 import { createProject, getOwnedProjectOrThrow, patchProject, logSystem } from "@/lib/video/project-service";
-import { VideoProjectCreateSchema, DirectorBriefSchema, RenderRequestSchema, VIDEO_LIMITS } from "@/lib/video/security";
+import { VideoProjectCreateSchema, DirectorBriefSchema, RenderRequestSchema, VIDEO_LIMITS, VideoQuotaError } from "@/lib/video/security";
 import { applyProductionPlan } from "@/lib/video/director-service";
 import { generateScript } from "@/lib/video/script-service";
 import { generateSceneImage } from "@/lib/video/image-bridge";
+import { generateSceneVideo, isSceneVideoServiceEnabled, SceneVideoUnavailableError } from "@/lib/video/scene-video-service";
 import { billImageGeneration, billTts } from "@/lib/video/credits";
 import { resolvePreferredVoice, withPlatformVoiceFallback, generateSceneNarration, attachRecordingAsNarration } from "@/lib/video/voice-service";
 import { listAssets } from "@/lib/video/asset-service";
@@ -129,6 +130,12 @@ export interface ProductionJobOptions {
   effectPreset?: VideoEffectPreset;
   /** Formats dérivés à produire après le master (validés RenderRequestSchema). */
   derivedTargets?: VideoExportTarget[];
+  /**
+   * Task 154 — clips vidéo IA par scène (Agnes Video 2.5). Défaut : ACTIVÉ
+   * quand le service est configuré (vraie vidéo générée, plus réaliste).
+   * false → animation image Ken Burns historique (économie).
+   */
+  videoClips?: boolean;
 }
 
 export interface VideoProductionJob {
@@ -456,6 +463,15 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
   } else if (options.effectPreset !== undefined) {
     delete options.effectPreset;
   }
+  // Task 154 — levier clips vidéo IA : booléen strict (toute autre valeur
+  // est écartée silencieusement — le défaut reste « activé si configuré »).
+  if (options.videoClips !== undefined) {
+    if (typeof options.videoClips === "boolean") {
+      options.videoClips = options.videoClips as boolean;
+    } else {
+      delete options.videoClips;
+    }
+  }
   const promptRaw = (params.prompt ?? "").trim();
   const briefSource =
     promptRaw.length >= 10
@@ -781,10 +797,16 @@ function narrationOutcome(reason: unknown): SceneNarrationOutcome {
   return classifyTickError(reason) === "fatal" ? { status: "fatal", error: reason } : { status: "deferred" };
 }
 
-/** Sortie IMAGE + NARRATION d'une scène de la vague parallèle. */
+/** Sortie IMAGE + NARRATION + CLIP VIDÉO IA d'une scène de la vague parallèle. */
 interface SceneWaveResult {
   image: { status: "ok"; generated: boolean } | { status: "ignored" } | { status: "fatal"; error: unknown };
   narration: SceneNarrationOutcome;
+  /**
+   * Task 154 — clip vidéo IA (Agnes Video, mode keyframe). JAMAIS bloquant
+   * pour la production : un échec (indisponibilité, crédit, quota) dégrade
+   * la scène en animation image Ken Burns avec avertissement utilisateur.
+   */
+  video: { status: "generated" | "reused" | "skipped" | "failed"; error?: string };
 }
 
 /** Voix résolue + narrations déjà posées (chevauchement assets∥voice). */
@@ -966,7 +988,38 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
           })
         : Promise.resolve({ status: "fulfilled" as const, value: { status: "disabled" as const } });
       const imageSettled = await imageTask;
+      // Task 154 — CLIP VIDÉO IA : démarre APRÈS l'image (mode keyframe —
+      // l'image cohérente devient la first frame du clip) et se poursuit en
+      // parallèle de la narration. Échec → dégradation Ken Burns (jamais
+      // bloquant) : le rendu n'a simplement pas de videoR2Key pour la scène.
+      const videoTask: Promise<{ status: "fulfilled"; value: { status: "generated" | "reused" | "skipped" | "failed"; error?: string } } | { status: "rejected"; reason: unknown }> =
+        imageSettled.status === "rejected"
+          ? Promise.resolve({ status: "fulfilled" as const, value: { status: "skipped" as const } })
+          : settle(async () => {
+              if (job.options?.videoClips === false || !isSceneVideoServiceEnabled()) {
+                return { status: "skipped" as const };
+              }
+              try {
+                const clip = await generateSceneVideo({ userId: job.userId, project, scene });
+                return clip.reused ? { status: "reused" as const } : { status: "generated" as const };
+              } catch (error) {
+                if (error instanceof SceneVideoUnavailableError || error instanceof VideoQuotaError) {
+                  return { status: "failed" as const, error: error.message };
+                }
+                // Fonds insuffisants (402 wallet) → dégradation contrôlée : la
+                // scène garde son animation image, l'utilisateur est averti.
+                const message = error instanceof Error ? error.message : String(error);
+                if (/insufficient|fonds|solde|wallet/i.test(message)) {
+                  return { status: "failed" as const, error: message };
+                }
+                throw error;
+              }
+            });
       const narrationSettled = await narrationTask;
+      const videoSettled = await videoTask;
+      const videoResult = videoSettled.status === "rejected"
+        ? { status: "failed" as const, error: videoSettled.reason instanceof Error ? videoSettled.reason.message : String(videoSettled.reason) }
+        : videoSettled.value;
       if (imageSettled.status === "rejected") {
         // Image quota/transitoire → PROPAGATION (rejet du worker, isolé par
         // le pool — la première dans l'ORDRE remonte après la vague).
@@ -974,9 +1027,14 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
         return {
           image: { status: "fatal", error: imageSettled.reason },
           narration: narrationSettled.status === "rejected" ? narrationOutcome(narrationSettled.reason) : narrationSettled.value,
+          video: videoResult,
         };
       }
-      return { image: imageSettled.value, narration: narrationSettled.status === "rejected" ? narrationOutcome(narrationSettled.reason) : narrationSettled.value };
+      return {
+        image: imageSettled.value,
+        narration: narrationSettled.status === "rejected" ? narrationOutcome(narrationSettled.reason) : narrationSettled.value,
+        video: videoResult,
+      };
     },
     {
       // Budget temps du tick honoré AVANT chaque démarrage de scène (le
@@ -1042,6 +1100,14 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
       );
     } else if (result.narration.status === "done") {
       narrated += 1;
+    }
+    // Task 154 — clip vidéo IA : avertissement HONNÊTE en cas d'échec (la
+    // scène est livrée en animation image Ken Burns, jamais bloquée).
+    if (result.video.status === "failed") {
+      warnings = appendJobWarning(
+        warnings,
+        `Clip vidéo IA de la scène ${sceneIndex + 1} non généré (${(result.video.error ?? "raison inconnue").slice(0, 160)}) — animation image utilisée.`,
+      );
     }
     cursor = sceneIndex + 1;
   }

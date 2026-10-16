@@ -152,6 +152,16 @@ const OPTIONAL_RECOGNIZED = [
   "AGNES_IMAGE_MODEL",
   "AGNES_API_BASE",
   "AGNES_TEXT_MODEL",
+  // Task 154 — génération vidéo IA (lib/ai/video-generation.ts,
+  // lib/video/scene-video-service.ts) : Agnes Video 2.5 par scène.
+  "AGNES_VIDEO_MODEL",
+  "GEN3IA_VIDEO_CLIPS_ENABLED",
+  "GEN3IA_VIDEO_POLL_TIMEOUT_MS",
+  "COST_AGNES_VIDEO_720P_EUR_PER_SEC",
+  "COST_AGNES_VIDEO_1080P_EUR_PER_SEC",
+  "COST_AGNES_VIDEO_1K_EUR_PER_SEC",
+  "COST_AGNES_VIDEO_2K_EUR_PER_SEC",
+  "VIDEO_MAX_GENERATED_SCENE_VIDEOS",
   // Voix (lib/integrations/elevenlabs/client.ts) et rendu UI 21st
   // (lib/integrations/twentyfirst/client.ts).
   "ELEVENLABS_VOICE_ID",

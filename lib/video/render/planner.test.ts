@@ -9,6 +9,7 @@ import { videoObjectKey, isOwnedVideoKey, videoProjectPrefix, VIDEO_STORAGE_DOMA
 import {
   buildRenderPlan,
   buildSegmentFfmpegArgs,
+  buildVideoSegmentFfmpegArgs,
   buildTransitionFfmpegArgs,
   buildAudioMixFfmpegArgs,
   buildAssForRender,
@@ -217,5 +218,90 @@ describe("Motion → graphe FFmpeg", () => {
     expect(vf).toContain("zoompan");
     expect(vf).toMatch(/z='1\.0000\+\(0\.1200\)\*on\/100'/); // 4 s × 25 fps = 100 frames
     void zExpr;
+  });
+});
+
+// ── Task 154 : segments alimentés par des CLIPS VIDÉO IA ─────────────────
+
+describe("Task 154 — clips vidéo IA par scène (plan + graphe FFmpeg)", () => {
+  it("buildRenderPlan : videoByScene câble videoR2Keys sur les segments (l'image reste en repli)", () => {
+    const { project, timeline } = fakeProjectWithTimeline();
+    const imageByScene = new Map([
+      ["scene_001", fakeAsset("a1", "users/u1/video/p1/images/1.png", "image", "scene_001")],
+      ["scene_002", fakeAsset("a2", "users/u1/video/p1/images/2.png", "image", "scene_002")],
+    ]);
+    const videoByScene = new Map([
+      ["scene_001", { ...fakeAsset("v1", "users/u1/video/p1/renders/clip1.mp4", "video", "scene_001"), role: "scene-video:scene_001" } as VideoAsset],
+    ]);
+    const plan = buildRenderPlan({
+      project, timeline, jobId: "job1",
+      imageByScene, narrationByScene: new Map(),
+      sfxAssetByName: new Map(), derivedTargets: [],
+      videoByScene,
+    });
+    expect(plan.segments).toHaveLength(2);
+    // Scène AVEC clip : videoR2Keys branché, image conservée (repli QC).
+    expect(plan.segments[0].videoR2Keys).toEqual(["users/u1/video/p1/renders/clip1.mp4"]);
+    expect(plan.segments[0].imageR2Keys).toEqual(["users/u1/video/p1/images/1.png"]);
+    // Scène SANS clip : comportement historique (aucune clé vidéo).
+    expect(plan.segments[1].videoR2Keys).toBeUndefined();
+  });
+
+  it("buildVideoSegmentFfmpegArgs : normalisation cover + fps + trim exact, SANS zoompan", () => {
+    const segment: RenderPlan["segments"][number] = {
+      index: 0, sceneId: "scene_001", durationSec: 8, imageR2Keys: ["i.png"],
+      motion: { preset: "slow_zoom", keyframes: [{ at: 0, scale: 1, x: 0, y: 0, rotationDeg: 0 }] },
+      effects: [{ name: "vignette", intensity: "normal" }],
+      textOverlays: [], transitionIn: "cut", transitionOut: "cut",
+    };
+    const args = buildVideoSegmentFfmpegArgs({
+      segment, ctx: { width: 1920, height: 1080, fps: 30 },
+      videoFile: "clip.mp4", outFile: "seg.mp4", sourceDurationSec: 12.4,
+    });
+    // Entrée = le clip (pas de -loop image).
+    expect(args).toContain("clip.mp4");
+    expect(args).not.toContain("-loop");
+    const vf = args[args.indexOf("-vf") + 1];
+    // Cover-scale vers la géométrie de rendu + crop centré + fps du plan.
+    expect(vf).toContain("scale=1920:1080:force_original_aspect_ratio=increase");
+    expect(vf).toContain("crop=1920:1080");
+    expect(vf).toContain("fps=30");
+    // Clip PLUS LONG que la scène : pas de tpad, trim par -t.
+    expect(vf).not.toContain("tpad");
+    expect(args[args.indexOf("-t") + 1]).toBe("8.000");
+    // AUCUN zoompan (la caméra est réelle) — effets non-caméra conservés.
+    expect(vf).not.toContain("zoompan");
+    expect(vf).toContain("vignette");
+    // Même encodage intermédiaire que les segments image.
+    expect(args).toContain("libx264");
+    expect(args).toContain("-an");
+  });
+
+  it("buildVideoSegmentFfmpegArgs : clip plus COURT que la scène → tenue de dernière frame (tpad clone)", () => {
+    const segment: RenderPlan["segments"][number] = {
+      index: 1, sceneId: "scene_002", durationSec: 10, imageR2Keys: ["j.png"],
+      motion: { preset: "static", keyframes: [{ at: 0, scale: 1, x: 0, y: 0, rotationDeg: 0 }] },
+      effects: [], textOverlays: [], transitionIn: "cut", transitionOut: "cut",
+    };
+    const args = buildVideoSegmentFfmpegArgs({
+      segment, ctx: { width: 1280, height: 720, fps: 24 },
+      videoFile: "clip.mp4", outFile: "seg.mp4", sourceDurationSec: 6,
+    });
+    const vf = args[args.indexOf("-vf") + 1];
+    expect(vf).toMatch(/tpad=stop_mode=clone:stop_duration=4\.500/); // 10 - 6 + 0.5
+    expect(args[args.indexOf("-t") + 1]).toBe("10.000");
+  });
+
+  it("buildVideoSegmentFfmpegArgs : durée source inconnue → aucun tpad (trim par -t seul)", () => {
+    const segment: RenderPlan["segments"][number] = {
+      index: 0, sceneId: "scene_001", durationSec: 5, imageR2Keys: ["i.png"],
+      motion: { preset: "static", keyframes: [{ at: 0, scale: 1, x: 0, y: 0, rotationDeg: 0 }] },
+      effects: [], textOverlays: [], transitionIn: "cut", transitionOut: "cut",
+    };
+    const args = buildVideoSegmentFfmpegArgs({
+      segment, ctx: { width: 1280, height: 720, fps: 30 },
+      videoFile: "clip.mp4", outFile: "seg.mp4",
+    });
+    expect(args[args.indexOf("-vf") + 1]).not.toContain("tpad");
   });
 });

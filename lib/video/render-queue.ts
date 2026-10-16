@@ -859,6 +859,10 @@ async function stagePlan(job: RenderJob, io: EngineIo): Promise<void> {
 
   const images = await listAssets(job.userId, job.projectId, "image");
   const imageByScene = new Map(images.filter((a) => a.role?.startsWith("scene:")).map((a) => [a.sceneId!, a]));
+  // Task 154 — clips vidéo IA par scène (Agnes Video) : consommés par le
+  // planner en PRIORITÉ (mouvement réel), l'image reste le repli.
+  const sceneVideos = await listAssets(job.userId, job.projectId, "video");
+  const videoByScene = new Map(sceneVideos.filter((a) => a.role?.startsWith("scene-video:")).map((a) => [a.sceneId!, a]));
   const narrations = await listAssets(job.userId, job.projectId, "audio_narration");
   const narrationByScene = new Map(narrations.filter((a) => a.sceneId).map((a) => [a.sceneId!, a]));
   const sfxAssets = await listAssets(job.userId, job.projectId, "audio_sfx");
@@ -925,13 +929,14 @@ async function stagePlan(job: RenderJob, io: EngineIo): Promise<void> {
     musicBedAsset: musicBedFinal,
     derivedTargets: job.exports.map((e) => e.target),
     assR2Key,
+    ...(videoByScene.size > 0 ? { videoByScene } : {}),
     ...(voiceSyncByScene.size > 0 ? { voiceSyncByScene } : {}),
   });
   if (plan.segments.length === 0) throw new Error("Plan de rendu vide : aucune scène avec image.");
   // Task 95-c — écriture via la couche résiliente (checkpoint).
   await writeCheckpointSet(JOBS_COLLECTION, job.id, { plan, updatedAt: nowIso() }, job.userId);
   job.plan = plan;
-  await io.log(`Plan de rendu établi : ${plan.segments.length} segments, ${plan.estimatedSec} s attendues${voiceSyncByScene.size > 0 ? `, ${voiceSyncByScene.size} narration(s) synchronisée(s) à la voix (pouls/coupes)` : ""}.`);
+  await io.log(`Plan de rendu établi : ${plan.segments.length} segments, ${plan.estimatedSec} s attendues${videoByScene.size > 0 ? `, ${videoByScene.size} clip(s) vidéo IA (${[...videoByScene.values()].length} scène(s) en mouvement réel)` : ""}${voiceSyncByScene.size > 0 ? `, ${voiceSyncByScene.size} narration(s) synchronisée(s) à la voix (pouls/coupes)` : ""}.`);
 }
 
 /**

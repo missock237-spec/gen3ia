@@ -44,6 +44,8 @@ export const VIDEO_LIMITS = {
   maxRenderBytes: envInt("VIDEO_MAX_RENDER_BYTES", 8 * 1024 * 1024 * 1024),
   /** Images générées maximum par projet. */
   maxGeneratedImages: envInt("VIDEO_MAX_GENERATED_IMAGES", 600),
+  /** Task 154 — clips vidéo IA (Agnes Video) générés maximum par projet. */
+  maxGeneratedSceneVideos: envInt("VIDEO_MAX_GENERATED_SCENE_VIDEOS", 300),
   /** Caractères ElevenLabs maximum par projet. */
   maxTtsCharacters: envInt("VIDEO_MAX_TTS_CHARACTERS", 400_000),
   /** Task 120 — générations d'images de scènes simultanées (assets ∥). */

@@ -23,6 +23,7 @@ import { dimensionsFor } from "@/lib/video/types";
 import { runFfmpeg, probeMedia, cleanupTmpDir } from "@/lib/video/ffmpeg";
 import {
   buildSegmentFfmpegArgs,
+  buildVideoSegmentFfmpegArgs,
   buildTransitionFfmpegArgs,
   buildAudioMixFfmpegArgs,
   buildExportFfmpegArgs,
@@ -87,6 +88,41 @@ export async function renderSegments(params: {
       Math.max(1, params.concurrency ?? 1),
       async (segment) => {
         const outFile = join(params.io.tmpDir, `segment_${String(segment.index).padStart(4, "0")}.mp4`);
+        // Task 154 — CLIP VIDÉO IA : le segment porte un clip généré (Agnes
+        // Video, mode keyframe depuis l'image cohérente de la scène) → il
+        // est rendu depuis le clip RÉEL (mouvement, lumière, matières).
+        // Illisible/corrompu → REPLI automatique sur l'animation image
+        // (résultat plutôt qu'échec, scène préservée).
+        const videoR2Key = segment.videoR2Keys?.[0];
+        if (videoR2Key) {
+          try {
+            const videoFile = await params.io.materializeByName(videoR2Key, `vid_${segment.index}.mp4`);
+            const probe = await probeMedia(videoFile, params.io.tmpDir).catch(() => null);
+            const args = buildVideoSegmentFfmpegArgs({
+              segment,
+              ctx: { width: dims.width, height: dims.height, fps: params.plan.fps },
+              videoFile,
+              outFile,
+              fontFile: fontFile ?? undefined,
+              sourceDurationSec: probe?.durationSec,
+            });
+            await runFfmpeg({
+              args,
+              cwd: params.io.tmpDir,
+              outputDurationSec: segment.durationSec,
+              outputPaths: [outFile],
+            });
+            await params.onSegmentDone(segment.index);
+            await params.io.log(
+              `Segment ${segment.index + 1}/${params.plan.segments.length} rendu depuis le clip vidéo IA (${segment.sceneId}).`,
+            );
+            return;
+          } catch (videoError) {
+            await params.io.log(
+              `Clip vidéo IA de ${segment.sceneId} inutilisable (${videoError instanceof Error ? videoError.message : "erreur"}) — repli sur l'animation image.`,
+            );
+          }
+        }
         const imageFiles: string[] = [];
         for (const [i, r2Key] of segment.imageR2Keys.entries()) {
           imageFiles.push(await params.io.materializeByName(r2Key, `img_${segment.index}_${i}.png`));

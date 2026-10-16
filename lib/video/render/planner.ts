@@ -79,6 +79,12 @@ export interface BuildPlanInput {
   /** Clé R2 du fichier ASS de sous-titres (si activés). */
   assR2Key?: string;
   /**
+   * Task 154 — CLIPS VIDÉO IA PAR SCÈNE : un clip Agnes Video 2.5 généré
+   * à partir de l'image cohérente de la scène (mode keyframe). Absent →
+   * comportement historique (animation image zoompan Ken Burns).
+   */
+  videoByScene?: Map<string, VideoAsset>;
+  /**
    * Task 119 — timelines d'amplitude des narrations (voice-sync) : active
    * les effets audio-réactifs (voice_pulse/punch_zoom sur les scènes avec
    * PERSONNE) et l'alignement des coupes sur les silences de parole.
@@ -133,6 +139,9 @@ export function buildRenderPlan(input: BuildPlanInput): RenderPlan {
       sceneId: scene.id,
       durationSec: sceneDuration(scene.id, scene.durationSec),
       imageR2Keys: [image.r2Key],
+      // Task 154 — clip vidéo IA de la scène : le rendu l'utilise en PRIORITÉ
+      // (mouvement réel), l'image reste en repli QC/anticrépissage.
+      ...(input.videoByScene?.get(scene.id) ? { videoR2Keys: [input.videoByScene.get(scene.id)!.r2Key] } : {}),
       narrationR2Key: narration?.r2Key,
       motion: resolveMotion(project, scene.id, scene.cameraMotion, sceneDuration(scene.id, scene.durationSec)),
       effects,
@@ -560,6 +569,91 @@ export function buildSegmentFfmpegArgs(params: {
     "-r", String(ctx.fps),
     // Task 120 — encodage : preset veryfast + CRF adapté à la résolution +
     // threads auto (les segments sont des intermédiaires : pas de faststart).
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crfForHeight(dims.height)), "-pix_fmt", "yuv420p", "-threads", "0",
+    "-an",
+    params.outFile,
+  ];
+}
+
+/**
+ * Task 154 — SEGMENT VIDÉO RÉEL : construit les arguments FFmpeg d'un segment
+ * alimenté par un CLIP VIDÉO IA (Agnes Video 2.5, mode keyframe depuis l'image
+ * cohérente de la scène) au lieu d'une image fixe zoompan.
+ *
+ * Normalisation professionnelle :
+ *  - cover-scale vers la géométrie cible (crop centré si ratio diffère) ;
+ *  - cadence normalisée au fps du plan (dup/skip de frames — pas de
+ *    minterpolate coûteux sur les clips déjà fluides) ;
+ *  - durée exacte du segment : tenue sur la dernière frame (tpad clone) si
+ *    le clip est plus court, trim net s'il est plus long ;
+ *  - la caméra est DÉJÀ réelle (mouvement généré) : les effets audio-réactifs
+ *    de zoompan (voice_pulse/punch_zoom) ne s'appliquent PAS — seuls les
+ *    effets de grade/couleur et les textes à l'écran restent ;
+ *  - même encodage intermédiaire que les segments image (libx264 veryfast,
+ *    CRF adapté, yuv420p, sans audio) → transitions xfade et concat
+ *    demuxer fonctionnent à l'identique.
+ */
+export function buildVideoSegmentFfmpegArgs(params: {
+  segment: TransformableRenderSegment;
+  ctx: SegmentFilterContext;
+  videoFile: string;
+  outFile: string;
+  fontFile?: string;
+  /** Durée réelle du clip source (sonde ffprobe) — pilotage du tpad/trim. */
+  sourceDurationSec?: number;
+}): string[] {
+  const { segment, ctx } = params;
+  const dims = { width: ctx.width, height: ctx.height };
+
+  const chain: string[] = [];
+
+  // 1) Cover-scale + crop centré vers la géométrie de rendu.
+  chain.push(`scale=${dims.width}:${dims.height}:force_original_aspect_ratio=increase`);
+  chain.push(`crop=${dims.width}:${dims.height}`);
+
+  // 2) Tenue de dernière frame si le clip est plus court que la scène
+  //    (stop_mode=clone : freeze propre, standard broadcast) — inoffensif
+  //    sinon (le -t final borne de toute façon).
+  const sourceSec = typeof params.sourceDurationSec === "number" && params.sourceDurationSec > 0
+    ? params.sourceDurationSec
+    : null;
+  if (sourceSec !== null && sourceSec < segment.durationSec - 0.05) {
+    const padSec = Math.max(0.1, segment.durationSec - sourceSec + 0.5);
+    chain.push(`tpad=stop_mode=clone:stop_duration=${padSec.toFixed(3)}`);
+  }
+
+  // 3) Cadence du plan (dup/skip — le clip IA sort en 24-30 fps natifs).
+  chain.push(`fps=${ctx.fps}`);
+
+  // 4) Effets NON-caméra (grade, vignette, flurs d'ambiance…) : les effets
+  //    audio-réactifs de zoompan sont écartés (caméra réelle du clip).
+  const nonCameraEffects = segment.effects.filter((e) => e.name !== "voice_pulse" && e.name !== "punch_zoom");
+  const effectCtx: EffectFragmentContext = {
+    width: dims.width,
+    height: dims.height,
+    fps: ctx.fps,
+    durationSec: segment.durationSec,
+  };
+  const effectChain = buildEffectFilterChain(nonCameraEffects, effectCtx);
+  if (effectChain) chain.push(effectChain);
+
+  // 5) Textes à l'écran (drawtext — mêmes règles que les segments image).
+  for (const overlay of segment.textOverlays) {
+    if (!params.fontFile) break;
+    const escaped = escapeDrawtext(overlay.text);
+    const yPos = overlay.position === "center" ? `(h/2-th/2)` : overlay.position === "top" ? `h*0.08` : `h*0.82`;
+    chain.push(
+      `drawtext=fontfile=${params.fontFile}:text='${escaped}':fontsize=${Math.round(dims.height / 18)}:fontcolor=white:borderw=3:bordercolor=black@0.7:x=(w-tw)/2:y=${yPos}:enable='between(t,0.2,${Math.min(segment.durationSec - 0.2, 4).toFixed(2)})'`,
+    );
+  }
+
+  chain.push("format=yuv420p");
+
+  return [
+    "-i", params.videoFile,
+    "-vf", chain.join(","),
+    "-t", segment.durationSec.toFixed(3),
+    "-r", String(ctx.fps),
     "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crfForHeight(dims.height)), "-pix_fmt", "yuv420p", "-threads", "0",
     "-an",
     params.outFile,

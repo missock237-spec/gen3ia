@@ -520,6 +520,9 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
   // scènes du scénario qui possèdent déjà leur image (kind=image + sceneId).
   const [batchProgress, setBatchProgress] = useState<{ ready: number; total: number } | null>(null);
   const pollRef = useRef<{ timer: ReturnType<typeof setInterval>; controller: AbortController } | null>(null);
+  // Task 154 — progression du lot de CLIPS VIDÉO IA en cours.
+  const [videoBatchProgress, setVideoBatchProgress] = useState<{ ready: number; total: number } | null>(null);
+  const videoPollRef = useRef<{ timer: ReturnType<typeof setInterval>; controller: AbortController } | null>(null);
 
   useEffect(() => () => {
     // Démontage : arrêt du sondage + abort des GET en vol.
@@ -528,10 +531,57 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
       pollRef.current.controller.abort();
       pollRef.current = null;
     }
+    if (videoPollRef.current) {
+      clearInterval(videoPollRef.current.timer);
+      videoPollRef.current.controller.abort();
+      videoPollRef.current = null;
+    }
   }, []);
 
   function countScenesWithImage(list: VideoAsset[]) {
     return scenes.filter((s) => list.some((img) => img.kind === "image" && img.sceneId === s.id)).length;
+  }
+
+  // Task 154 — clips vidéo IA : compteur de scènes disposant de leur clip
+  // (kind=video + rôle scene-video:<id>) — même contrat que les images.
+  const videos = assets.filter((a) => a.kind === "video" && a.role?.startsWith("scene-video:"));
+  function countScenesWithVideo(list: VideoAsset[]) {
+    return scenes.filter((s) => list.some((v) => v.kind === "video" && v.role?.startsWith("scene-video:") && v.sceneId === s.id)).length;
+  }
+
+  async function generateVideoBatch(force = false) {
+    const target = scenes.filter((s) => force || !videos.some((v) => v.sceneId === s.id)).slice(0, 4);
+    if (target.length === 0) throw new Error("Toutes les scènes ont déjà leur clip vidéo IA — utilisez Régénérer.");
+    const total = scenes.length;
+    const controller = new AbortController();
+    const timer = setInterval(async () => {
+      try {
+        const poll = await authFetch(`/api/video/projects/${project.id}/assets`, { signal: controller.signal });
+        if (!poll.ok) return;
+        const fresh = ((await poll.json()) as { assets: VideoAsset[] }).assets;
+        setVideoBatchProgress({ ready: countScenesWithVideo(fresh), total });
+      } catch {
+        // GET annulé (fin de lot / démontage) — silencieux.
+      }
+    }, 3_000);
+    videoPollRef.current = { timer, controller };
+    setVideoBatchProgress({ ready: countScenesWithVideo(assets), total });
+    try {
+      const response = await authFetch(`/api/video/projects/${project.id}/generate-videos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sceneIds: target.map((s) => s.id), force }),
+      });
+      const data = (await response.json()) as { error?: string; generated?: number; failed?: Array<{ error: string }> };
+      if (!response.ok) throw new Error(data.error ?? "Génération de clips impossible");
+      if (data.failed?.length) throw new Error(`${data.generated ?? 0} clip(s) généré(s), ${data.failed.length} échec(s) : ${data.failed[0].error}`);
+    } finally {
+      clearInterval(timer);
+      controller.abort();
+      videoPollRef.current = null;
+      setVideoBatchProgress(null);
+      await onRefresh();
+    }
   }
 
   async function generateBatch(force = false) {
@@ -583,6 +633,16 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
           detail={`${batchProgress.ready}/${batchProgress.total} images prêtes`}
         />
       ) : null}
+      {videoBatchProgress ? (
+        <MediaProgressFrame
+          compact
+          tone="dark"
+          status="running"
+          stageLabel="Génération des clips vidéo IA (Agnes Video)"
+          percent={videoBatchProgress.total > 0 ? (videoBatchProgress.ready / videoBatchProgress.total) * 100 : null}
+          detail={`${videoBatchProgress.ready}/${videoBatchProgress.total} clips prêts — mouvement réel généré par IA`}
+        />
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <button onClick={() => runAction("images", () => generateBatch(false))} disabled={busy === "images" || !project.script} className="rounded-xl bg-[var(--g3-secondary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">
           {busy === "images" ? "Génération…" : `Générer les images (${Math.max(0, scenes.filter((s) => !images.some((img) => img.sceneId === s.id)).length)})`}
@@ -590,7 +650,13 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
         <button onClick={() => runAction("images-force", () => generateBatch(true))} disabled={busy === "images-force" || !project.script} className="rounded-xl border border-neutral-300 px-5 py-2 text-sm disabled:opacity-50">
           Régénérer (4 suivantes)
         </button>
-        <span className="self-center text-xs text-neutral-500">Lot de 4 par clic — cohérence des personnages assurée par le Consistency Engine.</span>
+        <button onClick={() => runAction("clips", () => generateVideoBatch(false))} disabled={busy === "clips" || !project.script || images.length === 0} className="rounded-xl bg-[var(--g3-primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50" title="Anime chaque scène en VRAIE vidéo IA (Agnes Video 2.5) à partir de son image cohérente">
+          {busy === "clips" ? "Génération des clips…" : `Générer les clips vidéo IA (${Math.max(0, scenes.filter((s) => !videos.some((v) => v.sceneId === s.id)).length)})`}
+        </button>
+        <button onClick={() => runAction("clips-force", () => generateVideoBatch(true))} disabled={busy === "clips-force" || !project.script || images.length === 0} className="rounded-xl border border-neutral-300 px-5 py-2 text-sm disabled:opacity-50">
+          Régénérer les clips (4)
+        </button>
+        <span className="self-center text-xs text-neutral-500">Images : cohérence personnages · Clips IA : mouvement réel caméra. Le rendu utilise le clip de chaque scène quand il existe (repli animation image sinon).</span>
       </div>
 
       {storyboard.length === 0 ? (
@@ -599,11 +665,15 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
         <ol className="grid gap-3 sm:grid-cols-2">
           {storyboard.map((entry) => {
             const image = images.find((img) => img.sceneId === entry.sceneId);
+            const clip = videos.find((v) => v.sceneId === entry.sceneId);
             return (
               <li key={entry.sceneId} className="rounded-2xl border border-neutral-200 bg-white p-4">
                 <div className="flex items-center justify-between text-xs text-neutral-500">
                   <span className="font-mono">SCÈNE {entry.sceneId.replace("scene_", "")} · {formatTimecode(entry.timecodeStartSec)} → {formatTimecode(entry.timecodeEndSec)}</span>
-                  <span className={image ? "text-[var(--g3-success-strong)]" : "text-neutral-400"}>{image ? "image prête" : "en attente"}</span>
+                  <span className="flex gap-2">
+                    <span className={image ? "text-[var(--g3-success-strong)]" : "text-neutral-400"}>{image ? "image prête" : "image attendue"}</span>
+                    <span className={clip ? "font-semibold text-[var(--g3-primary)]" : "text-neutral-400"}>{clip ? "clip vidéo IA" : "animation image"}</span>
+                  </span>
                 </div>
                 <p className="mt-2 text-sm text-neutral-800">{entry.imageBrief}</p>
                 <p className="mt-2 text-[11px] text-neutral-400">Animation : {entry.animation} · Entrée : {entry.transitionIn} · Voix : {entry.voiceBrief.slice(0, 80)}…</p>
