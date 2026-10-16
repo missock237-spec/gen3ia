@@ -140,6 +140,9 @@ export async function GET(request: NextRequest, { params }: Params) {
       timeline: current.timeline,
       sceneCursor: current.sceneCursor,
       title: current.title,
+      // Task 154 — avertissements honnêtes (clips IA dégradés en animation
+      // image, scènes tolérées…) : exposés au client pour le suivi production.
+      warnings: current.warnings ?? [],
       createdAt: current.createdAt,
       updatedAt: current.updatedAt,
       queueMode: tickQueueConfigured() ? ("queue" as const) : ("poll" as const),
