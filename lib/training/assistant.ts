@@ -55,6 +55,17 @@ export function buildAnalysisContext(overview: ProjectOverview): Record<string, 
       pairs: d.stats.pairs,
       duplicates: d.stats.duplicates,
       warnings: d.stats.warnings,
+      // v1.1 — origine hub + métadonnées RÉELLES remontées par l'API du hub
+      // au moment de l'import (lignes totales déclarées, splits, licence,
+      // échantillon). Aucune de ces valeurs n'est inventée.
+      source: d.source,
+      hubRef: d.hubRef ?? null,
+      hubTotalRows: d.originMetadata?.totalRows ?? null,
+      hubSplits: (d.originMetadata?.splits ?? []).map((split) => ({ name: split.name, rows: split.rows })),
+      license: d.originMetadata?.license ?? null,
+      ...(d.previewRows && d.previewRows.length > 0
+        ? { sample: JSON.stringify(d.previewRows.slice(0, 2)).slice(0, 600) }
+        : {}),
     })),
     splits: {
       train: datasets.filter((d) => d.split === "train").reduce((t, d) => t + d.stats.rows, 0),
@@ -80,6 +91,7 @@ Ta mission : recommander un plan d'entraînement PRÉCIS et HONNÊTE.
 Règles impératives :
 - Ne recommande QUE des méthodes supportées par les moteurs listés (champ methods).
 - Utilise uniquement les paramètres déclarés par le moteur, dans leurs bornes.
+- Les datasets importés de Hugging Face ou Kaggle portent des métadonnées d'ORIGINE (hubTotalRows, hubSplits, license, sample) : ce sont des données réelles fournies par le hub — sers-t'en ; si hubTotalRows dépasse largement les lignes analysées localement, signale que seuls certains fichiers ont été téléchargés.
 - Les estimations de ressources (VRAM, durée) sont des ESTIMATIONS : arrondis prudemment par excès.
 - Si les données sont insuffisantes pour un fine-tuning (< 50 paires), recommande la méthode "rag" (indexation RAG) et explique pourquoi.
 - Si aucun dataset n'est importé, dis-le clairement et recommande d'importer des données (aucun plan de fine-tuning).

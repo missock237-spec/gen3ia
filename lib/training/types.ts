@@ -56,6 +56,15 @@ export type DatasetSplit = (typeof DATASET_SPLITS)[number];
 export const DATASET_FORMATS = ["csv", "json", "jsonl", "txt"] as const;
 export type DatasetFormat = (typeof DATASET_FORMATS)[number];
 
+/**
+ * Origine d'un dataset (v1.1 — import depuis les hubs) :
+ *  - "upload" : fichier téléversé par l'utilisateur ;
+ *  - "huggingface" / "kaggle" : fichier réellement téléchargé depuis le hub
+ *    du même nom, puis validé par le MÊME pipeline (stats, doublons, PII).
+ */
+export const DATASET_SOURCES = ["upload", "huggingface", "kaggle"] as const;
+export type DatasetSource = (typeof DATASET_SOURCES)[number];
+
 /** Machine à états d'un job — les transitions sont validées par l'orchestrateur. */
 export const JOB_STATUSES = ["queued", "scheduled", "running", "completed", "failed", "cancelled"] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
@@ -127,6 +136,32 @@ export const datasetStatsSchema = z.object({
 });
 export type DatasetStats = z.infer<typeof datasetStatsSchema>;
 
+/**
+ * Métadonnées d'origine d'un dataset importé depuis un hub (v1.1).
+ * UNIQUEMENT des données RÉELLES remontées par l'API du hub au moment de
+ * l'inspection — jamais de chiffre inventé. `totalRows`/`splits` reflètent
+ * la déclaration du hub (utile quand seul un sous-ensemble de fichiers a
+ * pu être téléchargé sous les plafonds).
+ */
+export const datasetOriginMetadataSchema = z.object({
+  provider: z.enum(["huggingface", "kaggle"]).nullish(),
+  /** Référence hub d'origine (owner/dataset). */
+  hubRef: z.string().max(240).nullish(),
+  /** Lignes TOTALES déclarées par le hub (toutes splits confondues), si exposées. */
+  totalRows: z.number().int().nonnegative().nullish(),
+  /** Splits déclarés par le hub (nom → lignes), si exposés. */
+  splits: z
+    .array(z.object({ name: z.string().max(60), rows: z.number().int().nonnegative().nullable() }))
+    .max(20)
+    .default([]),
+  license: z.string().max(120).nullish(),
+  /** Nombre de fichiers du hub réellement téléchargés / écartés sous plafond. */
+  importedFiles: z.number().int().nonnegative().default(0),
+  skippedFiles: z.number().int().nonnegative().default(0),
+  inspectedAt: z.string().nullish(),
+});
+export type DatasetOriginMetadata = z.infer<typeof datasetOriginMetadataSchema>;
+
 export const datasetAssetSchema = z.object({
   v: z.literal(1).default(1),
   id: z.string().min(1),
@@ -134,6 +169,14 @@ export const datasetAssetSchema = z.object({
   ownerId: z.string().min(1),
   name: z.string().min(1).max(180),
   format: z.enum(DATASET_FORMATS),
+  /** Origine du fichier (v1.1) : téléversement ou hub Hugging Face / Kaggle. */
+  source: z.enum(DATASET_SOURCES).default("upload"),
+  /** Référence hub (owner/dataset) quand source = "huggingface" | "kaggle". */
+  hubRef: z.string().max(240).nullish(),
+  /** Métadonnées réelles du hub au moment de l'import (v1.1). */
+  originMetadata: datasetOriginMetadataSchema.optional(),
+  /** Échantillon de lignes réelles du hub (≤ 10 lignes, cellules tronquées). */
+  previewRows: z.array(z.record(z.string(), z.unknown())).max(10).default([]),
   storageKey: z.string(),
   sizeBytes: z.number().int().nonnegative(),
   sha256: z.string(),

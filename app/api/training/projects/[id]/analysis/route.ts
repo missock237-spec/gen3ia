@@ -6,6 +6,7 @@ import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 import { generateTrainingPlan } from "@/lib/training/assistant";
+import { ipFromRequest, recordTrainingAudit } from "@/lib/training/audit";
 import { getProject, savePlan } from "@/lib/training/repository";
 
 /**
@@ -44,6 +45,15 @@ export async function POST(
       );
     }
     await savePlan(user.uid, result.plan);
+    void recordTrainingAudit({
+      uid: user.uid,
+      action: "analysis.generated",
+      entityType: "plan",
+      entityId: result.plan.id,
+      projectId: id,
+      ip: ipFromRequest(request),
+      details: { generatedBy: result.generatedBy, method: result.plan.method, engineId: result.plan.engineId },
+    }).catch(() => undefined);
     return NextResponse.json(
       { plan: result.plan, generatedBy: result.generatedBy, explanation: result.explanation, requestId },
       { status: 201, headers: { "x-request-id": requestId } },

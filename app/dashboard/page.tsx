@@ -79,6 +79,7 @@ export default function DashboardPage() {
     { href: "/workspace/connectors", label: "Connecteurs", icon: "⧉", description: "Applications connectées" },
     { href: "/workspace/bibliotheque", label: "Bibliothèque", icon: "◈", description: "Capacités métier" },
     { href: "/studio", label: "Missions", icon: "◷", description: "Tâches et validations" },
+    { href: "/workspace/training", label: "AI Training Studio", icon: "⌬", description: "Fine-tuning LoRA/QLoRA, RAG, import Hugging Face & Kaggle" },
   ];
 
   return (

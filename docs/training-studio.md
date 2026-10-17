@@ -104,3 +104,24 @@ Voir `.env.example` (section AI TRAINING STUDIO). Toutes facultatives. Sans `TRA
 - `lib/training/orchestrator.test.ts` — honnêteté sans fournisseur, cycle simulé étiqueté, annulation, garde-fous de création.
 - `lib/training/assistant.test.ts` — contexte réel, repli heuristique, bornage des paramètres.
 - `app/api/training/projects/route.test.ts` — 401, validation des champs, création, transmission des quotas.
+- `lib/training/hub/*.test.ts` (v1.1) — connecteurs HF/Kaggle (normalisation, aperçus, plafonds), sélection de fichiers, audit, budget de minutes.
+
+## 7. v1.1 — Import de datasets depuis les hubs
+
+### Connecteurs (lib/training/hub/)
+
+- **Hugging Face** : recherche (`/api/datasets?search=`), inspection (`/api/datasets/{id}` + `datasets-server` `/info` et `/first-rows` pour les splits déclarés et un échantillon de lignes réelles), téléchargement (`/resolve/main/{fichier}`). La taille exacte des fichiers n'est pas exposée par l'API de listing — note honnête affichée, plafond appliqué au téléchargement.
+- **Kaggle** : recherche (`/api/v1/datasets/list?search=`), inspection (`/datasets/view` + `/datasets/list` pour les fichiers avec tailles), aperçu (téléchargement du plus petit fichier ingérable ≤ 2 Mo), téléchargement par fichier (`/datasets/download/{owner}/{slug}/{fichier}`). Authentification Bearer via `KAGGLE_API_TOKEN` (serveur uniquement). Kaggle ne déclare pas de splits : note explicite, affectation train/validation/test à la charge de l'utilisateur après import.
+- Sécurité : hôtes fixes (aucune URL client résolue — anti-SSRF), références validées par regex stricte, timeouts `AbortController`, plafonds de réponse (5 Mo JSON) et de fichiers, jetons jamais exposés au client.
+- Import (`POST /api/training/projects/[id]/datasets/import`) : sélection des fichiers ingérables (.csv/.json/.jsonl/.txt) sous plafonds serveur, téléchargement réel, validation par le MÊME pipeline que les téléversements, stockage R2. Les fichiers écartés sont retournés avec leur raison. Les métadonnées d'origine (lignes totales déclarées, splits, licence, échantillon) sont conservées sur l'asset et alimentent l'assistant IA.
+
+### Quotas étendus (v1.1)
+
+- `TRAINING_MAX_STORAGE_MB` (défaut 2048) : stockage total (datasets + modèles + exports) vérifié à chaque écriture (`assertStorageQuota`).
+- `TRAINING_MAX_MINUTES_PER_MONTH` (défaut 60) : budget de minutes d'entraînement par mois civil ; l'estimation de durée du plan sert de réservation prudente à l'acceptation (`assertTrainingMinutesBudget`), la consommation réelle est calculée depuis les jobs démarrés. Estimation ≠ mesure : sans estimation, rien n'est bloqué.
+- `TRAINING_MAX_HUB_IMPORT_MB` (défaut 500) : taille totale maximale d'un import hub.
+- Le plafond de durée déclaré par un fournisseur GPU (`maxDurationMinutes`) écarte désormais honnêtement les fournisseurs trop courts pour l'estimation du plan (le job reste en file avec la raison).
+
+### Journal d'audit (v1.1)
+
+`lib/training/audit.ts` — entrées par préfixe mensuel `users/{uid}/training-audit/{aaaa-mm}/`, écrites en fire-and-forget (jamais bloquantes). Actions tracées : cycle de vie des projets, imports (upload ET hub, avec source/tailles/compteurs), analyses, acceptations de plans, création/annulation de jobs, exports (préparation + téléchargement), refus de quota projet. Les détails sont sanitisés (identifiants et compteurs uniquement — aucun contenu, aucun secret).

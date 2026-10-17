@@ -7,6 +7,7 @@ import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 import { getProject } from "@/lib/training/repository";
+import { ipFromRequest, recordTrainingAudit } from "@/lib/training/audit";
 import { prepareExport } from "@/lib/training/exports";
 
 const createExportSchema = z.object({
@@ -48,6 +49,15 @@ export async function POST(request: NextRequest) {
         { status: 409, headers: { "x-request-id": requestId } },
       );
     }
+    void recordTrainingAudit({
+      uid: user.uid,
+      action: "export.prepared",
+      entityType: "export",
+      entityId: result.artifact.id,
+      projectId: parsed.data.projectId,
+      ip: ipFromRequest(request),
+      details: { kind: parsed.data.kind, sizeBytes: result.artifact.sizeBytes },
+    }).catch(() => undefined);
     return NextResponse.json(
       { export: result.artifact, requestId },
       { status: 201, headers: { "x-request-id": requestId } },

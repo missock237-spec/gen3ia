@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 
 import { getProject, getPlan, savePlan } from "@/lib/training/repository";
+import { ipFromRequest, recordTrainingAudit } from "@/lib/training/audit";
 import { createJobFromPlan } from "@/lib/training/orchestrator";
 import { planCoherenceErrors } from "@/lib/training/assistant";
 
@@ -62,6 +63,24 @@ export async function POST(
     }
 
     await savePlan(user.uid, { ...plan, status: "accepted", acceptedAt: new Date().toISOString() });
+    void recordTrainingAudit({
+      uid: user.uid,
+      action: "plan.accepted",
+      entityType: "plan",
+      entityId: plan.id,
+      projectId,
+      ip: ipFromRequest(request),
+      details: { method: plan.method, engineId: plan.engineId, jobId: result.job.id },
+    }).catch(() => undefined);
+    void recordTrainingAudit({
+      uid: user.uid,
+      action: "job.created",
+      entityType: "job",
+      entityId: result.job.id,
+      projectId,
+      ip: ipFromRequest(request),
+      details: { status: result.job.status, waitingReason: result.job.waitingReason ?? null, simulated: result.job.simulated },
+    }).catch(() => undefined);
     return NextResponse.json(
       { job: result.job, requestId },
       { status: 201, headers: { "x-request-id": requestId } },

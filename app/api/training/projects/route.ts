@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 
 import { assertCanCreateProject } from "@/lib/training/quotas";
+import { ipFromRequest, recordTrainingAudit } from "@/lib/training/audit";
 import { createProject, listProjects } from "@/lib/training/repository";
 import { trainingFamilySchema, trainingModeSchema } from "@/lib/training/types";
 
@@ -57,8 +58,32 @@ export async function POST(request: NextRequest) {
       dataTypes: parsed.data.dataTypes,
       mode: parsed.data.mode,
     });
+    void recordTrainingAudit({
+      uid: user.uid,
+      action: "project.created",
+      entityType: "project",
+      entityId: project.id,
+      ip: ipFromRequest(request),
+      details: { family: project.family, mode: project.mode },
+    }).catch(() => undefined);
     return NextResponse.json({ project, requestId }, { status: 201, headers: { "x-request-id": requestId } });
   } catch (error) {
+    // Audit même des échecs de quota : traçabilité des tentatives.
+    if (error instanceof Error && error.message.startsWith("Quota atteint")) {
+      try {
+        const user = await requireUser(request);
+        void recordTrainingAudit({
+          uid: user.uid,
+          action: "project.created",
+          entityType: "project",
+          entityId: "-",
+          ip: ipFromRequest(request),
+          details: { refused: true, reason: "quota-projects" },
+        }).catch(() => undefined);
+      } catch {
+        // Auth déjà validée plus haut : ignore.
+      }
+    }
     return NextResponse.json(
       { ...errorBody(error, "Création du projet impossible"), requestId },
       { status: errorStatus(error, 400), headers: { "x-request-id": requestId } },

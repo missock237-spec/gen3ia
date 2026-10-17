@@ -1,4 +1,4 @@
-import { ListSkeleton, PageHeaderSkeleton } from "@/components/workspace/skeletons";
+import { PageHeaderSkeleton } from "@/components/workspace/skeletons";
 
 export default function Loading() {
   return (

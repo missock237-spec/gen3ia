@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 
 import { getProject } from "@/lib/training/repository";
+import { ipFromRequest, recordTrainingAudit } from "@/lib/training/audit";
 import { cancelJob } from "@/lib/training/orchestrator";
 
 /** POST /api/training/jobs/[jobId]/cancel — annule une tâche (propagée au fournisseur GPU). */
@@ -32,6 +33,15 @@ export async function POST(
     if (!job) {
       return NextResponse.json({ error: "Tâche introuvable.", requestId }, { status: 404, headers: { "x-request-id": requestId } });
     }
+    void recordTrainingAudit({
+      uid: user.uid,
+      action: "job.cancelled",
+      entityType: "job",
+      entityId: job.id,
+      projectId,
+      ip: ipFromRequest(request),
+      details: { status: job.status },
+    }).catch(() => undefined);
     return NextResponse.json({ job, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
     return NextResponse.json(

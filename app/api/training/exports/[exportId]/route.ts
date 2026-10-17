@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 
 import { getProject } from "@/lib/training/repository";
+import { ipFromRequest, recordTrainingAudit } from "@/lib/training/audit";
 import { exportDownloadUrl } from "@/lib/training/exports";
 
 /**
@@ -38,6 +39,14 @@ export async function GET(
         { status: result.status, headers: { "x-request-id": requestId } },
       );
     }
+    void recordTrainingAudit({
+      uid: user.uid,
+      action: "export.downloaded",
+      entityType: "export",
+      entityId: exportId,
+      projectId,
+      ip: ipFromRequest(request),
+    }).catch(() => undefined);
     return NextResponse.json({ url: result.url, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
     return NextResponse.json(
