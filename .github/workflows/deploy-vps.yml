@@ -16,6 +16,11 @@ jobs:
       - name: Checkout (script de déploiement à jour)
         uses: actions/checkout@v4
 
+      - name: Diagnostic TCP vers le VPS (port SSH 22022)
+        run: |
+          echo "=== Test TCP + bannière ==="
+          (sleep 2; echo "") | timeout 12 nc -v 209.74.86.62 22022 2>&1 | head -3 || echo "NC_FAILED (code $?)"
+
       - name: Installer la clé SSH du VPS
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -23,9 +28,13 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/vps_key
           chmod 600 ~/.ssh/vps_key
-          ssh-keyscan -p 22022 209.74.86.62 >> ~/.ssh/known_hosts 2>/dev/null
+          # Vérification de la validité de la clé
+          ssh-keygen -y -f ~/.ssh/vps_key > /dev/null && echo "Clé privée valide"
 
       - name: Uploader et exécuter le script de déploiement
+        env:
+          TERM: dumb
         run: |
-          scp -P 22022 -i ~/.ssh/vps_key scripts/deploy_free_mode.sh root@209.74.86.62:/tmp/deploy_free_mode.sh
-          ssh -p 22022 -i ~/.ssh/vps_key root@209.74.86.62 "bash -lc 'bash /tmp/deploy_free_mode.sh'"
+          set -x
+          scp -v -P 22022 -i ~/.ssh/vps_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 scripts/deploy_free_mode.sh root@209.74.86.62:/tmp/deploy_free_mode.sh 2>&1 | tail -15
+          ssh -p 22022 -i ~/.ssh/vps_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@209.74.86.62 "bash -lc 'bash /tmp/deploy_free_mode.sh'"
