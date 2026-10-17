@@ -80,7 +80,10 @@ export type LiveClientMessage =
   | { type: "hello"; sessionId: string; deviceId: string; pairingToken: string }
   | { type: "heartbeat"; sessionId: string; deviceId: string; timestamp: number }
   | { type: "frame"; sessionId: string; deviceId: string; timestamp: number; width: number; height: number; jpegBase64: string }
-  | { type: "action.result"; sessionId: string; actionId: string; ok: boolean; error?: string; result?: unknown };
+  | { type: "action.result"; sessionId: string; actionId: string; ok: boolean; error?: string; result?: unknown }
+  | { type: "copilot.hello"; sessionId: string; deviceId: string; pairingToken: string }
+  | { type: "copilot.ask"; sessionId: string; deviceId: string; text: string }
+  | { type: "copilot.stop"; sessionId: string; deviceId: string };
 
 export type LiveServerMessage =
   | { type: "hello.ack"; sessionId: string; heartbeatIntervalMs: number; frameIntervalMs: number }
@@ -89,11 +92,18 @@ export type LiveServerMessage =
   | { type: "action"; actionId: string; action: LiveAction }
   | { type: "pause"; reason: string }
   | { type: "resume"; reason: string }
-  | { type: "stop"; reason: string };
+  | { type: "stop"; reason: string }
+  | { type: "copilot.ack"; sessionId: string; heartbeatIntervalMs: number }
+  | { type: "copilot.delta"; sessionId: string; text: string }
+  | { type: "copilot.done"; sessionId: string }
+  | { type: "copilot.error"; sessionId: string; message: string };
 
 export const LiveClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("viewer.hello"), sessionId: z.string().min(1).max(128), viewerToken: z.string().min(32).max(256) }),
   z.object({ type: z.literal("hello"), sessionId: z.string().min(1).max(128), deviceId: z.string().min(1).max(256), pairingToken: z.string().min(32).max(256) }),
+  z.object({ type: z.literal("copilot.hello"), sessionId: z.string().min(1).max(128), deviceId: z.string().min(1).max(256), pairingToken: z.string().min(32).max(256) }),
+  z.object({ type: z.literal("copilot.ask"), sessionId: z.string().min(1).max(128), deviceId: z.string().min(1).max(256), text: z.string().min(1).max(4000) }),
+  z.object({ type: z.literal("copilot.stop"), sessionId: z.string().min(1).max(128), deviceId: z.string().min(1).max(256) }),
   z.object({ type: z.literal("heartbeat"), sessionId: z.string().min(1).max(128), deviceId: z.string().min(1).max(256), timestamp: z.number().int().positive() }),
   z.object({ type: z.literal("frame"), sessionId: z.string().min(1).max(128), deviceId: z.string().min(1).max(256), timestamp: z.number().int().positive(), width: z.number().int().min(1).max(10000), height: z.number().int().min(1).max(10000), jpegBase64: z.string().min(1).max(2_000_000) }),
   z.object({ type: z.literal("action.result"), sessionId: z.string().min(1).max(128), actionId: z.string().uuid(), ok: z.boolean(), error: z.string().max(2000).optional(), result: z.unknown().optional() }),

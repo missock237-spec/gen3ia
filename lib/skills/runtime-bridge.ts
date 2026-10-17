@@ -66,6 +66,10 @@ export async function selectSkillsForObjective(params: {
         const haystack = [
           skill.name,
           skill.description,
+          // Triggers (EN + synonymes FR de l'import skills.sh) : ce sont les
+          // termes PENSÉS pour matcher la demande utilisateur — ils doivent
+          // compter dans le scoring lexical.
+          ...skill.triggers,
           ...skill.capabilities.map((c) => `${c.name} ${c.description ?? ""}`),
           ...skill.evaluationCriteria,
         ].join(" ").toLowerCase();

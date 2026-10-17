@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "test:e2e:firebase": "npx firebase-tools emulators:exec --project demo-gen3ia \"vitest run --config vitest.e2e.config.mts\"",
     "format": "prettier --write .",
-    "live:gateway": "tsx lib/live/gateway-server.ts",
+    "live:gateway": "NODE_OPTIONS='--conditions react-server' tsx lib/live/gateway-server.ts",
     "test:coverage": "vitest run --coverage",
     "analyze": "ANALYZE=true next build",
     "test:e2e": "npx firebase-tools emulators:exec --project demo-gen3ia \"vitest run --config vitest.e2e.config.mts\"",

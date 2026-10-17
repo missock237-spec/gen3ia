@@ -1,0 +1,81 @@
+/* Copilote visuel temps réel — styles complémentaires (tokens AURORA OS). */
+
+/* Point « En direct » (pulsation douce — respecte prefers-reduced-motion). */
+.copilot-live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--g3-secondary);
+  box-shadow: 0 0 0 0 var(--g3-secondary-soft);
+  animation: copilot-pulse 2s ease-out infinite;
+}
+
+.copilot-idle-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--g3-faint);
+}
+
+.copilot-badge-live {
+  background: var(--g3-secondary-soft);
+  color: var(--g3-secondary-strong);
+}
+
+@keyframes copilot-pulse {
+  0% { box-shadow: 0 0 0 0 var(--g3-secondary-soft); }
+  70% { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copilot-live-dot { animation: none; }
+}
+
+/* Curseur de frappe (réponse en streaming). */
+.copilot-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  border-radius: 2px;
+  background: var(--g3-secondary);
+  animation: copilot-blink 1s steps(2, start) infinite;
+}
+
+@keyframes copilot-blink {
+  to { visibility: hidden; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copilot-cursor { animation: none; }
+}
+
+/* Markdown minimal des réponses du copilote. */
+.copilot-md code {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 0.86em;
+  padding: 0.1em 0.4em;
+  border-radius: 6px;
+  background: var(--g3-deep);
+  color: var(--g3-secondary-strong);
+}
+
+.copilot-md pre {
+  margin: 0.5rem 0;
+  padding: 0.75rem 0.9rem;
+  overflow-x: auto;
+  border-radius: 12px;
+  background: var(--g3-deep);
+}
+
+.copilot-md pre code {
+  padding: 0;
+  background: transparent;
+  color: var(--g3-text);
+  font-size: 0.84em;
+  line-height: 1.55;
+}

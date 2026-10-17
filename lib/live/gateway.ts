@@ -18,6 +18,7 @@ import {
 } from "./repository";
 import { assertActionAllowed, assertFreshLiveTimestamp, constantTimeEqual, hashPairingToken, LiveAuthFailureLimiter, LiveRateLimiter, validateFrameBase64 } from "./security";
 import { actionRequiresConfirmation, decideLiveAction } from "./vision-decider";
+import { answerCopilotAsk, assertCopilotAsk } from "./copilot-agent";
 import { LiveActionSchema, LiveClientMessageSchema, type LiveClientMessage, type LiveServerMessage } from "./types";
 
 const MAX_FRAME_INTERVAL_MS = 900;
@@ -54,6 +55,15 @@ interface ConnectionState {
   lastDecisionFeedbackAt: number;
   lastActionId?: string;
   lastActionResult?: { ok: boolean; error?: string; at: number };
+  /** Copilote visuel temps réel : la connexion sert l'assistance contextuelle
+   *  (questions/réponses streaming) — PAS la boucle d'action autonome. */
+  copilot: boolean;
+  /** Dernière frame reçue — analysée À LA DEMANDE (copilot.ask). */
+  copilotFrame?: { jpeg: Buffer; width: number; height: number };
+  /** Historique conversationnel borné du copilote. */
+  copilotHistory: { role: "user" | "assistant"; content: string }[];
+  /** Abandon de la question en cours (bouton Stop). */
+  copilotAbort?: AbortController;
 }
 
 const clients = new Map<string, ConnectionState>();
@@ -63,7 +73,7 @@ function send(socket: WebSocket, message: LiveServerMessage) {
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
 }
 
-async function authenticateHello(message: Extract<LiveClientMessage, { type: "hello" }>) {
+async function authenticateHello(message: { sessionId: string; pairingToken: string }) {
   const session = await getLiveSession(message.sessionId);
   if (!session) throw new Error("Live session not found");
   if (session.expiresAt && session.expiresAt <= Date.now()) throw new Error("Live session expired");
@@ -179,7 +189,7 @@ export function startLiveGateway(port = Number(process.env.LIVE_GATEWAY_PORT || 
             existing.socket.close(4009, "Replaced");
           }
           const initiallyPaused = session.status === "paused" || Boolean(session.inFlightAction);
-          state = { sessionId: session.id, deviceId: message.deviceId, socket, pausedByServer: initiallyPaused, lastFrameAt: 0, lastHeartbeatAt: Date.now(), decisionInFlight: false, lastDecisionFeedbackAt: 0 };
+          state = { sessionId: session.id, deviceId: message.deviceId, socket, pausedByServer: initiallyPaused, lastFrameAt: 0, lastHeartbeatAt: Date.now(), decisionInFlight: false, lastDecisionFeedbackAt: 0, copilot: false, copilotHistory: [] };
           clients.set(session.id, state);
 
           if (!initiallyPaused) {
@@ -197,6 +207,25 @@ export function startLiveGateway(port = Number(process.env.LIVE_GATEWAY_PORT || 
           } else if (initiallyPaused) {
             send(socket, { type: "pause", reason: "Live session is paused" });
           }
+          return;
+        }
+
+        if (message.type === "copilot.hello") {
+          // Copilote visuel : même authentification (pairing token), mais la
+          // session reste « connected » — PAS de boucle d'action autonome, la
+          // vision n'analyse QUE les frames les plus récentes À LA DEMANDE.
+          const session = await authenticateHello(message);
+          const existing = clients.get(session.id);
+          if (existing && existing.socket !== socket) {
+            existing.copilotAbort?.abort();
+            send(existing.socket, { type: "stop", reason: "Replaced by a newer live connection" });
+            existing.socket.close(4009, "Replaced");
+          }
+          state = { sessionId: session.id, deviceId: message.deviceId, socket, pausedByServer: false, lastFrameAt: 0, lastHeartbeatAt: Date.now(), decisionInFlight: false, lastDecisionFeedbackAt: 0, copilot: true, copilotHistory: [] };
+          clients.set(session.id, state);
+          await updateLiveSessionStatus(session.id, "connected", message.deviceId);
+          await recordLiveEvent(session.id, { type: "connected", deviceId: message.deviceId, copilot: true });
+          send(socket, { type: "copilot.ack", sessionId: session.id, heartbeatIntervalMs: HEARTBEAT_MS });
           return;
         }
 
@@ -229,6 +258,14 @@ export function startLiveGateway(port = Number(process.env.LIVE_GATEWAY_PORT || 
           });
           state.lastFrameAt = now;
           state.lastHeartbeatAt = now;
+
+          // Copilote : la frame est conservée pour l'analyse À LA DEMANDE —
+          // aucune boucle de décision autonome (économie d'appels vision,
+          // l'utilisateur garde l'initiative des questions).
+          if (state.copilot) {
+            state.copilotFrame = { jpeg, width: message.width, height: message.height };
+            return;
+          }
 
           const session = await getLiveSession(state.sessionId);
           if (!session) throw new Error("Live session not found");
@@ -315,6 +352,52 @@ export function startLiveGateway(port = Number(process.env.LIVE_GATEWAY_PORT || 
           await clearPendingLiveAction(state.sessionId, message.actionId);
           await recordLiveEvent(state.sessionId, { type: "action.result", actionId: message.actionId, ok: message.ok, error: message.error });
         }
+
+        if (message.type === "copilot.ask") {
+          if (!state.copilot) throw new Error("Not a copilot connection");
+          const conn = state;
+          const question = assertCopilotAsk(message.text);
+          // Une seule question à la fois : la précédente est abandonnée
+          // (le client affiche déjà sa réponse partielle).
+          conn.copilotAbort?.abort();
+          const controller = new AbortController();
+          conn.copilotAbort = controller;
+          const startedAt = Date.now();
+          try {
+            const answer = await answerCopilotAsk(
+              {
+                question,
+                frame: conn.copilotFrame,
+                history: conn.copilotHistory,
+                signal: controller.signal,
+              },
+              {
+                onDelta: (text) => send(socket, { type: "copilot.delta", sessionId: conn.sessionId, text }),
+              },
+            );
+            conn.copilotHistory = [...conn.copilotHistory, { role: "user" as const, content: question }, { role: "assistant" as const, content: answer }].slice(-16);
+            send(socket, { type: "copilot.done", sessionId: conn.sessionId });
+            await recordLiveEvent(conn.sessionId, { type: "copilot.answer", deviceId: conn.deviceId, durationMs: Date.now() - startedAt, chars: answer.length }).catch(() => undefined);
+          } catch (error) {
+            if (controller.signal.aborted) {
+              // Stop utilisateur : la réponse partielle reste affichée.
+              send(socket, { type: "copilot.done", sessionId: conn.sessionId });
+              return;
+            }
+            const reason = error instanceof Error ? error.message : "Copilote vision failed";
+            send(socket, { type: "copilot.error", sessionId: conn.sessionId, message: reason });
+            await recordLiveEvent(conn.sessionId, { type: "protocol.error", reason: `copilot: ${reason}` }).catch(() => undefined);
+          } finally {
+            if (conn.copilotAbort === controller) conn.copilotAbort = undefined;
+          }
+          return;
+        }
+
+        if (message.type === "copilot.stop") {
+          if (!state.copilot) throw new Error("Not a copilot connection");
+          state.copilotAbort?.abort();
+          return;
+        }
       } catch (error) {
         const reason = error instanceof Error ? error.message : "Live gateway error";
         if (state) {
@@ -337,6 +420,7 @@ export function startLiveGateway(port = Number(process.env.LIVE_GATEWAY_PORT || 
       }
 
       if (!state) return;
+      state.copilotAbort?.abort();
       if (clients.get(state.sessionId)?.socket === socket) {
         clients.delete(state.sessionId);
         try {

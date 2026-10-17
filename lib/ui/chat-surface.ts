@@ -16,6 +16,8 @@
 export function isImmersiveChatRoute(pathname: string): boolean {
   return (
     pathname === "/chat" ||
+    pathname === "/chat-v4" ||
+    pathname === "/copilot" ||
     pathname === "/workspace/conversations" ||
     /^\/workspace\/conversations\/[^/]+$/.test(pathname) ||
     pathname === "/studio/agents"

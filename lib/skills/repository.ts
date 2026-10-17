@@ -125,6 +125,54 @@ export async function createSkill(
   return validated;
 }
 
+/**
+ * Upsert idempotent (import skills.sh) : crée la skill si elle n'existe pas,
+ * la met à jour uniquement si le contenu (version dérivée du hash) a changé.
+ */
+export async function saveSkill(
+  skill: SkillDefinitionInput,
+): Promise<{ skill: SkillDefinitionInput; created: boolean; updated: boolean }> {
+  const validated = SkillDefinitionSchema.parse(skill);
+
+  const ref = getSkillsCollection().doc(validated.id);
+  const existing = await ref.get();
+  if (!existing.exists) {
+    await ref.create({
+      ...validated,
+      createdAt: Timestamp.fromDate(new Date(validated.createdAt)),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await getVersionsCollection()
+      .doc(`${validated.id}:v${validated.version}`)
+      .set({
+        skillId: validated.id,
+        version: validated.version,
+        definition: validated,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    return { skill: validated, created: true, updated: false };
+  }
+
+  const currentVersion = Number((existing.data() as { version?: unknown } | undefined)?.version ?? 0);
+  if (currentVersion === validated.version) {
+    return { skill: validated, created: false, updated: false };
+  }
+
+  await ref.update({
+    ...validated,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  await getVersionsCollection()
+    .doc(`${validated.id}:v${validated.version}`)
+    .set({
+      skillId: validated.id,
+      version: validated.version,
+      definition: validated,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  return { skill: validated, created: false, updated: true };
+}
+
 export async function updateSkill(
   skillId: string,
   skill: SkillDefinitionInput,

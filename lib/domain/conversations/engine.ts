@@ -1413,7 +1413,18 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     }
   }
   if (intent.mode === "chat") {
-    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, webContext, knowledgeContext, mediaAnalysisContext });
+    // Skills auto-attribuées : la demande de l'utilisateur sélectionne
+    // (déterministe, fail-soft) les skills pertinentes de la bibliothèque
+    // (skills.sh + plateforme) — injectées comme instructions de mission.
+    let skillsSection: string | undefined;
+    try {
+      const { selectSkillsForObjective, formatSkillsSection } = await import("@/lib/skills/runtime-bridge");
+      const skillsBlock = await selectSkillsForObjective({ userId: input.userId, objective: input.message });
+      skillsSection = formatSkillsSection(skillsBlock) || undefined;
+    } catch {
+      skillsSection = undefined;
+    }
+    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, webContext, knowledgeContext, mediaAnalysisContext, skillsSection });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,
@@ -1454,6 +1465,8 @@ interface TurnBase extends ConversationTurnInput {
   mediaAnalysisContext?: string;
   /** Score de complexité évalué par le système d'auto-amélioration. */
   complexityScore?: number;
+  /** Skills auto-attribuées pour ce tour (sélection par la demande). */
+  skillsSection?: string;
 }
 
 interface TurnContext extends TurnBase {
@@ -1482,6 +1495,9 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     "POLITIQUE UNIVERSELLE (impérative) : la plateforme prend en charge TOUS les types de génération — ne dis JAMAIS qu'elle « ne prend en charge que les images », « ne fait pas d'audio » ou qu'une capacité manque. Si la production n'a pas été déclenchée automatiquement, demande les éléments manquants (ex : le TEXTE à faire entendre pour un audio) ou oriente vers la relance — ne propose JAMAIS un service externe ni un tutoriel à la place d'une capacité de la plateforme.",
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
+    // Skills auto-attribuées (skills.sh + plateforme) : sélection déterministe
+    // par la demande utilisateur — fail-soft, absent si aucune ne matche.
+    ctx.skillsSection ?? "",
     ctx.filesContext ? `Ces contenus proviennent de fichiers importés par l'utilisateur (conversion réelle stockée en base de données) — appuie-toi EXCLUSIVEMENT sur eux pour toute question les concernant, sans jamais inventer de données :${ctx.filesContext}` : "",
     ctx.mediaAnalysisContext ?? "",
     ctx.webContext ? `Ces contenus proviennent de liens fournis par l'utilisateur — pages RÉELLEMENT récupérées par la plateforme au moment de la demande. Appuie-toi sur eux pour toute question les concernant, cite-les fidèlement, et ne complète JAMAIS par une invention de leur contenu :${ctx.webContext}` : "",
