@@ -20,19 +20,120 @@ export interface ComposioToolInfo {
   outputSchema?: unknown;
 }
 
+/**
+ * Format PLATE historique d'un outil Composio — celui que l'API v3 renvoie
+ * nativement (et que composio.tools.getRawComposioTools expose tel quel) :
+ * c'est LE contrat consommé par le hub de connexions, le sélecteur d'actions,
+ * les prompts agents, les publications sociales et les actions Ads.
+ */
+export interface RawComposioTool {
+  slug: string;
+  name?: string;
+  description?: string;
+  inputParameters?: unknown;
+  outputParameters?: unknown;
+  toolkit?: { slug?: string; name?: string } | string;
+  [key: string]: unknown;
+}
+
+/**
+ * Normalise UN item d'outil Composio vers la forme plate historique.
+ *
+ * Deux formats coexistent selon la surface du SDK @composio/core :
+ *  · plate (getRawComposioTools / API v3) : { slug, name, description,
+ *    inputParameters, toolkit: { slug } } ;
+ *  · OpenAI function-calling (tools.get, SDK ≥ 0.22) :
+ *    { type: "function", function: { name, description, parameters } }.
+ *
+ * Cette fonction accepte LES DEUX (défense contre une nouvelle évolution du
+ * SDK) et renvoie toujours la forme plate, ou null si aucun slug exploitable
+ * n'est identifiable.
+ */
+export function normalizeComposioToolItem(item: unknown): RawComposioTool | null {
+  if (!item || typeof item !== "object") return null;
+  const value = item as Record<string, unknown>;
+  const fn =
+    value.function && typeof value.function === "object"
+      ? (value.function as Record<string, unknown>)
+      : undefined;
+  const slug =
+    (typeof value.slug === "string" && value.slug) ||
+    (typeof fn?.name === "string" && fn.name) ||
+    (typeof value.name === "string" && value.name) ||
+    "";
+  if (!slug) return null;
+  const description =
+    typeof value.description === "string"
+      ? value.description
+      : typeof fn?.description === "string"
+        ? fn.description
+        : undefined;
+  const inputParameters = value.inputParameters ?? value.parameters ?? fn?.parameters;
+  return {
+    ...value,
+    slug,
+    name: typeof value.name === "string" ? value.name : slug,
+    ...(description !== undefined ? { description } : {}),
+    ...(inputParameters !== undefined ? { inputParameters } : {}),
+  } as RawComposioTool;
+}
+
+/**
+ * Task 162 — liste les outils Composio au format PLATE historique.
+ *
+ * Le SDK @composio/core ≥ 0.22 renvoie désormais composio.tools.get() au
+ * format OpenAI function-calling ({ type: "function", function: { name } }) —
+ * tous les consommateurs Gen3ia (prompts agents via mention.ts, hub de
+ * connexions, publications sociales, actions Ads) lisent la forme plate
+ * { slug, name, description, inputParameters, toolkit } et lisaient donc des
+ * champs vides. composio.tools.getRawComposioTools() expose exactement la
+ * forme plate attendue : ce helper centralise l'appel + la normalisation
+ * défensive (les deux formats restent acceptés en sortie SDK).
+ *
+ * Filtres : toolkits non vide, search optionnel, limit borné (100 par défaut
+ * comme historiquement).
+ */
+export async function listRawComposioTools(
+  filters: { toolkits?: string[]; search?: string; limit?: number },
+): Promise<RawComposioTool[]> {
+  const toolkits = (filters.toolkits ?? []).filter((toolkit) => typeof toolkit === "string" && toolkit.length > 0);
+  if (toolkits.length === 0 && !filters.search) return [];
+  const limit = Math.min(200, Math.max(1, Math.floor(filters.limit ?? 100)));
+
+  const composio = getComposio() as unknown as {
+    tools: {
+      getRawComposioTools?: (query: Record<string, unknown>) => Promise<unknown>;
+      get?: (userId: string, filters: Record<string, unknown>) => Promise<unknown>;
+    };
+  };
+
+  let response: unknown;
+  if (typeof composio.tools?.getRawComposioTools === "function") {
+    const query: Record<string, unknown> = { limit };
+    if (toolkits.length > 0) query.toolkits = toolkits;
+    if (filters.search) query.search = filters.search;
+    response = await composio.tools.getRawComposioTools(query);
+  } else {
+    // Repli défensif : très anciennes versions du SDK sans getRawComposioTools.
+    response = await composio.tools.get!("", { ...(toolkits.length > 0 ? { toolkits } : {}), ...(filters.search ? { search: filters.search } : {}), limit });
+  }
+
+  const items: unknown[] = Array.isArray(response)
+    ? response
+    : response && typeof response === "object" && Array.isArray((response as { items?: unknown[] }).items)
+      ? (response as { items: unknown[] }).items
+      : [];
+  return items
+    .map((item) => normalizeComposioToolItem(item))
+    .filter((item): item is RawComposioTool => item !== null);
+}
+
 export async function getComposioTools(
   userId: string,
   toolkits?: string[],
-): Promise<unknown> {
-  const composio =
-    getComposio();
-
-  return composio.tools.get(
-    userId,
-    toolkits && toolkits.length > 0
-      ? { toolkits }
-      : { toolkits: [] },
-  );
+): Promise<RawComposioTool[]> {
+  if (!toolkits || toolkits.length === 0) return [];
+  return listRawComposioTools({ toolkits, limit: 100 });
 }
 
 export async function executeComposioTool(

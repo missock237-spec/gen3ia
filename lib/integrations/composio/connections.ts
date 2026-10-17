@@ -391,16 +391,21 @@ export async function getProjectComposioTools(userId: string, projectId: string,
   const connectors = await listDeveloperProjectConnectors(userId, projectId);
   const toolkits = connectors.filter((item) => item.status === "active").map((item) => item.toolkit);
   if (toolkits.length === 0) return { items: [], nextCursor: null };
-  return getComposio().tools.get(userId, { toolkits, ...(search ? { search } : {}), limit: 100 });
+  // Task 162 — format PLATE via listRawComposioTools (le SDK renvoie sinon le
+  // format OpenAI function-calling que cette route ne sait pas lire).
+  const { listRawComposioTools } = await import("./tools");
+  const items = await listRawComposioTools({ toolkits, ...(search ? { search } : {}), limit: 100 });
+  return { items, nextCursor: null };
 }
 
 export async function getToolkitTools(userId: string, toolkit: string, search?: string) {
   if (!userId) throw new Error("userId is required.");
   const normalized = assertSupportedToolkit(toolkit);
-  const composio = getComposio();
+  // Task 162 — même raison : la forme plate est le contrat du hub/UI.
+  const { listRawComposioTools } = await import("./tools");
   return timedComposioCall(
     () =>
-      composio.tools.get(userId, {
+      listRawComposioTools({
         toolkits: [normalized],
         ...(search ? { search, limit: 25 } : { limit: 100 }),
       }),

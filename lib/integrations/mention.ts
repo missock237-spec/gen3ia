@@ -122,17 +122,14 @@ export async function describeConnectedConnectorsForPrompt(userId: string, budge
 
     let actionsByToolkit = new Map<string, string[]>();
     try {
-      const { getComposio } = await import("./composio/client");
-      const composio = getComposio();
-      const toolsResponse = await budget(
-        composio.tools.get(userId, { toolkits, limit: 100 }),
+      const { listRawComposioTools } = await import("./composio/tools");
+      // Task 162 — forme PLATE : tools.get (SDK ≥ 0.22) renvoie le format
+      // OpenAI function-calling sans slug lisible, ce vidait la note de
+      // toutes ses actions — l'agent ne savait plus quoi appeler.
+      const list = await budget(
+        listRawComposioTools({ toolkits, limit: 100 }),
         Math.max(2_000, budgetMs - 6_000),
       );
-      const list = Array.isArray(toolsResponse)
-        ? toolsResponse
-        : Array.isArray((toolsResponse as { items?: unknown[] })?.items)
-          ? (toolsResponse as { items: unknown[] }).items
-          : [];
       const actionsMap = new Map<string, string[]>();
       for (const tool of list) {
         const slug = (tool as { slug?: unknown })?.slug;

@@ -1,4 +1,5 @@
 import { getComposio } from "./client";
+import { listRawComposioTools } from "./tools";
 import { getAppUrl } from "@/lib/url/app-url";
 
 export type AdsProvider = "google_ads" | "meta_ads" | "tiktok_ads";
@@ -57,7 +58,9 @@ export async function listAdsConnections(userId: string) {
 
 export async function getAdsTools(userId: string, provider: string) {
   if (!userId) throw new Error("userId is required.");
-  return getComposio().tools.get(userId, { toolkits: [getAdsToolkit(provider)] });
+  // Task 162 — forme PLATE (slug/name/description/inputParameters) : le
+  // compactage côté routes Ads lit ces champs littéralement.
+  return listRawComposioTools({ toolkits: [getAdsToolkit(provider)], limit: 100 });
 }
 
 export async function executeAdsTool(params: {
@@ -78,12 +81,12 @@ export async function executeAdsTool(params: {
   if (!account || account.isDisabled || account.status !== "ACTIVE") throw new Error("The requested Ads connected account is not active or does not belong to this user.");
   if (account.toolkit?.slug !== getAdsToolkit(params.provider)) throw new Error("The connected Ads account does not match the requested provider.");
 
-  const tools = await composio.tools.get(params.userId, {
+  const tools = await listRawComposioTools({
     toolkits: [getAdsToolkit(params.provider)],
     search: params.toolSlug,
     limit: 20,
   });
-  const matchingTool = Array.isArray(tools) ? tools.find((tool) => (tool as { slug?: string }).slug === params.toolSlug) : undefined;
+  const matchingTool = tools.find((tool) => tool.slug === params.toolSlug);
   if (!matchingTool) throw new Error("The requested Ads tool is not available for this connected account.");
 
   return composio.tools.execute(

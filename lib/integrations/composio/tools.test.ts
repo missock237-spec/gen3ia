@@ -3,6 +3,8 @@ import { CONNECTIONS_CATALOG } from "./connections";
 import {
   SERVICENOW_ACTIONS,
   ZENDESK_ACTIONS,
+  listRawComposioTools,
+  normalizeComposioToolItem,
   resolveVerifiedComposioAccount,
   servicenowIncidentCreateTool,
   servicenowIncidentQueryTool,
@@ -27,6 +29,9 @@ import type { ToolContext, ToolDefinition } from "@/lib/tools/types";
 
 const mocks = vi.hoisted(() => ({
   composioExecute: vi.fn(),
+  composioToolsRaw: vi.fn(),
+  rawAvailable: true,
+  composioToolsGet: vi.fn(),
   listHubConnections: vi.fn(),
   listDeveloperProjectConnectors: vi.fn(),
 }));
@@ -35,6 +40,10 @@ vi.mock("./client", () => ({
   getComposio: () => ({
     tools: {
       execute: (...args: unknown[]) => mocks.composioExecute(...args),
+      ...(mocks.rawAvailable
+        ? { getRawComposioTools: (query: unknown) => mocks.composioToolsRaw(query) }
+        : {}),
+      get: (userId: unknown, filters: unknown) => mocks.composioToolsGet(userId, filters),
     },
   }),
 }));
@@ -80,7 +89,87 @@ function connexionHub(toolkit: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.rawAvailable = true;
   mocks.composioExecute.mockResolvedValue({ successful: true, data: {} });
+});
+
+describe("Task 162 — normalisation du format des outils Composio", () => {
+  it("normalise le format OpenAI function-calling (SDK >= 0.22) vers la forme plate", () => {
+    const normalized = normalizeComposioToolItem({
+      type: "function",
+      function: {
+        name: "GMAIL_SEND_EMAIL",
+        description: "Send an email",
+        parameters: { type: "object", properties: { to: { type: "string" } } },
+      },
+    });
+    expect(normalized).toMatchObject({
+      slug: "GMAIL_SEND_EMAIL",
+      name: "GMAIL_SEND_EMAIL",
+      description: "Send an email",
+      inputParameters: { type: "object", properties: { to: { type: "string" } } },
+    });
+  });
+
+  it("conserve la forme plate historique intacte (slug, toolkit objet)", () => {
+    const plate = {
+      slug: "ZENDESK_CREATE_ZENDESK_TICKET",
+      name: "Create ticket",
+      description: "Creates a ticket",
+      inputParameters: { type: "object" },
+      toolkit: { slug: "zendesk" },
+    };
+    expect(normalizeComposioToolItem(plate)).toEqual(plate);
+  });
+
+  it("rejette les items sans slug exploitable", () => {
+    expect(normalizeComposioToolItem(null)).toBeNull();
+    expect(normalizeComposioToolItem("chaîne")).toBeNull();
+    expect(normalizeComposioToolItem({})).toBeNull();
+    expect(normalizeComposioToolItem({ type: "function", function: {} })).toBeNull();
+  });
+});
+
+describe("Task 162 — listRawComposioTools (contrat plate pour tous les consommateurs)", () => {
+  it("appelle getRawComposioTools avec les filtres et normalise la réponse (tableau direct)", async () => {
+    mocks.composioToolsRaw.mockResolvedValue([
+      { slug: "GMAIL_A", name: "Action A", toolkit: { slug: "gmail" } },
+      { type: "function", function: { name: "GMAIL_B", description: "Action B" } },
+      "pas-un-objet",
+      { sans: "slug" },
+    ]);
+    const out = await listRawComposioTools({ toolkits: ["gmail"], limit: 50 });
+    expect(mocks.composioToolsRaw).toHaveBeenCalledWith({ toolkits: ["gmail"], limit: 50 });
+    expect(out.map((tool) => tool.slug)).toEqual(["GMAIL_A", "GMAIL_B"]);
+    expect(out[1].name).toBe("GMAIL_B");
+    expect(out[1].description).toBe("Action B");
+  });
+
+  it("accepte aussi une réponse enveloppée { items }", async () => {
+    mocks.composioToolsRaw.mockResolvedValue({ items: [{ slug: "X_A", toolkit: { slug: "x" } }] });
+    const out = await listRawComposioTools({ toolkits: ["x"] });
+    expect(out).toHaveLength(1);
+    expect(out[0].slug).toBe("X_A");
+  });
+
+  it("repli sur tools.get quand getRawComposioTools est absent du SDK", async () => {
+    mocks.rawAvailable = false;
+    mocks.composioToolsGet.mockResolvedValue([{ slug: "Y_A" }]);
+    try {
+      const out = await listRawComposioTools({ toolkits: ["y"], limit: 10 });
+      expect(out.map((tool) => tool.slug)).toEqual(["Y_A"]);
+      expect(mocks.composioToolsGet).toHaveBeenCalledWith("", { toolkits: ["y"], limit: 10 });
+      expect(mocks.composioToolsRaw).not.toHaveBeenCalled();
+    } finally {
+      mocks.rawAvailable = true;
+    }
+  });
+
+  it("retourne une liste vide sans toolkits ni search", async () => {
+    const out = await listRawComposioTools({ toolkits: [] });
+    expect(out).toEqual([]);
+    expect(mocks.composioToolsRaw).not.toHaveBeenCalled();
+  });
 });
 
 describe("outils Zendesk/ServiceNow — contrats de définition", () => {

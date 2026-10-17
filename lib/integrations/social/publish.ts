@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getComposio } from "@/lib/integrations/composio/client";
+import { listRawComposioTools } from "@/lib/integrations/composio/tools";
 import { billUsage } from "@/lib/billing/media-meter";
 
 /**
@@ -73,10 +74,11 @@ async function resolveConnectedAccount(userId: string, toolkit: string, connecte
 }
 
 async function findPostingTool(userId: string, toolkit: string): Promise<ComposioToolShape & { slug: string }> {
-  const composio = getComposio();
-  const tools = (await composio.tools.get(userId, { toolkits: [toolkit], search: "post", limit: 25 })) as unknown[];
-  const candidates = (Array.isArray(tools) ? tools : []) as Array<ComposioToolShape & { slug?: string }>;
-  const posting = candidates.find((tool) => typeof tool.slug === "string" && POSTING_TOOL_RE.test(tool.slug));
+  // Task 162 — forme PLATE : le format OpenAI function-calling du SDK ≥ 0.22
+  // n'expose pas `slug`, et la recherche de l'action de publication échouait
+  // systématiquement.
+  const tools = await listRawComposioTools({ toolkits: [toolkit], search: "post", limit: 25 });
+  const posting = tools.find((tool) => typeof tool.slug === "string" && POSTING_TOOL_RE.test(tool.slug));
   if (!posting?.slug) {
     throw new Error(`Aucune action de publication disponible pour "${toolkit}". Vérifiez les permissions de la connexion.`);
   }

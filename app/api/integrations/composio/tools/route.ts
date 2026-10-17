@@ -6,15 +6,19 @@ export const runtime = "nodejs";
 
 function compactTool(tool: unknown) {
   const value = tool as Record<string, unknown>;
+  // Task 162 — double format accepté : plate (getRawComposioTools, contrat
+  // historique) OU OpenAI function-calling (tools.get SDK ≥ 0.22).
+  const fn =
+    value.function && typeof value.function === "object"
+      ? (value.function as Record<string, unknown>)
+      : undefined;
   const toolkit = value.toolkit as Record<string, unknown> | undefined;
-  const parameters =
-    (value.inputParameters as Record<string, unknown> | undefined) ??
-    (value.parameters as Record<string, unknown> | undefined);
+  const parameters = value.inputParameters ?? value.parameters ?? fn?.parameters;
   return {
-    slug: typeof value.slug === "string" ? value.slug : undefined,
-    name: typeof value.name === "string" ? value.name : undefined,
-    description: typeof value.description === "string" ? value.description.slice(0, 500) : undefined,
-    toolkit: typeof toolkit?.slug === "string" ? toolkit.slug : undefined,
+    slug: typeof value.slug === "string" ? value.slug : typeof fn?.name === "string" ? fn.name : undefined,
+    name: typeof value.name === "string" ? value.name : typeof fn?.name === "string" ? fn.name : undefined,
+    description: typeof value.description === "string" ? value.description.slice(0, 500) : typeof fn?.description === "string" ? fn.description.slice(0, 500) : undefined,
+    toolkit: typeof toolkit?.slug === "string" ? toolkit.slug : typeof value.toolkit === "string" ? value.toolkit : undefined,
     parameters,
   };
 }

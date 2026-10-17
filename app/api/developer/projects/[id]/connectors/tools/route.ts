@@ -27,6 +27,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const tools = items.map((item) => {
       const value = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      // Task 162 — double format accepté : plate (contrat historique,
+      // renvoyé par listRawComposioTools) OU OpenAI function-calling.
+      const fn =
+        value.function && typeof value.function === "object"
+          ? (value.function as Record<string, unknown>)
+          : undefined;
       const toolkitValue = value.toolkit ?? value.toolkit_slug ?? value.toolkitSlug;
       const toolkit =
         typeof toolkitValue === "string"
@@ -39,16 +45,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const slug =
         typeof value.slug === "string"
           ? value.slug
-          : typeof value.name === "string"
-            ? value.name
-            : "";
+          : typeof fn?.name === "string"
+            ? fn.name
+            : typeof value.name === "string"
+              ? value.name
+              : "";
 
       return {
         slug,
         name: typeof value.name === "string" ? value.name : slug,
         toolkit,
-        description: typeof value.description === "string" ? value.description : "",
-        inputSchema: value.inputSchema ?? value.input_schema ?? null,
+        description: typeof value.description === "string" ? value.description : typeof fn?.description === "string" ? fn.description : "",
+        inputSchema: value.inputSchema ?? value.input_schema ?? value.inputParameters ?? fn?.parameters ?? null,
       };
     }).filter((tool) => tool.slug && tool.toolkit);
 
