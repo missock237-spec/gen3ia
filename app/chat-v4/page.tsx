@@ -1489,7 +1489,7 @@ export default function ChatV4Page() {
                           </div>
                         ) : (apps ?? []).length === 0 && apisPersos.length === 0 ? (
                           <div className="pop-vide">
-                            <p className="pop-vide-txt">Aucune application connectée — l'agent peut agir dans vos apps (Gmail, Calendar, Slack, Notion, Zendesk…) dès qu'elles sont reliées à Gen3ia.</p>
+                            <p className="pop-vide-txt">Aucune application connectée — l&apos;agent peut agir dans vos apps (Gmail, Calendar, Slack, Notion, Zendesk…) dès qu&apos;elles sont reliées à Gen3ia.</p>
                             <p className="pop-vide-sous">Services populaires :</p>
                             <div className="pop-suggestions">
                               {APPS_SUGGEREES.map((toolkit) => (

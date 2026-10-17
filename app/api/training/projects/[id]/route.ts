@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 
 import { deleteProject, getProjectOverview, updateProject } from "@/lib/training/repository";
+import { ipFromRequest, recordTrainingAudit } from "@/lib/training/audit";
 import { sweepUserJobs } from "@/lib/training/orchestrator";
 import { trainingModeSchema } from "@/lib/training/types";
 
@@ -70,6 +71,14 @@ export async function PATCH(
         { status: 404, headers: { "x-request-id": requestId } },
       );
     }
+    void recordTrainingAudit({
+      uid: user.uid,
+      action: updated.status === "archived" ? "project.archived" : "project.updated",
+      entityType: "project",
+      entityId: updated.id,
+      ip: ipFromRequest(request),
+      details: { champs: Object.keys(parsed.data).slice(0, 8) },
+    }).catch(() => undefined);
     return NextResponse.json({ project: updated, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
     return NextResponse.json(
@@ -95,6 +104,13 @@ export async function DELETE(
         { status: 404, headers: { "x-request-id": requestId } },
       );
     }
+    void recordTrainingAudit({
+      uid: user.uid,
+      action: "project.deleted",
+      entityType: "project",
+      entityId: id,
+      ip: ipFromRequest(request),
+    }).catch(() => undefined);
     return NextResponse.json({ removed: true, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
     return NextResponse.json(

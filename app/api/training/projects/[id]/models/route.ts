@@ -6,7 +6,8 @@ import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { putObject } from "@/lib/storage/r2";
 import { newUlid, userDir } from "@/lib/storage/user-data-store";
 
-import { assertAssetQuota, assertUploadSize } from "@/lib/training/quotas";
+import { assertAssetQuota, assertStorageQuota, assertUploadSize } from "@/lib/training/quotas";
+import { ipFromRequest, recordTrainingAudit } from "@/lib/training/audit";
 import { getProject, listModels, saveModel } from "@/lib/training/repository";
 import { validateModelFile } from "@/lib/training/validation/model-files";
 import { modelAssetSchema } from "@/lib/training/types";
@@ -93,6 +94,15 @@ export async function POST(
         updatedAt: stamp,
       });
       await saveModel(user.uid, asset);
+      void recordTrainingAudit({
+        uid: user.uid,
+        action: "model.imported",
+        entityType: "model",
+        entityId: asset.id,
+        projectId: id,
+        ip: ipFromRequest(request),
+        details: { source: "catalog", catalogId: entry.id },
+      }).catch(() => undefined);
       return NextResponse.json({ model: asset, requestId }, { status: 201, headers: { "x-request-id": requestId } });
     }
 
@@ -109,6 +119,7 @@ export async function POST(
     const name = (typeof nameField === "string" && nameField.trim() ? nameField.trim() : file.name).slice(0, 180);
     const buffer = Buffer.from(await file.arrayBuffer());
     assertUploadSize(buffer.byteLength, "Modèle");
+    await assertStorageQuota(user.uid, buffer.byteLength);
 
     const report = await validateModelFile(name, buffer, project.family);
 
@@ -146,6 +157,15 @@ export async function POST(
       updatedAt: stamp,
     });
     await saveModel(user.uid, asset);
+    void recordTrainingAudit({
+      uid: user.uid,
+      action: "model.imported",
+      entityType: "model",
+      entityId: asset.id,
+      projectId: id,
+      ip: ipFromRequest(request),
+      details: { source: "upload", format: report.format ?? "inconnu", sizeBytes: buffer.byteLength },
+    }).catch(() => undefined);
     return NextResponse.json({ model: asset, requestId }, { status: 201, headers: { "x-request-id": requestId } });
   } catch (error) {
     return NextResponse.json(

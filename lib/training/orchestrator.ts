@@ -10,7 +10,7 @@ import {
   getJob,
   saveJob,
 } from "./repository";
-import { assertJobConcurrency } from "./quotas";
+import { assertJobConcurrency, assertTrainingMinutesBudget } from "./quotas";
 import { JOB_EVENT_CAP, trainingJobSchema, type TrainingEvent, type TrainingJob, type TrainingPlan } from "./types";
 import { providerSupportsVram, resolveProviders } from "./providers";
 import type { GpuProvider, GpuProviderCapabilities } from "./providers";
@@ -99,6 +99,17 @@ export async function createJobFromPlan(
     return { ok: false, error: error instanceof Error ? error.message : "Quota de concurrence atteint." };
   }
 
+  // Budget de minutes du mois (v1.1) : l'ESTIMATION de durée du plan sert de
+  // réservation prudente — la consommation réelle est mesurée séparément
+  // (estimation ≠ mesure, spec §2). Sans estimation, rien n'est bloqué.
+  const estimatedMinutes =
+    typeof plan.resources.estimatedDurationMinutes === "number" ? plan.resources.estimatedDurationMinutes : 0;
+  try {
+    await assertTrainingMinutesBudget(uid, estimatedMinutes);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Quota de durée d'entraînement atteint." };
+  }
+
   const stamp = nowIso();
   let job = trainingJobSchema.parse({
     id: newUlid(),
@@ -124,13 +135,24 @@ export async function createJobFromPlan(
 
 async function selectProvider(
   minVramGb: number,
+  estimatedDurationMinutes: number,
 ): Promise<{ provider: GpuProvider; capabilities: GpuProviderCapabilities } | null> {
   for (const provider of resolveProviders()) {
     try {
       const capabilities = await provider.capabilities();
-      if (providerSupportsVram(capabilities, minVramGb)) {
-        return { provider, capabilities };
+      if (!providerSupportsVram(capabilities, minVramGb)) continue;
+      // v1.1 — plafond de durée du fournisseur : une estimation plus longue
+      // que ce que le fournisseur accepte l'écarte honnêtement (le job reste
+      // en file avec la raison explicite ci-dessous, aucun raccourcissement
+      // silencieux de l'entraînement).
+      if (
+        capabilities.maxDurationMinutes !== null &&
+        estimatedDurationMinutes > 0 &&
+        estimatedDurationMinutes > capabilities.maxDurationMinutes
+      ) {
+        continue;
       }
+      return { provider, capabilities };
     } catch {
       // Fournisseur injoignable : on essaie le suivant (honnête, pas de repli simulé).
     }
@@ -149,7 +171,7 @@ export async function dispatchJob(uid: string, job: TrainingJob, plan: TrainingP
     return withEvent(job, makeEvent("error", `Moteur ${plan.engineId} inconnu : tâche marquée en échec.`));
   }
 
-  const selected = await selectProvider(engine.minVramGb);
+  const selected = await selectProvider(engine.minVramGb, plan.resources.estimatedDurationMinutes ?? 0);
   if (!selected) {
     const reason = "no-gpu-provider";
     const alreadyWaiting = job.waitingReason === reason;

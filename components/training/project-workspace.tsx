@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "@/lib/firebase/auth-client";
 import { SectionHeader } from "@/components/shells/section-header";
 import { EmptyState, LoadingState } from "@/components/shells/states";
+import { HubImportPanel } from "./hub-import";
 import {
   Chip,
   ErrorBanner,
@@ -581,6 +582,7 @@ function DataStep({
   const projectId = overview.project.id;
   const [split, setSplit] = useState("train");
   const [uploading, setUploading] = useState(false);
+  const [tab, setTab] = useState<"upload" | "huggingface" | "kaggle">("upload");
 
   const uploadDataset = async (file: File, chosenSplit: string) => {
     setUploading(true);
@@ -632,41 +634,72 @@ function DataStep({
           instruction/réponse recommandées), <strong>.txt</strong>. Le contenu est réellement parsé : statistiques, doublons,
           détection de données personnelles (avertissement RGPD).
         </p>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <label className="ts-dropzone flex-1">
-            <input
-              type="file"
-              className="sr-only"
-              accept=".csv,.json,.jsonl,.txt"
-              disabled={uploading}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void uploadDataset(file, split);
-                event.target.value = "";
-              }}
-            />
-            <span className="block text-sm font-medium text-[var(--g3-text-secondary)]">
-              {uploading ? "Analyse du contenu en cours…" : "Glissez ou sélectionnez un dataset"}
-            </span>
-            <span className="mt-1 block text-xs text-[var(--g3-faint)]">Le fichier sera analysé avant stockage</span>
-          </label>
-          <div>
-            <label htmlFor="dataset-split" className="mb-1 block text-xs uppercase tracking-[.14em] text-[var(--g3-faint)]">
-              Split d&apos;affectation
-            </label>
-            <select
-              id="dataset-split"
-              value={split}
-              onChange={(event) => setSplit(event.target.value)}
-              className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2 text-sm text-[var(--g3-text)]"
+
+        {/* v1.1 — trois sources : téléversement, Hugging Face, Kaggle */}
+        <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Source des données">
+          {([
+            { key: "upload", label: "Téléverser un fichier" },
+            { key: "huggingface", label: "Hugging Face" },
+            { key: "kaggle", label: "Kaggle" },
+          ] as const).map((entry) => (
+            <button
+              key={entry.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === entry.key}
+              onClick={() => setTab(entry.key)}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                tab === entry.key
+                  ? "bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]"
+                  : "text-[var(--g3-muted)] hover:bg-[var(--g3-hover)]"
+              }`}
             >
-              <option value="train">Entraînement (train)</option>
-              <option value="validation">Validation</option>
-              <option value="test">Test</option>
-              <option value="unassigned">Non assigné</option>
-            </select>
-          </div>
+              {entry.label}
+            </button>
+          ))}
         </div>
+
+        {tab === "upload" ? (
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <label className="ts-dropzone flex-1">
+              <input
+                type="file"
+                className="sr-only"
+                accept=".csv,.json,.jsonl,.txt"
+                disabled={uploading}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadDataset(file, split);
+                  event.target.value = "";
+                }}
+              />
+              <span className="block text-sm font-medium text-[var(--g3-text-secondary)]">
+                {uploading ? "Analyse du contenu en cours…" : "Glissez ou sélectionnez un dataset"}
+              </span>
+              <span className="mt-1 block text-xs text-[var(--g3-faint)]">Le fichier sera analysé avant stockage</span>
+            </label>
+            <div>
+              <label htmlFor="dataset-split" className="mb-1 block text-xs uppercase tracking-[.14em] text-[var(--g3-faint)]">
+                Split d&apos;affectation
+              </label>
+              <select
+                id="dataset-split"
+                value={split}
+                onChange={(event) => setSplit(event.target.value)}
+                className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2 text-sm text-[var(--g3-text)]"
+              >
+                <option value="train">Entraînement (train)</option>
+                <option value="validation">Validation</option>
+                <option value="test">Test</option>
+                <option value="unassigned">Non assigné</option>
+              </select>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4">
+            <HubImportPanel projectId={projectId} onChanged={onChanged} onError={onError} />
+          </div>
+        )}
       </div>
 
       {overview.datasets.length > 0 ? (
@@ -726,6 +759,11 @@ function DatasetCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate font-medium text-[var(--g3-text)]">{dataset.name}</span>
+            {dataset.source && dataset.source !== "upload" ? (
+              <Chip variant="primary">
+                {dataset.source === "huggingface" ? "Hugging Face" : "Kaggle"}
+              </Chip>
+            ) : null}
             <Chip variant={dataset.split === "unassigned" ? "warn" : "primary"}>
               {dataset.split === "unassigned" ? "Non assigné" : dataset.split}
             </Chip>
@@ -736,6 +774,9 @@ function DatasetCard({
             {dataset.stats.rows.toLocaleString("fr-FR")} lignes
             {dataset.stats.pairs > 0 ? ` · ${dataset.stats.pairs} paire(s) détectée(s)` : ""}
             {dataset.stats.duplicates > 0 ? ` · ${dataset.stats.duplicates} doublon(s)` : ""}
+            {dataset.originMetadata?.totalRows
+              ? ` · ${dataset.originMetadata.totalRows.toLocaleString("fr-FR")} lignes déclarées par le hub`
+              : ""}
           </div>
         </div>
         <div className="flex items-center gap-2">
