@@ -1,0 +1,209 @@
+/* ============================================================
+   AI Training Studio — styles spécifiques (tokens AURORA OS).
+   Conventions du projet : zéro hex brut, bordures neutres,
+   radius généreux, dégradé signature violet → cyan.
+   ============================================================ */
+
+.ts-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  background:
+    radial-gradient(1200px 400px at 12% -20%, rgba(124, 92, 255, 0.16), transparent 60%),
+    radial-gradient(900px 380px at 95% 0%, rgba(42, 212, 232, 0.12), transparent 55%),
+    var(--g3-surface);
+}
+
+.ts-stepper {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0.25rem;
+  border-radius: 18px;
+  background: var(--g3-deep);
+}
+
+.ts-stepper::-webkit-scrollbar {
+  display: none;
+}
+
+.ts-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  padding: 0.55rem 0.85rem;
+  border-radius: 14px;
+  font-size: 0.8rem;
+  color: var(--g3-muted);
+  transition: color 0.18s ease, background 0.18s ease;
+  cursor: pointer;
+}
+
+.ts-step:hover {
+  color: var(--g3-text-secondary);
+  background: rgba(124, 92, 255, 0.07);
+}
+
+.ts-step[data-state="active"] {
+  color: var(--g3-text);
+  background: var(--g3-primary-soft);
+  font-weight: 600;
+}
+
+.ts-step[data-state="done"] {
+  color: var(--g3-text-secondary);
+}
+
+.ts-step[data-state="disabled"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ts-step-index {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--g3-elevated);
+  color: var(--g3-faint);
+}
+
+.ts-step[data-state="active"] .ts-step-index {
+  background: var(--g3-gradient);
+  color: var(--g3-on-primary);
+}
+
+.ts-step[data-state="done"] .ts-step-index {
+  background: var(--g3-secondary-soft);
+  color: var(--g3-info);
+}
+
+.ts-card {
+  border-radius: 20px;
+  background: var(--g3-surface);
+  border: 1px solid var(--g3-border);
+}
+
+.ts-card-elevated {
+  border-radius: 20px;
+  background: var(--g3-elevated);
+  border: 1px solid var(--g3-border);
+}
+
+.ts-plan {
+  border-radius: 20px;
+  background: linear-gradient(160deg, rgba(124, 92, 255, 0.10), rgba(42, 212, 232, 0.06)), var(--g3-surface);
+  border: 1px solid var(--g3-primary-border);
+}
+
+.ts-log {
+  max-height: 260px;
+  overflow-y: auto;
+  border-radius: 14px;
+  background: var(--g3-deep);
+  padding: 0.75rem 0.9rem;
+  font-family: var(--font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.74rem;
+  line-height: 1.55;
+}
+
+.ts-log-line {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.ts-log-line time {
+  color: var(--g3-faint);
+  flex-shrink: 0;
+}
+
+.ts-log-line[data-level="warn"] span {
+  color: var(--g3-warning-strong);
+}
+
+.ts-log-line[data-level="error"] span {
+  color: var(--g3-danger-strong);
+}
+
+.ts-progress {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--g3-elevated);
+  overflow: hidden;
+}
+
+.ts-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--g3-gradient);
+  transition: width 0.6s ease;
+}
+
+.ts-dropzone {
+  border: 1.5px dashed var(--g3-border-strong);
+  border-radius: 18px;
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+  transition: border-color 0.18s ease, background 0.18s ease;
+  cursor: pointer;
+}
+
+.ts-dropzone:hover,
+.ts-dropzone[data-drag="true"] {
+  border-color: var(--g3-primary);
+  background: var(--g3-hover);
+}
+
+.ts-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.ts-chip[data-variant="valid"] {
+  background: var(--g3-secondary-soft);
+  color: var(--g3-info);
+}
+
+.ts-chip[data-variant="warn"] {
+  background: var(--g3-warning-soft);
+  color: var(--g3-warning-strong);
+}
+
+.ts-chip[data-variant="error"] {
+  background: var(--g3-danger-soft);
+  color: var(--g3-danger-strong);
+}
+
+.ts-chip[data-variant="neutral"] {
+  background: var(--g3-elevated);
+  color: var(--g3-muted);
+}
+
+.ts-chip[data-variant="primary"] {
+  background: var(--g3-primary-soft);
+  color: var(--g3-primary-strong);
+}
+
+.ts-simulated-banner {
+  border-radius: 16px;
+  border: 1px solid var(--g3-warning-border);
+  background: var(--g3-warning-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-progress-bar {
+    transition: none;
+  }
+}
