@@ -165,13 +165,13 @@ describe("POST /api/v1/agents/[agentId]/run", () => {
     }));
   });
 
-  it("renvoie 402 explicite sur solde insuffisant", async () => {
+  it("plus de 402 « solde insuffisant » : l'erreur réelle remonte telle quelle (Task 152)", async () => {
     mockRuntime.mockImplementation(function () {
       return { run: async () => { throw new Error("Wallet balance too low"); } } as unknown as InstanceType<typeof AgentRuntime>;
     } as unknown as typeof AgentRuntime);
     const response = await POST(makeRequest(), CONTEXT());
-    expect(response.status).toBe(402);
+    expect(response.status).toBe(500);
     const body = await response.json();
-    expect(body.error).toMatch(/portefeuille/);
+    expect(body.error).toMatch(/Wallet balance too low/);
   });
 });

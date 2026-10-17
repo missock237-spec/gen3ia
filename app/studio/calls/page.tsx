@@ -323,7 +323,7 @@ export default function StudioCallsPage() {
                 {busy ? "Lancement…" : "Lancer l'appel"}
               </button>
               <p className="text-[11px] leading-relaxed text-[var(--g3-muted)]">
-                L&apos;appel est conduit par l&apos;agent Bland synchronisé ; il est enregistré, transcrit, et facturé à la minute sur votre portefeuille Gen3ia.
+                L&apos;appel est conduit par l&apos;agent Bland synchronisé ; il est enregistré et transcrit.
               </p>
             </div>
           )}

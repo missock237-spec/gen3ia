@@ -130,9 +130,9 @@ Content-Type: application/json
 {"objective": "Surveille la concurrence et rédige un rapport"}`}
         </pre>
         <ul className="mt-3 space-y-1 text-xs text-[var(--g3-faint)]">
-          <li>• La réponse contient <code>status</code>, <code>outputs</code>, <code>observations</code> et <code>billing</code>.</li>
+          <li>• La réponse contient <code>status</code>, <code>outputs</code> et <code>observations</code>.</li>
           <li>• Les actions sensibles restent soumises à la validation humaine configurée sur l&apos;agent.</li>
-          <li>• Limite : 30 exécutions par 5 minutes par clé ; le solde du portefeuille est facturé réellement.</li>
+          <li>• Limite : 30 exécutions par 5 minutes par clé.</li>
         </ul>
       </Panel>
     </section>

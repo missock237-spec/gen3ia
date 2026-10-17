@@ -174,15 +174,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const safe = safeError(error);
     log.error({ event: "api.agent.execution.failed", error: safe }, "Erreur exécution d'agent via API");
     const message = error instanceof Error ? error.message : "Exécution impossible";
-    const insufficient = /wallet|balance|funds/i.test(message);
+    // Task 152 — neutralisation de la facturation : plus de mapping 402
+    // « solde insuffisant » (aucune exécution n'est bloquée par le wallet).
     return NextResponse.json(
-      {
-        error: insufficient
-          ? "Solde du portefeuille insuffisant. Rechargez votre wallet dans Facturation."
-          : message,
-        requestId,
-      },
-      { status: insufficient ? 402 : authStatus(error), headers: { "x-request-id": requestId } },
+      { error: message, requestId },
+      { status: authStatus(error), headers: { "x-request-id": requestId } },
     );
   }
 }

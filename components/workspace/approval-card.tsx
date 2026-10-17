@@ -8,7 +8,7 @@ import type { ConversationApproval } from "@/lib/domain/conversations/types";
 
 /**
  * Carte de validation inline — l'action sensible est résumée clairement :
- * impact, outil utilisé, données concernées et coût estimé. La décision
+ * impact, outil utilisé et données concernées. La décision
  * (approuver / rejeter) reste dans le fil de la conversation.
  */
 
@@ -53,10 +53,6 @@ export function ApprovalCard({ approval, onDecide, disabled = false }: ApprovalC
         <div>
           <dt className="font-medium text-[var(--g3-muted)]">Outil utilisé</dt>
           <dd className="text-[var(--g3-text)]">{approvalToolLabel(approval.toolName)}</dd>
-        </div>
-        <div>
-          <dt className="font-medium text-[var(--g3-muted)]">Coût estimé</dt>
-          <dd className="text-[var(--g3-text)]">{approval.estimatedCost || "gratuit"}</dd>
         </div>
         <div>
           <dt className="font-medium text-[var(--g3-muted)]">Données concernées</dt>

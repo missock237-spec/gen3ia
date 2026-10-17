@@ -37,9 +37,6 @@ export interface BusinessKpis {
 
 function kpiLine(kpis: BusinessKpis): string {
   const lines: string[] = [];
-  if (kpis.wallet) {
-    lines.push(`- Portefeuille : ${(kpis.wallet.balanceMinor / 100).toFixed(2)} ${kpis.wallet.currency} disponibles, ${(kpis.wallet.reservedMinor / 100).toFixed(2)} réservés.`);
-  }
   if (kpis.ads) {
     lines.push(`- Publicité interne : ${kpis.ads.active} campagne(s) active(s), ${kpis.ads.paused} en pause, budget journalier total ${(kpis.ads.totalDailyBudgetMinor / 100).toFixed(2)} EUR.`);
   }

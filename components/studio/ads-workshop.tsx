@@ -154,7 +154,7 @@ export function AdsWorkshop() {
       <section className="grid grid-cols-1 gap-5 md:grid-cols-3">
         <div className="g3-card p-5 md:col-span-3">
           <h3 className="font-serif text-lg font-semibold">Validation humaine</h3>
-          <p className="mt-2 text-sm text-[var(--g3-muted)]">Aucune publication ne part sans votre décision explicite. Le coût de publication est débité du portefeuille après exécution.</p>
+          <p className="mt-2 text-sm text-[var(--g3-muted)]">Aucune publication ne part sans votre décision explicite.</p>
           {pendingApprovalId ? (
             <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-4">
               <span className="font-mono text-xs text-[var(--g3-warning-strong)]">Approbation en attente : {pendingApprovalId}</span>

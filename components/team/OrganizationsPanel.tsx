@@ -219,7 +219,6 @@ export function OrganizationsPanel() {
                       <div className="grid grid-cols-2 gap-2 text-[11px] text-[var(--g3-muted)] sm:grid-cols-4">
                         <span className="rounded-xl bg-[var(--g3-elevated)] px-3 py-2">Membres : <strong>{detail.members.length}/{detail.quotas.maxMembers}</strong></span>
                         <span className="rounded-xl bg-[var(--g3-elevated)] px-3 py-2">Agents : <strong>{detail.quotas.maxAgents}</strong></span>
-                        <span className="rounded-xl bg-[var(--g3-elevated)] px-3 py-2">Crédits/mois : <strong>{detail.quotas.monthlyCredits.toLocaleString("fr-FR")}</strong></span>
                         <span className="rounded-xl bg-[var(--g3-elevated)] px-3 py-2">Stockage : <strong>{detail.quotas.storageGb} Go</strong></span>
                       </div>
 

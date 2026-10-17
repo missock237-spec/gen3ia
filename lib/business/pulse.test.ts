@@ -96,7 +96,8 @@ describe("objectif du pulse", () => {
       ads: { active: 2, paused: 1, totalDailyBudgetMinor: 800 },
       topRisks: ["timeout (5×)"],
     });
-    expect(objective).toContain("4200.00 XAF");
+    // Task 152 — neutralisation : le KPI portefeuille n'alimente plus l'objectif.
+    expect(objective).not.toContain("4200.00 XAF");
     expect(objective).toContain("2 campagne(s) active(s)");
     expect(objective).toContain("timeout (5×)");
     expect(objective.toLowerCase()).toContain("dépense");
