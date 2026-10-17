@@ -3848,3 +3848,18 @@ Work Log:
 Stage Summary:
 - Plus AUCUN blocage de solde ni affichage de crédits en mode libre sur toutes les surfaces
 - Reste : déployer sur VPS via scripts/deploy_free_mode.sh
+
+---
+Task ID: 161
+Agent: Super Z (main)
+Task: Mode libre par défaut en production (sans accès SSH)
+
+Work Log:
+- sshd VPS refuse tout le monde (« Not allowed at this time » — PerSourcePenalties) ; terminal app = sandbox Docker (pas d'accès hôte)
+- Auto-updater PM2 déploie chaque commit de main → solution sans shell : défaut inversé dans billing-mode.ts (BILLING_ENABLED = (env === "true"))
+- Tests armés via GEN3IA_BILLING_ENABLED=true dans les deux configs vitest ; nouveau test du défaut ; inventaire CI 4 workflows
+- 3957 tests verts, typecheck OK — commit 4b63997
+
+Stage Summary:
+- Production en mode libre dès le déploiement automatique de ce commit
+- SSH à réparer côté fournisseur (systemctl restart sshd via console) ; réactivation facturation : GEN3IA_BILLING_ENABLED=true dans .env.production + rebuild
