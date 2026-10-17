@@ -27,9 +27,9 @@
     "sdk:test": "vitest run sdk/test"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "3.1147.0",
-    "@aws-sdk/s3-request-presigner": "3.1147.0",
-    "@composio/core": "0.22.0",
+    "@aws-sdk/client-s3": "3.1151.0",
+    "@aws-sdk/s3-request-presigner": "3.1151.0",
+    "@composio/core": "0.23.0",
     "@huggingface/inference": "^4.13.30",
     "@monaco-editor/react": "^4.7.0",
     "@opentelemetry/api": "^1.9.1",
@@ -44,7 +44,7 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@vercel/analytics": "^2.0.1",
     "archiver": "^7.0.1",
-    "docx": "^9.9.0",
+    "docx": "^9.11.0",
     "exceljs": "^4.4.0",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "^3.1.0",
@@ -63,7 +63,7 @@
     "web-push": "^3.6.7",
     "ws": "8.22.0",
     "yauzl": "^3.2.0",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -77,10 +77,10 @@
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.2",
     "@types/yauzl": "^3.4.0",
-    "@vitest/coverage-v8": "^5.0.3",
+    "@vitest/coverage-v8": "^5.0.4",
     "eslint": "^9.0.0",
     "eslint-config-next": "15.5.26",
-    "playwright": "^1.63.0",
+    "playwright": "^1.64.1",
     "prettier": "^3.9.9",
     "tsx": "^4.23.15",
     "vitest": "^5.0.3"
