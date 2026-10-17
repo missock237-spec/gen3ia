@@ -3863,3 +3863,21 @@ Work Log:
 Stage Summary:
 - Production en mode libre dès le déploiement automatique de ce commit
 - SSH à réparer côté fournisseur (systemctl restart sshd via console) ; réactivation facturation : GEN3IA_BILLING_ENABLED=true dans .env.production + rebuild
+
+---
+Task ID: 162
+Agent: Super Z (main)
+Task: « Activer le système de plugins pour que les agents IA puissent utiliser et agir dans les apps externes » — diagnostic + réparation du connecteur Composio
+
+Work Log:
+- Diagnostic production (compte de test R2 qa.plugins.*@gen3ia-test.online) : mode libre ACTIF (billingEnabled=false), composio=true, catalogue 1609 apps vivant, flux OAuth Gmail fonctionnel (authorizationUrl Composio généré) — MAIS /api/integrations/composio/tools?toolkit=gmail renvoyait 63 actions avec slug/name/description/parameters TOUS undefined.
+- Cause racine : le SDK @composio/core 0.22.0 renvoie composio.tools.get() au format OpenAI function-calling ({ type: "function", function: { name, description, parameters } }) — plus aucun champ plate (slug, name, inputParameters, toolkit) que tous les consommateurs Gen3ia lisent. 7 sites cassés : prompts agents (mention.ts x2 — la note « Actions disponibles » était VIDE, l'agent ne savait plus quoi appeler), hub de connexions (connections.ts x2), actions Ads (ads.ts x2 — « No X Composio tools available » systématique), publication sociale (publish.ts — aucune action de publication trouvée).
+- Correctif : helper central listRawComposioTools() dans lib/integrations/composio/tools.ts — passe par composio.tools.getRawComposioTools() (forme PLATE historique : slug/name/description/inputParameters/toolkit.slug, vérifiée contre l'API réelle) + normalizeComposioToolItem() défensive acceptant LES DEUX formats (repli tools.get si getRawComposioTools absent). Appliqué aux 7 sites ; routes de compactage (tools + developer connectors) rendues tolérantes aux deux formats.
+- Corrigé au passage : 2 imports inutilisés (production-queue.ts, scene-video-service.ts) qui cassaient le CI (lint) sur 711250c ; deps sandbox réparées (npm ci --prefix sandbox — fastify).
+- Validation : tsc 0 erreur ; eslint 0/0 sur les 10 fichiers touchés ; vitest complet 3964 tests verts (7 nouveaux : normalisation OpenAI→plate, forme plate intacte, items sans slug rejetés, getRawComposioTools avec filtres, enveloppe {items}, repli tools.get, liste vide sans toolkits) ; API réelle : 63 outils Gmail avec slugs, LINKEDIN_CREATE_LINKED_IN_POST trouvé via search "post", match exact par slug, attribution multi-toolkits (gmail 63 / notion 37) — commits 3ee292b (lint, CI vert) + b476772 (Task 162).
+- État accès : SSH VPS toujours « Not allowed at this time » (refus AVANT auth, même depuis les runners GitHub — PerSourcePenalties sshd, réparation par console fournisseur) ; déploiement assuré par l'auto-updater PM2 (2 min de poll + build staging + swap atomique + rollback).
+
+Stage Summary:
+- Le système de plugins est réellement ACTIF : les agents reçoivent de nouveau la liste des actions réelles par app connectée dans leurs prompts, les cartes « Connecter <App> » et l'OAuth fonctionnent, 1609 apps au catalogue.
+- Toute la chaîne d'action externe réparée : agents (composio.execute avec slugs exacts), hub de connexions (actions nommées), publications sociales (recherche de l'action de publication), actions Ads (sélection d'outil valide).
+- Reste utilisateur : connecter les apps voulues depuis /integrations (OAuth 1 clic) ; SSH à réparer côté console fournisseur (systemctl restart sshd) si un accès shell est souhaité.
