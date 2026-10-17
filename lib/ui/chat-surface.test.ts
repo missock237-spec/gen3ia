@@ -9,6 +9,7 @@ import { isImmersiveChatRoute } from "./chat-surface";
  */
 describe("isImmersiveChatRoute", () => {
   it("active le mode immersif sur les surfaces de chat", () => {
+    expect(isImmersiveChatRoute("/chat")).toBe(true);
     expect(isImmersiveChatRoute("/workspace/conversations")).toBe(true);
     expect(isImmersiveChatRoute("/workspace/conversations/abc123")).toBe(true);
     expect(isImmersiveChatRoute("/studio/agents")).toBe(true);

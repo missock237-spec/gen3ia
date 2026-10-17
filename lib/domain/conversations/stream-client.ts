@@ -26,6 +26,9 @@ export interface StreamTurnPayload {
   authorizationMode?: AuthorizationMode;
   /** Task 141 — agent dédié choisi dans le composer (sélecteur Gen IA ⇄ agents). */
   agentId?: string;
+  /** Task 141 — modèle IA choisi pour ce tour (undefined = routeur auto). */
+  provider?: string;
+  model?: string;
   /** Fuseau horaire du client (IANA) pour les sous-services pilotés en langage naturel. */
   timezone?: string;
   signal?: AbortSignal;
@@ -57,6 +60,7 @@ export async function streamConversationTurn(payload: StreamTurnPayload): Promis
       ...(payload.connectors && payload.connectors.length > 0 ? { connectors: payload.connectors } : {}),
       ...(payload.authorizationMode ? { authorizationMode: payload.authorizationMode } : {}),
       ...(payload.agentId ? { agentId: payload.agentId } : {}),
+      ...(payload.provider ? { provider: payload.provider, model: payload.model } : {}),
       ...(payload.timezone ? { timezone: payload.timezone } : {}),
     }),
     signal: payload.signal,

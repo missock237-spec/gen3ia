@@ -8,12 +8,14 @@
  * bord, fil qui défile en interne et composer collé en bas, à la manière
  * d'une application de messagerie native.
  *
- * Concerne les deux chats transverses du projet :
+ * Concerne les trois chats transverses du projet :
  *  - la conversation (/workspace/conversations[/id]) ;
- *  - le chat d'agent IA (/studio/agents).
+ *  - le chat d'agent IA (/studio/agents) ;
+ *  - le chat direct nouvelle génération (/chat — interface Aurora).
  */
 export function isImmersiveChatRoute(pathname: string): boolean {
   return (
+    pathname === "/chat" ||
     pathname === "/workspace/conversations" ||
     /^\/workspace\/conversations\/[^/]+$/.test(pathname) ||
     pathname === "/studio/agents"
