@@ -31,7 +31,6 @@ import {
   findSceneImage,
 } from "@/lib/video/image-bridge";
 import {
-  generateVideo,
   isVideoGenerationEnabled,
   areSceneClipsEnabled,
   videoSizeForResolution,

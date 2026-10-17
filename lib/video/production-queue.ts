@@ -38,7 +38,7 @@ import { VideoProjectCreateSchema, DirectorBriefSchema, RenderRequestSchema, VID
 import { applyProductionPlan } from "@/lib/video/director-service";
 import { generateScript } from "@/lib/video/script-service";
 import { generateSceneImage, findSceneImage } from "@/lib/video/image-bridge";
-import { generateSceneVideo, isSceneVideoServiceEnabled, SceneVideoUnavailableError, startSceneVideoTask, awaitSceneVideoTask, findSceneVideo, type SceneVideoTaskState } from "@/lib/video/scene-video-service";
+import { isSceneVideoServiceEnabled, SceneVideoUnavailableError, startSceneVideoTask, awaitSceneVideoTask, findSceneVideo, type SceneVideoTaskState } from "@/lib/video/scene-video-service";
 import { billImageGeneration, billTts } from "@/lib/video/credits";
 import { resolvePreferredVoice, withPlatformVoiceFallback, generateSceneNarration, attachRecordingAsNarration } from "@/lib/video/voice-service";
 import { listAssets } from "@/lib/video/asset-service";
