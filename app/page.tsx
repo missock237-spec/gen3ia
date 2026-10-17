@@ -5,6 +5,7 @@ import { AppDownloads } from "@/components/home/app-downloads";
 import { VitrineHeader } from "@/components/home/vitrine-header";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import { FAQ_FR, buildStructuredData } from "@/lib/geo/content";
+import { BILLING_ENABLED } from "@/lib/billing/billing-mode";
 
 /**
  * Vitrine Gen3ia — VERSION 2 « Aurora OS ».
@@ -37,7 +38,9 @@ const STATS = [
   { value: "3 espaces", label: "Studio, Live & Marketplace intégrés" },
   { value: "24/7", label: "Agents autonomes planifiables" },
   { value: "100%", label: "Actions sensibles validées par un humain" },
-  { value: "XAF/EUR", label: "Facturation à l'usage, wallet intégré" },
+  ...(BILLING_ENABLED
+    ? [{ value: "XAF/EUR", label: "Facturation à l'usage, wallet intégré" }]
+    : [{ value: "Inclus", label: "Toutes les fonctionnalités en accès libre" }]),
 ];
 
 const CAPABILITIES = [
@@ -49,7 +52,7 @@ const CAPABILITIES = [
   { href: "/storage", label: "Stockage", icon: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2Z" },
   { href: "/team", label: "Équipes", icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" },
   { href: "/developer", label: "Développeurs", icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
-  { href: "/billing", label: "Wallet intégré", icon: "M21 12V7H5a2 2 0 0 1 0-4h14v4M3 5v14a2 2 0 0 0 2 2h16v-5M18 12a2 2 0 0 0 0 4h4v-4Z" },
+  ...(BILLING_ENABLED ? [{ href: "/billing", label: "Wallet intégré", icon: "M21 12V7H5a2 2 0 0 1 0-4h14v4M3 5v14a2 2 0 0 0 2 2h16v-5M18 12a2 2 0 0 0 0 4h4v-4Z" }] : []),
 ];
 
 const SOLUTIONS = [
@@ -447,18 +450,32 @@ export default function HomePage() {
               <pre className="g3-code mt-4 !max-h-24 !p-3 !text-[10px]" aria-hidden="true">{`<Hero variant="aurora" />\n<StatsGrid cols={4} />\n<BentoFeature />`}</pre>
             </article>
 
-            {/* Facturation */}
-            <article className="card-glow reveal flex gap-4 rounded-3xl border border-[var(--g3-primary-soft)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--g3-magenta-soft)] text-[var(--g3-magenta)]">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                </svg>
-              </span>
-              <div>
-                <h3 className="text-sm font-bold">Facturation à l&apos;usage</h3>
-                <p className="mt-1.5 text-xs leading-5 text-[var(--g3-muted)]">Wallet intégré, rechargement Mobile Money ou carte. Vous ne payez que ce que vos agents exécutent.</p>
-              </div>
-            </article>
+            {/* Facturation / Accès libre — le discours s'adapte au mode */}
+            {BILLING_ENABLED ? (
+              <article className="card-glow reveal flex gap-4 rounded-3xl border border-[var(--g3-primary-soft)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--g3-magenta-soft)] text-[var(--g3-magenta)]">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold">Facturation à l&apos;usage</h3>
+                  <p className="mt-1.5 text-xs leading-5 text-[var(--g3-muted)]">Wallet intégré, rechargement Mobile Money ou carte. Vous ne payez que ce que vos agents exécutent.</p>
+                </div>
+              </article>
+            ) : (
+              <article className="card-glow reveal flex gap-4 rounded-3xl border border-[var(--g3-primary-soft)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold">Tout est inclus</h3>
+                  <p className="mt-1.5 text-xs leading-5 text-[var(--g3-muted)]">Agents, missions, analyses et générations en accès libre — aucun crédit, aucun solde à recharger.</p>
+                </div>
+              </article>
+            )}
 
             {/* Planification */}
             <article className="card-glow reveal flex gap-4 rounded-3xl border border-[var(--g3-primary-soft)] bg-[var(--g3-surface)]/80 p-6 backdrop-blur">
@@ -719,7 +736,7 @@ export default function HomePage() {
               <ul className="mt-4 space-y-2.5 text-sm">
                 <li><Link href="/dashboard" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Tableau de bord</Link></li>
                 <li><Link href="/team" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Équipes</Link></li>
-                <li><Link href="/billing" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Facturation</Link></li>
+                {BILLING_ENABLED && <li><Link href="/billing" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Facturation</Link></li>}
                 <li><Link href="/storage" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Stockage permanent</Link></li>
                 <li><Link href="/developer" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Espace développeur</Link></li>
               </ul>

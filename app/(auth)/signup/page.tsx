@@ -21,8 +21,8 @@ export default function SignupPage() {
               Créez votre compte
             </h1>
             <p className="mt-2 text-sm text-[var(--g3-muted)]">
-              Une minute suffit : votre wallet de démonstration est crédité
-              automatiquement pour tester la plateforme.
+              Une minute suffit : toutes les fonctionnalités de la plateforme
+              sont immédiatement accessibles après votre inscription.
             </p>
           </div>
 

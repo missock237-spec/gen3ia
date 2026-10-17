@@ -6,6 +6,7 @@ import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { getWallet } from "@/lib/billing/wallet";
+import { BILLING_ENABLED } from "@/lib/billing/billing-mode";
 import { isBlandConfigured, sendBlandCall } from "@/lib/integrations/bland/client";
 import { ensureAgentSynced, mapGen3iaLanguageToBland } from "@/lib/voice/bland-agent-sync";
 import {
@@ -82,14 +83,18 @@ export async function POST(request: NextRequest) {
 
     // Garde de trésorerie AVANT toute dépense : le wallet doit dépasser le
     // plancher (l'appel sera ensuite facturé à la minute via le webhook).
+    // Mode libre : garde neutralisée — aucun appel ne doit être bloqué par
+    // un solde (BILLING_ENABLED=false → jamais de 402 sur cette surface).
     let walletSufficient = true;
-    try {
-      const wallet = await getWallet(user.uid);
-      walletSufficient = wallet.availableMinor >= VOICE_CALL_MIN_BALANCE_MINOR;
-    } catch (walletError) {
-      // Fail-open sur l'indisponibilité du wallet (l'appel reste facturable
-      // via billUsage à la complétion) : on journalise l'incident.
-      logger.warn({ err: walletError }, "voice_call_wallet_check_failed");
+    if (BILLING_ENABLED) {
+      try {
+        const wallet = await getWallet(user.uid);
+        walletSufficient = wallet.availableMinor >= VOICE_CALL_MIN_BALANCE_MINOR;
+      } catch (walletError) {
+        // Fail-open sur l'indisponibilité du wallet (l'appel reste facturable
+        // via billUsage à la complétion) : on journalise l'incident.
+        logger.warn({ err: walletError }, "voice_call_wallet_check_failed");
+      }
     }
     if (!walletSufficient) {
       return NextResponse.json(

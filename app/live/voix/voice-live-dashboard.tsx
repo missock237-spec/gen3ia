@@ -309,9 +309,13 @@ export function VoiceLiveDashboard() {
               <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-1 text-xs font-medium text-[var(--g3-muted)]">
                 Epoch {voix.epoch}/{voix.maxEpochs}
               </span>
-              <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-1 text-xs font-medium text-[var(--g3-muted)]">
-                Coût : {formatXAF(voix.totalCostMinor)}
-              </span>
+              {/* Mode libre : le coût n'est plus affiché quand il est nul
+                  (aucune déduction de crédit — la facturation est désactivée). */}
+              {voix.totalCostMinor > 0 && (
+                <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-1 text-xs font-medium text-[var(--g3-muted)]">
+                  Coût : {formatXAF(voix.totalCostMinor)}
+                </span>
+              )}
               {voix.lastDifficulty && (
                 <span
                   className={`rounded-full border px-3 py-1 text-xs font-medium ${
