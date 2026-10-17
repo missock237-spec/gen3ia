@@ -3832,3 +3832,19 @@ Stage Summary:
 - Live agent complet : l'agent vocal VOIT l'écran partagé en temps réel (frame par tour) et PARLE VRAIMENT (ElevenLabs flash phrase par phrase, voix du jumeau) — sessions jusqu'à 2 h.
 - Chaque agent dédié est joignable vocalement (sélecteur + liens) avec sa charte et sa mémoire.
 - MCP production-grade : sessions stateful, schémas d'outils persistés et injectés au planificateur, HITL aligné « connecté = agir », SSRF re-validée, erreurs typées, UI multi-headers + viewer d'outils.
+
+---
+Task ID: 160
+Agent: Super Z (main)
+Task: Mode libre — compléments finaux (garde appels vocaux Bland + UI vitrine adaptée)
+
+Work Log:
+- Base : origin/main (mode libre déjà implémenté en f4dad46/d58c23e/84e4b1a — session parallèle)
+- app/api/voice/calls/route.ts : garde 402 de trésorerie enveloppée dans BILLING_ENABLED (plus d'appel bloqué en mode libre)
+- app/page.tsx : vitrine adaptée (chip wallet, stat, carte marketing, footer — conditionnés à BILLING_ENABLED)
+- signup : sans mention de wallet ; Live Voix : coût masqué quand nul
+- 3956 tests verts, typecheck OK, lint OK — commit f07e563
+
+Stage Summary:
+- Plus AUCUN blocage de solde ni affichage de crédits en mode libre sur toutes les surfaces
+- Reste : déployer sur VPS via scripts/deploy_free_mode.sh
