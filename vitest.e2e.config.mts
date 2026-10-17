@@ -39,6 +39,9 @@ export default defineConfig({
       // de e2e/helpers/r2-memoire.ts.
       GCLOUD_PROJECT: "demo-gen3ia",
       FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
+      // Task 161 : défaut = mode libre en production ; les e2e valident la
+      // chaîne ARMÉE en la déclarant explicitement.
+      GEN3IA_BILLING_ENABLED: "true",
     },
   },
 });

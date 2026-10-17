@@ -46,6 +46,11 @@ export default defineConfig({
       FIREBASE_PROJECT_ID: "test-project",
       FIREBASE_CLIENT_EMAIL: "test@test-project.iam.gserviceaccount.com",
       FIREBASE_PRIVATE_KEY: dummyPrivateKeyPem,
+      // Task 161 : le DÉFAUT de BILLING_ENABLED est désormais le mode libre
+      // (absence de variable = gratuit, en production). Les tests valident
+      // les garanties de la facturation ARMÉE en la déclarant explicitement
+      // (lib/billing/free-mode.test.ts override à false localement).
+      GEN3IA_BILLING_ENABLED: "true",
     },
     coverage: {
       provider: "v8",

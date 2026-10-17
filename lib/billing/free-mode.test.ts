@@ -227,3 +227,21 @@ describe("Mode libre — outcome-credits", () => {
     expect(mocks.runTransaction).not.toHaveBeenCalled();
   });
 });
+
+describe("Mode libre — DÉFAUT de production (Task 161)", () => {
+  it("l'ABSENCE de GEN3IA_BILLING_ENABLED signifie mode libre", async () => {
+    // Sémantique inversée : la facturation ne se réactive QUE par une
+    // valeur explicite « true ». Un environnement mal configuré (variable
+    // absente — c'est le cas de la production) ne doit JAMAIS débiter.
+    const sauve = process.env.GEN3IA_BILLING_ENABLED;
+    delete process.env.GEN3IA_BILLING_ENABLED;
+    try {
+      vi.resetModules();
+      const billingMode = await import("./billing-mode");
+      expect(billingMode.BILLING_ENABLED).toBe(false);
+    } finally {
+      if (sauve !== undefined) process.env.GEN3IA_BILLING_ENABLED = sauve;
+      vi.resetModules();
+    }
+  });
+});
