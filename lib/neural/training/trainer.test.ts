@@ -145,8 +145,8 @@ describe("NeuralTrainer — apprentissage réel", () => {
     const parLabel = Array.from(tokensParLabel.entries());
     for (let i = 0; i < parLabel.length; i++) {
       for (let j = i + 1; j < parLabel.length; j++) {
-        const [labelA, tokensA] = parLabel[i];
-        const [labelB, tokensB] = parLabel[j];
+        const [, tokensA] = parLabel[i];
+        const [, tokensB] = parLabel[j];
         const partage = Array.from(tokensA).filter((t) => tokensB.has(t));
         expect(partage).toEqual([]); // aucun token partagé
       }
