@@ -40,12 +40,6 @@ import {
 const MAX_CLIP_SECONDS = 12;
 const MIN_CLIP_SECONDS = 4;
 type VideoSize = "720P" | "1080P" | "1K" | "2K";
-function isVideoGenerationEnabled(): boolean {
-  return false;
-}
-function areSceneClipsEnabled(): boolean {
-  return false;
-}
 function videoSizeForResolution(_r: unknown): VideoSize {
   return "720P";
 }

@@ -23,7 +23,6 @@ import { createActionApproval, listActionApprovals } from "@/lib/agents/action-a
 import { selectApprovalRequiredSteps } from "@/lib/agents/approval-policy";
 import type { RuntimePlan } from "@/lib/agents/runtime/types";
 import { appendMessage, createConversation, getConversation, listMessages, updateConversation, type ChatConversation } from "@/lib/chat/repository";
-import { createArtifact } from "@/lib/domain/artifacts/repository";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { policyForAgent } from "@/lib/agents/personalized-plan";
 import { answerAsAgent, classifyRequest, historyContextNote, unavailableCapabilityReply, planAgentTask, CLARIFICATION_CONFIDENCE_THRESHOLD } from "@/lib/agents/chat-engine";
@@ -173,12 +172,6 @@ function policyForAgentMission(
     allowedTools: [...new Set([...withServices, "composio.execute"])],
     permissions,
   };
-}
-
-interface MessageAttachmentLike {
-  filename: string;
-  url?: string;
-  contentType?: string;
 }
 
 /**

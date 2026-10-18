@@ -27,7 +27,7 @@
  * Module PUR — aucune dépendance Node.
  */
 
-import { hashToken, tokenize } from "../encoding/text-encoder";
+import { tokenize } from "../encoding/text-encoder";
 import type { PaireLangage } from "./corpus";
 
 /** Seuil d'appariement (score cosinus pondéré IDF) au-delà duquel une paire répond. */
@@ -140,11 +140,6 @@ export interface EtatLangage {
 /** Motif normalisé servant de clé (tokens triés + joints). */
 function cleMotif(motif: string): string {
   return [...new Set(tokenize(motif))].sort().join(" ");
-}
-
-/** Hash 32 bits stable d'une chaîne (FNV-1a, cf. text-encoder). */
-function hashChaine(texte: string): number {
-  return hashToken(texte);
 }
 
 /**
