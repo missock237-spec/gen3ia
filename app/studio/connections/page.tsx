@@ -123,14 +123,6 @@ export default function ConnectionsPage() {
         status: status.email ? "ok" : "disabled",
         statusLabel: status.email ? "Configuré" : "Non configuré",
       },
-      {
-        id: "voice",
-        icon: "♪",
-        title: "Voix (ElevenLabs)",
-        meta: "Appels et réponses audio des agents",
-        status: status.voice?.elevenlabs ? "ok" : "disabled",
-        statusLabel: status.voice?.elevenlabs ? "Configurée" : "Non configurée",
-      },
     ];
     return rows;
   }, [status]);

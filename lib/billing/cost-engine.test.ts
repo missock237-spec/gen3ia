@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { costFromAIResponse, estimateExecutionCost } from "./cost-engine";
 
+/**
+ * Moteur unique : neural Gen3 (SNN interne — tarif nul par principe).
+ * Les IA externes (openai/groq/…) ont été SUPPRIMÉES du projet sur
+ * demande de l'utilisateur : les tests de tarification fournisseur
+ * sont remplacés par les invariants du moteur neuronal (coût nul,
+ * overhead plateforme, marge et réserve conservés).
+ */
 describe("estimateExecutionCost", () => {
   it("facture au minimum GEN3IA_MIN_EXECUTION_CHARGE_EUR (1 minor) pour une execution vide", () => {
     const result = estimateExecutionCost({ task: "chat" });
@@ -9,19 +16,17 @@ describe("estimateExecutionCost", () => {
     expect(result.reserveMinor).toBeGreaterThanOrEqual(result.chargeMinor);
   });
 
-  it("calcule le cout fournisseur sur les tarifs par defaut (openai 2.5 EUR in / 10 EUR out par million)", () => {
-    const result = estimateExecutionCost({ task: "chat", provider: "openai", inputTokens: 1_000_000, outputTokens: 0, complexity: 0.5 });
+  it("moteur neural : coût fournisseur NUL (calcul local), charge = overhead + marge", () => {
+    const result = estimateExecutionCost({ task: "chat", provider: "gen3-snn", inputTokens: 1_000_000, outputTokens: 1_000_000, complexity: 0.5 });
     // complexite 0.5 * multiplicateur chat 1 = 0.5
-    // cout brut = 2.5 EUR + overhead plateforme ~0.0005 → * 0.5
-    expect(result.providerCostEur).toBeCloseTo(2.5, 5);
+    expect(result.providerCostEur).toBeCloseTo(0, 5);
     expect(result.complexityMultiplier).toBeCloseTo(0.5, 5);
     expect(result.chargeEur).toBeGreaterThan(0);
   });
 
-  it("applique le tarif cache aux tokens caches et le tarif normal au reste", () => {
-    const base = estimateExecutionCost({ task: "chat", provider: "openai", inputTokens: 1_000_000, complexity: 0.5 });
-    const cached = estimateExecutionCost({ task: "chat", provider: "openai", inputTokens: 1_000_000, cachedInputTokens: 1_000_000, complexity: 0.5 });
-    // Sans tarif cache configure, cachedInputEurPer1M retombe sur inputEurPer1M : meme prix.
+  it("tokens cachés : aucun coût supplémentaire (tarif nul du moteur local)", () => {
+    const base = estimateExecutionCost({ task: "chat", provider: "gen3-snn", inputTokens: 1_000_000, complexity: 0.5 });
+    const cached = estimateExecutionCost({ task: "chat", provider: "gen3-snn", inputTokens: 1_000_000, cachedInputTokens: 1_000_000, complexity: 0.5 });
     expect(cached.providerCostEur).toBeCloseTo(base.providerCostEur, 5);
   });
 
@@ -40,7 +45,7 @@ describe("estimateExecutionCost", () => {
   });
 
   it("majore la reserve selon GEN3IA_RESERVE_MULTIPLIER (>= charge)", () => {
-    const result = estimateExecutionCost({ task: "agent", provider: "groq", inputTokens: 100_000, outputTokens: 50_000, complexity: 2 });
+    const result = estimateExecutionCost({ task: "agent", provider: "gen3-snn", inputTokens: 100_000, outputTokens: 50_000, complexity: 2 });
     expect(result.reserveEur).toBeGreaterThanOrEqual(result.chargeEur);
     expect(result.reserveMinor).toBeGreaterThanOrEqual(result.chargeMinor);
   });
@@ -52,27 +57,28 @@ describe("estimateExecutionCost", () => {
     expect(withTools.externalToolCostEur).toBe(0.5);
   });
 
-  it("retombe sur les tarifs par defaut si GEN3IA_MODEL_PRICING_JSON est invalide", () => {
+  it("retombe sur le tarif nul si GEN3IA_MODEL_PRICING_JSON est invalide", () => {
     process.env.GEN3IA_MODEL_PRICING_JSON = "pas-du-json";
-    const result = estimateExecutionCost({ task: "chat", provider: "openai", inputTokens: 1_000_000, complexity: 0.5 });
-    expect(result.providerCostEur).toBeCloseTo(2.5, 5);
+    const result = estimateExecutionCost({ task: "chat", provider: "gen3-snn", inputTokens: 1_000_000, complexity: 0.5 });
+    expect(result.providerCostEur).toBeCloseTo(0, 5);
+    expect(Number.isFinite(result.chargeEur)).toBe(true);
     delete process.env.GEN3IA_MODEL_PRICING_JSON;
   });
 
   it("honore un tarif modele valide depuis GEN3IA_MODEL_PRICING_JSON", () => {
     process.env.GEN3IA_MODEL_PRICING_JSON = JSON.stringify([
-      { provider: "openai", model: "gpt-test", inputEurPer1M: 1, outputEurPer1M: 2 },
+      { provider: "gen3-snn", model: "gen3-snn-v1", inputEurPer1M: 1, outputEurPer1M: 2 },
     ]);
-    const result = estimateExecutionCost({ task: "chat", provider: "openai", model: "gpt-test", inputTokens: 1_000_000, outputTokens: 1_000_000, complexity: 0.5 });
+    const result = estimateExecutionCost({ task: "chat", provider: "gen3-snn", model: "gen3-snn-v1", inputTokens: 1_000_000, outputTokens: 1_000_000, complexity: 0.5 });
     expect(result.providerCostEur).toBeCloseTo(3, 5);
     delete process.env.GEN3IA_MODEL_PRICING_JSON;
   });
 
   it("ecarte un tarif environnemental non fini (evite NaN dans la reserve)", () => {
     process.env.GEN3IA_MODEL_PRICING_JSON = JSON.stringify([
-      { provider: "groq", model: "broken", inputEurPer1M: "NaN", outputEurPer1M: 1 },
+      { provider: "gen3-snn", model: "broken", inputEurPer1M: "NaN", outputEurPer1M: 1 },
     ]);
-    const result = estimateExecutionCost({ task: "chat", provider: "groq", model: "broken", inputTokens: 1_000_000, complexity: 0.5 });
+    const result = estimateExecutionCost({ task: "chat", provider: "gen3-snn", model: "broken", inputTokens: 1_000_000, complexity: 0.5 });
     expect(Number.isFinite(result.chargeEur)).toBe(true);
     expect(Number.isFinite(result.reserveEur)).toBe(true);
     delete process.env.GEN3IA_MODEL_PRICING_JSON;
@@ -84,8 +90,8 @@ describe("costFromAIResponse", () => {
     const charge = costFromAIResponse(
       { task: "chat", messages: [] } as Parameters<typeof costFromAIResponse>[0],
       {
-        provider: "openai",
-        model: "gpt-x",
+        provider: "gen3-snn",
+        model: "gen3-snn-v1",
         text: "ok",
         usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
         latencyMs: 100,

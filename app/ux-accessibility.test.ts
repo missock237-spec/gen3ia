@@ -156,7 +156,7 @@ describe("D6 — Metadata SEO des segments publics", () => {
 });
 
 describe("D7 — loading.tsx de perception de vitesse", () => {
-  const segments = ["dashboard", "billing", "settings", "memory", "team", "admin", "live", "marketplace"];
+  const segments = ["dashboard", "billing", "settings", "memory", "team", "admin", "marketplace", "neural"];
 
   it("chaque segment applicatif possède un skeleton cohérent (partagé ou inline)", () => {
     for (const segment of segments) {

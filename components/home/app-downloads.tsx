@@ -70,7 +70,7 @@ export function AppDownloads() {
                   </span>
                   {platform.key === "pc" ? (
                     <a
-                      href="/live"
+                      href="/neural"
                       className="shrink-0 rounded-full border border-[var(--g3-primary-border)] bg-white/[0.05] px-4 py-2 text-sm font-semibold text-[var(--g3-text)] transition hover:border-[var(--g3-primary)] hover:text-white"
                     >
                       Ouvrir

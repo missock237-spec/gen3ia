@@ -44,28 +44,10 @@ const GROUPS: GroupSpec[] = [
     fallback: "aucun — la plateforme entière en dépend",
   },
   {
-    group: "llm-openai",
-    role: "Fournisseur LLM OpenAI (planner, chat, vision)",
-    required: ["OPENAI_API_KEY"],
-    fallback: "bascule automatique sur Groq / Agnes / GLM",
-  },
-  {
-    group: "llm-groq",
-    role: "Fournisseur LLM Groq (repli rapide)",
-    required: ["GROQ_API_KEY"],
-    fallback: "bascule sur OpenAI / Agnes",
-  },
-  {
-    group: "llm-glm",
-    role: "Fournisseur LLM GLM",
-    required: ["GLM_API_KEY"],
-    fallback: "bascule sur les autres fournisseurs LLM",
-  },
-  {
-    group: "llm-agnes",
-    role: "Fournisseur LLM Agnes (repli + images)",
-    required: ["AGNES_API_KEY"],
-    fallback: "bascule sur OpenAI / Groq",
+    group: "neural-gen3",
+    role: "Moteur neuronal Gen3 (SNN interne — unique moteur IA, aucune clé requise)",
+    required: [],
+    fallback: "toujours actif (calcul local, tarif nul)",
   },
   {
     group: "vector-qdrant",
@@ -84,18 +66,6 @@ const GROUPS: GroupSpec[] = [
     role: "E-mail transactionnel Resend",
     required: ["RESEND_API_KEY", "EMAIL_FROM_ADDRESS"],
     fallback: "e-mails désactivés (aucun crash)",
-  },
-  {
-    group: "telephony",
-    role: "Téléphonie Bland AI (appels vocaux des agents)",
-    required: ["BLAND_API_KEY"],
-    fallback: "appels vocaux indisponibles (message explicite à l'utilisateur)",
-  },
-  {
-    group: "voice",
-    role: "Synthèse vocale ElevenLabs",
-    required: ["ELEVENLABS_API_KEY"],
-    fallback: "voix de repli navigateur",
   },
   {
     group: "tools-composio",
@@ -140,33 +110,10 @@ const GROUPS: GroupSpec[] = [
  * n'est jamais bloquante, elle n'informe que la télémétrie de présence).
  */
 const OPTIONAL_RECOGNIZED = [
-  "OPENROUTER_API_KEY",
-  "ANTHROPIC_API_KEY",
+  // HF_TOKEN : UNIQUEMENT pour l'import de datasets Hugging Face du Training
+  // Studio (téléchargement de données — aucune inférence IA externe).
   "HF_TOKEN",
-  // Fallback image Hugging Face (lib/ai/hf-image-fallback.ts) : modèle
-  // Z-Image-Turbo par défaut — la variable ne sert qu'au changement de modèle.
-  "HF_IMAGE_MODEL",
-  // Fournisseur LLM/image Agnes (lib/ai/config.ts, lib/ai/image-generation.ts,
-  // lib/live/vision-decider.ts) : clé + surcharges modèle/endpoint.
-  "AGNES_API_KEY",
-  "AGNES_IMAGE_MODEL",
-  "AGNES_API_BASE",
-  "AGNES_TEXT_MODEL",
-  // Task 154 — génération vidéo IA (lib/ai/video-generation.ts,
-  // lib/video/scene-video-service.ts) : Agnes Video 2.5 par scène.
-  "AGNES_VIDEO_MODEL",
-  "GEN3IA_VIDEO_CLIPS_ENABLED",
-  "GEN3IA_VIDEO_POLL_TIMEOUT_MS",
-  "COST_AGNES_VIDEO_720P_EUR_PER_SEC",
-  "COST_AGNES_VIDEO_1080P_EUR_PER_SEC",
-  "COST_AGNES_VIDEO_1K_EUR_PER_SEC",
-  "COST_AGNES_VIDEO_2K_EUR_PER_SEC",
   "VIDEO_MAX_GENERATED_SCENE_VIDEOS",
-  // Voix (lib/integrations/elevenlabs/client.ts) et rendu UI 21st
-  // (lib/integrations/twentyfirst/client.ts).
-  "ELEVENLABS_VOICE_ID",
-  "TWENTY_FIRST_API_KEY",
-  "BLAND_WEBHOOK_BASE_URL",
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ACCOUNT_ID",
   "GOOGLE_ADS_DEVELOPER_TOKEN",

@@ -6,15 +6,11 @@ import { stripThinkTags, ThinkTagStreamFilter } from "@/lib/ai/think-filter";
 import { RESPONSE_FORMAT_RULES, preferFreeForVisibleAnswers } from "@/lib/ai/response-quality";
 import {
   detectImageRatio,
-  editImageWithAgnes,
   extractImagePrompt,
-  ImageGenerationError,
+  enhanceImagePrompt,
   looksLikeExplicitDrawingRequest,
   looksLikeImageRequest,
-} from "@/lib/ai/image-generation";
-import { generateImageWithFallback } from "@/lib/ai/hf-image-fallback";
-import { analyzeAttachedMediaContext } from "@/lib/media/analysis";
-import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
+} from "@/lib/ai/image-intent";
 import { attachmentImageCandidates, resolveEditableImageSources } from "@/lib/files/image-source";
 import { hasImageAttachment, shouldRouteImageEdit } from "@/lib/domain/conversations/image-intent";
 import { loadWebPageContext } from "@/lib/domain/conversations/web-context";
@@ -48,13 +44,10 @@ import {
 } from "@/lib/ai/auto-improvement";
 import { enhancePromptForExecution, languageDirective } from "@/lib/ai/prompt-enhancer";
 import { imagesForModel } from "@/lib/ai/vision-input";
-import { extractVideoParams, extractVideoTitle, looksLikeVideoRequest, looksLikeVoiceRequest, resolveVoiceRequestFromContext, extractVoiceRequestText, type ContextVoiceResolution } from "@/lib/ai/video-intent";
+import { extractVideoParams, extractVideoTitle, looksLikeVideoRequest } from "@/lib/ai/video-intent";
 // Task 135 — clarification d'intention : marqueur 🔄, suivi contextuel et
 // garde déterministe d'ambiguïté (amélioration #1).
 import { markClarification, resolveClarifiedObjective, detectAmbiguitySignals, deterministicClarifyingQuestion } from "@/lib/ai/clarification-followup";
-import { isJulesConfigured } from "@/lib/integrations/jules/client";
-import { resolveCodeRequestFromContext, type ContextCodeResolution } from "@/lib/ai/code-intent";
-import { speakDirectForUser } from "@/lib/ai/voice-speak-direct";
 import { sanitizeProductionOptions, VIDEO_ASPECT_RATIOS } from "@/lib/tools/media/create-video";
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
 import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
@@ -200,15 +193,13 @@ export function stepRequiresApproval(risk: string): boolean {
 /** Coût estimé affiché sur la carte de validation. */
 export function estimatedCostForTool(toolName: string): string {
   if (toolName.startsWith("web.") || toolName.startsWith("knowledge.")) return "gratuit";
-  if (toolName.startsWith("voice.")) return "~0,02 € / génération";
-  if (toolName === "phone.call") return "selon destination (~0,02 €/min)";
   if (toolName.startsWith("composio.") || toolName.startsWith("mcp.")) return "inclus (application connectée)";
   if (toolName.startsWith("custom_api.")) return "gratuit (votre API — quota du fournisseur)";
   if (toolName === "workflow.run" || (toolName === "workflow.create")) return "gratuit à la création ; exécution facturée selon les modèles";
   if (toolName.startsWith("schedule.") || toolName.startsWith("workflow.")) return "gratuit";
-  if (toolName === "image.generate") return "~0,01–0,04 € / image (facturée à l'usage)";
-  if (toolName === "video.create") return "production complète facturée selon durée/résolution + visuels et voix";
-  if (toolName === "video.revise") return "gratuit (révisions facturées au réel : visuels/voix régénérés le cas échéant)";
+  if (toolName === "image.generate") return "gratuit (moteur neuronal local)";
+  if (toolName === "video.create") return "production locale (visuels neuraux, rendu interne)";
+  if (toolName === "video.revise") return "gratuit";
   // Task 140 — suite « outils pilotés par les agents IA ».
   if (toolName === "build.autofix") return "appels LLM facturés à l'usage (analyse du log + correctif)";
   if (toolName === "voicemail.respond") return "appels LLM facturés à l'usage + envoi email/SMS selon canal";
@@ -249,7 +240,6 @@ export function dataScopeForTool(toolName: string, input: unknown): string {
   if (toolName === "social.publish") return "Compte social connecté — publication publique";
   if (toolName === "webhook.emit") return "Endpoints webhook déclarés par votre compte";
   if (toolName === "github.create_repository") return "Votre compte GitHub — nouveau dépôt";
-  if (toolName === "phone.call") return "Numéro appelé + transcript de l'appel";
   if (toolName === "file.create" || toolName === "artifact.create") return "Votre stockage permanent Gen3ia";
   if (toolName === "memory.write") return "Mémoire permanente de vos agents";
   if (toolName === "image.generate") return "Génération d'une image à partir de votre description (stockée dans votre espace)";
@@ -953,7 +943,10 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   // cette vidéo / cet audio » fonctionne enfin. Fail-soft TOTAL (jamais
   // bloquant), plafonné à 2 médias, les images gardant la voie vision
   // native (imagesForModel).
-  const mediaAnalysisContext = await analyzeAttachedMediaContext(input.userId, input.attachments, input.message).catch(() => "");
+  // ANALYSE MÉDIA (vision) : les modèles de perception externes ont été SUPPRIMÉS
+  // du projet (seules des IA externes devaient disparaître) — aucune
+  // description fabriquée : les pièces jointes restent des fichiers.
+  const mediaAnalysisContext = "";
 
   // 1 quinquies) Contenu RÉEL des liens fournis par l'utilisateur (étape 13) :
   // une URL collée dans la conversation est RÉELLEMENT récupérée (web.open,
@@ -1051,107 +1044,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     return result;
   }
 
-  // 2 quater bis) VOIX-OFF / AUDIO DIRECT (fix capture 13:02) : synthèse
-  // immédiate ElevenLabs (miroir du chemin agent chat Task 114-a) — demande
-  // directe AVEC texte, OU réponse de l'utilisateur à la question de
-  // clarification (suivi contextuel). La production vidéo reste prioritaire
-  // (looksLikeVoiceRequest la laisse déjà passer).
-  const contextVoice = resolveVoiceRequestFromContext(input.message, priorHistory);
-  if (contextVoice) {
-    await onEvent({ type: "status", phase: "execution", label: "Synthèse de l'audio en cours…" });
-    const result = await runVoiceTurn({ ...input, conversation, project, projectId, userMessage, priorHistory }, contextVoice);
-    await onEvent({
-      type: "done",
-      assistantMessage: result.assistantMessage,
-      artifacts: result.artifacts,
-      approvals: result.approvals,
-    });
-    return result;
-  }
-  if (looksLikeVoiceRequest(input.message)) {
-    const directVoice = extractVoiceRequestText(input.message);
-    if (directVoice) {
-      await onEvent({ type: "status", phase: "execution", label: "Synthèse de l'audio en cours…" });
-      const result = await runVoiceTurn({ ...input, conversation, project, projectId, userMessage, priorHistory }, { ...directVoice, source: "direct" });
-      await onEvent({
-        type: "done",
-        assistantMessage: result.assistantMessage,
-        artifacts: result.artifacts,
-        approvals: result.approvals,
-      });
-      return result;
-    }
-    // Demande d'audio SANS texte identifiable : question de clarification
-    // DÉTERMINISTE (zéro LLM, zéro refus, zéro tuto externe) — la réponse de
-    // l'utilisateur sera synthétisée telle quelle par le suivi contextuel.
-    const question = await appendMessage({
-      conversationId: conversation.id,
-      userId: input.userId,
-      role: "assistant",
-      content: [
-        "Avec plaisir — je peux synthétiser votre audio dès maintenant (voix naturelle ElevenLabs, archivée dans votre espace).",
-        "Quel texte ou quel contenu souhaitez-vous entendre dans cet audio ? Répondez directement avec le texte : je le synthétise immédiatement.",
-      ].join("\n"),
-      generationStatus: "complete",
-    });
-    await onEvent({ type: "message_complete", message: question });
-    return {
-      conversationId: conversation.id,
-      userMessage,
-      assistantMessage: question,
-      artifacts: [],
-      approvals: [],
-      intent: { mode: "chat", understanding: "Demande d'audio — texte à synthétiser demandé (clarification déterministe)." },
-    };
-  }
-
-  // 2 quinter) DEMANDE DE CODE (Task 121) : routage automatique vers l'agent
-  // de code Jules de Google (jules.google) — détection déterministe (zéro
-  // LLM, FR + EN) APRÈS les intercepts vidéo/audio (priorité média) et
-  // AVANT l'artefact application : une demande portant un dépôt GitHub
-  // reste une tâche de code réel, même si elle mentionne une « page »/« app »
-  // (elle vit DANS le dépôt). Trois régimes, tous sans refus de cadre :
-  //  a) clé JULES_API_KEY absente → réponse honnête (intégration en
-  //     préparation, relance via les outils internes au message suivant —
-  //     le garde isJulesPendingNotice empêche la répétition en boucle) ;
-  //  b) dépôt GitHub inconnu → question de clarification DÉTERMINISTE
-  //     (zéro LLM), la réponse owner/repo est reliée à la demande d'origine
-  //     par le suivi contextuel (resolveCodeRequestFromContext) ;
-  //  c) dépôt connu → création de session Jules (API v1alpha) + ticket de
-  //     suivi dans la file de ticks R2 : livraison idempotente du résultat
-  //     dans CE fil dès l'état terminal (miroir de la livraison vidéo).
-  const codeRequest = resolveCodeRequestFromContext(input.message, priorHistory);
-  if (codeRequest) {
-    if (!isJulesConfigured()) {
-      const result = await runJulesPendingTurn(baseCtx, codeRequest);
-      await onEvent({
-        type: "done",
-        assistantMessage: result.assistantMessage,
-        artifacts: result.artifacts,
-        approvals: result.approvals,
-      });
-      return result;
-    }
-    if (!codeRequest.repo) {
-      const result = await runJulesRepoClarificationTurn(baseCtx);
-      await onEvent({
-        type: "done",
-        assistantMessage: result.assistantMessage,
-        artifacts: result.artifacts,
-        approvals: result.approvals,
-      });
-      return result;
-    }
-    await onEvent({ type: "status", phase: "execution", label: "Création de la tâche Jules…" });
-    const result = await runJulesTurn(baseCtx, codeRequest);
-    await onEvent({
-      type: "done",
-      assistantMessage: result.assistantMessage,
-      artifacts: result.artifacts,
-      approvals: result.approvals,
-    });
-    return result;
-  }
+  // (voix-off supprimée : TTS externe retiré du projet)
 
   // 2 bis) ARTEFACTS — création d'une page web / petite application :
   // le moteur produit un artefact HTML complet + un LIEN WEB (/preview/<id>)
@@ -1716,59 +1609,24 @@ async function produceConversationImage(
     typeof plannedPrompt === "string" && plannedPrompt.trim().length >= 3
       ? plannedPrompt.trim().slice(0, 4000)
       : extractImagePrompt(ctx.message);
-  // Amélioration bornée : si le LLM d'amélioration traîne, la génération
-  // part avec le prompt d'origine plutôt que de dépasser le budget.
-  await onProgress?.({ label: "Amélioration du prompt visuel…", stage: "enhance", percent: 15 });
-  const enhancement = await withTimeout(
-    enhanceImagePrompt(rawPrompt, { userId: ctx.userId }).catch(() => ({ prompt: rawPrompt, enhanced: false })),
-    32_000,
-    "amélioration du prompt image",
-  ).catch(() => ({ prompt: rawPrompt, enhanced: false }));
-  await onProgress?.({ label: "Génération de l'image en cours…", stage: "generating", percent: 40 });
-  // Reprise AUTOMATIQUE : si Agnes est à sa limite de crédit (code d'erreur
-  // 402/message crédit), Hugging Face Z-Image-Turbo termine la tâche
-  // (lib/ai/hf-image-fallback — archivage R2 permanent inclus).
-  const image = await generateImageWithFallback({
-    prompt: enhancement.prompt,
-    ratio: detectImageRatio(ctx.message),
-    timeoutMs: 40_000,
+  // Brief visuel déterministe (moteur local — sujet intact).
+  await onProgress?.({ label: "Préparation du brief visuel…", stage: "enhance", percent: 15 });
+  const prompt = enhanceImagePrompt(rawPrompt);
+  await onProgress?.({ label: "Génération neuronale en cours…", stage: "generating", percent: 40 });
+  // GÉNÉRATION NEURONALE LOCALE : les imageurs externes (Agnes/HF) ont été
+  // SUPPRIMÉS du projet sur demande de l'utilisateur. La composition est
+  // calculée par le moteur Gen3 depuis l'état réel du cerveau et archivée
+  // en R2 permanent par le service média.
+  const { genererVisuelNeuralEtPersister } = await import("@/lib/neural/media-service");
+  const image = await genererVisuelNeuralEtPersister({
     userId: ctx.userId,
+    prompt,
+    ratio: detectImageRatio(ctx.message),
   });
   await onProgress?.({ label: "Enregistrement sécurisé de l'image…", stage: "persisting", percent: 80 });
-  const persisted = image.storagePath
-    ? { storagePath: image.storagePath }
-    : await persistGeneratedImage(ctx.userId, image.imageUrl).catch(() => ({}));
-  return { imageUrl: image.imageUrl, model: image.model, ...persisted };
+  return { imageUrl: image.url, model: "gen3-snn-v1" };
 }
 
-/** Taille max d'une image inline en data URI (limite des documents). */
-const IMAGE_INLINE_MAX_BYTES = 380_000;
-
-/**
- * Copie l'image générée dans le stockage personnel de l'utilisateur.
- * Ne lève JAMAIS : en cas d'échec, l'URL d'origine reste utilisable.
- */
-async function persistGeneratedImage(
-  userId: string,
-  imageUrl: string,
-): Promise<{ storagePath?: string; inlineDataUrl?: string }> {
-  if (!imageUrl.startsWith("http")) return {};
-  const response = await fetch(imageUrl, { signal: AbortSignal.timeout(20_000) });
-  if (!response.ok) return {};
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (buffer.length === 0) return {};
-  const contentType = (response.headers.get("content-type") || "image/png").split(";")[0].trim();
-  const ext = contentType.includes("jpeg") ? "jpg" : contentType.includes("webp") ? "webp" : "png";
-  if (isR2Configured()) {
-    const key = `users/${userId}/permanent/ai-images/${Date.now()}-${randomUUID()}.${ext}`;
-    await uploadToR2(key, buffer, contentType);
-    return { storagePath: key };
-  }
-  if (buffer.length <= IMAGE_INLINE_MAX_BYTES) {
-    return { inlineDataUrl: `data:${contentType};base64,${buffer.toString("base64")}` };
-  }
-  return {};
-}
 
 /**
  * Dernière image exploitable de la conversation (édition sans pièce
@@ -1805,28 +1663,28 @@ async function runImageEditTurn(ctx: TurnBase, lastConversationImage: string | n
     const attachmentSources = (ctx.attachments ?? []).flatMap((attachment) => attachmentImageCandidates(attachment));
     const rawSources = attachmentSources.length > 0 ? attachmentSources : lastConversationImage ? [lastConversationImage] : [];
     if (rawSources.length === 0) {
-      throw new ImageGenerationError(
-        "INVALID_IMAGE",
+      throw new Error(
         "Aucune image à éditer n'a été trouvée. Joignez l'image à votre message (📎) ou générez-en une d'abord, puis redemandez la modification.",
       );
     }
     const sources = await resolveEditableImageSources(rawSources);
-    const image = await editImageWithAgnes({
+    // ÉDITION PIXEL SUPPRIMÉE (modèle d'édition externe retiré) : la demande
+    // est honorée par une RÉGÉNÉRATION neuronale locale intégrant la consigne
+    // — honnête : composition recalculée, pas retouche pixel par pixel.
+    const { genererVisuelNeuralEtPersister } = await import("@/lib/neural/media-service");
+    const image = await genererVisuelNeuralEtPersister({
+      userId: ctx.userId,
       prompt: ctx.message.trim().slice(0, 4000),
-      images: sources.map((source) => source.dataUri),
       ratio: detectImageRatio(ctx.message),
     });
-    const persisted = await persistGeneratedImage(ctx.userId, image.imageUrl).catch(
-      (): { storagePath?: string; inlineDataUrl?: string } => ({}),
-    );
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
       userId: ctx.userId,
       role: "assistant",
-      content: "Voici votre image modifiée. L'original reste disponible dans les artefacts de la conversation.",
-      imageUrl: persisted.inlineDataUrl ?? image.imageUrl,
-      provider: "agnes",
-      model: image.model,
+      content: "Voici votre nouvelle composition neuronale, recalculée avec votre consigne de modification. L'original reste disponible dans les artefacts de la conversation.",
+      imageUrl: image.url,
+      provider: "gen3-snn",
+      model: "gen3-snn-v1",
       generationStatus: "complete",
     });
     const artifact = await createArtifact({
@@ -1835,9 +1693,8 @@ async function runImageEditTurn(ctx: TurnBase, lastConversationImage: string | n
       projectId: ctx.projectId,
       type: "image",
       title: ctx.message.slice(0, 80),
-      url: persisted.inlineDataUrl ?? image.imageUrl,
-      storagePath: persisted.storagePath,
-      note: `Édité avec ${image.model} — ${sources.length} image(s) source(s)`,
+      url: image.url,
+      note: `Régénéré par le moteur neuronal Gen3 (${sources.length} source(s) conservée(s))`,
     });
     await onEvent({ type: "message_complete", message: assistantMessage });
     await onEvent({ type: "artifact_created", artifact });
@@ -1850,7 +1707,7 @@ async function runImageEditTurn(ctx: TurnBase, lastConversationImage: string | n
       intent: { mode: "chat", understanding: "Demande d'édition d'une image existante." },
     };
   } catch (error) {
-    const message = error instanceof ImageGenerationError
+    const message = error instanceof Error
       ? error.message
       : "L'édition d'image a échoué. Réessayez dans un instant.";
     const assistantMessage = await appendMessage({
@@ -1888,7 +1745,7 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       role: "assistant",
       content: "Voici l'image que j'ai générée pour vous. Elle est également enregistrée dans les artefacts de la conversation.",
       imageUrl: image.inlineDataUrl ?? image.imageUrl,
-      provider: "agnes",
+      provider: "gen3-snn",
       model: image.model,
       generationStatus: "complete",
     });
@@ -1900,7 +1757,7 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       title: ctx.message.slice(0, 80),
       url: image.inlineDataUrl ?? image.imageUrl,
       storagePath: image.storagePath,
-      note: `Généré avec ${image.model}`,
+      note: `Généré par le moteur neuronal Gen3 (${image.model})`,
     });
     // Contrat de flux complet : le client doit recevoir la même séquence
     // d'événements que les autres tours (audit 25-a : message_complete et
@@ -1916,7 +1773,7 @@ async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
       intent: { mode: "chat", understanding: "Demande de génération d'image." },
     };
   } catch (error) {
-    const message = error instanceof ImageGenerationError
+    const message = error instanceof Error
       ? error.message
       : "La génération d'image a échoué. Réessayez dans un instant.";
     const assistantMessage = await appendMessage({
@@ -2048,298 +1905,6 @@ async function runVideoTurn(
       artifacts: [],
       approvals: [],
       intent: { mode: "chat", understanding: "Demande de production vidéo complète (échec du lancement)." },
-    };
-  }
-}
-
-/**
- * VOIX-OFF / AUDIO DIRECT (fix capture 13:02 — moteur workspace) : synthèse
- * ElevenLabs immédiate, mécanique identique au chemin agent chat (Task
- * 114-a) : archivage permanent R2 + facturation au réel + artefact audio
- * rattaché à la conversation, LIVRÉ DIRECTEMENT dans le fil par le lecteur
- * intégré (Task 123 — plus aucun lien markdown expirable). Échec de synthèse
- * → réponse HONNÊTE avec relance (jamais de tuto externe ni de refus sec).
- */
-async function runVoiceTurn(ctx: TurnBase, resolution: ContextVoiceResolution): Promise<ConversationTurnResult> {
-  const onEvent = safeEmitter(ctx.onEvent);
-  const spoken = await speakDirectForUser({
-    userId: ctx.userId,
-    text: resolution.text2speak,
-    executionId: `voice_direct_${ctx.conversationId}`,
-  }).catch(() => null);
-
-  if (!spoken?.ok) {
-    const assistantMessage = await appendMessage({
-      conversationId: ctx.conversationId,
-      userId: ctx.userId,
-      role: "assistant",
-      content: [
-        "La synthèse vocale n'a pas pu aboutir pour le moment (service momentanément indisponible).",
-        "Réessayez dans un instant : redites-moi simplement le texte à faire entendre et je le synthétise immédiatement en voix-off naturelle.",
-      ].join("\n"),
-      generationStatus: "failed",
-    });
-    await onEvent({ type: "message_complete", message: assistantMessage });
-    return {
-      conversationId: ctx.conversationId,
-      userMessage: ctx.userMessage,
-      assistantMessage,
-      artifacts: [],
-      approvals: [],
-      intent: { mode: "chat", understanding: "Synthèse vocale indisponible (relance possible)." },
-    };
-  }
-
-  // LIVRAISON DIRECTE (Task 123) : PLUS AUCUN lien markdown dans le message —
-  // une URL signée expire (1 h, plafond du presigneur) et faisait de la
-  // livraison un lien mort. L'audio est rendu DIRECTEMENT dans le fil par un
-  // lecteur <audio> intégré (components/workspace/audio-delivery.tsx) qui
-  // résout à LA DEMANDE une URL signée fraîche depuis la clé R2 permanente
-  // (storagePath de l'artefact, canal /api/storage/permanent).
-  const reply = [
-    resolution.source === "context"
-      ? "Voici votre audio, synthétisé à partir du texte que vous venez de donner — il est prêt ci-dessous, à écouter et à télécharger."
-      : "Voici votre audio, synthétisé avec une voix naturelle ElevenLabs — il est prêt ci-dessous, à écouter et à télécharger.",
-    spoken.storage === "r2"
-      ? "L'audio est archivé en permanence dans votre espace : il reste disponible et réutilisable."
-      : "L'archivage permanent est momentanément indisponible : l'audio est livré dans la réponse de cette conversation (version temporaire).",
-  ].join("\n");
-  const assistantMessage = await appendMessage({
-    conversationId: ctx.conversationId,
-    userId: ctx.userId,
-    role: "assistant",
-    content: reply,
-    generationStatus: "complete",
-  });
-  await onEvent({ type: "message_complete", message: assistantMessage });
-
-  // Artefact audio : la clé R2 permanente est la référence durable (le lecteur
-  // du fil la résout en URL signée courte à chaque écoute). Repli inline :
-  // pas d'artefact (data URI non rejouable depuis le fil) — la réponse API
-  // porte alors le data URI pour lecture immédiate.
-  let artifact: ConversationArtifact | null = null;
-  if (spoken.audioUrl) {
-    artifact = await createArtifact({
-      userId: ctx.userId,
-      conversationId: ctx.conversationId,
-      projectId: ctx.projectId,
-      type: "audio",
-      title: (resolution.title ?? resolution.text2speak).slice(0, 80),
-      storagePath: spoken.audioUrl,
-      note: "Synthèse vocale ElevenLabs — audio permanent (R2)",
-    });
-    await onEvent({ type: "artifact_created", artifact });
-  }
-
-  return {
-    conversationId: ctx.conversationId,
-    userMessage: ctx.userMessage,
-    assistantMessage,
-    artifacts: artifact ? [artifact] : [],
-    approvals: [],
-    intent: { mode: "chat", understanding: "Voix-off synthétisée et livrée (ElevenLabs)." },
-  };
-}
-
-/* ------------------------------------------------------------------ */
-/* Tour « Jules en préparation » — clé absente (réponse honnête)        */
-/* ------------------------------------------------------------------ */
-
-/**
- * DEMANDE DE CODE SANS CLÉ JULES (Task 121) : réponse honnête 100 %
- * déterministe (zéro LLM) — la plateforme prépare l'intégration de l'agent
- * de code Jules (jules.google), la clé JULES_API_KEY reste à configurer
- * côté hébergement. JAMAIS de refus de cadre : le message invite
- * explicitement à renvoyer la demande pour qu'elle soit traitée par les
- * outils internes de l'agent (le garde isJulesPendingNotice de
- * code-intent.ts fait retomber le message suivant dans le flux normal —
- * l'avis n'est jamais répété en boucle).
- */
-async function runJulesPendingTurn(ctx: TurnBase, codeRequest: ContextCodeResolution): Promise<ConversationTurnResult> {
-  const onEvent = safeEmitter(ctx.onEvent);
-  const assistantMessage = await appendMessage({
-    conversationId: ctx.conversationId,
-    userId: ctx.userId,
-    role: "assistant",
-    content: [
-      "Je comprends votre demande de développement de code.",
-      "",
-      "L'intégration de l'agent de code Jules (jules.google) est en préparation sur la plateforme : la clé d'API (JULES_API_KEY) reste à configurer côté hébergement. Dès qu'elle sera active, ce type de demande lancera automatiquement une session Jules sur votre dépôt GitHub (correctifs, pull requests).",
-      "",
-      "En attendant, je traite votre demande directement ici avec mes outils internes : renvoyez-la telle quelle (ou précisez le résultat attendu) et je m'en occupe immédiatement.",
-      "",
-      `Votre demande, conservée telle quelle : « ${codeRequest.promptExtraction.slice(0, 500)} »`,
-    ].join("\n"),
-    generationStatus: "complete",
-  });
-  await onEvent({ type: "message_complete", message: assistantMessage });
-  return {
-    conversationId: ctx.conversationId,
-    userMessage: ctx.userMessage,
-    assistantMessage,
-    artifacts: [],
-    approvals: [],
-    intent: { mode: "chat", understanding: "Demande de code — intégration Jules en préparation (clé absente), traitement via les outils internes proposé." },
-  };
-}
-
-/* ------------------------------------------------------------------ */
-/* Tour « clarification dépôt » — question déterministe (zéro LLM)     */
-/* ------------------------------------------------------------------ */
-
-/**
- * DEMANDE DE CODE SANS DÉPÔT CONNU : question de clarification
- * DÉTERMINISTE (aucun LLM, aucune invention). La réponse de l'utilisateur
- * (owner/repo ou URL GitHub) est reliée à la demande d'origine par le suivi
- * contextuel de code-intent.ts (resolveCodeRequestFromContext, source
- * "context") — le tour suivant lance la session Jules sans rien redemander.
- * Les marqueurs « dépôt GitHub » et « owner/repo » sont le contrat de
- * détection de isCodeRepoClarifyingQuestion : ne pas les reformuler.
- */
-async function runJulesRepoClarificationTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
-  const onEvent = safeEmitter(ctx.onEvent);
-  const assistantMessage = await appendMessage({
-    conversationId: ctx.conversationId,
-    userId: ctx.userId,
-    role: "assistant",
-    content: [
-      "Avec plaisir — je confie cette tâche à Jules, l'agent de code de Google : il clone votre dépôt GitHub, travaille sur la demande, puis propose ses changements (branche de correctif, pull request), et je vous livre le résultat ici.",
-      "",
-      "Sur quel dépôt GitHub dois-je travailler ? Répondez au format owner/repo (ex. : mon-compte/mon-projet), ou collez simplement l'URL GitHub du dépôt — je lance la session immédiatement.",
-    ].join("\n"),
-    generationStatus: "complete",
-  });
-  await onEvent({ type: "message_complete", message: assistantMessage });
-  return {
-    conversationId: ctx.conversationId,
-    userMessage: ctx.userMessage,
-    assistantMessage,
-    artifacts: [],
-    approvals: [],
-    intent: { mode: "chat", understanding: "Demande de code — dépôt GitHub demandé (clarification déterministe)." },
-  };
-}
-
-/* ------------------------------------------------------------------ */
-/* Tour « Jules » — création de session + surveillance asynchrone       */
-/* ------------------------------------------------------------------ */
-
-/**
- * DEMANDE DE CODE AVEC DÉPÔT CONNU (Task 121) : création RÉELLE d'une
- * session Jules (POST /sessions, API v1alpha), persistance du suivi
- * (collection julesSessions — la conversation d'origine est PORTÉE PAR LE
- * DOCUMENT pour que la complétion « monte » le résultat DANS ce fil, même
- * page fermée) et programmation du ticket de suivi dans la file de ticks
- * R2 (boucle auto-perpétuée par pollJulesSessions ; replis : cron quotidien,
- * polling client). La livraison terminale est idempotente (miroir de la
- * livraison vidéo deliverJobToConversation — Task 113).
- */
-async function runJulesTurn(ctx: TurnBase, codeRequest: ContextCodeResolution): Promise<ConversationTurnResult> {
-  const onEvent = safeEmitter(ctx.onEvent);
-  // Garde typée : l'appelant a déjà vérifié le dépôt (branche c du routage).
-  if (!codeRequest.repo) {
-    return runJulesRepoClarificationTurn(ctx);
-  }
-  try {
-    // Imports DYNAMIQUES (miroir runVideoTurn) : la machinerie Jules (client
-    // fetch + file de suivi) n'alourdit pas le démarrage du moteur.
-    const { julesCreateSession } = await import("@/lib/integrations/jules/client");
-    const { createJulesSessionRecord, scheduleJulesFollowup } = await import("@/lib/integrations/jules/followup");
-
-    const repo = `${codeRequest.repo.owner}/${codeRequest.repo.repo}`;
-    const created = await julesCreateSession({
-      githubRepo: repo,
-      prompt: codeRequest.promptExtraction,
-    });
-    if (!created.session) {
-      throw new Error("Jules n'a pas renvoyé d'identifiant de session.");
-    }
-
-    const record = await createJulesSessionRecord({
-      userId: ctx.userId,
-      conversationId: ctx.conversationId,
-      ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
-      session: created.session,
-      repo,
-      prompt: codeRequest.promptExtraction,
-      title: codeRequest.promptExtraction.slice(0, 80) || "Tâche Jules",
-    });
-
-    // Ticket de suivi : la file de ticks R2 délivre le premier passage au
-    // receiver /api/cron/jules-followup (échec non bloquant — les replis
-    // cron/polling reprennent la boucle).
-    const scheduled = await scheduleJulesFollowup();
-
-    const assistantMessage = await appendMessage({
-      conversationId: ctx.conversationId,
-      userId: ctx.userId,
-      role: "assistant",
-      content: [
-        `Votre tâche Jules est lancée sur le dépôt ${repo}.`,
-        "",
-        `Jules (jules.google) a créé la session \`${created.session}\` : il clone le dépôt, travaille sur votre demande, puis propose ses changements (branche de correctif, pull request).`,
-        "Je surveille l'avancement automatiquement — dès que la session est terminée, je vous livre ici son état et les liens de ses sorties.",
-        scheduled.ok
-          ? ""
-          : "(La surveillance planifiée est momentanément indisponible : le contrôle régulier de la plateforme reprend le relais.)",
-        "",
-        `Votre demande, transmise telle quelle à Jules : « ${codeRequest.promptExtraction.slice(0, 500)} »`,
-      ].filter(Boolean).join("\n"),
-      generationStatus: "complete",
-    });
-
-    // Carte de suivi dans le fil (miroir vidéo) : la tâche et sa session
-    // restent visibles pendant tout le travail asynchrone.
-    const artifact = await createArtifact({
-      userId: ctx.userId,
-      conversationId: ctx.conversationId,
-      ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
-      type: "code",
-      title: record.title,
-      language: "markdown",
-      content: [
-        `# Tâche Jules — ${repo}`,
-        "",
-        `Session Jules : ${created.session}`,
-        "",
-        codeRequest.promptExtraction,
-      ].join("\n"),
-      note: "Session Jules en cours — surveillance automatique",
-    });
-    await onEvent({ type: "message_complete", message: assistantMessage });
-    await onEvent({ type: "artifact_created", artifact });
-
-    return {
-      conversationId: ctx.conversationId,
-      userMessage: ctx.userMessage,
-      assistantMessage,
-      artifacts: [artifact],
-      approvals: [],
-      intent: { mode: "chat", understanding: "Demande de code — session Jules créée (jules.google), surveillance asynchrone lancée." },
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "La création de la session Jules a échoué.";
-    const assistantMessage = await appendMessage({
-      conversationId: ctx.conversationId,
-      userId: ctx.userId,
-      role: "assistant",
-      content: [
-        "Je n'ai pas réussi à créer la session Jules pour le moment.",
-        "",
-        `Cause remontée : ${message.slice(0, 300)}`,
-        "",
-        "Votre demande est conservée — réessayez dans un instant (renvoyez le message ou redonnez le dépôt), je relancerai la session immédiatement.",
-      ].join("\n"),
-      generationStatus: "failed",
-    });
-    await onEvent({ type: "message_complete", message: assistantMessage });
-    return {
-      conversationId: ctx.conversationId,
-      userMessage: ctx.userMessage,
-      assistantMessage,
-      artifacts: [],
-      approvals: [],
-      intent: { mode: "chat", understanding: "Demande de code — échec de la création de session Jules (relance proposée)." },
     };
   }
 }
@@ -3200,7 +2765,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
           title: (typeof planned.toolInput?.prompt === "string" && planned.toolInput.prompt.trim() ? planned.toolInput.prompt.trim() : ctx.message).slice(0, 80),
           url: image.inlineDataUrl ?? image.imageUrl,
           storagePath: image.storagePath,
-          note: `Généré avec ${image.model}`,
+          note: `Généré par le moteur neuronal Gen3 (${image.model})`,
         });
         artifacts.push(artifact);
         step.artifactId = artifact.id;
@@ -3209,7 +2774,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
         step.status = "failed";
         step.startedAt = startedAt;
         step.finishedAt = new Date().toISOString();
-        step.output = error instanceof ImageGenerationError ? error.message : "La génération d'image a échoué.";
+        step.output = error instanceof Error ? error.message : "La génération d'image a échoué.";
         anyFailure = true;
       }
       await onEvent({ type: "step_update", runId: run.id, step });
@@ -3452,7 +3017,7 @@ async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
 
     // Mode « Autoriser automatiquement » : les actions sensibles NON critiques
     // s'exécutent directement (piste d'audit), le plancher de sécurité reste
-    // invariant (ads.publish / file.delete / phone.call / risque critical).
+    // invariant (ads.publish / file.delete / risque critical).
     const autoAllowed = toolName ? isAutoApprovable(ctx.authorizationMode, toolName, risk) : false;
     if (autoAllowed) {
       console.log(JSON.stringify({

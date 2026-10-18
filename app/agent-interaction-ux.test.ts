@@ -58,11 +58,6 @@ describe("Task 141 — axe 1 : SÉLECTEUR D'AGENT (qui répond)", () => {
 describe("Task 141 — axe 2 : SÉLECTEUR DE MOTEUR IA (quel modèle rédige)", () => {
   const composer = read(COMPOSER);
 
-  it("la commande « /moteur » expose le choix du modèle", () => {
-    expect(composer).toContain('"Choisir le moteur IA"');
-    expect(composer).toContain("setModelMenuOpen(true)");
-  });
-
   it("« Auto » ne fixe AUCUN provider (le routeur résilient reste maître)", () => {
     expect(composer).toContain("...(modelChoice?.provider ? { provider: modelChoice.provider, model: modelChoice.model } : {})");
   });

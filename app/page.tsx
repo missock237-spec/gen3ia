@@ -2,13 +2,14 @@ import Link from "next/link";
 
 import { AdSenseAd } from "@/components/ads/adsense-ad";
 import { AppDownloads } from "@/components/home/app-downloads";
+import { NeuralLiveStrip } from "@/components/home/neural-live-strip";
 import { VitrineHeader } from "@/components/home/vitrine-header";
 import { Gen3iaLogo } from "@/components/brand/gen3ia-logo";
 import { FAQ_FR, buildStructuredData } from "@/lib/geo/content";
 import { BILLING_ENABLED } from "@/lib/billing/billing-mode";
 
 /**
- * Vitrine Gen3ia — VERSION 2 « Aurora OS ».
+ * Vitrine Gen3ia — VERSION 3 « Aurora OS V6 » (neural-first).
  *
  * Identité nouvelle née de zéro : espace profond, halos aurora animés,
  * verre dépoli, frontière lumineuse dégradée (violet → cyan),
@@ -19,7 +20,7 @@ import { BILLING_ENABLED } from "@/lib/billing/billing-mode";
 
 const PRODUCT_LINKS = [
   { href: "/studio", label: "Studio" },
-  { href: "/live", label: "Agent Live" },
+  { href: "/neural", label: "Système Neuronal" },
   { href: "/marketplace", label: "Marketplace" },
 ];
 
@@ -45,9 +46,8 @@ const STATS = [
 
 const CAPABILITIES = [
   { href: "/studio", label: "Agents IA", icon: "M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6l-8-4Z" },
-  { href: "/live", label: "Agent Live", icon: "M2 3h20v14H2zM8 21h8M12 17v4" },
+  { href: "/neural", label: "Système Neuronal", icon: "M12 5a3 3 0 0 0-3 3v3a3 3 0 0 0 6 0V8a3 3 0 0 0-3-3ZM5 11a7 7 0 0 0 14 0M12 18v3" },
   { href: "/marketplace", label: "Marketplace", icon: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4H6Z" },
-  { href: "/studio/interface-lab", label: "Atelier d’Interfaces", icon: "m8 6-6 6 6 6M16 6l6 6-6 6" },
   { href: "/workspace/schedules", label: "Planifications", icon: "M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" },
   { href: "/storage", label: "Stockage", icon: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2Z" },
   { href: "/team", label: "Équipes", icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" },
@@ -92,15 +92,15 @@ const PRODUCTS = [
     badge: null as string | null,
   },
   {
-    href: "/live",
-    eyebrow: "Gen3ia Live",
-    title: "Agent Live sur votre PC",
+    href: "/neural",
+    eyebrow: "Gen3 Neural",
+    title: "Système Neuronal Gen3",
     description:
-      "Un agent qui observe votre écran et pilote clavier/souris pour exécuter vos tâches réelles, avec permissions granulaires, double validation humaine et journal d'audit complet.",
-    points: ["Observation d'écran en direct", "Contrôle clavier & souris validé", "Réservé aux ordinateurs (Windows, Linux, macOS)"],
-    cta: "Découvrir Agent Live",
-    icon: "M2 3h20v14H2zM8 21h8M12 17v4m-2-8-2 2 2 2m4-4 2 2-2 2",
-    badge: "PC",
+      "Le moteur IA interne de la plateforme : un réseau de neurones à spikes avec plasticité hebbienne, entraîné sur vos données, qui apprend et crée — aucune IA externe, 100 % local.",
+    points: ["Réseau à spikes + plasticité hebbienne", "Entraînement réel sur vos datasets", "Effecteurs visuels, audio et vidéo locaux"],
+    cta: "Ouvrir la console neuronale",
+    icon: "M12 4.5a2 2 0 0 0-2 2v2a2 2 0 0 0 4 0v-2a2 2 0 0 0-2-2Zm-7 7a2 2 0 0 0-2 2 2 2 0 0 0 4 0 2 2 0 0 0-2-2Zm14 0a2 2 0 0 0-2 2 2 2 0 0 0 4 0 2 2 0 0 0-2-2Zm-7 3a2 2 0 0 0-2 2 2 2 0 0 0 4 0 2 2 0 0 0-2-2Z",
+    badge: "IA Interne",
   },
   {
     href: "/marketplace",
@@ -201,20 +201,21 @@ export default function HomePage() {
           <div className="grid-bg absolute inset-0" aria-hidden="true" />
           <div className="relative mx-auto max-w-6xl px-4 pb-24 pt-20 sm:px-6 sm:pt-28">
             <div className="mx-auto max-w-3xl text-center">
-              {/* Badge V2 */}
+              {/* Badge V6 — moteur neural */}
               <p className="anim-fade-up mx-auto inline-flex items-center gap-2 rounded-full border border-[var(--g3-primary-border)] bg-[var(--g3-primary-soft)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--g3-primary-strong)] shadow-[0_0_24px_-6px_var(--g3-primary)]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--g3-gradient)]" aria-hidden />
-                Interface V2 · Aurora
+                <span className="g3v6-resonance-bar h-1.5 w-1.5" aria-hidden />
+                Aurora OS V6 · Moteur neural
               </p>
 
               <h1 className="anim-fade-up anim-delay-1 mt-7 font-[family-name:var(--font-display)] text-5xl font-bold leading-[1.02] tracking-tight sm:text-7xl">
                 Décrivez-le.
                 <br />
-                <span className="gradient-text">L&apos;agent l&apos;exécute.</span>
+                <span className="gradient-text">Votre réseau l&apos;exécute.</span>
               </h1>
               <p className="anim-fade-up anim-delay-2 mx-auto mt-6 max-w-xl text-base leading-8 text-[var(--g3-text-secondary)] sm:text-lg">
-                Un seul agent IA pour transformer une idée en projet qui tourne :
-                il crée, exécute le travail et continue de grandir pour vous.
+                Gen3ia pense avec son PROPRE système neuronal — un cerveau à
+                spikes qui apprend de vos données et exécute vos projets.
+                100 % local, aucune IA externe.
               </p>
 
               {/* Boîte de prompt — verre, frontière lumineuse */}
@@ -263,6 +264,9 @@ export default function HomePage() {
               <p className="anim-fade-up anim-delay-5 mt-6 text-xs text-[var(--g3-faint)]">
                 Web (Android &amp; iOS — installable depuis le navigateur) · Desktop Windows &amp; Linux
               </p>
+
+              {/* V6 — état RÉEL du moteur interne, en direct */}
+              <NeuralLiveStrip />
             </div>
           </div>
         </section>
@@ -726,7 +730,7 @@ export default function HomePage() {
                     <Link href={link.href} className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">{link.label}</Link>
                   </li>
                 ))}
-                <li><Link href="/studio/interface-lab" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Atelier d&apos;Interfaces</Link></li>
+                <li><Link href="/neural" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Système Neuronal</Link></li>
                 <li><Link href="/workspace/schedules" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Planifications</Link></li>
                 <li><Link href="/faq" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">FAQ</Link></li>
               </ul>

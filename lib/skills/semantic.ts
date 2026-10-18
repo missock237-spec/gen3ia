@@ -1,78 +1,31 @@
-import { InferenceClient } from "@huggingface/inference";
+import {
+  embedderLexical,
+  similariteCosinus,
+} from "@/lib/neural/encoding/lexical-embedding";
 
-const hf = process.env.HF_TOKEN
-  ? new InferenceClient(process.env.HF_TOKEN)
-  : null;
-
-function cosineSimilarity(
-  a: number[],
-  b: number[],
-): number {
-  if (a.length !== b.length) {
-    return 0;
-  }
-
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-
-  if (normA === 0 || normB === 0) {
-    return 0;
-  }
-
-  return (
-    dot /
-    (Math.sqrt(normA) * Math.sqrt(normB))
-  );
-}
+/**
+ * RECHERCHE SÉMANTIQUE DE COMPÉTENCES — encodeur LEXICAL LOCAL.
+ *
+ * Les embeddings distants (Hugging Face Inference — IA externe) ont été
+ * SUPPRIMÉS du projet sur demande explicite de l'utilisateur. La
+ * sélection sémantique de compétences repose désormais sur l'encodeur
+ * lexical local Gen3 (lib/neural/encoding/lexical-embedding.ts) —
+ * déterministe, instantané, sans clé ni appel réseau.
+ *
+ * Contrat inchangé pour lib/skills/selector.ts.
+ */
 
 export async function createEmbedding(
   text: string,
 ): Promise<number[]> {
-  if (!hf) {
-    throw new Error(
-      "HF_TOKEN is required for semantic skill search.",
-    );
-  }
-
-  const model =
-    process.env.HF_EMBEDDING_MODEL;
-
-  if (!model) {
-    throw new Error(
-      "HF_EMBEDDING_MODEL is not configured.",
-    );
-  }
-
-  const result = await hf.featureExtraction({
-    model,
-    inputs: text,
-  });
-
-  if (!Array.isArray(result)) {
-    throw new Error(
-      "Invalid embedding response from Hugging Face.",
-    );
-  }
-
-  const vector = Array.isArray(result[0])
-    ? result[0]
-    : result;
-
-  return vector as number[];
+  return embedderLexical(text);
 }
 
 export function similarity(
   a: number[],
   b: number[],
 ): number {
-  return cosineSimilarity(a, b);
+  return similariteCosinus(a, b);
 }
 
 export function buildSkillSearchText(skill: {

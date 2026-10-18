@@ -10,10 +10,8 @@ import { reviewVisibleAnswer } from "@/lib/ai/self-review";
 import { assembleMessages } from "@/lib/ai/context-window";
 import {
   enhanceImagePrompt,
-  generateImageWithAgnes,
-  ImageGenerationError,
   looksLikeImageRequest,
-} from "@/lib/ai/image-generation";
+} from "@/lib/ai/image-intent";
 import { appendMessage, createConversation, getConversation, listMessages } from "@/lib/chat/repository";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { errorStatus } from "@/lib/security/http-errors";
@@ -33,7 +31,7 @@ const Body = z.object({
   // « huggingface » retiré de l'enum (audit médias 103-c) : provider mort sans
   // adaptateur — une entrée client avec cette valeur est désormais rejetée à
   // la validation (400) au lieu d'échouer côté résolution de provider.
-  provider: z.enum(["groq","openrouter","anthropic","openai","glm","agnes"]).optional(),
+  provider: z.literal("gen3-snn").optional(),
   model: z.string().trim().max(200).optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().positive().max(20000).optional(),
@@ -100,26 +98,26 @@ async function handleChatMessage(
     const history = await listMessages(userId, conversationId, 100, { order: "recent" });
     await appendMessage({ conversationId, userId, role: "user", content: body.message });
 
-    // Génération d'images réelle (Agnes AI) : une demande explicite d'image
-    // est servie directement — pas de réponse textuelle en guise d'image.
+    // Génération d'images NEURONALE LOCALE : les imageurs externes (Agnes)
+    // ont été supprimés du projet — la composition est calculée par le
+    // moteur Gen3 depuis l'état réel du cerveau (tarif nul).
     if (imageRequest) {
-      // Task 153 — le coût externe de l'image est compté dans l'exécution.
-      recordExternalCostForBilling({ eur: imageExternalCostEur(), label: "image-generation" });
       try {
-        const image = await generateImageWithAgnes({ prompt: enhanceImagePrompt(body.message) });
-        const reply = `Voici l'image que j'ai générée pour vous.`;
+        const { genererVisuelNeuralEtPersister } = await import("@/lib/neural/media-service");
+        const image = await genererVisuelNeuralEtPersister({ userId, prompt: enhanceImagePrompt(body.message) });
+        const reply = `Voici la composition neuronale que j'ai générée pour vous.`;
         const assistant = await appendMessage({
           conversationId, userId, role: "assistant", content: reply,
-          imageUrl: image.imageUrl, provider: "agnes", model: image.model,
+          imageUrl: image.url, provider: "gen3-snn", model: "gen3-snn-v1",
         });
-        return { status: 200, payload: { conversationId, message: assistant, response: { provider: "agnes", model: image.model, latencyMs: image.latencyMs, finishReason: "stop" } } };
+        return { status: 200, payload: { conversationId, message: assistant, response: { provider: "gen3-snn", model: "gen3-snn-v1", latencyMs: 0, finishReason: "stop" } } };
       } catch (error) {
         // Panne image : on ne masque pas l'échec derrière une réponse textuelle.
-        const message = error instanceof ImageGenerationError
+        const message = error instanceof Error
           ? error.message
           : "La génération d'image a échoué. Réessayez dans un instant.";
         const assistant = await appendMessage({ conversationId, userId, role: "assistant", content: message });
-        return { status: 200, payload: { conversationId, message: assistant, response: { provider: "agnes", model: "image", finishReason: "error" } } };
+        return { status: 200, payload: { conversationId, message: assistant, response: { provider: "gen3-snn", model: "gen3-snn-v1", finishReason: "error" } } };
       }
     }
 

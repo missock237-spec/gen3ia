@@ -268,7 +268,7 @@ export default function EnglishHomePage() {
           </Link>
           <nav aria-label="English footer" className="flex flex-wrap items-center justify-center gap-4 text-sm">
             <Link href="/studio" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Studio</Link>
-            <Link href="/live" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Live agent</Link>
+            <Link href="/neural" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Neural system</Link>
             <Link href="/marketplace" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Marketplace</Link>
             <Link href="/privacy" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Privacy</Link>
             <Link href="/faq" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">FAQ (FR)</Link>

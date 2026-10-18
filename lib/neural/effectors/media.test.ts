@@ -11,7 +11,7 @@ import { InterfaceVocaleTelephonique } from "./voice-phone";
  * EFFECTEURS MÉDIA & TÉLÉPHONIE — tests du gating honnête :
  *  - résonance < 0.80 → AUCUNE action ;
  *  - résonance 1.0 → action déclenchée avec le statut honnête
- *    MOTEUR_EXTERNE_DESACTIVE (le moteur de rendu externe est réellement
+ *    MOTEUR_LOCAL_INDISPONIBLE (aucun moteur local n'est injecté : l'effecteur le déclare
  *    déconnecté en mode neuronal — aucune simulation de fichier/score) ;
  *  - les outils média sont bien enregistrés dans le Tool OS et retournent le
  *    même statut honnête en exécution directe.
@@ -45,7 +45,7 @@ describe("Effecteurs média — gating par résonance", () => {
     expect(vocale.evaluerEtExecuter([])).toEqual([]);
   });
 
-  it("audio : résonance 1.0 → action honnête MOTEUR_EXTERNE_DESACTIVE", () => {
+  it("audio : résonance 1.0 → action honnête MOTEUR_LOCAL_INDISPONIBLE", () => {
     const { espace, toolOs, audio } = monterCorps();
 
     const actions = audio.evaluerEtExecuter([42, 43], {
@@ -55,10 +55,10 @@ describe("Effecteurs média — gating par résonance", () => {
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe("GENERER_AUDIO");
-    expect(actions[0].status).toBe("MOTEUR_EXTERNE_DESACTIVE");
+    expect(actions[0].status).toBe("MOTEUR_LOCAL_INDISPONIBLE");
     // Le résultat interne déclare honnêtement l'absence du moteur de rendu.
     const resultat = actions[0]["resultat"] as Record<string, unknown>;
-    expect(resultat["statut_rendu"]).toBe("MOTEUR_EXTERNE_DESACTIVE");
+    expect(resultat["statut_rendu"]).toBe("MOTEUR_LOCAL_INDISPONIBLE");
     expect(resultat["prompt"]).toBe("ambiance de forêt");
     expect(resultat["duree"]).toBe(7);
     // Aucun fichier fabriqué, aucun score de fidélité inventé.
@@ -73,7 +73,7 @@ describe("Effecteurs média — gating par résonance", () => {
     expect(espace.outputPools.get("GENERER_AUDIO")).toEqual([42, 43]);
   });
 
-  it("visuel : résonance 1.0 → action honnête MOTEUR_EXTERNE_DESACTIVE", () => {
+  it("visuel : résonance 1.0 → action honnête MOTEUR_LOCAL_INDISPONIBLE", () => {
     const { espace, visuel } = monterCorps();
 
     const actions = visuel.evaluerEtExecuter([46, 47], {
@@ -82,15 +82,15 @@ describe("Effecteurs média — gating par résonance", () => {
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe("GENERER_IMAGE");
-    expect(actions[0].status).toBe("MOTEUR_EXTERNE_DESACTIVE");
+    expect(actions[0].status).toBe("MOTEUR_LOCAL_INDISPONIBLE");
     const resultat = actions[0]["resultat"] as Record<string, unknown>;
-    expect(resultat["statut_rendu"]).toBe("MOTEUR_EXTERNE_DESACTIVE");
+    expect(resultat["statut_rendu"]).toBe("MOTEUR_LOCAL_INDISPONIBLE");
     expect(resultat["prompt"]).toBe("montagne au crépuscule");
     expect(resultat["chemin_fichier"]).toBeUndefined();
     expect(espace.outputPools.get("GENERER_IMAGE")).toEqual([46, 47]);
   });
 
-  it("vidéo : résonance 1.0 → action honnête MOTEUR_EXTERNE_DESACTIVE", () => {
+  it("vidéo : résonance 1.0 → action honnête MOTEUR_LOCAL_INDISPONIBLE", () => {
     const { video } = monterCorps();
 
     const actions = video.evaluerEtExecuter([44, 45], {
@@ -101,7 +101,7 @@ describe("Effecteurs média — gating par résonance", () => {
 
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe("GENERER_VIDEO");
-    expect(actions[0].status).toBe("MOTEUR_EXTERNE_DESACTIVE");
+    expect(actions[0].status).toBe("MOTEUR_LOCAL_INDISPONIBLE");
     const resultat = actions[0]["resultat"] as Record<string, unknown>;
     expect(resultat["duree"]).toBe(12);
     expect(resultat["fps"]).toBe(30);
@@ -119,7 +119,7 @@ describe("Effecteurs média — gating par résonance", () => {
       (resultatAudio[0]["resultat"] as Record<string, unknown>)[
         "statut_rendu"
       ],
-    ).toBe("MOTEUR_EXTERNE_DESACTIVE");
+    ).toBe("MOTEUR_LOCAL_INDISPONIBLE");
 
     const resultatImage = toolOs.executerEnSandbox(
       "generer_image_visuelle",
@@ -129,7 +129,7 @@ describe("Effecteurs média — gating par résonance", () => {
       (resultatImage[0]["resultat"] as Record<string, unknown>)[
         "statut_rendu"
       ],
-    ).toBe("MOTEUR_EXTERNE_DESACTIVE");
+    ).toBe("MOTEUR_LOCAL_INDISPONIBLE");
 
     const resultatVideo = toolOs.executerEnSandbox("generer_sequence_video", {
       prompt: "voyage",
@@ -138,7 +138,7 @@ describe("Effecteurs média — gating par résonance", () => {
       (resultatVideo[0]["resultat"] as Record<string, unknown>)[
         "statut_rendu"
       ],
-    ).toBe("MOTEUR_EXTERNE_DESACTIVE");
+    ).toBe("MOTEUR_LOCAL_INDISPONIBLE");
   });
 });
 

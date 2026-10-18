@@ -135,10 +135,10 @@ async function executeNode(ctx: ExecuteContext, node: WorkflowNode): Promise<unk
         executionId: `wf_${ctx.state.runId}`,
         request: {
           task: "agent",
-          // Union alignée sur AIProvider (audit médias 103-c : « huggingface »
-          // retiré — provider mort sans adaptateur ; un ancien doc qui le
-          // stockerait tomberait désormais dans le routage automatique).
-          ...(provider ? { provider: provider as "groq" | "openrouter" | "anthropic" | "openai" | "glm" | "agnes" } : {}),
+          // Moteur unique : neural Gen3 (les IA externes ont été supprimées
+          // du projet — un ancien doc qui stockerait un provider externe
+          // tombe dans le routage automatique vers le moteur neuronal).
+          ...(provider === "gen3-snn" ? { provider: provider as "gen3-snn" } : {}),
           ...(model ? { model } : {}),
           ...(typeof temperature === "number" ? { temperature } : {}),
           messages: [

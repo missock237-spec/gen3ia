@@ -1,8 +1,3 @@
-import {
-  MODEL_CAPABILITIES,
-  PROVIDERS,
-} from "./config";
-
 import type {
   AIProvider,
   AIMessage,
@@ -11,35 +6,29 @@ import type {
 } from "./models";
 
 import { validateImageAttachments } from "./content-filter";
-import { isProviderAvailable, recordProviderFailure, recordProviderSuccess } from "./resilience";
 
-// Task 153 — paiement par exécution : chaque réponse réussie est comptée dans
-// l'exécution facturée en cours (AsyncLocalStorage) s'il y en a une. Fail-soft.
+// Comptage du coût réel dans l'exécution facturée en cours (tarif nul —
+// le moteur interne ne consomme aucun service externe).
 import { recordLLMCallForBilling } from "@/lib/billing/execution-meter";
 
-import {
-  callProvider,
-  callProviderStream,
-} from "./providers";
-
-import { isNeuralEngineActive } from "./engine-mode";
 import { getNeuralRuntime } from "../neural/runtime";
 
 /**
- * MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : délégation directe au moteur
- * neuronal Gen3 (SNN interne, lib/neural/) AVANT toute sélection de
- * fournisseur externe — toutes les IA externes sont désactivées pendant
- * la phase de test du système neuronal de l'utilisateur.
+ * ROUTEUR IA — MOTEUR NEURONAL EXCLUSIF.
+ *
+ * Les IA externes (LLM OpenAI/Anthropic/Groq/OpenRouter/GLM/Agnes) ont
+ * été supprimées du projet sur demande explicite de l'utilisateur :
+ * toutes les capacités IA passent par le SYSTÈME NEURONAL Gen3
+ * (lib/neural/ — SNN à spikes, plasticité hebbienne, corps sémantique).
+ *
+ * `generate` / `generateStream` conservent leur signature historique :
+ * chaque intégration existante (chat, agents, planificateurs, critiques,
+ * entraînement…) continue de fonctionner, dorénavant propulsée par le
+ * moteur interne.
  */
-function delegateAuMoteurNeuralSiActif(): boolean {
-  return isNeuralEngineActive();
-}
 
-/**
- * Garde vision (Task 42, axe 4) : toute image jointe est validée (nombre,
- * taille réelle après base64, format, URLs https) AVANT la sélection du
- * fournisseur — rejet immédiat et uniforme pour tous les providers.
- */
+/** Garde vision : toute image jointe est validée (nombre, taille réelle
+ *  après base64, format, URLs https) AVANT l'exécution — rejet uniforme. */
 function assertImagesAllowed(request: AIRequest): void {
   const images = request.messages.flatMap((message) => message.images ?? []);
   if (images.length === 0) return;
@@ -59,140 +48,35 @@ export interface RoutingDecision {
   score: number;
 }
 
-function calculateScore(
-  request: AIRequest,
-  provider: AIProvider,
-  model: string,
-): number {
-  const capability =
-    MODEL_CAPABILITIES.find(
-      (item) =>
-        item.provider === provider &&
-        item.model === model,
-    );
+/** Modèle logique du moteur neuronal (lib/neural/engine.ts). */
+const NEURAL_MODEL = "gen3-snn-v1";
 
-  if (!capability) {
-    return -Infinity;
-  }
-
-  if (
-    !capability.tasks.includes(
-      request.task,
-    )
-  ) {
-    return -Infinity;
-  }
-
-  if (
-    request.requiresTools &&
-    !capability.toolCalling
-  ) {
-    return -Infinity;
-  }
-
-  if (
-    request.requiresVision &&
-    !capability.vision
-  ) {
-    return -Infinity;
-  }
-
-  if (
-    request.requiresStructuredOutput &&
-    !capability.structuredOutput
-  ) {
-    return -Infinity;
-  }
-
-  let score =
-    capability.priority;
-
-  if (
-    request.provider ===
-    provider
-  ) {
-    score += 100;
-  }
-
-  if (
-    request.preferFree &&
-    provider === "openrouter"
-  ) {
-    score += 40;
-  }
-
-  return score;
-}
-
+/**
+ * Décision de routage — un seul moteur, une seule décision. Conservée
+ * pour les intégrations historiques (billing/execution-gate,
+ * worstCaseReserve) : la réponse est toujours la même et honnête.
+ */
 export function selectProvider(
-  request: AIRequest,
+  _request: AIRequest,
 ): RoutingDecision[] {
-  const decisions:
-    RoutingDecision[] = [];
-
-  for (const providerConfig of PROVIDERS) {
-    if (!providerConfig.enabled) {
-      continue;
-    }
-
-    const model =
-      request.provider ===
-        providerConfig.provider &&
-      request.model
-        ? request.model
-        : providerConfig.defaultModel;
-
-    if (
-      !model ||
-      model === "auto"
-    ) {
-      continue;
-    }
-
-    const score =
-      calculateScore(
-        request,
-        providerConfig.provider,
-        model,
-      );
-
-    if (
-      score === -Infinity
-    ) {
-      continue;
-    }
-
-    decisions.push({
-      provider:
-        providerConfig.provider,
-
-      model,
-
-      score,
-
-      reason:
-        `${providerConfig.provider} selected for ${request.task}`,
-    });
-  }
-
-  return decisions.sort(
-    (a, b) =>
-      b.score - a.score,
-  );
+  return [
+    {
+      provider: "gen3-snn",
+      model: NEURAL_MODEL,
+      reason: "Moteur neuronal Gen3 (SNN interne) — unique moteur du projet",
+      score: 100,
+    },
+  ];
 }
 
 /**
- * Picks the best available model for a request.
- * Returns the highest-scored routing decision, or null when no
- * configured provider can serve the task.
+ * Picks the best available model for a request — toujours le moteur
+ * neuronal Gen3.
  */
 export function selectModel(
   request: Omit<AIRequest, "messages"> & { messages?: AIMessage[] },
 ): RoutingDecision | null {
-  const decisions =
-    selectProvider({ ...request, messages: request.messages ?? [] });
-
-  return decisions[0] ?? null;
+  return selectProvider({ ...request, messages: request.messages ?? [] })[0] ?? null;
 }
 
 export async function generate(
@@ -200,172 +84,33 @@ export async function generate(
 ): Promise<AIResponse> {
   assertImagesAllowed(request);
 
-  // MODE NEURONAL : le moteur Gen3 (SNN) remplace les fournisseurs externes.
-  if (delegateAuMoteurNeuralSiActif()) {
-    return getNeuralRuntime().engine.generate(request);
-  }
-
-  const candidates =
-    selectProvider(request);
-
-  if (candidates.length === 0) {
-    throw new Error(
-      `No configured provider can execute task "${request.task}".`,
-    );
-  }
-
-  const failures: Array<{
-    provider: AIProvider;
-    error: string;
-  }> = [];
-
-  for (const candidate of candidates) {
-    // Coupe-circuit (Task 42, axe 8) : un fournisseur en incident rafale
-    // est sauté (latence préservée). Si TOUS sont ouverts, le meilleur est
-    // tenté quand même — mieux vaut un essai qu'une erreur immédiate.
-    if (!isProviderAvailable(candidate.provider) && failures.length < candidates.length - 1) {
-      failures.push({ provider: candidate.provider, error: "circuit ouvert (incident récent)" });
-      continue;
-    }
-    try {
-      const response = await callProvider(
-        candidate.provider,
-        {
-          ...request,
-
-          provider:
-            candidate.provider,
-
-          model:
-            candidate.model,
-        },
-      );
-      recordProviderSuccess(candidate.provider);
-      // Task 153 — comptage du coût réel dans l'exécution facturée en cours.
-      recordLLMCallForBilling(request, response);
-      return response;
-    } catch (error) {
-      recordProviderFailure(candidate.provider);
-      failures.push({
-        provider:
-          candidate.provider,
-
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unknown provider error.",
-      });
-    }
-  }
-
-  throw new Error(
-    `All AI providers failed: ${JSON.stringify(
-      failures,
-    )}`,
-  );
+  // Moteur neuronal Gen3 — unique moteur du projet.
+  const response = await getNeuralRuntime().engine.generate(request);
+  recordLLMCallForBilling(request, response);
+  return response;
 }
 
 /**
- * Variante en flux de `generate` : mêmes règles de sélection de fournisseur,
- * mais chaque fragment de texte est transmis à `onDelta` au fil de l'arrivée
- * (token streaming réel côté fournisseur). En cas d'échec d'un fournisseur,
- * on réessaie avec le suivant — les fragments déjà émis ne sont PAS
- * retransmis : `onDelta` ne doit être branché qu'à partir du premier
- * fournisseur qui accepte le flux (signalé via `onProviderSelected`).
+ * Variante en flux de `generate` : les fragments réels du moteur neuronal
+ * (progression cycle par cycle, puis texte décodé par segments) sont
+ * transmis à `onDelta` au fil de l'exécution ; `onProviderSelected` est
+ * appelé avant le premier delta — contrat identique au routeur historique.
  */
 export async function generateStream(
   request: AIRequest,
   handlers: {
     onDelta: (delta: string) => void | Promise<void>;
-    /** Appelé avant le premier delta du fournisseur retenu. */
+    /** Appelé avant le premier delta du moteur retenu. */
     onProviderSelected?: (provider: AIProvider, model: string) => void | Promise<void>;
   },
 ): Promise<AIResponse> {
   assertImagesAllowed(request);
 
-  // MODE NEURONAL : le moteur Gen3 (SNN) remplace les fournisseurs externes
-  // (les fragments de progression cycle par cycle sont émis via onDelta).
-  if (delegateAuMoteurNeuralSiActif()) {
-    return getNeuralRuntime().engine.generateStream(request, handlers);
-  }
-
-  const candidates =
-    selectProvider(request);
-
-  if (candidates.length === 0) {
-    throw new Error(
-      `No configured provider can execute task "${request.task}".`,
-    );
-  }
-
-  const failures: Array<{
-    provider: AIProvider;
-    error: string;
-  }> = [];
-
-  for (const candidate of candidates) {
-    // Coupe-circuit (Task 45) : même résilience que generate — un fournisseur
-    // en incident rafale est sauté sur le chemin streamé aussi. Si TOUS sont
-    // ouverts, le meilleur est tenté quand même.
-    if (!isProviderAvailable(candidate.provider) && failures.length < candidates.length - 1) {
-      failures.push({ provider: candidate.provider, error: "circuit ouvert (incident récent)" });
-      continue;
-    }
-    let providerAccepted = false;
-    try {
-      const response = await callProviderStream(
-        candidate.provider,
-        {
-          ...request,
-
-          provider:
-            candidate.provider,
-
-          model:
-            candidate.model,
-        },
-        (delta) => {
-          if (!providerAccepted) {
-            providerAccepted = true;
-            const selected = handlers.onProviderSelected?.(candidate.provider, candidate.model);
-            // Le premier fragment suit le même chemin que les autres :
-            // onProviderSelected est un signal, jamais un remplacement.
-            return Promise.resolve(selected).then(() => handlers.onDelta(delta));
-          }
-          return handlers.onDelta(delta);
-        },
-      );
-      // Le premier fragment passe par onProviderSelected : transmettons-le
-      // aussi à onDelta pour que le texte émis soit complet.
-      recordProviderSuccess(candidate.provider);
-      // Task 153 — même comptage du coût réel sur le chemin en flux.
-      recordLLMCallForBilling(request, response);
-      return response;
-    } catch (error) {
-      recordProviderFailure(candidate.provider);
-      // Aucun fragment n'a été émis pour ce fournisseur : on peut tenter le
-      // suivant sans risque de dupliquer du texte côté client.
-      if (!providerAccepted) {
-        failures.push({
-          provider:
-            candidate.provider,
-
-          error:
-            error instanceof Error
-              ? error.message
-              : "Unknown provider error.",
-        });
-        continue;
-      }
-      // Le flux a commencé mais a échoué en cours de route : on ne retente
-      // pas (texte déjà partiellement livré) — l'appelant gère le repli.
-      throw error;
-    }
-  }
-
-  throw new Error(
-    `All AI providers failed (stream): ${JSON.stringify(
-      failures,
-    )}`,
-  );
+  // Moteur neuronal Gen3 — unique moteur du projet.
+  const response = await getNeuralRuntime().engine.generateStream(request, {
+    onDelta: handlers.onDelta,
+    onProviderSelected: handlers.onProviderSelected,
+  });
+  recordLLMCallForBilling(request, response);
+  return response;
 }

@@ -14,6 +14,7 @@ import {
 import { SystemeExploitationOutils } from "./effectors/tool-os";
 import { MoteurSelectionCompetencesOutils } from "./effectors/skills-engine";
 import { EffecteurGenerationAudio } from "./effectors/audio";
+import type { GenerateurLocalMedia } from "./effectors/audio";
 import { EffecteurGenerationVisuelle } from "./effectors/visual";
 import { EffecteurGenerationVideo } from "./effectors/video";
 import { InterfaceVocaleTelephonique } from "./effectors/voice-phone";
@@ -28,19 +29,31 @@ import {
   importerRegistreTokens,
   reinitialiserRegistreTokens,
 } from "./encoding/text-encoder";
+import { capturerSnapshot } from "./generation/snapshot";
+import { genererVisuelNeural, visuelVersDataUri } from "./generation/visual-engine";
+import { genererAudioNeural, audioVersDataUri } from "./generation/audio-engine";
+import { genererVideoNeural, videoVersDataUri } from "./generation/video-engine";
+import { CentralSupervisor, HippocampusMemory } from "./memory/hippocampus";
 
 /**
  * RUNTIME NEURONAL — singleton caché sur globalThis (résiste au HMR de
  * Next.js dev : le cerveau n'est PAS reconstruit à chaque rechargement de
  * module).
  *
- * Assemblage complet du système Gen3 en mode neuronal :
+ * Assemblage complet du système Gen3 :
  *  - réseau seedé (42 par défaut), espace résonant, générateur de veille ;
  *  - corps sémantique : Tool OS, moteur de compétences, effecteurs audio /
- *    visuel / vidéo / vocal-téléphonique, tous enregistrés au noyau ;
+ *    visuel / vidéo / vocal-téléphonique, tous enregistrés au noyau —
+ *    les effecteurs média exécutent les MOTEURS LOCAUX RÉELS
+ *    (lib/neural/generation/ — SVG, WAV, SVG animé calculés depuis
+ *    l'état APPRIS du cerveau, aucune IA externe) ;
+ *  - hippocampe (mémoire court terme) + superviseur central (boucle
+ *    cognitive Capteurs → Hippocampe → Cortex → Action → Mémoire),
+ *    portage du système de l'utilisateur (Inportateur.pdf) ;
  *  - pools d'entrée « utilisateur_in » et de sortie « INTENTION_GENERALE » ;
- *  - VRAIS outils fonctionnels dans le Tool OS (etat_reseau, lister_competences,
- *    rapport_sante) — données réelles du réseau et du noyau ;
+ *  - VRAIS outils fonctionnels dans le Tool OS (etat_reseau,
+ *    lister_competences, rapport_sante, generer_visuel_neural,
+ *    generer_signal_audio, generer_animation) — données réelles ;
  *  - au démarrage : tentative de chargement du cerveau persisté
  *    (var/neural/brain-v1.json) → importState si présent.
  */
@@ -57,11 +70,11 @@ export interface NeuralRuntime {
   toolOs: SystemeExploitationOutils;
   /** Moteur de sélection de compétences (catalogue réel). */
   moteurCompetences: MoteurSelectionCompetencesOutils;
-  /** Effecteur audio (moteur externe déconnecté — honnête). */
+  /** Effecteur audio (moteur local réel — synthèse WAV). */
   effecteurAudio: EffecteurGenerationAudio;
-  /** Effecteur visuel (moteur externe déconnecté — honnête). */
+  /** Effecteur visuel (moteur local réel — composition SVG). */
   effecteurVisuel: EffecteurGenerationVisuelle;
-  /** Effecteur vidéo (moteur externe déconnecté — honnête). */
+  /** Effecteur vidéo (moteur local réel — animation SVG SMIL). */
   effecteurVideo: EffecteurGenerationVideo;
   /** Interface vocale & téléphonique (moteurs externes déconnectés — honnête). */
   interfaceVocale: InterfaceVocaleTelephonique;
@@ -69,6 +82,10 @@ export interface NeuralRuntime {
   noyau: NoyauCentralGen3;
   /** Moteur adapté au contrat IA du projet (generate/generateStream). */
   engine: NeuralEngine;
+  /** Hippocampe — mémoire de travail à court terme (fenêtre de discussion). */
+  hippocampe: HippocampusMemory;
+  /** Superviseur central — boucle cognitive complète. */
+  superviseur: CentralSupervisor;
   /** Historique des rapports d'entraînement persistés (données réelles). */
   historiqueEntrainement: TrainingReport[];
   /** Date ISO de création du runtime. */
@@ -102,15 +119,82 @@ export function getNeuralRuntime(): NeuralRuntime {
     createRng(SEED_RUNTIME + 1),
   );
 
-  // 2. Corps sémantique (chaque effecteur enregistre ses pools de sortie).
+  // 2. Moteurs locaux RÉELS des effecteurs média : le contenu est calculé
+  //    depuis l'état APPRIS du cerveau (poids synaptiques, histogramme) —
+  //    déterministe, aucune IA externe, aucun simulacre.
+  const moteurVisuelLocal: GenerateurLocalMedia = (args) => {
+    const prompt =
+      typeof args["prompt"] === "string" && args["prompt"].length > 0
+        ? args["prompt"]
+        : "Fractale neuronale abstraite";
+    const ratio =
+      typeof args["ratio"] === "string" ? args["ratio"] : args["resolution"] ?? "1:1";
+    const snapshot = capturerSnapshot(reseau, prompt);
+    const rendu = genererVisuelNeural(prompt, String(ratio), snapshot);
+    return {
+      statut_rendu: "TERMINE",
+      mime: "image/svg+xml",
+      data_uri: visuelVersDataUri(rendu.svg),
+      resolution: `${rendu.width}x${rendu.height}`,
+      meta: rendu.meta,
+      prompt,
+    };
+  };
+
+  const moteurAudioLocal: GenerateurLocalMedia = (args) => {
+    const prompt =
+      typeof args["prompt"] === "string" && args["prompt"].length > 0
+        ? args["prompt"]
+        : "Signal d'harmonique pure et pulsation fluide";
+    const duree =
+      typeof args["duree_secondes"] === "number" ? args["duree_secondes"] : 3;
+    const frequence =
+      typeof args["frequence_echantillonnage"] === "number"
+        ? args["frequence_echantillonnage"]
+        : 22050;
+    const snapshot = capturerSnapshot(reseau, prompt);
+    const rendu = genererAudioNeural(prompt, duree, frequence, snapshot);
+    return {
+      statut_rendu: "TERMINE",
+      mime: "audio/wav",
+      data_uri: audioVersDataUri(rendu.wav),
+      duree: rendu.dureeSecondes,
+      frequence: rendu.sampleRate,
+      octets: rendu.wav.length,
+      meta: rendu.meta,
+      prompt,
+    };
+  };
+
+  const moteurVideoLocal: GenerateurLocalMedia = (args) => {
+    const prompt =
+      typeof args["prompt"] === "string" && args["prompt"].length > 0
+        ? args["prompt"]
+        : "Transition fluide de structures neuronales";
+    const duree =
+      typeof args["duree_secondes"] === "number" ? args["duree_secondes"] : 4;
+    const snapshot = capturerSnapshot(reseau, prompt);
+    const rendu = genererVideoNeural(prompt, duree, snapshot);
+    return {
+      statut_rendu: "TERMINE",
+      mime: "image/svg+xml",
+      data_uri: videoVersDataUri(rendu.svg),
+      duree: rendu.dureeSecondes,
+      resolution: `${rendu.width}x${rendu.height}`,
+      meta: rendu.meta,
+      prompt,
+    };
+  };
+
+  // 3. Corps sémantique (chaque effecteur enregistre ses pools de sortie).
   const toolOs = new SystemeExploitationOutils(espace);
   const moteurCompetences = new MoteurSelectionCompetencesOutils(espace);
-  const effecteurAudio = new EffecteurGenerationAudio(espace, toolOs);
-  const effecteurVisuel = new EffecteurGenerationVisuelle(espace, toolOs);
-  const effecteurVideo = new EffecteurGenerationVideo(espace, toolOs);
+  const effecteurAudio = new EffecteurGenerationAudio(espace, toolOs, moteurAudioLocal);
+  const effecteurVisuel = new EffecteurGenerationVisuelle(espace, toolOs, moteurVisuelLocal);
+  const effecteurVideo = new EffecteurGenerationVideo(espace, toolOs, moteurVideoLocal);
   const interfaceVocale = new InterfaceVocaleTelephonique(espace);
 
-  // 3. Noyau central avec tous les effecteurs enregistrés.
+  // 4. Noyau central avec tous les effecteurs enregistrés.
   const noyau = new NoyauCentralGen3(reseau, espace, veille);
   noyau.enregistrerEffecteur(toolOs);
   noyau.enregistrerEffecteur(moteurCompetences);
@@ -119,12 +203,13 @@ export function getNeuralRuntime(): NeuralRuntime {
   noyau.enregistrerEffecteur(effecteurVideo);
   noyau.enregistrerEffecteur(interfaceVocale);
 
-  // 4. Pools d'entrée/sortie du runtime (les pools média sont enregistrés
+  // 5. Pools d'entrée/sortie du runtime (les pools média sont enregistrés
   //    par leurs effecteurs respectifs — cf. constructeurs ci-dessus).
   espace.registerInputPool(CANAL_UTILISATEUR_IN, [...POOL_UTILISATEUR_IN]);
   espace.registerOutputPool(CANAL_INTENTION_GENERALE, [...POOL_INTENTION_GENERALE]);
 
-  // 5. VRAIS outils fonctionnels du Tool OS : données réelles du réseau.
+  // 6. VRAIS outils fonctionnels du Tool OS : données réelles du réseau +
+  //    génération média locale réelle (contenu complet dans la réponse).
   toolOs.enregistrerOutil(
     "etat_reseau",
     () => ({
@@ -147,8 +232,27 @@ export function getNeuralRuntime(): NeuralRuntime {
     () => ({ ...noyau.metriquesSante }),
     "Rapport de santé du noyau central (cycles, énergie, homéostasie, mode).",
   );
+  toolOs.enregistrerOutil(
+    "generer_visuel_neural",
+    moteurVisuelLocal,
+    "Génère une composition visuelle SVG calculée depuis l'état réel du réseau (moteur local, aucune IA externe).",
+  );
+  toolOs.enregistrerOutil(
+    "generer_signal_audio_neural",
+    moteurAudioLocal,
+    "Synthétise un signal WAV calculé depuis l'histogramme réel des poids synaptiques (moteur local).",
+  );
+  toolOs.enregistrerOutil(
+    "generer_animation_neurale",
+    moteurVideoLocal,
+    "Génère une animation vectorielle SVG SMIL calculée depuis l'état réel du réseau (moteur local).",
+  );
 
-  // 6. Moteur IA adapté au contrat du projet.
+  // 7. Hippocampe + Superviseur central (boucle cognitive de l'utilisateur).
+  const hippocampe = new HippocampusMemory(10);
+  const superviseur = new CentralSupervisor(noyau, reseau, 5);
+
+  // 8. Moteur IA adapté au contrat du projet.
   const engine = new NeuralEngine(noyau, espace);
 
   const runtime: NeuralRuntime = {
@@ -163,11 +267,13 @@ export function getNeuralRuntime(): NeuralRuntime {
     interfaceVocale,
     noyau,
     engine,
+    hippocampe,
+    superviseur,
     historiqueEntrainement: [],
     creeLe: new Date().toISOString(),
   };
 
-  // 7. Démarrage : tente de restaurer le cerveau persisté (synchrone, unique).
+  // 9. Démarrage : tente de restaurer le cerveau persisté (synchrone, unique).
   const etat = loadBrainState();
   if (etat) {
     reseau.importState({ config: etat.config, synapses: etat.synapses });
@@ -196,7 +302,7 @@ export function resetBrain(): NeuralRuntime {
 
 /**
  * Sauvegarde le cerveau courant (réseau + registre lexical + historique
- * d'entraînement du runtime) — commodité serveur pour la Tâche 3.
+ * d'entraînement du runtime) — commodité serveur.
  */
 export async function sauvegarderCerveauRuntime(): Promise<boolean> {
   const runtime = getNeuralRuntime();

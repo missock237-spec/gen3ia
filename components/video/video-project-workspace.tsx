@@ -650,13 +650,7 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
         <button onClick={() => runAction("images-force", () => generateBatch(true))} disabled={busy === "images-force" || !project.script} className="rounded-xl border border-neutral-300 px-5 py-2 text-sm disabled:opacity-50">
           Régénérer (4 suivantes)
         </button>
-        <button onClick={() => runAction("clips", () => generateVideoBatch(false))} disabled={busy === "clips" || !project.script || images.length === 0} className="rounded-xl bg-[var(--g3-primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50" title="Anime chaque scène en VRAIE vidéo IA (Agnes Video 2.5) à partir de son image cohérente">
-          {busy === "clips" ? "Génération des clips…" : `Générer les clips vidéo IA (${Math.max(0, scenes.filter((s) => !videos.some((v) => v.sceneId === s.id)).length)})`}
-        </button>
-        <button onClick={() => runAction("clips-force", () => generateVideoBatch(true))} disabled={busy === "clips-force" || !project.script || images.length === 0} className="rounded-xl border border-neutral-300 px-5 py-2 text-sm disabled:opacity-50">
-          Régénérer les clips (4)
-        </button>
-        <span className="self-center text-xs text-neutral-500">Images : cohérence personnages · Clips IA : mouvement réel caméra. Le rendu utilise le clip de chaque scène quand il existe (repli animation image sinon).</span>
+        <span className="self-center text-xs text-neutral-500">Images : compositions neuronales locales (cohérence chromatique par entité). Le rendu anime chaque scène (mouvement interne Ken Burns) — les clips vidéo IA externes ont été retirés de la plateforme.</span>
       </div>
 
       {storyboard.length === 0 ? (

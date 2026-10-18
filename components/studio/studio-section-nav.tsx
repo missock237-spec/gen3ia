@@ -25,24 +25,10 @@ const STUDIO_SECTIONS = [
     ),
   },
   {
-    href: "/studio/calls",
-    label: "Appels",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M5 3.5h3l2 5-2.5 1.5a12 12 0 0 0 6.5 6.5L15.5 14l5 2v3a2 2 0 0 1-2.2 2A17.5 17.5 0 0 1 3.5 5.7 2 2 0 0 1 5 3.5Z" /></svg>
-    ),
-  },
-  {
     href: "/studio/console",
     label: "Console",
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 3 3-3 3M12 15h5" /></svg>
-    ),
-  },
-  {
-    href: "/studio/interface-lab",
-    label: "Atelier d'Interfaces",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6" /></svg>
     ),
   },
 ] as const;

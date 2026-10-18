@@ -40,20 +40,10 @@ import { recallAgentContext, recordExchange, shouldSummarize, summarizeConversat
 import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import { describeConnectorsForPrompt, describeConnectedConnectorsForPrompt, type ConnectedConnectorsContext } from "@/lib/integrations/mention";
 import { describeProjectServicesForPrompt, PROJECT_SERVICE_TOOLS } from "@/lib/agents/services/bridge";
-import {
-  generateImageWithAgnes,
-  ImageGenerationError,
-  isImageGenerationEnabled,
-  looksLikeImageRequest,
-} from "@/lib/ai/image-generation";
-import { extractVideoTitle, extractVoiceRequestText, looksLikeVideoRequest, looksLikeVoiceRequest, resolveVoiceRequestFromContext, type VoiceHistoryTurn } from "@/lib/ai/video-intent";
-import { speakDirectForUser } from "@/lib/ai/voice-speak-direct";
+import { looksLikeImageRequest, extractImagePrompt, detectImageRatio } from "@/lib/ai/image-intent";
+import { extractVideoTitle, looksLikeVideoRequest } from "@/lib/ai/video-intent";
 import { captureMissionEscrow, reserveMissionEscrow } from "@/lib/billing/mission-escrow";
-import { imagesForModel } from "@/lib/ai/vision-input";
-import type { AIImageAttachment } from "@/lib/ai/models";
-import { createR2DownloadUrl } from "@/lib/storage/r2";
 import type { AgentRecord } from "@/lib/agents/schema";
-import { buildImageGenerationSkill } from "@/lib/agents/skills/image-generation";
 
 const Body = z.object({
   message: z.string().trim().min(1).max(200_000),
@@ -185,39 +175,6 @@ function policyForAgentMission(
   };
 }
 
-/**
- * VISION : convertit les pièces jointes image du message en parts vision
- * réelles — une clé R2 est résolue en URL signée https (courte durée), une
- * URL https passe telle quelle. Purement additif : sans image exploitable,
- * undefined (rétrocompatible, aucun appel réseau inutile).
- */
-async function visionImagesFor(
-  attachments?: Array<{ path: string; name: string; sizeBytes?: number; contentType?: string }>,
-  legacy?: { path?: string; name?: string } | null,
-): Promise<AIImageAttachment[] | undefined> {
-  const candidates = [
-    ...(legacy?.path ? [{ path: legacy.path, name: legacy.name ?? legacy.path, contentType: (undefined as string | undefined) }] : []),
-    ...(attachments ?? []).map((item) => ({ path: item.path, name: item.name, contentType: item.contentType as string | undefined })),
-  ];
-  const resolved: MessageAttachmentLike[] = [];
-  for (const candidate of candidates) {
-    const isImage = (candidate.contentType ?? "").startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(candidate.name);
-    if (!isImage) continue;
-    let url: string | undefined;
-    if (/^https:\/\//i.test(candidate.path)) {
-      url = candidate.path;
-    } else {
-      try {
-        url = await createR2DownloadUrl(candidate.path, 600);
-      } catch {
-        continue; // résolution impossible : cette image est écartée
-      }
-    }
-    resolved.push({ filename: candidate.name, url, ...(candidate.contentType ? { contentType: candidate.contentType } : {}) });
-  }
-  return imagesForModel(resolved);
-}
-
 interface MessageAttachmentLike {
   filename: string;
   url?: string;
@@ -276,30 +233,30 @@ async function respondWithImage(params: {
   conversationId: string;
   message: string;
   agentId?: string;
-  /** Rapport de progression RÉEL (amélioration → génération → enregistrement). */
+  /** Rapport de progression RÉEL (brief → génération → enregistrement). */
   onProgress?: (event: { label: string; stage: string; percent: number }) => Promise<void> | void;
 }): Promise<{ reply: string; imageUrl: string | undefined; model: string | undefined }> {
   const { userId, conversationId, message, onProgress } = params;
-  if (!isImageGenerationEnabled()) {
-    const reply = "La génération d'images n'est pas encore disponible sur la plateforme. Réessayez bientôt.";
-    await appendMessage({ conversationId, userId, role: "assistant", content: reply });
-    return { reply, imageUrl: undefined, model: undefined };
-  }
   try {
-    await onProgress?.({ label: "Amélioration du prompt visuel…", stage: "enhance", percent: 15 });
-    const imageSkill = buildImageGenerationSkill(message);
-    await onProgress?.({ label: "Génération de l'image en cours…", stage: "generating", percent: 40 });
-    const image = await generateImageWithAgnes({ prompt: imageSkill.prompt, ratio: imageSkill.ratio });
+    await onProgress?.({ label: "Préparation du brief visuel…", stage: "enhance", percent: 15 });
+    const prompt = extractImagePrompt(message);
+    const ratio = detectImageRatio(message);
+    await onProgress?.({ label: "Génération neuronale en cours…", stage: "generating", percent: 40 });
+    // GÉNÉRATION NEURONALE LOCALE (imageurs externes supprimés du projet) :
+    // composition calculée depuis l'état réel du cerveau Gen3, archivage
+    // R2 permanent inclus.
+    const { genererVisuelNeuralEtPersister } = await import("@/lib/neural/media-service");
+    const image = await genererVisuelNeuralEtPersister({ userId, prompt, ratio });
     await onProgress?.({ label: "Finalisation de l'image…", stage: "persisting", percent: 85 });
     const reply = "";
     await appendMessage({
       conversationId, userId, role: "assistant", content: reply,
-      imageUrl: image.imageUrl, provider: "agnes", model: image.model,
+      imageUrl: image.url, provider: "gen3-snn", model: "gen3-snn-v1",
     });
     await onProgress?.({ label: "Image prête.", stage: "complete", percent: 100 });
-    return { reply, imageUrl: image.imageUrl, model: image.model };
+    return { reply, imageUrl: image.url, model: "gen3-snn-v1" };
   } catch (error) {
-    const reply = error instanceof ImageGenerationError
+    const reply = error instanceof Error
       ? error.message
       : "La génération d'image a échoué. Réessayez dans un instant.";
     await appendMessage({ conversationId, userId, role: "assistant", content: reply });
@@ -307,128 +264,6 @@ async function respondWithImage(params: {
   }
 }
 
-/**
- * VOIX-OFF DIRECTE (Task 114-a + Task 123) : synthèse ElevenLabs immédiate —
- * même mécanique d'archivage permanent R2 que l'outil voice.speak (clé
- * réutilisable par le canal signé de l'application), facturation TTS au réel.
- * LIVRAISON DIRECTE : PLUS AUCUN lien markdown (une URL signée expire) — un
- * artefact audio (storagePath = clé R2 permanente) est rattaché à la
- * conversation et le lecteur intégré du fil le résout à la demande ; la
- * réponse API porte le dataUri pour la lecture immédiate côté client. Retourne
- * spoken=false en échec de synthèse/facturation — l'appelant continue le flux
- * normal (jamais d'échec visible brut).
- */
-async function respondWithVoiceOff(params: {
-  userId: string;
-  conversationId: string;
-  text: string;
-}): Promise<{ spoken: boolean; reply?: string; audio?: { url?: string; storage: "r2" | "inline"; dataUri?: string } }> {
-  const executionId = `voice_direct_${params.conversationId}`;
-  const result = await speakDirectForUser({ userId: params.userId, text: params.text, executionId });
-  if (!result.ok) return { spoken: false };
-
-  // LIVRAISON DIRECTE (Task 123) : le message annonce l'audio PRÊT
-  // ci-dessous — jamais de lien markdown expirable. En repli inline, le data
-  // URI reste dans la réponse API (audio.dataUri) — la base64 n'est jamais
-  // déversée dans le fil (rendu markdown du chat limité à https).
-  const reply = [
-    "Voici votre voix-off, synthétisée avec une voix naturelle ElevenLabs — elle est prête ci-dessous, à écouter et à télécharger.",
-    result.storage === "r2"
-      ? "L'audio est archivé en permanence dans votre espace : il reste disponible et réutilisable."
-      : "L'archivage permanent est momentanément indisponible : l'audio est livré dans la réponse de cette conversation (version temporaire).",
-  ].join("\n");
-  await appendMessage({ conversationId: params.conversationId, userId: params.userId, role: "assistant", content: reply });
-
-  // Artefact audio (référence permanente) : la clé R2 est le storagePath —
-  // le lecteur intégré du fil la résout en URL signée fraîche à chaque
-  // écoute, et l'audio survit au refresh / à l'expiration d'un lien.
-  if (result.storage === "r2" && result.audioUrl) {
-    await createArtifact({
-      userId: params.userId,
-      conversationId: params.conversationId,
-      type: "audio",
-      title: params.text.trim().slice(0, 80) || "Voix-off",
-      storagePath: result.audioUrl,
-      note: "Synthèse vocale ElevenLabs — audio permanent (R2)",
-    }).catch((error) => {
-      logger.warn(
-        { err: error instanceof Error ? error.message : error },
-        "agent_chat_voice_artifact_failed",
-      );
-    });
-  }
-  return {
-    spoken: true,
-    reply,
-    audio: {
-      ...(result.audioUrl ? { url: result.audioUrl } : {}),
-      storage: result.storage ?? "inline",
-      ...(result.dataUri ? { dataUri: result.dataUri } : {}),
-    },
-  };
-}
-
-/**
- * Intercept VOIX-OFF (Task 114-a + fix capture 13:02) : une demande explicite
- * de voix-off avec un texte identifiable est servie IMMÉDIATEMENT (synthèse +
- * message assistant), avant tout routage de mission — miroir de l'intercept
- * vidéo. SUIVI CONTEXTUEL : la réponse de l'utilisateur à une question de
- * clarification (« quel texte ? ») est synthétisée telle quelle. Demande
- * d'audio SANS texte → question de clarification DÉTERMINISTE (zéro LLM,
- * zéro refus, zéro tuto externe). Retourne spoken/clarify à livrer, ou
- * undefined pour laisser le flux normal continuer (demande vidéo, texte non
- * extractible, synthèse/facturation indisponibles).
- */
-async function interceptVoiceOff(params: {
-  userId: string;
-  conversationId: string;
-  message: string;
-  /** Fil AVANT le message courant (chronologique) pour le suivi contextuel. */
-  history?: VoiceHistoryTurn[];
-}): Promise<{ kind: "spoken"; reply: string; audio: { url?: string; storage: "r2" | "inline"; dataUri?: string } } | { kind: "clarify"; reply: string } | undefined> {
-  // 1) Suivi contextuel : réponse au « quel texte voulez-vous entendre ? ».
-  const contextVoice = resolveVoiceRequestFromContext(params.message, params.history ?? []);
-  if (contextVoice) {
-    try {
-      const spoken = await respondWithVoiceOff({
-        userId: params.userId,
-        conversationId: params.conversationId,
-        text: contextVoice.text2speak,
-      });
-      if (spoken.spoken && spoken.audio) {
-        return { kind: "spoken", reply: spoken.reply ?? "Voici votre audio.", audio: spoken.audio };
-      }
-    } catch (voiceError) {
-      logger.warn({ err: voiceError instanceof Error ? voiceError.message : voiceError }, "agent_chat_voice_context_failed");
-    }
-    // Synthèse impossible : le flux normal prend le relais (réponse LLM).
-    return undefined;
-  }
-  if (!looksLikeVoiceRequest(params.message)) return undefined;
-  const voiceRequest = extractVoiceRequestText(params.message);
-  if (!voiceRequest) {
-    // 2) Demande d'audio SANS texte identifiable : clarification déterministe
-    // (jamais de refus ni de tuto externe — la plateforme synthétise l'audio).
-    const reply = [
-      "Avec plaisir — je peux synthétiser votre audio dès maintenant (voix naturelle ElevenLabs, archivée dans votre espace).",
-      "Quel texte ou quel contenu souhaitez-vous entendre dans cet audio ? Répondez directement avec le texte : je le synthétise immédiatement.",
-    ].join("\n");
-    await appendMessage({ conversationId: params.conversationId, userId: params.userId, role: "assistant", content: reply });
-    return { kind: "clarify", reply };
-  }
-  try {
-    const spoken = await respondWithVoiceOff({
-      userId: params.userId,
-      conversationId: params.conversationId,
-      text: voiceRequest.text2speak,
-    });
-    if (!spoken.spoken || !spoken.audio) return undefined;
-    return { kind: "spoken", reply: spoken.reply ?? "Voici votre voix-off.", audio: spoken.audio };
-  } catch (voiceError) {
-    logger.warn({ err: voiceError instanceof Error ? voiceError.message : voiceError }, "agent_chat_voice_off_intercept_failed");
-    return undefined;
-  }
-}
 
 export const runtime = "nodejs";
 // Fenêtre du repli SYNCHRONE (file non configurée) : les missions longues
@@ -636,39 +471,6 @@ async function handleAgentChat(request: NextRequest, user: AuthenticatedUser) {
         content: body.message,
         ...(attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) ? { attachments: attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) } : {}),
       });
-      // VOIX-OFF DIRECTE (Task 114-a + fix capture 13:02) : une demande
-      // explicite de voix-off (ou la réponse au « quel texte ? ») est
-      // synthétisée IMMÉDIATEMENT (ElevenLabs + archivage permanent), avant
-      // tout routage de mission. Demande d'audio SANS texte → clarification
-      // déterministe (jamais de refus ni de tuto externe). Le flux normal
-      // continue si la synthèse n'est pas possible (jamais d'échec visible).
-      const voiceOff = await interceptVoiceOff({
-        userId: user.uid,
-        conversationId,
-        message: body.message,
-        history: history.map((item) => ({ role: item.role, content: item.content })),
-      });
-      if (voiceOff?.kind === "clarify") {
-        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: voiceOff.reply, mode: "chat" }));
-        return NextResponse.json({
-          mode: "chat",
-          conversationId,
-          agentId: agent.id,
-          classification: { mode: "chat" as const, inScope: true, reason: "Voix-off" },
-          reply: voiceOff.reply,
-        });
-      }
-      if (voiceOff) {
-        after(() => recordExchange({ userId: user.uid, agentId: agent.id, conversationId, userMessage: body.message, assistantReply: voiceOff.reply, mode: "chat" }));
-        return NextResponse.json({
-          mode: "chat",
-          conversationId,
-          agentId: agent.id,
-          classification: { mode: "chat" as const, inScope: true, reason: "Voix-off" },
-          reply: voiceOff.reply,
-          audio: voiceOff.audio,
-        });
-      }
       // PRODUCTION VIDÉO (autopilote) : une demande explicite de vidéo lance
       // la file de production RÉELLE (projet → plan → scénario → visuels →
       // voix → rendu) — le client suit la progression via l'API production.
@@ -897,9 +699,10 @@ async function handleAgentChat(request: NextRequest, user: AuthenticatedUser) {
         });
       }
       if (classification.mode === "chat") {
-        // VISION : les images jointes au message sont transmises au modèle
-        // (URLs R2 signées — parts vision réelles).
-        const visionImages = await visionImagesFor(body.attachments, body.attachmentPath ? { path: body.attachmentPath, name: body.attachmentName ?? body.attachmentPath } : null);
+        // VISION : les modèles de vision externes ont été supprimés du
+        // projet — le moteur neuronal ne perçoit pas les images (pièces
+        // jointes conservées comme fichiers, aucune description fabriquée).
+        const visionImages = undefined;
         // Task 131 : latence du tour mesurée autour de la GÉNÉRATION seule
         // (l'appel LLM), pas autour des lectures de contexte amont.
         const chatTurnStartedAt = Date.now();
@@ -1250,36 +1053,6 @@ async function handleAgentChat(request: NextRequest, user: AuthenticatedUser) {
       content: body.message,
       ...(attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) ? { attachments: attachmentsForMessage(body.attachments, { path: body.attachmentPath, name: body.attachmentName }) } : {}),
     });
-
-    // VOIX-OFF DIRECTE (Task 114-a + fix capture 13:02) sur le chemin
-    // universel aussi, AVANT l'intercept vidéo (la production vidéo reste
-    // prioritaire sur sa propre demande) — suivi contextuel + clarification
-    // déterministe inclus.
-    const voiceOff = await interceptVoiceOff({
-      userId: user.uid,
-      conversationId,
-      message: body.message,
-      history: history.map((item) => ({ role: item.role, content: item.content })),
-    });
-    if (voiceOff?.kind === "clarify") {
-      return NextResponse.json({
-        mode: "chat",
-        status: "completed",
-        conversationId,
-        objective: body.message,
-        reply: voiceOff.reply,
-      });
-    }
-    if (voiceOff) {
-      return NextResponse.json({
-        mode: "chat",
-        status: "completed",
-        conversationId,
-        objective: body.message,
-        reply: voiceOff.reply,
-        audio: voiceOff.audio,
-      });
-    }
 
     // PRODUCTION VIDÉO (autopilote) sur le chemin universel aussi.
     if (looksLikeVideoRequest(body.message)) {

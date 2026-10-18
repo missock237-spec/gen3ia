@@ -53,13 +53,7 @@ const RequestSchema =
     ),
 
     provider: z
-      .enum([
-        "groq",
-        "openrouter",
-        "anthropic",
-        "openai",
-        "glm",
-      ])
+      .literal("gen3-snn")
       .optional(),
 
     model:

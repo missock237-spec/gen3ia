@@ -18,7 +18,6 @@ import type { MessageAttachment } from "@/lib/domain/conversations/types";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 import { AgentPicker, type ComposerAgentOption } from "./agent-picker";
 import { TemplateMenu } from "./template-menu";
-import { ModelMenu } from "./model-menu";
 
 /**
  * Composer de conversation — réplique EXACTE de la maquette unifiée
@@ -36,7 +35,7 @@ import { ModelMenu } from "./model-menu";
  *
  * Task 141 — utilisation SIMPLE et FLEXIBLE :
  *  - sélecteur d'agent (pill + /agent) : QUI répond au prochain message ;
- *  - sélecteur de moteur IA (pill + /moteur) : QUEL modèle rédige ;
+ *  - moteur IA unique : le système neuronal Gen3 (aucun sélecteur) ;
  *  - bibliothèque de modèles de prompts (pill + /modèle) : formulations
  *    réutilisables, enregistrables depuis le brouillon en cours ;
  *  - glisser-déposer de fichiers sur toute la zone du composer ;
@@ -128,7 +127,6 @@ export function Composer({
   // « /moteur » (ouverture contrôlée des pills au-dessus du composer).
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   // Task 141 — glisser-déposer : compteur de profondeur (les événements
   // dragenter/dragleave se déclenchent sur CHAQUE enfant — le compteur
   // distingue l'entrée réelle du survol interne, l'overlay ne clignote pas).
@@ -331,16 +329,6 @@ export function Composer({
       description: "Insérez une formulation réutilisable, ou enregistrez le brouillon actuel comme modèle.",
       run: () => setTemplateMenuOpen(true),
     },
-    ...(onModelIdChange
-      ? [
-          {
-            id: "moteur",
-            label: "Choisir le moteur IA",
-            description: "Le modèle qui rédige les réponses (automatique, GLM, GPT-4o, Claude…).",
-            run: () => setModelMenuOpen(true),
-          },
-        ]
-      : []),
     ...(onConnectorsChange
       ? [
           {
@@ -433,15 +421,6 @@ export function Composer({
             open={templateMenuOpen}
             onOpenChange={setTemplateMenuOpen}
           />
-          {onModelIdChange && (
-            <ModelMenu
-              modelId={modelId}
-              onChange={onModelIdChange}
-              disabled={disabled}
-              open={modelMenuOpen}
-              onOpenChange={setModelMenuOpen}
-            />
-          )}
         </div>
       )}
 

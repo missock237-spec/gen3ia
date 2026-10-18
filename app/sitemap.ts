@@ -42,7 +42,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
-      url: `${BASE}/live`,
+      url: `${BASE}/neural`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.8,
@@ -60,10 +60,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     {
-      url: `${BASE}/studio/interface-lab`,
+      url: `${BASE}/neural`,
       lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.6,
+      changeFrequency: "weekly",
+      priority: 0.8,
     },
     {
       url: `${BASE}/signup`,

@@ -5,7 +5,6 @@ import { RenderRequestSchema } from "@/lib/video/security";
 import { startRenderJob, listJobs, pauseJob, resumeJob, cancelJob, sweepStaleRenderJobs, maybeAdvancePendingJob, POLL_ADVANCE_BUDGET_MS } from "@/lib/video/render-queue";
 import { checkFfmpegAvailable } from "@/lib/video/ffmpeg";
 import { tickQueueConfigured } from "@/lib/queue/tick-queue";
-import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
 import { getJobProgress } from "@/lib/video/progress-store";
 import { cacheGet, cacheSet } from "@/lib/cache/redis";
 
@@ -100,7 +99,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       derivedTargets,
     });
     return NextResponse.json(
-      { ...result, imagesEnabled: isImageGenerationEnabled(), queueMode: tickQueueConfigured() ? ("queue" as const) : ("poll" as const) },
+      { ...result, imagesEnabled: true, queueMode: tickQueueConfigured() ? ("queue" as const) : ("poll" as const) },
       { status: 202 },
     );
   } catch (error) {

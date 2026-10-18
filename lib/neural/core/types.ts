@@ -73,7 +73,8 @@ export type EffectorStatus =
   | "SUCCES"
   | "ECHEC"
   | "INCONNU"
-  | "MOTEUR_EXTERNE_DESACTIVE";
+  | "MOTEUR_EXTERNE_DESACTIVE"
+  | "MOTEUR_LOCAL_INDISPONIBLE";
 
 /**
  * Résultat d'une action déclenchée par un effecteur du corps sémantique.

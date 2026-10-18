@@ -32,20 +32,11 @@ import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
 import { socialPublishTool } from "@/lib/integrations/social/tools";
 import { webhookEmitTool } from "@/lib/integrations/webhooks/tools";
 import { githubCreateRepositoryTool } from "@/lib/integrations/github/tools";
-import {
-  voiceListTool,
-  voiceSpeakTool,
-} from "@/lib/integrations/elevenlabs/tools";
-import { twentyFirstUiTool } from "@/lib/integrations/twentyfirst/tool";
-import { phoneCallTool } from "@/lib/tools/phone/call";
+import { generateImageNeuralTool } from "@/lib/tools/media/generate-image-neural";
 import {
   notionCreatePageTool,
   notionSearchTool,
 } from "@/lib/integrations/notion/tools";
-import {
-  julesCreateTaskTool,
-  julesGetTaskTool,
-} from "@/lib/integrations/jules/tools";
 import {
   cloudflareDnsCreateTool,
   cloudflareDnsListTool,
@@ -71,12 +62,9 @@ import {
   networkReadInboxTool,
   networkMarkReadTool,
 } from "@/lib/agents/networks/tools";
-import { generateImageTool } from "@/lib/tools/media/generate-image";
 import { createVideoTool } from "@/lib/tools/media/create-video";
-import { analyzeMediaTool } from "@/lib/tools/media/analyze-media";
 import { videoStatusTool } from "@/lib/tools/media/video-status";
 import { videoReviseTool } from "@/lib/tools/media/video-revise";
-import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
 // Task 140 — suite « outils pilotés par les agents IA » (16 outils) :
 // les imports sont groupés par lot d'implémentation (sous-agents 140-a/b/c/d).
 import { handoverComposeTool } from "@/lib/tools/agent-suite/handover-compose";
@@ -119,7 +107,6 @@ export function createDefaultToolRegistry(): ToolRegistry {
     analyzeZipTool,
     extractZipTool,
     adsReadTool,
-    phoneCallTool,
     // Task 106-a — pilote vidéo complet du chat : création, suivi,
     // révision/pause/annulation/exports (le pipeline existait déjà).
     videoStatusTool,
@@ -175,35 +162,16 @@ export function createDefaultToolRegistry(): ToolRegistry {
   registry.register(networkReadInboxTool);
   registry.register(networkMarkReadTool);
   if (process.env.GITHUB_TOKEN) registry.register(githubCreateRepositoryTool);
-  if (process.env.ELEVENLABS_API_KEY) {
-    registry.register(voiceSpeakTool);
-    registry.register(voiceListTool);
-  }
-  // Médias RÉELS (audit outils médias) : génération d'image Agnes AI (la MÊME
-  // voie que le chat conversationnel) et production vidéo autonome (file
-  // interne payante). Gated par la clé Agnes — sans clé, les outils
-  // n'existent PAS au registre (aucune capacité fantôme annoncée aux
-  // planners) ; avec clé, « image.generate » devient un outil exécutable
-  // réel là où la conversation l'annonçait déjà. La production vidéo charge
-  // son module par import paresseux au moment de l'exécution.
-  if (isImageGenerationEnabled()) {
-    registry.register(generateImageTool);
-    registry.register(createVideoTool);
-  }
-  // Analyse média RÉELLE (image / audio / vidéo) — l'agent et la
-  // conversation sont connectés à la couche lib/media/analysis. Toujours
-  // enregistré : sans fournisseur, l'outil échoue HONNÊTEMENT en nommant la
-  // variable d'environnement manquante (aucune capacité fantôme — le
-  // contrat d'erreur est explicite).
-  registry.register(analyzeMediaTool);
-  if (process.env.TWENTY_FIRST_API_KEY) registry.register(twentyFirstUiTool);
+  // MÉDIAS NEURONAUX LOCAUX : génération d'image par le moteur Gen3
+  // (composition calculée depuis l'état réel du cerveau — aucune IA
+  // externe, aucune clé requise) et production vidéo autonome (file
+  // interne : scénario → visuels neuronaux → narration utilisateur →
+  // montage Ken Burns → rendu).
+  registry.register(generateImageNeuralTool);
+  registry.register(createVideoTool);
   if (process.env.NOTION_API_TOKEN) {
     registry.register(notionSearchTool);
     registry.register(notionCreatePageTool);
-  }
-  if (process.env.JULES_API_KEY) {
-    registry.register(julesCreateTaskTool);
-    registry.register(julesGetTaskTool);
   }
   if (process.env.CLOUDFLARE_API_TOKEN) {
     registry.register(cloudflareZonesListTool);

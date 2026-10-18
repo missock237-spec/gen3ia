@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import { NeuralConsole } from "@/components/neural/neural-console";
 
 export const metadata: Metadata = {
-  title: "Console neuronale Gen3",
+  title: "Système Neuronal Gen3 — Aurora OS V6",
   description:
-    "Testez le système neuronal Gen3 à spikes : conversation par cycles réels, état du cerveau, entraînement supervisé sur le corpus du projet et reset complet.",
+    "Le moteur IA interne de Gen3ia : réseau de neurones à spikes avec plasticité hebbienne. Constellation synaptique en direct, conversation par cycles réels, atelier média local et entraînement supervisé sur le corpus du projet.",
 };
 
 export default function NeuralPage() {

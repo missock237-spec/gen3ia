@@ -17,11 +17,9 @@ import "server-only";
  * l'autre.
  */
 
-import { editImageWithAgnes, ImageGenerationError } from "@/lib/ai/image-generation";
-import { generateImageWithFallback, isAgnesUnavailableError } from "@/lib/ai/hf-image-fallback";
+import { genererVisuelNeuralBrut } from "@/lib/neural/media-service";
 import { composeScenePrompt, bindReference } from "@/lib/video/consistency-engine";
-import { registerAsset, getAsset } from "@/lib/video/asset-service";
-import { downloadAssetContent } from "@/lib/video/asset-service";
+import { registerAsset } from "@/lib/video/asset-service";
 import type { VideoProject, ScriptScene, VisualBible, VideoAsset } from "@/lib/video/types";
 import { VIDEO_LIMITS, VideoQuotaError } from "@/lib/video/security";
 
@@ -31,20 +29,6 @@ function agnesRatio(aspect: VideoProject["aspectRatio"]): "1:1" | "3:4" | "4:3" 
   return aspect;
 }
 
-function sizeFor(resolution: VideoProject["resolution"]): "1K" | "2K" | "3K" | "4K" {
-  switch (resolution) {
-    case "480p":
-    case "720p":
-      return "1K";
-    case "1080p":
-      return "2K";
-    case "1440p":
-      return "3K";
-    case "4K":
-      return "4K";
-  }
-}
-
 export interface SceneImageResult {
   sceneId: string;
   assetId: string;
@@ -52,16 +36,10 @@ export interface SceneImageResult {
   reused: boolean;
 }
 
-async function downloadReferenceAsDataUri(userId: string, asset: VideoAsset): Promise<string> {
-  const buffer = await downloadAssetContent(userId, asset);
-  return `data:${asset.contentType};base64,${buffer.toString("base64")}`;
-}
-
 /**
  * Génère (ou réutilise) l'image d'une scène :
  * - une image déjà liée à la scène → réutilisée (idempotence, révisions) ;
- * - une entité avec référence → composition multi-images (cohérence) ;
- * - sinon → text-to-image enrichi par la bible visuelle.
+ * - sinon → génération neuronale LOCALE enrichie par la bible visuelle.
  * La première image d'une entité devient sa référence canonique.
  */
 export async function generateSceneImage(params: {
@@ -81,69 +59,32 @@ export async function generateSceneImage(params: {
 
   await assertProjectImageBudget(userId, project.id);
 
-  // Résolution des images de référence (max 4 — limite du modèle).
-  const referenceUris: string[] = [];
+  // Références visuelles liées (bible) : elles n'alimentent plus une
+  // composition multi-images (modèle d'édition externe supprimé) mais
+  // restent liées à la scène pour l'atelier — le compte enrichit le
+  // prompt neuronal (continuité chromatique déterministe).
+  let nbReferencesLiees = 0;
   for (const entityId of composed.referenceEntityIds.slice(0, 4)) {
     const entity = [...project.visualBible.characters, ...project.visualBible.locations]
       .find((e) => e.id === entityId);
-    if (!entity?.referenceAssetId) continue;
-    const refAsset = await getAsset(userId, entity.referenceAssetId);
-    if (!refAsset) continue;
-    referenceUris.push(await downloadReferenceAsDataUri(userId, refAsset));
+    if (entity?.referenceAssetId) nbReferencesLiees += 1;
   }
 
-  let imageUrl: string;
-  try {
-    if (referenceUris.length > 0) {
-      try {
-        const edited = await editImageWithAgnes({
-          prompt: composed.prompt,
-          images: referenceUris,
-          size: sizeFor(project.resolution),
-          ratio: agnesRatio(project.aspectRatio),
-        });
-        imageUrl = edited.imageUrl;
-      } catch (editError) {
-        // Repli AUTOMATIQUE « résultat plutôt qu'échec » : si la composition
-        // multi-images Agnes est indisponible (limite de crédit, clé rejetée,
-        // panne 5xx, rate-limit, timeout) — SEULEMENT dans ce cas — la scène
-        // est produite en text-to-image (repli Hugging Face Z-Image-Turbo
-        // inclus). La cohérence de référence est moins forte mais la vidéo
-        // aboutit au lieu de mourir à l'étape des visuels.
-        if (!isAgnesUnavailableError(editError)) throw editError;
-        console.warn(
-          `[image-bridge] composition Agnes indisponible pour ${scene.id} (${editError instanceof ImageGenerationError ? editError.code : "erreur"}) — repli text-to-image pour livrer la scène.`,
-        );
-        const generated = await generateImageWithFallback({
-          prompt: composed.prompt,
-          ratio: agnesRatio(project.aspectRatio),
-          userId,
-        });
-        imageUrl = generated.imageUrl;
-      }
-    } else {
-      // Reprise AUTOMATIQUE : limite de crédit OU indisponibilité technique
-      // d'Agnes (code d'erreur) → Hugging Face Z-Image-Turbo termine la scène
-      // (lib/ai/hf-image-fallback).
-      const generated = await generateImageWithFallback({
-        prompt: composed.prompt,
-        ratio: agnesRatio(project.aspectRatio),
-        userId,
-      });
-      imageUrl = generated.imageUrl;
-    }
-  } catch (error) {
-    if (error instanceof ImageGenerationError) {
-      throw new Error(`Génération d'image (${scene.id}) : ${error.message}`);
-    }
-    throw error;
-  }
-
-  // Téléchargement de l'image générée puis enregistrement comme asset projet.
-  const response = await fetch(imageUrl);
-  if (!response.ok) throw new Error(`Téléchargement de l'image (${scene.id}) : HTTP ${response.status}`);
-  const contentType = response.headers.get("content-type") ?? "image/png";
-  const body = Buffer.from(await response.arrayBuffer());
+  // GÉNÉRATION NEURONALE LOCALE (les imageurs externes Agnes/HF ont été
+  // supprimés du projet) : la composition visuelle est calculée depuis
+  // l'état réel du cerveau Gen3 (poids synaptiques appris) et rastérisée
+  // en PNG. La continuité visuelle entre scènes repose sur la graine
+  // déterministe dérivée du prompt composé (mêmes entités → même identité
+  // chromatique) — honnête, aucune IA externe.
+  const referenceContext = nbReferencesLiees > 0
+    ? ` ${nbReferencesLiees} référence(s) visuelle(s) liée(s)`
+    : "";
+  const rendu = await genererVisuelNeuralBrut({
+    prompt: `${composed.prompt}${referenceContext}`,
+    ratio: agnesRatio(project.aspectRatio),
+  });
+  const contentType = rendu.mime;
+  const body = rendu.image;
 
   const asset = await registerAsset({
     userId,

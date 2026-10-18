@@ -91,12 +91,14 @@ function sanitizePrefix(prefix?: string): string {
   return cleaned.length > 0 ? cleaned : DEFAULT_PREFIX;
 }
 
-/** Extension déduite du type MIME (parité avec engine.ts). */
+/** Extension déduite du type MIME (supports images, SVG et WAV). */
 function extensionFor(contentType: string): string {
   if (contentType.includes("jpeg")) return "jpg";
   if (contentType.includes("webp")) return "webp";
   if (contentType.includes("gif")) return "gif";
   if (contentType.includes("avif")) return "avif";
+  if (contentType.includes("svg")) return "svg";
+  if (contentType.includes("wav")) return "wav";
   return "png";
 }
 

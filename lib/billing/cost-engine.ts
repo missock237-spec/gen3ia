@@ -1,13 +1,14 @@
 import type { AIProvider, AIResponse, AIRequest, TaskType } from "@/lib/ai/models";
 
 const n = (value: string | undefined, fallback: number) => { const parsed = Number(value); return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback; };
-// NB (audit médias 103-c) : les entrées « huggingface » (COST_HF_*) ont été
-// retirées — provider mort sans adaptateur (voir lib/ai/models.ts).
-const DEFAULT_INPUT_PER_MILLION: Record<AIProvider, number> = { openai: n(process.env.COST_OPENAI_INPUT_EUR_PER_1M, 2.5), anthropic: n(process.env.COST_ANTHROPIC_INPUT_EUR_PER_1M, 3), groq: n(process.env.COST_GROQ_INPUT_EUR_PER_1M, 0.6), openrouter: n(process.env.COST_OPENROUTER_INPUT_EUR_PER_1M, 1.5), glm: n(process.env.COST_GLM_INPUT_EUR_PER_1M, 1), agnes: n(process.env.COST_AGNES_INPUT_EUR_PER_1M, 0.5),
+// NB : les IA externes (openai/anthropic/groq/openrouter/glm/agnes) ont été
+// SUPPRIMÉES du projet sur demande de l'utilisateur — le moteur neuronal
+// Gen3 (SNN interne) est le seul moteur restant.
+const DEFAULT_INPUT_PER_MILLION: Record<AIProvider, number> = {
   // Moteur neuronal interne Gen3 (SNN) : calcul local, aucun coût
   // fournisseur externe — tarif nul par principe.
   "gen3-snn": 0 };
-const DEFAULT_OUTPUT_PER_MILLION: Record<AIProvider, number> = { openai: n(process.env.COST_OPENAI_OUTPUT_EUR_PER_1M, 10), anthropic: n(process.env.COST_ANTHROPIC_OUTPUT_EUR_PER_1M, 15), groq: n(process.env.COST_GROQ_OUTPUT_EUR_PER_1M, 0.8), openrouter: n(process.env.COST_OPENROUTER_OUTPUT_EUR_PER_1M, 5), glm: n(process.env.COST_GLM_OUTPUT_EUR_PER_1M, 3), agnes: n(process.env.COST_AGNES_OUTPUT_EUR_PER_1M, 1.5), "gen3-snn": 0 };
+const DEFAULT_OUTPUT_PER_MILLION: Record<AIProvider, number> = { "gen3-snn": 0 };
 const TASK_MULTIPLIER: Record<TaskType, number> = { chat: 1, reasoning: 1.5, research: 1.25, coding: 1.35, image: 1.5, video: 2.5, audio: 1.8, document: 1.1, automation: 1.25, agent: 1.4 };
 const PLATFORM_OVERHEAD_EUR = n(process.env.GEN3IA_EXECUTION_OVERHEAD_EUR, 0.0005);
 const PLATFORM_MARGIN = Math.max(0, n(process.env.GEN3IA_PLATFORM_MARGIN_RATE, 0.35));
@@ -46,7 +47,7 @@ export interface ExecutionCostInput { task: TaskType; provider?: AIProvider; mod
 export interface ExecutionCostBreakdown { providerCostEur: number; platformOverheadEur: number; computeCostEur: number; storageCostEur: number; networkCostEur: number; externalToolCostEur: number; complexityMultiplier: number; marginEur: number; chargeEur: number; reserveEur: number; chargeMinor: number; reserveMinor: number; }
 
 export function estimateExecutionCost(input: ExecutionCostInput): ExecutionCostBreakdown {
-  const provider = input.provider ?? "openrouter"; const rate = rateFor(provider, input.model);
+  const provider = input.provider ?? "gen3-snn"; const rate = rateFor(provider, input.model);
   const inputTokens = Math.max(0, input.inputTokens ?? 0); const outputTokens = Math.max(0, input.outputTokens ?? 0); const cached = Math.min(inputTokens, Math.max(0, input.cachedInputTokens ?? 0));
   const normalInput = inputTokens - cached;
   const inputCost = normalInput / 1_000_000 * rate.inputEurPer1M + cached / 1_000_000 * (rate.cachedInputEurPer1M ?? rate.inputEurPer1M) + outputTokens / 1_000_000 * rate.outputEurPer1M;

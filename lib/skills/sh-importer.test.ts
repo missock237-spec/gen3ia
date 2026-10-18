@@ -59,14 +59,14 @@ describe("convertSkillMarkdown", () => {
     expect(skill.compatibleTasks).toEqual(["*"]);
   });
 
-  it("couvre les catégories média (vidéo/image/audio) en français", () => {
+  it("couvre les catégories média (rendu vidéo) en français — les skills IA média externes ont été retirées du catalogue", () => {
     const video = convertSkillMarkdown(
-      "ai-video-generation",
-      `---\nname: ai-video-generation\ndescription: Generate videos with AI models. Use when asked to "create a video".\n---\n\n# Video\n\nSteps.`,
+      "remotion-render",
+      `---\nname: remotion-render\ndescription: Render videos with Remotion. Use when asked to "render a video".\n---\n\n# Render\n\nSteps.`,
     );
     expect(video.category).toBe("media");
     expect(video.triggers).toContain("vidéo");
-    expect(video.triggers).toContain("générer");
+    expect(video.triggers).toContain("montage");
   });
 
   it("repli propre sans frontmatter (titre H1)", () => {

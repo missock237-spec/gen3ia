@@ -18,9 +18,7 @@ import { navPrimaryFor, type NavRole } from "./nav-registry";
 
 const STUDIO_TOOLS = [
   { href: "/studio/clients", label: "Clients ID" },
-  { href: "/studio/calls", label: "Appels" },
   { href: "/studio/console", label: "Console" },
-  { href: "/studio/interface-lab", label: "Atelier d'Interfaces" },
 ] as const;
 
 export function WorkspaceShell() {

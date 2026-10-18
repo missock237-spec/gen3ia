@@ -30,19 +30,48 @@ import {
   generateSceneImage,
   findSceneImage,
 } from "@/lib/video/image-bridge";
-import {
-  isVideoGenerationEnabled,
-  areSceneClipsEnabled,
-  videoSizeForResolution,
-  videoAspectRatioFor,
-  agnesVideoCostEur,
-  MAX_CLIP_SECONDS,
-  MIN_CLIP_SECONDS,
-  isVideoUnavailableError,
-  awaitVideoTask,
-  createVideoTask,
-  type VideoSize,
-} from "@/lib/ai/video-generation";
+/**
+ * CLIPS VIDÉO IA EXTERNES (Agnes Video) — SUPPRIMÉS du projet sur demande
+ * de l'utilisateur (seules des IA externes devaient disparaître). Le
+ * service est DÉFINITIVEMENT désactivé : tout appel lève
+ * SceneVideoUnavailableError et la file de production retombe sur
+ * l'animation image Ken Burns (chemin interne historique, conservé).
+ */
+const MAX_CLIP_SECONDS = 12;
+const MIN_CLIP_SECONDS = 4;
+type VideoSize = "720P" | "1080P" | "1K" | "2K";
+function isVideoGenerationEnabled(): boolean {
+  return false;
+}
+function areSceneClipsEnabled(): boolean {
+  return false;
+}
+function videoSizeForResolution(_r: unknown): VideoSize {
+  return "720P";
+}
+function videoAspectRatioFor(_a: unknown): string {
+  return "16:9";
+}
+function agnesVideoCostEur(_s: number, _d: VideoSize): number {
+  return 0;
+}
+function isVideoUnavailableError(_e: unknown): boolean {
+  return true;
+}
+interface StubVideoTask {
+  videoId: string;
+  taskId: string;
+  status: "pending" | "completed" | "failed";
+  error?: string;
+  videoUrl?: string;
+  seconds?: number;
+}
+async function awaitVideoTask(..._args: unknown[]): Promise<StubVideoTask> {
+  throw new SceneVideoUnavailableError("Génération de clips vidéo IA retirée du projet.");
+}
+async function createVideoTask(..._args: unknown[]): Promise<{ videoId: string; taskId: string; status: string }> {
+  throw new SceneVideoUnavailableError("Génération de clips vidéo IA retirée du projet.");
+}
 import { registerAsset, listAssets, countGeneratedProjectAssets } from "@/lib/video/asset-service";
 import { createVideoPlaybackUrl } from "@/lib/video/storage";
 import { estimateExecutionCost } from "@/lib/billing/cost-engine";
@@ -438,7 +467,9 @@ export interface GenerateSceneVideoParams {
 
 /** Vrai si le service de clips IA est actif (clé + levier métier). */
 export function isSceneVideoServiceEnabled(): boolean {
-  return isVideoGenerationEnabled() && areSceneClipsEnabled();
+  // Clips IA externes supprimés du projet — service désactivé
+  // définitivement (repli Ken Burns côté file de production).
+  return false;
 }
 
 /** Budget de clips IA par projet (plafond strict, spec §28) — Task 159 :

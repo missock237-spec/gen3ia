@@ -68,16 +68,16 @@ interface ModeleDef {
   model?: string;
 }
 
-/** Tiers v4 → moteurs réels, alignés sur lib/ui/composer-models.ts :
- *  Rapide = GPT-OSS 120B via Groq (« réponses éclair »), Équilibré = routeur
- *  automatique, Expert = Claude 3.5 Sonnet (« analyse approfondie »). */
+/** Tiers v4 → MOTEUR NEURONAL UNIQUE Gen3 (les IA externes ont été
+ * supprimées du projet) : les trois tiers ajustent le nombre de cycles
+ * d'inférence du SNN — la même intelligence, trois budgets de réflexion. */
 const MODELES: Record<TierId, ModeleDef> = {
   rapide: {
     nom: "Gen3ia Rapide",
     ico: "⚡",
     sub: "Réponses instantanées, questions simples",
-    provider: "groq",
-    model: "openai/gpt-oss-120b",
+    provider: "gen3-snn",
+    model: "gen3-snn-v1",
   },
   equilibre: {
     nom: "Gen3ia Équilibré",
@@ -88,8 +88,8 @@ const MODELES: Record<TierId, ModeleDef> = {
     nom: "Gen3ia Expert",
     ico: "🧠",
     sub: "Raisonnement avancé, analyses longues",
-    provider: "anthropic",
-    model: "claude-3-5-sonnet-20241022",
+    provider: "gen3-snn",
+    model: "gen3-snn-v1",
   },
 };
 

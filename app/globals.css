@@ -123,6 +123,38 @@
   --gen3ia-shadow-md: 0 24px 60px -26px rgba(4, 5, 16, 0.60);
   --gen3ia-shadow-glow: 0 10px 44px -12px rgba(124, 92, 255, 0.48);
   --g3-glow-ring: 0 0 0 1px rgba(124, 92, 255, 0.26), 0 8px 40px -8px rgba(124, 92, 255, 0.26);
+
+  /* ───────────────────────────────────────────────────────────
+     AURORA OS V6 — COUCHE « NEURAL » (architecture neural-first)
+     Pièce maîtresse de la V6 : le moteur neuronal Gen3 devient
+     l'identité visible de la plateforme. La couche est ADDITIVE —
+     les tokens V5 restent exacts (aucun composant cassé), les
+     composants V6 consomment les tokens --g3v6-*.
+     ─────────────────────────────────────────────────────────── */
+  /* Signature neuronale : violet synaptique profond + cyan spike */
+  --g3v6-neural: #7C5CFF;
+  --g3v6-neural-strong: #A78BFF;
+  --g3v6-spike: #2AD4E8;
+  --g3v6-spike-soft: rgba(42, 212, 232, 0.13);
+  --g3v6-resonance: #F0ABFC;
+  --g3v6-synapse: rgba(124, 92, 255, 0.32);
+  /* Surfaces V6 : verre orbital — profondeur accrue derrière les
+     visualisations cérébrales (la constellation doit flotter). */
+  --g3v6-void: #03040A;
+  --g3v6-glass: rgba(16, 19, 37, 0.66);
+  --g3v6-glass-border: rgba(124, 92, 255, 0.22);
+  /* Typographie neuronale : chiffres tabulaires (métriques), titres
+     larges (pistes de vision). */
+  --g3v6-metric-font: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --g3v6-track: 0.26em;
+  /* Motifs : grille cérébrale + halo de résonance */
+  --g3v6-grid: radial-gradient(circle at 1px 1px, rgba(124, 92, 255, 0.13) 1px, transparent 0);
+  --g3v6-grid-size: 34px;
+  --g3v6-halo: 0 0 90px -18px rgba(124, 92, 255, 0.55);
+  --g3v6-halo-spike: 0 0 60px -14px rgba(42, 212, 232, 0.45);
+  /* Animations signature V6 (respectent prefers-reduced-motion) */
+  --g3v6-pulse: g3v6-pulse 3.2s ease-in-out infinite;
+  --g3v6-sweep: g3v6-sweep 7s linear infinite;
 }
 
 /* ============================================================
@@ -2279,3 +2311,88 @@ textarea:focus-visible, [tabindex]:focus-visible {
   .g3-breadcrumb { padding-top: max(14px, env(safe-area-inset-top)); }
 }
 
+
+/* ============================================================
+   AURORA OS V6 — STYLES « NEURAL-FIRST » (couche additive)
+   Architecture neural-first : le moteur Gen3 (SNN interne) est
+   l'identité visible. Ces styles ne REMPLACENT rien — ils
+   habillent les NOUVELLES surfaces V6 (console neuronale, hero,
+   visualisations). Les tokens V5 restent la base de tout le reste.
+   ============================================================ */
+
+@keyframes g3v6-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.035); }
+}
+
+@keyframes g3v6-sweep {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+
+@keyframes g3v6-spike-flow {
+  0%, 100% { stroke-opacity: 0.16; }
+  50% { stroke-opacity: 0.62; }
+}
+
+/* Carte verre orbital V6 : profondeur + liseré synaptique. */
+.g3v6-card {
+  background: var(--g3v6-glass);
+  border: 1px solid var(--g3v6-glass-border);
+  border-radius: 22px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--gen3ia-shadow-md);
+}
+
+/* Fond cérébral : grille + halo — la constellation flotte dessus. */
+.g3v6-brainfield {
+  background-color: var(--g3v6-void);
+  background-image:
+    radial-gradient(ellipse 70% 55% at 50% 42%, rgba(124, 92, 255, 0.13), transparent 70%),
+    var(--g3v6-grid);
+  background-size: auto, var(--g3v6-grid-size) var(--g3v6-grid-size);
+}
+
+/* Halo résonant (mode actif du noyau). */
+.g3v6-halo { box-shadow: var(--g3v6-halo); }
+.g3v6-halo-spike { box-shadow: var(--g3v6-halo-spike); }
+
+/* Étiquette métrique : chiffres tabulaires, lettrage large. */
+.g3v6-metric {
+  font-family: var(--g3v6-metric-font);
+  letter-spacing: var(--g3v6-track);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Barre de résonance animée (pools de sortie). */
+.g3v6-resonance-bar {
+  background: var(--g3-gradient);
+  animation: var(--g3v6-pulse);
+  border-radius: 999px;
+}
+
+/* Balayage holographique des cartes actives. */
+.g3v6-sweep { position: relative; overflow: hidden; }
+.g3v6-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  background: linear-gradient(100deg, transparent, rgba(124, 92, 255, 0.10), transparent);
+  animation: var(--g3v6-sweep);
+  pointer-events: none;
+}
+
+/* Arêtes synaptiques vivantes (SVG console). */
+.g3v6-synapse { animation: g3v6-spike-flow 2.6s ease-in-out infinite; }
+
+/* Respect strict du mouvement réduit : les animations décoratives
+   s'arrêtent, l'information reste (opacité finale figée). */
+@media (prefers-reduced-motion: reduce) {
+  .g3v6-resonance-bar,
+  .g3v6-sweep::after,
+  .g3v6-synapse {
+    animation: none;
+  }
+}

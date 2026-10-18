@@ -8,7 +8,6 @@ import { assertResourceWrite } from "@/lib/tenants/resource-access";
 import { CHUNKED_COMMIT_SIZE, commitOpsInChunks, type ChunkedWriteOp } from "@/lib/firestore/chunked-commit";
 import { indexKnowledgeDocument } from "./indexer";
 import { markupToText } from "@/lib/content/html-text";
-import { perceiveIfSupported } from "./perception";
 import { evaluateKnowledgeTriggers } from "./triggers";
 import { pdfToText } from "@/lib/files/pdf-text";
 
@@ -137,16 +136,13 @@ export async function extractTextFromUpload(file: File): Promise<{ text: string;
     return { text, mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
   }
 
-  // COUCHE PERCEPTION (concept #9) : images (OCR par modèle vision) et
-  // audios (ASR ElevenLabs) deviennent du TEXTE indexable — le réel entre
-  // dans la base de connaissances. Erreur honnête si fournisseur absent.
+  // PERCEPTION (OCR/ASR) : les modèles de perception externes (vision
+  // LLM, ElevenLabs Scribe) ont été SUPPRIMÉS du projet sur demande de
+  // l'utilisateur — seules des IA externes devaient disparaître. Les
+  // images et audios ne sont plus convertis en texte : erreur honnête
+  // explicite, aucune transcription fabriquée.
   if (file.type.startsWith("image/") || file.type.startsWith("audio/") || ["png", "jpg", "jpeg", "webp", "gif", "mp3", "wav", "m4a", "ogg", "flac", "webm"].includes(extension)) {
-    const mimeType = file.type || (extension === "png" || extension === "gif" || extension === "webp" ? `image/${extension}` : extension === "jpg" || extension === "jpeg" ? "image/jpeg" : extension === "mp3" ? "audio/mpeg" : extension === "wav" ? "audio/wav" : extension === "m4a" ? "audio/mp4" : extension === "ogg" ? "audio/ogg" : extension === "flac" ? "audio/flac" : `image/${extension}`);
-    const perception = await perceiveIfSupported({ buffer, mimeType, filename: file.name });
-    if (perception) {
-      if (!perception.text.trim()) throw new Error(`Aucun texte extractible de cette source (${perception.providerLabel}).`);
-      return { text: perception.text, mimeType, perception: perception.providerLabel };
-    }
+    throw new Error("Perception (OCR/ASR) indisponible : les modèles de perception externes ont été retirés du projet. Formats texte acceptés : TXT, MD, CSV, JSON, HTML, DOCX, PDF natif.");
   }
 
   const text = buffer.toString("utf8");
@@ -161,11 +157,7 @@ export async function extractTextFromUpload(file: File): Promise<{ text: string;
     if (text.replace(/[^A-Za-zÀ-ÿ0-9]/g, "").length >= 30) {
       return { text, mimeType: "application/pdf" };
     }
-    const perception = await perceiveIfSupported({ buffer, mimeType: "application/pdf", filename: file.name });
-    if (perception && perception.text.trim()) {
-      return { text: perception.text, mimeType: "application/pdf", perception: perception.providerLabel };
-    }
-    throw new Error("PDF sans texte natif extractible (probablement scanné) et perception indisponible. Convertissez-le en DOCX, TXT ou Markdown.");
+    throw new Error("PDF sans texte natif extractible (probablement scanné) et perception (OCR) indisponible : les modèles de perception externes ont été retirés du projet. Convertissez-le en DOCX, TXT ou Markdown.");
   }
   if (!TEXT_EXTENSIONS.has(extension) && !file.type.startsWith("text/") && file.type !== "application/json") {
     throw new Error(`Format « ${extension || file.type || "inconnu"} » non pris en charge. Formats acceptés : TXT, MD, CSV, JSON, HTML, DOCX, PDF, images (OCR), audio (ASR).`);
@@ -197,19 +189,14 @@ export async function extractTextFromPermanentFile(input: {
   if (extension === "docx" || contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
     return { text: await docxToText(buffer), mimeType: contentType };
   }
+  // PERCEPTION (OCR/ASR) : modèles externes supprimés du projet — erreur honnête.
   if (contentType.startsWith("image/") || contentType.startsWith("audio/") || ["png", "jpg", "jpeg", "webp", "gif", "mp3", "wav", "m4a", "ogg", "flac", "webm"].includes(extension)) {
-    const perception = await perceiveIfSupported({ buffer, mimeType: contentType, filename: input.filename });
-    if (perception) {
-      if (!perception.text.trim()) throw new Error(`Aucun texte extractible de cette source (${perception.providerLabel}).`);
-      return { text: perception.text, mimeType: contentType, perception: perception.providerLabel };
-    }
+    throw new Error("Perception (OCR/ASR) indisponible : les modèles de perception externes ont été retirés du projet. Formats texte acceptés : TXT, MD, CSV, JSON, HTML, DOCX, PDF natif.");
   }
   if (extension === "pdf" || contentType === "application/pdf") {
     const { text } = pdfToText(buffer);
     if (text.replace(/[^A-Za-zÀ-ÿ0-9]/g, "").length >= 30) return { text, mimeType: "application/pdf" };
-    const perception = await perceiveIfSupported({ buffer, mimeType: "application/pdf", filename: input.filename });
-    if (perception && perception.text.trim()) return { text: perception.text, mimeType: "application/pdf", perception: perception.providerLabel };
-    throw new Error("PDF sans texte natif extractible et perception indisponible.");
+    throw new Error("PDF sans texte natif extractible (probablement scanné) et perception (OCR) indisponible : modèles externes retirés du projet.");
   }
   const text = buffer.toString("utf8");
   if (extension === "html" || extension === "htm" || contentType === "text/html") {
@@ -237,13 +224,8 @@ export async function extractTextFromUrl(rawUrl: string): Promise<{ text: string
   const buffer = Buffer.from(await response.arrayBuffer());
   if (buffer.length > KNOWLEDGE_MAX_URL_BYTES) throw new Error("Page trop volumineuse (max 2 Mo).");
 
-  // Perception des URLs directes vers des images (OCR) — concept #9.
-  if (contentType.startsWith("image/")) {
-    const perception = await perceiveIfSupported({ buffer, mimeType: contentType, filename: response.url.split("/").pop() ?? "image" });
-    if (perception && perception.text.trim()) {
-      return { text: perception.text, mimeType: contentType, finalUrl: response.url || url.toString() };
-    }
-  }
+  // Perception OCR des URLs d'images : modèles externes supprimés du projet —
+  // une URL d'image n'est pas extractible en texte (aucune transcription fabriquée).
 
   const text = buffer.toString("utf8");
 

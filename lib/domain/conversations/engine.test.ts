@@ -41,8 +41,10 @@ describe("moteur conversationnel — contrôle humain des actions sensibles", ()
     const byName = new Map(catalog.map((t) => [t.name, t]));
     // Lecture : pas de validation.
     expect(byName.get("web.search")?.requiresApproval).toBe(false);
-    // Appel téléphonique (toujours enregistré, risque élevé) : validation obligatoire.
-    expect(byName.get("phone.call")?.requiresApproval).toBe(true);
+    // Les outils de téléphonie IA externe (phone.call / voice.speak) ont été
+    // SUPPRIMÉS du projet avec les IA externes — ils ne sont plus annoncés.
+    expect(byName.has("phone.call")).toBe(false);
+    expect(byName.has("voice.speak")).toBe(false);
     // Caméra et code arbitraire exclus du périmètre conversationnel.
     expect(byName.has("camera.capture")).toBe(false);
     expect(byName.has("code.execute")).toBe(false);
@@ -50,7 +52,7 @@ describe("moteur conversationnel — contrôle humain des actions sensibles", ()
 
   it("produit un résumé d'impact et un périmètre de données lisibles", () => {
     expect(estimatedCostForTool("web.search")).toBe("gratuit");
-    expect(estimatedCostForTool("phone.call")).toContain("0,02");
+    expect(estimatedCostForTool("image.generate")).toContain("gratuit");
     expect(dataScopeForTool("composio.execute", { toolkit: "gmail" })).toContain("gmail");
     expect(dataScopeForTool("email.send")).toContain("Destinataire");
     expect(dataScopeForTool("social.publish")).toContain("public");

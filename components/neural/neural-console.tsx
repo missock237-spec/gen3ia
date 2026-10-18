@@ -1,47 +1,61 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /**
- * CONSOLE DE TEST DU SYSTÈME NEURONAL GEN3 — surface d'interaction complète
- * avec le cerveau à spikes : conversation (cycles réels), état du réseau
- * (santé, synapses, pools), entraînement sur le corpus du projet et reset.
+ * CONSOLE NEURONALE — AURORA OS V6 (architecture neural-first).
  *
- * Toutes les données affichées sont RÉELLES (aucune simulation) : elles
- * proviennent de /api/neural/state, /api/neural/cycle, /api/neural/train.
+ * La pièce maîtresse de la plateforme : le SYSTÈME NEURONAL Gen3 y est
+ * visible, vivant et pilotable. Toutes les données sont RÉELLES :
+ *  - la CONSTELLATION est l'échantillon synaptique du cerveau chargé
+ *    (/api/neural/brain) — les nœuds, arêtes, énergies et pulsations
+ *    représentent les VRAIES synapses apprises ;
+ *  - la conversation parle au moteur (/api/neural/cycle) ;
+ *  - l'entraînement apprend réellement le corpus (/api/neural/train) ;
+ *  - la génération média produit de VRAIS fichiers (SVG/WAV/SVG animé)
+ *    calculés depuis l'état du cerveau (/api/neural/media) ;
+ *  - l'hippocampe compte les tours MÉMORISÉS du runtime.
  */
 
-interface EtatNeural {
-  moteurNeuralActif: boolean;
+/* ------------------------------------------------------------------ */
+/* Types (contrats des routes /api/neural/*)                          */
+/* ------------------------------------------------------------------ */
+
+interface EtatCerveau {
   modele: string;
   creeLe: string;
-  cerveau: {
+  stats: {
     nbNeurones: number;
     nbSynapses: number;
-    poids: { moyen: number; min: number; max: number };
+    poidsMoyen: number;
+    poidsMin: number;
+    poidsMax: number;
+    histogramme: number[];
   };
+  constellation: Array<[number, number, number]>;
+  energies: Array<[number, number]>;
   sante: {
     cyclesTotaux: number;
     energieMoyenne: number;
     indiceHomeostasie: number;
     modeActuel: string;
   };
+  pools: Record<string, number[]>;
+  hippocampe: { toursMemorises: number; fenetreMax: number };
+  dernierJobEntrainement: JobEntrainement | null;
+}
+
+interface EtatNeural {
+  moteurNeuralActif: boolean;
+  modele: string;
+  creeLe: string;
+  cerveau: { nbNeurones: number; nbSynapses: number; poids: { moyen: number; min: number; max: number } };
+  sante: { cyclesTotaux: number; energieMoyenne: number; indiceHomeostasie: number; modeActuel: string };
   horlogeVirtuelle: number;
   poolsSortie: Record<string, number[]>;
-  outils: Array<{
-    nom: string;
-    description: string;
-    utilisations: number;
-    succesHistorique: number;
-  }>;
+  outils: Array<{ nom: string; description: string; utilisations: number; succesHistorique: number }>;
   competences: Array<{ nom: string; version: string; description: string }>;
-  historiqueEntrainement: Array<{
-    epochs: number;
-    samples: number;
-    accuracyTrain: number;
-    accuracyTest: number;
-    startedAt: string;
-  }>;
+  historiqueEntrainement: Array<{ epochs: number; samples: number; accuracyTrain: number; accuracyTest: number; startedAt: string }>;
   dernierJobEntrainement: JobEntrainement | null;
 }
 
@@ -69,492 +83,569 @@ interface JobEntrainement {
 interface MessageConversation {
   role: "utilisateur" | "reseaux";
   texte: string;
-  meta?: {
-    intention?: string;
-    scoreResonance?: number;
-    motsCles?: string[];
-    latencyMs?: number;
-  };
+  meta?: { intention?: string; scoreResonance?: number; motsCles?: string[]; latencyMs?: number };
 }
 
-const cardNeutre: React.CSSProperties = {
-  background: "var(--g3-surface)",
-  borderRadius: "var(--gen3ia-radius, 20px)",
-  boxShadow: "var(--gen3ia-shadow-sm)",
-};
-
-function pct(valeur: number): string {
-  return `${Math.round(valeur * 100)} %`;
+interface MediaGenere {
+  url: string;
+  storage: "r3" | "inline" | "r2";
+  mime: "image/png" | "image/svg+xml" | "audio/wav";
+  meta: Record<string, unknown>;
 }
 
-export function NeuralConsole() {
-  const [etat, setEtat] = useState<EtatNeural | null>(null);
+/* ------------------------------------------------------------------ */
+/* Utilitaires                                                         */
+/* ------------------------------------------------------------------ */
+
+const PCT = (v: number) => `${Math.round(v * 100)} %`;
+
+function useTelechargement<T>(url: string, intervalMs: number | null) {
+  const [donnees, setDonnees] = useState<T | null>(null);
   const [erreurAuth, setErreurAuth] = useState(false);
-  const [message, setMessage] = useState("");
-  const [envoiEnCours, setEnvoiEnCours] = useState(false);
-  const [conversation, setConversation] = useState<MessageConversation[]>([]);
-  const [lancement, setLancement] = useState<string | null>(null);
-  const finConversation = useRef<HTMLDivElement>(null);
 
-  const rafraichirEtat = useCallback(async () => {
+  const rafraichir = useCallback(async () => {
     try {
-      const reponse = await fetch("/api/neural/state", { cache: "no-store" });
+      const reponse = await fetch(url, { cache: "no-store" });
       if (reponse.status === 401 || reponse.status === 403) {
         setErreurAuth(true);
         return;
       }
-      if (reponse.ok) setEtat(await reponse.json());
+      if (reponse.ok) setDonnees(await reponse.json());
     } catch {
-      /* silencieux : la console retentera au prochain cycle */
+      /* silencieux : la prochaine interrogation retentera */
     }
-  }, []);
+  }, [url]);
 
   useEffect(() => {
-    void rafraichirEtat();
-    const interval = setInterval(() => void rafraichirEtat(), 5000);
+    void rafraichir();
+    if (intervalMs === null) return;
+    const interval = setInterval(() => void rafraichir(), intervalMs);
     return () => clearInterval(interval);
-  }, [rafraichirEtat]);
+  }, [rafraichir, intervalMs]);
 
-  // Progression du job d'entraînement : interrogation rapprochée.
+  return { donnees, erreurAuth, rafraichir };
+}
+
+/* ------------------------------------------------------------------ */
+/* Constellation — la carte RÉELLE du cerveau                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Visualisation de l'échantillon synaptique réel : chaque nœud est un
+ * neurone (position par spirale d'or dérivée de son ID), chaque arête
+ * une synapse APPRISE (opacité ∝ poids). Les pools de sortie connus
+ * (média, outils, intention) sont sur-lignés en cyan.
+ */
+function ConstellationNeuronale({ cerveau }: { cerveau: EtatCerveau | null }) {
+  const noeuds = useMemo(() => {
+    if (!cerveau || cerveau.constellation.length === 0) return [];
+    const parNid = new Map<number, { id: number; poidsMax: number }>();
+    for (const [src, , poids] of cerveau.constellation) {
+      const existant = parNid.get(src);
+      if (!existant || poids > existant.poidsMax) parNid.set(src, { id: src, poidsMax: poids });
+    }
+    const liste = Array.from(parNid.values()).slice(0, 64);
+    const angleOr = Math.PI * (3 - Math.sqrt(5));
+    return liste.map((n, i) => {
+      const t = (i + (n.id % 7) / 7) / Math.max(1, liste.length);
+      const angle = t * Math.PI * 2 * 1.2 + angleOr;
+      const r = 42 * Math.sqrt(t) * (0.72 + ((n.id % 11) / 11) * 0.26);
+      return {
+        id: n.id,
+        cx: 50 + r * Math.cos(angle),
+        cy: 50 + r * Math.sin(angle),
+        rayon: 0.55 + n.poidsMax * 2.1,
+        poids: n.poidsMax,
+      };
+    });
+  }, [cerveau]);
+
+  const aretes = useMemo(() => {
+    if (!cerveau) return [];
+    const visibles: Array<{ a: (typeof noeuds)[number]; b: (typeof noeuds)[number]; poids: number }> = [];
+    for (const [source, cible, poids] of cerveau.constellation) {
+      if (visibles.length >= 96) break;
+      const a = noeuds.find((n) => n.id === source);
+      const b = noeuds.find((n) => n.id === cible);
+      if (a && b && a !== b) visibles.push({ a, b, poids });
+    }
+    return visibles;
+  }, [cerveau, noeuds]);
+
+  if (!cerveau) {
+    return (
+      <div className="g3v6-brainfield flex h-full min-h-[280px] items-center justify-center rounded-[22px]" aria-busy="true" aria-label="Connexion au cerveau">
+        <p className="text-xs tracking-[.22em] text-[var(--g3-faint)] uppercase">Synchronisation du cerveau…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="g3v6-brainfield g3v6-halo relative h-full min-h-[280px] overflow-hidden rounded-[22px]" aria-label="Constellation synaptique réelle du cerveau Gen3">
+      <svg viewBox="0 0 100 100" className="h-full w-full" preserveAspectRatio="xMidYMid slice" role="img">
+        <defs>
+          <radialGradient id="v6-foyer" cx="50%" cy="46%" r="60%">
+            <stop offset="0%" stopColor="rgba(124,92,255,0.30)" />
+            <stop offset="100%" stopColor="transparent" />
+          </radialGradient>
+        </defs>
+        <rect width="100" height="100" fill="url(#v6-foyer)" />
+        {aretes.map(({ a, b, poids }, i) => (
+          <line
+            key={`ar-${i}`}
+            x1={a.cx} y1={a.cy} x2={b.cx} y2={b.cy}
+            stroke={poids > 0.55 ? "var(--g3v6-spike)" : "var(--g3v6-neural)"}
+            strokeWidth={0.12 + poids * 0.42}
+            strokeOpacity={0.14 + poids * 0.5}
+            className="g3v6-synapse"
+            style={{ animationDelay: `${(i % 7) * 0.32}s` }}
+          />
+        ))}
+        {noeuds.map((n, i) => (
+          <circle
+            key={`nd-${n.id}`}
+            cx={n.cx} cy={n.cy} r={n.rayon}
+            fill={n.poids > 0.6 ? "var(--g3v6-spike)" : "var(--g3v6-neural-strong)"}
+            fillOpacity={0.5 + n.poids * 0.45}
+            style={{ animation: `var(--g3v6-pulse)`, animationDelay: `${(i % 9) * 0.28}s` }}
+          />
+        ))}
+      </svg>
+      <div className="pointer-events-none absolute bottom-3 left-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] tracking-[.14em] text-[var(--g3-faint)] uppercase">
+        <span><span className="mr-1 inline-block size-1.5 rounded-full bg-[var(--g3v6-neural-strong)]" />neurone ({cerveau.stats.nbNeurones})</span>
+        <span><span className="mr-1 inline-block size-1.5 rounded-full bg-[var(--g3v6-spike)]" />synapse forte</span>
+        <span className="g3v6-metric">{cerveau.stats.nbSynapses.toLocaleString("fr-FR")} synapses · poids moyen {cerveau.stats.poidsMoyen.toFixed(3)}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Métrique V6                                                         */
+/* ------------------------------------------------------------------ */
+
+function Metrique({ label, valeur, sous = null }: { label: string; valeur: string; sous?: string | null }) {
+  return (
+    <div className="g3v6-card px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">{label}</p>
+      <p className="g3v6-metric mt-1.5 text-xl text-[var(--g3-text)]">{valeur}</p>
+      {sous ? <p className="mt-0.5 text-[11px] text-[var(--g3-muted)]">{sous}</p> : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Console principale                                                  */
+/* ------------------------------------------------------------------ */
+
+type OngletV6 = "cerveau" | "conversation" | "atelier" | "entrainement";
+
+const ONGLETS: Array<{ id: OngletV6; label: string }> = [
+  { id: "cerveau", label: "Cerveau" },
+  { id: "conversation", label: "Conversation" },
+  { id: "atelier", label: "Atelier média" },
+  { id: "entrainement", label: "Entraînement" },
+];
+
+export function NeuralConsole() {
+  const [onglet, setOnglet] = useState<OngletV6>("cerveau");
+
+  const { donnees: cerveau, rafraichir: rafraichirCerveau } = useTelechargement<EtatCerveau>("/api/neural/brain", 6000);
+  const { donnees: etat } = useTelechargement<EtatNeural>("/api/neural/state", 8000);
+
+  // Conversation
+  const [message, setMessage] = useState("");
+  const [envoiEnCours, setEnvoiEnCours] = useState(false);
+  const [conversation, setConversation] = useState<MessageConversation[]>([]);
+  const finFil = useRef<HTMLDivElement>(null);
+
+  // Atelier média
+  const [typeMedia, setTypeMedia] = useState<"visuel" | "audio" | "video">("visuel");
+  const [promptMedia, setPromptMedia] = useState("");
+  const [mediaEnCours, setMediaEnCours] = useState(false);
+  const [media, setMedia] = useState<MediaGenere | null>(null);
+  const [erreurMedia, setErreurMedia] = useState("");
+
+  // Entraînement
+  const [lancement, setLancement] = useState<string | null>(null);
+
   const jobEnCours = etat?.dernierJobEntrainement?.status === "en_cours";
   useEffect(() => {
     if (!jobEnCours) return;
-    const interval = setInterval(() => void rafraichirEtat(), 1500);
+    const interval = setInterval(() => void rafraichirCerveau(), 1500);
     return () => clearInterval(interval);
-  }, [jobEnCours, rafraichirEtat]);
+  }, [jobEnCours, rafraichirCerveau]);
 
   useEffect(() => {
-    finConversation.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversation]);
+    finFil.current?.scrollIntoView({ behavior: "smooth" });
+  }, [conversation.length]);
 
-  async function envoyerMessage(evenement: React.FormEvent) {
-    evenement.preventDefault();
+  /* ---------------- Conversation ---------------- */
+
+  const envoyer = useCallback(async () => {
     const texte = message.trim();
     if (!texte || envoiEnCours) return;
-
-    setConversation((precedent) => [
-      ...precedent,
-      { role: "utilisateur", texte },
-    ]);
-    setMessage("");
     setEnvoiEnCours(true);
+    setConversation((f) => [...f, { role: "utilisateur", texte }]);
+    setMessage("");
     try {
       const reponse = await fetch("/api/neural/cycle", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message: texte }),
       });
-      const donnees = await reponse.json();
-      if (!reponse.ok) throw new Error(donnees.error ?? "Cycle impossible.");
-      setConversation((precedent) => [
-        ...precedent,
+      const data = await reponse.json();
+      setConversation((f) => [
+        ...f,
         {
           role: "reseaux",
-          texte: donnees.reponse.texte,
+          texte: typeof data.reponse?.texte === "string" ? data.reponse.texte : data.error ?? "Aucune réponse.",
           meta: {
-            intention: donnees.reponse.intention,
-            scoreResonance: donnees.reponse.scoreResonance,
-            motsCles: donnees.reponse.motsCles,
-            latencyMs: donnees.reponse.latencyMs,
+            intention: data.reponse?.intention,
+            scoreResonance: data.reponse?.scoreResonance,
+            motsCles: data.reponse?.motsCles,
+            latencyMs: data.reponse?.latencyMs,
           },
         },
       ]);
-      void rafraichirEtat();
-    } catch (erreur) {
-      setConversation((precedent) => [
-        ...precedent,
-        {
-          role: "reseaux",
-          texte: `Erreur : ${erreur instanceof Error ? erreur.message : "inconnue"}`,
-        },
+      void rafraichirCerveau();
+    } catch (error) {
+      setConversation((f) => [
+        ...f,
+        { role: "reseaux", texte: `Le cerveau est momentanément injoignable (${error instanceof Error ? error.message : "erreur"}).` },
       ]);
     } finally {
       setEnvoiEnCours(false);
     }
-  }
+  }, [message, envoiEnCours, rafraichirCerveau]);
 
-  async function lancerEntrainement() {
-    if (jobEnCours) return;
-    setLancement(null);
+  /* ---------------- Atelier média ---------------- */
+
+  const genererMedia = useCallback(async () => {
+    const prompt = promptMedia.trim();
+    if (!prompt || mediaEnCours) return;
+    setMediaEnCours(true);
+    setErreurMedia("");
+    setMedia(null);
     try {
-      const reponse = await fetch("/api/neural/train", {
+      const reponse = await fetch("/api/neural/media", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ epochs: 4 }),
+        body: JSON.stringify({
+          type: typeMedia,
+          prompt,
+          ...(typeMedia === "audio" ? { dureeSecondes: 4 } : {}),
+          ...(typeMedia === "video" ? { dureeSecondes: 6 } : {}),
+        }),
       });
-      const donnees = await reponse.json();
-      if (!reponse.ok) throw new Error(donnees.error ?? "Lancement impossible.");
-      setLancement("Entraînement lancé — progression en direct ci-dessous.");
-      void rafraichirEtat();
-    } catch (erreur) {
-      setLancement(
-        `Échec du lancement : ${erreur instanceof Error ? erreur.message : "inconnue"}`,
-      );
+      const data = await reponse.json();
+      if (!reponse.ok) throw new Error(data.error ?? "Génération impossible.");
+      setMedia(data.media as MediaGenere);
+    } catch (error) {
+      setErreurMedia(error instanceof Error ? error.message : "Génération impossible.");
+    } finally {
+      setMediaEnCours(false);
     }
-  }
+  }, [promptMedia, typeMedia, mediaEnCours]);
 
-  async function reinitialiserCerveau() {
-    setLancement(null);
+  /* ---------------- Entraînement ---------------- */
+
+  const lancerEntrainement = useCallback(async () => {
+    if (lancement) return;
+    setLancement("démarrage…");
+    try {
+      const reponse = await fetch("/api/neural/train", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const data = await reponse.json();
+      setLancement(reponse.ok ? (data.job?.status === "en_cours" ? "en cours — la courbe se met à jour en direct." : "terminé.") : `échec : ${String(data.error ?? "")}`);
+      void rafraichirCerveau();
+    } catch (error) {
+      setLancement(`échec : ${error instanceof Error ? error.message : "erreur"}`);
+    }
+  }, [lancement, rafraichirCerveau]);
+
+  const reinitialiser = useCallback(async () => {
+    if (lancement) return;
+    setLancement("réinitialisation…");
     try {
       const reponse = await fetch("/api/neural/reset", { method: "POST" });
-      const donnees = await reponse.json();
-      if (!reponse.ok) throw new Error(donnees.error ?? "Reset impossible.");
-      setLancement("Cerveau réinitialisé à l'état initial (seed 42).");
-      setConversation([]);
-      void rafraichirEtat();
-    } catch (erreur) {
-      setLancement(
-        `Échec du reset : ${erreur instanceof Error ? erreur.message : "inconnue"}`,
-      );
+      setLancement(reponse.ok ? "cerveau réinitialisé (nouveau réseau seedé)." : "échec de la réinitialisation.");
+      void rafraichirCerveau();
+    } catch {
+      setLancement("échec de la réinitialisation.");
     }
-  }
+  }, [lancement, rafraichirCerveau]);
 
-  if (erreurAuth) {
-    return (
-      <div className="mx-auto max-w-xl px-6 py-24 text-center">
-        <h1 className="text-2xl font-semibold">Console neuronale Gen3</h1>
-        <p className="mt-4 text-[var(--g3-muted)]">
-          Connectez-vous pour interagir avec le système neuronal.
-        </p>
-      </div>
-    );
-  }
+  /* ---------------- Rendu ---------------- */
 
+  const sante = etat?.sante ?? cerveau?.sante;
+  const historique = etat?.historiqueEntrainement ?? [];
   const job = etat?.dernierJobEntrainement ?? null;
-  const dernierRapport = job?.rapport ?? null;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      {/* En-tête */}
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-[var(--g3-faint)]">
-            Système neuronal Gen3
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold">
-            Console{" "}
-            <span
-              style={{
-                background: "var(--g3-gradient)",
-                WebkitBackgroundClip: "text",
-                backgroundClip: "text",
-                color: "transparent",
-              }}
+    <div className="space-y-6">
+      {/* En-tête V6 : identité neural-first */}
+      <header className="g3v6-card g3v6-sweep relative overflow-hidden px-6 py-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3v6-spike)]">Aurora OS · V6 · Moteur interne</p>
+            <h1 className="mt-1 text-2xl font-bold text-[var(--g3-text)]">Système Neuronal Gen3</h1>
+            <p className="mt-1 max-w-xl text-sm text-[var(--g3-muted)]">
+              Réseau de neurones à spikes, plasticité hebbienne et corps sémantique — 100 % local, aucune IA externe.
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <span className="g3v6-resonance-bar h-2.5 w-2.5" aria-hidden />
+            <p className="g3v6-metric text-xs text-[var(--g3-text-secondary)]">
+              {sante ? `${sante.cyclesTotaux.toLocaleString("fr-FR")} cycles` : "—"}
+            </p>
+          </div>
+        </div>
+        <nav className="mt-4 flex flex-wrap gap-1.5" aria-label="Sections de la console neuronale">
+          {ONGLETS.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => setOnglet(o.id)}
+              aria-current={onglet === o.id ? "page" : undefined}
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${onglet === o.id
+                ? "bg-[var(--g3-primary)] text-white shadow-[var(--gen3ia-shadow-glow)]"
+                : "text-[var(--g3-muted)] hover:bg-[var(--g3-hover)] hover:text-[var(--g3-text)]"}`}
             >
-              cerveau à spikes
-            </span>
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-[var(--g3-muted)]">
-            Réseau à impulsions de 100 neurones, plasticité synaptique,
-            corps sémantique à 6 effecteurs. Réponses honnêtes : ce réseau
-            détecte des intentions, il ne génère pas de prose — moteur de
-            rendu externe déconnecté en mode neuronal.
-          </p>
-        </div>
-        <div
-          className="flex items-center gap-2 px-4 py-2 text-sm"
-          style={{
-            ...cardNeutre,
-            color: etat?.moteurNeuralActif
-              ? "var(--g3-success-strong)"
-              : "var(--g3-muted)",
-          }}
-        >
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{
-              background: etat?.moteurNeuralActif
-                ? "var(--g3-success)"
-                : "var(--g3-faint)",
-              boxShadow: etat?.moteurNeuralActif
-                ? "0 0 12px var(--g3-success)"
-                : undefined,
-            }}
-          />
-          {etat?.moteurNeuralActif
-            ? "Mode neuronal actif"
-            : "Mode externe (flag GEN3IA_AI_ENGINE)"}
-        </div>
+              {o.label}
+            </button>
+          ))}
+        </nav>
       </header>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-        {/* Colonne conversation */}
-        <section className="flex flex-col" style={{ ...cardNeutre, padding: 24 }}>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--g3-muted)]">
-            Conversation (cycles réels)
-          </h2>
-
-          <div className="mt-4 flex-1 space-y-3 overflow-y-auto" style={{ maxHeight: 420 }}>
-            {conversation.length === 0 && (
-              <p className="text-sm text-[var(--g3-faint)]">
-                Parlez au réseau : « génère une image de chat », « appelle le
-                support », « joue un son »… Chaque message est encodé en
-                stimulations neuronales, le cerveau propage ses spikes et la
-                résonance des pools décide de l&apos;intention.
-              </p>
-            )}
-            {conversation.map((tour, index) => (
-              <div
-                key={index}
-                className="leading-relaxed"
-                style={{
-                  borderRadius: 16,
-                  padding: "12px 16px",
-                  background:
-                    tour.role === "utilisateur"
-                      ? "var(--g3-primary-soft)"
-                      : "var(--g3-elevated)",
-                }}
-              >
-                <p className="whitespace-pre-wrap text-sm">{tour.texte}</p>
-                {tour.meta?.intention && (
-                  <p className="mt-2 flex flex-wrap gap-x-4 text-xs text-[var(--g3-faint)]">
-                    <span>
-                      intention :{" "}
-                      <b className="text-[var(--g3-secondary)]">
-                        {tour.meta.intention}
-                      </b>
-                    </span>
-                    {typeof tour.meta.scoreResonance === "number" && (
-                      <span>résonance : {tour.meta.scoreResonance.toFixed(2)}</span>
-                    )}
-                    {typeof tour.meta.latencyMs === "number" && (
-                      <span>{tour.meta.latencyMs} ms</span>
-                    )}
-                  </p>
-                )}
-              </div>
-            ))}
-            <div ref={finConversation} />
+      {/* Onglet CERVEAU : constellation + métriques + hippocampe */}
+      {onglet === "cerveau" && (
+        <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+          <ConstellationNeuronale cerveau={cerveau} />
+          <div className="space-y-3">
+            <Metrique label="Neurones" valeur={cerveau ? String(cerveau.stats.nbNeurones) : "—"} sous={cerveau ? `${cerveau.stats.nbSynapses.toLocaleString("fr-FR")} synapses câblées` : undefined} />
+            <Metrique label="Poids synaptique moyen" valeur={cerveau ? cerveau.stats.poidsMoyen.toFixed(3) : "—"} sous={cerveau ? `min ${cerveau.stats.poidsMin.toFixed(2)} · max ${cerveau.stats.poidsMax.toFixed(2)}` : undefined} />
+            <Metrique label="Homéostasie" valeur={sante ? PCT(sante.indiceHomeostasie) : "—"} sous={sante ? `énergie moyenne ${sante.energieMoyenne.toFixed(3)} · ${sante.modeActuel}` : undefined} />
+            <Metrique
+              label="Hippocampe (mémoire court terme)"
+              valeur={cerveau ? `${cerveau.hippocampe.toursMemorises}/${cerveau.hippocampe.fenetreMax}` : "—"}
+              sous="Fenêtre de discussion du superviseur central"
+            />
+            <div className="g3v6-card px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">Pools résonants</p>
+              <ul className="mt-2 space-y-1.5">
+                {Object.entries(cerveau?.pools ?? {}).slice(0, 6).map(([canal, neurones]) => (
+                  <li key={canal} className="flex items-center justify-between text-[11px]">
+                    <span className="text-[var(--g3-text-secondary)]">{canal}</span>
+                    <span className="g3v6-metric text-[var(--g3v6-spike)]">#{neurones.join(" #")}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
+        </div>
+      )}
 
-          <form onSubmit={envoyerMessage} className="mt-4 flex gap-3">
+      {/* Onglet CONVERSATION : parler au cerveau */}
+      {onglet === "conversation" && (
+        <div className="g3v6-card flex h-[520px] flex-col">
+          <div className="border-b border-[var(--g3v6-glass-border)] px-5 py-3">
+            <p className="text-sm font-semibold text-[var(--g3-text)]">Parlez au cerveau</p>
+            <p className="text-[11px] text-[var(--g3-muted)]">Chaque message stimule la zone lexicale réelle — la réponse est décodée des résonances apprises.</p>
+          </div>
+          <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+            {conversation.length === 0 ? (
+              <p className="pt-16 text-center text-sm text-[var(--g3-faint)]">Le réseau écoute. Écrivez le premier message…</p>
+            ) : (
+              conversation.map((m, i) => (
+                <div key={i} className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role === "utilisateur"
+                  ? "ml-auto bg-[var(--g3-primary)] text-white"
+                  : "bg-[var(--g3-elevated)] text-[var(--g3-text)]"}`}>
+                  <p className="whitespace-pre-wrap">{m.texte}</p>
+                  {m.meta?.intention ? (
+                    <p className="g3v6-metric mt-2 text-[10px] text-[var(--g3v6-spike)]">
+                      intention {m.meta.intention} · résonance {m.meta.scoreResonance !== undefined ? PCT(m.meta.scoreResonance) : "—"}
+                      {m.meta.latencyMs !== undefined ? ` · ${m.meta.latencyMs} ms` : ""}
+                    </p>
+                  ) : null}
+                </div>
+              ))
+            )}
+            {envoiEnCours ? <p className="text-xs text-[var(--g3-faint)]">Propagation synaptique en cours…</p> : null}
+            <div ref={finFil} />
+          </div>
+          <form
+            className="flex gap-2 border-t border-[var(--g3v6-glass-border)] p-4"
+            onSubmit={(e) => { e.preventDefault(); void envoyer(); }}
+          >
             <input
               value={message}
-              onChange={(evenement) => setMessage(evenement.target.value)}
-              placeholder="Votre message au cerveau…"
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Stimulez le réseau…"
               maxLength={4000}
-              className="flex-1 px-4 py-3 text-sm outline-none"
-              style={{
-                borderRadius: 14,
-                background: "var(--g3-elevated)",
-                color: "var(--g3-text)",
-              }}
+              className="flex-1 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-bg)] px-4 py-2.5 text-sm text-[var(--g3-text)] outline-none placeholder:text-[var(--g3-faint)] focus:border-[var(--g3-primary-border)]"
+              aria-label="Message au système neuronal"
             />
             <button
               type="submit"
               disabled={envoiEnCours || message.trim().length === 0}
-              className="px-5 py-3 text-sm font-semibold disabled:opacity-40"
-              style={{
-                borderRadius: 14,
-                background: "var(--g3-gradient)",
-                color: "var(--g3-on-primary)",
-              }}
+              className="rounded-xl bg-[var(--g3-primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--g3-primary-strong)] disabled:opacity-50"
             >
-              {envoiEnCours ? "Cycles…" : "Envoyer"}
+              {envoiEnCours ? "…" : "Stimuler"}
             </button>
           </form>
-        </section>
-
-        {/* Colonne état + entraînement */}
-        <div className="space-y-6">
-          <section style={{ ...cardNeutre, padding: 24 }}>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--g3-muted)]">
-              État du cerveau
-            </h2>
-            {etat ? (
-              <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                <div>
-                  <dt className="text-[var(--g3-faint)]">Neurones</dt>
-                  <dd className="text-lg font-semibold">
-                    {etat.cerveau.nbNeurones}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--g3-faint)]">Synapses</dt>
-                  <dd className="text-lg font-semibold">
-                    {etat.cerveau.nbSynapses}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--g3-faint)]">Poids moyen</dt>
-                  <dd className="text-lg font-semibold">
-                    {etat.cerveau.poids.moyen.toFixed(3)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--g3-faint)]">Cycles totaux</dt>
-                  <dd className="text-lg font-semibold">
-                    {etat.sante.cyclesTotaux}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--g3-faint)]">Énergie moyenne</dt>
-                  <dd className="text-lg font-semibold">
-                    {etat.sante.energieMoyenne.toFixed(3)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--g3-faint)]">Homéostasie</dt>
-                  <dd className="text-lg font-semibold">
-                    {etat.sante.indiceHomeostasie.toFixed(2)}
-                  </dd>
-                </div>
-                <div className="col-span-2">
-                  <dt className="text-[var(--g3-faint)]">Mode</dt>
-                  <dd>{etat.sante.modeActuel}</dd>
-                </div>
-                <div className="col-span-2">
-                  <dt className="text-[var(--g3-faint)]">
-                    Pools de sortie ({Object.keys(etat.poolsSortie).length})
-                  </dt>
-                  <dd className="mt-1 flex flex-wrap gap-1.5">
-                    {Object.keys(etat.poolsSortie).map((pool) => (
-                      <span
-                        key={pool}
-                        className="px-2 py-1 text-xs"
-                        style={{
-                          borderRadius: 8,
-                          background: "var(--g3-elevated)",
-                          color: "var(--g3-secondary)",
-                        }}
-                      >
-                        {pool}
-                      </span>
-                    ))}
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="mt-4 text-sm text-[var(--g3-faint)]">Chargement…</p>
-            )}
-          </section>
-
-          <section style={{ ...cardNeutre, padding: 24 }}>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--g3-muted)]">
-              Entraînement (corpus du projet)
-            </h2>
-            <p className="mt-2 text-xs text-[var(--g3-faint)]">
-              Boucle supervisée réelle sur public/llms*.txt + amorçage
-              canonique — plasticité synaptique guidée, accuracy mesurée,
-              cerveau persisté après chaque run.
-            </p>
-
-            {job && (
-              <div className="mt-4 space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--g3-faint)]">Statut</span>
-                  <span
-                    style={{
-                      color:
-                        job.status === "termine"
-                          ? "var(--g3-success-strong)"
-                          : job.status === "echec"
-                            ? "var(--g3-danger-strong)"
-                            : "var(--g3-warning-strong)",
-                    }}
-                  >
-                    {job.status === "en_cours"
-                      ? `Époque ${job.epochCourante}/${job.epochs}`
-                      : job.status}
-                  </span>
-                </div>
-                {job.status === "en_cours" && (
-                  <div>
-                    <div
-                      className="h-1.5 w-full overflow-hidden"
-                      style={{ borderRadius: 4, background: "var(--g3-elevated)" }}
-                    >
-                      <div
-                        className="h-full transition-all"
-                        style={{
-                          width: `${(job.epochCourante / job.epochs) * 100}%`,
-                          background: "var(--g3-gradient)",
-                        }}
-                      />
-                    </div>
-                    <p className="mt-1 text-xs text-[var(--g3-faint)]">
-                      accuracy courante : {pct(job.accuracyCourante)} ·{" "}
-                      {job.nbEchantillons} échantillons
-                    </p>
-                  </div>
-                )}
-                {dernierRapport && (
-                  <div className="text-xs text-[var(--g3-muted)]">
-                    <p>
-                      Accuracy train :{" "}
-                      <b className="text-[var(--g3-text)]">
-                        {pct(dernierRapport.accuracyTrain)}
-                      </b>{" "}
-                      · test :{" "}
-                      <b className="text-[var(--g3-text)]">
-                        {pct(dernierRapport.accuracyTest)}
-                      </b>{" "}
-                      · {dernierRapport.dureeMs} ms
-                    </p>
-                  </div>
-                )}
-                {job.erreur && (
-                  <p className="text-xs" style={{ color: "var(--g3-danger-strong)" }}>
-                    {job.erreur}
-                  </p>
-                )}
-              </div>
-            )}
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                onClick={() => void lancerEntrainement()}
-                disabled={jobEnCours}
-                className="px-4 py-2.5 text-sm font-semibold disabled:opacity-40"
-                style={{
-                  borderRadius: 12,
-                  background: "var(--g3-gradient)",
-                  color: "var(--g3-on-primary)",
-                }}
-              >
-                {jobEnCours ? "Entraînement…" : "Lancer l'entraînement"}
-              </button>
-              <button
-                onClick={() => void reinitialiserCerveau()}
-                disabled={jobEnCours}
-                className="px-4 py-2.5 text-sm disabled:opacity-40"
-                style={{
-                  borderRadius: 12,
-                  background: "var(--g3-elevated)",
-                  color: "var(--g3-muted)",
-                }}
-              >
-                Réinitialiser le cerveau
-              </button>
-            </div>
-            {lancement && (
-              <p className="mt-3 text-xs text-[var(--g3-secondary)]">{lancement}</p>
-            )}
-          </section>
-
-          {etat && etat.historiqueEntrainement.length > 0 && (
-            <section style={{ ...cardNeutre, padding: 24 }}>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--g3-muted)]">
-                Historique ({etat.historiqueEntrainement.length})
-              </h2>
-              <ul className="mt-3 space-y-1.5 text-xs text-[var(--g3-muted)]">
-                {etat.historiqueEntrainement
-                  .slice(-5)
-                  .reverse()
-                  .map((rapport, index) => (
-                    <li key={index} className="flex justify-between gap-2">
-                      <span>{new Date(rapport.startedAt).toLocaleString("fr-FR")}</span>
-                      <span>
-                        {rapport.samples} éch. · test {pct(rapport.accuracyTest)}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-            </section>
-          )}
         </div>
-      </div>
+      )}
+
+      {/* Onglet ATELIER MÉDIA : effecteurs locaux */}
+      {onglet === "atelier" && (
+        <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+          <div className="g3v6-card space-y-4 p-5">
+            <div>
+              <p className="text-sm font-semibold text-[var(--g3-text)]">Effecteurs du corps sémantique</p>
+              <p className="mt-1 text-[11px] leading-5 text-[var(--g3-muted)]">
+                Chaque création est calculée depuis l&apos;état RÉEL du cerveau (poids appris) — déterministe, locale, gratuite.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5" role="tablist" aria-label="Type de média">
+              {( ["visuel", "audio", "video"] as const ).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="tab"
+                  aria-selected={typeMedia === t}
+                  onClick={() => { setTypeMedia(t); setMedia(null); setErreurMedia(""); }}
+                  className={`rounded-xl px-3 py-2 text-xs font-semibold capitalize transition ${typeMedia === t
+                    ? "bg-[var(--g3v6-spike-soft)] text-[var(--g3v6-spike)] ring-1 ring-[var(--g3v6-spike)]"
+                    : "text-[var(--g3-muted)] hover:bg-[var(--g3-hover)]"}`}
+                >
+                  {t === "video" ? "vidéo" : t}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={promptMedia}
+              onChange={(e) => setPromptMedia(e.target.value)}
+              placeholder={typeMedia === "visuel" ? "Fractale neuronale bleutée, constellation dense…" : typeMedia === "audio" ? "Pulsation harmonique calme, gamme pentatonique…" : "Ondes synaptiques traversant la constellation…"}
+              rows={3}
+              maxLength={2000}
+              className="w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-bg)] px-4 py-3 text-sm text-[var(--g3-text)] outline-none placeholder:text-[var(--g3-faint)] focus:border-[var(--g3-primary-border)]"
+              aria-label="Prompt de génération"
+            />
+            <button
+              type="button"
+              onClick={() => void genererMedia()}
+              disabled={mediaEnCours || promptMedia.trim().length === 0}
+              className="w-full rounded-xl bg-[var(--g3-gradient)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+            >
+              {mediaEnCours ? "Le cerveau compose…" : "Générer (moteur local)"}
+            </button>
+            {erreurMedia ? <p className="text-xs text-[var(--g3-danger-strong)]">{erreurMedia}</p> : null}
+          </div>
+          <div className="g3v6-card flex items-center justify-center overflow-hidden p-4">
+            {media ? (
+              media.mime === "audio/wav" ? (
+                <div className="w-full space-y-3 text-center">
+                  <p className="text-xs text-[var(--g3-muted)]">Signal WAV synthétisé — {String(media.meta.octets ?? "?")} octets réels.</p>
+                  <audio controls src={media.url} className="mx-auto w-full" />
+                </div>
+              ) : (
+                <div className="w-full space-y-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={media.url} alt={`Création neuronale : ${String(media.meta.prompt ?? "")}`} className="mx-auto max-h-[420px] w-auto rounded-xl" />
+                  <p className="text-center text-[11px] text-[var(--g3-muted)]">
+                    {media.mime === "image/svg+xml" ? "Animation vectorielle SMIL — votre navigateur l'anime." : "Composition rastérisée en PNG."}
+                  </p>
+                </div>
+              )
+            ) : (
+              <p className="max-w-xs text-center text-sm text-[var(--g3-faint)]">
+                L&apos;œuvre générée apparaîtra ici — directement issue des synapses apprises de votre cerveau.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Onglet ENTRAÎNEMENT */}
+      {onglet === "entrainement" && (
+        <div className="space-y-6">
+          <div className="g3v6-card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[var(--g3-text)]">Apprentissage hebbien sur le corpus du projet</p>
+                <p className="mt-1 text-[11px] text-[var(--g3-muted)]">
+                  Le réseau APPREND réellement : plasticité guidée par label, accuracy train/test mesurée, cerveau persisté.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => void lancerEntrainement()} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl bg-[var(--g3-primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--g3-primary-strong)] disabled:opacity-50">
+                  {jobEnCours ? `Epoch ${job?.epochCourante ?? 0}/${job?.epochs ?? "?"}…` : "Lancer un entraînement"}
+                </button>
+                <button type="button" onClick={() => void reinitialiser()} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl border border-[var(--g3-border)] px-4 py-2.5 text-sm text-[var(--g3-muted)] transition hover:bg-[var(--g3-hover)] disabled:opacity-50">
+                  Réinitialiser
+                </button>
+              </div>
+            </div>
+            {lancement ? <p className="mt-3 text-xs text-[var(--g3-v6-spike, var(--g3v6-spike))]">{lancement}</p> : null}
+            {job?.rapport ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <Metrique label="Accuracy train" valeur={PCT(job.rapport.accuracyTrain)} sous={`${job.rapport.epochs} epochs · ${job.rapport.samples} échantillons`} />
+                <Metrique label="Accuracy test" valeur={PCT(job.rapport.accuracyTest)} sous="Généralisation mesurée" />
+                <Metrique label="Durée réelle" valeur={`${(job.rapport.dureeMs / 1000).toFixed(1)} s`} sous="Apprentissage exécuté" />
+              </div>
+            ) : null}
+          </div>
+
+          {/* Courbe d'apprentissage (données réelles du dernier rapport) */}
+          {job?.rapport && job.rapport.history.length > 1 ? (
+            <div className="g3v6-card p-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">Courbe d&apos;apprentissage (dernier job)</p>
+              <svg viewBox="0 0 100 40" className="mt-3 h-32 w-full" role="img" aria-label="Précision par epoch">
+                <polyline
+                  fill="none"
+                  stroke="var(--g3v6-spike)"
+                  strokeWidth="0.8"
+                  strokeDasharray="0.4 0.4"
+                  points={job.rapport.history
+                    .map((p, i) => `${(i / Math.max(1, job.rapport!.history.length - 1)) * 96 + 2},${38 - p.accuracy * 34}`)
+                    .join(" ")}
+                />
+              </svg>
+            </div>
+          ) : null}
+
+          {/* Historique persisté */}
+          <div className="g3v6-card p-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">Historique d&apos;entraînement (cerveau persisté)</p>
+            {historique.length === 0 ? (
+              <p className="mt-2 text-sm text-[var(--g3-faint)]">Aucun entraînement encore enregistré — lancez le premier.</p>
+            ) : (
+              <table className="mt-3 w-full text-left text-xs">
+                <thead>
+                  <tr className="text-[var(--g3-faint)]">
+                    <th className="pb-2 pr-4 font-semibold">Date</th>
+                    <th className="pb-2 pr-4 font-semibold">Epochs</th>
+                    <th className="pb-2 pr-4 font-semibold">Échantillons</th>
+                    <th className="pb-2 pr-4 font-semibold">Train</th>
+                    <th className="pb-2 font-semibold">Test</th>
+                  </tr>
+                </thead>
+                <tbody className="g3v6-metric text-[var(--g3-text-secondary)]">
+                  {historique.slice().reverse().slice(0, 8).map((h, i) => (
+                    <tr key={i} className="border-t border-[var(--g3-border)]">
+                      <td className="py-2 pr-4">{new Date(h.startedAt).toLocaleString("fr-FR")}</td>
+                      <td className="py-2 pr-4">{h.epochs}</td>
+                      <td className="py-2 pr-4">{h.samples}</td>
+                      <td className="py-2 pr-4 text-[var(--g3v6-spike)]">{PCT(h.accuracyTrain)}</td>
+                      <td className="py-2 text-[var(--g3v6-neural-strong)]">{PCT(h.accuracyTest)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

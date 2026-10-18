@@ -11,7 +11,7 @@ vi.mock("./wallet", () => ({
   releaseReservation: vi.fn(async () => ({ userId: "u", currency: "XAF", balanceMinor: 1_000_000, reservedMinor: 0, availableMinor: 1_000_000, updatedAt: 0, welcomeGranted: true, welcomeAmountMinor: 300_000 })),
 }));
 vi.mock("@/lib/ai/router", () => ({
-  selectProvider: vi.fn(() => [{ provider: "groq", model: "llama-test", reason: "test", score: 1 }]),
+  selectProvider: vi.fn(() => [{ provider: "gen3-snn", model: "gen3-snn-v1", reason: "test", score: 1 }]),
 }));
 
 import { getWallet, releaseReservation, reserveFunds, settleReservation } from "./wallet";
@@ -41,8 +41,8 @@ function fakeLLMCall(inputTokens = 1_000, outputTokens = 500, selfBilled = false
     ...(selfBilled ? { metadata: { [SELF_BILLED_METADATA_KEY]: SELF_BILLED_METADATA_VALUE } } : {}),
   } as unknown as AIRequest;
   const response = {
-    provider: "groq",
-    model: "llama-test",
+    provider: "gen3-snn",
+    model: "gen3-snn-v1",
     text: "réponse",
     usage: { inputTokens, outputTokens },
     latencyMs: 100,
@@ -58,7 +58,7 @@ beforeEach(() => {
   mockedSettle.mockResolvedValue({} as never);
   mockedRelease.mockResolvedValue({} as never);
   mockedGetWallet.mockResolvedValue({ userId: "u", currency: "XAF", balanceMinor: 1_000_000, reservedMinor: 0, availableMinor: 1_000_000, updatedAt: 0, welcomeGranted: true, welcomeAmountMinor: 300_000 });
-  mockedSelectProvider.mockReturnValue([{ provider: "groq", model: "llama-test", reason: "test", score: 1 }]);
+  mockedSelectProvider.mockReturnValue([{ provider: "gen3-snn", model: "gen3-snn-v1", reason: "test", score: 1 }]);
 });
 
 afterEach(() => {
@@ -89,13 +89,14 @@ describe("runWithExecutionBilling — cycle réservation/exécution/règlement",
     const reservedMinor = mockedReserveFunds.mock.calls[0]?.[0]?.amountMinor ?? 0;
     expect(reservedMinor).toBeGreaterThan(0);
     expect(billing.reservedMinor).toBe(reservedMinor);
-    // Le coût réel (2 000 in + 1 000 out tokens, tarifs groq) est facturé.
+    // Le coût réel (tokens à tarif NUL — moteur local) : la charge porte
+    // l'overhead plateforme + la marge (minimum GEN3IA_MIN_EXECUTION_CHARGE_EUR).
     expect(billing.chargeMinor).toBeGreaterThan(0);
     expect(billing.llmCalls).toBe(1);
     expect(billing.inputTokens).toBe(2_000);
     expect(billing.outputTokens).toBe(1_000);
     expect(billing.currency).toBe("XAF");
-    expect(billing.models).toContain("groq:llama-test");
+    expect(billing.models).toContain("gen3-snn:gen3-snn-v1");
     // Le règlement reprend exactement le débit annoncé.
     expect(mockedSettle.mock.calls[0]?.[0]?.actualChargeMinor).toBe(billing.chargeMinor);
     expect(mockedSettle.mock.calls[0]?.[0]?.reservedMinor).toBe(reservedMinor);
@@ -197,21 +198,16 @@ describe("runWithExecutionBilling — cycle réservation/exécution/règlement",
     expect(mockedSettle.mock.calls[0]?.[0]?.actualChargeMinor).toBe(0);
   });
 
-  it("l'estimation du pire couvre TOUS les fournisseurs capables (multi-candidats)", async () => {
-    mockedSelectProvider.mockReturnValue([
-      { provider: "groq", model: "cheap", reason: "t", score: 1 },
-      { provider: "openai", model: "premium", reason: "t", score: 2 },
-    ]);
+  it("l'estimation du pire couvre le moteur unique (charge minimale)", async () => {
     const { billing } = await runWithExecutionBilling({
       userId: "u",
       label: "test-multi",
       estimate: { task: "chat", inputTokens: 1_000, outputTokens: 1_000 },
       fn: async () => "ok",
     });
-    // openai (2,5 €/1M in, 10 €/1M out) > groq : la réserve couvre openai.
-    // 1 000 in + 1 000 out tokens sur openai ≈ 0,0125 € → marge 35 % → ~0,017 €
-    // → ×2 (RESERVE_MULTIPLIER) → minor XAF.
-    expect(billing.reservedMinor).toBeGreaterThanOrEqual(eurToXafRate() * 100 * 0.0125);
+    // Moteur neural unique (tarif nul) : la réserve couvre au minimum la
+    // charge plancher (overhead + marge, ×RESERVE_MULTIPLIER).
+    expect(billing.reservedMinor).toBeGreaterThanOrEqual(1);
   });
 
   it("la réservation est plafonnée (GEN3IA_MAX_EXECUTION_RESERVE_EUR) pour ne pas bloquer un solde entier", async () => {

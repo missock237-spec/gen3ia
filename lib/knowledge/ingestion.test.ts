@@ -33,7 +33,7 @@ describe("extractTextFromUpload — garde-fous de format", () => {
 
   it("route les images vers la couche perception (OCR) — erreur explicite si aucun modèle vision configuré", async () => {
     const binary = new File([new Uint8Array([0x00, 0x01, 0x02])], "image.png", { type: "image/png" });
-    await expect(extractTextFromUpload(binary)).rejects.toThrow(/OCR indisponible|aucun modèle vision/);
+    await expect(extractTextFromUpload(binary)).rejects.toThrow(/Perception \(OCR\/ASR\) indisponible|modèles de perception externes/);
   });
 
   it("refuse les formats réellement non pris en charge avec la liste mise à jour (OCR/ASR inclus)", async () => {

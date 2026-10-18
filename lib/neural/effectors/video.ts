@@ -8,12 +8,12 @@
  * L'exécution passe par le Tool OS en sandbox — la mécanique (gating,
  * sandbox, métriques d'usage, feedback) est RÉELLE.
  *
- * ADAPTATION HONNÊTE du portage (mode neuronal / test SNN) : la source
- * simulait le rendu des trames (fichier /tmp, score de fluidité fabriqué).
- * Ici, le moteur de rendu externe est déclaré NON CONNECTÉ : l'action interne
- * retourne explicitement { statut_rendu: "MOTEUR_EXTERNE_DESACTIVE", ... }
- * avec les paramètres réellement demandés (prompt, durée, fps). Aucun faux
- * fichier, aucun faux score.
+ * MOTEUR LOCAL : le rendu est produit par le moteur neuronal local
+ * (lib/neural/generation/video-engine.ts — animation vectorielle SVG SMIL
+ * calculée depuis les synapses et poids APPRIS du cerveau). Aucune IA
+ * externe. Le générateur est injecté au constructeur (câblé dans
+ * runtime.ts) ; sans générateur, l'effecteur le déclare honnêtement
+ * (MOTEUR_LOCAL_INDISPONIBLE) — jamais de faux fichier ni de faux score.
  *
  * Module PUR — aucune dépendance Node.
  */
@@ -24,6 +24,7 @@ import { actionEffecteur } from "../core/types";
 import type { EspaceFiltreResonant } from "../core/resonant-space";
 import type { SystemeExploitationOutils } from "./tool-os";
 import { statutEffectifDuResultat } from "./audio";
+import type { GenerateurLocalMedia } from "./audio";
 
 /** Nom du canal de sortie écouté (identique à la source). */
 export const CANAL_GENERER_VIDEO = "GENERER_VIDEO";
@@ -47,6 +48,7 @@ export class EffecteurGenerationVideo implements Effecteur {
   constructor(
     espaceResonant: EspaceFiltreResonant,
     toolOs: SystemeExploitationOutils,
+    private readonly generateurLocal?: GenerateurLocalMedia,
   ) {
     this.espaceResonant = espaceResonant;
     this.toolOs = toolOs;
@@ -67,10 +69,9 @@ export class EffecteurGenerationVideo implements Effecteur {
   }
 
   /**
-   * Action interne de génération — STUB HONNÊTE : le moteur de rendu vidéo
-   * externe n'est pas connecté en mode neuronal. Retourne le statut réel
-   * (MOTEUR_EXTERNE_DESACTIVE) et les paramètres demandés, sans simuler de
-   * fichier ni de score de fluidité.
+   * Action interne de génération — MOTEUR LOCAL : le générateur injecté
+   * produit une VRAIE animation SVG (calculée depuis l'état neuronal).
+   * Sans générateur injecté : statut honnête MOTEUR_LOCAL_INDISPONIBLE.
    */
   private actionGenerationVideoInterne(
     args: Record<string, unknown>,
@@ -83,14 +84,19 @@ export class EffecteurGenerationVideo implements Effecteur {
       typeof args["duree_secondes"] === "number" ? args["duree_secondes"] : 4;
     const fps = typeof args["fps"] === "number" ? args["fps"] : 24;
 
-    console.log(
-      `[NEURAL] [Moteur Vidéo] Moteur de rendu externe non connecté — intention vidéo : '${prompt}' (${dureeSecondes}s à ${fps}fps)`,
-    );
+    if (this.generateurLocal) {
+      return this.generateurLocal({
+        ...args,
+        prompt,
+        duree_secondes: dureeSecondes,
+        fps,
+      });
+    }
 
     return {
-      statut_rendu: "MOTEUR_EXTERNE_DESACTIVE",
+      statut_rendu: "MOTEUR_LOCAL_INDISPONIBLE",
       details:
-        "Moteur de rendu externe non connecté en mode neuronal (test SNN).",
+        "Aucun moteur de rendu local n'est injecté dans cet effecteur.",
       prompt,
       duree: dureeSecondes,
       fps,

@@ -152,7 +152,7 @@ export default function FaqPage() {
           </Link>
           <nav aria-label="Pied de page FAQ" className="flex flex-wrap items-center justify-center gap-4 text-sm">
             <Link href="/studio" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Studio</Link>
-            <Link href="/live" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Agent Live</Link>
+            <Link href="/neural" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Système Neuronal</Link>
             <Link href="/marketplace" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Marketplace</Link>
             <Link href="/privacy" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Confidentialité</Link>
           </nav>

@@ -40,7 +40,7 @@ import { generateScript } from "@/lib/video/script-service";
 import { generateSceneImage, findSceneImage } from "@/lib/video/image-bridge";
 import { isSceneVideoServiceEnabled, SceneVideoUnavailableError, startSceneVideoTask, awaitSceneVideoTask, findSceneVideo, type SceneVideoTaskState } from "@/lib/video/scene-video-service";
 import { billImageGeneration, billTts } from "@/lib/video/credits";
-import { resolvePreferredVoice, withPlatformVoiceFallback, generateSceneNarration, attachRecordingAsNarration } from "@/lib/video/voice-service";
+import { resolvePreferredVoice, withPlatformVoiceFallback, attachRecordingAsNarration } from "@/lib/video/voice-service";
 import { listAssets } from "@/lib/video/asset-service";
 import { syncVoiceTrack, applyTimelinePatch } from "@/lib/video/timeline-service";
 import { ensureMusicBed } from "@/lib/video/audio-engine";
@@ -902,15 +902,10 @@ async function narrationTaskForScene(
     });
     return 0;
   }
-  // Voie B : synthèse ElevenLabs facturée au caractère réel.
-  const narration = await generateSceneNarration({
-    userId: job.userId,
-    projectId: job.projectId,
-    sceneId: scene.id,
-    narration: scene.narration,
-    voice,
-  });
-  return narration.charactersUsed;
+  // Voie B (TTS ElevenLabs) SUPPRIMÉE : la synthèse vocale externe a été
+  // retirée du projet — sans enregistrement utilisateur, la scène reste
+  // muette (sous-titres préservés au montage). Aucun caractère facturé.
+  return 0;
 }
 
 /**

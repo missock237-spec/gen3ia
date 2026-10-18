@@ -4,7 +4,6 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorStatus } from "@/lib/security/http-errors";
 
 import { getNeuralRuntime } from "@/lib/neural/runtime";
-import { isNeuralEngineActive } from "@/lib/ai/engine-mode";
 import { getDernierJob } from "@/lib/neural/training/job";
 
 /**
@@ -23,7 +22,7 @@ export async function GET(request: NextRequest) {
     const stats = runtime.reseau.getStats();
 
     return NextResponse.json({
-      moteurNeuralActif: isNeuralEngineActive(),
+      moteurNeuralActif: true,
       modele: "gen3-snn-v1",
       creeLe: runtime.creeLe,
       cerveau: {

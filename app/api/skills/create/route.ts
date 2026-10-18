@@ -28,59 +28,83 @@ import {
   createSkill,
 } from "@/lib/skills/repository";
 
-import {
-  OpenAI,
-} from "openai";
+import type { StructuredSkillGenerator } from "@/lib/skills/factory";
 
-function createGenerator() {
-  const client =
-    new OpenAI({
-      apiKey:
-        process.env.OPENAI_API_KEY,
-    });
-
+/**
+ * GÉNÉRATEUR LOCAL de la Skill Factory — les LLM externes (OpenAI…)
+ * ont été SUPPRIMÉS du projet sur demande de l'utilisateur. La
+ * spécification de compétence est construite de façon DÉTERMINISTE
+ * depuis la requête elle-même (objectif, type, capacités, outils,
+ * contraintes) : aucune génération simulée, aucun champ inventé.
+ */
+function createGenerator(): StructuredSkillGenerator {
   return {
     async generate(prompt: string) {
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error(
-          "OPENAI_API_KEY is required.",
-        );
-      }
+      const lignes = prompt.split("\n");
+      const champ = (label: string): string => {
+        const ligne = lignes.find((l) => l.trim().startsWith(label));
+        return ligne ? ligne.slice(label.length).trim() : "";
+      };
+      const objectif = champ("OBJECTIVE:") || "Compétence Gen3";
+      const taskType = champ("TASK TYPE:") || "automation";
+      const capabilities = (champ("REQUIRED CAPABILITIES:") || "analyse")
+        .split(",")
+        .map((c) => c.trim())
+        .filter(Boolean);
+      const tools = (champ("REQUIRED TOOLS:") || "")
+        .split(",")
+        .map((c) => c.trim())
+        .filter(Boolean);
+      const expectedOutput = champ("EXPECTED OUTPUT:");
 
-      const response =
-        await client.chat.completions.create({
-          model:
-            process.env.OPENAI_TEXT_MODEL ||
-            "gpt-4.1",
+      const nom =
+        objectif
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "")
+          .slice(0, 48) || "competence_gen3";
 
-          messages: [
-            {
-              role: "system",
-              content:
-                "Return only valid JSON.",
-            },
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-
-          response_format: {
-            type: "json_object",
+      return {
+        name: nom,
+        description: `Compétence générée localement par la Skill Factory Gen3 — objectif : ${objectif}`,
+        category: taskType,
+        capabilities: (capabilities.length > 0 ? capabilities : ["execution"]).map((c) => ({
+          name: c,
+          description: `Capacité « ${c} » requise par l'objectif de la compétence.`,
+        })),
+        inputs: [
+          {
+            name: "demande",
+            type: "string",
+            description: "La demande utilisateur à traiter par la compétence.",
+            required: true,
           },
-        });
-
-      const content =
-        response.choices[0]
-          ?.message.content;
-
-      if (!content) {
-        throw new Error(
-          "Skill Factory returned empty output.",
-        );
-      }
-
-      return JSON.parse(content);
+        ],
+        outputs: [
+          {
+            name: "resultat",
+            type: expectedOutput || "string",
+            description: "Le résultat produit par la compétence.",
+          },
+        ],
+        triggers: [nom.split("_").slice(0, 3).join(" ")],
+        requiredTools: tools,
+        compatibleTasks: [taskType],
+        systemInstructions: `Tu es la compétence « ${nom} ». Objectif : ${objectif}. Utilise uniquement les outils déclarés. Échoue honnêtement si les entrées sont insuffisantes.`,
+        executionInstructions: [
+          `1. Analyser la demande au regard de l'objectif : ${objectif}.`,
+          "2. Vérifier que les outils requis sont disponibles (sinon échec explicite).",
+          "3. Exécuter le traitement de façon déterministe quand c'est possible.",
+          "4. Retourner le résultat et signaler honnêtement toute limite.",
+        ].join("\n"),
+        evaluationCriteria: [
+          "La compétence respecte l'objectif déclaré.",
+          "Aucun outil non déclaré n'est invoqué.",
+          "Les échecs sont explicites (jamais de résultat fabriqué).",
+        ],
+      };
     },
   };
 }

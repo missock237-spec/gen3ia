@@ -39,6 +39,6 @@ describe("composer-models — catalogue des moteurs", () => {
   it("modelChoiceLabel retombe sur « Automatique » pour un choix inconnu", () => {
     expect(modelChoiceLabel(undefined)).toBe("Automatique");
     expect(modelChoiceLabel("inconnu")).toBe("Automatique");
-    expect(modelChoiceLabel("glm-flash")).toBe("GLM 4 Flash");
+    expect(modelChoiceLabel("neural")).toBe("Neural Gen3");
   });
 });

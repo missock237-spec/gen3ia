@@ -8,13 +8,12 @@
  * passe par le Tool OS en sandbox — la mécanique (gating, sandbox, métriques
  * d'usage, feedback) est RÉELLE.
  *
- * ADAPTATION HONNÊTE du portage (mode neuronal / test SNN) : la source
- * simulait la synthèse (fichier /tmp, temps de rendu, score de fidélité
- * fabriqué). Ici, le moteur de rendu externe est déclaré NON CONNECTÉ :
- * l'action interne retourne explicitement
- * { statut_rendu: "MOTEUR_EXTERNE_DESACTIVE", ... } avec les paramètres
- * réellement demandés (prompt, durée, fréquence). Aucun faux fichier,
- * aucun faux score.
+ * MOTEUR LOCAL : la synthèse est produite par le moteur neuronal local
+ * (lib/neural/generation/audio-engine.ts — WAV réel calculé depuis
+ * l'histogramme des poids synaptiques APPRIS). Aucune IA externe.
+ * Le générateur est injecté au constructeur (câblé dans runtime.ts) ;
+ * sans générateur, l'effecteur le déclare honnêtement
+ * (MOTEUR_LOCAL_INDISPONIBLE) — jamais de fichier ni de score fabriqué.
  *
  * Module PUR — aucune dépendance Node.
  */
@@ -27,6 +26,11 @@ import type { SystemeExploitationOutils } from "./tool-os";
 
 /** Nom du canal de sortie écouté (identique à la source). */
 export const CANAL_GENERER_AUDIO = "GENERER_AUDIO";
+
+/** Générateur local de média : produit le contenu réel (data URI + mime). */
+export type GenerateurLocalMedia = (
+  args: Record<string, unknown>,
+) => Record<string, unknown>;
 
 /** Paramètres audio d'une commande de génération. */
 export interface ParametresAudio {
@@ -47,6 +51,7 @@ export class EffecteurGenerationAudio implements Effecteur {
   constructor(
     espaceResonant: EspaceFiltreResonant,
     toolOs: SystemeExploitationOutils,
+    private readonly generateurLocal?: GenerateurLocalMedia,
   ) {
     this.espaceResonant = espaceResonant;
     this.toolOs = toolOs;
@@ -67,10 +72,9 @@ export class EffecteurGenerationAudio implements Effecteur {
   }
 
   /**
-   * Action interne de synthèse — STUB HONNÊTE : le moteur de rendu audio
-   * externe n'est pas connecté en mode neuronal. Retourne le statut réel
-   * (MOTEUR_EXTERNE_DESACTIVE) et les paramètres demandés, sans simuler de
-   * fichier ni de score de fidélité.
+   * Action interne de synthèse — MOTEUR LOCAL : le générateur injecté
+   * produit un VRAI signal WAV (synthèse calculée depuis l'état neuronal).
+   * Sans générateur injecté : statut honnête MOTEUR_LOCAL_INDISPONIBLE.
    */
   private actionGenerationAudioInterne(
     args: Record<string, unknown>,
@@ -84,16 +88,21 @@ export class EffecteurGenerationAudio implements Effecteur {
     const frequenceEchantillonnage =
       typeof args["frequence_echantillonnage"] === "number"
         ? args["frequence_echantillonnage"]
-        : 44100;
+        : 22050;
 
-    console.log(
-      `[NEURAL] [Moteur Audio] Moteur de rendu externe non connecté — intention sonore : '${prompt}' (${dureeSecondes}s à ${frequenceEchantillonnage}Hz)`,
-    );
+    if (this.generateurLocal) {
+      return this.generateurLocal({
+        ...args,
+        prompt,
+        duree_secondes: dureeSecondes,
+        frequence_echantillonnage: frequenceEchantillonnage,
+      });
+    }
 
     return {
-      statut_rendu: "MOTEUR_EXTERNE_DESACTIVE",
+      statut_rendu: "MOTEUR_LOCAL_INDISPONIBLE",
       details:
-        "Moteur de rendu externe non connecté en mode neuronal (test SNN).",
+        "Aucun moteur de synthèse local n'est injecté dans cet effecteur.",
       prompt,
       duree: dureeSecondes,
       frequence: frequenceEchantillonnage,
@@ -178,7 +187,7 @@ export class EffecteurGenerationAudio implements Effecteur {
 
 /**
  * Statut effectif d'une action média : une exécution sandbox SUCCES dont le
- * rendu externe est désactivé remonte honnêtement MOTEUR_EXTERNE_DESACTIVE.
+ * rendu est indisponible remonte honnêtement son statut réel.
  */
 export function statutEffectifDuResultat(
   resultat: EffectorActionResult,
@@ -192,6 +201,14 @@ export function statutEffectifDuResultat(
         "MOTEUR_EXTERNE_DESACTIVE"
     ) {
       return "MOTEUR_EXTERNE_DESACTIVE";
+    }
+    if (
+      typeof rendu === "object" &&
+      rendu !== null &&
+      (rendu as { statut_rendu?: unknown }).statut_rendu ===
+        "MOTEUR_LOCAL_INDISPONIBLE"
+    ) {
+      return "MOTEUR_LOCAL_INDISPONIBLE";
     }
   }
   return resultat.status;

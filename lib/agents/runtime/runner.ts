@@ -11,9 +11,7 @@ import { createCheckpoint, saveCheckpoint } from "./checkpoint";
 import { getReadySteps, validateDAG } from "./dag";
 import { RuntimeScheduler } from "./scheduler";
 import { assertNotPaused, assertNotStopped, PauseRequestedError } from "./pause";
-import { isImageGenerationEnabled } from "@/lib/ai/image-generation";
-import { generateImageWithFallback } from "@/lib/ai/hf-image-fallback";
-import { enhanceImagePrompt } from "@/lib/ai/image-prompt-enhancer";
+import { enhanceImagePrompt } from "@/lib/ai/image-intent";
 import { RESPONSE_FORMAT_RULES } from "@/lib/ai/response-quality";
 import { applyPromptVariables } from "@/lib/ai/prompt-template";
 import { verifyOutcomeCriteria, type OutcomeContract } from "@/lib/agents/outcome-contract";
@@ -496,29 +494,23 @@ export class AgentRuntime {
 
   /**
    * Compétence image du runtime Gen3ia : une étape `media` génère une VRAIE
-   * image via Agnes AI. Le prompt est analysé puis amélioré par LLM (réalisme,
-   * cadrage, éclairage) sans jamais modifier le sujet demandé. La sortie est
-   * un rendu markdown d'image (affiché directement dans la conversation).
-   * Repli : si Agnes n'est pas configuré, l'étape retombe sur une rédaction
-   * LLM (comportement historique) au lieu de faire échouer la mission.
+   * image via le MOTEUR NEURONAL LOCAL (génération calculée depuis l'état
+   * réel du cerveau Gen3 — aucune IA externe). Le prompt est analysé puis
+   * enrichi par brief déterministe. La sortie est un rendu markdown d'image
+   * (affiché directement dans la conversation), archivé en R2 permanent.
    */
   private async executeMedia(step: RuntimeStep): Promise<unknown> {
     const rawPrompt = typeof step.input?.prompt === "string" && (step.input.prompt as string).trim()
       ? String(step.input.prompt).slice(0, 4_000)
       : step.description;
-    if (!isImageGenerationEnabled()) {
-      return this.executeLLM(step);
-    }
-    const { prompt } = await enhanceImagePrompt(rawPrompt, { userId: this.state.userId });
-    // REPRISE AUTOMATIQUE (directive permanente) + qualité « ultra réaliste »
-    // (2K, garde-fou de durée aligné sur la politique d'exécution des outils) :
-    // si Agnes est à sa limite de crédit (402), Hugging Face Z-Image-Turbo
-    // termine la tâche — même mécanique que le chat (lib/ai/hf-image-fallback).
-    // L'archivage R2 permanent est inclus dans le repli (storagePath) : l'URL
-    // de l'étape reste résolvable après expiration de l'URL fournisseur.
-    const image = await generateImageWithFallback({ prompt, size: "2K", timeoutMs: 60_000, userId: this.state.userId });
+    const prompt = enhanceImagePrompt(rawPrompt);
+    const { genererVisuelNeuralEtPersister } = await import("@/lib/neural/media-service");
+    const image = await genererVisuelNeuralEtPersister({
+      userId: this.state.userId,
+      prompt,
+    });
     const alt = step.name.replace(/[\[\]()"]/g, "").slice(0, 120) || "Image générée";
-    return `![${alt}](${image.imageUrl})`;
+    return `![${alt}](${image.url})`;
   }
 
   /**
@@ -572,13 +564,14 @@ export class AgentRuntime {
     return `[${sub.name}] ${billed.response.text}`;
   }
 
-  // Fournisseurs tolérés à la LECTURE des configs stockées (audit médias
-  // 103-c : « huggingface » retiré — provider mort ; un ancien doc qui le
-  // stockerait est désormais ignoré → routage automatique de repli).
-  private static readonly VALID_PROVIDERS = new Set(["groq", "openrouter", "anthropic", "openai", "glm", "agnes"]);
+  // Fournisseurs tolérés à la LECTURE des configs stockées : le moteur
+  // neuronal Gen3 est le SEUL moteur du projet (IA externes supprimées) —
+  // un ancien doc qui stockerait un provider externe est ignoré → routage
+  // automatique vers le moteur neuronal.
+  private static readonly VALID_PROVIDERS = new Set(["gen3-snn"]);
 
-  private static safeProvider(value?: string): "groq" | "openrouter" | "anthropic" | "openai" | "glm" | "agnes" | undefined {
-    return value && AgentRuntime.VALID_PROVIDERS.has(value) ? (value as "groq" | "openrouter" | "anthropic" | "openai" | "glm" | "agnes") : undefined;
+  private static safeProvider(value?: string): "gen3-snn" | undefined {
+    return value && AgentRuntime.VALID_PROVIDERS.has(value) ? (value as "gen3-snn") : undefined;
   }
 
   private async executeLLM(step: RuntimeStep): Promise<unknown> {

@@ -12,18 +12,14 @@ import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
 
 export const runtime = "nodejs";
 
-/** Capacité LLM : au moins un provider configuré + liste des clés présentes. */
+/** Capacité IA : le moteur NEURONAL Gen3 (interne, 100 % local) —
+ * aucune clé externe nécessaire, toujours actif. */
 function llmCapability() {
-  const providers = [
-    { id: "groq", configured: Boolean(process.env.GROQ_API_KEY) },
-    { id: "openrouter", configured: Boolean(process.env.OPENROUTER_API_KEY) },
-    { id: "openai", configured: Boolean(process.env.OPENAI_API_KEY) },
-    { id: "anthropic", configured: Boolean(process.env.ANTHROPIC_API_KEY) },
-    { id: "glm", configured: Boolean(process.env.GLM_API_KEY) },
-  ];
   return {
-    configured: providers.some((provider) => provider.configured),
-    providers,
+    configured: true,
+    providers: [
+      { id: "gen3-snn", configured: true },
+    ],
   };
 }
 
@@ -36,7 +32,7 @@ export async function GET(request: NextRequest) {
     provider: searchProvider || (process.env.SEARCH_API_KEY ? "serpapi" : "none"),
     configured: Boolean(process.env.SEARCH_API_KEY),
   };
-  const voice = { elevenlabs: Boolean(process.env.ELEVENLABS_API_KEY) };
+  const voice = { elevenlabs: false };
   const composio = Boolean(process.env.COMPOSIO_API_KEY);
 
   return NextResponse.json(

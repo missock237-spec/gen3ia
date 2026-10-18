@@ -53,10 +53,7 @@ const SOURCES: Record<string, { repo: string; category: string }> = {
   implement: { repo: "mattpocock/skills", category: "code" },
   teach: { repo: "mattpocock/skills", category: "productivity" },
   handoff: { repo: "mattpocock/skills", category: "productivity" },
-  "ai-video-generation": { repo: "101-skills/superpowers", category: "media" },
-  "ai-image-generation": { repo: "101-skills/superpowers", category: "media" },
   "agent-browser": { repo: "101-skills/superpowers", category: "web" },
-  "elevenlabs-tts": { repo: "101-skills/superpowers", category: "media" },
   "remotion-render": { repo: "101-skills/superpowers", category: "media" },
 };
 

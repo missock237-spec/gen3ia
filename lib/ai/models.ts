@@ -1,27 +1,15 @@
 /**
- * Fournisseurs LLM réellement implémentés (lib/ai/providers/index.ts).
+ * CONTRAT IA DU PROJET — moteur unique : le SYSTÈME NEURONAL Gen3
+ * (lib/neural/, SNN à spikes, portage du système de l'utilisateur).
  *
- * NB (audit médias 103-c) : « huggingface » a été RETIRÉ — aucun adaptateur
- * texte n'a jamais existé (le provider index levait « implemented
- * separately ») et aucun chemin de production ne le référence ; HF_TOKEN
- * reste une variable d'environnement valide mais sert UNIQUEMENT aux
- * embeddings (lib/memory/embeddings.ts, lib/skills/semantic.ts), jamais à
- * ce provider.
- *
- * NB (moteur neuronal Gen3) : « gen3-snn » désigne le moteur INTERNE
- * (lib/neural/engine.ts, SNN à spikes) — il n'est jamais servi par
- * callProvider/callProviderStream : le routeur (lib/ai/router.ts) délègue
- * directement au moteur neuronal quand GEN3IA_AI_ENGINE=neural, AVANT
- * toute sélection de fournisseur externe.
+ * Les fournisseurs LLM externes (OpenAI, Anthropic, Groq, OpenRouter,
+ * GLM, Agnes) ont été SUPPRIMÉS du projet sur demande explicite de
+ * l'utilisateur : seules des IA externes devaient disparaître, tout le
+ * reste de la structure reste intact. « gen3-snn » est le seul
+ * fournisseur restant — le moteur interne, servi par le routeur
+ * (lib/ai/router.ts) via lib/neural/runtime.ts.
  */
-export type AIProvider =
-  | "groq"
-  | "openrouter"
-  | "anthropic"
-  | "openai"
-  | "glm"
-  | "agnes"
-  | "gen3-snn";
+export type AIProvider = "gen3-snn";
 
 export type TaskType =
   | "chat"
@@ -41,7 +29,7 @@ export type AIMessageRole =
   | "assistant";
 
 export interface AIImageAttachment {
-  /** Type MIME supporté par les modèles vision servis par Gen3ia. */
+  /** Type MIME validé par lib/ai/content-filter.ts. */
   mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
 
   /** Soit des octets encodés base64 (sans préfixe data:), soit une URL. */
@@ -55,10 +43,10 @@ export interface AIMessage {
   content: string;
 
   /**
-   * Pièces jointes image (capacité vision, Task 42 axe 4) : validées par
-   * lib/ai/content-filter.ts (nombre, taille, format) AVANT l'appel
-   * provider. Ignorées par les modèles sans capacité vision (le routeur
-   * sélectionne alors un modèle vision selon `requiresVision`).
+   * Pièces jointes image : validées par lib/ai/content-filter.ts (nombre,
+   * taille, format). Le moteur neuronal ne possède pas de capacité vision —
+   * les images jointes sont conservées comme pièces jointes (artefacts)
+   * sans être interprétées ; aucune transcription fabriquée.
    */
   images?: AIImageAttachment[];
 }

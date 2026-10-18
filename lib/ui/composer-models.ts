@@ -4,10 +4,11 @@
  * Module PUR (aucune dépendance serveur) : partagé entre le composer client,
  * la persistance localStorage et les tests unitaires.
  *
- * « Auto » laisse le routeur Gen3ia choisir (repli élastique multi-fournisseurs
- * — Task 42) ; les autres options fixent le couple provider/model du tour.
- * Le routeur retombe automatiquement sur un autre fournisseur si le modèle
- * choisi est indisponible (coupe-circuit + résilience élastique).
+ * MOTEUR UNIQUE : les IA externes (OpenAI, Anthropic, Groq, OpenRouter, GLM,
+ * Agnes) ont été SUPPRIMÉES du projet sur demande explicite de l'utilisateur
+ * — le SYSTÈME NEURONAL Gen3 (SNN interne) est l'unique moteur. La liste
+ * reste exposée pour la compatibilité des appels (label « Neural Gen3 »)
+ * mais ne propose plus aucun fournisseur externe.
  */
 
 export interface ComposerModelChoice {
@@ -26,35 +27,14 @@ export const COMPOSER_MODEL_OPTIONS: ComposerModelOption[] = [
   {
     id: "auto",
     label: "Automatique",
-    description: "Le routeur Gen3ia choisit le meilleur modèle disponible — recommandé.",
+    description: "Le moteur neuronal Gen3 traite votre demande — recommandé.",
   },
   {
-    id: "glm-flash",
-    provider: "glm",
-    model: "glm-4-flash",
-    label: "GLM 4 Flash",
-    description: "Ultra rapide et économique — idéal pour le quotidien.",
-  },
-  {
-    id: "gpt-4o",
-    provider: "openai",
-    model: "gpt-4o",
-    label: "GPT-4o",
-    description: "OpenAI — raisonnement polyvalent et vision.",
-  },
-  {
-    id: "claude-sonnet",
-    provider: "anthropic",
-    model: "claude-3-5-sonnet-20241022",
-    label: "Claude 3.5 Sonnet",
-    description: "Anthropic — rédaction soignée et analyse approfondie.",
-  },
-  {
-    id: "gpt-oss",
-    provider: "groq",
-    model: "openai/gpt-oss-120b",
-    label: "GPT-OSS 120B",
-    description: "Groq — réponses éclair en open source.",
+    id: "neural",
+    provider: "gen3-snn",
+    model: "gen3-snn-v1",
+    label: "Neural Gen3",
+    description: "Le système neuronal Gen3 (SNN à spikes) — moteur interne de la plateforme.",
   },
 ];
 
@@ -64,7 +44,7 @@ export function findModelOption(id: string | undefined): ComposerModelOption | n
   return COMPOSER_MODEL_OPTIONS.find((option) => option.id === id) ?? null;
 }
 
-/** Libellé compact de la pill : « Moteur : GLM 4 Flash ». */
+/** Libellé compact de la pill : « Moteur : Neural Gen3 ». */
 export function modelChoiceLabel(id: string | undefined): string {
   return findModelOption(id)?.label ?? "Automatique";
 }

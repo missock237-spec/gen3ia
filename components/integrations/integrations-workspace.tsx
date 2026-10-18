@@ -479,7 +479,6 @@ export function IntegrationsWorkspace() {
                 { label: "Composio Hub", ok: status?.composio },
                 { label: "Moteurs IA", ok: status?.llm?.configured === true },
                 { label: "Recherche web", ok: status?.search?.configured === true },
-                { label: "Voix (ElevenLabs)", ok: status?.voice?.elevenlabs === true },
               ].map((item) => (
                 <div key={item.label} className="rounded-xl border border-[var(--g3-border)] px-4 py-3">
                   <p className="text-sm font-medium">{item.label}</p>
