@@ -175,11 +175,13 @@ export async function dispatchJob(uid: string, job: TrainingJob, plan: TrainingP
   if (!selected) {
     const reason = "no-gpu-provider";
     const alreadyWaiting = job.waitingReason === reason;
-    let updated: TrainingJob = {
-      ...job,
-      waitingReason: reason,
-      updatedAt: nowIso(),
-    };
+    // Idempotence du balayage : sans changement effectif (déjà en attente
+    // pour la même raison), la tâche n'est NI modifiée NI réécrite — le
+    // cron de balayage global ne doit pas générer une écriture R2 par
+    // passage et par tâche en file.
+    let updated: TrainingJob = alreadyWaiting
+      ? job
+      : { ...job, waitingReason: reason, updatedAt: nowIso() };
     if (!alreadyWaiting) {
       updated = withEvent(
         updated,
