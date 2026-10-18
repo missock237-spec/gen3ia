@@ -1,0 +1,14 @@
+# Dépendances de DÉPLOIEMENT du worker GPU (image Docker / machine GPU).
+# Pour un environnement CPU léger (rag-index uniquement), installer torch CPU :
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+boto3>=1.34
+torch>=2.2
+transformers>=4.44
+peft>=0.11
+accelerate>=0.30
+datasets>=2.19
+sentence-transformers>=3.0
+sentencepiece>=0.2.0

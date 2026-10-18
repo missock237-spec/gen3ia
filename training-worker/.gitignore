@@ -1,0 +1,8 @@
+.venv/
+.venv-qa/
+__pycache__/
+*.pyc
+.work/
+work/
+jobs-state/
+.pytest_cache/

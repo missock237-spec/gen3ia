@@ -1,0 +1,3 @@
+# Dépendances de TEST du worker (légères : ni torch ni boto3 requis).
+pytest>=8.0
+httpx>=0.27
