@@ -37,6 +37,7 @@ import { genererVisuelNeural, visuelVersDataUri } from "./generation/visual-engi
 import { genererAudioNeural, audioVersDataUri } from "./generation/audio-engine";
 import { genererVideoNeural, videoVersDataUri } from "./generation/video-engine";
 import { CentralSupervisor, HippocampusMemory } from "./memory/hippocampus";
+import { MoteurEvolutionGen3 } from "./evolution";
 
 /**
  * RUNTIME NEURONAL — singleton caché sur globalThis (résiste au HMR de
@@ -94,6 +95,8 @@ export interface NeuralRuntime {
    * paires personnalisées du Studio d'entraînement + plasticité d'usage).
    */
   cortex: CortexLangagierGen3;
+  /** Moteur d'évolution continue (observation + consolidation autonome). */
+  evolution: MoteurEvolutionGen3;
   /** Historique des rapports d'entraînement persistés (données réelles). */
   historiqueEntrainement: TrainingReport[];
   /** Date ISO de création du runtime. */
@@ -267,8 +270,13 @@ export function getNeuralRuntime(): NeuralRuntime {
   const statsCorpus = cortex.apprendre(CORPUS_GEN3);
 
   // 9. Moteur IA adapté au contrat du projet (cortex + hippocampe câblés :
-  //    conversation réelle + mémoire de reprise).
-  const engine = new NeuralEngine(noyau, espace, cortex, hippocampe);
+  //    conversation réelle + mémoire de reprise) — et ÉVOLUTION CONTINUE :
+  //    chaque échange réussi est observé, périodiquement consolidé en
+  //    mémoire longue, puis le cerveau est sauvegardé (fire-and-forget).
+  const evolution = new MoteurEvolutionGen3(cortex);
+  const engine = new NeuralEngine(noyau, espace, cortex, hippocampe, evolution, () => {
+    void sauvegarderCerveauRuntime().catch(() => undefined);
+  });
 
   const runtime: NeuralRuntime = {
     reseau,
@@ -285,6 +293,7 @@ export function getNeuralRuntime(): NeuralRuntime {
     hippocampe,
     superviseur,
     cortex,
+    evolution,
     historiqueEntrainement: [],
     creeLe: new Date().toISOString(),
   };

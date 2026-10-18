@@ -37,6 +37,16 @@ export async function GET() {
           themes: runtime.cortex.themes().length,
           pairesPersonnalisees: runtime.cortex.compterPersonnalisees(),
         },
+        evolution: {
+          echangesObserves: runtime.evolution.metriques().echangesObserves,
+          echangesConsolides: runtime.evolution.metriques().echangesConsolides,
+          cyclesConsolidation: runtime.evolution.metriques().cyclesConsolidation,
+          apprentissageContinu: true,
+        },
+        entraînementUtilisateurs: {
+          studio: "Gen entraîne les modèles fournis par les utilisateurs",
+          moteurNatif: "gen3-native (CPU local, apprentissage réel)",
+        },
         iaExterne: "aucune — moteur 100 % local",
       },
       { headers: { "cache-control": "public, max-age=30, stale-while-revalidate=60" } },

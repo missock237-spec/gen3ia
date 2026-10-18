@@ -16,6 +16,8 @@ import { decodeResponse, poidsResonanceParCycle } from "./decoding/response-deco
 import type { NeuralDecodedResponse } from "./decoding/response-decoder";
 import type { CortexLangagierGen3, ContexteLangage } from "./generation/language";
 import type { HippocampusMemory } from "./memory/hippocampus";
+import { MoteurEvolutionGen3 } from "./evolution";
+import type { ResultatConsolidation } from "./evolution";
 
 /** Source du langage de la réponse (télémétrie honnête). */
 export type SourceLangage =
@@ -94,6 +96,14 @@ export class NeuralEngine {
     private readonly espace: EspaceFiltreResonant,
     private readonly cortex?: CortexLangagierGen3,
     private readonly hippocampe?: HippocampusMemory,
+    /**
+     * ÉVOLUTION CONTINUE : chaque échange réussi est observé, puis périodiquement
+     * consolidé en mémoire longue (paires personnalisées du cortex). Sans ce
+     * moteur, l'IA reste statique entre deux sessions d'entraînement.
+     */
+    private readonly evolution?: MoteurEvolutionGen3,
+    /** Callback de persistance appelé après chaque consolidation effective. */
+    private readonly surConsolidation?: (resultat: ResultatConsolidation) => void,
   ) {}
 
   /**
@@ -137,6 +147,7 @@ export class NeuralEngine {
     const messageUtilisateur = extraireDernierMessageUtilisateur(options);
     const composition = this.composer(messageUtilisateur, decode);
     this.memoriser(messageUtilisateur, composition.texte);
+    this.evoluer(messageUtilisateur, composition);
 
     return this.construireReponse(
       prompt,
@@ -213,6 +224,7 @@ export class NeuralEngine {
     }
 
     this.memoriser(messageUtilisateur, composition.texte);
+    this.evoluer(messageUtilisateur, composition);
     return this.construireReponse(
       prompt,
       composition,
@@ -268,6 +280,7 @@ export class NeuralEngine {
     }
 
     this.memoriser(messageUtilisateur, composition.texte);
+    this.evoluer(messageUtilisateur, composition);
     return this.construireReponse(
       prompt,
       composition,
@@ -358,6 +371,32 @@ export class NeuralEngine {
       this.hippocampe.remember(prompt, reponse);
     } catch {
       // Télémétrie perdue, pas la conversation.
+    }
+  }
+
+  /**
+   * ÉVOLUTION CONTINUE — chaque échange réussi est observé par le moteur
+   * d'évolution ; quand la périodicité est atteinte, une consolidation
+   * transforme les échanges de qualité en connaissances durables (paires
+   * personnalisées du cortex) et le callback de persistance est appelé
+   * (le cerveau est sauvegardé). Échec silencieux : une panne d'évolution
+   * ne doit jamais casser la conversation.
+   */
+  private evoluer(prompt: string, composition: CompositionReponse): void {
+    if (!this.evolution) return;
+    try {
+      this.evolution.observer({
+        question: prompt,
+        reponse: composition.texte,
+        score: composition.scoreAppariement ?? 0,
+        source: composition.source,
+      });
+      const resultat = this.evolution.consoliderSiPret();
+      if (resultat && resultat.enseignees > 0) {
+        this.surConsolidation?.(resultat);
+      }
+    } catch {
+      // L'évolution est un gain, jamais une dépendance critique.
     }
   }
 
