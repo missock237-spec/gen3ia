@@ -56,6 +56,12 @@ export interface ProviderJobState {
 export interface GpuProvider {
   readonly id: string;
   readonly label: string;
+  /**
+   * Périmètre d'engines optionnel : si déclaré, le fournisseur n'accepte
+   * QUE les tâches de ces moteurs (ex. gen3-local → gen3-native). Absent =
+   * compatible avec tous les moteurs (sélection VRAM standard).
+   */
+  readonly engines?: readonly string[];
   /** Sonde les capacités réelles (échoue proprement si injoignable). */
   capabilities(): Promise<GpuProviderCapabilities>;
   submit(payload: SubmitJobPayload): Promise<{ externalId: string }>;

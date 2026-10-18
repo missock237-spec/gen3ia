@@ -236,7 +236,7 @@ function normalizePlan(
       vramGbEstimate: toPositive(resourcesRaw.vramGbEstimate) ?? (engine.minVramGb || null),
       storageGbEstimate: toPositive(resourcesRaw.storageGbEstimate),
       estimatedDurationMinutes: toPositive(resourcesRaw.estimatedDurationMinutes),
-      providerClass: "worker-http",
+      providerClass: engine.id === "gen3-native" ? "gen3-local" : "worker-http",
     },
     risks: Array.isArray(draft.risks) ? draft.risks.filter((r): r is string => typeof r === "string").slice(0, 10) : [],
     warnings: Array.isArray(draft.warnings) ? draft.warnings.filter((w): w is string => typeof w === "string").slice(0, 10) : [],
@@ -312,24 +312,31 @@ export function heuristicPlan(context: Record<string, unknown>): {
   const smallData = totalPairs < 50 || splits.train < 50;
 
   if (smallData) {
+    // Moteur Gen3 NATIF : Gen (l'IA de la plateforme) entraîne elle-même un
+    // modèle sur les paires de l'utilisateur — CPU local, pas de GPU requis,
+    // apprentissage réel dès quelques paires. C'est la recommandation
+    // naturelle du Studio « Gen entraîne vos modèles ».
     return {
       plan: {
-        method: "rag",
-        engineId: "rag-index",
-        baseModel: "Qwen/Qwen2.5-1.5B-Instruct",
+        method: "finetune",
+        engineId: "gen3-native",
+        baseModel: "gen3-snn-cortex",
         baseModelKind: "catalog",
-        parameters: { chunkSize: 800, chunkOverlap: 80 },
-        resources: { vramGbEstimate: null, storageGbEstimate: 1, estimatedDurationMinutes: 5, providerClass: "worker-http" },
+        parameters: { epochs: 5, testRatio: 0.15 },
+        resources: { vramGbEstimate: 0, storageGbEstimate: 1, estimatedDurationMinutes: 2, providerClass: "gen3-local" },
         risks: [
-          "Volume de données trop faible pour un fine-tuning crédible (risque fort de surapprentissage).",
-          ...(splits.validation === 0 ? ["Aucun split de validation : les métriques ne seront pas mesurables."] : []),
+          "Le modèle Gen3 apprend par corpus : il répond à partir de vos données et ne généralise pas comme un LLM transformeur.",
+          ...(splits.validation === 0 ? ["Aucun split de validation : la précision test est mesurée par séparation interne (testRatio)."] : []),
         ],
-        warnings: [`${totalPairs} paires détectées : en dessous du seuil recommandé (50+) pour un LoRA.`],
-        expectedOutcomes: "RAG fonctionnel sur vos données : réponses ancrées dans vos documents sans toucher aux poids.",
-        evaluationCriteria: ["Réponses correctes sur 10 questions de contrôle", "Aucune hallucination sur des questions hors périmètre"],
+        warnings: [`${totalPairs} paires détectées : parfaites pour un entraînement Gen3 natif (et trop peu pour un LoRA).`],
+        expectedOutcomes: "Un modèle Gen3 entraîné sur VOS données, exportable (JSON), avec précision train/test mesurée réellement.",
+        evaluationCriteria: [
+          "Précision test mesurée sur des paires jamais vues",
+          "Le modèle répond correctement à vos questions d'entraînement",
+        ],
       },
       explanation:
-        "Le volume de données est trop faible pour un fine-tuning fiable : la solution adaptée est un RAG (indexation de vos documents, sans modification des poids du modèle). Enrichissez le dataset (plusieurs centaines de paires) pour débloquer un LoRA. (Analyse heuristique — assistant IA momentanément indisponible.)",
+        "Gen va entraîner elle-même un modèle sur vos données avec son moteur neuronal natif : aucun GPU n'est requis et l'apprentissage est réel dès quelques paires. Enrichissez le dataset (plusieurs centaines de paires) pour débloquer en plus un fine-tuning LoRA sur GPU. (Analyse heuristique — assistant IA momentanément indisponible.)",
     };
   }
 

@@ -270,7 +270,7 @@ export const exportArtifactSchema = z.object({
   id: z.string().min(1),
   projectId: z.string().min(1),
   ownerId: z.string().min(1),
-  kind: z.enum(["dataset-archive", "model-files", "plan-config"]),
+  kind: z.enum(["dataset-archive", "model-files", "plan-config", "trained-model"]),
   label: z.string().max(200).default(""),
   storageKey: z.string(),
   sizeBytes: z.number().int().nonnegative(),

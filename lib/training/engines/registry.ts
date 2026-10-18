@@ -50,6 +50,26 @@ export interface TrainingEngine {
 
 export const ENGINES: TrainingEngine[] = [
   {
+    id: "gen3-native",
+    name: "Gen3 natif — Gen entraîne votre modèle",
+    description:
+      "L'IA Gen3ia entraîne ELLE-MÊME un modèle de langage sur VOS données : votre dataset de paires question/réponse est réellement appris par le cortex neuronal Gen3 (index inversé pondéré IDF + plasticité d'usage), sur le CPU de la plateforme. Aucun GPU externe requis, aucun modèle téléchargé — le modèle produit est un cerveau Gen3 exportable (JSON) qui répond à vos questions.",
+    families: ["text"],
+    methods: ["finetune", "full-training"],
+    acceptedModelFormats: ["config-only", "catalog"],
+    acceptedDatasetFormats: ["json", "jsonl", "csv", "txt"],
+    minVramGb: 0,
+    available: true,
+    parameters: [
+      { key: "epochs", label: "Époques", type: "number", min: 1, max: 30, step: 1, defaultValue: 5, description: "Passes complètes sur votre dataset (chaque passe renforce la plasticité du modèle)." },
+      { key: "testRatio", label: "Fraction de test", type: "number", min: 0.05, max: 0.3, step: 0.05, defaultValue: 0.15, description: "Part des paires réservée à la mesure de précision (jamais vue pendant l'apprentissage)." },
+    ],
+    knownLimits: [
+      "Le modèle produit est un cerveau Gen3 (apprentissage par corpus : il répond à partir de ce que le dataset lui a enseigné) — il ne généralise pas comme un LLM transformeur.",
+      "Plafonds honnêtes : 5 Mo et 5 000 paires par dataset (au-delà, les lignes excédentaires sont ignorées et signalées dans les journaux).",
+    ],
+  },
+  {
     id: "text-lora",
     name: "Fine-tuning LLM — LoRA / QLoRA",
     description:

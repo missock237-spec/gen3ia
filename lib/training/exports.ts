@@ -92,6 +92,25 @@ export async function prepareExport(
       }
     }
     label = `modeles-${overview.project.name}`;
+  } else if (kind === "trained-model") {
+    // Modèles ENTRAÎNÉS : artefacts réellement produits par des tâches
+    // complétées (ex. cerveau Gen3 du moteur gen3-native). Vide sans tâche
+    // complétée — aucun modèle fictif n'est jamais exporté.
+    const completes = overview.jobs.filter((j) => j.status === "completed" && j.artifacts.length > 0);
+    if (completes.length === 0) {
+      return { ok: false, error: "Aucun modèle entraîné : les artefacts apparaissent après une tâche complétée réellement." };
+    }
+    for (const job of completes) {
+      for (const artefact of job.artifacts) {
+        try {
+          const content = await downloadFromR2(artefact.storageKey, 512 * 1024 * 1024);
+          entries.push({ name: `${job.id}-${artefact.label || "modele"}.json`, content });
+        } catch {
+          return { ok: false, error: `Artefact ${artefact.label || artefact.storageKey} illisible : export annulé.` };
+        }
+      }
+    }
+    label = `modeles-entraines-${overview.project.name}`;
   } else {
     const plan = overview.plans.find((p) => p.status === "accepted") ?? overview.plans[0];
     if (!plan) return { ok: false, error: "Aucun plan à exporter." };
