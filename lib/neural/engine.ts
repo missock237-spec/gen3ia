@@ -14,6 +14,25 @@ import type { EspaceFiltreResonant } from "./core/resonant-space";
 import { encodeText } from "./encoding/text-encoder";
 import { decodeResponse, poidsResonanceParCycle } from "./decoding/response-decoder";
 import type { NeuralDecodedResponse } from "./decoding/response-decoder";
+import type { CortexLangagierGen3, ContexteLangage } from "./generation/language";
+import type { HippocampusMemory } from "./memory/hippocampus";
+
+/** Source du langage de la réponse (télémétrie honnête). */
+export type SourceLangage =
+  | "cortex_corpus"
+  | "cortex_personnalisee"
+  | "cortex_contexte"
+  | "decoder_intention";
+
+/** Composition finale : texte émis + provenance (traçabilité). */
+export interface CompositionReponse {
+  texte: string;
+  source: SourceLangage;
+  /** Thème du corpus quand la réponse vient du cortex (sinon undefined). */
+  theme?: string;
+  /** Score d'appariement du cortex (sinon undefined). */
+  scoreAppariement?: number;
+}
 
 /**
  * MOTEUR NEURONAL — adaptateur du système SNN Gen3 au contrat IA du projet
@@ -73,6 +92,8 @@ export class NeuralEngine {
   constructor(
     private readonly noyau: NoyauCentralGen3,
     private readonly espace: EspaceFiltreResonant,
+    private readonly cortex?: CortexLangagierGen3,
+    private readonly hippocampe?: HippocampusMemory,
   ) {}
 
   /**
@@ -113,8 +134,16 @@ export class NeuralEngine {
     }
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
+    const messageUtilisateur = extraireDernierMessageUtilisateur(options);
+    const composition = this.composer(messageUtilisateur, decode);
+    this.memoriser(messageUtilisateur, composition.texte);
 
-    return this.construireReponse(prompt, decode, Date.now() - debut);
+    return this.construireReponse(
+      prompt,
+      composition,
+      decode,
+      Date.now() - debut,
+    );
   }
 
   /**
@@ -147,7 +176,8 @@ export class NeuralEngine {
     // Adaptation (d) : inférence propre — reset complet des énergies.
     this.reinitialiserEnergies();
 
-    // Fragments d'événement de progression : données réelles de chaque cycle.
+    // Fragments : la progression des cycles n'est PLUS émise dans le flux
+    // conversationnel (bruit) — les télémétries réelles restent dans raw.
     const resonances: Record<string, number> = {};
     let dernierRapport: CycleReport | undefined;
     // Injection en VOLÉE UNIQUE (cycle 1) puis propagation libre — cf. trainer.
@@ -163,26 +193,32 @@ export class NeuralEngine {
         dernierRapport.spikedNeurones,
         cycle - 1,
       );
-      await emettre(
-        `Cycle ${cycle}/${NEURAL_CYCLES_PAR_GENERATION} — ${dernierRapport.neuronesActifs} neurones actifs (${dernierRapport.mode}).\n`,
-      );
     }
     if (!dernierRapport) {
       throw new Error("Aucun cycle neuronal n'a pu être exécuté.");
     }
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
+    const messageUtilisateur = extraireDernierMessageUtilisateur(options);
+    const composition = this.composer(messageUtilisateur, decode);
 
-    // Le texte décodé est émis par segments (phrases réelles du décodeur).
-    await emettre("\n");
-    for (const segment of segmenterTexte(decode.texte)) {
+    // La réponse composée est émise par segments (phrases réelles). Les
+    // télémétries de cycles restent disponibles dans raw (plus de bruit de
+    // progression dans le flux conversationnel).
+    for (const segment of segmenterTexte(composition.texte)) {
       await emettre(segment);
       // Rend la main à l'event loop entre les segments (flux réel, sans
       // délai artificiel).
       await new Promise<void>((resoudre) => setImmediate(resoudre));
     }
 
-    return this.construireReponse(prompt, decode, Date.now() - debut);
+    this.memoriser(messageUtilisateur, composition.texte);
+    return this.construireReponse(
+      prompt,
+      composition,
+      decode,
+      Date.now() - debut,
+    );
   }
 
   /**
@@ -224,13 +260,20 @@ export class NeuralEngine {
     }
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
+    const messageUtilisateur = extraireDernierMessageUtilisateur(options);
+    const composition = this.composer(messageUtilisateur, decode);
 
-    yield "\n";
-    for (const segment of segmenterTexte(decode.texte)) {
+    for (const segment of segmenterTexte(composition.texte)) {
       yield segment;
     }
 
-    return this.construireReponse(prompt, decode, Date.now() - debut);
+    this.memoriser(messageUtilisateur, composition.texte);
+    return this.construireReponse(
+      prompt,
+      composition,
+      decode,
+      Date.now() - debut,
+    );
   }
 
   /**
@@ -263,16 +306,72 @@ export class NeuralEngine {
     }
   }
 
+  /**
+   * COMPOSITION DU LANGAGE — le cœur conversationnel du moteur :
+   *  1. le cortex langagier (corpus appris) est consulté en priorité avec
+   *     le contexte de l'hippocampe (reprises courtes) ;
+   *  2. sous le seuil d'appariement, la composition conversationnelle du
+   *     décodeur prend le relais (intention détectée + données réelles).
+   */
+  private composer(
+    prompt: string,
+    decode: NeuralDecodedResponse,
+  ): CompositionReponse {
+    if (this.cortex) {
+      const contexte: ContexteLangage = {};
+      if (this.hippocampe) {
+        const historique = this.hippocampe.getHistory();
+        const dernierTour = historique[historique.length - 1];
+        if (dernierTour) {
+          contexte.messagePrecedent = dernierTour.user;
+          contexte.reponsePrecedente = dernierTour.system;
+        }
+      }
+      const reponse = this.cortex.repondre(prompt, contexte);
+      if (reponse) {
+        return {
+          texte: reponse.texte,
+          source:
+            reponse.source === "personnalisee"
+              ? "cortex_personnalisee"
+              : reponse.source === "contexte"
+                ? "cortex_contexte"
+                : "cortex_corpus",
+          theme: reponse.theme,
+          scoreAppariement: reponse.score,
+        };
+      }
+    }
+
+    // Repli : composition conversationnelle du décodeur (intention + réelles).
+    return { texte: decode.texte, source: "decoder_intention" };
+  }
+
+  /**
+   * Mémorise l'échange dans l'hippocampe (mémoire de travail) : le tour
+   * suivant disposera du contexte de reprise. Échec silencieux (jamais de
+   * panne de chat pour une mémoire).
+   */
+  private memoriser(prompt: string, reponse: string): void {
+    if (!this.hippocampe) return;
+    try {
+      this.hippocampe.remember(prompt, reponse);
+    } catch {
+      // Télémétrie perdue, pas la conversation.
+    }
+  }
+
   /** Construit la réponse conforme AIResponse à partir du décodage réel. */
   private construireReponse(
     prompt: string,
+    composition: CompositionReponse,
     decode: NeuralDecodedResponse,
     latencyMs: number,
   ): NeuralAIResponse {
     // Estimation honnête documentée : un SNN ne compte pas de tokens de LLM,
     // on rapporte les mots réels du prompt et de la réponse.
     const inputTokens = compterMots(prompt);
-    const outputTokens = compterMots(decode.texte);
+    const outputTokens = compterMots(composition.texte);
     const usage: AIUsage = {
       inputTokens,
       outputTokens,
@@ -283,7 +382,7 @@ export class NeuralEngine {
       id: `snn-${randomUUID()}`,
       provider: "gen3-snn",
       model: NEURAL_MODEL,
-      text: decode.texte,
+      text: composition.texte,
       usage,
       finishReason: "stop",
       latencyMs,
@@ -293,9 +392,33 @@ export class NeuralEngine {
         scoreResonance: decode.scoreResonance,
         resonances: decode.resonances,
         motsCles: decode.motsCles,
+        langage: {
+          source: composition.source,
+          theme: composition.theme ?? null,
+          scoreAppariement: composition.scoreAppariement ?? null,
+        },
       },
     };
   }
+}
+
+/**
+ * Extrait le DERNIER message utilisateur (le tour courant) : c'est lui que
+ * le cortex langagier interroge et que l'hippocampe mémorise — le prompt
+ * complet (chartes système, historique) ne doit pas polluer l'appariement.
+ * Repli : le message système, puis le prompt brut vide-garde.
+ */
+export function extraireDernierMessageUtilisateur(options: AIRequest): string {
+  for (let i = options.messages.length - 1; i >= 0; i--) {
+    const message = options.messages[i];
+    if (message.role === "user" && message.content.trim().length > 0) {
+      return message.content.trim();
+    }
+  }
+  if (options.system && options.system.trim().length > 0) {
+    return options.system.trim();
+  }
+  return "";
 }
 
 /**

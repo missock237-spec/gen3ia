@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import type { ReseauNeuronalGen3 } from "../core/network";
 import type { NeuralConfig } from "../core/types";
 import type { TrainingReport } from "./trainer";
+import type { EtatLangage } from "../generation/language";
 
 /**
  * PERSISTANCE DU CERVEAU NEURONAL — état structural (config + synapses) et
@@ -26,7 +27,7 @@ import type { TrainingReport } from "./trainer";
 export const BRAIN_PATH = join(process.cwd(), "var/neural/brain-v1.json");
 
 /** Version du format de persistance. */
-export const BRAIN_VERSION = 1;
+export const BRAIN_VERSION = 2;
 
 /** État complet du cerveau persisté. */
 export interface BrainState {
@@ -41,6 +42,11 @@ export interface BrainState {
   tokenRegistry: Record<number, string[]>;
   /** Historique des rapports d'entraînement (données réelles). */
   trainingHistory: TrainingReport[];
+  /**
+   * État du cortex langagier (v2) : paires personnalisées + poids d'usage.
+   * Absent des cerveaux v1 — restauration optionnelle.
+   */
+  langage?: EtatLangage;
 }
 
 /**
@@ -51,6 +57,7 @@ export async function saveBrainState(
   reseau: ReseauNeuronalGen3,
   tokenRegistry: Record<number, string[]>,
   trainingHistory: TrainingReport[],
+  langage?: EtatLangage,
 ): Promise<boolean> {
   try {
     // Le répertoire var/ doit rester hors git (seul fichier hors lib/neural
@@ -68,6 +75,7 @@ export async function saveBrainState(
       ),
       tokenRegistry,
       trainingHistory,
+      ...(langage ? { langage } : {}),
     };
 
     // Écriture atomique : .tmp puis rename.
@@ -114,6 +122,21 @@ export function loadBrainState(): BrainState | null {
       trainingHistory: Array.isArray(etat.trainingHistory)
         ? etat.trainingHistory
         : [],
+      langage:
+        etat.langage && typeof etat.langage === "object"
+          ? {
+              pairesPersonnalisees: Array.isArray(
+                etat.langage.pairesPersonnalisees,
+              )
+                ? etat.langage.pairesPersonnalisees
+                : [],
+              poidsUsage:
+                etat.langage.poidsUsage &&
+                typeof etat.langage.poidsUsage === "object"
+                  ? etat.langage.poidsUsage
+                  : {},
+            }
+          : undefined,
     };
   } catch (erreur: unknown) {
     console.warn(
