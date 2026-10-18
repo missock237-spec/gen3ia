@@ -31,6 +31,12 @@ export async function GET() {
           indiceHomeostasie: runtime.noyau.metriquesSante.indiceHomeostasie,
           mode: runtime.noyau.metriquesSante.modeActuel,
         },
+        langage: {
+          paires: runtime.cortex.nbPaires,
+          vocabulaire: runtime.cortex.tailleVocabulaire,
+          themes: runtime.cortex.themes().length,
+          pairesPersonnalisees: runtime.cortex.compterPersonnalisees(),
+        },
         iaExterne: "aucune — moteur 100 % local",
       },
       { headers: { "cache-control": "public, max-age=30, stale-while-revalidate=60" } },

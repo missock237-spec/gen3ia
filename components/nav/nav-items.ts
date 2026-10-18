@@ -1,13 +1,12 @@
 /**
- * Adaptateur de navigation — dérive désormais du NavRegistry unique
+ * Adaptateur de navigation — dérive du NavRegistry unique
  * (components/shells/nav-registry.ts) pour garantir une seule source de
  * vérité entre les 3 shells (workspace / developer / admin), le fil d'Ariane
  * et la palette de commandes.
  *
- * Architecture conversation-first : la navigation principale est
- * Conversations · Projets · Fichiers · Connecteurs · Bibliothèque ; les
- * modules métier sont des capacités (bibliothèque + conversations), pas
- * des entrées de menu permanentes.
+ * Architecture IA-FIRST : la navigation principale est
+ * Chat IA · Conversations · Cerveau IA · Entraînement IA · Connaissances ;
+ * les automatisations (agents) et le reste sont des capacités secondaires.
  */
 import { NAV_REGISTRY, navCommandIndex, type NavRoute } from "@/components/shells/nav-registry";
 
@@ -37,16 +36,19 @@ function groupByIds(ids: string[], extras: Record<string, Partial<NavItem>> = {}
     .map((route) => toItem(route, extras[route.id] ?? {}));
 }
 
-/** Espace de travail — centre de gravité « Conversations ». */
-export const WORKSPACE: NavItem[] = groupByIds(["conversations", "projects", "workflows", "files", "knowledge", "connectors", "library", "missions", "team"], {
-  conversations: { shortcut: "C" },
-});
+/** Espace de travail — centre de gravité « IA » (Chat IA en tête). */
+export const WORKSPACE: NavItem[] = groupByIds(
+  ["chat-ia", "conversations", "cerveau", "training", "knowledge", "projects", "files", "workflows"],
+  {
+    "chat-ia": { shortcut: "C" },
+  },
+);
 
-/** Agents & automatisation (surfaces transverses). */
+/** Automatisations (agents) — surfaces transverses, secondaires. */
 export const AGENTS: NavItem[] = [
-  ...groupByIds(["schedules", "live"]),
-  { href: "/studio/agents", label: "Agents IA", icon: "✦", hint: "Personnaliser et dialoguer avec vos agents" },
-  { href: "/observability", label: "Observabilité", icon: "∿", hint: "Traces, coûts et alertes de vos agents" },
+  ...groupByIds(["schedules", "live", "missions"]),
+  { href: "/studio/agents", label: "Agents", icon: "✦", hint: "Personnaliser et dialoguer avec vos agents spécialisés" },
+  { href: "/observability", label: "Observabilité", icon: "∿", hint: "Traces, coûts et alertes de vos exécutions" },
   { href: "/integrations", label: "Intégrations", icon: "⧉", hint: "Connecter vos services externes" },
 ];
 
@@ -66,8 +68,8 @@ export const ADMIN: NavItem[] = [
 ];
 
 export const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
-  { title: "Espace de travail", items: WORKSPACE },
-  { title: "Agents & automatisation", items: AGENTS },
+  { title: "Intelligence", items: WORKSPACE },
+  { title: "Automatisations", items: AGENTS },
   { title: "Ressources", items: LIBRARY },
   { title: "Développeur", items: [...DEVELOPER, ...ADMIN] },
 ];

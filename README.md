@@ -1,50 +1,55 @@
-# Gen3ia — Plateforme SaaS d'Agents IA Autonomes
+# Gen3ia — Plateforme d'IA à moteur neuronal propriétaire
 
-**Gen3ia** est une plateforme SaaS enterprise de création, orchestration et exécution d'agents IA autonomes. Conçue avec **Next.js 15 (App Router)**, **React 19** et **Firebase**, elle combine un moteur de chat intelligent, une boucle d'exécution autonome (Planner-Executor-Evaluator), la vision live en navigateur, la téléphonie interactive, la publication multi-canal de publicités via Composio, et un écosystème d'extensions marketplace multi-tenant.
+**Gen3ia** est une plateforme d'intelligence artificielle qui pense avec son **propre cerveau neuronal** : le moteur **Gen3** (SNN — réseau de neurones à spikes), entraîné sur la plateforme, 100 % local, **aucune IA externe**. Conçue avec **Next.js 15 (App Router)**, **React 19** et **Firebase**, elle combine la conversation IA honnête, l'entraînement ouvert (corpus intégré, Hugging Face, Kaggle), la création média neuronale, la mémoire conversationnelle et des automatisations spécialisées sous validation humaine.
 
 **Production : <https://gen3ia.online>**
 
 ---
 
-## 🌟 Fonctionnalités Clés
+## 🧠 L'IA Gen3 — comment elle fonctionne vraiment
 
-### 🤖 Studio & Chat Agent Intelligent
-- **Création guidée** : Définition de l'identité (nom, description, chartes générées, compétences, mémoire dédiée, type personnalisé).
-- **Classification automatique des requêtes** : Traitement instantané des réponses directes LLM vs déclenchement de missions d'exécution autonomes.
-- **Invocations d'outils `@`** : Activation à la volée de connecteurs (Gmail, Notion, Slack, GitHub, Jira...) directement dans le fil de discussion.
-- **Approbations de sécurité** : Validation humaine obligatoire pour l'exécution d'actions sensibles.
+L'intelligence de Gen3ia n'est ni un LLM externe ni un simulacre : c'est un **système neuronal complet** (`lib/neural/`), observable et traçable de bout en bout.
 
-### 🔄 Boucle d'Exécution Autonome & Planification
-- **Moteur Planner-Executor-Evaluator** : Décomposition dynamique de tâches complexes en plans d'action ordonnés.
-- **Règles & Garde-fous** : Limites de profondeur d'exécution, arrêt d'urgence, vérification d'idempotence et contrôle du budget.
+### Le réseau (SNN à spikes)
+- **Neurones à seuils d'énergie** : chaque message est encodé en énergie sur la zone de tokens (hachage FNV-1a déterministe), les spikes se propagent par synapses pondérées.
+- **Pools d'intention en sortie** : image, audio, vidéo, outils, compétences, appels… le pool qui résonne le plus fort détermine ce que l'IA a compris (pondération par **latence de spike** — le signal appris spike tôt, le bruit spike tard).
+- **Plasticité hebbienne supervisée** : chaque entraînement renforce les synapses entrée → pool cible, avec punition compétitive des mauvais pools.
 
-### 🌐 Agent Live Navigateur & Vision
-- **Capture d'écran native** : Contrôle et analyse du navigateur via `getDisplayMedia` sans installation de logiciel PC externe.
-- **Décideur Vision Multi-Fournisseurs** : Moteur de vision résilient avec repli automatique (OpenAI → Groq → Agnes).
+### Le cortex langagier (`lib/neural/generation/language.ts`)
+- **Corpus appris** : 91+ paires conversationnelles françaises intégrées (`corpus.ts`), enrichies par des **paires personnalisées** enseignées via le Studio d'entraînement.
+- **Appariement pondéré IDF** : score cosinus avec filtre de stopwords FR/EN, bonus de sous-ensemble (question exacte), bonus de personnalisation — **déterministe et traçable**.
+- **Contexte anaphorique** : l'hippocampe (mémoire de travail) fournit le tour précédent — « et toi ? » est résolu.
+- **Plasticité d'usage** : chaque rappel réussi renforce le poids de la paire (plafonné) — la connaissance utile remonte plus vite.
+- **Honnêteté d'architecture** : sous le seuil d'appariement, l'IA **assume** qu'elle ne sait pas au lieu d'inventer.
 
-### 📞 Téléphonie & Agent Vocal
-- **Appels sortants et entrants** : Intégration complète Twilio et Plivo pour la gestion de conversations téléphoniques interactives.
-- **Synthèse vocale avancée** : Voix naturelles propulsées par ElevenLabs.
+### Persistance & entraînement
+- **Cerveau persisté** (`var/neural/brain-v1.json`, format v2) : synapses, registre lexical, état du cortex langagier, historique d'entraînement — écriture atomique, rétrocompatible v1.
+- **AI Training Studio** : datasets du dépôt, import **Hugging Face** et **Kaggle**, quotas, audit, worker GPU Python (`training-worker/`), cron de balayage.
+- **Rapports réels** : époques, échantillons, précision train/test — rien de décoratif.
 
-### 📢 Publication Ads & Marketing
-- **Connexions multi-plateformes** : Intégrations Meta Ads, Google Ads, TikTok Ads et LinkedIn Ads via Composio.
-- **Génération & Garde-fous de budget** : Moteur de création de contenus publicitaires avec plafonds de dépense stricts.
+### Création média neuronale
+- **Moteurs 100 % locaux** (`lib/neural/generation/`) : compositions visuelles SVG, signaux audio WAV, animations SMIL — calculés depuis l'état réel des poids synaptiques, archivés en R2.
 
-### 🏢 Multi-Tenancy & Organisations Enterprise
-- **Gestion des équipes** : Rôles granulaires (Owner, Admin, Member), système d'invitations sécurisées par lien expirable (7 jours).
-- **Isolation des données** : Isolation Firestore au niveau organisation et quotas paramétrables par plan (Free, Pro, Enterprise).
+---
 
-### 🧠 Mémoire RAG Épisodique & Connaissances
-- **Recherche sémantique & Vectorielle** : Indexation de documents, recherche d'embeddings, résumés épisodiques automatiques.
-- **Calcul de charge cognitive** : Suivi de la charge cognitive d'équipe et agrégation de connaissances.
+## 🌟 Fonctionnalités de la plateforme
 
-### 🛒 Marketplace d'Extensions & Code Agents
-- **Écosystème de modules** : Publication, revue d'administration, installation et exécution d'extensions tierces.
-- **Génération UI 21st.dev** : Intégration de composants UI réutilisables et générateur de thèmes et logos.
+### 💬 Chat IA (cœur du produit)
+- **Conversation honnête** : réponses composées depuis le corpus appris + télémétrie réseau (`raw.langage` : source, thème, score d'appariement).
+- **Conversations persistées** en R2 (liste, recherche, renommage, suppression, export Markdown), streaming NDJSON, pièces jointes réelles (upload multipart).
+- **Approbations de sécurité** : les actions sensibles des automatisations restent validées par un humain.
 
-### 📊 Observabilité & Facturation
-- **Traçabilité `traceId`** : Corrélation de chaque requête API avec logs structurés JSON Pino.
-- **Moteur de coûts & Wallet** : Suivi précis des consommations de tokens, des appels d'outils et des crédits d'exécution.
+### 🏢 Multi-Tenancy & Organisations
+- Rôles granulaires (Owner, Admin, Member), invitations sécurisées par lien expirable, isolation Firestore au niveau organisation, quotas par plan.
+
+### 🧩 Mémoire RAG & Connaissances
+- Indexation de documents, recherche sémantique/vectorielle (Qdrant), résumés épisodiques automatiques, bases de connaissances partagées.
+
+### 🛒 Marketplace d'Extensions
+- Publication, revue d'administration, installation et exécution d'extensions tierces versionnées et sandboxées.
+
+### 📊 Observabilité
+- Traçabilité `traceId`, logs structurés JSON Pino, Sentry (erreurs + traces), page **Cerveau IA** (`/neural`) : santé du noyau, cycles, synapses et langage en direct.
 
 ---
 
@@ -61,7 +66,9 @@ npm run dev         # http://localhost:3000
 
 **Variables OBLIGATOIRES** (développement comme production) : `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (identités factices acceptées en local — le seed en génère).
 
-**Variables OPTIONNELLES** (chaque absence dégrade avec repli, jamais de panne) : `OPENAI_API_KEY`/`GROQ_API_KEY`/`GLM_API_KEY`/`AGNES_API_KEY` (LLM), `QDRANT_URL`/`QDRANT_API_KEY` (recherche vectorielle), `R2_*` (stockage fichiers), `RESEND_API_KEY` (e-mail), `TWILIO_*` (téléphonie), `ELEVENLABS_API_KEY` (voix), `COMPOSIO_API_KEY` (connecteurs), `CHARIOW_*` (facturation), `SANDBOX_URL`/`SANDBOX_SHARED_SECRET` (exécution de code). La sonde `/api/health/infra` (auth requise) liste les groupes présents/absents par nom — jamais de valeur.
+**Variables OPTIONNELLES** (chaque absence dégrade avec repli, jamais de panne) : `QDRANT_URL`/`QDRANT_API_KEY` (recherche vectorielle), `R2_*` (stockage fichiers), `RESEND_API_KEY` (e-mail), `COMPOSIO_API_KEY` (connecteurs), `CHARIOW_*` (facturation), `SANDBOX_URL`/`SANDBOX_SHARED_SECRET` (exécution de code). La sonde `/api/health/infra` (auth requise) liste les groupes présents/absents par nom — jamais de valeur.
+
+> **Note IA** : aucune clé LLM n'est nécessaire — le moteur neural Gen3 est entièrement interne (les IA externes ont été retirées du projet, cf. Task 150).
 
 **Qualité** : `make qa` = lint + typecheck + tests unitaires + build + budget bundle. Tests e2e contre émulateurs : `make test:e2e` (ne touche JAMAIS la production).
 
@@ -71,47 +78,26 @@ npm run dev         # http://localhost:3000
 
 | Dossier / Fichier | Rôle dans l'application |
 |---|---|
-| `app/` | Routes Next.js 15 (App Router) : `(auth)`, `admin`, `api`, `billing`, `dashboard`, `live`, `marketplace`, `memory`, `observability`, `studio`, `team` |
-| `components/` | Composants UI React 19 modulaires (`agent`, `auth`, `home`, `integrations`, `marketplace`, `memory`, `nav`, `observability`, `studio`, `team`, `ui`) |
-| `lib/` | Logique métier centralisée : `agents`, `ai`, `billing`, `documents`, `extensions`, `firebase`, `integrations`, `live`, `memory`, `observability`, `security`, `skills`, `tenants` |
-| `functions/` | Firebase Cloud Functions backend |
-| `docs/` | Documentation technique, bilans d'analyse, décisions d'architecture et roadmap SaaS |
-| `e2e/` & `vitest/` | Tests d'intégration E2E et suites de tests unitaires |
+| `lib/neural/` | **L'IA Gen3** : réseau SNN (`core/`), encodage lexical (`encoding/`), décodage conversationnel (`decoding/`), cortex langagier + corpus (`generation/`), hippocampe & superviseur (`memory/`), effecteurs média/outils (`effectors/`), entraîneur supervisé + persistance (`training/`) |
+| `app/` | Routes Next.js 15 (App Router) : `(auth)`, `admin`, `api`, `chat`, `neural`, `workspace`, `studio`, `marketplace`, `memory`, `observability`, `billing`, `team` |
+| `components/` | Composants UI React 19 modulaires (`neural`, `chat`, `training`, `shells`, `nav`, `knowledge`, `marketplace`, `ui`…) |
+| `lib/` | Logique métier : `ai` (routeur → moteur neural), `chat`, `knowledge`, `memory`, `agents` (automatisations), `billing`, `integrations`, `security`, `tenants`, `training` |
+| `training-worker/` | Worker GPU Python pour les entraînements lourds (contrat + tests) |
+| `sandbox/` | Sandbox d'exécution de code (Fastify) |
+| `e2e/` & `vitest/` | Tests d'intégration E2E et suites unitaires (4 000+ tests) |
 
----
+### Flux d'une requête IA
 
-## 🚀 Démarrage Rapide
-
-### Prérequis
-- Node.js 20+
-- npm ou pnpm
-
-### Installation et Lancement Local
-
-```bash
-# 1. Cloner le projet et installer les dépendances
-npm install
-
-# 2. Lancer le serveur de développement Next.js
-npm run dev
-
-# L'application est accessible sur http://localhost:3000
 ```
-
-### Script de Génération & Tests
-
-```bash
-# Vérification des types TypeScript
-npm run typecheck
-
-# Exécution des lints ESLint
-npm run lint
-
-# Exécution de la suite de tests unitaires Vitest
-npm test
-
-# Compilation pour la production
-npm run build
+Message utilisateur
+  → /api/chat (validation, rate-limit, mémoire)
+  → lib/ai/router.ts  (un seul moteur : gen3-snn)
+  → lib/neural/engine.ts
+      ├─ encodage lexical (zone de tokens)
+      ├─ cycles SNN (noyau central, résonances par latence)
+      ├─ cortex langagier (corpus appris + contexte hippocampe)
+      └─ décodeur conversationnel (repli honnête par intention)
+  → réponse streamée (NDJSON) + télémétrie raw.langage
 ```
 
 ---
@@ -126,49 +112,32 @@ npm run build
 | `lint` | `eslint .` | Analyse et vérifie la qualité du code avec ESLint |
 | `typecheck` | `tsc --noEmit` | Valide les types TypeScript sur l'ensemble du projet |
 | `test` | `vitest run` | Exécute la suite de tests unitaires avec Vitest |
-| `test:watch` | `vitest` | Lance les tests en mode réactif (watch) |
-| `test:coverage` | `vitest run --coverage` | Génère un rapport de couverture de code |
-| `test:e2e:firebase` | `npx firebase-tools...` | Exécute les tests E2E avec l'émulateur Firebase |
-| `format` | `prettier --write .` | Formate automatiquement l'ensemble du code source |
+| `test:e2e:firebase` | `npx firebase-tools…` | Exécute les tests E2E avec l'émulateur Firebase |
 | `firebase:emulators` | `firebase emulators:start` | Démarre la suite d'émulateurs Firebase en local |
-| `firebase:deploy` | `firebase deploy` | Déploie les règles, index et Cloud Functions sur Firebase |
 | `live:gateway` | `tsx lib/live/gateway-server.ts` | Lance le serveur Gateway WebSocket pour les sessions Live |
-| `analyze` | `ANALYZE=true next build` | Analyse la taille du bundle d'optimisation de build |
-| `check:bundle` | `node scripts/...` | Vérifie le budget First Load JS gzip par route (CI) |
-| `setup:hooks` | `cp scripts/git-hooks/...` | Installe le pre-commit gitleaks (scan des secrets) |
 | `seed` / `db:reset` | `tsx scripts/seed.ts` | Peuple les émulateurs Firebase (dev local) |
 
 ---
 
 ## 📚 Documentation Approfondie
 
-Pour en savoir plus sur l'architecture, la roadmap et les spécifications techniques, consultez les documents dans le dossier `docs/` :
+Consultez les documents dans le dossier `docs/` :
 
-- 📖 **[Guide Technique & Référence API](docs/guide-technique.md)** : Cartographie complète des modules `lib/`, endpoints API, variables d'environnement et stack.
-- 🎯 **[Analyse du Projet](docs/analyse-projet.md)** : Rapport d'analyse d'architecture, forces de la plateforme et leviers d'amélioration.
-- 📐 **[Décisions d'Architecture (ADR)](docs/architecture-decisions.md)** : Journal des choix techniques structurants (Next.js API routes, state management, ADR-005 Sentry, ADR-007 AdSense).
-- 🗺️ **[Feuille de Route SaaS (Roadmap)](docs/saas-roadmap.md)** : État d'implémentation de la couverture entreprise (Multi-tenant, Sécurité, Observabilité, Billing).
+- 📖 **[Guide Technique & Référence API](docs/guide-technique.md)** : cartographie des modules `lib/`, endpoints API, variables d'environnement et stack.
+- 📐 **[Décisions d'Architecture (ADR)](docs/architecture-decisions.md)** : journal des choix techniques structurants.
+- 🗺️ **[Feuille de Route SaaS](docs/saas-roadmap.md)** : état d'implémentation de la couverture entreprise.
 
-### Observabilité & données (Task 40 + 108)
+### Observabilité & données
+- **Sentry** : erreurs + traces via le pont asynchrone (zéro coût First Load), tunnel `/monitoring`, source maps au build. Voir ADR-005.
+- **Firestore (Firebase)** : unique moteur de données ; le stockage d'objets/identité est Cloudflare R2.
+- **Google AdSense** : confiné aux pages publiques (`AdSenseAd`), `ads.txt` à la racine. Voir ADR-007.
 
-- **Sentry** : erreurs + traces (serveur 15 % / client 10 %) via le pont
-  asynchrone (zéro coût First Load), tunnel anti-bloqueurs `/monitoring`,
-  source maps au build (`SENTRY_AUTH_TOKEN`). Voir ADR-005.
-- **Firestore (Firebase)** : unique moteur de données (Task 108 — le second
-  backend et son miroir ont été retirés, ADR-006 retirée) ; le stockage
-  d'objets/identité est Cloudflare R2.
-- **Google AdSense** : emplacements publicitaires confinés aux pages
-  publiques (`AdSenseAd`), `ads.txt` à la racine, CSP étendue. Voir ADR-007.
+## Système d'Auto-Amélioration
 
-## Système d'Auto-Amélioration (Self-Improvement)
+Le projet intègre un audit automatique de qualité (TypeScript, ESLint, dette TODO/FIXME, tests) :
 
-Le projet intègre un système d'audit automatique de qualité pour évaluer le code (TypeScript, ESLint, dette TODO/FIXME, tests).
-
-### Exécution Manuelle
-Pour lancer l'audit en local :
 ```bash
 node scripts/self-improve.mjs
 ```
 
-### Déclenchement Automatique
-Le workflow GitHub Actions s'exécute chaque semaine (lundi à 08:00 UTC) ou à la demande via `workflow_dispatch` pour créer ou mettre à jour un rapport dans les Issues GitHub.
+Un workflow GitHub Actions s'exécute chaque semaine (lundi 08:00 UTC) ou à la demande via `workflow_dispatch`.
