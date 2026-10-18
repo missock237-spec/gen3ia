@@ -1,6 +1,8 @@
 import "server-only";
 
-import { detectImageRatio, enhanceImagePrompt } from "@/lib/ai/image-generation";
+// Module externe (Agnes) supprimé en Task 150 : l'intention image vit
+// désormais dans lib/ai/image-intent (pur, sans générateur externe).
+import { detectImageRatio, enhanceImagePrompt } from "@/lib/ai/image-intent";
 
 /**
  * Compétence spécialisée Gen3ia pour les demandes d'image.
