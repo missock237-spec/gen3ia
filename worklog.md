@@ -3902,3 +3902,29 @@ Stage Summary:
 - L'IA Gen3ia est DÉSORMAIS conversationnelle : « Qui es-tu ? » → « Je suis Gen3ia, l'intelligence artificielle de la plateforme… » (source cortex_corpus, thème identite) ; « et toi ? » résolu par l'hippocampe ; inconnue → refus honnête assumé au lieu d'un diagnostic brut.
 - La plateforme est repositionnée IA-first : le Chat IA est le centre, le Cerveau IA et l'Entraînement sont les instruments, les agents sont démotés en « Automatisations » sans aucune rupture fonctionnelle.
 - Reste pour la suite (propositions) : fusion dans main après relecture, enrichissement du corpus via le Studio d'entraînement (paires personnalisées persistées), wire des réponses cortex dans les surfaces agents (chartes), éventuel entraînement SNN sur le corpus langagier pour renforcer les réservoirs d'intention.
+
+---
+Task ID: 165 (plateforme IA — studio formateur + évolution continue)
+Agent: Super Z (main) — session migration IA (suite)
+Task: « Le studio d'entraînement n'est pas pour entraîner Gen mais pour que Gen entraîne des modèles fournis par les utilisateurs ; Gen doit rédiger texte/images/vidéo/audio ; le système neuronal doit évoluer continuellement ; enrichir le corpus ; créer la PR vers main »
+
+Work Log:
+- STUDIO REORIENTÉ (vision utilisateur appliquée) : nouveau moteur gen3-native (lib/training/engines/registry.ts) — « Gen3 natif — Gen entraîne votre modèle », families text, methods finetune/full-training, minVramGb 0, available true, paramètres epochs (1-30) + testRatio (0.05-0.3).
+- lib/training/engines/gen3-dataset.ts : parsing PUR JSON/JSONL/CSV/TXT → paires {question, réponse} (clés FR/EN acceptées : instruction/question/prompt/motif × response/answer/réponse/output), plafonds honnêtes 5 Mo / 5000 paires (excédentaires COMPÉTÉS + avertissements), séparation déterministe train/test (separerTrainTest).
+- lib/training/providers/gen3-local.ts : fournisseur LOCAL RÉEL (simulated=false) — soumission → session async chunkée (setImmediate), chargeurs injectables (R2 par défaut, mémoire pour tests). Déroulé : chargement datasets train → parsing → séparation → apprentissage RÉEL (CortexLangagierGen3 vierge, paires personnalisées, index IDF) → époques réelles (précision train mesurée à chaque époque, plasticité d'usage en jeu) → précision test (jamais vu) → artefact gen3-model.json (format gen3-language-model v1 : état complet du modèle + métriques + traçabilité) archivé en R2. trainLoss convention honnête = 1 - précision. Cap mémoire sessions (50), logs réels sans [SIMULATION].
+- PÉRIMÈTRE D'ENGINES : GpuProvider.engines? (types.ts) + filtre dans selectProvider (orchestrator.ts) — gen3-local ne sert QUE gen3-native ; les moteurs GPU restent sur worker-http. resolveProviders inclut gen3-local TOUJOURS.
+- ASSISTANT : repli heuristique → moteur gen3-native dès données modestes (<50 paires) au lieu de RAG ; providerClass "gen3-local" ; plan LLM normalisé idem.
+- EXPORTS : kind "trained-model" (ZIP des artefacts de jobs complétés réellement) dans types.ts + exports.ts + route + UI (4 boutons d'export, grille 2/4 colonnes).
+- ÉVOLUTION CONTINUE : lib/neural/evolution.ts (MoteurEvolutionGen3 PUR) — observation des échanges réussis (sources cortex uniquement, score >= 0.5), consolidation périodique (8 échanges) → paires personnalisées durables (dédup cortex, max 12/cycle, file 64), métriques réelles (observés/consolidés/cycles/écartés/dernière). engine.ts : evoluer() appelé dans generate/generateStream/streamDeltas après memoriser(), callback surConsolidation → sauvegarderCerveauRuntime (fire-and-forget). runtime.ts : moteur instancié + exposé.
+- API /api/neural/evolve : GET métriques (auth + rate-limit), POST consolidation immédiate + sauvegarde + audit (nouvelle action neural.evolution.consolidated, entityType neural). brain + public-stats : blocs langage/evolution/entraînementUtilisateurs.
+- CONSOLE CERVEAU : carte « Évolution continue » (consolidés, cycles, observés, paires personnelles) ; interface EtatCerveau étendue.
+- CORPUS ENRICHIS (lib/neural/generation/corpus.ts) : +26 paires (redaction ×6, studio ×12, evolution ×8), 4 paires réécrites qui contredisaient la vision (comment tu as ete entraine, tes capacites, comment t entrainer, tu peux apprendre). Total ≈ 117 paires, thèmes : + redaction, studio, evolution.
+- WORDING : vitrine (carte Studio + CTA « Faire entraîner mon modèle »), page Studio (en-tête + familles), nav-registry (description « Gen entraîne vos modèles »), bandeau fournisseurs réécrit (moteur natif actif sans GPU), message d'attente no-gpu-provider réorienté.
+- QA : tsc 0 ; eslint 0 (3 erreurs corrigées : imports/args inutilisés) ; vitest 3728 verts / 1 skipped / 0 échec (27 nouveaux : parsing 12, fournisseur 6, évolution 9 — artefact réimportable vérifié : le JSON restauré dans un CortexLangagierGen3 répond aux questions apprises) ; next build OK.
+- Commits : f9b90e1 (moteur gen3-native), d9eea20 (évolution continue + corpus), cc58061 (wording). Push + PR vers main via API GitHub.
+
+Stage Summary:
+- Le Studio d'entraînement est MAINTENANT ce que l'utilisateur a demandé : Gen (l'IA de la plateforme) entraîne les modèles que les utilisateurs lui confient — apprentissage RÉEL local (CPU), métriques mesurées, modèle exportable, sans GPU ni simulacre.
+- L'IA évolue EN CONTINU : plasticité d'usage à chaque rappel + consolidation autonome périodique des échanges réussis + persistance automatique — l'évolution est visible (page Cerveau, stats publiques, API).
+- Gen génère les 4 formats : texte (cortex langagier, +26 paires dont rédaction), images (moteur visuel SVG→PNG), audio (synthèse WAV), vidéo (animation SVG SMIL) — moteurs locaux réels déjà câblés au chat (/api/chat/message) et à /api/neural/media.
+- Reste : revue + fusion de la PR vers main.
