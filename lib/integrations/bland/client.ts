@@ -1,5 +1,8 @@
 import "server-only";
 
+import { refuserSiMoteurNeuralActif } from "@/lib/ai/engine-mode";
+
+
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { logger } from "@/lib/observability/logger";
@@ -65,6 +68,9 @@ export function isBlandConfigured(): boolean {
 /* ------------------------------------------------------------------ */
 
 async function blandFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  // MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : service externe désactivé (code conservé intact).
+  refuserSiMoteurNeuralActif("Appels téléphoniques Bland AI");
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), BLAND_TIMEOUT_MS);
   try {

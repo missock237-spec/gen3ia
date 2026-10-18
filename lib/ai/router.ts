@@ -22,6 +22,19 @@ import {
   callProviderStream,
 } from "./providers";
 
+import { isNeuralEngineActive } from "./engine-mode";
+import { getNeuralRuntime } from "../neural/runtime";
+
+/**
+ * MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : délégation directe au moteur
+ * neuronal Gen3 (SNN interne, lib/neural/) AVANT toute sélection de
+ * fournisseur externe — toutes les IA externes sont désactivées pendant
+ * la phase de test du système neuronal de l'utilisateur.
+ */
+function delegateAuMoteurNeuralSiActif(): boolean {
+  return isNeuralEngineActive();
+}
+
 /**
  * Garde vision (Task 42, axe 4) : toute image jointe est validée (nombre,
  * taille réelle après base64, format, URLs https) AVANT la sélection du
@@ -187,6 +200,11 @@ export async function generate(
 ): Promise<AIResponse> {
   assertImagesAllowed(request);
 
+  // MODE NEURONAL : le moteur Gen3 (SNN) remplace les fournisseurs externes.
+  if (delegateAuMoteurNeuralSiActif()) {
+    return getNeuralRuntime().engine.generate(request);
+  }
+
   const candidates =
     selectProvider(request);
 
@@ -264,6 +282,12 @@ export async function generateStream(
   },
 ): Promise<AIResponse> {
   assertImagesAllowed(request);
+
+  // MODE NEURONAL : le moteur Gen3 (SNN) remplace les fournisseurs externes
+  // (les fragments de progression cycle par cycle sont émis via onDelta).
+  if (delegateAuMoteurNeuralSiActif()) {
+    return getNeuralRuntime().engine.generateStream(request, handlers);
+  }
 
   const candidates =
     selectProvider(request);

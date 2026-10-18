@@ -1,5 +1,7 @@
 import "server-only";
 
+import { isNeuralEngineActive, refuserSiMoteurNeuralActif } from "./engine-mode";
+
 /**
  * Génération d'images réelle via Agnes AI (apihub.agnes-ai.com).
  *
@@ -52,8 +54,14 @@ export class ImageGenerationError extends Error {
   }
 }
 
-/** La génération d'images n'est disponible que si la clé Agnes est configurée. */
+/**
+ * La génération d'images n'est disponible que si la clé Agnes est configurée.
+ *
+ * MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : toujours FAUX — le générateur
+ * d'images externe est désactivé pendant le test du moteur neuronal Gen3.
+ */
 export function isImageGenerationEnabled(): boolean {
+  if (isNeuralEngineActive()) return false;
   return Boolean(process.env.AGNES_API_KEY);
 }
 
@@ -239,6 +247,9 @@ export async function generateImageWithAgnes(options: {
   /** Garde-fou de durée propre à la surface appelante (défaut 90 s). */
   timeoutMs?: number;
 }): Promise<GeneratedImage> {
+  // MODE NEURONAL : générateur d'images externe désactivé (code conservé).
+  refuserSiMoteurNeuralActif("Génération d'images Agnes");
+
   const apiKey = process.env.AGNES_API_KEY;
   if (!apiKey) {
     throw new ImageGenerationError(
@@ -366,6 +377,9 @@ export async function editImageWithAgnes(options: {
   ratio?: ImageRatio;
   timeoutMs?: number;
 }): Promise<GeneratedImage> {
+  // MODE NEURONAL : éditeur d'images externe désactivé (code conservé).
+  refuserSiMoteurNeuralActif("Édition d'images Agnes");
+
   const apiKey = process.env.AGNES_API_KEY;
   if (!apiKey) {
     throw new ImageGenerationError(

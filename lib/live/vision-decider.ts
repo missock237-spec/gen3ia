@@ -1,3 +1,4 @@
+import { refuserSiMoteurNeuralActif } from "@/lib/ai/engine-mode";
 import OpenAI from "openai";
 import { z } from "zod";
 import { LiveActionSchema, type LiveAction, type LiveSession } from "./types";
@@ -128,6 +129,9 @@ export async function decideLiveAction(
   height: number,
   feedback?: LiveActionFeedback,
 ): Promise<z.infer<typeof DecisionSchema>> {
+  // MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : service externe désactivé (code conservé intact).
+  refuserSiMoteurNeuralActif("Vision temps réel live (décideur LLM)");
+
   if (!session.permissions.includes("screen.read")) throw new Error("Live session has no screen.read permission");
   if (jpeg.length === 0 || jpeg.length > MAX_FRAME_BYTES) throw new Error("Live frame exceeds the allowed size");
 

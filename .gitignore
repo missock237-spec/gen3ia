@@ -51,3 +51,6 @@ firestore-debug.log
 # Credentials & artefacts de déploiement Firebase (jamais committés)
 .fb_deploy_key.json
 .rules_backup_before_deploy.rules
+
+# État neuronal persistant (SNN — jamais committé)
+var/

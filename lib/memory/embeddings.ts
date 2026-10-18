@@ -1,3 +1,4 @@
+import { isNeuralEngineActive } from "@/lib/ai/engine-mode";
 import {
   InferenceClient,
 } from "@huggingface/inference";
@@ -34,6 +35,11 @@ function cacheKey(text: string): string {
 export async function createMemoryEmbedding(
   text: string,
 ): Promise<number[]> {
+  // MODE NEURONAL : embeddings externes HF désactivés — vecteur vide :
+  // le rappel sémantique est ignoré (filtre length > 0 dans
+  // lib/memory/episodic.ts), aucune donnée fabriquée, aucun crash.
+  if (isNeuralEngineActive()) return [];
+
   if (!model) {
     throw new Error(
       "HF_EMBEDDING_MODEL is not configured",

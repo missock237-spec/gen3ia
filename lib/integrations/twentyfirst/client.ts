@@ -1,3 +1,4 @@
+import { refuserSiMoteurNeuralActif } from "@/lib/ai/engine-mode";
 /**
  * Client serveur pour l'API 21st.dev (serveur MCP https://21st.dev/api/mcp).
  *
@@ -60,6 +61,9 @@ function extractText(data: RpcResult): string {
 }
 
 async function callTool(name: string, args: Record<string, unknown>): Promise<string> {
+  // MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : service externe désactivé (code conservé intact).
+  refuserSiMoteurNeuralActif("Composants 21st.dev (MCP)");
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30_000);
   try {

@@ -1,5 +1,8 @@
 import "server-only";
 
+import { isNeuralEngineActive, refuserSiMoteurNeuralActif } from "@/lib/ai/engine-mode";
+
+
 /**
  * CLIENT HTTP JULES (Google, jules.google) — Task 121.
  *
@@ -26,6 +29,9 @@ export function julesApiBaseUrl(): string {
 
 /** La clé JULES est-elle configurée dans cet environnement ? (lecture dynamique) */
 export function isJulesConfigured(): boolean {
+  // MODE NEURONAL : agent de code externe désactivé.
+  if (isNeuralEngineActive()) return false;
+
   return Boolean(process.env.JULES_API_KEY?.trim());
 }
 
@@ -96,6 +102,9 @@ export function parseGithubRepo(githubRepo: string): JulesRepo {
  * sorties (patch/PR) sont asynchrones côté Google.
  */
 export async function julesCreateSession(input: JulesCreateSessionInput): Promise<JulesSessionCreated> {
+  // MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : service externe désactivé (code conservé intact).
+  refuserSiMoteurNeuralActif("Agent de code Jules (Google)");
+
   const { owner, repo } = parseGithubRepo(input.githubRepo);
   const data = await julesFetch<{ name?: string; id?: string; state?: string }>("/sessions", {
     method: "POST",
@@ -113,6 +122,9 @@ export async function julesCreateSession(input: JulesCreateSessionInput): Promis
  * Le nom peut être nu (« <id> ») ou complet (« sessions/<id> »).
  */
 export async function julesGetSession(session: string): Promise<JulesSessionSnapshot> {
+  // MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : service externe désactivé (code conservé intact).
+  refuserSiMoteurNeuralActif("Agent de code Jules (Google)");
+
   const name = session.replace(/^\/+/, "").replace(/^sessions\/?/, "");
   return julesFetch<JulesSessionSnapshot>(`/sessions/${encodeURIComponent(name)}`);
 }

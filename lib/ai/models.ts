@@ -7,6 +7,12 @@
  * reste une variable d'environnement valide mais sert UNIQUEMENT aux
  * embeddings (lib/memory/embeddings.ts, lib/skills/semantic.ts), jamais à
  * ce provider.
+ *
+ * NB (moteur neuronal Gen3) : « gen3-snn » désigne le moteur INTERNE
+ * (lib/neural/engine.ts, SNN à spikes) — il n'est jamais servi par
+ * callProvider/callProviderStream : le routeur (lib/ai/router.ts) délègue
+ * directement au moteur neuronal quand GEN3IA_AI_ENGINE=neural, AVANT
+ * toute sélection de fournisseur externe.
  */
 export type AIProvider =
   | "groq"
@@ -14,7 +20,8 @@ export type AIProvider =
   | "anthropic"
   | "openai"
   | "glm"
-  | "agnes";
+  | "agnes"
+  | "gen3-snn";
 
 export type TaskType =
   | "chat"

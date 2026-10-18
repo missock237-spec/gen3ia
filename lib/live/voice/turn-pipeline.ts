@@ -1,5 +1,8 @@
 import "server-only";
 
+import { refuserSiMoteurNeuralActif } from "@/lib/ai/engine-mode";
+
+
 import { logger } from "@/lib/observability/logger";
 import {
   elevenLabsSpeechToText,
@@ -212,6 +215,9 @@ function buildScreenImageAttachments(
 export async function* runLiveVoiceTurn(
   input: LiveVoiceTurnInput,
 ): AsyncGenerator<LiveVoiceTurnEvent, void, undefined> {
+  // MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : service externe désactivé (code conservé intact).
+  refuserSiMoteurNeuralActif("Conversation vocale live (STT ElevenLabs)");
+
   const turnId = input.turnId ?? newUlid();
   const startedAt = Date.now();
   const mimeType = input.audioMimeType?.trim() || "audio/wav";

@@ -1,5 +1,8 @@
 import "server-only";
 
+import { isNeuralEngineActive, refuserSiMoteurNeuralActif } from "@/lib/ai/engine-mode";
+
+
 import { randomUUID } from "node:crypto";
 
 import { InferenceClient } from "@huggingface/inference";
@@ -42,6 +45,8 @@ const client = new InferenceClient(process.env.HF_TOKEN);
 
 /** Le fallback n'est disponible que si le token Hugging Face est configuré. */
 export function isHuggingFaceImageEnabled(): boolean {
+  // MODE NEURONAL : générateur d'images externe désactivé.
+  if (isNeuralEngineActive()) return false;
   return Boolean(process.env.HF_TOKEN);
 }
 
@@ -124,6 +129,9 @@ export async function generateImageWithHuggingFace(options: {
   ratio?: ImageRatio | string;
   timeoutMs?: number;
 }): Promise<HuggingFaceImage> {
+  // MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : service externe désactivé (code conservé intact).
+  refuserSiMoteurNeuralActif("Génération d'images Hugging Face");
+
   const prompt = options.prompt?.trim();
   if (!prompt || prompt.length < 3) {
     throw new ImageGenerationError("INVALID_PROMPT", "Décrivez l'image à générer en quelques mots.");

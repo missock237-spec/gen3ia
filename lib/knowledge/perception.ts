@@ -1,3 +1,4 @@
+import { isNeuralEngineActive } from "@/lib/ai/engine-mode";
 import { generate } from "@/lib/ai/router";
 
 /**
@@ -102,6 +103,10 @@ export async function transcribeAudioToText(input: { buffer: Buffer; filename: s
 
 /** Renvoie la sortie perception (OCR ou ASR) selon le type MIME, ou null si le type n'est pas perceptuel. */
 export async function perceiveIfSupported(input: { buffer: Buffer; mimeType: string; filename: string }): Promise<{ text: string; providerLabel: string } | null> {
+  // MODE NEURONAL : perception externe (OCR vision + STT ElevenLabs)
+  // désactivée — retour null = upload non perçu, aucun crash appelant.
+  if (isNeuralEngineActive()) return null;
+
   const mimeType = input.mimeType.toLowerCase();
   if (mimeType.startsWith("image/")) {
     return ocrImageToText({ buffer: input.buffer, mimeType, filename: input.filename });

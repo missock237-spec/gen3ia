@@ -1,3 +1,4 @@
+import { refuserSiMoteurNeuralActif } from "@/lib/ai/engine-mode";
 import { z } from "zod";
 
 import { markupToText } from "@/lib/content/html-text";
@@ -329,6 +330,9 @@ export async function searchWeb(
   query: string,
   maxResults = 10,
 ): Promise<SearchResult[]> {
+  // MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : service externe désactivé (code conservé intact).
+  refuserSiMoteurNeuralActif("Recherche web (Tavily/Serper/SerpAPI)");
+
   const parsed =
     SearchInput.parse({ query, maxResults });
 

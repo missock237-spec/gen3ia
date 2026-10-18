@@ -1,3 +1,4 @@
+import { refuserSiMoteurNeuralActif } from "@/lib/ai/engine-mode";
 /**
  * Client ElevenLabs — autorisations analysées pour le token fourni :
  * - tier "free" : 10 000 caracteres/mois, 3 voix personnalisees max
@@ -31,6 +32,9 @@ const DEFAULT_MODEL: ElevenLabsModel =
   "eleven_multilingual_v2";
 
 export function getElevenLabsApiKey(): string {
+  // MODE NEURONAL (GEN3IA_AI_ENGINE=neural) : service externe désactivé (code conservé intact).
+  refuserSiMoteurNeuralActif("Voix ElevenLabs (TTS/STT)");
+
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
     throw new Error(
