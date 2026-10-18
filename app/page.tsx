@@ -108,9 +108,9 @@ const PRODUCTS = [
     eyebrow: "Gen3ia Training",
     title: "Studio d'entraînement IA",
     description:
-      "Nourrissez l'IA avec vos propres données : corpus intégré, import Hugging Face et Kaggle, quotas et audit. Chaque session d'entraînement met à jour le cerveau persisté — l'IA que vous Dialoguez demain est meilleure que celle d'aujourd'hui.",
-    points: ["Import de datasets HF/Kaggle", "Rapports d'entraînement réels (précision train/test)", "Cerveau persisté entre les sessions"],
-    cta: "Entraîner l'IA",
+      "Gen entraîne VOS modèles : confiez-lui vos datasets (paires question/réponse, Hugging Face, Kaggle) et son moteur neuronal natif les apprend réellement — précision mesurée à chaque époque, modèle exportable. Et pendant que vous travaillez, elle continue d'évoluer par l'usage et la consolidation de ses conversations.",
+    points: ["Gen entraîne vos modèles (moteur natif, sans GPU requis)", "Import de datasets HF/Kaggle + fine-tuning LoRA sur GPU", "Précision train/test réelle + modèle exportable", "Évolution continue de l'IA : usage + consolidation autonome"],
+    cta: "Faire entraîner mon modèle",
     icon: "M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z",
     badge: null as string | null,
   },

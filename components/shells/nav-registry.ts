@@ -70,7 +70,7 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     href: "/workspace/training",
     label: "Entraînement IA",
     icon: "⌬",
-    description: "Nourrir l'IA : datasets, sessions d'entraînement et exports",
+    description: "Gen entraîne vos modèles : vos datasets, vos sessions d'entraînement, vos exports",
     contexts: ["workspace"],
     section: "primary",
     keywords: ["training", "entraînement", "fine-tuning", "lora", "modèles", "dataset", "ia", "training studio"],
