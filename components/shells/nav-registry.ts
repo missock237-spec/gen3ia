@@ -56,6 +56,16 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     keywords: ["ondes", "wdnn", "wave", "gpu", "webgpu", "webrtc", "essaim", "p2p", "résonance", "kuramoto", "oscillateurs"],
   },
   {
+    id: "monde",
+    href: "/monde",
+    label: "Le Monde",
+    icon: "⌬",
+    description: "Simulateur universel des lois de la nature — physique, quantique, relativité, équations",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["monde", "simulation", "physique", "nature", "équations", "quantique", "relativité", "thermodynamique", "fluides", "mécanique", "ondes", "solveur", "science"],
+  },
+  {
     id: "conversations",
     href: "/workspace",
     label: "Conversations",
