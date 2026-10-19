@@ -32,7 +32,17 @@ import { isExternalAppConnected } from "@/lib/security/connected-apps";
 import { parseConnectorMissing, uniqueToolkits } from "@/lib/integrations/composio/errors";
 import { describeServersForPrompt } from "@/lib/integrations/mcp/service";
 import { INTERNAL_ACTION_TOOLS } from "@/lib/agents/approval-policy";
-import { getAgentForUser } from "@/lib/agents/repository";
+import {
+  createAgentRecord,
+  deleteAgentForUser,
+  getAgentForUser,
+  listAgentsForUser,
+  toSummary,
+  updateAgentForUser,
+} from "@/lib/agents/repository";
+import { AgentRecordSchema } from "@/lib/agents/schema";
+import { buildQuickCreatePayload } from "@/lib/agents/quick-create";
+import { resolveAndHarden } from "@/lib/agents/tool-resolver";
 import { buildAgentCharter } from "@/lib/agents/charter";
 import { buildFollowUpSuggestions } from "./follow-ups";
 import {
@@ -61,6 +71,7 @@ import {
   type ServiceControlIntent,
   type WorkflowIntent,
 } from "./service-intents";
+import { detectAgentIntent, type AgentIntent } from "./agent-intents";
 import {
   APP_SYSTEM_PROMPT,
   appendPreviewLinks,
@@ -722,6 +733,9 @@ export interface ConversationTurnInput {
   authorizationMode?: AuthorizationMode;
   /** Task 141 — agent dédié choisi dans le composer (sélecteur Gen IA ⇄ agents). */
   agentId?: string;
+  /** Bouton « Recherche web » du composer : la recherche réelle (web.search)
+   *  est FORCÉE pour ce tour — aucun routage heuristique ne peut l'ignorer. */
+  webSearch?: boolean;
   /** Fuseau horaire du client (IANA) pour les tâches planifiées créées en langage naturel. */
   timezone?: string;
   /** Émetteur d'événements de flux (streaming NDJSON) — absent = API classique. */
@@ -906,6 +920,21 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const workflowIntent = detectWorkflowIntent(input.message);
   if (workflowIntent) {
     const result = await runWorkflowIntentTurn(baseCtx, workflowIntent);
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+  // 1 bis-3) Agents sous commande de l'IA : créer, lister, activer,
+  // désactiver ou supprimer un agent RÉELLEMENT depuis le langage naturel
+  // (même détecteur déterministe, mêmes services que le Studio — aucune
+  // invention : l'agent créé reprend exactement la demande énoncée).
+  const agentIntent = detectAgentIntent(input.message);
+  if (agentIntent) {
+    const result = await runAgentIntentTurn(baseCtx, agentIntent);
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,
@@ -1188,7 +1217,11 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
 
   if (intent.mode === "chat") {
     // Garde-fou : la demande exige explicitement un outil réel ?
-    const explicit = detectExplicitToolIntent(input.message, catalog, customApis);
+    // Bouton « Recherche web » activé : la recherche est DEMANDÉE par l'utilisateur
+    // (option explicite du composer) — elle prime sur la détection heuristique.
+    const explicit = input.webSearch
+      ? ({ toolName: "web.search", query: extractSearchQuery(input.message) || input.message.trim().slice(0, 300) } as ExplicitToolIntent)
+      : detectExplicitToolIntent(input.message, catalog, customApis);
     if (!explicit && hasSelectedApis) {
       // API personnelle activée via le sélecteur pour CE message : appel réel attendu.
       const selectedApi = customApis.find((api) => (input.connectors ?? []).includes(`api-${api.id}`));
@@ -1325,6 +1358,23 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
       approvals: result.approvals,
     });
     return result;
+  }
+  if (intent.mode === "plan" && input.webSearch && !(intent.steps ?? []).some((s) => s.toolName === "web.search")) {
+    // Recherche web activée depuis le composer : le plan reçoit TOUJOURS une
+    // étape de recherche RÉELLE en tête — le bouton ne peut pas être ignoré
+    // par la classification (déterministe, aucune variance LLM).
+    intent = {
+      ...intent,
+      steps: [
+        {
+          title: "Recherche web",
+          detail: "Recherche réelle sur le web activée par l'utilisateur (bouton Recherche web du composer).",
+          toolName: "web.search",
+          toolInput: { query: extractSearchQuery(input.message) || input.message.trim().slice(0, 300), maxResults: 8 },
+        },
+        ...(intent.steps ?? []),
+      ].slice(0, 8),
+    };
   }
   const result = await runPlanTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, complexityScore: complexity.score });
   await onEvent({
@@ -2381,6 +2431,176 @@ async function runWorkflowIntentTurn(
     approvals: [],
     intent: { mode: "chat", understanding: "Création réelle d'un workflow (langage naturel)." },
   };
+}
+
+/**
+ * Agents sous commande de l'IA : création, liste, activation, désactivation
+ * et suppression d'agents RÉELS depuis le langage naturel. Mêmes services
+ * que le Studio (buildQuickCreatePayload → AgentRecordSchema →
+ * resolveAndHarden → createAgentRecord) : ce qui est créé en base reprend
+ * exactement la demande énoncée, aucune compétence n'est inventée.
+ */
+async function runAgentIntentTurn(
+  ctx: ServiceTurnContext,
+  intent: AgentIntent,
+): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+
+  /* ---------- Création ---------- */
+  if (intent.action === "create") {
+    await onEvent({ type: "status", phase: "execution", label: "Création de votre agent…" });
+    let content: string;
+    let ok = false;
+    try {
+      const payload = buildQuickCreatePayload({
+        name: intent.name,
+        typeKey: intent.typeKey,
+        ...(intent.customType ? { customType: intent.customType } : {}),
+      });
+      const parsed = AgentRecordSchema.safeParse(payload);
+      if (!parsed.success) {
+        content = "Je n'ai pas pu créer l'agent : les paramètres déduits de votre demande sont incomplets. Précisez un nom et un type (ex. « crée un agent commercial nommé Alex »).";
+      } else {
+        const { resolution, hardening } = resolveAndHarden(parsed.data.tools, parsed.data.authorizationMode);
+        const record = await createAgentRecord(ctx.userId, {
+          ...parsed.data,
+          tools: resolution.resolved,
+          authorizationMode: hardening.mode,
+        });
+        ok = true;
+        content = [
+          `Agent créé : « ${record.name} » (${record.typeLabel})`,
+          `- Compétences : ${record.skills.slice(0, 6).join(", ") || "polyvalence"}`,
+          `- Outils : ${record.tools.slice(0, 6).join(", ") || "aucun outil déclaré"}`,
+          `- Statut : ${record.status}`,
+          "",
+          "Il est enregistré dans votre espace : sélectionnez-le dans le sélecteur d'agents du composer (Gen IA ⇄ agents) pour lui confier vos demandes, ou dites simplement « utilise l'agent … ».",
+        ].join("\n");
+      }
+    } catch (error) {
+      content = `Je n'ai pas pu créer l'agent : ${error instanceof Error ? error.message : "erreur inattendue"}.`;
+    }
+
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content,
+      generationStatus: ok ? "complete" : "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Création réelle d'un agent (langage naturel)." },
+    };
+  }
+
+  /* ---------- Liste ---------- */
+  if (intent.action === "list") {
+    await onEvent({ type: "status", phase: "execution", label: "Consultation de vos agents…" });
+    let content: string;
+    try {
+      const agents = await listAgentsForUser(ctx.userId);
+      if (agents.length === 0) {
+        content = "Vous n'avez aucun agent pour l'instant. Dites simplement « crée-moi un agent … » (ex. « crée un agent commercial nommé Alex ») et je le crée réellement.";
+      } else {
+        content = [
+          `Vos agents (${agents.length}) :`,
+          ...agents.slice(0, 12).map((a) => {
+            const s = toSummary(a);
+            return `- ${s.name} — ${s.typeLabel}${s.status !== "active" ? ` (${s.status})` : ""} : ${s.description.slice(0, 100)}`;
+          }),
+          "",
+          "Pour dialoguer avec l'un d'eux : sélecteur d'agents du composer, ou « utilise l'agent … ». Pour gérer : « active l'agent … », « désactive l'agent … », « supprime l'agent … ».",
+        ].join("\n");
+      }
+    } catch {
+      content = "Je n'ai pas pu consulter vos agents (stockage indisponible). Réessayez dans un instant.";
+    }
+
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content,
+      generationStatus: "complete",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Liste réelle des agents (langage naturel)." },
+    };
+  }
+
+  /* ---------- Activation / désactivation / suppression ----------
+   * La cible est résolue par nom EXACT (insensible à la casse) parmi les
+   * agents de l'utilisateur — aucune correspondance floue : en cas
+   * d'ambiguïté, la liste est renvoyée et l'utilisateur précise. */
+  if (intent.action === "enable" || intent.action === "disable" || intent.action === "delete") {
+    await onEvent({ type: "status", phase: "execution", label: "Recherche de l'agent ciblé…" });
+    let content: string;
+    let ok = false;
+    try {
+      const agents = await listAgentsForUser(ctx.userId);
+      const nom = intent.name?.trim().toLowerCase();
+      const cible = nom
+        ? agents.find((a) => a.name.trim().toLowerCase() === nom)
+        : undefined;
+
+      if (!nom) {
+        content = agents.length === 0
+          ? "Vous n'avez aucun agent pour l'instant."
+          : `Quel agent concerne votre demande ? Vos agents : ${agents.slice(0, 8).map((a) => `« ${a.name} »`).join(", ")}.`;
+      } else if (!cible) {
+        content = agents.length === 0
+          ? `Je ne trouve aucun agent : votre espace n'en contient pas (rien n'a été ${intent.action === "delete" ? "supprimé" : "modifié"}).`
+          : `Aucun agent nommé exactement « ${intent.name} ». Vos agents : ${agents.slice(0, 8).map((a) => `« ${a.name} »`).join(", ")}. Rien n'a été ${intent.action === "delete" ? "supprimé" : "modifié"}.`;
+      } else if (intent.action === "delete") {
+        const supprimé = await deleteAgentForUser(ctx.userId, cible.id);
+        ok = supprimé;
+        content = supprimé
+          ? `Agent « ${cible.name} » supprimé définitivement.`
+          : `Je n'ai pas pu supprimer « ${cible.name} » (opération refusée par le stockage).`;
+      } else {
+        const statut = intent.action === "enable" ? "active" : "paused";
+        const maj = await updateAgentForUser(ctx.userId, cible.id, { status: statut });
+        ok = Boolean(maj);
+        content = maj
+          ? `Agent « ${cible.name} » ${intent.action === "enable" ? "réactivé" : "mis en pause"} (statut : ${maj.status}).`
+          : `Je n'ai pas pu modifier « ${cible.name} » (opération refusée par le stockage).`;
+      }
+    } catch (error) {
+      content = `Je n'ai pas pu ${intent.action === "delete" ? "supprimer" : intent.action === "enable" ? "activer" : "désactiver"} l'agent : ${error instanceof Error ? error.message : "erreur inattendue"}.`;
+    }
+
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content,
+      generationStatus: ok || intent.action !== "delete" ? "complete" : "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: `Gestion réelle d'un agent : ${intent.action} (langage naturel).` },
+    };
+  }
+
+  // Exhaustivité TypeScript (action couverte ci-dessus).
+  return runChatTurn({ ...ctx, intent: { mode: "chat", understanding: "Demande d'agent non résolue." } });
 }
 
 async function runServiceControlTurn(

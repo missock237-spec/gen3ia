@@ -37,13 +37,13 @@ export interface NavRoute {
 const WORKSPACE_PRIMARY: NavRoute[] = [
   {
     id: "chat-ia",
-    href: "/chat",
+    href: "/dashboard",
     label: "Chat IA",
     icon: "✦",
-    description: "Discuter avec l'IA Gen3ia — le cœur de la plateforme",
+    description: "Le dashboard EST le chat IA — prompt, fichiers, outils, effort, recherche web",
     contexts: ["workspace"],
     section: "primary",
-    keywords: ["chat", "ia", "intelligence", "conversation", "parler", "assistant", "aurora"],
+    keywords: ["chat", "ia", "intelligence", "conversation", "parler", "assistant", "dashboard", "nova"],
   },
   {
     id: "conversations",
