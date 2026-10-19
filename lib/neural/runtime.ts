@@ -38,6 +38,7 @@ import { genererAudioNeural, audioVersDataUri } from "./generation/audio-engine"
 import { genererVideoNeural, videoVersDataUri } from "./generation/video-engine";
 import { CentralSupervisor, HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
+import { piloterPlateforme } from "./pilotage/gen3ia";
 
 /**
  * RUNTIME NEURONAL — singleton caché sur globalThis (résiste au HMR de
@@ -276,7 +277,7 @@ export function getNeuralRuntime(): NeuralRuntime {
   const evolution = new MoteurEvolutionGen3(cortex);
   const engine = new NeuralEngine(noyau, espace, cortex, hippocampe, evolution, () => {
     void sauvegarderCerveauRuntime().catch(() => undefined);
-  });
+  }, piloterPlateforme);
 
   const runtime: NeuralRuntime = {
     reseau,
