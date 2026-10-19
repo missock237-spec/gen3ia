@@ -39,6 +39,7 @@ jobs:
           # Keepalive SSH : le build next dure plusieurs minutes ; sans
           # ServerAliveInterval, une session sans trafic sortant peut être
           # coupée (« Broken pipe ») par un NAT/pare-feu intermédiaire.
-          OPTS="-P 22022 -i ~/.ssh/vps_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=20 -o ServerAliveCountMax=30 -o TCPKeepAlive=yes"
-          scp -v $OPTS scripts/deploy_free_mode.sh root@209.74.86.62:/tmp/deploy_free_mode.sh 2>&1 | tail -15
-          ssh $OPTS root@209.74.86.62 "bash -lc 'bash /tmp/deploy_free_mode.sh'"
+          # ATTENTION aux drapeaux de port : scp = -P (majuscule), ssh = -p.
+          COMMON="-i ~/.ssh/vps_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=20 -o ServerAliveCountMax=30 -o TCPKeepAlive=yes"
+          scp -v -P 22022 $COMMON scripts/deploy_free_mode.sh root@209.74.86.62:/tmp/deploy_free_mode.sh 2>&1 | tail -15
+          ssh -v -p 22022 $COMMON root@209.74.86.62 "bash -lc 'bash /tmp/deploy_free_mode.sh'" 2>&1 | tail -60
