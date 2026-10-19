@@ -30,6 +30,22 @@ paths = [
   # le détecteur générique gitleaks (mot-clé key: + entropie) sinon
   # fausse alerte inévitable sur ce fichier par nature.
   '''app/api/settings/api-keys/route\.test\.ts$''',
+  # Fixtures des tests du masquage de secrets (lib/security) : le module
+  # testé EST le masque de secrets — ses jeux d'essai sont des faux
+  # évidents (sk-proj-fake0000…, fakeJwt à signature « forged-signature »,
+  # API_KEY abcd1234efgh5678). Aucune valeur réelle par construction.
+  '''lib/security/secret-masking\.test\.ts$''',
+  # Fixture du test d'intégration des API personnalisées : la même chaîne
+  # factice abcd1234efgh5678 sert uniquement à vérifier le masquage.
+  '''lib/integrations/custom-apis/client\.test\.ts$''',
+  # Script E2E cycle 03 (durcissement session) : cookies de session
+  # FORGÉS à dessein (signature « forged-signature », « garbage-not-jwt »)
+  # pour vérifier le rejet des sessions invalides — jamais un vrai jeton.
+  '''scripts/e2e_cycle03_prod\.mjs$''',
+  # Fixture du test de la file de ticks (R2) : secret nommé REAL_SECRET
+  # mais valeur littéralement « r2-secret-for-tests-0123456789abcdef » —
+  # placeholder de banc d'essai, aucune valeur réelle.
+  '''lib/queue/tick-queue\.test\.ts$''',
 ]
 # Clés d'API Web Firebase NEXT_PUBLIC_* : par conception publiques
 # (identifient le projet, ne donnent aucun accès sans règles de sécurité).
