@@ -42,8 +42,6 @@ export async function GET(
         (skill) =>
           skill.visibility ===
             "system" ||
-          skill.visibility ===
-            "marketplace" ||
           skill.authorId ===
             user.uid,
       );

@@ -84,11 +84,6 @@ export const AD_PLACEMENTS: AdPlacementInfo[] = [
     label: "Espace de travail",
     description: "Dans les surfaces de l'espace de travail connecté.",
   },
-  {
-    id: "marketplace",
-    label: "Marketplace",
-    description: "Dans l'écosystème marketplace d'agents et d'extensions.",
-  },
 ];
 
 export const AD_PLACEMENT_IDS = AD_PLACEMENTS.map((placement) => placement.id);

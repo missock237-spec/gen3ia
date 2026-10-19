@@ -21,7 +21,6 @@ import { BILLING_ENABLED } from "@/lib/billing/billing-mode";
 const PRODUCT_LINKS = [
   { href: "/studio", label: "Studio" },
   { href: "/neural", label: "Système Neuronal" },
-  { href: "/marketplace", label: "Marketplace" },
 ];
 
 /**
@@ -49,7 +48,6 @@ const CAPABILITIES = [
   { href: "/neural", label: "Cerveau IA", icon: "M12 5a3 3 0 0 0-3 3v3a3 3 0 0 0 6 0V8a3 3 0 0 0-3-3ZM5 11a7 7 0 0 0 14 0M12 18v3" },
   { href: "/workspace/training", label: "Entraînement", icon: "M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" },
   { href: "/workspace/knowledge", label: "Connaissances", icon: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" },
-  { href: "/marketplace", label: "Marketplace", icon: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4H6Z" },
   { href: "/studio", label: "Automatisations", icon: "M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6l-8-4Z" },
   { href: "/storage", label: "Stockage", icon: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2Z" },
   { href: "/team", label: "Équipes", icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" },
@@ -112,17 +110,6 @@ const PRODUCTS = [
     points: ["Gen entraîne vos modèles (moteur natif, sans GPU requis)", "Import de datasets HF/Kaggle + fine-tuning LoRA sur GPU", "Précision train/test réelle + modèle exportable", "Évolution continue de l'IA : usage + consolidation autonome"],
     cta: "Faire entraîner mon modèle",
     icon: "M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z",
-    badge: null as string | null,
-  },
-  {
-    href: "/marketplace",
-    eyebrow: "Gen3ia Marketplace",
-    title: "Marketplace d'extensions",
-    description:
-      "Étendez vos automatisations avec des tools, skills et workflows créés par la communauté. Chaque extension est versionnée, notée, sandboxée et contrôlée par des permissions explicites.",
-    points: ["Installation en un clic", "Permissions vérifiables avant achat", "Revenus développeur intégrés"],
-    cta: "Parcourir la Marketplace",
-    icon: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4H6Zm0 4h18M16 10a4 4 0 0 1-8 0",
     badge: null as string | null,
   },
 ];
@@ -731,8 +718,8 @@ export default function HomePage() {
               </Link>
               <p className="mt-3 font-[family-name:var(--font-display)] text-xl font-medium text-[var(--g3-text)]">La meilleure façon de travailler avec l’IA</p>
               <p className="mt-4 max-w-xs text-xs leading-5 text-[var(--g3-faint)]">
-                La plateforme d’agents IA autonomes : Studio, Agent Live et
-                Marketplace, avec la sécurité et le contrôle humain au centre.
+                La plateforme d’IA où Gen pilote tout : Chat, Cerveau,
+                Studio d’entraînement et Automatisations, avec la sécurité et le contrôle humain au centre.
               </p>
             </div>
             <nav aria-label="Capacités">

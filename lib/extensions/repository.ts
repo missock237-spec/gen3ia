@@ -93,7 +93,7 @@ export interface ReviewDoc{id:string;extensionId:string;userId:string;rating:num
 export async function upsertReview(params:{extensionId:string;userId:string;rating:number;title?:string;body:string}){const timestamp=now();const ref=adminDb.collection(COL.reviews).doc(`${params.extensionId}__${params.userId}`);await adminDb.runTransaction(async tx=>{const snap=await tx.get(ref);if(snap.exists){const previous=snap.data() as ReviewDoc;tx.update(ref,{rating:params.rating,title:params.title??null,body:params.body.slice(0,4000),updatedAt:timestamp});tx.update(extensionRef(params.extensionId),{"stats.ratingSum":FieldValue.increment(params.rating-previous.rating),updatedAt:timestamp});return;}tx.create(ref,{id:ref.id,extensionId:params.extensionId,userId:params.userId,rating:params.rating,title:params.title??null,body:params.body.slice(0,4000),status:"visible",createdAt:timestamp,updatedAt:timestamp,deletedAt:null});tx.update(extensionRef(params.extensionId),{"stats.ratingSum":FieldValue.increment(params.rating),"stats.ratingCount":FieldValue.increment(1),updatedAt:timestamp});});}
 export async function listReviews(extensionId:string,limit=20){const snap=await adminDb.collection(COL.reviews).where("extensionId","==",extensionId).where("status","==","visible").orderBy("createdAt","desc").limit(limit).get();return snap.docs.map(d=>d.data() as ReviewDoc);}
 
-/* ── Catalogue paginé (marketplace avancé) ───────────────────────────────────
+/* ── Catalogue paginé ───────────────────────────────────────────────────────
  * UNE SEULE forme de requête Firestore (equality status+deletedAt, plafond
  * 200) → tri en mémoire par clé de tri avec départage par identifiant
  * (déterministe). Le curseur opaque encode {k,id} de la dernière fiche : le

@@ -21,7 +21,7 @@ const METRIC_LABELS: Array<[string, string, string]> = [
   ["teams", "Équipes", "Espaces partagés"],
   ["tasks", "Missions", "Tâches workspace"],
   ["agents", "Agents", "Agents personnalisés"],
-  ["extensions", "Extensions", "Catalogue Marketplace"],
+  ["extensions", "Extensions", "Catalogue d'extensions"],
   ["installations", "Installations", "Extensions installées"],
   ["executions", "Exécutions", "Exécutions enregistrées"],
   ["memories", "Mémoires", "Souvenirs permanents"],

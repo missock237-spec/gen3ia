@@ -243,7 +243,7 @@ async function renewOne(entitlement: DueEntitlement, nowMs: number): Promise<Ren
           entitlement.userId,
           state === "expired" ? "Abonnement expiré" : "Renouvellement en attente",
           state === "expired"
-            ? `Votre abonnement « ${extension.name} » a expiré faute de solde suffisant. Réabonnez-vous depuis la Marketplace.`
+            ? `Votre abonnement « ${extension.name} » a expiré faute de solde suffisant. Réabonnez-vous depuis la plateforme.`
             : `Le renouvellement de « ${extension.name} » a échoué (solde insuffisant). Réapprovisionnez votre wallet sous ${Math.ceil((SUBSCRIPTION_GRACE_MS - overdue) / (24 * 60 * 60 * 1000))} jour(s) pour le conserver.`,
         );
       }

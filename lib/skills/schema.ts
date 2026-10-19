@@ -56,7 +56,6 @@ export const SkillDefinitionSchema = z.object({
   visibility: z.enum([
     "system",
     "private",
-    "marketplace",
   ]),
 
   authorId: z.string().nullable(),

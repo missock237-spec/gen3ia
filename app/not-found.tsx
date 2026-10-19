@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 /**
- * Page 404 soignée : les routes dynamiques invalides (marketplace/[id],
+ * Page 404 soignée : les routes dynamiques invalides (projets/[id],
  * approvals/[id], team/[teamId], client/[agentId], fautes de frappe…)
  * doivent offrir une issue claire au lieu du 404 par défaut du framework.
  */

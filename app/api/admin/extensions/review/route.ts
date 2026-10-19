@@ -5,7 +5,7 @@ import { extensionApiError } from "@/lib/extensions/api";
 import { listPendingVersions, reviewVersion, suspendExtension } from "@/lib/extensions/repository";
 
 /**
- * Marketplace moderation (admin only).
+ * Extension moderation (admin only).
  * GET  /api/admin/extensions/review          — pending submissions queue.
  * POST /api/admin/extensions/review          — approve/reject a version.
  * POST /api/admin/extensions/review?suspend=1 — suspend an extension.

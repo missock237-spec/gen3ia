@@ -19,8 +19,8 @@ export const WalletTransactionTypeSchema = z.enum([
   "release",
   "adjustment",
   "welcome_grant",
-  // Task 114-c — Marketplace d'agents : gain du propriétaire à la capture
-  // d'une location (split commission plateforme / net propriétaire).
+  // Gains entrants de la plateforme : crédit du bénéficiaire à la capture
+  // d'un règlement (split commission plateforme / net bénéficiaire).
   "earning",
 ]);
 export type WalletTransactionType = z.infer<typeof WalletTransactionTypeSchema>;
@@ -181,14 +181,14 @@ export async function applyTopup(params: {
 }
 
 /**
- * CRÉDIT ENTRANT « GAIN MARKETPLACE » (Task 114-c) : le net du propriétaire
- * après split de commission, à la capture d'une location d'agent réussie.
+ * CRÉDIT ENTRANT « GAIN » : le net du bénéficiaire après split de
+ * commission, à la capture d'un règlement réussi.
  *
  * Même mécanique que applyTopup : transaction r2fs sur userWallets + écriture
  * de ledger idempotente par doc-ID (`earning_<reference>` — un règlement déjà
  * joué ne se rejoue jamais). Balance += amountMinor, réarmement du cycle
  * d'alerte solde bas (de l'argent entre réellement). Réservé aux références
- * de la marketplace (hire_<hireId>) — les recharges restent sur applyTopup.
+ * de la plateforme — les recharges restent sur applyTopup.
  */
 export async function applyEarning(params: {
   userId: string;

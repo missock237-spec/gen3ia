@@ -8,7 +8,7 @@ import { getEntitlement } from "./repository";
  *
  * The orchestrator calls `getInstalledExtensionCapabilities(userId)` before
  * running a plan. Only extensions that are (1) installed & active for THIS
- * user, (2) approved on the marketplace and (3) covered by a valid
+ * user, (2) approved on the platform and (3) covered by a valid
  * entitlement are exposed — nothing else ever reaches the agent.
  */
 

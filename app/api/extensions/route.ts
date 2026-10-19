@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   } catch (error) { return extensionApiError(error); }
 }
 
-/** Marketplace catalog is account-only: public users cannot enumerate extensions through the API. */
+/** Extension catalog is account-only: public users cannot enumerate extensions through the API. */
 export async function GET(request: Request) {
   try {
     // L'authentification reste TOUJOURS avant le cache : aucune réponse

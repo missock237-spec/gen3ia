@@ -153,7 +153,6 @@ export default function FaqPage() {
           <nav aria-label="Pied de page FAQ" className="flex flex-wrap items-center justify-center gap-4 text-sm">
             <Link href="/studio" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Studio</Link>
             <Link href="/neural" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Système Neuronal</Link>
-            <Link href="/marketplace" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Marketplace</Link>
             <Link href="/privacy" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Confidentialité</Link>
           </nav>
           <p className="text-xs text-[var(--g3-faint)]">© {new Date().getFullYear()} Gen3ia AI Studio.</p>

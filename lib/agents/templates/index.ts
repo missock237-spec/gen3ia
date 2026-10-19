@@ -10,7 +10,7 @@ import type { AgentTemplate } from "./types";
  * TEMPLATES D'AGENTS SECTORIELS — registre (Task 132).
  *
  * MODULE PUR (données seulement, aucune dépendance serveur) : importable
- * par l'UI (grille « Templates sectoriels » de la marketplace) et par le
+ * par l'UI (grille « Templates sectoriels » de la Bibliothèque) et par le
  * serveur. L'instancialisation vit dans ./instantiate.ts (serveur).
  *
  * NOTE RUNTIME : les allowlists `outilsAutorises` sont portées dans

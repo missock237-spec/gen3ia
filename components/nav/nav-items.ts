@@ -54,7 +54,7 @@ export const AGENTS: NavItem[] = [
 
 /** Ressources. */
 export const LIBRARY: NavItem[] = [
-  ...groupByIds(["memory", "marketplace"]),
+  ...groupByIds(["memory"]),
   ...groupByIds(["billing", "settings"]),
 ];
 

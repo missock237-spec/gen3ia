@@ -118,14 +118,14 @@ function fallbackAd(placement: string): PlatformAd {
   const base = (process.env.NEXT_PUBLIC_APP_URL || "https://gen3ia.online").replace(/\/+$/, "");
   const now = Date.now();
   return {
-    id: "fallback-gen3ia-marketplace",
+    id: "fallback-gen3ia-accueil",
     placement,
     format: "link",
     title: "Découvrez les capacités de Gen3ia",
     advertiser: "Gen3ia",
-    description: "Explorez les agents, extensions et ressources disponibles dans l’écosystème Gen3ia.",
-    text: "Marketplace Gen3ia",
-    targetUrl: `${base}/marketplace`,
+    description: "Une plateforme d'IA pilotée par Gen : chat, cerveau, studio d'entraînement et médias.",
+    text: "Plateforme Gen3ia",
+    targetUrl: `${base}/`,
     ctaLabel: "Découvrir",
     enabled: true,
     priority: -1000,
@@ -296,7 +296,7 @@ function serializeAd(id: string, data: DocumentData): PlatformAd {
     text: typeof data.text === "string" ? data.text : undefined,
     imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : undefined,
     videoUrl: typeof data.videoUrl === "string" ? data.videoUrl : undefined,
-    targetUrl: String(data.targetUrl ?? "https://gen3ia.online/marketplace"),
+    targetUrl: String(data.targetUrl ?? "https://gen3ia.online/"),
     ctaLabel: typeof data.ctaLabel === "string" ? data.ctaLabel : undefined,
     ...(Array.isArray(data.keywords) && data.keywords.length > 0
       ? { keywords: data.keywords.map((keyword) => String(keyword).trim().toLowerCase().slice(0, 60)).filter(Boolean).slice(0, 30) }

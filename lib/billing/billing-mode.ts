@@ -5,7 +5,7 @@
  * primitives de DÉBIT (réservation, règlement, libération) deviennent des
  * no-ops fail-soft : un agent, une mission, un outil, une vidéo ou un média
  * ne peut JAMAIS être arrêté ni débité. Les entrées d'argent réel (recharge
- * Chariow, gains marketplace) restent opérationnelles.
+ * Chariow, gains de la plateforme) restent opérationnelles.
  *
  * SÉMANTIQUE (Task 161) : le DÉFAUT est le MODE LIBRE — l'absence de la
  * variable (production sans configuration particulière) signifie accès

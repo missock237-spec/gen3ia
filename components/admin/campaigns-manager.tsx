@@ -192,7 +192,7 @@ export function CampaignsManager() {
         <label className="text-xs font-semibold text-[var(--g3-muted)] md:col-span-2">
           Emplacements ciblés (séparés par des virgules)
           <input value={form.placements} onChange={(event) => setForm({ ...form, placements: event.target.value })}
-            className="mt-1 w-full rounded-xl bg-[var(--g3-elevated)] px-3 py-2.5 text-sm text-[var(--g3-text)] outline-none" placeholder="settings,workspace,marketplace" />
+            className="mt-1 w-full rounded-xl bg-[var(--g3-elevated)] px-3 py-2.5 text-sm text-[var(--g3-text)] outline-none" placeholder="settings,workspace" />
         </label>
         <label className="text-xs font-semibold text-[var(--g3-muted)]">
           Titre de la créa

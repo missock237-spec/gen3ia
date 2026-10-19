@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     siteName: "Gen3ia",
     title: "Gen3ia — Autonomous AI Agents That Execute Real Work",
     description:
-      "Describe a goal: your AI agent plans it, executes it and delivers a verified result. AI images, 800+ connectors, extension marketplace, human approval.",
+      "Describe a goal: Gen plans it, executes it and delivers a verified result. AI images, 800+ connectors, everything driven by the AI, human approval.",
     locale: "en_US",
     alternateLocale: ["fr_FR"],
     images: [
@@ -80,8 +80,8 @@ const WHAT_CARDS = [
     icon: "M13 2 3 14h7l-1 8 10-12h-7l1-8Z",
   },
   {
-    title: "Marketplace & scheduling",
-    text: "Extend agents with community skills, tools and workflows (versioned, sandboxed, permission-checked). Schedule agents 24/7 — they keep working even when the app is closed.",
+    title: "Scheduling 24/7",
+    text: "Schedule your automations around the clock — Gen keeps working even when the app is closed.",
     icon: "M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
   },
 ];
@@ -269,7 +269,6 @@ export default function EnglishHomePage() {
           <nav aria-label="English footer" className="flex flex-wrap items-center justify-center gap-4 text-sm">
             <Link href="/studio" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Studio</Link>
             <Link href="/neural" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Neural system</Link>
-            <Link href="/marketplace" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Marketplace</Link>
             <Link href="/privacy" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Privacy</Link>
             <Link href="/faq" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">FAQ (FR)</Link>
           </nav>

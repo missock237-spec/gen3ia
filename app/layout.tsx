@@ -84,7 +84,6 @@ export const metadata: Metadata = {
     "automatisation d'entreprise IA",
     "chatbot d'entreprise",
     "intégrations IA",
-    "marketplace d'extensions IA",
     "agent IA francophone",
     "Gen3ia",
   ],
@@ -97,7 +96,7 @@ export const metadata: Metadata = {
     siteName: "Gen3ia",
     title: "Gen3ia — Plateforme d'agents IA autonomes",
     description:
-      "Décrivez un objectif en une phrase : un agent IA Gen3ia le planifie, l'exécute et livre un résultat vérifié. Images par IA, 800+ connecteurs, marketplace d'extensions.",
+      "Décrivez un objectif en une phrase : Gen, l'IA de la plateforme, le planifie, l'exécute et livre un résultat vérifié. Images, vidéo, audio, 800+ connecteurs — tout est piloté par l'IA.",
     locale: "fr_FR",
     images: [
       {

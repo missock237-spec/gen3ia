@@ -148,10 +148,6 @@ const OPTIONAL_RECOGNIZED = [
   "GEN3IA_MISSION_RESULT_FEE_MINOR",
   "GEN3IA_MISSION_RESULT_FEE_MAX_MINOR",
   "GEN3IA_ESCROW_TTL_MS",
-  // Marketplace d'agents (Task 114-c, lib/marketplace/hire.ts) : commission
-  // plateforme sur les locations, en points de base (défaut 2 000 = 20 %,
-  // clamp 0..5 000).
-  "GEN3IA_MARKETPLACE_FEE_BPS",
   "FIRESTORE_EMULATOR_HOST",
   "FIREBASE_AUTH_EMULATOR_HOST",
 ];

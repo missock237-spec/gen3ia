@@ -10,7 +10,7 @@ import { listUserServers } from "@/lib/integrations/mcp/service";
  * System ») : la VUE UNIQUE de tout ce qu'un principal (utilisateur /
  * organisation) peut faire exécuter par ses agents Gen3ia. Les applications
  * deviennent des CAPACITÉS du système — outils natifs, skills, extensions
- * installées (marketplace), APIs personnelles, serveurs MCP, équipes
+ * installées, APIs personnelles, serveurs MCP, équipes
  * d'agents — agrégées sous un schéma commun, avec leur risque et leur
  * permission de niveau d'exécution.
  *

@@ -23,7 +23,6 @@ const LABELS = {
     nav: [
       { href: "/studio", label: "Studio" },
       { href: "/live", label: "Live agent" },
-      { href: "/marketplace", label: "Marketplace" },
     ],
     faq: { href: "/faq", label: "FAQ (FR)" },
     login: "Log in",
