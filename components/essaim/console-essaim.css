@@ -1,0 +1,377 @@
+/**
+ * Console de l'Essaim d'Agents — feuille de style.
+ *
+ * Même identité que le laboratoire des ondes et le Monde : fond nuit,
+ * violet/cyan en accents, cartes translucides. Les ondes de vie des
+ * agents sont dessinées dans le canvas, pas en CSS.
+ */
+
+.essaim-console {
+  --fond: #0a0714;
+  --carte: rgba(139, 92, 246, 0.07);
+  --bord: rgba(139, 92, 246, 0.22);
+  --texte: #e2e8f0;
+  --souris: rgba(226, 232, 240, 0.55);
+  --violet: #8b5cf6;
+  --cyan: #22d3ee;
+  --vert: #34d399;
+  --jaune: #fde047;
+  --rouge: #fb7185;
+
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(124, 58, 237, 0.17), transparent 60%),
+    radial-gradient(900px 500px at 88% 8%, rgba(34, 211, 238, 0.10), transparent 55%),
+    var(--fond);
+  color: var(--texte);
+  padding: 28px clamp(16px, 4vw, 56px) 48px;
+  max-width: 1240px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ——— En-tête ——— */
+
+.essaim-entete {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.essaim-titre h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3.4vw, 2.1rem);
+  letter-spacing: 0.02em;
+  background: linear-gradient(92deg, #c4b5fd, #67e8f9 70%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.essaim-titre p {
+  margin: 6px 0 0;
+  color: var(--souris);
+  font-size: 0.92rem;
+  max-width: 68ch;
+}
+
+.essaim-statut {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--souris);
+  text-align: right;
+}
+
+.essaim-puce {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--bord);
+  border-radius: 999px;
+  background: var(--carte);
+}
+
+.essaim-puce b {
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ——— Bande de statistiques ——— */
+
+.essaim-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.essaim-stat {
+  border: 1px solid var(--bord);
+  background: var(--carte);
+  border-radius: 14px;
+  padding: 10px 14px;
+}
+
+.essaim-stat .valeur {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.essaim-stat .etiquette {
+  font-size: 0.72rem;
+  color: var(--souris);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ——— Topologie (canvas) ——— */
+
+.essaim-topologie {
+  border: 1px solid var(--bord);
+  background: rgba(10, 7, 20, 0.6);
+  border-radius: 18px;
+  overflow: hidden;
+  position: relative;
+}
+
+.essaim-topologie canvas {
+  display: block;
+  width: 100%;
+  height: clamp(240px, 34vh, 380px);
+}
+
+.essaim-topologie-legende {
+  position: absolute;
+  bottom: 10px;
+  left: 14px;
+  font-size: 0.72rem;
+  color: var(--souris);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* ——— Actions rapides ——— */
+
+.essaim-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bouton-onde {
+  appearance: none;
+  border: 1px solid var(--bord);
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.16), rgba(139, 92, 246, 0.06));
+  color: var(--texte);
+  padding: 9px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.bouton-onde:hover {
+  transform: translateY(-1px);
+  border-color: var(--violet);
+}
+
+.bouton-onde:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.bouton-onde.danger {
+  border-color: rgba(251, 113, 133, 0.4);
+  background: linear-gradient(180deg, rgba(251, 113, 133, 0.16), rgba(251, 113, 133, 0.05));
+}
+
+/* ——— Onglets ——— */
+
+.essaim-onglets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.essaim-onglet {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--souris);
+  padding: 8px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.essaim-onglet.actif {
+  border-color: var(--bord);
+  background: var(--carte);
+  color: var(--texte);
+}
+
+/* ——— Panneaux ——— */
+
+.essaim-panneau {
+  border: 1px solid var(--bord);
+  background: var(--carte);
+  border-radius: 18px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.essaim-panneau h2 {
+  margin: 0;
+  font-size: 1.02rem;
+  color: #c4b5fd;
+}
+
+.essaim-panneau .note {
+  color: var(--souris);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.essaim-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.essaim-champ {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.essaim-champ label {
+  color: var(--souris);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.essaim-champ input,
+.essaim-champ textarea {
+  background: rgba(10, 7, 20, 0.65);
+  border: 1px solid var(--bord);
+  color: var(--texte);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font: inherit;
+  outline: none;
+}
+
+.essaim-champ input:focus,
+.essaim-champ textarea:focus {
+  border-color: var(--violet);
+}
+
+.essaim-champ textarea {
+  min-height: 110px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+
+/* ——— Listes ——— */
+
+.essaim-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.essaim-item {
+  border: 1px solid rgba(139, 92, 246, 0.14);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(10, 7, 20, 0.5);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.essaim-item .titre {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.essaim-item .detail {
+  color: var(--souris);
+  font-size: 0.78rem;
+  margin-top: 3px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--bord);
+}
+
+.badge.vert { color: var(--vert); border-color: rgba(52, 211, 153, 0.4); }
+.badge.cyan { color: var(--cyan); border-color: rgba(34, 211, 238, 0.4); }
+.badge.jaune { color: var(--jaune); border-color: rgba(253, 224, 71, 0.4); }
+.badge.rouge { color: var(--rouge); border-color: rgba(251, 113, 133, 0.45); }
+.badge.violet { color: #c4b5fd; border-color: var(--bord); }
+
+/* ——— Journal d'événements ——— */
+
+.essaim-journal {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.76rem;
+  line-height: 1.6;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid rgba(139, 92, 246, 0.14);
+  border-radius: 12px;
+  background: rgba(10, 7, 20, 0.55);
+  padding: 10px 12px;
+}
+
+.essaim-journal .ligne {
+  display: flex;
+  gap: 10px;
+}
+
+.essaim-journal .heure {
+  color: rgba(34, 211, 238, 0.55);
+  flex-shrink: 0;
+}
+
+.essaim-journal .type {
+  color: #c4b5fd;
+  flex-shrink: 0;
+  min-width: 10ch;
+}
+
+/* ——— Messages d'état ——— */
+
+.essaim-message {
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  border: 1px solid var(--bord);
+  background: rgba(34, 211, 238, 0.06);
+}
+
+.essaim-message.erreur {
+  border-color: rgba(251, 113, 133, 0.45);
+  background: rgba(251, 113, 133, 0.08);
+  color: #fecdd3;
+}
+
+/* ——— Responsive ——— */
+
+@media (max-width: 720px) {
+  .essaim-statut {
+    align-items: flex-start;
+    text-align: left;
+  }
+}

@@ -66,6 +66,16 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     keywords: ["monde", "simulation", "physique", "nature", "équations", "quantique", "relativité", "thermodynamique", "fluides", "mécanique", "ondes", "solveur", "science"],
   },
   {
+    id: "essaim",
+    href: "/essaim",
+    label: "Essaim d'agents",
+    icon: "⁂",
+    description: "Agents décentralisés connectés à Gen3 : RAG privé chiffré, compétences injectées par ondes, auto-réparation, voix",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["essaim", "agents", "décentralisé", "p2p", "webrtc", "rag", "chiffré", "compétences", "résilience", "voix", "vocal", "swarm"],
+  },
+  {
     id: "conversations",
     href: "/workspace",
     label: "Conversations",
