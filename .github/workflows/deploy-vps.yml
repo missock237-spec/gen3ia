@@ -11,7 +11,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout (script de déploiement à jour)
         uses: actions/checkout@v4
@@ -35,11 +35,42 @@ jobs:
         env:
           TERM: dumb
         run: |
-          set -x
+          set -eo pipefail
           # Keepalive SSH : le build next dure plusieurs minutes ; sans
           # ServerAliveInterval, une session sans trafic sortant peut être
           # coupée (« Broken pipe ») par un NAT/pare-feu intermédiaire.
           # ATTENTION aux drapeaux de port : scp = -P (majuscule), ssh = -p.
+          # sshd PerSourcePenalties peut bloquer l'IP du runner quelques
+          # minutes : boucles de RETRY avec délais + pipefail (un `| tail`
+          # masque sinon le code d'échec — run 39288884878 « success » à tort).
           COMMON="-i ~/.ssh/vps_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=20 -o ServerAliveCountMax=30 -o TCPKeepAlive=yes"
-          scp -v -P 22022 $COMMON scripts/deploy_free_mode.sh root@209.74.86.62:/tmp/deploy_free_mode.sh 2>&1 | tail -15
-          ssh -v -p 22022 $COMMON root@209.74.86.62 "bash -lc 'bash /tmp/deploy_free_mode.sh'" 2>&1 | tail -60
+
+          upload_ok=false
+          for i in 1 2 3 4 5; do
+            echo "=== Tentative d'upload $i/5 ==="
+            if scp -v -P 22022 $COMMON scripts/deploy_free_mode.sh root@209.74.86.62:/tmp/deploy_free_mode.sh 2>&1 | tail -8; then
+              upload_ok=true
+              break
+            fi
+            echo "Upload $i échoué (bannière/penalité sshd ?) — attente 60 s"
+            sleep 60
+          done
+          if [ "$upload_ok" != true ]; then
+            echo "##[error]Upload impossible après 5 tentatives"
+            exit 1
+          fi
+
+          deploy_ok=false
+          for i in 1 2 3; do
+            echo "=== Tentative de déploiement $i/3 ==="
+            if ssh -v -p 22022 $COMMON root@209.74.86.62 "bash -lc 'bash /tmp/deploy_free_mode.sh'" 2>&1 | tail -80; then
+              deploy_ok=true
+              break
+            fi
+            echo "Déploiement $i échoué — attente 60 s"
+            sleep 60
+          done
+          if [ "$deploy_ok" != true ]; then
+            echo "##[error]Déploiement impossible après 3 tentatives"
+            exit 1
+          fi
