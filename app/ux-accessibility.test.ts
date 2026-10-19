@@ -93,14 +93,9 @@ describe("D3 — Hors-ligne visible (réseaux instables)", () => {
 });
 
 describe("D4 — Monnaie XAF (0 décimale)", () => {
-  const hub = read("components/marketplace/marketplace-hub.tsx");
-  const fiche = read("app/marketplace/[id]/page.tsx");
-
-  it("plus aucun /100 manuel + suffixe XAF dans la marketplace (helper centralisé)", () => {
-    expect(hub).toContain('from "@/lib/ui/money"');
-    expect(hub).not.toMatch(/amountMinor [\s\S]{0,40}\.toLocaleString/);
-    expect(fiche).toContain('from "@/lib/ui/money"');
-    expect(fiche).not.toContain('toLocaleString("fr-FR")} ${pricing.currency');
+  it("le helper centralisé money reste exposé pour les surfaces facturées", () => {
+    const money = read("lib/ui/money.ts");
+    expect(money).toContain("export");
   });
 });
 
@@ -134,16 +129,6 @@ describe("D5 — Cibles tactiles 44px", () => {
 });
 
 describe("D6 — Metadata SEO des segments publics", () => {
-  it("marketplace : layout serveur avec title exact, description FR et openGraph", () => {
-    const layout = read("app/marketplace/layout.tsx");
-    expect(layout).toContain('absolute: "Marketplace — Gen3ia"');
-    expect(layout).toContain("openGraph:");
-    expect(layout).toContain('locale: "fr_FR"');
-    // Un layout imbriqué ne redéclare JAMAIS html/body (App Router).
-    expect(layout).not.toContain("<html>");
-    expect(layout).not.toContain("<body>");
-  });
-
   it("studio : metadata servie par le layout serveur (le shell client est déplacé, pas supprimé)", () => {
     const layout = read("app/studio/layout.tsx");
     const client = read("app/studio/studio-layout-client.tsx");
@@ -156,7 +141,7 @@ describe("D6 — Metadata SEO des segments publics", () => {
 });
 
 describe("D7 — loading.tsx de perception de vitesse", () => {
-  const segments = ["dashboard", "billing", "settings", "memory", "team", "admin", "marketplace", "neural"];
+  const segments = ["dashboard", "billing", "settings", "memory", "team", "admin", "neural"];
 
   it("chaque segment applicatif possède un skeleton cohérent (partagé ou inline)", () => {
     for (const segment of segments) {

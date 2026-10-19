@@ -6,7 +6,7 @@ import { canUseExtension } from "@/lib/extensions/pricing";
 
 type Params = { params: Promise<{ id: string }> };
 
-/** Account-only marketplace detail. Installation, entitlement and review state are user-scoped. */
+/** Account-only extension detail. Installation, entitlement and review state are user-scoped. */
 export async function GET(request: Request, { params }: Params) {
   try {
     const token = await verifyFirebaseAuth(request);

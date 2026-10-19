@@ -59,7 +59,7 @@ export async function POST(request: Request, { params }: Params) {
             userId: token.uid,
             extension,
             email,
-            redirectUrl: body.redirectUrl ?? "https://gen3ia.online/marketplace",
+            redirectUrl: body.redirectUrl ?? "https://gen3ia.online/",
           });
           return NextResponse.json({ status: "checkout_required", provider: "chariow", checkoutUrl: checkout.checkoutUrl, purchaseId: checkout.purchaseId }, { status: 202 });
         }

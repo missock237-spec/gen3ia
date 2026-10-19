@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Paiements marketplace : part développeur réellement enregistrée (80/20)
+ * Paiements d'extensions : part développeur réellement enregistrée (80/20)
  * sur achat wallet ET settlement Chariow ; échec wallet = achat marqué
  * failed SANS revenu ; idempotence du settlement (déjà payé = rien).
  */

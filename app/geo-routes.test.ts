@@ -33,7 +33,7 @@ describe("GEO : routes robots / sitemap / llms", () => {
 
   it("le sitemap expose toutes les surfaces citables publiques", () => {
     const urls = sitemap().map((entry) => new URL(entry.url).pathname);
-    for (const required of ["/", "/en", "/faq", "/studio", "/neural", "/marketplace", "/integrations", "/signup"]) {
+    for (const required of ["/", "/en", "/faq", "/studio", "/neural", "/integrations", "/signup"]) {
       expect(urls, `page publique manquante du sitemap : ${required}`).toContain(required);
     }
   });
@@ -56,7 +56,8 @@ describe("GEO : routes robots / sitemap / llms", () => {
   it("llms-full.txt contient le résumé anglais et les liens clés", () => {
     const full = readFileSync(path.join(process.cwd(), "public/llms-full.txt"), "utf8");
     expect(full).toContain("English summary");
-    expect(full).toContain("autonomous AI agent platform");
+    expect(full).toContain("AI platform powered by its own Gen3 neural engine");
+    expect(full).not.toContain("marketplace");
     expect(full).toContain("https://gen3ia.online/faq");
     expect(full).toContain("800+");
   });

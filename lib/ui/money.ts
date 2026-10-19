@@ -37,7 +37,7 @@ function format(amountMinor: number, currency: string, compact: boolean): string
 
 /**
  * Prix XAF (0 décimale) — remplace les `(amountMinor / 100).toLocaleString()`
- * manuels de la marketplace.
+ * manuels de la plateforme.
  */
 export function formatXAF(amountMinor: number): string {
   return format(amountMinor, "XAF", false);

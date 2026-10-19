@@ -4,7 +4,7 @@ import type { AgentType } from "@/lib/agents/agent-types";
  * TEMPLATES D'AGENTS SECTORIELS — types (Task 132).
  *
  * Un template est une DONNÉE PURE (aucune dépendance serveur) : il peut
- * être importé par l'UI (grille marketplace) et par le serveur
+ * être importé par l'UI (grille Bibliothèque) et par le serveur
  * (instanciation). L'instanciation passe par la fabrique d'agents
  * (lib/agents/factory.ts) puis le dépôt validant (lib/agents/repository.ts)
  * — voir ./instantiate.ts.
@@ -16,7 +16,7 @@ export interface AgentTemplate {
   id: string;
   /** Nom métier affiché (l'agent instancié sera préfixé « Agent … »). */
   nom: string;
-  /** Description courte (grille marketplace, ≤ 300 caractères). */
+  /** Description courte (grille Bibliothèque, ≤ 300 caractères). */
   description: string;
   /** Secteur d'activité couvert par le template. */
   secteur: string;

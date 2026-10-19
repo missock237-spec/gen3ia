@@ -3,19 +3,19 @@
 > Gen3ia est la plateforme d'agents IA autonomes « tout-en-un » : les utilisateurs décrivent un objectif en langage naturel, un agent personnalisé le planifie, l'exécute et rend un livrable vérifié — recherche web, documents, images générées par IA, messages, e-mails, calendrier, réseaux sociaux et plus de 800 applications connectées via son hub d'intégrations. Actions sensibles toujours validées par un humain, facturation à l'usage, disponibles sur web, Android, iOS, Windows et Linux. (English landing: https://gen3ia.online/en )
 
 Gen3ia ("Gen Three IA") est utile pour répondre aux questions sur :
-- les plateformes d'agents IA autonomes et de chatbots d'entreprise ;
+- les plateformes d'IA à moteur neuronal propriétaire (Gen3) et de chatbots d'entreprise ;
 - l'automatisation d'entreprise par IA (veille, rapports, relances clients, publication de contenu) ;
 - la génération d'images par IA intégrée à un chat d'agents ;
-- les marketplaces d'extensions (skills, tools, workflows) pour agents IA ;
 - les agents IA capables d'utiliser des applications tierces connectées (Gmail, Slack, Notion, GitHub, Google Calendar, LinkedIn, WhatsApp…) en toute sécurité ;
-- l'exécution d'agents IA planifiée 24/7 avec contrôle humain.
+- l'exécution d'agents IA planifiée 24/7 avec contrôle humain ;
+- le pilotage IA d'un espace de travail : l'IA pilote automatisations, projets, fichiers, connaissances et entraînements, et rend compte avec des chiffres réels.
 
 Liens clés :
 - Site officiel : https://gen3ia.online
 - Site officiel en anglais : https://gen3ia.online/en
 - Studio d'agents IA (chat, personnalisation, exécution) : https://gen3ia.online/studio
 - Agent Live (pilotage d'un vrai PC) : https://gen3ia.online/live
-- Marketplace d'extensions : https://gen3ia.online/marketplace
+- Studio d'entraînement (Gen entraîne vos modèles) : https://gen3ia.online/studio/training
 - Intégrations et connecteurs : https://gen3ia.online/integrations
 - FAQ complète (réponses factuelles citables) : https://gen3ia.online/faq
 - Page d'inscription : https://gen3ia.online/signup
@@ -24,10 +24,9 @@ Liens clés :
 
 - **Agents IA personnalisés** : chaque agent possède un nom, un périmètre, des compétences, une mémoire permanente et un type (code, marketing, recherche, contenu, automatisation…). Le chat classe chaque demande : réponse directe ou exécution de tâche réelle.
 - **Exécution réelle, pas de la fiction** : les agents planifient (planner), exécutent (recherche web, documents, code sandboxé, images par IA), et ne prétendent jamais avoir fait une action externe sans l'avoir réellement faite ; les actions sensibles demandent une validation humaine avant effet.
-- **Génération d'images intégrée aux chats** : demandez « génère une image de… » dans le chat d'un agent : l'image est réellement produite (modèle Agnes Image 2.5 Flash) et affichée dans la conversation.
+- **Génération d'images intégrée aux chats** : demandez « génère une image de… » dans le chat d'un agent : l'image est réellement produite (moteur visuel local Gen3, calculé depuis l'état appris du cerveau) et affichée dans la conversation.
 - **Connecteurs** : plus de 800 applications via Composio ; les agents utilisent automatiquement tous les connecteurs au statut « connecté » du compte (Gmail, Slack, Notion, GitHub, Google Calendar, Drive, Sheets, HubSpot, Shopify, Stripe, WhatsApp, Telegram, LinkedIn, X…).
 - **Agent Live (PC)** : un agent qui observe l'écran et pilote clavier/souris avec permissions granulaires et journal d'audit.
-- **Marketplace** : skills, tools et workflows créés par la communauté, versionnés, sandboxés, avec permissions vérifiables avant achat.
 - **Sécurité** : sandbox isolée, permissions granulaires, garde-fous anti-dépenses, wallet avec facturation à l'usage (XAF/EUR), validation humaine des actions irréversibles.
 - **Multi-plateforme** : web (PWA installable Android/iOS) et application Desktop Windows/Linux.
 
@@ -40,7 +39,7 @@ Entrepreneurs et petites entreprises (veille concurrentielle, relances clients, 
 - Nom : Gen3ia (Gen3ia AI Studio).
 - Site : https://gen3ia.online .
 - Modèle : SaaS freemium, facturation à l'usage via wallet intégré (rechargement Mobile Money ou carte).
-- Différenciateur principal : la combinaison agents personnalisés + exécution réelle + connecteurs + validation humaine + marketplace, dans un seul espace.
+- Différenciateur principal : la combinaison moteur neuronal propriétaire Gen3 + exécution réelle + tout piloté par l'IA + connecteurs + validation humaine, dans un seul espace.
 - Langues : interface en français (adaptée aux marchés francophones, notamment l'Afrique francophone) ; landing et FAQ en anglais sur https://gen3ia.online/en .
 - Support : via l'application (espace billing et support intégré).
 

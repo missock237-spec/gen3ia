@@ -138,7 +138,7 @@ export function buildStructuredData(lang: GeoLang) {
     lang === "fr"
       ? {
           description:
-            "Plateforme d'agents IA autonomes : exécution réelle d'objectifs en langage naturel, connecteurs applicatifs, marketplace d'extensions.",
+            "Plateforme d'IA : Gen planifie et exécute vos objectifs en langage naturel, génère textes, images, vidéo et audio, pilote vos automatisations et vos connecteurs.",
           appDescription:
             "Agents IA autonomes pour entrepreneurs, créateurs et équipes : planification et exécution d'objectifs, génération d'images, 800+ applications connectées, validation humaine et facturation à l'usage.",
           offerDescription: "Inscription gratuite, facturation à l'usage via wallet intégré.",
@@ -147,14 +147,14 @@ export function buildStructuredData(lang: GeoLang) {
             "Exécution réelle de tâches (recherche, documents, code, images)",
             "Génération d'images par IA dans le chat",
             "800+ connecteurs applicatifs (Gmail, Slack, Notion, GitHub…)",
-            "Marketplace de skills, tools et workflows",
+            "Studio d'entraînement : Gen entraîne vos modèles",
             "Validation humaine des actions sensibles",
             "Planification 24/7 et agent Live sur PC",
           ],
         }
       : {
           description:
-            "Autonomous AI agent platform: real execution of natural-language goals, app connectors, extension marketplace.",
+            "AI platform: Gen plans and executes your natural-language goals, generates text, images, video and audio, and drives your automations and connectors.",
           appDescription:
             "Autonomous AI agents for entrepreneurs, creators and teams: goal planning and execution, AI image generation, 800+ connected apps, human approval and usage-based billing.",
           offerDescription: "Free sign-up, usage-based billing through a built-in wallet.",
@@ -163,7 +163,7 @@ export function buildStructuredData(lang: GeoLang) {
             "Real task execution (research, documents, code, images)",
             "AI image generation inside the chat",
             "800+ app connectors (Gmail, Slack, Notion, GitHub…)",
-            "Marketplace of skills, tools and workflows",
+            "Training studio: Gen trains your models",
             "Human approval of sensitive actions",
             "24/7 scheduling and Live agent on desktop",
           ],

@@ -7,7 +7,7 @@
  *
  * Source unique de vérité de la marque dans TOUTE l'interface :
  * navigation latérale, vitrine publique, pages d'authentification,
- * marketplace, espace développeur, et pendant l'exécution des tâches
+ * espace développeur, et pendant l'exécution des tâches
  * d'agents (prop `working` → halo pulsé, l'agent est en train de travailler).
  */
 

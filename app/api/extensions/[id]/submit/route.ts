@@ -7,7 +7,7 @@ import { getExtension, getVersion, submitVersion } from "@/lib/extensions/reposi
 type Params = { params: Promise<{ id: string }> };
 
 /**
- * POST /api/extensions/:id/submit — submit a version for marketplace review.
+ * POST /api/extensions/:id/submit — submit a version for platform review.
  * Body: { version }
  * The automated security gate already ran at manifest validation time
  * (permissions, hosts, templates, cross-references). Status -> "pending".

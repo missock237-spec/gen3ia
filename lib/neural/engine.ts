@@ -24,7 +24,8 @@ export type SourceLangage =
   | "cortex_corpus"
   | "cortex_personnalisee"
   | "cortex_contexte"
-  | "decoder_intention";
+  | "decoder_intention"
+  | "pilotage";
 
 /** Composition finale : texte émis + provenance (traçabilité). */
 export interface CompositionReponse {
@@ -104,6 +105,17 @@ export class NeuralEngine {
     private readonly evolution?: MoteurEvolutionGen3,
     /** Callback de persistance appelé après chaque consolidation effective. */
     private readonly surConsolidation?: (resultat: ResultatConsolidation) => void,
+    /**
+     * PILOTAGE PLATEFORME : hook async optionnel (câblé par le runtime avec
+     * les dépôts réels). Si le message est une commande de pilotage (« état
+     * de la plateforme », « mes automatisations »…), la composition renvoyée
+     * — fondée sur des données réelles — PRIME sur cortex et décodeur.
+     * Module pur côté moteur : aucune I/O ici, injection de dépendance.
+     */
+    private readonly pilotage?: (
+      message: string,
+      options: AIRequest,
+    ) => Promise<CompositionReponse | null>,
   ) {}
 
   /**
@@ -145,7 +157,11 @@ export class NeuralEngine {
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const messageUtilisateur = extraireDernierMessageUtilisateur(options);
-    const composition = this.composer(messageUtilisateur, decode);
+    // PILOTAGE PLATEFORME d'abord (données réelles du compte) — sinon cortex
+    // puis décodeur, comme avant.
+    const composition =
+      (await this.pilotage?.(messageUtilisateur, options)) ??
+      this.composer(messageUtilisateur, decode);
     this.memoriser(messageUtilisateur, composition.texte);
     this.evoluer(messageUtilisateur, composition);
 
@@ -211,7 +227,9 @@ export class NeuralEngine {
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const messageUtilisateur = extraireDernierMessageUtilisateur(options);
-    const composition = this.composer(messageUtilisateur, decode);
+    const composition =
+      (await this.pilotage?.(messageUtilisateur, options)) ??
+      this.composer(messageUtilisateur, decode);
 
     // La réponse composée est émise par segments (phrases réelles). Les
     // télémétries de cycles restent disponibles dans raw (plus de bruit de
@@ -273,7 +291,9 @@ export class NeuralEngine {
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const messageUtilisateur = extraireDernierMessageUtilisateur(options);
-    const composition = this.composer(messageUtilisateur, decode);
+    const composition =
+      (await this.pilotage?.(messageUtilisateur, options)) ??
+      this.composer(messageUtilisateur, decode);
 
     for (const segment of segmenterTexte(composition.texte)) {
       yield segment;

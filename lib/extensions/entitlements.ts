@@ -196,7 +196,7 @@ export async function startChariowPurchase(params: {
     kind: pricing.model === "subscription" ? "subscription" : "one_time",
   });
   const storeUrl = getChariowStoreUrl();
-  const redirectUrl = params.redirectUrl || storeUrl || "https://gen3ia.online/marketplace";
+  const redirectUrl = params.redirectUrl || storeUrl || "https://gen3ia.online/";
   const checkout = await createChariowExtensionCheckout({
     productId,
     email: params.email,

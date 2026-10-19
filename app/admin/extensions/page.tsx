@@ -17,7 +17,7 @@ interface PendingVersion {
 }
 
 /**
- * File de modération Marketplace (admin uniquement — custom claim `admin: true`).
+ * File de modération des extensions (admin uniquement — custom claim `admin: true`).
  * Page accessible par URL directe : /admin/extensions. Aucun lien dans la
  * navigation principale pour éviter d'exposer l'entrée aux comptes standards.
  */
@@ -90,7 +90,7 @@ export default function AdminReviewPage() {
   if (sessionDisponible === false) {
     return (
       <div className="rounded-3xl border border-white/10 bg-[var(--g3-surface)]/5 p-8 text-center">
-        <h1 className="font-serif text-xl font-bold">Modération Marketplace</h1>
+        <h1 className="font-serif text-xl font-bold">Modération des extensions</h1>
         <p className="mt-2 text-sm text-[var(--g3-faint)]">Connectez-vous avec un compte administrateur.</p>
         <Link href="/login" className="mt-4 inline-flex rounded-full bg-[var(--g3-surface)] px-5 py-2.5 text-sm font-semibold text-[var(--g3-text)]">Se connecter</Link>
       </div>

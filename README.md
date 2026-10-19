@@ -45,8 +45,9 @@ L'intelligence de Gen3ia n'est ni un LLM externe ni un simulacre : c'est un **sy
 ### 🧩 Mémoire RAG & Connaissances
 - Indexation de documents, recherche sémantique/vectorielle (Qdrant), résumés épisodiques automatiques, bases de connaissances partagées.
 
-### 🛒 Marketplace d'Extensions
-- Publication, revue d'administration, installation et exécution d'extensions tierces versionnées et sandboxées.
+### 🤖 Pilotage IA de la plateforme
+- Toutes les fonctionnalités sont pilotées par Gen : automatisations (missions + agents), projets, fichiers importés, mémoire permanente, conversations et entraînements — « état de la plateforme » dans le chat retourne les chiffres réels du compte.
+- Catalogue d'extensions tiers versionnées et sandboxées, avec revue d'administration et permissions explicites.
 
 ### 📊 Observabilité
 - Traçabilité `traceId`, logs structurés JSON Pino, Sentry (erreurs + traces), page **Cerveau IA** (`/neural`) : santé du noyau, cycles, synapses et langage en direct.
@@ -79,8 +80,8 @@ npm run dev         # http://localhost:3000
 | Dossier / Fichier | Rôle dans l'application |
 |---|---|
 | `lib/neural/` | **L'IA Gen3** : réseau SNN (`core/`), encodage lexical (`encoding/`), décodage conversationnel (`decoding/`), cortex langagier + corpus (`generation/`), hippocampe & superviseur (`memory/`), effecteurs média/outils (`effectors/`), entraîneur supervisé + persistance (`training/`) |
-| `app/` | Routes Next.js 15 (App Router) : `(auth)`, `admin`, `api`, `chat`, `neural`, `workspace`, `studio`, `marketplace`, `memory`, `observability`, `billing`, `team` |
-| `components/` | Composants UI React 19 modulaires (`neural`, `chat`, `training`, `shells`, `nav`, `knowledge`, `marketplace`, `ui`…) |
+| `app/` | Routes Next.js 15 (App Router) : `(auth)`, `admin`, `api`, `chat`, `neural`, `workspace`, `studio`, `memory`, `observability`, `billing`, `team` |
+| `components/` | Composants UI React 19 modulaires (`neural`, `chat`, `training`, `shells`, `nav`, `knowledge`, `pilotage`, `ui`…) |
 | `lib/` | Logique métier : `ai` (routeur → moteur neural), `chat`, `knowledge`, `memory`, `agents` (automatisations), `billing`, `integrations`, `security`, `tenants`, `training` |
 | `training-worker/` | Worker GPU Python pour les entraînements lourds (contrat + tests) |
 | `sandbox/` | Sandbox d'exécution de code (Fastify) |
