@@ -46,6 +46,16 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     keywords: ["chat", "ia", "intelligence", "conversation", "parler", "assistant", "dashboard", "nova"],
   },
   {
+    id: "ondes",
+    href: "/ondes",
+    label: "Ondes W-DNN",
+    icon: "≋",
+    description: "Laboratoire d'inférence par ondes — GPU, essaim P2P, écriture progressive",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["ondes", "wdnn", "wave", "gpu", "webgpu", "webrtc", "essaim", "p2p", "résonance", "kuramoto", "oscillateurs"],
+  },
+  {
     id: "conversations",
     href: "/workspace",
     label: "Conversations",

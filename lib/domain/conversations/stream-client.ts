@@ -29,6 +29,8 @@ export interface StreamTurnPayload {
   /** Task 141 — modèle IA choisi pour ce tour (undefined = routeur auto). */
   provider?: string;
   model?: string;
+  /** W-DNN — recherche web explicitement pilotée par le composer d'ondes. */
+  webSearch?: boolean;
   /** Fuseau horaire du client (IANA) pour les sous-services pilotés en langage naturel. */
   timezone?: string;
   signal?: AbortSignal;
@@ -61,6 +63,7 @@ export async function streamConversationTurn(payload: StreamTurnPayload): Promis
       ...(payload.authorizationMode ? { authorizationMode: payload.authorizationMode } : {}),
       ...(payload.agentId ? { agentId: payload.agentId } : {}),
       ...(payload.provider ? { provider: payload.provider, model: payload.model } : {}),
+      ...(payload.webSearch !== undefined ? { webSearch: payload.webSearch } : {}),
       ...(payload.timezone ? { timezone: payload.timezone } : {}),
     }),
     signal: payload.signal,
