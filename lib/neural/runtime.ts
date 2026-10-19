@@ -24,6 +24,9 @@ import {
   deleteBrainState,
 } from "./training/persistence";
 import type { TrainingReport } from "./training/trainer";
+import { CortexLangagierGen3 } from "./generation/language";
+import type { EtatLangage } from "./generation/language";
+import { CORPUS_GEN3 } from "./generation/corpus";
 import {
   exporterRegistreTokens,
   importerRegistreTokens,
@@ -34,6 +37,7 @@ import { genererVisuelNeural, visuelVersDataUri } from "./generation/visual-engi
 import { genererAudioNeural, audioVersDataUri } from "./generation/audio-engine";
 import { genererVideoNeural, videoVersDataUri } from "./generation/video-engine";
 import { CentralSupervisor, HippocampusMemory } from "./memory/hippocampus";
+import { MoteurEvolutionGen3 } from "./evolution";
 
 /**
  * RUNTIME NEURONAL — singleton caché sur globalThis (résiste au HMR de
@@ -86,6 +90,13 @@ export interface NeuralRuntime {
   hippocampe: HippocampusMemory;
   /** Superviseur central — boucle cognitive complète. */
   superviseur: CentralSupervisor;
+  /**
+   * Cortex langagier — noyau de génération de langage (corpus appris +
+   * paires personnalisées du Studio d'entraînement + plasticité d'usage).
+   */
+  cortex: CortexLangagierGen3;
+  /** Moteur d'évolution continue (observation + consolidation autonome). */
+  evolution: MoteurEvolutionGen3;
   /** Historique des rapports d'entraînement persistés (données réelles). */
   historiqueEntrainement: TrainingReport[];
   /** Date ISO de création du runtime. */
@@ -252,8 +263,20 @@ export function getNeuralRuntime(): NeuralRuntime {
   const hippocampe = new HippocampusMemory(10);
   const superviseur = new CentralSupervisor(noyau, reseau, 5);
 
-  // 8. Moteur IA adapté au contrat du projet.
-  const engine = new NeuralEngine(noyau, espace);
+  // 8. Cortex langagier : corpus d'amorçage canonique (réappris à chaque
+  //    démarrage, pur et déterministe) — les paires personnalisées seront
+  //    restaurées à l'étape 9 depuis la persistance du cerveau.
+  const cortex = new CortexLangagierGen3();
+  const statsCorpus = cortex.apprendre(CORPUS_GEN3);
+
+  // 9. Moteur IA adapté au contrat du projet (cortex + hippocampe câblés :
+  //    conversation réelle + mémoire de reprise) — et ÉVOLUTION CONTINUE :
+  //    chaque échange réussi est observé, périodiquement consolidé en
+  //    mémoire longue, puis le cerveau est sauvegardé (fire-and-forget).
+  const evolution = new MoteurEvolutionGen3(cortex);
+  const engine = new NeuralEngine(noyau, espace, cortex, hippocampe, evolution, () => {
+    void sauvegarderCerveauRuntime().catch(() => undefined);
+  });
 
   const runtime: NeuralRuntime = {
     reseau,
@@ -269,18 +292,31 @@ export function getNeuralRuntime(): NeuralRuntime {
     engine,
     hippocampe,
     superviseur,
+    cortex,
+    evolution,
     historiqueEntrainement: [],
     creeLe: new Date().toISOString(),
   };
 
-  // 9. Démarrage : tente de restaurer le cerveau persisté (synchrone, unique).
+  // 10. Démarrage : tente de restaurer le cerveau persisté (synchrone, unique).
   const etat = loadBrainState();
   if (etat) {
     reseau.importState({ config: etat.config, synapses: etat.synapses });
     importerRegistreTokens(etat.tokenRegistry);
     runtime.historiqueEntrainement = [...etat.trainingHistory];
+    // Paires langagières personnalisées + poids d'usage appris.
+    if (etat.langage) {
+      const statsLangage = cortex.importerEtat(etat.langage);
+      console.log(
+        `[NEURAL] Langage restauré : ${statsLangage.pairesAjoutees} paire(s) personnalisée(s), vocabulaire ${cortex.tailleVocabulaire} tokens.`,
+      );
+    }
     console.log(
       `[NEURAL] Cerveau persisté restauré : ${etat.synapses.length} synapses, ${Object.keys(etat.tokenRegistry).length} neurones lexicaux (sauvegardé le ${etat.sauvegardeLe}).`,
+    );
+  } else {
+    console.log(
+      `[NEURAL] Cortex langagier amorcé : ${statsCorpus.pairesAjoutees} paires, vocabulaire ${statsCorpus.vocabulaire} tokens.`,
     );
   }
 
@@ -291,7 +327,8 @@ export function getNeuralRuntime(): NeuralRuntime {
 /**
  * Reset complet du cerveau : purge du fichier persisté, remise à zéro du
  * registre lexical, reconstruction intégrale du runtime (nouveau réseau
- * seedé). Retourne le nouveau runtime.
+ * seedé + cortex langagier réamorcé sur le corpus canonique). Retourne le
+ * nouveau runtime.
  */
 export function resetBrain(): NeuralRuntime {
   deleteBrainState();
@@ -301,15 +338,17 @@ export function resetBrain(): NeuralRuntime {
 }
 
 /**
- * Sauvegarde le cerveau courant (réseau + registre lexical + historique
- * d'entraînement du runtime) — commodité serveur.
+ * Sauvegarde le cerveau courant (réseau + registre lexical + état du cortex
+ * langagier + historique d'entraînement du runtime) — commodité serveur.
  */
 export async function sauvegarderCerveauRuntime(): Promise<boolean> {
   const runtime = getNeuralRuntime();
   const { saveBrainState } = await import("./training/persistence");
+  const langage: EtatLangage = runtime.cortex.exporterEtat();
   return saveBrainState(
     runtime.reseau,
     exporterRegistreTokens(),
     runtime.historiqueEntrainement,
+    langage,
   );
 }

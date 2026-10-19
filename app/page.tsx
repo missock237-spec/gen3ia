@@ -36,23 +36,24 @@ const FAQ_ITEMS = FAQ_FR;
 const STRUCTURED_DATA = buildStructuredData("fr");
 
 const STATS = [
-  { value: "3 espaces", label: "Studio, Live & Marketplace intégrés" },
-  { value: "24/7", label: "Agents autonomes planifiables" },
-  { value: "100%", label: "Actions sensibles validées par un humain" },
+  { value: "1 moteur", label: "IA propriétaire Gen3 — zéro IA externe" },
+  { value: "100 %", label: "Conversation honnête : jamais d'invention" },
+  { value: "Entraînable", label: "Datasets, Hugging Face & Kaggle" },
   ...(BILLING_ENABLED
     ? [{ value: "XAF/EUR", label: "Facturation à l'usage, wallet intégré" }]
     : [{ value: "Inclus", label: "Toutes les fonctionnalités en accès libre" }]),
 ];
 
 const CAPABILITIES = [
-  { href: "/studio", label: "Agents IA", icon: "M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6l-8-4Z" },
-  { href: "/neural", label: "Système Neuronal", icon: "M12 5a3 3 0 0 0-3 3v3a3 3 0 0 0 6 0V8a3 3 0 0 0-3-3ZM5 11a7 7 0 0 0 14 0M12 18v3" },
+  { href: "/chat", label: "Chat IA", icon: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" },
+  { href: "/neural", label: "Cerveau IA", icon: "M12 5a3 3 0 0 0-3 3v3a3 3 0 0 0 6 0V8a3 3 0 0 0-3-3ZM5 11a7 7 0 0 0 14 0M12 18v3" },
+  { href: "/workspace/training", label: "Entraînement", icon: "M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" },
+  { href: "/workspace/knowledge", label: "Connaissances", icon: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" },
   { href: "/marketplace", label: "Marketplace", icon: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4H6Z" },
-  { href: "/workspace/schedules", label: "Planifications", icon: "M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" },
+  { href: "/studio", label: "Automatisations", icon: "M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6l-8-4Z" },
   { href: "/storage", label: "Stockage", icon: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2Z" },
   { href: "/team", label: "Équipes", icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" },
   { href: "/developer", label: "Développeurs", icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
-  ...(BILLING_ENABLED ? [{ href: "/billing", label: "Wallet intégré", icon: "M21 12V7H5a2 2 0 0 1 0-4h14v4M3 5v14a2 2 0 0 0 2 2h16v-5M18 12a2 2 0 0 0 0 4h4v-4Z" }] : []),
 ];
 
 const SOLUTIONS = [
@@ -81,33 +82,44 @@ const SOLUTIONS = [
 
 const PRODUCTS = [
   {
-    href: "/studio",
-    eyebrow: "Gen3ia Studio",
-    title: "Studio d'agents IA",
+    href: "/chat",
+    eyebrow: "Gen3ia Chat",
+    title: "Chat IA Aurora",
     description:
-      "Créez, équipez et déployez des agents autonomes en quelques minutes. Objectifs en langage naturel, orchestration automatique des compétences, mémoire permanente et environnement contrôlé.",
-    points: ["Orchestration multi-compétences", "Mémoire persistante par agent", "Terminal sandboxé réservé aux agents"],
-    cta: "Ouvrir le Studio",
-    icon: "M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6l-8-4Zm-3 10 2 2 4-4",
-    badge: null as string | null,
+      "La conversation au cœur de la plateforme : l'IA Gen3ia répond depuis ce qu'elle a réellement appris, garde le fil de vos échanges grâce à sa mémoire hippocampique, et assume franchement ses limites au lieu d'inventer.",
+    points: ["Réponses traçables depuis le corpus appris", "Mémoire de conversation (hippocampe)", "Génération média en direct (visuels, sons, animations)"],
+    cta: "Ouvrir le Chat IA",
+    icon: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z",
+    badge: "IA Interne",
   },
   {
     href: "/neural",
     eyebrow: "Gen3 Neural",
-    title: "Système Neuronal Gen3",
+    title: "Cerveau IA Gen3",
     description:
-      "Le moteur IA interne de la plateforme : un réseau de neurones à spikes avec plasticité hebbienne, entraîné sur vos données, qui apprend et crée — aucune IA externe, 100 % local.",
-    points: ["Réseau à spikes + plasticité hebbienne", "Entraînement réel sur vos datasets", "Effecteurs visuels, audio et vidéo locaux"],
-    cta: "Ouvrir la console neuronale",
+      "Le moteur de la plateforme : un réseau de neurones à spikes avec plasticité hebbienne, un cortex langagier alimenté par le corpus appris et des effecteurs média locaux. Tout est observable en direct — santé, cycles, synapses.",
+    points: ["Réseau à spikes + plasticité hebbienne", "Cortex langagier : corpus appris + connaissances enseignées", "Entraînement réel : rapports de précision vérifiables"],
+    cta: "Explorer le Cerveau IA",
     icon: "M12 4.5a2 2 0 0 0-2 2v2a2 2 0 0 0 4 0v-2a2 2 0 0 0-2-2Zm-7 7a2 2 0 0 0-2 2 2 2 0 0 0 4 0 2 2 0 0 0-2-2Zm14 0a2 2 0 0 0-2 2 2 2 0 0 0 4 0 2 2 0 0 0-2-2Zm-7 3a2 2 0 0 0-2 2 2 2 0 0 0 4 0 2 2 0 0 0-2-2Z",
-    badge: "IA Interne",
+    badge: "100 % Local",
+  },
+  {
+    href: "/workspace/training",
+    eyebrow: "Gen3ia Training",
+    title: "Studio d'entraînement IA",
+    description:
+      "Gen entraîne VOS modèles : confiez-lui vos datasets (paires question/réponse, Hugging Face, Kaggle) et son moteur neuronal natif les apprend réellement — précision mesurée à chaque époque, modèle exportable. Et pendant que vous travaillez, elle continue d'évoluer par l'usage et la consolidation de ses conversations.",
+    points: ["Gen entraîne vos modèles (moteur natif, sans GPU requis)", "Import de datasets HF/Kaggle + fine-tuning LoRA sur GPU", "Précision train/test réelle + modèle exportable", "Évolution continue de l'IA : usage + consolidation autonome"],
+    cta: "Faire entraîner mon modèle",
+    icon: "M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z",
+    badge: null as string | null,
   },
   {
     href: "/marketplace",
     eyebrow: "Gen3ia Marketplace",
     title: "Marketplace d'extensions",
     description:
-      "Étendez vos agents avec des tools, skills et workflows créés par la communauté. Chaque extension est versionnée, notée, sandboxée et contrôlée par des permissions explicites.",
+      "Étendez vos automatisations avec des tools, skills et workflows créés par la communauté. Chaque extension est versionnée, notée, sandboxée et contrôlée par des permissions explicites.",
     points: ["Installation en un clic", "Permissions vérifiables avant achat", "Revenus développeur intégrés"],
     cta: "Parcourir la Marketplace",
     icon: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4H6Zm0 4h18M16 10a4 4 0 0 1-8 0",
@@ -204,33 +216,34 @@ export default function HomePage() {
               {/* Badge V6 — moteur neural */}
               <p className="anim-fade-up mx-auto inline-flex items-center gap-2 rounded-full border border-[var(--g3-primary-border)] bg-[var(--g3-primary-soft)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--g3-primary-strong)] shadow-[0_0_24px_-6px_var(--g3-primary)]">
                 <span className="g3v6-resonance-bar h-1.5 w-1.5" aria-hidden />
-                Aurora OS V6 · Moteur neural
+                Aurora OS V6 · Plateforme d&apos;IA
               </p>
 
               <h1 className="anim-fade-up anim-delay-1 mt-7 font-[family-name:var(--font-display)] text-5xl font-bold leading-[1.02] tracking-tight sm:text-7xl">
-                Décrivez-le.
+                Parlez-lui.
                 <br />
-                <span className="gradient-text">Votre réseau l&apos;exécute.</span>
+                <span className="gradient-text">Elle répond vraiment.</span>
               </h1>
               <p className="anim-fade-up anim-delay-2 mx-auto mt-6 max-w-xl text-base leading-8 text-[var(--g3-text-secondary)] sm:text-lg">
-                Gen3ia pense avec son PROPRE système neuronal — un cerveau à
-                spikes qui apprend de vos données et exécute vos projets.
+                Gen3ia est une plateforme d&apos;intelligence artificielle qui
+                pense avec son PROPRE cerveau neuronal : conversation honnête,
+                entraînement ouvert, création média et automatisations.
                 100 % local, aucune IA externe.
               </p>
 
               {/* Boîte de prompt — verre, frontière lumineuse */}
               <form action="/signup" className="anim-fade-up anim-delay-3 mx-auto mt-12 max-w-2xl text-left">
                 <div className="g3-gradient-border p-4 shadow-[0_30px_90px_-30px_var(--g3-primary)]">
-                  <label htmlFor="hero-intent" className="sr-only">Décrivez votre idée</label>
+                  <label htmlFor="hero-intent" className="sr-only">Posez votre question à l&apos;IA</label>
                   <textarea
                     id="hero-intent"
                     name="intent"
                     rows={3}
-                    placeholder="Décrivez ce que votre agent doit faire pour vous…"
+                    placeholder="Posez votre question à l'IA Gen3ia…"
                     className="w-full resize-none bg-transparent px-2 py-1.5 text-sm text-[var(--g3-text)] outline-none focus-visible:outline-none focus-visible:ring-0 placeholder:text-[var(--g3-faint)] sm:text-base"
                   />
                   <div className="flex items-center justify-between px-2 pb-1">
-                    <span className="text-xs text-[var(--g3-faint)]">Gen3ia s&apos;occupe du reste</span>
+                    <span className="text-xs text-[var(--g3-faint)]">L&apos;IA répond depuis ce qu&apos;elle a réellement appris</span>
                     <button
                       type="submit"
                       aria-label="Commencer avec cette idée"

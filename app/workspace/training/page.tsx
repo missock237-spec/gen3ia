@@ -17,7 +17,7 @@ import type { TrainingProject } from "@/lib/training/types";
 /* ------------------------------------------------------------------ */
 
 const FAMILIES = [
-  { id: "text", label: "Langage / conversationnel", hint: "Chatbots, assistants, rédaction — fine-tuning LoRA/QLoRA" },
+  { id: "text", label: "Langage / conversationnel", hint: "Chatbots, assistants, rédaction — entraînés par Gen (moteur Gen3 natif) ou fine-tuning LoRA/QLoRA" },
   { id: "image", label: "Images", hint: "Génération et compréhension d'images (capacités en préparation)" },
   { id: "audio", label: "Audio / voix", hint: "Reconnaissance et génération vocale (capacités en préparation)" },
   { id: "video", label: "Vidéo", hint: "Génération vidéo (capacités en préparation)" },
@@ -74,7 +74,7 @@ export default function TrainingStudioPage() {
         eyebrow="Gen3ia"
         title="AI Training"
         highlight="Studio"
-        description="Créez, entraînez, évaluez et exportez vos propres modèles IA : import de poids, analyse de datasets, plans générés par l'assistant, exécution sur GPU et exports signés."
+        description="Confiez VOS données à Gen : elle entraîne elle-même vos modèles IA sur son moteur neuronal natif (CPU, apprentissage réel dès quelques paires) ou sur GPU (LoRA) — analyse de datasets, plans adaptés, précision mesurée, modèles exportables."
         action={
           <button
             type="button"

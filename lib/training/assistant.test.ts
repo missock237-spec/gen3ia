@@ -130,14 +130,17 @@ describe("heuristicPlan — règles déterministes", () => {
     expect(plan.risks.join(" ")).toContain("Aucun dataset");
   });
 
-  it("recommande un RAG quand les données sont trop faibles", () => {
+  it("recommande le moteur Gen3 natif quand les données sont modestes (Gen entraîne vos paires)", () => {
     const { plan } = heuristicPlan({
       datasets: [{ rows: 20, pairs: 20, split: "train" }],
       models: [],
       splits: { train: 20, validation: 0 },
     });
-    expect(plan.method).toBe("rag");
-    expect(plan.warnings.join(" ")).toContain("50");
+    expect(plan.method).toBe("finetune");
+    expect(plan.engineId).toBe("gen3-native");
+    expect(plan.resources.providerClass).toBe("gen3-local");
+    expect(plan.warnings.join(" ")).toContain("20 paires");
+    expect(plan.expectedOutcomes).toContain("VOS données");
   });
 
   it("recommande un LoRA prudent au-delà du seuil de paires", () => {
@@ -203,7 +206,10 @@ describe("generateTrainingPlan — sources et étiquetage", () => {
       expect(result.generatedBy).toBe("heuristic-fallback");
       expect(result.plan.generatedBy).toBe("heuristic-fallback");
       expect(result.explanation).toContain("heuristique");
-      expect(result.plan.method).toBe("rag");
+      // 10 paires = données modestes → le repli recommande le moteur
+      // Gen3 natif (Gen entraîne elle-même, sans GPU).
+      expect(result.plan.method).toBe("finetune");
+      expect(result.plan.engineId).toBe("gen3-native");
     }
   });
 

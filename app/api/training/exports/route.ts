@@ -12,7 +12,7 @@ import { prepareExport } from "@/lib/training/exports";
 
 const createExportSchema = z.object({
   projectId: z.string().min(1),
-  kind: z.enum(["dataset-archive", "model-files", "plan-config"]),
+  kind: z.enum(["dataset-archive", "model-files", "plan-config", "trained-model"]),
 });
 
 /** POST /api/training/exports — prépare un export (ZIP) du projet, lien temporaire à suivre. */
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const parsed = createExportSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Requête d'export invalide : projectId et kind (dataset-archive | model-files | plan-config).", requestId },
+        { error: "Requête d'export invalide : projectId et kind (dataset-archive | model-files | plan-config | trained-model).", requestId },
         { status: 400, headers: { "x-request-id": requestId } },
       );
     }

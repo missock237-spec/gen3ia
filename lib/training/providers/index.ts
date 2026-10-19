@@ -3,17 +3,22 @@ import "server-only";
 import type { GpuProvider } from "./types";
 import { workerHttpProvider } from "./worker-http";
 import { mockProvider, mockProviderAllowed } from "./mock";
+import { gen3LocalProvider } from "./gen3-local";
 
 /* ------------------------------------------------------------------ */
-/* Résolution des fournisseurs GPU actifs (spec §8)                     */
+/* Résolution des fournisseurs actifs (spec §8)                         */
 /*                                                                    */
-/* Seuls les fournisseurs EXPLICITEMENT configurés sont retournés.      */
-/* Par défaut (aucune variable) : liste vide → les tâches restent      */
-/* en file d'attente avec un message honnête, AUCUNE simulation.        */
+/* Deux familles :                                                     */
+/*  - gen3-local : TOUJOURS disponible — Gen entraîne RÉELLEMENT les    */
+/*    modèles des utilisateurs sur le CPU de la plateforme (moteur     */
+/*    gen3-native uniquement, simulated = false) ;                     */
+/*  - worker-http / mock : fournisseurs GPU EXPLICITEMENT configurés    */
+/*    pour les autres moteurs. Sans eux, les tâches restent en file    */
+/*    d'attente avec un message honnête, AUCUNE simulation.            */
 /* ------------------------------------------------------------------ */
 
 export function resolveProviders(): GpuProvider[] {
-  const providers: GpuProvider[] = [];
+  const providers: GpuProvider[] = [gen3LocalProvider];
   if ((process.env.TRAINING_WORKER_URL ?? "").trim()) {
     providers.push(workerHttpProvider);
   }
@@ -23,6 +28,6 @@ export function resolveProviders(): GpuProvider[] {
   return providers;
 }
 
-export { workerHttpProvider, mockProvider, mockProviderAllowed };
+export { workerHttpProvider, mockProvider, mockProviderAllowed, gen3LocalProvider };
 export { providerSupportsVram } from "./types";
 export type { GpuProvider, GpuProviderCapabilities, ProviderJobState, SubmitJobPayload, GpuInfo } from "./types";

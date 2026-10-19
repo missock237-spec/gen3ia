@@ -18,7 +18,6 @@ import { errorStatus } from "@/lib/security/http-errors";
 // Task 153 — paiement par exécution : réservation AVANT toute génération,
 // règlement au réel après (coûts externes + marge projet).
 import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
-import { recordExternalCostForBilling } from "@/lib/billing/execution-meter";
 
 function imageExternalCostEur(): number {
   const parsed = Number(process.env.COST_IMAGE_GENERATION_EUR_PER_IMAGE);

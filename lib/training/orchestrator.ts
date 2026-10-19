@@ -136,8 +136,14 @@ export async function createJobFromPlan(
 async function selectProvider(
   minVramGb: number,
   estimatedDurationMinutes: number,
+  engineId: string,
 ): Promise<{ provider: GpuProvider; capabilities: GpuProviderCapabilities } | null> {
   for (const provider of resolveProviders()) {
+    // Périmètre d'engines : un fournisseur scopé (ex. gen3-local →
+    // gen3-native) n'est PAS éligible aux autres moteurs — et réciproquement
+    // un moteur scopé ne peut pas être pris en charge par hasard par un
+    // fournisseur GPU qui ne connaît pas ce type d'entraînement.
+    if (provider.engines && !provider.engines.includes(engineId)) continue;
     try {
       const capabilities = await provider.capabilities();
       if (!providerSupportsVram(capabilities, minVramGb)) continue;
@@ -171,7 +177,7 @@ export async function dispatchJob(uid: string, job: TrainingJob, plan: TrainingP
     return withEvent(job, makeEvent("error", `Moteur ${plan.engineId} inconnu : tâche marquée en échec.`));
   }
 
-  const selected = await selectProvider(engine.minVramGb, plan.resources.estimatedDurationMinutes ?? 0);
+  const selected = await selectProvider(engine.minVramGb, plan.resources.estimatedDurationMinutes ?? 0, plan.engineId);
   if (!selected) {
     const reason = "no-gpu-provider";
     const alreadyWaiting = job.waitingReason === reason;

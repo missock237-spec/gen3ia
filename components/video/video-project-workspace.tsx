@@ -520,10 +520,6 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
   // scènes du scénario qui possèdent déjà leur image (kind=image + sceneId).
   const [batchProgress, setBatchProgress] = useState<{ ready: number; total: number } | null>(null);
   const pollRef = useRef<{ timer: ReturnType<typeof setInterval>; controller: AbortController } | null>(null);
-  // Task 154 — progression du lot de CLIPS VIDÉO IA en cours.
-  const [videoBatchProgress, setVideoBatchProgress] = useState<{ ready: number; total: number } | null>(null);
-  const videoPollRef = useRef<{ timer: ReturnType<typeof setInterval>; controller: AbortController } | null>(null);
-
   useEffect(() => () => {
     // Démontage : arrêt du sondage + abort des GET en vol.
     if (pollRef.current) {
@@ -531,58 +527,16 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
       pollRef.current.controller.abort();
       pollRef.current = null;
     }
-    if (videoPollRef.current) {
-      clearInterval(videoPollRef.current.timer);
-      videoPollRef.current.controller.abort();
-      videoPollRef.current = null;
-    }
   }, []);
 
   function countScenesWithImage(list: VideoAsset[]) {
     return scenes.filter((s) => list.some((img) => img.kind === "image" && img.sceneId === s.id)).length;
   }
 
-  // Task 154 — clips vidéo IA : compteur de scènes disposant de leur clip
-  // (kind=video + rôle scene-video:<id>) — même contrat que les images.
+  // Task 154 (héritage) — clips vidéo IA retirés avec la génération externe ;
+  // le filtre reste utilisé pour la lecture des clips existants.
   const videos = assets.filter((a) => a.kind === "video" && a.role?.startsWith("scene-video:"));
-  function countScenesWithVideo(list: VideoAsset[]) {
-    return scenes.filter((s) => list.some((v) => v.kind === "video" && v.role?.startsWith("scene-video:") && v.sceneId === s.id)).length;
-  }
 
-  async function generateVideoBatch(force = false) {
-    const target = scenes.filter((s) => force || !videos.some((v) => v.sceneId === s.id)).slice(0, 4);
-    if (target.length === 0) throw new Error("Toutes les scènes ont déjà leur clip vidéo IA — utilisez Régénérer.");
-    const total = scenes.length;
-    const controller = new AbortController();
-    const timer = setInterval(async () => {
-      try {
-        const poll = await authFetch(`/api/video/projects/${project.id}/assets`, { signal: controller.signal });
-        if (!poll.ok) return;
-        const fresh = ((await poll.json()) as { assets: VideoAsset[] }).assets;
-        setVideoBatchProgress({ ready: countScenesWithVideo(fresh), total });
-      } catch {
-        // GET annulé (fin de lot / démontage) — silencieux.
-      }
-    }, 3_000);
-    videoPollRef.current = { timer, controller };
-    setVideoBatchProgress({ ready: countScenesWithVideo(assets), total });
-    try {
-      const response = await authFetch(`/api/video/projects/${project.id}/generate-videos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sceneIds: target.map((s) => s.id), force }),
-      });
-      const data = (await response.json()) as { error?: string; generated?: number; failed?: Array<{ error: string }> };
-      if (!response.ok) throw new Error(data.error ?? "Génération de clips impossible");
-      if (data.failed?.length) throw new Error(`${data.generated ?? 0} clip(s) généré(s), ${data.failed.length} échec(s) : ${data.failed[0].error}`);
-    } finally {
-      clearInterval(timer);
-      controller.abort();
-      videoPollRef.current = null;
-      setVideoBatchProgress(null);
-      await onRefresh();
-    }
-  }
 
   async function generateBatch(force = false) {
     const target = scenes.filter((s) => force || !images.some((img) => img.sceneId === s.id)).slice(0, 4);
@@ -631,16 +585,6 @@ function StoryboardPanel({ project, assets, onRefresh, busy, runAction }: { proj
           stageLabel="Génération des images de scènes"
           percent={batchProgress.total > 0 ? (batchProgress.ready / batchProgress.total) * 100 : null}
           detail={`${batchProgress.ready}/${batchProgress.total} images prêtes`}
-        />
-      ) : null}
-      {videoBatchProgress ? (
-        <MediaProgressFrame
-          compact
-          tone="dark"
-          status="running"
-          stageLabel="Génération des clips vidéo IA (Agnes Video)"
-          percent={videoBatchProgress.total > 0 ? (videoBatchProgress.ready / videoBatchProgress.total) * 100 : null}
-          detail={`${videoBatchProgress.ready}/${videoBatchProgress.total} clips prêts — mouvement réel généré par IA`}
         />
       ) : null}
       <div className="flex flex-wrap gap-2">

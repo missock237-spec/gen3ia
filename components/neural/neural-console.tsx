@@ -42,6 +42,14 @@ interface EtatCerveau {
   };
   pools: Record<string, number[]>;
   hippocampe: { toursMemorises: number; fenetreMax: number };
+  langage: { paires: number; pairesPersonnalisees: number; vocabulaire: number; themes: number };
+  evolution: {
+    echangesObserves: number;
+    echangesConsolides: number;
+    cyclesConsolidation: number;
+    echangesEcarts: number;
+    derniereConsolidation: string | null;
+  };
   dernierJobEntrainement: JobEntrainement | null;
 }
 
@@ -429,6 +437,11 @@ export function NeuralConsole() {
               label="Hippocampe (mémoire court terme)"
               valeur={cerveau ? `${cerveau.hippocampe.toursMemorises}/${cerveau.hippocampe.fenetreMax}` : "—"}
               sous="Fenêtre de discussion du superviseur central"
+            />
+            <Metrique
+              label="Évolution continue"
+              valeur={cerveau ? `${cerveau.evolution.echangesConsolides} consolidés` : "—"}
+              sous={cerveau ? `${cerveau.evolution.cyclesConsolidation} cycle(s) · ${cerveau.evolution.echangesObserves} échange(s) observé(s) · ${cerveau.langage.pairesPersonnalisees} paires personnelles` : undefined}
             />
             <div className="g3v6-card px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">Pools résonants</p>

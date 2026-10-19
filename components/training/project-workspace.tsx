@@ -256,33 +256,36 @@ export function TrainingProjectWorkspace({ projectId }: { projectId: string }) {
 }
 
 /* ================================================================== */
-/* Bandeau fournisseurs GPU — honnêteté sur l'exécution réelle          */
+/* Bandeau fournisseurs — honnêteté sur l'exécution réelle              */
+/* (Gen3 natif : TOUJOURS disponible, CPU local ; GPU worker : option)  */
 /* ================================================================== */
 
 function ProviderBanner({ catalog }: { catalog: CatalogPayload | null }) {
   if (!catalog) return null;
-  const configured = catalog.providers.filter((p) => p.configured);
-  if (configured.length > 0) {
-    return (
-      <div className="ts-card flex flex-wrap items-center gap-3 px-4 py-3 text-sm text-[var(--g3-text-secondary)]">
-        <Chip variant="valid">GPU disponible</Chip>
-        <span>
-          {configured.map((p) => `${p.label} — ${p.gpus.map((g) => `${g.name} (${g.vramGb} Go)`).join(", ")}`).join(" · ")}
-        </span>
-        {configured.some((p) => p.simulated) ? (
-          <Chip variant="warn">Simulation active (tests)</Chip>
-        ) : null}
-      </div>
-    );
-  }
+  const natif = catalog.providers.filter((p) => p.id === "gen3-local" && p.configured && !p.simulated);
+  const gpu = catalog.providers.filter((p) => p.id !== "gen3-local" && p.configured && !p.simulated);
   return (
-    <div className="ts-card flex flex-wrap items-start gap-3 px-4 py-3 text-sm text-[var(--g3-muted)]">
-      <Chip variant="warn">Aucun GPU configuré</Chip>
-      <span>
-        Les projets, imports, analyses IA et exports sont pleinement fonctionnels. L&apos;exécution d&apos;un entraînement réel
-        nécessite un worker GPU : la tâche restera <strong className="text-[var(--g3-text-secondary)]">en file d&apos;attente</strong> —
-        jamais simulée — jusqu&apos;à la connexion d&apos;un fournisseur (variable TRAINING_WORKER_URL côté serveur).
-      </span>
+    <div className="ts-card flex flex-wrap items-center gap-3 px-4 py-3 text-sm text-[var(--g3-text-secondary)]">
+      {natif.length > 0 ? (
+        <>
+          <Chip variant="valid">Gen entraîne vos modèles — moteur natif actif</Chip>
+          <span>Entraînement réel sur CPU, sans GPU requis (moteur Gen3 natif).</span>
+        </>
+      ) : null}
+      {gpu.length > 0 ? (
+        <span>
+          <Chip variant="valid">GPU disponible</Chip>{" "}
+          {gpu.map((p) => `${p.label} — ${p.gpus.map((g) => `${g.name} (${g.vramGb} Go)`).join(", ")}`).join(" · ")}
+        </span>
+      ) : (
+        <span>
+          <Chip variant="warn">Aucun GPU configuré</Chip>{" "}
+          Le fine-tuning LoRA/QLoRA sur LLM nécessite un worker GPU (TRAINING_WORKER_URL) — sans lui ces tâches
+          restent <strong className="text-[var(--g3-text-secondary)]">en file d&apos;attente</strong>, jamais simulées.
+          Le moteur Gen3 natif, lui, entraîne vos modèles dès maintenant.
+        </span>
+      )}
+      {catalog.providers.some((p) => p.simulated) ? <Chip variant="warn">Simulation active (tests)</Chip> : null}
     </div>
   );
 }
@@ -1162,8 +1165,9 @@ function TrainingStep({
           {entry.error ? <ErrorBanner message={entry.error} /> : null}
           {entry.waitingReason === "no-gpu-provider" ? (
             <p className="rounded-2xl bg-[var(--g3-elevated)] px-4 py-3 text-xs leading-5 text-[var(--g3-muted)]">
-              Aucun fournisseur GPU n&apos;est actuellement configuré : la tâche reste en file d&apos;attente (aucune simulation).
-              Dès qu&apos;un worker GPU sera connecté, elle sera automatiquement prise en charge.
+              Aucun fournisseur compatible n&apos;est actuellement disponible pour ce moteur : la tâche reste en file
+              d&apos;attente (aucune simulation). Astuce : le moteur Gen3 natif entraîne vos modèles sans GPU —
+              relancez le plan avec ce moteur pour une exécution immédiate.
             </p>
           ) : null}
 
@@ -1293,7 +1297,7 @@ function ExportStep({
 }) {
   const [preparing, setPreparing] = useState<string | null>(null);
 
-  const prepare = async (kind: "dataset-archive" | "model-files" | "plan-config") => {
+  const prepare = async (kind: "dataset-archive" | "model-files" | "plan-config" | "trained-model") => {
     setPreparing(kind);
     onError("");
     try {
@@ -1324,9 +1328,10 @@ function ExportStep({
     window.open(data.url, "_blank", "noopener");
   };
 
-  const kinds: Array<{ id: "dataset-archive" | "model-files" | "plan-config"; label: string; hint: string }> = [
+  const kinds: Array<{ id: "dataset-archive" | "model-files" | "plan-config" | "trained-model"; label: string; hint: string }> = [
     { id: "dataset-archive", label: "Archive des datasets", hint: "ZIP de tous vos datasets validés, préfixés par split" },
     { id: "model-files", label: "Fichiers modèle importés", hint: "ZIP de vos poids téléversés, tels qu'importés" },
+    { id: "trained-model", label: "Modèles entraînés par Gen", hint: "ZIP des cerveaux Gen3 produits par vos tâches complétées (moteur gen3-native)" },
     { id: "plan-config", label: "Configuration du plan", hint: "JSON reproductible du plan accepté" },
   ];
 
@@ -1339,7 +1344,7 @@ function ExportStep({
           le propriétaire du projet peut préparer un export. Les poids issus d&apos;un entraînement n&apos;apparaissent ici
           qu&apos;après une tâche réellement terminée.
         </p>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {kinds.map((kind) => (
             <button
               key={kind.id}

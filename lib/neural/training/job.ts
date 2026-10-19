@@ -11,6 +11,8 @@ import {
   SEED_EXAMPLES,
 } from "./dataset";
 import { enregistrerPoolsDIntention } from "./trainer";
+import { CORPUS_GEN3 } from "../generation/corpus";
+import type { StatsApprentissageLangage } from "../generation/language";
 import { executionLogger } from "@/lib/observability/logger";
 
 /**
@@ -52,6 +54,11 @@ export interface NeuralTrainingJob {
   erreur?: string;
   /** Rapport final complet si status = termine. */
   rapport?: TrainingReport;
+  /**
+   * Apprentissage langagier du cortex (corpus conversationnel + amorçage) —
+   * stats réelles du dernier passage (données réelles).
+   */
+  langage?: StatsApprentissageLangage;
 }
 
 /** Slots mémoire (résistent au HMR comme le runtime). */
@@ -160,7 +167,14 @@ export function lancerEntrainement(
         },
       });
 
-      // 4. Persistance du cerveau appris + historique du runtime.
+      // 3-bis. CORTEX LANGAGIER : le corpus conversationnel d'amorçage est
+      // réaffirmé à chaque session (idempotent) — les paires personnalisées
+      // déjà apprises sont conservées (le cortex est idempotent sur les
+      // doublons de motifs).
+      job.langage = runtime.cortex.apprendre(CORPUS_GEN3);
+
+      // 4. Persistance du cerveau appris (synapses + cortex langagier)
+      //    + historique du runtime.
       const sauvegarde = await sauvegarderCerveauRuntime();
       runtime.historiqueEntrainement.push(rapport);
       if (runtime.historiqueEntrainement.length > 20) {
@@ -176,7 +190,7 @@ export function lancerEntrainement(
       executionLogger({
         requestId: "neural-training",
         userId: `job:${job.id}`,
-      }).info(`Entraînement neuronal terminé (accuracy test: ${rapport.accuracyTest}, sauvegarde: ${sauvegarde})`);
+      }).info(`Entraînement neuronal terminé (accuracy test: ${rapport.accuracyTest}, langage: ${job.langage.pairesAjoutees} paires ajoutées, sauvegarde: ${sauvegarde})`);
     } catch (error) {
       job.status = "echec";
       job.termineLe = new Date().toISOString();

@@ -46,6 +46,13 @@ export async function GET(request: NextRequest) {
         toursMemorises: runtime.hippocampe.getHistory().length,
         fenetreMax: 10,
       },
+      langage: {
+        paires: runtime.cortex.nbPaires,
+        pairesPersonnalisees: runtime.cortex.compterPersonnalisees(),
+        vocabulaire: runtime.cortex.tailleVocabulaire,
+        themes: runtime.cortex.themes().length,
+      },
+      evolution: runtime.evolution.metriques(),
       dernierJobEntrainement: getDernierJob(),
     });
   } catch (error) {

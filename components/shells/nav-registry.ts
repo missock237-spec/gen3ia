@@ -2,7 +2,8 @@
  * NavRegistry — source unique de vérité pour toute la navigation Gen3ia.
  *
  * Architecture à 3 espaces :
- *  - "workspace" : l'espace utilisateur (Missions, Créer, Résultats, Connexions, Équipe)
+ *  - "workspace" : l'espace utilisateur — IA-FIRST : le Chat IA est le centre,
+ *    le Cerveau (moteur neural) et l'Entraînement en sont les instruments ;
  *  - "developer" : l'espace développeur (projets, build, connecteurs, API, extensions, monitoring)
  *  - "admin"     : l'espace opérateur (vue plateforme, utilisateurs, modération, sécurité)
  *
@@ -35,14 +36,54 @@ export interface NavRoute {
 
 const WORKSPACE_PRIMARY: NavRoute[] = [
   {
+    id: "chat-ia",
+    href: "/chat",
+    label: "Chat IA",
+    icon: "✦",
+    description: "Discuter avec l'IA Gen3ia — le cœur de la plateforme",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["chat", "ia", "intelligence", "conversation", "parler", "assistant", "aurora"],
+  },
+  {
     id: "conversations",
     href: "/workspace",
     label: "Conversations",
-    icon: "✦",
-    description: "Conversations persistantes avec exécution d'agents",
+    icon: "◇",
+    description: "Historique de vos échanges et exécutions",
     contexts: ["workspace"],
     section: "primary",
-    keywords: ["conversations", "chat", "agent", "messages"],
+    keywords: ["conversations", "historique", "agent", "messages"],
+  },
+  {
+    id: "cerveau",
+    href: "/neural",
+    label: "Cerveau IA",
+    icon: "◉",
+    description: "Le moteur neural Gen3 en direct : santé, cycles, état du réseau",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["cerveau", "neural", "neurones", "snn", "réseau", "santé", "moteur", "ia"],
+  },
+  {
+    id: "training",
+    href: "/workspace/training",
+    label: "Entraînement IA",
+    icon: "⌬",
+    description: "Gen entraîne vos modèles : vos datasets, vos sessions d'entraînement, vos exports",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["training", "entraînement", "fine-tuning", "lora", "modèles", "dataset", "ia", "training studio"],
+  },
+  {
+    id: "knowledge",
+    href: "/workspace/knowledge",
+    label: "Bases de connaissances",
+    icon: "▤",
+    description: "Documents, pages web et recherche sémantique (RAG)",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["knowledge", "connaissances", "documents", "rag", "recherche", "embeddings", "wiki"],
   },
   {
     id: "projects",
@@ -64,45 +105,16 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     section: "primary",
     keywords: ["fichiers", "livrables", "stockage", "artefacts", "résultats"],
   },
-  {
-    id: "connectors",
-    href: "/workspace/connectors",
-    label: "Connecteurs",
-    icon: "⧉",
-    description: "Applications connectées, état vérifié et permissions",
-    contexts: ["workspace"],
-    section: "primary",
-    keywords: ["connecteurs", "intégrations", "composio", "applications", "connexions"],
-  },
-  {
-    id: "library",
-    href: "/workspace/bibliotheque",
-    label: "Bibliothèque",
-    icon: "◈",
-    description: "Capacités métier, modèles de prompts et agents spécialisés",
-    contexts: ["workspace"],
-    section: "primary",
-    keywords: ["bibliothèque", "modèles", "capacités", "marketing", "sales", "rh", "finance", "missions", "créer"],
-  },
-  {
-    id: "knowledge",
-    href: "/workspace/knowledge",
-    label: "Bases de connaissances",
-    icon: "▤",
-    description: "Documents, pages web et recherche sémantique (RAG)",
-    contexts: ["workspace"],
-    section: "primary",
-    keywords: ["knowledge", "connaissances", "documents", "rag", "recherche", "embeddings", "wiki"],
-  },
 ];
 
 const WORKSPACE_SECONDARY: NavRoute[] = [
-  { id: "missions", href: "/studio", label: "Missions", icon: "◈", description: "Tâches en cours, validations et historique", contexts: ["workspace"], section: "secondary", keywords: ["missions", "tâches", "historique"] },
-  { id: "training", href: "/workspace/training", label: "AI Training Studio", icon: "⌬", description: "Créer, entraîner et exporter vos propres modèles IA", contexts: ["workspace"], section: "secondary", keywords: ["training", "entraînement", "fine-tuning", "lora", "modèles", "dataset", "ia", "training studio"] },
+  { id: "missions", href: "/studio", label: "Automatisations", icon: "◈", description: "Agents spécialisés, validations et historique d'exécution", contexts: ["workspace"], section: "secondary", keywords: ["automatisations", "agents", "missions", "tâches", "historique"] },
   { id: "schedules", href: "/workspace/schedules", label: "Planifications", icon: "⏱", description: "Tâches planifiées : récurrences, one-shot, relances", contexts: ["workspace"], section: "secondary", keywords: ["planifications", "schedules", "cron", "récurrence", "one-shot", "automatisations", "veille"] },
   { id: "team", href: "/team", label: "Équipe", icon: "◎", description: "Membres, rôles et activité partagée", contexts: ["workspace"], section: "secondary", keywords: ["équipe", "membres", "rôles"] },
   { id: "live", href: "/live", label: "Agent Live", icon: "◉", description: "Contrôler un poste de travail", contexts: ["workspace"], section: "secondary", keywords: ["live", "pc"] },
-  { id: "marketplace", href: "/marketplace", label: "Marketplace", icon: "◇", description: "Ajouter des capacités à vos agents", contexts: ["workspace"], section: "secondary", keywords: ["marketplace", "extensions"] },
+  { id: "connectors", href: "/workspace/connectors", label: "Connecteurs", icon: "⧉", description: "Applications connectées, état vérifié et permissions", contexts: ["workspace"], section: "secondary", keywords: ["connecteurs", "intégrations", "composio", "applications", "connexions"] },
+  { id: "library", href: "/workspace/bibliotheque", label: "Bibliothèque", icon: "◈", description: "Capacités métier, modèles de prompts et agents spécialisés", contexts: ["workspace"], section: "secondary", keywords: ["bibliothèque", "modèles", "capacités", "marketing", "sales", "rh", "finance", "missions", "créer"] },
+  { id: "marketplace", href: "/marketplace", label: "Marketplace", icon: "◇", description: "Ajouter des capacités à vos automatisations", contexts: ["workspace"], section: "secondary", keywords: ["marketplace", "extensions"] },
   { id: "memory", href: "/memory", label: "Mémoire permanente", icon: "◆", description: "Souvenirs et connaissances des agents", contexts: ["workspace"], section: "secondary", keywords: ["mémoire", "knowledge"] },
   { id: "billing", href: "/billing", label: "Facturation", icon: "₣", description: "Abonnements et consommation", contexts: ["workspace"], section: "secondary", keywords: ["facturation", "abonnement"] },
   { id: "settings", href: "/settings", label: "Paramètres", icon: "⚙", description: "Compte, sécurité, numéros et préférences", contexts: ["workspace"], section: "secondary", keywords: ["paramètres", "compte"] },

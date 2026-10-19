@@ -64,7 +64,8 @@ describe("GEO : contenu citable (lib/geo/content)", () => {
   });
 
   it("le pitch de marque est localisé et autosuffisant", () => {
-    expect(brandPitch("fr")).toMatch(/agents IA autonomes/);
-    expect(brandPitch("en")).toMatch(/autonomous AI agent platform/);
+    expect(brandPitch("fr")).toMatch(/plateforme d'intelligence artificielle/);
+    expect(brandPitch("fr")).toMatch(/moteur neural/);
+    expect(brandPitch("en")).toMatch(/AI platform/);
   });
 });
