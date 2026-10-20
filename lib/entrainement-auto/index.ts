@@ -20,7 +20,14 @@ export {
   lireEtatAuto,
   reduireEtat,
 } from "./etat";
-export { plafondsAuto, intervalleAutoMs, delaiInitialAutoMs, type PlafondsAuto } from "./plafonds";
+export { plafondsAuto, delaiInitialAutoMs, dureeAbsorptionMs, intervalleAbsorptionMs, type PlafondsAuto } from "./plafonds";
+export {
+  absorptionExpiree,
+  bilanAutonomie,
+  cloturerAbsorption,
+  phaseDe,
+  type VuePhase,
+} from "./phases";
 export { choisirDatasets, requeteDuCycle, REQUETES_OBJECTIF, type RechercheObjectif } from "./catalogue";
 export { ingesterDataset, lignesDepuisContenu, convertirPaire, convertirEchantillon, nettoyerTexte, type ApportDataset } from "./ingesteur";
 export { appliquerEntrainementAuto, type ResultatEntrainementAuto } from "./entraineur-auto";
@@ -33,11 +40,13 @@ export {
   type OptionsDemarrage,
 } from "./boucle";
 export type {
+  BilanAutonomie,
   ClientHubAuto,
   DatasetChoisi,
   EtatAutoApprentissage,
   HubSource,
   ObjectifAuto,
+  PhaseVie,
   RapportCycleAuto,
   RapportHubCycle,
   RapportIntentionCycle,

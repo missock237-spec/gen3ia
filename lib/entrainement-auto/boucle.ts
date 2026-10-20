@@ -12,7 +12,18 @@ import { choisirDatasets, requeteDuCycle, type RechercheObjectif } from "./catal
 import { appliquerEntrainementAuto } from "./entraineur-auto";
 import { lireEtatAuto, ecrireEtatAuto, ETAT_AUTO_PATH } from "./etat";
 import { ingesterDataset } from "./ingesteur";
-import { delaiInitialAutoMs, intervalleAutoMs, plafondsAuto, type PlafondsAuto } from "./plafonds";
+import {
+  absorptionExpiree,
+  cloturerAbsorption,
+  phaseDe,
+} from "./phases";
+import {
+  delaiInitialAutoMs,
+  dureeAbsorptionMs,
+  intervalleAbsorptionMs,
+  plafondsAuto,
+  type PlafondsAuto,
+} from "./plafonds";
 import type {
   ClientHubAuto,
   HubSource,
@@ -23,17 +34,24 @@ import type { PaireLangage } from "@/lib/neural/generation/corpus";
 import type { TrainingSample } from "@/lib/neural/training/dataset";
 
 /**
- * LA BOUCLE D'AUTO-APPRENTISSAGE — le cycle complet, exécuté SEUL :
+ * LA BOUCLE D'AUTO-APPRENTISSAGE — le cycle complet, exécuté SEUL, dans une
+ * FENÊTRE D'ABSORPTION BORNÉE :
  *
  *   découvrir (recherche HF + Kaggle) → choisir (conservateur) → ingérer
  *   (téléchargement plafonné + conversion) → entraîner (cortex + SNN réels)
  *   → persister (cerveau + état) → rapporter (honnête).
  *
+ * CYCLE DE VIE (phases.ts) : la fenêtre d'absorption court depuis le
+ * PREMIER lancement (défaut 2 h) — des cycles rapprochés y prennent tout ce
+ * que les hubs peuvent donner ; à l'échéance la fenêtre est clôturée
+ * DÉFINITIVEMENT (persisté) : les hubs ne sont plus JAMAIS interrogés, tout
+ * cycle hub est REFUSÉ (« refuse »), et l'évolution continue passe par les
+ * utilisateurs (consolidation des échanges — lib/neural/evolution.ts).
+ *
  * Démarrage : `demarrerAutoApprentissage()` est appelé par instrumentation
- * (register) au boot du serveur — premier cycle après délai, puis cycles
- * périodiques. Timers `unref()` (ne retiennent jamais le process), garde
- * d'unicité sur globalThis (résiste au HMR), `executerCycleAuto` à flight
- * unique (un cycle à la fois — jamais de double entraînement concurrent).
+ * (register) au boot du serveur — en autonomie la boucle n'est PAS armée.
+ * Timers `unref()` (ne retiennent jamais le process), garde d'unicité sur
+ * globalThis (résiste au HMR), `executerCycleAuto` à flight unique.
  */
 
 /* ------------------------------------------------------------------ */
@@ -106,24 +124,73 @@ export interface OptionsCycle {
   cheminEtat?: string;
   /** Plafonds injectables (tests). */
   plafonds?: PlafondsAuto;
+  /** Horloge injectable (tests — échéance de la fenêtre d'absorption). */
+  maintenantMs?: number;
+}
+
+/** Rapport « refuse » — phase autonomie : hubs coupés, rien de lancé. */
+function rapportRefuse(demarreA: string, dureeMs: number, message: string): RapportCycleAuto {
+  return {
+    v: 1,
+    id: newUlid(),
+    demarreA,
+    dureeMs,
+    statut: "refuse",
+    message,
+    hubs: [],
+    datasetsIngestes: [],
+  };
 }
 
 /**
  * Exécute UN cycle complet. @returns le rapport du cycle, ou null si un
  * cycle était déjà en cours (refus poli, rien de lancé en double).
+ *
+ * Phase autonomie (fenêtre clôturée) → rapport « refuse » SANS accès hub,
+ * SANS entraînement, SANS écriture d'état : l'IA n'apprend plus des
+ * datasets — définitivement.
  */
 export async function executerCycleAuto(opts: OptionsCycle = {}): Promise<RapportCycleAuto | null> {
   const g = garde();
   if (g.cycleEnCours) return null;
-  g.cycleEnCours = true;
 
   const client = opts.client ?? clientHubReel();
   const plafonds = opts.plafonds ?? plafondsAuto();
   const cheminEtat = opts.cheminEtat ?? ETAT_AUTO_PATH;
+  const maintenantMs = opts.maintenantMs ?? Date.now();
 
   const demarreA = new Date().toISOString();
   const debutMs = Date.now();
   const etat = await lireEtatAuto(cheminEtat);
+
+  // POINT DE CONTRÔLE DU CYCLE DE VIE — avant tout accès hub.
+  const vue = phaseDe(etat, maintenantMs);
+  if (vue.absorptionCloturee) {
+    return rapportRefuse(
+      demarreA,
+      Date.now() - debutMs,
+      "Phase autonomie : absorption clôturée le " +
+        `${vue.clotureeA ?? "?"} — Gen3ia n'apprend plus de ses datasets ; ` +
+        "son évolution passe par ses utilisateurs.",
+    );
+  }
+  if (absorptionExpiree(etat, maintenantMs)) {
+    // La fenêtre vient d'expirer : clôture persistée d'abord, refus ensuite.
+    const cloture = cloturerAbsorption(etat, maintenantMs);
+    await ecrireEtatAuto(cloture, cheminEtat);
+    console.log(
+      `[AUTO-APPRENTISSAGE] fenêtre d'absorption clôturée (${Math.round(
+        (cloture.bilanAutonomie?.dureeUtiliseeMs ?? 0) / 60_000,
+      )} min) — hubs coupés définitivement, apprentissage par les utilisateurs.`,
+    );
+    return rapportRefuse(
+      demarreA,
+      Date.now() - debutMs,
+      `Fenêtre d'absorption expirée et clôturée (${cloture.bilanAutonomie?.message ?? ""})`,
+    );
+  }
+
+  g.cycleEnCours = true;
   etat.enCours = true;
   await ecrireEtatAuto(etat, cheminEtat);
 
@@ -252,6 +319,17 @@ export async function executerCycleAuto(opts: OptionsCycle = {}): Promise<Rappor
     etatFrais.echantillonsCumules += echantillons.length;
     await ecrireEtatAuto(etatFrais, cheminEtat);
 
+    // 7. CLÔTURE AUTO-ASSIGNÉE — le cycle a démarré DANS la fenêtre, mais si
+    //    l'échéance est atteinte à sa fin, la fenêtre est clôturée ici aussi
+    //    (auto-guérison : aucun cycle hub ne peut survivre à l'échéance).
+    if (absorptionExpiree(etatFrais, maintenantMs)) {
+      const cloture = cloturerAbsorption(etatFrais, maintenantMs);
+      await ecrireEtatAuto(cloture, cheminEtat);
+      console.log(
+        `[AUTO-APPRENTISSAGE] fenêtre d'absorption clôturée — ${cloture.bilanAutonomie?.message ?? ""}`,
+      );
+    }
+
     return rapport;
   } catch (erreur: unknown) {
     // Erreur globale imprévue : rapport d'échec honnête + état libéré.
@@ -282,20 +360,40 @@ export async function executerCycleAuto(opts: OptionsCycle = {}): Promise<Rappor
 }
 
 /* ------------------------------------------------------------------ */
+/* Clôture de la fenêtre (persistance — appelée par le timer d'échéance) */
+/* ------------------------------------------------------------------ */
+
+async function cloturerAbsorptionPersistee(cheminEtat: string, maintenantMs: number): Promise<void> {
+  const etat = await lireEtatAuto(cheminEtat);
+  if (etat.absorptionCloturee) return; // idempotent — clôturée ailleurs
+  const cloture = cloturerAbsorption(etat, maintenantMs);
+  await ecrireEtatAuto(cloture, cheminEtat);
+  console.log(
+    `[AUTO-APPRENTISSAGE] fenêtre d'absorption clôturée — ${cloture.bilanAutonomie?.message ?? ""}`,
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Démarrage automatique (appelé par instrumentation)                   */
 /* ------------------------------------------------------------------ */
 
 export interface OptionsDemarrage {
   delaiMs?: number;
   intervalleMs?: number;
+  /** Chemin d'état injectable (tests). */
+  cheminEtat?: string;
 }
 
 /**
- * Arme la boucle autonome (UNE fois par process) :
+ * Arme le cycle de vie (UNE fois par process) :
  *  - uniquement runtime Node (jamais edge, jamais pendant `next build`) ;
  *  - désactivable par AUTO_APPRENTISSAGE=0 ;
- *  - timers unref() : la boucle ne retient jamais le serveur en vie ;
- *  - chaque cycle est protégé (single-flight) et loggé.
+ *  - PHASE AUTONOMIE (fenêtre déjà clôturée) → la boucle hub n'est PAS
+ *    armée : Gen3ia n'apprend plus de ses datasets — définitivement ;
+ *  - PHASE ABSORPTION → premier cycle après délai, cycles rapprochés
+ *    (intervalle d'absorption), et UN timer d'échéance qui clôture la
+ *    fenêtre à coup sûr (même si aucun cycle ne tourne) ;
+ *  - timers unref() : la boucle ne retient jamais le serveur en vie.
  */
 export function demarrerAutoApprentissage(opts: OptionsDemarrage = {}): void {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -307,12 +405,15 @@ export function demarrerAutoApprentissage(opts: OptionsDemarrage = {}): void {
   g.boucleArmee = true;
 
   const delaiMs = opts.delaiMs ?? delaiInitialAutoMs();
-  const intervalleMs = opts.intervalleMs ?? intervalleAutoMs();
+  const intervalleMs = opts.intervalleMs ?? intervalleAbsorptionMs();
+  const cheminEtat = opts.cheminEtat ?? ETAT_AUTO_PATH;
 
   const executer = () => {
-    executerCycleAuto()
+    executerCycleAuto({ cheminEtat })
       .then((rapport) => {
-        if (rapport) {
+        // « refuse » (autonomie) : le cycle de vie a fait son office —
+        // aucun bruit de log répété, la boucle est démontée ci-dessous.
+        if (rapport && rapport.statut !== "refuse") {
           console.log(
             `[AUTO-APPRENTISSAGE] cycle ${rapport.statut} (${Math.round(rapport.dureeMs / 100) / 10} s) : ${rapport.message}`,
           );
@@ -323,12 +424,45 @@ export function demarrerAutoApprentissage(opts: OptionsDemarrage = {}): void {
       });
   };
 
-  const initial = setTimeout(executer, delaiMs);
-  initial.unref?.();
-  const periodique = setInterval(executer, intervalleMs);
-  periodique.unref?.();
+  void (async () => {
+    const etat = await lireEtatAuto(cheminEtat);
+    const vue = phaseDe(etat);
 
-  console.log(
-    `[AUTO-APPRENTISSAGE] boucle armée — HF + Kaggle (si KAGGLE_API_TOKEN). Premier cycle dans ${Math.round(delaiMs / 1000)} s, puis tous les ${Math.round(intervalleMs / 60_000)} min.`,
-  );
+    if (vue.absorptionCloturee) {
+      console.log(
+        `[AUTO-APPRENTISSAGE] phase AUTONOMIE — absorption clôturée le ${vue.clotureeA ?? "?"} ; ` +
+          "hubs non armés : l'IA n'apprend plus de ses datasets, son évolution passe par ses utilisateurs.",
+      );
+      return;
+    }
+
+    const restantMs = vue.restantMs ?? 0;
+    if (restantMs <= 0) {
+      // Fenêtre expirée pendant l'arrêt : clôture immédiate, pas de boucle.
+      await cloturerAbsorptionPersistee(cheminEtat, Date.now());
+      return;
+    }
+
+    const initial = setTimeout(executer, Math.min(delaiMs, restantMs));
+    initial.unref?.();
+    const periodique = setInterval(executer, intervalleMs);
+    periodique.unref?.();
+
+    // LE TIMER D'ÉCHÉANCE — la clôture est CERTAINE, même sans cycle.
+    const echeance = setTimeout(() => {
+      clearInterval(periodique);
+      void cloturerAbsorptionPersistee(cheminEtat, Date.now());
+    }, restantMs);
+    echeance.unref?.();
+
+    console.log(
+      `[AUTO-APPRENTISSAGE] phase ABSORPTION — fenêtre de ${Math.round(restantMs / 60_000)} min ` +
+        `(défaut ${Math.round(dureeAbsorptionMs() / 60_000)} min, AUTO_APPRENTISSAGE_ABSORPTION_MIN) : ` +
+        `HF + Kaggle (si KAGGLE_API_TOKEN). Premier cycle dans ${Math.round(Math.min(delaiMs, restantMs) / 1000)} s, ` +
+        `puis tous les ${Math.round(intervalleMs / 60_000)} min. À l'échéance : hubs coupés définitivement, ` +
+        "apprentissage par les utilisateurs uniquement.",
+    );
+  })().catch((erreur: unknown) => {
+    console.warn("[AUTO-APPRENTISSAGE] armement interrompu :", messageErreur(erreur));
+  });
 }

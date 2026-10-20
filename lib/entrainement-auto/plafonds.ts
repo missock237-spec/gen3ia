@@ -50,9 +50,26 @@ export function plafondsAuto(env: NodeJS.ProcessEnv = process.env): PlafondsAuto
   };
 }
 
-/** Intervalle entre deux cycles (ms) — AUTO_APPRENTISSAGE_INTERVALLE_MIN, borné 15 min → 24 h. */
-export function intervalleAutoMs(env: NodeJS.ProcessEnv = process.env): number {
-  const minutes = entierEnv(env.AUTO_APPRENTISSAGE_INTERVALLE_MIN, 120, 15, 24 * 60);
+/**
+ * DURÉE DE LA FENÊTRE D'ABSORPTION (ms) — AUTO_APPRENTISSAGE_ABSORPTION_MIN,
+ * borné 5 min → 12 h, défaut 120 min (2 h). C'est le temps que l'IA a, depuis
+ * son PREMIER lancement, pour tout prendre de ses datasets ; à l'échéance la
+ * fenêtre est clôturée DÉFINITIVEMENT (hubs coupés, état persisté).
+ */
+export function dureeAbsorptionMs(env: NodeJS.ProcessEnv = process.env): number {
+  const minutes = entierEnv(env.AUTO_APPRENTISSAGE_ABSORPTION_MIN, 120, 5, 12 * 60);
+  return minutes * 60_000;
+}
+
+/**
+ * INTERVALLE DES CYCLES PENDANT LA FENÊTRE (ms) —
+ * AUTO_APPRENTISSAGE_ABSORPTION_INTERVALLE_MIN, borné 5 → 120 min, défaut
+ * 20 min : les cycles d'absorption sont plus rapprochés que les anciens
+ * cycles périodiques (2 h) pour que le maximum de cycles tienne dans la
+ * fenêtre (à 20 min → jusqu'à 6 cycles en 2 h, plafonds inchangés).
+ */
+export function intervalleAbsorptionMs(env: NodeJS.ProcessEnv = process.env): number {
+  const minutes = entierEnv(env.AUTO_APPRENTISSAGE_ABSORPTION_INTERVALLE_MIN, 20, 5, 120);
   return minutes * 60_000;
 }
 

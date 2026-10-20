@@ -7,17 +7,22 @@ import { rateLimitDistributed } from "@/lib/cache/redis";
 
 import { cycleEnCours, executerCycleAuto } from "@/lib/entrainement-auto/boucle";
 import { lireEtatAuto } from "@/lib/entrainement-auto/etat";
+import { phaseDe } from "@/lib/entrainement-auto/phases";
 import { plafondsAuto } from "@/lib/entrainement-auto/plafonds";
 import { hubIntegrationStatus } from "@/lib/training/hub";
 
 /**
- * AUTO-APPRENTISSAGE — la connexion hubs (Hugging Face + Kaggle) ↔ IA Gen3.
+ * AUTO-APPRENTISSAGE — la connexion hubs (Hugging Face + Kaggle) ↔ IA Gen3,
+ * dans le CYCLE DE VIE absorption → autonomie.
  *
  * GET  /api/ia/auto-apprentissage — état persistant (cycles, cumuls,
- *      dernier rapport, historique) + intégrations hubs + plafonds actifs.
+ *      dernier rapport, historique) + PHASE COURANTE (absorption avec temps
+ *      restant / autonomie), BILAN D'AUTONOMIE, intégrations hubs, plafonds.
  * POST /api/ia/auto-apprentissage — déclenche UN cycle complet à la demande
  *      (découverte → choix → ingestion → entraînement réel → persistance).
- *      Refus poli 409 si un cycle tourne déjà (single-flight).
+ *      Refus poli 409 si un cycle tourne déjà (single-flight) ou si la
+ *      fenêtre d'absorption est clôturée : l'IA n'apprend plus des datasets,
+ *      son évolution passe par ses utilisateurs.
  *
  * La boucle se déclenche DÉJÀ SEULE au lancement du serveur
  * (instrumentation.ts) : cette route est la fenêtre de contrôle honnête
@@ -40,9 +45,14 @@ export async function GET(request: NextRequest) {
     }
 
     const etat = await lireEtatAuto();
+    const vue = phaseDe(etat);
     return NextResponse.json(
       {
         etat,
+        phase: vue.phase,
+        absorptionCloturee: vue.absorptionCloturee,
+        clotureeA: vue.clotureeA,
+        restantMs: vue.restantMs,
         cycleEnCours: cycleEnCours(),
         integrations: hubIntegrationStatus(),
         plafonds: plafondsAuto(),
@@ -78,6 +88,14 @@ export async function POST(request: NextRequest) {
     if (!rapport) {
       return NextResponse.json(
         { error: "Un cycle d'auto-apprentissage est déjà en cours.", requestId },
+        { status: 409, headers: { "x-request-id": requestId } },
+      );
+    }
+    if (rapport.statut === "refuse") {
+      // Phase autonomie : la fenêtre d'absorption est clôturée — l'IA
+      // n'apprend plus des datasets. Refus poli, tout porteur de vérité.
+      return NextResponse.json(
+        { rapport, error: rapport.message, requestId },
         { status: 409, headers: { "x-request-id": requestId } },
       );
     }

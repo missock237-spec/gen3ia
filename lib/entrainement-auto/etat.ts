@@ -23,7 +23,7 @@ const ERREURS_CAP = 5;
 
 export function etatParDefaut(lanceA: string = new Date().toISOString()): EtatAutoApprentissage {
   return {
-    v: 1,
+    v: 2,
     lanceA,
     cyclesExecutes: 0,
     enCours: false,
@@ -32,6 +32,9 @@ export function etatParDefaut(lanceA: string = new Date().toISOString()): EtatAu
     datasetsIngestes: [],
     pairesCumulees: 0,
     echantillonsCumules: 0,
+    absorptionCloturee: false,
+    absorptionClotureeA: null,
+    bilanAutonomie: null,
   };
 }
 
@@ -47,13 +50,36 @@ export function reduireEtat(etat: EtatAutoApprentissage): EtatAutoApprentissage 
   };
 }
 
-/** Lecture tolérante : absent/corrompu/version inconnue → état par défaut. */
+/** Forme brute tolérante — v1 (legacy) ET v2 (cycle de vie), aucun cast violent. */
+interface EtatPersisteBrut {
+  v?: number;
+  lanceA?: string;
+  cyclesExecutes?: number;
+  enCours?: boolean;
+  dernierRapport?: EtatAutoApprentissage["dernierRapport"];
+  historique?: EtatAutoApprentissage["historique"];
+  datasetsIngestes?: string[];
+  pairesCumulees?: number;
+  echantillonsCumules?: number;
+  absorptionCloturee?: boolean;
+  absorptionClotureeA?: string | null;
+  bilanAutonomie?: EtatAutoApprentissage["bilanAutonomie"];
+}
+
+/**
+ * Migration v1 → v2 : un ancien état (boucle périodique sans cycle de vie)
+ * conserve TOUTES ses données (anti-rejoue, cumuls, historique) — seuls les
+ * champs du cycle de vie sont ajoutés à leurs défauts neutres (fenêtre non
+ * clôturée, bilan null). Lecture tolérante : absent/corrompu/version
+ * inconnue → état par défaut honnête, jamais d'exception remontée au boot.
+ */
 export async function lireEtatAuto(chemin: string = ETAT_AUTO_PATH): Promise<EtatAutoApprentissage> {
   try {
     const brut = await readFile(chemin, "utf8");
-    const parse = JSON.parse(brut) as Partial<EtatAutoApprentissage>;
-    if (parse.v !== 1 || typeof parse !== "object" || parse === null) return etatParDefaut();
-    return { ...etatParDefaut(), ...parse, v: 1 };
+    const parse = JSON.parse(brut) as EtatPersisteBrut | null;
+    if (typeof parse !== "object" || parse === null) return etatParDefaut();
+    if (parse.v !== 1 && parse.v !== 2) return etatParDefaut();
+    return { ...etatParDefaut(), ...parse, v: 2 };
   } catch {
     return etatParDefaut();
   }
