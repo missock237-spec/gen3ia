@@ -81,6 +81,21 @@ export async function register(): Promise<void> {
     } catch {
       /* l'observabilité ne doit jamais empêcher le service de démarrer. */
     }
+
+    // AUTO-APPRENTISSAGE (hubs HF + Kaggle) : la boucle autonome est armée
+    // ICI, au boot réel du serveur — Gen3ia s'entraîne seule dès son
+    // lancement. Import dynamique : le module neuronal n'est chargé que
+    // quand le serveur tourne, et AUCUN échec ici ne peut empêcher le
+    // démarrage (désactivable par AUTO_APPRENTISSAGE=0).
+    try {
+      const { demarrerAutoApprentissage } = await import("./lib/entrainement-auto");
+      demarrerAutoApprentissage();
+    } catch (erreur) {
+      console.warn(
+        "[INSTRUMENTATION] Auto-apprentissage non armé (non fatal) :",
+        erreur instanceof Error ? erreur.message : String(erreur),
+      );
+    }
   }
 
   if (process.env.NEXT_RUNTIME === "edge") {
