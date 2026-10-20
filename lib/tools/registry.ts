@@ -103,8 +103,8 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "video.create", description: "Lancer une production vidéo complète autonome (script, images, voix, montage) avec paramètres de production (durée, format, résolution, langue, style, audience, plateforme, musique, formats dérivés) et suivre sa progression.", risk: "write", permission: "tool.write", sideEffect: true },
   { name: "video.status", description: "Suivre une production vidéo : étape en cours, progression réelle, avertissements, URL de lecture du master terminé.", risk: "read", permission: "tool.read", sideEffect: false },
   { name: "video.revise", description: "Réviser ou piloter une vidéo existante : rythme, musique, voix, sous-titres, suppression de scène, pause/reprise/annulation du rendu, formats dérivés.", risk: "write", permission: "tool.write", sideEffect: true },
-  { name: "media.analyze", description: "Analyser une image, un audio ou une vidéo fournie (description, transcription, extraction d'informations).", risk: "read", permission: "tool.read", sideEffect: false },
-  { name: "voice.speak", description: "Generate natural voice audio from text (plateforme ElevenLabs — outil interne).", risk: "write", permission: "tool.write", sideEffect: false },
+  { name: "media.analyze", description: "Analyser localement une image, un audio ou une vidéo fournie (mesures réelles : format, dimensions, durée, codecs, palette, luminosité, images clés). La transcription vocale n'est pas incluse.", risk: "read", permission: "tool.read", sideEffect: false },
+  { name: "voice.speak", description: "Synthétiser un fichier AUDIO local à partir d'un texte (composition harmonique neuronale déterministe, instantanée, sans IA externe — ce n'est pas de la parole naturelle).", risk: "write", permission: "tool.write", sideEffect: false },
   // Task 140 — SUITE « OUTILS PILOTÉS PAR LES AGENTS IA » (16 outils).
   // Risques : « read » = analyse/lecture sans effet de bord ; « write » =
   // opération INTERNE Gen3ia (LLM facturé, artefacts, registres — directive

@@ -187,3 +187,69 @@ export async function persistGeneratedImage(
     return { url: original, storage: "provider" };
   }
 }
+
+/**
+ * Persiste DIRECTEMENT un Buffer déjà en main (génération locale : PNG
+ * rasterisé, WAV synthétisé…) sans le détour data URI Base64 → décodage.
+ *
+ * Gain (audit perf multimodal) : l'ancienne voie encodait le buffer en
+ * Base64 (mémoire ×1,33) pour le re-décoder aussitôt — jusqu'à ~4 Mo
+ * alloués deux fois par audio de 30 s. Ici : upload immédiat du buffer.
+ *
+ * Deux modes de clé :
+ *  - `fixedKey` fourni → CLÉ DE CONTENU DÉTERMINISTE (cache média : même
+ *    rendu = même clé = réutilisation sans re-render) ;
+ *  - sinon clé horodatée standard (comme persistGeneratedImage).
+ *
+ * Contrat identique : ne lève JAMAIS — repli `storage:"provider"` avec
+ * l'URL d'origine passée en paramètre (data URI de repli côté appelant).
+ */
+export async function persistGeneratedBuffer(params: {
+  userId: string;
+  /** Contenu brut déjà généré (PNG, WAV, SVG…). */
+  buffer: Buffer;
+  /** Type MIME exact du contenu. */
+  contentType: string;
+  /** Sous-dossier sous users/<uid>/permanent/ (défaut : ai-images). */
+  prefix?: string;
+  /** Clé R2 EXACTE demandée (cache de contenu déterministe). */
+  fixedKey?: string;
+  /**
+   * Repli retourné si l'archivage échoue (data URI / URL locale) —
+   * la génération réussie n'est jamais perdue pour un incident R2.
+   */
+  fallbackUrl?: string;
+}): Promise<PersistedImage> {
+  const original = params.fallbackUrl ?? "";
+  try {
+    const userId = typeof params.userId === "string" ? params.userId.trim() : "";
+    if (!userId || params.buffer.length === 0) {
+      return { url: original, storage: "provider" };
+    }
+    if (!isR2Configured()) {
+      return { url: original, storage: "provider" };
+    }
+    if (params.buffer.length > MAX_IMAGE_BYTES) {
+      return { url: original, storage: "provider" };
+    }
+
+    const contentType = (params.contentType || "application/octet-stream")
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+    const key =
+      params.fixedKey && params.fixedKey.startsWith(`users/${userId}/permanent/`)
+        ? params.fixedKey
+        : `users/${userId}/permanent/${sanitizePrefix(params.prefix)}/${Date.now()}-${randomUUID()}.${extensionFor(contentType)}`;
+
+    await uploadToR2(key, params.buffer, contentType);
+    const url = await createR2DownloadUrl(key, SIGNED_URL_TTL_S);
+    return { url, storage: "r2", storagePath: key };
+  } catch (persistError) {
+    console.warn(
+      "[media-persist] archivage buffer échoué — repli inline :",
+      persistError instanceof Error ? persistError.message : String(persistError),
+    );
+    return { url: original, storage: "provider" };
+  }
+}

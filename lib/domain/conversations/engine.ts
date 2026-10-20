@@ -62,6 +62,10 @@ import { sanitizeProductionOptions, VIDEO_ASPECT_RATIOS } from "@/lib/tools/medi
 import { createCustomApi, listEnabledCustomApis, type CustomApiRecord } from "@/lib/integrations/custom-apis/repository";
 import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
 import { getImportedFileContent, listImportedFiles, loadImportedFilesContext } from "@/lib/files/import";
+// Analyse média LOCALE (audit multimodal) : les médias joints (audio/vidéo,
+// et images hors voie vision) sont réellement mesurés (sharp/ffprobe/frames)
+// et le contexte injecté au tour — plus jamais un contexte d'analyse vide.
+import { construireContexteAnalyseMedias } from "@/lib/media/analyze";
 import {
   detectScheduleIntent,
   detectServiceControlIntent,
@@ -967,15 +971,24 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const filesContext = await loadImportedFilesContext(input.userId, input.attachments).catch(() => "");
   const filesContextShort = await loadImportedFilesContext(input.userId, input.attachments, { perFile: 2_500, total: 6_000 }).catch(() => "");
 
-  // 1 septies) Analyse RÉELLE des médias joints (audio/vidéo) : transcript
-  // (Scribe) + description (vision/FFmpeg) injectés au tour — « analyse
-  // cette vidéo / cet audio » fonctionne enfin. Fail-soft TOTAL (jamais
-  // bloquant), plafonné à 2 médias, les images gardant la voie vision
-  // native (imagesForModel).
-  // ANALYSE MÉDIA (vision) : les modèles de perception externes ont été SUPPRIMÉS
-  // du projet (seules des IA externes devaient disparaître) — aucune
-  // description fabriquée : les pièces jointes restent des fichiers.
-  const mediaAnalysisContext = "";
+  // 1 septies) Analyse RÉELLE des médias joints (image/audio/vidéo) :
+  // moteur LOCAL (audit multimodal) — sharp (dimensions, palette, luminosité,
+  // contraste), ffprobe + volumedetect (durée, codecs, dynamique), extraction
+  // d'images clés pour la vidéo. « analyse cette vidéo / cet audio / cette
+  // photo » reçoit enfin des MESURES réelles injectées au tour. Fail-soft
+  // TOTAL (jamais bloquant), plafonné à 2 médias ; les images restent aussi
+  // sur la voie vision native (imagesForModel). Aucune perception inventée :
+  // la transcription vocale parlée n'est pas incluse et le contexte le dit.
+  const mediaAnalysisContext = await construireContexteAnalyseMedias({
+    userId: input.userId,
+    attachments: input.attachments,
+  }).catch((erreur) => {
+    console.warn(
+      "[conversation] analyse média locale indisponible (fail-soft) :",
+      erreur instanceof Error ? erreur.message : String(erreur),
+    );
+    return "";
+  });
 
   // 1 quinquies) Contenu RÉEL des liens fournis par l'utilisateur (étape 13) :
   // une URL collée dans la conversation est RÉELLEMENT récupérée (web.open,
@@ -1434,7 +1447,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
     RESPONSE_FORMAT_RULES,
     // Compréhension exacte : répondre dans la LANGUE du dernier message.
     languageDirective(ctx.message),
-    "La génération d'IMAGES, la production de VIDÉOS, la synthèse d'AUDIOS (voix-off ElevenLabs) et l'analyse de médias sont effectuées par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré un média comme s'il était affiché, et n'invente jamais d'URL.",
+    "La génération d'IMAGES, la production de VIDÉOS, la synthèse d'AUDIOS (moteur audio neural local — composition sonore, pas de parole naturelle) et l'analyse de médias (mesures réelles : format, dimensions, durée, codecs, palette) sont effectuées par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré un média comme s'il était affiché, et n'invente jamais d'URL.",
     "POLITIQUE UNIVERSELLE (impérative) : la plateforme prend en charge TOUS les types de génération — ne dis JAMAIS qu'elle « ne prend en charge que les images », « ne fait pas d'audio » ou qu'une capacité manque. Si la production n'a pas été déclenchée automatiquement, demande les éléments manquants (ex : le TEXTE à faire entendre pour un audio) ou oriente vers la relance — ne propose JAMAIS un service externe ni un tutoriel à la place d'une capacité de la plateforme.",
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
     ctx.project?.privacyRules ? `Règles de confidentialité impératives :\n${ctx.project.privacyRules}` : "",
@@ -3468,7 +3481,11 @@ async function summarizePlanTurn(
         return `${mark} ${s.title}${s.output ? ` — ${s.output.slice(0, 300)}` : ""}`;
       })
       .join("\n"),
-    artifacts.length > 0 ? `\nArtefacts produits : ${artifacts.map((a) => a.title).join(", ")}.` : "",
+    artifacts.length > 0
+      ? `\nArtefacts produits (téléchargement direct) :\n${artifacts
+          .map((a) => `- [${a.title}](/api/files/artifacts/${a.id}?redirect=1)`)
+          .join("\n")}`
+      : "",
     hasPending ? "\n⚠️ Des actions sensibles attendent votre validation avant exécution." : "",
   ]
     .filter(Boolean)

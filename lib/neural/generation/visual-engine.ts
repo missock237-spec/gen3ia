@@ -149,11 +149,15 @@ export function genererVisuelNeural(
 
   // Arêtes : connexions réelles entre les nœuds retenus (les synapses dont
   // source ET cible sont dans la constellation), sinon voisins angulaires.
+  // Index Map une fois pour toutes (audit perf O(n²)→O(n)) : l'ancien
+  // `noeuds.find` rescannait la constellation pour CHAQUE synapse
+  // échantillonnée (900 × 2 scans).
+  const indexNoeuds = new Map(noeuds.map((n) => [n.id, n] as const));
   const aretes: Array<{ a: typeof noeuds[number]; b: typeof noeuds[number]; poids: number }> = [];
   for (const [src, tgt, poids] of snapshot.echantillonSynapses) {
     if (aretes.length >= totalNoeuds * 2) break;
-    const a = noeuds.find((n) => n.id === src);
-    const b = noeuds.find((n) => n.id === tgt);
+    const a = indexNoeuds.get(src);
+    const b = indexNoeuds.get(tgt);
     if (a && b && a !== b) aretes.push({ a, b, poids });
   }
   // Complément structurel : anneaux de voisins (structure en spirale réelle).
