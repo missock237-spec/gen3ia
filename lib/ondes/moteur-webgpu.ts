@@ -21,6 +21,14 @@ import type { ConfigOndes, Impulsion, PaquetOnde, Pic } from "./types";
 
 const TAILLE_IMPRESSION = 16 * 4; // 16 vec4<f32> = 256 octets
 
+/** Options de création : shader spécialisé par le compilateur matériel. */
+export interface OptionsMoteurWebGPU {
+  /** Code WGSL spécialisé (défaut : SHADER_ONDES standard). */
+  code?: string;
+  /** Taille de workgroup du shader spécialisé (défaut [8, 8]). */
+  workgroup?: [number, number];
+}
+
 export class MoteurWebGPU implements MoteurOndes {
   readonly type = "webgpu" as const;
 
@@ -36,6 +44,7 @@ export class MoteurWebGPU implements MoteurOndes {
   private stagingPhase: GPUBuffer;
 
   private cfg: ConfigOndes;
+  private readonly workgroup: [number, number];
   private freqCpu: Float32Array;
   private ampCpu: Float32Array;
   private phaseCpu: Float32Array;
@@ -60,6 +69,7 @@ export class MoteurWebGPU implements MoteurOndes {
     tamponImpulsions: GPUBuffer,
     stagingAmp: GPUBuffer,
     stagingPhase: GPUBuffer,
+    workgroup: [number, number] = [8, 8],
   ) {
     this.device = device;
     this.cfg = cfg;
@@ -76,14 +86,19 @@ export class MoteurWebGPU implements MoteurOndes {
     this.freqCpu = new Float32Array(n);
     this.ampCpu = new Float32Array(n);
     this.phaseCpu = new Float32Array(n);
+    this.workgroup = workgroup;
   }
 
   /**
    * Construit le moteur : adapter → device → buffers → pipeline →
    * 3 bind groups (cycle de triple bufferisation). Lève si WebGPU est
    * indisponible — l'appelant retombe sur le moteur CPU.
+   *
+   * `options.code` : shader SPÉCIALISÉ compilé par le Swarm-Edge
+   * Hardware Compiler pour CE GPU (voir compilateur-hardware.ts) — le
+   * workgroup du dispatch est calqué sur le shader compilé.
    */
-  static async creer(cfg: ConfigOndes): Promise<MoteurWebGPU> {
+  static async creer(cfg: ConfigOndes, options?: OptionsMoteurWebGPU): Promise<MoteurWebGPU> {
     if (typeof navigator === "undefined" || !navigator.gpu) {
       throw new Error("WebGPU indisponible dans ce navigateur.");
     }
@@ -125,7 +140,7 @@ export class MoteurWebGPU implements MoteurOndes {
       usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
     });
 
-    const module_ = device.createShaderModule({ code: SHADER_ONDES });
+    const module_ = device.createShaderModule({ code: options?.code ?? SHADER_ONDES });
     const pipeline = device.createComputePipeline({
       layout: "auto",
       compute: { module: module_, entryPoint: "principal" },
@@ -165,6 +180,7 @@ export class MoteurWebGPU implements MoteurOndes {
       tamponImpulsions,
       stagingAmp,
       stagingPhase,
+      options?.workgroup ?? [8, 8],
     );
     moteur.initialiserFrequences();
     return moteur;
@@ -248,9 +264,9 @@ export class MoteurWebGPU implements MoteurOndes {
     vue.setFloat32(32, this.cfg.gain, true);
     this.device.queue.writeBuffer(this.tamponParams, 0, params);
 
-    // Dispatch 8×8 par workgroup.
-    const groupesX = Math.ceil(w / 8);
-    const groupesY = Math.ceil(h / 8);
+    // Dispatch : workgroup du shader (standard 8×8, spécialisé sinon).
+    const groupesX = Math.ceil(w / this.workgroup[0]);
+    const groupesY = Math.ceil(h / this.workgroup[1]);
     const encodeur = this.device.createCommandEncoder();
     const passe = encodeur.beginComputePass();
     passe.setPipeline(this.pipeline);

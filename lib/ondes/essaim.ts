@@ -27,6 +27,12 @@ export interface OptionsNoeud {
   transport: TransportSignalisation;
   /** Reçoit un paquet d'ondes à injecter dans le champ local. */
   surPaquet?: (paquet: PaquetOnde) => void;
+  /**
+   * Reçoit un message de protocole non-paquet (consensus…). Les paquets
+   * d'ondes ne passent JAMAIS ici — ce canal sert aux extensions du
+   * protocole (voir lib/ondes/consensus-essaim.ts).
+   */
+  surMessage?: (message: unknown) => void;
   /** Nombre de pairs ouverts a changé. */
   surPairs?: (nombre: number) => void;
   /** Message de statut pour la journalisation UI. */
@@ -54,6 +60,7 @@ export class NoeudEssaim {
   readonly id: string;
   private readonly transport: TransportSignalisation;
   private readonly surPaquet: ((paquet: PaquetOnde) => void) | undefined;
+  private readonly surMessage: ((message: unknown) => void) | undefined;
   private readonly surPairs: ((nombre: number) => void) | undefined;
   private readonly surStatut: ((message: string) => void) | undefined;
   private readonly ttlInitial: number;
@@ -67,6 +74,7 @@ export class NoeudEssaim {
     this.id = options.id ?? nouvelId();
     this.transport = options.transport;
     this.surPaquet = options.surPaquet;
+    this.surMessage = options.surMessage;
     this.surPairs = options.surPairs;
     this.surStatut = options.surStatut;
     this.ttlInitial = options.ttlInitial ?? TTL_DEFAUT;
@@ -249,8 +257,14 @@ export class NoeudEssaim {
     };
     canal.onmessage = (evenement) => {
       try {
-        const paquet = JSON.parse(String(evenement.data)) as PaquetOnde;
-        this.recevoirPaquet(paquet);
+        const donnee = JSON.parse(String(evenement.data)) as { protocole?: string };
+        if (donnee && typeof donnee === "object" && donnee.protocole === "consensus") {
+          // Extension de protocole (consensus) : routée vers surMessage,
+          // JAMAIS injectée dans le champ physique.
+          this.surMessage?.(donnee);
+          return;
+        }
+        this.recevoirPaquet(donnee as PaquetOnde);
       } catch {
         // Paquet corrompu : perdu pour tout le monde en UDP-like, tant pis.
       }
@@ -289,15 +303,29 @@ export class NoeudEssaim {
     this.diffuser(complet);
   }
 
+  /**
+   * Émet un message de protocole (consensus) vers tous les pairs ouverts.
+   * Sans TTL ni cascade : la session consensus gère elle-même ses voies.
+   */
+  envoyerMessage(message: unknown): void {
+    if (!this.actif || this.nbPairsOuverts === 0) return;
+    this.diffuserDonnees(JSON.stringify(message));
+  }
+
   private diffuser(paquet: PaquetOnde, options?: { sauf?: string }): void {
     const donnees = JSON.stringify(paquet);
+    // Les statistiques de bande passante ne comptent que les paquets d'ondes.
+    this.stats.paquetsEnvoyes++;
+    this.stats.octetsEnvoyes += donnees.length;
+    this.diffuserDonnees(donnees, options);
+  }
+
+  private diffuserDonnees(donnees: string, options?: { sauf?: string }): void {
     for (const lien of this.liens.values()) {
       if (options?.sauf && lien.id === options.sauf) continue;
       if (lien.etat === "ouvert" && lien.canal?.readyState === "open") {
         try {
           lien.canal.send(donnees);
-          this.stats.paquetsEnvoyes++;
-          this.stats.octetsEnvoyes += donnees.length;
         } catch {
           // Canal refermé entre-temps : ignoré, l'ICE rétablira.
         }

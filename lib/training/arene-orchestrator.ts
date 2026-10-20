@@ -68,6 +68,12 @@ export interface SessionArene {
     /** Empreintes du modèle élève avant / après (le champ a changé). */
     rappelAvant: number;
     rappelApres: number;
+    /**
+     * Empreinte spectrale Proof-of-Resonance de l'état entraîné — la
+     * signature physique de la mémoire fréquentielle finale : toute
+     * altération ultérieure de l'artefact brise la cohérence de l'onde.
+     */
+    empreinteOndes: string;
   };
   /** Clé R2 de l'état amélioré de l'élève (disponible si distillation). */
   etatEleveStorageKey: string | null;
@@ -336,6 +342,7 @@ async function lancerSessionAreneInterne(
           distillees: rapport.distillees,
           rappelAvant,
           rappelApres,
+          empreinteOndes: rapport.empreinteOndes,
         },
         modele: rapport.etatEleve,
         meta: { arene: true, mode: options.mode, professeur: profLabel },
@@ -378,6 +385,7 @@ async function lancerSessionAreneInterne(
       progression: Number(rapport.progression.toFixed(4)),
       rappelAvant: Number(rappelAvant.toFixed(4)),
       rappelApres: Number(rappelApres.toFixed(4)),
+      empreinteOndes: rapport.empreinteOndes,
     },
     etatEleveStorageKey,
     etatEleveTailleOctets: etatEleveTaille,

@@ -33,6 +33,7 @@ import type { PaireLangage } from "@/lib/neural/generation/corpus";
 import { MoteurCpu, type MoteurOndes } from "./champ";
 import { texteVersVecteur, vecteurVersImpulsions } from "./codec";
 import { EvolutionOndes } from "./evolution";
+import { empreinteSpectrale } from "./por";
 import type { ConfigOndes, Impulsion } from "./types";
 
 /** Grille de l'arène — 128² : assez dense pour l'interférence, rapide en CPU. */
@@ -260,6 +261,14 @@ export interface RapportEntrainement {
    * propre, entre deux rounds, jamais en pleine distillation.
    */
   arreteParTimebox: boolean;
+  /**
+   * EMPREINTE SPECTRALE (Proof-of-Resonance) de la mémoire fréquentielle
+   * finale de l'élève : la signature physique de l'état entraîné. Elle
+   * permet à n'importe quel nœud de vérifier par résonance que l'état
+   * archivé est bien celui produit par la session (complément du
+   * scellement forteresse qui, lui, lie l'artefact à son propriétaire).
+   */
+  empreinteOndes: string;
 }
 
 export interface OptionsEntrainement {
@@ -415,7 +424,27 @@ export class EntrainementParResonance {
       progression,
       etatEleve: this.eleve.exporterEtat(),
       arreteParTimebox,
+      empreinteOndes: this.empreinteMemoire(),
     };
+  }
+
+  /**
+   * Empreinte spectrale de la mémoire fréquentielle actuelle de l'élève :
+   * le champ est « propagé à vide » (aucune impulsion) pour produire un
+   * état stable dont la phase porte la carte de fréquences — deux élèves
+   * entraînés différemment produisent des empreintes différentes.
+   */
+  private empreinteMemoire(): string {
+    const champ = this.arene.creerChamp();
+    try {
+      champ.remplacerFrequences(this.frequencesEleve);
+      for (let k = 0; k < PAS_PROPAGATION + 1; k++) champ.avancer();
+      return empreinteSpectrale(champ.amplitudes(), champ.phases(), {
+        config: this.arene.configuration,
+      }).empreinte;
+    } finally {
+      champ.detruire();
+    }
   }
 
   /**
