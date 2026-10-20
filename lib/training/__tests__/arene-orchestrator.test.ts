@@ -102,8 +102,8 @@ describe("lancerSessionArene — le pont Studio → arène d'ondes", () => {
     expect(session.metriques.distillees).toBe(PAIRES_ELEVE.length);
     expect(session.etatEleveStorageKey).not.toBeNull();
 
-    // Timebox garantie : budget 1 h présent, aucun arrêt prématuré ici.
-    expect(session.timebox.budgetMs).toBe(60 * 60 * 1000);
+    // Timebox garantie : budget 30 min présent, aucun arrêt prématuré ici.
+    expect(session.timebox.budgetMs).toBe(30 * 60 * 1000);
     expect(session.timebox.arreteParTimebox).toBe(false);
 
     // L'état amélioré est chiffré + scellé (FORTERESSE) : le stockage brut

@@ -306,7 +306,7 @@ export default function AreneOndes() {
           <span className="arene-badge" data-actif={enCours}>{enCours ? `Round ${roundCourant}/${roundsMax}` : "prête"}</span>
           <span className="arene-badge">{DIM_ARENE}×{DIM_ARENE}</span>
           <span className="arene-badge" data-actif={mode === "duel"}>{mode === "duel" ? "duel de modèles" : "élève contre Gen3"}</span>
-          <span className="arene-badge" title="Garantie timebox : un entraînement ne dépasse jamais une heure, par modèle, par session.">
+          <span className="arene-badge" title="Garantie timebox : un entraînement ne dépasse jamais trente minutes, par modèle, par session.">
             timebox ≤ {Math.round(DUREE_MAX_ENTRAINEMENT_MS / 60000)} min
           </span>
         </div>

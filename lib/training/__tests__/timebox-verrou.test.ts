@@ -18,17 +18,17 @@ import { EntrainementParResonance } from "@/lib/ondes/arene";
 import { CortexLangagierGen3 } from "@/lib/neural/generation/language";
 
 /* ------------------------------------------------------------------ */
-/* TIMEBOX — la garantie « un entraînement ne dépasse jamais 1 h par     */
-/* modèle, par session » est testée au niveau PHYSIQUE (la boucle).      */
+/* TIMEBOX — la garantie « un entraînement ne dépasse jamais 30 min par  */
+/* modèle, par session » est testée au niveau PHYSIQUE (la boucle).       */
 /* ------------------------------------------------------------------ */
 
 describe("timebox", () => {
-  it("la constante produit est exactement une heure", () => {
-    expect(DUREE_MAX_ENTRAINEMENT_MS).toBe(3_600_000);
+  it("la constante produit est exactement trente minutes", () => {
+    expect(DUREE_MAX_ENTRAINEMENT_MS).toBe(1_800_000);
     expect(TTL_VERROU_DEFAUT).toBe(DUREE_MAX_ENTRAINEMENT_MS + 5 * 60 * 1000);
   });
 
-  it("creerDeadline borne le budget à 1 h, sans dépassable", () => {
+  it("creerDeadline borne le budget à 30 min, sans dépassable", () => {
     const debut = 1_000_000;
     const { deadlineMs, budgetMs } = creerDeadline(debut);
     expect(budgetMs).toBe(DUREE_MAX_ENTRAINEMENT_MS);
@@ -38,15 +38,15 @@ describe("timebox", () => {
   it("statutTimebox décrit honnêtement le temps restant et le dépassement", () => {
     const debut = 0;
     const { deadlineMs } = creerDeadline(debut);
-    const milieu = statutTimebox(deadlineMs, () => 1_800_000);
+    const milieu = statutTimebox(deadlineMs, () => 900_000);
     expect(milieu.depasse).toBe(false);
-    expect(milieu.resteMs).toBe(1_800_000);
+    expect(milieu.resteMs).toBe(900_000);
     const passe = statutTimebox(deadlineMs, () => DUREE_MAX_ENTRAINEMENT_MS + 1);
     expect(passe.depasse).toBe(true);
     expect(passe.resteMs).toBeLessThanOrEqual(0);
   });
 
-  it("bornerBudgetMs plafonne TOUTE demande à 1 h (même tricheur)", () => {
+  it("bornerBudgetMs plafonne TOUTE demande à 30 min (même tricheur)", () => {
     expect(bornerBudgetMs(999_999_999)).toBe(DUREE_MAX_ENTRAINEMENT_MS);
     expect(bornerBudgetMs(5_000)).toBe(5_000);
     expect(bornerBudgetMs(10)).toBe(1_000); // plancher de sécurité

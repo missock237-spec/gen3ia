@@ -23,8 +23,12 @@ const CONTENT_SECURITY_POLICY = [
   // doubleclick/googleadservices. Le rendu réel passe par des iframes
   // (frame-src ci-dessous) ; le push window.adsbygoogle est inline (déjà
   // couvert par 'unsafe-inline').
-  "script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com https://www.googleapis.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com",
-  "style-src 'self' 'unsafe-inline'",
+  // Widgets de paiement Chariow (/billing) : loader officiel
+  // js.chariowcdn.com (widget.min.js + widget.min.css) — domaine unique,
+  // sans eval ; les checkout s'ouvrent en iframe/redirect vers la boutique
+  // *.mychariow.shop (frame-src + connect-src ci-dessous).
+  "script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com https://www.googleapis.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com https://js.chariowcdn.com",
+  "style-src 'self' 'unsafe-inline' https://js.chariowcdn.com",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
   "media-src 'self' blob: https:",
@@ -44,10 +48,12 @@ const CONTENT_SECURITY_POLICY = [
   //   - Composio, Upstash, Qdrant, Agnes/Groq, webhooks sortants :
   //     appels SERVEUR uniquement — volontairement ABSENTS de la CSP
   //     navigateur (aucun fetch direct depuis le client).
-  "connect-src 'self' https://apis.google.com https://*.googleapis.com https://www.gstatic.com https://*.firebaseio.com wss://*.googleapis.com wss://*.firebaseio.com https://o4511820262473728.ingest.de.sentry.io https://ingest.de.sentry.io https://ingest.sentry.io https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com",
+  "connect-src 'self' https://apis.google.com https://*.googleapis.com https://www.gstatic.com https://*.firebaseio.com wss://*.googleapis.com wss://*.firebaseio.com https://o4511820262473728.ingest.de.sentry.io https://ingest.de.sentry.io https://ingest.sentry.io https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com https://js.chariowcdn.com https://*.mychariow.shop",
   // Google AdSense (Task 40) : les annonces se rendent dans des iframes
   // servies par googleads.g.doubleclick.net et tpc.googlesyndication.com.
-  "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.firebaseio.com https://content.googleapis.com https://googleads.g.doubleclick.net https://*.googlesyndication.com https://*.doubleclick.net",
+  // Widgets Chariow (/billing) : iframe de checkout servie par le CDN widget
+  // et la boutique (xdaagetk.mychariow.shop → *.mychariow.shop).
+  "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://*.firebaseio.com https://content.googleapis.com https://googleads.g.doubleclick.net https://*.googlesyndication.com https://*.doubleclick.net https://js.chariowcdn.com https://*.mychariow.shop",
   "worker-src 'self' blob:",
   "upgrade-insecure-requests",
 ].join('; ');

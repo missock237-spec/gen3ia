@@ -3928,3 +3928,18 @@ Stage Summary:
 - L'IA évolue EN CONTINU : plasticité d'usage à chaque rappel + consolidation autonome périodique des échanges réussis + persistance automatique — l'évolution est visible (page Cerveau, stats publiques, API).
 - Gen génère les 4 formats : texte (cortex langagier, +26 paires dont rédaction), images (moteur visuel SVG→PNG), audio (synthèse WAV), vidéo (animation SVG SMIL) — moteurs locaux réels déjà câblés au chat (/api/chat/message) et à /api/neural/media.
 - Reste : revue + fusion de la PR vers main.
+
+---
+Task ID: 166 (paiements Chariow branchés + timebox 30 min)
+Agent: Super Z (main) — session continuation
+Task: « Voici le script pour les 3 payements dans le projet, puis change le temps d'entraînement des models d'IA ne soit que de 30min/model »
+
+Work Log:
+- PRODUITS IDENTIFIÉS VIA API (GET /products, clé sk_… du .env) : prd_svqonju7 = « Plan pro » 9 750 XAF one_time ; prd_v76f5kjl = « Plan entreprise » 325 000 XAF one_time ; prd_646qpmge = « Entraînez vos modèles d'IA » 995 000 XAF one_time — les 3 sont PUBLIÉS.
+- lib/billing/plans.ts : ENTREPRISE_PRODUCT_ID/SUR_MESURE_PRODUCT_ID ajoutés comme replis par défaut (env prime) → les 3 offres payantes deviennent achetables (checkout métadonnées + webhook Pulse + activation de licence via planForProductId, résolution inverse automatique). Prix affichés ALIGNÉS sur la boutique (325 000/995 000 XAF ≈ 495 €/1 517 €) : le checkout facture le prix produit Chariow, l'affichage doit matcher.
+- Widgets de paiement direct : nouveau components/billing/chariow-widget.tsx — rend la div officielle #chariow-widget (style tap, boutique xdaagetk.mychariow.shop) ; le script Chariow (widget.min.js v1, analysé) ne scanne le DOM qu'UNE fois → injection après rendu, dédoublonnée par micro-tâche (N widgets = 1 scan) + re-injection au remontage React (remove+re-append → re-scan). Section « Paiement direct sur la boutique Chariow » sur /billing avec les 3 widgets + note d'activation de licence.
+- CSP forteresse (middleware.ts) : ouverture MINIMALE — script-src + style-src += js.chariowcdn.com ; frame-src += js.chariowcdn.com + *.mychariow.shop (iframe checkout) ; connect-src idem. Aucun unsafe-eval, aucun domaine fourre-tout.
+- TIMEBOX 30 MIN : DUREE_MAX_ENTRAINEMENT_MS = 30*60*1000 (timebox.ts) — les 3 niveaux de garantie suivent (deadline physique entre rounds, verrou TTL = timebox+5 min = 35 min, bornerBudgetMs) ; message 409 arène « dure au plus 30 min par modèle », badge UI arene-ondes (auto : constante/60000), commentaires verrou.ts/arene.ts. Fenêtre datasets 2 h (entrainement-auto) INTACTE.
+- Tests : plans.test.ts (prix boutique, 3 produits résolus, purchasable) ; NOUVEAU chariow-widget.test.tsx (données exportées + verrouillage structurel injection/CSP/page) ; timebox-verrou.test.ts (1_800_000) ; arene-orchestrator.test.ts (30*60*1000).
+- Docs : docs/billing/chariow-plans.md réécrite (produits publiés, widgets, mise en service réduite au webhook Pulse) ; scripts/chariow_plans_status.mjs fallbacks+tarifs ; CHANGELOG.
+- QA : tsc 0 ; eslint 0 ; vitest verts ; next build OK. PR vers main.

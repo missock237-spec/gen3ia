@@ -255,7 +255,7 @@ export interface RapportEntrainement {
   /** État du cortex élève après entraînement (exportable/persistable). */
   etatEleve: ReturnType<CortexLangagierGen3["exporterEtat"]>;
   /**
-   * TRUE si la session s'est arrêtée sur sa deadline (timebox 1 h) —
+   * TRUE si la session s'est arrêtée sur sa deadline (timebox 30 min) —
    * l'état de l'élève reste COHÉRENT et archivable : l'arrêt est
    * propre, entre deux rounds, jamais en pleine distillation.
    */
@@ -378,7 +378,7 @@ export class EntrainementParResonance {
    *
    * TIMEBOX : si `deadlineMs` est fourni (epoch ms), la boucle vérifie
    * l'horloge ENTRE CHAQUE ROUND et s'arrête proprement à l'échéance —
-   * la garantie « un entraînement ne dépasse jamais 1 h par modèle »
+   * la garantie « un entraînement ne dépasse jamais 30 min par modèle »
    * est appliquée au niveau physique lui-même (voir
    * lib/training/timebox.ts).
    */

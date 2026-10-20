@@ -14,6 +14,24 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Ajouté
 
+- **Paiements Chariow — les 3 produits payants branchés de bout en bout** :
+  mappage des produits réellement publiés (`prd_svqonju7` → Pro 9 750 FCFA,
+  `prd_v76f5kjl` → Entreprise 325 000 FCFA, `prd_646qpmge` → Sur-Mesure
+  995 000 FCFA) comme replis par défaut de `lib/billing/plans.ts` (env prime
+  toujours) ; les trois offres deviennent achetables, l'activation de licence
+  reconnaît les trois produits ; composant `ChariowWidget` (injection
+  idempotente du loader officiel + re-scan au remontage React) et section
+  « Paiement direct sur la boutique Chariow » sur `/billing` ; CSP ouverte au
+  strict minimum (`js.chariowcdn.com` script/style/frame, `*.mychariow.shop`
+  frame/connect) ; script `chariow_plans_status.mjs` et doc billing alignés
+  sur les prix boutique (source de vérité du paiement).
+- **Timebox d'entraînement réduite à 30 min par modèle** : la garantie produit
+  « un entraînement ne dépasse jamais trente minutes, par modèle, par session »
+  (lib/training/timebox.ts : plafond physique entre chaque round, verrou TTL
+  timebox + 5 min, bornage défensif des durées demandées) ; message 409 et
+  badge de l'Arène d'Ondes mis à jour. La fenêtre d'absorption des datasets
+  (2 h) reste inchangée.
+
 - **Suite « outils pilotés par les agents IA » — 16 nouveaux outils (Task 140)** :
   `handover.compose` (brief de relais IA → humain : intention, état émotionnel,
   blocages, données collectées — livrable persisté), `terminal.shield` (terminal
