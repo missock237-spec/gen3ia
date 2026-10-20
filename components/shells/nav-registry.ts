@@ -56,6 +56,16 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     keywords: ["ondes", "wdnn", "wave", "gpu", "webgpu", "webrtc", "essaim", "p2p", "résonance", "kuramoto", "oscillateurs"],
   },
   {
+    id: "arene",
+    href: "/arene",
+    label: "Arène d'interférence",
+    icon: "⚛",
+    description: "Les IA s'entraînent mutuellement par collision d'ondes — résonance et distillation physique",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["arène", "arene", "interférence", "duel", "professeur", "élève", "distillation", "résonance", "ondes", "entraînement", "codec"],
+  },
+  {
     id: "monde",
     href: "/monde",
     label: "Le Monde",

@@ -331,6 +331,30 @@ export class CortexLangagierGen3 {
     return this.paires.filter((p) => p.personnalisee).length;
   }
 
+  /**
+   * RÉÉDUCATION D'UNE PAIRE — remplace la réponse d'un motif déjà connu
+   * (l'arène d'interférence corrige ainsi un élève qui répond à côté :
+   * `apprendre` refuserait le motif en doublon). Le poids d'usage est
+   * réinitialisé : la nouvelle réponse doit regagner sa plasticité.
+   * Retourne true si une paire existante a été mise à jour.
+   */
+  reeducer(motif: string, nouvelleReponse: string, theme: string): boolean {
+    const reponse = nouvelleReponse.trim();
+    if (!motif.trim() || !reponse) return false;
+    const cle = cleMotif(motif);
+    if (!this.clesConnues.has(cle)) return false;
+    const indice = this.paires.findIndex((p) => cleMotif(p.motif) === cle);
+    if (indice < 0) return false;
+    this.paires[indice] = {
+      ...this.paires[indice],
+      reponse,
+      theme,
+      poidsUsage: POIDS_USAGE_INITIAL,
+    };
+    this.poidsParCle.set(cle, POIDS_USAGE_INITIAL);
+    return true;
+  }
+
   /** Nombre total de paires indexées. */
   get nbPaires(): number {
     return this.paires.length;

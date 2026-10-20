@@ -37,6 +37,7 @@ export const TRAINING_AUDIT_ACTIONS = [
   "export.prepared",
   "export.downloaded",
   "neural.evolution.consolidated",
+  "arene.session",
 ] as const;
 export type TrainingAuditAction = (typeof TRAINING_AUDIT_ACTIONS)[number];
 
@@ -46,7 +47,7 @@ export interface TrainingAuditEntry {
   at: string;
   userId: string;
   action: TrainingAuditAction;
-  entityType: "project" | "model" | "dataset" | "plan" | "job" | "export" | "neural";
+  entityType: "project" | "model" | "dataset" | "plan" | "job" | "export" | "neural" | "arene";
   entityId: string;
   projectId?: string;
   ip?: string;
