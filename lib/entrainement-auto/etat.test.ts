@@ -78,8 +78,36 @@ describe("etat de l'auto-apprentissage", () => {
     const chemin = await cheminEtat();
     await writeFile(chemin, "{ ceci n'est pas du JSON", "utf8");
     const etat = await lireEtatAuto(chemin);
-    expect(etat.v).toBe(1);
+    expect(etat.v).toBe(2);
     expect(etat.cyclesExecutes).toBe(0);
+  });
+
+  it("migration v1 → v2 : les données v1 sont conservées, fenêtre non clôturée", async () => {
+    const chemin = await cheminEtat();
+    const ancien = {
+      v: 1,
+      lanceA: "2026-01-01T00:00:00.000Z",
+      cyclesExecutes: 7,
+      enCours: false,
+      dernierRapport: null,
+      historique: [],
+      datasetsIngestes: ["org/ancien"],
+      pairesCumulees: 42,
+      echantillonsCumules: 84,
+    };
+    await writeFile(chemin, JSON.stringify(ancien), "utf8");
+    const lu = await lireEtatAuto(chemin);
+    expect(lu.v).toBe(2);
+    // TOUTES les données v1 sont conservées (anti-rejoue, cumuls).
+    expect(lu.lanceA).toBe("2026-01-01T00:00:00.000Z");
+    expect(lu.cyclesExecutes).toBe(7);
+    expect(lu.datasetsIngestes).toEqual(["org/ancien"]);
+    expect(lu.pairesCumulees).toBe(42);
+    expect(lu.echantillonsCumules).toBe(84);
+    // Champs du cycle de vie à leurs défauts neutres.
+    expect(lu.absorptionCloturee).toBe(false);
+    expect(lu.absorptionClotureeA).toBeNull();
+    expect(lu.bilanAutonomie).toBeNull();
   });
 
   it("réduction : caps historique (10), datasets (400), erreurs (5)", () => {

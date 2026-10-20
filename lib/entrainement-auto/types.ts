@@ -21,6 +21,18 @@ import "server-only";
 export type HubSource = "huggingface" | "kaggle";
 
 /**
+ * LES DEUX PHASES DE VIE DE L'IA :
+ *  - « absorption » : fenêtre BORNÉE au lancement (défaut 2 h) — Gen3ia se
+ *    connecte à ses hubs (Hugging Face + Kaggle) et prend TOUT ce qu'elle
+ *    peut de ses datasets dans cette fenêtre ;
+ *  - « autonomie » : la fenêtre est clôturée DÉFINITIVEMENT (état persisté)
+ *    — les hubs ne sont plus jamais interrogés ; l'IA s'appuie sur ce qu'elle
+ *    a absorbé et son évolution continue passe UNIQUEMENT par ses
+ *    utilisateurs (consolidation des échanges réels, lib/neural/evolution.ts).
+ */
+export type PhaseVie = "absorption" | "autonomie";
+
+/**
  * Objectifs d'entraînement alimentés par les datasets :
  *  - « langage »   : paires { motif, réponse } → cortex langagier Gen3 ;
  *  - « intention » : échantillons { text, label } → entraîneur supervisé SNN.
@@ -72,8 +84,9 @@ export interface RapportCycleAuto {
   dureeMs: number;
   /** « termine » : datasets ingérés + entraînement appliqué ; « partiel » :
    *  données ingérées mais entraînement non appliqué ; « echec » : rien
-   *  d'ingéré (message explicite). */
-  statut: "termine" | "partiel" | "echec";
+   *  d'ingéré (message explicite) ; « refuse » : phase autonomie — les hubs
+   *  sont coupés, aucun accès réseau, aucun entraînement depuis datasets. */
+  statut: "termine" | "partiel" | "echec" | "refuse";
   message: string;
   hubs: RapportHubCycle[];
   langage?: RapportLangageCycle;
@@ -82,10 +95,34 @@ export interface RapportCycleAuto {
   datasetsIngestes: string[];
 }
 
+/**
+ * BILAN D'AUTONOMIE — écrit UNE fois, à la clôture de la fenêtre d'absorption.
+ * C'est la réponse honnête à « l'IA doit savoir tout ce dont elle a besoin
+ * pour son évolution » : ce qu'elle a réellement absorbé, et les axes
+ * déterministes (dérivés des métriques réelles, jamais inventés) qui
+ * guident son évolution par les utilisateurs.
+ */
+export interface BilanAutonomie {
+  /** Date ISO de la clôture de la fenêtre d'absorption. */
+  clotureA: string;
+  /** Durée réellement utilisée de la fenêtre (ms). */
+  dureeUtiliseeMs: number;
+  /** Cumuls réels absorbés pendant la fenêtre (tous cycles confondus). */
+  pairesAbsorbees: number;
+  echantillonsAbsorbes: number;
+  datasetsAbsorbes: number;
+  /** Axes d'évolution dérivés des métriques réelles (ordre stable). */
+  axes: string[];
+  /** Phrase honnête de clôture (affichée telle quelle). */
+  message: string;
+}
+
 /** État persistant de l'auto-apprentissage (var/entrainement-auto/etat.json). */
 export interface EtatAutoApprentissage {
-  v: 1;
-  /** Date ISO d'initialisation de l'état (premier lancement constaté). */
+  /** v2 : cycle de vie absorption → autonomie (migration v1 automatique). */
+  v: 2;
+  /** Date ISO d'initialisation de l'état (premier lancement constaté) —
+   *  origine de la fenêtre d'absorption (jamais réinitialisée au reboot). */
   lanceA: string;
   /** Cycles exécutés (termine, partiel ET echec — un cycle raté reste un cycle). */
   cyclesExecutes: number;
@@ -97,6 +134,13 @@ export interface EtatAutoApprentissage {
   datasetsIngestes: string[];
   pairesCumulees: number;
   echantillonsCumules: number;
+  /** Fenêtre d'absorption clôturée ? Une fois true, les hubs ne sont plus
+   *  JAMAIS interrogés (persisté — survit aux redémarrages). */
+  absorptionCloturee: boolean;
+  /** Date ISO de la clôture (null tant que la fenêtre est ouverte). */
+  absorptionClotureeA: string | null;
+  /** Bilan d'autonomie écrit à la clôture (null avant). */
+  bilanAutonomie: BilanAutonomie | null;
 }
 
 /**

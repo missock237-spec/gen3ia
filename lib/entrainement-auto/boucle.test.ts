@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { deleteBrainState } from "@/lib/neural/training/persistence";
 
 import { demarrerAutoApprentissage, executerCycleAuto } from "./boucle";
+import { ecrireEtatAuto, etatParDefaut, lireEtatAuto } from "./etat";
 import type { ClientHubAuto } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -171,4 +172,86 @@ describe("executerCycleAuto", () => {
     process.env.NEXT_RUNTIME = precedentRuntime;
     delete process.env.AUTO_APPRENTISSAGE;
   });
+});
+
+describe("cycle de vie — absorption bornée → autonomie définitive", () => {
+  const plafonds = { maxDatasetsParCycle: 4, maxParObjectif: 2, maxLignesParDataset: 1000, maxPairesParDataset: 100, maxEchantillonsParDataset: 100, maxEchantillonsParCycle: 100, parFichierOctets: 1_048_576, totalParCycleOctets: 8_388_608 };
+
+  /** Enveloppe le client factice : compte TOUT appel hub (doit rester à 0 en autonomie). */
+  function compterAppels(client: ClientHubAuto): { client: ClientHubAuto; appels: () => number } {
+    let n = 0;
+    const enveloppe = <A extends unknown[], R>(fn: (...args: A) => Promise<R>) =>
+      async (...args: A): Promise<R> => {
+        n += 1;
+        return fn(...args);
+      };
+    return {
+      client: {
+        rechercher: enveloppe(client.rechercher.bind(client)),
+        inspecter: enveloppe(client.inspecter.bind(client)),
+        telecharger: enveloppe(client.telecharger.bind(client)),
+        estConfigure: enveloppe(client.estConfigure.bind(client)),
+      } as unknown as ClientHubAuto,
+      appels: () => n,
+    };
+  }
+
+  it("fenêtre clôturée → cycle REFUSÉ : zéro accès hub, zéro écriture d'état", async () => {
+    const chemin = await cheminEtat();
+    await ecrireEtatAuto(
+      etatParDefaut(new Date(Date.now() - 3 * 60 * 60_000).toISOString()),
+      chemin,
+    );
+    // Clôture préalable (comme le ferait le timer d'échéance).
+    const etat = await lireEtatAuto(chemin);
+    await ecrireEtatAuto(
+      { ...etat, absorptionCloturee: true, absorptionClotureeA: new Date().toISOString() },
+      chemin,
+    );
+
+    const espion = compterAppels(clientHubFactice());
+    const rapport = await executerCycleAuto({ client: espion.client, cheminEtat: chemin, plafonds });
+
+    expect(rapport?.statut).toBe("refuse");
+    expect(rapport?.message).toContain("Phase autonomie");
+    expect(rapport?.message).toContain("utilisateurs");
+    expect(espion.appels()).toBe(0);
+    const apres = await lireEtatAuto(chemin);
+    expect(apres.cyclesExecutes).toBe(0); // un refus n'est pas un cycle
+  }, 30_000);
+
+  it("fenêtre expirée (2 h dépassées, non clôturée) → clôture persistée au premier point de contrôle, puis refus", async () => {
+    const chemin = await cheminEtat();
+    // État ancien : premier lancement il y a 3 h, fenêtre jamais clôturée.
+    await ecrireEtatAuto(
+      etatParDefaut(new Date(Date.now() - 3 * 60 * 60_000).toISOString()),
+      chemin,
+    );
+
+    const espion = compterAppels(clientHubFactice());
+    const rapport = await executerCycleAuto({ client: espion.client, cheminEtat: chemin, plafonds });
+
+    expect(rapport?.statut).toBe("refuse");
+    expect(rapport?.message).toContain("expirée");
+    expect(espion.appels()).toBe(0);
+    const etat = await lireEtatAuto(chemin);
+    expect(etat.absorptionCloturee).toBe(true);
+    expect(etat.bilanAutonomie).not.toBeNull();
+    expect(etat.bilanAutonomie?.message).toContain("n'apprend plus de ses datasets");
+
+    // Le second appel passe par la branche « déjà clôturée ».
+    const second = await executerCycleAuto({ client: espion.client, cheminEtat: chemin, plafonds });
+    expect(second?.statut).toBe("refuse");
+    expect(second?.message).toContain("Phase autonomie");
+    expect(espion.appels()).toBe(0);
+  }, 30_000);
+
+  it("en fenêtre : les cycles hub restent pleinement opérationnels", async () => {
+    const chemin = await cheminEtat();
+    await ecrireEtatAuto(etatParDefaut(new Date().toISOString()), chemin);
+    const espion = compterAppels(clientHubFactice());
+    const rapport = await executerCycleAuto({ client: espion.client, cheminEtat: chemin, plafonds });
+    expect(rapport?.statut).toBe("termine");
+    expect(espion.appels()).toBeGreaterThan(0);
+  }, 30_000);
 });

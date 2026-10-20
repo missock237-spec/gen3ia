@@ -120,3 +120,53 @@
   opacity: 0.55;
   cursor: default;
 }
+
+/* ---- Cycle de vie : phase + bilan d'autonomie ---- */
+
+.auto-carte-phase {
+  margin: 0;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+
+.auto-carte-phase.phase-absorption {
+  color: var(--g3-accent, #7c5cff);
+  background: color-mix(in srgb, var(--g3-accent, #7c5cff) 12%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+.auto-carte-phase.phase-autonomie {
+  color: var(--g3-success, #2e9e6b);
+  background: color-mix(in srgb, var(--g3-success, #2e9e6b) 12%, transparent);
+}
+
+.auto-carte-bilan {
+  font-size: 11px;
+  color: var(--g3-text-secondary);
+}
+
+.auto-carte-bilan summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--g3-text);
+}
+
+.auto-carte-bilan-message {
+  margin: 6px 0 4px;
+  font-style: italic;
+}
+
+.auto-carte-bilan-axes {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.auto-carte-note {
+  font-style: italic;
+}
