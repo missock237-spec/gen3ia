@@ -58,6 +58,14 @@ export async function POST(request: Request) {
     switch (result.kind) {
       case "extension_purchase":
         return Response.json({ received: true, kind: "extension_purchase", granted: result.granted });
+      case "plan_subscription":
+        return Response.json({
+          received: true,
+          kind: "plan_subscription",
+          planId: result.planId,
+          userId: result.userId,
+          activated: result.activated,
+        });
       case "ignored":
         return Response.json({ received: true, ignored: true });
       case "duplicate_sale":

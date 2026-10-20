@@ -5,6 +5,7 @@ import { Timestamp } from "@/lib/r2fs";
 import { adminDb } from "@/lib/firebase/admin";
 import { settleChariowExtensionPurchase } from "@/lib/extensions/entitlements";
 import { applyTopup, WALLET_CURRENCY, type WalletSnapshot } from "./wallet";
+import { activatePlanFromSale } from "./abonnements";
 
 /**
  * Livraisons du webhook Chariow Pulse (Task 104-b — rejeu résilient).
@@ -65,6 +66,7 @@ export type ChariowWebhookPayload = {
 /** Résultat discriminé du traitement d'une vente Chariow. */
 export type ChariowProcessResult =
   | { kind: "extension_purchase"; granted: boolean }
+  | { kind: "plan_subscription"; planId: string; userId: string; activated: boolean }
   | { kind: "ignored" }
   | { kind: "user_not_found" }
   | { kind: "duplicate_sale" }
@@ -174,6 +176,20 @@ function isTopupSale(payload: ChariowWebhookPayload): boolean {
   return String(payload?.sale?.custom_metadata?.gen3ia_product ?? "") === "wallet_topup";
 }
 
+/**
+ * Ventes d'abonnement aux offres Gen3ia (grille tarifaire) : le checkout de la
+ * plateforme tague la vente avec gen3ia_product = plan_subscription, plan_id
+ * et user_id — le webhook ouvre l'accès au plan sans intervention manuelle.
+ */
+function planSaleMetadata(payload: ChariowWebhookPayload) {
+  const metadata: Record<string, unknown> = payload?.sale?.custom_metadata ?? {};
+  return {
+    product: String(metadata.gen3ia_product ?? ""),
+    planId: String(metadata.plan_id ?? ""),
+    userId: String(metadata.user_id ?? ""),
+  };
+}
+
 function extensionSaleMetadata(payload: ChariowWebhookPayload) {
   const metadata: Record<string, unknown> = payload?.sale?.custom_metadata ?? {};
   return {
@@ -278,6 +294,64 @@ export async function processChariowSale(
         processedAt: new Date(),
       });
       return { kind: "extension_purchase", granted: result.granted };
+    }
+
+    const planMeta = planSaleMetadata(payload);
+    if (planMeta.product === "plan_subscription") {
+      const saleId = String(payload?.sale?.id ?? "");
+      const saleStatus = String(payload?.sale?.status ?? "completed").toLowerCase();
+      const customerEmail = String(payload.customer?.email ?? "").trim().toLowerCase();
+
+      if (!planMeta.planId || !saleId) {
+        throw new Error("Plan subscription payload is missing plan or sale reference.");
+      }
+      if (!CREDITABLE_STATUSES.has(saleStatus)) {
+        throw new Error(`Sale status ${saleStatus} is not creditable.`);
+      }
+
+      // Résolution utilisateur : user_id tagué au checkout par la plateforme,
+      // sinon e-mail du client Chariow (achat storefront réconcilié au webhook).
+      let userId = planMeta.userId;
+      if (!userId) {
+        if (!customerEmail) throw new Error("Plan subscription payload is missing user reference.");
+        try {
+          const user = await getAuth(getApps()[0]!).getUserByEmail(customerEmail);
+          userId = user.uid;
+        } catch {
+          await deliveryRef.update({
+            status: "failed",
+            reason: "firebase_user_not_found",
+            customerEmail,
+            saleId,
+            failedAt: new Date(),
+          });
+          return { kind: "user_not_found" };
+        }
+      }
+
+      const result = await activatePlanFromSale({
+        userId,
+        planId: planMeta.planId,
+        saleId,
+        source: "checkout",
+      });
+      if (result.kind === "ignored") throw new Error(`Unknown plan id ${planMeta.planId}.`);
+
+      await deliveryRef.update({
+        status: "processed",
+        kind: "plan_subscription",
+        planId: planMeta.planId,
+        userId,
+        saleId,
+        activated: result.kind === "activated",
+        processedAt: new Date(),
+      });
+      return {
+        kind: "plan_subscription",
+        planId: planMeta.planId,
+        userId,
+        activated: result.kind === "activated",
+      };
     }
 
     if (!isTopupSale(payload)) {
