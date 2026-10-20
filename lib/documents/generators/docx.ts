@@ -1,6 +1,8 @@
 import {
+  AlignmentType,
   Document,
   HeadingLevel,
+  ImageRun,
   Packer,
   Paragraph,
   Table,
@@ -10,6 +12,7 @@ import {
 } from "docx";
 
 import type { DocumentPlan } from "../types";
+import { chargerImageBloc } from "./image-embed";
 
 type DocxHeadingLevel = (typeof HeadingLevel)[keyof typeof HeadingLevel];
 
@@ -70,6 +73,47 @@ export async function generateDocx(
           }),
         );
         break;
+
+      case "image": {
+        // Audit multimodal : le bloc image était avalisé puis perdu — il est
+        // désormais réellement embarqué (ImageRun). Fail-soft : note en
+        // italique si la source est indisponible, le document part toujours.
+        const image = await chargerImageBloc(block);
+        if (image) {
+          // docx exprime les dimensions en pixels (96 dpi) — largeur utile
+          // A4 ≈ 600 px, ratio préservé.
+          const echelle = Math.min(1, 600 / image.largeurPx);
+          children.push(
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new ImageRun({
+                  data: image.buffer,
+                  // docx v9 exige le type explicite (contrat IImageOptions).
+                  type: image.mime === "image/png" ? "png" : "jpg",
+                  transformation: {
+                    width: Math.round(image.largeurPx * echelle),
+                    height: Math.round(image.hauteurPx * echelle),
+                  },
+                }),
+              ],
+            }),
+          );
+        } else {
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "[Image indisponible : source inaccessible ou format non pris en charge]",
+                  italics: true,
+                  color: "888888",
+                }),
+              ],
+            }),
+          );
+        }
+        break;
+      }
 
       case "quote":
         children.push(

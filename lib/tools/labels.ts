@@ -29,7 +29,7 @@ const TOOL_LABELS: Record<string, string> = {
   "ads.read": "Consultation publicitaire",
   "ads.publish": "Publication publicitaire",
   "github.create_repository": "Création de dépôt GitHub",
-  "voice.speak": "Génération de voix",
+  "voice.speak": "Synthèse audio (locale)",
   "voice.list": "Consultation des voix",
   "phone.call": "Appel téléphonique IA",
   "code.execute": "Exécution de code",

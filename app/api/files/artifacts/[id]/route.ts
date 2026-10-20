@@ -14,6 +14,12 @@ export async function GET(
   try {
     const { id } = await context.params;
     const url = await getArtifactDownloadUrl(id, guard.context.userId);
+    // Liens cliquables dans le chat (audit multimodal) : ?redirect=1 →
+    // redirection 302 directe vers l'URL signée au lieu du JSON — le
+    // navigateur télécharge le fichier sans passer par le panneau.
+    if (request.nextUrl.searchParams.get("redirect")) {
+      return NextResponse.redirect(url, 302);
+    }
     return NextResponse.json({ success: true, url, expiresIn: 300 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Artifact not found";

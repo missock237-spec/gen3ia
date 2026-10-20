@@ -33,6 +33,15 @@ import { socialPublishTool } from "@/lib/integrations/social/tools";
 import { webhookEmitTool } from "@/lib/integrations/webhooks/tools";
 import { githubCreateRepositoryTool } from "@/lib/integrations/github/tools";
 import { generateImageNeuralTool } from "@/lib/tools/media/generate-image-neural";
+// Analyse média LOCALE réelle (sharp + ffprobe + images clés) : rend réel
+// le contrat « media.analyze » annoncé au registre — l'outil fantôme cité
+// dans le worklog (lib/tools/media/analyze-media.ts supprimé un jour) est
+// réimplémenté avec un moteur 100 % local.
+import { analyzeMediaTool } from "@/lib/tools/media/analyze-media";
+// voice.speak RÉEL : l'AUDIO RULE du runtime agents promettait la synthèse
+// audio mais aucun exécuteur n'existait (échec « Unknown tool » garanti).
+// Synthèse harmonique neuronale locale, honnête (pas de parole naturelle).
+import { voiceSpeakTool } from "@/lib/tools/media/voice-speak";
 import {
   notionCreatePageTool,
   notionSearchTool,
@@ -169,6 +178,11 @@ export function createDefaultToolRegistry(): ToolRegistry {
   // montage Ken Burns → rendu).
   registry.register(generateImageNeuralTool);
   registry.register(createVideoTool);
+  // media.analyze RÉEL : lecture locale des images/audios/vidéos du compte
+  // (le planificateur voyait l'outil promis, aucun exécuteur n'existait).
+  registry.register(analyzeMediaTool);
+  // voice.speak RÉEL : la promesse AUDIO RULE devient une capacité vraie.
+  registry.register(voiceSpeakTool);
   if (process.env.NOTION_API_TOKEN) {
     registry.register(notionSearchTool);
     registry.register(notionCreatePageTool);

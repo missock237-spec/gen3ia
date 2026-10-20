@@ -152,6 +152,33 @@ export async function abortMultipartUpload(key: string, uploadId: string): Promi
   await getClient().send(new AbortMultipartUploadCommand({ Bucket: bucket, Key: key, UploadId: uploadId }));
 }
 
+/**
+ * Sondage HEAD d'un objet (existence + taille + type) sans téléchargement.
+ * Sert au CACHE DÉTERMINISTE des médias générés : une clé de contenu déjà
+ * présente signe un rendu identique déjà archivé (aucun re-render requis).
+ *
+ * Fail-soft total : toute erreur (clé absente, R2 injoignable, env
+ * manquante) renvoie null — l'appelant retombe alors sur le chemin de
+ * génération normal, jamais sur une fausse réponse.
+ */
+export async function headR2Object(key: string): Promise<{ sizeBytes: number; contentType: string } | null> {
+  if (!isR2Configured()) return null;
+  try {
+    const { bucket } = getConfig();
+    const head = await getClient().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return { sizeBytes: Number(head.ContentLength ?? 0), contentType: String(head.ContentType ?? "application/octet-stream") };
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    // 404 S3/R2 → clé absente : cache miss propre, sans bruit de log.
+    if (name === "NotFound" || name === "NoSuchKey") return null;
+    console.warn(
+      "[r2] headR2Object indisponible — traité comme cache miss :",
+      error instanceof Error ? error.message : String(error),
+    );
+    return null;
+  }
+}
+
 /** Liste les objets sous un prefixe (nom, taille, date). */
 export async function listObjectsUnderPrefix(prefix: string, maxResults = 500): Promise<Array<{ key: string; sizeBytes: number; updatedAt: string }>> {
   const { bucket } = getConfig();

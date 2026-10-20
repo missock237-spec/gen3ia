@@ -22,6 +22,14 @@ import {
   generateDocument,
 } from "./generators";
 
+// Normalisation WinAnsi partagée : le drawText du titre ci-dessous échouait
+// sur tout caractère hors CP1252 (emoji, trait insécable…) — le moteur
+// hérité réutilise désormais LA normalisation du vrai générateur PDF
+// (audit multimodal : un seul chemin de génération = un seul comportement).
+import {
+  textePdfSafe,
+} from "./generators/pdf";
+
 import {
   validateArtifact,
 } from "./validator";
@@ -252,7 +260,7 @@ export class DocumentEngine {
       );
 
     page.drawText(
-      request.title,
+      textePdfSafe(request.title),
       {
         x: 50,
         y: 750,

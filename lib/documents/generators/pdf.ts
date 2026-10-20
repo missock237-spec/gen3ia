@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import type { DocumentPlan } from "../types";
+import { chargerImageBloc } from "./image-embed";
 
 /**
  * Normalisation WinAnsi (Task 114) : les polices standard PDF (Helvetica)
@@ -16,7 +17,14 @@ const PDF_CHAR_FALLBACK: Record<string, string> = {
   "\u2043": "\u2022", "\u00A0": " ", "\u202F": " ", "\u2009": " ", "\u200B": "",
 };
 
-function textePdfSafe(input: unknown): string {
+/**
+ * Normalisation WinAnsi EXPORTÉE : le moteur document hérité
+ * (lib/documents/engine.ts) l'utilise aussi pour son titre — un emoji ou
+ * un trait insécable dans `request.title` faisait échouer TOUT le PDF
+ * (WinAnsi cannot encode). Un seul chemin de normalisation = un seul
+ * comportement d'erreur (audit multimodal, fusion des moteurs PDF).
+ */
+export function textePdfSafe(input: unknown): string {
   const source = typeof input === "string" ? input : String(input ?? "");
   let out = "";
   for (const ch of source) {
@@ -174,6 +182,51 @@ export async function generatePdf(plan: DocumentPlan): Promise<Buffer> {
       case "paragraph":
         drawParagraph(block.text ?? "");
         break;
+
+      case "image": {
+        // Audit multimodal : le bloc image était avalisé puis perdu — il est
+        // désormais réellement embarqué (PNG/JPEG natifs, autres formats
+        // convertis via sharp). Fail-soft : image indisponible → cadre
+        // « image indisponible », le document part toujours.
+        const image = await chargerImageBloc(block);
+        const largeurUtile = PAGE_WIDTH - MARGIN * 2;
+        if (image) {
+          const echelle = Math.min(1, largeurUtile / image.largeurPx);
+          const largeur = Math.round(image.largeurPx * echelle);
+          const hauteur = Math.round(image.hauteurPx * echelle);
+          ensureSpace(hauteur + 12);
+          const embarquee = image.mime === "image/png"
+            ? await pdf.embedPng(image.buffer)
+            : await pdf.embedJpg(image.buffer);
+          page.drawImage(embarquee, {
+            x: MARGIN + (largeurUtile - largeur) / 2,
+            y: y - hauteur,
+            width: largeur,
+            height: hauteur,
+          });
+          y -= hauteur + 14;
+        } else {
+          ensureSpace(46);
+          page.drawRectangle({
+            x: MARGIN,
+            y: y - 40,
+            width: largeurUtile,
+            height: 40,
+            borderColor: rgb(0.72, 0.72, 0.78),
+            borderWidth: 0.8,
+            color: rgb(0.96, 0.96, 0.97),
+          });
+          page.drawText(textePdfSafe("Image indisponible (source inaccessible ou format non pris en charge)"), {
+            x: MARGIN + 8,
+            y: y - 24,
+            size: 9,
+            font: italic,
+            color: rgb(0.45, 0.45, 0.5),
+          });
+          y -= 52;
+        }
+        break;
+      }
 
       case "quote":
         drawParagraph(`"${block.text ?? ""}"`, {

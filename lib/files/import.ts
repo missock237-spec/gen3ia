@@ -41,7 +41,7 @@ export const IMPORT_MAX_TEXT_CHARS = 600_000;
 /** Nombre maximal de lignes structurées stockées (aperçu complet conservé via texte). */
 export const IMPORT_MAX_STRUCTURED_ROWS = 500;
 
-export type ImportedFileKind = "text" | "markdown" | "csv" | "json" | "html" | "docx" | "xlsx" | "pdf" | "image" | "binary";
+export type ImportedFileKind = "text" | "markdown" | "csv" | "json" | "html" | "docx" | "xlsx" | "pdf" | "image" | "audio" | "video" | "binary";
 
 export interface ImportedFileRecord {
   id: string;
@@ -169,6 +169,30 @@ export async function convertFileBuffer(
   // Images : métadonnées réelles, pas de « conversion » texte illusoire.
   if (contentType.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)) {
     return { kind: "image", text: "", conversion: "metadata-only", note: "Image importée : métadonnées stockées (pas de contenu texte)." };
+  }
+
+  // Audios : kind dédié (audit multimodal) — l'ancien chemin tombait en
+  // « binary » sans note utile. L'analyse réelle (durée, codecs, dynamique)
+  // est disponible via media.analyze / l'analyse automatique du chat ; la
+  // transcription vocale parlée n'est pas incluse dans le moteur local.
+  if (contentType.startsWith("audio/") || ["mp3", "wav", "m4a", "aac", "ogg", "oga", "opus", "flac"].includes(extension)) {
+    return {
+      kind: "audio",
+      text: "",
+      conversion: "metadata-only",
+      note: "Audio importé : métadonnées stockées. L'analyse locale (durée, codecs, profil sonore) est disponible — demandez « analyse cet audio ». La transcription vocale parlée n'est pas incluse dans le moteur local.",
+    };
+  }
+
+  // Vidéos : kind dédié (audit multimodal) — l'analyse locale (durée,
+  // dimensions, images clés) est disponible via media.analyze.
+  if (contentType.startsWith("video/") || ["mp4", "webm", "mov", "m4v", "mkv"].includes(extension)) {
+    return {
+      kind: "video",
+      text: "",
+      conversion: "metadata-only",
+      note: "Vidéo importée : métadonnées stockées. L'analyse locale (durée, dimensions, images clés) est disponible — demandez « analyse cette vidéo ».",
+    };
   }
 
   if (extension === "docx" || contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
