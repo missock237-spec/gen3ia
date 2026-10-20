@@ -4,8 +4,8 @@
  * Le déploiement Gen3ia est mono-instance (PM2) : un verrou en mémoire
  * suffit et il est immédiat. Chaque verrou porte un TTL = timebox + marge :
  * même si le processus crashe sans libérer, le modèle redevient
- * entraînable au plus tard une heure et cinq minutes plus tard — la
- * garantie « 1 h par modèle par entraînement » ne peut JAMAIS être
+ * entraînable au plus tard trente-cinq minutes plus tard — la
+ * garantie « 30 min par modèle par entraînement » ne peut JAMAIS être
  * contournée par un verrou fantôme.
  *
  * Le verrou sert aussi d'anti-double-clic côté UI : un second lancement

@@ -1,6 +1,6 @@
 /**
  * TIMEBOX D'ENTRAÎNEMENT — « un entraînement de modèle utilisateur ne
- * dure JAMAIS plus d'une heure, par modèle, par session ».
+ * dure JAMAIS plus de trente minutes, par modèle, par session ».
  *
  * Garantie forte appliquée à TROIS niveaux (défense en profondeur) :
  *
@@ -16,8 +16,8 @@
  *     pour la dépasser (c'est la GARANTIE produit affichée).
  */
 
-/** Durée maximale d'un entraînement : 1 heure, par modèle, par session. */
-export const DUREE_MAX_ENTRAINEMENT_MS = 60 * 60 * 1000;
+/** Durée maximale d'un entraînement : 30 minutes, par modèle, par session. */
+export const DUREE_MAX_ENTRAINEMENT_MS = 30 * 60 * 1000;
 
 /** Marge du verrou au-delà de la timebox (nettoyage, archivage final). */
 export const MARGE_VERROU_MS = 5 * 60 * 1000;
@@ -33,7 +33,7 @@ export interface StatutTimebox {
   depasse: boolean;
 }
 
-/** Crée la deadline d'une session d'entraînement (budget borné à 1 h). */
+/** Crée la deadline d'une session d'entraînement (budget borné à 30 min). */
 export function creerDeadline(debutMs = Date.now()): { deadlineMs: number; budgetMs: number } {
   const budgetMs = DUREE_MAX_ENTRAINEMENT_MS;
   return { deadlineMs: debutMs + budgetMs, budgetMs };
@@ -46,7 +46,7 @@ export function statutTimebox(deadlineMs: number, maintenant: () => number = Dat
   return { budgetMs: DUREE_MAX_ENTRAINEMENT_MS, consommeMs, resteMs, depasse: resteMs <= 0 };
 }
 
-/** Bornage défensif d'une durée demandée par l'appelant (≤ 1 h, ≥ 1 s). */
+/** Bornage défensif d'une durée demandée par l'appelant (≤ 30 min, ≥ 1 s). */
 export function bornerBudgetMs(demandeMs?: number): number {
   if (typeof demandeMs !== "number" || !Number.isFinite(demandeMs)) return DUREE_MAX_ENTRAINEMENT_MS;
   return Math.min(DUREE_MAX_ENTRAINEMENT_MS, Math.max(1000, Math.floor(demandeMs)));

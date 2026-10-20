@@ -74,7 +74,7 @@ export interface SessionArene {
   etatEleveTailleOctets: number;
   error: string | null;
   dureeMs: number;
-  /** Timebox appliquée : budget (1 h) et arrêt propre à l'échéance. */
+  /** Timebox appliquée : budget (30 min) et arrêt propre à l'échéance. */
   timebox: { budgetMs: number; arreteParTimebox: boolean };
   createdAt: string;
 }
@@ -241,7 +241,7 @@ function mesurerRappel(cortex: CortexLangagierGen3, questions: string[]): number
  *
  * GARANTIES APPLIQUÉES ICI :
  *  · VERROU — un seul entraînement actif par modèle (409 sinon) ;
- *  · TIMEBOX — le duel s'arrête proprement à 1 h (deadline physique
+ *  · TIMEBOX — le duel s'arrête proprement à 30 min (deadline physique
  *    passée à `entrainer`), l'état reste archivable à l'échéance.
  */
 export async function lancerSessionArene(
@@ -260,7 +260,7 @@ export async function lancerSessionArene(
   if (!verrou.acquis) {
     throw new HttpError(
       409,
-      `Un entraînement est déjà en cours pour ce modèle (encore ${Math.ceil(verrou.resteMs / 60000)} min au maximum). Un entraînement dure au plus 1 h par modèle.`,
+      `Un entraînement est déjà en cours pour ce modèle (encore ${Math.ceil(verrou.resteMs / 60000)} min au maximum). Un entraînement dure au plus 30 min par modèle.`,
       "ENTRAINEMENT_EN_COURS",
     );
   }

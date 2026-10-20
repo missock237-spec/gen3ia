@@ -16,8 +16,8 @@ const BASE_URL = (process.env.CHARIOW_API_BASE_URL ?? "https://api.chariow.com/v
 
 const PLAN_ENVS = [
   { plan: "pro", env: "CHARIOW_PLAN_PRO_PRODUCT_ID", fallback: "prd_svqonju7", tarif: "15 € / mois (9 750 FCFA)" },
-  { plan: "entreprise", env: "CHARIOW_PLAN_ENTREPRISE_PRODUCT_ID", fallback: null, tarif: "500 € / mois (328 000 FCFA)" },
-  { plan: "modele-sur-mesure", env: "CHARIOW_PLAN_SUR_MESURE_PRODUCT_ID", fallback: null, tarif: "5 000 € / modèle (3 280 000 FCFA)" },
+  { plan: "entreprise", env: "CHARIOW_PLAN_ENTREPRISE_PRODUCT_ID", fallback: "prd_v76f5kjl", tarif: "≈ 495 € / mois (325 000 FCFA)" },
+  { plan: "modele-sur-mesure", env: "CHARIOW_PLAN_SUR_MESURE_PRODUCT_ID", fallback: "prd_646qpmge", tarif: "≈ 1 517 € / modèle (995 000 FCFA)" },
 ];
 
 const GREEN = "\x1b[32m", RED = "\x1b[31m", YELLOW = "\x1b[33m", RESET = "\x1b[0m";

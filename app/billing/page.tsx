@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { type User } from "firebase/auth";
 import { watchAuth } from "@/lib/firebase/client";
 import { authFetch, readJsonSafely, useSessionAvailable } from "@/lib/firebase/auth-client";
+import ChariowWidget, { CHARIOW_PLAN_WIDGETS } from "@/components/billing/chariow-widget";
 
 interface Wallet {
   currency: string;
@@ -381,6 +382,22 @@ export default function BillingPage() {
       </div>
       {plans.length === 0 && <p style={styles.note}>Chargement de la grille tarifaire…</p>}
 
+      {/* Paiement DIRECT boutique : les 3 widgets officiels Chariow (style tap).
+          La licence reçue après paiement s'active dans le formulaire ci-dessous. */}
+      <div style={styles.widgetsBlock}>
+        <div style={styles.widgetsTitle}>Paiement direct sur la boutique Chariow</div>
+        <div style={styles.widgetsGrid}>
+          {CHARIOW_PLAN_WIDGETS.map((widget) => (
+            <div key={widget.productId} style={styles.widgetCard}>
+              <div style={styles.widgetLabel}>{widget.label}</div>
+              <div style={styles.widgetNote}>{widget.note}</div>
+              <ChariowWidget productId={widget.productId} />
+            </div>
+          ))}
+        </div>
+        <p style={styles.note}>Le bouton ouvre le paiement sécurisé de la boutique Chariow (Mobile Money, carte ou wallet). Après paiement, collez la clé de licence reçue dans le formulaire d&apos;activation ci-dessous — ou reconnectez-vous, le webhook Chariow active l&apos;offre automatiquement.</p>
+      </div>
+
       <form onSubmit={submitLicense} style={styles.licenseForm}>
         <label style={styles.label} htmlFor="license">Vous avez acheté une licence sur la boutique Chariow ?</label>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -455,5 +472,11 @@ const styles: Record<string, CSSProperties> = {
   planAudience: { fontSize: 12, opacity: 0.65, fontStyle: "italic" },
   planFeatures: { margin: 0, paddingLeft: 18, display: "grid", gap: 6, fontSize: 13, lineHeight: 1.45 },
   planNote: { fontSize: 13, fontWeight: 700, opacity: 0.6 },
+  widgetsBlock: { marginTop: 26, padding: 18, borderRadius: 16, border: "1px dashed var(--g3-border)", background: "#faf9f6" },
+  widgetsTitle: { fontSize: 14, fontWeight: 800, letterSpacing: 0.4, marginBottom: 12 },
+  widgetsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 },
+  widgetCard: { display: "flex", flexDirection: "column", gap: 6, padding: 14, borderRadius: 12, border: "1px solid var(--g3-border)", background: "#ffffff" },
+  widgetLabel: { fontSize: 14, fontWeight: 700 },
+  widgetNote: { fontSize: 12, lineHeight: 1.45, opacity: 0.65, marginBottom: 6 },
   licenseForm: { marginTop: 24, display: "grid", gap: 8, paddingTop: 18, borderTop: "1px solid var(--g3-border)" },
 };

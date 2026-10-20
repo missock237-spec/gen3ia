@@ -4,16 +4,18 @@ Intégration « prête à l'emploi » des quatre offres officielles via la bouti
 Chariow [Gen3ia](https://xdaagetk.mychariow.shop). Chaque visite de paiement
 créée par la plateforme est rattachée à Gen3ia (métadonnées + redirection +
 origine déclarée), et le webhook Pulse active l'offre automatiquement après
-paiement.
+paiement. Les **trois produits payants sont publiés dans la boutique** et
+payables directement via les widgets officiels Chariow rendus sur `/billing`
+(components/billing/chariow-widget.tsx).
 
 ## 1. Les quatre offres
 
-| Offre | Tarif | Produit Chariow | Fonctionnalités ouvertes |
+| Offre | Tarif boutique (source de vérité) | Produit Chariow | Fonctionnalités ouvertes |
 |---|---|---|---|
 | **Plan Gratuit** | 0 FCFA (0 €) | — (inclus par défaut) | Micro-agents standards, inférence de base via l'essaim P2P public, contribution passive |
-| **Plan Pro** | 9 750 FCFA (≈ 15 €) / mois | `prd_svqonju7` (« Plan pro », boutique) | Agent Master + modules d'apprentissage, priorité de calcul P2P, RAG local chiffré, API datasets |
-| **Plan Entreprise** | 328 000 FCFA (≈ 500 €) / mois | à créer (dashboard) | IA 100 % locale et décentralisée (Private Mesh), confidentialité totale, support prioritaire, clé multi-postes, tout le Pro |
-| **Modèle Sur-Mesure** | 3 280 000 FCFA (≈ 5 000 €) / modèle | à créer (dashboard) | Entraînement d'un modèle/agent dédié dans l'Arène Virtuelle d'Ondes, traduction & correction symbolique, livraison clé en main en paquet d'ondes |
+| **Plan Pro** | 9 750 FCFA (≈ 15 €) | `prd_svqonju7` (« Plan pro ») | Agent Master + modules d'apprentissage, priorité de calcul P2P, RAG local chiffré, API datasets |
+| **Plan Entreprise** | 325 000 FCFA (≈ 495 €) | `prd_v76f5kjl` (« Plan entreprise ») | IA 100 % locale et décentralisée (Private Mesh), confidentialité totale, support prioritaire, clé multi-postes, tout le Pro |
+| **Modèle Sur-Mesure** | 995 000 FCFA (≈ 1 517 €) | `prd_646qpmge` (« Entraînez vos modèles d'IA ») | Entraînement d'un modèle/agent dédié dans l'Arène Virtuelle d'Ondes, traduction & correction symbolique, livraison clé en main en paquet d'ondes |
 
 La devise de facturation est le **XAF**, identique au portefeuille
 (`GEN3IA_WALLET_CURRENCY=XAF`). La parité EUR→XAF est fixe
@@ -42,11 +44,33 @@ B. Licence achetée sur la boutique publique
 Deux barrières d'idempotence protègent la facturation : le journal
 `planActivations` (une vente ou une licence ne prolonge jamais deux fois
 l'accès) et l'empilement des fenêtres (un renouvellement anticipé ajoute
-30 jours à la fin de la fenêtre courante, pas au jour du paiement). Les plans
-mensuels expirent après 30 jours avec 3 jours de grâce ; le Modèle Sur-Mesure
-est un achat unitaire sans expiration.
+30 jours à la fin de la fenêtre courante, pas au jour du paiement). Les trois
+produits boutique sont des licences one_time : Pro et Entreprise ouvrent une
+fenêtre de 30 jours par licence achetée (renouvelable), le Modèle Sur-Mesure
+est sans expiration.
 
-## 3. Gating des fonctionnalités
+## 3. Widgets de paiement direct (boutique)
+
+Sur `/billing`, la section « Paiement direct sur la boutique Chariow » rend les
+trois widgets officiels (script `js.chariowcdn.com/v1/widget.min.js`, style
+« tap », boutique `xdaagetk.mychariow.shop`) :
+
+- `prd_svqonju7` → Plan Pro ;
+- `prd_v76f5kjl` → Plan Entreprise ;
+- `prd_646qpmge` → Modèle Sur-Mesure.
+
+Le script Chariow scanne une seule fois tous les `#chariow-widget` du document :
+le composant injecte le loader après le rendu (dédoublonné par micro-tâche) et
+le réinjecte au remontage React pour rescanner. La CSP autorise
+`js.chariowcdn.com` (script + style + frame) et `*.mychariow.shop`
+(frame + connect) — rien d'autre n'est ouvert.
+
+Après un paiement effectué via widget, la licence s'active soit
+automatiquement (webhook Pulse, si l'acheteur est reconnu), soit en collant la
+clé reçue dans le formulaire « Activer une licence » de `/billing`
+(flux B ci-dessus).
+
+## 4. Gating des fonctionnalités
 
 `lib/billing/plans.ts` définit les entitlements, `lib/billing/abonnements.ts`
 les fait respecter :
@@ -66,7 +90,7 @@ Entitlements : `micro_agents` (tous), `agent_master`, `apprentissage_modules`,
 `multi_postes`, `support_prioritaire` (Entreprise+), `arene_ondes`,
 `paquet_ondes` (Sur-Mesure).
 
-## 4. Mise en service (dashboard Chariow)
+## 5. Mise en service (dashboard Chariow)
 
 L'API publique Chariow est en lecture seule sur `/products` : la création et
 la publication des produits se font dans le dashboard
@@ -77,43 +101,37 @@ Le script `scripts/chariow_plans_status.mjs` vérifie l'état à chaque étape :
 CHARIOW_API_KEY=sk_… node scripts/chariow_plans_status.mjs
 ```
 
-1. **Publier le produit « Plan pro »** (`prd_svqonju7`, actuellement en
-   brouillon) : Produits → Plan pro → Publier. Prix 9 750 FCFA.
-2. **Créer le produit « Plan Entreprise »** : type *Licence*, prix
-   **328 000 FCFA**, description suggérée :
-   > IA 100 % locale et décentralisée (Private Mesh) pour votre structure.
-   > Confiance et confidentialité totale : aucune donnée ne sort de votre parc
-   > informatique. Support prioritaire et clé de licence multi-postes.
-   Puis reporter son ID public dans `CHARIOW_PLAN_ENTREPRISE_PRODUCT_ID`.
-3. **Créer le produit « Modèle Sur-Mesure »** : type *Licence*, prix
-   **3 280 000 FCFA**, description suggérée :
-   > Entraînement complet d'un modèle/agent dédié dans l'Arène Virtuelle
-   > d'Ondes de Gen3ia. Traduction et correction symbolique sur-mesure pour
-   > vos besoins métiers. Livré clé en main sous forme de paquet d'ondes
-   > autonome optimisé.
-   Puis reporter son ID public dans `CHARIOW_PLAN_SUR_MESURE_PRODUCT_ID`.
-4. **Configurer le webhook Pulse** : Développeur → Pulse → créer un webhook
+État actuel (vérifié via GET /products) : les trois produits sont **publiés**
+(`prd_svqonju7` 9 750 FCFA · `prd_v76f5kjl` 325 000 FCFA · `prd_646qpmge`
+995 000 FCFA) et branchés par défaut dans `lib/billing/plans.ts` — aucune
+variable d'environnement n'est requise pour vendre. Reste à configurer dans le
+dashboard :
+
+1. **Webhook Pulse** : Développeur → Pulse → créer un webhook
    vers `https://<domaine-gen3ia>/api/webhooks/chariow`, événement
    **successful.sale**. Copier le secret de signature dans
    `CHARIOW_PULSE_SECRET` (le webhook vérifie la signature HMAC
    `x-chariow-signature` et rejette le reste).
+2. **Évolution des prix** : toute modification de prix se fait dans le
+   dashboard Chariow (source de vérité du paiement) puis est répercutée dans
+   `lib/billing/plans.ts` (affichage) — jamais l'inverse.
 
-## 5. Variables d'environnement (VPS)
+## 6. Variables d'environnement (VPS)
 
 ```bash
 CHARIOW_API_KEY=sk_…                        # clé API (Developpeur → API Keys)
 CHARIOW_PULSE_SECRET=…                      # secret de signature du webhook Pulse
 CHARIOW_PLAN_PRO_PRODUCT_ID=                # vide → produit boutique prd_svqonju7
-CHARIOW_PLAN_ENTREPRISE_PRODUCT_ID=prd_…    # après création dashboard
-CHARIOW_PLAN_SUR_MESURE_PRODUCT_ID=prd_…    # après création dashboard
+CHARIOW_PLAN_ENTREPRISE_PRODUCT_ID=         # vide → produit boutique prd_v76f5kjl
+CHARIOW_PLAN_SUR_MESURE_PRODUCT_ID=         # vide → produit boutique prd_646qpmge
 CHARIOW_EUR_XAF_RATE=655.957                # parité fixe franc CFA
 ```
 
-Tant qu'un produit n'est pas configuré, l'offre reste consultable sur
-`/billing` mais le bouton de paiement affiche « Bientôt disponible » (HTTP 409
-si appelée directement) — aucune vente ne peut aboutir sur un produit absent.
+Les trois produits étant branchés par défaut, les variables `CHARIOW_PLAN_*`
+sont optionnelles : elles servent uniquement à pointer un produit de
+remplacement (nouveau produit, test) sans redéploiement du code.
 
-## 6. Rattachement de la plateforme aux visites de paiement
+## 7. Rattachement de la plateforme aux visites de paiement
 
 Chaque session créée par `createChariowPlanCheckout` porte trois preuves que
 la visite provient de Gen3ia :
