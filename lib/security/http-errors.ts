@@ -23,6 +23,7 @@ export type ApiErrorCode =
   | "PAYMENT_REQUIRED"
   | "PROVIDER_UNAVAILABLE"
   | "CONFLICT"
+  | "ENTRAINEMENT_EN_COURS"
   | "INTERNAL";
 
 export class HttpError extends Error {

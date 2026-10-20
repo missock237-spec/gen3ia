@@ -92,6 +92,8 @@ export class SignalisationHttp implements TransportSignalisation {
     private readonly salle: string,
     private readonly pair: string,
     periodiciteMs = 900,
+    /** Ticket d'admission signé (salles privées mesh uniquement). */
+    private readonly ticket?: string,
   ) {
     this.periodiciteMs = periodiciteMs;
   }
@@ -101,7 +103,7 @@ export class SignalisationHttp implements TransportSignalisation {
     fetch("/api/ondes/signaling", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ salle: this.salle, ...enveloppe }),
+      body: JSON.stringify({ salle: this.salle, ticket: this.ticket, ...enveloppe }),
       cache: "no-store",
     }).catch(() => {
       // La signalisation est best-effort : une perte se rattrape à la
@@ -123,7 +125,7 @@ export class SignalisationHttp implements TransportSignalisation {
       try {
         this.controleur = new AbortController();
         const reponse = await fetch(
-          `/api/ondes/signaling?salle=${encodeURIComponent(this.salle)}&pair=${encodeURIComponent(this.pair)}`,
+          `/api/ondes/signaling?salle=${encodeURIComponent(this.salle)}&pair=${encodeURIComponent(this.pair)}${this.ticket ? `&ticket=${encodeURIComponent(this.ticket)}` : ""}`,
           { signal: this.controleur.signal, cache: "no-store" },
         );
         if (reponse.ok) {
@@ -165,13 +167,13 @@ export class SignalisationDouble implements TransportSignalisation {
   private retour: ((message: MessageSignal) => void) | null = null;
   private vus = new Set<string>();
 
-  constructor(salle: string, pair: string) {
+  constructor(salle: string, pair: string, ticket?: string) {
     try {
       this.locale = new SignalisationLocale(salle);
     } catch {
       this.locale = null;
     }
-    this.http = new SignalisationHttp(salle, pair);
+    this.http = new SignalisationHttp(salle, pair, 900, ticket);
   }
 
   envoyer(message: Omit<MessageSignal, "ts" | "mid"> & { mid?: string }): void {

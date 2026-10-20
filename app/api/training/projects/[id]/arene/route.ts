@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 import { ipFromRequest, recordTrainingAudit } from "@/lib/training/audit";
 import {
@@ -51,6 +52,22 @@ export async function POST(
   try {
     const user = await requireUser(request);
     const { id } = await params;
+
+    // Anti-abus : une session dure au plus 1 h (timebox) — trois
+    // lancements par heure et par compte suffisent largement, même
+    // pour un usage intensif ; un agent automatisé ne peut pas
+    // transformer l'arène en ferme de calcul non autorisée.
+    const limite = await enforceRateLimit("arene-session:" + user.uid, { limit: 3, windowMs: 60 * 60 * 1000 });
+    if (!limite.allowed) {
+      return NextResponse.json(
+        {
+          error: `Trop de sessions d'arène : réessayez dans ${Math.max(1, Math.ceil(limite.retryAfterMs / 60000))} min.`,
+          requestId,
+        },
+        { status: 429, headers: { "x-request-id": requestId } },
+      );
+    }
+
     const project = await getProject(user.uid, id);
     if (!project) {
       return NextResponse.json({ error: "Projet introuvable.", requestId }, { status: 404, headers: { "x-request-id": requestId } });

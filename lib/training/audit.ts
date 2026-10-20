@@ -3,6 +3,8 @@ import "server-only";
 import type { NextRequest } from "next/server";
 
 import { listJson, newUlid, userDir, userKey, writeJson } from "@/lib/storage/user-data-store";
+import { empreinteIp } from "@/lib/security/forteresse";
+import { ancreJournal, empreinteEntree } from "@/lib/security/journal-chaine";
 
 /* ------------------------------------------------------------------ */
 /* Journal d'audit du Training Studio (v1.1)                            */
@@ -50,7 +52,15 @@ export interface TrainingAuditEntry {
   entityType: "project" | "model" | "dataset" | "plan" | "job" | "export" | "neural" | "arene";
   entityId: string;
   projectId?: string;
-  ip?: string;
+  /**
+   * CONFIDENTIALITÉ ABSOLUE : jamais l'IP brute — une empreinte salée
+   * tournante (lib/security/forteresse.ts) : corrélation intra-journée
+   * possible (détection d'abus), ré-identification impossible.
+   */
+  ipEmpreinte?: string;
+  /** Chaînage HMAC (journal inviolable, lib/security/journal-chaine.ts). */
+  hashPrev?: string;
+  hash?: string;
   details: Record<string, unknown>;
 }
 
@@ -99,6 +109,14 @@ function previousMonthPrefix(date = new Date()): string {
   return monthPrefix(previous);
 }
 
+/**
+ * Dernière empreinte chaînée par (uid, mois) — cache du processus : le
+ * chaînage relie chaque entrée à la précédente SANS lecture disque ; à
+ * froid, la chaîne repart de l'ANCRE déterministe du mois (ancreJournal)
+ * : la vérification peut rejouer le calcul à tout moment.
+ */
+const dernierHash = new Map<string, string>();
+
 /** Enregistre une entrée d'audit (fire-and-forget côté appelant). */
 export async function recordTrainingAudit(input: {
   uid: string;
@@ -109,6 +127,7 @@ export async function recordTrainingAudit(input: {
   ip?: string;
   details?: Record<string, unknown>;
 }): Promise<void> {
+  const mois = monthPrefix();
   const entry: TrainingAuditEntry = {
     v: 1,
     id: newUlid(),
@@ -118,10 +137,20 @@ export async function recordTrainingAudit(input: {
     entityType: input.entityType,
     entityId: input.entityId.slice(0, 128),
     ...(input.projectId ? { projectId: input.projectId.slice(0, 128) } : {}),
-    ...(input.ip ? { ip: input.ip } : {}),
+    // CONFIDENTIALITÉ ABSOLUE : l'IP brute n'est JAMAIS persistée.
+    ...(input.ip ? { ipEmpreinte: empreinteIp(input.ip) } : {}),
     details: sanitizeDetails(input.details),
   };
-  await writeJson(userKey(input.uid, "training-audit", monthPrefix(), entry.id), entry, { maxBytes: 8 * 1024 });
+  // JOURNAL CHAÎNÉ : cette entrée scelle la précédente (HMAC). Toute
+  // suppression/modification/réordonnancement ultérieure casse la
+  // chaîne : verifierChaine le détecte.
+  const cleChaine = `${input.uid}|${mois}`;
+  const hashPrev = dernierHash.get(cleChaine) ?? ancreJournal(input.uid, mois);
+  entry.hashPrev = hashPrev;
+  entry.hash = empreinteEntree(entry as unknown as Record<string, unknown>, hashPrev);
+  dernierHash.set(cleChaine, entry.hash);
+
+  await writeJson(userKey(input.uid, "training-audit", mois, entry.id), entry, { maxBytes: 8 * 1024 });
 }
 
 /**

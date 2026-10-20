@@ -29,7 +29,16 @@ import { CORPUS_GEN3 } from "@/lib/neural/generation/corpus";
 import { CortexLangagierGen3, type EtatLangage } from "@/lib/neural/generation/language";
 
 import { EntrainementParResonance, type RapportEntrainement, type ResultatRound } from "@/lib/ondes/arene";
+import { HttpError } from "@/lib/security/http-errors";
 import { newUlid, userDir } from "@/lib/storage/user-data-store";
+import { acquerirVerrou, cleVerrouEntrainement, libererVerrou } from "@/lib/training/verrou";
+import { creerDeadline, DUREE_MAX_ENTRAINEMENT_MS } from "@/lib/training/timebox";
+import {
+  chiffrerPourUtilisateur,
+  dechiffrerPourUtilisateur,
+  scellerArtefact,
+  verifierSceau,
+} from "@/lib/security/forteresse";
 
 /* -------------------------------------------------------------------- */
 /* Types de session                                                      */
@@ -65,6 +74,8 @@ export interface SessionArene {
   etatEleveTailleOctets: number;
   error: string | null;
   dureeMs: number;
+  /** Timebox appliquée : budget (1 h) et arrêt propre à l'échéance. */
+  timebox: { budgetMs: number; arreteParTimebox: boolean };
   createdAt: string;
 }
 
@@ -113,6 +124,41 @@ const chargeursDefaut: ChargeursArene = {
 
 const ROUNDS_MAX_HARD = 120;
 
+/** Contexte de sceau des artefacts de modèles (forteresse). */
+const CTX_ARTEFACT = "artefact-modele";
+
+/**
+ * Déplie une couche de forteresse : si le texte est une enveloppe
+ * scellée, l'intégrité est VÉRIFIÉE (falsifiée → refus) ; si le corps
+ * est chiffré pour l'utilisateur, il est déchiffré. Les artefacts nus
+ * (historiques) traversent tel quels — rétrocompatibilité totale.
+ */
+export function deployerForteresse(texte: string, uid: string): string {
+  const sceau = verifierSceau(texte, CTX_ARTEFACT);
+  let corps: string;
+  if (sceau.valide) {
+    corps = (JSON.parse(texte) as { corps: string }).corps;
+  } else if (sceau.raison === "format") {
+    // Pas une enveloppe scellée : artefact nu historique.
+    corps = texte;
+  } else {
+    throw new Error("Artefact refusé : le sceau d'intégrité ne correspond pas (artefact altéré ou corrompu).");
+  }
+  const dechiffre = dechiffrerPourUtilisateur(corps, uid);
+  if (dechiffre.ok) return dechiffre.texte;
+  if (dechiffre.raison === "format") return corps; // corps nu (historique)
+  throw new Error("Artefact refusé : le chiffrement au repos ne correspond pas (artefact d'un autre compte ou corrompu).");
+}
+
+/**
+ * Enveloppe un artefact dans la forteresse (sceau + chiffrement) —
+ * appliqué À L'ARCHIVAGE : le stockage objet ne contient plus rien de
+ * lisible ni d'altérable en silence.
+ */
+export function enfermerForteresse(corps: string, uid: string): string {
+  return scellerArtefact(chiffrerPourUtilisateur(corps, uid), CTX_ARTEFACT);
+}
+
 /* -------------------------------------------------------------------- */
 /* Chargement des modèles — le pont Studio → arène                       */
 /* -------------------------------------------------------------------- */
@@ -156,13 +202,14 @@ export function extraireEtatLangage(corps: string): EtatLangage | null {
 /** Reconstruit un cortex d'arène depuis un artefact modèle R2. */
 async function chargerCortexDepuisArtefact(
   asset: AssetModeleMinimal,
+  uid: string,
   chargeurs: ChargeursArene,
 ): Promise<CortexLangagierGen3> {
   if (!asset.storageKey) {
     throw new Error(`Le modèle « ${asset.name} » n'a pas d'artefact archivé : seuls les modèles entraînés par Gen3 (format gen3-language-model) peuvent entrer dans l'arène.`);
   }
   const corps = await chargeurs.chargerArtefact(asset.storageKey);
-  const etat = extraireEtatLangage(corps);
+  const etat = extraireEtatLangage(deployerForteresse(corps, uid));
   if (!etat) {
     throw new Error(`L'artefact de « ${asset.name} » n'est pas un modèle Gen3 (format gen3-language-model attendu).`);
   }
@@ -188,8 +235,14 @@ function mesurerRappel(cortex: CortexLangagierGen3, questions: string[]): number
 
 /**
  * Exécute une session d'arène complète et la retourne. L'état amélioré
- * de l'élève est archivé ; la session (métriques) est archivée à la clé
+ * de l'élève est archivé (chiffré + scellé par la forteresse) ; la
+ * session (métriques) est archivée à la clé
  * `users/{uid}/training/projects/{projectId}/arene/{sessionId}.json`.
+ *
+ * GARANTIES APPLIQUÉES ICI :
+ *  · VERROU — un seul entraînement actif par modèle (409 sinon) ;
+ *  · TIMEBOX — le duel s'arrête proprement à 1 h (deadline physique
+ *    passée à `entrainer`), l'état reste archivable à l'échéance.
  */
 export async function lancerSessionArene(
   uid: string,
@@ -201,8 +254,36 @@ export async function lancerSessionArene(
   const debut = Date.now();
   const roundsMax = Math.max(1, Math.min(ROUNDS_MAX_HARD, Math.round(options.roundsMax ?? 60)));
 
+  // ── 0. Verrou : un entraînement à la fois, par modèle ──────────────
+  const cleVerrou = cleVerrouEntrainement(uid, projectId, assets.eleve.id);
+  const verrou = acquerirVerrou(cleVerrou, uid);
+  if (!verrou.acquis) {
+    throw new HttpError(
+      409,
+      `Un entraînement est déjà en cours pour ce modèle (encore ${Math.ceil(verrou.resteMs / 60000)} min au maximum). Un entraînement dure au plus 1 h par modèle.`,
+      "ENTRAINEMENT_EN_COURS",
+    );
+  }
+  try {
+    return await lancerSessionAreneInterne(uid, projectId, options, assets, chargeurs, debut, roundsMax);
+  } finally {
+    libererVerrou(cleVerrou, uid);
+  }
+}
+
+async function lancerSessionAreneInterne(
+  uid: string,
+  projectId: string,
+  options: OptionsLancerArene,
+  assets: { eleve: AssetModeleMinimal; professeur?: AssetModeleMinimal },
+  chargeurs: ChargeursArene,
+  debut: number,
+  roundsMax: number,
+): Promise<SessionArene> {
+  const { deadlineMs } = creerDeadline(debut);
+
   // ── 1. Chargement de l'élève (obligatoire) ──────────────────────────
-  const eleveCortex = await chargerCortexDepuisArtefact(assets.eleve, chargeurs);
+  const eleveCortex = await chargerCortexDepuisArtefact(assets.eleve, uid, chargeurs);
 
   // ── 2. Professeur : Gen3 (corpus complet) ou second modèle ─────────
   let profCortex: CortexLangagierGen3;
@@ -211,7 +292,7 @@ export async function lancerSessionArene(
     if (!assets.professeur) {
       throw new Error("Mode duel : le modèle professeur est requis.");
     }
-    profCortex = await chargerCortexDepuisArtefact(assets.professeur, chargeurs);
+    profCortex = await chargerCortexDepuisArtefact(assets.professeur, uid, chargeurs);
     profLabel = assets.professeur.name;
   } else {
     profCortex = new CortexLangagierGen3();
@@ -234,7 +315,7 @@ export async function lancerSessionArene(
 
   // ── 4. Duel + physics-guided reinforcement ─────────────────────────
   const entrainement = new EntrainementParResonance(profCortex, eleveCortex);
-  const rapport: RapportEntrainement = entrainement.entrainer(questions);
+  const rapport: RapportEntrainement = entrainement.entrainer(questions, { deadlineMs });
   const rappelApres = mesurerRappel(eleveCortex, questions);
 
   // ── 5. Archivage de l'élève amélioré + session ─────────────────────
@@ -263,7 +344,10 @@ export async function lancerSessionArene(
       2,
     );
     etatEleveStorageKey = `${userDir(uid, "training", "projects", projectId, "arene", sessionId)}/eleve-ameliore.json`;
-    etatEleveTaille = await chargeurs.archiver(etatEleveStorageKey, artefact);
+    // Forteresse : l'état du modèle est chiffré (AES-256-GCM, clé du
+    // propriétaire) PUIS scellé (HMAC) — le stockage ne contient rien
+    // de lisible, et toute altération est détectée au rechargement.
+    etatEleveTaille = await chargeurs.archiver(etatEleveStorageKey, enfermerForteresse(artefact, uid));
   } catch {
     // L'archivage peut échouer (quota) — la session reste jouable, l'état
     // amélioré n'est simplement pas persisté.
@@ -299,6 +383,7 @@ export async function lancerSessionArene(
     etatEleveTailleOctets: etatEleveTaille,
     error: null,
     dureeMs: Date.now() - debut,
+    timebox: { budgetMs: DUREE_MAX_ENTRAINEMENT_MS, arreteParTimebox: rapport.arreteParTimebox },
     createdAt: new Date().toISOString(),
   };
   return session;

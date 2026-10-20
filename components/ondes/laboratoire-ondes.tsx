@@ -145,6 +145,9 @@ export default function LaboratoireOndes() {
   const [statutGen3, setStatutGen3] = useState<"inconnu" | "invite" | "connecte">("inconnu");
   const [essaimActif, setEssaimActif] = useState(false);
   const [salle, setSalle] = useState("gen3ia-ondes");
+  /** Mode MESH PRIVÉ (plan Entreprise) : salle signée par ticket. */
+  const [modeMesh, setModeMesh] = useState(false);
+  const [meshNote, setMeshNote] = useState<string | null>(null);
   const [statutEssaimTexte, setStatutEssaimTexte] = useState("");
   const [stats, setStats] = useState<VueStats>(STATS_VIERGES);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -613,8 +616,8 @@ export default function LaboratoireOndes() {
     setPieces((precedentes) => [...precedentes, ...nouvelles].slice(-6));
   }, []);
 
-  // ——— essaim P2P : rejoindre / quitter une salle
-  const basculerEssaim = useCallback(() => {
+  // ——— essaim P2P : rejoindre / quitter une salle (publique OU privée)
+  const basculerEssaim = useCallback(async () => {
     if (essaimRef.current) {
       essaimRef.current.arreter();
       essaimRef.current = null;
@@ -622,7 +625,38 @@ export default function LaboratoireOndes() {
       setStatutEssaimTexte("");
       return;
     }
-    const transport = new SignalisationDouble(salle, idNoeudRef.current);
+    let salleEffective = salle;
+    let ticket: string | undefined;
+    if (modeMesh) {
+      // Private Mesh : un TICKET SIGNÉ (10 min) est exigé — l'admission
+      // est refusée au serveur pour tout compte sans le plan Entreprise.
+      setMeshNote("demande de ticket…");
+      try {
+        const reponse = await fetch("/api/ondes/mesh/ticket", { method: "POST", cache: "no-store" });
+        if (!reponse.ok) {
+          setMeshNote(
+            reponse.status === 403
+              ? "Mesh privé réservé au plan Entreprise (voir /tarifs)."
+              : "Ticket de mesh indisponible pour l'instant.",
+          );
+          return;
+        }
+        const donnees = (await reponse.json()) as { ticket?: string; salle?: string };
+        if (!donnees.ticket || !donnees.salle) {
+          setMeshNote("Ticket de mesh incomplet — réessayez.");
+          return;
+        }
+        ticket = donnees.ticket;
+        salleEffective = donnees.salle;
+        setMeshNote("mesh privé · admission signée — aucune donnée ne sort du parc");
+      } catch {
+        setMeshNote("Ticket de mesh indisponible (réseau).");
+        return;
+      }
+    } else {
+      setMeshNote(null);
+    }
+    const transport = new SignalisationDouble(salleEffective, idNoeudRef.current, ticket);
     const noeud = new NoeudEssaim({
       transport,
       surPaquet: (paquet) => {
@@ -635,7 +669,7 @@ export default function LaboratoireOndes() {
     noeud.demarrer();
     essaimRef.current = noeud;
     setEssaimActif(true);
-  }, [salle]);
+  }, [salle, modeMesh]);
 
   const entrerValide = (evenement: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (evenement.key === "Enter" && !evenement.shiftKey) {
@@ -733,16 +767,26 @@ export default function LaboratoireOndes() {
                   id="ondes-salle"
                   value={salle}
                   onChange={(evenement) => setSalle(evenement.target.value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32))}
-                  disabled={essaimActif}
+                  disabled={essaimActif || modeMesh}
                   aria-describedby="ondes-salle-aide"
                 />
               </div>
+              <label className="ondes-aide" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={modeMesh}
+                  onChange={(evenement) => setModeMesh(evenement.target.checked)}
+                  disabled={essaimActif}
+                />
+                Mesh privé (plan Entreprise) — essaim fermé, admission par ticket signé
+              </label>
               <p id="ondes-salle-aide" className="ondes-aide">
                 Ouvre cette page dans un second onglet ou navigateur, même salle : les ondes circulent en direct (WebRTC, micro-paquets de phase — jamais de tenseurs).
               </p>
-              <Button variant={essaimActif ? "secondary" : "primary"} size="sm" onClick={basculerEssaim} disabled={!statutMoteur || statutMoteur !== "pret"}>
-                {essaimActif ? "Quitter l'essaim" : "Rejoindre l'essaim"}
+              <Button variant={essaimActif ? "secondary" : "primary"} size="sm" onClick={() => void basculerEssaim()} disabled={!statutMoteur || statutMoteur !== "pret"}>
+                {essaimActif ? "Quitter l'essaim" : modeMesh ? "Rejoindre le mesh privé" : "Rejoindre l'essaim"}
               </Button>
+              {meshNote ? <p className="ondes-aide">{meshNote}</p> : null}
               {statutEssaimTexte ? <p className="ondes-aide">{statutEssaimTexte}</p> : null}
               {essaimActif ? (
                 <dl className="ondes-metriques">

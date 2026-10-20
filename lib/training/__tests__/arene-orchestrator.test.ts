@@ -5,6 +5,7 @@ import {
   extraireEtatLangage,
   lancerSessionArene,
   cleSessionArene,
+  deployerForteresse,
 } from "@/lib/training/arene-orchestrator";
 import { CortexLangagierGen3 } from "@/lib/neural/generation/language";
 import type { PaireLangage } from "@/lib/neural/generation/corpus";
@@ -101,10 +102,19 @@ describe("lancerSessionArene — le pont Studio → arène d'ondes", () => {
     expect(session.metriques.distillees).toBe(PAIRES_ELEVE.length);
     expect(session.etatEleveStorageKey).not.toBeNull();
 
-    // L'état amélioré est un VRAI modèle réimportable qui répond.
-    const corpsAmeliore = memoire.fichiers.get(session.etatEleveStorageKey!);
-    expect(corpsAmeliore).toBeDefined();
-    const artefact = JSON.parse(corpsAmeliore!) as { format: string; moteur: string; modele: { pairesPersonnalisees: Array<{ motif: string; reponse: string }> } };
+    // Timebox garantie : budget 1 h présent, aucun arrêt prématuré ici.
+    expect(session.timebox.budgetMs).toBe(60 * 60 * 1000);
+    expect(session.timebox.arreteParTimebox).toBe(false);
+
+    // L'état amélioré est chiffré + scellé (FORTERESSE) : le stockage brut
+    // ne révèle rien, et le dépliage (sceau + déchiffrement) restitue le
+    // VRAI modèle réimportable qui répond.
+    const corpsBrut = memoire.fichiers.get(session.etatEleveStorageKey!);
+    expect(corpsBrut).toBeDefined();
+    expect(corpsBrut).toContain("gen3ia-sceau-v1");
+    expect(corpsBrut).not.toContain("gen3-language-model");
+    const corpsAmeliore = deployerForteresse(corpsBrut!, "u1");
+    const artefact = JSON.parse(corpsAmeliore) as { format: string; moteur: string; modele: { pairesPersonnalisees: Array<{ motif: string; reponse: string }> } };
     expect(artefact.format).toBe("gen3-language-model");
     expect(artefact.moteur).toBe("gen3-arene");
     // Les motifs de l'élève sont conservés (rééduqués, pas dupliqués).
@@ -112,7 +122,7 @@ describe("lancerSessionArene — le pont Studio → arène d'ondes", () => {
     expect(artefact.modele.pairesPersonnalisees.some((p) => p.reponse === "Je ne sais pas encore.")).toBe(false);
 
     const cortexAmeliore = new CortexLangagierGen3();
-    cortexAmeliore.importerEtat((JSON.parse(corpsAmeliore!) as { modele: Parameters<CortexLangagierGen3["importerEtat"]>[0] }).modele);
+    cortexAmeliore.importerEtat((JSON.parse(corpsAmeliore) as { modele: Parameters<CortexLangagierGen3["importerEtat"]>[0] }).modele);
     const reponse = cortexAmeliore.repondre(PAIRES_PROF[0].motif);
     expect(reponse).not.toBeNull();
     expect(reponse!.texte).toBe(PAIRES_PROF[0].reponse);

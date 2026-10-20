@@ -254,6 +254,12 @@ export interface RapportEntrainement {
   progression: number;
   /** État du cortex élève après entraînement (exportable/persistable). */
   etatEleve: ReturnType<CortexLangagierGen3["exporterEtat"]>;
+  /**
+   * TRUE si la session s'est arrêtée sur sa deadline (timebox 1 h) —
+   * l'état de l'élève reste COHÉRENT et archivable : l'arrêt est
+   * propre, entre deux rounds, jamais en pleine distillation.
+   */
+  arreteParTimebox: boolean;
 }
 
 export interface OptionsEntrainement {
@@ -369,10 +375,26 @@ export class EntrainementParResonance {
    * Session complète : N motifs, un rapport. Les motifs peuvent être
    * fournis par l'appelant (questions du dataset, paires du modèle…) ;
    * s'ils sont absents, ce sont les motifs des paires de l'élève.
+   *
+   * TIMEBOX : si `deadlineMs` est fourni (epoch ms), la boucle vérifie
+   * l'horloge ENTRE CHAQUE ROUND et s'arrête proprement à l'échéance —
+   * la garantie « un entraînement ne dépasse jamais 1 h par modèle »
+   * est appliquée au niveau physique lui-même (voir
+   * lib/training/timebox.ts).
    */
-  entrainer(motifs: string[]): RapportEntrainement {
+  entrainer(
+    motifs: string[],
+    options?: { deadlineMs?: number; maintenant?: () => number },
+  ): RapportEntrainement {
+    const horloge = options?.maintenant ?? Date.now;
+    const deadlineMs = options?.deadlineMs;
     const rounds: ResultatRound[] = [];
+    let arreteParTimebox = false;
     for (const motif of motifs) {
+      if (deadlineMs !== undefined && horloge() >= deadlineMs) {
+        arreteParTimebox = true;
+        break;
+      }
       if (!motif.trim()) continue;
       rounds.push(this.round(motif));
     }
@@ -392,6 +414,7 @@ export class EntrainementParResonance {
       rewardMoyen,
       progression,
       etatEleve: this.eleve.exporterEtat(),
+      arreteParTimebox,
     };
   }
 
