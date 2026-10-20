@@ -46,6 +46,10 @@ paths = [
   # mais valeur littéralement « r2-secret-for-tests-0123456789abcdef » —
   # placeholder de banc d'essai, aucune valeur réelle.
   '''lib/queue/tick-queue\.test\.ts$''',
+  # Fixture du test du stockage clé-valeur chiffré : la chaîne « api_key: … »
+  # est un JEUX D'ESSAI volontaire du masquage de credentials (assertion du
+  # message d'erreur) — placeholder factice, jamais une clé réelle.
+  '''lib/memory/keyvalue\.test\.ts$''',
 ]
 # Clés d'API Web Firebase NEXT_PUBLIC_* : par conception publiques
 # (identifient le projet, ne donnent aucun accès sans règles de sécurité).

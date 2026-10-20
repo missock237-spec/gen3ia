@@ -189,3 +189,11 @@ export function formaterOctets(octets: number): string {
   if (octets < 1024 * 1024 * 1024) return `${(octets / (1024 * 1024)).toFixed(1)} Mo`;
   return `${(octets / (1024 * 1024 * 1024)).toFixed(2)} Go`;
 }
+
+/** Préfixe des salles PRIVÉES (Private Mesh, plan Entreprise). */
+export const PREFIXE_SALLE_MESH = "mesh-";
+
+/** Exigence « private mesh » : la salle est-elle privée (admission signée) ? */
+export function estSalleMesh(salle: string): boolean {
+  return salle.startsWith(PREFIXE_SALLE_MESH);
+}

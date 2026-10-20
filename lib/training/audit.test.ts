@@ -51,9 +51,24 @@ describe("recordTrainingAudit", () => {
     expect(entry.action).toBe("dataset.imported");
     expect(entry.entityId).toBe("asset-42");
     expect(entry.projectId).toBe("proj-7");
-    expect(entry.ip).toBe("203.0.113.9");
+    // CONFIDENTIALITÉ ABSOLUE : l'IP brute n'est JAMAIS persistée —
+    // uniquement une empreinte salée tournante (16 hex).
+    expect(entry.ip).toBeUndefined();
+    expect(entry.ipEmpreinte).toMatch(/^[0-9a-f]{16}$/);
+    expect(entry.ipEmpreinte).not.toContain("203.0.113.9");
+    // JOURNAL CHAÎNÉ : l'entrée porte son scellement (ancre 32 hex
+    // déterministe, empreinte de chaîne 64 hex).
+    expect(entry.hashPrev).toMatch(/^[0-9a-f]{32,64}$/);
+    expect(entry.hash).toMatch(/^[0-9a-f]{64}$/);
     expect(entry.details).toEqual({ provider: "kaggle", ref: "owner/jeu", importedFiles: 3 });
     expect(options.maxBytes).toBeLessThanOrEqual(8192);
+  });
+
+  it("chaîne les entrées successives : chaque entrée scelle la précédente", async () => {
+    await recordTrainingAudit({ uid: "user-2", action: "project.created", entityType: "project", entityId: "p1" });
+    await recordTrainingAudit({ uid: "user-2", action: "arene.session", entityType: "arene", entityId: "s1" });
+    const [premiere, seconde] = writeJsonMock.mock.calls.map((c) => c[1] as TrainingAuditEntry);
+    expect(seconde.hashPrev).toBe(premiere.hash);
   });
 
   it("tronque les valeurs longues dans les détails (aucune donnée de contenu)", async () => {

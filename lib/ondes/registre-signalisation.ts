@@ -178,3 +178,24 @@ export function registreSignalisation(): RegistreSalles {
   }
   return global_[CLE_GLOBALE];
 }
+
+/**
+ * Registre ISOLÉ des salles privées (Private Mesh, plan Entreprise).
+ * Les salles `mesh-*` ne partagent AUCUN état avec l'essaim public :
+ * un pair du mesh ne peut ni découvrir, ni joindre, ni lire les salles
+ * publiques et inversement — isolation structurelle du parc privé.
+ * Capacité dédiée (le mesh privé est borné au parc : 16 salles, 16
+ * pairs/salle — un parc multi-postes n'a jamais besoin de plus).
+ */
+const CLE_GLOBALE_MESH = "__gen3ia_registre_ondes_mesh__";
+
+export function registreSignalisationMesh(): RegistreSalles {
+  const global_ = globalThis as unknown as { [CLE_GLOBALE_MESH]?: RegistreSalles };
+  if (!global_[CLE_GLOBALE_MESH]) {
+    global_[CLE_GLOBALE_MESH] = new RegistreSalles({
+      maxSalles: 16,
+      maxPairsParSalle: 16,
+    });
+  }
+  return global_[CLE_GLOBALE_MESH];
+}
