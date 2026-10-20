@@ -14,6 +14,24 @@ interface Wallet {
   welcomeAmountMinor: number;
 }
 
+interface PublicPlan {
+  id: string;
+  name: string;
+  priceLabel: string;
+  cycle: string;
+  audience: string;
+  features: string[];
+  highlight: boolean;
+  purchasable: boolean;
+  current: boolean;
+}
+
+interface PlanStateInfo {
+  planId: string;
+  active: boolean;
+  expiresAt: number | null;
+}
+
 /** Mode libre (GEN3IA_BILLING_ENABLED=false) : la plateforme ne facture plus l'usage (R2 porte tout). */
 const FREE_MODE_BANNER = "Accès libre : Gen3ia ne débite plus de crédits. Toutes les exécutions d'agents, missions et générations sont gratuites tant que ce mode est actif.";
 
@@ -29,6 +47,14 @@ const COUNTRY_CODES = [
 ];
 
 type TopupPhase = "idle" | "creating" | "phone" | "redirecting";
+type PlanPhase = "idle" | "creating" | "redirecting";
+
+const PLAN_LABELS: Record<string, string> = {
+  gratuit: "Plan Gratuit",
+  pro: "Plan Pro",
+  entreprise: "Plan Entreprise",
+  "modele-sur-mesure": "Modèle Sur-Mesure",
+};
 
 interface WalletTransaction {
   id: string;
@@ -54,7 +80,26 @@ export default function BillingPage() {
   // seul ne dit pas où va l'argent (recharges, consommations, réservations).
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [billingEnabled, setBillingEnabled] = useState(true);
+  const [plans, setPlans] = useState<PublicPlan[]>([]);
+  const [planState, setPlanState] = useState<PlanStateInfo | null>(null);
+  const [planPhase, setPlanPhase] = useState<PlanPhase>("idle");
+  const [pendingPlan, setPendingPlan] = useState<string | null>(null);
+  const [licenseKey, setLicenseKey] = useState("");
+  const [licenseBusy, setLicenseBusy] = useState(false);
   const sessionDisponible = useSessionAvailable();
+
+  const loadPlans = useCallback(async () => {
+    try {
+      const response = await authFetch("/api/billing/plans", { cache: "no-store" });
+      const data = (await readJsonSafely<{ plans?: PublicPlan[]; activePlan?: string }>(response)) ?? {};
+      if (response.ok) {
+        setPlans(data.plans ?? []);
+        if (data.activePlan) {
+          setPlanState({ planId: data.activePlan, active: true, expiresAt: null });
+        }
+      }
+    } catch { /* grille indisponible : cartes masquées */ }
+  }, []);
 
   const loadWallet = useCallback(async () => {
     // authFetch : ID token Firebase si disponible, sinon cookie de session.
@@ -81,17 +126,18 @@ export default function BillingPage() {
     // L'etat Firebase client peut etre perdu (webviews mobiles) : on charge
     // quand meme le solde via le cookie de session serveur.
     if (!current) {
-      try { await loadWallet(); await loadTransactions(); } catch { /* aucune session : page de connexion affichee */ }
+      try { await loadWallet(); await loadTransactions(); await loadPlans(); } catch { /* aucune session : page de connexion affichee */ }
       finally { setLoading(false); }
       return;
     }
     try {
       await loadWallet();
       await loadTransactions();
+      await loadPlans();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Impossible de charger le solde.");
     } finally { setLoading(false); }
-  }), [loadWallet, loadTransactions]);
+  }), [loadWallet, loadTransactions, loadPlans]);
 
   // Retour de paiement Chariow : ?topup=success&sale=sal_xxx
   useEffect(() => {
@@ -128,6 +174,79 @@ export default function BillingPage() {
     })();
   }, [sessionDisponible, user]);
 
+  // Retour d'abonnement Chariow : ?plan=success&planId=… — le webhook Pulse
+  // active l'accès ; on sonde la grille quelques secondes pour l'afficher.
+  useEffect(() => {
+    if (sessionDisponible === false) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("plan") !== "success") return;
+
+    const planId = params.get("planId") ?? "";
+    window.history.replaceState({}, "", "/billing");
+    const label = PLAN_LABELS[planId] ?? "Votre offre";
+    const timer = setTimeout(() => setNotice(`Paiement reçu pour ${label}. L'abonnement s'active dès la confirmation Chariow (quelques secondes).`), 0);
+    const polls = [3000, 9000, 20000].map((delay) => setTimeout(() => { void loadPlans(); }, delay));
+    return () => {
+      clearTimeout(timer);
+      polls.forEach(clearTimeout);
+    };
+  }, [sessionDisponible, loadPlans]);
+
+  // Abonnement à une offre payante (même flux téléphones que la recharge).
+  const startPlanCheckout = async (planId: string, phone?: { number: string; country_code: string }) => {
+    if (sessionDisponible === false) return;
+    setPlanPhase(phone ? "redirecting" : "creating");
+    setError(""); setNotice(""); setSuccess("");
+    try {
+      const response = await authFetch("/api/billing/plans/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(phone ? { planId, phone } : { planId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Impossible d'ouvrir le paiement Chariow.");
+      if (data.requiresDetails) {
+        setPendingPlan(planId);
+        setPhase("phone");
+        setPlanPhase("idle");
+        return;
+      }
+      if (!data.checkoutUrl) throw new Error("Chariow n'a pas renvoyé de page de paiement.");
+      setPlanPhase("redirecting");
+      window.location.href = data.checkoutUrl;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Impossible d'ouvrir le paiement.");
+      setPlanPhase("idle");
+    }
+  };
+
+  // Activation d'une clé de licence achetée sur la boutique Chariow.
+  const submitLicense = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const key = licenseKey.trim();
+    if (!key) { setError("Saisissez votre clé de licence."); return; }
+    setLicenseBusy(true);
+    setError(""); setNotice(""); setSuccess("");
+    try {
+      const response = await authFetch("/api/billing/plans/licence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ licenseKey: key }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Activation impossible.");
+      setSuccess(data.alreadyActivated
+        ? "Cette licence était déjà active sur votre compte."
+        : `Offre ${PLAN_LABELS[data.planId] ?? data.planId} activée sur votre compte.`);
+      setLicenseKey("");
+      await loadPlans();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Activation impossible.");
+    } finally {
+      setLicenseBusy(false);
+    }
+  };
+
   const startTopup = async (phone?: { number: string; country_code: string }) => {
     if (sessionDisponible === false) return;
     setPhase(phone ? "redirecting" : "creating");
@@ -154,6 +273,9 @@ export default function BillingPage() {
     event.preventDefault();
     const digits = phoneNumber.replace(/\D/g, "");
     if (!digits) { setError("Saisissez votre numéro de téléphone Mobile Money."); return; }
+    // Le formulaire téléphone est partagé : une offre en attente route vers le
+    // checkout d'abonnement, sinon vers la recharge du portefeuille.
+    if (pendingPlan) { void startPlanCheckout(pendingPlan, { number: digits, country_code: countryCode }); return; }
     startTopup({ number: digits, country_code: countryCode });
   };
 
@@ -220,6 +342,64 @@ export default function BillingPage() {
       {error && <p style={styles.error}>{error}</p>}
     </section>
 
+    {/* Grille tarifaire officielle Chariow : 4 offres, paiement Mobile Money/carte */}
+    <section style={styles.card}>
+      <div style={styles.eyebrow}>OFFRES GEN3IA</div>
+      <h2 className="font-serif" style={{ fontSize: 24, margin: "4px 0 6px" }}>Choisissez votre offre</h2>
+      {planState && (
+        <p style={styles.note} >
+          Offre active : <strong>{PLAN_LABELS[planState.planId] ?? planState.planId}</strong>
+          {planState.expiresAt ? ` — jusqu'au ${new Date(planState.expiresAt).toLocaleDateString("fr-FR")}` : ""}
+        </p>
+      )}
+      <div style={styles.plansGrid}>
+        {plans.map((plan) => (
+          <div key={plan.id} style={{ ...styles.planCard, ...(plan.highlight ? styles.planHighlight : {}) }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+              <h3 style={{ margin: 0, fontSize: 17 }}>{plan.name}</h3>
+              {plan.current && <span style={styles.planBadge}>Active</span>}
+            </div>
+            <div style={styles.planPrice}>{plan.priceLabel}</div>
+            <div style={styles.planAudience}>{plan.audience}</div>
+            <ul style={styles.planFeatures}>
+              {plan.features.map((feature) => <li key={feature}>{feature}</li>)}
+            </ul>
+            {plan.id === "gratuit" || !plan.purchasable ? (
+              <span style={styles.planNote}>{plan.id === "gratuit" ? "Inclus par défaut" : "Bientôt disponible"}</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setPendingPlan(null); void startPlanCheckout(plan.id); }}
+                disabled={planPhase !== "idle"}
+                style={styles.button}
+              >
+                {planPhase !== "idle" ? "Ouverture du paiement…" : plan.current ? "Renouveler" : "Souscrire"}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {plans.length === 0 && <p style={styles.note}>Chargement de la grille tarifaire…</p>}
+
+      <form onSubmit={submitLicense} style={styles.licenseForm}>
+        <label style={styles.label} htmlFor="license">Vous avez acheté une licence sur la boutique Chariow ?</label>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            id="license"
+            value={licenseKey}
+            onChange={(e) => setLicenseKey(e.target.value)}
+            placeholder="Clé de licence (ex. GEN3IA-XXXX-XXXX)"
+            style={{ ...styles.input, flex: 1, minWidth: 200 }}
+            autoComplete="off"
+          />
+          <button type="submit" disabled={licenseBusy} style={{ ...styles.button, marginTop: 0, width: "auto", padding: "12px 22px" }}>
+            {licenseBusy ? "Activation…" : "Activer"}
+          </button>
+        </div>
+        <p style={styles.note}>La clé reçue après achat est vérifiée auprès de Chariow puis attachée à votre compte Gen3ia.</p>
+      </form>
+    </section>
+
     {/* Étape 20 — historique réel des mouvements du portefeuille */}
     <section style={styles.card}>
       <div style={styles.eyebrow}>HISTORIQUE</div>
@@ -267,4 +447,13 @@ const styles: Record<string, CSSProperties> = {
   success: { marginTop: 16, padding: 12, borderRadius: 10, background: "#E9F5F8", border: "1px solid rgba(8,153,180,0.35)", color: "#0A6E82", lineHeight: 1.5 },
   notice: { marginTop: 16, padding: 12, borderRadius: 10, background: "#E9F5F8", border: "1px solid rgba(8,153,180,0.35)", color: "#0E5F73", lineHeight: 1.5 },
   error: { marginTop: 16, color: "#5B2BE0" },
+  plansGrid: { marginTop: 18, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 },
+  planCard: { display: "flex", flexDirection: "column", gap: 8, padding: 18, borderRadius: 16, border: "1px solid var(--g3-border)", background: "#faf9f6" },
+  planHighlight: { border: "2px solid #0A6E82", background: "#f2fafa" },
+  planBadge: { fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", padding: "4px 10px", borderRadius: 999, background: "#0A6E82", color: "#fff" },
+  planPrice: { fontSize: 20, fontWeight: 800 },
+  planAudience: { fontSize: 12, opacity: 0.65, fontStyle: "italic" },
+  planFeatures: { margin: 0, paddingLeft: 18, display: "grid", gap: 6, fontSize: 13, lineHeight: 1.45 },
+  planNote: { fontSize: 13, fontWeight: 700, opacity: 0.6 },
+  licenseForm: { marginTop: 24, display: "grid", gap: 8, paddingTop: 18, borderTop: "1px solid var(--g3-border)" },
 };
