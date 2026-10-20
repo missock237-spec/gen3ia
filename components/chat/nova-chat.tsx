@@ -33,6 +33,7 @@
 import * as React from "react";
 
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import CarteAutoApprentissage from "@/components/chat/auto-apprentissage-carte";
 import { safeClientTimezone } from "@/lib/domain/conversations/stream-client";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
@@ -1396,6 +1397,7 @@ export default function NovaChat() {
             </React.Fragment>
           ))}
         </nav>
+        <CarteAutoApprentissage />
         <div className="nova-sidebar-pied">
           <a href="/workspace">Conversations serveur</a>
           <a href="/settings">Paramètres</a>

@@ -1,0 +1,122 @@
+/* ============================================================
+   CARTE AUTO-APPRENTISSAGE — sidebar du dashboard chat.
+   Identité Aurora OS : tokens --g3-* uniquement (thème clair/sombre).
+   ============================================================ */
+
+.auto-carte {
+  border: 1px solid var(--g3-border);
+  border-radius: 12px;
+  padding: 10px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--g3-surface-2, transparent);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.auto-carte-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.auto-carte-titre {
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--g3-text-secondary);
+}
+
+.auto-carte-refresh {
+  border: 1px solid var(--g3-border);
+  background: transparent;
+  color: var(--g3-text-secondary);
+  border-radius: 8px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.auto-carte-refresh:hover:not(:disabled) {
+  border-color: var(--g3-primary-border);
+  color: var(--g3-text);
+}
+
+.auto-carte-refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.auto-carte-hubs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.auto-carte-hub {
+  border: 1px solid var(--g3-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  color: var(--g3-text-secondary);
+}
+
+.auto-carte-hub.actif {
+  border-color: var(--g3-primary-border);
+  color: var(--g3-text);
+}
+
+.auto-carte-ligne {
+  margin: 0;
+  color: var(--g3-text-secondary);
+}
+
+.auto-carte-erreur {
+  color: var(--g3-danger, #d64545);
+}
+
+.auto-carte-dernier {
+  margin: 0;
+  color: var(--g3-text-secondary);
+  font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.auto-carte-dernier.statut-termine {
+  color: var(--g3-success, #2e9e6b);
+}
+
+.auto-carte-dernier.statut-echec {
+  color: var(--g3-danger, #d64545);
+}
+
+.auto-carte-bouton {
+  margin-top: 2px;
+  border: 1px solid var(--g3-primary-border);
+  background: transparent;
+  color: var(--g3-text);
+  border-radius: 10px;
+  padding: 7px 8px;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.auto-carte-bouton:hover:not(:disabled) {
+  background: var(--g3-gradient);
+  color: var(--g3-on-primary);
+}
+
+.auto-carte-bouton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
