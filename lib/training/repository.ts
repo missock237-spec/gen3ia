@@ -36,6 +36,7 @@ import {
 /*   users/{uid}/training/projects/{projectId}/datasets/{id}.json      */
 /*   users/{uid}/training/projects/{projectId}/plans/{planId}.json     */
 /*   users/{uid}/training/projects/{projectId}/jobs/{jobId}.json       */
+/*   users/{uid}/training/projects/{projectId}/arene/{sessionId}.json  */
 /*   users/{uid}/training/projects/{projectId}/exports/{id}.json      */
 /*   users/{uid}/training-files/{projectId}/{assetId}          (binaire) */
 /*                                                                    */
@@ -295,6 +296,31 @@ export async function listActiveJobsForUser(uid: string): Promise<TrainingJob[]>
     );
   }
   return active;
+}
+
+/* ------------------------------ Arène ----------------------------- */
+
+/** Sessions d'arène d'un projet (duels d'interférence, sans zod — session interne). */
+export async function listSessionsArene<T>(uid: string, projectId: string): Promise<T[]> {
+  const id = assertId(projectId, "projet");
+  const docs = await listJson<T>(userDir(uid, "training", "projects", id, "arene"), { limit: 50 });
+  return docs.sort((a, b) => {
+    const ta = String((a as { createdAt?: string }).createdAt ?? "");
+    const tb = String((b as { createdAt?: string }).createdAt ?? "");
+    return ta < tb ? 1 : -1;
+  });
+}
+
+export async function getSessionArene<T>(uid: string, projectId: string, sessionId: string): Promise<T | null> {
+  const pid = assertId(projectId, "projet");
+  const sid = assertId(sessionId, "session d'arène");
+  return readJsonIfExists<T>(userKey(uid, "training", "projects", pid, "arene", sid));
+}
+
+export async function saveSessionArene<T>(uid: string, projectId: string, sessionId: string, session: T): Promise<void> {
+  const pid = assertId(projectId, "projet");
+  const sid = assertId(sessionId, "session d'arène");
+  await writeJson(userKey(uid, "training", "projects", pid, "arene", sid), session);
 }
 
 /* ------------------------------ Exports --------------------------- */

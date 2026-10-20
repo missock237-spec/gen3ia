@@ -1,0 +1,399 @@
+/* ============================================================
+   Arène d'interférence — styles co-locés.
+   Design system Aurora : même langage que le laboratoire d'ondes
+   (surfaces sans bordure, violet/cyan, mobile-first).
+   ============================================================ */
+
+.arene-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--g3-bg);
+  color: var(--g3-text);
+}
+
+/* ——— En-tête ——————————————————————————————— */
+.arene-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--g3-surface);
+}
+
+.arene-marque {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.arene-logo {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.9rem;
+  font-size: 1.3rem;
+  color: var(--g3-on-primary);
+  background: var(--g3-gradient);
+  box-shadow: 0 0 24px var(--g3-primary-soft);
+}
+
+.arene-titre {
+  font-size: 1.02rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.arene-sous-titre {
+  font-size: 0.74rem;
+  color: var(--g3-muted);
+}
+
+.arene-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.arene-badge {
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  color: var(--g3-muted);
+  background: color-mix(in srgb, var(--g3-muted) 10%, transparent);
+}
+
+.arene-badge[data-actif="true"] {
+  color: var(--g3-text);
+  background: color-mix(in srgb, var(--g3-primary) 18%, transparent);
+}
+
+/* ——— Corps : scène + contrôles ————————————————— */
+.arene-corps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.9rem;
+  padding: 0.9rem 1.25rem 1.5rem;
+  align-items: start;
+}
+
+@media (min-width: 64rem) {
+  .arene-corps {
+    grid-template-columns: minmax(0, 1fr) 21rem;
+  }
+}
+
+.arene-scene {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem;
+  border-radius: 1.1rem;
+  background: var(--g3-surface);
+}
+
+.arene-champs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.9rem;
+}
+
+.arene-champ {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.arene-champ figcaption {
+  font-size: 0.72rem;
+  color: var(--g3-muted);
+  letter-spacing: 0.02em;
+}
+
+.arene-champ-central figcaption {
+  color: var(--g3-text);
+}
+
+.arene-champ canvas {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 0.8rem;
+  background: #0b0b14;
+  box-shadow: 0 0 32px rgb(0 0 0 / 0.35);
+}
+
+.arene-champ-central canvas {
+  box-shadow: 0 0 40px color-mix(in srgb, var(--g3-primary) 22%, transparent);
+}
+
+/* ——— Mesures physiques ———————————————————— */
+.arene-mesures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.55rem;
+}
+
+.arene-mesure {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--g3-muted) 7%, transparent);
+}
+
+.arene-mesure[data-sens="plus"] .arene-mesure-valeur {
+  color: #22d3ee;
+}
+
+.arene-mesure[data-sens="moins"] .arene-mesure-valeur {
+  color: #fb7185;
+}
+
+.arene-mesure-valeur {
+  font-size: 1.05rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.arene-mesure-label {
+  font-size: 0.68rem;
+  color: var(--g3-muted);
+}
+
+.arene-attente {
+  font-size: 0.8rem;
+  color: var(--g3-muted);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* ——— Panneau de contrôle ——————————————————— */
+.arene-controles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.arene-groupe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-radius: 1.1rem;
+  background: var(--g3-surface);
+}
+
+.arene-groupe h2 {
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--g3-muted);
+}
+
+.arene-champ-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+}
+
+.arene-champ-form span {
+  color: var(--g3-muted);
+}
+
+.arene-champ-form select,
+.arene-champ-form input {
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.6rem;
+  border: none;
+  font-size: 0.78rem;
+  color: var(--g3-text);
+  background: color-mix(in srgb, var(--g3-muted) 10%, transparent);
+}
+
+.arene-champ-form input[type="file"] {
+  font-size: 0.72rem;
+}
+
+.arene-note {
+  font-size: 0.72rem;
+  color: var(--g3-text);
+  margin: 0;
+}
+
+.arene-boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.arene-bouton {
+  flex: 1 1 auto;
+  padding: 0.5rem 0.8rem;
+  border: none;
+  border-radius: 0.7rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--g3-text);
+  background: color-mix(in srgb, var(--g3-muted) 14%, transparent);
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.arene-bouton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--g3-muted) 22%, transparent);
+}
+
+.arene-bouton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.arene-bouton-lancer {
+  color: var(--g3-on-primary);
+  background: var(--g3-gradient);
+  box-shadow: 0 0 20px var(--g3-primary-soft);
+}
+
+.arene-bouton-arreter {
+  color: #fb7185;
+  background: color-mix(in srgb, #fb7185 14%, transparent);
+}
+
+.arene-message {
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--g3-text);
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--g3-primary) 12%, transparent);
+}
+
+/* ——— Scores ———————————————————————————— */
+.arene-scores {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.arene-scores div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.76rem;
+}
+
+.arene-scores dt {
+  color: var(--g3-muted);
+}
+
+.arene-scores dd {
+  margin: 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ——— Historique ————————————————————————— */
+.arene-groupe-historique {
+  max-height: 26rem;
+}
+
+.arene-historique {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  max-height: 19rem;
+}
+
+.arene-historique li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--g3-muted) 6%, transparent);
+}
+
+.arene-historique li[data-action="renforcee"] .arene-historique-verdict {
+  color: #22d3ee;
+}
+
+.arene-historique li[data-action="distillee"] .arene-historique-verdict {
+  color: #fb7185;
+}
+
+.arene-historique li[data-action="ignoree"] .arene-historique-verdict {
+  color: var(--g3-muted);
+}
+
+.arene-historique-verdict {
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.arene-historique-motif {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--g3-text);
+}
+
+.arene-historique-reward {
+  font-variant-numeric: tabular-nums;
+  color: var(--g3-muted);
+}
+
+.arene-historique-vide {
+  display: block;
+  color: var(--g3-muted);
+  text-align: center;
+  padding: 0.8rem 0;
+}
+
+/* ——— Pédagogie ————————————————————————— */
+.arene-pedagogie {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0 1.25rem 1.5rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: 1.1rem;
+  background: var(--g3-surface);
+}
+
+.arene-pedagogie h2 {
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.arene-pedagogie p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.65;
+  color: var(--g3-muted);
+}
+
+.arene-pedagogie strong {
+  color: var(--g3-text);
+}
+
+.arene-pedagogie em {
+  color: #a78bfa;
+  font-style: normal;
+}
