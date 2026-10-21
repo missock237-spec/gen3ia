@@ -232,12 +232,16 @@ describe("DiffuseurCompetences — injection par ondes", () => {
       diffuseurB.traiterMessage({ ...f, de: "n-a" });
     }
 
-    // L'installation est asynchrone (vérification d'empreinte) : on laisse
-    // les microtâches se dérouler avant d'affirmer.
-    await new Promise((resoudre) => setTimeout(resoudre, 0));
+    // L'installation est asynchrone (vérification d'empreinte) : on attend
+    // borné (poll) qu'elle aboutisse — un simple tick peut être trop court
+    // sur un runner chargé (flake CI observé).
+    let installee = registreB.get("doubleur");
+    for (let i = 0; i < 40 && !installee; i += 1) {
+      await new Promise((resoudre) => setTimeout(resoudre, 5));
+      installee = registreB.get("doubleur");
+    }
 
     // …et installe la compétence vérifiée.
-    const installee = registreB.get("doubleur");
     expect(installee).toBeDefined();
     expect(installee!.module.code).toBe(mod.code);
 
