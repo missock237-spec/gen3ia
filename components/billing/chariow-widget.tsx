@@ -8,7 +8,7 @@ import {
   WIDGET_STYLE_HREF,
 } from "./chariow-widgets-config";
 
-export { CHARIOW_PLAN_WIDGETS, CHARIOW_STORE_DOMAIN } from "./chariow-widgets-config";
+export { CHARIOW_PLAN_WIDGETS, CHARIOW_STORE_DOMAIN, CHARIOW_TOPUP_WIDGET } from "./chariow-widgets-config";
 
 /**
  * WIDGET DE PAIEMENT DIRECT CHARIOW (boutique officielle).

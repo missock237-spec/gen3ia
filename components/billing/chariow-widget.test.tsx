@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   CHARIOW_PLAN_WIDGETS,
   CHARIOW_STORE_DOMAIN,
+  CHARIOW_TOPUP_WIDGET,
   WIDGET_SCRIPT_SRC,
   WIDGET_STYLE_HREF,
 } from "./chariow-widgets-config";
@@ -60,6 +61,31 @@ describe("produits de paiement direct (données pures exportées)", () => {
   });
 });
 
+describe("widget de recharge du wallet API (prd_llfosdp1, demande n°4)", () => {
+  it("expose le produit de recharge avec le code d'embed officiel", () => {
+    expect(CHARIOW_TOPUP_WIDGET.productId).toBe("prd_llfosdp1");
+    expect(CHARIOW_TOPUP_WIDGET.label).toBe("Recharge Wallet API");
+    expect(CHARIOW_TOPUP_WIDGET.label.length).toBeGreaterThan(0);
+    expect(CHARIOW_TOPUP_WIDGET.note).toContain("webhook Chariow");
+    // La recharge n'est PAS un plan : elle reste hors de la liste des 3 offres.
+    expect(CHARIOW_PLAN_WIDGETS.map((w) => w.productId)).not.toContain(CHARIOW_TOPUP_WIDGET.productId);
+  });
+
+  it("cohérence avec le serveur : prd_llfosdp1 est le défaut de reconnaissance webhook", async () => {
+    delete process.env.CHARIOW_TOPUP_PRODUCT_ID;
+    const chariow = await import("@/lib/billing/chariow");
+    expect(chariow.CHARIOW_TOPUP_PRODUCT_DEFAULT).toBe("prd_llfosdp1");
+    expect(chariow.getChariowTopupProductId()).toBe(CHARIOW_TOPUP_WIDGET.productId);
+  });
+
+  it("surcharge env : CHARIOW_TOPUP_PRODUCT_ID remplace le défaut boutique", async () => {
+    process.env.CHARIOW_TOPUP_PRODUCT_ID = "prd_remplacement";
+    const chariow = await import("@/lib/billing/chariow");
+    expect(chariow.getChariowTopupProductId()).toBe("prd_remplacement");
+    delete process.env.CHARIOW_TOPUP_PRODUCT_ID;
+  });
+});
+
 describe("mécanisme d'injection (verrouillage structurel du composant)", () => {
   const source = read(WIDGET);
 
@@ -106,6 +132,19 @@ describe("intégration page /billing + CSP forteresse", () => {
     expect(page).toContain("chariow-widget");
     expect(page).toContain("CHARIOW_PLAN_WIDGETS");
     expect(page).toContain("Paiement direct sur la boutique Chariow");
+  });
+
+  it("la carte GEN3IA WALLET intègre la recharge rapide du widget prd_llfosdp1", () => {
+    const page = read(BILLING_PAGE);
+    expect(page).toContain("Recharge rapide du wallet");
+    expect(page).toContain("CHARIOW_TOPUP_WIDGET");
+    expect(page).toContain("ChariowWidget productId={CHARIOW_TOPUP_WIDGET.productId}");
+    // Note courte obligatoire : crédit automatique par webhook.
+    expect(page).toContain("Le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow).");
+    // Le flux de recharge existant (checkout API / Mobile Money) est conservé.
+    expect(page).toContain("Recharger avec Chariow");
+    // Repli boutique (CHARIOW_TOPUP_STORE_URL via /api/billing/wallet) en lien secondaire.
+    expect(page).toContain("storeUrl");
   });
 
   it("la CSP autorise le CDN widget (script + style) sans ouvrir le reste", () => {

@@ -59,6 +59,10 @@ trois widgets officiels (script `js.chariowcdn.com/v1/widget.min.js`, style
 - `prd_v76f5kjl` → Plan Entreprise ;
 - `prd_646qpmge` → Modèle Sur-Mesure.
 
+La carte « GEN3IA WALLET » rend en plus le widget de **recharge rapide du
+portefeuille** (`prd_llfosdp1`, produit « Recharge Wallet API ») — voir
+§8.
+
 Le script Chariow scanne une seule fois tous les `#chariow-widget` du document :
 le composant injecte le loader après le rendu (dédoublonné par micro-tâche) et
 le réinjecte au remontage React pour rescanner. La CSP autorise
@@ -121,14 +125,17 @@ dashboard :
 ```bash
 CHARIOW_API_KEY=sk_…                        # clé API (Developpeur → API Keys)
 CHARIOW_PULSE_SECRET=…                      # secret de signature du webhook Pulse
+CHARIOW_TOPUP_PRODUCT_ID=prd_llfosdp1       # défaut boutique → « Recharge Wallet API »
+CHARIOW_TOPUP_STORE_URL=                    # optionnel : repli boutique affiché sur /billing
 CHARIOW_PLAN_PRO_PRODUCT_ID=                # vide → produit boutique prd_svqonju7
 CHARIOW_PLAN_ENTREPRISE_PRODUCT_ID=         # vide → produit boutique prd_v76f5kjl
 CHARIOW_PLAN_SUR_MESURE_PRODUCT_ID=         # vide → produit boutique prd_646qpmge
 CHARIOW_EUR_XAF_RATE=655.957                # parité fixe franc CFA
 ```
 
-Les trois produits étant branchés par défaut, les variables `CHARIOW_PLAN_*`
-sont optionnelles : elles servent uniquement à pointer un produit de
+Les trois produits de grille et le produit de recharge étant branchés par
+défaut, les variables `CHARIOW_PLAN_*` et `CHARIOW_TOPUP_PRODUCT_ID` sont
+optionnelles : elles servent uniquement à pointer un produit de
 remplacement (nouveau produit, test) sans redéploiement du code.
 
 ## 7. Rattachement de la plateforme aux visites de paiement
@@ -148,3 +155,50 @@ La même mécanique existe pour les recharges de portefeuille
 (`wallet_topup`) et les achats d'extensions (`extension_purchase`) — les trois
 types de ventes sont traités par le même webhook signé, avec dédoublonnement
 par vente et reprise des livraisons échouées.
+
+## 8. Recharge du wallet API — produit `prd_llfosdp1`
+
+Le produit **« Recharge Wallet API »** (`prd_llfosdp1`, boutique
+`xdaagetk.mychariow.shop`) alimente directement le solde du portefeuille
+(`GEN3IA_WALLET_CURRENCY`, XAF par défaut). Il est rendu sur `/billing` dans
+la carte « GEN3IA WALLET » (bloc « Recharge rapide du wallet ») via le même
+composant `components/billing/chariow-widget.tsx` que la grille tarifaire —
+aucun second mécanisme de widget.
+
+### Cycle d'un achat via le widget
+
+```
+Achat (widget « tap » prd_llfosdp1 sur la boutique)
+  → page de paiement Chariow (Mobile Money, carte…)
+  → webhook Pulse successful.sale → /api/webhooks/chariow (signature HMAC vérifiée)
+  → isTopupSale (lib/billing/chariow-delivery.ts) :
+      vente reconnue par product.id === getChariowTopupProductId()
+      (env CHARIOW_TOPUP_PRODUCT_ID → défaut boutique prd_llfosdp1)
+  → applyTopup (lib/billing/wallet.ts) : journal idempotent chariow_<saleId>
+    — une même vente ne peut jamais être créditée deux fois
+  → solde mis à jour, visible sur /billing
+```
+
+L'achat via widget ne porte pas de `custom_metadata` (le checkout n'est pas
+créé par la plateforme) : la reconnaissance repose sur l'identifiant produit.
+Les ventes créées par le checkout API de la plateforme (bouton « Recharger
+avec Chariow ») restent reconnues par `gen3ia_product = wallet_topup`, et le
+retour de paiement passe par `/api/billing/topup/verify` (filet de sécurité,
+même journal `chariow_<saleId>` partagé avec le webhook). En cas d'échec de
+crédit, la livraison Pulse est reprise automatiquement (re-délivrance ou
+rapprochement admin) ; le webhook reste la SEULE voie de crédit automatique.
+
+### Notes opérationnelles
+
+- **Le produit doit être facturé en XAF côté Chariow** : le webhook refuse
+  toute recharge dans une devise différente du wallet (`WALLET_CURRENCY`) —
+  la vente passe alors en `failed` et n'est jamais créditée.
+- **Surcharge env** : `CHARIOW_TOPUP_PRODUCT_ID` REMPLACE le défaut boutique
+  (même sémantique que `resolvePlanProductId`) — pointer un produit de
+  remplacement retire la reconnaissance du produit précédent.
+- **Repli boutique** : `CHARIOW_TOPUP_STORE_URL` (optionnel) est exposé par
+  `GET /api/billing/wallet` et affiché sur `/billing` comme lien secondaire.
+- **Variables requises (VPS)** : `CHARIOW_PULSE_SECRET` (webhook = seule voie
+  de crédit automatique) et `CHARIOW_API_KEY` (checkouts API + vérification
+  des ventes). Le produit `prd_llfosdp1` étant branché par défaut,
+  `CHARIOW_TOPUP_PRODUCT_ID` est optionnel.
