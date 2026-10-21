@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { requireUser } from "@/lib/security/authenticated-request";
+// SYSTÈME AGENT RÉSERVÉ (demande n°5) : édition/suppression fermées aux
+// utilisateurs standard (403 « réservé au système IA ») — admin conservé.
+import { requireAgentSystemAccess } from "@/lib/security/agent-system-access";
 import { deleteAgentForUser, getAgentForUser, toSummary, updateAgentForUser } from "@/lib/agents/repository";
 import { AGENT_TYPES } from "@/lib/agents/schema";
 import { resolveAndHarden } from "@/lib/agents/tool-resolver";
@@ -55,7 +57,7 @@ async function validateSubAgentIds(userId: string, agentId: string, subAgentIds:
 export async function GET(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireUser(request); const { id } = await context.params;
+    const user = await requireAgentSystemAccess(request); const { id } = await context.params;
     const record = await getAgentForUser(user.uid, id);
     if (!record) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
     return NextResponse.json({ agent: { ...toSummary(record), systemPrompt: record.systemPrompt }, requestId }, { headers: { "x-request-id": requestId } });
@@ -65,7 +67,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireUser(request); const { id } = await context.params;
+    const user = await requireAgentSystemAccess(request); const { id } = await context.params;
     const parsed = PatchSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Mise a jour invalide", issues: parsed.error.flatten(), requestId }, { status: 400 });
     if (parsed.data.projectId && !(await getDeveloperProject(user.uid, parsed.data.projectId))) return NextResponse.json({ error: "Projet introuvable ou inaccessible", requestId }, { status: 403 });
@@ -95,7 +97,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireUser(request); const { id } = await context.params;
+    const user = await requireAgentSystemAccess(request); const { id } = await context.params;
     const deleted = await deleteAgentForUser(user.uid, id);
     if (!deleted) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
     return NextResponse.json({ deleted: true, requestId }, { headers: { "x-request-id": requestId } });

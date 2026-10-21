@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 
-import { requireUser } from "@/lib/security/authenticated-request";
+// SYSTÈME AGENT RÉSERVÉ (demande n°5) : historique de planification fermé aux
+// utilisateurs standard (403 « réservé au système IA ») — admin conservé.
+import { requireAgentSystemAccess } from "@/lib/security/agent-system-access";
+import { errorStatus } from "@/lib/security/http-errors";
 import { listScheduleRuns } from "@/lib/agents/scheduler";
 
 interface RouteContext {
@@ -13,7 +15,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
 
   try {
-    const user = await requireUser(request);
+    const user = await requireAgentSystemAccess(request);
     const { id } = await context.params;
     const limit = Number(new URL(request.url).searchParams.get("limit") ?? "25");
     const runs = await listScheduleRuns(user.uid, id, Number.isFinite(limit) ? limit : 25);

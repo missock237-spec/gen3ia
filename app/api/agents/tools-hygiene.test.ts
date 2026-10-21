@@ -41,7 +41,9 @@ const mockCreate = vi.mocked(createAgentRecord);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockUser.mockResolvedValue({ uid: "user_1" } as Awaited<ReturnType<typeof requireUser>>);
+  // SYSTÈME AGENT RÉSERVÉ (demande n°5) : generate/POST exigent le privilège
+  // admin — les tests exercés ici empruntent le chemin admin.
+  mockUser.mockResolvedValue({ uid: "user_1", claims: { admin: true } } as Awaited<ReturnType<typeof requireUser>>);
   mockLimit.mockResolvedValue({ allowed: true, remaining: 19, resetMs: 3_600_000 } as Awaited<ReturnType<typeof enforceRateLimit>>);
   mockCreate.mockImplementation(async (_uid, input) => ({
     id: "agent_new", ownerId: "user_1", name: input.name, description: input.description,
