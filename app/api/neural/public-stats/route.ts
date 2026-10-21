@@ -48,6 +48,7 @@ export async function GET() {
           moteurNatif: "gen3-native (CPU local, apprentissage réel)",
         },
         cortexV2: blocCortexV2(runtime),
+        autoApprentissage: await blocAutoApprentissagePublic(),
         iaExterne: "aucune — moteur 100 % local",
       },
       { headers: { "cache-control": "public, max-age=30, stale-while-revalidate=60" } },
@@ -85,4 +86,55 @@ function blocCortexV2(runtime: ReturnType<typeof getNeuralRuntime>) {
     },
     consolidation: etat.consolidation,
   };
+}
+
+/**
+ * BLOC PUBLIC AUTO-APPRENTISSAGE — l'état RÉEL de la boucle autonome
+ * (régime maîtrise : entraînement continu depuis Hugging Face + Kaggle).
+ * Métriques anonymes et honnêtes issues de l'état persisté ; en cas
+ * d'indisponibilité, le bloc le dit (jamais de donnée fabriquée).
+ */
+async function blocAutoApprentissagePublic() {
+  try {
+    const { lireEtatAuto } = await import("@/lib/entrainement-auto/etat");
+    const { CATALOGUE_MAITRISE, domainesMaitrises, maitriseComplete } = await import(
+      "@/lib/entrainement-auto/maitrise"
+    );
+    const { cycleEnCours } = await import("@/lib/entrainement-auto/boucle");
+    const etat = await lireEtatAuto();
+    const bloc = etat.maitrise;
+    return {
+      regime: etat.regime,
+      actif: true,
+      cycleEnCours: cycleEnCours(),
+      cyclesExecutes: etat.cyclesExecutes,
+      pairesCumulees: etat.pairesCumulees,
+      echantillonsCumules: etat.echantillonsCumules,
+      datasetsIngestes: etat.datasetsIngestes.length,
+      hubs: { huggingface: true, kaggle: Boolean(process.env.KAGGLE_API_TOKEN) },
+      maitrise: {
+        complete: maitriseComplete(etat),
+        atteinteA: bloc?.atteinteA ?? null,
+        evaluations: bloc?.evaluationsTotales ?? 0,
+        cyclesSansProgres: bloc?.cyclesSansProgres ?? 0,
+        domainesMaitrises: domainesMaitrises(bloc),
+        domainesTotal: CATALOGUE_MAITRISE.length,
+        derniers: CATALOGUE_MAITRISE.slice(0, 12).map((domaine) => {
+          const etatDomaine = bloc?.domaines?.[domaine.id];
+          const derniere = etatDomaine?.dernieresEvaluations?.[0] ?? null;
+          return {
+            id: domaine.id,
+            maitrise: Boolean(etatDomaine?.maitriseA),
+            unites:
+              domaine.objectif === "langage"
+                ? etatDomaine?.pairesIngestees ?? 0
+                : etatDomaine?.echantillonsIngestes ?? 0,
+            precision: derniere ? Math.round(derniere.accuracy * 100) : null,
+          };
+        }),
+      },
+    };
+  } catch {
+    return { regime: null, actif: false, note: "État d'auto-apprentissage indisponible." };
+  }
 }
