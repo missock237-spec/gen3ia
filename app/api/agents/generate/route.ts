@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 
-import { requireUser } from "@/lib/security/authenticated-request";
+// SYSTÈME AGENT RÉSERVÉ (demande n°5) : la génération de configuration
+// d'agent (pré-création) est fermée aux utilisateurs standard — admin conservé.
+import { requireAgentSystemAccess } from "@/lib/security/agent-system-access";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { AGENT_TYPES, AGENT_TONES, AGENT_VERBOSITY_LEVELS } from "@/lib/agents/schema";
@@ -88,7 +90,7 @@ Règles : type "code" uniquement si l'agent doit exécuter du code ; "research" 
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireUser(request);
+    const user = await requireAgentSystemAccess(request);
     const limit = await enforceRateLimit(`agent-generate:${user.uid}`, { limit: 20, windowMs: 60 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Limite de générations atteinte, réessayez plus tard.", requestId }, { status: 429 });
 

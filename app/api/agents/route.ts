@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { requireUser } from "@/lib/security/authenticated-request";
+// SYSTÈME AGENT RÉSERVÉ (demande n°5) : les utilisateurs standard reçoivent
+// 403 « réservé au système IA » — seule l'IA (chat) crée/gère des agents,
+// via le chemin interne lib/agents/system-activation.ts ; l'admin est conservé.
+import { requireAgentSystemAccess } from "@/lib/security/agent-system-access";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { createAgentRecord, getAgentForUser, listAgentsForUser, toSummary } from "@/lib/agents/repository";
@@ -11,7 +14,7 @@ import { getDeveloperProject } from "@/lib/developer/projects";
 export async function GET(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireUser(request);
+    const user = await requireAgentSystemAccess(request);
     const projectId = request.nextUrl.searchParams.get("projectId")?.trim() || undefined;
     if (projectId && !(await getDeveloperProject(user.uid, projectId))) return NextResponse.json({ error: "Projet introuvable", requestId }, { status: 404 });
     const agents = await listAgentsForUser(user.uid, projectId);
@@ -24,7 +27,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireUser(request);
+    const user = await requireAgentSystemAccess(request);
     const limit = await enforceRateLimit(`agent-create:${user.uid}`, { limit: 20, windowMs: 60 * 60 * 1000 });
     if (!limit.allowed) return NextResponse.json({ error: "Limite de creation d'agents atteinte, reessayez plus tard.", requestId }, { status: 429 });
     const parsed = AgentRecordSchema.safeParse(await request.json());

@@ -60,7 +60,9 @@ function request(url: string, init?: RequestInit) {
 
 beforeEach(() => {
   mockedProjectOk.mockReset().mockResolvedValue(false);
-  mockedRequireUser.mockReset().mockResolvedValue({ uid: "u1" });
+  // SYSTÈME AGENT RÉSERVÉ (demande n°5) : la surface /api/agents exige le
+  // privilège admin — les tests exercés ici empruntent le chemin admin.
+  mockedRequireUser.mockReset().mockResolvedValue({ uid: "u1", claims: { admin: true } });
   mockedListForUser.mockReset().mockResolvedValue([]);
   mockedCreateRecord.mockReset().mockResolvedValue(agentSummary());
   mockedGetForUser.mockReset().mockResolvedValue(null);
@@ -80,6 +82,37 @@ describe("GET /api/agents — liste union", () => {
     mockedProjectOk.mockResolvedValue(true);
     await GET(request("/api/agents?projectId=p9"));
     expect(mockedListForUser).toHaveBeenCalledWith("u1", "p9");
+  });
+});
+
+// SYSTÈME AGENT RÉSERVÉ (demande n°5) : l'utilisateur standard (même
+// connecté, sans custom claim admin) reçoit 403 « réservé au système IA »
+// sur toute la surface de gestion — le chemin légitime est la demande
+// dans le chat (activation interne par l'IA).
+describe("GET/POST /api/agents — utilisateur standard bloqué (réservé au système IA)", () => {
+  it("GET : 403 explicite pour un utilisateur connecté sans claim admin", async () => {
+    mockedRequireUser.mockResolvedValue({ uid: "u1", claims: {} });
+    const response = await GET(request("/api/agents"));
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toContain("réservé au système IA");
+    expect(mockedListForUser).not.toHaveBeenCalled();
+  });
+
+  it("GET : 403 aussi sans claims (session cookie)", async () => {
+    mockedRequireUser.mockResolvedValue({ uid: "u1" });
+    const response = await GET(request("/api/agents"));
+    expect(response.status).toBe(403);
+    expect(mockedListForUser).not.toHaveBeenCalled();
+  });
+
+  it("POST : 403 explicite — aucune création directe par un utilisateur standard", async () => {
+    mockedRequireUser.mockResolvedValue({ uid: "u1", claims: {} });
+    const response = await POST(request("/api/agents", { method: "POST", body: JSON.stringify({ name: "Agent Studio", description: "desc", type: "universal" }), headers: { "content-type": "application/json" } }));
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toContain("réservé au système IA");
+    expect(mockedCreateRecord).not.toHaveBeenCalled();
   });
 });
 

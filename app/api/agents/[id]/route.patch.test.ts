@@ -37,7 +37,9 @@ const CURRENT_AGENT = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockUser.mockResolvedValue({ uid: "user_1" } as Awaited<ReturnType<typeof requireUser>>);
+  // SYSTÈME AGENT RÉSERVÉ (demande n°5) : PATCH exige le privilège admin —
+  // les tests exercés ici empruntent le chemin admin.
+  mockUser.mockResolvedValue({ uid: "user_1", claims: { admin: true } } as Awaited<ReturnType<typeof requireUser>>);
   mockGetAgent.mockResolvedValue(CURRENT_AGENT as Awaited<ReturnType<typeof getAgentForUser>>);
   mockUpdate.mockImplementation(async (_uid, _id, patch) => ({
     ...CURRENT_AGENT,
