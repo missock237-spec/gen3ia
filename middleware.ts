@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { detectDeviceFromHeaders } from "@/lib/device/detect";
 
+import {
+  classifyApiPath,
+  classifyPagePath,
+  createCachedAdminResolver,
+  isAdminActor,
+} from "@/lib/security/user-access";
+
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -126,56 +133,46 @@ function isPublicClientApi(pathname: string) {
   return pathname === "/api/public" || pathname.startsWith("/api/public/");
 }
 
-export function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
-  const hasClientAccess = Boolean(getClientEntry(request));
-  const isClientEntry = isClientRoute(pathname);
-  const isAllowedClientRequest = isClientEntry || isPublicClientApi(pathname) || pathname.startsWith("/_next/") || pathname === "/favicon.ico";
+/* ------------------------------------------------------------------ */
+/* LISTE BLANCHE D'ACCÈS UTILISATEUR (demande n°7 — deny-by-default)   */
+/*                                                                     */
+/* La classification des chemins (public / utilisateur / restreint)    */
+/* vit dans lib/security/user-access.ts — source centrale testée.      */
+/* Ici : application du contrôle pour TOUTES les requêtes (pages+API), */
+/* APRÈS l'isolation portail client (préservée en premier verrou).     */
+/*                                                                     */
+/*   restreint + ANONYME            → passage (comportement existant : */
+/*                                    401 levé par la route API,       */
+/*                                    redirection login côté client)   */
+/*   restreint + UTILISATEUR        → 403 (JSON API / page HTML)       */
+/*   restreint + ADMIN              → passage (accès complet)          */
+/*                                                                     */
+/* L'admin est reconnu par le custom claim Firebase vérifié (Bearer)   */
+/* OU par le rôle plateforme (même annuaire que getPlatformAccess,     */
+/* cache mémoire 60 s). Runtime NODE requis : vérification RS256 du    */
+/* Bearer + HMAC du cookie de session + annuaire (node:crypto, fetch). */
+/* ------------------------------------------------------------------ */
 
-  // Un lien client ouvre un espace isolé : tant que ce marqueur existe,
-  // aucune page de l'application n'est accessible depuis ce navigateur.
-  if (hasClientAccess && !isAllowedClientRequest) {
-    return NextResponse.redirect(new URL(getClientEntry(request) ?? "/client", request.url));
+const adminRoleResolver = createCachedAdminResolver(async (uid) => {
+  // Même source de vérité que lib/access/platform.ts (app/admin,
+  // /api/auth/access) : claims Bearer puis annuaire plateforme.
+  const { getPlatformRole } = await import("@/lib/access/platform");
+  const role = await getPlatformRole(uid);
+  return role === "admin";
+});
+
+async function isAdminByPlatformRole(uid: string): Promise<boolean> {
+  try {
+    // Une panne de l'annuaire n'est JAMAIS mise en cache et ne bloque
+    // que la décision courante (fail-closed : traité comme standard —
+    // c'est l'écran « espace restreint » actuel des pages admin).
+    return await adminRoleResolver(uid);
+  } catch {
+    return false;
   }
+}
 
-  // Detection automatique d'appareils : le resultat est expose aux pages
-  // serveur et aux routes API via les en-tetes x-gen3ia-device-*.
-  const device = detectDeviceFromHeaders(request.headers);
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-gen3ia-device", device.type);
-  requestHeaders.set("x-gen3ia-device-os", device.os);
-  requestHeaders.set("x-gen3ia-device-app", device.isDesktopApp ? "desktop-app" : "web");
-
-  // Corrélation : on réutilise l'id de l'appelant s'il est sain, sinon on
-  // en génère un. Propagé aux routes API via les request headers ET écho
-  // sur TOUTES les réponses /api/* (surveillance externe + support).
-  const isApiRoute = pathname.startsWith("/api/");
-  const traceId = traceIdEntrant(request) ?? genererTraceId();
-  if (isApiRoute) {
-    requestHeaders.set(TRACE_HEADER, traceId);
-  }
-
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
-
-  if (isClientEntry) {
-    response.cookies.set(CLIENT_ACCESS_COOKIE, pathname, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-    });
-  }
-
-  // Surface artefact : CSP dédiée (CDN + eval confinés au sandbox à code
-  // utilisateur) + X-Frame-Options assoupli pour l'intégration same-origin
-  // dans la modale d'aperçu. TOUT le reste de l'application garde la CSP
-  // stricte et X-Frame-Options SAMEORIGIN.
-  const isArtefactPreview = pathname === "/preview" || pathname.startsWith("/preview/");
-
-  if (isApiRoute) {
-    response.headers.set(TRACE_HEADER, traceId);
-  }
-  response.headers.set("X-Gen3ia-Device", device.type);
+function applySecurityHeaders(response: NextResponse, isArtefactPreview: boolean): NextResponse {
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", isArtefactPreview ? "SAMEORIGIN" : "DENY");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -198,6 +195,163 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
+const FORBIDDEN_PAGE_HTML = `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>403 — Accès refusé · Gen3ia</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+         background: #101014; color: #f2f2f5; font-family: system-ui, sans-serif; }
+  main { text-align: center; padding: 2rem; max-width: 34rem; }
+  h1 { font-size: 1.5rem; margin: 0 0 .75rem; }
+  p { color: #a9a9b8; line-height: 1.6; margin: 0; }
+  code { color: #d9d9e3; }
+</style>
+</head>
+<body>
+<main>
+  <h1>403 — Accès refusé</h1>
+  <p>Cette fonctionnalité n'est pas accessible avec votre compte.
+     Les espaces disponibles : chat IA, entraînement, connecteurs,
+     planifications, facturation, paramètres, compte, connaissances,
+     projets, fichiers, automatisation, intégrations, observabilité
+     et mémoire permanente.</p>
+</main>
+</body>
+</html>`;
+
+function forbiddenApi(traceId: string): NextResponse {
+  const response = NextResponse.json(
+    {
+      success: false,
+      error: "Accès refusé : cette fonctionnalité n'est pas disponible pour votre compte.",
+    },
+    { status: 403, headers: { [TRACE_HEADER]: traceId } },
+  );
+  return applySecurityHeaders(response, false);
+}
+
+function forbiddenPage(): NextResponse {
+  const response = new NextResponse(FORBIDDEN_PAGE_HTML, {
+    status: 403,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
+  return applySecurityHeaders(response, false);
+}
+
+/**
+ * Contrôle d'accès deny-by-default. Retourne une réponse 403 si un
+ * utilisateur standard (identifié, non admin) tente d'atteindre un chemin
+ * hors liste blanche ; `null` sinon (chemin autorisé, ou anonyme — le
+ * comportement d'auth existant s'applique alors sans changement).
+ */
+async function applyAccessControl(
+  request: NextRequest,
+  pathname: string,
+  isApiRoute: boolean,
+  traceId: string,
+): Promise<NextResponse | null> {
+  const decision = isApiRoute ? classifyApiPath(pathname) : classifyPagePath(pathname);
+  if (decision.access !== "restreint") return null;
+
+  // 1) Bearer Firebase JWT (RS256 vérifié) — seul chemin qui porte le
+  //    custom claim admin (convention requireAdmin).
+  const authorization = request.headers.get("authorization");
+  let identified = false;
+  if (authorization && authorization.toLowerCase().startsWith("bearer ")) {
+    try {
+      const { verifyFirebaseToken } = await import("@/lib/firebase/auth-server");
+      const token = await verifyFirebaseToken(authorization);
+      identified = true;
+      if (isAdminActor(token as unknown as Record<string, unknown>)) return null;
+      if (await isAdminByPlatformRole(token.uid)) return null;
+    } catch {
+      // Bearer absent/invalide : on tente le cookie de session (même
+      // sémantique de repli que requireUser), sinon anonyme.
+    }
+  }
+
+  // 2) Cookie de session signé gen3ia_session (HMAC serveur). Il ne
+  //    transporte jamais de claims : le rôle passe par l'annuaire.
+  if (!identified) {
+    const { readSessionCookie } = await import("@/lib/server/session-cookie");
+    const session = readSessionCookie(request.headers.get("cookie"));
+    if (session) {
+      identified = true;
+      if (await isAdminByPlatformRole(session.uid)) return null;
+    }
+  }
+
+  // 3) Anonyme : comportement existant strictement inchangé.
+  if (!identified) return null;
+
+  return isApiRoute ? forbiddenApi(traceId) : forbiddenPage();
+}
+
+export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const hasClientAccess = Boolean(getClientEntry(request));
+  const isClientEntry = isClientRoute(pathname);
+  const isAllowedClientRequest = isClientEntry || isPublicClientApi(pathname) || pathname.startsWith("/_next/") || pathname === "/favicon.ico";
+
+  // Un lien client ouvre un espace isolé : tant que ce marqueur existe,
+  // aucune page de l'application n'est accessible depuis ce navigateur.
+  if (hasClientAccess && !isAllowedClientRequest) {
+    return NextResponse.redirect(new URL(getClientEntry(request) ?? "/client", request.url));
+  }
+
+  const isApiRoute = pathname.startsWith("/api/");
+  const isArtefactPreview = pathname === "/preview" || pathname.startsWith("/preview/");
+
+  // Corrélation : on réutilise l'id de l'appelant s'il est sain, sinon on
+  // en génère un. Propagé aux routes API via les request headers ET écho
+  // sur TOUTES les réponses /api/* (surveillance externe + support) —
+  // y compris les 403 de la liste blanche (support production).
+  const traceId = traceIdEntrant(request) ?? genererTraceId();
+
+  // Liste blanche d'accès (demande n°7) : AVANT la détection d'appareil
+  // et la propagation de headers — un 403 n'a besoin de rien d'autre.
+  const denied = await applyAccessControl(request, pathname, isApiRoute, traceId);
+  if (denied) return denied;
+
+  // Detection automatique d'appareils : le resultat est expose aux pages
+  // serveur et aux routes API via les en-tetes x-gen3ia-device-*.
+  const device = detectDeviceFromHeaders(request.headers);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-gen3ia-device", device.type);
+  requestHeaders.set("x-gen3ia-device-os", device.os);
+  requestHeaders.set("x-gen3ia-device-app", device.isDesktopApp ? "desktop-app" : "web");
+
+  if (isApiRoute) {
+    requestHeaders.set(TRACE_HEADER, traceId);
+  }
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+
+  if (isClientEntry) {
+    response.cookies.set(CLIENT_ACCESS_COOKIE, pathname, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+    });
+  }
+
+  // Surface artefact : CSP dédiée (CDN + eval confinés au sandbox à code
+  // utilisateur) + X-Frame-Options assoupli pour l'intégration same-origin
+  // dans la modale d'aperçu. TOUT le reste de l'application garde la CSP
+  // stricte et X-Frame-Options SAMEORIGIN.
+  if (isApiRoute) {
+    response.headers.set(TRACE_HEADER, traceId);
+  }
+  response.headers.set("X-Gen3ia-Device", device.type);
+  applySecurityHeaders(response, isArtefactPreview);
+
+  return response;
+}
+
 export const config = {
   // Correspond à toutes les routes SAUF les assets statiques Next (qui
   // reçoivent déjà les en-têtes de next.config.ts headers()) et le favicon.
@@ -210,8 +364,18 @@ export const config = {
   //    middleware garantit la couverture des routes qui l'oublieraient ;
   // 3. l'isolation client (cookie gen3ia_client_access) doit pouvoir
   //    intercepter les appels API d'un navigateur client isolé ;
-  // 4. détection d'appareil propagée aux routes API (x-gen3ia-device-*).
+  // 4. détection d'appareil propagée aux routes API (x-gen3ia-device-*) ;
+  // 5. liste blanche d'accès utilisateur (demande n°7) : pages + API,
+  //    deny-by-default, appliquée AVANT les routes.
+  //
+  // Runtime NODEJS (demande n°7) : le contrôle d'accès doit vérifier
+  // réellement l'identité (JWT RS256 Firebase via node:crypto + fetch des
+  // certificats Google, HMAC du cookie de session) et résoudre le rôle
+  // admin via l'annuaire plateforme — impossible au runtime Edge. Les
+  // chemins publics/allowlistés (l'immense majorité du trafic) ne paient
+  // AUCUN de ces coûts : la classification est purement synchrone.
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
+  runtime: "nodejs",
 };
