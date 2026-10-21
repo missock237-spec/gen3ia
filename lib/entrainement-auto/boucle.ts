@@ -5,6 +5,7 @@ import {
   downloadHubFile,
   hubIntegrationStatus,
   inspectHubDataset,
+  lireLignesHub,
   searchHubDatasets,
 } from "@/lib/training/hub";
 
@@ -92,8 +93,17 @@ export function clientHubReel(): ClientHubAuto {
       };
     },
     async telecharger(provider, ref, fichier, maxOctets) {
-      const { buffer } = await downloadHubFile(provider, ref, fichier, maxOctets);
+      // MODE PARTIEL activé : les grands fichiers du hub (des centaines de
+      // Mo) sont lus jusqu'au plafond (premières lignes complètes) au lieu
+      // d'être refusés — c'est ce qui rend l'absorption à grande échelle
+      // possible dans les plafonds mémoire du VPS.
+      const { buffer } = await downloadHubFile(provider, ref, fichier, maxOctets, true);
       return buffer;
+    },
+    async lireLignes(provider, ref, maxLignes) {
+      // Paging datasets-server (HF) : les datasets parquet-only sont lus
+      // ligne à ligne, SANS téléchargement de fichier (petits JSON bornés).
+      return lireLignesHub(provider, ref, maxLignes);
     },
     estConfigure(provider) {
       return hubIntegrationStatus().some((s) => s.provider === provider && s.configured);

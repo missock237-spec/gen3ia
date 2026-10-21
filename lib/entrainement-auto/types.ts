@@ -253,4 +253,9 @@ export interface ClientHubAuto {
   telecharger(provider: HubSource, ref: string, fichier: string, maxOctets: number): Promise<Buffer>;
   /** Configuration honnête du connecteur (jeton présent ?). */
   estConfigure(provider: HubSource): boolean;
+  /** OPTIONNEL — lignes réelles via l'API de paging du hub (datasets-server
+   *  /rows pour Hugging Face : ouvre les datasets parquet-only sans
+   *  télécharger de fichier). Absent chez les clients de test simples ;
+   *  l'ingesteur le traite comme un enrichissement, jamais une exigence. */
+  lireLignes?(provider: HubSource, ref: string, maxLignes: number): Promise<Array<Record<string, unknown>>>;
 }

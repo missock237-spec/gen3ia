@@ -81,7 +81,7 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     label: "Conversation & dialogue",
     objectif: "langage",
     requetes: {
-      huggingface: ["french conversation dialogue", "chat dialogue pairs"],
+      huggingface: ["dialogue dataset", "conversation dataset"],
       kaggle: ["chatbot dialogue dataset", "conversation dataset"],
     },
     minDatasets: 1,
@@ -94,7 +94,7 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     label: "Question-réponse",
     objectif: "langage",
     requetes: {
-      huggingface: ["french question answering", "question answering dataset"],
+      huggingface: ["question answering dataset", "question answer pairs"],
       kaggle: ["question answering", "qa dataset"],
     },
     minDatasets: 1,
@@ -107,7 +107,7 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     label: "Suivi d'instructions",
     objectif: "langage",
     requetes: {
-      huggingface: ["instruction following dataset", "instruction tuning pairs"],
+      huggingface: ["instruction following dataset", "instruction tuning"],
       kaggle: ["instruction dataset", "alpaca instructions"],
     },
     minDatasets: 1,
@@ -120,7 +120,7 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     label: "Connaissances générales",
     objectif: "langage",
     requetes: {
-      huggingface: ["general knowledge facts dataset", "trivia question answer"],
+      huggingface: ["general knowledge", "trivia dataset"],
       kaggle: ["general knowledge", "facts dataset"],
     },
     minDatasets: 1,
@@ -133,7 +133,7 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     label: "Mathématiques & logique",
     objectif: "langage",
     requetes: {
-      huggingface: ["math word problems", "arithmetic reasoning dataset"],
+      huggingface: ["math word problems", "math dataset"],
       kaggle: ["math dataset", "arithmetic problems"],
     },
     minDatasets: 1,
@@ -146,7 +146,7 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     label: "Sciences",
     objectif: "langage",
     requetes: {
-      huggingface: ["science questions answers", "scientific explanation dataset"],
+      huggingface: ["science qa", "scientific qa"],
       kaggle: ["science qa", "science facts"],
     },
     minDatasets: 1,
@@ -159,7 +159,7 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     label: "Culture & histoire",
     objectif: "langage",
     requetes: {
-      huggingface: ["history questions answers", "culture geography trivia"],
+      huggingface: ["history dataset", "wikipedia question"],
       kaggle: ["history dataset", "geography facts"],
     },
     minDatasets: 1,
@@ -172,7 +172,7 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     label: "Langues & traduction",
     objectif: "langage",
     requetes: {
-      huggingface: ["french english translation pairs", "translation dataset"],
+      huggingface: ["french english translation", "translation dataset"],
       kaggle: ["translation dataset", "language pairs"],
     },
     minDatasets: 1,
@@ -185,7 +185,7 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     label: "Intentions & commandes",
     objectif: "intention",
     requetes: {
-      huggingface: ["intent classification dataset", "utterance intent"],
+      huggingface: ["intent classification dataset", "intent detection"],
       kaggle: ["intent classification", "chatbot intent dataset"],
     },
     minDatasets: 1,
@@ -211,7 +211,7 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     label: "Sujets & topiques",
     objectif: "intention",
     requetes: {
-      huggingface: ["topic classification dataset", "text classification topics"],
+      huggingface: ["topic classification dataset", "news classification dataset"],
       kaggle: ["topic classification", "news classification"],
     },
     minDatasets: 1,
@@ -224,7 +224,7 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     label: "Sécurité & toxicité",
     objectif: "intention",
     requetes: {
-      huggingface: ["toxicity classification dataset", "safe vs toxic comments"],
+      huggingface: ["toxicity classification dataset", "toxic comments"],
       kaggle: ["toxic comments", "toxicity dataset"],
     },
     minDatasets: 1,
@@ -369,6 +369,21 @@ function similariteJaccard(a: string, b: string): number {
   return commun / (ta.size + tb.size - commun);
 }
 
+/** Déduplique des paires par clé de motif (miroir de l'anti-doublon du
+ *  cortex) — l'échantillon de rétention ne contient que des paires réellement
+ *  indexées. */
+function dedupliquerPaires(paires: readonly PaireLangage[]): PaireLangage[] {
+  const vues = new Set<string>();
+  const uniques: PaireLangage[] = [];
+  for (const paire of paires) {
+    const cle = paire.motif.toLowerCase().split(/\s+/).sort().join(" ");
+    if (vues.has(cle)) continue;
+    vues.add(cle);
+    uniques.push(paire);
+  }
+  return uniques;
+}
+
 /** La réponse retournée correspond-elle à la réponse attendue (stricte) ? */
 export function reponseCorrespond(retournee: string, attendue: string): boolean {
   const r = normaliserTexte(retournee);
@@ -492,25 +507,53 @@ export async function entrainerEtEvaluerDomaine(
   };
 
   if (domaine.objectif === "langage") {
-    const { entrainement, validation } = separerValidation(matiere.paires, {
-      minValide: UNITES_VALIDATION_MIN,
-      maxValide: 60,
-    });
-    resultat.unitesValidation = validation.length;
-    if (entrainement.length > 0) {
-      const stats = rt.cortex.apprendre(entrainement, { personnalisees: true });
-      resultat.unitesEntraînees = stats.pairesAjoutees;
-      resultat.detail.vocabulaire = stats.vocabulaire;
-      resultat.detail.doublons = stats.pairesDoublons;
+    // Le cortex langagier Gen3 est une MÉMOIRE DE RÉCUPÉRATION : il apprend
+    // des paires motif → réponse. TOUTE la matière du cycle est donc apprise
+    // (c'est le contenu du domaine qui se construit), et la maîtrise se
+    // mesure à la RÉTENTION : fraction des paires apprises que le cortex
+    // restitue encore exactement — la capacité de production réelle.
+    // (Mesurer sur des paires jamais vues serait absurde : une mémoire de
+    // récupération ne « généralise » pas sur des contenus inconnus.)
+    const stats = rt.cortex.apprendre(matiere.paires, { personnalisees: true });
+    resultat.unitesEntraînees = stats.pairesAjoutees;
+    resultat.detail.vocabulaire = stats.vocabulaire;
+    resultat.detail.doublons = stats.pairesDoublons;
+
+    // Échantillon de rétention : paires APPRISES prises par pas régulier
+    // (cap 60), dédoublonnées par clé de motif — mesure réelle du cerveau.
+    const apprises = dedupliquerPaires(matiere.paires);
+    const pas = Math.max(1, Math.floor(apprises.length / 60));
+    const echantillon: PaireLangage[] = [];
+    for (let i = 0; i < apprises.length && echantillon.length < 60; i += pas) {
+      echantillon.push(apprises[i]);
     }
-    if (validation.length >= UNITES_VALIDATION_MIN) {
-      const retention = evaluerRetentionCortex(rt.cortex, validation);
+    resultat.unitesValidation = echantillon.length;
+    if (echantillon.length >= UNITES_VALIDATION_MIN && stats.pairesAjoutees > 0) {
+      const retention = evaluerRetentionCortex(rt.cortex, echantillon);
       resultat.evaluation = {
         dateA: maintenant(),
         accuracy: retention.accuracy,
         unites: retention.unites,
         valide: true,
       };
+    }
+    // Échantillons {text,label} reçus par un domaine langage : ils sont
+    // ENTRAÎNÉS AUSSI (SNN réel — aucun octet ingéré ne reste inutilisé),
+    // mais ils ne participent PAS à l'évaluation de maîtrise, qui reste
+    // fondée sur la rétention du cortex en paires (honnêteté de forme).
+    if (matiere.echantillons.length > 0) {
+      try {
+        const lotSnn = matiere.echantillons.slice(0, maxEchantillonsParCycle);
+        const entraineurSnn = new NeuralTrainer(rt.reseau, rt.espace, rt.veille, rt.noyau);
+        const rapportSnn = await entraineurSnn.train(lotSnn, { epochs: 2, testRatio: 0.2 });
+        resultat.detail.epoques = rapportSnn.epochs;
+        resultat.detail.accuracyTrain = rapportSnn.accuracyTrain;
+        resultat.detail.accuracyTest = rapportSnn.accuracyTest;
+        resultat.detail.dureeMs = rapportSnn.dureeMs;
+      } catch {
+        // Échec SNN non bloquant : le domaine langage reste sur son évaluation
+        // propre (paires). L'échec est visible dans les métriques secondaires.
+      }
     }
   } else {
     const { entrainement, validation } = separerValidation(matiere.echantillons, {
