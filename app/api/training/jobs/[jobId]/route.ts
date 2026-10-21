@@ -1,21 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
-import { requireUser } from "@/lib/security/authenticated-request";
+import { requireSystemAccess } from "@/app/api/training/_internal/system-only";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 
 import { getJob, getProject } from "@/lib/training/repository";
 import { refreshJob } from "@/lib/training/orchestrator";
 import { saveJob } from "@/lib/training/repository";
 
-/** GET /api/training/jobs/[jobId]?projectId=… — détail d'une tâche (raffraîchie si en cours). */
+/**
+ * GET /api/training/jobs/[jobId]?projectId=… — SYSTÈME-ONLY (demande n° 6).
+ *
+ * Le détail brut d'une tâche + le rafraîchissement fournisseur piloté par
+ * requête (`refreshJob`) relèvent de la mécanique interne : 403 JSON clair
+ * pour un utilisateur standard (401 si non authentifié). L'utilisateur suit
+ * progression, journal et métriques via `GET /api/training/projects/[id]`,
+ * dont le sweep interne rafraîchit les tâches en cours.
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> },
 ) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireUser(request);
+    const user = await requireSystemAccess(request);
     const { jobId } = await params;
     const projectId = new URL(request.url).searchParams.get("projectId") ?? "";
     if (!projectId) {
