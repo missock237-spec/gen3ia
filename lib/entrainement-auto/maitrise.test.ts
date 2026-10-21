@@ -70,8 +70,46 @@ describe("CATALOGUE_MAITRISE", () => {
       expect(domaine.requetes.kaggle.length).toBeGreaterThan(0);
       for (const requete of [...domaine.requetes.huggingface, ...domaine.requetes.kaggle]) {
         expect(requete.length).toBeLessThanOrEqual(80);
+        expect(requete.trim()).toBe(requete);
+        expect(requete.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("domaines historiquement vides : requêtes élargies, ciblées et sans doublon", () => {
+    // Les 4 domaines restés à 0 dataset ingéré en production ont chacun un
+    // pool ÉLARGI (≥ 3 requêtes par hub) choisi sur évidence HF réelle
+    // (fichiers ingérables + matière extraite, voir maitrise.ts).
+    for (const id of ["sciences", "culture-histoire", "langues", "sujets"]) {
+      const domaine = domaineParId(id);
+      expect(domaine, `domaine ${id} présent`).not.toBeNull();
+      expect(domaine!.requetes.huggingface.length).toBeGreaterThanOrEqual(3);
+      expect(domaine!.requetes.kaggle.length).toBeGreaterThanOrEqual(3);
+      for (const hub of ["huggingface", "kaggle"] as const) {
+        const uniques = new Set(domaine!.requetes[hub].map((r) => r.toLowerCase()));
+        expect(uniques.size).toBe(domaine!.requetes[hub].length);
+      }
+    }
+  });
+
+  it("requêtes des domaines vides : les plus riches d'abord (évidence HF)", () => {
+    // L'ordre EST la priorité d'ingestion du cycle : la première requête de
+    // chaque domaine vide est celle dont le top 6 HF a produit le plus de
+    // matière réelle lors de la validation (paires/échantillons extraits).
+    expect(domaineParId("sciences")?.requetes.huggingface[0]).toBe("medical meadow");
+    expect(domaineParId("culture-histoire")?.requetes.huggingface[0]).toBe("history qa");
+    expect(domaineParId("langues")?.requetes.huggingface[0]).toBe("translation instructions");
+    expect(domaineParId("sujets")?.requetes.huggingface[0]).toBe("news classification dataset");
+  });
+
+  it("sciences : « science qa » (0 paire comptable) remplacée par « biology qa »", () => {
+    // Évidence HF : le top 6 de « science qa » est parquet-only ET son repli
+    // /rows (ScienceQA) ne produit aucune paire (answer int8 → rejeté par
+    // REPONSE_MIN) ; « biology qa » a une matière prouvée (data.jsonl
+    // input→target). La requête morte ne doit plus gaspiller de budget.
+    const sciences = domaineParId("sciences");
+    expect(sciences?.requetes.huggingface).toContain("biology qa");
+    expect(sciences?.requetes.huggingface).not.toContain("science qa");
   });
 
   it("domaineParId : trouvé / inconnu → null", () => {

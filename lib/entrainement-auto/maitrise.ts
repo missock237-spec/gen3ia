@@ -74,6 +74,25 @@ const d = (domaine: DomaineMaitrise): DomaineMaitrise => domaine;
  * LE CATALOGUE — 12 domaines couvrant l'espace textuel que les hubs peuvent
  * alimenter pour ce cerveau (dialogue, savoir, raisonnement, commandes).
  * Déterministe : l'ordre EST la rotation de la boucle.
+ *
+ * MÉTHODE DE CHOIX DES REQUÊTES (évidence réelle, pas au hasard) — pour les
+ * domaines restés VIDES (sciences, culture-histoire, langues, sujets), chaque
+ * requête a été validée contre l'API publique HF exactement comme la boucle
+ * l'exécute : recherche `?search=…&limit=6&sort=downloads&direction=-1`, puis
+ * pour les résultats : fichiers ingérables (csv/json/jsonl/txt) présents ET
+ * extraction de MATIÈRE réelle (paires question→réponse / échantillons
+ * {text,label}) sur les 2 premiers fichiers — miroir de l'ingesteur. Les
+ * requêtes mortes (« science question answering » : 0 résultat ; « science
+ * qa » : top résultats parquet-only non lisibles aujourd'hui) ont été
+ * écartées ou reléguées en fin de liste. Ordre = priorité d'ingestion du
+ * cycle : les requêtes aux résultats les plus riches d'abord. Vérification
+ * du repli /rows : pour « science qa », le paging datasets-server RÉPOND
+ * (derek-thomas/ScienceQA) mais ne produit aucune PAIRE comptable pour un
+ * domaine langage (answer = int8 → rejeté par REPONSE_MIN) — la requête a
+ * donc été remplacée par « biology qa » (paires input→target prouvées).
+ * Les requêtes Kaggle (API sans accès de test ici — jeton absent du bac à
+ * sable) sont choisies sur les intitulés usuels des jeux Kaggle, sans
+ * preuve possible — signalé honnêtement plutôt que prétendu.
  */
 export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
   d({
@@ -145,9 +164,23 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     id: "sciences",
     label: "Sciences",
     objectif: "langage",
+    // Évidence HF mesurée le 2026-10-22 (recherche limit=6 sort=downloads,
+    // fichiers vérifiés via /api/datasets/{id}, matière lue en tête de fichier) :
+    //  medical meadow → 6/6 résultats ingérables (.json) ;
+    //    medical_meadow_medical_flashcards.json : 17,7 Mo, 33 955 paires
+    //    {instruction,input}→output (plafonnées 400/dataset par les plafonds,
+    //    fragment tronqué géré par l'ingesteur) ; wikidoc_patient_information
+    //    + health_advice : même structure ;
+    //  physics qa → PhysicsQA.json 370 paires (question→answer) +
+    //    dataset_QA_physics.csv (Question,Answer) ;
+    //  biology qa → QasTurk/Biology-QA-Data data.jsonl (input→target) —
+    //    REMPLACE « science qa » dont le top 6 est parquet-only (ScienceQA…)
+    //    ET dont le paging /rows ne donne aucune paire comptable (answer
+    //    int8 → rejeté par REPONSE_MIN=2 → repli échantillons non comptés
+    //    pour un domaine langage). Zéro budget gaspillé.
     requetes: {
-      huggingface: ["science qa", "scientific qa"],
-      kaggle: ["science qa", "science facts"],
+      huggingface: ["medical meadow", "physics qa", "biology qa"],
+      kaggle: ["science questions", "science exam", "science facts"],
     },
     minDatasets: 1,
     minUnites: 120,
@@ -158,9 +191,18 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     id: "culture-histoire",
     label: "Culture & histoire",
     objectif: "langage",
+    // Évidence HF mesurée le 2026-10-22 : history qa → 4/6 résultats
+    // ingérables : world-history-1500-qa dataset.json (qa_pairs
+    // {question,answer}) + moroccan_history_qa qa_dataset_en.csv
+    // (context,question,answer — 9 090 lignes brutes) + kz-history txt ;
+    // wikipedia question → restack/conversational-question-answer-wikipedia
+    // data.json (messages user→assistant, paires chat) 1/6 ingérable ;
+    // french history → Dorian2B french-history-5K (.json/.txt {text} :
+    // repli échantillons, matière secondaire non comptée). « history
+    // dataset » (0 matière dans le top 6) écarté.
     requetes: {
-      huggingface: ["history dataset", "wikipedia question"],
-      kaggle: ["history dataset", "geography facts"],
+      huggingface: ["history qa", "wikipedia question", "french history"],
+      kaggle: ["history facts", "world history", "geography facts"],
     },
     minDatasets: 1,
     minUnites: 120,
@@ -171,9 +213,17 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     id: "langues",
     label: "Langues & traduction",
     objectif: "langage",
+    // Évidence HF mesurée le 2026-10-22 : translation instructions →
+    // 3/4 résultats ingérables : mesolitica/noisy-standard-malay + standard-
+    // malay (.jsonl {input→output} de traduction) + OdiaGenAI .json
+    // {instruction→output} ; french translation → MaroneAI/Wolof-to-French
+    // train.csv (Input,Target — 30 003 lignes brutes, plafonnées 400
+    // paires/dataset) ; english french → GDGBabcockUniversity CSV parallèle
+    // (échantillons secondaires). « french english translation » et
+    // « translation dataset » (top 6 parquet-only ou méta-fichiers) écartés.
     requetes: {
-      huggingface: ["french english translation", "translation dataset"],
-      kaggle: ["translation dataset", "language pairs"],
+      huggingface: ["translation instructions", "french translation", "english french"],
+      kaggle: ["english french translation", "translation dataset", "french english"],
     },
     minDatasets: 1,
     minUnites: 120,
@@ -210,9 +260,16 @@ export const CATALOGUE_MAITRISE: readonly DomaineMaitrise[] = [
     id: "sujets",
     label: "Sujets & topiques",
     objectif: "intention",
+    // Évidence HF mesurée le 2026-10-22 (échantillons {text,label} —
+    // l'objectif intention compte des échantillons, pas des paires) :
+    // news classification dataset → 4/6 ingérables (news_bias.csv
+    // text,label ; Amharic-News train/test.csv ; elnazrezaee 6 .csv) ;
+    // text classification → 4/6 ingérables (Mental-Health, MNLI, PubMed .csv)
+    // ; topic classification dataset → 2/6 ingérables (tanaos + donajui
+    // data/train_data.csv text,labels). Ordre = richesse mesurée.
     requetes: {
-      huggingface: ["topic classification dataset", "news classification dataset"],
-      kaggle: ["topic classification", "news classification"],
+      huggingface: ["news classification dataset", "text classification", "topic classification dataset"],
+      kaggle: ["news classification", "topic classification", "text classification"],
     },
     minDatasets: 1,
     minUnites: 100,
