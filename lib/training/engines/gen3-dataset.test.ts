@@ -62,6 +62,20 @@ describe("parserDatasetGen3", () => {
     expect(b.paires).toEqual([{ question: "p", reponse: "o" }]);
   });
 
+  it("accepte la clé « completion » (format prompt/completion standard des datasets LLM)", () => {
+    // Régression : la clé « completion » était validée à l'import mais
+    // ignorée par ce parseur → 0 paire retenue, échec d'entraînement honnête
+    // mais évitable (constaté en production le 2026-10-21).
+    const jsonl = '{"prompt":"Qu est-ce que Gen3ia ?","completion":"Une plateforme IA."}';
+    const a = parserDatasetGen3("jsonl", jsonl);
+    expect(a.paires).toEqual([{ question: "Qu est-ce que Gen3ia ?", reponse: "Une plateforme IA." }]);
+    expect(a.ignores).toBe(0);
+    const b = parserDatasetGen3("csv", "prompt,completion\nQui ?,Moi.");
+    expect(b.paires).toEqual([{ question: "Qui ?", reponse: "Moi." }]);
+    const c = parserDatasetGen3("json", JSON.stringify([{ prompt: "p", completion: "c", answer: "a" }]));
+    expect(c.paires).toEqual([{ question: "p", reponse: "a" }]); // priorité inchangée aux clés historiques
+  });
+
   it("applique le plafond de paires (MAX_PAIRES_DATASET) sans les avaler en silence", () => {
     const grosses = Array.from({ length: MAX_PAIRES_DATASET + 25 }, (_, i) => ({
       question: `q${i}`,

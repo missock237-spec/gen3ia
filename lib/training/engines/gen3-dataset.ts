@@ -9,8 +9,9 @@
  *
  * Formats reconnus :
  *  - json / jsonl : objets { instruction|question|prompt|motif,
- *    response|answer|reponse|output|réponse } (les variantes FR/EN et
- *    q/a sont acceptées) ;
+ *    response|answer|reponse|réponse|output|completion } (les variantes
+ *    FR/EN et q/a sont acceptées — « completion » couvre le format
+ *    prompt/completion standard des datasets LLM) ;
  *  - csv : mêmes noms de colonnes (première ligne = en-tête) ;
  *  - txt : blocs « Q: … / A: … » (ou Question: / Réponse:), séparés par
  *    des lignes vides — les autres contenus txt ne constituent PAS des
@@ -53,7 +54,7 @@ const CLES_QUESTION = [
 
 /** Clés de réponse reconnues. */
 const CLES_REPONSE = [
-  "response", "answer", "reponse", "réponse", "output", "reply", "a",
+  "response", "answer", "reponse", "réponse", "output", "reply", "a", "completion",
 ] as const;
 
 function champTexte(valeur: unknown): string | null {

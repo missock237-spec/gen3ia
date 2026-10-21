@@ -1,5 +1,12 @@
 import "server-only";
 
+// ⚠️ IMPORT STATIQUE OBLIGATOIRE — l'interopérabilité webpack de l'import()
+// dynamique d'un paquet EXTERNE (serverExternalPackages) est cassée : en
+// production, `const { default: archiver } = await import("archiver")` lève
+// « TypeError: d is not a constructor » (reproduit et vérifié sur Next 15.5).
+// Le pattern statique (même que lib/documents/zip/create.ts) fonctionne.
+import archiver from "archiver";
+
 import { newUlid, userDir } from "@/lib/storage/user-data-store";
 import { putObject, createDownloadUrl, downloadFromR2 } from "@/lib/storage/r2";
 
@@ -26,7 +33,6 @@ function nowIso(): string {
 }
 
 async function buildZip(entries: Array<{ name: string; content: Buffer }>): Promise<Buffer> {
-  const { default: archiver } = await import("archiver");
   const { Writable } = await import("node:stream");
   const chunks: Buffer[] = [];
   const sink = new Writable({
