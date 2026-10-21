@@ -5,6 +5,17 @@ import { errorStatus } from "@/lib/security/http-errors";
 
 import { getNeuralRuntime } from "@/lib/neural/runtime";
 import { getDernierJob } from "@/lib/neural/training/job";
+import type { EffecteurCortexV2 } from "@/lib/neural/core/v2/effecteur-cortex";
+
+/** Bloc télémétrie Cortex v2 (données réelles) pour la réponse API. */
+function etatCortexV2PourApi(cortexV2: EffecteurCortexV2) {
+  const etat = cortexV2.etatPourApi();
+  return {
+    ...etat,
+    neuronesTotaux:
+      etat.cortex.colonnes + etat.champ.taille + 100,
+  };
+}
 
 /**
  * ÉTAT DU SYSTÈME NEURONAL GEN3 — instantané complet, données 100 % réelles :
@@ -24,6 +35,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       moteurNeuralActif: true,
       modele: "gen3-snn-v1",
+      architecture: "gen3-cortex-v2",
       creeLe: runtime.creeLe,
       cerveau: {
         nbNeurones: stats.nbNeurones,
@@ -34,6 +46,7 @@ export async function GET(request: NextRequest) {
           max: stats.poidsMax,
         },
       },
+      cortexV2: runtime.cortexV2 ? etatCortexV2PourApi(runtime.cortexV2) : null,
       sante: { ...runtime.noyau.metriquesSante },
       horlogeVirtuelle: runtime.noyau.time,
       poolsSortie: Object.fromEntries(runtime.espace.outputPools),

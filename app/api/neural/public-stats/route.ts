@@ -47,6 +47,7 @@ export async function GET() {
           studio: "Gen entraîne les modèles fournis par les utilisateurs",
           moteurNatif: "gen3-native (CPU local, apprentissage réel)",
         },
+        cortexV2: blocCortexV2(runtime),
         iaExterne: "aucune — moteur 100 % local",
       },
       { headers: { "cache-control": "public, max-age=30, stale-while-revalidate=60" } },
@@ -59,4 +60,29 @@ export async function GET() {
       { status: 200, headers: { "cache-control": "public, max-age=30" } },
     );
   }
+}
+
+/** Construit le bloc public Cortex v2 (données réelles du runtime). */
+function blocCortexV2(runtime: ReturnType<typeof getNeuralRuntime>) {
+  if (!runtime.cortexV2) return null;
+  const etat = runtime.cortexV2.etatPourApi();
+  return {
+    colonnes: etat.cortex.colonnes,
+    aretes: etat.cortex.aretes,
+    champNeuronesAdressables: etat.champ.taille,
+    neuronesTotaux: etat.cortex.colonnes + etat.champ.taille + 100,
+    vitesse: {
+      msCycle: etat.cortex.msCycleEma,
+      cyclesParSeconde: etat.cortex.cyclesParSeconde,
+    },
+    champ: {
+      amplitudeMoyenne:
+        Math.round(etat.champ.amplitudeMoyenne * 1000) / 1000,
+      fractionActive:
+        Math.round(etat.champ.fractionActive * 1000) / 1000,
+      erreurEchantillon:
+        Math.round(etat.champ.erreurEchantillon * 10000) / 10000,
+    },
+    consolidation: etat.consolidation,
+  };
 }
