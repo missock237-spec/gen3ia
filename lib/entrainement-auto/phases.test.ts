@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   absorptionExpiree,
@@ -12,7 +12,15 @@ import type { EtatAutoApprentissage } from "./types";
 /* ------------------------------------------------------------------ */
 /* LE CYCLE DE VIE — machine à états PURE : absorption bornée →        */
 /* autonomie définitive. Chaque règle est testée sur des états réels.  */
+/* (Régime fenêtre forcé : le régime maîtrise a ses propres tests.)    */
 /* ------------------------------------------------------------------ */
+
+beforeEach(() => {
+  vi.stubEnv("AUTO_APPRENTISSAGE_MAITRISE", "0");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const LANCE_A = "2026-01-01T00:00:00.000Z";
 const LANCE_A_DATE = Date.parse(LANCE_A);

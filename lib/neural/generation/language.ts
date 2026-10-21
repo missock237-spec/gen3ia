@@ -55,8 +55,12 @@ export const GAIN_USAGE = 0.05;
 /** Plafond du poids d'usage (la plasticité ne s'emballe pas). */
 export const POIDS_USAGE_MAX = 2.0;
 
-/** Nombre maximal de paires personnalisées (budget mémoire du cortex). */
-export const MAX_PAIRES_PERSONNALISEES = 2000;
+/** Nombre maximal de paires personnalisées (budget mémoire du cortex).
+ *  Élargi (directive « entraînement autonome à grande échelle ») : l'absorption
+ *  continue depuis les hubs (Hugging Face + Kaggle) doit pouvoir stocker les
+ *  connaissances acquises — ~20 000 paires ≈ quelques Mo en RAM, sans risque
+ *  pour le VPS 2 Go. */
+export const MAX_PAIRES_PERSONNALISEES = 20_000;
 
 /**
  * STOPWORDS (FR + EN) : mots fonctionnels sans valeur discriminante. Ils sont

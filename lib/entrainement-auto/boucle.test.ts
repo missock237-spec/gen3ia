@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { deleteBrainState } from "@/lib/neural/training/persistence";
 
@@ -12,7 +12,16 @@ import type { ClientHubAuto } from "./types";
 /* ------------------------------------------------------------------ */
 /* LA BOUCLE — cycle complet avec entraînement RÉEL (SNN + cortex) et   */
 /* client hub factice déterministe (aucun appel réseau dans les tests). */
+/* (Cycle de vie fenêtre forcé : le régime maîtrise a ses propres       */
+/* tests dans maitrise.test.ts.)                                        */
 /* ------------------------------------------------------------------ */
+
+beforeEach(() => {
+  vi.stubEnv("AUTO_APPRENTISSAGE_MAITRISE", "0");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const JSONL_LANGAGE = [
   { question: "Comment fonctionne ton réseau neuronal ?", response: "Un SNN à spikes avec pools d'intention." },

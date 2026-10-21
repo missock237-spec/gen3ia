@@ -26,40 +26,65 @@ import { dureeAbsorptionMs } from "./plafonds";
 /** Vue dérivée de la phase courante (calculée, jamais stockée en double). */
 export interface VuePhase {
   phase: PhaseVie;
+  /** Régime de vie persisté (v3). */
+  regime: "fenetre" | "maitrise";
   /** La clôture est-elle déjà persistée dans l'état ? */
   absorptionCloturee: boolean;
   /** Date ISO de clôture (null tant que la fenêtre est ouverte). */
   clotureeA: string | null;
-  /** Millisecondes restantes dans la fenêtre (0 si expirée, null en autonomie). */
+  /** Millisecondes restantes dans la fenêtre (0 si expirée, null en autonomie
+   *  ET en régime maîtrise — pas de fenêtre temporelle dans ce régime). */
   restantMs: number | null;
 }
 
 /**
- * Dérive la phase courante. La fenêtre court depuis `lanceA` (premier
- * lancement constaté — JAMAIS réinitialisé au reboot) + durée d'absorption ;
- * un reboot dans la fenêtre ne la repousse pas, un reboot après l'échéance
- * démarre directement en autonomie.
+ * Dérive la phase courante.
+ *  - RÉGIME MAÎTRISE (v3) : phase « maitrise » — pas de fenêtre temporelle,
+ *    les hubs restent ouverts jusqu'à maîtrise complète du catalogue (la
+ *    clôture historique éventuelle est conservée pour mémoire mais NE gate
+ *    plus rien) ;
+ *  - RÉGIME FENÊTRE : la fenêtre court depuis `lanceA` (premier lancement
+ *    constaté — JAMAIS réinitialisé au reboot) + durée d'absorption ; un
+ *    reboot dans la fenêtre ne la repousse pas, un reboot après l'échéance
+ *    démarre directement en autonomie.
  */
 export function phaseDe(
   etat: EtatAutoApprentissage,
   maintenantMs: number = Date.now(),
   env: NodeJS.ProcessEnv = process.env,
 ): VuePhase {
+  if (etat.regime === "maitrise") {
+    return {
+      phase: "maitrise",
+      regime: "maitrise",
+      absorptionCloturee: etat.absorptionCloturee,
+      clotureeA: etat.absorptionClotureeA,
+      restantMs: null,
+    };
+  }
   if (etat.absorptionCloturee) {
-    return { phase: "autonomie", absorptionCloturee: true, clotureeA: etat.absorptionClotureeA, restantMs: null };
+    return {
+      phase: "autonomie",
+      regime: "fenetre",
+      absorptionCloturee: true,
+      clotureeA: etat.absorptionClotureeA,
+      restantMs: null,
+    };
   }
   const debut = Date.parse(etat.lanceA);
   const origine = Number.isFinite(debut) ? debut : maintenantMs;
   const restantMs = Math.max(0, origine + dureeAbsorptionMs(env) - maintenantMs);
-  return { phase: "absorption", absorptionCloturee: false, clotureeA: null, restantMs };
+  return { phase: "absorption", regime: "fenetre", absorptionCloturee: false, clotureeA: null, restantMs };
 }
 
-/** La fenêtre est-elle expirée (clôture requise au prochain point de contrôle) ? */
+/** La fenêtre est-elle expirée (clôture requise au prochain point de contrôle) ?
+ *  En régime maîtrise il n'y a PAS de fenêtre : toujours false. */
 export function absorptionExpiree(
   etat: EtatAutoApprentissage,
   maintenantMs: number = Date.now(),
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
+  if (etat.regime === "maitrise") return false;
   const vue = phaseDe(etat, maintenantMs, env);
   return vue.phase === "absorption" && vue.restantMs === 0;
 }
