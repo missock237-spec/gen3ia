@@ -4,10 +4,12 @@ import {
   convertirEchantillon,
   convertirPaire,
   ingesterDataset,
+  lignesDepuisBuffer,
   lignesDepuisContenu,
   nettoyerTexte,
 } from "./ingesteur";
 import { plafondsAuto } from "./plafonds";
+import { fixturesParquet } from "@/lib/training/hub/__fixtures__/parquet";
 import type { ClientHubAuto, DatasetChoisi } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -110,6 +112,25 @@ describe("lignesDepuisContenu", () => {
     const contenu = Array.from({ length: 50 }, (_, i) => `{"n":${i}}`).join("\n");
     const { lignes } = lignesDepuisContenu(contenu, "d.jsonl", 10);
     expect(lignes).toHaveLength(10);
+  });
+});
+
+describe("lignesDepuisBuffer — dispatch parquet (binaire) vs textuel", () => {
+  it("route le parquet vers le parseur dédié (JS pur, plafonné)", async () => {
+    const { lignes, avertissements } = await lignesDepuisBuffer(
+      fixturesParquet().langageSnappy,
+      "data/train-00000-of-00001-abc.parquet",
+      100,
+    );
+    expect(avertissements).toEqual([]);
+    expect(lignes).toHaveLength(4);
+    expect(lignes[0]).toMatchObject({ question: "Comment fonctionne le réseau Gen3 ?" });
+  });
+
+  it("route les formats textuels vers lignesDepuisContenu (comportement inchangé)", async () => {
+    const buffer = Buffer.from('{"a":1}\n{"a":2}', "utf8");
+    const { lignes } = await lignesDepuisBuffer(buffer, "d.jsonl", 100);
+    expect(lignes).toEqual([{ a: 1 }, { a: 2 }]);
   });
 });
 
@@ -223,5 +244,77 @@ describe("ingesterDataset", () => {
       inspecter: async () => ({ files: [{ name: "train.jsonl", sizeBytes: 100, downloadable: true }] }),
     }, plafonds, 1_048_576);
     expect(apport.paires).toHaveLength(20);
+  });
+
+  it("ingère un PARQUET de dialogues en paires (fichier binaire, ex. HF ScienceQA)", async () => {
+    const parquet = fixturesParquet().langageSnappy;
+    const client = clientFictif({});
+    const apport = await ingesterDataset(
+      { ...choixFictif("langage", "org/scienceqa"), titre: "ScienceQA" },
+      {
+        ...client,
+        inspecter: async () => ({
+          files: [
+            { name: "README.md", sizeBytes: 40, downloadable: false },
+            { name: "data/train-00000-of-00001-9e5f6b98c6d89c9a.parquet", sizeBytes: parquet.byteLength, downloadable: true },
+          ],
+        }),
+        telecharger: async () => parquet,
+      },
+      plafondsAuto(),
+      1_048_576,
+    );
+    expect(apport.fichiersLus).toBe(1);
+    expect(apport.octetsTelecharges).toBe(parquet.byteLength);
+    expect(apport.paires).toHaveLength(4);
+    expect(apport.paires[0]).toEqual({
+      motif: "Comment fonctionne le réseau Gen3 ?",
+      reponse: "Un SNN à spikes entraîné par résonance.",
+      theme: "hub:huggingface:ScienceQA",
+    });
+    expect(apport.echantillons).toHaveLength(0);
+    expect(apport.erreurs).toEqual([]);
+  });
+
+  it("ingère un PARQUET d'intentions text/label en échantillons étiquetés", async () => {
+    const parquet = fixturesParquet().intentionsSansCompr;
+    const client = clientFictif({});
+    const apport = await ingesterDataset(choixFictif("intention", "org/commandes-parquet"), {
+      ...client,
+      inspecter: async () => ({ files: [{ name: "intentions.parquet", sizeBytes: parquet.byteLength, downloadable: true }] }),
+      telecharger: async () => parquet,
+    }, plafondsAuto(), 1_048_576);
+    expect(apport.paires).toHaveLength(0);
+    expect(apport.echantillons).toHaveLength(4);
+    expect(apport.echantillons[0]).toEqual({ text: "génère une image de montagne enneigée", label: "GENERER_IMAGE" });
+  });
+
+  it("applique les plafonds au parquet (lignes, paires) avec avertissement honnête", async () => {
+    const parquet = fixturesParquet().grandSnappy; // 30 lignes
+    const client = clientFictif({});
+    const plafonds = { ...plafondsAuto(), maxLignesParDataset: 10, maxPairesParDataset: 400 };
+    const apport = await ingesterDataset(choixFictif("langage", "org/grand-parquet"), {
+      ...client,
+      inspecter: async () => ({ files: [{ name: "data/train.parquet", sizeBytes: parquet.byteLength, downloadable: true }] }),
+      telecharger: async () => parquet,
+    }, plafonds, 1_048_576);
+    expect(apport.lignesLues).toBe(10);
+    expect(apport.paires).toHaveLength(10);
+    // Honnêteté : le fichier déclare 30 lignes, seules 10 ont été analysées.
+    expect(apport.erreurs.some((e) => e.includes("30 lignes") && e.includes("10 premières"))).toBe(true);
+  });
+
+  it("consigne honnêtement un parquet illisible et retombe sur le paging du hub", async () => {
+    const client = clientFictif({});
+    const apport = await ingesterDataset(choixFictif("langage", "org/parquet-casse"), {
+      ...client,
+      inspecter: async () => ({ files: [{ name: "data/train.parquet", sizeBytes: 1000, downloadable: true }] }),
+      telecharger: async () => Buffer.from("octets non parquet", "utf8"),
+      lireLignes: async () => [{ question: "Question venant du paging du hub ?", answer: "Oui, réponse honnête." }],
+    }, plafondsAuto(), 1_048_576);
+    expect(apport.fichiersLus).toBe(1);
+    expect(apport.paires).toHaveLength(1);
+    expect(apport.erreurs.some((e) => e.includes("data/train.parquet") && e.includes("parquet"))).toBe(true);
+    expect(apport.erreurs.some((e) => e.includes("paging du hub") && e.includes("ingérable"))).toBe(true);
   });
 });

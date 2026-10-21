@@ -91,10 +91,12 @@ export function assertHubFileName(name: string): string {
   return clean;
 }
 
-/** Fichiers ingérables : CSV, JSON, JSONL, TXT — y compris compressés .gz
- *  (format très fréquent sur les hubs ; décompression transparente au
- *  téléchargement, bornée par le plafond). */
-export const HUB_DATASET_FILE_RE = /\.(csv|json|jsonl|txt)(\.gz)?$/i;
+/** Fichiers ingérables : CSV, JSON, JSONL, TXT et PARQUET — y compris
+ *  compressés .gz (format très fréquent sur les hubs ; décompression
+ *  transparente au téléchargement, bornée par le plafond). Le parquet —
+ *  format majoritaire des datasets Hugging Face — est parsé en JavaScript
+ *  pur (lib/training/hub/parquet.ts, hyparquet : aucune dépendance native). */
+export const HUB_DATASET_FILE_RE = /\.(csv|json|jsonl|txt|parquet)(\.gz)?$/i;
 
 /** Encode un chemin de fichier hub en conservant les séparateurs `/`. */
 export function encodeHubPath(path: string): string {
@@ -122,7 +124,7 @@ export type HubDatasetSummary = z.infer<typeof hubDatasetSummarySchema>;
 export const hubFileSchema = z.object({
   name: z.string().min(1).max(300),
   sizeBytes: z.number().int().nonnegative().default(0),
-  /** Vrai si l'extension est ingérable par le pipeline (csv/json/jsonl/txt). */
+  /** Vrai si l'extension est ingérable par le pipeline (csv/json/jsonl/txt/parquet). */
   downloadable: z.boolean().default(false),
 });
 export type HubFile = z.infer<typeof hubFileSchema>;
@@ -369,7 +371,7 @@ export interface HubFileSelection {
 
 /**
  * Choisit les fichiers réellement importables d'un dataset de hub :
- *  - extensions ingérables uniquement (.csv/.json/.jsonl/.txt) ;
+ *  - extensions ingérables uniquement (.csv/.json/.jsonl/.txt/.parquet) ;
  *  - plafond par fichier, plafond total, nombre maximal de fichiers ;
  *  - les fichiers dont la taille est inconnue (API HF) sont tentés : le
  *    plafond reste appliqué AU TÉLÉCHARGEMENT (hubDownloadFile).
@@ -394,7 +396,7 @@ export function selectFilesForImport(
       if (!wanted || wanted.length === 0 || wanted.includes(file.name)) {
         selection.skipped.push({
           name: file.name,
-          reason: "Format non ingérable (seuls .csv, .json, .jsonl et .txt sont analysés).",
+          reason: "Format non ingérable (seuls .csv, .json, .jsonl, .txt et .parquet sont analysés).",
         });
       }
     }

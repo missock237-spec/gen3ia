@@ -7,6 +7,7 @@ import {
   type TrainingSample,
 } from "@/lib/neural/training/dataset";
 import { csvPreviewToRows, parseCsvPreview, selectFilesForImport } from "@/lib/training/hub/common";
+import { estFichierParquet, lignesDepuisParquet } from "@/lib/training/hub/parquet";
 
 import type { ClientHubAuto, DatasetChoisi } from "./types";
 import type { PlafondsAuto } from "./plafonds";
@@ -20,11 +21,14 @@ import type { PlafondsAuto } from "./plafonds";
  *    supervisé du SNN (étiquetage lexical déterministe labelText(), ou
  *    colonne label explicite si elle correspond aux labels connus).
  *
- * Formats réellement analysés : .jsonl, .json, .csv, .txt (connecteurs hub :
- * seuls ces formats sont marqués `downloadable`). Tous les plafonds sont
- * appliqués RÉELLEMENT (octets téléchargés, lignes analysées, paires et
- * échantillons extraits). Un fichier qui échoue ne bloque jamais le cycle :
- * l'erreur est consignée honnêtement dans le rapport.
+ * Formats réellement analysés : .jsonl, .json, .csv, .txt et .parquet
+ * (connecteurs hub : seuls ces formats sont marqués `downloadable`).
+ * Le parquet — format majoritaire des datasets Hugging Face (ex.
+ * derek-thomas/ScienceQA, `data/train-00000-of-00001-<hash>.parquet`) — est
+ * parsé en JavaScript pur (hyparquet) sous les plafonds. Tous les plafonds
+ * sont appliqués RÉELLEMENT (octets téléchargés, lignes analysées, paires
+ * et échantillons extraits). Un fichier qui échoue ne bloque jamais le
+ * cycle : l'erreur est consignée honnêtement dans le rapport.
  */
 
 /** Champs candidats pour le motif (question / instruction / texte). */
@@ -358,6 +362,24 @@ export function lignesDepuisContenu(
   return { lignes: [], avertissements: [`${nomFichier} : format non analysé.`] };
 }
 
+/**
+ * DISPATCH PAR FORMAT DEPUIS LE BUFFER BRUT — le parquet est BINAIRE (le
+ * décodage UTF-8 le corromprait) : il est routé vers le parseur dédié
+ * (hyparquet, JS pur) qui respecte les mêmes plafonds ; tous les autres
+ * formats sont textuels et passent par lignesDepuisContenu.
+ */
+export async function lignesDepuisBuffer(
+  buffer: Buffer,
+  nomFichier: string,
+  maxLignes: number,
+): Promise<{ lignes: LigneBrute[]; avertissements: string[] }> {
+  if (estFichierParquet(nomFichier)) {
+    const resultat = await lignesDepuisParquet(buffer, nomFichier, maxLignes);
+    return { lignes: resultat.lignes, avertissements: resultat.avertissements };
+  }
+  return lignesDepuisContenu(buffer.toString("utf8"), nomFichier, maxLignes);
+}
+
 /* ------------------------------------------------------------------ */
 /* Ingestion d'un dataset                                               */
 /* ------------------------------------------------------------------ */
@@ -468,8 +490,7 @@ export async function ingesterDataset(
       apport.octetsTelecharges += buffer.length;
       apport.fichiersLus += 1;
 
-      const brut = buffer.toString("utf8");
-      const { lignes, avertissements } = lignesDepuisContenu(brut, fichier.name, plafonds.maxLignesParDataset);
+      const { lignes, avertissements } = await lignesDepuisBuffer(buffer, fichier.name, plafonds.maxLignesParDataset);
       apport.erreurs.push(...avertissements);
       apport.lignesLues += lignes.length;
 

@@ -124,6 +124,46 @@ describe("inspectHuggingFaceDataset", () => {
     expect(detail.notes.some((note) => /taille exacte des fichiers/i.test(note))).toBe(true);
   });
 
+  it("découvre les fichiers PARQUET du dépôt via l'API tree (data/train-*.parquet, tailles réelles)", async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/tree/")) {
+        return Promise.resolve(
+          jsonResponse([
+            { type: "directory", path: "data", size: 0 },
+            { type: "file", path: "data/train-00000-of-00001-9e5f6b98c6d89c9a.parquet", size: 2_500_000 },
+            { type: "file", path: "README.md", size: 400 },
+          ]),
+        );
+      }
+      if (url.includes("/api/datasets/")) {
+        return Promise.resolve(
+          jsonResponse({
+            id: "org/parquet",
+            siblings: [
+              { rfilename: "data/train-00000-of-00001-9e5f6b98c6d89c9a.parquet" },
+              { rfilename: "README.md" },
+            ],
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse({ error: "not found" }, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const detail = await inspectHuggingFaceDataset("org/parquet");
+    // Le fichier data/train-*.parquet est découvert, ingérable, avec sa taille.
+    const parquet = detail.files.find((f) => f.name === "data/train-00000-of-00001-9e5f6b98c6d89c9a.parquet");
+    expect(parquet?.downloadable).toBe(true);
+    expect(parquet?.sizeBytes).toBe(2_500_000);
+    expect(detail.files.find((f) => f.name === "README.md")?.downloadable).toBe(false);
+    // Note honnête : les tailles proviennent de l'API tree.
+    expect(detail.notes.some((note) => /API tree/i.test(note))).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/tree/main?recursive=true"),
+      expect.anything(),
+    );
+  });
+
   it("dégrade proprement quand datasets-server ne connaît pas le dépôt", async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (url.includes("/api/datasets/")) {
