@@ -4,6 +4,10 @@ import { NextRequest } from "next/server";
 
 // Le middleware est testé tel quel (aucune dépendance à simuler) :
 // lib/device/detect est un module pur et next/server fonctionne en Node.
+// Le middleware est devenu asynchrone (demande n°7 — contrôle d'accès
+// deny-by-default avec vérification d'identité) : les chemins utilisés
+// ici (publics/allowlistés) ne déclenchent aucun travail d'identité,
+// le comportement de corrélation ci-dessous reste donc « tel quel ».
 import { config, middleware } from "../../middleware";
 
 function requestTo(pathname: string, headers: Record<string, string> = {}): NextRequest {
@@ -22,8 +26,8 @@ afterEach(() => {
 });
 
 describe("middleware — corrélation x-gen3ia-trace-id (audit 25-a)", () => {
-  it("ajoute un id généré (format trc_*) sur les réponses /api/*", () => {
-    const response = middleware(requestTo("/api/health"));
+  it("ajoute un id généré (format trc_*) sur les réponses /api/*", async () => {
+    const response = await middleware(requestTo("/api/health"));
     const traceId = response.headers.get("x-gen3ia-trace-id");
     expect(traceId).toBeTruthy();
     expect(traceId).toMatch(/^trc_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
@@ -31,27 +35,27 @@ describe("middleware — corrélation x-gen3ia-trace-id (audit 25-a)", () => {
     expect(traceId!.length).toBeGreaterThanOrEqual(12);
   });
 
-  it("réutilise l'id entrant s'il est sain (corrélation de bout en bout)", () => {
-    const response = middleware(requestTo("/api/workspace/conversations", { "x-gen3ia-trace-id": "client-trace-42" }));
+  it("réutilise l'id entrant s'il est sain (corrélation de bout en bout)", async () => {
+    const response = await middleware(requestTo("/api/workspace/conversations", { "x-gen3ia-trace-id": "client-trace-42" }));
     expect(response.headers.get("x-gen3ia-trace-id")).toBe("client-trace-42");
   });
 
-  it("remplace un id entrant invalide (anti-injection dans les logs)", () => {
-    const response = middleware(requestTo("/api/health", { "x-gen3ia-trace-id": "court!" }));
+  it("remplace un id entrant invalide (anti-injection dans les logs)", async () => {
+    const response = await middleware(requestTo("/api/health", { "x-gen3ia-trace-id": "court!" }));
     const traceId = response.headers.get("x-gen3ia-trace-id");
     expect(traceId).not.toBe("court!");
     expect(traceId).toMatch(/^trc_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   });
 
-  it("ne pose PAS le header sur les pages non-API", () => {
-    const response = middleware(requestTo("/dashboard"));
+  it("ne pose PAS le header sur les pages non-API", async () => {
+    const response = await middleware(requestTo("/dashboard"));
     expect(response.headers.get("x-gen3ia-trace-id")).toBeNull();
     // Le reste du comportement du proxy est préservé.
     expect(response.headers.get("X-Frame-Options")).toBe("DENY");
   });
 
-  it("préserve la redirection d'accès client (comportement existant)", () => {
-    const response = middleware(
+  it("préserve la redirection d'accès client (comportement existant)", async () => {
+    const response = await middleware(
       requestTo("/dashboard", { cookie: "gen3ia_client_access=/client/c/demo" }),
     );
     expect(response.status).toBe(307);

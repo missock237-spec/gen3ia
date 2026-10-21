@@ -24,6 +24,80 @@ import {
   traceLogger,
 } from "@/lib/observability/logger";
 
+import {
+  classifyApiPath,
+  createCachedAdminResolver,
+  isAdminActor,
+} from "./user-access";
+
+/**
+ * Liste blanche d'accès utilisateur (demande n°7) — SECONDE BARRIÈRE.
+ *
+ * Le middleware (middleware.ts) applique le contrôle deny-by-default sur
+ * TOUTES les requêtes ; protectRoute le ré-applique au niveau de la route
+ * (défense en profondeur : un contournement du middleware ne suffit pas).
+ * Même source de vérité : lib/security/user-access.ts.
+ *
+ * L'admin est reconnu par le custom claim `admin: true` (porté par le
+ * Bearer Firebase vérifié) ou, à défaut, par le rôle plateforme résolu
+ * via l'annuaire (même source que getPlatformAccess) avec un cache
+ * mémoire court — les erreurs d'annuaire ne sont jamais cachées et
+ * aboutissent à un refus (fail-closed, cohérent avec l'écran admin
+ * « espace restreint »).
+ */
+const adminByPlatformRole = createCachedAdminResolver(async (uid) => {
+  const { getPlatformRole } = await import("@/lib/access/platform");
+  const role = await getPlatformRole(uid);
+  return role === "admin";
+});
+
+async function isAccessAllowlisted(
+  pathname: string,
+  user: AuthenticatedUserLike,
+): Promise<boolean> {
+  const decision = classifyApiPath(pathname);
+  if (decision.access !== "restreint") return true;
+
+  if (isAdminActor(user.claims)) return true;
+  try {
+    return await adminByPlatformRole(user.uid);
+  } catch {
+    return false;
+  }
+}
+
+/** Sous-ensemble d'AuthenticatedUser utilisé par la liste blanche. */
+interface AuthenticatedUserLike {
+  uid: string;
+
+  claims?: Record<
+    string,
+    unknown
+  >;
+}
+
+function accessForbidden(traceId: string): NextResponse {
+  const response =
+    NextResponse.json(
+      {
+        success: false,
+
+        error:
+          "Accès refusé : cette fonctionnalité n'est pas disponible pour votre compte.",
+      },
+      {
+        status: 403,
+        headers: { "x-gen3ia-trace-id": traceId },
+      },
+    );
+
+  securityHeaders(
+    response.headers,
+  );
+
+  return response;
+}
+
 export interface RouteContext {
   userId: string;
 
@@ -93,6 +167,23 @@ export async function protectRoute(
 
     const routeKey = options.key ?? new URL(request.url).pathname;
     const traceId = requestTraceId(request);
+
+    // Barrière n°2 — liste blanche utilisateur (demande n°7) : un
+    // utilisateur standard (non admin) ne peut atteindre que les familles
+    // autorisées ; le contrôle est AVANT le compteur de débit (un refus
+    // 403 ne consomme pas de quota).
+    const allowlisted = await isAccessAllowlisted(
+      new URL(request.url).pathname,
+      user,
+    );
+
+    if (!allowlisted) {
+      traceLogger(traceId, { userId: user.uid, route: routeKey }).warn({ event: "request.access_denied" }, "Chemin hors liste blanche utilisateur");
+      return {
+        ok: false,
+        response: accessForbidden(traceId),
+      };
+    }
     const limitKey = `${routeKey}:${user.uid}`;
     const limitConfig = options.rateLimit ?? { limit: 240, windowMs: 5 * 60 * 1000 };
 
