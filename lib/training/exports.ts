@@ -1,11 +1,15 @@
 import "server-only";
 
-// ⚠️ IMPORT STATIQUE OBLIGATOIRE — l'interopérabilité webpack de l'import()
-// dynamique d'un paquet EXTERNE (serverExternalPackages) est cassée : en
-// production, `const { default: archiver } = await import("archiver")` lève
-// « TypeError: d is not a constructor » (reproduit et vérifié sur Next 15.5).
-// Le pattern statique (même que lib/documents/zip/create.ts) fonctionne.
+// ⚠️ IMPORTS STATIQUES OBLIGATOIRES — l'interopérabilité webpack de l'import()
+// dynamique d'un module EXTERNE est cassée dans ce build (Next 15.5.27, mode
+// d'interop 23 sans copie des exports nommés) : `await import("node:stream")`
+// renvoie { default } SANS Writable → « TypeError: d is not a constructor »
+// sur `new Writable(...)`, et `await import("archiver")` est tout aussi
+// déroutant. Reproduit et vérifié localement sur le bundle de production
+// (route de diagnostic : dyn.Writable === undefined ; import statique → OK).
+// Toute nouveauté ici doit suivre le pattern statique (lib/documents/zip/create.ts).
 import archiver from "archiver";
+import { Writable } from "node:stream";
 
 import { newUlid, userDir } from "@/lib/storage/user-data-store";
 import { putObject, createDownloadUrl, downloadFromR2 } from "@/lib/storage/r2";
@@ -33,7 +37,6 @@ function nowIso(): string {
 }
 
 async function buildZip(entries: Array<{ name: string; content: Buffer }>): Promise<Buffer> {
-  const { Writable } = await import("node:stream");
   const chunks: Buffer[] = [];
   const sink = new Writable({
     write(chunk, _enc, callback) {
