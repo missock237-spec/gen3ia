@@ -11,8 +11,15 @@ name: Déploiement continu VPS
 #     conservée (.next.old) jusqu'au health check ;
 #   · health check localhost:3000 — en cas d'échec, ROLLBACK automatique ;
 #   · un SHA en échec est blacklisté (jamais de boucle de crash).
+# Les variables NEXT_PUBLIC_* (config Firebase client) sont inlinées au
+# build : elles proviennent du secret DOTENV_PRODUCTION (copie chiffrée
+# du .env.production du VPS). SENTRY_AUTH_TOKEN y est vidé avant le build
+# (next.config.ts : disable: !SENTRY_AUTH_TOKEN → pas de sourcemaps,
+# ~2 Go RSS économisés et build aligné sur la recette validée).
 # L'updater PM2 est suspendu pendant la bascule pour éviter la course
-# avec le poller deploy.sh (relancé par trap, même en cas d'échec).
+# avec le poller deploy.sh (relancé par trap, même en cas d'échec ;
+# deploy.sh est lui-même un no-op depuis le 2026-10-21 — plus aucun
+# build VPS possible).
 
 on:
   push:
@@ -31,6 +38,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # La config client Firebase (NEXT_PUBLIC_*) est inlinée dans le bundle
+      # au build : sans elle, le site serait livré avec une auth cassée.
+      # Le secret DOTENV_PRODUCTION est la copie exacte du .env.production
+      # du VPS (gitignored). Le token Sentry est vidé pour le build.
+      - name: Restaurer .env.production (NEXT_PUBLIC_* inline au build)
+        run: |
+          printf '%s' "$DOTENV_PRODUCTION" > .env.production
+          sed -i 's/^SENTRY_AUTH_TOKEN=.*/SENTRY_AUTH_TOKEN=/' .env.production
+          echo "Config restaurée : $(grep -c '=' .env.production) variables, Sentry build désactivé."
+        env:
+          DOTENV_PRODUCTION: ${{ secrets.DOTENV_PRODUCTION }}
 
       - name: Node.js 22
         uses: actions/setup-node@v4
