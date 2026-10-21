@@ -20,7 +20,7 @@ export {
   lireEtatAuto,
   reduireEtat,
 } from "./etat";
-export { plafondsAuto, delaiInitialAutoMs, dureeAbsorptionMs, intervalleAbsorptionMs, type PlafondsAuto } from "./plafonds";
+export { plafondsAuto, delaiInitialAutoMs, dureeAbsorptionMs, intervalleAbsorptionMs, intervalleMaitriseMs, type PlafondsAuto } from "./plafonds";
 export {
   absorptionExpiree,
   bilanAutonomie,
@@ -29,6 +29,27 @@ export {
   type VuePhase,
 } from "./phases";
 export { choisirDatasets, requeteDuCycle, REQUETES_OBJECTIF, type RechercheObjectif } from "./catalogue";
+export {
+  appliquerBilanDomaine,
+  blocMaitriseDe,
+  blocMaitriseNeuf,
+  CATALOGUE_MAITRISE,
+  CATALOGUE_VERSION,
+  choisirDomaineCible,
+  domaineParId,
+  domainesMaitrises,
+  entrainerEtEvaluerDomaine,
+  etatDomaineNeuf,
+  evaluerRetentionCortex,
+  maitriseComplete,
+  regimeParDefaut,
+  reponseCorrespond,
+  separerValidation,
+  UNITES_VALIDATION_MIN,
+  type DomaineMaitrise,
+  type ResultatEntrainementDomaine,
+  type ResultatRetention,
+} from "./maitrise";
 export { ingesterDataset, lignesDepuisContenu, convertirPaire, convertirEchantillon, nettoyerTexte, type ApportDataset } from "./ingesteur";
 export { appliquerEntrainementAuto, type ResultatEntrainementAuto } from "./entraineur-auto";
 export {
@@ -41,9 +62,12 @@ export {
 } from "./boucle";
 export type {
   BilanAutonomie,
+  BlocMaitrise,
   ClientHubAuto,
   DatasetChoisi,
   EtatAutoApprentissage,
+  EtatDomaineMaitrise,
+  EvaluationMaitrise,
   HubSource,
   ObjectifAuto,
   PhaseVie,
@@ -51,4 +75,6 @@ export type {
   RapportHubCycle,
   RapportIntentionCycle,
   RapportLangageCycle,
+  RapportMaitrise,
+  RegimeAuto,
 } from "./types";

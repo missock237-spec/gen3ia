@@ -73,6 +73,19 @@ export function intervalleAbsorptionMs(env: NodeJS.ProcessEnv = process.env): nu
   return minutes * 60_000;
 }
 
+/**
+ * INTERVALLE DES CYCLES EN RÉGIME MAÎTRISE (ms) —
+ * AUTO_APPRENTISSAGE_MAITRISE_INTERVALLE_MIN, borné 5 → 240 min, défaut
+ * 15 min. C'est le rythme de l'entraînement autonome continu : un cycle
+ * (découvrir → ingérer → entraîner → évaluer) par domaine à la fois, sans
+ * fin tant que le catalogue n'est pas maîtrisé (backoff ×2 en cas d'échecs
+ * répétés, plafonné ×4 — la boucle ne s'arrête JAMAIS sur un échec).
+ */
+export function intervalleMaitriseMs(env: NodeJS.ProcessEnv = process.env): number {
+  const minutes = entierEnv(env.AUTO_APPRENTISSAGE_MAITRISE_INTERVALLE_MIN, 15, 5, 240);
+  return minutes * 60_000;
+}
+
 /** Délai avant le premier cycle après le boot (ms) — borné 10 s → 10 min. */
 export function delaiInitialAutoMs(env: NodeJS.ProcessEnv = process.env): number {
   const secondes = entierEnv(env.AUTO_APPRENTISSAGE_DELAI_S, 20, 10, 600);

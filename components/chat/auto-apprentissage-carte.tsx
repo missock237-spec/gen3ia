@@ -32,6 +32,35 @@ interface BilanAutonomie {
   message: string;
 }
 
+interface EvaluationMaitrise {
+  dateA: string;
+  accuracy: number;
+  unites: number;
+  valide: boolean;
+}
+
+interface DomaineMaitriseVue {
+  id: string;
+  label: string;
+  objectif: "langage" | "intention";
+  maitriseA: string | null;
+  datasets: number;
+  unites: number;
+  minUnites: number;
+  seuil: number;
+  derniereEvaluation: EvaluationMaitrise | null;
+}
+
+interface VueMaitrise {
+  complete: boolean;
+  atteinteA: string | null;
+  evaluationsTotales: number;
+  cyclesSansProgres: number;
+  domainesMaitrises: number;
+  domainesTotal: number;
+  domaines: DomaineMaitriseVue[];
+}
+
 interface EtatAutoApprentissage {
   cyclesExecutes: number;
   enCours: boolean;
@@ -94,7 +123,8 @@ function formaterDuree(ms: number): string {
 
 export default function CarteAutoApprentissage() {
   const [etat, setEtat] = React.useState<EtatAutoApprentissage | null>(null);
-  const [phase, setPhase] = React.useState<"absorption" | "autonomie" | null>(null);
+  const [phase, setPhase] = React.useState<"absorption" | "autonomie" | "maitrise" | null>(null);
+  const [maitrise, setMaitrise] = React.useState<VueMaitrise | null>(null);
   const [restantInitial, setRestantInitial] = React.useState<number | null>(null);
   const [integrations, setIntegrations] = React.useState<IntegrationHub[]>([]);
   const [cycleEnCours, setCycleEnCours] = React.useState(false);
@@ -118,13 +148,15 @@ export default function CarteAutoApprentissage() {
       }
       const data = (await res.json()) as {
         etat: EtatAutoApprentissage;
-        phase?: "absorption" | "autonomie";
+        phase?: "absorption" | "autonomie" | "maitrise";
         restantMs?: number | null;
         cycleEnCours?: boolean;
         integrations?: IntegrationHub[];
+        maitrise?: VueMaitrise;
       };
       setEtat(data.etat);
       setPhase(data.phase ?? (data.etat?.absorptionCloturee ? "autonomie" : "absorption"));
+      setMaitrise(data.maitrise ?? null);
       setRestantInitial(typeof data.restantMs === "number" ? data.restantMs : null);
       setIntegrations(data.integrations ?? []);
       setCycleEnCours(Boolean(data.cycleEnCours) || Boolean(data.etat?.enCours));
@@ -141,6 +173,7 @@ export default function CarteAutoApprentissage() {
   }, [charger]);
 
   const autonomie = phase === "autonomie";
+  const regimeMaitrise = phase === "maitrise";
 
   const lancerCycle = async () => {
     setOccupe(true);
@@ -182,11 +215,48 @@ export default function CarteAutoApprentissage() {
         <p className="auto-carte-ligne auto-carte-erreur">{erreur}</p>
       ) : etat ? (
         <>
-          <p className={`auto-carte-phase ${autonomie ? "phase-autonomie" : "phase-absorption"}`}>
-            {autonomie
-              ? "Phase autonomie — apprentissage par les utilisateurs"
-              : `Absorption des datasets${restantMs !== null ? ` — ${formaterDuree(restantMs)}` : ""}`}
+          <p
+            className={`auto-carte-phase ${
+              autonomie ? "phase-autonomie" : regimeMaitrise ? "phase-absorption" : "phase-absorption"
+            }`}
+          >
+            {regimeMaitrise
+              ? `Régime maîtrise — entraînement autonome continu${
+                  maitrise
+                    ? ` · ${maitrise.domainesMaitrises}/${maitrise.domainesTotal} domaine(s) maîtrisé(s)`
+                    : ""
+                }`
+              : autonomie
+                ? "Phase autonomie — apprentissage par les utilisateurs"
+                : `Absorption des datasets${restantMs !== null ? ` — ${formaterDuree(restantMs)}` : ""}`}
           </p>
+          {regimeMaitrise && maitrise ? (
+            <>
+              <p className="auto-carte-ligne">
+                {maitrise.complete
+                  ? `Catalogue complet maîtrisé${maitrise.atteinteA ? ` le ${maitrise.atteinteA.slice(0, 10)}` : ""} — hubs au repos.`
+                  : "La boucle tourne jusqu'à maîtrise complète du catalogue (mesures réelles)."}
+              </p>
+              <details className="auto-carte-bilan">
+                <summary>
+                  Domaines ({maitrise.domainesMaitrises}/{maitrise.domainesTotal} maîtrisés ·{" "}
+                  {maitrise.evaluationsTotales} évaluation(s))
+                </summary>
+                <ul className="auto-carte-bilan-axes">
+                  {maitrise.domaines.map((domaine) => (
+                    <li key={domaine.id}>
+                      {domaine.maitriseA ? "✓" : "·"} {domaine.label} — {domaine.unites}/{domaine.minUnites} unités
+                      {domaine.derniereEvaluation
+                        ? ` · dernière précision ${Math.round(domaine.derniereEvaluation.accuracy * 100)} %${
+                            domaine.derniereEvaluation.valide ? "" : " (non comptable)"
+                          }`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </>
+          ) : null}
           {!autonomie ? (
             <div className="auto-carte-hubs">
               {integrations.map((h) => (

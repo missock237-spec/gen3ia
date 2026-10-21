@@ -9,6 +9,12 @@ import { cycleEnCours, executerCycleAuto } from "@/lib/entrainement-auto/boucle"
 import { lireEtatAuto } from "@/lib/entrainement-auto/etat";
 import { phaseDe } from "@/lib/entrainement-auto/phases";
 import { plafondsAuto } from "@/lib/entrainement-auto/plafonds";
+import {
+  blocMaitriseDe,
+  CATALOGUE_MAITRISE,
+  domainesMaitrises,
+  maitriseComplete,
+} from "@/lib/entrainement-auto/maitrise";
 import { hubIntegrationStatus } from "@/lib/training/hub";
 
 /**
@@ -46,16 +52,45 @@ export async function GET(request: NextRequest) {
 
     const etat = await lireEtatAuto();
     const vue = phaseDe(etat);
+    const bloc = blocMaitriseDe(etat);
     return NextResponse.json(
       {
         etat,
         phase: vue.phase,
+        regime: vue.regime,
         absorptionCloturee: vue.absorptionCloturee,
         clotureeA: vue.clotureeA,
         restantMs: vue.restantMs,
         cycleEnCours: cycleEnCours(),
         integrations: hubIntegrationStatus(),
         plafonds: plafondsAuto(),
+        maitrise: {
+          complete: maitriseComplete(etat),
+          atteinteA: bloc.atteinteA,
+          evaluationsTotales: bloc.evaluationsTotales,
+          cyclesSansProgres: bloc.cyclesSansProgres,
+          domainesMaitrises: domainesMaitrises(bloc),
+          domainesTotal: CATALOGUE_MAITRISE.length,
+          domaines: CATALOGUE_MAITRISE.map((domaine) => {
+            const etatDomaine = bloc.domaines[domaine.id];
+            const unites =
+              domaine.objectif === "langage"
+                ? etatDomaine?.pairesIngestees ?? 0
+                : etatDomaine?.echantillonsIngestes ?? 0;
+            const derniere = etatDomaine?.dernieresEvaluations?.[0] ?? null;
+            return {
+              id: domaine.id,
+              label: domaine.label,
+              objectif: domaine.objectif,
+              maitriseA: etatDomaine?.maitriseA ?? null,
+              datasets: etatDomaine?.datasetsIngerees.length ?? 0,
+              unites,
+              minUnites: domaine.minUnites,
+              seuil: domaine.seuil,
+              derniereEvaluation: derniere,
+            };
+          }),
+        },
         requestId,
       },
       { headers: { "x-request-id": requestId } },
@@ -92,8 +127,10 @@ export async function POST(request: NextRequest) {
       );
     }
     if (rapport.statut === "refuse") {
-      // Phase autonomie : la fenêtre d'absorption est clôturée — l'IA
-      // n'apprend plus des datasets. Refus poli, tout porteur de vérité.
+      // Régime fenêtre + phase autonomie : la fenêtre d'absorption est
+      // clôturée — l'IA n'apprend plus des datasets. Refus poli, tout
+      // porteur de vérité. (En régime maîtrise ce refus ne se produit pas :
+      // les hubs restent ouverts jusqu'à maîtrise complète du catalogue.)
       return NextResponse.json(
         { rapport, error: rapport.message, requestId },
         { status: 409, headers: { "x-request-id": requestId } },

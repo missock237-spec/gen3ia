@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { etatParDefaut, ecrireEtatAuto, lireEtatAuto, reduireEtat } from "./etat";
 import type { EtatAutoApprentissage, RapportCycleAuto } from "./types";
@@ -9,6 +9,14 @@ import type { EtatAutoApprentissage, RapportCycleAuto } from "./types";
 /* ------------------------------------------------------------------ */
 /* PERSISTANCE DE L'AUTO-APPRENTISSAGE — atomique, tolérante, plafonnée */
 /* ------------------------------------------------------------------ */
+
+// Ce fichier teste le cycle de vie HISTORIQUE (v2) : régime fenêtre forcé.
+beforeEach(() => {
+  vi.stubEnv("AUTO_APPRENTISSAGE_MAITRISE", "0");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 let dossierTmp: string | null = null;
 
@@ -78,7 +86,7 @@ describe("etat de l'auto-apprentissage", () => {
     const chemin = await cheminEtat();
     await writeFile(chemin, "{ ceci n'est pas du JSON", "utf8");
     const etat = await lireEtatAuto(chemin);
-    expect(etat.v).toBe(2);
+    expect(etat.v).toBe(3);
     expect(etat.cyclesExecutes).toBe(0);
   });
 
@@ -97,7 +105,7 @@ describe("etat de l'auto-apprentissage", () => {
     };
     await writeFile(chemin, JSON.stringify(ancien), "utf8");
     const lu = await lireEtatAuto(chemin);
-    expect(lu.v).toBe(2);
+    expect(lu.v).toBe(3);
     // TOUTES les données v1 sont conservées (anti-rejoue, cumuls).
     expect(lu.lanceA).toBe("2026-01-01T00:00:00.000Z");
     expect(lu.cyclesExecutes).toBe(7);

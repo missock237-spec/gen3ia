@@ -3,6 +3,7 @@ import "server-only";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import { blocMaitriseNeuf, regimeParDefaut } from "./maitrise";
 import type { EtatAutoApprentissage } from "./types";
 
 /**
@@ -21,9 +22,13 @@ const HISTORIQUE_CAP = 10;
 const DATASETS_CAP = 400;
 const ERREURS_CAP = 5;
 
-export function etatParDefaut(lanceA: string = new Date().toISOString()): EtatAutoApprentissage {
+export function etatParDefaut(
+  lanceA: string = new Date().toISOString(),
+  regime: EtatAutoApprentissage["regime"] = regimeParDefaut(),
+): EtatAutoApprentissage {
   return {
-    v: 2,
+    v: 3,
+    regime,
     lanceA,
     cyclesExecutes: 0,
     enCours: false,
@@ -35,6 +40,7 @@ export function etatParDefaut(lanceA: string = new Date().toISOString()): EtatAu
     absorptionCloturee: false,
     absorptionClotureeA: null,
     bilanAutonomie: null,
+    maitrise: blocMaitriseNeuf(),
   };
 }
 
@@ -50,9 +56,11 @@ export function reduireEtat(etat: EtatAutoApprentissage): EtatAutoApprentissage 
   };
 }
 
-/** Forme brute tolérante — v1 (legacy) ET v2 (cycle de vie), aucun cast violent. */
+/** Forme brute tolérante — v1 (legacy), v2 (cycle de vie) ET v3 (régime
+ *  maîtrise), aucun cast violent. */
 interface EtatPersisteBrut {
   v?: number;
+  regime?: string;
   lanceA?: string;
   cyclesExecutes?: number;
   enCours?: boolean;
@@ -64,22 +72,39 @@ interface EtatPersisteBrut {
   absorptionCloturee?: boolean;
   absorptionClotureeA?: string | null;
   bilanAutonomie?: EtatAutoApprentissage["bilanAutonomie"];
+  maitrise?: Partial<EtatAutoApprentissage["maitrise"]>;
 }
 
 /**
- * Migration v1 → v2 : un ancien état (boucle périodique sans cycle de vie)
- * conserve TOUTES ses données (anti-rejoue, cumuls, historique) — seuls les
- * champs du cycle de vie sont ajoutés à leurs défauts neutres (fenêtre non
- * clôturée, bilan null). Lecture tolérante : absent/corrompu/version
- * inconnue → état par défaut honnête, jamais d'exception remontée au boot.
+ * Migration v1 → v2 → v3 : un ancien état conserve TOUTES ses données
+ * (anti-rejoue, cumuls, historique, bilan d'autonomie). Le régime de vie est
+ * posé à la MIGRATION selon l'env (AUTO_APPRENTISSAGE_MAITRISE, défaut :
+ * « maitrise » — directive propriétaire : les hubs restent ouverts jusqu'à
+ * maîtrise complète du catalogue, y compris si la fenêtre historique était
+ * déjà clôturée) et le bloc de maîtrise démarre neuf (aucun domaine évalué
+ * par le nouveau régime — aucune métrique inventée sur le passé).
+ * Lecture tolérante : absent/corrompu/version inconnue → état par défaut
+ * honnête, jamais d'exception remontée au boot.
  */
 export async function lireEtatAuto(chemin: string = ETAT_AUTO_PATH): Promise<EtatAutoApprentissage> {
   try {
     const brut = await readFile(chemin, "utf8");
     const parse = JSON.parse(brut) as EtatPersisteBrut | null;
     if (typeof parse !== "object" || parse === null) return etatParDefaut();
-    if (parse.v !== 1 && parse.v !== 2) return etatParDefaut();
-    return { ...etatParDefaut(), ...parse, v: 2 };
+    if (parse.v !== 1 && parse.v !== 2 && parse.v !== 3) return etatParDefaut();
+    const defaut = etatParDefaut();
+    // Le régime est conservé si l'état était déjà v3, sinon posé à la
+    // migration (env) — un choix explicite de l'opérateur prime sur l'oubli.
+    const regime = parse.v === 3 && (parse.regime === "fenetre" || parse.regime === "maitrise")
+      ? parse.regime
+      : regimeParDefaut();
+    return {
+      ...defaut,
+      ...parse,
+      v: 3,
+      regime,
+      maitrise: { ...blocMaitriseNeuf(), ...(parse.maitrise ?? {}) },
+    };
   } catch {
     return etatParDefaut();
   }
