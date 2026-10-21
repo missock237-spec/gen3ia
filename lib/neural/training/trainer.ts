@@ -19,6 +19,7 @@ import type { NoyauCentralGen3, RequeteExterne } from "../core/central-core";
 import { encodeText } from "../encoding/text-encoder";
 import { poidsResonanceParCycle } from "../decoding/response-decoder";
 import type { TrainingSample } from "./dataset";
+import { nouvelleFenetreNeuronale } from "../core/v2/effecteur-cortex";
 
 /**
  * ENTRAÎNEUR SUPERVISÉ DU RÉSEAU NEURONAL — la boucle d'apprentissage RÉELLE.
@@ -171,6 +172,13 @@ export class NeuralTrainer {
     const history: Array<{ epoch: number; accuracy: number }> = [];
     let accuracyTrain = 0;
 
+    // OPTIMISATION VITESSE (adaptation (e) du portage) : l'index des
+    // synapses "src->tgt" était reconstruit à CHAQUE échantillon (O(S) × N
+    // échantillons). Il est désormais construit une seule fois ici puis
+    // maintenu en sync par renforcerOuCreerSynapse — sémantique identique,
+    // entraînement nettement plus rapide sur de gros cerveaux.
+    const indexSynapses = indexerSynapses(this.reseau);
+
     for (let epoch = 1; epoch <= epochs; epoch++) {
       let corrects = 0;
       for (let i = 0; i < train.length; i++) {
@@ -180,6 +188,7 @@ export class NeuralTrainer {
           echantillon,
           cyclesParEchantillon,
           lrBoost,
+          indexSynapses,
         );
         if (prediction === echantillon.label) corrects += 1;
 
@@ -232,11 +241,13 @@ export class NeuralTrainer {
   /**
    * Un pas d'apprentissage complet sur un échantillon : retourne
    * l'intention prédite AVANT plasticité (prédiction en ligne honnête).
+   * `indexSynapses` est fourni par train() (construit une fois — cf. (e)).
    */
   private apprendreSurEchantillon(
     echantillon: TrainingSample,
     cyclesParEchantillon: number,
     lrBoost: number,
+    indexSynapses: Map<string, Synapse>,
   ): string {
     const { encodage, resonances } = this.propagerEchantillon(
       echantillon,
@@ -249,15 +260,11 @@ export class NeuralTrainer {
     const neuronesEntree = Object.keys(encodage.inputs).map(Number);
 
     if (poolCible) {
-      // Index des synapses entrée→pool pour des renforcements O(1)
-      // (la boucle totalise des milliers de recherches par échantillon).
-      const index = indexerSynapses(this.reseau);
-
       // Renforcement / création : chaque neurone d'entrée stimulé → chaque
       // neurone du pool cible (weight = min(1, w + lrBoost)).
       for (const src of neuronesEntree) {
         for (const tgt of poolCible) {
-          renforcerOuCreerSynapse(this.reseau, index, src, tgt, lrBoost);
+          renforcerOuCreerSynapse(this.reseau, indexSynapses, src, tgt, lrBoost);
         }
       }
 
@@ -306,13 +313,23 @@ export class NeuralTrainer {
     //     global (tous les pools à résonance 1.0, aucune discrimination) ;
     //     en volée unique, seuls les chemins synaptiques RENFORCÉS portent
     //     le signal jusqu'au seuil et la cascade parasite s'éteint d'elle-même.
+    //     Le contexte transmis aux effecteurs porte la fenêtre neuronale
+    //     (reset des énergies columnnaires du Cortex v2 à chaque échantillon)
+    //     et l'intention cible (plasticité supervisée columnnaire consolidée
+    //     à la clôture de la fenêtre — cf. effecteur-cortex.ts).
+    const fenetre = nouvelleFenetreNeuronale();
+    const contexte = {
+      prompt: echantillon.text,
+      __fenetreNeuronale: fenetre,
+      __intentionCible: echantillon.label,
+    };
     const resonances: Record<string, number> = {};
     for (let c = 0; c < cyclesParEchantillon; c++) {
       const requete: RequeteExterne =
         c === 0
           ? { intensite: 0, inputsDirects: encodage.inputs }
           : { intensite: 0 };
-      const spiked = this.noyau.executerCycle(requete).spikedNeurones;
+      const spiked = this.noyau.executerCycle(requete, contexte).spikedNeurones;
       const poids = poidsResonanceParCycle(c);
       for (const label of Object.keys(LABEL_POOLS)) {
         const score = this.espace.readResonance(spiked, label) * poids;

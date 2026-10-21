@@ -39,6 +39,18 @@ import { genererVideoNeural, videoVersDataUri } from "./generation/video-engine"
 import { CentralSupervisor, HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import { piloterPlateforme } from "./pilotage/gen3ia";
+import {
+  CortexColumnnaire,
+  CORTEX_CONFIG_DEFAUTS,
+} from "./core/v2/cortex-columnnaire";
+import { ChampCorticalGen3, TAILLE_CHAMP } from "./core/v2/champ-cortical";
+import { EffecteurCortexV2 } from "./core/v2/effecteur-cortex";
+import {
+  ecrireArtefactV2,
+  lireArtefactV2,
+  supprimerArtefactV2,
+} from "./core/v2/persistance-v2";
+import { join } from "node:path";
 
 /**
  * RUNTIME NEURONAL — singleton caché sur globalThis (résiste au HMR de
@@ -98,6 +110,12 @@ export interface NeuralRuntime {
   cortex: CortexLangagierGen3;
   /** Moteur d'évolution continue (observation + consolidation autonome). */
   evolution: MoteurEvolutionGen3;
+  /**
+   * CORTEX V2 — étage columnnaire (262 144 colonnes) + champ cortical
+   * d'un milliard de neurones adressables, branchés à chaque cycle du
+   * noyau via l'effecteur dédié. Null si désactivé (GEN3_CORTEX_V2=off).
+   */
+  cortexV2: EffecteurCortexV2 | null;
   /** Historique des rapports d'entraînement persistés (données réelles). */
   historiqueEntrainement: TrainingReport[];
   /** Date ISO de création du runtime. */
@@ -111,6 +129,39 @@ const globalAvecNeural = globalThis as typeof globalThis & {
 
 /** Graine par défaut du runtime (reproductibilité). */
 export const SEED_RUNTIME = 42;
+
+/** Chemin de l'artefact Cortex v2 de l'installation (état appris local). */
+export const CORTEX_V2_PATH = join(
+  process.cwd(),
+  "var/neural/cortex-v2.bin",
+);
+
+/** Chemin de l'artefact PRÉ-ENTRAÎNÉ livré avec le dépôt (amorçage). */
+export const CORTEX_V2_PRETRAIN_PATH = join(
+  process.cwd(),
+  "assets/neural-pretrained/cortex-v2.bin",
+);
+
+/**
+ * Lit la configuration v2 depuis l'environnement (défauts sûrs pour un
+ * VPS 2 Go) : GEN3_CORTEX_COLUMNS (262 144), GEN3_CORTEX_V2 (=off pour
+ * désactiver l'étage columnnaire).
+ */
+export function configCortexV2DepuisEnv(): {
+  actif: boolean;
+  colonnes: number;
+} {
+  const brut = process.env.GEN3_CORTEX_V2?.trim().toLowerCase();
+  const actif = brut !== "off" && brut !== "0" && brut !== "false";
+  const brutColonnes = Number.parseInt(
+    process.env.GEN3_CORTEX_COLUMNS ?? "",
+    10,
+  );
+  const colonnes = Number.isFinite(brutColonnes)
+    ? Math.min(4_194_304, Math.max(1024, brutColonnes))
+    : CORTEX_CONFIG_DEFAUTS.colonnes;
+  return { actif, colonnes };
+}
 
 /**
  * Retourne le runtime neuronal complet (singleton). Le premier appel
@@ -130,6 +181,16 @@ export function getNeuralRuntime(): NeuralRuntime {
     0.15,
     createRng(SEED_RUNTIME + 1),
   );
+
+  // 1-bis. CORTEX V2 — étage columnnaire + champ cortical (1e9 neurones).
+  //    Activé par défaut ; GEN3_CORTEX_V2=off retombe sur le noyau v1 seul.
+  const configV2 = configCortexV2DepuisEnv();
+  let cortexV2: EffecteurCortexV2 | null = null;
+  if (configV2.actif) {
+    const cortex = new CortexColumnnaire({ colonnes: configV2.colonnes });
+    const champ = new ChampCorticalGen3(SEED_RUNTIME);
+    cortexV2 = new EffecteurCortexV2(reseau, cortex, champ, SEED_RUNTIME + 2);
+  }
 
   // 2. Moteurs locaux RÉELS des effecteurs média : le contenu est calculé
   //    depuis l'état APPRIS du cerveau (poids synaptiques, histogramme) —
@@ -206,7 +267,8 @@ export function getNeuralRuntime(): NeuralRuntime {
   const effecteurVideo = new EffecteurGenerationVideo(espace, toolOs, moteurVideoLocal);
   const interfaceVocale = new InterfaceVocaleTelephonique(espace);
 
-  // 4. Noyau central avec tous les effecteurs enregistrés.
+  // 4. Noyau central avec tous les effecteurs enregistrés — dont le CORTEX
+  //    V2 (traitement interne de chaque cycle : colonnes + champ 1e9).
   const noyau = new NoyauCentralGen3(reseau, espace, veille);
   noyau.enregistrerEffecteur(toolOs);
   noyau.enregistrerEffecteur(moteurCompetences);
@@ -214,6 +276,7 @@ export function getNeuralRuntime(): NeuralRuntime {
   noyau.enregistrerEffecteur(effecteurVisuel);
   noyau.enregistrerEffecteur(effecteurVideo);
   noyau.enregistrerEffecteur(interfaceVocale);
+  if (cortexV2) noyau.enregistrerEffecteur(cortexV2);
 
   // 5. Pools d'entrée/sortie du runtime (les pools média sont enregistrés
   //    par leurs effecteurs respectifs — cf. constructeurs ci-dessus).
@@ -295,6 +358,7 @@ export function getNeuralRuntime(): NeuralRuntime {
     superviseur,
     cortex,
     evolution,
+    cortexV2,
     historiqueEntrainement: [],
     creeLe: new Date().toISOString(),
   };
@@ -321,6 +385,44 @@ export function getNeuralRuntime(): NeuralRuntime {
     );
   }
 
+  // 11. CORTEX V2 — restauration de l'état columnnaire appris (artefact
+  //     local), sinon amorçage sur l'artefact PRÉ-ENTRAÎNÉ livré avec le
+  //     dépôt (entraîné hors production — cf. scripts/pretrain-cortex-v2.ts).
+  if (cortexV2) {
+    let etatV2 = lireArtefactV2(CORTEX_V2_PATH);
+    let source = "installation";
+    if (!etatV2) {
+      etatV2 = lireArtefactV2(CORTEX_V2_PRETRAIN_PATH);
+      source = "pré-entraîné";
+    }
+    if (
+      etatV2 &&
+      etatV2.colonnes === cortexV2.cortex.config.colonnes &&
+      etatV2.voisins === cortexV2.cortex.config.voisins
+    ) {
+      cortexV2.cortex.importerPoids(etatV2.poids);
+      cortexV2.champ.seedEntrainement = etatV2.seedEntrainement;
+      cortexV2.champ.importerModulation(etatV2.modulationRegionale);
+      // Compteurs d'expérience restaurés sans re-consolidation (la graine
+      // du champ est déjà celle de l'artefact).
+      cortexV2.restaurerCompteurs(
+        etatV2.epochsConsolides,
+        etatV2.samplesConsolides,
+      );
+      console.log(
+        `[NEURAL-V2] Cortex columnnaire restauré (${source}) : ${etatV2.colonnes} colonnes, ${etatV2.poids.length} arêtes, champ 1e9 neurones (seed ${etatV2.seedEntrainement}), ${etatV2.epochsConsolides} époque(s) consolidée(s).`,
+      );
+    } else if (etatV2) {
+      console.warn(
+        `[NEURAL-V2] Artefact incompatible (colonnes ${etatV2.colonnes} ≠ ${cortexV2.cortex.config.colonnes}) — cortex neuf seedé.`,
+      );
+    } else {
+      console.log(
+        `[NEURAL-V2] Cortex columnnaire amorcé à neuf : ${cortexV2.cortex.config.colonnes} colonnes + champ de ${TAILLE_CHAMP.toLocaleString("fr-FR")} neurones adressables.`,
+      );
+    }
+  }
+
   globalAvecNeural.__gen3NeuralRuntime = runtime;
   return runtime;
 }
@@ -333,6 +435,7 @@ export function getNeuralRuntime(): NeuralRuntime {
  */
 export function resetBrain(): NeuralRuntime {
   deleteBrainState();
+  supprimerArtefactV2(CORTEX_V2_PATH);
   reinitialiserRegistreTokens();
   globalAvecNeural.__gen3NeuralRuntime = undefined;
   return getNeuralRuntime();
@@ -346,10 +449,29 @@ export async function sauvegarderCerveauRuntime(): Promise<boolean> {
   const runtime = getNeuralRuntime();
   const { saveBrainState } = await import("./training/persistence");
   const langage: EtatLangage = runtime.cortex.exporterEtat();
-  return saveBrainState(
+  const okV1 = await saveBrainState(
     runtime.reseau,
     exporterRegistreTokens(),
     runtime.historiqueEntrainement,
     langage,
   );
+  // CORTEX V2 — artefact columnnaire (poids CSR + champ) sauvegardé en
+  // parallèle ; échec non fatal (comme v1).
+  let okV2 = true;
+  if (runtime.cortexV2) {
+    const cortex = runtime.cortexV2.cortex;
+    okV2 = await ecrireArtefactV2(CORTEX_V2_PATH, {
+      colonnes: cortex.config.colonnes,
+      voisins: cortex.config.voisins,
+      bandes: cortex.config.bandes,
+      seed: cortex.config.seed,
+      seedEntrainement: runtime.cortexV2.champ.seedEntrainement,
+      epochsConsolides: runtime.cortexV2.etatPourApi().consolidation.epochs,
+      samplesConsolides:
+        runtime.cortexV2.etatPourApi().consolidation.samples,
+      poids: cortex.exporterPoids(),
+      modulationRegionale: runtime.cortexV2.champ.modulationRegionale(),
+    });
+  }
+  return okV1 && okV2;
 }

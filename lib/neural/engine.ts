@@ -18,6 +18,7 @@ import type { CortexLangagierGen3, ContexteLangage } from "./generation/language
 import type { HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
+import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
 
 /** Source du langage de la réponse (télémétrie honnête). */
 export type SourceLangage =
@@ -137,13 +138,17 @@ export class NeuralEngine {
 
     const resonances: Record<string, number> = {};
     let dernierRapport: CycleReport | undefined;
+    // Fenêtre neuronale : identifiant unique — le Cortex v2 (effecteur)
+    // remet ses énergies columnnaires à zéro à chaque nouvelle fenêtre
+    // (miroir de l'adaptation (d), cf. effecteur-cortex.ts).
+    const fenetre = nouvelleFenetreNeuronale();
     // Injection en VOLÉE UNIQUE (cycle 1) puis propagation libre — cf. trainer.
     for (let cycle = 1; cycle <= NEURAL_CYCLES_PAR_GENERATION; cycle++) {
       dernierRapport = this.noyau.executerCycle(
         cycle === 1
           ? { intensite: 0, inputsDirects: encodage.inputs }
           : { intensite: 0 },
-        { prompt },
+        { prompt, __fenetreNeuronale: fenetre },
       );
       this.majResonancesMax(
         resonances,
@@ -207,13 +212,15 @@ export class NeuralEngine {
     // conversationnel (bruit) — les télémétries réelles restent dans raw.
     const resonances: Record<string, number> = {};
     let dernierRapport: CycleReport | undefined;
+    // Fenêtre neuronale (cf. generate) — le Cortex v2 suit chaque fenêtre.
+    const fenetre = nouvelleFenetreNeuronale();
     // Injection en VOLÉE UNIQUE (cycle 1) puis propagation libre — cf. trainer.
     for (let cycle = 1; cycle <= NEURAL_CYCLES_PAR_GENERATION; cycle++) {
       dernierRapport = this.noyau.executerCycle(
         cycle === 1
           ? { intensite: 0, inputsDirects: encodage.inputs }
           : { intensite: 0 },
-        { prompt },
+        { prompt, __fenetreNeuronale: fenetre },
       );
       this.majResonancesMax(
         resonances,
@@ -270,13 +277,15 @@ export class NeuralEngine {
 
     const resonances: Record<string, number> = {};
     let dernierRapport: CycleReport | undefined;
+    // Fenêtre neuronale (cf. generate) — le Cortex v2 suit chaque fenêtre.
+    const fenetre = nouvelleFenetreNeuronale();
     // Injection en VOLÉE UNIQUE (cycle 1) puis propagation libre — cf. trainer.
     for (let cycle = 1; cycle <= NEURAL_CYCLES_PAR_GENERATION; cycle++) {
       dernierRapport = this.noyau.executerCycle(
         cycle === 1
           ? { intensite: 0, inputsDirects: encodage.inputs }
           : { intensite: 0 },
-        { prompt },
+        { prompt, __fenetreNeuronale: fenetre },
       );
       this.majResonancesMax(
         resonances,
