@@ -1,6 +1,8 @@
 import "server-only";
 
-import { assertHubRef, type HubProvider } from "./common";
+import { gunzipSync } from "node:zlib";
+
+import { assertHubRef, HubError, type HubProvider } from "./common";
 
 export {
   HUB_PROVIDERS,
@@ -31,14 +33,14 @@ export type {
   CsvPreview,
 } from "./common";
 
-export { hfToken, searchHuggingFaceDatasets, inspectHuggingFaceDataset, huggingFaceFileUrl } from "./huggingface";
+export { hfToken, searchHuggingFaceDatasets, inspectHuggingFaceDataset, huggingFaceFileUrl, lireLignesHuggingFace } from "./huggingface";
 export { kaggleToken, searchKaggleDatasets, inspectKaggleDataset, downloadKaggleFile } from "./kaggle";
 
-import { searchHuggingFaceDatasets, inspectHuggingFaceDataset, huggingFaceFileUrl } from "./huggingface";
-import { searchKaggleDatasets, inspectKaggleDataset, downloadKaggleFile } from "./kaggle";
+import { searchHuggingFaceDatasets, inspectHuggingFaceDataset, huggingFaceFileUrl, lireLignesHuggingFace } from "./huggingface";
+import { searchKaggleDatasets, inspectKaggleDataset } from "./kaggle";
 import { hubDownloadFile } from "./common";
 import { hfToken } from "./huggingface";
-import { kaggleToken } from "./kaggle";
+import { kaggleToken, downloadKaggleFile } from "./kaggle";
 
 /* ------------------------------------------------------------------ */
 /* Façade unifiée — dispatch par fournisseur, contrat unique            */
@@ -65,13 +67,35 @@ export async function downloadHubFile(
   ref: string,
   fileName: string,
   maxBytes: number,
-): Promise<{ buffer: Buffer; contentType: string }> {
+  partiel = false,
+): Promise<{ buffer: Buffer; contentType: string; tronque?: boolean }> {
   const safeRef = assertHubRef(provider, ref);
-  if (provider === "kaggle") return downloadKaggleFile(safeRef, fileName, maxBytes);
+  if (provider === "kaggle") return downloadKaggleFile(safeRef, fileName, maxBytes, partiel);
   const headers: Record<string, string> = {};
   const token = hfToken();
   if (token) headers.authorization = `Bearer ${token}`;
-  return hubDownloadFile(huggingFaceFileUrl(safeRef, fileName), { headers }, maxBytes);
+  const resultat = await hubDownloadFile(huggingFaceFileUrl(safeRef, fileName), { headers }, maxBytes, undefined, { partiel });
+  // Transparence .gz : les fichiers compressés des hubs (.jsonl.gz, .csv.gz…)
+  // sont décompressés ici, DANS le plafond (la sortie est bornée par la même
+  // limite que le téléchargement — jamais de pic mémoire non borné).
+  if (/\.gz$/i.test(fileName)) {
+    const decompresse = gunzipBorne(resultat.buffer, maxBytes);
+    return { ...resultat, buffer: decompresse, tronque: true };
+  }
+  return resultat;
+}
+
+/** Décompression gzip BORNÉE (sortie plafonnée — tolère une sortie tronquée). */
+function gunzipBorne(buffer: Buffer, maxBytes: number): Buffer {
+  try {
+    const decompresse = gunzipSync(buffer);
+    // La sortie doit rester dans le plafond : on coupe à maxBytes.
+    return decompresse.byteLength > maxBytes ? decompresse.subarray(0, maxBytes) : decompresse;
+  } catch {
+    // Fichier .gz illisible (corrompu, partiel sur binaire compressé…) :
+    // on renvoie le tampon brut — le parsing lèvera une erreur lisible.
+    return buffer;
+  }
 }
 
 /** État de configuration des connecteurs (affiché côté UI, sans secret). */
@@ -80,4 +104,20 @@ export function hubIntegrationStatus(): Array<{ provider: HubProvider; configure
     { provider: "huggingface", configured: true },
     { provider: "kaggle", configured: kaggleToken() !== null },
   ];
+}
+
+/** Lit jusqu'à maxLignes lignes RÉELLES d'un dataset via l'API de paging du
+ *  hub (datasets-server /rows pour Hugging Face — ouvre les datasets
+ *  parquet-only sans télécharger de fichier). Kaggle n'expose pas
+ *  d'équivalent : HubError « config » honnête. */
+export async function lireLignesHub(
+  provider: HubProvider,
+  ref: string,
+  maxLignes: number,
+): Promise<Array<Record<string, unknown>>> {
+  const safeRef = assertHubRef(provider, ref);
+  if (provider === "kaggle") {
+    throw new HubError("config", "Paging de lignes non disponible pour Kaggle (API sans équivalent /rows).");
+  }
+  return lireLignesHuggingFace(safeRef, maxLignes);
 }

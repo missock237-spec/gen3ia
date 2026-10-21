@@ -215,17 +215,20 @@ export async function inspectKaggleDataset(ref: string): Promise<HubDatasetDetai
 
 /* --------------------------- Téléchargement ----------------------- */
 
-/** Télécharge un fichier précis d'un dataset Kaggle (plafond appliqué). */
+/** Télécharge un fichier précis d'un dataset Kaggle (plafond appliqué).
+ *  `partiel` : les grands fichiers sont tronqués au plafond au lieu d'être
+ *  refusés (auto-apprentissage). */
 export async function downloadKaggleFile(
   ref: string,
   fileName: string,
   maxBytes: number,
-): Promise<{ buffer: Buffer; contentType: string }> {
+  partiel = false,
+): Promise<{ buffer: Buffer; contentType: string; tronque?: boolean }> {
   const safeName = assertHubFileName(fileName);
   const [owner, slug] = ref.split("/");
   const { hubDownloadFile } = await import("./common");
   const url =
     `${KAGGLE_API}/datasets/download/${encodeURIComponent(owner)}/${encodeURIComponent(slug)}` +
     `/${safeName.split("/").map((segment) => encodeURIComponent(segment)).join("/")}`;
-  return hubDownloadFile(url, { headers: kaggleHeaders() }, maxBytes);
+  return hubDownloadFile(url, { headers: kaggleHeaders() }, maxBytes, undefined, { partiel });
 }

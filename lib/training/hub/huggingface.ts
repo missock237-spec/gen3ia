@@ -4,6 +4,7 @@ import {
   hubDatasetDetailSchema,
   hubDatasetSummarySchema,
   hubFetchJson,
+  HubError,
   HUB_DATASET_FILE_RE,
   truncatePreviewRows,
   type HubDatasetDetail,
@@ -121,15 +122,36 @@ interface DsServerConfig {
 }
 
 interface DsServerInfo {
-  dataset_info?: {
-    configs?: DsServerConfig[];
-  };
+  dataset_info?:
+    | { configs?: DsServerConfig[] }
+    | { splits?: DsServerSplit[] | Record<string, { num_examples?: unknown }> };
   error?: unknown;
 }
 
 interface DsServerFirstRows {
   features?: Array<{ name?: unknown }>;
   rows?: Array<{ row?: Record<string, unknown> }>;
+}
+
+/** Choisit la config d'un dataset depuis /info — gère les DEUX formes de la
+ *  réponse : { configs: […] } (multi-configs) ou directement { splits: … }
+ *  (config unique), splits étant un tableau ou un dictionnaire. */
+function choisirConfigDsServer(info: DsServerInfo): DsServerConfig | null {
+  const infoBrute = info.dataset_info;
+  if (!infoBrute) return null;
+  if ("configs" in infoBrute && Array.isArray(infoBrute.configs)) {
+    return infoBrute.configs.find((config) => config.config_name === "default") ?? infoBrute.configs[0] ?? null;
+  }
+  if ("splits" in infoBrute && infoBrute.splits) {
+    const splits = Array.isArray(infoBrute.splits)
+      ? infoBrute.splits
+      : Object.entries(infoBrute.splits).map(([name, valeur]) => ({
+          name,
+          num_examples: (valeur as { num_examples?: unknown })?.num_examples,
+        }));
+    return { config_name: "default", splits };
+  }
+  return null;
 }
 
 function featuresToColumns(features: unknown, max = 30): string[] {
@@ -179,9 +201,7 @@ export async function inspectHuggingFaceDataset(ref: string): Promise<HubDataset
       `${HF_DATASETS_SERVER}/info?dataset=${encodeURIComponent(ref)}`,
       { headers: hfHeaders() },
     );
-    const configs = serverInfo.dataset_info?.configs ?? [];
-    const chosen =
-      configs.find((config) => config.config_name === "default") ?? configs[0];
+    const chosen = choisirConfigDsServer(serverInfo);
     if (chosen?.splits) {
       splits = chosen.splits
         .slice(0, 20)
@@ -252,4 +272,60 @@ export function huggingFaceFileUrl(ref: string, fileName: string): string {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/")}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* LIGNES VIA datasets-server (/rows) — les datasets PARQUET-ONLY       */
+/*                                                                      */
+/* La majorité des datasets HF ne livrent que des fichiers .parquet     */
+/* (non ingérables par un parsing fichier). Le serveur de datasets de   */
+/* HF expose néanmoins leurs lignes DÉJÀ CONVERTIES :                   */
+/*   GET /info?dataset=…  → configs + splits                            */
+/*   GET /rows?dataset=…&config=…&split=…&offset=…&length=100            */
+/*        → { features, rows: [{ row: { colonne: valeur } }] }          */
+/* C'est du paging borné (pas de téléchargement de fichier) : chaque    */
+/* réponse est un petit JSON. Honnêteté : si le serveur ne couvre pas   */
+/* le dataset (privé, exotique), l'échec est retourné tel quel.         */
+/* ------------------------------------------------------------------ */
+
+/** Pages maximales de /rows par dataset (100 lignes/page → 500 lignes max). */
+const LIGNES_MAX_PAGES = 5;
+
+/** Lit jusqu'à maxLignes lignes réelles d'un dataset via datasets-server. */
+export async function lireLignesHuggingFace(
+  ref: string,
+  maxLignes: number,
+): Promise<Array<Record<string, unknown>>> {
+  const info = await hubFetchJson<DsServerInfo>(
+    `${HF_DATASETS_SERVER}/info?dataset=${encodeURIComponent(ref)}`,
+    { headers: hfHeaders() },
+  );
+  // La sélection de config gère les DEUX formes de /info (configs directes
+  // ou splits directs) — voir choisirConfigDsServer.
+  const choisi = choisirConfigDsServer(info);
+  const split = choisi?.splits?.[0]?.name;
+  if (typeof split !== "string" || split.length === 0) {
+    throw new HubError("not-found", "Aucun split exposé par datasets-server pour ce dataset.");
+  }
+  const config = typeof choisi?.config_name === "string" ? choisi.config_name : "default";
+
+  const lignes: Array<Record<string, unknown>> = [];
+  for (let page = 0; page < LIGNES_MAX_PAGES && lignes.length < maxLignes; page += 1) {
+    const reponse = await hubFetchJson<DsServerFirstRows>(
+      `${HF_DATASETS_SERVER}/rows?dataset=${encodeURIComponent(ref)}` +
+        `&config=${encodeURIComponent(config)}&split=${encodeURIComponent(split)}` +
+        `&offset=${page * 100}&length=100`,
+      { headers: hfHeaders() },
+    );
+    const rangées = Array.isArray(reponse.rows) ? reponse.rows : [];
+    if (rangées.length === 0) break;
+    for (const entree of rangées) {
+      if (lignes.length >= maxLignes) break;
+      const row = entree?.row;
+      if (row !== null && typeof row === "object" && !Array.isArray(row)) {
+        lignes.push(row as Record<string, unknown>);
+      }
+    }
+  }
+  return lignes;
 }
