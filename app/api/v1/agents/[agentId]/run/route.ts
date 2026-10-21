@@ -5,6 +5,8 @@ import { z } from "zod";
 import { authenticateDeveloper } from "@/lib/extensions/developer-keys";
 import { authenticateApiKey } from "@/lib/security/api-keys";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { HttpError } from "@/lib/security/http-errors";
+import { runWithApiTokenBilling } from "@/lib/billing/api-usage";
 import { getAgentForOwner } from "@/lib/agents/repository";
 import { createPersonalizedPlan, policyForAgent } from "@/lib/agents/personalized-plan";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
@@ -24,8 +26,10 @@ export const maxDuration = 300;
  * Authentification (deux chaînes acceptées) :
  *   1. Clé API ENTREPRISE `g3a_…` (Task 126) : Authorization: Bearer g3a_…
  *      ou X-API-Key: g3a_… — exige le scope « agents », quota PAR CLÉ ;
+ *      l'appel est FACTURÉ au token (demande utilisateur n°9 : 1,00 €/1M
+ *      entrant, 1,50 €/1M sortant, débités du wallet — lib/billing/api-usage) ;
  *   2. Chaîne développeur (extensions) : Authorization: Bearer g3x_…
- *      + X-Gen3ia-Project-Id: <projet lié>.
+ *      + X-Gen3ia-Project-Id: <projet lié> (hors facturation tokens API).
  *
  * Le pipeline d'exécution est EXACTEMENT celui de la route session
  * (/api/agents/[id]/run) : plan personnalisé dérivé de la configuration de
@@ -134,7 +138,31 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
     });
 
-    const state = await runtime.run();
+    // Facturation tokens des appels authentifiés PAR CLÉ API `g3a_` :
+    // réservation estimée avant exécution (402 si solde insuffisant),
+    // règlement au RÉEL mesuré (usage reports du moteur) après, libération
+    // sur échec. La chaîne développeur (g3x_) n'est pas facturée ici.
+    let state: Awaited<ReturnType<typeof runtime.run>>;
+    let apiUsage: Awaited<ReturnType<typeof runWithApiTokenBilling>>["usage"] | undefined;
+    if (apiKeyIdentity) {
+      const billed = await runWithApiTokenBilling({
+        userId: identity.userId,
+        apiKeyId: apiKeyIdentity.keyId,
+        apiKeyPrefix: apiKeyIdentity.prefix,
+        endpoint: "POST /api/v1/agents/{agentId}/run",
+        objective: parsed.data.objective,
+        executionId,
+        fn: () => runtime.run(),
+        measure: (runState) => ({
+          inputTokens: runState?.billing?.llmInputTokens ?? 0,
+          outputTokens: runState?.billing?.llmOutputTokens ?? 0,
+        }),
+      });
+      state = billed.result;
+      apiUsage = billed.usage;
+    } else {
+      state = await runtime.run();
+    }
     const durationMs = Date.now() - startedAt;
 
     // Métriques OTel (Task 59) : coût par organisation (no-op si export désactivé).
@@ -166,6 +194,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
         outputs: state.outputs,
         observations: state.observations,
         billing: state.billing,
+        // Facturation tokens API (clés g3a_ uniquement) : tokens mesurés +
+        // tarification exacte + débit réel (transparence intégrale).
+        ...(apiUsage ? { apiUsage } : {}),
         durationMs,
       },
       { headers: { "x-request-id": requestId } },
@@ -175,10 +206,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     log.error({ event: "api.agent.execution.failed", error: safe }, "Erreur exécution d'agent via API");
     const message = error instanceof Error ? error.message : "Exécution impossible";
     // Task 152 — neutralisation de la facturation : plus de mapping 402
-    // « solde insuffisant » (aucune exécution n'est bloquée par le wallet).
+    // « solde insuffisant » pour les erreurs wallet génériques. En revanche
+    // une HttpError typée (402 facturation API par clé g3a_, 401/403/429…)
+    // conserve son statut sémantique.
+    const status = error instanceof HttpError ? error.status : authStatus(error);
     return NextResponse.json(
       { error: message, requestId },
-      { status: authStatus(error), headers: { "x-request-id": requestId } },
+      { status, headers: { "x-request-id": requestId } },
     );
   }
 }

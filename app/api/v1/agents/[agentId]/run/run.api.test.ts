@@ -16,7 +16,9 @@ import { NextRequest } from "next/server";
  */
 
 vi.mock("@/lib/extensions/developer-keys", () => ({ authenticateDeveloper: vi.fn() }));
+vi.mock("@/lib/security/api-keys", () => ({ authenticateApiKey: vi.fn() }));
 vi.mock("@/lib/security/rate-limit", () => ({ enforceRateLimit: vi.fn() }));
+vi.mock("@/lib/billing/api-usage", () => ({ runWithApiTokenBilling: vi.fn() }));
 vi.mock("@/lib/agents/repository", () => ({ getAgentForOwner: vi.fn() }));
 vi.mock("@/lib/agents/personalized-plan", () => ({
   createPersonalizedPlan: vi.fn(),
@@ -33,18 +35,43 @@ vi.mock("@/lib/observability/logger", () => {
 });
 
 import { authenticateDeveloper } from "@/lib/extensions/developer-keys";
+import { authenticateApiKey } from "@/lib/security/api-keys";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { runWithApiTokenBilling } from "@/lib/billing/api-usage";
 import { getAgentForOwner } from "@/lib/agents/repository";
 import { createPersonalizedPlan, policyForAgent } from "@/lib/agents/personalized-plan";
 import { AgentRuntime } from "@/lib/agents/runtime/runner";
+import { HttpError } from "@/lib/security/http-errors";
 import { POST } from "./route";
 
 const mockAuth = vi.mocked(authenticateDeveloper);
+const mockApiKeyAuth = vi.mocked(authenticateApiKey);
 const mockLimit = vi.mocked(enforceRateLimit);
+const mockBilling = vi.mocked(runWithApiTokenBilling);
 const mockGetAgent = vi.mocked(getAgentForOwner);
 const mockPlan = vi.mocked(createPersonalizedPlan);
 const mockPolicy = vi.mocked(policyForAgent);
 const mockRuntime = vi.mocked(AgentRuntime);
+
+const USAGE = {
+  billed: true,
+  billingEnabled: true,
+  measuredTokens: { inputTokens: 1200, outputTokens: 340 },
+  charge: { inputTokens: 1200, outputTokens: 340, inputNanoEur: 1200000, outputNanoEur: 510000, totalNanoEur: 1710000, chargeMicroEur: 1710, chargeMinor: 113, currency: "XAF" },
+  debitedMinor: 113,
+  reservedMinor: 3206,
+  platformAbsorbedMinor: 0,
+  currency: "XAF",
+  measurementNote: "tokens mesurés",
+  formula: "micro€ = ceil((tokens_in × 1000 + tokens_out × 1500) / 1000)",
+};
+
+const RUN_STATE = {
+  status: "completed",
+  outputs: { s1: "Rapport de veille réel" },
+  observations: [],
+  billing: { totalMinor: 12 },
+};
 
 const AGENT = {
   id: "agent_1",
@@ -88,6 +115,7 @@ const CONTEXT = (agentId = "agent_1") => ({ params: Promise.resolve({ agentId })
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockApiKeyAuth.mockResolvedValue(null);
   mockAuth.mockResolvedValue({ userId: "user_1", via: "api_key", displayName: "Gen3ia developer", projectId: "proj_1" });
   mockLimit.mockResolvedValue({ allowed: true, remaining: 29, resetMs: 300_000 } as Awaited<ReturnType<typeof enforceRateLimit>>);
   mockGetAgent.mockResolvedValue(AGENT);
@@ -173,5 +201,70 @@ describe("POST /api/v1/agents/[agentId]/run", () => {
     expect(response.status).toBe(500);
     const body = await response.json();
     expect(body.error).toMatch(/Wallet balance too low/);
+  });
+});
+
+describe("POST /api/v1/agents/[agentId]/run — facturation tokens par clé API g3a_ (demande n°9)", () => {
+  function apikeyRequest() {
+    return new NextRequest("http://localhost/api/v1/agents/agent_1/run", {
+      method: "POST",
+      body: JSON.stringify({ objective: "Surveille le marché des drones" }),
+      headers: { "content-type": "application/json", authorization: "Bearer g3a_test-entreprise-key" },
+    });
+  }
+
+  it("un appel authentifié PAR CLÉ g3a_ passe par le cycle de facturation tokens et expose apiUsage", async () => {
+    mockApiKeyAuth.mockResolvedValue({
+      userId: "user_1",
+      keyId: "keyhash-1",
+      prefix: "g3a_Ab12Cd",
+      scopes: ["agents"],
+      via: "api_key",
+    });
+    mockBilling.mockResolvedValue({ result: RUN_STATE, usage: USAGE } as never);
+    const response = await POST(apikeyRequest(), CONTEXT());
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.outputs).toEqual({ s1: "Rapport de veille réel" });
+    expect(body.apiUsage).toMatchObject({
+      billed: true,
+      debitedMinor: 113,
+      measuredTokens: { inputTokens: 1200, outputTokens: 340 },
+    });
+    expect(mockBilling).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user_1",
+        apiKeyId: "keyhash-1",
+        apiKeyPrefix: "g3a_Ab12Cd",
+        endpoint: "POST /api/v1/agents/{agentId}/run",
+        objective: "Surveille le marché des drones",
+      }),
+    );
+  });
+
+  it("la chaîne développeur (g3x_) n'est PAS facturée au token API", async () => {
+    const response = await POST(makeRequest(), CONTEXT());
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.apiUsage).toBeUndefined();
+    expect(mockBilling).not.toHaveBeenCalled();
+  });
+
+  it("solde insuffisant à la réservation → 402 PAYMENT_REQUIRED avec message clair", async () => {
+    mockApiKeyAuth.mockResolvedValue({
+      userId: "user_1",
+      keyId: "keyhash-1",
+      prefix: "g3a_Ab12Cd",
+      scopes: ["agents"],
+      via: "api_key",
+    });
+    mockBilling.mockRejectedValue(
+      new HttpError(402, "Solde insuffisant pour l'appel API. Rechargez votre portefeuille Gen3ia."),
+    );
+    const response = await POST(apikeyRequest(), CONTEXT());
+    expect(response.status).toBe(402);
+    const body = await response.json();
+    expect(body.error).toMatch(/Solde insuffisant pour l'appel API/);
+    expect(body.requestId).toBeTruthy();
   });
 });
