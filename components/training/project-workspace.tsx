@@ -42,8 +42,18 @@ interface CatalogPayload {
     knownLimits: string[];
   }>;
   baseModels: Array<{ id: string; name: string; params: string; minVramGb: number; recommendedFor: string[]; notes: string }>;
-  providers: Array<{ id: string; label: string; configured: boolean; gpus: Array<{ name: string; vramGb: number; available: boolean }>; simulated: boolean }>;
-  quotas: { maxProjects: number; maxConcurrentJobs: number; maxUploadMb: number; maxDatasetsPerProject: number; maxModelsPerProject: number };
+  /* Config-only (demande n° 6) : plus aucune sonde fournisseurs (worker GPU,
+     inventaire matériel, flags de simulation) — un simple résumé honnête. */
+  execution: { nativeAvailable: boolean; gpuAvailable: boolean; simulationDetected: boolean };
+  quotas: {
+    maxProjects: number;
+    maxConcurrentJobs: number;
+    maxUploadMb: number;
+    maxDatasetsPerProject: number;
+    maxModelsPerProject: number;
+    maxStorageMb?: number;
+    maxTrainingMinutesPerMonth?: number;
+  };
 }
 
 const STEPS = [
@@ -256,36 +266,42 @@ export function TrainingProjectWorkspace({ projectId }: { projectId: string }) {
 }
 
 /* ================================================================== */
-/* Bandeau fournisseurs — honnêteté sur l'exécution réelle              */
-/* (Gen3 natif : TOUJOURS disponible, CPU local ; GPU worker : option)  */
+/* Bandeau exécution — config-only (demande n° 6) : l'utilisateur voit  */
+/* un résumé honnête de disponibilité et ses quotas, jamais la          */
+/* mécanique interne (worker GPU, inventaire matériel, variables d'env). */
 /* ================================================================== */
 
 function ProviderBanner({ catalog }: { catalog: CatalogPayload | null }) {
   if (!catalog) return null;
-  const natif = catalog.providers.filter((p) => p.id === "gen3-local" && p.configured && !p.simulated);
-  const gpu = catalog.providers.filter((p) => p.id !== "gen3-local" && p.configured && !p.simulated);
+  const execution = catalog.execution;
+  const quotas = [
+    `${catalog.quotas.maxUploadMb} Mo par fichier`,
+    catalog.quotas.maxStorageMb ? `${catalog.quotas.maxStorageMb.toLocaleString("fr-FR")} Mo de stockage` : null,
+    `${catalog.quotas.maxTrainingMinutesPerMonth ?? 60} min d'entraînement/mois`,
+    `${catalog.quotas.maxDatasetsPerProject} datasets par projet`,
+  ].filter((entry): entry is string => entry !== null);
   return (
     <div className="ts-card flex flex-wrap items-center gap-3 px-4 py-3 text-sm text-[var(--g3-text-secondary)]">
-      {natif.length > 0 ? (
+      {execution?.nativeAvailable ? (
         <>
           <Chip variant="valid">Gen entraîne vos modèles — moteur natif actif</Chip>
           <span>Entraînement réel sur CPU, sans GPU requis (moteur Gen3 natif).</span>
         </>
       ) : null}
-      {gpu.length > 0 ? (
+      {execution?.gpuAvailable ? (
         <span>
-          <Chip variant="valid">GPU disponible</Chip>{" "}
-          {gpu.map((p) => `${p.label} — ${p.gpus.map((g) => `${g.name} (${g.vramGb} Go)`).join(", ")}`).join(" · ")}
+          <Chip variant="valid">GPU disponible</Chip> Les méthodes gourmandes (LoRA/QLoRA) sont prises en charge par la
+          plateforme.
         </span>
       ) : (
         <span>
-          <Chip variant="warn">Aucun GPU configuré</Chip>{" "}
-          Le fine-tuning LoRA/QLoRA sur LLM nécessite un worker GPU (TRAINING_WORKER_URL) — sans lui ces tâches
-          restent <strong className="text-[var(--g3-text-secondary)]">en file d&apos;attente</strong>, jamais simulées.
-          Le moteur Gen3 natif, lui, entraîne vos modèles dès maintenant.
+          <Chip variant="warn">Exécution GPU en attente côté plateforme</Chip> Les méthodes nécessitant un GPU restent en
+          file d&apos;attente jusqu&apos;à disponibilité — jamais simulées. Le moteur Gen3 natif, lui, entraîne vos modèles
+          dès maintenant.
         </span>
       )}
-      {catalog.providers.some((p) => p.simulated) ? <Chip variant="warn">Simulation active (tests)</Chip> : null}
+      {execution?.simulationDetected ? <Chip variant="warn">Simulation active (tests)</Chip> : null}
+      <span className="ml-auto text-xs text-[var(--g3-faint)]">Quotas : {quotas.join(" · ")}</span>
     </div>
   );
 }
@@ -525,8 +541,8 @@ function ModelStep({
         <div className="ts-card p-5">
           <h3 className="font-serif text-base font-semibold text-[var(--g3-text)]">Catalogue de modèles de base</h3>
           <p className="mt-1.5 text-xs leading-5 text-[var(--g3-muted)]">
-            Références publiques (Hugging Face) : aucun poids n&apos;est téléchargé ici — le worker GPU les récupère depuis le
-            dépôt officiel au moment de l&apos;entraînement.
+            Références publiques (Hugging Face) : aucun poids n&apos;est téléchargé ici — la plateforme les récupère depuis
+            le dépôt officiel au moment de l&apos;entraînement.
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {catalog.baseModels.map((entry) => {
