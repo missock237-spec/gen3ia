@@ -88,3 +88,25 @@ Si une future décision produit visait les données conversationnelles, les chem
 ## 6. Conclusion
 
 La demande « supprimer le système de conversation » se heurte à un fait d'architecture : **le module « conversation » et le chat IA sont le même système** (un backend, cinq frontaux). Conformément à la consigne n°3 de la mission (honnêteté prime sur l'action), cette PR livre l'analyse et **aucune suppression de code**. Toute suppression ciblerait nécessairement le chat IA lui-même et doit passer par une décision produit explicite.
+
+## 7. Reprise T4 — ré-verification indépendante (2026-10-21)
+
+L'agent de reprise a re-vérifié indépendamment chaque preuve clé avant la PR :
+
+| Preuve | Résultat de ré-verification |
+|---|---|
+| `components/chat/nova-chat.tsx` (Chat IA dashboard) | fetch `/api/workspace/conversations` lignes 816, 884, 1142, 1162 ; commentaire ligne 27 confirmé |
+| `components/chat/aurora-chat.tsx` | fetch lignes 189, 209, 375, 482, 601, 623 |
+| `app/chat-v4/page.tsx` | en-tête lignes 11-13 : POST/DELETE/PATCH + stream NDJSON `/api/workspace/conversations` |
+| Ondes / Essaim | `laboratoire-ondes.tsx:452`, `console-essaim.tsx:363` → même backend |
+| `lib/domain/conversations/engine.ts` | 3 813 lignes ; imports `lib/ai/router`, `lib/ai/*`, `lib/tools/*`, `lib/agents/*`, `lib/security/*` — cœur du chat |
+| `lib/agents/conversation-run.ts` | pont mission runtime ↔ conversation (feature agents) |
+| `app/api/chat/conversations` | consommé par `agent-chat-panel.tsx` / `agent-chat-workshop.tsx` (chat agents) |
+| `app/api/chat/message` | retiré de la file SW (`public/sw.js:26`), encore référencé par tests (`app/ai-response-quality.test.ts`, `pwa-consistency.test.ts`) + e2e ; chat API protégée |
+| Corpus moteur | `lib/neural/generation/corpus.ts` : « CORPUS CONVERSATIONNEL INTÉGRÉ du cortex langagier Gen3 » (interdiction) |
+| Domaine d'entraînement | `lib/entrainement-auto/catalogue.ts` : requêtes « french conversation dialogue », « assistant conversation pairs » (interdiction) |
+| Stockage | R2 `users/{uid}/conversations/...` (`lib/chat/repository.ts:29-30`), Qdrant `gen3ia_conversations` (`lib/chat/vector-index.ts:33`), Firestore `conversationArtifacts` / `conversationApprovals` (`lib/domain/artifacts|approvals/repository.ts`) |
+| Navigation | `components/shells/nav-registry.ts:89-96` : entrée primaire « Conversations » → `/workspace` ; `components/nav/nav-items.ts:41` |
+| Middleware | `middleware.ts:70` : mention commentaire uniquement (modale d'aperçu) |
+
+Comptages bruts `rg -i "conversation"` (mesure de reprise) : **app/** 66 fichiers / 639 occurrences, **lib/** 166 fichiers / 1 185 occurrences, **components/** 41 fichiers / 596 occurrences — ~2 400 occurrences au total, 100 % classées (a) ou (b) ; classe (c) vide.
