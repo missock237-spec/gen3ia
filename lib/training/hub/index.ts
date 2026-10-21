@@ -22,6 +22,8 @@ export {
   truncatePreviewRows,
   encodeHubPath,
 } from "./common";
+export { estFichierParquet, lignesDepuisParquet, normaliserValeurParquet } from "./parquet";
+export type { ResultatParquet } from "./parquet";
 export type {
   HubProvider,
   HubDatasetSummary,
@@ -107,8 +109,9 @@ export function hubIntegrationStatus(): Array<{ provider: HubProvider; configure
 }
 
 /** Lit jusqu'à maxLignes lignes RÉELLES d'un dataset via l'API de paging du
- *  hub (datasets-server /rows pour Hugging Face — ouvre les datasets
- *  parquet-only sans télécharger de fichier). Kaggle n'expose pas
+ *  hub (datasets-server /rows pour Hugging Face — repli honnête quand un
+ *  fichier, typiquement .parquet trop grand pour le plafond, ne peut pas
+ *  être téléchargé et parsé directement). Kaggle n'expose pas
  *  d'équivalent : HubError « config » honnête. */
 export async function lireLignesHub(
   provider: HubProvider,

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { downloadKaggleFile, inspectKaggleDataset, kaggleToken, searchKaggleDatasets } from "./kaggle";
 import { HubError, hubErrorStatus } from "./common";
+import { fixturesParquet } from "./__fixtures__/parquet";
 
 /* ------------------------------------------------------------------ */
 /* Connecteur Kaggle — jeton, normalisation, aperçu (fetch mocké).     */
@@ -95,8 +96,10 @@ describe("inspectKaggleDataset", () => {
         return Promise.resolve(
           jsonResponse([
             { name: "train.csv", totalBytes: 600 },
-            { name: "notes.parquet", totalBytes: 100 },
-            { name: "big.parquet", totalBytes: 500 },
+            // Le parquet est désormais ingérable — fichiers plus lourds que le
+            // CSV pour que l'aperçu continue de venir du CSV.
+            { name: "notes.parquet", totalBytes: 700 },
+            { name: "big.parquet", totalBytes: 900 },
           ]),
         );
       }
@@ -116,12 +119,52 @@ describe("inspectKaggleDataset", () => {
     expect(detail.name).toBe("Jeu de test");
     expect(detail.license).toBe("MIT");
     expect(detail.files.map((f) => f.name)).toEqual(["train.csv", "notes.parquet", "big.parquet"]);
-    expect(detail.files.find((f) => f.name === "big.parquet")?.downloadable).toBe(false);
-    // L'aperçu vient du fichier CSV téléchargé (le seul ingérable ≤ 2 Mo).
+    // Le parquet fait désormais partie des formats ingérables (hyparquet).
+    expect(detail.files.find((f) => f.name === "big.parquet")?.downloadable).toBe(true);
+    // L'aperçu vient du fichier CSV téléchargé (le plus léger ingérable ≤ 2 Mo).
     expect(detail.previewRows).toHaveLength(3);
     expect(detail.previewRows[0]).toEqual({ instruction: "Q1", response: "A1" });
     expect(detail.splits).toEqual([]);
     expect(detail.notes.some((note) => /n'expose pas les splits/i.test(note))).toBe(true);
+  });
+
+  it("produit un aperçu d'un dataset PARQUET-ONLY (format majoritaire HF)", async () => {
+    const parquet = fixturesParquet().langageSnappy;
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/datasets/view/")) {
+        return Promise.resolve(jsonResponse({ ref: "owner/parquet", title: "Parquet seul" }));
+      }
+      if (url.includes("/datasets/list/")) {
+        return Promise.resolve(
+          jsonResponse([
+            { name: "README.md", totalBytes: 40 },
+            { name: "data/train-00000-of-00001-abc.parquet", totalBytes: parquet.byteLength },
+          ]),
+        );
+      }
+      if (url.includes("/datasets/download/")) {
+        return Promise.resolve(
+          new Response(new Uint8Array(parquet), {
+            status: 200,
+            headers: { "content-type": "application/octet-stream", "content-length": String(parquet.byteLength) },
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse({}, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const detail = await inspectKaggleDataset("owner/parquet");
+    // README.md reste non ingérable ; le parquet passe les filtres.
+    expect(detail.files.find((f) => f.name === "README.md")?.downloadable).toBe(false);
+    expect(detail.files.find((f) => /\.parquet$/.test(f.name))?.downloadable).toBe(true);
+    // L'aperçu est extrait RÉELLEMENT du parquet (colonnes question/answer).
+    expect(detail.columns).toEqual(["question", "answer", "id"]);
+    expect(detail.previewRows).toHaveLength(4);
+    expect(detail.previewRows[0]).toMatchObject({
+      question: "Comment fonctionne le réseau Gen3 ?",
+      answer: "Un SNN à spikes entraîné par résonance.",
+    });
   });
 
   it("signale l'absence d'aperçu quand aucun fichier léger n'est ingérable", async () => {
