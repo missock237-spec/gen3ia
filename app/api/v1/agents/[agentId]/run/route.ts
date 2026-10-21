@@ -16,6 +16,12 @@ import { randomUUID } from "crypto";
 // aucun quota ni journal d'exécution consommé — impossible de contourner par
 // une clé valide. Le suivi des missions lancées par le système IA reste
 // possible (GET /api/agents/runs/[runId] et son flux SSE, scopés propriétaire).
+//
+// (Fusion demandes n°5 × n°9) La facturation tokens API (1 €/1M entrant,
+// 1,5 €/1M sortant, lib/billing/api-usage) reste en vigueur sur les endpoints
+// API autorisés authentifiés par clé `g3a_` ; cette route étant fermée, aucun
+// appel n'y est émis ni facturé — la sécurité (n°5) prime sur la surface
+// facturable.
 import { agentSystemReservedBody } from "@/lib/security/agent-system-access";
 
 export const runtime = "nodejs";

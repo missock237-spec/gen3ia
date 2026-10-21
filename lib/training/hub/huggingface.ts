@@ -13,17 +13,21 @@ import {
 } from "./common";
 
 /* ------------------------------------------------------------------ */
-/* Connecteur Hugging Face (v1.1)                                       */
+/* Connecteur Hugging Face (v1.2)                                       */
 /*                                                                    */
 /* Sources RÉELLES :                                                   */
 /*  - https://huggingface.co/api/datasets?search=…   (recherche)       */
 /*  - https://huggingface.co/api/datasets/{id}       (fichiers, card)   */
+/*  - https://huggingface.co/api/datasets/{id}/tree/main?recursive=true */
+/*      → parcours du dépôt avec TAILLE de chaque fichier               */
+/*      (ex. data/train-00000-of-00001-<hash>.parquet — format          */
+/*      majoritaire des datasets HF, parsé en JS pur côté ingesteur)    */
 /*  - https://datasets-server.huggingface.co/info?dataset=…            */
 /*      → splits + num_examples (déclarés par le hub)                   */
 /*  - https://datasets-server.huggingface.co/first-rows?…              */
 /*      → échantillon de lignes réelles                                */
-/* Ce que l'API ne fournit pas reste null + note (taille exacte des     */
-/* fichiers : non exposée par l'API de listing).                      */
+/* Ce que l'API ne fournit pas reste null + note (échec de l'API tree   */
+/* → tailles inconnues, plafond appliqué au téléchargement).          */
 /* ------------------------------------------------------------------ */
 
 const HF_API = "https://huggingface.co";
@@ -110,6 +114,14 @@ interface HfDatasetInfo {
   };
 }
 
+/** Entrée de l'API tree (parcours récursif du dépôt) : les fichiers y
+ *  portent leur taille exacte — contrairement à `siblings`. */
+interface HfTreeEntry {
+  type?: string;
+  path?: string;
+  size?: number;
+}
+
 interface DsServerSplit {
   name?: unknown;
   num_examples?: unknown;
@@ -185,11 +197,51 @@ export async function inspectHuggingFaceDataset(ref: string): Promise<HubDataset
     .slice(0, 200)
     .map((filename) => ({
       name: filename.slice(0, 300),
-      sizeBytes: 0, // l'API de listing n'expose pas la taille des fichiers
+      sizeBytes: 0, // valeur de repli — enrichie par l'API tree ci-dessous
       downloadable: HUB_DATASET_FILE_RE.test(filename),
     }));
+
+  // Découverte RÉELLE du dépôt via l'API tree (parcours récursif) : c'est
+  // elle qui liste les fichiers `data/train-*.parquet` — format majoritaire
+  // des datasets HF — et qui expose leur TAILLE exacte (absente de
+  // `siblings`). Échec ou réponse inattendue → repli honnête : tailles
+  // inconnues, le plafond reste appliqué AU TÉLÉCHARGEMENT.
+  let taillesConnues = false;
+  try {
+    const arbre = await hubFetchJson<unknown>(
+      `${HF_API}/api/datasets/${encodeURIComponent(owner)}/${encodeURIComponent(name)}` +
+        `/tree/main?recursive=true&limit=1000`,
+      { headers: hfHeaders() },
+    );
+    if (Array.isArray(arbre)) {
+      const tailles = new Map<string, number>();
+      for (const entree of arbre as HfTreeEntry[]) {
+        if (
+          entree?.type === "file" &&
+          typeof entree.path === "string" &&
+          entree.path.length > 0 &&
+          typeof entree.size === "number" &&
+          Number.isFinite(entree.size) &&
+          entree.size >= 0
+        ) {
+          tailles.set(entree.path, entree.size);
+        }
+      }
+      if (tailles.size > 0) {
+        taillesConnues = true;
+        for (const fichier of files) {
+          const taille = tailles.get(fichier.name);
+          if (typeof taille === "number") fichier.sizeBytes = taille;
+        }
+      }
+    }
+  } catch {
+    // repli silencieux : tailles inconnues (note honnête ci-dessous)
+  }
   notes.push(
-    "Taille exacte des fichiers non exposée par l'API Hugging Face : le plafond par fichier sera appliqué au téléchargement.",
+    taillesConnues
+      ? "Tailles des fichiers issues de l'API tree Hugging Face (parcours récursif du dépôt)."
+      : "Taille exacte des fichiers non exposée par l'API Hugging Face : le plafond par fichier sera appliqué au téléchargement.",
   );
 
   // Splits déclarés via datasets-server (peut échouer pour les dépôts privés/gated).
@@ -275,11 +327,12 @@ export function huggingFaceFileUrl(ref: string, fileName: string): string {
 }
 
 /* ------------------------------------------------------------------ */
-/* LIGNES VIA datasets-server (/rows) — les datasets PARQUET-ONLY       */
+/* LIGNES VIA datasets-server (/rows) — complément au parsing direct    */
 /*                                                                      */
-/* La majorité des datasets HF ne livrent que des fichiers .parquet     */
-/* (non ingérables par un parsing fichier). Le serveur de datasets de   */
-/* HF expose néanmoins leurs lignes DÉJÀ CONVERTIES :                   */
+/* Depuis l'ajout du parsing parquet (lib/training/hub/parquet.ts), les  */
+/* fichiers .parquet sont téléchargés et lus directement. L'API /rows    */
+/* reste utile en repli quand le téléchargement échoue (fichier trop     */
+/* grand pour le plafond → tronqué → footer parquet illisible) :        */
 /*   GET /info?dataset=…  → configs + splits                            */
 /*   GET /rows?dataset=…&config=…&split=…&offset=…&length=100            */
 /*        → { features, rows: [{ row: { colonne: valeur } }] }          */

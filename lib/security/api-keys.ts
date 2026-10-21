@@ -3,6 +3,8 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 
 import { adminDb } from "@/lib/firebase/admin";
+import { getPlanState } from "@/lib/billing/abonnements";
+import { PLANS } from "@/lib/billing/plans";
 import { runFirestoreGuarded } from "@/lib/queue/firestore-guard";
 import { enforceRateLimit } from "./rate-limit";
 import { HttpError } from "./http-errors";
@@ -25,6 +27,15 @@ import { HttpError } from "./http-errors";
  *   - quota par clé : `rateLimitPerMinute` appliqué via enforceRateLimit
  *     (locale + par-instance) AVANT toute exécution métier ;
  *   - révocation soft (revokedAt) : auditable, immédiat à l'auth.
+ *
+ * GATE PLAN PRO (demande utilisateur n°8) : la CRÉATION d'une clé exige le
+ * plan Pro ou supérieur (entitlement « api_keys » — pro, entreprise,
+ * modele-sur-mesure). Les clés DÉJÀ créées restent VALABLES : aucune
+ * révocation rétroactive n'est appliquée au changement/descente de plan —
+ * seul le passage du plan est vérifié au moment de la création, et
+ * `authenticateApiKey` ne consulte PAS l'abonnement (contrat documenté).
+ * L'usage des clés reste en revanche facturé au token
+ * (lib/billing/api-usage.ts : 1,00 €/1M entrant, 1,50 €/1M sortant).
  */
 
 const COLLECTION = "apiKeys";
@@ -117,6 +128,18 @@ export async function createApiKey(params: {
   rateLimitPerMinute?: number;
 }): Promise<{ key: string; view: ApiKeyPublicView }> {
   if (!params.ownerId.trim()) throw new HttpError(400, "Création de clé API : compte requis.");
+
+  // GATE PLAN PRO (demande utilisateur n°8) : la création de clés API est
+  // réservée au plan Pro ou supérieur. Message explicite avec l'orientation
+  // /billing. Les clés existantes ne sont JAMAIS révoquées rétroactivement.
+  const plan = await getPlanState(params.ownerId);
+  if (!PLANS[plan.planId].entitlements.includes("api_keys")) {
+    throw new HttpError(
+      403,
+      `La création de clés API est réservée au plan Pro ou supérieur (plan actuel : ${PLANS[plan.planId].name}). Mettez votre abonnement à niveau depuis /billing puis réessayez.`,
+    );
+  }
+
   const name = params.name.trim().slice(0, 100) || "clé API";
   const scopes = normalizeScopes(params.scopes);
   const rateLimitPerMinute = Math.min(

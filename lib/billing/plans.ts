@@ -42,6 +42,8 @@ export type PlanEntitlement =
   | "p2p_priority"
   | "rag_chiffre"
   | "datasets_api"
+  /** Demande utilisateur n°8 : création de clés API entreprise (`g3a_`) réservée au plan Pro ou supérieur. */
+  | "api_keys"
   | "private_mesh"
   | "multi_postes"
   | "support_prioritaire"
@@ -115,12 +117,14 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       "p2p_priority",
       "rag_chiffre",
       "datasets_api",
+      "api_keys",
     ],
     audience: "Développeurs, créateurs, freelances",
     features: [
       "Accès complet à l'Agent Master et aux modules d'apprentissage",
       "Priorité de calcul sur l'essaim P2P",
       "RAG local chiffré et intégration d'API de datasets",
+      "Création de clés API (usage facturé : 1,00 €/1M tokens entrant, 1,50 €/1M sortant)",
     ],
     highlight: true,
   },
@@ -141,6 +145,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       "p2p_priority",
       "rag_chiffre",
       "datasets_api",
+      "api_keys",
       "private_mesh",
       "multi_postes",
       "support_prioritaire",
@@ -170,6 +175,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       "p2p_priority",
       "rag_chiffre",
       "datasets_api",
+      "api_keys",
       "private_mesh",
       "multi_postes",
       "support_prioritaire",
