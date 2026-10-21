@@ -51,6 +51,14 @@ cd "$PROD_DIR" || { log "CD ERREUR: $PROD_DIR introuvable"; exit 1; }
 git fetch origin --quiet || { log "CD ERREUR: git fetch a échoué (réseau ?)"; exit 1; }
 git cat-file -e "$TARGET_SHA" 2>/dev/null || { log "CD ERREUR: SHA $TARGET_SHA inconnu du dépôt"; exit 1; }
 
+# --- Idempotence : déjà déployé + site sain → rien à faire (retry SSH sûrs) ---
+DEPLOYED=$(cat "$LAST_DEPLOYED" 2>/dev/null || git rev-parse HEAD)
+if [ "$TARGET_SHA" = "$DEPLOYED" ] && curl -fsS -m 10 -o /dev/null http://127.0.0.1:3000/ 2>/dev/null; then
+  log "CD: $TARGET_SHA déjà déployé et site en bonne santé — rien à faire."
+  rm -f /tmp/next-build.tar.gz /tmp/cd-finisher.sh
+  exit 0
+fi
+
 log "CD === DÉPLOIEMENT $TARGET_SHA (runner GitHub) ==="
 
 # --- Dépendances staging : npm ci UNIQUEMENT si le lockfile a changé ---

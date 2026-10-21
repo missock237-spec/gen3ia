@@ -61,20 +61,36 @@ jobs:
           chmod 600 ~/.ssh/vps_deploy
           ssh-keyscan -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Envoyer build + finisher vers le VPS
+      - name: Envoyer build + finisher vers le VPS (retry PerSourcePenalties)
         run: |
-          scp -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
-            /tmp/next-build.tar.gz \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/next-build.tar.gz"
-          scp -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
-            deploy/cd-finisher.sh \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/cd-finisher.sh"
+          ok=0
+          for i in 1 2 3 4; do
+            if scp -o ServerAliveInterval=30 -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+                 /tmp/next-build.tar.gz \
+                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/next-build.tar.gz" \
+            && scp -o ServerAliveInterval=30 -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+                 deploy/cd-finisher.sh \
+                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/cd-finisher.sh"; then
+              ok=1; break
+            fi
+            echo "Tentative $i/4 échouée (réseau / PerSourcePenalties ?) — nouvel essai dans 60 s…"
+            sleep 60
+          done
+          [ "$ok" = "1" ] || { echo "::error::Transfert SCP impossible après 4 tentatives"; exit 1; }
 
-      - name: Swap atomique + health check (rollback auto)
+      - name: Swap atomique + health check (rollback auto, retry)
         run: |
-          ssh -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "bash /tmp/cd-finisher.sh ${GITHUB_SHA}"
+          for i in 1 2 3 4; do
+            if ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+                 "bash /tmp/cd-finisher.sh ${GITHUB_SHA}"; then
+              exit 0
+            fi
+            echo "Tentative $i/4 échouée — nouvel essai dans 60 s…"
+            sleep 60
+          done
+          echo "::error::Application du déploiement impossible après 4 tentatives"
+          exit 1
 
       - name: Nettoyage runner
         if: always()
