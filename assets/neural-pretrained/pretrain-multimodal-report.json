@@ -1,0 +1,26 @@
+{
+  "entrainements": 134,
+  "enseignementsRefuses": 5,
+  "raisonsRefus": [
+    "déjà couvert par l'intégré : « etang »",
+    "déjà couvert par l'intégré : « eclaircies »",
+    "déjà couvert par l'intégré : « douceur »",
+    "déjà couvert par l'intégré : « marine »",
+    "doublon d'enseignement : « port » (cadre)"
+  ],
+  "avant": {
+    "precisionTrain": 0.913,
+    "precisionTest": 1
+  },
+  "apres": {
+    "precisionTrain": 1,
+    "precisionTest": 1,
+    "precisionGlobale": 1
+  },
+  "corpusTaille": 48,
+  "environnement": "pré-entraînement multimodal HORS PRODUCTION (sandbox de développement)",
+  "artefact": "assets/neural-pretrained/multimodal-lexique-v1.json",
+  "demarreA": "2026-10-22T03:03:53.587Z",
+  "dureeMs": 9,
+  "note": "Artefact chargé par la production au premier appel (lexique-serveur.ts) — l'entraînement reste HORS PRODUCTION ; la production charge, elle ne s'entraîne pas."
+}

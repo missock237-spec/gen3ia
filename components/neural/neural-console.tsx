@@ -516,7 +516,7 @@ export function NeuralConsole() {
             <div>
               <p className="text-sm font-semibold text-[var(--g3-text)]">Effecteurs du corps sémantique</p>
               <p className="mt-1 text-[11px] leading-5 text-[var(--g3-muted)]">
-                Chaque création est calculée depuis l&apos;état RÉEL du cerveau (poids appris) — déterministe, locale, gratuite.
+                Décrivez une scène (sujet, cadre, moment, météo) : les moteurs v2 la dessinent, la sonorisent et l&apos;animent localement — déterministe, sans GPU ni IA externe. Hors vocabulaire connu, repli sur les compositions abstraites v1.
               </p>
             </div>
             <div className="grid grid-cols-3 gap-1.5" role="tablist" aria-label="Type de média">
@@ -538,7 +538,7 @@ export function NeuralConsole() {
             <textarea
               value={promptMedia}
               onChange={(e) => setPromptMedia(e.target.value)}
-              placeholder={typeMedia === "visuel" ? "Fractale neuronale bleutée, constellation dense…" : typeMedia === "audio" ? "Pulsation harmonique calme, gamme pentatonique…" : "Ondes synaptiques traversant la constellation…"}
+              placeholder={typeMedia === "visuel" ? "Un chat noir au bord de la mer au coucher du soleil…" : typeMedia === "audio" ? "Pluie sur les vitres, ambiance calme, pas dans la rue…" : "Un phare dans la tempête. Puis la ville s'endort sous la neige…"}
               rows={3}
               maxLength={2000}
               className="w-full rounded-xl border border-[var(--g3-border)] bg-[var(--g3-bg)] px-4 py-3 text-sm text-[var(--g3-text)] outline-none placeholder:text-[var(--g3-faint)] focus:border-[var(--g3-primary-border)]"
