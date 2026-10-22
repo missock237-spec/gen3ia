@@ -340,6 +340,13 @@ export default function BillingPage() {
           </form>
         : <button onClick={() => startTopup()} disabled={busy || loading} style={styles.button}>{busy ? "Ouverture du paiement…" : "Recharger avec Chariow"}</button>)}
 
+      {/* Recharge à MONTANT LIBRE (choix opérateur) : le produit Chariow est
+          configuré en prix libre — l'utilisateur choisit lui-même le montant
+          sur la page de paiement (Mobile Money ou widget boutique), et le
+          webhook Pulse crédite le MONTANT RÉEL de la vente
+          (sale.amount.value → applyTopup), jamais un palier prédéfini. */}
+      {!free && <p style={styles.note}>Au montant de ton choix : sur la page de paiement Chariow, saisis librement le montant à recharger.</p>}
+
       {/* Recharge RAPIDE (demande n°4) : widget boutique officiel du produit
           « Recharge Wallet API » (prd_llfosdp1) — raccourci de paiement direct
           à côté du flux Mobile Money ci-dessus, qui reste disponible. Le
@@ -353,7 +360,7 @@ export default function BillingPage() {
             <div style={styles.widgetNote}>{CHARIOW_TOPUP_WIDGET.note}</div>
             <ChariowWidget productId={CHARIOW_TOPUP_WIDGET.productId} />
           </div>
-          <p style={styles.note}>Le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow).</p>
+          <p style={styles.note}>C&apos;est toi qui choisis le montant : saisis-le librement sur la page de paiement — le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow).</p>
           {storeUrl && (
             <p style={styles.note}>
               Recharge également possible sur la boutique :{" "}
