@@ -508,3 +508,37 @@
   .chat-v4 .btn-bas { bottom: 170px; }
   .chat-v4 .suggestions { padding-left: 0; }
 }
+
+/* ── Chat voix (envoi sans prompt écrit) : micro actif + lecture vocale ── */
+
+/* Bouton d'envoi devenu micro : point pulsant léger (écoute en cours). */
+.chat-v4 .btn-envoi.voix-active {
+  animation: v4-voix-pulse 1.2s ease-in-out infinite;
+}
+@keyframes v4-voix-pulse {
+  0%, 100% { box-shadow: var(--v4-glow), 0 0 0 0 color-mix(in srgb, var(--v4-text) 35%, transparent); }
+  50% { box-shadow: var(--v4-glow), 0 0 0 9px transparent; }
+}
+
+/* Indicateur « lecture vocale en cours » de la réponse IA (tours dictés). */
+.chat-v4 .lecture-vocale {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--v4-muted);
+  padding: 5px 10px; margin-bottom: 6px; width: fit-content;
+  border: 1px solid var(--v4-surface-3); border-radius: 10px;
+  background: var(--v4-surface-2);
+}
+.chat-v4 .lecture-vocale .point-lecture {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--g3-primary);
+  animation: v4-lecture-point 1s ease-in-out infinite;
+}
+@keyframes v4-lecture-point {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+.chat-v4 .lecture-vocale button {
+  border: none; background: none; padding: 0; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--g3-primary);
+}
+.chat-v4 .lecture-vocale button:hover { text-decoration: underline; }

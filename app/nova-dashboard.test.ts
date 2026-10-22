@@ -44,9 +44,12 @@ describe("Exigence 1 — le dashboard EST le chat IA (5 commandes)", () => {
 
   it("le composer NOVA expose les 5 commandes demandées", () => {
     const nova = read(NOVA);
-    // 1) envoi du prompt (⇄ Arrêter)
-    expect(nova).toContain('aria-label={enCours ? "Arrêter la génération" : "Envoyer"}');
-    expect(nova).toContain('className={`nova-envoi${enCours ? " stop" : ""}`}');
+    // 1) envoi du prompt (⇄ Arrêter) — + chat voix : envoi vide + clic =
+    //    dictée (bouton micro), re-clic pendant l'écoute = annulation.
+    expect(nova).toContain("Arrêter la génération");
+    expect(nova).toContain('className={`nova-envoi${enCours ? " stop" : ""}${voixEcoute ? " voix-active" : ""}`}');
+    expect(nova).toContain("Annuler l'écoute vocale");
+    expect(nova).toContain("Chat voix — dicter votre message");
     // 2) import de fichiers
     expect(nova).toContain('aria-label="Joindre des fichiers"');
     expect(nova).toContain('type="file"');
