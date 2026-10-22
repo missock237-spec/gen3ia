@@ -1,5 +1,7 @@
-import { describe, it, mock } from "node:test";
+import { describe, it, mock, after } from "node:test";
 import assert from "node:assert/strict";
+import { join } from "node:path";
+import { readdirSync, rmSync } from "node:fs";
 
 import {
   chargerBatchState,
@@ -26,11 +28,27 @@ async function run(etat, nouveaux, options, trigger) {
     etat,
     nouveaux,
     trigger ? { ...options, trigger } : options,
-    "/tmp/nonutilise-dans-ce-test.json",
+    // Chemin LOCAL au dossier test (jamais /tmp — alerte CodeQL
+    // js/insecure-temporary-file) ; nettoyé après la suite.
+    STATE_PATH_TEST,
     logger(),
   );
   return etatSuivant;
 }
+
+const STATE_PATH_TEST = join(process.cwd(), "test", ".tmp-batch-state.json");
+
+// Nettoyage FINAL : état de test + tous les tmp UUID générés par les
+// écritures de verifierEtDeclencher pendant la suite.
+after(() => {
+  rmSync(STATE_PATH_TEST, { force: true });
+  const testDir = join(process.cwd(), "test");
+  for (const fichier of readdirSync(testDir)) {
+    if (fichier.startsWith(".tmp-batch-state.json") && fichier.endsWith(".tmp")) {
+      rmSync(join(testDir, fichier), { force: true });
+    }
+  }
+});
 
 describe("verifierEtDeclencher", () => {
   const base = {
