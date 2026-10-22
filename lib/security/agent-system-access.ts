@@ -16,8 +16,8 @@ import { HttpError } from "./http-errors";
  * (authentification par secret serveur).
  *
  * EXCEPTIONS OUVERTES (demande explicite du propriétaire) :
- *  - GET/POST /api/agents : liste + provisionnement « Gen IA » du workshop
- *    /studio/agents (requireUser, cloisonnement propriétaire/org) ;
+ *  - GET/POST /api/agents : liste + provisionnement des agents dédiés
+ *    (requireUser, cloisonnement propriétaire/org) ;
  *  - DELETE /api/agents/[id] : suppression par le PROPRIÉTAIRE de l'agent
  *    (requireUser + deleteAgentForUser, 404 anti-énumération) ;
  *  - /api/agents/schedules/** : PLANIFICATIONS ouvertes à TOUS LES COMPTES

@@ -3,20 +3,19 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Task 141 — « Améliorer le système d'interaction avec les agents IA pour
- * une utilisation simple et flexible » : verrouillage STRUCTUREL des six
- * axes livrés, selon la convention du dépôt (lecture des sources — cf.
- * theme-consistency, agent-chat-ux) pour empêcher toute régression future.
+ * Task 141 — interaction composer : verrouillage STRUCTUREL des axes
+ * conservés, selon la convention du dépôt (lecture des sources — cf.
+ * theme-consistency) pour empêcher toute régression future.
  *
- *  1. SÉLECTEUR D'AGENT — qui répond au prochain message (pill + /agent) ;
  *  2. SÉLECTEUR DE MOTEUR IA — quel modèle rédige (pill + /moteur) ;
  *  3. MODÈLES DE PROMPTS — bibliothèque personnelle réutilisable (/modèle) ;
  *  4. ACTIONS RAPIDES — Copier / Réutiliser / Régénérer sur les réponses ;
  *  5. CHIPS DE SUIVI — suggestions cliquables sous la dernière réponse ;
  *  6. GLISSER-DÉPOSER de fichiers sur toute la zone du composer.
  *
- * + Câblage moteur : agentId accepté de bout en bout (route stream →
- *   ConversationTurnInput → charte agent injectée → persistance agentName).
+ * + Câblage moteur : agentId (missions/automatisations uniquement — le
+ *   sélecteur d'agent universel est supprimé de l'UI et de l'espace
+ *   conversation ; l'API serveur reste compatible missions).
  */
 
 const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
@@ -24,36 +23,10 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf
 const COMPOSER = "components/workspace/composer/composer.tsx";
 const WORKSPACE = "components/workspace/conversation-workspace.tsx";
 const THREAD = "components/workspace/message-thread.tsx";
-const AGENT_PICKER = "components/workspace/composer/agent-picker.tsx";
 const TEMPLATE_MENU = "components/workspace/composer/template-menu.tsx";
 const ENGINE = "lib/domain/conversations/engine.ts";
 const STREAM_ROUTE = "app/api/workspace/conversations/[conversationId]/messages/stream/route.ts";
 const TYPES = "lib/domain/conversations/types.ts";
-
-describe("Task 141 — axe 1 : SÉLECTEUR D'AGENT (qui répond)", () => {
-  const picker = read(AGENT_PICKER);
-  const composer = read(COMPOSER);
-
-  it("le sélecteur propose Gen IA (universel) et les agents dédiés actifs", () => {
-    expect(picker).toContain("Gen IA");
-    expect(picker).toContain('agent.status === "active"');
-    // Les agents d'appel (téléphonie) ne répondent pas dans un chat écrit.
-    expect(picker).toContain('agent.agentMode !== "call"');
-  });
-
-  it("l'agent sélectionné disparu ramène le sélecteur sur Gen IA (aucun état fantôme)", () => {
-    expect(picker).toContain("if (agentId && !selected) onChange(undefined);");
-  });
-
-  it("la commande « /agent » du composer ouvre le sélecteur", () => {
-    expect(composer).toContain('"Choisir l\'agent qui répond"');
-    expect(composer).toContain("setAgentMenuOpen(true)");
-  });
-
-  it("le choix est PAR MESSAGE : agentId transmis à l'envoi, jamais figé", () => {
-    expect(composer).toContain("...(agentId ? { agentId } : {})");
-  });
-});
 
 describe("Task 141 — axe 2 : SÉLECTEUR DE MOTEUR IA (quel modèle rédige)", () => {
   const composer = read(COMPOSER);
@@ -143,7 +116,6 @@ describe("Task 141 — axe 6 : GLISSER-DÉPOSER de fichiers", () => {
 describe("Task 141 — câblage moteur (agentId de bout en bout)", () => {
   const engine = read(ENGINE);
   const route = read(STREAM_ROUTE);
-  const workspace = read(WORKSPACE);
 
   it("la route de streaming accepte et transmet l'agentId", () => {
     expect(route).toContain("agentId: z.string().trim().min(1).max(128).optional()");
@@ -164,10 +136,4 @@ describe("Task 141 — câblage moteur (agentId de bout en bout)", () => {
     expect(read(THREAD)).toContain("{message.agentName}");
   });
 
-  it("l'espace de conversation charge la liste des agents et transmet le pilotage aux deux composers", () => {
-    expect(workspace).toContain('fetch("/api/agents"');
-    expect(workspace).toContain("const [agentId, setAgentId] = useState<string | undefined>(undefined);");
-    // Les DEUX composers (accueil + conversation) portent le sélecteur.
-    expect(workspace.match(/agents=\{agents\}/g)?.length).toBe(2);
-  });
 });

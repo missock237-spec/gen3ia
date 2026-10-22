@@ -64,10 +64,9 @@ describe("API — chemins PUBLICS (préservés, anonyme inclus)", () => {
 
 describe("API — liste blanche UTILISATEUR (14 familles de la demande)", () => {
   const utilisateurs = [
-    // Chat IA
-    ["/api/chat/message", "chat"],
-    ["/api/chat/conversations", "chat"],
-    ["/api/chat/conversations/c1", "chat"],
+    // Chat IA (les routes /api/chat/* de l'ancien chat d'agent sont
+    // supprimées du projet ; ne reste que /approve, servie par les
+    // centres de notifications et le workshop publicitaire)
     ["/api/agent/chat", "chat"],
     ["/api/agent/chat/approve", "chat"],
     ["/api/ai/feedback", "chat"],
@@ -314,8 +313,6 @@ describe("Pages — LISTE BLANCHE UTILISATEUR", () => {
     ["/integrations", "integrations"],
     // STUDIO MÉTIER (réouverture propriétaire) — hub complet hors console
     ["/studio", "studio"],
-    ["/studio/agents", "studio"],
-    ["/studio/agents/", "studio"],
     ["/studio/video", "studio"],
     ["/studio/clients", "studio"],
     ["/studio/finance/cashflow", "studio"],
@@ -365,7 +362,6 @@ describe("Pages — RESTREINT (deny-by-default)", () => {
   it("/studio réouvert aux utilisateurs, /studio/console (IDE dev) reste restreint", () => {
     expect(classifyPagePath("/studio/connections").access).toBe("user");
     expect(classifyPagePath("/studio").access).toBe("user");
-    expect(classifyPagePath("/studio/agents").access).toBe("user");
     expect(classifyPagePath("/studio/console").access).toBe("restreint");
     expect(classifyPagePath("/studio/console-x").access).toBe("user");
   });

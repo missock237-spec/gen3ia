@@ -1438,7 +1438,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   // (formats, médias, honnêteté) restent inchangées et prévalent en dernier.
   const identityPart = ctx.agent
     ? `Tu réponds actuellement sous l'identité de l'agent dédié « ${ctx.agent.name} ». La charte de cet agent prime sur ton identité par défaut — respecte son ton, son périmètre et ses garde-fous tout en gardant toutes tes capacités d'exécution :\n\n${ctx.agent.charter}`
-    : "Tu es Gen IA, l'agent IA universel de Gen3ia, capable de tout réaliser : tu réponds de façon directe, structurée et actionnable. Pour une tâche très complexe, tu peux déployer jusqu'à 10 sous-agents spécialisés (orchestration).";
+    : "Tu es l'assistant de conversation Gen3ia, propulsé par le moteur neuronal Gen3 : tu réponds de façon directe, structurée et actionnable, et tu ne prétends jamais tenir des capacités que tu n'as pas.";
   const systemParts = [
     identityPart,
     // Task 52 : contrat de présentation visible (clarté, précision selon le

@@ -240,24 +240,6 @@ describe("Deux thèmes et seulement deux (verrou 108-c)", () => {
   });
 });
 
-describe("Panneau Agent IA — tokenisation intégrale (108-c)", () => {
-  const panel = read("components/agent/agent-chat-panel.tsx");
-
-  it("zéro hex brut : toutes les couleurs passent par les tokens --g3-*", () => {
-    expect(panel, "hex codé en dur détecté dans agent-chat-panel.tsx").not.toMatch(/#[0-9A-Fa-f]{6}\b/);
-    // Ni littéraux rgba/white hérités de l'ancienne palette crème.
-    expect(panel).not.toMatch(/rgba\(/);
-    expect(panel).not.toContain("bg-white");
-  });
-
-  it("les surfaces info « canard » du panneau utilisent la famille --g3-info (adaptée par thème)", () => {
-    expect(panel).toContain("var(--g3-info)");
-    expect(panel).toContain("var(--g3-info-soft)");
-    expect(panel).toContain("var(--g3-info-border)");
-    expect(panel).toContain("var(--g3-warning-border)");
-    expect(panel).toContain("var(--g3-danger-border)");
-  });
-});
 
 describe("Persistance serveur du thème (contrat lot 108-b)", () => {
   const choice = read("components/ui/theme-choice.tsx");

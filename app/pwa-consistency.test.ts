@@ -13,9 +13,10 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf
 describe("Service worker — file hors-ligne fiable", () => {
   const sw = read("public/sw.js");
 
-  it("la file est STRICTE : /api/chat/message retirée, /approve et /continue jamais capturés", () => {
+  it("la file est STRICTE : routes de chat d'agent retirées, /approve jamais capturé", () => {
     expect(sw).not.toContain('"/api/chat/message"');
-    expect(sw).toContain('new Set(["/api/agent/chat", "/api/workspace/tasks"])');
+    expect(sw).not.toContain('"/api/agent/chat"');
+    expect(sw).toContain('new Set(["/api/workspace/tasks"])');
     // Correspondance EXACTE du pathname (le startsWith historique capturait
     // /api/agent/chat/approve et /continue — des décisions à ne jamais filer).
     expect(sw).toContain("QUEUED_PATHS.has(url.pathname)");
@@ -72,12 +73,7 @@ describe("Manifest & UI — app installable cohérente", () => {
     expect(composer).toContain("au retour du réseau");
   });
 
-  it("agent-chat-panel : 202 queued annoncé honnêtement, décisions jamais mises en file, panneau anti-crash", () => {
-    const panel = read("components/agent/agent-chat-panel.tsx");
-    expect(panel).toContain("data.queued && data.offline");
-    expect(panel).toContain("plan?.steps?.map");
-    expect(panel).toContain('"gen3ia:outbox-failed"');
-  });
+
 
   it("pwa-register : flush via serviceWorker.ready + relais des échecs et files pendantes", () => {
     const register = read("components/pwa-register.tsx");

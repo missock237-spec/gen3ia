@@ -87,11 +87,11 @@ describe("GET /api/agents — liste union", () => {
 
 // RÉOUVERTURE (demande propriétaire — « les utilisateurs n'ont plus accès
 // au projet ») : GET/POST de cette route sont ouverts à tout utilisateur
-// CONNECTÉ (requireUser) — le provisionnement « Gen IA » du workshop
-// /studio/agents doit fonctionner. L'orchestration (run/generate/plan,
-// PATCH/DELETE) reste verrouillée par requireAgentSystemAccess dans ses
-// propres routes.
-describe("GET/POST /api/agents — ouverts aux utilisateurs connectés (workshop Gen IA)", () => {
+// CONNECTÉ (requireUser) — le provisionnement des agents dédiés
+// (schedules, live, missions) doit fonctionner. L'orchestration
+// (run/generate/plan, PATCH/DELETE) reste verrouillée par
+// requireAgentSystemAccess dans ses propres routes.
+describe("GET/POST /api/agents — ouverts aux utilisateurs connectés (agents dédiés)", () => {
   it("GET : liste accessible à un utilisateur standard (sans claim admin)", async () => {
     mockedRequireUser.mockResolvedValue({ uid: "u1", claims: {} });
     const response = await GET(request("/api/agents"));
