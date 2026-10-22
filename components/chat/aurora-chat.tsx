@@ -686,7 +686,7 @@ export function AuroraChat() {
       if (!window.confirm(`Supprimer « ${conv?.title ?? "cette conversation"} » ?`)) return;
       if (generating && id === activeId) arreter();
       try {
-        const response = await fetch(`/api/workspace/conversations/${id}`, { method: "DELETE" });
+        const response = await authFetch(`/api/workspace/conversations/${id}`, { method: "DELETE" });
         if (!response.ok) throw new Error("Suppression impossible.");
         afficherToast("Conversation supprimée");
         if (id === activeId) {
@@ -708,7 +708,7 @@ export function AuroraChat() {
       const nouveau = window.prompt("Nouveau titre de la conversation :", conv.title);
       if (!nouveau || !nouveau.trim()) return;
       try {
-        const response = await fetch(`/api/workspace/conversations/${id}`, {
+        const response = await authFetch(`/api/workspace/conversations/${id}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ title: nouveau.trim().slice(0, 120) }),

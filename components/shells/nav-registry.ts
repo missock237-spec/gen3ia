@@ -53,6 +53,11 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     description: "Laboratoire d'inférence par ondes — GPU, essaim P2P, écriture progressive",
     contexts: ["workspace"],
     section: "primary",
+    // RÉSERVÉ ADMIN (demande : « les fonctionnalités que les utilisateurs
+    // n'ont pas accès, faites qu'ils ne les voient pas ») — la page reste
+    // en démo publique pour les anonymes mais est masquée + 403 pour un
+    // compte standard (middleware deny-by-default).
+    minRole: "admin",
     keywords: ["ondes", "wdnn", "wave", "gpu", "webgpu", "webrtc", "essaim", "p2p", "résonance", "kuramoto", "oscillateurs"],
   },
   {
@@ -63,6 +68,7 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     description: "Les IA s'entraînent mutuellement par collision d'ondes — résonance et distillation physique",
     contexts: ["workspace"],
     section: "primary",
+    minRole: "admin", // réserver admin — voir demande masquage
     keywords: ["arène", "arene", "interférence", "duel", "professeur", "élève", "distillation", "résonance", "ondes", "entraînement", "codec"],
   },
   {
@@ -73,6 +79,7 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     description: "Simulateur universel des lois de la nature — physique, quantique, relativité, équations",
     contexts: ["workspace"],
     section: "primary",
+    minRole: "admin", // réserver admin — voir demande masquage
     keywords: ["monde", "simulation", "physique", "nature", "équations", "quantique", "relativité", "thermodynamique", "fluides", "mécanique", "ondes", "solveur", "science"],
   },
   {
@@ -83,6 +90,7 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     description: "Agents décentralisés connectés à Gen3 : RAG privé chiffré, compétences injectées par ondes, auto-réparation, voix",
     contexts: ["workspace"],
     section: "primary",
+    minRole: "admin", // réserver admin — voir demande masquage
     keywords: ["essaim", "agents", "décentralisé", "p2p", "webrtc", "rag", "chiffré", "compétences", "résilience", "voix", "vocal", "swarm"],
   },
   {
@@ -103,6 +111,7 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     description: "Le moteur neural Gen3 en direct : santé, cycles, état du réseau",
     contexts: ["workspace"],
     section: "primary",
+    minRole: "admin", // réserver admin — voir demande masquage
     keywords: ["cerveau", "neural", "neurones", "snn", "réseau", "santé", "moteur", "ia"],
   },
   {

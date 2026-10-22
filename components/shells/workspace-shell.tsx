@@ -16,17 +16,23 @@ import { navPrimaryFor, type NavRole } from "./nav-registry";
  * Barre 2 (outils du Studio) : surfaces techniques transverses conservées.
  */
 
+// Outils du Studio : Clients ID est accessible à TOUS LES COMPTES (demande
+// propriétaire — restauration). Console est l'IDE développeur
+// (/studio/console, restreint par le middleware) : elle n'est affichée
+// qu'aux rôles développeur/admin — la nav ne doit pas mentir.
 const STUDIO_TOOLS = [
-  { href: "/studio/clients", label: "Clients ID" },
-  { href: "/studio/console", label: "Console" },
+  { href: "/studio/clients", label: "Clients ID", minRole: undefined as NavRole | undefined },
+  { href: "/studio/console", label: "Console", minRole: "developer" as NavRole },
 ] as const;
+
+const ROLE_ORDER: Record<NavRole, number> = { user: 0, developer: 1, admin: 2 };
 
 export function WorkspaceShell() {
   const pathname = usePathname();
   const [role, setRole] = useState<NavRole>("user");
 
-  // Le rôle sert uniquement à masquer les entrées primaire inexistantes pour
-  // un compte ; les entrées développeur/admin vivent dans leur propre shell.
+  // Le rôle sert uniquement à masquer les entrées inexistantes pour un
+  // compte ; les entrées développeur/admin vivent dans leur propre shell.
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/auth/access", { cache: "no-store" })
@@ -44,6 +50,9 @@ export function WorkspaceShell() {
   }, []);
 
   const primary = navPrimaryFor("workspace", role);
+  const tools = STUDIO_TOOLS.filter(
+    (tool) => !("minRole" in tool) || !tool.minRole || ROLE_ORDER[role] >= ROLE_ORDER[tool.minRole],
+  );
   const active = (href: string) => pathname === href || (href !== "/studio" && pathname.startsWith(href + "/"));
 
   return (
@@ -71,7 +80,7 @@ export function WorkspaceShell() {
 
       <nav aria-label="Outils du Studio" className="no-scrollbar max-w-full overflow-x-auto">
         <ul className="inline-flex items-center gap-1.5 px-0.5">
-          {STUDIO_TOOLS.map((tool) => (
+          {tools.map((tool) => (
             <li key={tool.href}>
               <Link
                 href={tool.href}

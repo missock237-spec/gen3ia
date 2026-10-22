@@ -40,13 +40,19 @@
  * compte (auth) · base de connaissances · projets · fichiers ·
  * automatisation · intégrations · observabilité · mémoire permanente ·
  * STUDIO MÉTIER (hub complet hors IDE développeur /studio/console, incl.
- * atelier vidéo) · AGENT LIVE (PC + Android).
+ * atelier vidéo) · AGENT LIVE (PC + Android) · ÉQUIPE/COLLABORATION ·
+ * PUBLICITÉ UTILISATEUR (campagnes personnelles, hors inventaire admin) ·
+ * CLIENTS ID (CRM commercial du studio).
+ *
+ * DEMANDE PROPRIÉTAIRE (restauration) : planifications, publicité, équipe
+ * et clients ID doivent rester ACCESSIBLES À TOUS LES COMPTES — ces
+ * familles ne doivent JAMAIS être retirées de la liste blanche.
  *
  * TOUT le reste est interdit : admin, IDE développeur (/studio/console,
- * /api/developer/*), monde, essaim, arène, ondes, teams, organizations,
- * extensions, ads, terminal, workflows, orchestrator, notifications push,
- * etc. La matrice COMPLÈTE allow/deny est documentée dans la PR de cette
- * branche.
+ * /api/developer/*), monde, essaim, arène, ondes, inventaire publicitaire
+ * admin (/api/ads/campaigns), extensions, terminal, workflows,
+ * orchestrator, notifications push, etc. La matrice COMPLÈTE allow/deny
+ * est documentée dans la PR de cette branche.
  */
 
 export type AccessLevel = "public" | "user" | "restreint";
@@ -70,7 +76,8 @@ export type RouteFamily =
   | "observabilite"
   | "memoire"
   | "studio"
-  | "live";
+  | "live"
+  | "collaboration";
 
 export interface PathDecision {
   access: AccessLevel;
@@ -139,6 +146,8 @@ const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   // Connecteurs (API personnalisées + hub /studio/connections)
   ["/api/custom-apis", "connecteurs"],
   // Planifications (hub agents/schedules consommé par /workspace/schedules)
+  // DEMANDE PROPRIÉTAIRE : ouverte à TOUS LES COMPTES (scoping propriétaire
+  // listSchedules/getSchedule(user.uid, …) assuré au niveau des routes).
   ["/api/agents/schedules", "planifications"],
   // Facturation
   ["/api/billing", "facturation"],
@@ -174,9 +183,26 @@ const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   ["/api/live", "live"],
   // WORKSHOP AGENT « GEN IA » (/studio/agents) : liste + provisionnement
   // de l'agent universel. Les routes d'ORCHESTRATION (run/generate/plan,
-  // PATCH/DELETE [id]) restent gardées AU NIVEAU DE LA ROUTE
-  // (requireAgentSystemAccess) — défense en profondeur conservée.
+  // PATCH [id]) restent gardées AU NIVEAU DE LA ROUTE
+  // (requireAgentSystemAccess) — défense en profondeur conservée. La
+  // SUPPRESSION (DELETE [id]) est ouverte au propriétaire (demande
+  // explicite — « supprime l'agent IA » ne devait rien faire).
   ["/api/agents", "studio"],
+  // CLIENTS ID (demande propriétaire — accessible à TOUS LES COMPTES) :
+  // CRM commercial du studio (/studio/clients), routes requireUser
+  // scopées propriétaire/org.
+  ["/api/commercial", "studio"],
+  // ÉQUIPE / COLLABORATION (demande propriétaire — accessible à TOUS LES
+  // COMPTES) : /team et ses APIs — routes requireUser + scoping membre.
+  ["/api/teams", "collaboration"],
+  ["/api/team", "collaboration"],
+  ["/api/organizations", "collaboration"],
+  // PUBLICITÉ UTILISATEUR (demande propriétaire — accessible à TOUS LES
+  // COMPTES) : campagne personnelle (placement, mes campagnes,
+  // publication) — chaque route authentifie elle-même (requireUser ou
+  // protectRoute). L'INVENTAIRE ADMIN (/api/ads/campaigns) reste
+  // RESTREINT (voir RESTRICTED_API_PREFIXES).
+  ["/api/ads", "parametres"],
 ];
 
 /* ------------------------------------------------------------------ */
@@ -195,6 +221,11 @@ const RESTRICTED_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   ["/api/agents/generate", "systeme"],
   ["/api/agents/plan", "systeme"],
   ["/api/agents/system", "systeme"],
+  // L'INVENTAIRE PUBLICITAIRE GLOBAL (toutes campagnes de la plateforme,
+  // écran /admin/ads) reste ADMIN : seule la PUBLICITÉ UTILISATEUR est
+  // ouverte (demande propriétaire). Exception évaluée AVANT le préfixe
+  // /api/ads de la liste blanche.
+  ["/api/ads/campaigns", "systeme"],
 ];
 
 /* ------------------------------------------------------------------ */
@@ -288,6 +319,12 @@ const USER_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   ["/workspace/bibliotheque", "fichiers"],
   // Planifications
   ["/workspace/schedules", "planifications"],
+  // ÉQUIPE (demande propriétaire — accessible à TOUS LES COMPTES)
+  ["/team", "collaboration"],
+  // PUBLICITÉ UTILISATEUR (demande propriétaire — accessible à TOUS LES
+  // COMPTES) : /settings est une entrée EXACTE, la sous-page /settings/ads
+  // doit donc être allowlistée explicitement.
+  ["/settings/ads", "parametres"],
   // STUDIO MÉTIER (réouverture demandée par le propriétaire — « les
   // utilisateurs n'ont plus accès au projet ») : hub complet (agents,
   // clients, documents, finance, marketing, opérations, résultats,

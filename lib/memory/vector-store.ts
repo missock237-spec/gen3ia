@@ -258,6 +258,26 @@ export async function deleteVectorPoints(
   }
 }
 
+/**
+ * Supprime les points d'une collection correspondant à un FILTRE de payload
+ * (ex. purge vectorielle d'une conversation supprimée — userId + conversationId).
+ * Fail-soft identique au reste du module : Qdrant absent/erreur → false,
+ * l'appelant (suppression R2, source de vérité) n'est JAMAIS bloqué.
+ */
+export async function deleteVectorPointsByFilter(
+  collection: string,
+  filter: Record<string, unknown>,
+): Promise<boolean> {
+  const client = getQdrant();
+  if (!client) return false;
+  try {
+    await client.delete(collection, { filter, wait: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Diagnostic : compte les points d'une collection (health checks). */
 export async function countVectorPoints(collection: string): Promise<number | null> {
   const client = getQdrant();

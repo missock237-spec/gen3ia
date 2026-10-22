@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
-// SYSTÈME AGENT RÉSERVÉ (demande n°5) : déclenchement manuel de planification
-// fermé aux utilisateurs standard (403 « réservé au système IA ») — admin conservé.
-import { requireAgentSystemAccess } from "@/lib/security/agent-system-access";
+// PLANIFICATIONS — DEMANDE PROPRIÉTAIRE (restauration) : ouvertes à
+// TOUS LES COMPTES (requireUser). Le scoping propriétaire (user.uid) est
+// assuré par listSchedules/getSchedule/triggerScheduleNow(...) — un
+// utilisateur ne voit et ne déclenche que SES planifications.
+import { requireUser } from "@/lib/security/authenticated-request";
 import { errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { triggerScheduleNow } from "@/lib/agents/scheduler";
@@ -13,7 +15,7 @@ interface RouteContext { params: Promise<{ id: string }>; }
 export async function POST(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireAgentSystemAccess(request);
+    const user = await requireUser(request);
     const limit = await enforceRateLimit(`schedule-manual-run:${user.uid}`, { limit: 10, windowMs: 60 * 60 * 1000 });
     if (!limit.allowed) {
       return NextResponse.json(

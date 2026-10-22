@@ -179,10 +179,13 @@ describe("API — RESTREINT (deny-by-default, hors demande n°7)", () => {
     "/api/agents/generate",
     "/api/agents/plan",
     // ⚠️ frontière critique : /api/agents/schedules reste autorisé
-    // Ads
-    "/api/ads/generate",
-    "/api/ads/connect",
-    "/api/ads/callback",
+    // Ads — l'INVENTAIRE ADMIN reste restreint (demande propriétaire :
+    // seule la PUBLICITÉ UTILISATEUR — placement/my-campaigns/publish… —
+    // est ouverte à tous les comptes). Le callback OAuth fait partie du
+    // flux UTILISATEUR (state signé côté serveur, userId du contexte) :
+    // il est couvert par le préfixe /api/ads utilisateur.
+    "/api/ads/campaigns",
+    "/api/ads/campaigns/c1",
     // Business (studio métier)
     "/api/business/automations",
     "/api/business/pulse",
@@ -202,16 +205,12 @@ describe("API — RESTREINT (deny-by-default, hors demande n°7)", () => {
     "/api/workflows",
     "/api/deployments/create",
     "/api/provisioning/intent",
-    "/api/organizations",
-    "/api/teams",
-    "/api/team/t1/memory",
     "/api/extensions",
     "/api/developer/api-keys",
     "/api/developer/terminal",
     "/api/capabilities",
     "/api/notifications",
     "/api/push/subscribe",
-    "/api/commercial",
     "/api/v1/agents/a1/run",
     // Observabilité : seule la vue personnelle est autorisée
     "/api/observability/org",
@@ -348,15 +347,10 @@ describe("Pages — RESTREINT (deny-by-default)", () => {
     "/monde",
     "/neural",
     "/ondes",
-    "/team",
-    "/team/t1",
-    "/team/join",
     // Studio métier : hub réouvert ; SEULE /studio/console reste
     // interdite (IDE développeur — clés API, projets, paiements dev)
     "/studio/console",
     "/studio/console/ide",
-    // ⚠️ frontière critique : /settings oui, /settings/ads non (module ads)
-    "/settings/ads",
     // Sous-pages workspace inconnues → deny
     "/workspace/inconnu",
     // Racines inconnues → deny
@@ -376,9 +370,34 @@ describe("Pages — RESTREINT (deny-by-default)", () => {
     expect(classifyPagePath("/studio/console-x").access).toBe("user");
   });
 
-  it("/settings exact est autorisé, /settings/ads est restreint", () => {
+  it("/settings exact et /settings/ads (publicité utilisateur) sont autorisés", () => {
     expect(classifyPagePath("/settings").access).toBe("user");
-    expect(classifyPagePath("/settings/ads").access).toBe("restreint");
+    // DEMANDE PROPRIÉTAIRE (restauration) : la page Publicité est ouverte
+    // à TOUS LES COMPTES.
+    expect(classifyPagePath("/settings/ads").access).toBe("user");
+    expect(classifyPagePath("/settings/ads").family).toBe("parametres");
+  });
+
+  it("équipe + publicité + clients ID + planifications : ouvertes à TOUS LES COMPTES (demande propriétaire)", () => {
+    // Équipe
+    expect(classifyPagePath("/team").access).toBe("user");
+    expect(classifyPagePath("/team/t1").access).toBe("user");
+    expect(classifyPagePath("/team/join").access).toBe("user");
+    expect(classifyApiPath("/api/teams").access).toBe("user");
+    expect(classifyApiPath("/api/team/t1/memory").access).toBe("user");
+    expect(classifyApiPath("/api/organizations").access).toBe("user");
+    // Publicité utilisateur
+    expect(classifyApiPath("/api/ads/generate").access).toBe("user");
+    expect(classifyApiPath("/api/ads/connect").access).toBe("user");
+    expect(classifyApiPath("/api/ads/my-campaigns").access).toBe("user");
+    // Callback OAuth : retour navigateur du flux de connexion utilisateur
+    // (state signé serveur, userId du contexte — pas un privilège admin).
+    expect(classifyApiPath("/api/ads/callback").access).toBe("user");
+    // Clients ID
+    expect(classifyApiPath("/api/commercial").access).toBe("user");
+    expect(classifyApiPath("/api/commercial/clients").access).toBe("user");
+    // Planifications (déjà verrouillé ailleurs, rappel de contrat)
+    expect(classifyApiPath("/api/agents/schedules").access).toBe("user");
   });
 });
 

@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 
-// SYSTÈME AGENT RÉSERVÉ (demande n°5) : planifications d'agents fermées aux
-// utilisateurs standard (403 « réservé au système IA ») — admin conservé.
-import { requireAgentSystemAccess } from "@/lib/security/agent-system-access";
+// PLANIFICATIONS — DEMANDE PROPRIÉTAIRE (restauration) : ouvertes à
+// TOUS LES COMPTES (requireUser). Le scoping propriétaire (user.uid) est
+// assuré par listSchedules/getSchedule/triggerScheduleNow(...) — un
+// utilisateur ne voit et ne déclenche que SES planifications.
+import { requireUser } from "@/lib/security/authenticated-request";
 import {
   createSchedule,
   listSchedules,
@@ -14,7 +16,7 @@ import { executionLogger, safeError } from "@/lib/observability/logger";
 export async function GET(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireAgentSystemAccess(request);
+    const user = await requireUser(request);
     return NextResponse.json(
       { schedules: await listSchedules(user.uid), requestId },
       { headers: { "x-request-id": requestId } },
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest) {
   const log = executionLogger({ requestId });
 
   try {
-    const user = await requireAgentSystemAccess(request);
+    const user = await requireUser(request);
     const body = await request.json();
     const schedule = await createSchedule(user.uid, body);
 
