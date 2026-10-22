@@ -132,8 +132,8 @@ describe("Scan OWASP ZAP (.github/workflows/security.yml)", () => {
     expect(security).toContain("cancel-in-progress: true");
   });
 
-  it("rapport ZAP publié en artefact via upload-artifact v6, même si le scan échoue", () => {
-    expect(security).toContain("actions/upload-artifact@v6");
+  it("rapport ZAP publié en artefact via upload-artifact v7, même si le scan échoue", () => {
+    expect(security).toContain("actions/upload-artifact@v7");
     // if: always() — le rapport est préservé pour triage même quand l'étape
     // ZAP est en échec (rodage, continue-on-error).
     expect(security).toContain("if: always()");
@@ -150,8 +150,8 @@ describe("Scan OWASP ZAP (.github/workflows/security.yml)", () => {
     expect(versionsAction(security, "actions/checkout")).toEqual(
       versionsAction(ci, "actions/checkout"),
     );
-    // upload-artifact suit le standard v6/v7 du dépôt (l'action n'est pas
+    // upload-artifact suit le standard v7 du dépôt (l'action n'est pas
     // référencée dans ci.yml : la version est donc verrouillée ici).
-    expect(versionsAction(security, "actions/upload-artifact")).toEqual(["v6"]);
+    expect(versionsAction(security, "actions/upload-artifact")).toEqual(["v7"]);
   });
 });

@@ -1,4 +1,4 @@
-import archiver from "archiver";
+import { ZipArchive } from "archiver";
 import { validateArchiveEntryCount, validateArchivePath, ARCHIVE_LIMITS } from "@/lib/security/archive-security";
 
 export interface ZipEntry {
@@ -46,7 +46,7 @@ export async function createZip(entries: ZipEntry[]): Promise<Buffer> {
       reject(error instanceof Error ? error : new Error("ZIP creation failed."));
     };
 
-    const archive = archiver("zip", {
+    const archive = new ZipArchive({
       zlib: { level: 9 },
     });
 
