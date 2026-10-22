@@ -1126,3 +1126,37 @@
     transform: none;
   }
 }
+
+/* ── Chat voix (envoi sans prompt écrit) : micro actif + lecture vocale ── */
+
+/* Bouton d'envoi devenu micro : point pulsant léger (écoute en cours). */
+.nova-envoi.voix-active {
+  animation: nova-voix-pulse 1.2s ease-in-out infinite;
+}
+@keyframes nova-voix-pulse {
+  0%, 100% { box-shadow: 0 10px 26px -10px rgba(124, 92, 255, 0.6), 0 0 0 0 rgba(124, 92, 255, 0.55); }
+  50% { box-shadow: 0 10px 26px -10px rgba(124, 92, 255, 0.6), 0 0 0 9px rgba(124, 92, 255, 0); }
+}
+
+/* Indicateur « lecture vocale en cours » de la réponse IA (tours dictés). */
+.nova-lecture-vocale {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--g3-text-secondary);
+  padding: 5px 10px; margin-bottom: 6px; width: fit-content;
+  border: 1px solid var(--g3-border); border-radius: 10px;
+  background: var(--g3-elevated);
+}
+.nova-lecture-vocale .nova-point-lecture {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--g3-primary);
+  animation: nova-lecture-point 1s ease-in-out infinite;
+}
+@keyframes nova-lecture-point {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+.nova-lecture-vocale button {
+  border: none; background: none; padding: 0; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--g3-primary);
+}
+.nova-lecture-vocale button:hover { text-decoration: underline; }

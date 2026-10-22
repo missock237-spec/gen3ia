@@ -23,6 +23,8 @@ import {
   iconePourNom,
   suggestionsPour,
 } from "./aurora-widgets";
+import { useVoiceInput } from "./use-voice-input";
+import { cancelSpeech, speakFr } from "./voice-speak";
 import "./aurora-chat.css";
 
 /**
@@ -135,8 +137,13 @@ export function AuroraChat() {
   const [toastTexte, setToastTexte] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
   const [procheBas, setProcheBas] = useState(true);
+  /* Chat voix : indicateur « lecture vocale en cours » de la réponse IA. */
+  const [lectureVocale, setLectureVocale] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
+  /* Chat voix : le tour courant a-t-il été initié par la voix (dictée) ?
+   * Consumé à la réponse (message_complete → TTS) puis réarmé. */
+  const dernierTourVocalRef = useRef(false);
   const messagesRef = useRef<HTMLDivElement>(null);
   const saisieRef = useRef<HTMLTextAreaElement>(null);
   const inputFichierRef = useRef<HTMLInputElement>(null);
@@ -347,6 +354,17 @@ export function AuroraChat() {
           imageUrl: event.message.imageUrl ?? courant?.imageUrl,
           status: "",
         }));
+        /* Chat voix : réponse LUE uniquement si le tour a été dicté — les
+         * tours écrits normaux restent silencieux (pas de TTS intrusif). */
+        if (dernierTourVocalRef.current) {
+          dernierTourVocalRef.current = false;
+          const contenuVocal = event.message.content ?? "";
+          if (contenuVocal.trim()) {
+            setLectureVocale(true);
+            const parle = speakFr(contenuVocal, { onFin: () => setLectureVocale(false) });
+            if (!parle) setLectureVocale(false); // synthèse indisponible : reste textuel
+          }
+        }
         break;
       case "error":
         throw new Error(event.message);
@@ -443,6 +461,7 @@ export function AuroraChat() {
         setLive(null);
         setGenerating(false);
         abortRef.current = null;
+        dernierTourVocalRef.current = false; // tour terminé : réarmement voix
         await chargerDetail(conversationId!, true);
         void chargerListes();
         saisieRef.current?.focus();
@@ -475,6 +494,7 @@ export function AuroraChat() {
           setLive(null);
           setGenerating(false);
           abortRef.current = null;
+          dernierTourVocalRef.current = false;
           return;
         }
         /* Repli : route classique (même persistance serveur). */
@@ -517,6 +537,7 @@ export function AuroraChat() {
           setLive(null);
           setGenerating(false);
           abortRef.current = null;
+          dernierTourVocalRef.current = false;
         }
       }
     },
@@ -539,6 +560,19 @@ export function AuroraChat() {
     abortRef.current?.abort();
     abortRef.current = null;
   }, []);
+
+  /* ───────────────── Chat voix (envoi sans prompt écrit) ─────────────────
+   * Envoi vide + bouton d'envoi → le bouton devient un micro : le transcript
+   * final est injecté puis ENVOYÉ automatiquement, et la réponse IA est lue
+   * (voir consommerEvenement). Re-clic pendant l'écoute = annulation. */
+  const saisieVocale = useVoiceInput({
+    onTranscript: (texte) => {
+      dernierTourVocalRef.current = true;
+      setSaisie(texte); // injection dans l'état de saisie
+      void envoyer(texte); // envoi automatique sans seconde action
+    },
+    onErreur: (message) => afficherToast(message),
+  });
 
   /** Régénère la dernière réponse : renvoie le dernier message utilisateur. */
   const regenerer = useCallback(() => {
@@ -1113,12 +1147,35 @@ export function AuroraChat() {
                 })}
               </div>
 
+              {/* Chat voix : lecture vocale de la réponse (tours dictés uniquement). */}
+              {lectureVocale && (
+                <div className="lecture-vocale">
+                  <span className="point-lecture" aria-hidden />
+                  <span>Lecture vocale en cours…</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cancelSpeech();
+                      setLectureVocale(false);
+                    }}
+                  >
+                    Couper
+                  </button>
+                </div>
+              )}
+
               <textarea
                 ref={saisieRef}
                 className="saisie"
                 rows={1}
                 value={saisie}
-                placeholder="Écris ton message… (↑ pour rappeler le dernier message)"
+                placeholder={
+                  saisieVocale.etat === "ecoute"
+                    ? saisieVocale.texteInterim
+                      ? `Écoute en cours… « ${saisieVocale.texteInterim} »`
+                      : "Écoute en cours… parlez maintenant"
+                    : "Écris ton message… (↑ pour rappeler le dernier message)"
+                }
                 aria-label="Message"
                 onChange={(event) => {
                   setSaisie(event.target.value);
@@ -1283,15 +1340,60 @@ export function AuroraChat() {
                     </div>
                   </div>
 
+                  {/* Chat voix : envoi vide + clic = dictée (transcript envoyé
+                      automatiquement) ; re-clic pendant l'écoute = annulation. */}
                   <button
                     type="button"
-                    className={`btn-envoi${generating ? " stop" : ""}`}
-                    onClick={() => (generating ? arreter() : void envoyer())}
-                    disabled={generating ? false : envoiVide || tropLong}
-                    aria-label={generating ? "Arrêter la génération" : "Envoyer"}
-                    title={generating ? "Arrêter" : "Envoyer (Entrée)"}
+                    className={`btn-envoi${generating ? " stop" : ""}${saisieVocale.etat === "ecoute" ? " voix-active" : ""}`}
+                    onClick={() => {
+                      if (generating) {
+                        arreter();
+                        return;
+                      }
+                      if (saisieVocale.etat === "ecoute") {
+                        saisieVocale.annuler();
+                        return;
+                      }
+                      if (envoiVide) {
+                        saisieVocale.demarrer();
+                        return;
+                      }
+                      void envoyer();
+                    }}
+                    disabled={generating ? false : tropLong || (envoiVide && !saisieVocale.supported)}
+                    aria-label={
+                      generating
+                        ? "Arrêter la génération"
+                        : saisieVocale.etat === "ecoute"
+                          ? "Annuler l'écoute vocale"
+                          : envoiVide
+                            ? saisieVocale.supported
+                              ? "Chat voix — dicter votre message"
+                              : "Reconnaissance vocale non supportée par ce navigateur"
+                            : "Envoyer"
+                    }
+                    title={
+                      generating
+                        ? "Arrêter"
+                        : saisieVocale.etat === "ecoute"
+                          ? "Annuler l'écoute vocale"
+                          : envoiVide
+                            ? saisieVocale.supported
+                              ? "Chat voix — dictez votre message (re-clic pour annuler)"
+                              : "Reconnaissance vocale non supportée par ce navigateur"
+                            : "Envoyer (Entrée)"
+                    }
                   >
-                    {generating ? Icones.stop : Icones.envoi}
+                    {generating ? (
+                      Icones.stop
+                    ) : saisieVocale.etat === "ecoute" ? (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <rect x="9" y="2" width="6" height="12" rx="3" />
+                        <path d="M5 10a7 7 0 0 0 14 0M12 19v3" />
+                      </svg>
+                    ) : (
+                      Icones.envoi
+                    )}
                   </button>
                 </div>
               </div>
