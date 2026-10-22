@@ -3943,3 +3943,21 @@ Work Log:
 - Tests : plans.test.ts (prix boutique, 3 produits résolus, purchasable) ; NOUVEAU chariow-widget.test.tsx (données exportées + verrouillage structurel injection/CSP/page) ; timebox-verrou.test.ts (1_800_000) ; arene-orchestrator.test.ts (30*60*1000).
 - Docs : docs/billing/chariow-plans.md réécrite (produits publiés, widgets, mise en service réduite au webhook Pulse) ; scripts/chariow_plans_status.mjs fallbacks+tarifs ; CHANGELOG.
 - QA : tsc 0 ; eslint 0 ; vitest verts ; next build OK. PR vers main.
+
+---
+Task ID: acces-studio-live (2 demandes)
+Agent: Super Z (main)
+Task: « 1. Capture 1 : en production les utilisateurs n'ont plus accès au projet (403 sur /studio). 2. Fichier 2 (genIA Desktop — Live & Partage d'Écran) : rendre l'agent live accessible via Android et PC avec ce code pour PC et l'autre pour Android, s'assurer que tout fonctionne. »
+
+Work Log:
+- DIAGNOSTIC 403 : le garde deny-by-default (demande n°7) classait /studio (hors /studio/connections) et /live restreints → 403 pour les utilisateurs standards (middleware + route-guard). Cartographie complète des dépendances : /studio/video → /api/video/projects (restreinte), /studio/agents → AgentChatWorkshop → GET/POST /api/agents (gardé par requireAgentSystemAccess, demande n°5).
+- RÉOUVERTURE SURGICALE (lib/security/user-access.ts) : familles studio + live ; /studio en liste blanche pages SAUF /studio/console (IDE développeur — RESTRICTED_PAGE_PREFIXES évaluées avant la liste blanche) ; APIs : /api/video/projects (+[id]+render), /api/live, /api/agents ; NOUVEAU mécanisme RESTRICTED_API_PREFIXES pour garder /api/agents/run|generate|plan|system interdits au middleware (orchestration réservée, demande n°5 maintenue).
+- /api/agents : GET/POST passent de requireAgentSystemAccess à requireUser (provisionnement « Gen IA » du workshop) — orchestration inchangée.
+- AGENT LIVE MULTI-APPAREILS : garde PC-only retiré (page /live, POST /api/live/sessions, POST frames) ; panneau Gemini Live à source adaptative — PC : getDisplayMedia 1 fps JPEG (mécanique exacte du fichier genIA Desktop fourni) ; Android/iOS : caméra getUserMedia + bascule avant/arrière À CHAUD + aperçu vidéo (getDisplayMedia n'existe pas sur ces navigateurs — la caméra est la source réelle équivalente, aucun simulacre) ; voix/barge-in inchangés ; aucun relais ws://localhost:8080 nécessaire (WebSocket Google direct, CSP déjà en place, clé en sessionStorage) ; Electron desktopCapturer non reproduit (documenté honnêtement).
+- Tests : matrice user-access réécrite (pages, API, frontières console + orchestration), middleware.test (studio réouvert + /live user + /studio/console 403), route-guard, route-org agents (GET/POST ouverts), sessions/frames android (201/200), PcOnlyNotice orphelin supprimé.
+- QA : tsc 0 ; eslint 0 ; vitest 4658 verts / 0 échec ; next build OK. PR #78 ouverte.
+
+Stage Summary:
+- Les utilisateurs retrouvent le studio complet (le 403 de la capture disparaît) sauf la console développeur, surface à privilège assumée.
+- L'agent Live fonctionne sur PC (écran + voix) ET Android (caméra + voix), code genIA Desktop intégré au panneau existant sans relais local.
+- Défense en profondeur conservée : orchestration agents réservée au système IA au double niveau (middleware + routes).
