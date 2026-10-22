@@ -53,15 +53,44 @@ export const runtime = "nodejs";
 /** Chaîne de repli : BUILD_ID servi → release générique (auto-hébergement)
  * → plateforme Vercel → environnement de développement local. Lu À LA
  * REQUÊTE (jamais au chargement du module) pour rester testable et suivre
- * l'environnement d'exécution réel. */
+ * l'environnement d'exécution réel.
+ *
+ * DURCISSEMENT 2026-10-22 : un repli en PRODUCTION est un INCIDENT — l'empreinte
+ * devient stable, le watcher client redevient aveugle aux déploiements (le bug
+ * d'origine, mais invisible). Le repli est désormais signalé (warn une fois par
+ * process + Sentry si disponible) au lieu de passer inaperçu. */
+let repliDejaSignale = false;
+
+function signalerRepliEmpreinte(empreinte: string, cause: string): void {
+  if (repliDejaSignale) return;
+  repliDejaSignale = true;
+  console.warn(
+    `[DEPLOY] BUILD_ID illisible depuis ce process (${cause}) — empreinte de repli « ${empreinte} » utilisée : le rechargement automatique des onglets est AVEUGLE tant que le BUILD_ID n'est pas lisible. Vérifier le répertoire de travail de PM2 et les permissions de .next/BUILD_ID.`,
+  );
+  void import("@sentry/nextjs")
+    .then((Sentry) => {
+      Sentry.captureMessage(
+        "deploy-info : empreinte de repli utilisée en production (BUILD_ID illisible)",
+        { level: "warning", extra: { empreinte, cause } },
+      );
+    })
+    .catch(() => {
+      // Sentry indisponible (dev, bundle minimal) — le warn console suffit.
+    });
+}
+
 function resolveDeploymentId(): string {
-  return (
-    readBuildId() ||
+  const buildId = readBuildId();
+  if (buildId) return buildId;
+  const empreinte =
     process.env.GEN3IA_RELEASE ||
     process.env.VERCEL_DEPLOYMENT_ID ||
     process.env.VERCEL_GIT_COMMIT_SHA ||
-    "local-dev"
-  );
+    "local-dev";
+  if (process.env.NODE_ENV === "production") {
+    signalerRepliEmpreinte(empreinte, "fichier .next/BUILD_ID absent ou illisible");
+  }
+  return empreinte;
 }
 
 export function GET() {

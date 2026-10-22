@@ -15,7 +15,7 @@ import { encodeText } from "./encoding/text-encoder";
 import { decodeResponse, poidsResonanceParCycle } from "./decoding/response-decoder";
 import type { NeuralDecodedResponse } from "./decoding/response-decoder";
 import type { CortexLangagierGen3, ContexteLangage } from "./generation/language";
-import type { HippocampusMemory } from "./memory/hippocampus";
+import { HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
 import { composerDepuisConnaissances } from "./connaissances-pont";
@@ -122,6 +122,56 @@ export class NeuralEngine {
   ) {}
 
   /**
+   * MÉMOIRE DE TRAVAIL PAR CONVERSATION (durcissement 2026-10-22 — P0) :
+   * l'hippocampe historique est un singleton partagé par TOUS les comptes —
+   * l'anaphore « et toi ? » d'un utilisateur pouvait capter le dernier tour
+   * d'un AUTRE (fuite de contexte entre comptes). Désormais, chaque couple
+   * (userId, conversationId) présent dans `metadata` dispose de sa PROPRE
+   * fenêtre glissante (LRU bornée) ; sans identité (appels système, tests,
+   * scripts), le comportement historique est conservé.
+   */
+  private readonly fenetresMemoire = new Map<
+    string,
+    { memoire: HippocampusMemory; dernierAcces: number }
+  >();
+
+  /** Plafond de fenêtres vivantes : au-delà, la moins récemment utilisée est
+   * évacuée (une fenêtre = ~10 tours × 2 × 2000 caractères au pire). */
+  private static readonly LIMITE_FENETRES_MEMOIRE = 500;
+
+  private memoirePour(options: AIRequest): HippocampusMemory | undefined {
+    if (!this.hippocampe) return undefined;
+    const meta = options.metadata ?? {};
+    const userId = typeof meta.userId === "string" ? meta.userId : "";
+    const conversationId =
+      typeof meta.conversationId === "string" ? meta.conversationId : "";
+    if (!userId && !conversationId) return this.hippocampe;
+
+    const cle = `${userId || "sans-compte"}|${conversationId || "hors-conversation"}`;
+    let entree = this.fenetresMemoire.get(cle);
+    if (!entree) {
+      if (this.fenetresMemoire.size >= NeuralEngine.LIMITE_FENETRES_MEMOIRE) {
+        let clePlusAncienne: string | null = null;
+        let plusAncien = Number.POSITIVE_INFINITY;
+        for (const [cleExistante, valeur] of this.fenetresMemoire) {
+          if (valeur.dernierAcces < plusAncien) {
+            plusAncien = valeur.dernierAcces;
+            clePlusAncienne = cleExistante;
+          }
+        }
+        if (clePlusAncienne) this.fenetresMemoire.delete(clePlusAncienne);
+      }
+      entree = {
+        memoire: new HippocampusMemory(this.hippocampe.tailleFenetre()),
+        dernierAcces: Date.now(),
+      };
+      this.fenetresMemoire.set(cle, entree);
+    }
+    entree.dernierAcces = Date.now();
+    return entree.memoire;
+  }
+
+  /**
    * Génération neuronale complète : encodage du prompt (texte extrait des
    * messages), fenêtre de cycles réels du noyau avec inférence propre
    * (adaptation (d) : reset complet des énergies — la mémoire vit dans les
@@ -169,11 +219,12 @@ export class NeuralEngine {
     // qui rend les documents ingérés visibles dans les réponses), puis
     // cortex et décodeur, comme avant.
     const knowledgeContext = options.knowledgeContext?.trim() ?? "";
+    const memoire = this.memoirePour(options);
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
-      this.composer(messageUtilisateur, decode);
-    this.memoriser(messageUtilisateur, composition.texte);
+      this.composer(messageUtilisateur, decode, memoire);
+    this.memoriser(messageUtilisateur, composition.texte, memoire);
     this.evoluer(messageUtilisateur, composition);
 
     return this.construireReponse(
@@ -308,15 +359,16 @@ export class NeuralEngine {
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const messageUtilisateur = extraireDernierMessageUtilisateur(options);
+    const memoire = this.memoirePour(options);
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
-      this.composer(messageUtilisateur, decode);
+      this.composer(messageUtilisateur, decode, memoire);
 
     for (const segment of segmenterTexte(composition.texte)) {
       yield segment;
     }
 
-    this.memoriser(messageUtilisateur, composition.texte);
+    this.memoriser(messageUtilisateur, composition.texte, memoire);
     this.evoluer(messageUtilisateur, composition);
     return this.construireReponse(
       prompt,
@@ -366,11 +418,12 @@ export class NeuralEngine {
   private composer(
     prompt: string,
     decode: NeuralDecodedResponse,
+    memoire?: HippocampusMemory,
   ): CompositionReponse {
     if (this.cortex) {
       const contexte: ContexteLangage = {};
-      if (this.hippocampe) {
-        const historique = this.hippocampe.getHistory();
+      if (memoire) {
+        const historique = memoire.getHistory();
         const dernierTour = historique[historique.length - 1];
         if (dernierTour) {
           contexte.messagePrecedent = dernierTour.user;
@@ -402,10 +455,14 @@ export class NeuralEngine {
    * suivant disposera du contexte de reprise. Échec silencieux (jamais de
    * panne de chat pour une mémoire).
    */
-  private memoriser(prompt: string, reponse: string): void {
-    if (!this.hippocampe) return;
+  private memoriser(
+    prompt: string,
+    reponse: string,
+    memoire?: HippocampusMemory,
+  ): void {
+    if (!memoire) return;
     try {
-      this.hippocampe.remember(prompt, reponse);
+      memoire.remember(prompt, reponse);
     } catch {
       // Télémétrie perdue, pas la conversation.
     }

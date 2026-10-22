@@ -3961,3 +3961,24 @@ Stage Summary:
 - Les utilisateurs retrouvent le studio complet (le 403 de la capture disparaît) sauf la console développeur, surface à privilège assumée.
 - L'agent Live fonctionne sur PC (écran + voix) ET Android (caméra + voix), code genIA Desktop intégré au panneau existant sans relais local.
 - Défense en profondeur conservée : orchestration agents réservée au système IA au double niveau (middleware + routes).
+
+---
+Task ID: durcissement-fiabilite (demande du propriétaire, 2026-10-22)
+Agent: Super Z (main — Z.ai)
+Task: « Vas-y, commence à appliquer ces correctifs » — implémentation des P0/P1 issus de l'analyse multi-agents (moteur neural, entraînement, robustesse production) : mémoire isolée par conversation, persistance durcie, sanitisation importState, empreinte de repli visible, CD durci, cron training-sweep.
+
+Work Log:
+- BRANCHE fix/fiabilite-cerveau-memoire-cd depuis main (17147742).
+- MÉMOIRE PAR CONVERSATION (P0, lib/neural/engine.ts + memory/hippocampus.ts) : carte LRU (500) de fenêtres HippocampusMemory clé « userId|conversationId » (metadata déjà posée par /api/chat/message:170) ; composer()/memoriser() reçoivent la fenêtre résolue (generate + generateStream) ; sans identité → fenêtre partagée historique (tests/appels système inchangés) ; hippocampe partagé plus alimenté par les tours identifiés ; getter tailleFenetre() ajouté pour cloner la taille du runtime.
+- PERSISTANCE DURCIE (P0, lib/neural/training/persistence.ts) : mutex interne (chaîne de promesses) sérialisant saveBrainState (les 4 call sites concurrents ne peuvent plus se renommer mutuellement un .tmp partiel) ; .tmp UNIQUE pid+uuid purgé en cas d'échec ; rotation .bak (copie de la version courante AVANT rename) ; loadBrainState tente le .bak AVANT le repli réseau neuf (amnésie évitée, warn visible) ; deleteBrainState purge main+bak. persistance-v2.ts : même .tmp unique.
+- SANITISATION importState (P0, lib/neural/core/network.ts) : rejet sans exception des synapses à poids non fini (NaN/Infinity) ou identifiants hors bornes, warn de comptage ; aller-retour exportState/importState fidèle.
+- EMPREINTE DE REPLI VISIBLE (P1, app/api/deploy-info/route.ts) : en production, tout repli hors BUILD_ID est loggué (warn, une fois/process) + envoyé à Sentry (import dynamique avalé) — le retour du bug « onglets aveugles » ne peut plus être silencieux. app/api/status/route.ts : resolveVersion aligné sur readBuildId() (la version /api/status reflète le build réellement servi sur le VPS — smoke test du runbook réparé).
+- CD DURCI (P1, deploy/cd-finisher.sh + .github/workflows/deploy-vps.yml) : blacklist failed_commits.txt ENFIN lue (grep -qxF → exit 3, plus aucune re-bascule d'un SHA fautif) ; workflow distinguant exit 3 (blacklist, abandon immédiat) et exit 2 (health check échoué → rollback appliqué, PAS de retry = plus de 4 bascules/rollbacks consécutifs) ; bascule node_modules en cp -al avec node_modules.old conservé → rollback .next.old + node_modules.old COHÉRENT (l'ancien rsync laissait ancien .next + nouvelles deps en cas d'échec) ; purge /tmp par trap EXIT ; BUILD_ID capturé au build et VÉRIFICATION FINALE côté VPS : /api/deploy-info doit servir EXACTEMENT le BUILD_ID du run (5 tentatives, 10 s) — un écart rend le workflow rouge.
+- CRON TRAINING-SWEEP (P0 entraînement) : entrée */5 * * * * dans vercel.json (parité) + section §7 « Crons VPS auto-hébergé » dans docs/runbooks/deployment.md avec crontab exacte (curl Bearer CRON_SECRET, log /var/log/gen3ia-cron.log) — le sweep global ne progressait qu'opportunistement (onglet Studio ouvert), rendant un futur worker GPU inutilisé dès onglet fermé.
+- TESTS : lib/neural/engine-memoire-isolee.test.ts (5 — fuite inter-comptes impossible, continuité intra-conversation préservée, hippocampe partagé intouché), lib/neural/training/persistence.test.ts (4 — concurrence sans corruption ni .tmp résiduel, rotation+repli .bak vérifiés avec horodatage, purge complète), lib/neural/core/network-sanitisation.test.ts (3 — NaN/hors bornes/malformés rejetés, état sain fidèle). Suites adjacentes reverdies : network (9), persistance-v2 (5), deploy-auto-update (deploy-info), status route (4), trainer/job, perf-cache-policy.
+- QA : tsc 0 ; eslint 0 (fichiers touchés) ; vitest verts ; bash -n cd-finisher OK. CHANGELOG §Sécurité/Fiabilité ajouté.
+
+Stage Summary:
+- Les 3 P0 « cœur IA » (fuite de contexte inter-comptes, courses de persistance, synapses toxiques) et les 3 P1 « visibilité » (repli signalé, version /api/status réelle, CD vérifié de bout en bout + blacklist) sont implémentés et testés.
+- Restent pour une prochaine vague (volontairement hors de cette PR pour rester réversible) : backup R2 du cerveau, durcissement gen3-local (timebox/anti-zombie), encodage du dernier message utilisateur dans le SNN, alertes uptime externes.
+- PR vers main = déploiement production automatique (deploy-vps.yml) avec vérification BUILD_ID intégrée.

@@ -12,6 +12,52 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Non publié]
 
+### Sécurité / Fiabilité (durcissement 2026-10-22 — analyse multi-agents)
+
+- **Mémoire de travail isolée par conversation (P0 — fuite de contexte)** :
+  l'hippocampe du moteur (`lib/neural/engine.ts`) était un singleton partagé
+  par TOUS les comptes — l'anaphore « et toi ? » d'un utilisateur pouvait
+  capter le dernier tour d'un AUTRE. Chaque couple (userId, conversationId)
+  présent dans `metadata` (déjà posé par `/api/chat/message`) dispose
+  désormais de sa propre fenêtre glissante (LRU bornée à 500) ; sans
+  identité (appels système/tests), le comportement historique est conservé.
+  L'hippocampe partagé n'est plus alimenté par les tours identifiés.
+- **Persistance du cerveau durcie (P0 — risque de corruption/amnésie)** :
+  `lib/neural/training/persistence.ts` — sauvegardes SÉRIALISÉES par un
+  mutex interne (fin des courses entre consolidation, entraînement auto,
+  route evolve qui écrivaient toutes le même `.tmp` fixe), fichier
+  temporaire UNIQUE (pid+uuid) purgé en cas d'échec, ROTATION `.bak` de la
+  dernière version connue bonne et repli automatique sur la `.bak` au
+  chargement (une corruption ponctuelle ne coûte plus tout l'apprentissage)
+  ; `deleteBrainState` purge le cerveau ET sa `.bak` ;
+  `persistance-v2.ts` (artefact columnnaire) reçoit le même `.tmp` unique.
+- **Sanitisation des synapses importées (P0)** : `network.importState`
+  rejette toute synapse invalide (poids NaN/Infinity — neurone mort,
+  amnésie silencieuse ; identifiants hors bornes — synapse orpheline) avec
+  avertissement, sans lever d'exception ; les synapses saines restent
+  fidèles (aller-retour export/import testé).
+- **Empreinte de repli visible (P1 — fin de la cécité silencieuse)** :
+  `/api/deploy-info` signale (warn console + Sentry, une fois par process)
+  tout repli hors BUILD_ID en PRODUCTION — l'ancien échec invisible du
+  BUILD_ID (bug d'origine des onglets restés sur l'ancienne version) ne
+  peut plus passer inaperçu ; `/api/status` expose désormais le BUILD_ID
+  effectivement servi (même chaîne que deploy-info — le smoke test du
+  runbook peut vérifier la version en ligne sur le VPS).
+- **Chaîne CD durcie (P1)** : `deploy/cd-finisher.sh` lit ENFIN la
+  blacklist (`failed_commits.txt` — un SHA déjà en échec n'est plus jamais
+  re-basculé, exit 3), conserve `node_modules.old` pour un rollback
+  COHÉRENT (l'ancien rsync mettait les nouvelles deps en place avant le
+  health check : rollback = ancien .next + NOUVELLES deps) et purge
+  systématiquement les artefacts `/tmp` via trap ; `deploy-vps.yml` distingue
+  les codes de sortie (blacklist/health-check → pas de retry inutile),
+  capture le BUILD_ID du runner et VÉRIFIE EN FIN DE RUN que la production
+  sert exactement ce build (`/api/deploy-info`) — plus jamais de déploiement
+  « vert mais muet ».
+- **Cron training-sweep planifié** : entrée `*/5 * * * *` dans
+  `vercel.json` (parité) + section « Crons VPS auto-hébergé » dans
+  `docs/runbooks/deployment.md` (crontab exacte avec `CRON_SECRET` — le
+  sweep global ne progressait qu'opportunistement, onglet Studio ouvert).
+
 ### Ajouté
 
 - **Accès utilisateurs restauré (studio + agent Live) et Agent Live sur ANDROID + PC** :

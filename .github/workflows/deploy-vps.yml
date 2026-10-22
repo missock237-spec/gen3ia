@@ -68,7 +68,11 @@ jobs:
       - name: Vérifier le BUILD_ID
         run: |
           test -f .next/BUILD_ID || { echo "::error::.next/BUILD_ID absent"; exit 1; }
-          echo "BUILD_ID=$(cat .next/BUILD_ID)"
+          BUILD_ID=$(cat .next/BUILD_ID)
+          echo "BUILD_ID=$BUILD_ID"
+          # Capturé pour la vérification finale : la production doit servir
+          # EXACTEMENT ce build (cf. dernière étape du job).
+          echo "BUILD_ID=$BUILD_ID" >> "$GITHUB_ENV"
 
       - name: Empaqueter .next (sans cache)
         run: tar czf /tmp/next-build.tar.gz --exclude='.next/cache' -C .next .
@@ -97,18 +101,50 @@ jobs:
           done
           [ "$ok" = "1" ] || { echo "::error::Transfert SCP impossible après 4 tentatives"; exit 1; }
 
-      - name: Swap atomique + health check (rollback auto, retry)
+      - name: Swap atomique + health check (rollback auto, retry raisonné)
         run: |
+          ok=0
           for i in 1 2 3 4; do
-            if ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+            sortie=$(ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-                 "bash /tmp/cd-finisher.sh ${GITHUB_SHA}"; then
+                 "bash /tmp/cd-finisher.sh ${GITHUB_SHA}" 2>&1) && code=0 || code=$?
+            echo "$sortie"
+            case $code in
+              0)
+                ok=1; break ;;
+              3)
+                echo "::error::SHA ${GITHUB_SHA} est blacklisté sur le VPS (échec antérieur) — abandon sans nouvelle tentative.";
+                exit 1 ;;
+              2)
+                echo "::error::Échec du health check — ROLLBACK appliqué côté VPS, SHA blacklisté. Retenter le même build serait une boucle de crash : abandon.";
+                exit 1 ;;
+              *)
+                echo "Tentative $i/4 échouée (code $code — SSH/réseau transitoire ?) — nouvel essai dans 60 s…";
+                sleep 60 ;;
+            esac
+          done
+          [ "$ok" = "1" ] || { echo "::error::Application du déploiement impossible après 4 tentatives"; exit 1; }
+
+      # VÉRIFICATION DE BOUT EN BOUT (durcissement 2026-10-22) : le health
+      # check interne prouve que l'app répond — pas qu'elle sert LE build
+      # livré par CE run. On compare l'empreinte /api/deploy-info (lue à la
+      # requête depuis .next/BUILD_ID, cf. lib/deploy/build-id.ts) au BUILD_ID
+      # compilé ci-dessus : un écart = workflow ROUGE, plus jamais un
+      # déploiement « vert mais muet ».
+      - name: Vérifier que la production sert ce build exact
+        run: |
+          for i in 1 2 3 4 5; do
+            empreinte=$(ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+                 "curl -fsS -m 15 http://127.0.0.1:3000/api/deploy-info" 2>/dev/null | grep -o '"deploymentId":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
+            if [ "$empreinte" = "$BUILD_ID" ]; then
+              echo "Vérifié : la production sert le build $BUILD_ID."
               exit 0
             fi
-            echo "Tentative $i/4 échouée — nouvel essai dans 60 s…"
-            sleep 60
+            echo "Tentative $i/5 : empreinte servie = '$empreinte' ≠ attendu '$BUILD_ID' — nouvelle tentative dans 10 s…"
+            sleep 10
           done
-          echo "::error::Application du déploiement impossible après 4 tentatives"
+          echo "::error::La production ne sert PAS le build livré ($BUILD_ID) — déploiement à investiguer."
           exit 1
 
       - name: Nettoyage runner

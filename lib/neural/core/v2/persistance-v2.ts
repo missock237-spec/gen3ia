@@ -25,6 +25,7 @@
  * rename), échec NON FATAL, lecture synchrone unique au démarrage.
  */
 
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { promises as fsp } from "node:fs";
 import { dirname } from "node:path";
@@ -125,16 +126,28 @@ export function deserialiserEtatV2(buf: Buffer): EtatStructuralV2 | null {
   }
 }
 
-/** Écriture atomique (`.tmp` puis rename) — non fatale. */
+/** Écriture atomique (`.tmp` UNIQUE pid+uuid puis rename) — non fatale.
+ * Durcissement 2026-10-22 : le `.tmp` fixe partagé permettait à deux
+ * écritures concurrentes (runtime + entraînement) de se renommer mutuellement
+ * un fichier PARTIEL — artefact corrompu au prochain démarrage. */
 export async function ecrireArtefactV2(
   chemin: string,
   etat: EtatStructuralV2,
 ): Promise<boolean> {
   try {
     await fsp.mkdir(dirname(chemin), { recursive: true });
-    const tmp = `${chemin}.tmp`;
-    await fsp.writeFile(tmp, serialiserEtatV2(etat));
-    await fsp.rename(tmp, chemin);
+    const tmp = `${chemin}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await fsp.writeFile(tmp, serialiserEtatV2(etat));
+      await fsp.rename(tmp, chemin);
+    } catch (erreur: unknown) {
+      try {
+        await fsp.unlink(tmp);
+      } catch {
+        // Rien à nettoyer.
+      }
+      throw erreur;
+    }
     return true;
   } catch (erreur: unknown) {
     console.warn(

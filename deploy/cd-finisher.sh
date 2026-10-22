@@ -43,13 +43,23 @@ if ! flock -n 9; then log "CD: un déploiement est déjà en cours — abandon."
 
 # --- Suspendre l'updater (relancé par trap dans tous les cas) ---
 pm2 stop updater >/dev/null 2>&1 || true
-trap 'pm2 start updater >/dev/null 2>&1 || true' EXIT
+# trap combiné : updater relancé + artefacts temporaires purgés (aucun tar
+# orphelin dans /tmp, même en cas d'échec) — durcissement 2026-10-22.
+trap 'pm2 start updater >/dev/null 2>&1 || true; rm -f /tmp/next-build.tar.gz /tmp/cd-finisher.sh' EXIT
 
 # --- Vérifier le SHA cible ---
 [ -f /tmp/next-build.tar.gz ] || { log "CD ERREUR: /tmp/next-build.tar.gz absent (scp a échoué ?)"; exit 1; }
 cd "$PROD_DIR" || { log "CD ERREUR: $PROD_DIR introuvable"; exit 1; }
 git fetch origin --quiet || { log "CD ERREUR: git fetch a échoué (réseau ?)"; exit 1; }
 git cat-file -e "$TARGET_SHA" 2>/dev/null || { log "CD ERREUR: SHA $TARGET_SHA inconnu du dépôt"; exit 1; }
+
+# --- BLACKLIST (durcissement 2026-10-22 : elle était écrite mais jamais lue)
+# Un SHA ayant déjà échoué (npm ci, extraction, health check) n'est plus
+# jamais re-basculé : exit 3 — le workflow distingue ce cas et n'insiste pas.
+if grep -qxF "$TARGET_SHA" "$FAILED_COMMITS" 2>/dev/null; then
+  log "CD: SHA $TARGET_SHA blacklisté (échec antérieur enregistré) — abandon sans bascule."
+  exit 3
+fi
 
 # --- Idempotence : déjà déployé + site sain → rien à faire (retry SSH sûrs) ---
 DEPLOYED=$(cat "$LAST_DEPLOYED" 2>/dev/null || git rev-parse HEAD)
@@ -92,8 +102,27 @@ git reset --hard "$TARGET_SHA" >> "$DEPLOY_LOG" 2>&1 || { log "CD ERREUR: git re
 rm -rf .next.old
 mv .next .next.old
 cp -al "$STAGING_DIR/.next" .next || { log "CD ERREUR: cp -al — restauration."; mv .next.old .next; exit 1; }
+
+# BASCULE COMPLÈTE de node_modules avec version précédente conservée
+# (durcissement 2026-10-22) : l'ancien rsync mettait les NOUVELLES deps en
+# place AVANT le health check — en cas de rollback, la prod restait avec
+# l'ancien .next + les NOUVELLES deps (couple incohérent). Désormais :
+# .next.old + node_modules.old = couple cohérent de rollback. cp -al =
+# liens matériels (même FS) : coût quasi nul, cohérence exacte avec le
+# node_modules validé du staging.
 if [ -x "$STAGING_DIR/node_modules/.bin/next" ]; then
-  rsync -a --delete "$STAGING_DIR/node_modules/" "$PROD_DIR/node_modules/" >> "$DEPLOY_LOG" 2>&1 || log "CD AVERTISSEMENT: rsync node_modules partiel (non bloquant)"
+  rm -rf node_modules.old
+  if [ -d node_modules ]; then
+    mv node_modules node_modules.old || { log "CD AVERTISSEMENT: mv node_modules → .old impossible — l'ancien arbre reste en place."; }
+  fi
+  if ! cp -al "$STAGING_DIR/node_modules" node_modules; then
+    log "CD ERREUR: bascule node_modules impossible — restauration de l'ancien arbre."
+    if [ -d node_modules.old ] && [ ! -d node_modules ]; then mv node_modules.old node_modules; fi
+    echo "$TARGET_SHA" >> "$FAILED_COMMITS"
+    exit 1
+  fi
+else
+  log "CD AVERTISSEMENT: staging sans node_modules/.bin/next — node_modules inchangé."
 fi
 pm2 restart gen3ia --update-env >> "$DEPLOY_LOG" 2>&1
 
@@ -111,15 +140,18 @@ if [ "$HEALTH_OK" != "1" ]; then
   log "CD ÉCHEC DÉMARRAGE — ROLLBACK vers la version précédente."
   rm -rf .next
   mv .next.old .next
+  if [ -d node_modules.old ]; then
+    rm -rf node_modules
+    mv node_modules.old node_modules
+  fi
   pm2 restart gen3ia --update-env >> "$DEPLOY_LOG" 2>&1
   echo "$TARGET_SHA" >> "$FAILED_COMMITS"
-  log "CD Rollback appliqué — site sur la version précédente, SHA blacklisté."
+  log "CD Rollback appliqué (.next + node_modules cohérents) — site sur la version précédente, SHA blacklisté."
   exit 2
 fi
 
 # --- Succès ---
-rm -rf .next.old
+rm -rf .next.old node_modules.old
 echo "$TARGET_SHA" > "$LAST_DEPLOYED"
-rm -f /tmp/next-build.tar.gz /tmp/cd-finisher.sh
 log "CD DÉPLOIEMENT RÉUSSI : $(git log --oneline -1 | head -c 120)"
 exit 0
