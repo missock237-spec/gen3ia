@@ -7,6 +7,16 @@ import { capturerSnapshot } from "./generation/snapshot";
 import { genererVisuelNeural, visuelVersDataUri } from "./generation/visual-engine";
 import { genererAudioNeural, audioVersDataUri } from "./generation/audio-engine";
 import { genererVideoNeural, videoVersDataUri } from "./generation/video-engine";
+import {
+  analyserScene,
+  analyserScenesMultiples,
+  sceneRendable,
+  type SceneSpec,
+} from "./generation/scene-spec";
+import { genererVisuelScene } from "./generation/visual-scene";
+import { genererAudioScene, sceneSonore } from "./generation/audio-composition";
+import { genererVideoScene } from "./generation/video-storyboard";
+import { lexiqueMultimodal } from "./generation/lexique-serveur";
 import type { NeuralSnapshot } from "./generation/snapshot";
 import { persistGeneratedBuffer } from "@/lib/media/persist";
 import { headR2Object, isR2Configured, createR2DownloadUrl } from "@/lib/storage/r2";
@@ -167,9 +177,39 @@ async function tenterCacheMedia(
 }
 
 /**
+ * Analyse sémantique du prompt (lexique intégré + appris HORS
+ * PRODUCTION). La couverture et les mots reconnus sont réels — le
+ * repli v1 est assumé quand rien n'est reconnu.
+ */
+function analyserPromptScene(prompt: string): SceneSpec {
+  return analyserScene(prompt, lexiqueMultimodal());
+}
+
+/** Méta commune des moteurs scéniques v2 (traçabilité honnête). */
+function metaScene(scene: SceneSpec): Record<string, unknown> {
+  return {
+    scene: {
+      sujet: scene.sujet?.type ?? null,
+      sujetLabel: scene.sujet?.label ?? null,
+      cadre: scene.cadre,
+      moment: scene.moment,
+      meteo: scene.meteo,
+      style: scene.style,
+      ambiance: scene.ambiance,
+      couverture: Number(scene.couverture.toFixed(3)),
+      motsReconnus: scene.motsReconnus.slice(0, 12),
+    },
+  };
+}
+
+/**
  * Génération visuelle brute : composition SVG calculée depuis l'état réel
  * du cerveau, rastérisée en PNG. Utilisée par le pipeline vidéo (assets de
  * scène) et par la persistance.
+ *
+ * MOTEUR V2 SCÉNIQUE : si l'analyse sémantique reconnaît un sujet ou un
+ * cadre, l'illustration est composée en CALQUES (le sujet demandé est
+ * DESSINÉ). Sinon, repli honnête sur la constellation neuronale v1.
  */
 export async function genererVisuelNeuralBrut(params: {
   prompt: string;
@@ -178,6 +218,28 @@ export async function genererVisuelNeuralBrut(params: {
   const { reseau } = getNeuralRuntime();
   const prompt = params.prompt.trim().slice(0, 2000) || "Fractale neuronale abstraite";
   const snapshot = capturerSnapshot(reseau, prompt);
+  const scene = analyserPromptScene(prompt);
+
+  if (sceneRendable(scene)) {
+    const rendu = genererVisuelScene(prompt, ratioSur(params.ratio), snapshot, scene);
+    const raster = await rasteriser(rendu.svg, rendu.width);
+    return {
+      svg: rendu.svg,
+      image: raster.buffer,
+      mime: raster.mime,
+      width: rendu.width,
+      height: rendu.height,
+      meta: {
+        ...rendu.meta,
+        ...metaScene(scene),
+        largeur: rendu.width,
+        hauteur: rendu.height,
+        prompt,
+        moteur: "gen3-snn-visuel-v2-scene",
+      },
+    };
+  }
+
   const rendu = genererVisuelNeural(prompt, ratioSur(params.ratio), snapshot);
   const raster = await rasteriser(rendu.svg, rendu.width);
 
@@ -189,10 +251,11 @@ export async function genererVisuelNeuralBrut(params: {
     height: rendu.height,
     meta: {
       ...rendu.meta,
+      ...metaScene(scene),
       largeur: rendu.width,
       hauteur: rendu.height,
       prompt,
-      moteur: "gen3-snn-visuel-v1",
+      moteur: "gen3-snn-visuel-v1-constellation",
     },
   };
 }
@@ -215,11 +278,15 @@ export async function genererVisuelNeuralEtPersister(params: {
   const prompt = params.prompt.trim().slice(0, 2000) || "Fractale neuronale abstraite";
   const ratio = ratioSur(params.ratio);
   const snapshot = capturerSnapshot(reseau, prompt);
+  const scene = analyserPromptScene(prompt);
+  const sceneRendue = sceneRendable(scene);
 
+  // Clé v2 : le contenu des rendus a changé (moteur scénique) — les
+  // anciennes clés v1 ne doivent jamais masquer un nouveau rendu.
   const cleCache = cleCacheMedia(
     params.userId,
     "visuel",
-    `visuel|v1|${prompt}|${ratio}|${empreinteSnapshot(snapshot)}`,
+    `visuel|v2|${prompt}|${ratio}|${empreinteSnapshot(snapshot)}`,
     "png",
   );
   const hit = await tenterCacheMedia(params.userId, cleCache);
@@ -228,20 +295,29 @@ export async function genererVisuelNeuralEtPersister(params: {
       url: hit,
       storage: "r2",
       mime: "image/png",
-      meta: { prompt, ratio, moteur: "gen3-snn-visuel-v1", cache: "hit" },
+      meta: {
+        prompt,
+        ratio,
+        moteur: sceneRendue ? "gen3-snn-visuel-v2-scene" : "gen3-snn-visuel-v1-constellation",
+        ...metaScene(scene),
+        cache: "hit",
+      },
       generationId: `visuel-${randomUUID()}`,
     };
   }
 
-  const rendu = genererVisuelNeural(prompt, ratio, snapshot);
+  const rendu = sceneRendue
+    ? genererVisuelScene(prompt, ratio, snapshot, scene)
+    : genererVisuelNeural(prompt, ratio, snapshot);
   const raster = await rasteriser(rendu.svg, rendu.width);
   const meta = {
     ...rendu.meta,
+    ...metaScene(scene),
     largeur: rendu.width,
     hauteur: rendu.height,
     prompt,
     ratio,
-    moteur: "gen3-snn-visuel-v1",
+    moteur: sceneRendue ? "gen3-snn-visuel-v2-scene" : "gen3-snn-visuel-v1-constellation",
     mime: raster.mime,
     cache: "miss",
   };
@@ -271,10 +347,11 @@ export async function genererVisuelNeuralEtPersister(params: {
 }
 
 /**
- * Génère et archive un SIGNAL AUDIO neural (synthèse WAV calculée depuis
- * l'histogramme réel des poids synaptiques appris). Cache de contenu sur
- * (prompt, durée, fréquence, empreinte neuronale) — un WAV déterministe
- * n'est jamais synthétisé deux fois.
+ * Génère et archive un SIGNAL AUDIO scénique. MOTEUR V2 : quand la
+ * scène est sonore (sons nommés, météo ou cadre reconnus), le design
+ * sonore comporte des COUCHES sémantiques (pluie, vagues, vent…)
+ * plus une musique structurée ; sinon repli honnête sur la nappe v1.
+ * Cache de contenu sur (prompt, durée, fréquence, empreinte).
  */
 export async function genererAudioNeuralEtPersister(params: {
   userId: string;
@@ -287,11 +364,13 @@ export async function genererAudioNeuralEtPersister(params: {
   const duree = params.dureeSecondes ?? 3;
   const frequence = params.frequenceEchantillonnage ?? 22050;
   const snapshot = capturerSnapshot(reseau, prompt);
+  const scene = analyserPromptScene(prompt);
+  const sceneSonore2 = sceneSonore(scene);
 
   const cleCache = cleCacheMedia(
     params.userId,
     "audio",
-    `audio|v1|${prompt}|${duree}|${frequence}|${empreinteSnapshot(snapshot)}`,
+    `audio|v2|${prompt}|${duree}|${frequence}|${empreinteSnapshot(snapshot)}`,
     "wav",
   );
   const hit = await tenterCacheMedia(params.userId, cleCache);
@@ -304,14 +383,17 @@ export async function genererAudioNeuralEtPersister(params: {
         duree,
         frequence,
         prompt,
-        moteur: "gen3-snn-audio-v1",
+        moteur: sceneSonore2 ? "gen3-snn-audio-v2-scene" : "gen3-snn-audio-v1-nappe",
+        ...metaScene(scene),
         cache: "hit",
       },
       generationId: `audio-${randomUUID()}`,
     };
   }
 
-  const rendu = genererAudioNeural(prompt, duree, frequence, snapshot);
+  const rendu = sceneSonore2
+    ? genererAudioScene(prompt, duree, frequence, snapshot, scene)
+    : genererAudioNeural(prompt, duree, frequence, snapshot);
 
   const persiste = await persistGeneratedBuffer({
     userId: params.userId,
@@ -327,12 +409,13 @@ export async function genererAudioNeuralEtPersister(params: {
     storage: persiste.storage === "r2" ? "r2" : "inline",
     mime: "audio/wav",
     meta: {
-      ...rendu.meta,
+      ...("couches" in rendu.meta ? rendu.meta : {}),
+      ...metaScene(scene),
       duree: rendu.dureeSecondes,
       frequence: rendu.sampleRate,
       octets: rendu.wav.length,
       prompt,
-      moteur: "gen3-snn-audio-v1",
+      moteur: sceneSonore2 ? "gen3-snn-audio-v2-scene" : "gen3-snn-audio-v1-nappe",
       cache: "miss",
     },
     generationId: `audio-${randomUUID()}`,
@@ -341,9 +424,10 @@ export async function genererAudioNeuralEtPersister(params: {
 }
 
 /**
- * Génère et archive une ANIMATION NEURONALE (SVG animé SMIL calculé
- * depuis l'état réel du cerveau — les navigateurs l'animent nativement).
- * Cache de contenu identique au visuel (SVG = texte déterministe).
+ * Génère et archive une ANIMATION SCÉNIQUE (storyboard v2 : les scènes
+ * reconnues du prompt sont rendues puis animées — caméra, météo vivante,
+ * transitions ; repli honnête sur la constellation pulsante v1).
+ * Cache de contenu identique (SVG = texte déterministe).
  */
 export async function genererVideoNeuralEtPersister(params: {
   userId: string;
@@ -354,11 +438,14 @@ export async function genererVideoNeuralEtPersister(params: {
   const prompt = params.prompt.trim().slice(0, 2000) || "Transition fluide de structures neuronales";
   const duree = params.dureeSecondes ?? 4;
   const snapshot = capturerSnapshot(reseau, prompt);
+  const scenesCandidates = analyserScenesMultiples(prompt, lexiqueMultimodal());
+  const scenes = scenesCandidates.filter(sceneRendable);
+  const storyboard = scenes.length > 0;
 
   const cleCache = cleCacheMedia(
     params.userId,
     "video",
-    `video|v1|${prompt}|${duree}|${empreinteSnapshot(snapshot)}`,
+    `video|v2|${prompt}|${duree}|${empreinteSnapshot(snapshot)}`,
     "svg",
   );
   const hit = await tenterCacheMedia(params.userId, cleCache);
@@ -370,14 +457,17 @@ export async function genererVideoNeuralEtPersister(params: {
       meta: {
         duree,
         prompt,
-        moteur: "gen3-snn-video-v1",
+        moteur: storyboard ? "gen3-snn-video-v2-storyboard" : "gen3-snn-video-v1-constellation",
+        ...(storyboard ? { nbScenes: scenes.length } : metaScene(scenesCandidates[0]!)),
         cache: "hit",
       },
       generationId: `video-${randomUUID()}`,
     };
   }
 
-  const rendu = genererVideoNeural(prompt, duree, snapshot);
+  const rendu = storyboard
+    ? genererVideoScene(prompt, duree, snapshot, scenes)
+    : genererVideoNeural(prompt, duree, snapshot);
 
   const persiste = await persistGeneratedBuffer({
     userId: params.userId,
@@ -394,11 +484,12 @@ export async function genererVideoNeuralEtPersister(params: {
     mime: "image/svg+xml",
     meta: {
       ...rendu.meta,
+      ...(storyboard ? { ...metaScene(scenes[0]!), scenesAnalysees: scenesCandidates.length } : {}),
       duree: rendu.dureeSecondes,
       largeur: rendu.width,
       hauteur: rendu.height,
       prompt,
-      moteur: "gen3-snn-video-v1",
+      moteur: storyboard ? "gen3-snn-video-v2-storyboard" : "gen3-snn-video-v1-constellation",
       cache: "miss",
     },
     generationId: `video-${randomUUID()}`,

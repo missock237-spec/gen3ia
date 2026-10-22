@@ -14,6 +14,39 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Ajouté
 
+- **Génération multimodale scénique v2 — texte/son/vidéo/image SANS GPU,
+  entraînement HORS PRODUCTION** : les trois moteurs média locaux passent de
+  l'abstrait neuronal (constellation v1) à la génération SCÉNIQUE — l'analyseur
+  sémantique (`lib/neural/generation/scene-spec.ts`, FR/EN : sujets, cadres,
+  moments, météos, styles, ambiances, couleurs, sons ; correspondance
+  longest-prefix « château » ≠ « chat », locutions, cadres implicites
+  phare→mer/vache→campagne) pilote trois moteurs en calques :
+  `visual-scene.ts` (illustration vectorielle → PNG via sharp : ciel du moment,
+  astre, météo, 8 cadres, 25 sujets dessinés, 6 styles), `audio-composition.ts`
+  (WAV PCM 16 bits : 11 couches SFX synthétisées + musique structurée — tempo
+  et mode majeur/mineur dérivés de l'ambiance, motif tiré des synapses
+  APPRISES), `video-storyboard.ts` (SVG animé SMIL : 1–4 scènes découpées du
+  prompt, caméra pan/zoom alternée, sujet flottant, météo vivante — pluie qui
+  tombe, éclairs, neige, brouillard —, oiseaux en vol, fondus enchaînés).
+  Déterminisme bit-à-bit conservé (même prompt + même état cérébral = même
+  œuvre) ; repli v1 ASSUMÉ et nommé (`gen3-snn-*-v1-constellation`) quand
+  rien n'est reconnu ; clés de cache de contenu bumpées v2 ; méta honnêtes
+  (`moteur`, scène reconnue, couverture, mots reconnus, calques/couches).
+  ENTRAÎNEMENT HORS PRODUCTION (directive : la production charge, elle ne
+  s'entraîne pas) : `scripts/pretrain-multimodal.ts` — corpus bilingue annoté
+  (48 phrases, jeu de test tenu à l'écart), 140 enseignements validés (aucun
+  conflit avec l'intégré, aucune valeur hors liste, aucun nouveau sujet non
+  rendable), précision attendus mesurée 0.913 → 1.000 (train) / 1.000 (test),
+  artefact committé `assets/neural-pretrained/multimodal-lexique-v1.json`
+  chargé au runtime (`lexique-serveur.ts`, échec doux) + rapport honnête.
+  Cortex langagier enrichi (6 paires « multimodal » : le moteur explique ses
+  capacités et ses écarts) ; console Cerveau IA : libellés atelier média
+  alignés (scènes décrites, repli v1 documenté) ; doc
+  `docs/multimodal/gen3-multimodal.md` (modalités, entraînement, niveaux de
+  référence ChatGPT/Leonardo/ElevenLabs/Veo avec écarts assumés). 63 tests
+  dédiés (analyseur, 3 moteurs, entraîneur + round-trip artefact, câblage
+  media-service v2/v1).
+
 - **Recharge rapide du wallet API via le widget Chariow (`prd_llfosdp1`)** :
   widget boutique officiel rendu dans la carte « GEN3IA WALLET » de `/billing`
   (raccourci de paiement direct à côté du flux Mobile Money existant, via le
