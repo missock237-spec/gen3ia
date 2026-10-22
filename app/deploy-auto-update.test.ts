@@ -206,6 +206,87 @@ describe("DeployWatcher — détection du nouveau build sans navigation", () => 
   });
 });
 
+/* --------------------- Mise à jour forcée — plan 4 étapes ------------------ */
+
+describe("Mise à jour forcée — manifeste version.json aligné sur le BUILD_ID (plan 2026-10-23, étape 2)", () => {
+  it("le build écrit public/version.json : init AVANT next build, finalize APRÈS (version = BUILD_ID)", () => {
+    const pkg = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
+    expect(pkg.scripts.build).toBe(
+      "node scripts/version-manifest.mjs init && next build && node scripts/version-manifest.mjs finalize",
+    );
+  });
+
+  it("le manifeste est un artefact gitignored (aucune valeur périmée committée)", () => {
+    expect(read(".gitignore")).toContain("/public/version.json");
+  });
+
+  it("en-tête serveur : /version.json JAMAIS cachable (couche Next — plan étape 1 côté app)", () => {
+    const config = read("next.config.ts");
+    expect(config).toContain('source: "/version.json"');
+    expect(config).toContain('value: "no-store, no-cache, must-revalidate"');
+  });
+
+  it("chaîne CD : le tar n'embarque que .next → cd-finisher copie .next/version.json dans public/ APRÈS git reset", () => {
+    const finisher = read("deploy/cd-finisher.sh");
+    expect(finisher).toContain('cp "$STAGING_DIR/.next/version.json" "$PROD_DIR/public/version.json"');
+    expect(finisher.indexOf("git reset --hard")).toBeLessThan(
+      finisher.indexOf('cp "$STAGING_DIR/.next/version.json"'),
+    );
+  });
+
+  it("vérification de fin de déploiement : deploy-info ET version.json == BUILD_ID — sinon workflow ROUGE (plan étape 4)", () => {
+    const workflow = read(".github/workflows/deploy-vps.yml");
+    expect(workflow).toContain("http://127.0.0.1:3000/version.json");
+    expect(workflow).toContain('[ "$empreinte" = "$BUILD_ID" ] && [ "$manifeste" = "$BUILD_ID" ]');
+  });
+
+  it("le snippet nginx (étape 1) protège le cache immutable des assets hashés tout en interdisant le cache HTML/JSON", () => {
+    const nginx = read("deploy/nginx/gen3ia-cache.conf");
+    expect(nginx).toContain("location ^~ /_next/static/");
+    expect(nginx).toContain("location = /version.json");
+    expect(nginx).toContain("location ~* \\.(html|json)$");
+    // Ordre de priorité : ^~ (immuable) déclaré AVANT le regex HTML/JSON.
+    expect(nginx.indexOf("location ^~ /_next/static/")).toBeLessThan(nginx.indexOf("location ~* \\.(html|json)$"));
+  });
+});
+
+describe("DeployWatcher — sonde version.json + persistance inter-sessions (plan 2026-10-23, étape 3)", () => {
+  const watcher = read("components/deploy-watcher.tsx");
+
+  it("seconde sonde INDÉPENDANTE : /version.json avec cache-buster et no-store", () => {
+    expect(watcher).toContain('VERSION_MANIFEST_URL = "/version.json"');
+    expect(watcher).toContain("`${VERSION_MANIFEST_URL}?t=${Date.now()}`");
+    expect(watcher).toContain('cache: "no-store"');
+    expect(watcher).toContain("AbortSignal.timeout(POLL_TIMEOUT_MS)");
+  });
+
+  it("sondes en PARALLÈLE ; l'API fait foi, le manifeste statique prend le relais si elle est muette", () => {
+    expect(watcher).toContain("Promise.all([fetchDeploymentId(), fetchManifestVersion()])");
+    expect(watcher).toContain("apiId ?? manifestVersion");
+  });
+
+  it("ambiguïté (bascule/rollback) : sources divergentes → AUCUNE décision ce cycle", () => {
+    expect(watcher).toContain("apiId !== null && manifestVersion !== null && apiId !== manifestVersion");
+  });
+
+  it("persistance inter-sessions : localStorage gen3ia-app-version — page périmée détectée dès le premier relevé", () => {
+    expect(watcher).toContain('APP_VERSION_KEY = "gen3ia-app-version"');
+    expect(watcher).toContain("readStoredVersion()");
+    expect(watcher).toContain('localStorage.getItem(APP_VERSION_KEY)');
+    expect(watcher).toContain("if (stored !== null && stored !== id)");
+  });
+
+  it("la version est écrite dans le stockage AVANT toute application — anti-boucle du plan utilisateur", () => {
+    const firstStore = watcher.indexOf("storeAppVersion(id)");
+    const firstApply = watcher.indexOf("applyDetectedDeployment(id);");
+    expect(firstStore).toBeGreaterThan(-1);
+    expect(firstApply).toBeGreaterThan(-1);
+    expect(firstStore).toBeLessThan(firstApply);
+    // L'écriture tolère un stockage indisponible (navigation privée stricte).
+    expect(watcher).toMatch(/try \{[\s\S]*localStorage\.setItem\(APP_VERSION_KEY, version\)[\s\S]*\} catch/);
+  });
+});
+
 /* --------------------------- UpdateBanner v2 -------------------------- */
 
 describe("UpdateBanner v2 — application AUTOMATIQUE contractée (Task 51)", () => {

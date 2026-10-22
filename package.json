@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/version-manifest.mjs init && next build && node scripts/version-manifest.mjs finalize",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -51,7 +51,7 @@
     "firebase-admin": "13.10.0",
     "hyparquet": "^1.31.5",
     "hyparquet-compressors": "^1.1.2",
-    "next": "15.5.27",
+    "next": "15.5.28",
     "pdf-lib": "^1.17.1",
     "pino": "^9.0.0",
     "pptxgenjs": "^4.0.1",

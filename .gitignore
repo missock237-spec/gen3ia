@@ -54,3 +54,6 @@ firestore-debug.log
 
 # État neuronal persistant (SNN — jamais committé)
 var/
+
+# Manifeste de version généré au build (mise à jour forcée navigateur — plan 4 étapes)
+/public/version.json
