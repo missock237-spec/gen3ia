@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/version-manifest.mjs init && next build && node scripts/version-manifest.mjs finalize",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

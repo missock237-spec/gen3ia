@@ -12,6 +12,35 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Non publié]
 
+### Fiabilité — Mise à jour forcée navigateur (plan 4 étapes, 2026-10-23)
+
+- **Manifeste de version écrit à chaque build (étape 2)** :
+  `scripts/version-manifest.mjs` — `npm run build` écrit
+  `public/version.json` (provisoire sha+timestamp AVANT `next build`,
+  aligné sur le `.next/BUILD_ID` réel APRÈS) et embarque le manifeste
+  dans `.next/version.json` ; `cd-finisher.sh` le recopie dans `public/`
+  sur le VPS après son `git reset --hard` (le tar CD ne contient que
+  `.next`). Fichier gitignored — jamais de valeur périmée committée.
+- **Seconde sonde client + persistance inter-sessions (étape 3)** :
+  `components/deploy-watcher.tsx` sonde DÉSORMAIS en parallèle
+  `/api/deploy-info` ET `/version.json?t=<timestamp>` (no-store) — un
+  incident de la couche route/middleware n'aveugle plus la détection ;
+  la version est persistée en `localStorage` (`gen3ia-app-version`) :
+  une page chargée depuis un cache avec un build périmé est détectée
+  dès le premier relevé. La version est écrite AVANT tout rechargement
+  et des sources divergentes (bascule/rollback en cours) ne déclenchent
+  aucune décision — aucune boucle possible.
+- **En-têtes no-cache (étape 1)** : `/version.json` en
+  `no-store, no-cache, must-revalidate` (next.config.ts) ;
+  `deploy/nginx/gen3ia-cache.conf` fournit le bloc nginx à intégrer au
+  vhost (HTML/JSON jamais cachés, assets hashés `/_next/static/`
+  PROTEGÉS du regex générique `\.(html|json)$` par un `^~` prioritaire,
+  piège d'héritage `add_header` documenté) — runbook §8.
+- **Vérification CD étendue (étape 4)** : la dernière étape de
+  `deploy-vps.yml` exige deploy-info ET version.json == BUILD_ID du
+  runner, sinon le workflow passe ROUGE ; smoke test runbook §4 enrichi
+  (contrôle d'alignement des deux empreintes).
+
 ### Sécurité / Fiabilité (durcissement 2026-10-22 — analyse multi-agents)
 
 - **Mémoire de travail isolée par conversation (P0 — fuite de contexte)** :

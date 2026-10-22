@@ -81,11 +81,20 @@ re-parties de zéro à chaque déploiement.
 | 4 | `/api/health` | `curl -s https://gen3ia.online/api/health` | `200` + `{ "status": "ok", "timestamp": … }` |
 | 5 | `/api/status` | `curl -s https://gen3ia.online/api/status` | `200` + `status: "ok"` et `services.auth/r2/ticks` à `true` — vérifier aussi que `version` correspond au déploiement du jour |
 | 6 | `manifest.webmanifest` (PWA) | `curl -s -o /dev/null -w "%{http_code}" https://gen3ia.online/manifest.webmanifest` | `200` (asset statique servi) |
+| 7 | `/version.json` (mise à jour forcée) | `curl -s https://gen3ia.online/version.json` | `200` + `"version"` ÉGALE au `deploymentId` de `/api/deploy-info` et au BUILD_ID affiché par le run de déploiement |
+
+Contrôle d'alignement de bout en bout (les trois empreintes doivent être
+identiques — sinon le mécanisme de rechargement automatique est aveugle) :
+
+```bash
+echo "deploy-info : $(curl -s https://gen3ia.online/api/deploy-info | grep -o '"deploymentId":"[^"]*"')"
+echo "version.json : $(curl -s https://gen3ia.online/version.json | grep -o '"version":"[^"]*"')"
+```
 
 D'une ligne, pour copier-coller :
 
 ```bash
-for r in / /login /studio /api/health /api/status /manifest.webmanifest; do
+for r in / /login /studio /api/health /api/status /manifest.webmanifest /version.json; do
   printf "%-25s %s\n" "$r" "$(curl -s -o /dev/null -w "%{http_code}" "https://gen3ia.online$r")"
 done
 ```
@@ -185,3 +194,54 @@ Notes :
   quotas restent bloqués par des tâches non rafraîchies.
 - Les autres crons (`agent-schedules`, `cleanup-invitations`) méritent la
   même treatment si leurs effets sont attendus en continu sur le VPS.
+
+---
+
+## 8. Mise à jour forcée navigateur (version.json + nginx — plan 4 étapes)
+
+Depuis le 2026-10-23, chaque navigateur se recharge TOUT SEUL à chaque
+nouvelle version, par une chaîne à triple redondance :
+
+1. **Au build** : `npm run build` écrit `public/version.json` dont la
+   `version` finale est EXACTEMENT le `.next/BUILD_ID` du build
+   (`scripts/version-manifest.mjs init` avant `next build`, `finalize`
+   après). Le manifeste est embarqué dans le tar CD (`.next/version.json`)
+   et `cd-finisher.sh` le copie dans `public/` sur le VPS après son
+   `git reset --hard`.
+2. **Côté client** : le `DeployWatcher` (monté dans `app/layout.tsx`) sonde
+   EN PARALLÈLE `/api/deploy-info` ET `/version.json?t=<timestamp>`
+   (no-store) toutes les ~90 s ; il compare aussi à la version persistée
+   en `localStorage` (`gen3ia-app-version`) — une page chargée depuis un
+   cache avec un build périmé est détectée dès le premier relevé. La
+   version nouvelle est écrite dans le stockage AVANT tout rechargement
+   (jamais de boucle). Les deux sources divergent (bascule/rollback en
+   cours) : aucune décision ce cycle.
+3. **Côté serveur web** : le dépôt fournit
+   `deploy/nginx/gen3ia-cache.conf` — à intégrer au vhost `server { }` de
+   gen3ia.online. La couche Next impose déjà `no-store` sur
+   `/version.json` ; le bloc nginx est la double ceinture (et protège du
+   jour où un CDN/intermédiaire s'insérera).
+
+Application sur le VPS (une fois, en root — le bloc doit être adapté au
+`proxy_pass` existant du vhost, cf. commentaires du fichier) :
+
+```bash
+# 1. Sauvegarder le vhost actuel, y intégrer les blocs du snippet
+#    (assets immuables ^~ /_next/static/, location = /version.json,
+#    regex \.(html|json)$ — cf. deploy/nginx/gen3ia-cache.conf)
+cp /etc/nginx/conf.d/gen3ia.conf /etc/nginx/conf.d/gen3ia.conf.bak
+#    … éditer le vhost pour y coller les blocs …
+
+# 2. Valider puis recharger
+nginx -t && systemctl reload nginx
+
+# 3. Vérifier : le manifeste n'est plus cachable, les assets hashés le
+#    restent (commandes de vérification en tête de
+#    deploy/nginx/gen3ia-cache.conf)
+curl -sI https://gen3ia.online/version.json | grep -i cache-control
+```
+
+> Si ce §8 n'a pas encore été appliqué sur le VPS, le mécanisme reste
+> OPÉRATIONNEL : les en-têtes `no-store` de la couche Next suffisent
+> (vérifiables par `curl -sI https://gen3ia.online/version.json |
+> grep -i cache-control` → `no-store, no-cache, must-revalidate`).

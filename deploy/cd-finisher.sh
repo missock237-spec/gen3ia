@@ -124,6 +124,18 @@ if [ -x "$STAGING_DIR/node_modules/.bin/next" ]; then
 else
   log "CD AVERTISSEMENT: staging sans node_modules/.bin/next — node_modules inchangé."
 fi
+
+# --- Manifeste de version (mise à jour forcée navigateur, plan 4 étapes)
+# 2026-10-23 : le runner l'a compilé à côté du BUILD_ID (.next/version.json,
+# embarqué dans le tar car il ne contient que .next). Il est copié dans
+# public/ APRÈS le git reset --hard (qui ne connaît que les fichiers
+# suivis — le manifeste est un artefact gitignored). Absent (build
+# antérieur au mécanisme) : repli silencieux sur la version suivie par git.
+if [ -f "$STAGING_DIR/.next/version.json" ]; then
+  cp "$STAGING_DIR/.next/version.json" "$PROD_DIR/public/version.json" \
+    || log "CD AVERTISSEMENT: copie de version.json impossible — manifeste git conservé."
+fi
+
 pm2 restart gen3ia --update-env >> "$DEPLOY_LOG" 2>&1
 
 # --- Health check : rollback si le nouveau build ne répond pas ---

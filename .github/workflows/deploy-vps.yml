@@ -131,17 +131,23 @@ jobs:
       # requête depuis .next/BUILD_ID, cf. lib/deploy/build-id.ts) au BUILD_ID
       # compilé ci-dessus : un écart = workflow ROUGE, plus jamais un
       # déploiement « vert mais muet ».
+      # Mise à jour forcée (plan 4 étapes, 2026-10-23) : /version.json
+      # (manifeste statique copié dans public/ par cd-finisher.sh) doit
+      # servir EXACTEMENT la même empreinte — c'est lui que les navigateurs
+      # sondent pour se recharger tout seuls.
       - name: Vérifier que la production sert ce build exact
         run: |
           for i in 1 2 3 4 5; do
-            empreinte=$(ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+            reponse=$(ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-                 "curl -fsS -m 15 http://127.0.0.1:3000/api/deploy-info" 2>/dev/null | grep -o '"deploymentId":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
-            if [ "$empreinte" = "$BUILD_ID" ]; then
-              echo "Vérifié : la production sert le build $BUILD_ID."
+                 "curl -fsS -m 15 http://127.0.0.1:3000/api/deploy-info && echo && curl -fsS -m 15 http://127.0.0.1:3000/version.json" 2>/dev/null || true)
+            empreinte=$(echo "$reponse" | grep -o '"deploymentId":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
+            manifeste=$(echo "$reponse" | grep -o '"version":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
+            if [ "$empreinte" = "$BUILD_ID" ] && [ "$manifeste" = "$BUILD_ID" ]; then
+              echo "Vérifié : la production sert le build $BUILD_ID (deploy-info + version.json alignés)."
               exit 0
             fi
-            echo "Tentative $i/5 : empreinte servie = '$empreinte' ≠ attendu '$BUILD_ID' — nouvelle tentative dans 10 s…"
+            echo "Tentative $i/5 : deploy-info='$empreinte' version.json='$manifeste' ≠ attendu '$BUILD_ID' — nouvelle tentative dans 10 s…"
             sleep 10
           done
           echo "::error::La production ne sert PAS le build livré ($BUILD_ID) — déploiement à investiguer."
