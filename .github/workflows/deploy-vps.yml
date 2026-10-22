@@ -141,8 +141,15 @@ jobs:
             reponse=$(ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
                  "curl -fsS -m 15 http://127.0.0.1:3000/api/deploy-info && echo && curl -fsS -m 15 http://127.0.0.1:3000/version.json" 2>/dev/null || true)
-            empreinte=$(echo "$reponse" | grep -o '"deploymentId":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
-            manifeste=$(echo "$reponse" | grep -o '"version":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
+            # Le manifeste version.json est indenté (JSON.stringify p=2) :
+            # « "version": "…" » avec espace après le deux-points — on
+            # compacte AVANT le grep (correction 2026-10-23 : le grep
+            # strict ne trouvait rien sur une réponse pourtant correcte,
+            # run #34 rouge à tort alors que la production servait bien
+            # le bon build).
+            compacte=$(echo "$reponse" | tr -d ' \n\r')
+            empreinte=$(echo "$compacte" | grep -o '"deploymentId":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
+            manifeste=$(echo "$compacte" | grep -o '"version":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
             if [ "$empreinte" = "$BUILD_ID" ] && [ "$manifeste" = "$BUILD_ID" ]; then
               echo "Vérifié : la production sert le build $BUILD_ID (deploy-info + version.json alignés)."
               exit 0
