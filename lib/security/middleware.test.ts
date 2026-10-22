@@ -131,12 +131,19 @@ describe("liste blanche — utilisateur standard (cookie de session réel)", () 
     expect(await response.text()).toContain("403");
   });
 
-  it("page module ads (/settings/ads) → 403", async () => {
+  it("publicité utilisateur ouverte à tous : /settings/ads passe ; l'IDE dev /studio/console reste 403", async () => {
     mockedGetPlatformRole.mockResolvedValue("user");
-    const response = await middleware(
+    // DEMANDE PROPRIÉTAIRE (restauration) : la page Publicité est ouverte
+    // à TOUS LES COMPTES.
+    const ads = await middleware(
       requestTo("/settings/ads", { cookie: sessionCookieFor("user-ads") }),
     );
-    expect(response.status).toBe(403);
+    expect(isPassed(ads)).toBe(true);
+
+    const consoleDev = await middleware(
+      requestTo("/studio/console", { cookie: sessionCookieFor("user-ads") }),
+    );
+    expect(consoleDev.status).toBe(403);
   });
 
   it("studio réouvert : /studio/create passe, /studio/console (IDE dev) → 403, /studio/connections passe", async () => {
@@ -255,7 +262,7 @@ describe("en-têtes de sécurité préservés sur les réponses 403", () => {
   it("CSP, nosniff et X-Frame-Options posés sur un 403", async () => {
     mockedGetPlatformRole.mockResolvedValue("user");
     const response = await middleware(
-      requestTo("/api/ads/generate", { cookie: sessionCookieFor("user-headers") }),
+      requestTo("/api/orchestrator", { cookie: sessionCookieFor("user-headers") }),
     );
     expect(response.status).toBe(403);
     expect(response.headers.get("content-security-policy")).toContain("default-src 'self'");
