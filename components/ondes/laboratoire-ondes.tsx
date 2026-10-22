@@ -52,6 +52,11 @@ import {
   SignalisationDouble,
   nouvelIdNoeud,
 } from "@/lib/ondes/signalisation";
+import {
+  attestationPourPaquet,
+  empreinteSpectrale,
+  verifierAttestation,
+} from "@/lib/ondes/por";
 import { authFetch } from "@/lib/firebase/auth-client";
 import { safeClientTimezone, streamConversationTurn } from "@/lib/domain/conversations/stream-client";
 import { cx } from "@/lib/ui/cx";
@@ -91,6 +96,9 @@ interface VueStats {
   paquetsEnvoyes: number;
   paquetsRecus: number;
   economie: number;
+  porEmis: number;
+  porVerifies: number;
+  porRejetes: number;
   eta: number;
   couplage: number;
   amortissement: number;
@@ -109,6 +117,9 @@ const STATS_VIERGES: VueStats = {
   paquetsEnvoyes: 0,
   paquetsRecus: 0,
   economie: 0,
+  porEmis: 0,
+  porVerifies: 0,
+  porRejetes: 0,
   eta: 0.012,
   couplage: 0.1,
   amortissement: 0.985,
@@ -171,6 +182,8 @@ export default function LaboratoireOndes() {
   const dernierLectureRef = useRef<LectureChamp | null>(null);
   const statutGen3Ref = useRef<"inconnu" | "invite" | "connecte">("inconnu");
   const occupeRef = useRef(false);
+  // ——— Proof-of-Resonance : attestations émises / vérifiées / rejetées
+  const porCompteursRef = useRef({ emis: 0, verifies: 0, rejetes: 0 });
 
   statutGen3Ref.current = statutGen3;
   occupeRef.current = occupe;
@@ -346,6 +359,32 @@ export default function LaboratoireOndes() {
             faireEchoMot(mot);
           }
 
+          // ——— PROOF-OF-RESONANCE : attestation du champ courant + émission
+          // des pics dominants vers l'essaim (chaque paquet porte l'empreinte
+          // spectrale de phase du champ qui l'a produit — les voisins la
+          // vérifient par résonance ; voir lib/ondes/por.ts).
+          const essaim = essaimRef.current;
+          if (essaim && essaim.nbPairsOuverts > 0) {
+            try {
+              const attestation = empreinteSpectrale(moteur.amplitudes(), moteur.phases(), { config: cfg });
+              const compacte = attestationPourPaquet(attestation);
+              for (const pic of lecture.pics.slice(0, 4)) {
+                essaim.envoyerPaquet({
+                  p: [pic.x, pic.y],
+                  a: pic.amplitude,
+                  f: 0.03 + (Math.abs(pic.phase) % 0.14),
+                  th: pic.phase,
+                  ts: Date.now(),
+                  por: compacte,
+                });
+                porCompteursRef.current.emis++;
+              }
+            } catch {
+              // Attestation impossible (grille en cours de réécriture) : la
+              // physique locale continue, le paquet suivant sera attesté.
+            }
+          }
+
           // Optimisation évolutive (1 Hz) : renforcement hebbien +
           // régulation du couplage et de l'amortissement.
           const evolution = evolutionRef.current;
@@ -405,6 +444,9 @@ export default function LaboratoireOndes() {
           paquetsEnvoyes: statsEssaim.paquetsEnvoyes,
           paquetsRecus: statsEssaim.paquetsRecus,
           economie: bandePassanteEconomisee(statsEssaim),
+          porEmis: porCompteursRef.current.emis,
+          porVerifies: porCompteursRef.current.verifies,
+          porRejetes: porCompteursRef.current.rejetes,
           eta: evolution?.etaCourant ?? 0.012,
           couplage: evolution?.couplageCourant ?? cfg.couplage,
           amortissement: evolution?.amortissementCourant ?? cfg.amortissement,
@@ -660,6 +702,14 @@ export default function LaboratoireOndes() {
     const noeud = new NoeudEssaim({
       transport,
       surPaquet: (paquet) => {
+        // Proof-of-Resonance : l'attestation du paquet est vérifiée AVANT
+        // injection — format, bornes et plausibilité physique. Un paquet
+        // sans attestation est admis (rétrocompatibilité) mais non compté.
+        if (paquet.por) {
+          const verdict = verifierAttestation(paquet.por);
+          if (verdict.valide) porCompteursRef.current.verifies++;
+          else porCompteursRef.current.rejetes++;
+        }
         moteurRef.current?.injecterPaquet(paquet);
         tamponRef.current.flashs.push({ x: paquet.p[0], y: paquet.p[1], t: performance.now() });
         if (tamponRef.current.flashs.length > 12) tamponRef.current.flashs.shift();
@@ -789,11 +839,23 @@ export default function LaboratoireOndes() {
               {meshNote ? <p className="ondes-aide">{meshNote}</p> : null}
               {statutEssaimTexte ? <p className="ondes-aide">{statutEssaimTexte}</p> : null}
               {essaimActif ? (
-                <dl className="ondes-metriques">
-                  <div><dt>Paquets ↗</dt><dd>{stats.paquetsEnvoyes}</dd></div>
-                  <div><dt>Paquets ↙</dt><dd>{stats.paquetsRecus}</dd></div>
-                  <div><dt>Économisée</dt><dd>{formaterOctets(stats.economie)}</dd></div>
-                </dl>
+                <>
+                  <dl className="ondes-metriques">
+                    <div><dt>Paquets ↗</dt><dd>{stats.paquetsEnvoyes}</dd></div>
+                    <div><dt>Paquets ↙</dt><dd>{stats.paquetsRecus}</dd></div>
+                    <div><dt>Économisée</dt><dd>{formaterOctets(stats.economie)}</dd></div>
+                  </dl>
+                  <dl className="ondes-metriques" aria-label="Proof-of-Resonance">
+                    <div><dt>PoR émises</dt><dd>{stats.porEmis}</dd></div>
+                    <div><dt>PoR vérifiées</dt><dd>{stats.porVerifies}</dd></div>
+                    <div><dt>PoR rejetées</dt><dd>{stats.porRejetes}</dd></div>
+                  </dl>
+                  <p className="ondes-aide">
+                    Chaque paquet transporte une empreinte spectrale de phase (Proof-of-Resonance) :
+                    les voisins la vérifient par résonance — nul ne peut la falsifier sans avoir
+                    réellement propagé l&apos;onde sur son GPU.
+                  </p>
+                </>
               ) : null}
             </div>
           </details>

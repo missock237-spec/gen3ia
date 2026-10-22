@@ -39,7 +39,26 @@ export interface Pic {
  * Micro-paquet d'ondes transmis entre navigateurs de l'essaim (WebRTC
  * data channel) : quelques octets de [phase, fréquence, amplitude] au
  * lieu de matrices de poids. `ttl` évite les boucles de retransmission.
+ *
+ * `por` : attestation Proof-of-Resonance optionnelle (lib/ondes/por.ts)
+ * — l'empreinte spectrale de phase du champ qui a produit ce pic. Les
+ * nœuds voisins la vérifient par résonance (format + plausibilité à
+ * chaque paquet, rejeu du défi en session consensus). Ignorée par les
+ * nœuds plus anciens (rétrocompatibilité totale).
  */
+export interface AttestationPaquet {
+  /** Haché 64 bits (hex 16). */
+  e: string;
+  /** Spectre résumé (32 valeurs quantifiées). */
+  s: number[];
+  /** Énergie moyenne. */
+  g: number;
+  /** Ordre de Kuramoto. */
+  r: number;
+  /** Cellules de la grille. */
+  c: number;
+}
+
 export interface PaquetOnde {
   /** Version du protocole. */
   v: 1;
@@ -59,6 +78,8 @@ export interface PaquetOnde {
   ts: number;
   /** Sauts restants avant abandon (1 = pas de retransmission). */
   ttl: number;
+  /** Attestation Proof-of-Resonance (voir lib/ondes/por.ts). */
+  por?: AttestationPaquet;
 }
 
 /** Niveaux d'effort de réflexion choisis dans le composer. */
