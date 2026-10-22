@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 
@@ -151,7 +152,9 @@ export async function verifierEtDeclencher(
 }
 
 async function sauverBatchState(statePath: string, etat: BatchState): Promise<void> {
-  const tmp = `${statePath}.tmp.${process.pid}`;
+  // Tmp au nom IMPRÉVISIBLE (UUID) : pas de course concurrentielle sur
+  // un nom prédictible (alerte CodeQL js/insecure-temporary-file).
+  const tmp = `${statePath}.${randomUUID()}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(etat), "utf-8");
   await fs.rename(tmp, statePath);
 }

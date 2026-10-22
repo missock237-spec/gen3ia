@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -132,21 +132,30 @@ export function htmlToText(
   }
 
   // Titres conservés comme séparateurs sémantiques, balises restantes
-  // supprimées, entités décodées, espaces normalisés.
+  // supprimées, entités décodées (PASSE UNIQUE : un remplacement par
+  // entité via callback — une chaîne de .replace() séquentiels peut
+  // produire du double-unescaping, alerte CodeQL), espaces normalisés.
+  const ENTITES: Record<string, string> = {
+    nbsp: " ",
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: '"',
+    "#39": "'",
+    "#039": "'",
+    rsquo: "\u2019",
+    laquo: "\u00ab",
+    raquo: "\u00bb",
+  };
   texte = texte
     .replace(/<h([1-6])\b[^>]*>/gi, "\n\n")
     .replace(/<\/h[1-6]>/gi, "\n")
     .replace(/<(p|div|li|tr|br|section|article)\b[^>]*>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#0?39;/g, "'")
-    .replace(/&rsquo;/g, "'")
-    .replace(/&laquo;/g, "\u00ab")
-    .replace(/&raquo;/g, "\u00bb")
+    .replace(/&(nbsp|amp|lt|gt|quot|#039|#39|rsquo|laquo|raquo);/gi, (entite: string) => {
+      const cle = entite.slice(1, -1).toLowerCase();
+      return ENTITES[cle] ?? entite;
+    })
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -254,9 +263,10 @@ export class LocalScraperPipeline {
   }
 
   private async saveHashCache(): Promise<void> {
-    // Écriture ATOMIQUE (tmp unique + rename) : un crash en cours de
-    // sauvegarde ne corrompt jamais le cache précédent.
-    const tmp = `${this.hashCachePath}.tmp.${process.pid}`;
+    // Écriture ATOMIQUE (tmp au nom IMPRÉVISIBLE + rename) : un crash en
+    // cours de sauvegarde ne corrompt jamais le cache précédent, et
+    // aucun concurrent ne peut renommer notre tmp partiel.
+    const tmp = `${this.hashCachePath}.${randomUUID()}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(Array.from(this.processedHashes)), "utf-8");
     await fs.rename(tmp, this.hashCachePath);
   }

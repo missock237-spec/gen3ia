@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { promises as fsp } from "node:fs";
 import { join } from "node:path";
 
@@ -91,7 +92,10 @@ let fileDEtat: Promise<void> = Promise.resolve();
 
 async function ecrireEtatAtomique(statePath: string, state: IngestState): Promise<void> {
   const run = async (): Promise<void> => {
-    const tmp = `${statePath}.tmp.${process.pid}.${Date.now()}`;
+    // Tmp au nom IMPRÉVISIBLE (UUID) + rename : un crash en cours
+    // d'écriture ne corrompt jamais l'état précédent, aucun appelant
+    // concurrent ne peut renommer notre tmp partiel (CodeQL).
+    const tmp = `${statePath}.${randomUUID()}.tmp`;
     const payload = JSON.stringify(
       { ...state, updatedAt: new Date().toISOString() },
       null,
