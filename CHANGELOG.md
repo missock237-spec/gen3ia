@@ -12,6 +12,47 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Non publié]
 
+### Ajouté — Pipeline d'auto-apprentissage découplé (scraping → corpus, 2026-10-23)
+
+- **Architecture découplée (async decoupling)** : un daemon PM2
+  `gen3ia-pipeline` (process de FOND, `max_memory_restart: '1G'`) scrape
+  le web en continu et écrit des documents JSONL en append-only atomique
+  dans `var/pipeline/output.jsonl` ; le serveur principal Next.js
+  (inférence, temps réel) ne fait qu'INGÉRER ce fichier partagé par
+  lots plafonnés — les deux mondes ne partagent que le fichier, aucune
+  requête utilisateur n'est jamais ralentie par la collecte.
+- **Daemon `pipeline/`** : moteur fetch natif par défaut (~60 Mo RAM,
+  zéro Chromium) + moteur Puppeteer OPTIONNEL (import dynamique,
+  dégradation gracieuse) pour les cibles `requiresJs` ; nettoyage DOM
+  (scripts/nav/pubs), rotation User-Agent, rate limit humanisé ±30 %,
+  déduplication SHA-256 persistée, cibles déclaratives
+  `config/targets.json` ; boucle PM2 sans chevauchement, arrêt propre
+  SIGTERM, `--once` pour cron/debug.
+- **Queue & Batching** (`pipeline/src/trainer.ts`) : l'ingestion
+  incrémentale se déclenche au seuil (1 000 docs) OU toutes les 60 min
+  ; reprise immédiate après install/crash (rattrapage) ; aucun
+  déclencheur à vide ; compteur persisté ; échec réseau = retenté au
+  prochain cycle (aucune perte).
+- **Route serveur `/api/cron/knowledge-ingest`** (Bearer `CRON_SECRET`,
+  pattern training-sweep) : consommation du JSONL PAR OFFSET EN OCTETS
+  (lignes complètes uniquement — jamais de ligne à moitié écrite),
+  état `.tmp + rename` réécrit après chaque document (aucune
+  re-ingestion après crash), plafond 60 docs / timebox 240 s,
+  mutex interne (cron + daemon sérialisés), détection de rotation.
+- **Corpus global dans les réponses** : `lib/knowledge/search.ts`
+  fusionne les fragments du corpus (`gen3ia-corpus`) aux résultats
+  personnels/org de chaque utilisateur — dédupliqués, triés par score,
+  fail-soft total, kill-switch opérationnel `PIPELINE_CORPUS_OFF=1` ;
+  les connaissances apprises sont citées par le pont connaissances.
+- **CD** : `deploy.sh` met à jour le daemon après le swap sain du site
+  (npm ci si lockfile changé, build tsc, restart PM2 — NON BLOQUANT,
+  le secret `CRON_SECRET` est synchronisé localement vers
+  `pipeline/.env` chmod 600, jamais commité).
+- **Tests** : 35 tests vitest (protocole JSONL pur, ingestion contre
+  répertoire réel avec ingestion knowledge mockée, fusion corpus avec
+  mocks vector-store) + 9 tests Node natifs du trainer ; suite
+  complète 4 745 verts.
+
 ### Fiabilité — Mise à jour forcée navigateur (plan 4 étapes, 2026-10-23)
 
 - **Manifeste de version écrit à chaque build (étape 2)** :

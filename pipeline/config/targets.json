@@ -1,0 +1,20 @@
+[
+  {
+    "url": "https://fr.wikipedia.org/wiki/Intelligence_artificielle",
+    "customSelector": "#mw-content-text",
+    "selectorsToRemove": [".mw-editsection", ".reflist", ".navbox", ".infobox", "#toc"],
+    "rateLimitMs": 2000
+  },
+  {
+    "url": "https://fr.wikipedia.org/wiki/Apprentissage_automatique",
+    "customSelector": "#mw-content-text",
+    "selectorsToRemove": [".mw-editsection", ".reflist", ".navbox", ".infobox", "#toc"],
+    "rateLimitMs": 2000
+  },
+  {
+    "url": "https://fr.wikipedia.org/wiki/R%C3%A9seaux_de_neurones_artificiels",
+    "customSelector": "#mw-content-text",
+    "selectorsToRemove": [".mw-editsection", ".reflist", ".navbox", ".infobox", "#toc"],
+    "rateLimitMs": 2000
+  }
+]
