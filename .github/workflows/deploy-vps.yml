@@ -1,74 +1,165 @@
-name: Deploy VPS (mode libre)
+name: Déploiement continu VPS
 
-# Déploiement de secours/main : exécute scripts/deploy_free_mode.sh sur le
-# VPS Gen3ia depuis un runner GitHub (utile si l'IP locale est pénalisée
-# par sshd PerSourcePenalties). Le script est idempotent : env
-# GEN3IA_BILLING_ENABLED=false + git pull + build + pm2 reload + sondes.
+# Déploiement automatique de main vers le VPS de production.
+# Pourquoi un build sur le runner GitHub ? Le VPS (2 Go RAM) ne peut pas
+# compiler l'application (`next build` réclame > 3,5 Go de RSS — cf.
+# next.config.ts : le type-check/lint sont déjà déplacés en CI pour la
+# même raison). Le runner (7 Go) build, puis livre le .next au VPS qui
+# applique son swap atomique (cf. deploy/cd-finisher.sh) :
+#   · staging isolé — l'app en ligne continue de servir pendant l'envoi ;
+#   · swap .next + node_modules via cp -al / rsync, version précédente
+#     conservée (.next.old) jusqu'au health check ;
+#   · health check localhost:3000 — en cas d'échec, ROLLBACK automatique ;
+#   · un SHA en échec est blacklisté (jamais de boucle de crash).
+# Les variables NEXT_PUBLIC_* (config Firebase client) sont inlinées au
+# build : elles proviennent du secret DOTENV_PRODUCTION (copie chiffrée
+# du .env.production du VPS). SENTRY_AUTH_TOKEN y est vidé avant le build
+# (next.config.ts : disable: !SENTRY_AUTH_TOKEN → pas de sourcemaps,
+# ~2 Go RSS économisés et build aligné sur la recette validée).
+# L'updater PM2 est suspendu pendant la bascule pour éviter la course
+# avec le poller deploy.sh (relancé par trap, même en cas d'échec ;
+# deploy.sh est lui-même un no-op depuis le 2026-10-21 — plus aucun
+# build VPS possible).
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    name: Build runner → swap atomique VPS
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
     steps:
-      - name: Checkout (script de déploiement à jour)
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Installer la clé SSH du VPS
+      # La config client Firebase (NEXT_PUBLIC_*) est inlinée dans le bundle
+      # au build : sans elle, le site serait livré avec une auth cassée.
+      # Le secret DOTENV_PRODUCTION est la copie exacte du .env.production
+      # du VPS (gitignored). Le token Sentry est vidé pour le build.
+      - name: Restaurer .env.production (NEXT_PUBLIC_* inline au build)
+        run: |
+          printf '%s' "$DOTENV_PRODUCTION" > .env.production
+          sed -i 's/^SENTRY_AUTH_TOKEN=.*/SENTRY_AUTH_TOKEN=/' .env.production
+          echo "Config restaurée : $(grep -c '=' .env.production) variables, Sentry build désactivé."
         env:
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          DOTENV_PRODUCTION: ${{ secrets.DOTENV_PRODUCTION }}
+
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci --include=dev --no-audit --no-fund
+
+      - name: Build production
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: Vérifier le BUILD_ID
+        run: |
+          test -f .next/BUILD_ID || { echo "::error::.next/BUILD_ID absent"; exit 1; }
+          BUILD_ID=$(cat .next/BUILD_ID)
+          echo "BUILD_ID=$BUILD_ID"
+          # Capturé pour la vérification finale : la production doit servir
+          # EXACTEMENT ce build (cf. dernière étape du job).
+          echo "BUILD_ID=$BUILD_ID" >> "$GITHUB_ENV"
+
+      - name: Empaqueter .next (sans cache)
+        run: tar czf /tmp/next-build.tar.gz --exclude='.next/cache' -C .next .
+
+      - name: Configurer la clé SSH VPS
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/vps_key
-          chmod 600 ~/.ssh/vps_key
-          # Vérification de la validité de la clé
-          ssh-keygen -y -f ~/.ssh/vps_key > /dev/null && echo "Clé privée valide"
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vps_deploy
+          chmod 600 ~/.ssh/vps_deploy
+          ssh-keyscan -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Uploader et exécuter le script de déploiement
-        env:
-          TERM: dumb
+      - name: Envoyer build + finisher vers le VPS (retry PerSourcePenalties)
         run: |
-          set -eo pipefail
-          # Keepalive SSH : le build next dure plusieurs minutes ; sans
-          # ServerAliveInterval, une session sans trafic sortant peut être
-          # coupée (« Broken pipe ») par un NAT/pare-feu intermédiaire.
-          # ATTENTION aux drapeaux de port : scp = -P (majuscule), ssh = -p.
-          # sshd PerSourcePenalties peut bloquer l'IP du runner quelques
-          # minutes : boucles de RETRY avec délais LONGS + pipefail (un
-          # `| tail` masque sinon le code d'échec — run 39288884878).
-          # NOTE : AUCUN sondage nc/brut avant la connexion — une ligne
-          # invalide envoyée à sshd (« Invalid SSH identification string »)
-          # nourrit elle-même les pénalités PerSourcePenalties.
-          COMMON="-i ~/.ssh/vps_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=20 -o ServerAliveCountMax=30 -o TCPKeepAlive=yes"
+          ok=0
+          for i in 1 2 3 4; do
+            if scp -o ServerAliveInterval=30 -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+                 /tmp/next-build.tar.gz \
+                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/next-build.tar.gz" \
+            && scp -o ServerAliveInterval=30 -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+                 deploy/cd-finisher.sh \
+                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/cd-finisher.sh"; then
+              ok=1; break
+            fi
+            echo "Tentative $i/4 échouée (réseau / PerSourcePenalties ?) — nouvel essai dans 60 s…"
+            sleep 60
+          done
+          [ "$ok" = "1" ] || { echo "::error::Transfert SCP impossible après 4 tentatives"; exit 1; }
 
-          upload_ok=false
+      - name: Swap atomique + health check (rollback auto, retry raisonné)
+        run: |
+          ok=0
+          for i in 1 2 3 4; do
+            sortie=$(ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+                 "bash /tmp/cd-finisher.sh ${GITHUB_SHA}" 2>&1) && code=0 || code=$?
+            echo "$sortie"
+            case $code in
+              0)
+                ok=1; break ;;
+              3)
+                echo "::error::SHA ${GITHUB_SHA} est blacklisté sur le VPS (échec antérieur) — abandon sans nouvelle tentative.";
+                exit 1 ;;
+              2)
+                echo "::error::Échec du health check — ROLLBACK appliqué côté VPS, SHA blacklisté. Retenter le même build serait une boucle de crash : abandon.";
+                exit 1 ;;
+              *)
+                echo "Tentative $i/4 échouée (code $code — SSH/réseau transitoire ?) — nouvel essai dans 60 s…";
+                sleep 60 ;;
+            esac
+          done
+          [ "$ok" = "1" ] || { echo "::error::Application du déploiement impossible après 4 tentatives"; exit 1; }
+
+      # VÉRIFICATION DE BOUT EN BOUT (durcissement 2026-10-22) : le health
+      # check interne prouve que l'app répond — pas qu'elle sert LE build
+      # livré par CE run. On compare l'empreinte /api/deploy-info (lue à la
+      # requête depuis .next/BUILD_ID, cf. lib/deploy/build-id.ts) au BUILD_ID
+      # compilé ci-dessus : un écart = workflow ROUGE, plus jamais un
+      # déploiement « vert mais muet ».
+      # Mise à jour forcée (plan 4 étapes, 2026-10-23) : /version.json
+      # (manifeste statique copié dans public/ par cd-finisher.sh) doit
+      # servir EXACTEMENT la même empreinte — c'est lui que les navigateurs
+      # sondent pour se recharger tout seuls.
+      - name: Vérifier que la production sert ce build exact
+        run: |
           for i in 1 2 3 4 5; do
-            echo "=== Tentative d'upload $i/5 ==="
-            if scp -v -P 22022 $COMMON scripts/deploy_free_mode.sh root@209.74.86.62:/tmp/deploy_free_mode.sh 2>&1 | tail -8; then
-              upload_ok=true
-              break
+            reponse=$(ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+                 "curl -fsS -m 15 http://127.0.0.1:3000/api/deploy-info && echo && curl -fsS -m 15 http://127.0.0.1:3000/version.json" 2>/dev/null || true)
+            # Le manifeste version.json est indenté (JSON.stringify p=2) :
+            # « "version": "…" » avec espace après le deux-points — on
+            # compacte AVANT le grep (correction 2026-10-23 : le grep
+            # strict ne trouvait rien sur une réponse pourtant correcte,
+            # run #34 rouge à tort alors que la production servait bien
+            # le bon build).
+            compacte=$(echo "$reponse" | tr -d ' \n\r')
+            empreinte=$(echo "$compacte" | grep -o '"deploymentId":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
+            manifeste=$(echo "$compacte" | grep -o '"version":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
+            if [ "$empreinte" = "$BUILD_ID" ] && [ "$manifeste" = "$BUILD_ID" ]; then
+              echo "Vérifié : la production sert le build $BUILD_ID (deploy-info + version.json alignés)."
+              exit 0
             fi
-            echo "Upload $i échoué (bannière/penalité sshd ?) — attente 120 s"
-            sleep 120
+            echo "Tentative $i/5 : deploy-info='$empreinte' version.json='$manifeste' ≠ attendu '$BUILD_ID' — nouvelle tentative dans 10 s…"
+            sleep 10
           done
-          if [ "$upload_ok" != true ]; then
-            echo "##[error]Upload impossible après 5 tentatives"
-            exit 1
-          fi
+          echo "::error::La production ne sert PAS le build livré ($BUILD_ID) — déploiement à investiguer."
+          exit 1
 
-          deploy_ok=false
-          for i in 1 2 3; do
-            echo "=== Tentative de déploiement $i/3 ==="
-            if ssh -v -p 22022 $COMMON root@209.74.86.62 "bash -lc 'bash /tmp/deploy_free_mode.sh'" 2>&1 | tail -80; then
-              deploy_ok=true
-              break
-            fi
-            echo "Déploiement $i échoué — attente 120 s"
-            sleep 120
-          done
-          if [ "$deploy_ok" != true ]; then
-            echo "##[error]Déploiement impossible après 3 tentatives"
-            exit 1
-          fi
+      - name: Nettoyage runner
+        if: always()
+        run: rm -f ~/.ssh/vps_deploy /tmp/next-build.tar.gz

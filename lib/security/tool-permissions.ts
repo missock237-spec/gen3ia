@@ -32,7 +32,9 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "ads.read": { name: "ads.read", risk: "read", requiredPermissions: ["tool.read", "ads.read", "network.read"], network: true, externalApp: true },
   "ads.publish": { name: "ads.publish", risk: "external", requiredPermissions: ["tool.external", "tool.write", "ads.write", "network.write"], network: true, externalApp: true },
   "github.create_repository": { name: "github.create_repository", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
-  "voice.speak": { name: "voice.speak", risk: "write", requiredPermissions: ["tool.write", "network.read"], network: true },
+  // voice.speak : synthèse audio NEURONALE LOCALE (audit multimodal) —
+  // plus aucun appel réseau (l'ancien moteur ElevenLabs a été supprimé).
+  "voice.speak": { name: "voice.speak", risk: "write", requiredPermissions: ["tool.write"] },
   "voice.list": { name: "voice.list", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "phone.call": { name: "phone.call", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   "notion.search": { name: "notion.search", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },

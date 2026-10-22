@@ -60,7 +60,9 @@ function request(url: string, init?: RequestInit) {
 
 beforeEach(() => {
   mockedProjectOk.mockReset().mockResolvedValue(false);
-  mockedRequireUser.mockReset().mockResolvedValue({ uid: "u1" });
+  // SYSTÈME AGENT RÉSERVÉ (demande n°5) : la surface /api/agents exige le
+  // privilège admin — les tests exercés ici empruntent le chemin admin.
+  mockedRequireUser.mockReset().mockResolvedValue({ uid: "u1", claims: { admin: true } });
   mockedListForUser.mockReset().mockResolvedValue([]);
   mockedCreateRecord.mockReset().mockResolvedValue(agentSummary());
   mockedGetForUser.mockReset().mockResolvedValue(null);
@@ -80,6 +82,35 @@ describe("GET /api/agents — liste union", () => {
     mockedProjectOk.mockResolvedValue(true);
     await GET(request("/api/agents?projectId=p9"));
     expect(mockedListForUser).toHaveBeenCalledWith("u1", "p9");
+  });
+});
+
+// RÉOUVERTURE (demande propriétaire — « les utilisateurs n'ont plus accès
+// au projet ») : GET/POST de cette route sont ouverts à tout utilisateur
+// CONNECTÉ (requireUser) — le provisionnement « Gen IA » du workshop
+// /studio/agents doit fonctionner. L'orchestration (run/generate/plan,
+// PATCH/DELETE) reste verrouillée par requireAgentSystemAccess dans ses
+// propres routes.
+describe("GET/POST /api/agents — ouverts aux utilisateurs connectés (workshop Gen IA)", () => {
+  it("GET : liste accessible à un utilisateur standard (sans claim admin)", async () => {
+    mockedRequireUser.mockResolvedValue({ uid: "u1", claims: {} });
+    const response = await GET(request("/api/agents"));
+    expect(response.status).toBe(200);
+    expect(mockedListForUser).toHaveBeenCalledWith("u1", undefined);
+  });
+
+  it("GET : accessible aussi sans claims (session cookie)", async () => {
+    mockedRequireUser.mockResolvedValue({ uid: "u1" });
+    const response = await GET(request("/api/agents"));
+    expect(response.status).toBe(200);
+    expect(mockedListForUser).toHaveBeenCalled();
+  });
+
+  it("POST : provisionnement possible par un utilisateur standard (Gen IA)", async () => {
+    mockedRequireUser.mockResolvedValue({ uid: "u1", claims: {} });
+    const response = await POST(request("/api/agents", { method: "POST", body: JSON.stringify({ name: "Gen IA", description: "agent universel", type: "universal" }), headers: { "content-type": "application/json" } }));
+    expect(response.status).toBe(201);
+    expect(mockedCreateRecord).toHaveBeenCalledTimes(1);
   });
 });
 

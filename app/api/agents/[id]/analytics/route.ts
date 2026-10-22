@@ -3,6 +3,9 @@ import { z } from "zod";
 
 import { protectRoute } from "@/lib/security/route-guard";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
+// SYSTÈME AGENT RÉSERVÉ (demande n°5) : analytique de gestion fermée aux
+// utilisateurs standard (403 « réservé au système IA ») — admin conservé.
+import { agentSystemReservedBody } from "@/lib/security/agent-system-access";
 import { getAgentById, getAgentForUser } from "@/lib/agents/repository";
 import { getAgentAnalytics } from "@/lib/agents/analytics";
 
@@ -37,6 +40,13 @@ const QuerySchema = z.object({
 export async function GET(request: NextRequest, context: RouteContext) {
   const guard = await protectRoute(request, { key: "agents-analytics-read" });
   if (!guard.ok) return guard.response;
+
+  // SYSTÈME AGENT RÉSERVÉ : protectRoute authentifie (session/tokens), la
+  // décision agent-système est prise ICI (claims portés par le contexte) —
+  // admin conservé, utilisateur standard → 403 explicite.
+  if (guard.context.claims?.admin !== true) {
+    return NextResponse.json(agentSystemReservedBody(), { status: 403 });
+  }
 
   try {
     const { id: agentId } = await context.params;

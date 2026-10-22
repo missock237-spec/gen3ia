@@ -1,5 +1,6 @@
 import pptxgen from "pptxgenjs";
 import type { DocumentPlan } from "../types";
+import { chargerImageBloc } from "./image-embed";
 
 /**
  * AI SLIDES — modèles professionnels appliqués automatiquement.
@@ -281,6 +282,43 @@ export async function generatePptx(
           y += 2.8;
         }
 
+        break;
+      }
+
+      case "image": {
+        // Audit multimodal : le bloc image était avalisé puis perdu — il est
+        // désormais réellement rendu (addImage). Fail-soft : note visible si
+        // la source est indisponible, le diaporama part toujours.
+        const image = await chargerImageBloc(block);
+        if (image) {
+          if (y > 2.6) {
+            newSlide();
+          }
+          // Coordonnées en pouces (LAYOUT_WIDE = 13,33 × 7,5) — image bornée
+          // à 8 × 4,5 po, centrée horizontalement, ratio préservé.
+          const echelle = Math.min(8 / image.largeurPx, 4.5 / image.hauteurPx);
+          const largeur = image.largeurPx * echelle;
+          const hauteur = image.hauteurPx * echelle;
+          slide.addImage({
+            data: `data:${image.mime};base64,${image.buffer.toString("base64")}`,
+            x: (13.33 - largeur) / 2,
+            y: y + 0.15,
+            w: largeur,
+            h: hauteur,
+          });
+          y += hauteur + 0.4;
+        } else {
+          slide.addText("[Image indisponible : source inaccessible ou format non pris en charge]", {
+            x: 1,
+            y,
+            w: 10.8,
+            h: 0.8,
+            fontSize: 12,
+            italic: true,
+            color: template.textColor,
+          });
+          y += 1;
+        }
         break;
       }
     }

@@ -71,7 +71,9 @@ const SUCCESS_STATE = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockConstructorCalls.length = 0;
-  mockedRequireUser.mockResolvedValue({ uid: "user-1" } as never);
+  // SYSTÈME AGENT RÉSERVÉ (demande n°5) : POST /api/agents/run exige le
+  // privilège admin — les tests exercés ici empruntent le chemin admin.
+  mockedRequireUser.mockResolvedValue({ uid: "user-1", claims: { admin: true } } as never);
   mockedConfigured.mockReturnValue(true);
   mockedPublish.mockResolvedValue({ ok: true, mode: "r2-queue", messageId: "msg-1" });
   mockedCreate.mockResolvedValue(undefined);

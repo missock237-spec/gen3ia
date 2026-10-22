@@ -79,6 +79,7 @@ vi.mock("@/lib/storage/r2", () => ({
 
 vi.mock("@/lib/chat/vector-index", () => ({
   indexConversationMessage: vi.fn(async () => true),
+  purgeConversationVectors: vi.fn(async () => true),
 }));
 
 import { indexConversationMessage } from "@/lib/chat/vector-index";

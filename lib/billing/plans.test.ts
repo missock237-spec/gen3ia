@@ -26,18 +26,18 @@ describe("grille tarifaire (prix boutique Chariow)", () => {
     expect(PLAN_ORDER).toEqual(["gratuit", "pro", "entreprise", "modele-sur-mesure"]);
   });
 
-  it("facture les prix XAF de la grille (0 / 9 750 / 328 000 / 3 280 000 FCFA)", () => {
+  it("facture les prix XAF de la boutique (0 / 9 750 / 325 000 / 995 000 FCFA)", () => {
     expect(PLANS.gratuit.priceXaf).toBe(0);
     expect(PLANS.pro.priceXaf).toBe(9750);
-    expect(PLANS.entreprise.priceXaf).toBe(328000);
-    expect(PLANS["modele-sur-mesure"].priceXaf).toBe(3280000);
+    expect(PLANS.entreprise.priceXaf).toBe(325000);
+    expect(PLANS["modele-sur-mesure"].priceXaf).toBe(995000);
   });
 
-  it("correspond aux tarifs EUR annoncés (0 / 15 / 500 / 5000 €)", () => {
+  it("correspond aux tarifs boutique (0 / 15 / 495 / 1 517 €)", () => {
     expect(PLANS.gratuit.priceEur).toBe(0);
     expect(PLANS.pro.priceEur).toBe(15);
-    expect(PLANS.entreprise.priceEur).toBe(500);
-    expect(PLANS["modele-sur-mesure"].priceEur).toBe(5000);
+    expect(PLANS.entreprise.priceEur).toBe(495);
+    expect(PLANS["modele-sur-mesure"].priceEur).toBe(1517);
   });
 
   it("calibre la périodicité : gratuit libre, mensuels 30 jours, sur-mesure sans expiration", () => {
@@ -104,15 +104,22 @@ describe("hiérarchie des fonctionnalités (entitlements)", () => {
 });
 
 describe("résolution des produits Chariow", () => {
-  it("tombe sur le produit boutique déjà créé pour le plan Pro", () => {
+  it("tombe sur les trois produits boutique publiés pour les offres payantes", () => {
     delete process.env.CHARIOW_PLAN_PRO_PRODUCT_ID;
+    delete process.env.CHARIOW_PLAN_ENTREPRISE_PRODUCT_ID;
+    delete process.env.CHARIOW_PLAN_SUR_MESURE_PRODUCT_ID;
     expect(resolvePlanProductId("pro")).toBe("prd_svqonju7");
+    expect(resolvePlanProductId("entreprise")).toBe("prd_v76f5kjl");
+    expect(resolvePlanProductId("modele-sur-mesure")).toBe("prd_646qpmge");
   });
 
-  it("laisse l'offre Entreprise non achetable tant que son produit n'est pas configuré", () => {
+  it("rend les trois offres payantes achetables (produits boutique branchés)", () => {
+    delete process.env.CHARIOW_PLAN_PRO_PRODUCT_ID;
     delete process.env.CHARIOW_PLAN_ENTREPRISE_PRODUCT_ID;
-    expect(resolvePlanProductId("entreprise")).toBeNull();
-    expect(toPublicPlan("entreprise", null).purchasable).toBe(false);
+    delete process.env.CHARIOW_PLAN_SUR_MESURE_PRODUCT_ID;
+    expect(toPublicPlan("pro", null).purchasable).toBe(true);
+    expect(toPublicPlan("entreprise", null).purchasable).toBe(true);
+    expect(toPublicPlan("modele-sur-mesure", null).purchasable).toBe(true);
   });
 
   it("privilégie la variable d'environnement sur le produit par défaut", () => {
@@ -153,6 +160,6 @@ describe("visites de paiement rattachées à la plateforme", () => {
     expect(card.current).toBe(true);
     const other = toPublicPlan("entreprise", "pro");
     expect(other.current).toBe(false);
-    expect(other.purchasable).toBe(false);
+    expect(other.purchasable).toBe(true);
   });
 });

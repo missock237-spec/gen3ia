@@ -18,12 +18,20 @@ export const maxDuration = 300;
 
 type RouteContext = { params: Promise<{ conversationId: string }> };
 
+// Contrat d'attachments ALIGNÉ sur messages/stream/route.ts : sans ces
+// champs, zod 4 strippait fileId/fileKind/charCount/rowCount au repli
+// non-stream — le contenu importé (loadImportedFilesContext) devenait
+// introuvable alors que le flux NDJSON le conservait.
 const AttachmentSchema = z.object({
   filename: z.string().trim().min(1).max(200),
   path: z.string().trim().max(400).optional(),
   url: z.string().trim().max(2000).optional(),
   contentType: z.string().trim().max(120).optional(),
   sizeBytes: z.number().int().nonnegative().max(ATTACHMENT_MAX_FILE_BYTES).optional(),
+  fileId: z.string().trim().max(128).optional(),
+  fileKind: z.string().trim().max(40).optional(),
+  charCount: z.number().int().nonnegative().max(100_000_000).optional(),
+  rowCount: z.number().int().nonnegative().max(10_000_000).optional(),
 });
 
 const ConnectorSchema = z

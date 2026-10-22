@@ -34,9 +34,12 @@ import * as React from "react";
 
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import CarteAutoApprentissage from "@/components/chat/auto-apprentissage-carte";
+import { authFetch } from "@/lib/firebase/auth-client";
 import { safeClientTimezone } from "@/lib/domain/conversations/stream-client";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
+import { useVoiceInput } from "./use-voice-input";
+import { cancelSpeech, speakFr } from "./voice-speak";
 import "./nova-chat.css";
 
 /* ================= Configuration ================= */
@@ -189,6 +192,54 @@ interface NovaPiece {
   type: string;
   fichier: File;
   apercu: string | null;
+}
+
+/**
+ * Import RÉEL d'un fichier téléversé : POST /api/files/import (canal R2
+ * { path }) — le serveur convertit le contenu et le persiste en base
+ * (collection `importedFiles`), puis renvoie le fileId référencé par le
+ * tour. Le contenu converti atteint ainsi le prompt du moteur.
+ * HONNÊTETÉ : en cas d'échec (réseau, format non convertible), l'attachment
+ * part SANS fileId — le tour continue (jamais bloquant, l'IA répondra sans
+ * le contenu converti) et le filet de compatibilité du moteur relira le
+ * fichier par son chemin R2.
+ */
+async function importerFichierImporte(fichier: { path: string; filename: string; contentType: string; sizeBytes: number }): Promise<{
+  fileId?: string;
+  fileKind?: string;
+  charCount?: number;
+  rowCount?: number;
+}> {
+  if (!fichier.path) {
+    console.warn("[nova-chat] import impossible : clé de stockage absente pour", fichier.filename);
+    return {};
+  }
+  try {
+    const response = await authFetch("/api/files/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        path: fichier.path,
+        filename: fichier.filename,
+        contentType: fichier.contentType || "application/octet-stream",
+        sizeBytes: fichier.sizeBytes,
+      }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = (await response.json()) as {
+      file?: { id?: string; kind?: string; charCount?: number; rowCount?: number };
+    };
+    if (!data.file?.id) throw new Error("réponse sans fileId");
+    return {
+      fileId: data.file.id,
+      ...(data.file.kind ? { fileKind: data.file.kind } : {}),
+      ...(data.file.charCount !== undefined ? { charCount: data.file.charCount } : {}),
+      ...(data.file.rowCount !== undefined ? { rowCount: data.file.rowCount } : {}),
+    };
+  } catch (erreurImport) {
+    console.warn("[nova-chat] import du fichier impossible (envoi sans contenu converti) :", erreurImport);
+    return {};
+  }
 }
 
 /** Application externe connectée (connecteur Composio vérifié). */
@@ -459,6 +510,8 @@ export default function NovaChat() {
   const [toast, setToast] = React.useState<{ texte: string; cle: number } | null>(null);
   const [charge, setCharge] = React.useState(false);
   const [dropActif, setDropActif] = React.useState(false);
+  /* Chat voix : indicateur « lecture vocale en cours » de la réponse IA. */
+  const [lectureVocale, setLectureVocale] = React.useState(false);
 
   const convsRef = React.useRef<NovaConversation[]>([]);
   const activeIdRef = React.useRef<string | null>(null);
@@ -466,6 +519,9 @@ export default function NovaChat() {
   const outilsRef = React.useRef<Set<string>>(new Set());
   const rechercheWebRef = React.useRef(false);
   const controleurRef = React.useRef<AbortController | null>(null);
+  /* Chat voix : le tour courant a-t-il été initié par la voix (dictée) ?
+   * Consumé à la réponse (événement done → TTS) puis réarmé. */
+  const dernierTourVocalRef = React.useRef(false);
   const saisieRef = React.useRef<HTMLTextAreaElement | null>(null);
   const messagesRef = React.useRef<HTMLDivElement | null>(null);
   const procheBasRef = React.useRef(true);
@@ -830,20 +886,35 @@ export default function NovaChat() {
         }
       }
 
-      // 2) Pièces jointes : téléversement réel, puis descripteur du tour.
-      let piecesApi: Array<{ filename: string; path: string; contentType: string; sizeBytes: number }> = [];
+      // 2) Pièces jointes : téléversement réel, import RÉEL (/api/files/import
+      //    — fileId du contenu converti stocké en base, injecté au prompt du
+      //    moteur), puis descripteur du tour. Échec d'import : attachment sans
+      //    fileId, envoi maintenu.
+      let piecesApi: Array<{
+        filename: string;
+        path: string;
+        contentType: string;
+        sizeBytes: number;
+        fileId?: string;
+        fileKind?: string;
+        charCount?: number;
+        rowCount?: number;
+      }> = [];
       if (pieces.length > 0) {
         setStatut("Téléversement des pièces jointes…");
         const resultat = await uploadPermanentFiles(pieces.map((p) => p.fichier));
         if (resultat.uploaded.length === 0) {
           throw new Error(resultat.failed[0]?.error || "Le téléversement des fichiers a échoué.");
         }
-        piecesApi = resultat.uploaded.map((u) => ({
-          filename: u.filename,
-          path: u.path,
-          contentType: u.contentType,
-          sizeBytes: u.sizeBytes,
-        }));
+        piecesApi = await Promise.all(
+          resultat.uploaded.map(async (u) => ({
+            filename: u.filename,
+            path: u.path,
+            contentType: u.contentType,
+            sizeBytes: u.sizeBytes,
+            ...(await importerFichierImporte(u)),
+          })),
+        );
       }
 
       // 3) Flux NDJSON du tour.
@@ -946,6 +1017,17 @@ export default function NovaChat() {
                   ),
                 );
               }
+              /* Chat voix : réponse LUE uniquement si le tour a été dicté —
+               * les tours écrits normaux restent silencieux (pas de TTS intrusif). */
+              if (dernierTourVocalRef.current) {
+                dernierTourVocalRef.current = false;
+                const texteVoix = final.content || contenu;
+                if (texteVoix.trim()) {
+                  setLectureVocale(true);
+                  const parle = speakFr(texteVoix, { onFin: () => setLectureVocale(false) });
+                  if (!parle) setLectureVocale(false); // synthèse indisponible : reste textuel
+                }
+              }
               break;
             }
             case "error":
@@ -1007,6 +1089,7 @@ export default function NovaChat() {
         setEnCours(false);
         setStatut("Prête — demandez-lui tout");
         sauvegarder();
+        dernierTourVocalRef.current = false; // tour terminé : réarmement voix
       }
     },
     [descendre, empilerDelta, majConvs, majMessage, sauvegarder, terminerEcriture],
@@ -1078,6 +1161,19 @@ export default function NovaChat() {
     [afficherToast, conversationActive, descendre, fichiers, lancerGeneration, majConvs, nouvelleConversation, saisie, sauvegarder, viderFichiers],
   );
 
+  /* ---- Chat voix (envoi sans prompt écrit) ----
+   * Envoi vide + bouton d'envoi → le bouton devient un micro : le transcript
+   * final est injecté puis ENVOYÉ automatiquement, et la réponse IA est lue
+   * (voir événement done). Re-clic pendant l'écoute = annulation. */
+  const saisieVocale = useVoiceInput({
+    onTranscript: (texte) => {
+      dernierTourVocalRef.current = true;
+      setSaisie(texte); // injection dans l'état de saisie
+      void envoyer(texte); // envoi automatique sans seconde action
+    },
+    onErreur: (message) => afficherToast(message),
+  });
+
   /* ---- Régénération : renvoie le dernier message utilisateur ---- */
   const regenerer = React.useCallback(async () => {
     const conv = conversationActive();
@@ -1134,17 +1230,35 @@ export default function NovaChat() {
   );
 
   const supprimerConversation = React.useCallback(
-    (id: string) => {
+    async (id: string) => {
       const conv = convsRef.current.find((c) => c.id === id);
       if (id === activeIdRef.current) controleurRef.current?.abort();
-      const restantes = convsRef.current.filter((c) => c.id !== id);
-      if (conv?.serverId) {
-        void fetch(`/api/workspace/conversations/${conv.serverId}`, { method: "DELETE" }).catch(() => undefined);
-      }
-      if (activeIdRef.current === id) majActiveId(restantes[0]?.id ?? null);
+      const avant = convsRef.current.slice();
+      const restantes = avant.filter((c) => c.id !== id);
+      const actifAvant = activeIdRef.current;
+      if (actifAvant === id) majActiveId(restantes[0]?.id ?? null);
       majConvs(restantes);
       sauvegarder();
-      afficherToast("Conversation supprimée");
+      if (!conv?.serverId) {
+        afficherToast("Conversation supprimée");
+        return;
+      }
+      try {
+        // Suppression serveur réellement attendue : sans ce contrôle, la conversation « ressusciterait »
+        // dans /chat et /workspace alors que l'interface locale prétend l'avoir supprimée.
+        const response = await authFetch(`/api/workspace/conversations/${conv.serverId}`, { method: "DELETE" });
+        if (!response.ok) throw new Error(`suppression refusée (HTTP ${response.status})`);
+        afficherToast("Conversation supprimée");
+      } catch {
+        // Échec serveur (session expirée, quota, R2 indisponible) : on remet la conversation dans la
+        // liste plutôt que de laisser croire à une suppression qui n'a pas eu lieu.
+        if (!convsRef.current.some((c) => c.id === id)) {
+          majConvs(avant);
+          if (actifAvant === id) majActiveId(actifAvant);
+          sauvegarder();
+        }
+        afficherToast("Suppression impossible — réessaie plus tard.");
+      }
     },
     [afficherToast, majActiveId, majConvs, sauvegarder],
   );
@@ -1324,7 +1438,11 @@ export default function NovaChat() {
       : null;
 
   const longueur = saisie.length;
-  const envoiDesactive = enCours ? false : ((!saisie.trim() && fichiers.length === 0) || longueur > CFG.maxCaracteres);
+  /* Chat voix : envoi vide + voix supportée → le bouton devient un micro
+   * (dicter puis envoyer automatiquement) au lieu d'être désactivé. */
+  const envoiVide = !saisie.trim() && fichiers.length === 0;
+  const voixEcoute = saisieVocale.etat === "ecoute";
+  const envoiDesactive = enCours ? false : ((envoiVide && !saisieVocale.supported) || longueur > CFG.maxCaracteres);
 
   return (
     <div className="nova">
@@ -1549,11 +1667,34 @@ export default function NovaChat() {
                 ) : null}
               </div>
 
+              {/* Chat voix : lecture vocale de la réponse (tours dictés uniquement). */}
+              {lectureVocale ? (
+                <div className="nova-lecture-vocale">
+                  <span className="nova-point-lecture" aria-hidden="true" />
+                  <span>Lecture vocale en cours…</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cancelSpeech();
+                      setLectureVocale(false);
+                    }}
+                  >
+                    Couper
+                  </button>
+                </div>
+              ) : null}
+
               <textarea
                 ref={saisieRef}
                 className="nova-saisie"
                 rows={1}
-                placeholder="Demandez tout à Gen3ia… (↑ pour rappeler le dernier message)"
+                placeholder={
+                  voixEcoute
+                    ? saisieVocale.texteInterim
+                      ? `Écoute en cours… « ${saisieVocale.texteInterim} »`
+                      : "Écoute en cours… parlez maintenant"
+                    : "Demandez tout à Gen3ia… (↑ pour rappeler le dernier message)"
+                }
                 aria-label="Message"
                 value={saisie}
                 onChange={(e) => {
@@ -1737,20 +1878,46 @@ export default function NovaChat() {
                     <span className={`nova-compteur${longueur > CFG.maxCaracteres ? " alerte" : ""}`}>{longueur}/{CFG.maxCaracteres}</span>
                   ) : null}
 
-                  {/* 1) ENVOI DU PROMPT (⇄ Arrêter) */}
+                  {/* 1) ENVOI DU PROMPT (⇄ Arrêter) — chat voix : envoi vide +
+                      clic = dictée (transcript envoyé automatiquement) ;
+                      re-clic pendant l'écoute = annulation. */}
                   <button
                     type="button"
-                    className={`nova-envoi${enCours ? " stop" : ""}`}
-                    aria-label={enCours ? "Arrêter la génération" : "Envoyer"}
-                    title={enCours ? "Arrêter" : "Envoyer (Entrée)"}
+                    className={`nova-envoi${enCours ? " stop" : ""}${voixEcoute ? " voix-active" : ""}`}
+                    aria-label={
+                      enCours
+                        ? "Arrêter la génération"
+                        : voixEcoute
+                          ? "Annuler l'écoute vocale"
+                          : envoiVide
+                            ? saisieVocale.supported
+                              ? "Chat voix — dicter votre message"
+                              : "Reconnaissance vocale non supportée par ce navigateur"
+                            : "Envoyer"
+                    }
+                    title={
+                      enCours
+                        ? "Arrêter"
+                        : voixEcoute
+                          ? "Annuler l'écoute vocale"
+                          : envoiVide
+                            ? saisieVocale.supported
+                              ? "Chat voix — dictez votre message (re-clic pour annuler)"
+                              : "Reconnaissance vocale non supportée par ce navigateur"
+                            : "Envoyer (Entrée)"
+                    }
                     disabled={envoiDesactive}
                     onClick={() => {
                       if (controleurRef.current) controleurRef.current.abort();
+                      else if (voixEcoute) saisieVocale.annuler();
+                      else if (envoiVide) saisieVocale.demarrer();
                       else void envoyer();
                     }}
                   >
                     {enCours ? (
                       <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                    ) : voixEcoute ? (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10a7 7 0 0 0 14 0M12 19v3" /></svg>
                     ) : (
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
                     )}

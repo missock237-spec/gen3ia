@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { readBuildId } from "@/lib/deploy/build-id";
 import { getAdminApp } from "@/lib/firebase/admin";
 import { pingR2 } from "@/lib/storage/r2";
 import { tickQueueConfigured } from "@/lib/queue/tick-queue";
@@ -28,12 +29,17 @@ import { tickQueueConfigured } from "@/lib/queue/tick-queue";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/** Empreinte de version — même chaîne de repli que /api/deploy-info. */
+/** Empreinte de version — même chaîne que /api/deploy-info : le BUILD_ID
+ * effectivement servi d'abord (change à CHAQUE déploiement VPS), puis les
+ * replis historiques. DURCISSEMENT 2026-10-22 : l'ancienne chaîne Vercel
+ * seule retombait sur « local-dev » constant sur le VPS auto-hébergé — le
+ * smoke test du runbook ne pouvait jamais vérifier la version en ligne. */
 function resolveVersion(): string {
   return (
+    readBuildId() ||
+    process.env.GEN3IA_RELEASE ||
     process.env.VERCEL_DEPLOYMENT_ID ||
     process.env.VERCEL_GIT_COMMIT_SHA ||
-    process.env.GEN3IA_RELEASE ||
     "local-dev"
   );
 }

@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 
+// PLANIFICATIONS — DEMANDE PROPRIÉTAIRE (restauration) : ouvertes à
+// TOUS LES COMPTES (requireUser). Le scoping propriétaire (user.uid) est
+// assuré par listSchedules/getSchedule/triggerScheduleNow(...) — un
+// utilisateur ne voit et ne déclenche que SES planifications.
 import { requireUser } from "@/lib/security/authenticated-request";
+import { errorStatus } from "@/lib/security/http-errors";
 import { listScheduleRuns } from "@/lib/agents/scheduler";
 
 interface RouteContext {

@@ -4,6 +4,7 @@ import {
   hubDatasetDetailSchema,
   hubDatasetSummarySchema,
   hubFetchJson,
+  HubError,
   HUB_DATASET_FILE_RE,
   truncatePreviewRows,
   type HubDatasetDetail,
@@ -12,17 +13,21 @@ import {
 } from "./common";
 
 /* ------------------------------------------------------------------ */
-/* Connecteur Hugging Face (v1.1)                                       */
+/* Connecteur Hugging Face (v1.2)                                       */
 /*                                                                    */
 /* Sources RÉELLES :                                                   */
 /*  - https://huggingface.co/api/datasets?search=…   (recherche)       */
 /*  - https://huggingface.co/api/datasets/{id}       (fichiers, card)   */
+/*  - https://huggingface.co/api/datasets/{id}/tree/main?recursive=true */
+/*      → parcours du dépôt avec TAILLE de chaque fichier               */
+/*      (ex. data/train-00000-of-00001-<hash>.parquet — format          */
+/*      majoritaire des datasets HF, parsé en JS pur côté ingesteur)    */
 /*  - https://datasets-server.huggingface.co/info?dataset=…            */
 /*      → splits + num_examples (déclarés par le hub)                   */
 /*  - https://datasets-server.huggingface.co/first-rows?…              */
 /*      → échantillon de lignes réelles                                */
-/* Ce que l'API ne fournit pas reste null + note (taille exacte des     */
-/* fichiers : non exposée par l'API de listing).                      */
+/* Ce que l'API ne fournit pas reste null + note (échec de l'API tree   */
+/* → tailles inconnues, plafond appliqué au téléchargement).          */
 /* ------------------------------------------------------------------ */
 
 const HF_API = "https://huggingface.co";
@@ -109,6 +114,14 @@ interface HfDatasetInfo {
   };
 }
 
+/** Entrée de l'API tree (parcours récursif du dépôt) : les fichiers y
+ *  portent leur taille exacte — contrairement à `siblings`. */
+interface HfTreeEntry {
+  type?: string;
+  path?: string;
+  size?: number;
+}
+
 interface DsServerSplit {
   name?: unknown;
   num_examples?: unknown;
@@ -121,15 +134,36 @@ interface DsServerConfig {
 }
 
 interface DsServerInfo {
-  dataset_info?: {
-    configs?: DsServerConfig[];
-  };
+  dataset_info?:
+    | { configs?: DsServerConfig[] }
+    | { splits?: DsServerSplit[] | Record<string, { num_examples?: unknown }> };
   error?: unknown;
 }
 
 interface DsServerFirstRows {
   features?: Array<{ name?: unknown }>;
   rows?: Array<{ row?: Record<string, unknown> }>;
+}
+
+/** Choisit la config d'un dataset depuis /info — gère les DEUX formes de la
+ *  réponse : { configs: […] } (multi-configs) ou directement { splits: … }
+ *  (config unique), splits étant un tableau ou un dictionnaire. */
+function choisirConfigDsServer(info: DsServerInfo): DsServerConfig | null {
+  const infoBrute = info.dataset_info;
+  if (!infoBrute) return null;
+  if ("configs" in infoBrute && Array.isArray(infoBrute.configs)) {
+    return infoBrute.configs.find((config) => config.config_name === "default") ?? infoBrute.configs[0] ?? null;
+  }
+  if ("splits" in infoBrute && infoBrute.splits) {
+    const splits = Array.isArray(infoBrute.splits)
+      ? infoBrute.splits
+      : Object.entries(infoBrute.splits).map(([name, valeur]) => ({
+          name,
+          num_examples: (valeur as { num_examples?: unknown })?.num_examples,
+        }));
+    return { config_name: "default", splits };
+  }
+  return null;
 }
 
 function featuresToColumns(features: unknown, max = 30): string[] {
@@ -163,11 +197,51 @@ export async function inspectHuggingFaceDataset(ref: string): Promise<HubDataset
     .slice(0, 200)
     .map((filename) => ({
       name: filename.slice(0, 300),
-      sizeBytes: 0, // l'API de listing n'expose pas la taille des fichiers
+      sizeBytes: 0, // valeur de repli — enrichie par l'API tree ci-dessous
       downloadable: HUB_DATASET_FILE_RE.test(filename),
     }));
+
+  // Découverte RÉELLE du dépôt via l'API tree (parcours récursif) : c'est
+  // elle qui liste les fichiers `data/train-*.parquet` — format majoritaire
+  // des datasets HF — et qui expose leur TAILLE exacte (absente de
+  // `siblings`). Échec ou réponse inattendue → repli honnête : tailles
+  // inconnues, le plafond reste appliqué AU TÉLÉCHARGEMENT.
+  let taillesConnues = false;
+  try {
+    const arbre = await hubFetchJson<unknown>(
+      `${HF_API}/api/datasets/${encodeURIComponent(owner)}/${encodeURIComponent(name)}` +
+        `/tree/main?recursive=true&limit=1000`,
+      { headers: hfHeaders() },
+    );
+    if (Array.isArray(arbre)) {
+      const tailles = new Map<string, number>();
+      for (const entree of arbre as HfTreeEntry[]) {
+        if (
+          entree?.type === "file" &&
+          typeof entree.path === "string" &&
+          entree.path.length > 0 &&
+          typeof entree.size === "number" &&
+          Number.isFinite(entree.size) &&
+          entree.size >= 0
+        ) {
+          tailles.set(entree.path, entree.size);
+        }
+      }
+      if (tailles.size > 0) {
+        taillesConnues = true;
+        for (const fichier of files) {
+          const taille = tailles.get(fichier.name);
+          if (typeof taille === "number") fichier.sizeBytes = taille;
+        }
+      }
+    }
+  } catch {
+    // repli silencieux : tailles inconnues (note honnête ci-dessous)
+  }
   notes.push(
-    "Taille exacte des fichiers non exposée par l'API Hugging Face : le plafond par fichier sera appliqué au téléchargement.",
+    taillesConnues
+      ? "Tailles des fichiers issues de l'API tree Hugging Face (parcours récursif du dépôt)."
+      : "Taille exacte des fichiers non exposée par l'API Hugging Face : le plafond par fichier sera appliqué au téléchargement.",
   );
 
   // Splits déclarés via datasets-server (peut échouer pour les dépôts privés/gated).
@@ -179,9 +253,7 @@ export async function inspectHuggingFaceDataset(ref: string): Promise<HubDataset
       `${HF_DATASETS_SERVER}/info?dataset=${encodeURIComponent(ref)}`,
       { headers: hfHeaders() },
     );
-    const configs = serverInfo.dataset_info?.configs ?? [];
-    const chosen =
-      configs.find((config) => config.config_name === "default") ?? configs[0];
+    const chosen = choisirConfigDsServer(serverInfo);
     if (chosen?.splits) {
       splits = chosen.splits
         .slice(0, 20)
@@ -252,4 +324,61 @@ export function huggingFaceFileUrl(ref: string, fileName: string): string {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/")}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* LIGNES VIA datasets-server (/rows) — complément au parsing direct    */
+/*                                                                      */
+/* Depuis l'ajout du parsing parquet (lib/training/hub/parquet.ts), les  */
+/* fichiers .parquet sont téléchargés et lus directement. L'API /rows    */
+/* reste utile en repli quand le téléchargement échoue (fichier trop     */
+/* grand pour le plafond → tronqué → footer parquet illisible) :        */
+/*   GET /info?dataset=…  → configs + splits                            */
+/*   GET /rows?dataset=…&config=…&split=…&offset=…&length=100            */
+/*        → { features, rows: [{ row: { colonne: valeur } }] }          */
+/* C'est du paging borné (pas de téléchargement de fichier) : chaque    */
+/* réponse est un petit JSON. Honnêteté : si le serveur ne couvre pas   */
+/* le dataset (privé, exotique), l'échec est retourné tel quel.         */
+/* ------------------------------------------------------------------ */
+
+/** Pages maximales de /rows par dataset (100 lignes/page → 500 lignes max). */
+const LIGNES_MAX_PAGES = 5;
+
+/** Lit jusqu'à maxLignes lignes réelles d'un dataset via datasets-server. */
+export async function lireLignesHuggingFace(
+  ref: string,
+  maxLignes: number,
+): Promise<Array<Record<string, unknown>>> {
+  const info = await hubFetchJson<DsServerInfo>(
+    `${HF_DATASETS_SERVER}/info?dataset=${encodeURIComponent(ref)}`,
+    { headers: hfHeaders() },
+  );
+  // La sélection de config gère les DEUX formes de /info (configs directes
+  // ou splits directs) — voir choisirConfigDsServer.
+  const choisi = choisirConfigDsServer(info);
+  const split = choisi?.splits?.[0]?.name;
+  if (typeof split !== "string" || split.length === 0) {
+    throw new HubError("not-found", "Aucun split exposé par datasets-server pour ce dataset.");
+  }
+  const config = typeof choisi?.config_name === "string" ? choisi.config_name : "default";
+
+  const lignes: Array<Record<string, unknown>> = [];
+  for (let page = 0; page < LIGNES_MAX_PAGES && lignes.length < maxLignes; page += 1) {
+    const reponse = await hubFetchJson<DsServerFirstRows>(
+      `${HF_DATASETS_SERVER}/rows?dataset=${encodeURIComponent(ref)}` +
+        `&config=${encodeURIComponent(config)}&split=${encodeURIComponent(split)}` +
+        `&offset=${page * 100}&length=100`,
+      { headers: hfHeaders() },
+    );
+    const rangées = Array.isArray(reponse.rows) ? reponse.rows : [];
+    if (rangées.length === 0) break;
+    for (const entree of rangées) {
+      if (lignes.length >= maxLignes) break;
+      const row = entree?.row;
+      if (row !== null && typeof row === "object" && !Array.isArray(row)) {
+        lignes.push(row as Record<string, unknown>);
+      }
+    }
+  }
+  return lignes;
 }

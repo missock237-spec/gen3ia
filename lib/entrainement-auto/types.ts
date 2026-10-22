@@ -21,16 +21,24 @@ import "server-only";
 export type HubSource = "huggingface" | "kaggle";
 
 /**
- * LES DEUX PHASES DE VIE DE L'IA :
+ * LES TROIS PHASES DE VIE DE L'IA :
  *  - « absorption » : fenêtre BORNÉE au lancement (défaut 2 h) — Gen3ia se
  *    connecte à ses hubs (Hugging Face + Kaggle) et prend TOUT ce qu'elle
  *    peut de ses datasets dans cette fenêtre ;
  *  - « autonomie » : la fenêtre est clôturée DÉFINITIVEMENT (état persisté)
  *    — les hubs ne sont plus jamais interrogés ; l'IA s'appuie sur ce qu'elle
  *    a absorbé et son évolution continue passe UNIQUEMENT par ses
- *    utilisateurs (consolidation des échanges réels, lib/neural/evolution.ts).
+ *    utilisateurs (consolidation des échanges réels, lib/neural/evolution.ts) ;
+ *  - « maîtrise » : RÉGIME CONTINU (directive propriétaire — entraînement
+ *    autonome à grande échelle) — les hubs restent ouverts cycle après
+ *    cycle, domaine après domaine, JUSQU'À la maîtrise mesurée du catalogue
+ *    complet (voir maitrise.ts). La boucle ne s'arrête qu'à maîtrise
+ *    totale — jamais avant, jamais sans mesure réelle.
  */
-export type PhaseVie = "absorption" | "autonomie";
+export type PhaseVie = "absorption" | "autonomie" | "maitrise";
+
+/** Régime de vie persisté (v3) — « maitrise » par défaut (directive). */
+export type RegimeAuto = "fenetre" | "maitrise";
 
 /**
  * Objectifs d'entraînement alimentés par les datasets :
@@ -46,6 +54,76 @@ export interface DatasetChoisi {
   ref: string;
   titre: string;
   objectif: ObjectifAuto;
+  /** Domaine du catalogue de maîtrise (régime maîtrise seulement). */
+  domaineId?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* MAÎTRISE — registre des domaines (régime continu v3)                 */
+/* ------------------------------------------------------------------ */
+
+/** Une évaluation de maîtrise (métrique RÉELLE mesurée sur données tenues
+ *  à l'écart de l'entraînement — jamais une estimation). */
+export interface EvaluationMaitrise {
+  /** Date ISO de l'évaluation. */
+  dateA: string;
+  /** Précision mesurée (0..1) : rétention cortex (langage) ou accuracyTest
+   *  du SNN sur jeu tenu à l'écart (intention). */
+  accuracy: number;
+  /** Nombre d'unités de validation réellement évaluées. */
+  unites: number;
+  /** false = évaluation consignée mais NON comptable (trop peu d'unités
+   *  pour être statistiquement porteuse — honnêteté avant optimisme). */
+  valide: boolean;
+}
+
+/** État de maîtrise d'UN domaine du catalogue. */
+export interface EtatDomaineMaitrise {
+  /** Références hub ingérées pour ce domaine (anti-rejoue par domaine). */
+  datasetsIngerees: string[];
+  /** Paires conversationnelles ingérées (objectif langage). */
+  pairesIngestees: number;
+  /** Échantillons étiquetés ingérés (objectif intention). */
+  echantillonsIngestes: number;
+  /** 10 dernières évaluations (les plus récentes d'abord). */
+  dernieresEvaluations: EvaluationMaitrise[];
+  /** Passes consécutifs (accuracy ≥ seuil ET évaluation valide). */
+  passesConsicutifs: number;
+  /** Date ISO où le domaine a été déclaré maîtrisé (null sinon). */
+  maitriseA: string | null;
+}
+
+/** Bloc de maîtrise persisté (état v3). */
+export interface BlocMaitrise {
+  /** Version du catalogue — un changement de catalogue incrémente ce numéro. */
+  catalogueVersion: 1;
+  /** État par domaine, clé = identifiant du domaine du catalogue. */
+  domaines: Record<string, EtatDomaineMaitrise>;
+  /** Date ISO où le catalogue COMPLET a été maîtrisé (null = boucle active). */
+  atteinteA: string | null;
+  /** Nombre total d'évaluations exécutées (tous domaines). */
+  evaluationsTotales: number;
+  /** Cycles consécutifs sans aucun progrès (backoff anti-boucle-crashee). */
+  cyclesSansProgres: number;
+}
+
+/** Bloc maîtrise d'un rapport de cycle (régime maîtrise). */
+export interface RapportMaitrise {
+  regime: "maitrise";
+  /** Domaine entraîné ce cycle. */
+  domaineCible: string;
+  domaineLabel: string;
+  objectif: ObjectifAuto;
+  /** Au moins un dataset ingéré ce cycle pour ce domaine ? */
+  ingereCeCycle: boolean;
+  /** Évaluation de maîtrise exécutée ce cycle (si assez de matière). */
+  evaluation?: { accuracy: number; unites: number; valide: boolean; seuil: number };
+  /** Le domaine est devenu maîtrisé À CE cycle. */
+  maitriseCeDomaine: boolean;
+  /** TOUS les domaines du catalogue sont maîtrisés — la boucle s'arrête. */
+  complete: boolean;
+  domainesMaitrises: number;
+  domainesTotal: number;
 }
 
 /** Bilan par hub d'un cycle (compteurs réels + erreurs lisibles). */
@@ -93,6 +171,8 @@ export interface RapportCycleAuto {
   intention?: RapportIntentionCycle;
   /** Références réellement ingérées ce cycle. */
   datasetsIngestes: string[];
+  /** Présent en régime maîtrise : progression du catalogue. */
+  maitrise?: RapportMaitrise;
 }
 
 /**
@@ -119,8 +199,15 @@ export interface BilanAutonomie {
 
 /** État persistant de l'auto-apprentissage (var/entrainement-auto/etat.json). */
 export interface EtatAutoApprentissage {
-  /** v2 : cycle de vie absorption → autonomie (migration v1 automatique). */
-  v: 2;
+  /** v3 : régime de vie persisté (« maitrise » par défaut — directive
+   *  propriétaire : entraînement autonome continu jusqu'à maîtrise totale
+   *  du catalogue HF + Kaggle) + bloc de maîtrise par domaine. Les
+   *  migrations v1→v3 et v2→v3 sont automatiques et sans perte. */
+  v: 3;
+  /** Régime de vie courant. « fenetre » = cycle de vie historique (absorption
+   *  bornée → autonomie définitive). « maitrise » = hubs ouverts jusqu'à
+   *  maîtrise complète du catalogue (maitrise.ts). */
+  regime: RegimeAuto;
   /** Date ISO d'initialisation de l'état (premier lancement constaté) —
    *  origine de la fenêtre d'absorption (jamais réinitialisée au reboot). */
   lanceA: string;
@@ -141,6 +228,8 @@ export interface EtatAutoApprentissage {
   absorptionClotureeA: string | null;
   /** Bilan d'autonomie écrit à la clôture (null avant). */
   bilanAutonomie: BilanAutonomie | null;
+  /** v3 : registre de maîtrise du catalogue (régime « maitrise »). */
+  maitrise: BlocMaitrise;
 }
 
 /**
@@ -164,4 +253,9 @@ export interface ClientHubAuto {
   telecharger(provider: HubSource, ref: string, fichier: string, maxOctets: number): Promise<Buffer>;
   /** Configuration honnête du connecteur (jeton présent ?). */
   estConfigure(provider: HubSource): boolean;
+  /** OPTIONNEL — lignes réelles via l'API de paging du hub (datasets-server
+   *  /rows pour Hugging Face : ouvre les datasets parquet-only sans
+   *  télécharger de fichier). Absent chez les clients de test simples ;
+   *  l'ingesteur le traite comme un enrichissement, jamais une exigence. */
+  lireLignes?(provider: HubSource, ref: string, maxLignes: number): Promise<Array<Record<string, unknown>>>;
 }

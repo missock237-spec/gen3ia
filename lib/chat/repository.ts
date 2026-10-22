@@ -21,6 +21,7 @@ import type {
 
 import {
   indexConversationMessage,
+  purgeConversationVectors,
 } from "@/lib/chat/vector-index";
 
 /**
@@ -449,4 +450,9 @@ export async function deleteConversation(userId: string, id: string) {
   // La méta part en dernier : tant qu'elle existe, le fil reste cohérent
   // (aucune route n'expose les messages orphelins sans conversation).
   await removeKey(conversationKey(userId, id));
+  // Purge de l'INDEX VECTORIEL (Qdrant) : sans elle, les messages effacés
+  // restaient retrouvables par recherche sémantique. Fail-soft : la
+  // suppression R2 (source de vérité) reste acquise même si l'index est
+  // indisponible — purgeConversationVectors journalise son propre échec.
+  await purgeConversationVectors(userId, id);
 }

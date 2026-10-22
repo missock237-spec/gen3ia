@@ -67,16 +67,24 @@ export function AppNav() {
   if (pathname === "/") return null;
 
   const canDeveloper = platformRole === "developer" || platformRole === "admin";
+  const canAdmin = platformRole === "admin";
   const name =
     user?.displayName?.trim() || user?.email?.split("@")[0] || "Compte";
   const initial = name.charAt(0).toUpperCase();
   const active = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
 
+  // FILTRE DE RÔLE COMPLET : developer ET admin. Le filtre ne couvrait que
+  // « developer » — le lien « Administration » était visible de tous et
+  // aboutissait à un écran de refus (nav qui ment = bug signalé).
   const visibleGroups = NAV_GROUPS
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => item.requiredRole !== "developer" || canDeveloper),
+      items: group.items.filter((item) => {
+        if (item.requiredRole === "developer") return canDeveloper;
+        if (item.requiredRole === "admin") return canAdmin;
+        return true;
+      }),
     }))
     .filter((group) => group.items.length > 0);
 

@@ -91,8 +91,12 @@ export function assertHubFileName(name: string): string {
   return clean;
 }
 
-/** Extensions de fichiers réellement ingérables par le pipeline dataset. */
-export const HUB_DATASET_FILE_RE = /\.(csv|json|jsonl|txt)$/i;
+/** Fichiers ingérables : CSV, JSON, JSONL, TXT et PARQUET — y compris
+ *  compressés .gz (format très fréquent sur les hubs ; décompression
+ *  transparente au téléchargement, bornée par le plafond). Le parquet —
+ *  format majoritaire des datasets Hugging Face — est parsé en JavaScript
+ *  pur (lib/training/hub/parquet.ts, hyparquet : aucune dépendance native). */
+export const HUB_DATASET_FILE_RE = /\.(csv|json|jsonl|txt|parquet)(\.gz)?$/i;
 
 /** Encode un chemin de fichier hub en conservant les séparateurs `/`. */
 export function encodeHubPath(path: string): string {
@@ -120,7 +124,7 @@ export type HubDatasetSummary = z.infer<typeof hubDatasetSummarySchema>;
 export const hubFileSchema = z.object({
   name: z.string().min(1).max(300),
   sizeBytes: z.number().int().nonnegative().default(0),
-  /** Vrai si l'extension est ingérable par le pipeline (csv/json/jsonl/txt). */
+  /** Vrai si l'extension est ingérable par le pipeline (csv/json/jsonl/txt/parquet). */
   downloadable: z.boolean().default(false),
 });
 export type HubFile = z.infer<typeof hubFileSchema>;
@@ -196,7 +200,8 @@ export async function hubDownloadFile(
   init: RequestInit,
   maxBytes: number,
   timeoutMs = HUB_DOWNLOAD_TIMEOUT_MS,
-): Promise<{ buffer: Buffer; contentType: string }> {
+  opts: { partiel?: boolean } = {},
+): Promise<{ buffer: Buffer; contentType: string; tronque?: boolean }> {
   const response = await fetchWithTimeout(url, init, timeoutMs);
   if (!response.ok) {
     if (response.status === 404) throw new HubError("not-found", "Fichier introuvable sur le hub.");
@@ -206,17 +211,60 @@ export async function hubDownloadFile(
     throw new HubError("upstream", `Téléchargement impossible (HTTP ${response.status}).`);
   }
   const contentLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    throw new HubError("invalid", `Fichier trop volumineux (${Math.round(contentLength / 1048576)} Mo).`);
+  if (!opts.partiel) {
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      throw new HubError("invalid", `Fichier trop volumineux (${Math.round(contentLength / 1048576)} Mo).`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    if (arrayBuffer.byteLength > maxBytes) {
+      throw new HubError("invalid", `Fichier trop volumineux (${Math.round(arrayBuffer.byteLength / 1048576)} Mo).`);
+    }
+    return {
+      buffer: Buffer.from(arrayBuffer),
+      contentType: response.headers.get("content-type") || "application/octet-stream",
+    };
   }
-  const arrayBuffer = await response.arrayBuffer();
-  if (arrayBuffer.byteLength > maxBytes) {
-    throw new HubError("invalid", `Fichier trop volumineux (${Math.round(arrayBuffer.byteLength / 1048576)} Mo).`);
-  }
+  // MODE PARTIEL — les grands fichiers sont lus jusqu'au plafond (données
+  // décompressées) au lieu d'être refusés : l'auto-apprentissage à grande
+  // échelle peut ainsi exploiter des datasets de centaines de Mo en en
+  // prenant des premières tranches COMPLÈTES (le parsing ne retient que les
+  // lignes intégrales — aucune donnée coupée n'est convertie).
+  const lu = await lireCorpsBorne(response, maxBytes);
   return {
-    buffer: Buffer.from(arrayBuffer),
+    buffer: lu.buffer,
     contentType: response.headers.get("content-type") || "application/octet-stream",
+    tronque: lu.tronque,
   };
+}
+
+/** Lecture bornée du corps d'une réponse (données décompressées si
+ *  content-encoding, plafond strict — jamais plus de maxBytes en RAM). */
+async function lireCorpsBorne(
+  response: Response,
+  maxBytes: number,
+): Promise<{ buffer: Buffer; tronque: boolean }> {
+  if (!response.body) throw new HubError("upstream", "Corps de réponse absent.");
+  const lecteur = response.body.getReader();
+  const morceaux: Buffer[] = [];
+  let total = 0;
+  let tronque = false;
+  for (;;) {
+    const { done, value } = await lecteur.read();
+    if (done) break;
+    if (total + value.byteLength > maxBytes) {
+      const restant = maxBytes - total;
+      if (restant > 0) {
+        morceaux.push(Buffer.from(value.slice(0, restant)));
+        total += restant;
+      }
+      tronque = true;
+      await lecteur.cancel().catch(() => {});
+      break;
+    }
+    morceaux.push(Buffer.from(value));
+    total += value.byteLength;
+  }
+  return { buffer: Buffer.concat(morceaux, total), tronque };
 }
 
 /* ------------------------------------------------------------------ */
@@ -323,7 +371,7 @@ export interface HubFileSelection {
 
 /**
  * Choisit les fichiers réellement importables d'un dataset de hub :
- *  - extensions ingérables uniquement (.csv/.json/.jsonl/.txt) ;
+ *  - extensions ingérables uniquement (.csv/.json/.jsonl/.txt/.parquet) ;
  *  - plafond par fichier, plafond total, nombre maximal de fichiers ;
  *  - les fichiers dont la taille est inconnue (API HF) sont tentés : le
  *    plafond reste appliqué AU TÉLÉCHARGEMENT (hubDownloadFile).
@@ -348,7 +396,7 @@ export function selectFilesForImport(
       if (!wanted || wanted.length === 0 || wanted.includes(file.name)) {
         selection.skipped.push({
           name: file.name,
-          reason: "Format non ingérable (seuls .csv, .json, .jsonl et .txt sont analysés).",
+          reason: "Format non ingérable (seuls .csv, .json, .jsonl, .txt et .parquet sont analysés).",
         });
       }
     }

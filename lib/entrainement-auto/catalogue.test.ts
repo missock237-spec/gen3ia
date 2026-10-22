@@ -82,3 +82,37 @@ describe("requeteDuCycle", () => {
     expect(requeteDuCycle("langage", "huggingface", requetes.length)).toBe(requetes[0]);
   });
 });
+
+describe("REQUETES_OBJECTIF", () => {
+  it("toutes les requêtes respectent le contrat assertHubQuery (1..80 caractères)", () => {
+    for (const objectif of ["langage", "intention"] as const) {
+      for (const hub of ["huggingface", "kaggle"] as const) {
+        for (const requete of REQUETES_OBJECTIF[objectif][hub]) {
+          expect(requete.trim()).toBe(requete);
+          expect(requete.length).toBeGreaterThan(0);
+          expect(requete.length).toBeLessThanOrEqual(80);
+        }
+      }
+    }
+  });
+
+  it("élargissement des domaines vides : requêtes à évidence HF présentes", () => {
+    // Mêmes requêtes validées par extraction de matière réelle que le
+    // catalogue de maîtrise (sciences, culture-histoire, langues, sujets).
+    expect(REQUETES_OBJECTIF.langage.huggingface).toEqual(
+      expect.arrayContaining(["medical meadow", "physics qa", "history qa", "translation instructions", "french translation"]),
+    );
+    expect(REQUETES_OBJECTIF.intention.huggingface).toEqual(
+      expect.arrayContaining(["news classification dataset", "text classification"]),
+    );
+  });
+
+  it("aucun doublon dans une même liste objectif/hub", () => {
+    for (const objectif of ["langage", "intention"] as const) {
+      for (const hub of ["huggingface", "kaggle"] as const) {
+        const requetes = REQUETES_OBJECTIF[objectif][hub];
+        expect(new Set(requetes.map((r) => r.toLowerCase())).size).toBe(requetes.length);
+      }
+    }
+  });
+});

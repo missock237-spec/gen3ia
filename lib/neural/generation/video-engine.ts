@@ -109,12 +109,14 @@ export function genererVideoNeural(
   }
 
   // Arêtes : synapses réelles reliant les nœuds retenus.
+  // Index Map une fois pour toutes (audit perf O(n²)→O(n)).
   interface Arete { a: Noeud; b: Noeud; poids: number }
+  const indexNoeuds = new Map(noeuds.map((n) => [n.id, n] as const));
   const aretes: Arete[] = [];
   for (const [src, tgt, poids] of snapshot.echantillonSynapses) {
     if (aretes.length >= nbNoeuds * 2) break;
-    const a = noeuds.find((n) => n.id === src);
-    const b = noeuds.find((n) => n.id === tgt);
+    const a = indexNoeuds.get(src);
+    const b = indexNoeuds.get(tgt);
     if (a && b && a !== b) aretes.push({ a, b, poids });
   }
   for (let i = 0; i < noeuds.length && aretes.length < nbNoeuds * 1.5; i++) {

@@ -9,6 +9,7 @@ import {
   hubErrorStatus,
   HubError,
   hubFetchJson,
+  HUB_DATASET_FILE_RE,
   parseCsvLine,
   parseCsvPreview,
   selectFilesForImport,
@@ -174,6 +175,16 @@ describe("hubDownloadFile", () => {
   });
 });
 
+describe("HUB_DATASET_FILE_RE", () => {
+  it("accepte les extensions ingérables, y compris .parquet (et .gz)", () => {
+    expect(HUB_DATASET_FILE_RE.test("data/train-00000-of-00001-abc123.parquet")).toBe(true);
+    expect(HUB_DATASET_FILE_RE.test("train.jsonl.gz")).toBe(true);
+    expect(HUB_DATASET_FILE_RE.test("train.csv.gz")).toBe(true);
+    expect(HUB_DATASET_FILE_RE.test("README.md")).toBe(false);
+    expect(HUB_DATASET_FILE_RE.test("fichier.xlsx")).toBe(false);
+  });
+});
+
 describe("selectFilesForImport", () => {
   const detail = (files: HubDatasetDetail["files"]): Pick<HubDatasetDetail, "files"> => ({ files });
 
@@ -237,5 +248,18 @@ describe("selectFilesForImport", () => {
     expect(selection.selected.map((f) => f.name)).toEqual(["train.csv"]);
     expect(selection.skipped.some((s) => s.name === "test.csv")).toBe(false);
     expect(selection.skipped.some((s) => s.name === "absent.csv" && /absent de ce jeu/i.test(s.reason))).toBe(true);
+  });
+
+  it("sélectionne les fichiers PARQUET (format majoritaire HF) et signale les autres", () => {
+    const selection = selectFilesForImport(
+      detail([
+        { name: "data/train-00000-of-00001-9e5f6b98c6d89c9a.parquet", sizeBytes: 0, downloadable: true },
+        { name: "README.md", sizeBytes: 50, downloadable: false },
+      ]),
+      { perFileBytes: 10_000, totalBytes: 10_000, maxFiles: 5 },
+    );
+    expect(selection.selected.map((f) => f.name)).toEqual(["data/train-00000-of-00001-9e5f6b98c6d89c9a.parquet"]);
+    // Message mis à jour : le parquet fait désormais partie des formats analysés.
+    expect(selection.skipped[0]?.reason).toContain(".parquet");
   });
 });

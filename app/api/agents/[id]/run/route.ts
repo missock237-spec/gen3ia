@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 
-import { requireUser } from "@/lib/security/authenticated-request";
+// SYSTÈME AGENT RÉSERVÉ (demande n°5) : exécution manuelle fermée aux
+// utilisateurs standard (403 « réservé au système IA ») — admin conservé.
+import { requireAgentSystemAccess } from "@/lib/security/agent-system-access";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { getAgentForUser } from "@/lib/agents/repository";
 import { createPersonalizedPlan, policyForAgent } from "@/lib/agents/personalized-plan";
@@ -37,7 +39,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const log = executionLogger({ requestId });
 
   try {
-    const user = await requireUser(request);
+    const user = await requireAgentSystemAccess(request);
     const limit = await enforceRateLimit(`agent-run:${user.uid}`, { limit: 12, windowMs: 5 * 60 * 1000 });
     if (!limit.allowed) {
       return NextResponse.json(

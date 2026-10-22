@@ -6,12 +6,14 @@ import {
 import { z } from "zod";
 
 import {
-  requireUser,
-} from "@/lib/security/authenticated-request";
-
-import {
   enforceRateLimit,
 } from "@/lib/security/rate-limit";
+
+// SYSTÈME AGENT RÉSERVÉ (demande n°5) : planification de missions fermée aux
+// utilisateurs standard (403 « réservé au système IA ») — admin conservé.
+import {
+  requireAgentSystemAccess,
+} from "@/lib/security/agent-system-access";
 
 import {
   errorBody,
@@ -34,7 +36,7 @@ export async function POST(
 ) {
   try {
     const user =
-      await requireUser(request);
+      await requireAgentSystemAccess(request);
 
     // Planification = appel LLM réel (même classe que les routes agent
     // voisines : agent-continue 20/5min) — la route est authentifiée mais

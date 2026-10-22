@@ -1,0 +1,48 @@
+{
+  "startedAt": "2026-10-21T15:15:15.003Z",
+  "dureeMs": 257,
+  "epochs": 6,
+  "cyclesParEchantillon": 4,
+  "lrBoost": 0.15,
+  "samplesTrain": 188,
+  "samplesTest": 33,
+  "accuracyTrain": 1,
+  "accuracyTest": 1,
+  "history": [
+    {
+      "epoch": 1,
+      "accuracy": 0.7819148936170213
+    },
+    {
+      "epoch": 2,
+      "accuracy": 0.9893617021276596
+    },
+    {
+      "epoch": 3,
+      "accuracy": 0.9946808510638298
+    },
+    {
+      "epoch": 4,
+      "accuracy": 1
+    },
+    {
+      "epoch": 5,
+      "accuracy": 1
+    },
+    {
+      "epoch": 6,
+      "accuracy": 1
+    }
+  ],
+  "champ": {
+    "taille": 1000000000,
+    "seedEntrainement": 2054139296
+  },
+  "cortex": {
+    "colonnes": 262144,
+    "aretes": 3145728,
+    "bandes": 32
+  },
+  "environnement": "pré-entraînement HORS PRODUCTION (sandbox de développement)",
+  "note": "Artefact chargé au premier démarrage du runtime (aucun cerveau local présent) — prêt à l'emploi, puis apprentissage continu en production."
+}

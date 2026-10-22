@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
+// PLANIFICATIONS — DEMANDE PROPRIÉTAIRE (restauration) : ouvertes à
+// TOUS LES COMPTES (requireUser). Le scoping propriétaire (user.uid) est
+// assuré par listSchedules/getSchedule/triggerScheduleNow(...) — un
+// utilisateur ne voit et ne déclenche que SES planifications.
 import { requireUser } from "@/lib/security/authenticated-request";
+import { errorStatus } from "@/lib/security/http-errors";
 import { checkScheduleWatchSourcesForUser } from "@/lib/agents/scheduler";
 
 /**
@@ -23,7 +28,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: true, results, requestId }, { headers: { "x-request-id": requestId } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Watch check failed";
-    const status = message === "Schedule not found" ? 404 : message.includes("no watch sources") ? 400 : 500;
+    // errorStatus : HttpError (403 agent-système réservé) d'abord, sinon le
+    // mapping message historique (404/400).
+    const status = errorStatus(error, message === "Schedule not found" ? 404 : message.includes("no watch sources") ? 400 : 500);
     return NextResponse.json({ error: message, requestId }, { status, headers: { "x-request-id": requestId } });
   }
 }

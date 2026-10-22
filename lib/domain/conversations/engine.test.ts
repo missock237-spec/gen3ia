@@ -41,10 +41,13 @@ describe("moteur conversationnel — contrôle humain des actions sensibles", ()
     const byName = new Map(catalog.map((t) => [t.name, t]));
     // Lecture : pas de validation.
     expect(byName.get("web.search")?.requiresApproval).toBe(false);
-    // Les outils de téléphonie IA externe (phone.call / voice.speak) ont été
-    // SUPPRIMÉS du projet avec les IA externes — ils ne sont plus annoncés.
+    // phone.call (téléphonie IA externe) a été SUPPRIMÉ du projet avec les
+    // IA externes — il n'est plus annoncé.
     expect(byName.has("phone.call")).toBe(false);
-    expect(byName.has("voice.speak")).toBe(false);
+    // voice.speak est de retour comme capacité LOCALE réelle (synthèse
+    // audio neuronale, audit multimodal) — sans validation (risque low).
+    expect(byName.has("voice.speak")).toBe(true);
+    expect(byName.get("voice.speak")?.requiresApproval).toBe(false);
     // Caméra et code arbitraire exclus du périmètre conversationnel.
     expect(byName.has("camera.capture")).toBe(false);
     expect(byName.has("code.execute")).toBe(false);

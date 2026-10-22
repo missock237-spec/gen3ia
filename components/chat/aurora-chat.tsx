@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { MarkdownContent } from "@/components/workspace/markdown";
+import { VideoProductionCard } from "@/components/workspace/video-production-card";
 import { authFetch, readJsonSafely } from "@/lib/firebase/auth-client";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import { ATTACHMENT_MAX_FILES, validateAttachment } from "@/lib/files/attachment-policy";
@@ -23,6 +24,8 @@ import {
   iconePourNom,
   suggestionsPour,
 } from "./aurora-widgets";
+import { useVoiceInput } from "./use-voice-input";
+import { cancelSpeech, speakFr } from "./voice-speak";
 import "./aurora-chat.css";
 
 /**
@@ -65,6 +68,54 @@ interface PiecePreparation {
   type: string;
   fichier: File;
   apercu: string | null;
+}
+
+/**
+ * Import RÉEL d'un fichier téléversé : POST /api/files/import (canal R2
+ * { path }) — le serveur convertit le contenu et le persiste en base
+ * (collection `importedFiles`), puis renvoie le fileId référencé par le
+ * tour. Le contenu converti atteint ainsi le prompt du moteur.
+ * HONNÊTETÉ : en cas d'échec (réseau, format non convertible), l'attachment
+ * part SANS fileId — le tour continue (jamais bloquant, l'IA répondra sans
+ * le contenu converti) et le filet de compatibilité du moteur relira le
+ * fichier par son chemin R2.
+ */
+async function importerFichierImporte(fichier: { path: string; filename: string; contentType: string; sizeBytes: number }): Promise<{
+  fileId?: string;
+  fileKind?: string;
+  charCount?: number;
+  rowCount?: number;
+}> {
+  if (!fichier.path) {
+    console.warn("[aurora-chat] import impossible : clé de stockage absente pour", fichier.filename);
+    return {};
+  }
+  try {
+    const response = await authFetch("/api/files/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        path: fichier.path,
+        filename: fichier.filename,
+        contentType: fichier.contentType || "application/octet-stream",
+        sizeBytes: fichier.sizeBytes,
+      }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = (await response.json()) as {
+      file?: { id?: string; kind?: string; charCount?: number; rowCount?: number };
+    };
+    if (!data.file?.id) throw new Error("réponse sans fileId");
+    return {
+      fileId: data.file.id,
+      ...(data.file.kind ? { fileKind: data.file.kind } : {}),
+      ...(data.file.charCount !== undefined ? { charCount: data.file.charCount } : {}),
+      ...(data.file.rowCount !== undefined ? { rowCount: data.file.rowCount } : {}),
+    };
+  } catch (erreurImport) {
+    console.warn("[aurora-chat] import du fichier impossible (envoi sans contenu converti) :", erreurImport);
+    return {};
+  }
 }
 
 interface ProfilInfo {
@@ -135,8 +186,13 @@ export function AuroraChat() {
   const [toastTexte, setToastTexte] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
   const [procheBas, setProcheBas] = useState(true);
+  /* Chat voix : indicateur « lecture vocale en cours » de la réponse IA. */
+  const [lectureVocale, setLectureVocale] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
+  /* Chat voix : le tour courant a-t-il été initié par la voix (dictée) ?
+   * Consumé à la réponse (message_complete → TTS) puis réarmé. */
+  const dernierTourVocalRef = useRef(false);
   const messagesRef = useRef<HTMLDivElement>(null);
   const saisieRef = useRef<HTMLTextAreaElement>(null);
   const inputFichierRef = useRef<HTMLInputElement>(null);
@@ -347,6 +403,17 @@ export function AuroraChat() {
           imageUrl: event.message.imageUrl ?? courant?.imageUrl,
           status: "",
         }));
+        /* Chat voix : réponse LUE uniquement si le tour a été dicté — les
+         * tours écrits normaux restent silencieux (pas de TTS intrusif). */
+        if (dernierTourVocalRef.current) {
+          dernierTourVocalRef.current = false;
+          const contenuVocal = event.message.content ?? "";
+          if (contenuVocal.trim()) {
+            setLectureVocale(true);
+            const parle = speakFr(contenuVocal, { onFin: () => setLectureVocale(false) });
+            if (!parle) setLectureVocale(false); // synthèse indisponible : reste textuel
+          }
+        }
         break;
       case "error":
         throw new Error(event.message);
@@ -394,18 +461,24 @@ export function AuroraChat() {
         }
       }
 
-      /* 2) Pièces jointes réelles : upload vers le stockage permanent. */
+      /* 2) Pièces jointes réelles : upload vers le stockage permanent, puis
+       *    import RÉEL (/api/files/import) — les attachments partent avec le
+       *    fileId du contenu converti stocké en base (le moteur l'injecte au
+       *    prompt). Échec d'import : attachment sans fileId, envoi maintenu. */
       let attachments: MessageAttachment[] = [];
       if (piecesMessage.length > 0) {
         setUploading(true);
         try {
           const batch = await uploadPermanentFiles(piecesMessage.map((piece) => piece.fichier));
-          attachments = batch.uploaded.map((fichier) => ({
-            filename: fichier.filename,
-            path: fichier.path,
-            contentType: fichier.contentType,
-            sizeBytes: fichier.sizeBytes,
-          }));
+          attachments = await Promise.all(
+            batch.uploaded.map(async (fichier) => ({
+              filename: fichier.filename,
+              path: fichier.path,
+              contentType: fichier.contentType,
+              sizeBytes: fichier.sizeBytes,
+              ...(await importerFichierImporte(fichier)),
+            })),
+          );
           if (batch.failed.length > 0) {
             afficherToast(`${batch.failed.length} fichier(s) non importé(s).`);
           }
@@ -443,6 +516,7 @@ export function AuroraChat() {
         setLive(null);
         setGenerating(false);
         abortRef.current = null;
+        dernierTourVocalRef.current = false; // tour terminé : réarmement voix
         await chargerDetail(conversationId!, true);
         void chargerListes();
         saisieRef.current?.focus();
@@ -475,6 +549,7 @@ export function AuroraChat() {
           setLive(null);
           setGenerating(false);
           abortRef.current = null;
+          dernierTourVocalRef.current = false;
           return;
         }
         /* Repli : route classique (même persistance serveur). */
@@ -517,6 +592,7 @@ export function AuroraChat() {
           setLive(null);
           setGenerating(false);
           abortRef.current = null;
+          dernierTourVocalRef.current = false;
         }
       }
     },
@@ -539,6 +615,19 @@ export function AuroraChat() {
     abortRef.current?.abort();
     abortRef.current = null;
   }, []);
+
+  /* ───────────────── Chat voix (envoi sans prompt écrit) ─────────────────
+   * Envoi vide + bouton d'envoi → le bouton devient un micro : le transcript
+   * final est injecté puis ENVOYÉ automatiquement, et la réponse IA est lue
+   * (voir consommerEvenement). Re-clic pendant l'écoute = annulation. */
+  const saisieVocale = useVoiceInput({
+    onTranscript: (texte) => {
+      dernierTourVocalRef.current = true;
+      setSaisie(texte); // injection dans l'état de saisie
+      void envoyer(texte); // envoi automatique sans seconde action
+    },
+    onErreur: (message) => afficherToast(message),
+  });
 
   /** Régénère la dernière réponse : renvoie le dernier message utilisateur. */
   const regenerer = useCallback(() => {
@@ -598,7 +687,7 @@ export function AuroraChat() {
       if (!window.confirm(`Supprimer « ${conv?.title ?? "cette conversation"} » ?`)) return;
       if (generating && id === activeId) arreter();
       try {
-        const response = await fetch(`/api/workspace/conversations/${id}`, { method: "DELETE" });
+        const response = await authFetch(`/api/workspace/conversations/${id}`, { method: "DELETE" });
         if (!response.ok) throw new Error("Suppression impossible.");
         afficherToast("Conversation supprimée");
         if (id === activeId) {
@@ -620,7 +709,7 @@ export function AuroraChat() {
       const nouveau = window.prompt("Nouveau titre de la conversation :", conv.title);
       if (!nouveau || !nouveau.trim()) return;
       try {
-        const response = await fetch(`/api/workspace/conversations/${id}`, {
+        const response = await authFetch(`/api/workspace/conversations/${id}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ title: nouveau.trim().slice(0, 120) }),
@@ -798,6 +887,21 @@ export function AuroraChat() {
   }, [conversationsFiltrees]);
 
   const messages = detail?.messages ?? [];
+  // Artefacts vidéo PERSISTÉS de la conversation : sans cette carte,
+  // l'utilisateur d'/chat ne voyait qu'un lien markdown présigné qui
+  // expire (900 s) — la carte suit la progression RÉELLE et affiche le
+  // lecteur <video> + téléchargement dès que le rendu est terminé (parité
+  // avec /workspace/conversations/[id]).
+  const videoArtifacts = useMemo(
+    () =>
+      (detail?.artifacts ?? []).flatMap((artifact) => {
+        if (!artifact || typeof artifact !== "object") return [];
+        const record = artifact as { id?: unknown; type?: unknown; title?: unknown; videoProjectId?: unknown };
+        if (record.type !== "video" || typeof record.videoProjectId !== "string" || record.videoProjectId.length === 0) return [];
+        return [{ id: typeof record.id === "string" ? record.id : record.videoProjectId, videoProjectId: record.videoProjectId, title: typeof record.title === "string" ? record.title : undefined }];
+      }),
+    [detail],
+  );
   const indexDernierBot = messages.map((m) => m.role).lastIndexOf("assistant");
   const indexDernierUser = messages.map((m) => m.role).lastIndexOf("user");
   const dernierMessage = messages[messages.length - 1];
@@ -974,6 +1078,16 @@ export function AuroraChat() {
                 />
               ))}
 
+              {/* Cartes de production vidéo persistées (parité /workspace) :
+                  progression réelle puis lecteur intégré. */}
+              {videoArtifacts.map((artifact) => (
+                <div key={`aurora-video-${artifact.id}`} className="msg bot">
+                  <div className="bubble-wrap w-full">
+                    <VideoProductionCard videoProjectId={artifact.videoProjectId} title={artifact.title} />
+                  </div>
+                </div>
+              ))}
+
               {/* Tour en cours : bulle de streaming avec statut en direct. */}
               {generating && live && (
                 <div className="msg bot">
@@ -1113,12 +1227,35 @@ export function AuroraChat() {
                 })}
               </div>
 
+              {/* Chat voix : lecture vocale de la réponse (tours dictés uniquement). */}
+              {lectureVocale && (
+                <div className="lecture-vocale">
+                  <span className="point-lecture" aria-hidden />
+                  <span>Lecture vocale en cours…</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cancelSpeech();
+                      setLectureVocale(false);
+                    }}
+                  >
+                    Couper
+                  </button>
+                </div>
+              )}
+
               <textarea
                 ref={saisieRef}
                 className="saisie"
                 rows={1}
                 value={saisie}
-                placeholder="Écris ton message… (↑ pour rappeler le dernier message)"
+                placeholder={
+                  saisieVocale.etat === "ecoute"
+                    ? saisieVocale.texteInterim
+                      ? `Écoute en cours… « ${saisieVocale.texteInterim} »`
+                      : "Écoute en cours… parlez maintenant"
+                    : "Écris ton message… (↑ pour rappeler le dernier message)"
+                }
                 aria-label="Message"
                 onChange={(event) => {
                   setSaisie(event.target.value);
@@ -1283,15 +1420,60 @@ export function AuroraChat() {
                     </div>
                   </div>
 
+                  {/* Chat voix : envoi vide + clic = dictée (transcript envoyé
+                      automatiquement) ; re-clic pendant l'écoute = annulation. */}
                   <button
                     type="button"
-                    className={`btn-envoi${generating ? " stop" : ""}`}
-                    onClick={() => (generating ? arreter() : void envoyer())}
-                    disabled={generating ? false : envoiVide || tropLong}
-                    aria-label={generating ? "Arrêter la génération" : "Envoyer"}
-                    title={generating ? "Arrêter" : "Envoyer (Entrée)"}
+                    className={`btn-envoi${generating ? " stop" : ""}${saisieVocale.etat === "ecoute" ? " voix-active" : ""}`}
+                    onClick={() => {
+                      if (generating) {
+                        arreter();
+                        return;
+                      }
+                      if (saisieVocale.etat === "ecoute") {
+                        saisieVocale.annuler();
+                        return;
+                      }
+                      if (envoiVide) {
+                        saisieVocale.demarrer();
+                        return;
+                      }
+                      void envoyer();
+                    }}
+                    disabled={generating ? false : tropLong || (envoiVide && !saisieVocale.supported)}
+                    aria-label={
+                      generating
+                        ? "Arrêter la génération"
+                        : saisieVocale.etat === "ecoute"
+                          ? "Annuler l'écoute vocale"
+                          : envoiVide
+                            ? saisieVocale.supported
+                              ? "Chat voix — dicter votre message"
+                              : "Reconnaissance vocale non supportée par ce navigateur"
+                            : "Envoyer"
+                    }
+                    title={
+                      generating
+                        ? "Arrêter"
+                        : saisieVocale.etat === "ecoute"
+                          ? "Annuler l'écoute vocale"
+                          : envoiVide
+                            ? saisieVocale.supported
+                              ? "Chat voix — dictez votre message (re-clic pour annuler)"
+                              : "Reconnaissance vocale non supportée par ce navigateur"
+                            : "Envoyer (Entrée)"
+                    }
                   >
-                    {generating ? Icones.stop : Icones.envoi}
+                    {generating ? (
+                      Icones.stop
+                    ) : saisieVocale.etat === "ecoute" ? (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <rect x="9" y="2" width="6" height="12" rx="3" />
+                        <path d="M5 10a7 7 0 0 0 14 0M12 19v3" />
+                      </svg>
+                    ) : (
+                      Icones.envoi
+                    )}
                   </button>
                 </div>
               </div>

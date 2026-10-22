@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { requireUser } from "@/lib/security/authenticated-request";
+import { requireSystemAccess } from "@/app/api/training/_internal/system-only";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 
@@ -12,14 +12,19 @@ import {
 } from "@/lib/training/arene-orchestrator";
 import { getModel, getProject, saveSessionArene, listSessionsArene } from "@/lib/training/repository";
 
-/** GET /api/training/projects/[id]/arene — liste des sessions d'arène du projet. */
+/** GET /api/training/projects/[id]/arene — SYSTÈME-ONLY (demande n° 6) : liste des sessions d'arène du projet.
+ *
+ * Le lanceur d'arène est de la mécanique interne brute (chargement/réécriture
+ * directs d'états de modèles, hors flux plan → acceptation → orchestrateur) :
+ * 403 JSON clair pour un utilisateur standard, 401 si non authentifié.
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const requestId = request.headers.get("x-request-id")?.trim() || crypto.randomUUID();
   try {
-    const user = await requireUser(request);
+    const user = await requireSystemAccess(request);
     const { id } = await params;
     const project = await getProject(user.uid, id);
     if (!project) {
@@ -36,11 +41,16 @@ export async function GET(
 }
 
 /**
- * POST /api/training/projects/[id]/arene
+ * POST /api/training/projects/[id]/arene — SYSTÈME-ONLY (demande n° 6).
+ *
  * Lance une session d'arène d'interférence : le modèle élève du projet
  * (artefact gen3-language-model) affronte le professeur (Gen3 ou un
  * second modèle), la physique juge chaque réponse et distille le savoir
  * par ondes. Toutes les métriques retournées sont MESURÉES.
+ *
+ * Ce lanceur direct de calcul (contournant le flux config → analyse → plan
+ * → acceptation et le budget de minutes) relève de la mécanique interne :
+ * 403 JSON clair pour un utilisateur standard via `requireSystemAccess`.
  *
  * Corps JSON : { mode, eleveAssetId, professeurAssetId?, roundsMax? }
  */
@@ -50,7 +60,7 @@ export async function POST(
 ) {
   const requestId = request.headers.get("x-request-id")?.trim() || crypto.randomUUID();
   try {
-    const user = await requireUser(request);
+    const user = await requireSystemAccess(request);
     const { id } = await params;
 
     // Anti-abus : une session dure au plus 1 h (timebox) — trois

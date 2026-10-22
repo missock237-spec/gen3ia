@@ -1,0 +1,675 @@
+{
+  "v": 1,
+  "entries": [
+    {
+      "terme": "baie",
+      "categorie": "cadre",
+      "valeur": "ocean"
+    },
+    {
+      "terme": "estuaire",
+      "categorie": "cadre",
+      "valeur": "ocean"
+    },
+    {
+      "terme": "falaise",
+      "categorie": "cadre",
+      "valeur": "ocean"
+    },
+    {
+      "terme": "ile",
+      "categorie": "cadre",
+      "valeur": "ocean"
+    },
+    {
+      "terme": "lagon",
+      "categorie": "cadre",
+      "valeur": "ocean"
+    },
+    {
+      "terme": "port",
+      "categorie": "cadre",
+      "valeur": "ocean"
+    },
+    {
+      "terme": "quai",
+      "categorie": "cadre",
+      "valeur": "ocean"
+    },
+    {
+      "terme": "fjord",
+      "categorie": "cadre",
+      "valeur": "montagne"
+    },
+    {
+      "terme": "crete",
+      "categorie": "cadre",
+      "valeur": "montagne"
+    },
+    {
+      "terme": "glacier",
+      "categorie": "cadre",
+      "valeur": "montagne"
+    },
+    {
+      "terme": "vallee",
+      "categorie": "cadre",
+      "valeur": "campagne"
+    },
+    {
+      "terme": "steppe",
+      "categorie": "cadre",
+      "valeur": "campagne"
+    },
+    {
+      "terme": "savane",
+      "categorie": "cadre",
+      "valeur": "campagne"
+    },
+    {
+      "terme": "toundra",
+      "categorie": "cadre",
+      "valeur": "campagne"
+    },
+    {
+      "terme": "banlieue",
+      "categorie": "cadre",
+      "valeur": "ville"
+    },
+    {
+      "terme": "quartier",
+      "categorie": "cadre",
+      "valeur": "ville"
+    },
+    {
+      "terme": "avenue",
+      "categorie": "cadre",
+      "valeur": "ville"
+    },
+    {
+      "terme": "boulevard",
+      "categorie": "cadre",
+      "valeur": "ville"
+    },
+    {
+      "terme": "sentier",
+      "categorie": "cadre",
+      "valeur": "foret"
+    },
+    {
+      "terme": "clairiere",
+      "categorie": "cadre",
+      "valeur": "foret"
+    },
+    {
+      "terme": "canyon",
+      "categorie": "cadre",
+      "valeur": "desert"
+    },
+    {
+      "terme": "wadi",
+      "categorie": "cadre",
+      "valeur": "desert"
+    },
+    {
+      "terme": "soir",
+      "categorie": "moment",
+      "valeur": "crepuscule"
+    },
+    {
+      "terme": "soiree",
+      "categorie": "moment",
+      "valeur": "crepuscule"
+    },
+    {
+      "terme": "matin",
+      "categorie": "moment",
+      "valeur": "aube"
+    },
+    {
+      "terme": "apres-midi",
+      "categorie": "moment",
+      "valeur": "jour"
+    },
+    {
+      "terme": "crachin",
+      "categorie": "meteo",
+      "valeur": "pluie"
+    },
+    {
+      "terme": "grele",
+      "categorie": "meteo",
+      "valeur": "pluie"
+    },
+    {
+      "terme": "verglas",
+      "categorie": "meteo",
+      "valeur": "neige"
+    },
+    {
+      "terme": "poudreuse",
+      "categorie": "meteo",
+      "valeur": "neige"
+    },
+    {
+      "terme": "blizzard",
+      "categorie": "meteo",
+      "valeur": "neige"
+    },
+    {
+      "terme": "vapeur",
+      "categorie": "meteo",
+      "valeur": "brouillard"
+    },
+    {
+      "terme": "bourrasque",
+      "categorie": "meteo",
+      "valeur": "orage"
+    },
+    {
+      "terme": "pastel",
+      "categorie": "style",
+      "valeur": "aquarelle"
+    },
+    {
+      "terme": "huile",
+      "categorie": "style",
+      "valeur": "gen3"
+    },
+    {
+      "terme": "esquisse",
+      "categorie": "style",
+      "valeur": "minimal"
+    },
+    {
+      "terme": "vectoriel",
+      "categorie": "style",
+      "valeur": "minimal"
+    },
+    {
+      "terme": "graffiti",
+      "categorie": "style",
+      "valeur": "bd"
+    },
+    {
+      "terme": "pixel",
+      "categorie": "style",
+      "valeur": "bd"
+    },
+    {
+      "terme": "seventies",
+      "categorie": "style",
+      "valeur": "vintage"
+    },
+    {
+      "terme": "art-deco",
+      "categorie": "style",
+      "valeur": "vintage"
+    },
+    {
+      "terme": "serenite",
+      "categorie": "ambiance",
+      "valeur": "calme"
+    },
+    {
+      "terme": "apaisant",
+      "categorie": "ambiance",
+      "valeur": "calme"
+    },
+    {
+      "terme": "relaxant",
+      "categorie": "ambiance",
+      "valeur": "calme"
+    },
+    {
+      "terme": "chagrin",
+      "categorie": "ambiance",
+      "valeur": "melancolique"
+    },
+    {
+      "terme": "solitude",
+      "categorie": "ambiance",
+      "valeur": "melancolique"
+    },
+    {
+      "terme": "regret",
+      "categorie": "ambiance",
+      "valeur": "melancolique"
+    },
+    {
+      "terme": "euphorie",
+      "categorie": "ambiance",
+      "valeur": "joyeux"
+    },
+    {
+      "terme": "celebration",
+      "categorie": "ambiance",
+      "valeur": "joyeux"
+    },
+    {
+      "terme": "exaltant",
+      "categorie": "ambiance",
+      "valeur": "joyeux"
+    },
+    {
+      "terme": "puissant",
+      "categorie": "ambiance",
+      "valeur": "epique"
+    },
+    {
+      "terme": "enigme",
+      "categorie": "ambiance",
+      "valeur": "mysterieux"
+    },
+    {
+      "terme": "cache",
+      "categorie": "ambiance",
+      "valeur": "mysterieux"
+    },
+    {
+      "terme": "lime",
+      "categorie": "couleur",
+      "valeur": "vert"
+    },
+    {
+      "terme": "olive",
+      "categorie": "couleur",
+      "valeur": "vert"
+    },
+    {
+      "terme": "kaki",
+      "categorie": "couleur",
+      "valeur": "vert"
+    },
+    {
+      "terme": "corail",
+      "categorie": "couleur",
+      "valeur": "rose"
+    },
+    {
+      "terme": "sang",
+      "categorie": "couleur",
+      "valeur": "rouge"
+    },
+    {
+      "terme": "lavande",
+      "categorie": "couleur",
+      "valeur": "violet"
+    },
+    {
+      "terme": "amethyste",
+      "categorie": "couleur",
+      "valeur": "violet"
+    },
+    {
+      "terme": "ivoire",
+      "categorie": "couleur",
+      "valeur": "blanc"
+    },
+    {
+      "terme": "charbon",
+      "categorie": "couleur",
+      "valeur": "noir"
+    },
+    {
+      "terme": "ebene",
+      "categorie": "couleur",
+      "valeur": "noir"
+    },
+    {
+      "terme": "cuivre",
+      "categorie": "couleur",
+      "valeur": "orange"
+    },
+    {
+      "terme": "brun",
+      "categorie": "couleur",
+      "valeur": "orange"
+    },
+    {
+      "terme": "marron",
+      "categorie": "couleur",
+      "valeur": "orange"
+    },
+    {
+      "terme": "beige",
+      "categorie": "couleur",
+      "valeur": "dore"
+    },
+    {
+      "terme": "crepitement",
+      "categorie": "son",
+      "valeur": "feu"
+    },
+    {
+      "terme": "applaudissements",
+      "categorie": "son",
+      "valeur": "foule"
+    },
+    {
+      "terme": "conversation",
+      "categorie": "son",
+      "valeur": "foule"
+    },
+    {
+      "terme": "agitation",
+      "categorie": "son",
+      "valeur": "foule"
+    },
+    {
+      "terme": "minou",
+      "categorie": "sujet",
+      "valeur": "chat"
+    },
+    {
+      "terme": "matou",
+      "categorie": "sujet",
+      "valeur": "chat"
+    },
+    {
+      "terme": "toutou",
+      "categorie": "sujet",
+      "valeur": "chien"
+    },
+    {
+      "terme": "cabot",
+      "categorie": "sujet",
+      "valeur": "chien"
+    },
+    {
+      "terme": "mesange",
+      "categorie": "sujet",
+      "valeur": "oiseau"
+    },
+    {
+      "terme": "perroquet",
+      "categorie": "sujet",
+      "valeur": "oiseau"
+    },
+    {
+      "terme": "colombe",
+      "categorie": "sujet",
+      "valeur": "oiseau"
+    },
+    {
+      "terme": "pigeon",
+      "categorie": "sujet",
+      "valeur": "oiseau"
+    },
+    {
+      "terme": "canard",
+      "categorie": "sujet",
+      "valeur": "oiseau"
+    },
+    {
+      "terme": "cygne",
+      "categorie": "sujet",
+      "valeur": "oiseau"
+    },
+    {
+      "terme": "corneille",
+      "categorie": "sujet",
+      "valeur": "oiseau"
+    },
+    {
+      "terme": "tilleul",
+      "categorie": "sujet",
+      "valeur": "arbre"
+    },
+    {
+      "terme": "cedre",
+      "categorie": "sujet",
+      "valeur": "arbre"
+    },
+    {
+      "terme": "bouleau",
+      "categorie": "sujet",
+      "valeur": "arbre"
+    },
+    {
+      "terme": "pivoine",
+      "categorie": "sujet",
+      "valeur": "fleur"
+    },
+    {
+      "terme": "coquelicot",
+      "categorie": "sujet",
+      "valeur": "fleur"
+    },
+    {
+      "terme": "jonquille",
+      "categorie": "sujet",
+      "valeur": "fleur"
+    },
+    {
+      "terme": "chaumiere",
+      "categorie": "sujet",
+      "valeur": "maison"
+    },
+    {
+      "terme": "igloo",
+      "categorie": "sujet",
+      "valeur": "maison"
+    },
+    {
+      "terme": "grange",
+      "categorie": "sujet",
+      "valeur": "maison"
+    },
+    {
+      "terme": "donjon",
+      "categorie": "sujet",
+      "valeur": "chateau"
+    },
+    {
+      "terme": "palais",
+      "categorie": "sujet",
+      "valeur": "chateau"
+    },
+    {
+      "terme": "citadelle",
+      "categorie": "sujet",
+      "valeur": "chateau"
+    },
+    {
+      "terme": "viaduc",
+      "categorie": "sujet",
+      "valeur": "pont"
+    },
+    {
+      "terme": "passerelle",
+      "categorie": "sujet",
+      "valeur": "pont"
+    },
+    {
+      "terme": "minaret",
+      "categorie": "sujet",
+      "valeur": "tour"
+    },
+    {
+      "terme": "beffroi",
+      "categorie": "sujet",
+      "valeur": "tour"
+    },
+    {
+      "terme": "passant",
+      "categorie": "sujet",
+      "valeur": "personnage"
+    },
+    {
+      "terme": "randonneur",
+      "categorie": "sujet",
+      "valeur": "personnage"
+    },
+    {
+      "terme": "cuisinier",
+      "categorie": "sujet",
+      "valeur": "personnage"
+    },
+    {
+      "terme": "paysan",
+      "categorie": "sujet",
+      "valeur": "personnage"
+    },
+    {
+      "terme": "guerrier",
+      "categorie": "sujet",
+      "valeur": "personnage"
+    },
+    {
+      "terme": "archer",
+      "categorie": "sujet",
+      "valeur": "personnage"
+    },
+    {
+      "terme": "magicien",
+      "categorie": "sujet",
+      "valeur": "personnage"
+    },
+    {
+      "terme": "satellite",
+      "categorie": "sujet",
+      "valeur": "astre"
+    },
+    {
+      "terme": "comete",
+      "categorie": "sujet",
+      "valeur": "astre"
+    },
+    {
+      "terme": "soucoupe",
+      "categorie": "sujet",
+      "valeur": "vaisseau"
+    },
+    {
+      "terme": "astronef",
+      "categorie": "sujet",
+      "valeur": "vaisseau"
+    },
+    {
+      "terme": "camion",
+      "categorie": "sujet",
+      "valeur": "voiture"
+    },
+    {
+      "terme": "taxi",
+      "categorie": "sujet",
+      "valeur": "voiture"
+    },
+    {
+      "terme": "scooter",
+      "categorie": "sujet",
+      "valeur": "velo"
+    },
+    {
+      "terme": "trottinette",
+      "categorie": "sujet",
+      "valeur": "velo"
+    },
+    {
+      "terme": "wagon",
+      "categorie": "sujet",
+      "valeur": "train"
+    },
+    {
+      "terme": "tram",
+      "categorie": "sujet",
+      "valeur": "train"
+    },
+    {
+      "terme": "zeppelin",
+      "categorie": "sujet",
+      "valeur": "montgolfiere"
+    },
+    {
+      "terme": "hydre",
+      "categorie": "sujet",
+      "valeur": "dragon"
+    },
+    {
+      "terme": "wyvern",
+      "categorie": "sujet",
+      "valeur": "dragon"
+    },
+    {
+      "terme": "taureau",
+      "categorie": "sujet",
+      "valeur": "vache"
+    },
+    {
+      "terme": "boeuf",
+      "categorie": "sujet",
+      "valeur": "vache"
+    },
+    {
+      "terme": "agneau",
+      "categorie": "sujet",
+      "valeur": "mouton"
+    },
+    {
+      "terme": "chevre",
+      "categorie": "sujet",
+      "valeur": "mouton"
+    },
+    {
+      "terme": "poney",
+      "categorie": "sujet",
+      "valeur": "cheval"
+    },
+    {
+      "terme": "sardine",
+      "categorie": "sujet",
+      "valeur": "poisson"
+    },
+    {
+      "terme": "truite",
+      "categorie": "sujet",
+      "valeur": "poisson"
+    },
+    {
+      "terme": "carpe",
+      "categorie": "sujet",
+      "valeur": "poisson"
+    },
+    {
+      "terme": "saumon",
+      "categorie": "sujet",
+      "valeur": "poisson"
+    },
+    {
+      "terme": "thon",
+      "categorie": "sujet",
+      "valeur": "poisson"
+    },
+    {
+      "terme": "viking",
+      "categorie": "sujet",
+      "valeur": "personnage"
+    },
+    {
+      "terme": "knight",
+      "categorie": "sujet",
+      "valeur": "personnage"
+    },
+    {
+      "terme": "abbaye",
+      "categorie": "sujet",
+      "valeur": "chateau"
+    },
+    {
+      "terme": "colline",
+      "categorie": "cadre",
+      "valeur": "campagne"
+    },
+    {
+      "terme": "solitaire",
+      "categorie": "ambiance",
+      "valeur": "melancolique"
+    },
+    {
+      "terme": "ruine",
+      "categorie": "ambiance",
+      "valeur": "mysterieux"
+    }
+  ]
+}

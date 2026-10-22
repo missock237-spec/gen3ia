@@ -29,7 +29,10 @@ vi.mock("@/lib/agents/analytics", () => ({
 
 import { GET } from "./route";
 
-const CONTEXT = { userId: "user-1", email: "u@gen3ia.io", traceId: "t1" };
+// SYSTÈME AGENT RÉSERVÉ (demande n°5) : la décision agent-système est prise
+// sur le contexte protectRoute — les tests exercés ici empruntent le chemin
+// admin (claims portés par le contexte de garde).
+const CONTEXT = { userId: "user-1", email: "u@gen3ia.io", claims: { admin: true }, traceId: "t1" };
 
 function ok() {
   return { ok: true as const, context: CONTEXT };
@@ -132,7 +135,20 @@ describe("GET /api/agents/[id]/analytics", () => {
     getAnalyticsMock.mockRejectedValue(new Error("agent analytics read: aucune réponse en 6000ms (probablement quota Firestore épuisé)."));
     const response = await GET(request(), ROUTE_CONTEXT);
     expect(response.status).toBe(503);
-    const body = (await response.json()) as { error: string; code: string };
+    const body = await response.json() as { error: string; code: string };
     expect(body.code).toBe("PROVIDER_UNAVAILABLE");
+  });
+
+  // SYSTÈME AGENT RÉSERVÉ (demande n°5) : utilisateur standard (sans claim
+  // admin) → 403 « réservé au système IA » avant toute lecture d'agent.
+  it("403 réservé au système IA pour un utilisateur standard (sans claim admin)", async () => {
+    protectMock.mockResolvedValue({ ok: true as const, context: { ...CONTEXT, claims: {} } });
+    const response = await GET(request(), ROUTE_CONTEXT);
+    expect(response.status).toBe(403);
+    const body = await response.json() as { error: string; code: string };
+    expect(body.code).toBe("FORBIDDEN");
+    expect(body.error).toContain("réservé au système IA");
+    expect(getAgentForUserMock).not.toHaveBeenCalled();
+    expect(getAnalyticsMock).not.toHaveBeenCalled();
   });
 });

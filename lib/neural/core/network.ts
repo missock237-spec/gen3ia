@@ -180,6 +180,13 @@ export class ReseauNeuronalGen3 {
    * Restaure un état exporté : recrée les neurones selon la config puis les
    * synapses sérialisées. Les énergies repartent de zéro (seul le câblage
    * appris est persistant — les énergies sont par nature transitoires).
+   *
+   * SANITISATION (durcissement 2026-10-22) : toute synapse invalide est
+   * rejetée AVANT restauration — poids non fini (NaN/Infinity : un neurone
+   * ne spikerait plus jamais, amnésie silencieuse) ou identifiants hors
+   * bornes (source/target < 0 ou ≥ size : synapse orpheline). Un avertissement
+   * est loggé si des entrées sont écartées ; les synapses saines sont
+   * restaurées à l'identique.
    */
   importState(state: ReseauStateExport): void {
     const config: NeuralConfig = {
@@ -193,7 +200,36 @@ export class ReseauNeuronalGen3 {
         new Neurone(i, config.defaultThreshold, config.defaultDecay),
       );
     }
-    this.synapses = state.synapses.map(
+    const brutes = Array.isArray(state.synapses) ? state.synapses : [];
+    const valides: Array<[number, number, number]> = [];
+    let rejetees = 0;
+    for (const entree of brutes) {
+      if (!Array.isArray(entree) || entree.length < 3) {
+        rejetees++;
+        continue;
+      }
+      const [sourceId, targetId, weight] = entree;
+      if (
+        !Number.isInteger(sourceId) ||
+        !Number.isInteger(targetId) ||
+        sourceId < 0 ||
+        targetId < 0 ||
+        sourceId >= config.size ||
+        targetId >= config.size ||
+        typeof weight !== "number" ||
+        !Number.isFinite(weight)
+      ) {
+        rejetees++;
+        continue;
+      }
+      valides.push([sourceId, targetId, weight]);
+    }
+    if (rejetees > 0) {
+      console.warn(
+        `[NEURAL] importState : ${rejetees} synapse(s) invalide(s) rejetée(s) sur ${brutes.length} (poids non fini ou identifiant hors bornes) — ${valides.length} restaurée(s).`,
+      );
+    }
+    this.synapses = valides.map(
       ([sourceId, targetId, weight]) =>
         new Synapse(sourceId, targetId, weight),
     );

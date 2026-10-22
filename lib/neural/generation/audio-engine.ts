@@ -131,6 +131,12 @@ export function genererAudioNeural(
   const donnees = Buffer.alloc(nbEchantillons * 2);
   let sommeAbs = 0;
 
+  // Curseur monotone sur les segments (audit perf O(n²)→O(n)) : les
+  // segments sont triés par debutS — l'ancien `segments.find` rescannait
+  // la liste pour CHAQUE échantillon (jusqu'à 1,44 M × 12 comparaisons à
+  // 30 s / 48 kHz). Le curseur avance une seule fois au total.
+  let indexSegment = 0;
+
   for (let n = 0; n < nbEchantillons; n++) {
     const t = n / rate;
     let echantillon = 0;
@@ -140,8 +146,16 @@ export function genererAudioNeural(
     echantillon +=
       0.22 * pulsationLente * Math.sin(2 * Math.PI * fondamentale * t);
 
-    // Segments : arpège des partiels de la gamme selon la note du segment.
-    const segment = segments.find((s) => t >= s.debutS && t < s.debutS + s.dureeS);
+    // Segments : arpège des partiels de la gamme selon la note du segment
+    // (curseur monotone — voir commentaire au-dessus de la boucle).
+    while (
+      indexSegment < segments.length &&
+      t >= segments[indexSegment]!.debutS + segments[indexSegment]!.dureeS
+    ) {
+      indexSegment++;
+    }
+    const courant = segments[indexSegment];
+    const segment = courant && t >= courant.debutS ? courant : undefined;
     if (segment) {
       // Enveloppe attaque/relâche (30 % du segment de chaque côté).
       const local = (t - segment.debutS) / Math.max(0.001, segment.dureeS);

@@ -14,6 +14,7 @@ import {
   type HubDatasetSummary,
   type HubProvider,
 } from "./common";
+import { lignesDepuisParquet } from "./parquet";
 
 /* ------------------------------------------------------------------ */
 /* Connecteur Kaggle (v1.1) — API v1, jeton KGAT (Bearer)               */
@@ -179,6 +180,12 @@ export async function inspectKaggleDataset(ref: string): Promise<HubDatasetDetai
           : [];
         previewRows = truncatePreviewRows(rows);
         columns = Object.keys(rows[0] ?? {}).slice(0, 30);
+      } else if (/\.parquet$/i.test(previewCandidate.name)) {
+        // Parquet (JS pur) : lignes décodées sous plafond, colonnes réelles.
+        const resultat = await lignesDepuisParquet(buffer, previewCandidate.name, 10);
+        previewRows = truncatePreviewRows(resultat.lignes);
+        columns = Object.keys(resultat.lignes[0] ?? {}).slice(0, 30);
+        for (const avertissement of resultat.avertissements) notes.push(avertissement.slice(0, 300));
       } else {
         // .txt : lignes brutes présentées en colonne unique.
         const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0).slice(0, 10);
@@ -215,17 +222,20 @@ export async function inspectKaggleDataset(ref: string): Promise<HubDatasetDetai
 
 /* --------------------------- Téléchargement ----------------------- */
 
-/** Télécharge un fichier précis d'un dataset Kaggle (plafond appliqué). */
+/** Télécharge un fichier précis d'un dataset Kaggle (plafond appliqué).
+ *  `partiel` : les grands fichiers sont tronqués au plafond au lieu d'être
+ *  refusés (auto-apprentissage). */
 export async function downloadKaggleFile(
   ref: string,
   fileName: string,
   maxBytes: number,
-): Promise<{ buffer: Buffer; contentType: string }> {
+  partiel = false,
+): Promise<{ buffer: Buffer; contentType: string; tronque?: boolean }> {
   const safeName = assertHubFileName(fileName);
   const [owner, slug] = ref.split("/");
   const { hubDownloadFile } = await import("./common");
   const url =
     `${KAGGLE_API}/datasets/download/${encodeURIComponent(owner)}/${encodeURIComponent(slug)}` +
     `/${safeName.split("/").map((segment) => encodeURIComponent(segment)).join("/")}`;
-  return hubDownloadFile(url, { headers: kaggleHeaders() }, maxBytes);
+  return hubDownloadFile(url, { headers: kaggleHeaders() }, maxBytes, undefined, { partiel });
 }

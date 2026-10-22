@@ -3928,3 +3928,57 @@ Stage Summary:
 - L'IA évolue EN CONTINU : plasticité d'usage à chaque rappel + consolidation autonome périodique des échanges réussis + persistance automatique — l'évolution est visible (page Cerveau, stats publiques, API).
 - Gen génère les 4 formats : texte (cortex langagier, +26 paires dont rédaction), images (moteur visuel SVG→PNG), audio (synthèse WAV), vidéo (animation SVG SMIL) — moteurs locaux réels déjà câblés au chat (/api/chat/message) et à /api/neural/media.
 - Reste : revue + fusion de la PR vers main.
+
+---
+Task ID: 166 (paiements Chariow branchés + timebox 30 min)
+Agent: Super Z (main) — session continuation
+Task: « Voici le script pour les 3 payements dans le projet, puis change le temps d'entraînement des models d'IA ne soit que de 30min/model »
+
+Work Log:
+- PRODUITS IDENTIFIÉS VIA API (GET /products, clé sk_… du .env) : prd_svqonju7 = « Plan pro » 9 750 XAF one_time ; prd_v76f5kjl = « Plan entreprise » 325 000 XAF one_time ; prd_646qpmge = « Entraînez vos modèles d'IA » 995 000 XAF one_time — les 3 sont PUBLIÉS.
+- lib/billing/plans.ts : ENTREPRISE_PRODUCT_ID/SUR_MESURE_PRODUCT_ID ajoutés comme replis par défaut (env prime) → les 3 offres payantes deviennent achetables (checkout métadonnées + webhook Pulse + activation de licence via planForProductId, résolution inverse automatique). Prix affichés ALIGNÉS sur la boutique (325 000/995 000 XAF ≈ 495 €/1 517 €) : le checkout facture le prix produit Chariow, l'affichage doit matcher.
+- Widgets de paiement direct : nouveau components/billing/chariow-widget.tsx — rend la div officielle #chariow-widget (style tap, boutique xdaagetk.mychariow.shop) ; le script Chariow (widget.min.js v1, analysé) ne scanne le DOM qu'UNE fois → injection après rendu, dédoublonnée par micro-tâche (N widgets = 1 scan) + re-injection au remontage React (remove+re-append → re-scan). Section « Paiement direct sur la boutique Chariow » sur /billing avec les 3 widgets + note d'activation de licence.
+- CSP forteresse (middleware.ts) : ouverture MINIMALE — script-src + style-src += js.chariowcdn.com ; frame-src += js.chariowcdn.com + *.mychariow.shop (iframe checkout) ; connect-src idem. Aucun unsafe-eval, aucun domaine fourre-tout.
+- TIMEBOX 30 MIN : DUREE_MAX_ENTRAINEMENT_MS = 30*60*1000 (timebox.ts) — les 3 niveaux de garantie suivent (deadline physique entre rounds, verrou TTL = timebox+5 min = 35 min, bornerBudgetMs) ; message 409 arène « dure au plus 30 min par modèle », badge UI arene-ondes (auto : constante/60000), commentaires verrou.ts/arene.ts. Fenêtre datasets 2 h (entrainement-auto) INTACTE.
+- Tests : plans.test.ts (prix boutique, 3 produits résolus, purchasable) ; NOUVEAU chariow-widget.test.tsx (données exportées + verrouillage structurel injection/CSP/page) ; timebox-verrou.test.ts (1_800_000) ; arene-orchestrator.test.ts (30*60*1000).
+- Docs : docs/billing/chariow-plans.md réécrite (produits publiés, widgets, mise en service réduite au webhook Pulse) ; scripts/chariow_plans_status.mjs fallbacks+tarifs ; CHANGELOG.
+- QA : tsc 0 ; eslint 0 ; vitest verts ; next build OK. PR vers main.
+
+---
+Task ID: acces-studio-live (2 demandes)
+Agent: Super Z (main)
+Task: « 1. Capture 1 : en production les utilisateurs n'ont plus accès au projet (403 sur /studio). 2. Fichier 2 (genIA Desktop — Live & Partage d'Écran) : rendre l'agent live accessible via Android et PC avec ce code pour PC et l'autre pour Android, s'assurer que tout fonctionne. »
+
+Work Log:
+- DIAGNOSTIC 403 : le garde deny-by-default (demande n°7) classait /studio (hors /studio/connections) et /live restreints → 403 pour les utilisateurs standards (middleware + route-guard). Cartographie complète des dépendances : /studio/video → /api/video/projects (restreinte), /studio/agents → AgentChatWorkshop → GET/POST /api/agents (gardé par requireAgentSystemAccess, demande n°5).
+- RÉOUVERTURE SURGICALE (lib/security/user-access.ts) : familles studio + live ; /studio en liste blanche pages SAUF /studio/console (IDE développeur — RESTRICTED_PAGE_PREFIXES évaluées avant la liste blanche) ; APIs : /api/video/projects (+[id]+render), /api/live, /api/agents ; NOUVEAU mécanisme RESTRICTED_API_PREFIXES pour garder /api/agents/run|generate|plan|system interdits au middleware (orchestration réservée, demande n°5 maintenue).
+- /api/agents : GET/POST passent de requireAgentSystemAccess à requireUser (provisionnement « Gen IA » du workshop) — orchestration inchangée.
+- AGENT LIVE MULTI-APPAREILS : garde PC-only retiré (page /live, POST /api/live/sessions, POST frames) ; panneau Gemini Live à source adaptative — PC : getDisplayMedia 1 fps JPEG (mécanique exacte du fichier genIA Desktop fourni) ; Android/iOS : caméra getUserMedia + bascule avant/arrière À CHAUD + aperçu vidéo (getDisplayMedia n'existe pas sur ces navigateurs — la caméra est la source réelle équivalente, aucun simulacre) ; voix/barge-in inchangés ; aucun relais ws://localhost:8080 nécessaire (WebSocket Google direct, CSP déjà en place, clé en sessionStorage) ; Electron desktopCapturer non reproduit (documenté honnêtement).
+- Tests : matrice user-access réécrite (pages, API, frontières console + orchestration), middleware.test (studio réouvert + /live user + /studio/console 403), route-guard, route-org agents (GET/POST ouverts), sessions/frames android (201/200), PcOnlyNotice orphelin supprimé.
+- QA : tsc 0 ; eslint 0 ; vitest 4658 verts / 0 échec ; next build OK. PR #78 ouverte.
+
+Stage Summary:
+- Les utilisateurs retrouvent le studio complet (le 403 de la capture disparaît) sauf la console développeur, surface à privilège assumée.
+- L'agent Live fonctionne sur PC (écran + voix) ET Android (caméra + voix), code genIA Desktop intégré au panneau existant sans relais local.
+- Défense en profondeur conservée : orchestration agents réservée au système IA au double niveau (middleware + routes).
+
+---
+Task ID: durcissement-fiabilite (demande du propriétaire, 2026-10-22)
+Agent: Super Z (main — Z.ai)
+Task: « Vas-y, commence à appliquer ces correctifs » — implémentation des P0/P1 issus de l'analyse multi-agents (moteur neural, entraînement, robustesse production) : mémoire isolée par conversation, persistance durcie, sanitisation importState, empreinte de repli visible, CD durci, cron training-sweep.
+
+Work Log:
+- BRANCHE fix/fiabilite-cerveau-memoire-cd depuis main (17147742).
+- MÉMOIRE PAR CONVERSATION (P0, lib/neural/engine.ts + memory/hippocampus.ts) : carte LRU (500) de fenêtres HippocampusMemory clé « userId|conversationId » (metadata déjà posée par /api/chat/message:170) ; composer()/memoriser() reçoivent la fenêtre résolue (generate + generateStream) ; sans identité → fenêtre partagée historique (tests/appels système inchangés) ; hippocampe partagé plus alimenté par les tours identifiés ; getter tailleFenetre() ajouté pour cloner la taille du runtime.
+- PERSISTANCE DURCIE (P0, lib/neural/training/persistence.ts) : mutex interne (chaîne de promesses) sérialisant saveBrainState (les 4 call sites concurrents ne peuvent plus se renommer mutuellement un .tmp partiel) ; .tmp UNIQUE pid+uuid purgé en cas d'échec ; rotation .bak (copie de la version courante AVANT rename) ; loadBrainState tente le .bak AVANT le repli réseau neuf (amnésie évitée, warn visible) ; deleteBrainState purge main+bak. persistance-v2.ts : même .tmp unique.
+- SANITISATION importState (P0, lib/neural/core/network.ts) : rejet sans exception des synapses à poids non fini (NaN/Infinity) ou identifiants hors bornes, warn de comptage ; aller-retour exportState/importState fidèle.
+- EMPREINTE DE REPLI VISIBLE (P1, app/api/deploy-info/route.ts) : en production, tout repli hors BUILD_ID est loggué (warn, une fois/process) + envoyé à Sentry (import dynamique avalé) — le retour du bug « onglets aveugles » ne peut plus être silencieux. app/api/status/route.ts : resolveVersion aligné sur readBuildId() (la version /api/status reflète le build réellement servi sur le VPS — smoke test du runbook réparé).
+- CD DURCI (P1, deploy/cd-finisher.sh + .github/workflows/deploy-vps.yml) : blacklist failed_commits.txt ENFIN lue (grep -qxF → exit 3, plus aucune re-bascule d'un SHA fautif) ; workflow distinguant exit 3 (blacklist, abandon immédiat) et exit 2 (health check échoué → rollback appliqué, PAS de retry = plus de 4 bascules/rollbacks consécutifs) ; bascule node_modules en cp -al avec node_modules.old conservé → rollback .next.old + node_modules.old COHÉRENT (l'ancien rsync laissait ancien .next + nouvelles deps en cas d'échec) ; purge /tmp par trap EXIT ; BUILD_ID capturé au build et VÉRIFICATION FINALE côté VPS : /api/deploy-info doit servir EXACTEMENT le BUILD_ID du run (5 tentatives, 10 s) — un écart rend le workflow rouge.
+- CRON TRAINING-SWEEP (P0 entraînement) : entrée */5 * * * * dans vercel.json (parité) + section §7 « Crons VPS auto-hébergé » dans docs/runbooks/deployment.md avec crontab exacte (curl Bearer CRON_SECRET, log /var/log/gen3ia-cron.log) — le sweep global ne progressait qu'opportunistement (onglet Studio ouvert), rendant un futur worker GPU inutilisé dès onglet fermé.
+- TESTS : lib/neural/engine-memoire-isolee.test.ts (5 — fuite inter-comptes impossible, continuité intra-conversation préservée, hippocampe partagé intouché), lib/neural/training/persistence.test.ts (4 — concurrence sans corruption ni .tmp résiduel, rotation+repli .bak vérifiés avec horodatage, purge complète), lib/neural/core/network-sanitisation.test.ts (3 — NaN/hors bornes/malformés rejetés, état sain fidèle). Suites adjacentes reverdies : network (9), persistance-v2 (5), deploy-auto-update (deploy-info), status route (4), trainer/job, perf-cache-policy.
+- QA : tsc 0 ; eslint 0 (fichiers touchés) ; vitest verts ; bash -n cd-finisher OK. CHANGELOG §Sécurité/Fiabilité ajouté.
+
+Stage Summary:
+- Les 3 P0 « cœur IA » (fuite de contexte inter-comptes, courses de persistance, synapses toxiques) et les 3 P1 « visibilité » (repli signalé, version /api/status réelle, CD vérifié de bout en bout + blacklist) sont implémentés et testés.
+- Restent pour une prochaine vague (volontairement hors de cette PR pour rester réversible) : backup R2 du cerveau, durcissement gen3-local (timebox/anti-zombie), encodage du dernier message utilisateur dans le SNN, alertes uptime externes.
+- PR vers main = déploiement production automatique (deploy-vps.yml) avec vérification BUILD_ID intégrée.

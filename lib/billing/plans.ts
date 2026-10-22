@@ -4,16 +4,25 @@
  * Quatre offres pilotent l'accès aux fonctionnalités :
  *  - gratuit          : 0 €            — micro-agents standards, essaim P2P public.
  *  - pro              : 15 € / mois    — Agent Master, priorité P2P, RAG chiffré, API datasets.
- *  - entreprise       : 500 € / mois   — mesh privé (IA 100 % locale), multi-postes, support prioritaire.
- *  - modele-sur-mesure: 5 000 € /modèle — entraînement d'un modèle dédié dans l'Arène d'Ondes,
- *                                        livré en paquet d'ondes autonome.
+ *  - entreprise       : 325 000 FCFA (≈ 495 €) — mesh privé (IA 100 % locale), multi-postes, support prioritaire.
+ *  - modele-sur-mesure: 995 000 FCFA (≈ 1 517 €) — entraînement d'un modèle dédié dans l'Arène d'Ondes,
+ *                                       livré en paquet d'ondes autonome.
  *
  * La devise de la boutique Chariow est le XAF (parité fixe : 1 EUR = 655.957 XAF),
- * identique au wallet (lib/billing/wallet.ts). Les prix produits sont donc exprimés
- * en XAF et affichés avec leur équivalent EUR. Les identifiants produits Chariow
- * restent configurables (dashboard Chariow = seule voie de création, l'API publique
- * est en lecture seule sur /products) : chaque plan tombe sur son produit par
- * CHARIOW_PLAN_<PLAN>_PRODUCT_ID, sinon sur le produit déjà créé dans la boutique.
+ * identique au wallet (lib/billing/wallet.ts). Les prix affichés sont ALIGNÉS sur
+ * les produits réellement publiés dans la boutique (source de vérité du paiement :
+ * le checkout Chariow facture le prix du produit, jamais ce fichier). Les
+ * identifiants produits restent surchargeables par CHARIOW_PLAN_<PLAN>_PRODUCT_ID
+ * (env) ; à défaut chaque plan tombe sur son produit boutique par défaut :
+ *  - pro            → prd_svqonju7 (« Plan pro », 9 750 XAF)
+ *  - entreprise     → prd_v76f5kjl (« Plan entreprise », 325 000 XAF)
+ *  - sur-mesure     → prd_646qpmge (« Entraînez vos modèles d'IA », 995 000 XAF)
+ *
+ * Les trois produits boutique sont des licences one_time : l'accès Pro/Entreprise
+ * est accordé 30 jours par licence achetée (renouvelable), le sur-mesure sans
+ * expiration. Les 3 widgets de paiement direct (boutique Chariow) sont rendus
+ * sur /billing par components/billing/chariow-widget.tsx ; une licence achetée
+ * hors plateforme s'active via POST /api/billing/plans/licence.
  */
 
 /** Taux EUR → XAF (parité fixe du franc CFA). Surchargeable via CHARIOW_EUR_XAF_RATE. */
@@ -33,6 +42,8 @@ export type PlanEntitlement =
   | "p2p_priority"
   | "rag_chiffre"
   | "datasets_api"
+  /** Demande utilisateur n°8 : création de clés API entreprise (`g3a_`) réservée au plan Pro ou supérieur. */
+  | "api_keys"
   | "private_mesh"
   | "multi_postes"
   | "support_prioritaire"
@@ -63,7 +74,13 @@ export interface PlanDefinition {
   highlight: boolean;
 }
 
+// Produits Chariow réellement publiés dans la boutique (vérifiés via
+// GET /products — scripts/chariow_plans_status.mjs). Le dashboard Chariow
+// reste la seule voie de création/modification ; ces constantes sont les
+// replis par défaut, la variable d'environnement prime toujours.
 const PRO_PRODUCT_ID = "prd_svqonju7";
+const ENTREPRISE_PRODUCT_ID = "prd_v76f5kjl";
+const SUR_MESURE_PRODUCT_ID = "prd_646qpmge";
 
 export const PLANS: Record<PlanId, PlanDefinition> = {
   gratuit: {
@@ -100,24 +117,27 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       "p2p_priority",
       "rag_chiffre",
       "datasets_api",
+      "api_keys",
     ],
     audience: "Développeurs, créateurs, freelances",
     features: [
       "Accès complet à l'Agent Master et aux modules d'apprentissage",
       "Priorité de calcul sur l'essaim P2P",
       "RAG local chiffré et intégration d'API de datasets",
+      "Création de clés API (usage facturé : 1,00 €/1M tokens entrant, 1,50 €/1M sortant)",
     ],
     highlight: true,
   },
   entreprise: {
     id: "entreprise",
     name: "Plan Entreprise",
-    priceEur: 500,
-    priceXaf: 328000,
+    // Prix du produit boutique « Plan entreprise » (prd_v76f5kjl) : 325 000 XAF.
+    priceEur: 495,
+    priceXaf: 325000,
     cycle: "mensuel",
     accessDays: 30,
     productIdEnv: "CHARIOW_PLAN_ENTREPRISE_PRODUCT_ID",
-    defaultProductId: null,
+    defaultProductId: ENTREPRISE_PRODUCT_ID,
     entitlements: [
       "micro_agents",
       "agent_master",
@@ -125,6 +145,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       "p2p_priority",
       "rag_chiffre",
       "datasets_api",
+      "api_keys",
       "private_mesh",
       "multi_postes",
       "support_prioritaire",
@@ -140,12 +161,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   "modele-sur-mesure": {
     id: "modele-sur-mesure",
     name: "Modèle Sur-Mesure",
-    priceEur: 5000,
-    priceXaf: 3280000,
+    // Prix du produit boutique « Entraînez vos modèles d'IA » (prd_646qpmge) : 995 000 XAF.
+    priceEur: 1517,
+    priceXaf: 995000,
     cycle: "unique",
     accessDays: null,
     productIdEnv: "CHARIOW_PLAN_SUR_MESURE_PRODUCT_ID",
-    defaultProductId: null,
+    defaultProductId: SUR_MESURE_PRODUCT_ID,
     entitlements: [
       "micro_agents",
       "agent_master",
@@ -153,6 +175,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       "p2p_priority",
       "rag_chiffre",
       "datasets_api",
+      "api_keys",
       "private_mesh",
       "multi_postes",
       "support_prioritaire",

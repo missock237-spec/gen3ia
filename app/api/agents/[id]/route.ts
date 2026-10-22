@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 import { z } from "zod";
+// SYSTÈME AGENT (demande n°5) : édition réservée au système IA, MAIS la
+// SUPPRESSION est ouverte au PROPRIÉTAIRE de l'agent (demande explicite du
+// propriétaire — « supprime l'agent IA » ne devait rien faire) :
+// deleteAgentForUser applique le cloisonnement propriétaire/org (404
+// anti-énumération). GET/PATCH restent réservés (requireAgentSystemAccess).
+import { requireAgentSystemAccess } from "@/lib/security/agent-system-access";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { deleteAgentForUser, getAgentForUser, toSummary, updateAgentForUser } from "@/lib/agents/repository";
 import { AGENT_TYPES } from "@/lib/agents/schema";
@@ -55,7 +61,7 @@ async function validateSubAgentIds(userId: string, agentId: string, subAgentIds:
 export async function GET(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireUser(request); const { id } = await context.params;
+    const user = await requireAgentSystemAccess(request); const { id } = await context.params;
     const record = await getAgentForUser(user.uid, id);
     if (!record) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
     return NextResponse.json({ agent: { ...toSummary(record), systemPrompt: record.systemPrompt }, requestId }, { headers: { "x-request-id": requestId } });
@@ -65,7 +71,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireUser(request); const { id } = await context.params;
+    const user = await requireAgentSystemAccess(request); const { id } = await context.params;
     const parsed = PatchSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Mise a jour invalide", issues: parsed.error.flatten(), requestId }, { status: 400 });
     if (parsed.data.projectId && !(await getDeveloperProject(user.uid, parsed.data.projectId))) return NextResponse.json({ error: "Projet introuvable ou inaccessible", requestId }, { status: 403 });
@@ -95,6 +101,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
+    // OUVERTURE PROPRIÉTAIRE : tout utilisateur CONNECTÉ peut supprimer SES
+    // agents — le cloisonnement reste total (deleteAgentForUser refuse les
+    // agents d'autrui avec un 404, aucune fuite d'existence).
     const user = await requireUser(request); const { id } = await context.params;
     const deleted = await deleteAgentForUser(user.uid, id);
     if (!deleted) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });

@@ -20,8 +20,12 @@ import { errorStatus } from "@/lib/security/http-errors";
 import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
 
 function imageExternalCostEur(): number {
+  // Génération image 100 % NEURONALE LOCALE (moteur Gen3, zéro provider
+  // externe) : coût externe réel = 0 €. La variable d'env reste lisible
+  // pour un futur provider payant, mais plus aucun faux coût n'est
+  // facturé au client par défaut (audit multimodal).
   const parsed = Number(process.env.COST_IMAGE_GENERATION_EUR_PER_IMAGE);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0.04;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 const Body = z.object({
@@ -94,7 +98,10 @@ async function handleChatMessage(
 
     // Historique AVANT l'ajout du message courant — les PLUS RÉCENTS
     // (ordre chronologique) : une conversation longue garde sa fin.
-    const history = await listMessages(userId, conversationId, 100, { order: "recent" });
+    // 40 messages suffisent : assembleMessages compresse extractivement
+    // dans une fenêtre bien plus courte (≈16) — charger 100 faisait lire
+    // 2,5× plus de documents Firestore pour rien (audit multimodal).
+    const history = await listMessages(userId, conversationId, 40, { order: "recent" });
     await appendMessage({ conversationId, userId, role: "user", content: body.message });
 
     // Génération d'images NEURONALE LOCALE : les imageurs externes (Agnes)

@@ -24,6 +24,7 @@
 import { v5 as uuidV5 } from "uuid";
 
 import {
+  deleteVectorPointsByFilter,
   searchVectorPoints,
   upsertVectorPoints,
 } from "@/lib/memory/vector-store";
@@ -120,6 +121,38 @@ export async function indexConversationMessage(input: ConversationIndexInput): P
     );
     return false;
   }
+}
+
+/**
+ * Purge vectorielle d'une conversation SUPPRIMÉE : retire de l'index Qdrant
+ * tous les points (messages) portant ce userId + conversationId.
+ *
+ * Sans cette purge, les messages d'une conversation effacée restaient
+ * retrouvables par recherche sémantique (résidu orphelin = fuite de vie
+ * privée ressentie comme « ma conversation n'a pas été supprimée »).
+ *
+ * Fail-soft comme tout le module : R2 reste la SOURCE DE VÉRITÉ — si Qdrant
+ * est indisponible la suppression R2 aboutit quand même (return false
+ * journalisé, l'index se resynchronisera à la prochaine indexation).
+ */
+export async function purgeConversationVectors(userId: string, conversationId: string): Promise<boolean> {
+  if (!userId || !conversationId) return false;
+  const ok = await deleteVectorPointsByFilter(CONVERSATION_VECTOR_COLLECTION, {
+    must: [
+      { key: "userId", match: { value: userId } },
+      { key: "conversationId", match: { value: conversationId } },
+    ],
+  });
+  if (!ok) {
+    console.warn(
+      JSON.stringify({
+        event: "conversation_vector_purge_failed",
+        conversationId,
+        reason: "qdrant_unavailable_or_error",
+      }),
+    );
+  }
+  return ok;
 }
 
 /**

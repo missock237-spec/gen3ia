@@ -128,6 +128,15 @@ const nextConfig: NextConfig = {
         source: "/offline.html",
         headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }],
       },
+      // Mise à jour forcée navigateur (plan 4 étapes, 2026-10-23) : le
+      // manifeste de version est sondé par le DeployWatcher avec un
+      // cache-buster — il ne doit JAMAIS provenir d'un cache navigateur
+      // ni d'un intermédiaire (couche Next ; le runbook §8 double cette
+      // règle côté nginx).
+      {
+        source: "/version.json",
+        headers: [{ key: "Cache-Control", value: "no-store, no-cache, must-revalidate" }],
+      },
     ];
   },
   images: {

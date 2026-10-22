@@ -28,6 +28,11 @@ export class HippocampusMemory {
 
   constructor(private readonly maxHistory: number = TAILLE_FENETRE_DEFAUT) {}
 
+  /** Taille de la fenêtre glissante (pour cloner des fenêtres par conversation). */
+  tailleFenetre(): number {
+    return this.maxHistory;
+  }
+
   /** Enregistre un tour complet (entrée utilisateur + réponse système). */
   remember(userInput: string, systemResponse: string): void {
     this.history.push({

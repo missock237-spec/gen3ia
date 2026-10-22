@@ -115,14 +115,17 @@ export class NoyauCentralGen3 {
    *  - sinon → indice 1.0 (équilibre parfait).
    */
   verifierSanteNeuronale(): void {
-    const energies = Array.from(
-      this.cerveau.neurones.values(),
-      (n) => n.energy,
-    );
-    const energieMoy =
-      energies.length > 0
-        ? energies.reduce((a, b) => a + b, 0) / energies.length
-        : 0.0;
+    // OPTIMISATION (adaptation (f) du portage) : la moyenne était calculée
+    // via Array.from + reduce (2 allocations par cycle). Une boucle simple
+    // sur la Map donne le même résultat sans allocation — le résultat est
+    // strictement identique (somme des énergies / nombre de neurones).
+    let somme = 0;
+    let compte = 0;
+    for (const neurone of this.cerveau.neurones.values()) {
+      somme += neurone.energy;
+      compte += 1;
+    }
+    const energieMoy = compte > 0 ? somme / compte : 0.0;
     this.metriquesSante.energieMoyenne = energieMoy;
 
     if (energieMoy > 0.75) {

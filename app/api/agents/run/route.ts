@@ -3,7 +3,11 @@ import { errorStatus } from "@/lib/security/http-errors";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 
-import { requireUser } from "@/lib/security/authenticated-request";
+// SYSTÈME AGENT RÉSERVÉ (demande n°5) : lancement de missions fermé aux
+// utilisateurs standard (403 « réservé au système IA ») — admin conservé.
+// Le chemin IA légitime reste l'activation interne (lib/agents/system-activation.ts)
+// et le suivi de mission /api/agents/runs/[runId].
+import { requireAgentSystemAccess } from "@/lib/security/agent-system-access";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import {
   AgentRuntime,
@@ -65,7 +69,7 @@ export async function POST(request: NextRequest) {
   const startedAt = Date.now();
 
   try {
-    const user = await requireUser(request);
+    const user = await requireAgentSystemAccess(request);
     // Même classe de coût que /api/agents/[id]/run (12/5min) et
     // /api/v1/agents/[agentId]/run (30/5min) : l'entrée SDK/interne sans
     // limite pourrait enfiler des centaines de missions facturées.

@@ -14,7 +14,13 @@ import type { DatasetChoisi, HubSource, ObjectifAuto } from "./types";
  * stricts. Aucune requête réseau ici — le conservateur ne fait que choisir.
  */
 
-/** Requêtes de recherche par objectif et hub (FR + EN, 80 caractères max). */
+/** Requêtes de recherche par objectif et hub (FR + EN, 80 caractères max).
+ *  Élargissement (évidence HF, mêmes critères que le catalogue de maîtrise) :
+ *  les requêtes « domaines vides » validées avec extraction de matière réelle
+ *  (paires/échantillons sur les 2 premiers fichiers ingérables) sont aussi
+ *  proposées au régime fenêtre — sciences (medical meadow, physics qa),
+ *  culture-histoire (history qa), langues (translation instructions, french
+ *  translation), sujets (news classification). */
 export const REQUETES_OBJECTIF: Record<ObjectifAuto, Record<HubSource, string[]>> = {
   langage: {
     huggingface: [
@@ -22,11 +28,19 @@ export const REQUETES_OBJECTIF: Record<ObjectifAuto, Record<HubSource, string[]>
       "french question answering",
       "instruction following dialogue",
       "assistant conversation pairs",
+      "medical meadow",
+      "physics qa",
+      "history qa",
+      "translation instructions",
+      "french translation",
     ],
     kaggle: [
       "french conversation",
       "chatbot dialogue dataset",
       "customer support conversations",
+      "science questions",
+      "history facts",
+      "english french translation",
     ],
   },
   intention: {
@@ -35,10 +49,13 @@ export const REQUETES_OBJECTIF: Record<ObjectifAuto, Record<HubSource, string[]>
       "command classification dataset",
       "user utterance intent",
       "text classification commands",
+      "news classification dataset",
+      "text classification",
     ],
     kaggle: [
       "intent classification",
       "chatbot intent dataset",
+      "news classification",
     ],
   },
 };

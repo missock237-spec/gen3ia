@@ -47,6 +47,8 @@ export async function GET() {
           studio: "Gen entraîne les modèles fournis par les utilisateurs",
           moteurNatif: "gen3-native (CPU local, apprentissage réel)",
         },
+        cortexV2: blocCortexV2(runtime),
+        autoApprentissage: await blocAutoApprentissagePublic(),
         iaExterne: "aucune — moteur 100 % local",
       },
       { headers: { "cache-control": "public, max-age=30, stale-while-revalidate=60" } },
@@ -58,5 +60,81 @@ export async function GET() {
       { moteur: "gen3-snn-v1", cerveau: null, iaExterne: "aucune — moteur 100 % local" },
       { status: 200, headers: { "cache-control": "public, max-age=30" } },
     );
+  }
+}
+
+/** Construit le bloc public Cortex v2 (données réelles du runtime). */
+function blocCortexV2(runtime: ReturnType<typeof getNeuralRuntime>) {
+  if (!runtime.cortexV2) return null;
+  const etat = runtime.cortexV2.etatPourApi();
+  return {
+    colonnes: etat.cortex.colonnes,
+    aretes: etat.cortex.aretes,
+    champNeuronesAdressables: etat.champ.taille,
+    neuronesTotaux: etat.cortex.colonnes + etat.champ.taille + 100,
+    vitesse: {
+      msCycle: etat.cortex.msCycleEma,
+      cyclesParSeconde: etat.cortex.cyclesParSeconde,
+    },
+    champ: {
+      amplitudeMoyenne:
+        Math.round(etat.champ.amplitudeMoyenne * 1000) / 1000,
+      fractionActive:
+        Math.round(etat.champ.fractionActive * 1000) / 1000,
+      erreurEchantillon:
+        Math.round(etat.champ.erreurEchantillon * 10000) / 10000,
+    },
+    consolidation: etat.consolidation,
+  };
+}
+
+/**
+ * BLOC PUBLIC AUTO-APPRENTISSAGE — l'état RÉEL de la boucle autonome
+ * (régime maîtrise : entraînement continu depuis Hugging Face + Kaggle).
+ * Métriques anonymes et honnêtes issues de l'état persisté ; en cas
+ * d'indisponibilité, le bloc le dit (jamais de donnée fabriquée).
+ */
+async function blocAutoApprentissagePublic() {
+  try {
+    const { lireEtatAuto } = await import("@/lib/entrainement-auto/etat");
+    const { CATALOGUE_MAITRISE, domainesMaitrises, maitriseComplete } = await import(
+      "@/lib/entrainement-auto/maitrise"
+    );
+    const { cycleEnCours } = await import("@/lib/entrainement-auto/boucle");
+    const etat = await lireEtatAuto();
+    const bloc = etat.maitrise;
+    return {
+      regime: etat.regime,
+      actif: true,
+      cycleEnCours: cycleEnCours(),
+      cyclesExecutes: etat.cyclesExecutes,
+      pairesCumulees: etat.pairesCumulees,
+      echantillonsCumules: etat.echantillonsCumules,
+      datasetsIngestes: etat.datasetsIngestes.length,
+      hubs: { huggingface: true, kaggle: Boolean(process.env.KAGGLE_API_TOKEN) },
+      maitrise: {
+        complete: maitriseComplete(etat),
+        atteinteA: bloc?.atteinteA ?? null,
+        evaluations: bloc?.evaluationsTotales ?? 0,
+        cyclesSansProgres: bloc?.cyclesSansProgres ?? 0,
+        domainesMaitrises: domainesMaitrises(bloc),
+        domainesTotal: CATALOGUE_MAITRISE.length,
+        derniers: CATALOGUE_MAITRISE.slice(0, 12).map((domaine) => {
+          const etatDomaine = bloc?.domaines?.[domaine.id];
+          const derniere = etatDomaine?.dernieresEvaluations?.[0] ?? null;
+          return {
+            id: domaine.id,
+            maitrise: Boolean(etatDomaine?.maitriseA),
+            unites:
+              domaine.objectif === "langage"
+                ? etatDomaine?.pairesIngestees ?? 0
+                : etatDomaine?.echantillonsIngestes ?? 0,
+            precision: derniere ? Math.round(derniere.accuracy * 100) : null,
+          };
+        }),
+      },
+    };
+  } catch {
+    return { regime: null, actif: false, note: "État d'auto-apprentissage indisponible." };
   }
 }

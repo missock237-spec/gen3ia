@@ -12,7 +12,176 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Non publié]
 
+### Fiabilité — Mise à jour forcée navigateur (plan 4 étapes, 2026-10-23)
+
+- **Manifeste de version écrit à chaque build (étape 2)** :
+  `scripts/version-manifest.mjs` — `npm run build` écrit
+  `public/version.json` (provisoire sha+timestamp AVANT `next build`,
+  aligné sur le `.next/BUILD_ID` réel APRÈS) et embarque le manifeste
+  dans `.next/version.json` ; `cd-finisher.sh` le recopie dans `public/`
+  sur le VPS après son `git reset --hard` (le tar CD ne contient que
+  `.next`). Fichier gitignored — jamais de valeur périmée committée.
+- **Seconde sonde client + persistance inter-sessions (étape 3)** :
+  `components/deploy-watcher.tsx` sonde DÉSORMAIS en parallèle
+  `/api/deploy-info` ET `/version.json?t=<timestamp>` (no-store) — un
+  incident de la couche route/middleware n'aveugle plus la détection ;
+  la version est persistée en `localStorage` (`gen3ia-app-version`) :
+  une page chargée depuis un cache avec un build périmé est détectée
+  dès le premier relevé. La version est écrite AVANT tout rechargement
+  et des sources divergentes (bascule/rollback en cours) ne déclenchent
+  aucune décision — aucune boucle possible.
+- **En-têtes no-cache (étape 1)** : `/version.json` en
+  `no-store, no-cache, must-revalidate` (next.config.ts) ;
+  `deploy/nginx/gen3ia-cache.conf` fournit le bloc nginx à intégrer au
+  vhost (HTML/JSON jamais cachés, assets hashés `/_next/static/`
+  PROTEGÉS du regex générique `\.(html|json)$` par un `^~` prioritaire,
+  piège d'héritage `add_header` documenté) — runbook §8.
+- **Vérification CD étendue (étape 4)** : la dernière étape de
+  `deploy-vps.yml` exige deploy-info ET version.json == BUILD_ID du
+  runner, sinon le workflow passe ROUGE ; smoke test runbook §4 enrichi
+  (contrôle d'alignement des deux empreintes).
+
+### Sécurité / Fiabilité (durcissement 2026-10-22 — analyse multi-agents)
+
+- **Mémoire de travail isolée par conversation (P0 — fuite de contexte)** :
+  l'hippocampe du moteur (`lib/neural/engine.ts`) était un singleton partagé
+  par TOUS les comptes — l'anaphore « et toi ? » d'un utilisateur pouvait
+  capter le dernier tour d'un AUTRE. Chaque couple (userId, conversationId)
+  présent dans `metadata` (déjà posé par `/api/chat/message`) dispose
+  désormais de sa propre fenêtre glissante (LRU bornée à 500) ; sans
+  identité (appels système/tests), le comportement historique est conservé.
+  L'hippocampe partagé n'est plus alimenté par les tours identifiés.
+- **Persistance du cerveau durcie (P0 — risque de corruption/amnésie)** :
+  `lib/neural/training/persistence.ts` — sauvegardes SÉRIALISÉES par un
+  mutex interne (fin des courses entre consolidation, entraînement auto,
+  route evolve qui écrivaient toutes le même `.tmp` fixe), fichier
+  temporaire UNIQUE (pid+uuid) purgé en cas d'échec, ROTATION `.bak` de la
+  dernière version connue bonne et repli automatique sur la `.bak` au
+  chargement (une corruption ponctuelle ne coûte plus tout l'apprentissage)
+  ; `deleteBrainState` purge le cerveau ET sa `.bak` ;
+  `persistance-v2.ts` (artefact columnnaire) reçoit le même `.tmp` unique.
+- **Sanitisation des synapses importées (P0)** : `network.importState`
+  rejette toute synapse invalide (poids NaN/Infinity — neurone mort,
+  amnésie silencieuse ; identifiants hors bornes — synapse orpheline) avec
+  avertissement, sans lever d'exception ; les synapses saines restent
+  fidèles (aller-retour export/import testé).
+- **Empreinte de repli visible (P1 — fin de la cécité silencieuse)** :
+  `/api/deploy-info` signale (warn console + Sentry, une fois par process)
+  tout repli hors BUILD_ID en PRODUCTION — l'ancien échec invisible du
+  BUILD_ID (bug d'origine des onglets restés sur l'ancienne version) ne
+  peut plus passer inaperçu ; `/api/status` expose désormais le BUILD_ID
+  effectivement servi (même chaîne que deploy-info — le smoke test du
+  runbook peut vérifier la version en ligne sur le VPS).
+- **Chaîne CD durcie (P1)** : `deploy/cd-finisher.sh` lit ENFIN la
+  blacklist (`failed_commits.txt` — un SHA déjà en échec n'est plus jamais
+  re-basculé, exit 3), conserve `node_modules.old` pour un rollback
+  COHÉRENT (l'ancien rsync mettait les nouvelles deps en place avant le
+  health check : rollback = ancien .next + NOUVELLES deps) et purge
+  systématiquement les artefacts `/tmp` via trap ; `deploy-vps.yml` distingue
+  les codes de sortie (blacklist/health-check → pas de retry inutile),
+  capture le BUILD_ID du runner et VÉRIFIE EN FIN DE RUN que la production
+  sert exactement ce build (`/api/deploy-info`) — plus jamais de déploiement
+  « vert mais muet ».
+- **Cron training-sweep planifié** : entrée `*/5 * * * *` dans
+  `vercel.json` (parité) + section « Crons VPS auto-hébergé » dans
+  `docs/runbooks/deployment.md` (crontab exacte avec `CRON_SECRET` — le
+  sweep global ne progressait qu'opportunistement, onglet Studio ouvert).
+
 ### Ajouté
+
+- **Accès utilisateurs restauré (studio + agent Live) et Agent Live sur ANDROID + PC** :
+  sur demande explicite du propriétaire (« les utilisateurs n'ont plus accès au
+  projet » + code genIA Desktop fourni) :
+  - **Studio métier réouvert** : `/studio` (hub complet — agents, clients,
+    documents, finance, marketing, opérations, résultats, ventes, conformité,
+    vidéo, création) passe dans la liste blanche utilisateur (famille
+    `studio`) ; SEULE `/studio/console` reste RESTREINTE (IDE développeur :
+    clés API, projets et paiements développeur `/api/developer/*` — surfaces à
+    privilège, même sémantique que `/developer`) ; `/api/video/projects` (+[id]
+    +render) ouverts (atelier vidéo) — le worker vidéo reste système ;
+  - **Workshop « Gen IA » fonctionnel pour les utilisateurs** : GET/POST de
+    `/api/agents` (liste + provisionnement de l'agent universel) passent de
+    `requireAgentSystemAccess` à `requireUser` — l'orchestration
+    (`/run`, `/generate`, `/plan`, PATCH/DELETE `[id]`, `system/activate`)
+    reste RÉSERVÉE au système IA + admin (défense en profondeur conservée,
+    demande n°5 assouplie au strict nécessaire) ;
+  - **Agent Live sur PC ET Android** (`/live` + `/api/live` en liste blanche,
+    famille `live`) : le garde PC-only de la page et des routes
+    `sessions`/`frames` est retiré ; le panneau Gemini Live adapte sa SOURCE
+    à l'appareil — PC : partage d'écran natif (`getDisplayMedia`, 1 fps JPEG,
+    identique au fichier genIA Desktop fourni) ; Android/iOS : CAMÉRA
+    (`getUserMedia`, bascule avant/arrière à chaud, aperçu vidéo visible) —
+    le partage d'écran n'existant pas sur ces navigateurs, la caméra est la
+    source réelle équivalente (aucun simulacre) ; voix + barge-in inchangés
+    (PCM16 16 kHz, réponses 24 kHz, VAD 0,06) ; aucun relais local
+    (`ws://localhost:8080` du fichier d'origine inutile : le client parle
+    directement au WebSocket officiel de Google, clé en sessionStorage) ;
+  - matrice d'accès testée de bout en bout (pages, API, frontières
+    `/studio/console`, orchestration agents), doc `docs/live-gemini.md`
+    réécrite (accès, Android, choix d'architecture).
+
+- **Génération multimodale scénique v2 — texte/son/vidéo/image SANS GPU,
+  entraînement HORS PRODUCTION** : les trois moteurs média locaux passent de
+  l'abstrait neuronal (constellation v1) à la génération SCÉNIQUE — l'analyseur
+  sémantique (`lib/neural/generation/scene-spec.ts`, FR/EN : sujets, cadres,
+  moments, météos, styles, ambiances, couleurs, sons ; correspondance
+  longest-prefix « château » ≠ « chat », locutions, cadres implicites
+  phare→mer/vache→campagne) pilote trois moteurs en calques :
+  `visual-scene.ts` (illustration vectorielle → PNG via sharp : ciel du moment,
+  astre, météo, 8 cadres, 25 sujets dessinés, 6 styles), `audio-composition.ts`
+  (WAV PCM 16 bits : 11 couches SFX synthétisées + musique structurée — tempo
+  et mode majeur/mineur dérivés de l'ambiance, motif tiré des synapses
+  APPRISES), `video-storyboard.ts` (SVG animé SMIL : 1–4 scènes découpées du
+  prompt, caméra pan/zoom alternée, sujet flottant, météo vivante — pluie qui
+  tombe, éclairs, neige, brouillard —, oiseaux en vol, fondus enchaînés).
+  Déterminisme bit-à-bit conservé (même prompt + même état cérébral = même
+  œuvre) ; repli v1 ASSUMÉ et nommé (`gen3-snn-*-v1-constellation`) quand
+  rien n'est reconnu ; clés de cache de contenu bumpées v2 ; méta honnêtes
+  (`moteur`, scène reconnue, couverture, mots reconnus, calques/couches).
+  ENTRAÎNEMENT HORS PRODUCTION (directive : la production charge, elle ne
+  s'entraîne pas) : `scripts/pretrain-multimodal.ts` — corpus bilingue annoté
+  (48 phrases, jeu de test tenu à l'écart), 140 enseignements validés (aucun
+  conflit avec l'intégré, aucune valeur hors liste, aucun nouveau sujet non
+  rendable), précision attendus mesurée 0.913 → 1.000 (train) / 1.000 (test),
+  artefact committé `assets/neural-pretrained/multimodal-lexique-v1.json`
+  chargé au runtime (`lexique-serveur.ts`, échec doux) + rapport honnête.
+  Cortex langagier enrichi (6 paires « multimodal » : le moteur explique ses
+  capacités et ses écarts) ; console Cerveau IA : libellés atelier média
+  alignés (scènes décrites, repli v1 documenté) ; doc
+  `docs/multimodal/gen3-multimodal.md` (modalités, entraînement, niveaux de
+  référence ChatGPT/Leonardo/ElevenLabs/Veo avec écarts assumés). 63 tests
+  dédiés (analyseur, 3 moteurs, entraîneur + round-trip artefact, câblage
+  media-service v2/v1).
+
+- **Recharge rapide du wallet API via le widget Chariow (`prd_llfosdp1`)** :
+  widget boutique officiel rendu dans la carte « GEN3IA WALLET » de `/billing`
+  (raccourci de paiement direct à côté du flux Mobile Money existant, via le
+  même composant `ChariowWidget`) ; le webhook Pulse reconnaît les ventes du
+  produit par identifiant (`CHARIOW_TOPUP_PRODUCT_ID` → défaut boutique
+  `prd_llfosdp1`, sinon métadonnée `gen3ia_product = wallet_topup`) et crédite
+  le solde de façon idempotente (`chariow_<saleId>`, journal partagé avec le
+  retour de paiement vérifié) ; devise wallet alignée sur la boutique
+  (`GEN3IA_WALLET_CURRENCY=XAF` — le webhook refuse toute recharge dans une
+  autre devise) ; repli boutique `CHARIOW_TOPUP_STORE_URL` exposé par
+  `GET /api/billing/wallet` et affiché en lien secondaire ; doc
+  `docs/billing/chariow-plans.md` §8 (cycle paiement → webhook → solde).
+- **Paiements Chariow — les 3 produits payants branchés de bout en bout** :
+  mappage des produits réellement publiés (`prd_svqonju7` → Pro 9 750 FCFA,
+  `prd_v76f5kjl` → Entreprise 325 000 FCFA, `prd_646qpmge` → Sur-Mesure
+  995 000 FCFA) comme replis par défaut de `lib/billing/plans.ts` (env prime
+  toujours) ; les trois offres deviennent achetables, l'activation de licence
+  reconnaît les trois produits ; composant `ChariowWidget` (injection
+  idempotente du loader officiel + re-scan au remontage React) et section
+  « Paiement direct sur la boutique Chariow » sur `/billing` ; CSP ouverte au
+  strict minimum (`js.chariowcdn.com` script/style/frame, `*.mychariow.shop`
+  frame/connect) ; script `chariow_plans_status.mjs` et doc billing alignés
+  sur les prix boutique (source de vérité du paiement).
+- **Timebox d'entraînement réduite à 30 min par modèle** : la garantie produit
+  « un entraînement ne dépasse jamais trente minutes, par modèle, par session »
+  (lib/training/timebox.ts : plafond physique entre chaque round, verrou TTL
+  timebox + 5 min, bornage défensif des durées demandées) ; message 409 et
+  badge de l'Arène d'Ondes mis à jour. La fenêtre d'absorption des datasets
+  (2 h) reste inchangée.
 
 - **Suite « outils pilotés par les agents IA » — 16 nouveaux outils (Task 140)** :
   `handover.compose` (brief de relais IA → humain : intention, état émotionnel,

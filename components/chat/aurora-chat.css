@@ -505,3 +505,37 @@
   .aurora-chat .btn-bas { bottom: 170px; }
   .aurora-chat .suggestions { padding-left: 0; }
 }
+
+/* ── Chat voix (envoi sans prompt écrit) : micro actif + lecture vocale ── */
+
+/* Bouton d'envoi devenu micro : point pulsant léger (écoute en cours). */
+.aurora-chat .btn-envoi.voix-active {
+  animation: aurora-voix-pulse 1.2s ease-in-out infinite;
+}
+@keyframes aurora-voix-pulse {
+  0%, 100% { box-shadow: var(--gen3ia-shadow-glow), 0 0 0 0 color-mix(in srgb, var(--ac-accent) 55%, transparent); }
+  50% { box-shadow: var(--gen3ia-shadow-glow), 0 0 0 9px transparent; }
+}
+
+/* Indicateur « lecture vocale en cours » de la réponse IA (tours dictés). */
+.aurora-chat .lecture-vocale {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--ac-text-2);
+  padding: 5px 10px; margin-bottom: 6px; width: fit-content;
+  border: 1px solid var(--ac-surface-3); border-radius: 10px;
+  background: var(--ac-surface-2);
+}
+.aurora-chat .lecture-vocale .point-lecture {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--ac-accent);
+  animation: aurora-lecture-point 1s ease-in-out infinite;
+}
+@keyframes aurora-lecture-point {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+.aurora-chat .lecture-vocale button {
+  border: none; background: none; padding: 0; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--ac-accent);
+}
+.aurora-chat .lecture-vocale button:hover { text-decoration: underline; }

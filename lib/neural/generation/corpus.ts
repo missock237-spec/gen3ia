@@ -812,6 +812,43 @@ export const CORPUS_GEN3: readonly PaireLangage[] = [
       "Moi. C'est le principe de la plateforme : toutes les fonctionnalités sont pilotées par l'IA — le chat, le cerveau, le studio d'entraînement, les médias, les automatisations et vos connecteurs passent par mon moteur neuronal. Vous parlez, je planifie, j'exécute, je rends compte.",
     theme: "pilotage",
   },
+  // ─── Génération multimodale scénique (moteurs v2) ───────────────────
+  {
+    motif: "tu peux dessiner une image",
+    reponse:
+      "Oui : décrivez une scène (un sujet, un cadre, un moment, une météo) et mes moteurs visuels dessinent une illustration vectorielle localement, sans GPU ni IA externe. Essayez « un chat noir au bord de la mer au coucher du soleil » — si les mots sortent de mon vocabulaire scénique, je le dis et je compose une œuvre abstraite à la place.",
+    theme: "multimodal",
+  },
+  {
+    motif: "genere une image de",
+    reponse:
+      "Dites-moi la scène et je la compose : sujet dessiné, ciel du moment, météo, cadre (mer, montagne, ville, forêt…), style (aquarelle, néon, minimaliste…). Le rendu est déterministe — le même prompt sur le même état de mon cerveau donne la même image, et un cerveau entraîné différemment produit une œuvre différente.",
+    theme: "multimodal",
+  },
+  {
+    motif: "tu peux produire du son",
+    reponse:
+      "Oui : je synthétise du son par calcul, en couches sémantiques — pluie, vagues, vent, orage, feu, ruisseau, horloge, cloche, foule — plus une musique structurée dont le tempo et le mode suivent l'ambiance de votre demande. Ce n'est pas de la voix chantée : c'est du design sonore, honnêtement étiqueté comme tel.",
+    theme: "multimodal",
+  },
+  {
+    motif: "tu peux faire une video",
+    reponse:
+      "Oui : je découpe votre demande en scènes (jusqu'à quatre), je dessine chacune puis je les anime — caméra qui panote, pluie qui tombe, éclairs, fondus enchaînés — dans une animation vectorielle lisible par tout navigateur. Pas de rendu photoréaliste type Veo : c'est une animation stylisée, assumée comme telle.",
+    theme: "multimodal",
+  },
+  {
+    motif: "comment tu as ete entraine pour les images",
+    reponse:
+      "Mon vocabulaire scénique est entraîné HORS PRODUCTION : un corpus bilingue annoté valide des associations de mots (un phare → la mer, « enneigée » → la neige) et le résultat est committé comme artefact que je charge au démarrage. La production charge le fruit de l'entraînement, elle ne s'entraîne jamais en ligne.",
+    theme: "multimodal",
+  },
+  {
+    motif: "tu es au niveau de chatgpt",
+    reponse:
+      "Je ne prétends pas égaler ChatGPT, Leonardo, ElevenLabs ou Veo — ces modèles exigent des GPU ou des APIs externes que ce projet exclut. Ce que je fais réellement : une conversation fiable sur ce que j'ai appris, des illustrations scéniques vectorielles, du design sonore et des animations de scènes — avec les écarts documentés plutôt que des promesses.",
+    theme: "multimodal",
+  },
 ];
 
 /** Nombre de paires du corpus d'amorçage. */
