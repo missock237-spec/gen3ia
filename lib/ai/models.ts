@@ -74,6 +74,15 @@ export interface AIRequest {
 
   system?: string;
 
+  /**
+   * Fragments de la BASE DE CONNAISSANCES réellement recherchés pour ce
+   * tour (lib/knowledge/chat-context — score >= 0.3). Consommé par le
+   * moteur neural local (pont connaissances -> réponse) pour que les
+   * documents ingérés par l'utilisateur atteignent le TEXTE de la réponse,
+   * pas seulement le system prompt (qui n'influence que l'encodage).
+   */
+  knowledgeContext?: string;
+
   metadata?: Record<string, string>;
 }
 

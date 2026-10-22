@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { MarkdownContent } from "@/components/workspace/markdown";
+import { VideoProductionCard } from "@/components/workspace/video-production-card";
 import { authFetch, readJsonSafely } from "@/lib/firebase/auth-client";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import { ATTACHMENT_MAX_FILES, validateAttachment } from "@/lib/files/attachment-policy";
@@ -886,6 +887,21 @@ export function AuroraChat() {
   }, [conversationsFiltrees]);
 
   const messages = detail?.messages ?? [];
+  // Artefacts vidéo PERSISTÉS de la conversation : sans cette carte,
+  // l'utilisateur d'/chat ne voyait qu'un lien markdown présigné qui
+  // expire (900 s) — la carte suit la progression RÉELLE et affiche le
+  // lecteur <video> + téléchargement dès que le rendu est terminé (parité
+  // avec /workspace/conversations/[id]).
+  const videoArtifacts = useMemo(
+    () =>
+      (detail?.artifacts ?? []).flatMap((artifact) => {
+        if (!artifact || typeof artifact !== "object") return [];
+        const record = artifact as { id?: unknown; type?: unknown; title?: unknown; videoProjectId?: unknown };
+        if (record.type !== "video" || typeof record.videoProjectId !== "string" || record.videoProjectId.length === 0) return [];
+        return [{ id: typeof record.id === "string" ? record.id : record.videoProjectId, videoProjectId: record.videoProjectId, title: typeof record.title === "string" ? record.title : undefined }];
+      }),
+    [detail],
+  );
   const indexDernierBot = messages.map((m) => m.role).lastIndexOf("assistant");
   const indexDernierUser = messages.map((m) => m.role).lastIndexOf("user");
   const dernierMessage = messages[messages.length - 1];
@@ -1060,6 +1076,16 @@ export function AuroraChat() {
                   onRegenerer={regenerer}
                   onModifier={modifierDernier}
                 />
+              ))}
+
+              {/* Cartes de production vidéo persistées (parité /workspace) :
+                  progression réelle puis lecteur intégré. */}
+              {videoArtifacts.map((artifact) => (
+                <div key={`aurora-video-${artifact.id}`} className="msg bot">
+                  <div className="bubble-wrap w-full">
+                    <VideoProductionCard videoProjectId={artifact.videoProjectId} title={artifact.title} />
+                  </div>
+                </div>
               ))}
 
               {/* Tour en cours : bulle de streaming avec statut en direct. */}

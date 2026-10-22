@@ -18,6 +18,7 @@ import type { CortexLangagierGen3, ContexteLangage } from "./generation/language
 import type { HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
+import { composerDepuisConnaissances } from "./connaissances-pont";
 import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
 
 /** Source du langage de la réponse (télémétrie honnête). */
@@ -26,7 +27,8 @@ export type SourceLangage =
   | "cortex_personnalisee"
   | "cortex_contexte"
   | "decoder_intention"
-  | "pilotage";
+  | "pilotage"
+  | "connaissances_utilisateur";
 
 /** Composition finale : texte émis + provenance (traçabilité). */
 export interface CompositionReponse {
@@ -162,10 +164,14 @@ export class NeuralEngine {
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const messageUtilisateur = extraireDernierMessageUtilisateur(options);
-    // PILOTAGE PLATEFORME d'abord (données réelles du compte) — sinon cortex
-    // puis décodeur, comme avant.
+    // PILOTAGE PLATEFORME d'abord (données réelles du compte) — puis le PONT
+    // CONNAISSANCES (fragments réellement recherchés pour ce tour — c'est ce
+    // qui rend les documents ingérés visibles dans les réponses), puis
+    // cortex et décodeur, comme avant.
+    const knowledgeContext = options.knowledgeContext?.trim() ?? "";
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
+      (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
       this.composer(messageUtilisateur, decode);
     this.memoriser(messageUtilisateur, composition.texte);
     this.evoluer(messageUtilisateur, composition);
@@ -234,8 +240,10 @@ export class NeuralEngine {
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const messageUtilisateur = extraireDernierMessageUtilisateur(options);
+    const knowledgeContext = options.knowledgeContext?.trim() ?? "";
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
+      (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
       this.composer(messageUtilisateur, decode);
 
     // La réponse composée est émise par segments (phrases réelles). Les

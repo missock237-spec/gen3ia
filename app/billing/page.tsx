@@ -144,40 +144,70 @@ export default function BillingPage() {
     } finally { setLoading(false); }
   }), [loadWallet, loadTransactions, loadPlans]);
 
-  // Retour de paiement Chariow : ?topup=success&sale=sal_xxx
+  // Retour de paiement Chariow : ?topup=success&sale=sal_xxx. Si Chariow
+  // n'ajoute pas le saleId à l'URL de retour, on le retrouve via le
+  // sessionStorage posé au moment de la création du checkout
+  // (gen3ia_topup_sale — valable 30 min, effacé après usage).
   useEffect(() => {
     if (sessionDisponible === false) return;
     const params = new URLSearchParams(window.location.search);
     const topup = params.get("topup");
-    const saleId = params.get("sale");
+    const saleIdParam = params.get("sale");
     if (topup !== "success") return;
 
+    const saleIdStocke = (() => {
+      try {
+        const raw = sessionStorage.getItem("gen3ia_topup_sale");
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { saleId?: string; at?: number };
+        if (!parsed?.saleId || !parsed.at || Date.now() - parsed.at > 30 * 60 * 1000) return null;
+        return parsed.saleId;
+      } catch { return null; }
+    })();
+    const saleId = saleIdParam ?? saleIdStocke;
+
     window.history.replaceState({}, "", "/billing");
+    try { sessionStorage.removeItem("gen3ia_topup_sale"); } catch { /* stockage indisponible */ }
     if (!saleId) {
       // Differe d'un tick pour eviter un rendu en cascade synchrone (set-state-in-effect).
-      const timer = setTimeout(() => setNotice("Paiement terminé. Le crédit apparaît dès la confirmation Chariow."), 0);
+      const timer = setTimeout(() => setNotice("Paiement terminé. Le crédit apparaît dès la confirmation Chariow — le solde se mettra à jour automatiquement."), 0);
       return () => clearTimeout(timer);
     }
+    let annule = false;
     (async () => {
-      try {
-        const response = await authFetch("/api/billing/topup/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ saleId }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error ?? "Vérification du paiement impossible.");
-        setWallet(data.wallet);
-        if (data.credited) {
-          setSuccess(`Recharge confirmée : +${((data.wallet.balanceMinor ?? 0) / 100).toLocaleString("fr-FR")} ${data.wallet.currency} crédités sur votre portefeuille.`);
-        } else {
-          setNotice(data.reason ?? "Paiement reçu. Le crédit est en cours de confirmation.");
+      // Filet de sécurité post-paiement : vérification de la vente via
+      // l'API Chariow (crédit idempotent, même clé de ledger que le
+      // webhook). Si le paiement n'est pas encore confirmé, on SONDE :
+      // jusqu'à 10 essais espacés de 6 s — le webhook Pulse crédite
+      // normalement en quelques secondes et le solde s'affiche tout seul.
+      for (let essai = 0; essai < 10 && !annule; essai += 1) {
+        if (essai > 0) await new Promise((resolve) => setTimeout(resolve, 6000));
+        if (annule) return;
+        try {
+          const response = await authFetch("/api/billing/topup/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ saleId }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error ?? "Vérification du paiement impossible.");
+          if (annule) return;
+          if (data.wallet) setWallet(data.wallet);
+          if (data.credited) {
+            setSuccess(`Recharge confirmée : +${((data.wallet.balanceMinor ?? 0) / 100).toLocaleString("fr-FR")} ${data.wallet.currency} crédités sur votre portefeuille.`);
+            void loadTransactions();
+            return;
+          }
+          setNotice(data.reason ?? "Paiement reçu. Le crédit est en cours de confirmation — le solde se mettra à jour automatiquement.");
+        } catch (e) {
+          if (annule) return;
+          setError(e instanceof Error ? e.message : "Vérification du paiement impossible.");
+          return;
         }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Vérification du paiement impossible.");
       }
     })();
-  }, [sessionDisponible, user]);
+    return () => { annule = true; };
+  }, [sessionDisponible, user, loadTransactions, loadWallet]);
 
   // Retour d'abonnement Chariow : ?plan=success&planId=… — le webhook Pulse
   // active l'accès ; on sonde la grille quelques secondes pour l'afficher.
@@ -266,10 +296,21 @@ export default function BillingPage() {
       if (!response.ok) throw new Error(data.error ?? "Impossible d'ouvrir le paiement Chariow.");
       if (data.requiresDetails) { setPhase("phone"); return; }
       if (!data.checkoutUrl) throw new Error("Chariow n'a pas renvoyé de page de paiement.");
+      // Le saleId renvoyé à la création du checkout est mémorisé : au retour
+      // sur /billing, la vérification post-paiement peut interroger CETTE
+      // vente même si Chariow n'ajoute aucun paramètre à l'URL de retour.
+      if (data.saleId) {
+        try { sessionStorage.setItem("gen3ia_topup_sale", JSON.stringify({ saleId: String(data.saleId), at: Date.now() })); } catch { /* stockage indisponible */ }
+      }
       setPhase("redirecting");
       window.location.href = data.checkoutUrl;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Impossible d'ouvrir le paiement.");
+      const message = e instanceof Error ? e.message : "Impossible d'ouvrir le paiement.";
+      // Guidage réel vers la voie alternative (widget boutique prix libre) :
+      // le produit de recharge étant en PRIX LIBRE, l'API de checkout Chariow
+      // peut refuser la création — l'utilisateur doit alors passer par le
+      // widget « Recharge rapide » affiché sur cette même page.
+      setError(`${message} — utilisez plutôt le widget « Recharge rapide » ci-dessous (montant au choix), la recharge y est directe.`);
       setPhase("idle");
     }
   };
