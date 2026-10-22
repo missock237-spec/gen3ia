@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Timestamp } from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue, FsTimestamp } from "@/lib/r2fs";
@@ -47,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
     if (expirees > 0) await batch.commit();
 
-    return NextResponse.json({ ok: true, scanned: snapshot.size, expired: expirees, at: (maintenant as Timestamp).toMillis() });
+    return NextResponse.json({ ok: true, scanned: snapshot.size, expired: expirees, at: maintenant.toMillis() });
   } catch (error) {
     // Pattern canonique : réponse JSON + statut classifié (un `return
     // errorStatus(error)` seul retourne un NOMBRE → 500 vide de Next).

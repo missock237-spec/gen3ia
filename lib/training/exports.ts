@@ -8,7 +8,7 @@ import "server-only";
 // déroutant. Reproduit et vérifié localement sur le bundle de production
 // (route de diagnostic : dyn.Writable === undefined ; import statique → OK).
 // Toute nouveauté ici doit suivre le pattern statique (lib/documents/zip/create.ts).
-import archiver from "archiver";
+import { ZipArchive } from "archiver";
 import { Writable } from "node:stream";
 
 import { newUlid, userDir } from "@/lib/storage/user-data-store";
@@ -44,7 +44,7 @@ async function buildZip(entries: Array<{ name: string; content: Buffer }>): Prom
       callback();
     },
   });
-  const archive = archiver("zip", { zlib: { level: 6 } });
+  const archive = new ZipArchive({ zlib: { level: 6 } });
   const done = new Promise<void>((resolve, reject) => {
     sink.on("finish", () => resolve());
     sink.on("error", reject);
