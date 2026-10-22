@@ -9,6 +9,8 @@ import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import type { LiveAction } from "@/lib/live/types";
 import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
+import { LiveGeminiPanel } from "./live-gemini-panel";
+
 type Permission =
   | "screen.read"
   | "input.mouse"
@@ -568,9 +570,10 @@ export function LiveDashboard() {
   const sessionActive = liveSessionId ?? created?.session.id ?? null;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-      <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-        <h2 className="font-serif text-xl font-semibold">Créer une session d’agent Live</h2>
+    <div className="space-y-5">
+      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+        <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+          <h2 className="font-serif text-xl font-semibold">Créer une session d’agent Live</h2>
         <p className="mt-2 text-sm text-[var(--g3-muted)]">
           Décrivez la mission : l’agent observe votre écran depuis le navigateur
           et vous guide étape par étape avec le moteur IA interne. Aucun
@@ -656,177 +659,182 @@ export function LiveDashboard() {
             </p>
           </div>
         )}
-      </section>
+        </section>
 
-      <div className="space-y-5">
-        <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="font-serif text-lg font-semibold">Agent Live — dans le navigateur</h2>
-              <p className="mt-1 text-xs text-[var(--g3-muted)]">
-                Aucun téléchargement : partage d’écran natif, suivi et guidage
-                par l’IA interne en temps réel.
-              </p>
-            </div>
-            <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2.5 py-1 text-[11px] text-[var(--g3-muted)]">
-              {liveStatus === "running" ? "LIVE" : liveStatus === "starting" ? "démarrage" : liveStatus === "stopped" ? "arrêté" : "hors ligne"}
-            </span>
-          </div>
-
-          <div className="relative mt-4 overflow-hidden rounded-2xl border border-[var(--g3-border)] bg-black aspect-video flex items-center justify-center">
-            <video ref={videoRef} muted playsInline autoPlay className="h-full w-full object-contain" />
-            {liveStatus !== "running" && liveStatus !== "starting" && (
-              <span className="absolute text-sm text-[var(--g3-faint)]">Aucun partage d’écran actif</span>
-            )}
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {sessionActive && liveStatus !== "running" && (
-              <button
-                onClick={() => {
-                  const target = created?.session.id === sessionActive
-                    ? created.session
-                    : sessions.find((item) => item.id === sessionActive);
-                  if (target) {
-                    setObservations([]);
-                    void startBrowserLive(target);
-                  }
-                }}
-                disabled={liveStatus === "starting"}
-                className="g3-btn g3-btn-primary"
-              >
-                {liveStatus === "starting" ? "Démarrage…" : "Partager l’écran et démarrer"}
-              </button>
-            )}
-            {liveStatus === "running" && liveSessionId && (
-              <button onClick={() => void stopBrowserLive(true)} className="g3-btn g3-btn-ghost">
-                Arrêter la session
-              </button>
-            )}
-            {liveStatus === "stopped" && (
-              <button onClick={() => setLiveStatus("idle")} className="rounded-xl border border-[var(--g3-border)] px-4 py-2 text-xs font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]">
-                Réinitialiser
-              </button>
-            )}
-          </div>
-          {browserError && (
-            <div className="mt-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3 text-sm text-[var(--g3-warning-strong)]">{browserError}</div>
-          )}
-
-          <div className="mt-4">
-            <div className="text-xs uppercase tracking-widest text-[var(--g3-muted)]">Journal de l’agent</div>
-            <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-3">
-              {observations.length === 0 ? (
-                <p className="text-xs text-[var(--g3-faint)]">
-                  Les observations de l’agent apparaîtront ici dès qu’une session est active.
+        <div className="space-y-5">
+          <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-serif text-lg font-semibold">Agent Live — dans le navigateur</h2>
+                <p className="mt-1 text-xs text-[var(--g3-muted)]">
+                  Aucun téléchargement : partage d’écran natif, suivi et guidage
+                  par l’IA interne en temps réel.
                 </p>
-              ) : (
-                observations.map((entry) => (
-                  <p key={entry.id} className={`text-xs leading-5 ${KIND_STYLES[entry.kind]}`}>
-                    <span className="mr-2 font-mono text-[10px] text-[var(--g3-faint)]">{formatTime(entry.at)}</span>
-                    {entry.text}
-                  </p>
-                ))
+              </div>
+              <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2.5 py-1 text-[11px] text-[var(--g3-muted)]">
+                {liveStatus === "running" ? "LIVE" : liveStatus === "starting" ? "démarrage" : liveStatus === "stopped" ? "arrêté" : "hors ligne"}
+              </span>
+            </div>
+
+            <div className="relative mt-4 overflow-hidden rounded-2xl border border-[var(--g3-border)] bg-black aspect-video flex items-center justify-center">
+              <video ref={videoRef} muted playsInline autoPlay className="h-full w-full object-contain" />
+              {liveStatus !== "running" && liveStatus !== "starting" && (
+                <span className="absolute text-sm text-[var(--g3-faint)]">Aucun partage d’écran actif</span>
               )}
             </div>
-          </div>
 
-          <p className="mt-4 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3 text-xs leading-5 text-[var(--g3-warning-strong)]">
-            En mode navigateur, l’agent observe, analyse et vous guide action par
-            action — il ne contrôle pas votre clavier ni votre souris. Chaque
-            action sensible exige de toute façon votre validation.
-          </p>
-          <p className="mt-2 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-3 text-xs leading-5 text-[var(--g3-muted)]">
-            Perception actuelle : <strong>structurelle</strong> — le moteur IA
-            interne mesure l’écran (dimensions, activité, écran inchangé) et
-            vous guide selon votre objectif, sans interpréter les pixels ni
-            inventer de contenu d’écran.
-          </p>
-        </section>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {sessionActive && liveStatus !== "running" && (
+                <button
+                  onClick={() => {
+                    const target = created?.session.id === sessionActive
+                      ? created.session
+                      : sessions.find((item) => item.id === sessionActive);
+                    if (target) {
+                      setObservations([]);
+                      void startBrowserLive(target);
+                    }
+                  }}
+                  disabled={liveStatus === "starting"}
+                  className="g3-btn g3-btn-primary"
+                >
+                  {liveStatus === "starting" ? "Démarrage…" : "Partager l’écran et démarrer"}
+                </button>
+              )}
+              {liveStatus === "running" && liveSessionId && (
+                <button onClick={() => void stopBrowserLive(true)} className="g3-btn g3-btn-ghost">
+                  Arrêter la session
+                </button>
+              )}
+              {liveStatus === "stopped" && (
+                <button onClick={() => setLiveStatus("idle")} className="rounded-xl border border-[var(--g3-border)] px-4 py-2 text-xs font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]">
+                  Réinitialiser
+                </button>
+              )}
+            </div>
+            {browserError && (
+              <div className="mt-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3 text-sm text-[var(--g3-warning-strong)]">{browserError}</div>
+            )}
 
-        <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-          <h2 className="font-serif text-lg font-semibold">Sessions récentes</h2>
-          {sessions.length === 0 ? (
-            <p className="mt-3 text-sm text-[var(--g3-muted)]">Aucune session pour le moment.</p>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {sessions.map((session) => (
-                <li key={session.id} className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="truncate text-sm font-semibold">{session.name}</div>
-                    <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] ${STATUS_STYLES[session.status] ?? STATUS_STYLES.paused}`}>
-                      {session.status}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-[var(--g3-faint)]">{formatDate(session.createdAt)}</div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {session.permissions.map((permission) => (
-                      <span key={permission} className="rounded-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2 py-0.5 text-[10px] text-[var(--g3-muted)]">
-                        {permission}
+            <div className="mt-4">
+              <div className="text-xs uppercase tracking-widest text-[var(--g3-muted)]">Journal de l’agent</div>
+              <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-3">
+                {observations.length === 0 ? (
+                  <p className="text-xs text-[var(--g3-faint)]">
+                    Les observations de l’agent apparaîtront ici dès qu’une session est active.
+                  </p>
+                ) : (
+                  observations.map((entry) => (
+                    <p key={entry.id} className={`text-xs leading-5 ${KIND_STYLES[entry.kind]}`}>
+                      <span className="mr-2 font-mono text-[10px] text-[var(--g3-faint)]">{formatTime(entry.at)}</span>
+                      {entry.text}
+                    </p>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <p className="mt-4 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3 text-xs leading-5 text-[var(--g3-warning-strong)]">
+              En mode navigateur, l’agent observe, analyse et vous guide action par
+              action — il ne contrôle pas votre clavier ni votre souris. Chaque
+              action sensible exige de toute façon votre validation.
+            </p>
+            <p className="mt-2 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-3 text-xs leading-5 text-[var(--g3-muted)]">
+              Perception actuelle : <strong>structurelle</strong> — le moteur IA
+              interne mesure l’écran (dimensions, activité, écran inchangé) et
+              vous guide selon votre objectif, sans interpréter les pixels ni
+              inventer de contenu d’écran.
+            </p>
+          </section>
+
+          <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+            <h2 className="font-serif text-lg font-semibold">Sessions récentes</h2>
+            {sessions.length === 0 ? (
+              <p className="mt-3 text-sm text-[var(--g3-muted)]">Aucune session pour le moment.</p>
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {sessions.map((session) => (
+                  <li key={session.id} className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="truncate text-sm font-semibold">{session.name}</div>
+                      <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] ${STATUS_STYLES[session.status] ?? STATUS_STYLES.paused}`}>
+                        {session.status}
                       </span>
-                    ))}
-                  </div>
-                  {session.pendingAction?.actionId && (
-                    <div className="mt-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3">
-                      <div className="text-xs font-semibold text-[var(--g3-warning-strong)]">Action sensible en attente de votre validation</div>
-                      <div className="mt-1 truncate font-mono text-[10px] text-[var(--g3-warning-strong)]">{actionLabel(session.pendingAction.action)}</div>
-                      <div className="mt-2 flex gap-2">
+                    </div>
+                    <div className="mt-1 text-xs text-[var(--g3-faint)]">{formatDate(session.createdAt)}</div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {session.permissions.map((permission) => (
+                        <span key={permission} className="rounded-md border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2 py-0.5 text-[10px] text-[var(--g3-muted)]">
+                          {permission}
+                        </span>
+                      ))}
+                    </div>
+                    {session.pendingAction?.actionId && (
+                      <div className="mt-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3">
+                        <div className="text-xs font-semibold text-[var(--g3-warning-strong)]">Action sensible en attente de votre validation</div>
+                        <div className="mt-1 truncate font-mono text-[10px] text-[var(--g3-warning-strong)]">{actionLabel(session.pendingAction.action)}</div>
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            onClick={() => approveAction(session.id, session.pendingAction!.actionId)}
+                            className="rounded-lg border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-success-strong)] hover:bg-[var(--g3-success-soft)]"
+                          >
+                            Approuver
+                          </button>
+                          <button
+                            onClick={() => stopSession(session.id)}
+                            className="rounded-lg border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
+                          >
+                            Refuser et arrêter
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {session.inFlightAction?.actionId && (
+                      <div className="mt-3 rounded-xl border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] p-3">
+                        <div className="text-xs font-semibold text-[var(--g3-info)]">Action en cours dont le résultat est inconnu</div>
+                        <div className="mt-1 truncate font-mono text-[10px] text-[var(--g3-info)]">{actionLabel(session.inFlightAction.action)}</div>
                         <button
-                          onClick={() => approveAction(session.id, session.pendingAction!.actionId)}
-                          className="rounded-lg border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-success-strong)] hover:bg-[var(--g3-success-soft)]"
+                          onClick={() => retryAction(session.id, session.inFlightAction!.actionId)}
+                          className="mt-2 rounded-lg border border-[var(--g3-secondary-soft)] bg-[var(--g3-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-info)] hover:bg-[var(--g3-secondary-soft)]"
                         >
-                          Approuver
-                        </button>
-                        <button
-                          onClick={() => stopSession(session.id)}
-                          className="rounded-lg border border-[var(--g3-border)] bg-[var(--g3-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]"
-                        >
-                          Refuser et arrêter
+                          Réessayer
                         </button>
                       </div>
-                    </div>
-                  )}
-                  {session.inFlightAction?.actionId && (
-                    <div className="mt-3 rounded-xl border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] p-3">
-                      <div className="text-xs font-semibold text-[var(--g3-info)]">Action en cours dont le résultat est inconnu</div>
-                      <div className="mt-1 truncate font-mono text-[10px] text-[var(--g3-info)]">{actionLabel(session.inFlightAction.action)}</div>
-                      <button
-                        onClick={() => retryAction(session.id, session.inFlightAction!.actionId)}
-                        className="mt-2 rounded-lg border border-[var(--g3-secondary-soft)] bg-[var(--g3-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-info)] hover:bg-[var(--g3-secondary-soft)]"
-                      >
-                        Réessayer
-                      </button>
-                    </div>
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {["pending", "connected", "running", "paused"].includes(session.status) && (
-                      <>
-                        {liveSessionId !== session.id && (
-                          <button
-                            onClick={() => {
-                              setObservations([]);
-                              void startBrowserLive(session);
-                            }}
-                            className="rounded-lg border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-info)] hover:bg-[var(--g3-secondary-soft)]"
-                          >
-                            Tester dans le navigateur
-                          </button>
-                        )}
-                        <button
-                          onClick={() => stopSession(session.id)}
-                          className="rounded-lg border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]"
-                        >
-                          Stop
-                        </button>
-                      </>
                     )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {["pending", "connected", "running", "paused"].includes(session.status) && (
+                        <>
+                          {liveSessionId !== session.id && (
+                            <button
+                              onClick={() => {
+                                setObservations([]);
+                                void startBrowserLive(session);
+                              }}
+                              className="rounded-lg border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-info)] hover:bg-[var(--g3-secondary-soft)]"
+                            >
+                              Tester dans le navigateur
+                            </button>
+                          )}
+                          <button
+                            onClick={() => stopSession(session.id)}
+                            className="rounded-lg border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:bg-[var(--g3-danger-soft)]"
+                          >
+                            Stop
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       </div>
+
+      {/* Canal complémentaire Gemini Live (écran + voix) — Task 2-a :
+          le flux sessions/frames existant ci-dessus reste inchangé. */}
+      <LiveGeminiPanel />
     </div>
   );
 }
