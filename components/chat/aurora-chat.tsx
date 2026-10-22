@@ -69,6 +69,54 @@ interface PiecePreparation {
   apercu: string | null;
 }
 
+/**
+ * Import RÉEL d'un fichier téléversé : POST /api/files/import (canal R2
+ * { path }) — le serveur convertit le contenu et le persiste en base
+ * (collection `importedFiles`), puis renvoie le fileId référencé par le
+ * tour. Le contenu converti atteint ainsi le prompt du moteur.
+ * HONNÊTETÉ : en cas d'échec (réseau, format non convertible), l'attachment
+ * part SANS fileId — le tour continue (jamais bloquant, l'IA répondra sans
+ * le contenu converti) et le filet de compatibilité du moteur relira le
+ * fichier par son chemin R2.
+ */
+async function importerFichierImporte(fichier: { path: string; filename: string; contentType: string; sizeBytes: number }): Promise<{
+  fileId?: string;
+  fileKind?: string;
+  charCount?: number;
+  rowCount?: number;
+}> {
+  if (!fichier.path) {
+    console.warn("[aurora-chat] import impossible : clé de stockage absente pour", fichier.filename);
+    return {};
+  }
+  try {
+    const response = await authFetch("/api/files/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        path: fichier.path,
+        filename: fichier.filename,
+        contentType: fichier.contentType || "application/octet-stream",
+        sizeBytes: fichier.sizeBytes,
+      }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = (await response.json()) as {
+      file?: { id?: string; kind?: string; charCount?: number; rowCount?: number };
+    };
+    if (!data.file?.id) throw new Error("réponse sans fileId");
+    return {
+      fileId: data.file.id,
+      ...(data.file.kind ? { fileKind: data.file.kind } : {}),
+      ...(data.file.charCount !== undefined ? { charCount: data.file.charCount } : {}),
+      ...(data.file.rowCount !== undefined ? { rowCount: data.file.rowCount } : {}),
+    };
+  } catch (erreurImport) {
+    console.warn("[aurora-chat] import du fichier impossible (envoi sans contenu converti) :", erreurImport);
+    return {};
+  }
+}
+
 interface ProfilInfo {
   nom: string;
   initiale: string;
@@ -412,18 +460,24 @@ export function AuroraChat() {
         }
       }
 
-      /* 2) Pièces jointes réelles : upload vers le stockage permanent. */
+      /* 2) Pièces jointes réelles : upload vers le stockage permanent, puis
+       *    import RÉEL (/api/files/import) — les attachments partent avec le
+       *    fileId du contenu converti stocké en base (le moteur l'injecte au
+       *    prompt). Échec d'import : attachment sans fileId, envoi maintenu. */
       let attachments: MessageAttachment[] = [];
       if (piecesMessage.length > 0) {
         setUploading(true);
         try {
           const batch = await uploadPermanentFiles(piecesMessage.map((piece) => piece.fichier));
-          attachments = batch.uploaded.map((fichier) => ({
-            filename: fichier.filename,
-            path: fichier.path,
-            contentType: fichier.contentType,
-            sizeBytes: fichier.sizeBytes,
-          }));
+          attachments = await Promise.all(
+            batch.uploaded.map(async (fichier) => ({
+              filename: fichier.filename,
+              path: fichier.path,
+              contentType: fichier.contentType,
+              sizeBytes: fichier.sizeBytes,
+              ...(await importerFichierImporte(fichier)),
+            })),
+          );
           if (batch.failed.length > 0) {
             afficherToast(`${batch.failed.length} fichier(s) non importé(s).`);
           }

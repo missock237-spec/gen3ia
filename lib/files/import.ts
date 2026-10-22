@@ -6,6 +6,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
 import { pdfToText } from "@/lib/files/pdf-text";
 import { docxToText, htmlToText } from "@/lib/knowledge/ingestion";
+import { mapWithConcurrency } from "@/lib/video/concurrency";
 import { downloadFromR2, isR2Configured, uploadToR2 } from "@/lib/storage/r2";
 
 /**
@@ -411,26 +412,135 @@ export async function getImportedFileContent(userId: string, id: string): Promis
 /* Contexte modèle — contenu RÉEL injecté dans le tour                 */
 /* ------------------------------------------------------------------ */
 
-/** Charge le contenu converti des fichiers joints (référencés par fileId). */
+/**
+ * Charge le contenu converti des fichiers joints et l'assemble en bloc de
+ * contexte (mêmes budgets que la politique 10 fichiers × 50 Mo : 12 000
+ * caractères par fichier, 60 000 au total, ATTACHMENT_MAX_FILES fichiers).
+ *
+ * DEUX sources de vérité :
+ *  - fileId présent → le contenu converti est relu de la base de données
+ *    (collection `importedFiles`, remplie par POST /api/files/import) ;
+ *  - FILET DE COMPATIBILITÉ — fileId ABSENT mais `path` présent : le flux
+ *    n'est pas passé par /api/files/import (UI historiques aurora/nova/v4
+ *    avant branchement, replis non-stream) — le fichier est relu À LA VOLÉE
+ *    depuis le stockage PERMANENT du propriétaire (clé R2 cloisonnée par
+ *    isOwnedPermanentKey) puis converti avec les MÊMES règles. Les pièces
+ *    non textuelles restent honnêtement « métadonnées seulement » (note
+ *    explicite dans le bloc) : le moteur est textuel, aucune perception
+ *    d'image/audio/vidéo/PDF scanné n'est jamais simulée. Ce filet est là
+ *    pour qu'un attachment { path } seul produise quand même un contexte
+ *    réel — à supprimer quand toutes les UI émettent systématiquement un
+ *    fileId.
+ */
 export async function loadImportedFilesContext(
   userId: string,
-  attachments?: Array<{ fileId?: string; filename?: string }>,
+  attachments?: Array<{ fileId?: string; filename?: string; path?: string; contentType?: string }>,
   budget: { perFile?: number; total?: number } = {},
 ): Promise<string> {
   const perFile = budget.perFile ?? 12_000;
   const maxTotal = budget.total ?? 60_000;
   if (!attachments || attachments.length === 0) return "";
-  const fileIds = attachments.map((a) => a.fileId).filter((id): id is string => Boolean(id)).slice(0, ATTACHMENT_MAX_FILES);
-  if (fileIds.length === 0) return "";
+
+  type ReferenceFichier =
+    | { fileId: string }
+    | { path: string; filename: string; contentType?: string };
+  const references: ReferenceFichier[] = attachments
+    .slice(0, ATTACHMENT_MAX_FILES)
+    .map((attachment): ReferenceFichier | null => {
+      if (attachment.fileId) return { fileId: attachment.fileId };
+      if (attachment.path) {
+        return {
+          path: attachment.path,
+          filename: attachment.filename || attachment.path.split("/").pop() || attachment.path,
+          ...(attachment.contentType ? { contentType: attachment.contentType } : {}),
+        };
+      }
+      return null;
+    })
+    .filter((reference): reference is ReferenceFichier => reference !== null);
+  if (references.length === 0) return "";
+
+  interface ContenuCharge {
+    filename: string;
+    kind: ImportedFileKind;
+    conversion: "full" | "metadata-only";
+    charCount: number;
+    rowCount?: number;
+    textContent: string;
+    note?: string;
+    /** "base" = Firestore via fileId ; "storage" = lecture R2 à la volée (filet). */
+    source: "base" | "storage";
+  }
+
+  const charge = async (reference: ReferenceFichier): Promise<ContenuCharge | null> => {
+    if ("fileId" in reference) {
+      const record = await getImportedFileContent(userId, reference.fileId).catch(() => null);
+      if (!record) return null;
+      return {
+        filename: record.filename,
+        kind: record.kind,
+        conversion: record.conversion,
+        charCount: record.charCount,
+        ...(record.rowCount !== undefined ? { rowCount: record.rowCount } : {}),
+        textContent: record.textContent,
+        ...(record.note ? { note: record.note } : {}),
+        source: "base",
+      };
+    }
+    const echec = (note: string): ContenuCharge => ({
+      filename: reference.filename,
+      kind: "binary",
+      conversion: "metadata-only",
+      charCount: 0,
+      textContent: "",
+      note,
+      source: "storage",
+    });
+    // Cloisonnement : seule la clé permanente de CE propriétaire est lisible.
+    if (!isOwnedPermanentKey(userId, reference.path)) {
+      return echec("contenu non chargé (chemin hors du stockage permanent du compte)");
+    }
+    try {
+      const buffer = await downloadFromR2(reference.path, ATTACHMENT_MAX_FILE_BYTES);
+      if (!buffer || buffer.length === 0) {
+        return echec("contenu non chargé (fichier introuvable dans le stockage permanent)");
+      }
+      const conversion = await convertFileBuffer(
+        buffer,
+        reference.filename,
+        reference.contentType || "application/octet-stream",
+        buffer.length,
+      );
+      return {
+        filename: reference.filename,
+        kind: conversion.kind,
+        conversion: conversion.conversion,
+        charCount: conversion.text.length,
+        ...(conversion.rowCount !== undefined ? { rowCount: conversion.rowCount } : {}),
+        textContent: conversion.text,
+        ...(conversion.note ? { note: conversion.note } : {}),
+        source: "storage",
+      };
+    } catch (error) {
+      const raison = error instanceof Error ? error.message.slice(0, 160) : "lecture impossible";
+      return echec(`contenu non chargé (${raison})`);
+    }
+  };
+
+  // Lecture PARALLÉLISÉE à concurrence bornée (4), ordre d'entrée préservé —
+  // même discipline que loadAgentAttachmentsContext.
+  const outcomes = await mapWithConcurrency(references, 4, charge);
 
   const parts: string[] = [];
   let total = 0;
-  for (const fileId of fileIds) {
-    const record = await getImportedFileContent(userId, fileId).catch(() => null);
-    if (!record) continue;
+  let viaStorage = false;
+  for (const outcome of outcomes) {
+    if (outcome.status !== "fulfilled" || !outcome.value) continue;
+    const record = outcome.value;
+    if (record.source === "storage") viaStorage = true;
     const label =
       record.conversion === "full"
-        ? `${record.charCount.toLocaleString("fr-FR")} caractères convertis`
+        ? `${record.charCount.toLocaleString("fr-FR")} caractères convertis${record.source === "storage" ? " (lecture directe du stockage permanent)" : ""}`
         : "métadonnées seulement";
     const header = `Fichier importé « ${record.filename} » (${record.kind}, ${label}${record.rowCount !== undefined ? `, ${record.rowCount} lignes` : ""}) :`;
     const body = record.textContent ? record.textContent.slice(0, Math.min(perFile, maxTotal - total)) : record.note ?? "(aucun contenu texte)";
@@ -438,5 +548,10 @@ export async function loadImportedFilesContext(
     total += header.length + body.length;
     if (total >= maxTotal) break;
   }
-  return parts.length > 0 ? `\n\nContenu RÉEL des fichiers importés (stockés en base de données) :\n${parts.join("\n\n---\n\n")}` : "";
+  // Titre honnête : quand le filet de compatibilité est emprunté, une partie
+  // du contenu ne vient PAS de la base — on le dit au lieu de prétendre.
+  const titre = viaStorage
+    ? "\n\nContenu RÉEL des fichiers importés (base de données ou lecture directe du stockage permanent) :\n"
+    : "\n\nContenu RÉEL des fichiers importés (stockés en base de données) :\n";
+  return parts.length > 0 ? `${titre}${parts.join("\n\n---\n\n")}` : "";
 }

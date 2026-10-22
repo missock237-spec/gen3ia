@@ -41,6 +41,7 @@
 import * as React from "react";
 
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { authFetch } from "@/lib/firebase/auth-client";
 import { safeClientTimezone } from "@/lib/domain/conversations/stream-client";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
@@ -173,6 +174,54 @@ interface V4Piece {
   type: string;
   fichier: File;
   apercu: string | null;
+}
+
+/**
+ * Import RÉEL d'un fichier téléversé : POST /api/files/import (canal R2
+ * { path }) — le serveur convertit le contenu et le persiste en base
+ * (collection `importedFiles`), puis renvoie le fileId référencé par le
+ * tour. Le contenu converti atteint ainsi le prompt du moteur.
+ * HONNÊTETÉ : en cas d'échec (réseau, format non convertible), l'attachment
+ * part SANS fileId — le tour continue (jamais bloquant, l'IA répondra sans
+ * le contenu converti) et le filet de compatibilité du moteur relira le
+ * fichier par son chemin R2.
+ */
+async function importerFichierImporte(fichier: { path: string; filename: string; contentType: string; sizeBytes: number }): Promise<{
+  fileId?: string;
+  fileKind?: string;
+  charCount?: number;
+  rowCount?: number;
+}> {
+  if (!fichier.path) {
+    console.warn("[chat-v4] import impossible : clé de stockage absente pour", fichier.filename);
+    return {};
+  }
+  try {
+    const response = await authFetch("/api/files/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        path: fichier.path,
+        filename: fichier.filename,
+        contentType: fichier.contentType || "application/octet-stream",
+        sizeBytes: fichier.sizeBytes,
+      }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = (await response.json()) as {
+      file?: { id?: string; kind?: string; charCount?: number; rowCount?: number };
+    };
+    if (!data.file?.id) throw new Error("réponse sans fileId");
+    return {
+      fileId: data.file.id,
+      ...(data.file.kind ? { fileKind: data.file.kind } : {}),
+      ...(data.file.charCount !== undefined ? { charCount: data.file.charCount } : {}),
+      ...(data.file.rowCount !== undefined ? { rowCount: data.file.rowCount } : {}),
+    };
+  } catch (erreurImport) {
+    console.warn("[chat-v4] import du fichier impossible (envoi sans contenu converti) :", erreurImport);
+    return {};
+  }
 }
 
 /** Application externe connectée (connecteur Composio vérifié). */
@@ -645,20 +694,35 @@ export default function ChatV4Page() {
         }
       }
 
-      // 2) Pièces jointes : téléversement réel, puis descripteur du tour.
-      let piecesApi: Array<{ filename: string; path: string; contentType: string; sizeBytes: number }> = [];
+      // 2) Pièces jointes : téléversement réel, import RÉEL (/api/files/import
+      //    — fileId du contenu converti stocké en base, injecté au prompt du
+      //    moteur), puis descripteur du tour. Échec d'import : attachment sans
+      //    fileId, envoi maintenu.
+      let piecesApi: Array<{
+        filename: string;
+        path: string;
+        contentType: string;
+        sizeBytes: number;
+        fileId?: string;
+        fileKind?: string;
+        charCount?: number;
+        rowCount?: number;
+      }> = [];
       if (pieces.length > 0) {
         setStatut("Téléversement des pièces jointes…");
         const resultat = await uploadPermanentFiles(pieces.map((p) => p.fichier));
         if (resultat.uploaded.length === 0) {
           throw new Error(resultat.failed[0]?.error || "Le téléversement des fichiers a échoué.");
         }
-        piecesApi = resultat.uploaded.map((u) => ({
-          filename: u.filename,
-          path: u.path,
-          contentType: u.contentType,
-          sizeBytes: u.sizeBytes,
-        }));
+        piecesApi = await Promise.all(
+          resultat.uploaded.map(async (u) => ({
+            filename: u.filename,
+            path: u.path,
+            contentType: u.contentType,
+            sizeBytes: u.sizeBytes,
+            ...(await importerFichierImporte(u)),
+          })),
+        );
       }
 
       // 3) Flux NDJSON du tour.

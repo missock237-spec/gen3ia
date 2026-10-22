@@ -1,11 +1,40 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// loadImportedFilesContext touche R2 (filet de compatibilité { path }) et
+// Firestore (fileId) : les deux sont mockés — la conversion, elle, est RÉELLE.
+const docStore = vi.hoisted(() => new Map<string, Record<string, unknown>>());
+
+vi.mock("@/lib/storage/r2", () => ({
+  downloadFromR2: vi.fn(),
+  isR2Configured: vi.fn(() => true),
+  uploadToR2: vi.fn(),
+}));
+vi.mock("@/lib/firebase/admin", () => ({
+  adminDb: {
+    collection: () => ({
+      doc: (id: string) => ({
+        get: async () => {
+          const data = docStore.get(id);
+          return data ? { exists: true, id, data: () => data } : { exists: false, id, data: () => undefined };
+        },
+      }),
+    }),
+  },
+}));
+
+import { downloadFromR2 } from "@/lib/storage/r2";
 import {
   convertUploadedFile,
   detectCsvDelimiter,
+  loadImportedFilesContext,
   parseCsv,
   pdfToText,
 } from "./import";
+
+const mockedDownload = vi.mocked(downloadFromR2);
+
+const USER = "user-1";
+const PREFIX = `users/${USER}/permanent/`;
 
 describe("detectCsvDelimiter + parseCsv — conversion CSV réelle", () => {
   it("détecte le point-virgule", () => {
@@ -103,5 +132,132 @@ describe("convertUploadedFile — conversion réelle par type", () => {
     const big = new File([new Uint8Array(10)], "huge.txt", { type: "text/plain" });
     Object.defineProperty(big, "size", { value: 52_500_000 });
     await expect(convertUploadedFile(big)).rejects.toThrow(/trop volumineux/);
+  });
+});
+
+/**
+ * CONTEXTE MODÈLE — loadImportedFilesContext :
+ *  - fileId → contenu relu de la base (Firestore mocké, données réelles) ;
+ *  - FILET DE COMPATIBILITÉ { path } (fileId absent) : lecture R2 à la volée
+ *    + conversion RÉELLE (le convertisseur n'est PAS mocké), mêmes budgets,
+ *    cloisonnement strict au stockage permanent du propriétaire.
+ */
+describe("loadImportedFilesContext — contenu réel injecté au tour", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    docStore.clear();
+  });
+
+  it("retourne une chaîne vide sans pièce jointe", async () => {
+    await expect(loadImportedFilesContext(USER, undefined)).resolves.toBe("");
+    await expect(loadImportedFilesContext(USER, [])).resolves.toBe("");
+  });
+
+  it("charge le contenu réel d'un attachment réduit à { path } (filet de compatibilité)", async () => {
+    mockedDownload.mockResolvedValue(Buffer.from("Contenu réel du rapport annuel.") as never);
+    const contexte = await loadImportedFilesContext(USER, [
+      { path: `${PREFIX}rapport.txt`, filename: "rapport.txt", contentType: "text/plain" },
+    ]);
+    expect(mockedDownload).toHaveBeenCalledOnce();
+    expect(contexte).toContain("Contenu RÉEL des fichiers importés");
+    expect(contexte).toContain("rapport.txt");
+    expect(contexte).toContain("Contenu réel du rapport annuel.");
+    // Le filet est annoncé honnêtement (le contenu ne vient PAS de la base).
+    expect(contexte).toContain("lecture directe du stockage permanent");
+  });
+
+  it("refuse un chemin hors du stockage permanent du propriétaire (cloisonnement)", async () => {
+    mockedDownload.mockResolvedValue(Buffer.from("secret") as never);
+    const contexte = await loadImportedFilesContext(USER, [
+      { path: "users/autre-utilisateur/permanent/f.txt", filename: "f.txt", contentType: "text/plain" },
+    ]);
+    expect(mockedDownload).not.toHaveBeenCalled();
+    expect(contexte).toContain("f.txt");
+    expect(contexte).toContain("hors du stockage permanent");
+  });
+
+  it("annonce honnêtement les métadonnées d'une image (moteur textuel, rien d'inventé)", async () => {
+    mockedDownload.mockResolvedValue(Buffer.from([0x89, 0x50, 0x4e, 0x47]) as never);
+    const contexte = await loadImportedFilesContext(USER, [
+      { path: `${PREFIX}photo.png`, filename: "photo.png", contentType: "image/png" },
+    ]);
+    expect(contexte).toContain("photo.png");
+    expect(contexte).toContain("métadonnées seulement");
+    expect(contexte).toContain("métadonnées stockées");
+  });
+
+  it("tronque le contenu au budget par fichier (12 000 caractères)", async () => {
+    mockedDownload.mockResolvedValue(Buffer.from("x".repeat(20_000), "utf8") as never);
+    const contexte = await loadImportedFilesContext(USER, [
+      { path: `${PREFIX}gros.txt`, filename: "gros.txt", contentType: "text/plain" },
+    ]);
+    expect(contexte).not.toBe("");
+    // Corps coupé au budget (12 000) — en-tête + titre du bloc en sus.
+    expect(contexte.length).toBeLessThan(13_000);
+  });
+
+  it("respecte le budget total (60 000 caractères) sur un lot de fichiers", async () => {
+    mockedDownload.mockImplementation(() => Promise.resolve(Buffer.from("x".repeat(20_000), "utf8")) as never);
+    const attachments = Array.from({ length: 10 }, (_inutilise, index) => ({
+      path: `${PREFIX}fichier-${index}.txt`,
+      filename: `fichier-${index}.txt`,
+      contentType: "text/plain",
+    }));
+    const contexte = await loadImportedFilesContext(USER, attachments);
+    // 10 fichiers convertis mais le bloc reste borné (jamais de prompt illimité).
+    expect(contexte.length).toBeLessThan(70_000);
+  });
+
+  it("mélange fileId (base de données) et path (lecture à la volée)", async () => {
+    docStore.set("file-1", {
+      id: "file-1",
+      userId: USER,
+      filename: "ventes.csv",
+      contentType: "text/csv",
+      sizeBytes: 30,
+      kind: "csv",
+      conversion: "full",
+      charCount: 23,
+      createdAt: new Date().toISOString(),
+      textContent: "produit,prix\nCafé,1500",
+    });
+    mockedDownload.mockResolvedValue(Buffer.from("Notes de réunion réelles.") as never);
+    const contexte = await loadImportedFilesContext(USER, [
+      { fileId: "file-1", filename: "ventes.csv" },
+      { path: `${PREFIX}notes.txt`, filename: "notes.txt", contentType: "text/plain" },
+    ]);
+    expect(contexte).toContain("ventes.csv");
+    expect(contexte).toContain("produit,prix");
+    expect(contexte).toContain("notes.txt");
+    expect(contexte).toContain("Notes de réunion réelles.");
+  });
+
+  it("ignore un fileId inconnu sans casser le reste du contexte", async () => {
+    mockedDownload.mockResolvedValue(Buffer.from("Contenu du chemin secours.") as never);
+    const contexte = await loadImportedFilesContext(USER, [
+      { fileId: "inconnu-absent", filename: "perdu.pdf" },
+      { path: `${PREFIX}secours.txt`, filename: "secours.txt", contentType: "text/plain" },
+    ]);
+    expect(contexte).not.toContain("perdu.pdf");
+    expect(contexte).toContain("secours.txt");
+    expect(contexte).toContain("Contenu du chemin secours.");
+  });
+
+  it("le titre reste « stockés en base de données » quand tout vient de la base", async () => {
+    docStore.set("file-2", {
+      id: "file-2",
+      userId: USER,
+      filename: "compte-rendu.txt",
+      contentType: "text/plain",
+      sizeBytes: 20,
+      kind: "text",
+      conversion: "full",
+      charCount: 10,
+      createdAt: new Date().toISOString(),
+      textContent: "Texte stocké.",
+    });
+    const contexte = await loadImportedFilesContext(USER, [{ fileId: "file-2", filename: "compte-rendu.txt" }]);
+    expect(contexte).toContain("Contenu RÉEL des fichiers importés (stockés en base de données)");
+    expect(contexte).toContain("Texte stocké.");
   });
 });
