@@ -115,7 +115,52 @@ if [ "$HEALTH_OK" != "1" ]; then
   exit 1
 fi
 
-# --- 7. Succès ---
+# --- 7. Daemon pipeline d'auto-apprentissage (NON BLOQUANT) ---
+# Le site est déjà swappé et sain : toute erreur ci-dessous est
+# journalisée mais ne fait JAMAIS échouer le déploiement ni retenter
+# un rollback. Le daemon scrape en tâche de fond et alimente le corpus
+# (JSONL partagé) — cf. pipeline/README.md.
+if [ -d "$PROD_DIR/pipeline" ]; then
+  log "Pipeline : mise à jour du daemon d'auto-apprentissage…"
+  (
+    cd "$PROD_DIR/pipeline" || exit 0
+    mkdir -p logs data
+
+    # Secret d'ingestion : copie locale depuis .env.production (jamais
+    # commité, jamais affiché) — permet au daemon de déclencher
+    # /api/cron/knowledge-ingest (Bearer CRON_SECRET).
+    if [ -f "$PROD_DIR/.env.production" ] && grep -q '^CRON_SECRET=' "$PROD_DIR/.env.production"; then
+      grep '^CRON_SECRET=' "$PROD_DIR/.env.production" > .env.cron
+      if [ -f .env ]; then
+        grep -v '^CRON_SECRET=' .env >> .env.cron 2>/dev/null || true
+      fi
+      mv .env.cron .env
+      chmod 600 .env
+    fi
+
+    # Dépendances : npm ci UNIQUEMENT si le lockfile du pipeline a changé.
+    PIPELINE_LOCK_HASH=$(sha256sum package-lock.json 2>/dev/null | cut -d' ' -f1)
+    if [ ! -d node_modules ] || [ "$PIPELINE_LOCK_HASH" != "$(cat "$STATE_DIR/pipeline-lock-hash.txt" 2>/dev/null)" ]; then
+      log "Pipeline : npm ci (lockfile $PIPELINE_LOCK_HASH)…"
+      npm ci --omit=dev --no-audit --no-fund >> "$DEPLOY_LOG" 2>&1 \
+        || npm install --omit=dev --no-audit --no-fund >> "$DEPLOY_LOG" 2>&1 \
+        || { log "AVERTISSEMENT: npm pipeline en échec (daemon non mis à jour)"; exit 0; }
+      echo "$PIPELINE_LOCK_HASH" > "$STATE_DIR/pipeline-lock-hash.txt"
+    fi
+
+    # Build TypeScript du daemon (léger : winston seul).
+    if npm run build >> "$DEPLOY_LOG" 2>&1; then
+      pm2 restart gen3ia-pipeline --update-env >> "$DEPLOY_LOG" 2>&1 \
+        || pm2 start "$PROD_DIR/pipeline/ecosystem.config.js" >> "$DEPLOY_LOG" 2>&1 \
+        || log "AVERTISSEMENT: démarrage PM2 du pipeline en échec"
+      log "Pipeline : daemon à jour et (re)démarré."
+    else
+      log "AVERTISSEMENT: build pipeline en échec (daemon sur la version précédente)"
+    fi
+  ) || true
+fi
+
+# --- 8. Succès ---
 rm -rf .next.old
 echo "$TARGET_SHA" > "$LAST_DEPLOYED"
 log "DÉPLOIEMENT RÉUSSI : $(git log --oneline -1 | head -c 120)"

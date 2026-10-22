@@ -16,6 +16,10 @@ import {
   searchVectorPoints,
 } from "@/lib/memory/vector-store";
 
+import {
+  CORPUS_USER_ID,
+} from "@/lib/pipeline/corpus";
+
 /**
  * Plafond du repli Firestore quand Qdrant n'est PAS configuré (chemin
  * récurrent, pas un incident) : 100 fragments AU TOTAL, répartis entre les
@@ -26,6 +30,55 @@ import {
  */
 const FALLBACK_TOTAL_LIMIT = 100;
 const FALLBACK_ERROR_LIMIT = 500;
+
+/**
+ * CORPUS GLOBAL (auto-apprentissage) — kill-switch opérationnel : mettre
+ * PIPELINE_CORPUS_OFF=1 pour exclure le corpus de scraping de toutes les
+ * recherches (aucun redéploiement requis, lu à chaque recherche).
+ */
+export function isCorpusEnabled(): boolean {
+  const flag = process.env.PIPELINE_CORPUS_OFF?.trim().toLowerCase();
+  return flag !== "1" && flag !== "true";
+}
+
+/**
+ * Fusionne les fragments du corpus global aux résultats du périmètre
+ * utilisateur : dédupliqués par id Qdrant, triés par score, plafonnés à
+ * la même limite. Fail-soft TOTAL : tout incident corpus (Qdrant en
+ * erreur, filtre refusé) est silencieusement ignoré — la recherche
+ * utilisateur ne peut JAMAIS échouer à cause du corpus.
+ */
+export async function fusionnerCorpusGlobal(
+  hits: Array<{ id: string; payload: Record<string, unknown>; score: number }>,
+  queryEmbedding: number[],
+  limit: number,
+): Promise<Array<{ id: string; payload: Record<string, unknown>; score: number }>> {
+  if (!isCorpusEnabled()) return hits;
+  try {
+    const corpusHits = await searchVectorPoints(
+      VECTOR_COLLECTION_KNOWLEDGE,
+      queryEmbedding,
+      {
+        limit,
+        // Périmètre global : userId corpus SANS projectId (tout le corpus).
+        filter: { userId: CORPUS_USER_ID, projectId: "", orgIds: [] },
+      },
+    );
+    // null = « pas de réponse » (Qdrant indisponible) : fail-soft.
+    if (!corpusHits || corpusHits.length === 0) return hits;
+    const vus = new Set(hits.map((hit) => hit.id));
+    const fusion = [...hits];
+    for (const hit of corpusHits) {
+      if (vus.has(hit.id)) continue;
+      vus.add(hit.id);
+      fusion.push(hit);
+    }
+    return fusion.sort((a, b) => b.score - a.score).slice(0, limit);
+  } catch {
+    // Fail-soft : corpus indisponible = recherche utilisateur intacte.
+    return hits;
+  }
+}
 
 export interface KnowledgeSearchResult {
   id: string;
@@ -94,7 +147,12 @@ export async function searchKnowledge(
     // Qdrant a RÉPONDU : 0 hit est un résultat légitime (index vide pour ce
     // périmètre) — aucun repli Firestore, la réponse est retournée telle
     // quelle (économie de quota : le repli coûtait jusqu'à 1 000+ lectures).
-    return hits.map((hit) => ({
+    // FUSION CORPUS GLOBAL (auto-apprentissage) : les fragments du corpus
+    // de scraping (userId gen3ia-corpus) concourent avec les résultats
+    // personnels/org, même score minimum, plafond identique — fail-soft
+    // total (un incident corpus ne peut pas dégrader la recherche).
+    const fusionnes = await fusionnerCorpusGlobal(hits, queryEmbedding, limit);
+    return fusionnes.map((hit) => ({
       id: hit.id,
       documentId: String(hit.payload.documentId ?? ""),
       text: String(hit.payload.text ?? hit.payload.preview ?? ""),

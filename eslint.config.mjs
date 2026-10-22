@@ -24,6 +24,7 @@ const config = [
       "desktop/**",
       "sandbox/**",
       "live-agent/**",
+      "pipeline/**",
       "sdk/**",
       "functions/**",
       "public/sw.js",
