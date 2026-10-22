@@ -68,7 +68,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
     "@eslint/eslintrc": "^3.3.7",
-    "@firebase/rules-unit-testing": "^5.0.2",
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@next/bundle-analyzer": "16.4.2",
     "@types/archiver": "^8.0.0",
     "@types/node": "^26.6.4",
