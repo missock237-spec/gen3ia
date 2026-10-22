@@ -67,6 +67,9 @@ describe("widget de recharge du wallet API (prd_llfosdp1, demande n°4)", () => 
     expect(CHARIOW_TOPUP_WIDGET.label).toBe("Recharge Wallet API");
     expect(CHARIOW_TOPUP_WIDGET.label.length).toBeGreaterThan(0);
     expect(CHARIOW_TOPUP_WIDGET.note).toContain("webhook Chariow");
+    // Recharge à MONTANT LIBRE : l'utilisateur choisit le montant sur la page
+    // de paiement, le webhook crédite le montant réel de la vente.
+    expect(CHARIOW_TOPUP_WIDGET.note).toContain("montant");
     // La recharge n'est PAS un plan : elle reste hors de la liste des 3 offres.
     expect(CHARIOW_PLAN_WIDGETS.map((w) => w.productId)).not.toContain(CHARIOW_TOPUP_WIDGET.productId);
   });
@@ -139,8 +142,11 @@ describe("intégration page /billing + CSP forteresse", () => {
     expect(page).toContain("Recharge rapide du wallet");
     expect(page).toContain("CHARIOW_TOPUP_WIDGET");
     expect(page).toContain("ChariowWidget productId={CHARIOW_TOPUP_WIDGET.productId}");
-    // Note courte obligatoire : crédit automatique par webhook.
-    expect(page).toContain("Le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow).");
+    // Note courte obligatoire : montant libre (choix utilisateur) + crédit
+    // automatique par webhook sur le montant réel de la vente.
+    expect(page).toContain("C&apos;est toi qui choisis le montant : saisis-le librement sur la page de paiement — le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow).");
+    // Mention montant libre à côté du flux Mobile Money (checkout API).
+    expect(page).toContain("Au montant de ton choix : sur la page de paiement Chariow, saisis librement le montant à recharger.");
     // Le flux de recharge existant (checkout API / Mobile Money) est conservé.
     expect(page).toContain("Recharger avec Chariow");
     // Repli boutique (CHARIOW_TOPUP_STORE_URL via /api/billing/wallet) en lien secondaire.

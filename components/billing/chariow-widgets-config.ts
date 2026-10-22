@@ -42,11 +42,17 @@ export const CHARIOW_PLAN_WIDGETS: readonly ChariowPlanWidget[] = [
  * Pulse reconnaît ses ventes par identifiant produit (défaut serveur
  * CHARIOW_TOPUP_PRODUCT_DEFAULT dans lib/billing/chariow.ts, surcharge
  * CHARIOW_TOPUP_PRODUCT_ID). Le produit doit être facturé en XAF côté Chariow.
+ *
+ * MONTANT LIBRE (choix opérateur) : le produit Chariow est configuré en prix
+ * libre — c'est l'utilisateur qui choisit le montant de sa recharge sur la
+ * page de paiement. Le webhook crédite le MONTANT RÉEL de la vente
+ * (payload.sale.amount.value → applyTopup amountMinor), jamais un montant
+ * prédéfini : aucun plafond ni palier n'est imposé par le code.
  */
 export const CHARIOW_TOPUP_WIDGET: ChariowPlanWidget = {
   productId: "prd_llfosdp1",
   label: "Recharge Wallet API",
-  note: "Paiement direct Mobile Money/carte — le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow)",
+  note: "Choisis toi-même le montant de ta recharge, paie par Mobile Money ou carte — le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow)",
 } as const;
 
 /** URLs officielles du loader widget (script + feuille de style). */

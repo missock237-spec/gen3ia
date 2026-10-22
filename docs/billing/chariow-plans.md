@@ -165,6 +165,15 @@ la carte « GEN3IA WALLET » (bloc « Recharge rapide du wallet ») via le même
 composant `components/billing/chariow-widget.tsx` que la grille tarifaire —
 aucun second mécanisme de widget.
 
+**Montant libre (choix utilisateur)** : le produit est configuré en prix
+libre côté Chariow — c'est l'utilisateur qui choisit le montant de sa
+recharge sur la page de paiement (Mobile Money ou carte). Le webhook crédite
+le **montant réel de la vente** (`payload.sale.amount.value` →
+`amountMinor = Math.round(amount * 100)` → `applyTopup`), jamais un palier
+prédéfini : aucun montant n'est imposé ni plafonné par le code. Seules
+contraintes : devise de vente = devise wallet (XAF), statut créditable
+(`CREDITABLE_STATUSES`), idempotence par `chariow_<saleId>`.
+
 ### Cycle d'un achat via le widget
 
 ```
