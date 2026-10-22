@@ -14,6 +14,18 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Ajouté
 
+- **Recharge rapide du wallet API via le widget Chariow (`prd_llfosdp1`)** :
+  widget boutique officiel rendu dans la carte « GEN3IA WALLET » de `/billing`
+  (raccourci de paiement direct à côté du flux Mobile Money existant, via le
+  même composant `ChariowWidget`) ; le webhook Pulse reconnaît les ventes du
+  produit par identifiant (`CHARIOW_TOPUP_PRODUCT_ID` → défaut boutique
+  `prd_llfosdp1`, sinon métadonnée `gen3ia_product = wallet_topup`) et crédite
+  le solde de façon idempotente (`chariow_<saleId>`, journal partagé avec le
+  retour de paiement vérifié) ; devise wallet alignée sur la boutique
+  (`GEN3IA_WALLET_CURRENCY=XAF` — le webhook refuse toute recharge dans une
+  autre devise) ; repli boutique `CHARIOW_TOPUP_STORE_URL` exposé par
+  `GET /api/billing/wallet` et affiché en lien secondaire ; doc
+  `docs/billing/chariow-plans.md` §8 (cycle paiement → webhook → solde).
 - **Paiements Chariow — les 3 produits payants branchés de bout en bout** :
   mappage des produits réellement publiés (`prd_svqonju7` → Pro 9 750 FCFA,
   `prd_v76f5kjl` → Entreprise 325 000 FCFA, `prd_646qpmge` → Sur-Mesure

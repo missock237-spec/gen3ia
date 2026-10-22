@@ -6,12 +6,25 @@ function required(name: string): string {
   return value;
 }
 
-export function getChariowTopupProductId(): string | null {
-  return process.env.CHARIOW_TOPUP_PRODUCT_ID?.trim() || null;
-}
-
 export function getChariowStoreUrl(): string | null {
   return process.env.CHARIOW_TOPUP_STORE_URL?.trim() || null;
+}
+
+/**
+ * Produit Chariow de recharge du wallet API, publié dans la boutique
+ * (widget « Recharge Wallet API » rendu sur /billing). Même convention que la
+ * grille tarifaire (lib/billing/plans.ts) : l'identifiant est surchargeable
+ * par CHARIOW_TOPUP_PRODUCT_ID, sinon le produit boutique par défaut s'applique.
+ *
+ * Contrainte opérationnelle : ce produit DOIT être facturé en XAF côté
+ * Chariow — le webhook refuse toute recharge dans une autre devise que
+ * WALLET_CURRENCY (lib/billing/wallet.ts).
+ */
+export const CHARIOW_TOPUP_PRODUCT_DEFAULT = "prd_llfosdp1";
+
+/** Produit de recharge du wallet : env CHARIOW_TOPUP_PRODUCT_ID → défaut boutique. */
+export function getChariowTopupProductId(): string | null {
+  return process.env.CHARIOW_TOPUP_PRODUCT_ID?.trim() || CHARIOW_TOPUP_PRODUCT_DEFAULT;
 }
 
 export interface ChariowCheckoutInput {

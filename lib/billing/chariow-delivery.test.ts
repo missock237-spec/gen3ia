@@ -303,6 +303,76 @@ describe("processChariowSale (extension + hors périmètre)", () => {
   });
 });
 
+describe("reconnaissance du produit de recharge wallet API (widget boutique prd_llfosdp1)", () => {
+  // Achat DIRECT via le widget « Recharge Wallet API » sur la boutique : le
+  // checkout n'est pas créé par la plateforme, la vente ne porte AUCUNE
+  // custom_metadata — la reconnaissance se fait par identifiant produit
+  // (défaut serveur prd_llfosdp1, cf. lib/billing/chariow.ts).
+  const WIDGET_TOPUP_PAYLOAD = {
+    event: "successful.sale",
+    customer: { email: "Client@Example.com" },
+    product: { id: "prd_llfosdp1" },
+    sale: {
+      id: "sale-widget-1",
+      status: "completed",
+      amount: { value: 5000, currency: "XAF" },
+    },
+  };
+
+  it("vente prd_llfosdp1 sans métadonnées → reconnue topup et créditée (sans env)", async () => {
+    delete process.env.CHARIOW_TOPUP_PRODUCT_ID;
+    dedupGet.mockResolvedValue({ docs: [] });
+    getUserByEmail.mockResolvedValue({ uid: "user-1" });
+    applyTopupMock.mockResolvedValue(WALLET);
+    const result = await processChariowSale(WIDGET_TOPUP_PAYLOAD, "d1");
+    expect(result).toEqual({ kind: "credited", wallet: WALLET });
+    expect(applyTopupMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        amountMinor: 500_000,
+        currency: "XAF",
+        providerReference: "sale-widget-1",
+      }),
+    );
+    expect(deliveryDoc.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "processed", saleId: "sale-widget-1", amountMinor: 500_000 }),
+    );
+  });
+
+  it("surcharge CHARIOW_TOPUP_PRODUCT_ID : le produit configuré est reconnu, le défaut ne l'est plus", async () => {
+    process.env.CHARIOW_TOPUP_PRODUCT_ID = "prd_remplacement";
+    dedupGet.mockResolvedValue({ docs: [] });
+    getUserByEmail.mockResolvedValue({ uid: "user-1" });
+    applyTopupMock.mockResolvedValue(WALLET);
+
+    const overridden = await processChariowSale(
+      { ...WIDGET_TOPUP_PAYLOAD, product: { id: "prd_remplacement" } },
+      "d2",
+    );
+    expect(overridden).toEqual({ kind: "credited", wallet: WALLET });
+
+    applyTopupMock.mockClear();
+    const oldDefault = await processChariowSale(WIDGET_TOPUP_PAYLOAD, "d3");
+    expect(oldDefault).toEqual({ kind: "ignored" });
+    expect(applyTopupMock).not.toHaveBeenCalled();
+    delete process.env.CHARIOW_TOPUP_PRODUCT_ID;
+  });
+
+  it("un autre produit boutique sans métadonnées (ex. un plan via widget) reste ignoré", async () => {
+    delete process.env.CHARIOW_TOPUP_PRODUCT_ID;
+    dedupGet.mockResolvedValue({ docs: [] });
+    const result = await processChariowSale(
+      { ...WIDGET_TOPUP_PAYLOAD, product: { id: "prd_svqonju7" }, sale: { ...WIDGET_TOPUP_PAYLOAD.sale, id: "sale-plan" } },
+      "d1",
+    );
+    expect(result).toEqual({ kind: "ignored" });
+    expect(applyTopupMock).not.toHaveBeenCalled();
+    expect(deliveryDoc.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "ignored", reason: "not_a_wallet_topup_sale" }),
+    );
+  });
+});
+
 describe("snapshot de charge utile", () => {
   it("sérialisable : valeurs non JSON écartées, dates en ISO", () => {
     const snapshot = buildChariowPayloadSnapshot({ a: 1, b: { c: undefined }, d: new Date(0) });

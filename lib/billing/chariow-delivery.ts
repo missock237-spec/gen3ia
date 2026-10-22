@@ -4,6 +4,7 @@ import { Timestamp } from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { settleChariowExtensionPurchase } from "@/lib/extensions/entitlements";
+import { getChariowTopupProductId } from "./chariow";
 import { applyTopup, WALLET_CURRENCY, type WalletSnapshot } from "./wallet";
 import { activatePlanFromSale } from "./abonnements";
 
@@ -170,8 +171,20 @@ export async function claimChariowDelivery(
   });
 }
 
+/**
+ * Reconnaissance d'une vente de recharge wallet. Deux voies :
+ *  - le checkout créé par la plateforme tague la vente avec
+ *    `custom_metadata.gen3ia_product = "wallet_topup"` (createChariowTopupCheckout) ;
+ *  - l'achat DIRECT via le widget boutique (« Recharge Wallet API »,
+ *    produit prd_llfosdp1 par défaut) n'a aucune métadonnée : la vente est
+ *    reconnue par son identifiant produit — le resolver partagé
+ *    getChariowTopupProductId() (env CHARIOW_TOPUP_PRODUCT_ID → défaut
+ *    boutique prd_llfosdp1, cf. lib/billing/chariow.ts). La surcharge env
+ *    REMPLACE le défaut (même sémantique que resolvePlanProductId) : pointer
+ *    un produit de remplacement retire la reconnaissance du produit précédent.
+ */
 function isTopupSale(payload: ChariowWebhookPayload): boolean {
-  const configuredProductId = process.env.CHARIOW_TOPUP_PRODUCT_ID?.trim();
+  const configuredProductId = getChariowTopupProductId();
   if (configuredProductId && String(payload?.product?.id ?? "") === configuredProductId) return true;
   return String(payload?.sale?.custom_metadata?.gen3ia_product ?? "") === "wallet_topup";
 }

@@ -75,9 +75,14 @@ const GROUPS: GroupSpec[] = [
   },
   {
     group: "billing-chariow",
-    role: "Facturation Chariow (abonnements, recharges)",
-    required: ["CHARIOW_API_BASE_URL", "CHARIOW_TOPUP_PRODUCT_ID"],
-    fallback: "portefeuille d'accueil uniquement",
+    role: "Facturation Chariow (abonnements, recharges wallet, webhook Pulse)",
+    required: ["CHARIOW_API_KEY", "CHARIOW_PULSE_SECRET"],
+    // Produits par défaut de la boutique (plans + recharge prd_llfosdp1) : les
+    // variables CHARIOW_PLAN_* et CHARIOW_TOPUP_PRODUCT_ID ne sont que des
+    // surcharges. Sans clé API, le paiement direct passe par les widgets
+    // boutique ; sans secret Pulse, le crédit wallet dépend du retour de
+    // paiement vérifié (/api/billing/topup/verify).
+    fallback: "widgets boutique pour le paiement direct ; crédit wallet au retour de paiement vérifié",
   },
   {
     group: "sandbox",
@@ -148,6 +153,11 @@ const OPTIONAL_RECOGNIZED = [
   "GEN3IA_MISSION_RESULT_FEE_MINOR",
   "GEN3IA_MISSION_RESULT_FEE_MAX_MINOR",
   "GEN3IA_ESCROW_TTL_MS",
+  // Chariow (lib/billing/chariow.ts) : produit de recharge wallet API
+  // (défaut boutique prd_llfosdp1) et repli boutique /billing — surcharges
+  // optionnelles, jamais requises.
+  "CHARIOW_TOPUP_PRODUCT_ID",
+  "CHARIOW_TOPUP_STORE_URL",
   "FIRESTORE_EMULATOR_HOST",
   "FIREBASE_AUTH_EMULATOR_HOST",
 ];

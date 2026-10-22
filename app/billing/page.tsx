@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { type User } from "firebase/auth";
 import { watchAuth } from "@/lib/firebase/client";
 import { authFetch, readJsonSafely, useSessionAvailable } from "@/lib/firebase/auth-client";
-import ChariowWidget, { CHARIOW_PLAN_WIDGETS } from "@/components/billing/chariow-widget";
+import ChariowWidget, { CHARIOW_PLAN_WIDGETS, CHARIOW_TOPUP_WIDGET } from "@/components/billing/chariow-widget";
 
 interface Wallet {
   currency: string;
@@ -87,6 +87,9 @@ export default function BillingPage() {
   const [pendingPlan, setPendingPlan] = useState<string | null>(null);
   const [licenseKey, setLicenseKey] = useState("");
   const [licenseBusy, setLicenseBusy] = useState(false);
+  // Repli boutique (CHARIOW_TOPUP_STORE_URL renvoyé par /api/billing/wallet) :
+  // lien secondaire affiché sous le widget de recharge rapide.
+  const [storeUrl, setStoreUrl] = useState<string | null>(null);
   const sessionDisponible = useSessionAvailable();
 
   const loadPlans = useCallback(async () => {
@@ -107,10 +110,11 @@ export default function BillingPage() {
     // readJsonSafely : un 502 HTML du proxy ne doit pas masquer l'erreur
     // réelle par une SyntaxError sur response.json().
     const response = await authFetch("/api/billing/wallet", { cache: "no-store" });
-    const data = (await readJsonSafely<{ error?: string; wallet?: Wallet | null; billingEnabled?: boolean }>(response)) ?? {};
+    const data = (await readJsonSafely<{ error?: string; wallet?: Wallet | null; billingEnabled?: boolean; storeUrl?: string | null }>(response)) ?? {};
     if (!response.ok) throw new Error(data.error ?? "Impossible de charger le solde.");
     setWallet(data.wallet ?? null);
     setBillingEnabled(data.billingEnabled !== false);
+    setStoreUrl(data.storeUrl?.trim() || null);
   }, []);
 
   const loadTransactions = useCallback(async () => {
@@ -336,6 +340,29 @@ export default function BillingPage() {
           </form>
         : <button onClick={() => startTopup()} disabled={busy || loading} style={styles.button}>{busy ? "Ouverture du paiement…" : "Recharger avec Chariow"}</button>)}
 
+      {/* Recharge RAPIDE (demande n°4) : widget boutique officiel du produit
+          « Recharge Wallet API » (prd_llfosdp1) — raccourci de paiement direct
+          à côté du flux Mobile Money ci-dessus, qui reste disponible. Le
+          webhook Pulse crédite le solde automatiquement (vente reconnue par
+          identifiant produit, idempotence chariow_<saleId>). */}
+      {!free && (
+        <div style={styles.widgetsBlock}>
+          <div style={styles.widgetsTitle}>Recharge rapide du wallet</div>
+          <div style={styles.widgetCard}>
+            <div style={styles.widgetLabel}>{CHARIOW_TOPUP_WIDGET.label}</div>
+            <div style={styles.widgetNote}>{CHARIOW_TOPUP_WIDGET.note}</div>
+            <ChariowWidget productId={CHARIOW_TOPUP_WIDGET.productId} />
+          </div>
+          <p style={styles.note}>Le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow).</p>
+          {storeUrl && (
+            <p style={styles.note}>
+              Recharge également possible sur la boutique :{" "}
+              <a href={storeUrl} target="_blank" rel="noopener noreferrer" style={styles.storeLink}>{storeUrl}</a>
+            </p>
+          )}
+        </div>
+      )}
+
       {success && <p style={styles.success}>{success}</p>}
       {notice && <p style={styles.notice}>{notice}</p>}
       {!free && <p style={styles.note}>Le paiement s&apos;effectue via la boutique Chariow (Mobile Money, carte ou wallet selon votre pays). Le solde est crédité après confirmation du paiement par Chariow — automatiquement via le webhook signé, ou à votre retour sur cette page.</p>}
@@ -478,5 +505,6 @@ const styles: Record<string, CSSProperties> = {
   widgetCard: { display: "flex", flexDirection: "column", gap: 6, padding: 14, borderRadius: 12, border: "1px solid var(--g3-border)", background: "#ffffff" },
   widgetLabel: { fontSize: 14, fontWeight: 700 },
   widgetNote: { fontSize: 12, lineHeight: 1.45, opacity: 0.65, marginBottom: 6 },
+  storeLink: { color: "#0A6E82", fontWeight: 700 },
   licenseForm: { marginTop: 24, display: "grid", gap: 8, paddingTop: 18, borderTop: "1px solid var(--g3-border)" },
 };

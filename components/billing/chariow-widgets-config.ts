@@ -36,6 +36,19 @@ export const CHARIOW_PLAN_WIDGETS: readonly ChariowPlanWidget[] = [
   },
 ] as const;
 
+/**
+ * Widget de RECHARGE DU WALLET API (paiement direct boutique). Hors grille
+ * tarifaire : ce produit crédite le solde XAF du portefeuille — le webhook
+ * Pulse reconnaît ses ventes par identifiant produit (défaut serveur
+ * CHARIOW_TOPUP_PRODUCT_DEFAULT dans lib/billing/chariow.ts, surcharge
+ * CHARIOW_TOPUP_PRODUCT_ID). Le produit doit être facturé en XAF côté Chariow.
+ */
+export const CHARIOW_TOPUP_WIDGET: ChariowPlanWidget = {
+  productId: "prd_llfosdp1",
+  label: "Recharge Wallet API",
+  note: "Paiement direct Mobile Money/carte — le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow)",
+} as const;
+
 /** URLs officielles du loader widget (script + feuille de style). */
 export const WIDGET_SCRIPT_SRC = "https://js.chariowcdn.com/v1/widget.min.js";
 export const WIDGET_STYLE_HREF = "https://js.chariowcdn.com/v1/widget.min.css";
