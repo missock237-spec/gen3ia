@@ -1026,39 +1026,67 @@ export default function ChatV4Page() {
   );
 
   const supprimerConversation = React.useCallback(
-    (id: string) => {
+    async (id: string) => {
       const conv = convsRef.current.find((c) => c.id === id);
       if (id === activeIdRef.current) controleurRef.current?.abort();
-      const restantes = convsRef.current.filter((c) => c.id !== id);
-      if (conv?.serverId) {
-        void fetch(`/api/workspace/conversations/${conv.serverId}`, { method: "DELETE" }).catch(() => undefined);
-      }
-      if (activeIdRef.current === id) majActiveId(restantes[0]?.id ?? null);
+      const avant = convsRef.current.slice();
+      const restantes = avant.filter((c) => c.id !== id);
+      const actifAvant = activeIdRef.current;
+      if (actifAvant === id) majActiveId(restantes[0]?.id ?? null);
       majConvs(restantes);
       sauvegarder();
-      afficherToast("Conversation supprimée");
+      if (!conv?.serverId) {
+        afficherToast("Conversation supprimée");
+        return;
+      }
+      try {
+        // Suppression serveur réellement attendue : sans ce contrôle, la conversation « ressusciterait »
+        // dans /chat et /workspace alors que l'interface locale prétend l'avoir supprimée.
+        const response = await authFetch(`/api/workspace/conversations/${conv.serverId}`, { method: "DELETE" });
+        if (!response.ok) throw new Error(`suppression refusée (HTTP ${response.status})`);
+        afficherToast("Conversation supprimée");
+      } catch {
+        // Échec serveur (session expirée, quota, R2 indisponible) : on remet la conversation dans la
+        // liste plutôt que de laisser croire à une suppression qui n'a pas eu lieu.
+        if (!convsRef.current.some((c) => c.id === id)) {
+          majConvs(avant);
+          if (actifAvant === id) majActiveId(actifAvant);
+          sauvegarder();
+        }
+        afficherToast("Suppression impossible — réessaie plus tard.");
+      }
     },
     [afficherToast, majActiveId, majConvs, sauvegarder],
   );
 
   const renommerConversation = React.useCallback(
-    (id: string) => {
+    async (id: string) => {
       const conv = convsRef.current.find((c) => c.id === id);
       if (!conv) return;
       const nouveau = window.prompt("Nouveau titre de la conversation :", conv.titre);
       if (!nouveau || !nouveau.trim()) return;
+      const ancienTitre = conv.titre;
       conv.titre = nouveau.trim().slice(0, 60);
       majConvs(convsRef.current.slice());
       sauvegarder();
       if (conv.serverId) {
-        void fetch(`/api/workspace/conversations/${conv.serverId}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ title: conv.titre }),
-        }).catch(() => undefined);
+        try {
+          const response = await authFetch(`/api/workspace/conversations/${conv.serverId}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ title: conv.titre }),
+          });
+          if (!response.ok) throw new Error(`renommage refusé (HTTP ${response.status})`);
+        } catch {
+          // Le serveur a refusé : on rétablit l'ancien titre pour rester cohérent avec /chat et /workspace.
+          conv.titre = ancienTitre;
+          majConvs(convsRef.current.slice());
+          sauvegarder();
+          afficherToast("Renommage impossible — réessaie plus tard.");
+        }
       }
     },
-    [majConvs, sauvegarder],
+    [afficherToast, majConvs, sauvegarder],
   );
 
   const exporterConversation = React.useCallback(() => {

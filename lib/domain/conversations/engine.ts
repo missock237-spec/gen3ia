@@ -1522,6 +1522,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
             provider: ctx.provider as never,
             model: ctx.model,
             preferFree: preferFreeForVisibleAnswers(),
+            knowledgeContext: ctx.knowledgeContext,
             metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
           },
           {
@@ -1560,6 +1561,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
               provider: ctx.provider as never,
               model: ctx.model,
               preferFree: preferFreeForVisibleAnswers(),
+              knowledgeContext: ctx.knowledgeContext,
               metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
             }),
             CHAT_BUDGET_MS,
@@ -1589,6 +1591,7 @@ async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
           provider: ctx.provider as never,
           model: ctx.model,
           preferFree: preferFreeForVisibleAnswers(),
+          knowledgeContext: ctx.knowledgeContext,
           metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
         }),
         CHAT_BUDGET_MS,

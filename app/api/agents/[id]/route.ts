@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { errorStatus } from "@/lib/security/http-errors";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-// SYSTÈME AGENT RÉSERVÉ (demande n°5) : édition/suppression fermées aux
-// utilisateurs standard (403 « réservé au système IA ») — admin conservé.
+// SYSTÈME AGENT (demande n°5) : édition réservée au système IA, MAIS la
+// SUPPRESSION est ouverte au PROPRIÉTAIRE de l'agent (demande explicite du
+// propriétaire — « supprime l'agent IA » ne devait rien faire) :
+// deleteAgentForUser applique le cloisonnement propriétaire/org (404
+// anti-énumération). GET/PATCH restent réservés (requireAgentSystemAccess).
 import { requireAgentSystemAccess } from "@/lib/security/agent-system-access";
+import { requireUser } from "@/lib/security/authenticated-request";
 import { deleteAgentForUser, getAgentForUser, toSummary, updateAgentForUser } from "@/lib/agents/repository";
 import { AGENT_TYPES } from "@/lib/agents/schema";
 import { resolveAndHarden } from "@/lib/agents/tool-resolver";
@@ -97,7 +101,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireAgentSystemAccess(request); const { id } = await context.params;
+    // OUVERTURE PROPRIÉTAIRE : tout utilisateur CONNECTÉ peut supprimer SES
+    // agents — le cloisonnement reste total (deleteAgentForUser refuse les
+    // agents d'autrui avec un 404, aucune fuite d'existence).
+    const user = await requireUser(request); const { id } = await context.params;
     const deleted = await deleteAgentForUser(user.uid, id);
     if (!deleted) return NextResponse.json({ error: "Agent introuvable", requestId }, { status: 404 });
     return NextResponse.json({ deleted: true, requestId }, { headers: { "x-request-id": requestId } });

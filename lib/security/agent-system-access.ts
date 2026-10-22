@@ -4,15 +4,24 @@ import { requireUser, type AuthenticatedUser } from "./authenticated-request";
 import { HttpError } from "./http-errors";
 
 /**
- * AGENT SYSTÈME RÉSERVÉ (demande utilisateur n°5).
+ * AGENT SYSTÈME (demande utilisateur n°5, partiellement assoulie sur
+ * demande explicite du propriétaire).
  *
- * Le système d'agents IA (création, édition, exécution manuelle, suppression,
- * listing, planifications) n'est PLUS accessible aux utilisateurs standard :
- * seule l'IA de Gen3ia peut l'activer, À LA DEMANDE d'un utilisateur exprimée
- * dans le chat (l'IA décide → active le système → des sous-agents assistent
- * l'agent navigateur). La surface utilisateur est fermée par cette garde ;
- * la surface interne vit dans lib/agents/system-activation.ts +
- * app/api/agents/system/activate (authentification par secret serveur).
+ * L'ORCHESTRATION du système d'agents IA (exécution manuelle, édition,
+ * génération de plan, activation) reste réservée au système IA de Gen3ia :
+ * seule l'IA peut l'activer, À LA DEMANDE d'un utilisateur exprimée dans le
+ * chat (l'IA décide → active le système → des sous-agents assistent
+ * l'agent navigateur). La surface interne vit dans
+ * lib/agents/system-activation.ts + app/api/agents/system/activate
+ * (authentification par secret serveur).
+ *
+ * EXCEPTIONS OUVERTES (demande explicite du propriétaire) :
+ *  - GET/POST /api/agents : liste + provisionnement « Gen IA » du workshop
+ *    /studio/agents (requireUser, cloisonnement propriétaire/org) ;
+ *  - DELETE /api/agents/[id] : suppression par le PROPRIÉTAIRE de l'agent
+ *    (requireUser + deleteAgentForUser, 404 anti-énumération) ;
+ *  - /api/agents/schedules/** : PLANIFICATIONS ouvertes à TOUS LES COMPTES
+ *    (requireUser, scoping propriétaire user.uid dans chaque route).
  *
  * L'accès ADMIN (custom claim Firebase `admin: true`, même sémantique que
  * lib/security/admin-access.ts → requireAdmin) est CONSERVÉ : l'exploitation
@@ -20,13 +29,11 @@ import { HttpError } from "./http-errors";
  * interne. Les utilisateurs standard reçoivent un 403 JSON explicite qui
  * explique le nouveau mode d'accès (demander au chat).
  *
- * Routes protégées (toutes sous app/api/agents/**) :
- *   GET/POST /api/agents ; GET/PATCH/DELETE /api/agents/[id] ;
- *   POST /api/agents/[id]/run ; GET /api/agents/[id]/analytics ;
- *   POST /api/agents/run ; POST /api/agents/generate ; POST /api/agents/plan ;
- *   GET/POST /api/agents/schedules ; GET/PATCH/DELETE /api/agents/schedules/[id] ;
- *   POST /api/agents/schedules/[id]/run ; GET /api/agents/schedules/[id]/runs ;
- *   POST /api/agents/schedules/[id]/watch.
+ * Routes ENCORE protégées (toutes sous app/api/agents/**) :
+ *   GET/PATCH /api/agents/[id] ; POST /api/agents/[id]/run ;
+ *   GET /api/agents/[id]/analytics ; POST /api/agents/run ;
+ *   POST /api/agents/generate ; POST /api/agents/plan ;
+ *   POST /api/agents/system/activate.
  * Routes laissées ouvertes (suivi de mission, non-gestion, scopées
  * propriétaire) : GET /api/agents/runs/[runId] et son flux SSE — elles
  * permettent à l'utilisateur de SUIVRE une mission que le système IA a lancé

@@ -61,6 +61,7 @@ function formatRelativeDate(iso: string): string {
 export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: string }) {
   const sessionDisponible = useSessionAvailable();
   const [agent, setAgent] = React.useState<AgentSummary | null>(null);
+  const [agents, setAgents] = React.useState<AgentSummary[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [bootstrapping, setBootstrapping] = React.useState(false);
   const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
@@ -104,6 +105,7 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
       if (response.ok) {
         const data = await response.json();
         const agents = (data.agents ?? []) as AgentSummary[];
+        setAgents(agents);
         const genIa = agents.find((item) => item.name?.toLowerCase() === "gen ia") ?? agents[0] ?? null;
         if (genIa) {
           setAgent(genIa);
@@ -151,6 +153,30 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
     if (response.ok) {
       setConversations((current) => current.filter((item) => item.id !== id));
       if (id === pendingConversationId) setPendingConversationId(null);
+    } else {
+      // Échec serveur (session expirée, quota, stockage) : l'item reste — on
+      // l'explique au lieu d'un silence que l'utilisateur prend pour un bug.
+      setError(response.status === 401 ? "Session expirée — reconnectez-vous pour supprimer ce chat." : "Suppression impossible pour le moment. Réessayez dans un instant.");
+    }
+  }
+
+  /** Suppression d'un agent possédé (route ouverte aux propriétaires,
+   *  cloisonnement propriétaire/org assuré par deleteAgentForUser). */
+  async function deleteAgent(id: string) {
+    const cible = agents.find((item) => item.id === id);
+    if (!cible) return;
+    if (!window.confirm(`Supprimer définitivement l'agent « ${cible.name || id} » ? Ses chats resteront dans l'historique.`)) return;
+    const response = await authFetch(`/api/agents/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (response.ok) {
+      setAgents((current) => current.filter((item) => item.id !== id));
+      if (agent?.id === id) {
+        // L'agent actif vient d'être supprimé : recharger (le système
+        // re-provisionne automatiquement l'agent universel « Gen IA »).
+        setAgent(null);
+        await refresh();
+      }
+    } else {
+      setError(response.status === 401 ? "Session expirée — reconnectez-vous pour supprimer cet agent." : "Suppression de l'agent impossible pour le moment. Réessayez dans un instant.");
     }
   }
 
@@ -174,6 +200,41 @@ export function AgentChatWorkshop({ initialMessage = "" }: { initialMessage?: st
       <button type="button" className="mt-2 w-full rounded-xl border border-[var(--g3-border)] px-3 py-2 text-xs font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]" onClick={() => setShowCreateAgent(true)}>
         + Créer un agent
       </button>
+
+      <p className="mt-4 text-[10px] font-black uppercase tracking-[.24em] text-[var(--g3-muted)]">Vos agents</p>
+      <div className="mt-2 space-y-1.5">
+        {agents.length === 0 ? (
+          <p className="rounded-xl bg-[var(--g3-elevated)] px-3 py-3 text-center text-xs leading-5 text-[var(--g3-faint)]">
+            Aucun agent. Créez-en un ou discutez avec l&apos;agent universel.
+          </p>
+        ) : (
+          agents.map((item) => {
+            const actif = item.id === agent?.id;
+            return (
+              <div key={item.id} className="group flex items-center gap-2 rounded-2xl bg-[var(--g3-elevated)]/60 px-3 py-2">
+                <span aria-hidden="true" className="text-sm">🤖</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-bold text-[var(--g3-text)]">{item.name || item.id}</span>
+                  <span className="block truncate text-[10px] text-[var(--g3-faint)]">
+                    {item.typeLabel || item.type} · {item.status}
+                    {actif ? " · actif" : ""}
+                  </span>
+                </span>
+                {!actif && (
+                  <button
+                    type="button"
+                    onClick={() => void deleteAgent(item.id)}
+                    aria-label={`Supprimer l'agent ${item.name || item.id}`}
+                    className="shrink-0 rounded-lg px-1.5 py-1 text-[9px] text-[var(--g3-faint)] transition hover:text-[var(--g3-danger-strong)]"
+                  >
+                    Suppr.
+                  </button>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
 
       <p className="mt-4 text-[10px] font-black uppercase tracking-[.24em] text-[var(--g3-muted)]">Historique des chats</p>
       <div className="mt-2 max-h-[420px] min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5 lg:max-h-none">

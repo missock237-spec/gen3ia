@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
-// SYSTÈME AGENT RÉSERVÉ (demande n°5) : sonde de veille fermée aux
-// utilisateurs standard (403 « réservé au système IA ») — admin conservé.
-import { requireAgentSystemAccess } from "@/lib/security/agent-system-access";
+// PLANIFICATIONS — DEMANDE PROPRIÉTAIRE (restauration) : ouvertes à
+// TOUS LES COMPTES (requireUser). Le scoping propriétaire (user.uid) est
+// assuré par listSchedules/getSchedule/triggerScheduleNow(...) — un
+// utilisateur ne voit et ne déclenche que SES planifications.
+import { requireUser } from "@/lib/security/authenticated-request";
 import { errorStatus } from "@/lib/security/http-errors";
 import { checkScheduleWatchSourcesForUser } from "@/lib/agents/scheduler";
 
@@ -20,7 +22,7 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest, context: RouteContext) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
-    const user = await requireAgentSystemAccess(request);
+    const user = await requireUser(request);
     const { id } = await context.params;
     const results = await checkScheduleWatchSourcesForUser(user.uid, id);
     return NextResponse.json({ ok: true, results, requestId }, { headers: { "x-request-id": requestId } });

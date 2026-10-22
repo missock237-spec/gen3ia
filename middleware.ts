@@ -215,9 +215,9 @@ const FORBIDDEN_PAGE_HTML = `<!doctype html>
   <h1>403 — Accès refusé</h1>
   <p>Cette fonctionnalité n'est pas accessible avec votre compte.
      Les espaces disponibles : chat IA, entraînement, connecteurs,
-     planifications, facturation, paramètres, compte, connaissances,
-     projets, fichiers, automatisation, intégrations, observabilité
-     et mémoire permanente.</p>
+     planifications, équipe, publicité, clients ID, facturation,
+     paramètres, compte, connaissances, projets, fichiers,
+     automatisation, intégrations, observabilité et mémoire permanente.</p>
 </main>
 </body>
 </html>`;

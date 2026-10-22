@@ -116,7 +116,10 @@ describe("protectRoute — liste blanche utilisateur (demande n°7, barrière n�
     const options = { key: "route-refusee", rateLimit: { limit: 1, windowMs: 60_000 } };
 
     for (let i = 0; i < 5; i++) {
-      const result = await protectRoute(requestTo("/api/ads/generate"), options);
+      // Chemin RESTREINT (demande n°7) — /api/ads/generate est désormais
+      // ouvert à tous les comptes (publicité utilisateur, demande
+      // propriétaire), il ne peut plus servir de refus d'exemple.
+      const result = await protectRoute(requestTo("/api/orchestrator"), options);
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.response.status).toBe(403); // jamais 429
     }
