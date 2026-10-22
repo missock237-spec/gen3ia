@@ -146,6 +146,20 @@ describe("API — liste blanche UTILISATEUR (14 familles de la demande)", () => 
     ["/api/memory/export", "memoire"],
     ["/api/memory/consent", "memoire"],
     ["/api/memory/purge", "memoire"],
+    // STUDIO MÉTIER (réouverture propriétaire) — atelier vidéo
+    ["/api/video/projects", "studio"],
+    ["/api/video/projects/p1", "studio"],
+    ["/api/video/projects/p1/render", "studio"],
+    // Workshop agent « Gen IA » (liste + provisionnement) — l'orchestration
+    // (/run, /generate, /plan) reste gardée AU NIVEAU DE LA ROUTE.
+    ["/api/agents", "studio"],
+    ["/api/agents/a1", "studio"],
+    // Suivi de mission (lecture propriétaire, non-pilotage)
+    ["/api/agents/runs/r1", "studio"],
+    // AGENT LIVE (réouverture propriétaire — PC + Android)
+    ["/api/live/sessions", "live"],
+    ["/api/live/sessions/s1", "live"],
+    ["/api/live/sessions/s1/frames", "live"],
   ] as const;
 
   it.each(utilisateurs)("%s → user (%s)", (path, family) => {
@@ -159,12 +173,11 @@ describe("API — RESTREINT (deny-by-default, hors demande n°7)", () => {
     "/api/admin/users",
     "/api/admin/observability",
     "/api/admin/security",
-    // Agents (hors planifications)
-    "/api/agents",
+    // Agents — orchestration RÉSERVÉE au niveau route (requireAgentSystemAccess)
+    // même si le PRÉFIXE /api/agents est atteignable (défense en profondeur)
     "/api/agents/run",
     "/api/agents/generate",
     "/api/agents/plan",
-    "/api/agents/runs/r1",
     // ⚠️ frontière critique : /api/agents/schedules reste autorisé
     // Ads
     "/api/ads/generate",
@@ -199,8 +212,6 @@ describe("API — RESTREINT (deny-by-default, hors demande n°7)", () => {
     "/api/notifications",
     "/api/push/subscribe",
     "/api/commercial",
-    "/api/video/projects",
-    "/api/video/projects/p1/render",
     "/api/v1/agents/a1/run",
     // Observabilité : seule la vue personnelle est autorisée
     "/api/observability/org",
@@ -213,10 +224,13 @@ describe("API — RESTREINT (deny-by-default, hors demande n°7)", () => {
     expect(classifyApiPath(path)).toMatchObject({ access: "restreint" });
   });
 
-  it("ne confond PAS /api/agents/schedules (user) avec /api/agents (restreint)", () => {
+  it("ne confond PAS /api/agents/schedules (user) avec /api/agents (user studio)", () => {
     expect(classifyApiPath("/api/agents/schedules").access).toBe("user");
-    expect(classifyApiPath("/api/agents/schedule-x").access).toBe("restreint");
+    expect(classifyApiPath("/api/agents/schedule-x").access).toBe("user");
     expect(classifyApiPath("/api/agents/schedules").family).toBe("planifications");
+    // Le préfixe /api/agents est atteignable, l'orchestration reste
+    // verrouillée au niveau des routes elles-mêmes (défense en profondeur).
+    expect(classifyApiPath("/api/agents").access).toBe("user");
   });
 
   it("ne confond PAS /api/neural/public-stats (public) avec /api/neural (restreint)", () => {
@@ -224,9 +238,10 @@ describe("API — RESTREINT (deny-by-default, hors demande n°7)", () => {
     expect(classifyApiPath("/api/neural/public-stats-x").access).toBe("restreint");
   });
 
-  it("ne confond PAS /api/video/worker (public) avec /api/video/projects (restreint)", () => {
+  it("ne confond PAS /api/video/worker (public) avec /api/video/projects (user studio)", () => {
     expect(classifyApiPath("/api/video/worker/tick").access).toBe("public");
-    expect(classifyApiPath("/api/video/projects").access).toBe("restreint");
+    expect(classifyApiPath("/api/video/projects").access).toBe("user");
+    expect(classifyApiPath("/api/video/projects").family).toBe("studio");
   });
 
   it("ne confond PAS /api/observability/overview (user) avec /api/observability/org (restreint)", () => {
@@ -298,6 +313,22 @@ describe("Pages — LISTE BLANCHE UTILISATEUR", () => {
     ["/memory", "memoire"],
     ["/observability", "observabilite"],
     ["/integrations", "integrations"],
+    // STUDIO MÉTIER (réouverture propriétaire) — hub complet hors console
+    ["/studio", "studio"],
+    ["/studio/agents", "studio"],
+    ["/studio/agents/", "studio"],
+    ["/studio/video", "studio"],
+    ["/studio/clients", "studio"],
+    ["/studio/finance/cashflow", "studio"],
+    ["/studio/create", "studio"],
+    ["/studio/documents", "studio"],
+    ["/studio/operations", "studio"],
+    ["/studio/results", "studio"],
+    ["/studio/sales", "studio"],
+    ["/studio/compliance", "studio"],
+    ["/studio/connections", "connecteurs"],
+    // AGENT LIVE (réouverture propriétaire — PC et Android)
+    ["/live", "live"],
   ] as const;
 
   it.each(utilisateurs)("%s → user (%s)", (path, family) => {
@@ -320,12 +351,10 @@ describe("Pages — RESTREINT (deny-by-default)", () => {
     "/team",
     "/team/t1",
     "/team/join",
-    // Studio métier : SEUL /studio/connections est autorisé
-    "/studio",
-    "/studio/create",
-    "/studio/agents",
-    "/studio/video",
-    "/studio/finance/cashflow",
+    // Studio métier : hub réouvert ; SEULE /studio/console reste
+    // interdite (IDE développeur — clés API, projets, paiements dev)
+    "/studio/console",
+    "/studio/console/ide",
     // ⚠️ frontière critique : /settings oui, /settings/ads non (module ads)
     "/settings/ads",
     // Sous-pages workspace inconnues → deny
@@ -339,9 +368,12 @@ describe("Pages — RESTREINT (deny-by-default)", () => {
     expect(classifyPagePath(path)).toMatchObject({ access: "restreint" });
   });
 
-  it("/studio/connections (connecteurs) reste autorisé, pas le reste du studio", () => {
+  it("/studio réouvert aux utilisateurs, /studio/console (IDE dev) reste restreint", () => {
     expect(classifyPagePath("/studio/connections").access).toBe("user");
-    expect(classifyPagePath("/studio/connections-x").access).toBe("restreint");
+    expect(classifyPagePath("/studio").access).toBe("user");
+    expect(classifyPagePath("/studio/agents").access).toBe("user");
+    expect(classifyPagePath("/studio/console").access).toBe("restreint");
+    expect(classifyPagePath("/studio/console-x").access).toBe("user");
   });
 
   it("/settings exact est autorisé, /settings/ads est restreint", () => {

@@ -14,6 +14,37 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Ajouté
 
+- **Accès utilisateurs restauré (studio + agent Live) et Agent Live sur ANDROID + PC** :
+  sur demande explicite du propriétaire (« les utilisateurs n'ont plus accès au
+  projet » + code genIA Desktop fourni) :
+  - **Studio métier réouvert** : `/studio` (hub complet — agents, clients,
+    documents, finance, marketing, opérations, résultats, ventes, conformité,
+    vidéo, création) passe dans la liste blanche utilisateur (famille
+    `studio`) ; SEULE `/studio/console` reste RESTREINTE (IDE développeur :
+    clés API, projets et paiements développeur `/api/developer/*` — surfaces à
+    privilège, même sémantique que `/developer`) ; `/api/video/projects` (+[id]
+    +render) ouverts (atelier vidéo) — le worker vidéo reste système ;
+  - **Workshop « Gen IA » fonctionnel pour les utilisateurs** : GET/POST de
+    `/api/agents` (liste + provisionnement de l'agent universel) passent de
+    `requireAgentSystemAccess` à `requireUser` — l'orchestration
+    (`/run`, `/generate`, `/plan`, PATCH/DELETE `[id]`, `system/activate`)
+    reste RÉSERVÉE au système IA + admin (défense en profondeur conservée,
+    demande n°5 assouplie au strict nécessaire) ;
+  - **Agent Live sur PC ET Android** (`/live` + `/api/live` en liste blanche,
+    famille `live`) : le garde PC-only de la page et des routes
+    `sessions`/`frames` est retiré ; le panneau Gemini Live adapte sa SOURCE
+    à l'appareil — PC : partage d'écran natif (`getDisplayMedia`, 1 fps JPEG,
+    identique au fichier genIA Desktop fourni) ; Android/iOS : CAMÉRA
+    (`getUserMedia`, bascule avant/arrière à chaud, aperçu vidéo visible) —
+    le partage d'écran n'existant pas sur ces navigateurs, la caméra est la
+    source réelle équivalente (aucun simulacre) ; voix + barge-in inchangés
+    (PCM16 16 kHz, réponses 24 kHz, VAD 0,06) ; aucun relais local
+    (`ws://localhost:8080` du fichier d'origine inutile : le client parle
+    directement au WebSocket officiel de Google, clé en sessionStorage) ;
+  - matrice d'accès testée de bout en bout (pages, API, frontières
+    `/studio/console`, orchestration agents), doc `docs/live-gemini.md`
+    réécrite (accès, Android, choix d'architecture).
+
 - **Génération multimodale scénique v2 — texte/son/vidéo/image SANS GPU,
   entraînement HORS PRODUCTION** : les trois moteurs média locaux passent de
   l'abstrait neuronal (constellation v1) à la génération SCÉNIQUE — l'analyseur

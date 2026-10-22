@@ -1,16 +1,24 @@
-# Gemini Live (écran + voix) — canal complémentaire du système Agent Live
+# Gemini Live (écran/caméra + voix) — canal complémentaire du système Agent Live
 
 > Task 2-a — intégration du fichier autonome fourni par l'opérateur
-> « Gemini Live Screen & Voice App.html » au tableau de bord `/live`.
+> « Gemini Live Screen & Voice App.html » (genIA Desktop) au tableau de bord
+> `/live` — élargi sur demande du propriétaire à **Android** (caméra) et aux
+> **utilisateurs** (réouverture de la liste blanche).
 
 ## Objet
 
-Le panneau « Gemini Live — écran + voix » (`app/live/live-gemini-panel.tsx`)
-reproduit, dans le système agent live gen3ia, les capacités temps réel du
-fichier HTML d'origine :
+Le panneau « Gemini Live — écran ou caméra + voix »
+(`app/live/live-gemini-panel.tsx`) reproduit, dans le système agent live
+gen3ia, les capacités temps réel du fichier HTML d'origine, avec une source
+visuelle adaptée à l'appareil :
 
-- **Vision pixel** : `getDisplayMedia` 1 fps → canvas → JPEG qualité 0,6 →
-  `realtimeInput.mediaChunks` (`image/jpeg`) sur le WebSocket Gemini.
+- **Vision pixel — PC** : `getDisplayMedia` 1 fps → canvas → JPEG qualité
+  0,6 → `realtimeInput.mediaChunks` (`image/jpeg`) sur le WebSocket Gemini.
+- **Vision pixel — Android/iOS** : le partage d'écran n'existe pas sur ces
+  navigateurs (`getDisplayMedia` indisponible) — la **CAMÉRA**
+  (`getUserMedia`, bascule avant/arrière à chaud) alimente la même chaîne
+  canvas → JPEG → 1 fps. Aucun simulacre d'écran : la source réelle est
+  annoncée dans le journal et les libellés.
 - **Voix bidirectionnelle** : micro PCM16 16 kHz continu
   (`audio/pcm`, ScriptProcessorNode 4096, base64) et réponses voix du modèle
   en PCM 24 kHz (`serverContent.modelTurn.parts[].inlineData`,
@@ -37,8 +45,21 @@ La CSP existante autorise déjà `wss://*.googleapis.com` (connect-src) et
   aucune route `/api/live/*` et ne crée pas de session Firestore.
 - Pendant la session, les images d'écran et la voix de l'opérateur sont
   envoyées aux serveurs Google (cf. note affichée dans l'UI).
-- `/live` reste hors liste blanche utilisateur (système agent réservé) ;
-  `lib/security/user-access.ts` n'a pas été modifié.
+- `/live` est DÉSORMAIS dans la liste blanche utilisateur (réouverture
+  demandée : « l'agent live accessible via Android et PC ») — famille
+  `live` dans `lib/security/user-access.ts` ; `/api/live` également
+  (sessions + frames). L'ancien garde PC-only des routes
+  `/api/live/sessions` et `/api/live/sessions/[id]/frames` est retiré :
+  les sessions peuvent être créées depuis Android (source caméra).
+- Aucun relais local (`ws://localhost:8080` du fichier d'origine) n'est
+  nécessaire : le client parle DIRECTEMENT au WebSocket officiel de Google
+  (la CSP autorise `wss://*.googleapis.com`) — moins de maillons, la clé ne
+  quitte jamais le navigateur de l'opérateur.
+- L'intégration Electron native (`desktopCapturer` via IPC) du fichier
+  d'origine n'est PAS reproduite : le navigateur PC utilise le sélecteur
+  standard de `getDisplayMedia` (écran/fenêtre/onglet) — fonctionnel
+  partout, sans binaire à signer. Le pont `Gen3iaDesktop` reste détecté
+  par `lib/device/detect.ts` pour le reste de la plateforme.
 
 ## Limites réelles
 
@@ -68,10 +89,12 @@ pipeline d'énoncés gen3ia (aucun code modifié de son côté).
 ## Périmètre inchangé
 
 - `lib/live/vision-decider.ts` (perception structurelle, moteur Gen3),
-  `lib/live/repository.ts`, `lib/live/gateway.ts`, la route
-  `/api/live/sessions/[id]/frames` et le flux sessions/frames du dashboard
-  (`app/live/live-dashboard.tsx`) : **inchangés**. Le panneau Gemini est rendu
-  sous la grille existante, comme canal complémentaire.
+  `lib/live/repository.ts`, `lib/live/gateway.ts` et le flux
+  sessions/frames du dashboard (`app/live/live-dashboard.tsx`) :
+  **inchangés**. Le panneau Gemini est rendu sous la grille existante,
+  comme canal complémentaire. La route `/api/live/sessions/[id]/frames`
+  ne change que d'un point : le garde PC-only est retiré (frames caméra
+  Android acceptées) — toute la logique de décision reste identique.
 
 ## Fichiers
 

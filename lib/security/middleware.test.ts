@@ -139,15 +139,28 @@ describe("liste blanche — utilisateur standard (cookie de session réel)", () 
     expect(response.status).toBe(403);
   });
 
-  it("page studio métier (/studio/create) → 403, mais /studio/connections passe", async () => {
+  it("studio réouvert : /studio/create passe, /studio/console (IDE dev) → 403, /studio/connections passe", async () => {
     mockedGetPlatformRole.mockResolvedValue("user");
-    const denied = await middleware(
+    const allowed = await middleware(
       requestTo("/studio/create", { cookie: sessionCookieFor("user-studio") }),
+    );
+    expect(isPassed(allowed)).toBe(true);
+
+    const denied = await middleware(
+      requestTo("/studio/console", { cookie: sessionCookieFor("user-studio") }),
     );
     expect(denied.status).toBe(403);
 
-    const allowed = await middleware(
+    const connections = await middleware(
       requestTo("/studio/connections", { cookie: sessionCookieFor("user-studio") }),
+    );
+    expect(isPassed(connections)).toBe(true);
+  });
+
+  it("page agent live (/live) → passe pour un utilisateur standard (réouverture PC + Android)", async () => {
+    mockedGetPlatformRole.mockResolvedValue("user");
+    const allowed = await middleware(
+      requestTo("/live", { cookie: sessionCookieFor("user-live") }),
     );
     expect(isPassed(allowed)).toBe(true);
   });

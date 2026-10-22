@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
  * (résultat d'action). Restauration post-Task 150.
  *
  * Verrous :
- *  - garde PC-only, auth, quota de frames, session propriétaire + device ;
+ *  - accès PC+ANDROID (réouverture), auth, quota de frames, session propriétaire ;
  *  - dédup « écran inchangé » : réponse immédiate sans nouvelle décision ;
  *  - verrou « une décision en vol par session » (409 sinon) ;
  *  - le résultat d'action alimente le runtime (reprise de boucle).
@@ -132,13 +132,18 @@ beforeEach(() => {
 });
 
 describe("POST /api/live/sessions/[id]/frames", () => {
-  it("refuse les appareils non PC", async () => {
+  it("accepte les frames ANDROID (réouverture propriétaire — caméra mobile)", async () => {
+    mockedDecide.mockResolvedValueOnce({
+      done: false,
+      message: "Observation structurelle en cours.",
+      action: null,
+      perception: "structural-degraded",
+    });
     const response = await POST_FRAMES(
       postFrame(frameBody(), "Mozilla/5.0 (Linux; Android 13; SM-A536B) AppleWebKit/537.36 Mobile Safari/537.36"),
       { params: Promise.resolve({ id: SESSION_ID }) },
     );
-    expect(response.status).toBe(403);
-    expect((await response.json()).code).toBe("LIVE_PC_ONLY");
+    expect(response.status).toBe(200);
   });
 
   it("exige une authentification", async () => {
