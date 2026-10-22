@@ -147,3 +147,41 @@ précédent connu-sain vaut mieux qu'un correctif écrit sous pression.
 | Durée des exécutions | routes lourdes jusqu'à 300 s (`maxDuration`), missions longues par file de ticks R2 — un déploiement n'interrompt pas les missions en cours (checkpoint + reprise) |
 | Persistance | Cloudflare R2 pour les fichiers, artefacts et files durables ; Firebase Admin pour l'auth — les variables `R2_*` et `FIREBASE_*` sont requises en production |
 | Statut | `/api/status` expose la `version` du déploiement courant : c'est la référence pour vérifier qu'un rollback a bien pris effet |
+
+---
+
+## 7. Crons VPS auto-hébergé (durcissement 2026-10-22)
+
+La production tourne sur le VPS (`deploy-vps.yml` → `cd-finisher.sh`) : les
+`crons` de `vercel.json` ne s'y exécutent PAS (inertes hors Vercel). Ils y
+restent pour la parité si la plateforme repasse sur Vercel. Sur le VPS, le
+cron `/api/cron/training-sweep` (balayage global des tâches d'entraînement :
+dispatch des tâches en attente, rafraîchissement des tâches en cours pour
+TOUS les utilisateurs, même onglet fermé — indispensable dès qu'un worker
+GPU est câblé) doit être planifié en crontab :
+
+```cron
+*/5 * * * * curl -fsS -m 290 -H "Authorization: Bearer $CRON_SECRET" http://127.0.0.1:3000/api/cron/training-sweep -o /dev/null -w '%{http_code}\n' >> /var/log/gen3ia-cron.log 2>&1
+```
+
+Installation (une fois, en root sur le VPS) :
+
+```bash
+# 1. Charger le secret depuis .env.production (CRON_SECRET y figure déjà)
+grep -q CRON_SECRET /etc/environment || echo "CRON_SECRET=$(grep '^CRON_SECRET=' /opt/gen3ia/.env.production | cut -d= -f2-)" >> /etc/environment
+
+# 2. Crontab : toutes les 5 minutes
+( crontab -l 2>/dev/null; echo '*/5 * * * * . /etc/environment && curl -fsS -m 290 -H "Authorization: Bearer $CRON_SECRET" http://127.0.0.1:3000/api/cron/training-sweep -o /dev/null -w "%{http_code}\n" >> /var/log/gen3ia-cron.log 2>&1' ) | crontab -
+
+# 3. Vérifier : une ligne 200 toutes les 5 min après le prochain cycle
+tail -f /var/log/gen3ia-cron.log
+```
+
+Notes :
+- `CRON_SECRET` doit rester identique à celui du `.env.production` du VPS
+  (comparaison à temps constant côté route — `timingSafeStringEqual`).
+- Sans ce cron, le sweep ne progresse qu'opportunistement (onglet Studio
+  ouvert) : les tâches d'entraînement en attente restent en attente et les
+  quotas restent bloqués par des tâches non rafraîchies.
+- Les autres crons (`agent-schedules`, `cleanup-invitations`) méritent la
+  même treatment si leurs effets sont attendus en continu sur le VPS.
