@@ -76,7 +76,7 @@ jobs:
       # fichier — ce n'est pas une erreur de ce workflow.
       - name: Publication du rapport ZAP (artefact)
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: rapport-zap
           path: |
