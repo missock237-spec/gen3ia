@@ -4,7 +4,6 @@ import { z } from "zod";
 import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { captureServerException } from "@/lib/observability/sentry";
-import { detectDeviceFromHeaders } from "@/lib/device/detect";
 import {
   assertLiveSessionOwner,
   beginLiveAction,
@@ -26,9 +25,6 @@ import {
   releaseDecisionLock,
   setFramePrint,
 } from "@/lib/live/decision-lock";
-
-const PC_ONLY_MESSAGE =
-  "L'agent Live est réservé aux ordinateurs (Windows/Linux/macOS) : il utilise le partage d'écran natif du navigateur.";
 
 // La boucle de vision (LLM) peut dépasser la durée par défaut des fonctions.
 export const maxDuration = 60;
@@ -59,18 +55,16 @@ function fail(status: number, error: string, code?: string, extra?: Record<strin
 /**
  * Boucle Live du mode navigateur (aucune gateway, aucun téléchargement).
  *
- * Le navigateur capte l'écran (getDisplayMedia) et pousse chaque frame ici.
- * Le serveur applique exactement la même logique que la gateway WebSocket :
- * validation, décision de vision (LLM), observation tracée, actions auto ou
- * bloquées pour approbation humaine. La réponse indique au navigateur quoi
- * exécuter (action) ou pourquoi il est en pause.
+ * Le navigateur capte la source (écran via getDisplayMedia sur PC, caméra
+ * via getUserMedia sur Android — réouverture demandée par le propriétaire,
+ * l'ancien garde PC-only est retiré) et pousse chaque frame ici. Le
+ * serveur applique exactement la même logique que la gateway WebSocket :
+ * validation, décision de vision (LLM), observation tracée, actions auto
+ * ou bloquées pour approbation humaine. La réponse indique au navigateur
+ * quoi exécuter (action) ou pourquoi il est en pause.
  */
 export async function POST(request: Request, { params }: Params) {
   try {
-    const device = detectDeviceFromHeaders(request.headers);
-    if (!device.isLiveCapable) {
-      return fail(403, PC_ONLY_MESSAGE, "LIVE_PC_ONLY", { device: device.type, os: device.os });
-    }
     const token = await verifyFirebaseAuth(request);
     // Garde-fou coût/abus : une frame déclenche au plus un appel vision.
     const frameLimit = await enforceRateLimit(`live-frames:${token.uid}`, { limit: 30, windowMs: 60_000 });

@@ -1,17 +1,26 @@
 "use client";
 
 /**
- * PANNEAU « GEMINI LIVE (ÉCRAN + VOIX) » — Task 2-a.
+ * PANNEAU « GEMINI LIVE (SOURCE + VOIX) » — PC (écran) ET ANDROID (caméra).
  *
- * Intégration du fichier autonome « Gemini Live Screen & Voice App.html » au
- * tableau de bord Agent Live, comme canal complémentaire du système existant.
+ * Intégration du fichier autonome « Gemini Live Screen & Voice App.html »
+ * (fourni par le propriétaire : genIA Desktop — Live & Partage d'Écran),
+ * adaptée aux DEUX familles d'appareils :
  *
- * CAPACITÉS RÉELLES :
- *  - Vision pixel + voix en direct via l'API Gemini Live (WebSocket
+ *  - PC (Windows/Linux/macOS) : partage d'écran natif getDisplayMedia,
+ *    1 fps → canvas → JPEG 0,6 — identique au fichier d'origine ;
+ *  - ANDROID / iOS / tablette : le partage d'écran N'EXISTE PAS sur ces
+ *    navigateurs (getDisplayMedia indisponible) — la CAMÉRA
+ *    (getUserMedia, bascule avant/arrière) est la source visuelle
+ *    équivalente, honnêtement étiquetée. Aucune simulation d'écran.
+ *
+ * CAPACITÉS RÉELLES (inchangées, mécanique du fichier d'origine) :
+ *  - Vision + voix en direct via l'API Gemini Live (WebSocket
  *    BidiGenerateContent v1alpha, modèle gemini-2.0-flash-exp, voix Puck),
- *    appelée DEPUIS LE NAVIGATEUR de l'opérateur.
- *  - Écran : getDisplayMedia 1 fps → canvas → JPEG 0,6 → realtimeInput
- *    (identique au fichier HTML d'origine).
+ *    appelée DEPUIS LE NAVIGATEUR — aucun relais local (le
+ *    ws://localhost:8080 du fichier d'origine n'est pas nécessaire : le
+ *    client parle DIRECTEMENT au WebSocket officiel de Google, la CSP du
+ *    projet autorise wss://*.googleapis.com) ;
  *  - Voix : micro PCM16 16 kHz en continu (realtimeInput audio/pcm) via
  *    ScriptProcessorNode 4096 ; réponses audio PCM 24 kHz mises en file de
  *    lecture via AudioContext ; barge-in VAD (RMS > 0,06) pendant la lecture,
@@ -25,14 +34,10 @@
  *    peuvent évoluer sans préavis ; images et voix partent chez Google
  *    pendant la session.
  *  - Le décideur interne du système live (lib/live/vision-decider.ts,
- *    perception structurelle, moteur Gen3) reste INCHANGÉ : ce panneau ne
- *    crée pas de session gen3ia et n'utilise pas le moteur HITL existant.
- *  - Capture micro : le worklet existant /worklets/live-voice-capture.js
- *    (contrat 110-0) livre des ÉNONCÉS VAD-gated (start/flush, pré-roll
- *    320 ms) et non un flux PCM continu ; l'utiliser en boucle start→flush
- *    dupliquerait 320 ms de pré-roll à chaque redémarrage. Gemini attend un
- *    flux continu : ScriptProcessorNode 4096 est donc utilisé, avec le même
- *    calcul RMS inline que le fichier HTML (seuil 0,06) pour le barge-in.
+ *    perception structurelle, moteur Gen3) reste INCHANGÉ pour le canal
+ *    gen3ia ; ce panneau ne crée pas de session gen3ia.
+ *  - Capture micro : ScriptProcessorNode 4096 (le worklet 110-0 livre des
+ *    énoncés VAD-gated incompatibles avec un flux continu).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -52,6 +57,14 @@ const GEMINI_JPEG_QUALITY = 0.6;
 const GEMINI_MIC_BUFFER_SIZE = 4096;
 
 type GeminiJournalKind = "system" | "ai" | "error";
+
+/** Source visuelle du Live : écran (PC) ou caméra (Android/iOS/tablette). */
+type SourceVisuelle = "ecran" | "camera";
+
+const SOURCE_LABELS: Record<SourceVisuelle, string> = {
+  ecran: "Écran (PC)",
+  camera: "Caméra (Android)",
+};
 
 interface GeminiJournalEntry {
   id: number;
@@ -83,20 +96,42 @@ export function LiveGeminiPanel() {
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [journal, setJournal] = useState<GeminiJournalEntry[]>([]);
+  // Source visuelle : « ecran » sur PC, « camera » sur Android/iOS —
+  // détectée une fois au montage (getDisplayMedia indisponible sur mobile).
+  const [sourceMode, setSourceMode] = useState<SourceVisuelle>("ecran");
+  const [ecranDisponible, setEcranDisponible] = useState(true);
+  const [facing, setFacing] = useState<"environment" | "user">("environment");
 
   const sessionRef = useRef<GeminiLiveSession | null>(null);
   const runningRef = useRef(false);
   const startingRef = useRef(false);
-  const screenStreamRef = useRef<MediaStream | null>(null);
+  const videoStreamRef = useRef<MediaStream | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const silentGainRef = useRef<GainNode | null>(null);
-  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const captureVideoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const journalIdRef = useRef(0);
+  const sourceModeRef = useRef<SourceVisuelle>("ecran");
+  const facingRef = useRef<"environment" | "user">("environment");
+
+  useEffect(() => {
+    sourceModeRef.current = sourceMode;
+  }, [sourceMode]);
+  useEffect(() => {
+    facingRef.current = facing;
+  }, [facing]);
+
+  // Détection honnête des capacités (une fois) : sans getDisplayMedia
+  // (Android/iOS), la source écran est indisponible → caméra imposée.
+  useEffect(() => {
+    const supporte = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia);
+    setEcranDisponible(supporte);
+    setSourceMode(supporte ? "ecran" : "camera");
+  }, []);
 
   const addJournal = useCallback((kind: GeminiJournalKind, text: string) => {
     journalIdRef.current += 1;
@@ -127,11 +162,11 @@ export function LiveGeminiPanel() {
         void audioContextRef.current.close().catch(() => undefined);
         audioContextRef.current = null;
       }
-      screenStreamRef.current?.getTracks().forEach((track) => track.stop());
-      screenStreamRef.current = null;
+      videoStreamRef.current?.getTracks().forEach((track) => track.stop());
+      videoStreamRef.current = null;
       micStreamRef.current?.getTracks().forEach((track) => track.stop());
       micStreamRef.current = null;
-      if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
+      if (captureVideoRef.current) captureVideoRef.current.srcObject = null;
       const session = sessionRef.current;
       sessionRef.current = null;
       if (session) session.close();
@@ -176,13 +211,18 @@ export function LiveGeminiPanel() {
       addJournal("error", "Saisissez votre clé API Gemini pour démarrer le mode Live.");
       return;
     }
-    if (!navigator.mediaDevices?.getDisplayMedia || !navigator.mediaDevices?.getUserMedia) {
-      addJournal("error", "Ce navigateur ne prend pas en charge le partage d'écran ou le micro (PC requis).");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      addJournal("error", "Ce navigateur ne prend pas en charge la capture micro/caméra.");
+      return;
+    }
+    const mode = sourceModeRef.current;
+    if (mode === "ecran" && !navigator.mediaDevices?.getDisplayMedia) {
+      addJournal("error", "Ce navigateur ne prend pas en charge le partage d'écran — utilisez le mode Caméra.");
       return;
     }
     startingRef.current = true;
     setBusy(true);
-    addJournal("system", "Connexion au WebSocket Gemini Live (gemini-2.0-flash-exp, voix Puck)…");
+    addJournal("system", `Connexion au WebSocket Gemini Live (gemini-2.0-flash-exp, voix Puck) — source : ${SOURCE_LABELS[mode]}…`);
 
     const session = new GeminiLiveSession({
       onStateChange: (next) => {
@@ -212,20 +252,28 @@ export function LiveGeminiPanel() {
       await session.connect(key);
       runningRef.current = true;
 
-      // 1) Écran : getDisplayMedia 1 fps (identique au fichier HTML).
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 1 },
-        audio: false,
-      });
-      screenStreamRef.current = screenStream;
-      screenStream.getVideoTracks().forEach((track) =>
+      // 1) SOURCE VISUELLE — écran (PC) ou caméra (Android/iOS) :
+      //    1 fps → canvas → JPEG 0,6 dans les deux cas (mécanique du
+      //    fichier d'origine, source adaptée à l'appareil).
+      const videoStream =
+        mode === "ecran"
+          ? await navigator.mediaDevices.getDisplayMedia({
+              video: { frameRate: 1 },
+              audio: false,
+            })
+          : await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: facingRef.current, width: { ideal: 1280 }, height: { ideal: 720 } },
+              audio: false,
+            });
+      videoStreamRef.current = videoStream;
+      videoStream.getVideoTracks().forEach((track) =>
         track.addEventListener("ended", () => {
-          stopLiveRef.current("Session arrêtée : partage d'écran terminé.");
+          stopLiveRef.current("Session arrêtée : source visuelle terminée.");
         }),
       );
-      if (screenVideoRef.current) {
-        screenVideoRef.current.srcObject = screenStream;
-        await screenVideoRef.current.play().catch(() => undefined);
+      if (captureVideoRef.current) {
+        captureVideoRef.current.srcObject = videoStream;
+        await captureVideoRef.current.play().catch(() => undefined);
       }
 
       // 2) Micro : PCM16 16 kHz continu via ScriptProcessorNode 4096 (voir
@@ -261,12 +309,12 @@ export function LiveGeminiPanel() {
       processor.connect(silentGain);
       silentGain.connect(audioContext.destination);
 
-      // 3) Frames d'écran : canvas → JPEG 0,6 → 1 image/seconde.
+      // 3) Frames : canvas → JPEG 0,6 → 1 image/seconde (écran OU caméra).
       const canvas = canvasRef.current ?? document.createElement("canvas");
       canvasRef.current = canvas;
       frameIntervalRef.current = setInterval(() => {
         const active = sessionRef.current;
-        const video = screenVideoRef.current;
+        const video = captureVideoRef.current;
         if (!active || !runningRef.current || !video || video.videoWidth === 0) return;
         const scale = Math.min(1, GEMINI_MAX_CAPTURE_WIDTH / video.videoWidth);
         const width = Math.max(1, Math.round(video.videoWidth * scale));
@@ -281,11 +329,16 @@ export function LiveGeminiPanel() {
         if (jpegBase64.length > 64) active.sendImageFrame(jpegBase64);
       }, GEMINI_FRAME_INTERVAL_MS);
 
-      addJournal("system", "Live démarré : écran (1 image/s, JPEG) + micro (PCM 16 kHz continu).");
+      addJournal(
+        "system",
+        mode === "ecran"
+          ? "Live démarré : écran (1 image/s, JPEG) + micro (PCM 16 kHz continu)."
+          : `Live démarré : caméra ${facingRef.current === "environment" ? "arrière" : "avant"} (1 image/s, JPEG) + micro (PCM 16 kHz continu).`,
+      );
     } catch (error) {
       const raw = error instanceof Error ? error.message : "Démarrage impossible";
       const message = /permission|denied|dismissed/i.test(raw)
-        ? "Accès refusé : autorisez le partage d'écran et le micro pour démarrer le Live."
+        ? "Accès refusé : autorisez la source visuelle et le micro pour démarrer le Live."
         : raw;
       addJournal("error", `Démarrage impossible : ${message}`);
       if (runningRef.current) {
@@ -300,6 +353,29 @@ export function LiveGeminiPanel() {
       setBusy(false);
     }
   }, [apiKey, addJournal]);
+
+  /** Bascule caméra avant/arrière À CHAUD (mode caméra uniquement). */
+  const switchCamera = useCallback(async () => {
+    if (sourceModeRef.current !== "camera" || !runningRef.current) return;
+    const suivant = facingRef.current === "environment" ? "user" : "environment";
+    try {
+      const nouveau = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: suivant, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      videoStreamRef.current?.getTracks().forEach((track) => track.stop());
+      videoStreamRef.current = nouveau;
+      if (captureVideoRef.current) {
+        captureVideoRef.current.srcObject = nouveau;
+        await captureVideoRef.current.play().catch(() => undefined);
+      }
+      facingRef.current = suivant;
+      setFacing(suivant);
+      addJournal("system", `Caméra basculée : ${suivant === "environment" ? "arrière" : "avant"}.`);
+    } catch (error) {
+      addJournal("error", `Bascule caméra impossible : ${error instanceof Error ? error.message : "erreur"}`);
+    }
+  }, [addJournal]);
 
   const interruptManual = useCallback(() => {
     const session = sessionRef.current;
@@ -320,22 +396,29 @@ export function LiveGeminiPanel() {
 
   return (
     <section className="relative rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-      {/* Vidéo cachée : source des frames d'écran envoyées à Gemini. */}
+      {/* Source visuelle : cachée en mode écran (frames vers Gemini) ;
+          aperçu visible en mode caméra (l'utilisateur vise avec son
+          appareil Android). */}
       <video
-        ref={screenVideoRef}
+        ref={captureVideoRef}
         muted
         playsInline
         autoPlay
-        aria-hidden
+        aria-hidden={sourceMode !== "camera"}
         tabIndex={-1}
-        className="pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"
+        className={
+          sourceMode === "camera"
+            ? "mb-4 aspect-video w-full rounded-2xl border border-[var(--g3-border)] bg-black object-cover"
+            : "pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"
+        }
       />
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="font-serif text-lg font-semibold">Gemini Live — écran + voix (temps réel)</h2>
+          <h2 className="font-serif text-lg font-semibold">Gemini Live — écran ou caméra + voix (temps réel)</h2>
           <p className="mt-1 text-xs text-[var(--g3-muted)]">
-            Le canal Gemini officiel : l&apos;IA voit votre écran (1 image/s) et vous parle
+            Le canal Gemini officiel : l&apos;IA voit ce que votre appareil capte —
+            votre écran (PC, 1 image/s) ou votre caméra (Android/iOS) — et vous parle
             en voix de synthèse, avec barge-in quand vous coupez la parole.
           </p>
         </div>
@@ -373,10 +456,37 @@ export function LiveGeminiPanel() {
         </p>
       </div>
 
+      {/* Source visuelle : écran sur PC, caméra sur Android/iOS —
+          imposée quand le navigateur ne sait pas partager l'écran. */}
+      <div className="mt-4 grid grid-cols-2 gap-2" role="tablist" aria-label="Source visuelle du Live">
+        {(Object.keys(SOURCE_LABELS) as SourceVisuelle[]).map((mode) => {
+          const indisponible = mode === "ecran" && !ecranDisponible;
+          return (
+            <button
+              key={mode}
+              type="button"
+              role="tab"
+              aria-selected={sourceMode === mode}
+              disabled={isLive || busy || indisponible}
+              onClick={() => setSourceMode(mode)}
+              title={indisponible ? "Partage d'écran indisponible sur cet appareil — caméra uniquement." : undefined}
+              className={`rounded-xl px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                sourceMode === mode
+                  ? "bg-[var(--g3-primary-soft,var(--g3-elevated))] text-[var(--g3-text)] ring-1 ring-[var(--g3-primary-border,var(--g3-border))]"
+                  : "text-[var(--g3-muted)] hover:bg-[var(--g3-hover,var(--g3-elevated))]"
+              }`}
+            >
+              {SOURCE_LABELS[mode]}
+              {indisponible ? " — indisponible" : ""}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mt-4 flex flex-wrap gap-2">
         {!isLive ? (
           <button onClick={() => void startLive()} disabled={busy || state === "connecting"} className="g3-btn g3-btn-primary">
-            {busy ? "Démarrage…" : "Démarrer Live (écran + voix)"}
+            {busy ? "Démarrage…" : sourceMode === "ecran" ? "Démarrer Live (écran + voix)" : "Démarrer Live (caméra + voix)"}
           </button>
         ) : (
           <button onClick={() => stopLiveRef.current("Session Live arrêtée par l'opérateur.")} className="g3-btn g3-btn-ghost">
@@ -390,6 +500,15 @@ export function LiveGeminiPanel() {
         >
           Interrompre la voix (Barge-in)
         </button>
+        {sourceMode === "camera" ? (
+          <button
+            onClick={() => void switchCamera()}
+            disabled={!isLive}
+            className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-4 py-2 text-sm font-semibold text-[var(--g3-text)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {facing === "environment" ? "Caméra : arrière → passer à l'avant" : "Caméra : avant → passer à l'arrière"}
+          </button>
+        ) : null}
       </div>
 
       <div className="mt-4">
@@ -416,8 +535,10 @@ export function LiveGeminiPanel() {
         (perception structurelle, moteur Gen3, sessions et approbations HITL)
         reste inchangé. Modèle <strong>expérimental</strong> Google
         (gemini-2.0-flash-exp) : disponibilité, quotas et format de réponse
-        côté Google peuvent varier. Pendant la session, vos images d&apos;écran
-        et votre voix sont envoyées aux serveurs Google.
+        côté Google peuvent varier. Pendant la session, vos images (écran ou
+        caméra) et votre voix sont envoyées aux serveurs Google. Sur
+        Android/iOS, le partage d&apos;écran n&apos;existe pas dans les navigateurs :
+        la caméra est la source réelle équivalente — aucun simulacre d&apos;écran.
       </p>
     </section>
   );

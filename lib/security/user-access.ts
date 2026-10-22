@@ -33,17 +33,20 @@
  * (createCachedAdminResolver) reçoivent leur chargeur en INJECTION —
  * aucun graphe de dépendances serveur n'est tiré ici.
  *
- * FAMILIES AUTORISÉES AUX UTILISATEURS (demande n°7, verbatim) :
- * chat IA · studio d'entraînement (+ sa configuration) · connecteurs ·
- * planifications · facturation · paramètres · accès au compte (auth) ·
- * base de connaissances · projets · fichiers · automatisation ·
- * intégrations · observabilité · mémoire permanente.
+ * FAMILIES AUTORISÉES AUX UTILISATEURS (demande n°7, élargie sur demande
+ * explicite du propriétaire — « les utilisateurs n'ont plus accès au
+ * projet ») : chat IA · studio d'entraînement (+ sa configuration) ·
+ * connecteurs · planifications · facturation · paramètres · accès au
+ * compte (auth) · base de connaissances · projets · fichiers ·
+ * automatisation · intégrations · observabilité · mémoire permanente ·
+ * STUDIO MÉTIER (hub complet hors IDE développeur /studio/console, incl.
+ * atelier vidéo) · AGENT LIVE (PC + Android).
  *
- * TOUT le reste est interdit : admin, agents (hors planifications),
- * neural (hors stats publiques), monde, essaim, arène, ondes, teams,
- * organizations, developer, extensions, ads, business, video, terminal,
- * tools, workflows, orchestrator, notifications push, etc. La matrice
- * COMPLÈTE allow/deny est documentée dans la PR de cette branche.
+ * TOUT le reste est interdit : admin, IDE développeur (/studio/console,
+ * /api/developer/*), monde, essaim, arène, ondes, teams, organizations,
+ * extensions, ads, terminal, workflows, orchestrator, notifications push,
+ * etc. La matrice COMPLÈTE allow/deny est documentée dans la PR de cette
+ * branche.
  */
 
 export type AccessLevel = "public" | "user" | "restreint";
@@ -65,7 +68,9 @@ export type RouteFamily =
   | "automatisation"
   | "integrations"
   | "observabilite"
-  | "memoire";
+  | "memoire"
+  | "studio"
+  | "live";
 
 export interface PathDecision {
   access: AccessLevel;
@@ -158,6 +163,38 @@ const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   ["/api/observability/overview", "observabilite"],
   // Mémoire permanente
   ["/api/memory", "memoire"],
+  // STUDIO MÉTIER (réouverture demandée par le propriétaire — les
+  // utilisateurs doivent avoir accès au projet) : atelier vidéo
+  // (/studio/video → /api/video/projects), projets et rendus vidéo.
+  // Le worker vidéo reste SYSTEME (public/signé) — jamais exposé.
+  ["/api/video/projects", "studio"],
+  // AGENT LIVE (réouverture demandée) : sessions et frames du tableau
+  // de bord live — auth utilisateur + cloisonnement propriétaire déjà
+  // assurés par les routes elles-mêmes (assertLiveSessionOwner).
+  ["/api/live", "live"],
+  // WORKSHOP AGENT « GEN IA » (/studio/agents) : liste + provisionnement
+  // de l'agent universel. Les routes d'ORCHESTRATION (run/generate/plan,
+  // PATCH/DELETE [id]) restent gardées AU NIVEAU DE LA ROUTE
+  // (requireAgentSystemAccess) — défense en profondeur conservée.
+  ["/api/agents", "studio"],
+];
+
+/* ------------------------------------------------------------------ */
+/* API — EXCEPTIONS RESTREINTES (évaluées AVANT la liste blanche)       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sous-chemins d'un préfixe autorisé qui restent INTERDITS aux
+ * utilisateurs standard : l'ORCHESTRATION du système agent (exécution,
+ * génération de plan, activation interne) est réservée à l'IA (demande
+ * n°5, maintenue) — seul le provisionnement « Gen IA » du workshop
+ * /studio/agents est ouvert.
+ */
+const RESTRICTED_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
+  ["/api/agents/run", "systeme"],
+  ["/api/agents/generate", "systeme"],
+  ["/api/agents/plan", "systeme"],
+  ["/api/agents/system", "systeme"],
 ];
 
 /* ------------------------------------------------------------------ */
@@ -204,6 +241,21 @@ const STATIC_EXTENSIONS: ReadonlySet<string> = new Set([
 ]);
 
 /* ------------------------------------------------------------------ */
+/* PAGES — EXCEPTIONS RESTREINTES (évaluées AVANT la liste blanche)     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Surfaces du studio qui restent INTERDITES aux utilisateurs standard
+ * même après la réouverture du studio : /studio/console est l'atelier
+ * IDE développeur (clés API, projets, paiements développeur via
+ * /api/developer/* — surfaces à privilège). Même sémantique que
+ * /developer (filtre par rôle côté nav).
+ */
+const RESTRICTED_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
+  ["/studio/console", "systeme"],
+];
+
+/* ------------------------------------------------------------------ */
 /* PAGES — liste blanche utilisateur                                   */
 /* ------------------------------------------------------------------ */
 
@@ -236,6 +288,15 @@ const USER_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   ["/workspace/bibliotheque", "fichiers"],
   // Planifications
   ["/workspace/schedules", "planifications"],
+  // STUDIO MÉTIER (réouverture demandée par le propriétaire — « les
+  // utilisateurs n'ont plus accès au projet ») : hub complet (agents,
+  // clients, documents, finance, marketing, opérations, résultats,
+  // ventes, conformité, vidéo, création). Exception : /studio/console
+  // reste RESTREINT (IDE développeur — voir RESTRICTED_PAGE_EXACT).
+  ["/studio", "studio"],
+  // AGENT LIVE (réouverture demandée) : PC (partage d'écran) ET
+  // Android (caméra) — le panneau adapte sa source selon l'appareil.
+  ["/live", "live"],
 ];
 
 /* ------------------------------------------------------------------ */
@@ -273,6 +334,12 @@ export function classifyApiPath(pathname: string): PathDecision {
     if (matchesPrefix(path, prefix)) return { access: "public", family };
   }
 
+  // Exceptions RESTREINTES avant la liste blanche : l'orchestration du
+  // système agent reste interdite même avec /api/agents ouvert.
+  for (const [prefix, family] of RESTRICTED_API_PREFIXES) {
+    if (matchesPrefix(path, prefix)) return { access: "restreint", family };
+  }
+
   for (const [prefix, family] of USER_API_PREFIXES) {
     if (matchesPrefix(path, prefix)) return { access: "user", family };
   }
@@ -296,6 +363,12 @@ export function classifyPagePath(pathname: string): PathDecision {
 
   for (const [prefix, family] of PUBLIC_PAGE_PREFIXES) {
     if (matchesPrefix(path, prefix)) return { access: "public", family };
+  }
+
+  // Exceptions RESTREINTES avant la liste blanche : /studio/console
+  // (IDE développeur) reste interdit même avec /studio ouvert.
+  for (const [prefix, family] of RESTRICTED_PAGE_PREFIXES) {
+    if (matchesPrefix(path, prefix)) return { access: "restreint", family };
   }
 
   const userExact = USER_PAGE_EXACT[path];

@@ -85,34 +85,32 @@ describe("GET /api/agents — liste union", () => {
   });
 });
 
-// SYSTÈME AGENT RÉSERVÉ (demande n°5) : l'utilisateur standard (même
-// connecté, sans custom claim admin) reçoit 403 « réservé au système IA »
-// sur toute la surface de gestion — le chemin légitime est la demande
-// dans le chat (activation interne par l'IA).
-describe("GET/POST /api/agents — utilisateur standard bloqué (réservé au système IA)", () => {
-  it("GET : 403 explicite pour un utilisateur connecté sans claim admin", async () => {
+// RÉOUVERTURE (demande propriétaire — « les utilisateurs n'ont plus accès
+// au projet ») : GET/POST de cette route sont ouverts à tout utilisateur
+// CONNECTÉ (requireUser) — le provisionnement « Gen IA » du workshop
+// /studio/agents doit fonctionner. L'orchestration (run/generate/plan,
+// PATCH/DELETE) reste verrouillée par requireAgentSystemAccess dans ses
+// propres routes.
+describe("GET/POST /api/agents — ouverts aux utilisateurs connectés (workshop Gen IA)", () => {
+  it("GET : liste accessible à un utilisateur standard (sans claim admin)", async () => {
     mockedRequireUser.mockResolvedValue({ uid: "u1", claims: {} });
     const response = await GET(request("/api/agents"));
-    expect(response.status).toBe(403);
-    const body = await response.json();
-    expect(body.error).toContain("réservé au système IA");
-    expect(mockedListForUser).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mockedListForUser).toHaveBeenCalledWith("u1", undefined);
   });
 
-  it("GET : 403 aussi sans claims (session cookie)", async () => {
+  it("GET : accessible aussi sans claims (session cookie)", async () => {
     mockedRequireUser.mockResolvedValue({ uid: "u1" });
     const response = await GET(request("/api/agents"));
-    expect(response.status).toBe(403);
-    expect(mockedListForUser).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mockedListForUser).toHaveBeenCalled();
   });
 
-  it("POST : 403 explicite — aucune création directe par un utilisateur standard", async () => {
+  it("POST : provisionnement possible par un utilisateur standard (Gen IA)", async () => {
     mockedRequireUser.mockResolvedValue({ uid: "u1", claims: {} });
-    const response = await POST(request("/api/agents", { method: "POST", body: JSON.stringify({ name: "Agent Studio", description: "desc", type: "universal" }), headers: { "content-type": "application/json" } }));
-    expect(response.status).toBe(403);
-    const body = await response.json();
-    expect(body.error).toContain("réservé au système IA");
-    expect(mockedCreateRecord).not.toHaveBeenCalled();
+    const response = await POST(request("/api/agents", { method: "POST", body: JSON.stringify({ name: "Gen IA", description: "agent universel", type: "universal" }), headers: { "content-type": "application/json" } }));
+    expect(response.status).toBe(201);
+    expect(mockedCreateRecord).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -5,30 +5,19 @@ import { verifyFirebaseAuth } from "@/lib/firebase/auth-server";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { appendSecurityAuditEvent } from "@/lib/security/security-audit";
 import { captureServerException } from "@/lib/observability/sentry";
-import { detectDeviceFromHeaders } from "@/lib/device/detect";
 import { createLiveSession, listLiveSessions } from "@/lib/live/repository";
 import { createPairingToken, hashPairingToken } from "@/lib/live/security";
 import { LivePermissionSchema, LiveSessionModeSchema } from "@/lib/live/types";
 import { errorStatus } from "@/lib/security/http-errors";
 
-const PC_ONLY_MESSAGE =
-  "L'agent Live est réservé aux ordinateurs (Windows/Linux/macOS) : il utilise le partage d'écran natif du navigateur.";
-
 /**
- * Garde serveur PC-only : l'agent Live observe un vrai ordinateur via le
- * partage d'écran natif du navigateur. Toute session doit être créée depuis
- * un ordinateur (Windows/Linux/macOS) — mode navigateur, sans téléchargement.
+ * ACCÈS PC + ANDROID (réouverture demandée par le propriétaire — l'agent
+ * Live est accessible sur ordinateur ET mobile) : l'ancien garde PC-only
+ * est RETIRÉ. La session reste authentifiée (Firebase), limitée en débit
+ * et cloisonnée propriétaire ; la SOURCE de capture (écran sur PC,
+ * caméra sur Android) est choisie par le client — cf.
+ * app/live/live-gemini-panel.tsx et docs/live-gemini.md.
  */
-function pcOnlyGuard(request: Request): NextResponse | null {
-  const device = detectDeviceFromHeaders(request.headers);
-  if (!device.isLiveCapable) {
-    return NextResponse.json(
-      { error: PC_ONLY_MESSAGE, code: "LIVE_PC_ONLY", device: device.type, os: device.os },
-      { status: 403 },
-    );
-  }
-  return null;
-}
 
 const CreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -45,8 +34,6 @@ function unauthorized(error: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const pcOnly = pcOnlyGuard(request);
-    if (pcOnly) return pcOnly;
     const token = await verifyFirebaseAuth(request);
     const liveLimit = await enforceRateLimit(`live-session:${token.uid}`, { limit: 20, windowMs: 5 * 60 * 1000 });
     if (!liveLimit.allowed) {

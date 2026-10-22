@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 /**
  * Routes /api/live/sessions — création et liste des sessions de l'agent Live.
  * Restauration post-Task 150 : le module est de retour, propulsé par le
- * moteur neural interne. Verrous : garde PC-only, authentification, rate
+ * moteur neural interne. Verrous : accès PC+ANDROID (réouverture), authentification, rate
  * limit, tokens d'appairage jamais stockés en clair, isolation propriétaire.
  */
 
@@ -78,12 +78,16 @@ beforeEach(() => {
 });
 
 describe("POST /api/live/sessions", () => {
-  it("refuse les appareils non PC (garde serveur isLiveCapable)", async () => {
+  it("accepte ANDROID (réouverture propriétaire — live accessible mobile)", async () => {
+    const response = await POST(postRequest({ name: "x", objective: "y".repeat(12), permissions: ["screen.read"] }, "Mozilla/5.0 (Linux; Android 13; SM-A536B) AppleWebKit/537.36 Mobile Safari/537.36"));
+    expect(response.status).toBe(201);
+    expect(mockedCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepte iPhone (source caméra côté client)", async () => {
     const response = await POST(postRequest({ name: "x", objective: "y".repeat(12), permissions: ["screen.read"] }, "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1"));
-    expect(response.status).toBe(403);
-    const data = await response.json();
-    expect(data.code).toBe("LIVE_PC_ONLY");
-    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(mockedCreate).toHaveBeenCalledTimes(1);
   });
 
   it("exige une authentification valide", async () => {
