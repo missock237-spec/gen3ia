@@ -68,10 +68,6 @@ const ENGINE_SOURCE = readFileSync(
   path.resolve(process.cwd(), "lib/domain/conversations/engine.ts"),
   "utf8",
 );
-const CHAT_MESSAGE_SOURCE = readFileSync(
-  path.resolve(process.cwd(), "app/api/chat/message/route.ts"),
-  "utf8",
-);
 const RUNNER_SOURCE = readFileSync(
   path.resolve(process.cwd(), "lib/agents/runtime/runner.ts"),
   "utf8",
@@ -149,37 +145,6 @@ describe("moteur conversationnel — chemins visibles sans préférence gratuite
 
   it("la synthèse de plan garde un budget de sortie lisible (1200 tokens)", () => {
     expect(ENGINE_SOURCE).toContain("maxTokens: 1200");
-  });
-});
-
-describe("route /api/chat/message — chat générique (visible)", () => {
-  it("possède un system prompt STRUCTURÉ de qualité dès la première réponse (Task 138)", () => {
-    // Le squelette normalisé remplace l'assemblage ad-hoc : rôle → méthode
-    // (CoT) → contraintes → format → exemples few-shot.
-    expect(CHAT_MESSAGE_SOURCE).toContain("composeStructuredPrompt(");
-    expect(CHAT_MESSAGE_SOURCE).toContain("@/lib/ai/response-quality");
-    expect(CHAT_MESSAGE_SOURCE).toContain("REASONING_DIRECTIVE");
-    expect(CHAT_MESSAGE_SOURCE).toContain("RESPONSE_FORMAT_RULES");
-    // Few-shot : exemples de qualité sélectionnés selon la demande.
-    expect(CHAT_MESSAGE_SOURCE).toContain("buildFewShotSection(");
-    // Self-reflection : critique de la proposition avant livraison.
-    expect(CHAT_MESSAGE_SOURCE).toContain("reviewVisibleAnswer(");
-  });
-
-  it("assemble l'historique dans la fenêtre du modèle (plus d'empilement brut)", () => {
-    expect(CHAT_MESSAGE_SOURCE).toContain("assembleMessages(");
-  });
-
-  it("nettoie les balises de raisonnement avant persistance", () => {
-    expect(CHAT_MESSAGE_SOURCE).toContain("stripThinkTags(response.text)");
-  });
-
-  it("routage par défaut = politique de qualité (sauf choix explicite du client)", () => {
-    expect(CHAT_MESSAGE_SOURCE).toContain("preferFree: body.preferFree ?? preferFreeForVisibleAnswers()");
-  });
-
-  it("budget de sortie par défaut 4096 tokens", () => {
-    expect(CHAT_MESSAGE_SOURCE).toContain("body.maxTokens ?? 4_096");
   });
 });
 

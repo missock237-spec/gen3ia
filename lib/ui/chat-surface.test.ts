@@ -14,7 +14,6 @@ describe("isImmersiveChatRoute", () => {
     expect(isImmersiveChatRoute("/copilot")).toBe(true);
     expect(isImmersiveChatRoute("/workspace/conversations")).toBe(true);
     expect(isImmersiveChatRoute("/workspace/conversations/abc123")).toBe(true);
-    expect(isImmersiveChatRoute("/studio/agents")).toBe(true);
   });
 
   it("reste en mise en page classique partout ailleurs", () => {

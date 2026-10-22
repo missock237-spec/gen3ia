@@ -129,8 +129,9 @@ const PUBLIC_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
  * `/api/agents/schedules/<id>/run` mais PAS `/api/agents/run`.
  */
 const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
-  // Chat IA (pages /chat, /chat-v4, /dashboard, /workspace/conversations)
-  ["/api/chat", "chat"],
+  // Chat IA (pages /chat, /chat-v4, /dashboard, /workspace/conversations).
+  // /api/agent/chat ne couvre plus que /approve (approbations missions/ads) ;
+  // les routes du chat d'agent universel sont supprimées du projet.
   ["/api/agent/chat", "chat"],
   ["/api/ai/feedback", "chat"],
   ["/api/workspace/conversations", "chat"],
@@ -181,9 +182,9 @@ const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   // de bord live — auth utilisateur + cloisonnement propriétaire déjà
   // assurés par les routes elles-mêmes (assertLiveSessionOwner).
   ["/api/live", "live"],
-  // WORKSHOP AGENT « GEN IA » (/studio/agents) : liste + provisionnement
-  // de l'agent universel. Les routes d'ORCHESTRATION (run/generate/plan,
-  // PATCH [id]) restent gardées AU NIVEAU DE LA ROUTE
+  // AGENTS DÉDIÉS (schedules/live/missions — le workshop universel
+  // /studio/agents est supprimé) : les routes d'ORCHESTRATION
+  // (run/generate/plan, PATCH [id]) restent gardées AU NIVEAU DE LA ROUTE
   // (requireAgentSystemAccess) — défense en profondeur conservée. La
   // SUPPRESSION (DELETE [id]) est ouverte au propriétaire (demande
   // explicite — « supprime l'agent IA » ne devait rien faire).
@@ -213,8 +214,7 @@ const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
  * Sous-chemins d'un préfixe autorisé qui restent INTERDITS aux
  * utilisateurs standard : l'ORCHESTRATION du système agent (exécution,
  * génération de plan, activation interne) est réservée à l'IA (demande
- * n°5, maintenue) — seul le provisionnement « Gen IA » du workshop
- * /studio/agents est ouvert.
+ * n°5, maintenue) — seul le provisionnement des agents dédiés est ouvert.
  */
 const RESTRICTED_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   ["/api/agents/run", "systeme"],

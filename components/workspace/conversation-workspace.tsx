@@ -31,7 +31,6 @@ import { RechargeCallout } from "@/components/billing/recharge-callout";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 import type { AuthorizationMode } from "@/lib/security/authorization-mode";
 import { findModelOption } from "@/lib/ui/composer-models";
-import type { ComposerAgentOption } from "./composer/agent-picker";
 import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
 /**
@@ -71,13 +70,6 @@ interface LiveTurn {
   approvals: ConversationApproval[];
   artifacts: ConversationArtifact[];
 }
-
-const STARTER_SUGGESTIONS = [
-  "Analyse mes ventes du mois et rédige un compte rendu",
-  "Prépare un point hebdo à partir de mes notes",
-  "Crée un rapport de suivi avec les prochaines échéances",
-  "Recherche les dernières tendances de mon marché",
-];
 
 /** Message en attente après création depuis l'accueil (hand-off entre pages). */
 export const PENDING_MESSAGE_PREFIX = "g3-pending-message:";
@@ -127,11 +119,9 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
   // des conversations, tiroir de contexte) deviennent des feuilles
   // superposées OUVRABLES — le même contenu, jamais une version amputée.
   const [mobileListOpen, setMobileListOpen] = useState(false);
-  // Task 141 — pilotage du prochain message : agent dédié (QUI répond),
-  // moteur IA (QUEL modèle rédige), pré-remplissage externe (chips de suivi,
-  // « Réutiliser ») consommé par le composer.
-  const [agents, setAgents] = useState<ComposerAgentOption[]>([]);
-  const [agentId, setAgentId] = useState<string | undefined>(undefined);
+  // Task 141 — pilotage du prochain message : moteur IA (QUEL modèle
+  // rédige), pré-remplissage externe (chips de suivi, « Réutiliser »)
+  // consommé par le composer.
   const [modelId, setModelId] = useState<string | undefined>(undefined);
   const [prefill, setPrefill] = useState<{ text: string } | null>(null);
   const threadScrollRef = useRef<HTMLDivElement>(null);
@@ -163,26 +153,6 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
     } finally {
       setLoadingList(false);
     }
-  }, []);
-
-  // Task 141 — agents dédiés de l'utilisateur (sélecteur du composer).
-  // Chargement best-effort : une indisponibilité masque simplement le
-  // sélecteur (repli silencieux sur Gen IA universel).
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch("/api/agents", { cache: "no-store" });
-        if (!response.ok) return;
-        const data = (await response.json()) as { agents?: ComposerAgentOption[] };
-        if (!cancelled && Array.isArray(data.agents)) setAgents(data.agents);
-      } catch {
-        /* sélecteur masqué : comportement universel inchangé */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const loadDetail = useCallback(async (id: string, silent = false) => {
@@ -384,7 +354,6 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           projectId,
           connectors,
           authorizationMode,
-          ...(options?.agentId ? { agentId: options.agentId } : {}),
           ...(options?.provider ? { provider: options.provider, model: options.model } : {}),
           timezone: safeClientTimezone(),
           signal: controller.signal,
@@ -425,7 +394,6 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               projectId,
               ...(connectors.length > 0 ? { connectors } : {}),
               ...(authorizationMode ? { authorizationMode } : {}),
-              ...(options?.agentId ? { agentId: options.agentId } : {}),
               ...(options?.provider ? { provider: options.provider, model: options.model } : {}),
               ...(safeClientTimezone() ? { timezone: safeClientTimezone() } : {}),
             }),
@@ -506,13 +474,12 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         const modelChoice = findModelOption(modelId);
         void sendMessage(message.content, message.attachments ?? [], {
           authorizationMode: readAuthorizationMode(),
-          ...(agentId ? { agentId } : {}),
           ...(modelChoice?.provider ? { provider: modelChoice.provider, model: modelChoice.model } : {}),
         });
         return;
       }
     }
-  }, [agentId, detail, generating, modelId, sendMessage]);
+  }, [detail, generating, modelId, sendMessage]);
 
   const createConversation = useCallback(async () => {
     const response = await fetch("/api/workspace/conversations", {
@@ -538,14 +505,12 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         message: string;
         attachments?: MessageAttachment[];
         authorizationMode?: AuthorizationMode;
-        agentId?: string;
         provider?: string;
         model?: string;
       };
       if (pending.message) {
         void sendMessage(pending.message, pending.attachments ?? [], {
           authorizationMode: pending.authorizationMode,
-          ...(pending.agentId ? { agentId: pending.agentId } : {}),
           ...(pending.provider ? { provider: pending.provider, model: pending.model } : {}),
         });
       }
@@ -585,10 +550,10 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
           ✦
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-[var(--g3-text)]">Que voulez-vous accomplir ?</h1>
+          <h1 className="text-lg font-semibold text-[var(--g3-text)]">Votre conversation</h1>
           <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-[var(--g3-muted)]">
-            Décrivez un objectif : Gen3ia propose un plan lisible, utilise vos applications connectées
-            avec votre validation, et range les livrables (documents, images, rapports, fichiers) dans la conversation.
+            Posez vos questions, joignez vos fichiers et retrouvez l’historique de vos échanges —
+            le moteur neuronal Gen3 répond avec honnêteté, sans jamais inventer d’information.
           </p>
         </div>
         <div className="w-full max-w-xl">
@@ -616,7 +581,6 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
                     message,
                     attachments,
                     authorizationMode: readAuthorizationMode(),
-                    ...(options?.agentId ? { agentId: options.agentId } : {}),
                     ...(options?.provider ? { provider: options.provider, model: options.model } : {}),
                   }),
                 );
@@ -631,10 +595,6 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
             onProjectChange={setProjectId}
             connectors={connectors}
             onConnectorsChange={setConnectors}
-            suggestions={STARTER_SUGGESTIONS}
-            agents={agents}
-            agentId={agentId}
-            onAgentChange={setAgentId}
             modelId={modelId}
             onModelIdChange={setModelId}
             prefill={prefill}
@@ -643,7 +603,7 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
         </div>
       </div>
     ),
-    [agentId, agents, connectors, modelId, prefill, projectId, projects, router],
+    [connectors, modelId, prefill, projectId, projects, router],
   );
 
   // Fusion des entités vivantes (tour en cours) avec l'état serveur.
@@ -803,9 +763,6 @@ export function ConversationWorkspace({ conversationId }: ConversationWorkspaceP
               autoFocus
               injected={injectedEdit}
               onInjectedConsumed={() => setInjectedEdit(null)}
-              agents={agents}
-              agentId={agentId}
-              onAgentChange={setAgentId}
               modelId={modelId}
               onModelIdChange={setModelId}
               prefill={prefill}

@@ -132,9 +132,6 @@ export default function MissionsPage() {
             <Link href="/studio/create" className="g3-btn g3-btn-ghost text-xs">
               Modèles de missions
             </Link>
-            <Link href="/studio/agents" className="g3-btn g3-btn-primary text-xs">
-              Agents & chat
-            </Link>
           </>
         }
       />

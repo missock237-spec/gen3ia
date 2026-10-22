@@ -21,10 +21,10 @@ const DB_NAME = "gen3ia-outbox";
 const STORE = "requests";
 const SYNC_TAG = "gen3ia-outbox";
 const OFFLINE_URL = "/offline.html";
-// File STRICTE : la route de chat d'agent EXACTE (jamais /approve ni
-// /continue — ces décisions ne partent jamais en file) et la création de
-// tâche workspace. /api/chat/message est morte dans l'app et est retirée.
-const QUEUED_PATHS = new Set(["/api/agent/chat", "/api/workspace/tasks"]);
+// File STRICTE : la création de tâche workspace uniquement. La route de
+// chat d'agent (/api/agent/chat) est supprimée du projet ; /approve et
+// /continue ne partent de toute façon jamais en file.
+const QUEUED_PATHS = new Set(["/api/workspace/tasks"]);
 const MAX_ATTEMPTS = 5;
 // Cache des statiques IMMUBABLES (lot C4) : /_next/static/* est versionnée
 // par build (contenu immuable), /icons/* est quasi immuable — cache-first

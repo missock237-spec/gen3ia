@@ -15,8 +15,8 @@ import { isImmersiveChatRoute } from "@/lib/ui/chat-surface";
  * Connexions, Équipe) issue du NavRegistry unique, plus les outils du Studio.
  * Industrialise le fond crème, le conteneur max-w-7xl et les marges.
  *
- * Mode immersif (routes de chat) : sur le chat d'agent IA (/studio/agents),
- * l'interface de discussion occupe TOUTE la surface de l'appareil — les
+ * Mode immersif (routes de chat) : sur les conversations (/workspace/
+ * conversations), l'interface de discussion occupe TOUTE la surface de l'appareil — les
  * barres de navigation et les marges disparaissent, le fil défile en
  * interne et le composer reste collé en bas.
  */

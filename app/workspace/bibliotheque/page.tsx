@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -9,7 +8,6 @@ import { EmptyState, LoadingState } from "@/components/shells/states";
 import { PENDING_MESSAGE_PREFIX } from "@/components/workspace/conversation-workspace";
 import { authFetch } from "@/lib/firebase/auth-client";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
-import { AGENT_TEMPLATES } from "@/lib/agents/templates";
 
 /**
  * /workspace/bibliotheque — les modules métier (Marketing, Sales, RH,
@@ -214,11 +212,7 @@ export default function LibraryPage() {
         title="Bibliothèque"
         highlight="de capacités"
         description="Les modules métier deviennent des capacités activables dans vos conversations : chaque capacité démarre une conversation avec un objectif pré-rempli, dans le contexte du projet choisi."
-        action={
-          <Link href="/studio/agents" className="g3-btn g3-btn-ghost text-xs">
-            Agents spécialisés →
-          </Link>
-        }
+        action={undefined}
       />
 
       <div className="g3-card flex flex-wrap items-center gap-3 !p-3">
@@ -286,40 +280,9 @@ export default function LibraryPage() {
 
       <p className="text-[11px] leading-relaxed text-[var(--g3-muted)]">
         Ces capacités s&apos;appuient sur les six moteurs communs de la plateforme (IA, documents, workflow,
-        planification, analytique, données) et sur vos connecteurs. Les agents spécialisés restent disponibles
-        dans <Link href="/studio/agents" className="underline underline-offset-2">l&apos;espace Agents</Link>.
+        planification, analytique, données) et sur vos connecteurs.
       </p>
 
-      {/* Templates sectoriels — anciennement sur la page Marketplace
-          (supprimée) : les agents métier prêts à l'emploi vivent désormais
-          dans la Bibliothèque, au cœur du pilotage IA. */}
-      <section aria-labelledby="titre-templates-sectoriels" className="pt-2">
-        <div className="g3-card !p-6">
-          <div className="text-[10px] font-bold tracking-[.28em] text-[var(--g3-info)]">GEN3IA / TEMPLATES</div>
-          <h2 id="titre-templates-sectoriels" className="mt-3 font-serif text-2xl font-bold tracking-tight">
-            Templates sectoriels
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--g3-muted)]">
-            Six agents métier prêts à l&apos;emploi, instanciés par le Studio en un clic — Gen les pilote
-            comme vos autres automatisations.
-          </p>
-          <ul className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" role="list">
-            {AGENT_TEMPLATES.map((template) => (
-              <li key={template.id} className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)]/60 p-4">
-                <p className="text-sm font-semibold text-[var(--g3-text)]">Agent {template.nom}</p>
-                <p className="mt-1 text-[10px] uppercase tracking-wide text-[var(--g3-faint)]">{template.secteur}</p>
-                <p className="mt-2 text-xs leading-relaxed text-[var(--g3-muted)]">{template.description}</p>
-                <Link
-                  href={`/studio/agents?template=${template.id}`}
-                  className="g3-btn g3-btn-ghost mt-3 w-full text-xs"
-                >
-                  Instancier ce modèle →
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
     </div>
   );
 }

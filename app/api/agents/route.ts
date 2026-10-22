@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 // AGENT SYSTÈME (demande n°5, ASSOULIE sur demande explicite du
 // propriétaire — « les utilisateurs n'ont plus accès au projet ») :
-// GET/POST de CETTE route (liste + provisionnement de l'agent universel
-// « Gen IA » du workshop /studio/agents) sont ouverts à tout utilisateur
+// GET/POST de CETTE route (liste + provisionnement des agents dédiés —
+// schedules, live, missions) sont ouverts à tout utilisateur
 // CONNECTÉ (requireUser) — cloisonnement propriétaire/org inchangé.
 // Les routes d'ORCHESTRATION (run, generate, plan, PATCH/DELETE [id],
 // system/activate) restent RÉSERVÉES (requireAgentSystemAccess) : seule

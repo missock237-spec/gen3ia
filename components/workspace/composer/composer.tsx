@@ -16,7 +16,6 @@ import type { ComposerCommand, MentionItem } from "@/lib/ui/command-composer-hel
 import { findModelOption } from "@/lib/ui/composer-models";
 import type { MessageAttachment } from "@/lib/domain/conversations/types";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
-import { AgentPicker, type ComposerAgentOption } from "./agent-picker";
 import { TemplateMenu } from "./template-menu";
 
 /**
@@ -27,14 +26,12 @@ import { TemplateMenu } from "./template-menu";
  *    compétences ou connecteurs, ou / pour les commandes » ;
  *  - bouton « + » = pièce jointe RÉELLE (stockage permanent Gen3ia) ;
  *  - « @ » = applications connectées activables pour ce message ;
- *  - « / » = commandes (fichier, connecteurs, projet, agent, modèles,
- *    moteur) ;
+ *  - « / » = commandes (fichier, connecteurs, projet, modèles, moteur) ;
  *  - « Toujours demander ▼ » = mode d'autorisation HITL transmis au moteur
  *    (préférence partagée avec tous les chats, clé localStorage commune) ;
  *  - 🎙 saisie vocale fr-FR, bouton circulaire ↑ d'envoi.
  *
  * Task 141 — utilisation SIMPLE et FLEXIBLE :
- *  - sélecteur d'agent (pill + /agent) : QUI répond au prochain message ;
  *  - moteur IA unique : le système neuronal Gen3 (aucun sélecteur) ;
  *  - bibliothèque de modèles de prompts (pill + /modèle) : formulations
  *    réutilisables, enregistrables depuis le brouillon en cours ;
@@ -45,8 +42,6 @@ import { TemplateMenu } from "./template-menu";
 export interface ComposerSendOptions {
   /** Mode d'autorisation lu dans la préférence partagée au moment de l'envoi. */
   authorizationMode?: AuthorizationMode;
-  /** Task 141 — agent dédié choisi pour ce tour (undefined = Gen IA). */
-  agentId?: string;
   /** Task 141 — modèle IA choisi pour ce tour (undefined = automatique). */
   provider?: string;
   model?: string;
@@ -61,7 +56,6 @@ interface ComposerProps {
   /** Connecteurs activés pour le prochain message (slugs Composio). */
   connectors?: string[];
   onConnectorsChange?: (connectors: string[]) => void;
-  suggestions?: string[];
   placeholder?: string;
   autoFocus?: boolean;
   /**
@@ -71,11 +65,6 @@ interface ComposerProps {
    */
   injected?: { attachment: MessageAttachment; text?: string } | null;
   onInjectedConsumed?: () => void;
-  /** Task 141 — agents actifs de l'utilisateur (sélecteur du composer). */
-  agents?: ComposerAgentOption[];
-  /** Agent dédié choisi pour le prochain message (undefined = Gen IA). */
-  agentId?: string;
-  onAgentChange?: (agentId: string | undefined) => void;
   /** Identifiant du moteur IA choisi (cf. lib/ui/composer-models). */
   modelId?: string;
   onModelIdChange?: (modelId: string | undefined) => void;
@@ -102,14 +91,10 @@ export function Composer({
   onProjectChange,
   connectors = [],
   onConnectorsChange,
-  suggestions,
   placeholder,
   autoFocus = false,
   injected = null,
   onInjectedConsumed,
-  agents = [],
-  agentId,
-  onAgentChange,
   modelId,
   onModelIdChange,
   prefill = null,
@@ -123,9 +108,8 @@ export function Composer({
   // Libellés lisibles des connecteurs déjà vus dans le sélecteur « @ » (état,
   // pas une ref : ils servent au rendu des puces activées).
   const [mentionLabels, setMentionLabels] = useState<Map<string, MentionItem>>(() => new Map());
-  // Task 141 — menus pilotés par les commandes « /agent », « /modèle » et
+  // Task 141 — menus pilotés par les commandes « /modèle » et
   // « /moteur » (ouverture contrôlée des pills au-dessus du composer).
-  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   // Task 141 — glisser-déposer : compteur de profondeur (les événements
   // dragenter/dragleave se déclenchent sur CHAQUE enfant — le compteur
@@ -249,7 +233,6 @@ export function Composer({
     const modelChoice = findModelOption(modelId);
     await onSend(message, sent, {
       authorizationMode: readAuthorizationMode(),
-      ...(agentId ? { agentId } : {}),
       ...(modelChoice?.provider ? { provider: modelChoice.provider, model: modelChoice.model } : {}),
     });
   };
@@ -313,16 +296,6 @@ export function Composer({
       description: "CSV, JSON, XLSX, DOCX, PDF, TXT… — réellement converti et stocké en base de données.",
       run: () => composerRef.current?.openFilePicker(),
     },
-    ...(onAgentChange
-      ? [
-          {
-            id: "agent",
-            label: "Choisir l'agent qui répond",
-            description: "Gen IA universel ou l'un de vos agents dédiés (persona, compétences, garde-fous).",
-            run: () => setAgentMenuOpen(true),
-          },
-        ]
-      : []),
     {
       id: "modeles",
       label: "Modèles de prompts",
@@ -400,20 +373,10 @@ export function Composer({
         </div>
       )}
 
-      {/* Task 141 — pills de pilotage : QUI répond (agent), avec QUEL moteur
-          (modèle IA), et la bibliothèque de formulations (modèles). */}
-      {(onAgentChange || onModelIdChange) && (
+      {/* Task 141 — pills de pilotage : la bibliothèque de formulations
+          (modèles) au-dessus du composer. */}
+      {onModelIdChange && (
         <div className="flex flex-wrap items-center gap-1.5" aria-label="Pilotage du prochain message">
-          {onAgentChange && (
-            <AgentPicker
-              agents={agents}
-              agentId={agentId}
-              onChange={onAgentChange}
-              disabled={disabled}
-              open={agentMenuOpen}
-              onOpenChange={setAgentMenuOpen}
-            />
-          )}
           <TemplateMenu
             onInsert={(body) => setValue((current) => (current.trim().length === 0 ? body : `${current}\n\n${body}`))}
             draft={value}
@@ -421,16 +384,6 @@ export function Composer({
             open={templateMenuOpen}
             onOpenChange={setTemplateMenuOpen}
           />
-        </div>
-      )}
-
-      {suggestions && suggestions.length > 0 && value === "" && attachments.length === 0 && (
-        <div className="flex flex-wrap gap-1.5" aria-label="Suggestions de départ">
-          {suggestions.slice(0, 4).map((suggestion) => (
-            <button key={suggestion} type="button" onClick={() => setValue(suggestion)} className="g3-chip text-[11px]">
-              {suggestion}
-            </button>
-          ))}
         </div>
       )}
 
