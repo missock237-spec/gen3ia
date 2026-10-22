@@ -72,24 +72,32 @@ export function PwaRegister() {
     // contrôle par un SW plus récent).
     const pageWasControlled = Boolean(navigator.serviceWorker.controller);
 
-    void navigator.serviceWorker.register("/sw.js", { scope: "/" }).then((reg) => {
-      // Au retour de la connexion : demande de reprise immédiate (navigateurs
-      // sans Background Sync) puis signal du retour en ligne à la page.
-      window.addEventListener("online", () => {
-        requestFlush(reg);
-        window.dispatchEvent(new CustomEvent("gen3ia:online"));
-      });
-      if (navigator.onLine) requestFlush(reg);
+    // updateViaCache:"none" : le sw.js sondé par reg.update() ne passe
+    // JAMAIS par le cache HTTP navigateur (double ceinture avec l'en-tête
+    // Cache-Control: max-age=0, must-revalidate de next.config.ts) — la
+    // détection d'une nouvelle version ne peut pas être aveuglée par un
+    // sw.js périmé servi depuis le cache.
+    void navigator.serviceWorker
+      .register("/sw.js", { scope: "/", updateViaCache: "none" })
+      .then((reg) => {
+        // Au retour de la connexion : demande de reprise immédiate (navigateurs
+        // sans Background Sync) puis signal du retour en ligne à la page.
+        window.addEventListener("online", () => {
+          requestFlush(reg);
+          window.dispatchEvent(new CustomEvent("gen3ia:online"));
+        });
+        if (navigator.onLine) requestFlush(reg);
 
-      // Étape 11 — le nouveau SW prend le contrôle : les pages héritées
-      // appliquent la version fraîche (une seule fois par session).
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (pageWasControlled) applyNewVersion();
+        // Étape 11 — le nouveau SW prend le contrôle : les pages héritées
+        // appliquent la version fraîche (une seule fois par session).
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (pageWasControlled) applyNewVersion();
+        });
+        if (reg.waiting) applyNewVersion();
+      })
+      .catch(() => {
+        /* Le service worker est optionnel. */
       });
-      if (reg.waiting) applyNewVersion();
-    }).catch(() => {
-      /* Le service worker est optionnel. */
-    });
 
     // Étape 11 — sessions longues : re-vérification périodique, au retour
     // de l'onglet et à chaque retour de réseau.

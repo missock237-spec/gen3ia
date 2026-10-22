@@ -24,9 +24,12 @@ import { useEffect } from "react";
  *   (throttle 30 s) et au retour du réseau (événement natif online) ;
  * - écart détecté → application au moment sûr : onglet caché =
  *   rechargement transparent UNE fois par déploiement cible et par onglet
- *   (sessionStorage survit au rechargement) ; onglet visible ou repli =
- *   signal "gen3ia:new-version" une seule fois par cible — la bannière
- *   (UpdateBanner) prend le relais avec un compte à rebours annulable.
+ *   (sessionStorage survit au rechargement) ; onglet visible =
+ *   rechargement REPORTÉ à la prochaine mise en arrière-plan de l'onglet
+ *   (invisible pour l'utilisateur — demande du 2026-10-22 : « sans même
+ *   que l'utilisateur le sache ») ; filet de sécurité : si l'onglet reste
+ *   au premier plan, la bannière (UpdateBanner) prend le relais après un
+ *   délai avec un compte à rebours annulable.
  *
  * Échec réseau / hors-ligne : la sonde est silencieusement ignorée, le
  * prochain cycle retentera — jamais de rechargement en boucle hors-ligne.
@@ -44,6 +47,11 @@ const POLL_TIMEOUT_MS = 10_000;
 /** Garde anti-boucle PAR CIBLE : un rechargement automatique maximum par
  * déploiement détecté et par onglet (sessionStorage survit au reload). */
 const RELOAD_FLAG_PREFIX = "gen3ia-deploy-reloaded:";
+/** Onglet resté au premier plan après détection : délai avant de laisser
+ * la bannière prendre le relais (compte à rebours visible, annulable).
+ * En dessous de ce délai, la nouvelle version s'applique à la première
+ * mise en arrière-plan — invisible. */
+const VISIBLE_DEFER_MS = 30_000;
 
 type DeployInfo = { deploymentId?: unknown };
 
@@ -56,6 +64,10 @@ export function DeployWatcher() {
     let checkInFlight = false;
     let reloadedWithoutStorage = false;
     const notifiedTargets = new Set<string>();
+    /** Cible détectée pendant que l'onglet était visible : rechargement
+     * différé à la prochaine mise en arrière-plan. */
+    let deferredTarget: string | null = null;
+    let fallbackTimer: number | null = null;
 
     const fetchDeploymentId = async (): Promise<string | null> => {
       try {
@@ -93,21 +105,53 @@ export function DeployWatcher() {
       }
     };
 
-    /** Nouveau déploiement confirmé : application au moment sûr. */
+    /** Nouveau déploiement confirmé : application au moment sûr.
+     * Onglet caché → rechargement immédiat et transparent. Onglet visible
+     * → rechargement REPORTÉ à la prochaine mise en arrière-plan (jamais
+     * une coupure sous les yeux de l'utilisateur) ; si l'onglet reste au
+     * premier plan, la bannière prend le relais après VISIBLE_DEFER_MS. */
     const applyDetectedDeployment = (id: string) => {
-      if (document.visibilityState === "hidden" && canTryReload(id)) {
-        window.location.reload();
+      if (document.visibilityState === "hidden") {
+        if (canTryReload(id)) window.location.reload();
+        else announceOnce(id);
         return;
       }
-      // Onglet visible (ou rechargement déjà tenté pour cette cible) :
-      // signal doux UNE fois par cible — la bannière gère l'annonce et le
-      // compte à rebours annulable.
-      if (!notifiedTargets.has(id)) {
-        notifiedTargets.add(id);
-        window.dispatchEvent(
-          new CustomEvent("gen3ia:new-version", { detail: { deploymentId: id } }),
-        );
+      if (deferredTarget !== id) {
+        deferredTarget = id;
+        if (fallbackTimer === null) {
+          fallbackTimer = window.setTimeout(() => {
+            fallbackTimer = null;
+            const pending = deferredTarget;
+            deferredTarget = null;
+            if (pending !== null) announceOnce(pending);
+          }, VISIBLE_DEFER_MS);
+        }
       }
+    };
+
+    /** Signal doux UNE fois par cible — la bannière gère l'annonce et le
+     * compte à rebours annulable (filet de sécurité onglet toujours au
+     * premier plan). */
+    const announceOnce = (id: string) => {
+      if (notifiedTargets.has(id)) return;
+      notifiedTargets.add(id);
+      window.dispatchEvent(
+        new CustomEvent("gen3ia:new-version", { detail: { deploymentId: id } }),
+      );
+    };
+
+    /** L'onglet passe en arrière-plan : c'est le moment sûr — la nouvelle
+     * version s'applique sans que l'utilisateur le voie. */
+    const onHidden = () => {
+      if (document.visibilityState !== "hidden" || deferredTarget === null) return;
+      const id = deferredTarget;
+      deferredTarget = null;
+      if (fallbackTimer !== null) {
+        window.clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+      if (canTryReload(id)) window.location.reload();
+      else announceOnce(id);
     };
 
     const check = async () => {
@@ -156,12 +200,15 @@ export function DeployWatcher() {
     void check();
     schedule();
     document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("online", onOnline);
 
     return () => {
       disposed = true;
       if (timer !== null) window.clearTimeout(timer);
+      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
       document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener("online", onOnline);
     };
   }, []);
