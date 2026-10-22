@@ -238,6 +238,11 @@ describe("Mise à jour forcée — manifeste version.json aligné sur le BUILD_I
     const workflow = read(".github/workflows/deploy-vps.yml");
     expect(workflow).toContain("http://127.0.0.1:3000/version.json");
     expect(workflow).toContain('[ "$empreinte" = "$BUILD_ID" ] && [ "$manifeste" = "$BUILD_ID" ]');
+    // Le manifeste est indenté (JSON.stringify p=2) : le grep doit porter
+    // sur la réponse COMPACTÉE, sinon un déploiement correct passe rouge
+    // (régression du run #34).
+    expect(workflow).toContain("tr -d ' \\n\\r'");
+    expect(workflow.indexOf("compacte=")).toBeLessThan(workflow.indexOf('grep -o \'"version"'));
   });
 
   it("le snippet nginx (étape 1) protège le cache immutable des assets hashés tout en interdisant le cache HTML/JSON", () => {
