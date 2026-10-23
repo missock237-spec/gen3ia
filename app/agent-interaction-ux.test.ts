@@ -10,8 +10,13 @@ import { describe, expect, it } from "vitest";
  * MISE À JOUR (suppression surfaces workspace/studio) : les verrous portant
  * sur components/workspace/{composer,conversation-workspace,message-thread,
  * template-menu} ont été retirés avec ces fichiers. Restent les verrous sur
- * le MOTEUR et la ROUTE DE STREAMING (conservés : le chat IA du dashboard,
- * aurora-chat et chat-v4 les consomment).
+ * le MOTEUR et la ROUTE DE STREAMING (conservés : le chat IA du dashboard
+ * les consomme).
+ *
+ * MISE À JOUR (découpage moteur) : le moteur conversationnel est désormais
+ * réparti en modules (engine.ts + engine-{chat,turn,intent,plan,services,
+ * media,apps,approvals,tools}.ts) — les verrous lisent l'UNION des sources
+ * pour rester valables quel que soit le module porteur du code.
  *
  *  5bis. CHIPS DE SUIVI — suggestions portées par le message persisté ;
  *  7. CÂBLAGE MOTEUR — agentId de bout en bout.
@@ -19,7 +24,19 @@ import { describe, expect, it } from "vitest";
 
 const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
 
-const ENGINE = "lib/domain/conversations/engine.ts";
+const ENGINE_MODULES = [
+  "lib/domain/conversations/engine.ts",
+  "lib/domain/conversations/engine-chat.ts",
+  "lib/domain/conversations/engine-turn.ts",
+  "lib/domain/conversations/engine-intent.ts",
+  "lib/domain/conversations/engine-plan.ts",
+  "lib/domain/conversations/engine-services.ts",
+  "lib/domain/conversations/engine-media.ts",
+  "lib/domain/conversations/engine-apps.ts",
+  "lib/domain/conversations/engine-approvals.ts",
+  "lib/domain/conversations/engine-tools.ts",
+];
+const ENGINE = ENGINE_MODULES.map(read).join("\n");
 const STREAM_ROUTE = "app/api/workspace/conversations/[conversationId]/messages/stream/route.ts";
 const TYPES = "lib/domain/conversations/types.ts";
 
@@ -31,7 +48,7 @@ describe("Task 141 — axe 5 (conservé) : CHIPS DE SUIVI portées par le messag
 });
 
 describe("Task 141 — câblage moteur (agentId de bout en bout)", () => {
-  const engine = read(ENGINE);
+  const engine = ENGINE;
   const route = read(STREAM_ROUTE);
 
   it("la route de streaming accepte et transmet l'agentId", () => {

@@ -64,10 +64,24 @@ const agent = {
   updatedAt: new Date().toISOString(),
 } as AgentRecord;
 
-const ENGINE_SOURCE = readFileSync(
-  path.resolve(process.cwd(), "lib/domain/conversations/engine.ts"),
-  "utf8",
-);
+// Moteur conversationnel réparti en modules (découpage engine.ts) — les
+// verrous lisent l'UNION des sources : la garde négative (aucun
+// `preferFree: true`) couvre ainsi TOUT le moteur, pas seulement le barrel.
+const ENGINE_MODULES = [
+  "engine.ts",
+  "engine-chat.ts",
+  "engine-turn.ts",
+  "engine-intent.ts",
+  "engine-plan.ts",
+  "engine-services.ts",
+  "engine-media.ts",
+  "engine-apps.ts",
+  "engine-approvals.ts",
+  "engine-tools.ts",
+];
+const ENGINE_SOURCE = ENGINE_MODULES.map((f) =>
+  readFileSync(path.resolve(process.cwd(), "lib/domain/conversations", f), "utf8"),
+).join("\n");
 const RUNNER_SOURCE = readFileSync(
   path.resolve(process.cwd(), "lib/agents/runtime/runner.ts"),
   "utf8",

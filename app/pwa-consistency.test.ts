@@ -65,10 +65,11 @@ describe("Manifest & UI — app installable cohérente", () => {
     expect(manifest.background_color.toLowerCase()).toBe("#0b0d1a");
   });
 
-  it("mission-composer : verrou retiré avec la surface (components/workspace/mission-composer supprimé)", () => {
+  it("file hors-ligne : verrou QUEUED_PATHS conservé (mission-composer supprimé avec la surface)", () => {
     // La surface « Missions » (/studio) a été supprimée du produit ; le
     // verrou structurel historique sur son bouton d'envoi n'a plus de cible.
-    // La file hors-ligne (sw.js) est toujours verrouillée ci-dessus.
+    // La file hors-ligne (sw.js) reste verrouillée sur ses seules routes.
+    const sw = read("public/sw.js");
     expect(sw).toContain("QUEUED_PATHS.has(url.pathname)");
   });
 

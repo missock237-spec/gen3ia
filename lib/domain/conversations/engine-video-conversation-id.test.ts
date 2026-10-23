@@ -11,31 +11,39 @@ import { describe, expect, it } from "vitest";
  * complétion « monte » le résultat DANS le chat (livraison automatique par
  * lib/video/production-queue.deliverJobToConversation).
  *
+ * MISE À JOUR (découpage moteur) : runVideoTurn vit désormais dans
+ * engine-media.ts et l'intercept video.create dans engine-plan.ts —
+ * le garde lit ces modules directement.
+ *
  * Ce garde complète les tests unitaires RÉELS de la livraison
  * (lib/video/production-queue-delivery.test.ts) : il verrouille le câblage
  * côté appelant, trop lourd à exécuter unitairement (moteur LLM complet).
  */
 
-const source = readFileSync(path.join(process.cwd(), "lib/domain/conversations/engine.ts"), "utf8");
-
-/** Extrait le bloc source entre deux marqueurs (échoue si introuvable). */
-function block(startMarker: string, endMarker: string): string {
-  const start = source.indexOf(startMarker);
-  expect(start).toBeGreaterThanOrEqual(0);
-  const end = source.indexOf(endMarker, start);
-  expect(end).toBeGreaterThan(start);
-  return source.slice(start, end);
-}
+const mediaSource = readFileSync(
+  path.join(process.cwd(), "lib/domain/conversations/engine-media.ts"),
+  "utf8",
+);
+const planSource = readFileSync(
+  path.join(process.cwd(), "lib/domain/conversations/engine-plan.ts"),
+  "utf8",
+);
 
 describe("Garde fs — portage de conversationId dans le moteur conversationnel (Task 107-a)", () => {
   it("runVideoTurn passe conversationId: ctx.conversationId à createVideoProductionJob", () => {
-    const runVideoTurn = block("async function runVideoTurn", "async function runAppTurn");
+    const start = mediaSource.indexOf("async function runVideoTurn");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const runVideoTurn = mediaSource.slice(start);
     expect(runVideoTurn).toContain("createVideoProductionJob");
     expect(runVideoTurn).toContain("conversationId: ctx.conversationId");
   });
 
   it("l'intercept video.create passe conversationId: ctx.conversationId à createVideoProductionJob", () => {
-    const intercept = block('planned.toolName === "video.create"', 'planned.toolName === "video.status"');
+    const start = planSource.indexOf('planned.toolName === "video.create"');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = planSource.indexOf('planned.toolName === "video.status"', start);
+    expect(end).toBeGreaterThan(start);
+    const intercept = planSource.slice(start, end);
     expect(intercept).toContain("createVideoProductionJob");
     expect(intercept).toContain("conversationId: ctx.conversationId");
   });

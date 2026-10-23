@@ -32,7 +32,22 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf
 const NOVA = "components/chat/nova-chat.tsx";
 const DASHBOARD = "app/dashboard/page.tsx";
 const STREAM_ROUTE = "app/api/workspace/conversations/[conversationId]/messages/stream/route.ts";
-const ENGINE = "lib/domain/conversations/engine.ts";
+// Moteur conversationnel réparti en modules (découpage engine.ts) — les
+// verrous lisent l'UNION des sources pour rester valables quel que soit
+// le module porteur du code.
+const ENGINE_MODULES = [
+  "lib/domain/conversations/engine.ts",
+  "lib/domain/conversations/engine-chat.ts",
+  "lib/domain/conversations/engine-turn.ts",
+  "lib/domain/conversations/engine-intent.ts",
+  "lib/domain/conversations/engine-plan.ts",
+  "lib/domain/conversations/engine-services.ts",
+  "lib/domain/conversations/engine-media.ts",
+  "lib/domain/conversations/engine-apps.ts",
+  "lib/domain/conversations/engine-approvals.ts",
+  "lib/domain/conversations/engine-tools.ts",
+];
+const ENGINE = ENGINE_MODULES.map(read).join("\n");
 const NAV_REGISTRY = "components/shells/nav-registry.ts";
 
 describe("Exigence 1 — le dashboard EST le chat IA (5 commandes)", () => {
@@ -83,7 +98,7 @@ describe("Exigence 2 — recherche web de bout en bout", () => {
   });
 
   it("le moteur FORCE web.search (mode chat et mode plan)", () => {
-    const engine = read(ENGINE);
+    const engine = ENGINE;
     expect(engine).toContain('input.webSearch\n      ? ({ toolName: "web.search"');
     expect(engine).toContain('if (intent.mode === "plan" && input.webSearch && !(intent.steps ?? []).some((s) => s.toolName === "web.search"))');
   });
@@ -91,14 +106,15 @@ describe("Exigence 2 — recherche web de bout en bout", () => {
 
 describe("Exigence 3 — agents sous commande de l'IA", () => {
   it("le détecteur d'intentions agents est branché au moteur", () => {
-    const engine = read(ENGINE);
-    expect(engine).toContain('import { detectAgentIntent, type AgentIntent } from "./agent-intents"');
+    const engine = ENGINE;
+    expect(engine).toContain('import { detectAgentIntent } from "./agent-intents"');
+    expect(engine).toContain('import type { AgentIntent } from "./agent-intents"');
     expect(engine).toContain("const agentIntent = detectAgentIntent(input.message);");
     expect(engine).toContain("runAgentIntentTurn(baseCtx, agentIntent)");
   });
 
   it("la création d'agent passe par les services RÉELS du Studio", () => {
-    const engine = read(ENGINE);
+    const engine = ENGINE;
     expect(engine).toContain("buildQuickCreatePayload");
     expect(engine).toContain("AgentRecordSchema.safeParse");
     expect(engine).toContain("resolveAndHarden");
