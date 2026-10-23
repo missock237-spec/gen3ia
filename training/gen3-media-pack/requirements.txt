@@ -1,0 +1,34 @@
+# Gen3 Media Pack — dépendances d'entraînement GPU (Colab / L4 / A100)
+# Versions ÉPINGLÉES pour reproductibilité ; testées ensemble sur Colab T4/L4/A100.
+
+# --- socle deep learning ---
+torch>=2.4.1,<2.8
+torchvision>=0.19,<0.24
+accelerate==1.2.1
+diffusers==0.32.2          # LTXPipeline incluse (>=0.32)
+transformers==4.47.2
+peft==0.14.0
+safetensors>=0.4.5
+bitsandbytes>=0.45.0       # Adam 8 bits optionnel
+sentencepiece>=0.2.0       # tokenizer T5
+
+# --- médias & datasets ---
+pillow>=10.4
+imageio>=2.35
+imageio-ffmpeg>=0.5
+soundfile>=0.12.1
+datasets>=3.2.0            # téléchargement COCO-30 / MLS français dans le notebook
+huggingface_hub>=0.27.0
+
+# --- TTS ---
+f5-tts==1.1.22             # fine-tuning voix (poids de base CC-BY-NC-4.0)
+kokoro>=0.9.4              # alternative Apache-2.0 (inférence, voix fr si dispo)
+
+# --- pont API ---
+fastapi>=0.115.0
+uvicorn>=0.32.0
+pydantic>=2.9
+
+# --- utils (d'éjà présent sur Colab mais épinglé pour un VPS GPU) ---
+numpy>=1.26
+tqdm>=4.66
