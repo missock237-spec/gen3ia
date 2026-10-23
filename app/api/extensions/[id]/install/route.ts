@@ -10,6 +10,7 @@ import {
   uninstallExtension,
 } from "@/lib/extensions/repository";
 import { startChariowPurchase, purchaseWithWallet } from "@/lib/extensions/entitlements";
+import { isPaymentProviderActive } from "@/lib/billing/payment-provider";
 
 const WALLET_CURRENCIES = new Set(["xaf", "xfcfa", "xfpfc"]); // devise unique du wallet Gen3ia
 
@@ -53,6 +54,12 @@ export async function POST(request: Request, { params }: Params) {
           await purchaseWithWallet({ userId: token.uid, extension, reference });
           walletPurchased = true;
         } else {
+          if (!isPaymentProviderActive()) {
+            return NextResponse.json(
+              { error: "Passerelle de paiement désactivée : seule Chariow est supportée (PAYMENT_PROVIDER=chariow)." },
+              { status: 501 },
+            );
+          }
           const email = body.email?.trim() || token.email?.trim();
           if (!email) return NextResponse.json({ error: "Une adresse e-mail est requise pour démarrer le paiement Chariow." }, { status: 400 });
           const checkout = await startChariowPurchase({

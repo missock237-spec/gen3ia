@@ -117,7 +117,7 @@ await anon.commercial.chat("<slug>", { message: "…", conversationId });
 ## 4. Flux webhook → mission agent
 
 C'est le mécanisme qui relie **un système externe quelconque** (n8n, Make,
-Zapier, Stripe, GitHub, un backend maison capable d'appeler une URL) à
+Zapier, Chariow, GitHub, un backend maison capable d'appeler une URL) à
 **l'exécution d'un agent Gen3ia**, sans compte ni session.
 
 ### 4.1 Étape 1 — création du déclencheur

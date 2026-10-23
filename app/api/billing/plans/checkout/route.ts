@@ -1,4 +1,5 @@
 import { verifyFirebaseRequest } from "@/lib/auth/firebase";
+import { isPaymentProviderActive } from "@/lib/billing/payment-provider";
 import { createChariowPlanCheckout } from "@/lib/billing/chariow";
 import { WALLET_CURRENCY } from "@/lib/billing/wallet";
 import { isKnownPlanId, planCheckoutMetadata, resolvePlanProductId } from "@/lib/billing/plans";
@@ -25,10 +26,19 @@ function appOrigin(request: Request): string {
  *
  * Même contrat que /api/billing/topup : premier appel sans téléphone →
  * `requiresDetails: true`, le client renvoie phone:{number, country_code}.
+ *
+ * Chariow est la seule passerelle d'encaissement (lib/billing/payment-provider.ts)
+ * : PAYMENT_PROVIDER ≠ chariow court-circuite la route (501).
  */
 export async function POST(request: Request) {
   try {
     const token = await verifyFirebaseRequest(request);
+    if (!isPaymentProviderActive()) {
+      return Response.json(
+        { error: "Passerelle de paiement désactivée : seule Chariow est supportée (PAYMENT_PROVIDER=chariow)." },
+        { status: 501 },
+      );
+    }
     const planLimit = await enforceRateLimit(`billing-plan-checkout:${token.uid}`, { limit: 10, windowMs: 10 * 60 * 1000 });
     if (!planLimit.allowed) {
       return Response.json(

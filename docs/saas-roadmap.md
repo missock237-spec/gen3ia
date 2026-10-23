@@ -70,10 +70,13 @@ phase suivante).
   définis dans `lib/tenants/organizations.ts` (membres, agents, crédits/mois,
   stockage) appliqués aux invitations et à la création d'organisations.
   Paiement : intégration Chariow existante.
-- **Reste** : Stripe Billing (plans, portail client, webhooks) — le module
-  `lib/billing/` expose les événements d'usage ; brancher Stripe nécessite
-  les clés du compte Stripe du propriétaire. Les quotas code-side sont déjà
-  indépendants du PSP.
+- **Décision client (2026-10-23)** : Chariow est la SEULE passerelle de
+  paiement (grille tarifaire, recharge wallet, extensions). L'ancienne piste
+  « Stripe Billing » est abandonnée — aucune autre passerelle n'est
+  implémentée ni autorisée. Le flag `PAYMENT_PROVIDER` (défaut `chariow`,
+  seule valeur supportée, contrôle dans `lib/billing/payment-provider.ts`)
+  court-circuite tout autre fournisseur d'encaissement (501). Les quotas
+  code-side restent indépendants du PSP.
 
 ## 6. Expérience développeur — ✅ Amélioré
 
