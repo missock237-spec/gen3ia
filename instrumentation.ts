@@ -162,7 +162,9 @@ export async function onRequestError(error: unknown, request: Parameters<typeof 
       const { logger } = await import("./lib/observability/logger");
       let chemin: string | undefined;
       try {
-        chemin = new URL((request as Request).url).pathname;
+        // request est typé RequestInfo côté hook — lecture défensive du champ url.
+        const url = (request as { url?: unknown }).url;
+        chemin = typeof url === "string" ? new URL(url).pathname : undefined;
       } catch {
         chemin = undefined;
       }

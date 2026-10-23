@@ -109,9 +109,9 @@ let sdkStarted = false;
  */
 async function construireSamplerEchantillonnage(): Promise<unknown | undefined> {
   try {
-    const module = (await import("@opentelemetry/sdk-trace-base")) as unknown as Record<string, unknown>;
-    const ParentBased = module.ParentBasedSampler ?? module.ParentBased;
-    const TraceIdRatioBased = module.TraceIdRatioBasedSampler ?? module.TraceIdRatioBased;
+    const moduleSdk = (await import("@opentelemetry/sdk-trace-base")) as unknown as Record<string, unknown>;
+    const ParentBased = moduleSdk.ParentBasedSampler ?? moduleSdk.ParentBased;
+    const TraceIdRatioBased = moduleSdk.TraceIdRatioBasedSampler ?? moduleSdk.TraceIdRatioBased;
     if (typeof ParentBased !== "function" || typeof TraceIdRatioBased !== "function") return undefined;
     const racine = new (TraceIdRatioBased as new (ratio: number) => object)(tauxEchantillonnageTraces());
     return new (ParentBased as new (options: { root?: unknown }) => object)({ root: racine });
@@ -170,7 +170,7 @@ export async function initOtel(): Promise<void> {
     };
     const sampler = await construireSamplerEchantillonnage();
     if (sampler) configSdk.sampler = sampler;
-    const sdk = new NodeSDK(configSdk as unknown as Parameters<typeof NodeSDK>[0]);
+    const sdk = new NodeSDK(configSdk as unknown as NonNullable<ConstructorParameters<typeof NodeSDK>[0]>);
     sdk.start();
     sdkStarted = true;
 
