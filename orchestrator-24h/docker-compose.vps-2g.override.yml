@@ -1,0 +1,25 @@
+# Override pour VPS 2 Go — gen3ia (PM2) tourne déjà sur la machine :
+# total resserré ~870 Mo au lieu de ~1,26 Go.
+# Usage :
+#   docker compose -f docker-compose.yml -f docker-compose.vps-2g.override.yml up -d --build
+# Surveiller free -m après démarrage ; si swap/latence, déployer l'orchestrateur
+# sur une machine séparée ou réduire les limites encore.
+services:
+  redis:
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "160mb", "--maxmemory-policy", "noeviction"]
+    mem_limit: 224m
+
+  api:
+    mem_limit: 160m
+
+  worker-image:
+    mem_limit: 120m
+
+  worker-audio:
+    mem_limit: 120m
+
+  worker-video:
+    mem_limit: 120m
+
+  worker-data:
+    mem_limit: 120m

@@ -1,0 +1,107 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    mem_limit: 320m
+
+  api:
+    build: .
+    command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 90s  # lifespan FastAPI : fermeture propre de Redis au stop
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 220m
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+  worker-image:
+    build: .
+    command: ["python", "worker.py"]
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MODALITY: image
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 90s  # laisse finir la tâche en cours (reprise par re-claim au-delà)
+    mem_limit: 180m
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+  worker-audio:
+    build: .
+    command: ["python", "worker.py"]
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MODALITY: audio
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 90s  # laisse finir la tâche en cours (reprise par re-claim au-delà)
+    mem_limit: 180m
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+  worker-video:
+    build: .
+    command: ["python", "worker.py"]
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MODALITY: video
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 90s  # laisse finir la tâche en cours (reprise par re-claim au-delà)
+    mem_limit: 180m
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+  worker-data:
+    build: .
+    command: ["python", "worker.py"]
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MODALITY: data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 90s  # laisse finir la tâche en cours (reprise par re-claim au-delà)
+    mem_limit: 180m
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+volumes:
+  redis_data:
