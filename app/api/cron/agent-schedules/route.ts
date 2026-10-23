@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { dispatchSchedules } from "@/lib/agents/scheduler";
 import { renewDueExtensionSubscriptions } from "@/lib/extensions/subscriptions";
 import { errorStatus } from "@/lib/security/http-errors";
+import { requireService } from "@/lib/security/service-identity";
 import { timingSafeStringEqual } from "@/lib/security/timing-safe";
 import { scheduleNextDispatchTick, slotFor } from "@/lib/queue/dispatch-loop";
 import { enqueueDispatchTick, pumpDueTicks } from "@/lib/queue/tick-queue";
@@ -17,6 +18,17 @@ function isAuthorized(request: NextRequest) {
   const authorization = request.headers.get("authorization") ?? "";
   // Comparaison à temps constant (pas de court-circuit exploitable).
   return timingSafeStringEqual(authorization, `Bearer ${secret}`);
+}
+
+/**
+ * AUTHENTIFICATION DU SERVICE APPELANT (Pilier 3 — Zero Trust) : la
+ * signature d'identité de service (lib/security/service-identity.ts) est
+ * acceptée EN PLUS du bearer CRON_SECRET historique — jamais à sa place.
+ * GEN3IA_SERVICE_TOKENS absente → bearer seul, comportement inchangé
+ * (rétrocompatibilité stricte, warning loggé par le module).
+ */
+function estAutorisee(request: NextRequest): boolean {
+  return requireService(request, "cron").ok || isAuthorized(request);
 }
 
 /**
@@ -43,7 +55,7 @@ function isAuthorized(request: NextRequest) {
  *     migration des appels vocaux vers Bland AI (numéros gérés par Bland).
  */
 export async function GET(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!estAutorisee(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
