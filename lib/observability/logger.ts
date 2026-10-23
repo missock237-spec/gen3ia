@@ -2,6 +2,15 @@ import "server-only";
 
 import pino, { type Logger } from "pino";
 
+import {
+  contextePino,
+} from "./contexte-requete";
+
+import {
+  TRACEPARENT_HEADER,
+  traceIdGen3iaDepuisTraceparent,
+} from "./trace-w3c";
+
 const REDACT_PATHS = [
   "req.headers.authorization",
   "req.headers.cookie",
@@ -29,6 +38,11 @@ export const logger: Logger = pino({
     service: "gen3ia-ai-studio",
     environment: process.env.NODE_ENV ?? "development",
   },
+  // Corrélation automatique (Task K) : l'AsyncLocalStorage de
+  // lib/observability/contexte-requete.ts alimente traceId/orgId/userId/
+  // route de CHAQUE ligne émise pendant une requête instrumentée — les
+  // routes n'ont plus à repasser le traceId à la main. Hors contexte : {}.
+  mixin: () => contextePino(),
   redact: {
     paths: REDACT_PATHS,
     censor: "[REDACTED]",
@@ -54,14 +68,19 @@ const TRACE_ID_RE = /^[a-zA-Z0-9_-]{8,64}$/;
 
 /**
  * Identifiant de corrélation par requête : réutilise celui de l'appelant
- * (passerelle, client SDK) s'il est sain, sinon en génère un. À propager
- * dans tous les logs de la requête et dans les réponses (header renvoyé).
+ * (passerelle, client SDK) s'il est sain — en-têtes custom Gen3ia D'ABORD
+ * puis standard W3C traceparent (Task K : les appels inter-services
+ * signés peuvent ne porter QUE le traceparent) — sinon en génère un.
+ * À propager dans tous les logs de la requête et dans les réponses
+ * (header renvoyé).
  */
 export function requestTraceId(request: Request): string {
   for (const header of TRACE_HEADER_CANDIDATES) {
     const value = request.headers.get(header);
     if (value && TRACE_ID_RE.test(value)) return value;
   }
+  const depuisW3C = traceIdGen3iaDepuisTraceparent(request.headers.get(TRACEPARENT_HEADER));
+  if (depuisW3C) return depuisW3C;
   return `trc_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 }
 
