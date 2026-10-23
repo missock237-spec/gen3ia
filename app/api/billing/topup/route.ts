@@ -1,4 +1,5 @@
 import { verifyFirebaseRequest } from "@/lib/auth/firebase";
+import { isPaymentProviderActive } from "@/lib/billing/payment-provider";
 import {
   createChariowTopupCheckout,
   getChariowStoreUrl,
@@ -27,10 +28,19 @@ function appOrigin(request: Request): string {
  *
  * Mode 2 (fallback): redirects to the Chariow storefront configured in
  * CHARIOW_TOPUP_STORE_URL. Wallet credit then relies on the Pulse webhook.
+ *
+ * Chariow est la seule passerelle d'encaissement (lib/billing/payment-provider.ts)
+ * : PAYMENT_PROVIDER ≠ chariow court-circuite la route (501).
  */
 export async function POST(request: Request) {
   try {
     const token = await verifyFirebaseRequest(request);
+    if (!isPaymentProviderActive()) {
+      return Response.json(
+        { error: "Passerelle de paiement désactivée : seule Chariow est supportée (PAYMENT_PROVIDER=chariow)." },
+        { status: 501 },
+      );
+    }
     // Surface sensible argent (Task 63) : si le compte est marqué « MFA
     // requis », un second facteur vérifié est exigé avant tout rechargement.
     const { assertStrongAuth } = await import("@/lib/security/mfa");
