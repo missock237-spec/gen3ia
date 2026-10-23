@@ -55,5 +55,12 @@ firestore-debug.log
 # État neuronal persistant (SNN — jamais committé)
 var/
 
+# Artefacts neuronaux PRÉ-ENTRAÎNÉS volumineux (cortex-v2.bin ≈ 12 Mo).
+# Plus versionnés (alourdissait clones & CI) : à récupérer via
+# assets/neural-pretrained/download-model.sh ou à régénérer avec
+# `npx tsx scripts/pretrain-cortex-v2.ts` — cf. assets/neural-pretrained/README.md.
+# NB : les JSON (lexique + rapports) restent versionnés.
+assets/neural-pretrained/*.bin
+
 # Manifeste de version généré au build (mise à jour forcée navigateur — plan 4 étapes)
 /public/version.json
