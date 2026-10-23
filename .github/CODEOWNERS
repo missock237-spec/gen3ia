@@ -1,0 +1,18 @@
+# CODEOWNERS — revue obligatoire sur tout le dépôt.
+#
+# Règle unique : CHAQUE pull request doit être relue par le propriétaire
+# (@missock237-spec), y compris — surtout — en mode solo. La relecture n'est
+# pas une formalité bureaucratique : c'est le seul garde-fou humain entre un
+# diff (souvent produit par un agent IA) et main, qui se déploie
+# automatiquement en production (push main → deploy-vps.yml).
+#
+# Discipline en solo + agents :
+#   · l'auteur d'un changement n'est jamais son relecteur ;
+#   · la relecture par un agent IA indépendant compte comme passe technique
+#     (diffs relus, invariants vérifiés), mais l'orchestrateur/propriétaire
+#     valide le merge (cf. docs/processus-ingenierie.md § Revue de code) ;
+#   · une PR sans revue ne fusionne pas, même « évidente ».
+#
+# Syntaxe GitHub : https://docs.github.com/fr/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @missock237-spec
