@@ -1,0 +1,16 @@
+# Kit d'orchestration multimodal gen3 — dépendances
+# torch est FOURNI par l'environnement GPU (Colab / machine CUDA) : vérifier la
+# compatibilité avec le driver CUDA du serveur au lieu de le réinstaller.
+transformers>=4.44,<5
+diffusers>=0.31
+accelerate>=0.33
+peft>=0.12
+datasets>=2.20
+safetensors>=0.4
+sentencepiece>=0.1.99
+soundfile>=0.12
+huggingface_hub>=0.24
+# Lecture vidéo du trainer video/train_model.py (livré avec torch sur Colab)
+# torchvision>=0.19
+# Facultatif (analyse d'images dans plan_gen3.py) :
+# Pillow>=10

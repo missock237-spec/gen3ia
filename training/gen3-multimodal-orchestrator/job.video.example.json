@@ -1,0 +1,31 @@
+{
+  "owner_id": "user_123",
+  "job_id": "video_job_001",
+  "modality": "video",
+  "task": "video_lora",
+  "model_path": "video_model",
+  "dataset_path": "video_dataset",
+  "output_dir": "video_job_001",
+  "trainer_script": "video/train_model.py",
+  "launcher": "accelerate",
+  "runtime_minutes": 120,
+  "min_gpu_memory_gb": 24,
+  "allow_cpu": false,
+  "allow_overwrite_output": false,
+  "training_args": [
+    "--pretrained_model_name_or_path",
+    "{model_path}",
+    "--dataset_dir",
+    "{dataset_path}",
+    "--output_dir",
+    "{output_dir}",
+    "--train_batch_size",
+    "1",
+    "--gradient_accumulation_steps",
+    "4",
+    "--learning_rate",
+    "1e-5",
+    "--max_train_steps",
+    "300"
+  ]
+}

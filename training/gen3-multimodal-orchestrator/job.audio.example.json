@@ -1,0 +1,27 @@
+{
+  "owner_id": "user_123",
+  "job_id": "audio_job_001",
+  "modality": "audio",
+  "task": "audio_finetune",
+  "model_path": "audio_model",
+  "dataset_path": "audio_dataset",
+  "output_dir": "audio_job_001",
+  "trainer_script": "audio/train_model.py",
+  "launcher": "accelerate",
+  "runtime_minutes": 120,
+  "min_gpu_memory_gb": 16,
+  "allow_cpu": false,
+  "allow_overwrite_output": false,
+  "training_args": [
+    "--model_name_or_path",
+    "{model_path}",
+    "--train_dataset",
+    "{dataset_path}",
+    "--output_dir",
+    "{output_dir}",
+    "--learning_rate",
+    "1e-4",
+    "--max_steps",
+    "500"
+  ]
+}
