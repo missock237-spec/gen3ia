@@ -1,0 +1,11 @@
+# Pack code gen3 — dépendances d'entraînement/inférence
+# Colab fournit déjà torch + CUDA : ne PAS réinstaller torch (voir notebook).
+transformers>=4.44,<5
+datasets>=2.20
+accelerate>=0.33
+peft>=0.12
+safetensors>=0.4
+sentencepiece>=0.1.99
+huggingface_hub>=0.24
+# 4 bits (QLoRA) — binaire CUDA, requis sur L4/A100 avec --load-in-4bit
+bitsandbytes>=0.43
