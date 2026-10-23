@@ -1,0 +1,103 @@
+name: Test de charge k6 (manuel)
+
+# Test de charge k6 — déclenchement MANUEL UNIQUEMENT (workflow_dispatch).
+#
+# Pourquoi jamais automatique ? Un test de charge est une DÉCISION : il
+# génère du trafic réel vers un environnement (souvent la production VPS
+# 2 Go) et ne doit jamais être un effet de bord d'un push ou d'un cron
+# (Pilier 4 — « tests de charge avant déploiement majeur », cf.
+# docs/processus-ingenierie.md et scripts/charge/README.md).
+#
+# Scénario par défaut : smoke (10 VU · 60 s · GET /, /api/health,
+# /api/deploy-info — aucun endpoint coûteux chat/IA). Seuils : p95 < 3 000 ms,
+# échecs < 1 % — un seuil franchi fait ÉCHOUER le job.
+#
+# Cadre éthique : ne cibler QUE gen3ia.online (notre propriété) ou un
+# environnement local — le garde-fou ci-dessous bloque toute autre cible
+# (cf. docs/load-testing.md §7 : pointer k6 vers un domaine tiers est un
+# délit, pas un test).
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL cible (gen3ia.online ou localhost uniquement)"
+        required: true
+        default: "https://gen3ia.online"
+        type: string
+      scenario:
+        description: "Scénario à exécuter"
+        required: true
+        default: "smoke"
+        type: choice
+        options:
+          - smoke
+
+permissions:
+  contents: read
+
+# Un seul test de charge à la fois : deux runs simultanés sur la même cible
+# additionneraient leur charge et fausseraient (voire doubleraient) les seuils.
+concurrency:
+  group: load-test
+  cancel-in-progress: true
+
+jobs:
+  k6:
+    name: "k6 ${{ inputs.scenario }} · ${{ inputs.url }}"
+    runs-on: ubuntu-latest
+    # Timeout court : le smoke dure 60 s ; au-delà de 10 min le run est
+    # forcément pendu (k6 bloqué, réseau) et doit être coupé.
+    timeout-minutes: 10
+
+    steps:
+      - name: Garde-fou — cible autorisée uniquement
+        run: |
+          cible="${{ inputs.url }}"
+          case "$cible" in
+            https://gen3ia.online|https://www.gen3ia.online|http://localhost:*|http://127.0.0.1:*)
+              echo "Cible autorisée : $cible" ;;
+            *)
+              echo "::error::Cible « $cible » non autorisée — seuls gen3ia.online et localhost sont permis (docs/load-testing.md §7)."
+              exit 1 ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Installation officielle k6 (action Grafana ; binaire autonome hors
+      # Node — aucune dépendance npm ajoutée au projet, même doctrine que
+      # docs/load-testing.md).
+      - name: Installer k6
+        uses: grafana/setup-k6-action@v1
+
+      # Résolution du scénario : seul « smoke » est versionné pour ce
+      # workflow. La valeur étant un choix contraint, ce case est une
+      # ceinture de sécurité (édition manuelle du YAML, appel API).
+      - name: Résoudre le scénario
+        run: |
+          case "${{ inputs.scenario }}" in
+            smoke)
+              echo "SCRIPT=scripts/charge/k6-chat-smoke.js" >> "$GITHUB_ENV" ;;
+            *)
+              echo "::error::Scénario « ${{ inputs.scenario }} » inconnu — seul « smoke » est versionné (scripts/charge/)."
+              exit 1 ;;
+          esac
+
+      # BASE_URL est la seule variable du script k6 (lue via __ENV,
+      # production par défaut — cf. scripts/charge/k6-chat-smoke.js).
+      # L'export JSON alimente la comparaison entre runs (avant/après
+      # déploiement) ; les métriques agrégées et le verdict des seuils
+      # restent visibles dans les logs de cette étape.
+      - name: Exécuter le scénario k6 (échec si un seuil est franchi)
+        run: k6 run --out json=rapport-k6.json "$SCRIPT"
+        env:
+          BASE_URL: ${{ inputs.url }}
+
+      - name: Publier le rapport k6 (artefact)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rapport-k6-${{ inputs.scenario }}
+          path: rapport-k6.json
+          retention-days: 30
