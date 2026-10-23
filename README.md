@@ -1,6 +1,6 @@
 # Gen3ia — Plateforme d'IA à moteur neuronal propriétaire
 
-**Gen3ia** est une plateforme d'intelligence artificielle qui pense avec son **propre cerveau neuronal** : le moteur **Gen3** (SNN — réseau de neurones à spikes), entraîné sur la plateforme, 100 % local, **aucune IA externe**. Conçue avec **Next.js 15 (App Router)**, **React 19** et **Firebase**, elle combine la conversation IA honnête, l'entraînement ouvert (corpus intégré, Hugging Face, Kaggle), la création média neuronale, la mémoire conversationnelle et des automatisations spécialisées sous validation humaine.
+**Gen3ia** est une plateforme d'intelligence artificielle qui pense avec son **propre cerveau neuronal** : le moteur **Gen3** (SNN — réseau de neurones à spikes), entraîné sur la plateforme, 100 % local, **aucune IA externe**. Conçue avec **Next.js 15.5 (App Router)**, **React 19** et **Firebase**, elle combine la conversation IA honnête, l'entraînement ouvert (corpus intégré, Hugging Face, Kaggle), la création média neuronale, la mémoire conversationnelle et des automatisations spécialisées sous validation humaine.
 
 **Production : <https://gen3ia.online>**
 
@@ -80,7 +80,7 @@ npm run dev         # http://localhost:3000
 | Dossier / Fichier | Rôle dans l'application |
 |---|---|
 | `lib/neural/` | **L'IA Gen3** : réseau SNN (`core/`), encodage lexical (`encoding/`), décodage conversationnel (`decoding/`), cortex langagier + corpus (`generation/`), hippocampe & superviseur (`memory/`), effecteurs média/outils (`effectors/`), entraîneur supervisé + persistance (`training/`) |
-| `app/` | Routes Next.js 15 (App Router) : `(auth)`, `admin`, `api`, `chat`, `neural`, `workspace`, `studio`, `memory`, `observability`, `billing`, `team` |
+| `app/` | Routes Next.js 15.5 (App Router) : `(auth)`, `admin`, `api`, `chat`, `neural`, `workspace`, `studio`, `memory`, `observability`, `billing`, `team` |
 | `components/` | Composants UI React 19 modulaires (`neural`, `chat`, `training`, `shells`, `nav`, `knowledge`, `pilotage`, `ui`…) |
 | `lib/` | Logique métier : `ai` (routeur → moteur neural), `chat`, `knowledge`, `memory`, `agents` (automatisations), `billing`, `integrations`, `security`, `tenants`, `training` |
 | `training-worker/` | Worker GPU Python pour les entraînements lourds (contrat + tests) |
@@ -117,6 +117,15 @@ Message utilisateur
 | `firebase:emulators` | `firebase emulators:start` | Démarre la suite d'émulateurs Firebase en local |
 | `live:gateway` | `tsx lib/live/gateway-server.ts` | Lance le serveur Gateway WebSocket pour les sessions Live |
 | `seed` / `db:reset` | `tsx scripts/seed.ts` | Peuple les émulateurs Firebase (dev local) |
+
+---
+
+## 🚢 Déploiement (VPS)
+
+- **CD** : un push sur `main` déclenche `.github/workflows/deploy-vps.yml` — le runner GitHub (7 Go) installe et compile (`npm ci` + `next build`, le VPS de 2 Go ne peut pas builder), puis livre `.next` au VPS (`/opt/gen3ia`, PM2 + nginx).
+- **Swap atomique** (`deploy/cd-finisher.sh`) : staging isolé pendant le transfert, bascule `.next` + `node_modules` avec conservation de la version précédente, health check `localhost:3000`, **rollback automatique** et blacklist des SHA en échec.
+- **Vérification de bout en bout** : le workflow prouve que la production sert exactement le build livré (`/api/deploy-info` + `/version.json`).
+- **Artefact neuronal pré-entraîné** : `assets/neural-pretrained/cortex-v2.bin` (≈ 12 Mo) n'est **plus versionné** — récupération/régénération documentées dans `assets/neural-pretrained/README.md` (l'app démarre sans lui, cortex amorcé à neuf).
 
 ---
 

@@ -6,11 +6,11 @@ Ce document fournit un aperçu complet des modules techniques, des routes API, d
 
 ## 1. Vue d'ensemble de la Stack Technique
 
-- **Framework Web** : Next.js 15 (App Router, Server Actions, Route Handlers)
+- **Framework Web** : Next.js 15.5 (App Router, Server Actions, Route Handlers)
 - **Frontend** : React 19, Tailwind CSS v4, Lucide Icons, UI Composants personnalisés
 - **Backend & Base de Données** : Firebase Admin SDK, Firestore, Firebase Auth, Firebase Storage
 - **Stockage Objets** : Cloudflare R2 / AWS S3 (via `@aws-sdk/client-s3`)
-- **Moteur IA & LLM** : Routeur multi-fournisseurs (`lib/ai/router.ts`) supportant OpenAI, Groq, Anthropic, Hugging Face, OpenRouter
+- **Moteur IA** : moteur neural Gen3 100 % local (`lib/neural/` — SNN à spikes, cf. `lib/ai/router.ts` : « moteur neuronal exclusif ») ; les IA externes (OpenAI, Groq, Anthropic, OpenRouter) ont été retirées du projet (Task 150)
 - **Connecteurs d'outils** : Composio (`@composio/core`, 800+ intégrations), MCP (Model Context Protocol)
 - **Téléphonie & Voix** : Bland AI (appels vocaux), ElevenLabs TTS
 - **Exécution de code & composant UI** : Intégration 21st.dev (`lib/integrations/twentyfirst`)

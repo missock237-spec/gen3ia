@@ -15,7 +15,10 @@
 | **Vidéo** | Moteur vidéo scénique v2 (`lib/neural/generation/video-storyboard.ts`) | prompt → SVG animé SMIL (storyboard 1–4 scènes) | animation constellation v1 |
 
 Le **texte** est le canal le plus mature (pré-entraînement `cortex-v2.bin`
-committé, boucle de maîtrise HF/Kaggle, consolidation d'expérience). Les
+— artefact **non versionné** depuis le 2026-10-23 : à récupérer via
+`assets/neural-pretrained/download-model.sh` ou à régénérer, cf.
+`assets/neural-pretrained/README.md` —, boucle de maîtrise HF/Kaggle,
+consolidation d'expérience). Les
 trois autres modalités sont scéniques : elles rendent ce que l'analyseur
 sémantique (`lib/neural/generation/scene-spec.ts`) comprend du prompt.
 
