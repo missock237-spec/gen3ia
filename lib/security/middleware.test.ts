@@ -23,6 +23,11 @@ vi.mock("@/lib/access/platform", () => ({
 import { getPlatformRole } from "@/lib/access/platform";
 import { verifyFirebaseToken } from "@/lib/firebase/auth-server";
 import { signSessionPayload } from "@/lib/server/session-cookie";
+import {
+  formaterTraceparent,
+  parserTraceparent,
+  w3cTraceIdDepuisGen3ia,
+} from "@/lib/observability/trace-w3c";
 
 import { middleware } from "../../middleware";
 
@@ -298,5 +303,103 @@ describe("comportements préexistants du middleware (non-régression)", () => {
       requestTo("/api/skills", { cookie: sessionCookieFor("user-trace") }),
     );
     expect(response.headers.get("x-gen3ia-trace-id")).toMatch(/^trc_[0-9a-f-]{36}$/);
+  });
+});
+
+describe("traceparent W3C (Task K — tracing distribué)", () => {
+  const TRACE_ID_W3C = "4bf92f3577b34da6a3ce929d0e0e4736";
+  const SPAN_ID_W3C = "00f067aa0ba902b7";
+
+  function traceparentEmis(response: Response): ReturnType<typeof parserTraceparent> {
+    return parserTraceparent(response.headers.get("traceparent"));
+  }
+
+  it("traceparent entrant valide → trace-id réutilisé comme x-gen3ia-trace-id", async () => {
+    const response = await middleware(
+      requestTo("/api/memory", { traceparent: `00-${TRACE_ID_W3C}-${SPAN_ID_W3C}-01` }),
+    );
+    expect(isPassed(response)).toBe(true);
+    // Le trace-id W3C entrant devient la clé primaire Gen3ia (priorité 2).
+    expect(response.headers.get("x-gen3ia-trace-id")).toBe(TRACE_ID_W3C);
+    const emis = traceparentEmis(response);
+    expect(emis).toBeDefined();
+    expect(emis?.traceId).toBe(TRACE_ID_W3C);
+    // Le span-id est NOUVEAU par requête (l'entrant n'est pas recopié).
+    expect(emis?.spanId).toMatch(/^[0-9a-f]{16}$/);
+    expect(emis?.spanId).not.toBe(SPAN_ID_W3C);
+  });
+
+  it("les DEUX headers sont émis ensemble sur une réponse API (écho)", async () => {
+    const response = await middleware(requestTo("/api/health"));
+    expect(isPassed(response)).toBe(true);
+    const traceId = response.headers.get("x-gen3ia-trace-id");
+    expect(traceId).toMatch(/^trc_[0-9a-f-]{36}$/);
+    const emis = traceparentEmis(response);
+    expect(emis).toBeDefined();
+    // Continuité : le traceparent émis porte la dérivation déterministe
+    // du traceId Gen3ia retenu (bijection documentée docs/sre/tracing.md).
+    expect(emis?.traceId).toBe(w3cTraceIdDepuisGen3ia(traceId!));
+  });
+
+  it("traceparent malformé → ignoré (génération Gen3ia, jamais réémis tel quel)", async () => {
+    const response = await middleware(
+      requestTo("/api/memory", { traceparent: "garbage-not-w3c" }),
+    );
+    expect(isPassed(response)).toBe(true);
+    const traceId = response.headers.get("x-gen3ia-trace-id");
+    expect(traceId).toMatch(/^trc_/);
+    const emis = traceparentEmis(response);
+    expect(emis?.traceId).toBe(w3cTraceIdDepuisGen3ia(traceId!));
+  });
+
+  it("trace-id W3C tous zéros (malformé) → ignoré", async () => {
+    const response = await middleware(
+      requestTo("/api/memory", { traceparent: `00-${"0".repeat(32)}-${SPAN_ID_W3C}-01` }),
+    );
+    expect(response.headers.get("x-gen3ia-trace-id")).toMatch(/^trc_/);
+  });
+
+  it("x-gen3ia-trace-id entrant est PRIORITAIRE sur le traceparent entrant", async () => {
+    const response = await middleware(
+      requestTo("/api/memory", {
+        "x-gen3ia-trace-id": "client-trace-42",
+        traceparent: `00-${TRACE_ID_W3C}-${SPAN_ID_W3C}-00`,
+      }),
+    );
+    expect(isPassed(response)).toBe(true);
+    expect(response.headers.get("x-gen3ia-trace-id")).toBe("client-trace-42");
+    // Le traceparent émis dérive du custom retenu (PAS du trace-id entrant).
+    expect(traceparentEmis(response)?.traceId).toBe(w3cTraceIdDepuisGen3ia("client-trace-42"));
+    // Les flags entrants sont préservés (00 = non échantillonné côté amont).
+    expect(traceparentEmis(response)?.flags).toBe("00");
+  });
+
+  it("nouveau span-id par requête (deux appels → deux sauts distincts)", async () => {
+    const entrant = { traceparent: `00-${TRACE_ID_W3C}-${SPAN_ID_W3C}-01` };
+    const premiere = traceparentEmis(await middleware(requestTo("/api/memory", entrant)));
+    const seconde = traceparentEmis(await middleware(requestTo("/api/memory", entrant)));
+    expect(premiere?.spanId).not.toBe(seconde?.spanId);
+    expect(premiere?.traceId).toBe(seconde?.traceId); // même arbre W3C
+  });
+
+  it("403 API porte le COUPLE complet (x-gen3ia-trace-id + traceparent)", async () => {
+    mockedGetPlatformRole.mockResolvedValue("user");
+    const response = await middleware(
+      requestTo("/api/admin/users", { cookie: sessionCookieFor("user-w3c-403") }),
+    );
+    expect(response.status).toBe(403);
+    const traceId = response.headers.get("x-gen3ia-trace-id");
+    expect(traceId).toMatch(/^trc_/);
+    const emis = traceparentEmis(response);
+    expect(emis?.traceId).toBe(w3cTraceIdDepuisGen3ia(traceId!));
+    expect(emis?.flags).toBe("01");
+  });
+
+  it("coherence : le middleware émet le même format que le module partagé", () => {
+    // Verrou structurel : l'émission du middleware (formaterTraceparent)
+    // et la lecture des tests (parserTraceparent) partagent LE MÊME module.
+    expect(formaterTraceparent(TRACE_ID_W3C, { spanId: SPAN_ID_W3C, flags: "01" })).toBe(
+      `00-${TRACE_ID_W3C}-${SPAN_ID_W3C}-01`,
+    );
   });
 });

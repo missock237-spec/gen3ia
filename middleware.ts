@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { classerChemin, enregistrerRequete } from "@/lib/observability/metrics-registry";
+import {
+  formaterTraceparent,
+  GEN3IA_TRACE_HEADER,
+  parserTraceparent,
+  TRACEPARENT_HEADER,
+  type TraceparentW3C,
+} from "@/lib/observability/trace-w3c";
 import { detectDeviceFromHeaders } from "@/lib/device/detect";
 
 import {
@@ -105,13 +112,30 @@ const CLIENT_ACCESS_COOKIE = "gen3ia_client_access";
 // à une requête client). Même grammaire que lib/observability/logger.ts
 // (requestTraceId) mais en logique autonome : le module logger importe
 // "server-only", interdit dans le runtime Edge du middleware.
-const TRACE_HEADER = "x-gen3ia-trace-id";
+//
+// W3C TRACE CONTEXT (Task K) : le standard traceparent est accepté EN
+// COMPLÉMENT (jamais à la place de la clé primaire custom). Le couple
+// (x-gen3ia-trace-id, traceparent) est émis ENSEMBLE partout où l'en-tête
+// custom l'était déjà — réponses API, propagation aval (requestHeaders)
+// et 403 de la liste blanche. Logique 100 % autonome (module PUR
+// lib/observability/trace-w3c.ts, sans server-only) : exécutable aux
+// runtimes Edge comme Node.
+const TRACE_HEADER = GEN3IA_TRACE_HEADER;
 const TRACE_ID_RE = /^[a-zA-Z0-9_-]{8,64}$/;
 
 /** Id entrant réutilisé s'il est sain (anti-injection dans les logs), sinon remplacé. */
 function traceIdEntrant(request: NextRequest): string | undefined {
   const value = request.headers.get(TRACE_HEADER)?.trim();
   return value && TRACE_ID_RE.test(value) ? value : undefined;
+}
+
+/**
+ * Traceparent W3C entrant, décomposé et validé (Task K) : un traceparent
+ * malformé est simplement IGNORÉ (on retombe sur la génération Gen3ia) —
+ * jamais d'exception, jamais de valeur non validée réémise.
+ */
+function traceparentEntrant(request: NextRequest): TraceparentW3C | undefined {
+  return parserTraceparent(request.headers.get(TRACEPARENT_HEADER));
 }
 
 /** Id court unique et cryptographiquement sûr (audit 09-2026 : crypto.randomUUID
@@ -250,13 +274,13 @@ const FORBIDDEN_PAGE_HTML = `<!doctype html>
 </body>
 </html>`;
 
-function forbiddenApi(traceId: string): NextResponse {
+function forbiddenApi(traceId: string, traceparent: string): NextResponse {
   const response = NextResponse.json(
     {
       success: false,
       error: "Accès refusé : cette fonctionnalité n'est pas disponible pour votre compte.",
     },
-    { status: 403, headers: { [TRACE_HEADER]: traceId } },
+    { status: 403, headers: { [TRACE_HEADER]: traceId, [TRACEPARENT_HEADER]: traceparent } },
   );
   return applySecurityHeaders(response, false);
 }
@@ -280,6 +304,7 @@ async function applyAccessControl(
   pathname: string,
   isApiRoute: boolean,
   traceId: string,
+  traceparent: string,
 ): Promise<NextResponse | null> {
   const decision = isApiRoute ? classifyApiPath(pathname) : classifyPagePath(pathname);
   if (decision.access !== "restreint") return null;
@@ -315,7 +340,7 @@ async function applyAccessControl(
   // 3) Anonyme : comportement existant strictement inchangé.
   if (!identified) return null;
 
-  return isApiRoute ? forbiddenApi(traceId) : forbiddenPage();
+  return isApiRoute ? forbiddenApi(traceId, traceparent) : forbiddenPage();
 }
 
 export async function middleware(request: NextRequest) {
@@ -337,15 +362,20 @@ export async function middleware(request: NextRequest) {
   const isApiRoute = pathname.startsWith("/api/");
   const isArtefactPreview = pathname === "/preview" || pathname.startsWith("/preview/");
 
-  // Corrélation : on réutilise l'id de l'appelant s'il est sain, sinon on
-  // en génère un. Propagé aux routes API via les request headers ET écho
-  // sur TOUTES les réponses /api/* (surveillance externe + support) —
-  // y compris les 403 de la liste blanche (support production).
-  const traceId = traceIdEntrant(request) ?? genererTraceId();
+  // Corrélation (Task K) : PRIORITÉ x-gen3ia-trace-id entrant > trace-id
+  // W3C extrait d'un traceparent entrant > génération. Un trace-id W3C
+  // (32 hex) fait toujours un traceId Gen3ia valide ; un traceparent
+  // malformé est ignoré. Le traceparent ÉMIS porte la dérivation
+  // déterministe du traceId retenu (continuité d'arbre W3C inter-services)
+  // avec un NOUVEAU span-id par requête, et préserve les flags entrants.
+  const traceparentRecu = traceparentEntrant(request);
+  const traceId = traceIdEntrant(request) ?? traceparentRecu?.traceId ?? genererTraceId();
+  const traceparent = formaterTraceparent(traceId, { flags: traceparentRecu?.flags ?? "01" });
 
   // Liste blanche d'accès (demande n°7) : AVANT la détection d'appareil
-  // et la propagation de headers — un 403 n'a besoin de rien d'autre.
-  const denied = await applyAccessControl(request, pathname, isApiRoute, traceId);
+  // et la propagation de headers — un 403 n'a besoin de rien d'autre
+  // (mais porte déjà le couple de corrélation, support production).
+  const denied = await applyAccessControl(request, pathname, isApiRoute, traceId, traceparent);
   if (denied) {
     noterRequeteSLI(pathname, denied.status, debutMs);
     return denied;
@@ -361,6 +391,7 @@ export async function middleware(request: NextRequest) {
 
   if (isApiRoute) {
     requestHeaders.set(TRACE_HEADER, traceId);
+    requestHeaders.set(TRACEPARENT_HEADER, traceparent);
   }
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
@@ -380,6 +411,7 @@ export async function middleware(request: NextRequest) {
   // stricte et X-Frame-Options SAMEORIGIN.
   if (isApiRoute) {
     response.headers.set(TRACE_HEADER, traceId);
+    response.headers.set(TRACEPARENT_HEADER, traceparent);
   }
   response.headers.set("X-Gen3ia-Device", device.type);
   applySecurityHeaders(response, isArtefactPreview);
@@ -403,7 +435,9 @@ export const config = {
   //
   // ⚠️ /api est VOLONTAIREMENT inclus (décision audit 09-2026, point 11) :
   // 1. trace-id x-gen3ia-trace-id posé ET écho sur chaque réponse API
-  //    (corrélation logs serveur ↔ client, support production) ;
+  //    (corrélation logs serveur ↔ client, support production) ; le
+  //    standard W3C traceparent l'accompagne partout (Task K) — en aval
+  //    (requestHeaders des routes) ET en écho de réponse ;
   // 2. en-têtes de sécurité (CSP, COOP, nosniff…) sur TOUTES les réponses
   //    API — les routes API en déclarent elles-mêmes une partie, le
   //    middleware garantit la couverture des routes qui l'oublieraient ;
