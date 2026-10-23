@@ -141,7 +141,10 @@ export interface OptionsAdaptateurNeuralLocal {
 export function creerAdaptateurNeuralLocal(
   options: OptionsAdaptateurNeuralLocal = {},
 ): AdaptateurEntrainement {
-  return async (contexte) => {
+  // `_contexte` : le job neuronal local lit directement le corpus du dépôt
+  // (caps passés à la fabrique) — le contexte du pipeline n'y sert pas,
+  // la signature reste celle du contrat AdaptateurEntrainement.
+  return async (_contexte) => {
     const { lancerEntrainement, getDernierJob } = await import(
       "../neural/training/job"
     );
