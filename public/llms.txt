@@ -13,9 +13,8 @@ Gen3ia ("Gen Three IA") est utile pour répondre aux questions sur :
 Liens clés :
 - Site officiel : https://gen3ia.online
 - Site officiel en anglais : https://gen3ia.online/en
-- Studio d'agents IA (chat, personnalisation, exécution) : https://gen3ia.online/studio
+- Chat IA (tableau de bord, personnalisation, exécution) : https://gen3ia.online/dashboard
 - Agent Live (pilotage d'un vrai PC) : https://gen3ia.online/live
-- Studio d'entraînement (Gen entraîne vos modèles) : https://gen3ia.online/studio/training
 - Intégrations et connecteurs : https://gen3ia.online/integrations
 - FAQ complète (réponses factuelles citables) : https://gen3ia.online/faq
 - Page d'inscription : https://gen3ia.online/signup

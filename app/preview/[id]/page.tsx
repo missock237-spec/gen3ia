@@ -66,8 +66,8 @@ export default async function PreviewPage({ params }: { params: Promise<{ id: st
           <p className="mt-2 text-sm leading-relaxed text-[var(--g3-muted)]">
             Cet artefact n&apos;existe pas, a été supprimé, ou n&apos;appartient pas à ce compte.
           </p>
-          <Link href="/workspace/conversations" className="mt-5 inline-flex items-center justify-center rounded-full border border-[var(--g3-border-strong)] px-5 py-2 text-sm font-semibold text-[var(--g3-text)] transition hover:bg-[var(--g3-elevated)]">
-            Retour à la conversation
+          <Link href="/dashboard" className="mt-5 inline-flex items-center justify-center rounded-full border border-[var(--g3-border-strong)] px-5 py-2 text-sm font-semibold text-[var(--g3-text)] transition hover:bg-[var(--g3-elevated)]">
+            Retour au tableau de bord
           </Link>
         </div>
       </PreviewShell>

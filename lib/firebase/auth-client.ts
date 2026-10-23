@@ -297,7 +297,7 @@ export async function establishSession(user: User, redirectTo?: string | null): 
       // Session POSÉE : la sonde (401 récent éventuellement mis en cache par
       // la dédup) ne reflète plus l'état — on l'invalide avant redirection.
       invaliderSondeSession();
-      window.location.href = sanitizeRedirect(redirectTo) ?? "/studio"; // codeql[js/client-side-unvalidated-url-redirection] — cible durcie par sanitizeRedirect (chemin relatif strict + résolution WHATWG + origine same-origin exigée, Tâche 50, 5 tests dédiés) : sanitizer local que CodeQL ne modélise pas.
+      window.location.href = sanitizeRedirect(redirectTo) ?? "/dashboard"; // codeql[js/client-side-unvalidated-url-redirection] — cible durcie par sanitizeRedirect (chemin relatif strict + résolution WHATWG + origine same-origin exigée, Tâche 50, 5 tests dédiés) : sanitizer local que CodeQL ne modélise pas.
       return;
     }
 

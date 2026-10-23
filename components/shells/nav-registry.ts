@@ -7,9 +7,16 @@
  *  - "developer" : l'espace développeur (projets, build, connecteurs, API, extensions, monitoring)
  *  - "admin"     : l'espace opérateur (vue plateforme, utilisateurs, modération, sécurité)
  *
- * Toutes les surfaces (WorkspaceShell, DeveloperShell, AdminShell, palette de
+ * Toutes les surfaces (AppShell, DeveloperShell, AdminShell, palette de
  * commandes, fil d'Ariane) consomment ce registre typé au lieu de maintenir
  * des tableaux séparés par page.
+ *
+ * Note (suppression surfaces workspace/studio) : les anciennes entrées
+ * « Conversations » (/workspace), « Entraînement IA », « Bases de
+ * connaissances », « Projets », « Fichiers », « Automatisations » (/studio),
+ * « Planifications », « Connecteurs », « Bibliothèque » et « Workshop IDE »
+ * (/studio/console) ont été retirées avec leurs surfaces — le dashboard
+ * (chat IA) est le point d'entrée unique.
  */
 
 export type NavContext = "workspace" | "developer" | "admin";
@@ -94,16 +101,6 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     keywords: ["essaim", "agents", "décentralisé", "p2p", "webrtc", "rag", "chiffré", "compétences", "résilience", "voix", "vocal", "swarm"],
   },
   {
-    id: "conversations",
-    href: "/workspace",
-    label: "Conversations",
-    icon: "◇",
-    description: "Historique de vos échanges et exécutions",
-    contexts: ["workspace"],
-    section: "primary",
-    keywords: ["conversations", "historique", "agent", "messages"],
-  },
-  {
     id: "cerveau",
     href: "/neural",
     label: "Cerveau IA",
@@ -114,55 +111,11 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     minRole: "admin", // réserver admin — voir demande masquage
     keywords: ["cerveau", "neural", "neurones", "snn", "réseau", "santé", "moteur", "ia"],
   },
-  {
-    id: "training",
-    href: "/workspace/training",
-    label: "Entraînement IA",
-    icon: "⌬",
-    description: "Gen entraîne vos modèles : vos datasets, vos sessions d'entraînement, vos exports",
-    contexts: ["workspace"],
-    section: "primary",
-    keywords: ["training", "entraînement", "fine-tuning", "lora", "modèles", "dataset", "ia", "training studio"],
-  },
-  {
-    id: "knowledge",
-    href: "/workspace/knowledge",
-    label: "Bases de connaissances",
-    icon: "▤",
-    description: "Documents, pages web et recherche sémantique (RAG)",
-    contexts: ["workspace"],
-    section: "primary",
-    keywords: ["knowledge", "connaissances", "documents", "rag", "recherche", "embeddings", "wiki"],
-  },
-  {
-    id: "projects",
-    href: "/workspace/projects",
-    label: "Projets",
-    icon: "▦",
-    description: "Contextes persistants : instructions, fichiers, connecteurs",
-    contexts: ["workspace"],
-    section: "primary",
-    keywords: ["projets", "instructions", "contexte"],
-  },
-  {
-    id: "files",
-    href: "/workspace/files",
-    label: "Fichiers",
-    icon: "□",
-    description: "Stockage permanent et livrables générés",
-    contexts: ["workspace"],
-    section: "primary",
-    keywords: ["fichiers", "livrables", "stockage", "artefacts", "résultats"],
-  },
 ];
 
 const WORKSPACE_SECONDARY: NavRoute[] = [
-  { id: "missions", href: "/studio", label: "Automatisations", icon: "◈", description: "Agents spécialisés, validations et historique d'exécution", contexts: ["workspace"], section: "secondary", keywords: ["automatisations", "agents", "missions", "tâches", "historique"] },
-  { id: "schedules", href: "/workspace/schedules", label: "Planifications", icon: "⏱", description: "Tâches planifiées : récurrences, one-shot, relances", contexts: ["workspace"], section: "secondary", keywords: ["planifications", "schedules", "cron", "récurrence", "one-shot", "automatisations", "veille"] },
   { id: "team", href: "/team", label: "Équipe", icon: "◎", description: "Membres, rôles et activité partagée", contexts: ["workspace"], section: "secondary", keywords: ["équipe", "membres", "rôles"] },
   { id: "live", href: "/live", label: "Agent Live", icon: "◉", description: "Contrôler un poste de travail", contexts: ["workspace"], section: "secondary", keywords: ["live", "pc"] },
-  { id: "connectors", href: "/workspace/connectors", label: "Connecteurs", icon: "⧉", description: "Applications connectées, état vérifié et permissions", contexts: ["workspace"], section: "secondary", keywords: ["connecteurs", "intégrations", "composio", "applications", "connexions"] },
-  { id: "library", href: "/workspace/bibliotheque", label: "Bibliothèque", icon: "◈", description: "Capacités métier, modèles de prompts et agents spécialisés", contexts: ["workspace"], section: "secondary", keywords: ["bibliothèque", "modèles", "capacités", "marketing", "sales", "rh", "finance", "missions", "créer"] },
   { id: "memory", href: "/memory", label: "Mémoire permanente", icon: "◆", description: "Souvenirs et connaissances des agents", contexts: ["workspace"], section: "secondary", keywords: ["mémoire", "knowledge"] },
   { id: "billing", href: "/billing", label: "Facturation", icon: "₣", description: "Abonnements et consommation", contexts: ["workspace"], section: "secondary", keywords: ["facturation", "abonnement"] },
   { id: "settings", href: "/settings", label: "Paramètres", icon: "⚙", description: "Compte, sécurité, numéros et préférences", contexts: ["workspace"], section: "secondary", keywords: ["paramètres", "compte"] },
@@ -256,17 +209,6 @@ const DEVELOPER_NAV: NavRoute[] = [
     minRole: "developer",
     section: "primary",
     keywords: ["monitoring", "revenus", "statistiques"],
-  },
-  {
-    id: "dev-ide",
-    href: "/studio/console",
-    label: "Workshop IDE",
-    icon: "❯_",
-    description: "Workspace IDE unifié : terminal agent, éditeur, logs, aperçu, tests",
-    contexts: ["developer"],
-    minRole: "developer",
-    section: "primary",
-    keywords: ["ide", "terminal", "éditeur", "code", "workshop", "console"],
   },
 ];
 

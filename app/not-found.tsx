@@ -18,12 +18,13 @@ export default function NotFound() {
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
           {/* Deux issues DISTINCTES (audit UX 2-c) : le tableau de bord d'un
-              côté, le Studio de l'autre — les deux ne pointaient que /studio. */}
+              côté, l'accueil vitrine de l'autre. (L'ancienne 2e issue « Studio »
+              a été supprimée avec la surface /studio.) */}
           <Link href="/dashboard" className="g3-btn g3-btn-primary rounded-full">
             Tableau de bord
           </Link>
-          <Link href="/studio" className="g3-btn g3-btn-ghost rounded-full">
-            Ouvrir le Studio
+          <Link href="/" className="g3-btn g3-btn-ghost rounded-full">
+            Retour à l&apos;accueil
           </Link>
         </div>
       </section>

@@ -115,7 +115,7 @@ export function TerminalView({
             <li className="flex gap-2"><span aria-hidden>2.</span> Demandez une tâche nécessitant l&apos;exécution de commandes.</li>
             <li className="flex gap-2"><span aria-hidden>3.</span> Observez et contrôlez l&apos;exécution ici.</li>
           </ul>
-          <Link href="/workspace" className="mt-4 inline-block rounded-full bg-[var(--g3-surface)] px-4 py-2 text-xs font-semibold text-black transition hover:bg-[var(--g3-elevated)]">
+          <Link href="/dashboard" className="mt-4 inline-block rounded-full bg-[var(--g3-surface)] px-4 py-2 text-xs font-semibold text-black transition hover:bg-[var(--g3-elevated)]">
             Ouvrir une conversation
           </Link>
         </div>

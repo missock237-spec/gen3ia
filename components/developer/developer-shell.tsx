@@ -27,7 +27,7 @@ export function DeveloperShell({ children }: { children: ReactNode }) {
     <div className="min-h-full bg-[var(--g3-elevated)] text-neutral-950">
       <div className="mx-auto flex min-h-full max-w-[1500px] flex-col lg:flex-row">
         <aside className="w-full border-b bg-[var(--g3-deep)] p-4 text-white lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r lg:p-5">
-          <Link href="/studio" className="flex items-center gap-2 text-lg font-bold">
+          <Link href="/dashboard" className="flex items-center gap-2 text-lg font-bold">
             <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--g3-surface)] overflow-hidden"><Gen3iaLogo size={32} alt="" /></span> Gen3ia
           </Link>
           <div className="mt-1 text-[10px] uppercase tracking-[.25em] text-[var(--g3-muted)]">Developer Studio</div>
@@ -78,7 +78,7 @@ export function DeveloperShell({ children }: { children: ReactNode }) {
         <main className="min-w-0 flex-1 p-5 md:p-8">
           <header className="mb-7">
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--g3-faint)]">
-              <Link href="/studio" className="transition hover:text-[var(--g3-text-secondary)]">Espace de travail</Link>
+              <Link href="/dashboard" className="transition hover:text-[var(--g3-text-secondary)]">Espace de travail</Link>
               <span aria-hidden="true">/</span>
               <span className="font-medium text-[var(--g3-info)]">Développeur</span>
               {current && current.href !== "/developer" && (

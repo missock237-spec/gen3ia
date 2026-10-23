@@ -34,10 +34,10 @@ export function AdminShell({ children, role }: { children: ReactNode; role: stri
             </div>
           </div>
           <Link
-            href="/studio"
+            href="/dashboard"
             className="inline-flex items-center gap-2 rounded-full bg-[var(--g3-surface)]/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-[var(--g3-surface)]/20"
           >
-            <span aria-hidden="true">←</span> Retour au Workspace
+            <span aria-hidden="true">←</span> Retour au tableau de bord
           </Link>
         </div>
 

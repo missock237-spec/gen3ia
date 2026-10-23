@@ -5,8 +5,9 @@
  * et la palette de commandes.
  *
  * Architecture IA-FIRST : la navigation principale est
- * Chat IA · Conversations · Cerveau IA · Entraînement IA · Connaissances ;
- * les automatisations (agents) et le reste sont des capacités secondaires.
+ * Chat IA · Cerveau IA ; le reste est des capacités secondaires.
+ * (Surfaces workspace/studio supprimées : conversations, entraînement,
+ * connaissances, projets, fichiers, automatisations, planifications.)
  */
 import { NAV_REGISTRY, navCommandIndex, type NavRoute } from "@/components/shells/nav-registry";
 
@@ -38,7 +39,7 @@ function groupByIds(ids: string[], extras: Record<string, Partial<NavItem>> = {}
 
 /** Espace de travail — centre de gravité « IA » (Chat IA en tête). */
 export const WORKSPACE: NavItem[] = groupByIds(
-  ["chat-ia", "conversations", "cerveau", "training", "knowledge", "projects", "files", "workflows"],
+  ["chat-ia", "cerveau"],
   {
     "chat-ia": { shortcut: "C" },
   },
@@ -46,7 +47,7 @@ export const WORKSPACE: NavItem[] = groupByIds(
 
 /** Automatisations (agents) — surfaces transverses, secondaires. */
 export const AGENTS: NavItem[] = [
-  ...groupByIds(["schedules", "live", "missions"]),
+  ...groupByIds(["live"]),
   { href: "/observability", label: "Observabilité", icon: "∿", hint: "Traces, coûts et alertes de vos exécutions" },
   { href: "/integrations", label: "Intégrations", icon: "⧉", hint: "Connecter vos services externes" },
 ];
