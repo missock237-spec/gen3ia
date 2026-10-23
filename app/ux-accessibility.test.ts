@@ -114,12 +114,9 @@ describe("D5 — Cibles tactiles 44px", () => {
     expect(composer).not.toContain("h-9");
   });
 
-  it("liste de conversations : replier/déplier/nouvelle conversation à 44px", () => {
-    const list = read("components/workspace/conversation-list.tsx");
-    expect(list).toContain("g3-btn g3-btn-ghost h-11 w-11 justify-center !px-0");
-    expect(list).toContain("g3-btn g3-btn-primary h-11 w-11 justify-center !px-0");
-    expect(list).not.toContain("h-9 w-9");
-  });
+  // (L'ancien verrou « liste de conversations 44px » portait sur la surface
+  // /workspace supprimée — les cibles tactiles du chat conservé sont
+  // couvertes par le verrou composer ci-dessus.)
 
   it("menu mobile flottant passé de 38px à 44px (+ dégagement du fil d'Ariane)", () => {
     const css = read("app/globals.css");
@@ -129,13 +126,8 @@ describe("D5 — Cibles tactiles 44px", () => {
 });
 
 describe("D6 — Metadata SEO des segments publics", () => {
-  it("studio : metadata servie par le layout serveur (le shell client est déplacé, pas supprimé)", () => {
-    const layout = read("app/studio/layout.tsx");
-    const client = read("app/studio/studio-layout-client.tsx");
-    expect(layout).toContain('absolute: "Studio — Gen3ia"');
-    expect(layout).toContain("<StudioLayoutClient>");
-    expect(client).toContain('"use client"');
-    expect(client).toContain("<WorkspaceShell />");
+  it("developer : metadata servie par le layout serveur (surface conservée)", () => {
+    const layout = read("app/developer/layout.tsx");
     expect(layout).not.toContain("<html>");
   });
 });
@@ -157,10 +149,10 @@ describe("D7 — loading.tsx de perception de vitesse", () => {
 });
 
 describe("D8 — 404 : deux issues distinctes", () => {
-  it("« Tableau de bord » pointe /dashboard, « Ouvrir le Studio » pointe /studio", () => {
+  it("« Tableau de bord » pointe /dashboard et « Retour à l'accueil » pointe /", () => {
     const page = read("app/not-found.tsx");
     expect(page).toContain('href="/dashboard"');
-    expect(page).toContain('href="/studio"');
+    expect(page).toContain('href="/"');
   });
 });
 
@@ -182,8 +174,8 @@ describe("D9 — PWA installée : safe-area top + installation in-app (Task 99-c
     expect(shell).toContain("g3-shell-skeleton");
   });
 
-  it("app/studio/loading.tsx et app/developer/loading.tsx existent avec le squelette conventionnel", () => {
-    for (const segment of ["studio", "developer"]) {
+  it("app/developer/loading.tsx existe avec le squelette conventionnel (app/studio supprimée)", () => {
+    for (const segment of ["developer"]) {
       const source = read(`app/${segment}/loading.tsx`);
       const shared = source.includes("Skeleton");
       const inline = source.includes("var(--g3-elevated)") || source.includes("aria-busy");

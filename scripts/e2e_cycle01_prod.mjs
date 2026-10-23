@@ -41,8 +41,8 @@ await timed("headers", async () => {
   check("Referrer-Policy", !!r.headers.get("referrer-policy"), r.headers.get("referrer-policy") ?? "absent");
   check("Permissions-Policy", !!r.headers.get("permissions-policy"), r.headers.get("permissions-policy") ?? "absent");
 });
-await timed("pages workspace", async () => {
-  for (const p of ["/workspace/conversations", "/workspace/conversations/abc", "/workspace/projects", "/workspace/files", "/workspace/bibliotheque", "/settings", "/studio", "/team", "/billing"]) {
+await timed("pages applicatives", async () => {
+  for (const p of ["/dashboard", "/settings", "/team", "/billing"]) {
     const r = await fetch(BASE + p, { redirect: "manual" });
     check(`page ${p}`, [200, 307, 308].includes(r.status), String(r.status));
   }
@@ -58,8 +58,6 @@ await timed("santé", async () => {
 await timed("API protégée (sans session)", async () => {
   const probes = [
     ["GET", "/api/workspace/conversations"],
-    ["GET", "/api/workspace/projects"],
-    ["GET", "/api/workspace/artifacts"],
     ["GET", "/api/workspace/approvals/appr-test-id"],
     ["GET", "/api/workspace/tasks"],
     ["GET", "/api/files/workspaces"],

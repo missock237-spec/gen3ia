@@ -4,7 +4,7 @@
  *
  * 1. signUp Firebase + session          : compte réel.
  * 2. Santé                              : plateforme OK.
- * 3. BUNDLE : First Load JS de la surface principale /workspace/conversations
+ * 3. BUNDLE : First Load JS de la surface principale /dashboard
  *    mesuré en TRANSFERT (brotli) — doit rester < 220 kB (avant Task 38 :
  *    286 kB raw / ~75 kB de plus en transfert).
  * 4. BUNDLE : AUCUN chunk initial ne contient Firestore/re2js/webchannel
@@ -134,7 +134,7 @@ async function main() {
     return Math.round(times[1]);
   }
   const ttfbHome = await ttfb("/");
-  const ttfbConv = await ttfb("/workspace/conversations");
+  const ttfbConv = await ttfb("/dashboard");
   ok("9/TTFB (info)", true, `accueil=${ttfbHome} ms, conversations=${ttfbConv} ms (réseau e2e)`);
 
   // ---------- 10. Non-régression headers ----------

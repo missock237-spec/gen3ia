@@ -11,7 +11,7 @@
  *     + ancienne palette claire (#f6f4ef) absente.
  *  3. /login et /signup : split-screen aurora (aside + g3-gradient-border).
  *  4. signUp Firebase + session réelle → pages applicatives 200 :
- *     /dashboard, /workspace/conversations, /studio/agents, /settings.
+ *     /dashboard, /settings.
  *  5. API intacte : /api/agents, /api/auth/access, /api/public/health.
  *  6. Plein écran chat conservé : meta interactive-widget + --g3-vvh.
  */
@@ -100,7 +100,7 @@ async function getHtml(path, cookie) {
   const cookie = (sessionRes.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
   check("4/session", sessionRes.ok && Boolean(cookie), `HTTP ${sessionRes.status}`);
 
-  for (const path of ["/dashboard", "/workspace/conversations", "/studio/agents", "/settings"]) {
+  for (const path of ["/dashboard", "/settings"]) {
     const page = await getHtml(path, cookie);
     const isOk = page.res.status === 200 && !page.html.includes("__NEXT_ERROR");
     check(`4/page:${path}`, isOk, `HTTP ${page.res.status}`);
@@ -115,7 +115,7 @@ async function getHtml(path, cookie) {
   check("5/api-health", healthRes.status === 200, `HTTP ${healthRes.status}`);
 
   // 6. Chat plein écran conservé (gains Task 27 non régressés)
-  const conv = await getHtml("/workspace/conversations", cookie);
+  const conv = await getHtml("/dashboard", cookie);
   check("6/fullscreen-vvh", conv.html.includes("--g3-vvh") || conv.html.includes("g3-shell"), "chaîne de hauteur conservée");
 
   console.log(`\n=== ${failures === 0 ? "TOUS LES CONTRÔLES SONT VERTS" : failures + " CONTRÔLE(S) EN ÉCHEC"} ===\n`);

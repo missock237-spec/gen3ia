@@ -109,7 +109,6 @@ describe("Artéfact « carré parasite » (étape 12 + exigence utilisateur)", (
     // interfaces de prompt. Chaque textarea de saisie IA porte désormais la
     // neutralisation explicite (spécificité > textarea:focus-visible global).
     const surfaces: Array<[string, RegExp]> = [
-      ["components/workspace/mission-composer.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
       ["app/page.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
       ["app/client/[agentId]/page.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
       ["app/client/c/[slug]/page.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],

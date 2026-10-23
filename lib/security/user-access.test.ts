@@ -74,9 +74,7 @@ describe("API — liste blanche UTILISATEUR (14 familles de la demande)", () => 
     ["/api/workspace/conversations/c1/messages/stream", "chat"],
     ["/api/workspace/conversations/search", "chat"],
     ["/api/workspace/approvals/a1", "chat"],
-    ["/api/workspace/prompt-templates", "chat"],
-    ["/api/workspace/prompt-templates/t1", "chat"],
-    // Studio d'entraînement (+ configuration)
+    // API training conservée (contrat worker GPU system-only + lib/neural)
     ["/api/training/catalog", "training"],
     ["/api/training/projects", "training"],
     ["/api/training/projects/p1/datasets", "training"],
@@ -108,17 +106,13 @@ describe("API — liste blanche UTILISATEUR (14 familles de la demande)", () => 
     ["/api/knowledge", "connaissances"],
     ["/api/knowledge/triggers", "connaissances"],
     ["/api/knowledge/triggers/t1", "connaissances"],
-    // Projets
-    ["/api/workspace/projects", "projets"],
-    ["/api/workspace/projects/p1", "projets"],
-    // Fichiers (+ artefacts, stockage permanent, capture)
+    // Fichiers (+ stockage permanent, capture)
     ["/api/files/read", "fichiers"],
     ["/api/files/write", "fichiers"],
     ["/api/files/workspaces", "fichiers"],
     ["/api/files/artifacts/a1", "fichiers"],
     ["/api/files/import", "fichiers"],
     ["/api/documents/a1", "fichiers"],
-    ["/api/workspace/artifacts", "fichiers"],
     ["/api/storage/permanent", "fichiers"],
     ["/api/storage/permanent/session", "fichiers"],
     ["/api/storage/plan", "fichiers"],
@@ -126,7 +120,6 @@ describe("API — liste blanche UTILISATEUR (14 familles de la demande)", () => 
     // Automatisation (exécution pilotée depuis la conversation)
     ["/api/workspace/tasks", "automatisation"],
     ["/api/workspace/tasks/t1/execute", "automatisation"],
-    ["/api/workspace/missions", "automatisation"],
     // Intégrations
     ["/api/integrations/status", "integrations"],
     ["/api/integrations/catalog", "integrations"],
@@ -291,38 +284,13 @@ describe("Pages — LISTE BLANCHE UTILISATEUR", () => {
     ["/chat/", "chat"],
     ["/chat-v4", "chat"],
     ["/dashboard", "chat"],
-    ["/workspace", "chat"],
-    ["/workspace/conversations", "chat"],
-    ["/workspace/conversations/c1", "chat"],
     ["/approvals/a1", "chat"],
-    ["/workspace/training", "training"],
-    ["/workspace/training/p1", "training"],
-    ["/workspace/connectors", "connecteurs"],
-    ["/studio/connections", "connecteurs"],
-    ["/workspace/schedules", "planifications"],
     ["/billing", "facturation"],
     ["/settings", "parametres"],
-    ["/workspace/knowledge", "connaissances"],
-    ["/workspace/projects", "projets"],
-    ["/workspace/projects/p1", "projets"],
-    ["/workspace/files", "fichiers"],
-    ["/workspace/bibliotheque", "fichiers"],
     ["/storage", "fichiers"],
     ["/memory", "memoire"],
     ["/observability", "observabilite"],
     ["/integrations", "integrations"],
-    // STUDIO MÉTIER (réouverture propriétaire) — hub complet hors console
-    ["/studio", "studio"],
-    ["/studio/video", "studio"],
-    ["/studio/clients", "studio"],
-    ["/studio/finance/cashflow", "studio"],
-    ["/studio/create", "studio"],
-    ["/studio/documents", "studio"],
-    ["/studio/operations", "studio"],
-    ["/studio/results", "studio"],
-    ["/studio/sales", "studio"],
-    ["/studio/compliance", "studio"],
-    ["/studio/connections", "connecteurs"],
     // AGENT LIVE (réouverture propriétaire — PC et Android)
     ["/live", "live"],
   ] as const;
@@ -344,12 +312,12 @@ describe("Pages — RESTREINT (deny-by-default)", () => {
     "/monde",
     "/neural",
     "/ondes",
-    // Studio métier : hub réouvert ; SEULE /studio/console reste
-    // interdite (IDE développeur — clés API, projets, paiements dev)
-    "/studio/console",
-    "/studio/console/ide",
-    // Sous-pages workspace inconnues → deny
+    // Surfaces workspace/studio supprimées : hors liste blanche → restreint
+    // (en pratique, next.config les redirige vers /dashboard AVANT le
+    // middleware — le test verrouille le comportement deny-by-default du
+    // classifieur lui-même).
     "/workspace/inconnu",
+    "/studio/inconnu",
     // Racines inconnues → deny
     "/inconnu",
     "/secret",
@@ -359,11 +327,9 @@ describe("Pages — RESTREINT (deny-by-default)", () => {
     expect(classifyPagePath(path)).toMatchObject({ access: "restreint" });
   });
 
-  it("/studio réouvert aux utilisateurs, /studio/console (IDE dev) reste restreint", () => {
-    expect(classifyPagePath("/studio/connections").access).toBe("user");
-    expect(classifyPagePath("/studio").access).toBe("user");
-    expect(classifyPagePath("/studio/console").access).toBe("restreint");
-    expect(classifyPagePath("/studio/console-x").access).toBe("user");
+  it("surfaces supprimées workspace/studio : deny-by-default du classifieur (la redirection /dashboard est gérée par next.config)", () => {
+    expect(classifyPagePath("/workspace").access).toBe("restreint");
+    expect(classifyPagePath("/studio").access).toBe("restreint");
   });
 
   it("/settings exact et /settings/ads (publicité utilisateur) sont autorisés", () => {
