@@ -1,0 +1,11 @@
+# Dépendances du pack vidéo gen3 — l'entraînement réel exige un GPU
+# (Colab L4 / A100 40 Go). Sur Colab, torch est déjà fourni : NE PAS le
+# réinstaller. La génération Wan exige aussi le dépôt cloné
+# Wan-Video/Wan2.1 (generate.py) et les poids Wan-AI/Wan2.1-T2V-1.3B (HF).
+transformers>=4.50
+accelerate>=0.30
+peft>=0.11
+datasets>=2.19
+bitsandbytes>=0.43
+pillow>=10.0
+huggingface_hub>=0.23
