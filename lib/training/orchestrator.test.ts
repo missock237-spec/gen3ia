@@ -30,7 +30,7 @@ function makePlan(overrides: Partial<TrainingPlan> = {}): TrainingPlan {
     ownerId: "user-1",
     method: "lora",
     engineId: "text-lora",
-    baseModel: "Qwen/Qwen2.5-1.5B-Instruct",
+    baseModel: "google/gemma-2-2b-it",
     baseModelKind: "catalog",
     parameters: { epochs: 2, learningRate: 0.0002, loraRank: 16, loraAlpha: 32, loraDropout: 0.05, batchSize: 4, maxSequenceLength: 1024, gradientAccumulation: 2 },
     resources: { vramGbEstimate: 10, providerClass: "worker-http" },

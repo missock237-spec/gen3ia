@@ -1,1 +1,0 @@
-Chaque ligne JSONL contient `id`, `task`, `instruction`, `response`, `image` (chemin relatif ou null), `language` et `quality_status`. Une ligne JSON valide ne garantit pas que la réponse soit correcte. Les exemples synthétiques doivent être vérifiés avant usage sérieux.

@@ -51,9 +51,6 @@ const MODEL_CONTEXT_WINDOWS: ReadonlyArray<{
   { match: /mistral-large/i, window: 128_000 },
   { match: /mixtral/i, window: 32_768 },
   { match: /mistral-7b/i, window: 32_768 },
-  // Qwen
-  { match: /qwen2?\.?5?-?(max|plus|coder|72b)/i, window: 128_000 },
-  { match: /qwen/i, window: 32_768 },
   // DeepSeek
   { match: /deepseek-chat|deepseek-v3/i, window: 128_000 },
   { match: /deepseek-reasoner|r1/i, window: 64_000 },

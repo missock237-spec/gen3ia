@@ -1,7 +1,7 @@
 /**
  * Filtrage des balises de raisonnement interne (« think », « thinking »,
  * « reasoning ») qui fuient dans les réponses de certains modèles
- * (GLM-4-Flash, DeepSeek-R1, Qwen…).
+ * (GLM-4-Flash, DeepSeek-R1…).
  *
  * Deux mécanismes complémentaires :
  *  - `stripThinkTags(text)` : nettoyage d'un texte complet avant persistance

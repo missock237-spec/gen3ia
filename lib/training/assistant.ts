@@ -184,7 +184,7 @@ function normalizePlan(
   // Base model : asset importé valide → assetId ; sinon catalogue par défaut.
   const uploaded = overview.models.find((m) => m.source === "upload" && m.status === "valid");
   const catalogAsset = overview.models.find((m) => m.source === "catalog");
-  const defaultCatalog = overview.project.family === "text" ? "Qwen/Qwen2.5-1.5B-Instruct" : null;
+  const defaultCatalog = overview.project.family === "text" ? "google/gemma-2-2b-it" : null;
 
   let baseModel = typeof draft.baseModel === "string" ? draft.baseModel : "";
   let baseModelKind: "upload" | "catalog" = draft.baseModelKind === "upload" ? "upload" : "catalog";
@@ -202,7 +202,7 @@ function normalizePlan(
     baseModel = defaultCatalog;
     baseModelKind = "catalog";
   } else {
-    baseModel = baseModel || "Qwen/Qwen2.5-1.5B-Instruct";
+    baseModel = baseModel || "google/gemma-2-2b-it";
     baseModelKind = "catalog";
   }
 
@@ -294,7 +294,7 @@ export function heuristicPlan(context: Record<string, unknown>): {
       plan: {
         method: "rag",
         engineId: "rag-index",
-        baseModel: "Qwen/Qwen2.5-1.5B-Instruct",
+        baseModel: "google/gemma-2-2b-it",
         baseModelKind: "catalog",
         parameters: { chunkSize: 800, chunkOverlap: 80 },
         resources: { vramGbEstimate: null, storageGbEstimate: 1, estimatedDurationMinutes: 5, providerClass: "worker-http" },
@@ -345,7 +345,7 @@ export function heuristicPlan(context: Record<string, unknown>): {
     plan: {
       method: "lora",
       engineId: "text-lora",
-      baseModel: "Qwen/Qwen2.5-1.5B-Instruct",
+      baseModel: "google/gemma-2-2b-it",
       baseModelKind,
       parameters: {
         learningRate: 0.0002,

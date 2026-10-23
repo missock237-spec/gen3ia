@@ -47,7 +47,7 @@ const baseCatalog = {
     },
   ],
   baseModels: [
-    { id: "Qwen/Qwen2.5-0.5B-Instruct", name: "Qwen2.5 0.5B Instruct", family: "text" as const, params: "0,5 Md", minVramGb: 4, recommendedFor: ["qlora"], notes: "" },
+    { id: "google/gemma-2-2b-it", name: "Gemma 2 2B IT", family: "text" as const, params: "2,6 Md", minVramGb: 10, recommendedFor: ["qlora"], notes: "" },
   ],
   providers: [] as Array<{ id: string; label: string; configured: boolean; gpus: Array<{ name: string; vramGb: number; available: boolean }>; simulated: boolean }>,
   quotas: {

@@ -73,7 +73,7 @@ export const ENGINES: TrainingEngine[] = [
     id: "text-lora",
     name: "Fine-tuning LLM — LoRA / QLoRA",
     description:
-      "Adaptateurs LoRA et QLoRA sur les modèles de langage compatibles Hugging Face Transformers (Llama, Mistral, Qwen, Gemma…). Méthode la plus économe en VRAM pour spécialiser un LLM.",
+      "Adaptateurs LoRA et QLoRA sur les modèles de langage compatibles Hugging Face Transformers (Llama, Mistral, Gemma…). Méthode la plus économe en VRAM pour spécialiser un LLM.",
     families: ["text"],
     methods: ["lora", "qlora", "adapter"],
     acceptedModelFormats: ["safetensors", "zip-archive", "catalog"],

@@ -441,7 +441,7 @@ export const CORPUS_GEN3: readonly PaireLangage[] = [
   {
     motif: "tu entraines quoi exactement",
     reponse:
-      "Des modèles de langage appris sur vos données : je prends vos paires question/réponse et j'entraîne un cerveau Gen3 qui répond à VOS questions avec VOS réponses. Sur le même Studio, les moteurs LoRA/QLoRA fine-tunent des LLM externes (Llama, Qwen, Mistral) quand vous connectez un worker GPU.",
+      "Des modèles de langage appris sur vos données : je prends vos paires question/réponse et j'entraîne un cerveau Gen3 qui répond à VOS questions avec VOS réponses. Sur le même Studio, les moteurs LoRA/QLoRA fine-tunent des LLM externes (Llama, Gemma, Mistral) quand vous connectez un worker GPU.",
     theme: "studio",
   },
   {

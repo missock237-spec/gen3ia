@@ -75,7 +75,7 @@ Toutes les routes sauf `/healthz` exigent `Authorization: Bearer <WORKER_TOKEN>`
   "parameters": {"learningRate": 2e-4, "epochs": 3, "batchSize": 4, "loraRank": 16,
                  "loraAlpha": 32, "loraDropout": 0.05, "maxSequenceLength": 1024,
                  "gradientAccumulation": 2},
-  "baseModel": {"kind": "catalog", "ref": "Qwen/Qwen2.5-1.5B-Instruct"},
+  "baseModel": {"kind": "catalog", "ref": "google/gemma-2-2b-it"},
   "datasets": [{"storageKey": "users/{uid}/training-files/{projectId}/{assetId}",
                  "split": "train", "format": "jsonl"}]
 }

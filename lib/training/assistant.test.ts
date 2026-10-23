@@ -171,7 +171,7 @@ describe("generateTrainingPlan — sources et étiquetage", () => {
       text: JSON.stringify({
         method: "lora",
         engineId: "text-lora",
-        baseModel: "Qwen/Qwen2.5-1.5B-Instruct",
+        baseModel: "google/gemma-2-2b-it",
         baseModelKind: "catalog",
         parameters: { epochs: 3, learningRate: 0.0002, loraRank: 16, loraAlpha: 32, loraDropout: 0.05, batchSize: 4, maxSequenceLength: 1024, gradientAccumulation: 2 },
         resources: { vramGbEstimate: 12, storageGbEstimate: 4, estimatedDurationMinutes: 60, providerClass: "worker-http" },

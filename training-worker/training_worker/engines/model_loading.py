@@ -1,6 +1,6 @@
 """Chargement du modèle de base — catalogue Hugging Face ou upload R2.
 
-- ``kind = "catalog"`` : ``ref`` est un identifiant HF (ex. ``Qwen/Qwen2.5-1.5B-Instruct``),
+- ``kind = "catalog"`` : ``ref`` est un identifiant HF (ex. ``google/gemma-2-2b-it``),
   chargé directement via ``from_pretrained`` (téléchargement depuis le hub) ;
 - ``kind = "upload"``  : l'objet R2 ``storageKey`` est téléchargé puis préparé —
   archive ZIP d'un dossier de modèle (extraction sécurisée), ou fichier de poids

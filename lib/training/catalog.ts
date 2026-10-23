@@ -24,26 +24,10 @@ export interface CatalogBaseModel {
   notes: string;
 }
 
-/** Modèles de base recommandés — références publiques vérifiables. */
+/** Modèles de base recommandés — références publiques vérifiables.
+ *  Qwen est exclu du projet par décision produit : la lignée Google (Gemma)
+ *  est la référence gen3. */
 export const BASE_MODELS: CatalogBaseModel[] = [
-  {
-    id: "Qwen/Qwen2.5-0.5B-Instruct",
-    name: "Qwen2.5 0.5B Instruct",
-    family: "text",
-    params: "0,5 Md",
-    minVramGb: 4,
-    recommendedFor: ["qlora", "expérimentation"],
-    notes: "Très léger : idéal pour valider un pipeline d'entraînement de bout en bout.",
-  },
-  {
-    id: "Qwen/Qwen2.5-1.5B-Instruct",
-    name: "Qwen2.5 1.5B Instruct",
-    family: "text",
-    params: "1,5 Md",
-    minVramGb: 8,
-    recommendedFor: ["lora", "qlora"],
-    notes: "Compromis qualité/VRAM recommandé par défaut pour les premiers fine-tunings.",
-  },
   {
     id: "meta-llama/Llama-3.2-1B-Instruct",
     name: "Llama 3.2 1B Instruct",
@@ -69,7 +53,16 @@ export const BASE_MODELS: CatalogBaseModel[] = [
     params: "2,6 Md",
     minVramGb: 10,
     recommendedFor: ["lora", "qlora"],
-    notes: "Bon rapport qualité/taille, licence Gemma.",
+    notes: "Lignée Google : compromis qualité/taille recommandé par défaut, licence Gemma.",
+  },
+  {
+    id: "google/gemma-2-9b-it",
+    name: "Gemma 2 9B IT",
+    family: "text",
+    params: "9,2 Md",
+    minVramGb: 24,
+    recommendedFor: ["qlora"],
+    notes: "Qualité supérieure (lignée Google) : QLoRA requis sur GPU 24 Go.",
   },
 ];
 
