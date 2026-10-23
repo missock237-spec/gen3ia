@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 
 import { timingSafeStringEqual } from "@/lib/security/timing-safe";
+import { requireService } from "@/lib/security/service-identity";
 import { activateAgentSystemForUser } from "@/lib/agents/system-activation";
 import { errorStatus } from "@/lib/security/http-errors";
 
@@ -19,10 +20,15 @@ import { errorStatus } from "@/lib/security/http-errors";
  *   → sous-agents navigateur RÉELS créés → ils assistent l'agent navigateur.
  *
  * AUTHENTIFICATION SYSTÈME (pas utilisateur) : bearer `AGENTS_SYSTEM_SECRET`
- * (secret serveur interne, même contrat que CRON_SECRET pour les routes cron).
+ * (secret serveur interne, même contrat que CRON_SECRET pour les routes cron)
+ * OU signature d'identité de service (GEN3IA_SERVICE_TOKENS, service
+ * « agent-system » — lib/security/service-identity.ts, corps BRUT signé).
+ * Rétrocompatible : la signature est acceptée EN PLUS du bearer — tant que
+ * GEN3IA_SERVICE_TOKENS est absente, le contrat historique s'applique seul.
  *  - secret absent de l'environnement → 503 (le chemin interne n'est pas
  *    configuré : réponse HONNÊTE, jamais de faux succès) ;
  *  - bearer manquant/erroné → 401 (comparaison à temps constant) ;
+ *  - signature de service invalide → 401 (anti-replay ±300 s, corps signé) ;
  *  - corps invalide → 400 ;
  *  - succès → 200 { activated, subAgents[], requestId } (idempotent : une
  *    seconde activation ne duplique RIEN — reason "already_active").
@@ -53,22 +59,32 @@ function isAuthorized(request: NextRequest): boolean {
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
 
-  // Secret serveur non configuré : 503 honnête (aucune activation simulée).
-  if (!process.env.AGENTS_SYSTEM_SECRET?.trim()) {
-    return NextResponse.json(
-      { error: "Activation du système agent non configurée (AGENTS_SYSTEM_SECRET absent).", code: "PROVIDER_UNAVAILABLE", requestId },
-      { status: 503, headers: { "x-request-id": requestId } },
-    );
-  }
-  if (!isAuthorized(request)) {
-    return NextResponse.json(
-      { error: "Secret d'activation interne manquant ou invalide.", code: "AUTH_REQUIRED", requestId },
-      { status: 401, headers: { "x-request-id": requestId } },
-    );
+  // Corps BRUT lu une seule fois : signé tel quel par l'émetteur (identité
+  // de service), puis parsé ensuite — même pattern que le webhook signé.
+  const rawBody = await request.text().catch(() => "");
+
+  // Zero Trust — identité de service (Task I) : signature acceptée EN PLUS
+  // du bearer AGENTS_SYSTEM_SECRET historique. GEN3IA_SERVICE_TOKENS
+  // absente → contrat historique seul (503/401 ci-dessous, inchangés).
+  const service = requireService(request, { body: rawBody }, "agent-system");
+  if (!service.ok) {
+    // Secret serveur non configuré : 503 honnête (aucune activation simulée).
+    if (!process.env.AGENTS_SYSTEM_SECRET?.trim()) {
+      return NextResponse.json(
+        { error: "Activation du système agent non configurée (AGENTS_SYSTEM_SECRET absent).", code: "PROVIDER_UNAVAILABLE", requestId },
+        { status: 503, headers: { "x-request-id": requestId } },
+      );
+    }
+    if (!isAuthorized(request)) {
+      return NextResponse.json(
+        { error: "Secret d'activation interne manquant ou invalide.", code: "AUTH_REQUIRED", requestId },
+        { status: 401, headers: { "x-request-id": requestId } },
+      );
+    }
   }
 
   try {
-    const parsed = ActivateSchema.safeParse(await request.json());
+    const parsed = ActivateSchema.safeParse(rawBody.trim() ? JSON.parse(rawBody) : undefined);
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Corps d'activation invalide (userId requis ; demande ≤ 2000 car.).", issues: parsed.error.flatten(), requestId },

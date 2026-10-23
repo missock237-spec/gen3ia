@@ -1,0 +1,286 @@
+rules_version = '2';
+
+// ============================================================================
+// GEN3IA — RÈGLES FIRESTORE (Pilier 3 — Zero Trust, défense en profondeur)
+// ============================================================================
+//
+// CARTOGRAPHIE RÉELLE (Task I, 2026-10) — LIRE AVANT DE JUGER :
+//   · Firebase = FOURNISSEUR D'IDENTITÉ (Auth) ; le SDK CLIENT n'utilise
+//     JAMAIS Firestore (imports retirés de lib/firebase/client.ts).
+//   · Les données vivent dans R2 via le moteur r2fs (lib/r2fs), consommé
+//     côté serveur par le SDK Admin (lib/firebase/admin.ts) — et le SDK
+//     Admin CONTOURNE TOUJOURS ces règles.
+//   · Ces règles sont donc une BARRIÈRE DE DÉFENSE EN PROFONDEUR : elles
+//     interdisent par défaut tout accès client direct, et elles encadrent
+//     le modèle multi-tenant SI/SI Firestore est réactivé comme base
+//     (migration future). Elles ne peuvent PAS casser le service actuel.
+//
+// MODÈLE DE DONNÉES cible (collections réellement employées dans le code,
+// cf. lib/tenants/organizations.ts + lib/tenants/resource-access.ts) :
+//   users/{uid}                                   — profil (role, plan, credits)
+//   organizations/{orgId}                         — tenant (ownerId, plan)
+//   organizations/{orgId}/members/{uid}           — rôle owner|admin|member
+//   organizations/{orgId}/invitations/{id}        — invitations (TTL 7 j)
+//   orgMemberships/{userId_orgId}                 — index user→org
+//   Ressources métier : ownerId + orgId optionnel (personnelle OU d'org)
+//     agents, workflows, videoProjects, knowledgeDocuments,
+//     chatConversations, userWallets (portefeuille).
+//
+// PRINCIPES (deny-by-default) :
+//   1. TOUT est interdit par défaut (règle finale match /{document=**}).
+//   2. Utilisateur : ne lit/écrit que SES données (uid documenté).
+//   3. Isolation par organisation : un membre ne voit que les ressources
+//      de SES organisations (exists sur organizations/{org}/members/{uid}).
+//   4. Élévation impossible : role/plan/credits ne sont jamais modifiables
+//      par le client (réservés au serveur — SDK Admin).
+//   5. Bypass documenté : le serveur (Admin SDK / r2fs) et les services
+//      internes signés (identité de service, lib/security/service-
+//      identity.ts) n'évaluent JAMAIS ces règles — c'est le contour
+//      administratif assumé, tracé côté application (logs d'audit).
+//
+// DÉPLOIEMENT : à exécuter MANUELLEMENT par le client (jamais automatisé
+// dans la CI actuelle) :
+//   firebase deploy --only firestore:rules
+// (prérequis : FIREBASE_PROJECT_ID + CLI authentifiée ; les règles ne
+// prennent effet que si la base Firestore du projet est réellement active.)
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ------------------------------------------------------------------
+     * HELPERS — fonctions de décision réutilisables
+     * ------------------------------------------------------------------ */
+
+    // Identité : un appel est authentifié si un jeton Firebase est porté.
+    function estConnecte() {
+      return request.auth != null;
+    }
+
+    // Admin plateforme : custom claim `admin: true` posé côté serveur
+    // (convention requireAdmin / lib/security/admin-access.ts).
+    function estAdmin() {
+      return estConnecte() && request.auth.token.get('admin', false) == true;
+    }
+
+    // Propriété d'un document utilisateur indexé par uid (users, wallets).
+    function estSoiMeme(uid) {
+      return estConnecte() && request.auth.uid == uid;
+    }
+
+    // Propriété par champ (ownerId / userId) — ressources métier + index.
+    function estProprietaire(champUid) {
+      return estConnecte() && resource.data.get(champUid, '') == request.auth.uid;
+    }
+
+    // Membre de l'organisation (isolation multi-tenant — même vérification
+    // que requireOrgContext côté serveur).
+    function estMembreOrg(orgId) {
+      return estConnecte() &&
+        exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid));
+    }
+
+    // Rôle du membre (owner | admin | member) — lecture du document membre.
+    function roleOrg(orgId) {
+      return get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('role', 'member');
+    }
+
+    // Gestionnaire d'organisation (peut inviter / gérer les membres).
+    function estGestionnaireOrg(orgId) {
+      return estMembreOrg(orgId) && roleOrg(orgId) in ['owner', 'admin'];
+    }
+
+    // Champs de profil auto-modifiables — TOUT le reste (uid, role, plan,
+    // credits, providers, createdAt, lastLoginAt) est réservé au serveur.
+    function champsProfilAutoEditables() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['email', 'displayName', 'firstName', 'lastName', 'username',
+                  'photoURL', 'phoneNumber', 'country', 'bio', 'language', 'timezone']);
+    }
+
+    // L'orgId est-il « absent » (absent, vide ou null) ? — évite tout
+    // accès direct à une clé potentiellement manquante (erreur en règles).
+    function sansOrg(org) {
+      return org == null || org == '';
+    }
+
+    // Création d'une ressource métier : propriétaire documenté = appelant,
+    // et si l'org est renseignée, l'appelant DOIT en être membre (jamais de
+    // rattachement à une organisation dont on ne fait pas partie — même
+    // règle que assertOrgTransfer côté serveur).
+    function creationRessourceAutorisee() {
+      return estConnecte() &&
+        request.resource.data.get('ownerId', '') == request.auth.uid &&
+        (sansOrg(request.resource.data.get('orgId', ''))
+          || estMembreOrg(request.resource.data.get('orgId', '')));
+    }
+
+    // Lecture/écriture d'une ressource métier existante : personnelle
+    // (ownerId) OU d'organisation (orgId → membre ; écriture réservée aux
+    // gestionnaires et au propriétaire, cohérent avec la matrice
+    // resource-access : member = lecture + exécution).
+    function lectureRessourceAutorisee() {
+      return estAdmin() ||
+        (sansOrg(resource.data.get('orgId', ''))
+          ? estProprietaire('ownerId')
+          : estMembreOrg(resource.data.get('orgId', '')));
+    }
+
+    function ecritureRessourceAutorisee() {
+      return estAdmin() ||
+        (sansOrg(resource.data.get('orgId', ''))
+          ? estProprietaire('ownerId')
+          : (estGestionnaireOrg(resource.data.get('orgId', '')) || estProprietaire('ownerId')));
+    }
+
+    /* ------------------------------------------------------------------
+     * PROFILS UTILISATEURS — chacun ne voit que le sien
+     * ------------------------------------------------------------------ */
+
+    match /users/{uid} {
+      // Lecture : soi-même ou admin (jamais de listing client des profils).
+      allow get: if estSoiMeme(uid) || estAdmin();
+      allow list: if false;
+
+      // Création : le serveur provisionne (ensureUserProfile) ; un client
+      // authentifié peut créer SON document, sans jamais toucher aux
+      // champs privilégiés (role/plan/credits verrouillés par le schéma
+      // strict ci-dessous via la comparaison de champs modifiables).
+      allow create: if (estSoiMeme(uid)
+                        && request.resource.data.uid == request.auth.uid
+                        && request.resource.data.get('role', 'user') == 'user'
+                        && request.resource.data.get('plan', 'free') == 'free'
+                        && request.resource.data.get('credits', 0) == 0)
+                     || estAdmin();
+
+      // Mise à jour : soi-même sur les champs de présentation UNIQUEMENT
+      // (uid/role/plan/credits immuables côté client) ; admin sans limite.
+      allow update: if estAdmin()
+                    || (estSoiMeme(uid) && champsProfilAutoEditables());
+
+      // Suppression : serveur uniquement (RGPD via /api/settings/*).
+      allow delete: if false;
+    }
+
+    /* ------------------------------------------------------------------
+     * ORGANISATIONS (tenants) + MEMBRES + INVITATIONS
+     * ------------------------------------------------------------------ */
+
+    match /organizations/{orgId} {
+      // Lecture réservée aux membres (anti-énumération des tenants).
+      allow get: if estMembreOrg(orgId) || estAdmin();
+      allow list: if false;
+
+      // Création : l'appelant se déclare owner (batch serveur normal) ;
+      // le plan démarre free côté serveur.
+      allow create: if estConnecte() && request.resource.data.get('ownerId', '') == request.auth.uid;
+
+      // Mise à jour (nom, réglages) : gestionnaires ; transferts de
+      // propriété et plans : serveur/admin.
+      allow update: if estGestionnaireOrg(orgId) || estAdmin();
+
+      // Suppression : serveur uniquement.
+      allow delete: if false;
+
+      match /members/{memberId} {
+        // Les membres voient la liste de LEUR organisation (nom, rôle).
+        allow get, list: if estMembreOrg(orgId) || estAdmin();
+        // Création/modification/retrait : gestionnaires ou admin — un
+        // membre ne peut JAMAIS s'auto-promouvoir (role réservé serveur).
+        allow create: if estGestionnaireOrg(orgId) || estAdmin();
+        allow update: if estGestionnaireOrg(orgId) || estAdmin();
+        allow delete: if estGestionnaireOrg(orgId) || estAdmin();
+      }
+
+      match /invitations/{invitationId} {
+        // Invitations visibles/manipulables par les gestionnaires ; la
+        // consommation (acceptation) passe par le serveur (vérification
+        // email + expiration), jamais en écriture directe par l'invité.
+        allow get, list: if estGestionnaireOrg(orgId) || estAdmin();
+        allow create, update, delete: if estGestionnaireOrg(orgId) || estAdmin();
+      }
+    }
+
+    /* ------------------------------------------------------------------
+     * INDEX D'APPARTENANCE orgMemberships/{userId_orgId}
+     * ------------------------------------------------------------------ */
+
+    match /orgMemberships/{docId} {
+      // Lecture de SES adhésions uniquement ; écritures réservées au
+      // serveur (création d'org, acceptation d'invitation, retrait).
+      allow get: if estAdmin() || estProprietaire('userId');
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    /* ------------------------------------------------------------------
+     * RESSOURCES MÉTIER — personnelle (ownerId) OU d'organisation (orgId)
+     * ------------------------------------------------------------------ */
+
+    // AGENTS : ressource d'org visible par ses membres, gérée par ses
+    // gestionnaires/propriétaire (matrice resource-access).
+    match /agents/{agentId} {
+      allow get: if lectureRessourceAutorisee();
+      allow list: if false;
+      allow create: if creationRessourceAutorisee();
+      allow update, delete: if ecritureRessourceAutorisee();
+    }
+
+    // WORKFLOWS (automatisation) : même modèle.
+    match /workflows/{workflowId} {
+      allow get: if lectureRessourceAutorisee();
+      allow list: if false;
+      allow create: if creationRessourceAutorisee();
+      allow update, delete: if ecritureRessourceAutorisee();
+    }
+
+    // PROJETS VIDÉO (atelier vidéo) : même modèle.
+    match /videoProjects/{projectId} {
+      allow get: if lectureRessourceAutorisee();
+      allow list: if false;
+      allow create: if creationRessourceAutorisee();
+      allow update, delete: if ecritureRessourceAutorisee();
+    }
+
+    // BASE DE CONNAISSANCES (documents) : même modèle.
+    match /knowledgeDocuments/{documentId} {
+      allow get: if lectureRessourceAutorisee();
+      allow list: if false;
+      allow create: if creationRessourceAutorisee();
+      allow update, delete: if ecritureRessourceAutorisee();
+    }
+
+    // CONVERSATIONS (chat) : même modèle.
+    match /chatConversations/{conversationId} {
+      allow get: if lectureRessourceAutorisee();
+      allow list: if false;
+      allow create: if creationRessourceAutorisee();
+      allow update, delete: if ecritureRessourceAutorisee();
+    }
+
+    /* ------------------------------------------------------------------
+     * PORTEFEUILLE (facturation) — lecture seule pour le titulaire
+     * ------------------------------------------------------------------ */
+
+    match /userWallets/{uid} {
+      // Le solde ne se consulte que par son titulaire (ou l'admin) ; les
+      // crédits/débits sont calculés SERVEUR uniquement (wallet.ts, webhook
+      // Chariow signé) — aucune écriture client possible, jamais.
+      allow get: if estSoiMeme(uid) || estAdmin();
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    /* ------------------------------------------------------------------
+     * REFUS PAR DÉFAUT — tout le reste est interdit
+     * ------------------------------------------------------------------ */
+
+    // Files système (missionQueue, executions, usage, locks, plate-forme
+    // Ads, extensions, journal d'audit…), sous-collections non décrites
+    // ci-dessus, collections futures : AUCUN accès client direct. Le
+    // serveur (Admin SDK) n'est pas concerné par cette règle.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
