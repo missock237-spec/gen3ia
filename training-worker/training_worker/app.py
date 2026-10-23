@@ -19,7 +19,7 @@ import os
 
 from fastapi import Depends, FastAPI, HTTPException
 
-from . import __version__
+from training_worker.training_worker.app import __version__
 from .auth import require_worker_token
 from .config import Settings, load_settings
 from .job_manager import JobManager, JobSubmissionError
