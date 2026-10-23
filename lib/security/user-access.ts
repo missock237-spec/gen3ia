@@ -137,7 +137,6 @@ const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   ["/api/ai/feedback", "chat"],
   ["/api/workspace/conversations", "chat"],
   ["/api/workspace/approvals", "chat"],
-  ["/api/workspace/prompt-templates", "chat"],
   // Studio d'entraînement + configuration. /api/ia/auto-apprentissage est
   // l'état/toggle de la boucle d'entraînement affiché DANS la page de chat
   // (components/chat/auto-apprentissage-carte.tsx) : le refuser casserait
@@ -145,9 +144,10 @@ const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   // de configuration de l'entraînement au sens de la demande n°7.
   ["/api/training", "training"],
   ["/api/ia/auto-apprentissage", "training"],
-  // Connecteurs (API personnalisées + hub /studio/connections)
+  // Connecteurs (API personnalisées)
   ["/api/custom-apis", "connecteurs"],
-  // Planifications (hub agents/schedules consommé par /workspace/schedules)
+  // Planifications (API agents/schedules — surface UI dédiée supprimée,
+  // API conservée pour le runtime d'orchestration)
   // DEMANDE PROPRIÉTAIRE : ouverte à TOUS LES COMPTES (scoping propriétaire
   // listSchedules/getSchedule(user.uid, …) assuré au niveau des routes).
   ["/api/agents/schedules", "planifications"],
@@ -157,17 +157,13 @@ const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   ["/api/settings", "parametres"],
   // Base de connaissances
   ["/api/knowledge", "connaissances"],
-  // Projets
-  ["/api/workspace/projects", "projets"],
-  // Fichiers (+ artefacts de conversation, stockage permanent, capture photo)
+  // Fichiers (stockage permanent, capture photo)
   ["/api/files", "fichiers"],
   ["/api/documents", "fichiers"],
-  ["/api/workspace/artifacts", "fichiers"],
   ["/api/storage", "fichiers"],
   ["/api/camera", "fichiers"],
   // Automatisation (exécution pilotée depuis la conversation)
   ["/api/workspace/tasks", "automatisation"],
-  ["/api/workspace/missions", "automatisation"],
   // Intégrations (Composio, MCP, messagerie, webhooks utilisateur)
   ["/api/integrations", "integrations"],
   // Observabilité (vue personnelle ; /api/observability/org reste restreint)
@@ -277,15 +273,12 @@ const STATIC_EXTENSIONS: ReadonlySet<string> = new Set([
 /* ------------------------------------------------------------------ */
 
 /**
- * Surfaces du studio qui restent INTERDITES aux utilisateurs standard
- * même après la réouverture du studio : /studio/console est l'atelier
- * IDE développeur (clés API, projets, paiements développeur via
- * /api/developer/* — surfaces à privilège). Même sémantique que
- * /developer (filtre par rôle côté nav).
+ * Surfaces à privilège interdites aux utilisateurs standard (deny avant la
+ * liste blanche). Vide depuis la suppression des surfaces workspace/studio :
+ * /studio/console (IDE développeur) n'existe plus. Le mécanisme reste en
+ * place pour les futures surfaces à privilège.
  */
-const RESTRICTED_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
-  ["/studio/console", "systeme"],
-];
+const RESTRICTED_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [];
 
 /* ------------------------------------------------------------------ */
 /* PAGES — liste blanche utilisateur                                   */
@@ -299,38 +292,18 @@ const USER_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/observability": "observabilite",
   "/integrations": "integrations",
   "/storage": "fichiers",
-  "/workspace": "chat",
   "/settings": "parametres",
 };
 
 const USER_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
-  // Pages de conversation + approbations du flux agent
-  ["/workspace/conversations", "chat"],
+  // Approbations du flux agent
   ["/approvals", "chat"],
-  // Studio d'entraînement
-  ["/workspace/training", "training"],
-  // Connecteurs (redirige vers le hub /studio/connections)
-  ["/workspace/connectors", "connecteurs"],
-  ["/studio/connections", "connecteurs"],
-  // Connaissances, projets, fichiers (+ bibliothèque d'artefacts)
-  ["/workspace/knowledge", "connaissances"],
-  ["/workspace/projects", "projets"],
-  ["/workspace/files", "fichiers"],
-  ["/workspace/bibliotheque", "fichiers"],
-  // Planifications
-  ["/workspace/schedules", "planifications"],
   // ÉQUIPE (demande propriétaire — accessible à TOUS LES COMPTES)
   ["/team", "collaboration"],
   // PUBLICITÉ UTILISATEUR (demande propriétaire — accessible à TOUS LES
   // COMPTES) : /settings est une entrée EXACTE, la sous-page /settings/ads
   // doit donc être allowlistée explicitement.
   ["/settings/ads", "parametres"],
-  // STUDIO MÉTIER (réouverture demandée par le propriétaire — « les
-  // utilisateurs n'ont plus accès au projet ») : hub complet (agents,
-  // clients, documents, finance, marketing, opérations, résultats,
-  // ventes, conformité, vidéo, création). Exception : /studio/console
-  // reste RESTREINT (IDE développeur — voir RESTRICTED_PAGE_EXACT).
-  ["/studio", "studio"],
   // AGENT LIVE (réouverture demandée) : PC (partage d'écran) ET
   // Android (caméra) — le panneau adapte sa source selon l'appareil.
   ["/live", "live"],

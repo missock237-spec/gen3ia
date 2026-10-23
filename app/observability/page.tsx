@@ -56,7 +56,7 @@ export default function ObservabilityPage() {
         title="Observabilité des agents"
         description="Traces d'exécution, coûts, tokens, usage des outils et alertes : gardez la visibilité totale sur ce que vos agents font, dépensent et décident."
         actions={
-          <Link href="/studio" className="g3-btn g3-btn-ghost text-xs">← Retour au Studio</Link>
+          <Link href="/dashboard" className="g3-btn g3-btn-ghost text-xs">← Retour au tableau de bord</Link>
         }
       />
 

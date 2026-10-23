@@ -12,7 +12,7 @@ Gen3ia (Gen3ia AI Studio) est une plateforme SaaS d'agents IA autonomes. L'utili
 
 - Site officiel : https://gen3ia.online
 - Site en anglais : https://gen3ia.online/en
-- Produits : Chat IA (https://gen3ia.online/chat), Cerveau IA (https://gen3ia.online/neural), Studio d'agents IA (https://gen3ia.online/studio), Studio d'entraînement (https://gen3ia.online/studio/training), Agent Live (https://gen3ia.online/live), Atelier d'Interfaces (https://gen3ia.online/studio/interface-lab), Planification (https://gen3ia.online/studio/schedules)
+- Produits : Chat IA (https://gen3ia.online/dashboard), Cerveau IA (https://gen3ia.online/neural), Agent Live (https://gen3ia.online/live)
 - FAQ complète : https://gen3ia.online/faq
 - Compte : https://gen3ia.online/signup (inscription gratuite) · https://gen3ia.online/login
 - Confidentialité : https://gen3ia.online/privacy

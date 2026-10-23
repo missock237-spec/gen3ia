@@ -47,10 +47,10 @@ async function main() {
   const dash = await fetch(BASE + "/dashboard", { redirect: "manual" });
   check("dashboard léger accessible/redirect", [200, 302, 307, 308].includes(dash.status), String(dash.status));
 
-  // 5) Routes workspace (redirections auth attendues, jamais 404).
-  for (const path of ["/workspace", "/workspace/conversations", "/workspace/projects", "/workspace/files", "/workspace/bibliotheque"]) {
+  // 5) Anciennes routes workspace/studio : redirigées vers /dashboard.
+  for (const path of ["/workspace", "/workspace/conversations", "/studio"]) {
     const res = await fetch(BASE + path, { redirect: "manual" });
-    check(`page ${path}`, [200, 302, 307, 308].includes(res.status), String(res.status));
+    check(`redirection ${path} → /dashboard`, [302, 307, 308].includes(res.status) && (res.headers.get("location") ?? "").includes("/dashboard"), String(res.status));
   }
 
   // 6) API streaming présente — sans session : 401/400 (PAS 404).

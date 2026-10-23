@@ -12,8 +12,8 @@ import { readNextRedirect, sanitizeRedirect } from "./auth-client";
 
 describe("sanitizeRedirect — seuls les chemins internes survivent", () => {
   it("chemins internes légitimes : préservés à l'identique", () => {
-    expect(sanitizeRedirect("/studio")).toBe("/studio");
-    expect(sanitizeRedirect("/workspace/conversations/abc?x=1")).toBe("/workspace/conversations/abc?x=1");
+    expect(sanitizeRedirect("/dashboard")).toBe("/dashboard");
+    expect(sanitizeRedirect("/dashboard?x=1")).toBe("/dashboard?x=1");
     expect(sanitizeRedirect("/billing")).toBe("/billing");
   });
 

@@ -64,7 +64,6 @@ await (async () => {
 await (async () => {
   const mutations = [
     ["POST", "/api/workspace/conversations", JSON.stringify({ title: "x" })],
-    ["POST", "/api/workspace/projects", JSON.stringify({ name: "x" })],
     ["POST", "/api/teams", JSON.stringify({ name: "x" })],
     ["POST", "/api/auth/session", "{}"],
     ["POST", "/api/ai/image", JSON.stringify({ prompt: "x" })],

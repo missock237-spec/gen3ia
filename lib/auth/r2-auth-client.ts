@@ -67,7 +67,7 @@ function messageDErreur(result: { status: number; data: R2AuthResponseBody | nul
 /** Invalide la sonde puis redirige (destination interne uniquement). */
 function redirigerApresSession(redirectTo?: string | null): void {
   invalidateSessionProbe();
-  window.location.href = sanitizeRedirect(redirectTo) ?? "/studio";
+  window.location.href = sanitizeRedirect(redirectTo) ?? "/dashboard";
 }
 
 /**

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * VAGUE 20 — Test production : Workshop IDE unifié.
- *  - page /studio/console déployée et servie ;
+ *  - ancienne page /studio/console (IDE) supprimée → redirection /dashboard ;
  *  - routes IDE protégées (401 sans session, jamais de fuite) ;
  *  - terminal agent : aucune commande acceptée sans session (401/403) ;
  *  - identifiants de session/fichier hostiles rejetés (400/401) ;
@@ -15,14 +15,16 @@ function check(name, ok, detail = "") {
   else { failed++; results.push(`KO ${name}${detail ? ` — ${detail}` : ""}`); }
 }
 
-// 1) Accueil + page Workshop IDE servies
+// 1) Accueil servi ; l'ancienne page /studio/console (IDE) est supprimée → redirection
 try {
   const home = await fetch(BASE + "/");
   check("accueil 200", home.status === 200, `status=${home.status}`);
-  const console = await fetch(BASE + "/studio/console");
-  const body = await console.text();
-  check("page /studio/console 200", console.status === 200, `status=${console.status}`);
-  check("page console contient l'IDE", body.includes("Workshop IDE") || console.status === 404 === false, "contenu vérifié");
+  const console = await fetch(BASE + "/studio/console", { redirect: "manual" });
+  check(
+    "ancienne /studio/console redirigée vers /dashboard",
+    [302, 307, 308].includes(console.status) && (console.headers.get("location") ?? "").includes("/dashboard"),
+    `status=${console.status}`,
+  );
 } catch (e) {
   check("accueil/console", false, e.message);
 }

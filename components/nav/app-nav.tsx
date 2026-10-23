@@ -143,7 +143,7 @@ export function AppNav() {
       }>
         <div className="flex h-full flex-col">
           <div className="g3-nav-header">
-            <Link href="/studio" className="g3-brand" onClick={() => setOpen(false)}>
+            <Link href="/dashboard" className="g3-brand" onClick={() => setOpen(false)}>
               <span className="g3-brand-mark"><Gen3iaLogo size={31} alt="" /></span>
               {!compact && <span className="g3-brand-name">Gen3ia</span>}
             </Link>
@@ -160,7 +160,7 @@ export function AppNav() {
 
           <div className="px-2.5 pt-3">
             <Link
-              href="/studio"
+              href="/dashboard"
               onClick={() => setOpen(false)}
               className={"g3-new-task " + (compact ? "is-compact" : "")}
               title={compact ? "Nouvelle tâche" : undefined}

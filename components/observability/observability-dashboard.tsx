@@ -59,7 +59,7 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: "bg-[var(--g3-elevated)] text-[var(--g3-muted)] border-[var(--g3-border)]",
 };
 
-// Libellés alignés sur le vocabulaire canonique (components/workspace/labels.ts).
+// Libellés français canoniques (l'ancien registre components/workspace/labels.ts a été supprimé avec la surface workspace).
 const STATUS_LABELS: Record<string, string> = {
   completed: "Terminée",
   failed: "Échec",

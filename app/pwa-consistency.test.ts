@@ -65,12 +65,11 @@ describe("Manifest & UI — app installable cohérente", () => {
     expect(manifest.background_color.toLowerCase()).toBe("#0b0d1a");
   });
 
-  it("mission-composer : le bouton n'est plus jamais bloqué (finally) et le 202 queued est annoncé honnêtement", () => {
-    const composer = read("components/workspace/mission-composer.tsx");
-    expect(composer).toContain("} finally {");
-    expect(composer).toContain("setBusy(false)");
-    expect(composer).toContain("data.queued && data.offline");
-    expect(composer).toContain("au retour du réseau");
+  it("mission-composer : verrou retiré avec la surface (components/workspace/mission-composer supprimé)", () => {
+    // La surface « Missions » (/studio) a été supprimée du produit ; le
+    // verrou structurel historique sur son bouton d'envoi n'a plus de cible.
+    // La file hors-ligne (sw.js) est toujours verrouillée ci-dessus.
+    expect(sw).toContain("QUEUED_PATHS.has(url.pathname)");
   });
 
 

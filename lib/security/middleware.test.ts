@@ -131,7 +131,7 @@ describe("liste blanche — utilisateur standard (cookie de session réel)", () 
     expect(await response.text()).toContain("403");
   });
 
-  it("publicité utilisateur ouverte à tous : /settings/ads passe ; l'IDE dev /studio/console reste 403", async () => {
+  it("publicité utilisateur ouverte à tous : /settings/ads passe ; page admin reste 403", async () => {
     mockedGetPlatformRole.mockResolvedValue("user");
     // DEMANDE PROPRIÉTAIRE (restauration) : la page Publicité est ouverte
     // à TOUS LES COMPTES.
@@ -140,28 +140,25 @@ describe("liste blanche — utilisateur standard (cookie de session réel)", () 
     );
     expect(isPassed(ads)).toBe(true);
 
-    const consoleDev = await middleware(
-      requestTo("/studio/console", { cookie: sessionCookieFor("user-ads") }),
+    // (L'ancien contre-exemple /studio/console — IDE dev — a été supprimé
+    // avec la surface studio ; la page admin reste le cas 403 de référence.)
+    const adminPage = await middleware(
+      requestTo("/admin", { cookie: sessionCookieFor("user-ads") }),
     );
-    expect(consoleDev.status).toBe(403);
+    expect(adminPage.status).toBe(403);
   });
 
-  it("studio réouvert : /studio/create passe, /studio/console (IDE dev) → 403, /studio/connections passe", async () => {
+  it("surfaces supprimées workspace/studio : restreint pour un utilisateur standard (la redirection /dashboard est portée par next.config)", async () => {
     mockedGetPlatformRole.mockResolvedValue("user");
-    const allowed = await middleware(
-      requestTo("/studio/create", { cookie: sessionCookieFor("user-studio") }),
-    );
-    expect(isPassed(allowed)).toBe(true);
-
     const denied = await middleware(
-      requestTo("/studio/console", { cookie: sessionCookieFor("user-studio") }),
+      requestTo("/studio", { cookie: sessionCookieFor("user-studio") }),
     );
     expect(denied.status).toBe(403);
 
-    const connections = await middleware(
-      requestTo("/studio/connections", { cookie: sessionCookieFor("user-studio") }),
+    const deniedWorkspace = await middleware(
+      requestTo("/workspace/conversations", { cookie: sessionCookieFor("user-studio") }),
     );
-    expect(isPassed(connections)).toBe(true);
+    expect(deniedWorkspace.status).toBe(403);
   });
 
   it("page agent live (/live) → passe pour un utilisateur standard (réouverture PC + Android)", async () => {

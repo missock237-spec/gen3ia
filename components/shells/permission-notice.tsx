@@ -40,8 +40,8 @@ export function PermissionNotice({
   );
 }
 
-/** Bouton de retour standard vers l'espace de travail. */
-export function BackToWorkspace({ label = "Retour à l'espace de travail", href = "/studio" }: { label?: string; href?: string }) {
+/** Bouton de retour standard vers l'espace de travail (dashboard = chat IA). */
+export function BackToWorkspace({ label = "Retour à l'espace de travail", href = "/dashboard" }: { label?: string; href?: string }) {
   return (
     <Link
       href={href}

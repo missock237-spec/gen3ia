@@ -32,7 +32,7 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[var(--g3-muted)]">
               La vue plateforme, les comptes, la modération, la publicité et l&apos;audit sont réservés aux administrateurs. L&apos;autorisation est vérifiée côté serveur.
             </p>
-            <Link href="/studio" className="g3-btn g3-btn-primary mt-6 inline-flex rounded-full">
+            <Link href="/dashboard" className="g3-btn g3-btn-primary mt-6 inline-flex rounded-full">
               Retour à l&apos;espace de travail
             </Link>
           </section>

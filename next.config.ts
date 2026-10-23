@@ -43,19 +43,22 @@ const nextConfig: NextConfig = {
   },
   // Les sous-services (tâches planifiées, workflows, automatisations) sont
   // exécutés par les agents IA : l'utilisateur décrit son besoin en langage
-  // naturel dans la conversation. Les anciennes pages redirigent donc vers
-  // l'espace de conversation, point d'entrée unique de l'exécution.
-  //
-  // Task C (consolidation chat unique) : l'ancienne page /chat-v4 est
-  // supprimée — l'expérience canonique est servie par /chat (NovaChat).
-  // Redirection temporaire (permanent: false) : les favoris/onglets
-  // anciens continuent de fonctionner sans graver l'association dans les
-  // navigateurs/robots pendant que la bascule se propage.
+  // naturel dans la conversation. Les anciennes surfaces « workspace » et
+  // « studio » (captures 2 et 3) ont été SUPPRIMÉES du produit, tout comme
+  // l'ancienne page /chat-v4 (consolidation chat unique) : chaque lien ou
+  // favori existant tombe sur le dashboard (le chat IA, point d'entrée
+  // unique de l'exécution). permanent: false → ajustable sans cache navigateur.
   async redirects() {
     return [
-      { source: "/studio/schedules", destination: "/workspace/conversations", permanent: false },
-      { source: "/studio/automations", destination: "/workspace/conversations", permanent: false },
-      { source: "/workspace/workflows", destination: "/workspace/conversations", permanent: false },
+      { source: "/workspace", destination: "/dashboard", permanent: false },
+      { source: "/workspace/:path*", destination: "/dashboard", permanent: false },
+      { source: "/studio", destination: "/dashboard", permanent: false },
+      { source: "/studio/:path*", destination: "/dashboard", permanent: false },
+      // Redirections historiques (surfaces déjà fermées) : même cible.
+      { source: "/studio/schedules", destination: "/dashboard", permanent: false },
+      { source: "/studio/automations", destination: "/dashboard", permanent: false },
+      { source: "/workspace/workflows", destination: "/dashboard", permanent: false },
+      // Ancien chat v4 (Task C) : l'expérience canonique est servie par /chat.
       { source: "/chat-v4", destination: "/chat", permanent: false },
       { source: "/chat-v4/:path*", destination: "/chat/:path*", permanent: false },
     ];

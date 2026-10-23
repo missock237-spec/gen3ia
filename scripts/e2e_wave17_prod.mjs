@@ -67,15 +67,14 @@ async function main() {
   const dashboardHtml = await dashboard.text();
   check("2/dashboard-leger", /Nouvelle conversation|conversation/i.test(dashboardHtml), "accueil conversationnel présent");
 
-  // 3. Redirections
-  const workspaceRoot = await fetch(`${BASE}/workspace`, { redirect: "manual" });
-  check("3/workspace-redirect", workspaceRoot.status >= 300 && workspaceRoot.status < 400 && (workspaceRoot.headers.get("location") ?? "").includes("/workspace/conversations"), `→ ${workspaceRoot.headers.get("location")}`);
-  const connectors = await fetch(`${BASE}/workspace/connectors`, { redirect: "manual" });
-  check("3/connectors-redirect", connectors.status >= 300 && connectors.status < 400 && (connectors.headers.get("location") ?? "").includes("/studio/connections"), `→ ${connectors.headers.get("location")}`);
-
-  for (const route of ["/workspace/conversations", "/workspace/projects", "/workspace/files", "/workspace/bibliotheque", "/studio", "/studio/connections"]) {
-    const res = await fetch(`${BASE}${route}`);
-    check(`3/page ${route}`, res.status === 200, `HTTP ${res.status}`);
+  // 3. Redirections (surfaces workspace/studio supprimées → /dashboard)
+  for (const route of ["/workspace", "/workspace/conversations", "/workspace/projects", "/workspace/files", "/workspace/bibliotheque", "/studio", "/studio/connections"]) {
+    const res = await fetch(`${BASE}${route}`, { redirect: "manual" });
+    check(
+      `3/redirection ${route} → /dashboard`,
+      res.status >= 300 && res.status < 400 && (res.headers.get("location") ?? "").includes("/dashboard"),
+      `→ ${res.headers.get("location")}`,
+    );
   }
 
   // 4. CRUD conversations
@@ -172,56 +171,11 @@ async function main() {
     executedTool ? `outil=${executedTool.toolName} statut=${executedTool.status} run=${run.status}` : "aucun outil exécuté",
   );
 
-  // 8. Projets
-  const projectRes = await fetch(`${BASE}/api/workspace/projects`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      name: "E2E 17 — Projet test",
-      description: "Projet de validation e2e",
-      instructions: "Réponds toujours en français, de façon concise.",
-      privacyRules: "Ne jamais citer de données personnelles.",
-      authorizedConnectors: ["web"],
-    }),
-  });
-  const project = await readJson(projectRes, "création projet");
-  check("8/projet-creation", projectRes.status === 201 && !!project.project?.id, `id=${project.project?.id}`);
+  // 8. Projets — API /api/workspace/projects supprimée avec la surface (les
+  // conversations restent créables et listables sans projet).
 
-  const convInProjectRes = await fetch(`${BASE}/api/workspace/conversations`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ title: "Conversation projet", projectId: project.project.id }),
-  });
-  const convInProject = await readJson(convInProjectRes, "conversation projet");
-  check("8/conversation-projet", convInProjectRes.status === 201 && convInProject.conversation?.projectId === project.project.id);
-
-  const projectConversationsRes = await fetch(
-    `${BASE}/api/workspace/conversations?projectId=${project.project.id}`,
-    { headers },
-  );
-  const projectConversations = await readJson(projectConversationsRes, "conversations projet");
-  check(
-    "8/liste-projet",
-    projectConversationsRes.status === 200 &&
-      projectConversations.conversations.some((c) => c.id === convInProject.conversation.id),
-    `${projectConversations.conversations.length} conversation(s) rattachée(s)`,
-  );
-
-  const projectDetailRes = await fetch(`${BASE}/api/workspace/projects/${project.project.id}`, { headers });
-  const projectDetail = await readJson(projectDetailRes, "détail projet");
-  check(
-    "8/projet-detail",
-    projectDetailRes.status === 200 &&
-      projectDetail.project.instructions?.includes("français") &&
-      Array.isArray(projectDetail.project.authorizedConnectors),
-  );
-
-  // 9. Artefacts
-  const artifactsRes = await fetch(`${BASE}/api/workspace/artifacts?conversationId=${conversationId}`, { headers });
-  const artifactsData = await readJson(artifactsRes, "artefacts conversation");
-  const hasImageArtifact = artifactsData.artifacts.some((a) => a.type === "image");
-  check("9/artefacts-liste", artifactsRes.status === 200 && Array.isArray(artifactsData.artifacts), `${artifactsData.artifacts.length} artefact(s)`);
-  check("9/artefact-image", hasImageArtifact, "artefact image produit par la conversation");
+  // 9. Persistance complète (l'API /api/workspace/artifacts dédiée est
+  // supprimée — les artefacts restent servis dans le détail de conversation)
   const runsInConversation = await fetch(`${BASE}/api/workspace/conversations/${conversationId}`, { headers });
   const fullDetail = await readJson(runsInConversation, "détail complet");
   check(

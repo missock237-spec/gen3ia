@@ -267,7 +267,7 @@ export default function EnglishHomePage() {
             <span className="font-[family-name:var(--font-display)] text-sm font-bold">Gen3ia</span>
           </Link>
           <nav aria-label="English footer" className="flex flex-wrap items-center justify-center gap-4 text-sm">
-            <Link href="/studio" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Studio</Link>
+            <Link href="/dashboard" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Dashboard</Link>
             <Link href="/neural" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Neural system</Link>
             <Link href="/privacy" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Privacy</Link>
             <Link href="/faq" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">FAQ (FR)</Link>

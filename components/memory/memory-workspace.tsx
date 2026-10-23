@@ -83,7 +83,7 @@ export function MemoryWorkspace() {
               mots de passe y restent interdits.
             </p>
           </div>
-          <Link href="/studio" className="g3-btn g3-btn-ghost w-fit text-xs">← Retour au Studio</Link>
+          <Link href="/dashboard" className="g3-btn g3-btn-ghost w-fit text-xs">← Retour au tableau de bord</Link>
         </header>
 
         {/* Bandeau statistiques + quota */}

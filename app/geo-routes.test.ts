@@ -33,7 +33,7 @@ describe("GEO : routes robots / sitemap / llms", () => {
 
   it("le sitemap expose toutes les surfaces citables publiques", () => {
     const urls = sitemap().map((entry) => new URL(entry.url).pathname);
-    for (const required of ["/", "/en", "/faq", "/studio", "/neural", "/live", "/integrations", "/signup"]) {
+    for (const required of ["/", "/en", "/faq", "/neural", "/live", "/integrations", "/signup"]) {
       expect(urls, `page publique manquante du sitemap : ${required}`).toContain(required);
     }
   });

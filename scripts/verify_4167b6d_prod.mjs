@@ -9,8 +9,8 @@
  *
  * 1. signUp Firebase + session                                  : compte réel.
  * 2. GET /api/integrations/status                               : email=true.
- * 3. Redirections /studio/schedules, /studio/automations,
- *    /workspace/workflows → /workspace/conversations            : sous-services
+ * 3. Redirections /studio/* et /workspace/* → /dashboard           : surfaces
+ *    supprimées du produit
  *    DISPARUS de l'environnement, exécution déléguée aux agents.
  * 4. GET /api/ads/placement (single + mode=all)                 : pub visible.
  * 5. Chat — « Envoie un email à … »                             : outil email.send
@@ -84,7 +84,7 @@ async function newConversation(cookie) {
 async function checkRedirect(cookie, path) {
   const res = await fetch(`${BASE}${path}`, { redirect: "manual", headers: { cookie } });
   const location = res.headers.get("location") ?? "";
-  const ok = [302, 307, 308].includes(res.status) && location.includes("/workspace/conversations");
+  const ok = [302, 307, 308].includes(res.status) && location.includes("/dashboard");
   return { ok, status: res.status, location };
 }
 
@@ -112,7 +112,7 @@ async function main() {
   check("2/email-provider-configure", statusRes.ok && statusData?.email === true,
     statusRes.ok ? `email=${statusData.email} (RESEND_API_KEY + EMAIL_FROM_ADDRESS actifs)` : `HTTP ${statusRes.status} · ${JSON.stringify(statusData).slice(0, 160)}`);
 
-  // 3. Sous-services DISPARUS : les anciennes pages redirigent vers la conversation
+  // 3. Surfaces workspace/studio SUPPRIMÉES : redirection vers /dashboard
   for (const path of ["/studio/schedules", "/studio/automations", "/workspace/workflows"]) {
     const { ok, status, location } = await checkRedirect(cookie, path);
     check(`3/disparu${path.replaceAll("/", "-")}`, ok, ok ? `HTTP ${status} → ${location}` : `HTTP ${status} · location=${location || "(aucune)"}`);

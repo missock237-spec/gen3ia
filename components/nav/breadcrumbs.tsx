@@ -17,12 +17,12 @@ function crumbsFor(pathname: string): Crumb[] {
   if (!matched) return [];
 
   // Chemin de parents : remonte les préfixes connus du registre
-  // (ex. /studio/marketing/landing → Espace de travail / Missions / landing).
+  // (ex. /billing → Espace de travail / Facturation).
   const prefixes = NAV_REGISTRY.filter(
     (route) => route.href !== matched.href && matched.href.startsWith(route.href + "/"),
   ).sort((a, b) => a.href.length - b.href.length);
 
-  const crumbs: Crumb[] = [{ label: "Espace de travail", href: "/studio" }];
+  const crumbs: Crumb[] = [{ label: "Espace de travail", href: "/dashboard" }];
   for (const parent of prefixes) {
     crumbs.push({ label: parent.label, href: parent.href });
   }
@@ -33,8 +33,9 @@ function crumbsFor(pathname: string): Crumb[] {
 export function Breadcrumbs() {
   const pathname = usePathname();
   if (pathname === "/" || pathname === "/login" || pathname === "/signup") return null;
-  // Le studio et ses sous-espaces gèrent leur fil d'Ariane dans SectionHeader.
-  if (pathname.startsWith("/studio") || pathname.startsWith("/developer") || pathname.startsWith("/admin")) return null;
+  // Le dashboard et les espaces developer/admin gèrent leur fil d'Ariane
+  // dans leur shell dédié.
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/developer") || pathname.startsWith("/admin")) return null;
   const crumbs = crumbsFor(pathname);
   if (!crumbs.length) return null;
 

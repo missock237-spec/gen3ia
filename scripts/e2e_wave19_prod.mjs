@@ -7,7 +7,7 @@
  *  - défense CSRF : POST cross-origin avec Origin hostile → 403 ;
  *  - POST same-origin sans session → 401 (pas de 403 : l'origine est OK) ;
  *  - rate-limit en production (31 POST /api/auth/session → 429 au 31e) ;
- *  - non-régression : accueil, login, chat Gen réel, pages workspace.
+ *  - non-régression : accueil, login, chat Gen réel, redirections surfaces supprimées.
  */
 const BASE = "https://gen3ia.online";
 let passed = 0;
@@ -80,11 +80,11 @@ async function main() {
   const chatBody = await chat.json().catch(() => ({}));
   check("chat Gen répond réellement", chat.status === 200 && typeof chatBody.reply === "string" && chatBody.reply.length > 0, `${chat.status}, ${String(chatBody.reply ?? "").length} car.`);
 
-  // 7) Non-régression : pages workspace publiques (sans session → rendu ou
-  //    redirection, jamais 404/500).
-  for (const path of ["/workspace/conversations", "/workspace/projects", "/workspace/files", "/workspace/bibliotheque"]) {
-    const response = await fetch(BASE + path);
-    check(`page ${path}`, response.status === 200 || response.status === 307, String(response.status));
+  // 7) Non-régression : dashboard + redirections des surfaces supprimées
+  //    (workspace/studio → /dashboard, jamais 404/500).
+  for (const path of ["/dashboard", "/workspace/conversations", "/studio"]) {
+    const response = await fetch(BASE + path, { redirect: "manual" });
+    check(`page ${path}`, response.status === 200 || [302, 307, 308].includes(response.status), String(response.status));
   }
 
   // Rapport.

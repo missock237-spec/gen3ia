@@ -12,15 +12,19 @@ import { clampPercent, formatElapsed, MEDIA_PROGRESS_STATUS_LABELS } from "./med
  * Convention du dépôt (cf. app/agent-chat-ux.test.ts) : vitest tourne en Node
  * SANS jsdom ni @testing-library/react — les comportements purs (chronomètre,
  * bornes de pourcentage) sont testés par import direct, les aspects visuels
- * (thèmes, pastilles, a11y) et l'intégration atelier vidéo sont verrouillés
+ * (thèmes, pastilles, a11y) sont verrouillés
  * structurellement sur les sources.
+ *
+ * (Les verrous d'intégration atelier vidéo portaient sur
+ * components/video/video-project-workspace.tsx — surface /studio/video
+ * supprimée du produit ; le cadre partagé reste consommé par le chat —
+ * components/workspace/video-production-card.tsx.)
  */
 
 const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
 
 const FRAME = "components/media/media-progress-frame.tsx";
 const LOGIC = "components/media/media-progress-logic.ts";
-const WORKSPACE = "components/video/video-project-workspace.tsx";
 const GLOBALS = "app/globals.css";
 
 describe("formatElapsed — chronomètre réel (bornes verrouillées)", () => {
@@ -141,66 +145,5 @@ describe("Cadre de progression (structurel) — barres, thèmes, a11y, chronomè
     const logic = read(LOGIC);
     expect(logic).toContain("export function formatElapsed");
     expect(logic).toContain("export function clampPercent");
-  });
-});
-
-describe("Intégration atelier vidéo (structurel) — rendu + storyboard", () => {
-  const workspace = read(WORKSPACE);
-
-  it("importe et rend le cadre de progression partagé", () => {
-    expect(workspace).toContain('from "@/components/media/media-progress-frame"');
-    expect(workspace).toContain("<MediaProgressFrame");
-  });
-
-  it("clamp ROBUSTE aux deux échelles serveur (0..1 historique, 0..100 résiduel)", () => {
-    expect(workspace).toContain("job.progress <= 1 ? job.progress * 100 : job.progress");
-    expect(workspace).toContain("Math.max(0, Math.min(100");
-  });
-
-  it("rendu : étiquette d'étape STAGE_LABELS + détail segments + chronomètre depuis createdAt", () => {
-    expect(workspace).toContain("STAGE_LABELS[job.stage] ?? job.stage");
-    expect(workspace).toContain("segment(s) rendu(s)");
-    expect(workspace).toContain("correction(s) auto");
-    expect(workspace).toContain("Date.parse(job.createdAt)");
-    expect(workspace).toContain("startedAt={Number.isFinite(startedAtMs) ? startedAtMs : undefined}");
-  });
-
-  it("rendu : Annuler / Réessayer câblés sur les actions PATCH existantes", () => {
-    expect(workspace).toContain('jobAction(job.id, "cancel")');
-    expect(workspace).toContain('jobAction(job.id, "resume")');
-  });
-
-  it("storyboard : progression réelle du lot — sondage GET /assets toutes les 3 s", () => {
-    expect(workspace).toContain("}, 3_000);");
-    expect(workspace).toContain('authFetch(`/api/video/projects/${project.id}/assets`, { signal: controller.signal })');
-    expect(workspace).toContain("img.kind === \"image\" && img.sceneId === s.id");
-  });
-
-  it("storyboard : cadre compact tone dark pendant le lot (X/N images prêtes)", () => {
-    expect(workspace).toContain('stageLabel="Génération des images de scènes"');
-    expect(workspace).toContain("images prêtes");
-    expect(workspace).toContain("compact");
-    expect(workspace).toContain('tone="dark"');
-  });
-
-  it("storyboard : AbortController + nettoyage au démontage + arrêt à la résolution du POST", () => {
-    expect(workspace).toContain("new AbortController()");
-    expect(workspace).toContain("controller.abort();");
-    expect(workspace).toContain("clearInterval(pollRef.current.timer);");
-    expect(workspace).toContain("pollRef.current.controller.abort();");
-    expect(workspace).toContain("clearInterval(timer);");
-    expect(workspace).toContain("await onRefresh();");
-  });
-});
-
-describe("Lot C4d (Task 101-c) — tick de rendu : jobs et projet chargés en parallèle", () => {
-  const workspace = read(WORKSPACE);
-
-  it("le poll 4 s ne séquence plus loadJobs() puis loadProject() (Promise.all)", () => {
-    expect(workspace).toContain("await Promise.all([loadJobs(), loadProject()]);");
-    // L'ancien enchaînement séquentiel a disparu du sondage.
-    expect(workspace).not.toMatch(/await loadJobs\(\);\s*\n\s*await loadProject\(\);/);
-    // L'intervalle et la suspension hors onglet visible sont inchangés.
-    expect(workspace).toContain("hasActiveJob ? 4_000 : null");
   });
 });
