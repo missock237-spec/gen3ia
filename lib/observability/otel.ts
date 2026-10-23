@@ -1,6 +1,8 @@
 import "server-only";
 
-import { metrics, trace, type Counter, type Histogram, type Meter, type Span, SpanStatusCode, type Tracer } from "@opentelemetry/api";
+import { metrics, trace, type Counter, type Histogram, type Meter, type Span, SpanKind, SpanStatusCode, type Tracer } from "@opentelemetry/api";
+
+import { traceIdRequeteCourant } from "./contexte-requete";
 
 /**
  * Export OpenTelemetry (Task 59, priorité #3 — recommandations utilisateur).
@@ -31,6 +33,20 @@ import { metrics, trace, type Counter, type Histogram, type Meter, type Span, Sp
 /** Interrupteur principal : endpoint OTLP défini = export activé. */
 export function isOtelExportEnabled(): boolean {
   return Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim());
+}
+
+/**
+ * Taux d'échantillonnage des TRACES (Task K) : ParentBased(TraceIdRatioBased)
+ * piloté par OTEL_TRACES_SAMPLER_ARG (fraction 0..1, DÉFAUT 0.1 — 10 % des
+ * requêtes suffisent à une carte latence exploitable sans coûts d'ingestion).
+ * Valeur invalide ou négative → défaut ; 0 = jamais (légitime).
+ */
+export function tauxEchantillonnageTraces(): number {
+  const brut = process.env.OTEL_TRACES_SAMPLER_ARG?.trim();
+  if (!brut) return 0.1;
+  const valeur = Number(brut);
+  if (!Number.isFinite(valeur) || valeur < 0) return 0.1;
+  return Math.min(1, valeur);
 }
 
 /** Nom d'attribut Gen3ia (préfixe dédié — pas de collision sémantique). */
@@ -83,6 +99,27 @@ interface OtelInstruments {
 let instruments: OtelInstruments | null = null;
 let sdkStarted = false;
 
+/**
+ * Construit le sampler ParentBased(TraceIdRatioBased) à partir de
+ * OTEL_TRACES_SAMPLER_ARG (Task K). Le module sdk-trace-base est une
+ * dépendance transitive de @opentelemetry/sdk-node (donc présent à
+ * l'exécution) — import dynamique DÉFENSIF : si l'import échouait, on
+ * retourne undefined et le sampler par défaut du SDK s'applique (jamais
+ * d'exception à l'init).
+ */
+async function construireSamplerEchantillonnage(): Promise<unknown | undefined> {
+  try {
+    const module = (await import("@opentelemetry/sdk-trace-base")) as unknown as Record<string, unknown>;
+    const ParentBased = module.ParentBasedSampler ?? module.ParentBased;
+    const TraceIdRatioBased = module.TraceIdRatioBasedSampler ?? module.TraceIdRatioBased;
+    if (typeof ParentBased !== "function" || typeof TraceIdRatioBased !== "function") return undefined;
+    const racine = new (TraceIdRatioBased as new (ratio: number) => object)(tauxEchantillonnageTraces());
+    return new (ParentBased as new (options: { root?: unknown }) => object)({ root: racine });
+  } catch {
+    return undefined;
+  }
+}
+
 /** Drapeau interne (tests) : SDK démarré. */
 export function isOtelSdkStarted(): boolean {
   return sdkStarted;
@@ -93,6 +130,12 @@ export function isOtelSdkStarted(): boolean {
  * est défini (runtime nodejs). Import dynamique du SDK lourd : jamais
  * chargé quand l'export est désactivé. Un échec d'init est journalisé et
  * neutre pour l'application.
+ *
+ * Task K : le SDK est démarré avec un sampler ParentBased(TraceIdRatioBased)
+ * piloté par OTEL_TRACES_SAMPLER_ARG (défaut 0.1). Les spans HTTP serveur
+ * restent MANUELLES (span « http.server » via demarrerSpanServeur, branchée
+ * par lib/observability/span-serveur.ts) : @opentelemetry/instrumentation-http
+ * n'est PAS une dépendance du projet — cf. docs/sre/tracing.md.
  */
 export async function initOtel(): Promise<void> {
   if (!isOtelExportEnabled() || sdkStarted) return;
@@ -115,7 +158,7 @@ export async function initOtel(): Promise<void> {
       ["deployment.environment"]: environment,
     });
 
-    const sdk = new NodeSDK({
+    const configSdk: Record<string, unknown> = {
       resource,
       traceExporter: new OTLPTraceExporter(),
       // Poussée métrique 30 s : fenêtre compatible serverless (une fonction
@@ -124,7 +167,10 @@ export async function initOtel(): Promise<void> {
         exporter: new OTLPMetricExporter(),
         exportIntervalMillis: 30_000,
       }),
-    });
+    };
+    const sampler = await construireSamplerEchantillonnage();
+    if (sampler) configSdk.sampler = sampler;
+    const sdk = new NodeSDK(configSdk as unknown as Parameters<typeof NodeSDK>[0]);
     sdk.start();
     sdkStarted = true;
 
@@ -178,7 +224,10 @@ export interface ExecutionTelemetry {
 export function recordExecutionMetrics(telemetry: ExecutionTelemetry): void {
   try {
     if (!sdkStarted || !instruments) return;
-    const attrs = executionMetricAttrs(telemetry);
+    // Repli corrélation (Task K) : traceId absent des données d'exécution →
+    // AsyncLocalStorage de la requête courante (si instrumentation active).
+    const traceId = telemetry.traceId?.trim() || traceIdRequeteCourant();
+    const attrs = executionMetricAttrs({ ...telemetry, traceId });
     instruments.executionsTotal.add(1, attrs);
     const inputTokens = telemetry.inputTokens ?? 0;
     const outputTokens = telemetry.outputTokens ?? 0;
@@ -234,7 +283,7 @@ export function traceExecutionEvent(event: TraceableExecutionEvent): void {
       "gen3ia.input_tokens": event.inputTokens,
       "gen3ia.output_tokens": event.outputTokens,
     };
-    const traceId = metaText(event.metadata, "traceId");
+    const traceId = metaText(event.metadata, "traceId") ?? traceIdRequeteCourant();
     const orgId = metaText(event.metadata, "orgId");
     const userId = metaText(event.metadata, "userId");
     if (traceId) attributes[ATTR_TRACE_ID] = traceId;
@@ -249,5 +298,63 @@ export function traceExecutionEvent(event: TraceableExecutionEvent): void {
     span.end();
   } catch {
     /* fire-and-forget. */
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Span HTTP serveur MANUELLE (Task K)                                  */
+/*                                                                      */
+/* @opentelemetry/instrumentation-http n'est PAS une dépendance du      */
+/* projet (zéro surcoût mémoire tant que l'endpoint OTLP est absent) :  */
+/* les spans serveur sont créées MANUELLEMENT autour du handler par le  */
+/* helper withContexteRoute (lib/observability/span-serveur.ts), via la */
+/* même AsyncLocalStorage que la corrélation des logs.                  */
+/* ------------------------------------------------------------------ */
+
+export interface SpanServeurManuel {
+  /** Termine le span avec le statut HTTP de la réponse (500 sur exception). */
+  end(statut: number): void;
+}
+
+const SPAN_SERVEUR_MUET: SpanServeurManuel = { end: () => undefined };
+
+/**
+ * Démarre un span serveur « http.server » pour la requête courante — no-op
+ * garanti quand l'export est désactivé ou que le SDK n'a pas démarré
+ * (zéro coût). Le nom NE contient JAMAIS le chemin brut (cardinalité) :
+ * le chemin borné va dans l'attribut url.path, la route dans gen3ia.route.
+ */
+export function demarrerSpanServeur(input: {
+  route: string;
+  methode?: string;
+  chemin?: string;
+  /** TraceId Gen3ia explicite (span-serveur le passe AVANT d'entrer dans l'ALS). */
+  traceId?: string;
+}): SpanServeurManuel {
+  try {
+    if (!sdkStarted || !instruments) return SPAN_SERVEUR_MUET;
+    const traceId = input.traceId ?? traceIdRequeteCourant();
+    const span = instruments.tracer.startSpan("http.server", {
+      kind: SpanKind.SERVER,
+      attributes: {
+        "http.request.method": input.methode?.toUpperCase().slice(0, 16),
+        "url.path": input.chemin?.slice(0, 256),
+        "gen3ia.route": input.route.slice(0, 128),
+        ...(traceId ? { [ATTR_TRACE_ID]: traceId } : {}),
+      },
+    });
+    return {
+      end: (statut: number) => {
+        try {
+          span.setAttribute("http.response.status_code", statut);
+          span.setStatus({ code: statut >= 500 ? SpanStatusCode.ERROR : SpanStatusCode.OK });
+          span.end();
+        } catch {
+          /* fire-and-forget : aucune télémétrie ne casse une réponse. */
+        }
+      },
+    };
+  } catch {
+    return SPAN_SERVEUR_MUET;
   }
 }

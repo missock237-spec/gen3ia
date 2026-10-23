@@ -1,5 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 
+import { traceIdGen3iaDepuisTraceparent } from "./lib/observability/trace-w3c";
+
 /**
  * Instrumentation Sentry — Task 40 (Rec 4 : observabilité de niveau Google).
  *
@@ -74,7 +76,9 @@ export async function register(): Promise<void> {
 
     // Export OpenTelemetry (Task 59) : UNIQUEMENT si l'endpoint OTLP est
     // défini (Datadog, Grafana, collecteur interne). Import dynamique du
-    // pont — sans la variable, aucun module OTel n'est chargé.
+    // pont — sans la variable, aucun module OTel n'est chargé. Task K :
+    // l'init démarre aussi le sampler ParentBased(TraceIdRatioBased) piloté
+    // par OTEL_TRACES_SAMPLER_ARG (défaut 0.1).
     try {
       const { initOtel, isOtelExportEnabled } = await import("./lib/observability/otel");
       if (isOtelExportEnabled()) await initOtel();
@@ -109,19 +113,81 @@ export async function register(): Promise<void> {
 }
 
 /**
+ * TraceId Gen3ia depuis les EN-TÊTES de la requête fautive (Task K) : le
+ * middleware pose le couple x-gen3ia-trace-id + traceparent — l'un des deux
+ * suffit. Extraction défensive (l'objet request de Sentry ressemble à un
+ * Request mais reste un type inconnu) : jamais d'exception depuis ce hook.
+ */
+function extraireTraceIdEnTetes(enTetes: unknown): string | undefined {
+  try {
+    const get = (enTetes as { get?: (nom: string) => string | null } | undefined)?.get?.bind(enTetes);
+    if (!get) return undefined;
+    const direct = get("x-gen3ia-trace-id")?.trim();
+    if (direct && /^[a-zA-Z0-9_-]{8,64}$/.test(direct)) return direct;
+    return traceIdGen3iaDepuisTraceparent(get("traceparent"));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Les 401 AUTH_REQUIRED sont des réponses métier attendues (session absente,
  * expirée ou cookie non disponible), pas des incidents applicatifs. Next.js
  * transmet néanmoins les erreurs levées par les route handlers à
  * `onRequestError`, ce qui polluait Sentry et les clusters runtime Vercel.
  * On les filtre ici tout en conservant la capture de toutes les autres erreurs.
+ *
+ * CORRÉLATION LOGS (Task K) : chaque erreur capturée produit AUSSI une ligne
+ * pino `request.error` portant le traceId extrait des en-têtes — l'objectif
+ * minimal de corrélation (traceId présent dans les logs d'erreur même quand
+ * la route n'a pas adopté withContexteRoute). Le tag Sentry gen3ia.trace_id
+ * relie l'événement Sentry au même identifiant.
  */
-export function onRequestError(error: unknown, request: Parameters<typeof Sentry.captureRequestError>[1], context: Parameters<typeof Sentry.captureRequestError>[2]): void {
+export async function onRequestError(error: unknown, request: Parameters<typeof Sentry.captureRequestError>[1], context: Parameters<typeof Sentry.captureRequestError>[2]): Promise<void> {
   const candidate = error as { status?: unknown; code?: unknown } | null;
   const status = candidate?.status;
   const code = candidate?.code;
 
   if (status === 401 || code === "AUTH_REQUIRED") {
     return;
+  }
+
+  const traceId = extraireTraceIdEnTetes((request as { headers?: unknown })?.headers);
+
+  if (traceId) {
+    try {
+      // Import DYNAMIQUE : instrumentation.ts est bundlé pour les DEUX
+      // runtimes (nodejs + edge) — le logger (pino, server-only) ne peut
+      // pas y être importé statiquement.
+      const { logger } = await import("./lib/observability/logger");
+      let chemin: string | undefined;
+      try {
+        chemin = new URL((request as Request).url).pathname;
+      } catch {
+        chemin = undefined;
+      }
+      logger.error(
+        {
+          event: "request.error",
+          traceId,
+          route: chemin,
+          status: typeof status === "number" ? status : undefined,
+          errorCode: typeof code === "string" ? code : undefined,
+        },
+        error instanceof Error ? error.message : String(error),
+      );
+    } catch {
+      /* la corrélation ne doit JAMAIS masquer la capture Sentry. */
+    }
+    try {
+      Sentry.withScope((scope) => {
+        scope.setTag("gen3ia.trace_id", traceId);
+        Sentry.captureRequestError(error, request, context);
+      });
+      return;
+    } catch {
+      /* repli ci-dessous. */
+    }
   }
 
   Sentry.captureRequestError(error, request, context);
