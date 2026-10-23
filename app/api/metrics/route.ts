@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { estActive } from "@/lib/flags/feature-flags";
 import { formaterPrometheus } from "@/lib/observability/metrics-registry";
 import { timingSafeStringEqual } from "@/lib/security/timing-safe";
 
@@ -27,8 +28,31 @@ export const dynamic = "force-dynamic";
  * depuis l'extérieur (ou exiger le Bearer côté collecteur uniquement).
  * Le collecteur/scrapeur reste LOCAL au VPS (curl / node_exporter textfile),
  * jamais exposé publiquement.
+ *
+ * FEATURE FLAG — GEN3IA_FLAG_SLI_ENDPOINT (Task M, lib/flags/) : premier
+ * exemple réel du système de flags. Défaut ACTIF (aucun changement de
+ * comportement pour les déploiements existants) ; KILL-SWITCH D'URGENCE
+ * : passer la variable à 0 dans .env.production puis `pm2 restart gen3ia`
+ * désactive l'endpoint (404 JSON propre) sans redéploiement — usage en
+ * cas d'incident où l'exposition elle-même devient suspecte. La COLLECTE
+ * en mémoire du registre (middleware) continue quoi qu'il en soit : seule
+ * l'exposition est coupée, aucun compteur n'est perdu.
  */
 export async function GET(request: NextRequest) {
+  // Kill-switch d'urgence (GEN3IA_FLAG_SLI_ENDPOINT, défaut actif) : la
+  // désactivation coupe l'EXPOSITION des métriques, pas leur collecte.
+  if (!estActive("SLI_ENDPOINT")) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Endpoint /api/metrics désactivé (GEN3IA_FLAG_SLI_ENDPOINT=0) — " +
+          "kill-switch d'urgence du flag SLI_ENDPOINT (lib/flags/feature-flags.ts).",
+      },
+      { status: 404, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const token = process.env.METRICS_TOKEN?.trim();
   if (token) {
     const authorization = request.headers.get("authorization") ?? "";
