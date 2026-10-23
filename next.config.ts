@@ -45,11 +45,19 @@ const nextConfig: NextConfig = {
   // exécutés par les agents IA : l'utilisateur décrit son besoin en langage
   // naturel dans la conversation. Les anciennes pages redirigent donc vers
   // l'espace de conversation, point d'entrée unique de l'exécution.
+  //
+  // Task C (consolidation chat unique) : l'ancienne page /chat-v4 est
+  // supprimée — l'expérience canonique est servie par /chat (NovaChat).
+  // Redirection temporaire (permanent: false) : les favoris/onglets
+  // anciens continuent de fonctionner sans graver l'association dans les
+  // navigateurs/robots pendant que la bascule se propage.
   async redirects() {
     return [
       { source: "/studio/schedules", destination: "/workspace/conversations", permanent: false },
       { source: "/studio/automations", destination: "/workspace/conversations", permanent: false },
       { source: "/workspace/workflows", destination: "/workspace/conversations", permanent: false },
+      { source: "/chat-v4", destination: "/chat", permanent: false },
+      { source: "/chat-v4/:path*", destination: "/chat/:path*", permanent: false },
     ];
   },
   async headers() {
