@@ -87,7 +87,14 @@ jobs:
       - name: Envoyer build + finisher vers le VPS (retry PerSourcePenalties)
         run: |
           ok=0
-          for i in 1 2 3 4; do
+          # PerSourcePenalties (OpenSSH 9.8+) : chaque connexion tentée PENDANT
+          # une pénalité PROLONGE la pénalité — d'où un espacement LONG entre
+          # essais (180 s) plutôt que des re-tentatives rapprochées qui
+          # entretiennent le blocage (leçons des runs #43/#44/#45, 2026-10-23).
+          # Chaque run GitHub part d'une IP egress différente : un blocage
+          # persistant au-delà de ce step = blocage VPS côté sshd/firewall,
+          # à lever sur le VPS (cf. docs/exploitation/ssh-bloque-runbook.md).
+          for i in 1 2 3 4 5 6; do
             if scp -o ServerAliveInterval=30 -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
                  /tmp/next-build.tar.gz \
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/next-build.tar.gz" \
@@ -96,10 +103,10 @@ jobs:
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/cd-finisher.sh"; then
               ok=1; break
             fi
-            echo "Tentative $i/4 échouée (réseau / PerSourcePenalties ?) — nouvel essai dans 60 s…"
-            sleep 60
+            echo "Tentative $i/6 échouée (réseau / PerSourcePenalties ?) — nouvel essai dans 180 s…"
+            [ "$i" = "6" ] || sleep 180
           done
-          [ "$ok" = "1" ] || { echo "::error::Transfert SCP impossible après 4 tentatives"; exit 1; }
+          [ "$ok" = "1" ] || { echo "::error::Transfert SCP impossible après 6 tentatives espacées (voir docs/exploitation/ssh-bloque-runbook.md)"; exit 1; }
 
       - name: Swap atomique + health check (rollback auto, retry raisonné)
         run: |
