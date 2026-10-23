@@ -739,7 +739,7 @@ export default function HomePage() {
               <p className="text-xs font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">Votre espace</p>
               <ul className="mt-4 space-y-2.5 text-sm">
                 <li><Link href="/dashboard" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Tableau de bord</Link></li>
-                <li><Link href="/chat-v4" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Chat v4 (bêta)</Link></li>
+                <li><Link href="/chat" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Chat IA</Link></li>
                 <li><Link href="/team" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Équipes</Link></li>
                 {BILLING_ENABLED && <li><Link href="/billing" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Facturation</Link></li>}
                 <li><Link href="/storage" className="text-[var(--g3-muted)] transition hover:text-[var(--g3-primary-strong)]">Stockage permanent</Link></li>

@@ -59,7 +59,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isAuth = pathname === "/login" || pathname === "/signup";
   const isApproval = pathname.startsWith("/approvals");
   const isClient = pathname === "/client" || pathname.startsWith("/client/");
-  // Chat Aurora (/chat) : interface de conversation AUTONOME (brand, historique
+  // Chat IA (/chat) : interface de conversation AUTONOME (brand, historique
   // et composer intégrés à l'écran) — même traitement que la vitrine : aucune
   // navigation projet autour, l'écran occupe 100 % de la surface.
   const isStandaloneChat = pathname === "/chat" || pathname.startsWith("/chat/");

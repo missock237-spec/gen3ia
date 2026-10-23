@@ -289,7 +289,6 @@ describe("Pages — LISTE BLANCHE UTILISATEUR", () => {
   const utilisateurs = [
     ["/chat", "chat"],
     ["/chat/", "chat"],
-    ["/chat-v4", "chat"],
     ["/dashboard", "chat"],
     ["/workspace", "chat"],
     ["/workspace/conversations", "chat"],
