@@ -53,9 +53,10 @@ Vérifications production (compte de test créé puis parcours complet) :
    projets, exécutions) restent indexées par `userId`. La convention
    recommandée : ajouter `orgId` optionnel aux schémas, l'écrire lors des
    prochaines créations, et filtrer par org dans les vues « entreprise ».
-2. **Stripe Billing** : le moteur de quotas est indépendant du PSP mais les
-   plans payants nécessitent les clés Stripe du propriétaire (webhooks +
-   portail client à brancher sur `lib/billing/`).
+2. **Passerelle unique Chariow** (décision client) : le moteur de quotas est
+   indépendant du PSP ; l'encaissement (abonnements, recharge wallet,
+   extensions) passe exclusivement par Chariow (webhook Pulse signé +
+   licences). La piste « Stripe Billing » est abandonnée.
 3. **Observabilité avancée** : export OpenTelemetry vers un backend dédié et
    métriques agrégées par org (le contexte est prêt) restent à câbler.
 4. **Scalabilité infra** : Redis distribué et file éphémère managée (Pub/Sub
@@ -70,8 +71,10 @@ Vérifications production (compte de test créé puis parcours complet) :
 
 1. Écrire `orgId` sur les nouvelles ressources (agents/projets) et filtrer
    les vues par organisation côté API (migration lazy, sans coupure).
-2. Brancher Stripe Billing sur les événements d'usage existants (clés à
-   fournir), avec webhooks idempotents et portail client.
+2. Consolider Chariow (passerelle unique de paiement — décision client) :
+   webhook Pulse déjà idempotent et signé ; restent à outiller le portail
+   client côté boutique Chariow et la réconciliation admin
+   (`/api/admin/billing/reconcile`).
 3. Ajouter l'export OTel (collector) derrière une variable d'environnement,
    en réutilisant `traceId` comme corrélation primaire.
 4. Resserrer la CSP par audit du trafic réel (en-têtes déjà loggés).

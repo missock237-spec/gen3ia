@@ -54,11 +54,11 @@ const final = await client.missions.waitFor(queued.runId, { timeoutMs: 600_000 }
 
 ```ts
 const client = new Gen3iaClient({ baseUrl: "https://gen3ia.online" });
-await client.webhooks.trigger("<token>", { event: "stripe.checkout.completed", id: "evt_…" });
+await client.webhooks.trigger("<token>", { event: "chariow.sale.paid", id: "sal_…" });
 // 202 { ok: true, executionId } — l'agent travaille en tâche de fond.
 ```
 
-Le flux complet (création du token, plomberie n8n/Make/Stripe/GitHub, réponses 202/409) est documenté dans [`docs/sdk.md`](../docs/sdk.md#flux-webhook--mission-agent).
+Le flux complet (création du token, plomberie n8n/Make/Chariow/GitHub, réponses 202/409) est documenté dans [`docs/sdk.md`](../docs/sdk.md#flux-webhook--mission-agent).
 
 ## Gestion des erreurs
 

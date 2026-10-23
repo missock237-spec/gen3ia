@@ -57,7 +57,7 @@ export function GET(request: NextRequest) {
         import: `import { Gen3iaClient } from "${SDK_PACKAGE_NAME}";`,
         developerKey: `const client = new Gen3iaClient({ apiKey: "g3x_…", projectId: "…" });\nconst result = await client.agents.run("<agentId>", { objective: "Rédige la veille du jour." });`,
         missions: `const client = new Gen3iaClient({ firebaseToken: () => getIdToken() });\nconst queued = await client.missions.run({ objective: "…" });\nawait client.missions.follow(queued.runId, { onProgress, onFinal });`,
-        webhook: `// Déclenche une mission « agent toujours actif » depuis un système externe.\nawait client.webhooks.trigger("<token>", { event: "stripe.paid", id: "evt_…" });`,
+        webhook: `// Déclenche une mission « agent toujours actif » depuis un système externe.\nawait client.webhooks.trigger("<token>", { event: "chariow.sale.paid", id: "sal_…" });`,
       },
       docs: `${origin}/docs/sdk.md`,
       download: downloadUrl,
