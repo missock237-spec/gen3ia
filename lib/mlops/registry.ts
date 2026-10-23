@@ -1,6 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { promises as fsp } from "node:fs";
 import { join } from "node:path";
 
@@ -388,7 +388,6 @@ export function validerManifest(brut: ManifestModele): ManifestModele {
 export async function empreinteArtefact(
   chemin: string,
 ): Promise<{ sha256: string; bytes: number }> {
-  const { createHash } = await import("node:crypto");
   const contenu = await fsp.readFile(chemin);
   return {
     sha256: createHash("sha256").update(contenu).digest("hex"),
