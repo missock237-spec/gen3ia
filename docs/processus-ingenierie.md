@@ -28,12 +28,40 @@ Tout le reste découle de ces trois règles.
 
 **Modèle de branches.** Le trunk, c'est `main`. Les branches de travail
 (`feat/*`, `fix/*`, `refactor/*`, `chore/*`, `docs/*`) sont **courtes :
-vivant moins de 48 h**, idéalement quelques heures. Un changement qui semble
-nécessiter plus de 48 h est découpé en séries de petits changements
-intégrables indépendamment. Règle de cadence : **un ou plusieurs petits
-changements intégrés à `main` au moins une fois par jour** — une branche qui
-s'endort plus de deux jours est un risque (dérive du trunk, conflits, perte
-de contexte) et se jette ou se découpe.
+vivant moins de 48 h** — règle évaluée en temps RÉEL de travail effectif,
+pas en temps mur entre le premier commit et le merge (un agent qui pousse
+une branche entamée la veille doit la considérer « déjà vieille » et la
+découper ou la jeter). Petits incréments : chaque branche porte UNE
+intention livrable indépendamment. Un changement qui semble nécessiter
+plus de 48 h est découpé en séries de petits changements intégrables
+indépendamment, et tout code non fini entre derrière un feature flag
+(cf. §2.1) plutôt que d'attendre dans la branche. Règle de cadence : **un
+ou plusieurs petits changements intégrés à `main` au moins une fois par
+jour** — une branche qui s'endort plus de deux jours est un risque (dérive
+du trunk, conflits, perte de contexte) et se jette ou se découpe.
+
+**Ménage automatique des branches fusionnées.** Une branche dont le tip
+est déjà dans `main` est une branche morte : la garder suggère un travail
+en cours qui n'existe plus. Le workflow
+`.github/workflows/menage-branches.yml` (déclenché sur push `main` +
+manuel) exécute `scripts/menage-branches.mjs` : détection par
+`git merge-base --is-ancestor`, suppression via l'API GitHub (DRY_RUN=0
+en CI, dry-run par défaut en local), `main` protégée, branche dont le tip
+a bougé pendant l'analyse conservée (anti-course). Testé contre le dépôt
+réel : 64 branches fantômes héritées des sessions antérieures auraient
+été supprimées au premier passage.
+
+**Note honnête — l'artefact sandbox.** Les branches longues passées du
+dépôt (`feat/zero-trust-services`, `feat/mlops-registry-pipeline`, etc.)
+contredisent la règle des 48 h : c'est en partie un ARTÉFACT de notre
+orchestration — les agents travaillent en sandbox SANS droit de push, donc
+leurs branches « vivent » en local jusqu'à l'intégration orchestrée, et le
+trunk voit des rafales de merges plutôt que des petits flux continus. Ce
+n'est pas une excuse : la norme reste la branche courte ; l'orchestrateur
+compense en découpant les périmètres par agent et en fusionnant à cadence
+quotidienne. Le workflow de ménage garantit qu'une branche, une fois
+fusionnée, ne traîne plus — la longueur d'une branche AVANT merge reste la
+responsabilité du découpage, pas du tooling.
 
 **Intégration.** Pas de longues feature branches ni de branches de release :
 `main` fusionné = `main` déployé (déploiement continu, cf. §3). Les merges
@@ -42,7 +70,9 @@ déploiement (pattern des sessions multi-agents : 6 branches mergées puis
 un seul push `main`, cf. worklog de session).
 
 **Feature flags.** Un travail non fini n'attend pas la branche : il entre
-derrière un flag d'environnement. Le pattern éprouvé du dépôt :
+derrière un flag d'environnement, géré par le système dédié `lib/flags/`
+(§2.1). Les patterns éprouvés du dépôt, antérieurs au système et toujours
+valides :
 
 - `PAYMENT_PROVIDER` (défaut `chariow`, **seule valeur supportée**) — toute
   autre valeur court-circuite explicitement les encaissements en 501 :
@@ -68,6 +98,58 @@ temporaires `permanent: false`) et d'un retrait de la liste blanche
 `lib/security/user-access.ts` — l'utilisateur qui a un vieux lien n'est
 jamais perdu (pattern des suppressions `/chat-v4`, `/workspace`, `/studio`).
 
+### 2.1 Feature Flags — livrer du code non fini sans l'exposer
+
+Le système vit dans **`lib/flags/feature-flags.ts`** (module server-only,
+zéro dépendance) : un catalogue TYPOGRAPHÉ des flags connus (nom de variable,
+description FR, défaut, date d'introduction), une API `estActive(nom)` /
+`assertFlag(nom)` / `listeFlags()` (diagnostics), un parse robuste
+(`1/true/on` actif, `0/false/off` inactif, valeur inconnue = défaut +
+warning unique, jamais d'interprétation silencieuse). Un flag a UN nom
+dans l'environnement : `GEN3IA_FLAG_<NOM>`. Premier exemple réel :
+`GEN3IA_FLAG_SLI_ENDPOINT` gate `GET /api/metrics` (défaut ACTIF, kill-
+switch d'urgence à 0 → 404 JSON propre) dans `app/api/metrics/route.ts`.
+
+**Quand créer un flag :**
+
+- **code incomplet** — la feature entre à `main` en petits incréments,
+  invisibles des utilisateurs jusqu'à l'activation (le cas TBD canonique) ;
+- **déploiement risqué** — surface sensible (billing, endpoints système,
+  exposition de données) : le kill-switch permet de couper SANS
+  redéploiement pendant un incident (pattern `PAYMENT_PROVIDER`, qui
+  ferme les encaissements sur toute configuration non reconnue) ;
+- **test A/B ou bascule progressive** — exposer d'abord en interne,
+  mesurer via `/api/metrics`, puis activer globalement.
+
+**Quand NE PAS créer de flag :** pour cacher du code cassé ou non testé
+(« c'est derrière un flag » n'excuse pas une CI verte sur du non fini), ni
+pour des variations cosmétiques à durée de vie éphémère — un commit de
+revert est plus honnête.
+
+**Cycle de vie :** (1) CRÉATION — le flag entre dans `CATALOGUE_FLAGS`
+(état `defaut` = comportement actuel, donc INACTIF pour une nouvelle
+feature) ET dans `.env.example`, dans le MÊME commit ; (2) ACTIVATION —
+progressive par environnement (staging puis production via
+`.env.production`), la valeur par défaut reste le filet quand la variable
+est absente ; (3) NETTOYAGE — une fois la feature stabilisée, le code
+derrière le flag est réduit au seul chemin actif et le flag est retiré du
+catalogue, d'`.env.example` et de l'environnement. **Durée de vie maximale
+: 90 jours** (revue trimestrielle de `CATALOGUE_FLAGS` — le champ `depuis`
+rend les flags périmés visibles). Un flag qui traîne est une dette : le
+second code path pourrit et la combinaison des états devient intestable.
+
+**Limites assumées :** les flags sont des variables d'ENVIRONNEMENT lues
+par le process — un changement exige un **restart** (sur le VPS PM2 :
+`pm2 restart gen3ia` ; le déploiement CD le fait de toute façon à chaque
+swap). Pas d'activation à chaud, pas de ciblage par utilisateur ni de
+pourcentage runtime : ce sont des flags de DÉPLOIEMENT. Une activation
+progressive fine reste possible par environnement (staging → prod), pas
+par cohorte d'utilisateurs. **Phase 3 (non déclenchée) :** un service type
+LaunchDarkly/Unleash est INUTILE à notre échelle (un process PM2, un VPS
+2 Go, pas de flotte multi-instance) — n'introduire un tel service que si
+un jour plusieurs instances doivent basculer de façon coordonnée sans
+restart, et le noter alors dans `docs/feuille-de-route-google-grade.md`.
+
 ## 3. CI/CD standardisé
 
 ### 3.1 Le pipeline actuel (réel)
@@ -87,6 +169,13 @@ jamais perdu (pattern des suppressions `/chat-v4`, `/workspace`, `/studio`).
 - `codeql.yml` — analyse statique de sécurité (CodeQL) ;
 - `security.yml` — scan dynamique OWASP ZAP baseline (DAST passif + sondes
   actives modérées, rapport en artefact).
+
+**Ménage du trunk — `.github/workflows/menage-branches.yml`** (push
+`main` + manuel, permissions `contents: write`) : suppression automatique
+des branches distantes déjà fusionnées (cf. §2). Six workflows au total,
+inventaire verrouillé par le test structurel
+`lib/__tests__/ci-pipeline.test.ts` (« Inventaire des workflows ») — toute
+addition ou suppression passe par une mise à jour explicite de ce test.
 
 **Déploiement continu — `.github/workflows/deploy-vps.yml`** (push `main`
 → production, + `workflow_dispatch` manuel) :
