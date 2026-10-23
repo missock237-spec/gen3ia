@@ -6,8 +6,6 @@ import "server-only";
 
 import { isDraftEmailRequest } from "./service-intents";
 import type { ComplexityAssessment } from "@/lib/ai/auto-improvement";
-import { languageDirective } from "@/lib/ai/prompt-enhancer";
-import { generate } from "@/lib/ai/router";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 import { extractApiUsageName, looksLikeApiUsageRequest } from "@/lib/integrations/custom-apis/detect";
 import type { CustomApiRecord } from "@/lib/integrations/custom-apis/repository";

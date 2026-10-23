@@ -4,7 +4,6 @@ import "server-only";
  * Catalogue d'outils conversationnel + politique d'exécution + métadonnées de validation (risque, coût estimé, périmètre de données, condensation). Extrait de engine.ts — code déplacé tel quel.
  */
 
-import { generate } from "@/lib/ai/router";
 import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
 import type { ExecutionPolicy } from "@/lib/security/execution-policy";
 import { createDefaultToolRegistry } from "@/lib/tools/default-registry";
