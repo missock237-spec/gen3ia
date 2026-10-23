@@ -25,6 +25,10 @@ export default defineConfig({
       "lib/**/*.test.ts",
       "lib/__tests__/**/*.test.ts",
       "app/**/*.test.ts",
+      // Règles Firestore — isolation multi-tenant (Task I, Pilier 3 Zero
+      // Trust) : s'auto-désactive sans émulateur, tourne dans
+      // `firebase emulators:exec --only firestore`.
+      "tests/**/*.test.ts",
       // Primitifs UI partagés (Task 1-c : cadre de progression média) —
       // tests Node sans jsdom (logique pure + verrous structurels).
       "components/**/*.test.{ts,tsx}",
