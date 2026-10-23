@@ -23,6 +23,15 @@ vi.mock("@/lib/queue/tick-queue", () => ({
   tickQueueConfigured: () => tickQueueConfiguredMock(),
 }));
 
+// Le BUILD_ID effectivement servi (.next/BUILD_ID) a la PRIORITÉ sur les
+// replis historiques (durcissement 2026-10-22) : on le neutralise ici pour
+// que ce test porte sur la chaîne de repli (GEN3IA_RELEASE /
+// VERCEL_DEPLOYMENT_ID) indépendamment de la présence d'un build local —
+// sinon le test ne passerait qu'avant tout `npm run build`.
+vi.mock("@/lib/deploy/build-id", () => ({
+  readBuildId: () => null,
+}));
+
 import { GET } from "./route";
 
 beforeEach(() => {

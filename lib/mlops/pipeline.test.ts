@@ -207,6 +207,10 @@ describe("pipeline MLOps à porte d'évaluation (lib/mlops/pipeline)", () => {
     });
 
     await executerPipeline({ ...communs, version: "1.0.0", adaptateur });
+    // Le premier run a légitimement entraîné UNE fois : l'idempotence
+    // porte sur le SECOND run — aucun appel supplémentaire autorisé.
+    const appelsApresPremierRun = adaptateur.compteur.appels;
+    expect(appelsApresPremierRun).toBe(1);
     const pointeurAvant = readFileSync(
       join(racine, "gen3-cortex-v2", "production.json"),
       "utf8",
@@ -218,7 +222,7 @@ describe("pipeline MLOps à porte d'évaluation (lib/mlops/pipeline)", () => {
       adaptateur,
     });
 
-    expect(adaptateur.compteur.appels).toBe(0); // JAMAIS ré-entraîné
+    expect(adaptateur.compteur.appels).toBe(appelsApresPremierRun); // JAMAIS ré-entraîné
     expect(rapport.reprise).toBe(true);
     expect(rapport.decision).toBe("promotion");
     expect(rapport.etapes.entrainement.statut).toBe("reprise");

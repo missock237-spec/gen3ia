@@ -1,6 +1,6 @@
 import { createHash, createHmac } from "crypto";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { securityHeaders } from "./request-security";
 import { timingSafeStringEqual } from "./timing-safe";
@@ -63,10 +63,10 @@ export const DEFAULT_MAX_AGE_SEC = 300;
 /**
  * Parse GEN3IA_SERVICE_TOKENS (« nom:secret,nom2:secret2 ») de manière
  * ROBUSTE : les entrées malformées (pas de « : », nom ou secret vide,
- * virgule traînante) sont IGNORÉES sans lever ; le nom est nettoyé des
- * espaces de bord ; en cas de doublon, la PREMIÈRE occurrence gagne (et
- * une entrée est notifiée en warning). Un registre vide/absent déclenche
- * UN warning unique par instance.
+ * espace dans le nom ou le secret, virgule traînante) sont IGNORÉES sans
+ * lever ; en cas de doublon, la PREMIÈRE occurrence gagne (et une entrée
+ * est notifiée en warning). Un registre vide/absent déclenche UN warning
+ * unique par instance.
  */
 export function parseServiceTokens(
   raw: string | undefined,
@@ -81,17 +81,20 @@ export function parseServiceTokens(
   }
 
   for (const entree of brut.split(",")) {
-    const morceau = entree.trim();
-    if (!morceau) continue; // virgule traînante / espaces
-    const separateur = morceau.indexOf(":");
+    if (!entree.trim()) continue; // virgule traînante / entrée vide
+    const separateur = entree.indexOf(":");
     if (separateur <= 0) {
       if (!options.silent) console.warn("[service-identity] entrée GEN3IA_SERVICE_TOKENS malformée ignorée (attendu « nom:secret »).");
       continue;
     }
-    const nom = morceau.slice(0, separateur).trim();
-    const secret = morceau.slice(separateur + 1).trim();
-    if (!nom || !secret || /\s/.test(nom)) {
-      if (!options.silent) console.warn(`[service-identity] entrée GEN3IA_SERVICE_TOKENS ignorée (nom/secret vide ou nom avec espace) : « ${nom || "(vide)"} ».`);
+    const nomBrut = entree.slice(0, separateur);
+    const nom = nomBrut.trim();
+    const secret = entree.slice(separateur + 1).trim();
+    // ZÉRO tolérance sur les espaces : tout espace dans le nom (même en
+    // bordure) ou dans le secret rend l'entrée malformée — on ne normalise
+    // jamais silencieusement une identité ou un secret.
+    if (!nom || !secret || /\s/.test(nomBrut) || /\s/.test(secret)) {
+      if (!options.silent) console.warn(`[service-identity] entrée GEN3IA_SERVICE_TOKENS ignorée (nom/secret vide ou contenant un espace) : « ${nom || "(vide)"} ».`);
       continue;
     }
     if (tokens.has(nom)) {
@@ -107,7 +110,7 @@ export function parseServiceTokens(
 
 /** Warning « registre vide » loggé UNE seule fois par instance (pas de spam). */
 let warningRegistreVideLogge = false;
-function avertirUneFois(silent: boolean): void {
+function avertirUneFois(silent?: boolean): void {
   if (warningRegistreVideLogge || silent) return;
   warningRegistreVideLogge = true;
   console.warn(
