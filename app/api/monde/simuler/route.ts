@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { protectRoute } from "@/lib/security/route-guard";
 import { interpreter } from "@/lib/monde/intention";
 import { repartiteurGlobal } from "@/lib/essaim-global/repartiteur";
 import { simuler, type SpecSimulation } from "@/lib/monde/univers";
@@ -12,9 +13,29 @@ import { simuler, type SpecSimulation } from "@/lib/monde/univers";
  * client apporte son GPU). Cette route existe pour les intégrations
  * externes et démontre le répartiteur : admission par quota, files
  * bornées, refus propre 429 — le serveur ne peut jamais saturer.
+ *
+ * GARDE D'ACCÈS (défense en profondeur, appliquée AVANT tout calcul) :
+ * le chemin /api/monde est classé « restreint » par la matrice
+ * lib/security/user-access.ts — le middleware bloque déjà les
+ * utilisateurs standard (403) mais LAISSE PASSER les requêtes anonymes
+ * (contrat : la route lève le 401 elle-même). protectRoute ré-applique
+ * la même matrice au niveau de la route :
+ *   - anonyme          → 401 (requireUser : Bearer Firebase OU cookie
+ *                        de session signé gen3ia_session) ;
+ *   - utilisateur std  → 403 (hors liste blanche utilisateur) ;
+ *   - admin            → passage, puis rate limit 10 req/min par
+ *                        utilisateur (barrière de débit indépendante du
+ *                        répartiteur d'admission de l'essaim).
+ * Les intégrations externes s'authentifient par Bearer Firebase
+ * (structurellement immunisé au CSRF) ; le navigateur /monde passe par
+ * le cookie de session (fetch same-origin : cookies envoyés par défaut).
  */
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/** Taille max du corps : une question (≤ 2000 car.) + une spec JSON. */
+const TAILLE_MAX_CORPS = 16 * 1024;
 
 /** Caps serveur : plus stricts que le client (VPS 2 Go). */
 const CAPS_SERVEUR = {
@@ -27,8 +48,9 @@ const SchemaQuestion = z.object({
   question: z.string().min(1).max(2000).optional(),
   /** Spécification typée (prioritaire si fournie). */
   spec: z.record(z.string(), z.unknown()).optional(),
-  /** Identifiant utilisateur (quota) — anonyme acceptable. */
-  utilisateur: z.string().min(1).max(64).optional(),
+  // NB : l'ancien champ `utilisateur` (identité de quota fournie par le
+  // client) n'est plus accepté — l'identité de quota est désormais
+  // dérivée de l'authentification (uid vérifié), impossible à usurper.
 });
 
 /** Applique les caps serveur à une spécification si elle en porte. */
@@ -43,12 +65,28 @@ function plafonner(spec: Record<string, unknown>): Record<string, unknown> {
   return copie;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const debut = performance.now();
+
+  // ——— Garde d'accès AVANT tout calcul coûteux (401 / 403 / 429) ———
+  const guard = await protectRoute(request, {
+    key: "monde-simuler",
+    rateLimit: { limit: 10, windowMs: 60 * 1000 },
+  });
+  if (!guard.ok) return guard.response;
+
+  // ——— Corps : taille bornée AVANT parsing, puis schéma strict ———
+  const brut = await request.text().catch(() => "");
+  if (Buffer.byteLength(brut, "utf8") > TAILLE_MAX_CORPS) {
+    return NextResponse.json(
+      { erreur: "Corps trop volumineux (16 Ko maximum)." },
+      { status: 413 },
+    );
+  }
 
   let corps: unknown;
   try {
-    corps = await request.json();
+    corps = JSON.parse(brut);
   } catch {
     return NextResponse.json({ erreur: "Corps JSON invalide." }, { status: 400 });
   }
@@ -61,11 +99,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const { question, spec, utilisateur } = analyse.data;
+  const { question, spec } = analyse.data;
 
   // ——— Admission dans l'essaim global (quota + files bornées) ———
+  // Identité de quota = uid AUTHENTIFIÉ (plus jamais une chaîne fournie
+  // par le client, qui permettait d'épuiser le quota d'autrui).
   const repartiteur = repartiteurGlobal();
-  const decision = repartiteur.soumettre(utilisateur ?? request.headers.get("x-forwarded-for") ?? "anonyme");
+  const decision = repartiteur.soumettre(guard.context.userId);
   if (!decision.admis) {
     return NextResponse.json(
       {
