@@ -4,6 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { securityHeaders } from "./request-security";
 import { timingSafeStringEqual } from "./timing-safe";
+import {
+  estTraceIdGen3iaValide,
+  formaterTraceparent,
+  parserTraceparent,
+  TRACEPARENT_HEADER,
+} from "../observability/trace-w3c";
 
 /**
  * IDENTITÉ DE SERVICE INTERNE (Pilier 3 — Zero Trust, BeyondProd local).
@@ -152,12 +158,23 @@ export interface ServiceRequestDescriptor {
 
   /** Corps brut (chaîne) — absent/vide → haché du corps vide. */
   body?: string;
+
+  /**
+   * TraceId Gen3ia OPTIONNEL à propager (Task K) : présent et sain → un
+   * en-tête W3C `traceparent` est émis EN PLUS des trois en-têtes signés
+   * (le traceparent ne fait PAS partie de la signature — l'observabilité ne
+   * doit jamais verrouiller la corrélation). Absent → aucun en-tête traceparent
+   * (comportement historique inchangé).
+   */
+  traceId?: string;
 }
 
 export interface ServiceSignedHeaders {
   "X-Gen3ia-Service": string;
   "X-Gen3ia-Timestamp": string;
   "X-Gen3ia-Signature": string;
+  /** Task K : présent UNIQUEMENT quand descriptor.traceId est fourni. */
+  traceparent?: string;
 }
 
 /** Haché SHA-256 hexadécimal (minuscule) du corps — étape de la signature. */
@@ -198,11 +215,20 @@ export function signServiceRequest(
     .update(messageSignature(service, method, path, timestamp, body ?? ""), "utf8")
     .digest("hex");
 
-  return {
+  const enTetes: ServiceSignedHeaders = {
     "X-Gen3ia-Service": service,
     "X-Gen3ia-Timestamp": timestamp,
     "X-Gen3ia-Signature": `sha256=${signature}`,
   };
+
+  // Propagation W3C (Task K) : traceId sain → traceparent cohérent avec le
+  // middleware (même dérivation déterministe du module partagé trace-w3c).
+  const traceId = descriptor.traceId?.trim();
+  if (estTraceIdGen3iaValide(traceId)) {
+    enTetes.traceparent = formaterTraceparent(traceId!);
+  }
+
+  return enTetes;
 }
 
 /* ------------------------------------------------------------------ */
@@ -219,7 +245,7 @@ export type ServiceVerifyReason =
   | "signature_invalide";
 
 export type ServiceVerifyResult =
-  | { ok: true; service: string }
+  | { ok: true; service: string; /** Task K : traceparent W3C entrant (brut, validé) s'il était présent. */ traceparent?: string }
   | { ok: false; reason: ServiceVerifyReason };
 
 export interface VerifyServiceOptions {
@@ -255,6 +281,14 @@ export function verifyServiceRequest(
   if (!service || !timestampBrut || !signatureRecue) {
     return { ok: false, reason: "entetes_manquants" };
   }
+
+  // Corrélation (Task K) : le traceparent W3C entrant est lu s'il existe,
+  // validé par le parse strict (aucune valeur non validée ne rejoint les
+  // logs — anti-injection), et exposé au verdict pour chaînage ALS/route.
+  const traceparentParse = parserTraceparent(request.headers.get(TRACEPARENT_HEADER));
+  const traceparentBrut = traceparentParse
+    ? request.headers.get(TRACEPARENT_HEADER)!.trim()
+    : undefined;
 
   // Anti-replay : horodatage epoch secondes, fenêtre glissante ±maxAgeSec.
   if (!/^\d{1,16}$/.test(timestampBrut)) {
@@ -307,7 +341,17 @@ export function verifyServiceRequest(
     return { ok: false, reason: "signature_invalide" };
   }
 
-  return { ok: true, service };
+  // Task K : le traceparent entrant est LOGGÉ (champs hexadécimaux validés
+  // par le parse — aucun caractère libre → aucune injection de log possible).
+  if (traceparentParse && traceparentBrut) {
+    console.info(
+      `[service-identity] traceparent W3C entrant de « ${service} » : ${traceparentBrut.slice(0, 64)}`,
+    );
+  }
+
+  return traceparentBrut
+    ? { ok: true, service, traceparent: traceparentBrut }
+    : { ok: true, service };
 }
 
 /* ------------------------------------------------------------------ */

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
+import { parserTraceparent, w3cTraceIdDepuisGen3ia } from "../observability/trace-w3c";
+
 /**
  * Tests de l'identité de service interne (lib/security/service-identity.ts).
  *
@@ -306,6 +308,90 @@ describe("allowIfUnconfigured — rétrocompatibilité explicite", () => {
       expect(appelsGen3ia.length).toBeLessThanOrEqual(1);
     } finally {
       warn.mockRestore();
+    }
+  });
+});
+
+describe("propagation W3C traceparent (Task K)", () => {
+  it("signServiceRequest avec traceId sain → en-tête traceparent valide (dérivation déterministe)", async () => {
+    const { signServiceRequest, verifyServiceRequest } = await import("./service-identity");
+    const maintenant = Date.now();
+    const enTetes = signServiceRequest(
+      { service: "cron", method: "GET", path: "/api/cron/training-sweep", traceId: "trc_cron-42" },
+      { nowMs: maintenant },
+    );
+    expect(enTetes.traceparent).toBeDefined();
+    const parse = parserTraceparent(enTetes.traceparent);
+    expect(parse).toBeDefined();
+    expect(parse?.traceId).toBe(w3cTraceIdDepuisGen3ia("trc_cron-42"));
+    expect(parse?.spanId).toMatch(/^[0-9a-f]{16}$/);
+
+    // La signature reste VALIDE : le traceparent ne fait PAS partie du HMAC.
+    const verdict = verifyServiceRequest(requete(URL_ROUTE, "GET", enTetes), { nowMs: maintenant });
+    expect(verdict.ok).toBe(true);
+    if (verdict.ok) {
+      expect(verdict.service).toBe("cron");
+      expect(verdict.traceparent).toBe(enTetes.traceparent);
+    }
+  });
+
+  it("signServiceRequest SANS traceId → aucun en-tête traceparent (comportement historique)", async () => {
+    const { signServiceRequest } = await import("./service-identity");
+    const enTetes = signServiceRequest(
+      { service: "cron", method: "GET", path: "/api/cron/training-sweep" },
+    );
+    expect(enTetes.traceparent).toBeUndefined();
+    expect(Object.keys(enTetes).sort()).toEqual([
+      "X-Gen3ia-Service",
+      "X-Gen3ia-Signature",
+      "X-Gen3ia-Timestamp",
+    ]);
+  });
+
+  it("traceId non sain (injection potentielle) → pas de traceparent, pas de levée", async () => {
+    const { signServiceRequest } = await import("./service-identity");
+    const enTetes = signServiceRequest(
+      { service: "cron", method: "GET", path: "/api/cron/training-sweep", traceId: "injection\nlog()" },
+    );
+    expect(enTetes.traceparent).toBeUndefined();
+  });
+
+  it("verifyServiceRequest LOGGE le traceparent W3C entrant valide", async () => {
+    const { signServiceRequest, verifyServiceRequest } = await import("./service-identity");
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const maintenant = Date.now();
+    const enTetes = signServiceRequest(
+      { service: "cron", method: "GET", path: "/api/cron/training-sweep", traceId: "trc_log-1" },
+      { nowMs: maintenant },
+    );
+    try {
+      const verdict = verifyServiceRequest(requete(URL_ROUTE, "GET", enTetes), { nowMs: maintenant });
+      expect(verdict.ok).toBe(true);
+      expect(info).toHaveBeenCalledWith(expect.stringContaining("[service-identity] traceparent"));
+      expect(info).toHaveBeenCalledWith(expect.stringContaining(enTetes.traceparent!));
+    } finally {
+      info.mockRestore();
+    }
+  });
+
+  it("traceparent ENTRANT malformé → ni loggé ni exposé (parse strict, anti-injection)", async () => {
+    const { signServiceRequest, verifyServiceRequest } = await import("./service-identity");
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const maintenant = Date.now();
+    const enTetes = signServiceRequest(
+      { service: "cron", method: "GET", path: "/api/cron/training-sweep" },
+      { nowMs: maintenant },
+    );
+    try {
+      const verdict = verifyServiceRequest(requete(URL_ROUTE, "GET", {
+        ...enTetes,
+        traceparent: "00-xxxx-garbage-01",
+      }), { nowMs: maintenant });
+      expect(verdict.ok).toBe(true);
+      if (verdict.ok) expect(verdict.traceparent).toBeUndefined();
+      expect(info).not.toHaveBeenCalled();
+    } finally {
+      info.mockRestore();
     }
   });
 });

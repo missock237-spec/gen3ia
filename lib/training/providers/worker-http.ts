@@ -1,5 +1,7 @@
 import "server-only";
 
+import { traceparentPourPropagation } from "@/lib/observability/contexte-requete";
+
 import type {
   GpuProvider,
   GpuProviderCapabilities,
@@ -32,12 +34,19 @@ async function workerFetch(
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  // Propagation W3C (Task K) : si la requête ENTRANTE qui déclenche cet
+  // appel porte un traceId (AsyncLocalStorage remplie par withContexteRoute
+  // ou l'exécution d'agent), un traceparent est émis vers le worker —
+  // continuité de l'arbre W3C côté collecteur. Hors contexte : aucun
+  // en-tête (comportement historique inchangé).
+  const traceparent = traceparentPourPropagation();
   try {
     return await fetch(`${cfg.url}${path}`, {
       ...init,
       headers: {
         "content-type": "application/json",
         ...(cfg.token ? { authorization: `Bearer ${cfg.token}` } : {}),
+        ...(traceparent ? { traceparent } : {}),
         ...(init?.headers ?? {}),
       },
       signal: controller.signal,
