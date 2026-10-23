@@ -1,0 +1,63 @@
+name: Ménage des branches fusionnées
+
+# Suppression automatique des branches DISTANTES dont le tip est déjà
+# fusionné dans `main` (Task M — Trunk-Based Development,
+# docs/processus-ingenierie.md §2).
+#
+# Pourquoi sur push `main` ? Le merge EST le moment où une branche meurt :
+# un push sur le trunk déclenche le ménage immédiat, donc aucune branche
+# fantôme ne s'accumule pour suggérer un travail en cours qui n'existe plus.
+# `workflow_dispatch` permet de relancer le ménage à la demande (après un
+# import de branches, un renommage, un dépôt assaini à la main).
+#
+# La logique vit dans scripts/menage-branches.mjs (zéro dépendance npm) :
+# détection `git merge-base --is-ancestor`, SUPPRESSION via l'API GitHub
+# (DELETE /repos/{owner}/{repo}/git/refs/heads/{branche}) avec le token du
+# run — permissions `contents: write`, strictement nécessaires et
+# suffisantes pour détruire une référence git.
+#
+# SÉCURITÉ : main est protégée par le script (jamais supprimée) ; une
+# branche dont le tip a bougé entre l'analyse et la suppression est
+# CONSERVÉE (anti-course) ; les branches non fusionnées sont conservées.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Un seul ménage à la fois : deux runs concurrents pourraient se
+# contredire sur l'état des refs (analyse vs suppression).
+concurrency:
+  group: menage-branches
+  cancel-in-progress: true
+
+jobs:
+  menage:
+    name: Supprimer les branches distantes fusionnées dans main
+    runs-on: ubuntu-latest
+    # Le script ne fait que des appels git + API : au-delà de 5 min, le
+    # run est pendu (réseau API GitHub) et doit être coupé.
+    timeout-minutes: 5
+
+    steps:
+      # Historique COMPLET obligatoire : le test d'ancêtrage
+      # `git merge-base --is-ancestor <tip> main` exige que les commits des
+      # branches fusionnées soient présents localement (shallow clone ne
+      # suffirait pas — même exigence que le job secrets-scan).
+      - name: Checkout (historique complet — requis pour merge-base)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # DRY_RUN=0 : le dry-run reste disponible en local (défaut du script)
+      # pour prévisualiser avant toute exécution. GITHUB_TOKEN est le token
+      # éphémère du run (contents: write ci-dessus) — aucun secret de dépôt.
+      - name: Supprimer les branches fusionnées (script zéro dépendance)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DRY_RUN: "0"
+        run: node scripts/menage-branches.mjs

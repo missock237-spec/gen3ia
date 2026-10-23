@@ -85,7 +85,7 @@ describe("Inventaire des workflows (.github/workflows/)", () => {
   // Toute addition/suppression de workflow doit passer par la mise à jour
   // explicite de cette liste — un workflow est une surface d'exécution
   // (secrets, permissions, accès production), pas un fichier anodin.
-  it("exactement cinq workflows : CI, CodeQL, Security, Deploy VPS et Load test (manuel)", () => {
+  it("exactement six workflows : CI, CodeQL, Security, Deploy VPS, Load test (manuel) et Ménage des branches", () => {
     const workflows = readdirSync(path.join(process.cwd(), ".github/workflows"))
       .filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"))
       .sort();
@@ -94,6 +94,7 @@ describe("Inventaire des workflows (.github/workflows/)", () => {
       "codeql.yml",
       "deploy-vps.yml",
       "load-test.yml",
+      "menage-branches.yml",
       "security.yml",
     ]);
   });
