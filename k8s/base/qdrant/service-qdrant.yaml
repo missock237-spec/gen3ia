@@ -1,0 +1,37 @@
+# =============================================================================
+# GEN3IA — Service headless Qdrant (k8s/base/qdrant)
+#
+# Headless (clusterIP: None) : résolution DNS directe vers le pod du
+# StatefulSet (gen3ia-qdrant-0.gen3ia-qdrant.gen3ia.svc.cluster.local) —
+# le contrat standard pour un StatefulSet, et ce qui permet de passer à
+# 3 replicas sans changer la manière dont l'app découvre les nœuds.
+#
+# Interne UNIQUEMENT : pas d'exposition externe (pas d'Ingress, pas de
+# LoadBalancer) — sur le VPS actuel Qdrant est déjà un service interne.
+# La variable QDRANT_URL de l'app pointera sur
+# http://gen3ia-qdrant.gen3ia.svc.cluster.local:6333 (cf.
+# secret-example.yaml + docs/deploiement-k8s.md).
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: gen3ia-qdrant
+  namespace: gen3ia
+  labels:
+    app.kubernetes.io/name: gen3ia
+    app.kubernetes.io/component: qdrant
+    app.kubernetes.io/part-of: gen3ia
+spec:
+  clusterIP: None # headless — DNS par pod, contrat StatefulSet
+  selector:
+    app.kubernetes.io/name: gen3ia
+    app.kubernetes.io/component: qdrant
+  ports:
+    - name: http
+      port: 6333
+      targetPort: http
+      protocol: TCP
+    - name: grpc
+      port: 6334
+      targetPort: grpc
+      protocol: TCP

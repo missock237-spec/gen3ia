@@ -1,0 +1,30 @@
+# =============================================================================
+# GEN3IA — PodDisruptionBudget de l'application (k8s/base)
+#
+# Garantit qu'au PLUS 1 pod gen3ia-app est volontairement évacué à la fois
+# (drain de nœud, upgrade GKE, maintenance) : au moins 1 pod reste toujours
+# en service. C'est le pendant k8s de la règle PM2 « un process qui redémarre
+# pendant que l'autre sert » — et la pièce manquante classique des déploiements
+# qui se portent bien en jour 1 et tombent au premier upgrade de nœud.
+#
+# Cohérence : replicas plancher 2 (Deployment/HPA) − maxUnavailable 1 = ≥ 1
+# pod servi en permanence, y compris pendant un drain.
+#
+# ⚠️ Ne protège QUE contre les disruptions VOLONTAIRES (eviction API) —
+# un OOMKill ou un crash reste couvert par les probes/liveness (Deployment).
+# =============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gen3ia-app-pdb
+  namespace: gen3ia
+  labels:
+    app.kubernetes.io/name: gen3ia
+    app.kubernetes.io/component: app
+    app.kubernetes.io/part-of: gen3ia
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gen3ia
+      app.kubernetes.io/component: app

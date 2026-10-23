@@ -1,0 +1,187 @@
+# =============================================================================
+# GEN3IA — Déploiement de l'application Next.js (k8s/base)
+#
+# Image : ghcr.io/missock237-spec/gen3ia (construite par le Dockerfile
+# multi-stage de la Task G — node:22-alpine, USER node, EXPOSE 3000,
+# `next start`, HEALTHCHECK /api/health). Le TAG est volontairement un
+# placeholder : kustomize base déclare `images:` (cf. kustomization.yaml)
+# et chaque overlay épingle le tag réel au moment du déploiement
+# (cf. docs/deploiement-k8s.md — `kustomize edit set image`).
+#
+# UN SEUL conteneur : l'app est un process Node unique (pas de sidecar
+# aujourd'hui). Les logs passent sur stdout/stderr (kubectl logs / Cloud
+# Logging), les métriques restent sur /api/metrics (cf. Task G).
+#
+# Choix de ressources (alignés sur la RÉALITÉ mesurée, pas sur un idéal) :
+#   - Le VPS de production actuel fait 2 Go de RAM au TOTAL (Phase 2) et
+#     `next build` réclame > 3,5 Go (cf. deploy-vps.yml : le build vit sur
+#     le runner). En RUNTIME, un process Next.js gen3ia consomme typiquement
+#     400–700 Mo RSS. requests 512Mi = planification honnête ; limit 1Gi =
+#     marge de burst sans risquer un OOMKill silencieux du nœud.
+#   - CPU request 250m : suffisant pour servir le trafic actuel ; limit 1
+#     core pour absorber les pics de rendu de réponse.
+#   - 2 replicas × 1Gi = 2 Gi de limite RAM app — c'est le « VPS 2 Go »
+#     dédoublé, la taille minimale de départ cohérente avec la Phase 3
+#     (déclencheurs de migration : docs/feuille-de-route-google-grade.md §6).
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gen3ia-app
+  namespace: gen3ia
+  labels:
+    app.kubernetes.io/name: gen3ia
+    app.kubernetes.io/component: app
+    app.kubernetes.io/part-of: gen3ia
+spec:
+  # replicas 2 : plancher de disponibilité (un pod peut être recyclé pendant
+  # que l'autre sert). L'HPA (hpa-app.yaml) fait évoluer ce nombre entre 2 et 6.
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    # maxUnavailable 0 : JAMAIS moins de 2 pods disponibles pendant un
+    # rollout — l'équivalent conteneur du « swap atomique » de
+    # deploy/cd-finisher.sh (la version en ligne continue de servir).
+    # maxSurge 1 : on ajoute au plus un pod à la fois (coût maîtrisé,
+    # progressif — l'esprit du rollback .next.old sans le prix).
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gen3ia
+      app.kubernetes.io/component: app
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gen3ia
+        app.kubernetes.io/component: app
+        app.kubernetes.io/part-of: gen3ia
+    spec:
+      # =========================================================
+      # Sécurité (Google-grade par défaut)
+      # =========================================================
+      # runAsNonRoot : l'image embarque déjà USER node (uid/gid 1000,
+      # cf. Dockerfile Task G) — on le VERROUILLE au niveau du pod pour
+      # qu'un changement d'image ne puisse pas repasser en root.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      # 30 s : drain des connexions de chat SSE/WebSocket avant SIGKILL.
+      # Correspond au stop-graceful PM2 actuel. Le hook preStop (plus bas)
+      # laisse l'ingress retirer l'endpoint AVANT l'envoi de SIGTERM.
+      terminationGracePeriodSeconds: 30
+      # Anti-affinité DOUCE sur le hostname : deux pods ne partagent pas
+      # volontairement le même nœud. `preferred` (et non `required`) pour ne
+      # PAS bloquer un rollout sur un cluster de 2 nœuds en cours d'upgrade ;
+      # passer en requiredDuringScheduling quand le cluster aura ≥ 3 nœuds
+      # stables (Phase 3 rodée).
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: gen3ia
+                    app.kubernetes.io/component: app
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: app
+          # Tag posé par kustomize (cf. kustomization.yaml + overlays).
+          image: ghcr.io/missock237-spec/gen3ia
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          # =========================================================
+          # Configuration
+          # =========================================================
+          # ⚠️ LES NEXT_PUBLIC_* NE SONT PAS ICI (et ne doivent jamais l'être) :
+          # elles sont INLINÉES DANS LE BUNDLE JS AU BUILD (config Firebase
+          # client, NEXT_PUBLIC_APP_URL…). Un change de NEXT_PUBLIC_* exige un
+          # REBUILD D'IMAGE, pas un redémarrage de pod — c'est la même
+          # contrainte que le CD actuel (deploy-vps.yml restaure
+          # DOTENV_PRODUCTION avant `npm run build`, cf. son en-tête).
+          #   → secret gen3ia-app-secrets  : secrets RUNTIME uniquement
+          #     (Firebase Admin, R2, Qdrant, tokens…) — cf. secret-example.yaml
+          #   → configMap gen3ia-app-config : config non sensible RUNTIME
+          #     (LOG_LEVEL, OTEL_EXPORTER_OTLP_ENDPOINT — cf. Task K tracing)
+          envFrom:
+            - secretRef:
+                name: gen3ia-app-secrets
+            - configMapRef:
+                name: gen3ia-app-config
+          # =========================================================
+          # Probes — uniquement /api/health (heartbeat léger, SANS dépendance
+          # externe). JAMAIS /api/health/infra (protégé, touche Firestore/R2 —
+          # un blip réseau externe déclencherait des redémarrages en cascade)
+          # ni /api/status (public mais sonde des services tiers + cache 30 s
+          # : signal trop lourd et trop lent pour une sonde).
+          # =========================================================
+          readinessProbe:
+            # Retiré du Service dès que le heartbeat échoue : le pod n'est
+            # plus exposé pendant qu'il se rétablit.
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            # Redémarre le conteneur si l'app ne répond plus (plantage bloqué,
+            # boucle d'événements saturée). Délais raisonnés pour ne jamais
+            # tourner en rond pendant un pic de CPU.
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            # Boot lent toléré : 12 × 5 s = 60 s de budget avant que les
+            # autres probes ne prennent le relais (Next.js doit initialiser
+            # Firebase Admin, le runtime neuronal var/neural, etc.).
+            # Protection contre les redémarrages en boucle au premier boot.
+            httpGet:
+              path: /api/health
+              port: 3000
+            periodSeconds: 5
+            failureThreshold: 12
+          # =========================================================
+          # Ressources (cf. analyse en en-tête de fichier)
+          # =========================================================
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          # =========================================================
+          # Arrêt propre (Google-grade)
+          # =========================================================
+          lifecycle:
+            preStop:
+              # sleep 5 : laisse le control-plane retirer le pod des endpoints
+              # du Service (et l'ingress propager) AVANT SIGTERM — sinon les
+              # requêtes SSE en cours sont coupées net au début du drain.
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+          # Durcissement conteneur (complète runAsNonRoot du pod) —
+          # aucune élévation de privilèges, aucune capability.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      # Trafic sortant uniquement (API Google, R2, Qdrant…) : la policy
+      # réseau (NetworkPolicy deny-by-default) est volontairement HORS base —
+      # à activer avec l'équipe une fois la topologie de trafic validée en
+      # staging (trop facile de couper Qdrant/Firestore par accident au
+      # premier jour).

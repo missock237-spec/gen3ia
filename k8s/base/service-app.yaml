@@ -1,0 +1,28 @@
+# =============================================================================
+# GEN3IA — Service ClusterIP de l'application (k8s/base)
+#
+# ClusterIP uniquement : JAMAIS de LoadBalancer / NodePort — le seul chemin
+# vers l'app est l'Ingress (ingress.yaml), comme nginx est le seul chemin sur
+# le VPS. Pas de session-affinity : l'app est stateless (état dans Firestore /
+# R2 / Qdrant) et les flux SSE/WebSocket sont long-lived une fois établis —
+# du sticky par IP ne changerait rien, mais casserait l'équilibrage.
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: gen3ia-app
+  namespace: gen3ia
+  labels:
+    app.kubernetes.io/name: gen3ia
+    app.kubernetes.io/component: app
+    app.kubernetes.io/part-of: gen3ia
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: gen3ia
+    app.kubernetes.io/component: app
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http # containerPort 3000 (cf. deployment-app.yaml)
+      protocol: TCP

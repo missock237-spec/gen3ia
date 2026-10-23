@@ -1,0 +1,58 @@
+# =============================================================================
+# GEN3IA — HPA (HorizontalPodAutoscaler) de l'application (k8s/base)
+#
+# minReplicas 2 : jamais sous le plancher de disponibilité (cf. Deployment).
+# maxReplicas 6 : plafond de coûts volontairement serré (Phase 3 démarre
+# petite — cf. feuille de route §6 : le coût RETARDE la migration tant que
+# la charge suit ; on élargira sur métriques réelles, pas sur intuition).
+#
+# CIBLE CPU 70 % : signal le plus fiable ici. Le scaling sur MÉMOIRE compte
+# MOINS pour ce workload : une app Node garde un RSS élevé (GC, caches
+# .next, buffers SSE) sans être réellement saturée — une cible mémoire
+# déclencherait des oscillations inutiles. On regarde la RAM à l'œil via
+# /api/metrics + Cloud Monitoring avant d'en faire un critère d'autoscaling.
+#
+# Prérequis : metrics-server (préinstallé sur GKE, y compris Autopilot).
+#
+# Sur GKE Autopilot, les pods sont facturés à leurs `requests` : scaler de 2
+# à 6 pods = de 2×(250m/512Mi) à 6×(250m/512Mi) de facturation pods — le
+# plafond maxReplicas EST le plafond de facturation app (hors Qdrant).
+# =============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gen3ia-app-hpa
+  namespace: gen3ia
+  labels:
+    app.kubernetes.io/name: gen3ia
+    app.kubernetes.io/component: app
+    app.kubernetes.io/part-of: gen3ia
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gen3ia-app
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    # Descente LENTE (protection « VPS-like ») : stabilisation 300 s avant
+    # toute réduction + au plus 25 % des pods retirés par minute. Objectif :
+    # ne jamais resserrer la capacité pendant un creux passager (fin de
+    # réunion, pause de conversation SSE) — c'est le même réflexe que le
+    # VPS qui garde sa RAM allouée. Montée : comportement par défaut
+    # (rapide) — mieux vaut sur-scaler quelques minutes que refuser des
+    # requêtes.
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      selectPolicy: Max
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60

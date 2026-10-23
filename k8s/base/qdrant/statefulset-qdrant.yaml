@@ -1,0 +1,127 @@
+# =============================================================================
+# GEN3IA — StatefulSet Qdrant (k8s/base/qdrant)
+#
+# Base vectorielle : mémoires, connaissances indexées, conversations
+# (client @qdrant/js-client-rest — cf. lib/memory/vector-store.ts, variables
+# QDRANT_URL / QDRANT_API_KEY).
+#
+# DECISION Phase 3 : Qdrant AUTO-HÉBERGÉ dans le cluster (StatefulSet 1
+# replica + PVC 10 Gi) = point de départ fidèle au VPS actuel (service
+# système externe). ALTERNATIVE À ÉVALUER AVANT LA BASCULE : **Qdrant Cloud
+# managé** (backups, upgrades, replication inclus) — dans ce cas, supprimer
+# ce StatefulSet + service-qdrant.yaml des resources, et pointer
+# QDRANT_URL/QDRANT_API_KEY (secret gen3ia-app-secrets) vers l'URL Cloud.
+# Les DEUX options sont prévues par la feuille de route §6
+# (« Qdrant → StatefulSet GKE ou service managé »).
+#
+# 1 replica SEULEMENT au début : avec un seul PVC, le risque est concentré
+# → les SNAPSHOT (API /collections/{c}/snapshots) restent OBLIGATOIRES et
+# la migration de données passe par eux (cf. docs/deploiement-k8s.md).
+# Passer à 3 replicas (mode distributed Qdrant) seulement si la charge
+# vectorielle le justifie — pas avant d'avoir des métriques.
+#
+# Version ÉPINGLÉE (contrairement à docker-compose.yml qui utilise `latest`
+# avec le commentaire « Phase 3 : épingler ») : v1.15.1 — vérifier la
+# compatibilité avec @qdrant/js-client-rest (^1.19.0, REST API stable pour
+# upsert/search/snapshots) et monter de version par snapshot/restore, jamais
+# par pull silencieux.
+#
+# Ports : 6333 REST (utilisé par le client JS), 6334 gRPC (réservé, pas
+# utilisé aujourd'hui mais exposé dans le Service pour éviter un break de
+# contrat le jour où on y passe pour la performance).
+#
+# Sécurité : l'image officielle qdrant/qdrant tourne en root — acceptable
+# en interne (pas de LoadBalancer, Service headless interne uniquement,
+# pas de port exposé à Internet), à durcir plus tard (image distroless /
+# utilisateur dédié) si une NetworkPolicy/Qdrant Cloud ne l'a pas déjà
+# remplacé.
+# =============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: gen3ia-qdrant
+  namespace: gen3ia
+  labels:
+    app.kubernetes.io/name: gen3ia
+    app.kubernetes.io/component: qdrant
+    app.kubernetes.io/part-of: gen3ia
+spec:
+  serviceName: gen3ia-qdrant # headless (cf. service-qdrant.yaml)
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gen3ia
+      app.kubernetes.io/component: qdrant
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gen3ia
+        app.kubernetes.io/component: qdrant
+        app.kubernetes.io/part-of: gen3ia
+    spec:
+      # fsGroup : laisse le process du conteneur écrire sur le volume PVC
+      # monté (GKE attache le disque avec ce gid).
+      securityContext:
+        fsGroup: 2000
+      containers:
+        - name: qdrant
+          image: qdrant/qdrant:v1.15.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 6333 # API REST (client JS)
+            - name: grpc
+              containerPort: 6334 # gRPC (réservé)
+          resources:
+            # Demande modeste au démarrage (le VPS actuel fait tourner Qdrant
+            # sur 2 Go partagés) ; limit 2Gi pour les pics d'indexation.
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          # Probes Qdrant : /livez et /readyz existent nativement (≥ v1.8)
+          # et restent légères — pas de dépendance au contenu des collections.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 6333
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 6333
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            # Premier boot : création des collections / récupération WAL sur
+            # un disque réseau (PD) = lent et NORMAL. Budget généreux : 24 × 5 s.
+            httpGet:
+              path: /readyz
+              port: 6333
+            periodSeconds: 5
+            failureThreshold: 24
+          volumeMounts:
+            - name: qdrant-storage
+              mountPath: /qdrant/storage
+          securityContext:
+            allowPrivilegeEscalation: false
+  # PVC par pod (volumeClaimTemplates = la raison d'être d'un StatefulSet) :
+  # 10 Gi, classe par défaut du cluster (GKE : pd-balanced/rwo).
+  # La taille est volontairement en deçà de l'inflation possible mais
+  # extensible (PVC extensible via storageclass allowVolumeExpansion —
+  # vérifier sur le cluster avant d'augmenter).
+  volumeClaimTemplates:
+    - metadata:
+        name: qdrant-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
