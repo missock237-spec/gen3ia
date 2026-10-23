@@ -10,12 +10,12 @@
  *
  * Concerne les chats transverses du projet :
  *  - la conversation (/workspace/conversations[/id]) ;
- *  - le chat direct nouvelle génération (/chat — interface Aurora).
+ *  - le chat direct (/chat — interface canonique Nova, ex-Aurora supprimée
+ *    Task C ; l'ancienne route /chat-v4 redirige vers /chat, cf. next.config).
  */
 export function isImmersiveChatRoute(pathname: string): boolean {
   return (
     pathname === "/chat" ||
-    pathname === "/chat-v4" ||
     pathname === "/copilot" ||
     pathname === "/workspace/conversations" ||
     /^\/workspace\/conversations\/[^/]+$/.test(pathname)

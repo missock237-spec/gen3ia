@@ -129,7 +129,8 @@ const PUBLIC_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
  * `/api/agents/schedules/<id>/run` mais PAS `/api/agents/run`.
  */
 const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
-  // Chat IA (pages /chat, /chat-v4, /dashboard, /workspace/conversations).
+  // Chat IA (pages /chat, /dashboard, /workspace/conversations) — l'ancienne
+  // page /chat-v4 est supprimée et redirigée vers /chat (Task C).
   // /api/agent/chat ne couvre plus que /approve (approbations missions/ads) ;
   // les routes du chat d'agent universel sont supprimées du projet.
   ["/api/agent/chat", "chat"],
@@ -292,7 +293,6 @@ const RESTRICTED_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = 
 
 const USER_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/chat": "chat",
-  "/chat-v4": "chat",
   "/dashboard": "chat",
   "/billing": "facturation",
   "/memory": "memoire",
