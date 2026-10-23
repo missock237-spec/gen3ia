@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { classerChemin, enregistrerRequete } from "@/lib/observability/metrics-registry";
 import { detectDeviceFromHeaders } from "@/lib/device/detect";
 
 import {
@@ -118,6 +119,33 @@ function traceIdEntrant(request: NextRequest): string | undefined {
  *  runtime Edge. Format trc_<uuid> = 40 caractères, conforme à TRACE_ID_RE. */
 function genererTraceId(): string {
   return `trc_${crypto.randomUUID()}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* SLI — hook de métriques HTTP (Task G — SRE)                          */
+/*                                                                      */
+/* Chaque requête passant par le middleware est enregistrée dans le     */
+/* registre in-memory (lib/observability/metrics-registry.ts) : classe   */
+/* de route à CARDINALITÉ BORNÉE (chat/api/pages/static — JAMAIS le     */
+/* chemin brut), famille de statut, durée. Coût : une Map.set + un push */
+/* ring buffer — aucun I/O, aucune allocation hors registre.            */
+/*                                                                      */
+/* ⚠️ Périmètre de mesure : le middleware mesure SON traitement et le   */
+/* statut de SA réponse (200 continuation / 307 redirection / 403). Les */
+/* 5xx produits en aval par un route handler ne passent pas ici — la    */
+/* source complémentaire reste les logs d'accès nginx (cf.              */
+/* docs/sre/sli-slo.md).                                                */
+/* ------------------------------------------------------------------ */
+
+/** Enregistre la requête courante dans le registre SLI — échec silencieux : */
+/** la télémétrie ne doit JAMAIS perturber le trafic (ni latence, ni erreur). */
+function noterRequeteSLI(chemin: string, statut: number, debutMs: number): void {
+  try {
+    enregistrerRequete(classerChemin(chemin), statut, performance.now() - debutMs);
+  } catch {
+    // Volontairement muet : la perte d'une mesure est acceptable, une
+    // perturbation du trafic ne l'est pas.
+  }
 }
 
 function isClientRoute(pathname: string) {
@@ -291,6 +319,8 @@ async function applyAccessControl(
 }
 
 export async function middleware(request: NextRequest) {
+  // SLI : horodatage de début (performance.now() = précision sous-ms).
+  const debutMs = performance.now();
   const pathname = request.nextUrl.pathname;
   const hasClientAccess = Boolean(getClientEntry(request));
   const isClientEntry = isClientRoute(pathname);
@@ -299,7 +329,9 @@ export async function middleware(request: NextRequest) {
   // Un lien client ouvre un espace isolé : tant que ce marqueur existe,
   // aucune page de l'application n'est accessible depuis ce navigateur.
   if (hasClientAccess && !isAllowedClientRequest) {
-    return NextResponse.redirect(new URL(getClientEntry(request) ?? "/client", request.url));
+    const redirectionClient = NextResponse.redirect(new URL(getClientEntry(request) ?? "/client", request.url));
+    noterRequeteSLI(pathname, redirectionClient.status, debutMs);
+    return redirectionClient;
   }
 
   const isApiRoute = pathname.startsWith("/api/");
@@ -314,7 +346,10 @@ export async function middleware(request: NextRequest) {
   // Liste blanche d'accès (demande n°7) : AVANT la détection d'appareil
   // et la propagation de headers — un 403 n'a besoin de rien d'autre.
   const denied = await applyAccessControl(request, pathname, isApiRoute, traceId);
-  if (denied) return denied;
+  if (denied) {
+    noterRequeteSLI(pathname, denied.status, debutMs);
+    return denied;
+  }
 
   // Detection automatique d'appareils : le resultat est expose aux pages
   // serveur et aux routes API via les en-tetes x-gen3ia-device-*.
@@ -349,12 +384,22 @@ export async function middleware(request: NextRequest) {
   response.headers.set("X-Gen3ia-Device", device.type);
   applySecurityHeaders(response, isArtefactPreview);
 
+  // SLI : la continuation middleware est observée avec le statut de SA
+  // réponse (200) — le sort de la requête en aval (route handler) est hors
+  // de ce périmètre (limitation documentée dans docs/sre/sli-slo.md).
+  noterRequeteSLI(pathname, response.status, debutMs);
+
   return response;
 }
 
 export const config = {
   // Correspond à toutes les routes SAUF les assets statiques Next (qui
   // reçoivent déjà les en-têtes de next.config.ts headers()) et le favicon.
+  //
+  // Conséquence SLI (Task G) : ces chemins exclus ne sont PAS comptés dans
+  // /api/metrics (les assets _next/static ne transitent pas par le
+  // middleware) — les classes « static » observées couvrent les autres
+  // fichiers publics (icônes, manifest, sw.js…).
   //
   // ⚠️ /api est VOLONTAIREMENT inclus (décision audit 09-2026, point 11) :
   // 1. trace-id x-gen3ia-trace-id posé ET écho sur chaque réponse API

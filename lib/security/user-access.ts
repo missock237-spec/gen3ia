@@ -96,6 +96,10 @@ const PUBLIC_API_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/api/neural/public-stats": "public",
   "/api/status": "systeme",
   "/api/deploy-info": "systeme",
+  // SLI Prometheus (Task G) : la route applique SA PROPRE garde Bearer
+  // (METRICS_TOKEN via timingSafeStringEqual, même convention que /api/cron)
+  // — public ici = « non bloqué par la liste blanche », pas « sans auth ».
+  "/api/metrics": "systeme",
 };
 
 /**
