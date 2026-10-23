@@ -1,0 +1,49 @@
+# =============================================================================
+# GEN3IA — exclusions du contexte de build Docker
+#
+# But : contexte minimal (builds plus rapides, image sans secrets ni artefacts
+# locaux). Les replis runtime correspondants sont documentés dans le Dockerfile.
+# =============================================================================
+
+# --- Dépendances et artefacts de build (recréés DANS l'image) ---
+node_modules
+.next
+out
+coverage
+.vitest
+
+# --- Git et CI (non nécessaires au build) ---
+.git
+.gitignore
+.github
+
+# --- État runtime local (repli « amorcé à neuf » prévu côté lib/neural) ---
+var
+
+# --- Journaux locaux ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Secrets locaux : JAMAIS dans l'image (config injectée au runtime) ---
+# Couvre .env, .env.local, .env.production et .env.example (documentation
+# hors image — les variables sont fournies par docker-compose / l'orchestrateur).
+.env*
+
+# --- Binaires neuronaux volumineux (~12 Mo, déversionnés Task E) ---
+# À télécharger via assets/neural-pretrained/download-model.sh si besoin ;
+# le runtime neuronal a un repli propre sans ce fichier.
+assets/neural-pretrained/*.bin
+
+# --- Services annexes : builds/images PROPRES (hors image Next.js) ---
+# tsconfig.json exclut déjà ces répertoires du typecheck : aucun n'est importé
+# par l'application (lib/sandbox/* ≠ sandbox/, lib/pipeline/* ≠ pipeline/).
+training-worker
+pipeline
+sandbox
+live-agent
+sdk
+
+# --- Tests de bout en bout (Playwright, exécutés hors image) ---
+e2e

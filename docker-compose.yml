@@ -1,0 +1,62 @@
+# =============================================================================
+# GEN3IA — composition Docker (portabilité Phase 2)
+#
+# ⚠️ CE N'EST PAS LE RUNTIME DE PRODUCTION ACTUEL.
+#   La production est un VPS 2 Go (AlmaLinux) avec PM2 (process « gen3ia »,
+#   port 3000) + nginx + https://gen3ia.online, déployée par
+#   .github/workflows/deploy-vps.yml → deploy/cd-finisher.sh (swap atomique
+#   .next). Cette composition sert :
+#     - au DÉVELOPPEMENT LOCAL reproductible (`docker compose up`) ;
+#     - de socle à la migration conteneurs (GKE Phase 3).
+#
+# Usage local :
+#   docker compose up --build          # app (Next.js) + qdrant
+#   curl http://localhost:3000/api/health
+#
+# Configuration : les variables d'environnement (.env à la racine, modèle
+# .env.example) sont injectées via env_file ci-dessous. Si le fichier est
+# absent, créer un .env minimal (ou supprimer la ligne) — Firebase reste
+# requis pour un usage réel.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Application Next.js (construite depuis ./Dockerfile multi-stage)
+  # ---------------------------------------------------------------------------
+  app:
+    build: .
+    image: gen3ia:local
+    # L'app écoute sur 3000 dans le conteneur ; nginx/traefik s'interposera
+    # en Phase 3 (même rôle que nginx sur le VPS actuel).
+    ports:
+      - "3000:3000"
+    env_file:
+      - path: .env
+        required: false # tolérant : build/healthcheck marchent sans .env
+    environment:
+      # Qdrant joignable par le NOM DE SERVICE du réseau compose (DNS interne).
+      # Surcharge la valeur locale (http://127.0.0.1:6333) du .env si présente.
+      QDRANT_URL: http://qdrant:6333
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Qdrant — base vectorielle (mémoires, connaissances, conversations).
+  # Sur le VPS actuel : service système externe ; ici : conteneur avec volume
+  # nommé pour PERSISTANCE entre les recréations du conteneur.
+  # ---------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest # Phase 3 : ÉPINGLER une version précise (reproductibilité)
+    # 6333 = API REST (client @qdrant/js-client-rest). Exposé ici pour le
+    # debug local uniquement ; en Phase 3, le retirer (réseau interne only).
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+volumes:
+  # Volume nommé : les collections Qdrant survivent aux `docker compose down`
+  # (perdues seulement avec `down -v`).
+  qdrant_storage:
