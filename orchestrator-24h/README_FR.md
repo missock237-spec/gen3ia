@@ -72,15 +72,15 @@ curl http://127.0.0.1:8000/health
 ```bash
 curl -X POST http://127.0.0.1:8000/jobs \
   -H 'Content-Type: application/json' \
-  -H 'X-API-Key: CHANGE_ME_TO_A_LONG_RANDOM_SECRET' \
+  -H "X-API-Key: $QUEUE_API_KEY" \
   -H 'Idempotency-Key: test-image-001' \
   -d '{"modality":"image","priority":5,"payload":{"prompt":"Illustration d’une ville futuriste au lever du soleil","size":"1024x1024"}}'
 ```
 
-Remplace la clé d'exemple par celle réellement enregistrée dans `.env`. L'API répond par un `job_id` et la voie (`lane: normal|fast`). Consulte ensuite :
+Les exemples lisent la clé depuis l'environnement (`export QUEUE_API_KEY=...` une fois par session) : elle ne figure jamais en clair dans la documentation ni dans l'historique du shell. L'API répond par un `job_id` et la voie (`lane: normal|fast`). Consulte ensuite :
 
 ```bash
-curl -H 'X-API-Key: TA_VRAIE_CLE' http://127.0.0.1:8000/jobs/ID_DE_LA_TACHE
+curl -H "X-API-Key: $QUEUE_API_KEY" http://127.0.0.1:8000/jobs/ID_DE_LA_TACHE
 ```
 
 ## Tâche urgente (voie rapide, v2)
@@ -88,14 +88,14 @@ curl -H 'X-API-Key: TA_VRAIE_CLE' http://127.0.0.1:8000/jobs/ID_DE_LA_TACHE
 ```bash
 # priority <= FAST_LANE_MAX_PRIORITY (défaut 3) → traitée en premier
 curl -X POST http://127.0.0.1:8000/jobs \
-  -H 'Content-Type: application/json' -H 'X-API-Key: TA_VRAIE_CLE' \
+  -H 'Content-Type: application/json' -H "X-API-Key: $QUEUE_API_KEY" \
   -d '{"modality":"video","priority":1,"payload":{"scene":"teaser 10s"}}'
 ```
 
 ## Supervision 24/7 (v2)
 
 ```bash
-curl -H 'X-API-Key: TA_VRAIE_CLE' http://127.0.0.1:8000/stats
+curl -H "X-API-Key: $QUEUE_API_KEY" http://127.0.0.1:8000/stats
 # {"queues":{"image":{"normal":0,"fast":1,"total":1},...},"dead_letters":{...},"review":0,...}
 docker compose ps
 docker compose logs -f worker-image worker-audio worker-video worker-data
@@ -109,7 +109,7 @@ Même endpoint, seulement `modality` change : `audio` ou `video`. Le contenu de 
 
 ```bash
 curl -X POST http://127.0.0.1:8000/jobs \
-  -H 'Content-Type: application/json' -H 'X-API-Key: TA_VRAIE_CLE' \
+  -H 'Content-Type: application/json' -H "X-API-Key: $QUEUE_API_KEY" \
   -d '{"modality":"data","payload":{"records":[{"caption":"Un chat noir sur un canapé","asset_url":"https://example.com/cat.jpg"},{"caption":"   "}]}}'
 ```
 
