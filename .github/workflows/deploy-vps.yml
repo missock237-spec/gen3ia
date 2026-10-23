@@ -82,7 +82,14 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vps_deploy
           chmod 600 ~/.ssh/vps_deploy
-          ssh-keyscan -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          # keyscan NON FATAL : en cas de blocage passager du sshd VPS
+          # (PerSourcePenalties / fail2ban / MaxStartups saturé par le bruit
+          # SSH public — runs #43-#46), on ne meurt PAS ici : les options
+          # accept-new des étapes suivantes acceptent l'hôte à la première
+          # connexion réussie, et la vraie fenêtre de combat reste la boucle
+          # de retry espacée du transfert.
+          ssh-keyscan -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || \
+            echo "⚠️ keyscan échoué (blocage SSH passager ?) — known_hosts incomplet, accept-new prendra le relais."
 
       - name: Envoyer build + finisher vers le VPS (retry PerSourcePenalties)
         run: |
@@ -95,10 +102,10 @@ jobs:
           # persistant au-delà de ce step = blocage VPS côté sshd/firewall,
           # à lever sur le VPS (cf. docs/exploitation/ssh-bloque-runbook.md).
           for i in 1 2 3 4 5 6; do
-            if scp -o ServerAliveInterval=30 -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+            if scp -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
                  /tmp/next-build.tar.gz \
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/next-build.tar.gz" \
-            && scp -o ServerAliveInterval=30 -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+            && scp -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
                  deploy/cd-finisher.sh \
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/cd-finisher.sh"; then
               ok=1; break
@@ -112,7 +119,7 @@ jobs:
         run: |
           ok=0
           for i in 1 2 3 4; do
-            sortie=$(ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+            sortie=$(ssh -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
                  "bash /tmp/cd-finisher.sh ${GITHUB_SHA}" 2>&1) && code=0 || code=$?
             echo "$sortie"
