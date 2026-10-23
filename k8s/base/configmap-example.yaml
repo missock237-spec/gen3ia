@@ -1,0 +1,29 @@
+# =============================================================================
+# GEN3IA — EXEMPLE de ConfigMap (k8s/base/configmap-example.yaml)
+#
+# ⚠️ CE FICHIER N'EST PAS DANS LES `resources` DE LA KUSTOMIZATION —
+# il DOCUMENTE la liste attendue. Création réelle (une fois par
+# environnement, valeurs non sensibles uniquement — tout secret va dans
+# gen3ia-app-secrets) :
+#
+#   kubectl create configmap gen3ia-app-config \
+#     --namespace gen3ia \
+#     --from-literal=LOG_LEVEL=info \
+#     --from-literal=OTEL_EXPORTER_OTLP_ENDPOINT=
+#
+# Contexte OTEL_EXPORTER_OTLP_ENDPOINT : le tracing distribué est en
+# préparation (Task K — OTel/trace-id) ; la variable est réservée DÈS
+# MAINTENANT pour que le jour de l'activation, ce soit un changement de
+# ConfigMap + rollout restart, pas un changement d'image.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gen3ia-app-config
+  namespace: gen3ia
+data:
+  # Niveau de logs applicatifs (prod : info ; staging : debug toléré).
+  LOG_LEVEL: "<info>"
+  # Endpoint OTLP du collecteur de tracing (vide = tracing désactivé,
+  # cf. Task K). Phase 3 GCP : endpoint Cloud Trace / collector OTel.
+  OTEL_EXPORTER_OTLP_ENDPOINT: "<https://collector-otlp...>"

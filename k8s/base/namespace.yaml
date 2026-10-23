@@ -1,0 +1,21 @@
+# =============================================================================
+# GEN3IA — Namespace dédié (k8s/base)
+#
+# Pourquoi un namespace dédié :
+#   - cloisonnement des quotas (ResourceQuota futur), des secrets et des
+#     rôles RBAC de la plateforme ;
+#   - séparation nette avec les composants d'infrastructure du cluster
+#     (ingress-nginx, cert-manager vivent dans kube-system / cert-manager) ;
+#   - les overlays (prod/staging) réaffirment `namespace: gen3ia` pour que
+#     `kubectl apply -k k8s/overlays/prod` ne dépende jamais du contexte
+#     courant de kubectl.
+#
+# Phase 3 (GKE) : un projet GCP par environnement reste la barrière forte ;
+# ce namespace est la barrière interne au cluster.
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gen3ia
+  labels:
+    app.kubernetes.io/part-of: gen3ia

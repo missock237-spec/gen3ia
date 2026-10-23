@@ -1,0 +1,33 @@
+# =============================================================================
+# GEN3IA — kustomization BASE (kustomize, v1beta1)
+#
+# La base = la topologie commune à tous les environnements :
+# namespace + app (deployment/service/ingress/hpa/pdb) + qdrant (statefulset/
+# service). Les overlays (prod, staging) ne font que spécialiser :
+# tag d'image, hosts TLS, replicas, ressources — rien n'est dupliqué.
+#
+# ⚠️ Les fichiers *-example.yaml (secret/configmap) ne sont PAS dans les
+# resources : ils sont à créer réellement via `kubectl create secret|configmap`
+# (cf. docs/deploiement-k8s.md). Un pod qui démarre sans eux tombe en
+# CreateContainerConfigError — c'est le signal voulu, fail-fast.
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - deployment-app.yaml
+  - service-app.yaml
+  - ingress.yaml
+  - hpa-app.yaml
+  - pdb-app.yaml
+  - qdrant/statefulset-qdrant.yaml
+  - qdrant/service-qdrant.yaml
+
+# Image : le tag du placeholder est INVALIDE volontairement (A-REMPLACER) :
+# un `kubectl apply -k k8s/base` nu échoue au pull au lieu de déployer un
+# build inconnu. Chaque overlay épingle son tag (cf. overlays/prod et la
+# doc : `kustomize edit set image ...`).
+images:
+  - name: ghcr.io/missock237-spec/gen3ia
+    newTag: A-REMPLACER-PAR-TAG-IMAGE

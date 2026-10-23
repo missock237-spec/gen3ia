@@ -1,0 +1,18 @@
+# =============================================================================
+# GEN3IA — patch staging : HPA (1 pod minimum)
+#
+# Cohérence avec patch-deployment-staging.yaml (replicas 1) : sans ce patch,
+# l'HPA de la base (minReplicas 2) recréerait un 2e pod à la première
+# sollicitation CPU. Plafond maxReplicas 2 : le staging peut être chargé
+# volontairement (smoke k6) sans coûter plus que 2 pods.
+# EXEMPLE de spécialisation par overlay : la prod garde 2→6 (base), le
+# staging 1→2.
+# =============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gen3ia-app-hpa
+  namespace: gen3ia-staging
+spec:
+  minReplicas: 1
+  maxReplicas: 2

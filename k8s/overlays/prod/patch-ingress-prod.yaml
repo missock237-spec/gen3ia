@@ -1,0 +1,46 @@
+# =============================================================================
+# GEN3IA — patch prod : Ingress (hosts TLS gen3ia.online + www)
+#
+# Re-déclaration explicite des hosts de PRODUCTION et du secret TLS
+# gen3ia-tls (géré par cert-manager, ClusterIssuer letsencrypt-prod).
+# Identiques à la base : ce patch EST la documentation de prod vivante
+# (modifier ici si le domaine change — la base reste générique).
+#
+# staging.gen3ia.online est couvert par l'overlay staging, pas ici —
+# la prod ne route JAMAIS un environnement de test.
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gen3ia-ingress
+  namespace: gen3ia
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - gen3ia.online
+        - www.gen3ia.online
+      secretName: gen3ia-tls
+  rules:
+    - host: gen3ia.online
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gen3ia-app
+                port:
+                  number: 3000
+    - host: www.gen3ia.online
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gen3ia-app
+                port:
+                  number: 3000

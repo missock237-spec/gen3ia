@@ -1,0 +1,80 @@
+# =============================================================================
+# GEN3IA — Ingress nginx (k8s/base)
+#
+# Équivalent du vhost nginx du VPS : point d'entrée unique TLS → Service app.
+#
+# Prérequis cluster (Phase 3, cf. docs/deploiement-k8s.md) :
+#   - ingress-nginx installé (controller qui honore ingressClassName: nginx) ;
+#   - cert-manager installé avec un ClusterIssuer `letsencrypt-prod`
+#     (HTTP-01 — l'Ingress est publiquement routé).
+#
+# SSE / WebSocket (chats conversationnels) :
+#   - WebSocket : géré NATIVEMENT par ingress-nginx (upgrade transparent),
+#     aucune annotation requise — ne pas en ajouter « au cas où » ;
+#   - SSE : les réponses streamées doivent traverser sans être mises en
+#     tampon ni coupées → proxy-buffering off + timeouts longs
+#     (proxy-read-timeout/send-timeout 3600) ;
+#   - PAS de session-affinity volontairement : l'app est stateless, du sticky
+#     casserait l'équilibrage sans rien apporter (cf. service-app.yaml).
+#
+# host gen3ia.online + www.gen3ia.online : les deux servent la même app.
+# La redirection www → domaine canonique est déjà la responsabilité de
+# l'application/middleware (comme sur le VPS) — on garde les deux hosts
+# actifs pour ne pas introduire de 404 pendant la cohabitation.
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gen3ia-ingress
+  namespace: gen3ia
+  labels:
+    app.kubernetes.io/name: gen3ia
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: gen3ia
+  annotations:
+    # ---------- TLS automatisé (cert-manager) ----------
+    # Le ClusterIssuer `letsencrypt-prod` doit exister au niveau cluster
+    # (à créer une fois, cf. docs/deploiement-k8s.md). Le secret gen3ia-tls
+    # est GÉRÉ PAR cert-manager : ne jamais le créer/éditer à la main.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # ---------- Corps des requêtes ----------
+    # 25 m : uploads utilisateur (assets vidéo/images via /api/*) — aligné
+    # sur les limites pratiques constatées côté R2/S3. Ne pas monter sans
+    # raison : c'est aussi une garde anti-abus.
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+    # ---------- SSE / WebSocket (cf. note en en-tête) ----------
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - gen3ia.online
+        - www.gen3ia.online
+      # Certificat émis par cert-manager (HTTP-01) pour les deux hosts.
+      secretName: gen3ia-tls
+  rules:
+    # Une règle par host, même backend : simple, lisible, équivalent au
+    # server_name gen3ia.online www.gen3ia.online du vhost nginx.
+    - host: gen3ia.online
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gen3ia-app
+                port:
+                  number: 3000
+    - host: www.gen3ia.online
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gen3ia-app
+                port:
+                  number: 3000
