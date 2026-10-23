@@ -1,0 +1,48 @@
+# =============================================================================
+# GEN3IA — Overlay STAGING (k8s/overlays/staging)
+#
+# Environnement de pré-prod MINIMAL : 1 replica, host staging.gen3ia.online,
+# émetteur Let's Encrypt STAGING (quotas raisonnables — le rate-limit
+# production ne doit jamais être brûlé par des tests de renouvellement).
+#
+# ⚠️ HÉBERGEMENT — deux options (à trancher au moment de la Phase 3) :
+#   A. Cluster GKE DÉDIÉ au staging (recommandé Google-grade — cf. feuille de
+#      route §6 : « projet/environnement GCP dédié ») : ce namespace
+#      gen3ia-staging est alors le seul existant, la ressource Namespace
+#      ci-dessous est nécessaire au premier apply.
+#   B. Cohabitation dans le cluster de prod : gen3ia-staging isole les
+#      ressources (secrets/ConfigMaps séparés — les créer aussi :
+#      kubectl create secret ... -n gen3ia-staging), mais partage le
+#      control-plane et les nœuds : OK pour un rodage, PAS pour des tests
+#      destructifs.
+#
+# ⚠️ La ressource Namespace de la base (`gen3ia`) est RENOMMÉE
+# automatiquement en `gen3ia-staging` par le champ `namespace` ci-dessous
+# (comportement kustomize pour les objets Namespace) — le namespace est
+# donc créé par le premier apply, rien à faire à la main.
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: gen3ia-staging
+
+resources:
+  - ../../base
+
+patches:
+  - path: patch-deployment-staging.yaml
+    target:
+      kind: Deployment
+      name: gen3ia-app
+  - path: patch-hpa-staging.yaml
+    target:
+      kind: HorizontalPodAutoscaler
+      name: gen3ia-app-hpa
+  - path: patch-ingress-staging.yaml
+    target:
+      kind: Ingress
+      name: gen3ia-ingress
+
+images:
+  - name: ghcr.io/missock237-spec/gen3ia
+    newTag: A-PINNER-AU-DEPLOIEMENT

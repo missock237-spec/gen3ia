@@ -1,0 +1,30 @@
+# =============================================================================
+# GEN3IA — patch prod : Deployment (replicas + ressources)
+#
+# Re-déclaration EXPLICITE des valeurs de production (identiques à la base) :
+# l'overlay montre ce qui est engagé en prod sans devoir ouvrir la base.
+#
+# 2 pods × (250m CPU / 512Mi RAM request, 1 CPU / 1Gi RAM limit) : la capacité
+# minimale viable alignée sur la réalité du VPS 2 Go actuel (cf. analyse dans
+# k8s/base/deployment-app.yaml). À REVOIR avec 30 jours de métriques réelles
+# (/api/metrics + Cloud Monitoring) une fois la Phase 3 lancée — pas avant :
+# les guesses de ressources sont une dette, les métriques sont la vérité.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gen3ia-app
+  namespace: gen3ia
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: app
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi

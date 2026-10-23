@@ -1,0 +1,35 @@
+# =============================================================================
+# GEN3IA — patch staging : Ingress (host staging.gen3ia.online)
+#
+# Différences prod (volontaires, EXEMPLES de ce qu'un overlay peut spécialiser) :
+#   - host unique staging.gen3ia.online (DNS A/CNAME à créer vers l'IP de
+#     l'ingress-nginx du cluster) ;
+#   - ClusterIssuer `letsencrypt-staging` : certificats non approuvés publics
+#     mais quotas Let's Encrypt PRODUCTION préservés (un renouvellement raté
+#     en boucle en staging ne doit jamais bloquer la prod) ;
+#   - secret TLS distinct gen3ia-tls-staging.
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gen3ia-ingress
+  namespace: gen3ia-staging
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - staging.gen3ia.online
+      secretName: gen3ia-tls-staging
+  rules:
+    - host: staging.gen3ia.online
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gen3ia-app
+                port:
+                  number: 3000

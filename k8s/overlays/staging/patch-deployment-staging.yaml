@@ -1,0 +1,17 @@
+# =============================================================================
+# GEN3IA — patch staging : Deployment (replicas 1)
+#
+# 1 replica : le staging coûte le minimum (Autopilot facture les requests).
+# EXEMPLE de spécialisation : on pourrait aussi réduire les ressources ici
+# (ex. requests 125m/256Mi) — gardé volontairement identique pour que le
+# staging se rapproche des conditions de prod (mesures comparables).
+# ⚠️ À coupler avec patch-hpa-staging.yaml : sans lui, l'HPA de la base
+# (minReplicas 2) recréerait un 2e pod à la première sollicitation CPU.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gen3ia-app
+  namespace: gen3ia-staging
+spec:
+  replicas: 1

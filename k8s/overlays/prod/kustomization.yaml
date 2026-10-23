@@ -1,0 +1,47 @@
+# =============================================================================
+# GEN3IA — Overlay PROD (k8s/overlays/prod)
+#
+# Surcharge MINIMALE de la base : prod = la base, épinglée. C'est volontaire :
+# plus un overlay corrige, moins la base est testée — ici la base EST la
+# configuration de production (replicas 2, hosts gen3ia.online déjà corrects).
+#
+# Ce que l'overlay spécialise :
+#   1. le namespace (gen3ia — réaffirmé, `apply -k` ne dépend pas du contexte
+#      kubectl courant) ;
+#   2. le TAG d'image (à épingler à chaque release — voir ci-dessous) ;
+#   3. re-déclaration explicite des replicas/ressources prod et des hosts TLS
+#      (fichiers patch-*.yaml : les valeurs visibles LOCALEMENT dans l'overlay,
+#      pas cachées dans la base).
+#
+# Épingler le tag d'image à une release :
+#   cd k8s/overlays/prod
+#   kustomize edit set image ghcr.io/missock237-spec/gen3ia=ghcr.io/missock237-spec/gen3ia:v1.2.3
+#   # (sans binaire kustomize : éditer newTag ci-dessous — git diff = la release)
+#   kubectl apply -k .
+#   kubectl -n gen3ia rollout status deployment/gen3ia-app
+#
+# Le tag A-PINNER est INVALIDE volontairement : un apply sans épinglage
+# échoue au pull au lieu de servir un build inconnu (fail-fast, même
+# philosophie que le BUILD_ID vérifié par deploy-vps.yml).
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: gen3ia
+
+resources:
+  - ../../base
+
+patches:
+  - path: patch-deployment-prod.yaml
+    target:
+      kind: Deployment
+      name: gen3ia-app
+  - path: patch-ingress-prod.yaml
+    target:
+      kind: Ingress
+      name: gen3ia-ingress
+
+images:
+  - name: ghcr.io/missock237-spec/gen3ia
+    newTag: A-PINNER-AU-DEPLOIEMENT
