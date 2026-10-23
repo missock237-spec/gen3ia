@@ -8,8 +8,9 @@ le contrat consommé par la plateforme Next.js dans
 > Règle absolue du studio : **aucune simulation d'entraînement en production**.
 > Chaque progression, chaque perte, chaque métrique provient d'une exécution
 > réelle. Le moteur `fake` (tests) n'est accepté que si
-> `WORKER_ALLOW_FAKE_ENGINE=true`, et le CPU est déclaré honnêtement : il ne
-> permet d'exécuter que `rag-index`.
+> `WORKER_ALLOW_FAKE_ENGINE=true`. gen3 est conçu pour exploiter les ressources
+> GPU disponibles : `/capabilities` ne déclare que des GPU CUDA réels — le CPU
+> n'est jamais une capacité de calcul pour l'IA.
 
 ## 1. Architecture
 
@@ -58,10 +59,8 @@ Toutes les routes sauf `/healthz` exigent `Authorization: Bearer <WORKER_TOKEN>`
 ### Capacités
 
 - Les GPU sont détectés **réellement** via `torch.cuda` (nom + VRAM). Sans
-  torch ou sans CUDA : aucune entrée GPU — rien n'est inventé.
-- `WORKER_DECLARE_CPU=true` (défaut) ajoute `{"name":"cpu","vramGb":0.0,"available":true}` :
-  la plateforme peut alors exécuter **rag-index** (minVramGb 0) sur cet hôte,
-  tandis que text-lora (8 Go min) reste exclu.
+  torch ou sans CUDA : aucune entrée GPU — rien n'est inventé, et surtout pas
+  de pseudo-entrée « cpu » : un hôte sans GPU n'a aucune capacité d'IA.
 - `maxDurationMinutes` vient de `MAX_DURATION_MINUTES` (ou `null`). Cette durée
   est aussi **appliquée** par un watchdog : au bout du délai, la tâche échoue
   au prochain point de contrôle du moteur.
@@ -135,7 +134,6 @@ RAG…) et la tâche devient `failed` avec l'erreur « Annulé par la plateforme
 | `WORKER_HOST` / `WORKER_PORT` | `0.0.0.0` / `8000` | Écoute (usage `python -m training_worker.app`) |
 | `MAX_DURATION_MINUTES` | `null` | Durée max d'une tâche (annoncée + appliquée) |
 | `MAX_CONCURRENT_JOBS` | `1` | Tâches réellement parallèles |
-| `WORKER_DECLARE_CPU` | `true` | Déclarer l'entrée `cpu` dans /capabilities |
 | `WORKER_ALLOW_FAKE_ENGINE` | `false` | Autoriser le moteur de test `fake` |
 | `WORK_DIR` | `./work` | Téléchargements, artefacts locaux, une dir par tâche |
 | `JOBS_STATE_FILE` | `./jobs-state/jobs.json` | État persistant (reprise après redémarrage) |
@@ -163,7 +161,7 @@ uvicorn training_worker.app:app --host 0.0.0.0 --port 8000
 Côté plateforme : `TRAINING_WORKER_URL=http://<hôte>:8000` et
 `TRAINING_WORKER_TOKEN=<même jeton>`.
 
-### Docker (CPU / développement — rag-index uniquement)
+### Docker (développement — service et tests sans GPU)
 
 ```bash
 docker build -t gen3ia-training-worker ./training-worker
@@ -197,7 +195,8 @@ python3 -m venv .venv-qa
 ```
 
 Les tests (25) couvrent : authentification (401/503, /healthz libre), forme
-exacte de `/capabilities` (entrée CPU, maxDurationMinutes), cycle complet
+exacte de `/capabilities` (GPU réels uniquement — jamais d'entrée CPU,
+maxDurationMinutes), cycle complet
 fake (201 → état ProviderJobState → artefacts), validation des payloads
 (422/400, moteur fake refusé par défaut), annulation, redémarrage (tâches
 interrompues marquées en échec) et **hygiène d'import** (aucun module lourd
@@ -205,9 +204,11 @@ tiré au chargement). Ils passent **sans torch ni boto3**.
 
 ## 7. Limites connues (honnêtes)
 
-1. **Le CPU ne sert que rag-index** : text-lora exige un vrai GPU (QLoRA :
-   GPU CUDA + bitsandbytes ; LoRA classique possible mais très lent sur CPU —
-   la plateforme exclut déjà text-lora sans 8 Go de VRAM).
+1. **Pas de GPU = aucune tâche d'IA** : gen3 exploite les ressources GPU
+   disponibles (L4, A100…) — text-lora exige CUDA + bitsandbytes ; un hôte
+   sans GPU déclare une liste vide et ne reçoit jamais d'entraînement.
+   rag-index reste un utilitaire documentaire (chunking/embeddings) exécutable
+   là où un hôte en dispose, sans jamais être annoncé comme calcul IA.
 2. **Un fichier de poids seul ne suffit pas** : un upload `.safetensors`
    isolé n'a ni `config.json` ni tokenizer → refus explicite (fournir une
    archive ZIP du dossier de modèle complet). GGUF (llama.cpp) refusé.

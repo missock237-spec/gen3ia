@@ -45,7 +45,6 @@ def worker_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Environnement de test : token, moteur fake, répertoires temporaires, R2 absent."""
     monkeypatch.setenv("WORKER_TOKEN", "test-token")
     monkeypatch.setenv("WORKER_ALLOW_FAKE_ENGINE", "true")
-    monkeypatch.setenv("WORKER_DECLARE_CPU", "true")
     monkeypatch.setenv("WORK_DIR", str(tmp_path / "work"))
     monkeypatch.setenv("JOBS_STATE_FILE", str(tmp_path / "state" / "jobs.json"))
     # R2 volontairement NON configuré : les tests doivent passer sans boto3.

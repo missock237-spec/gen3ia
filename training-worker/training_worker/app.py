@@ -3,7 +3,7 @@
 Routes (contrat exact, cf. ``lib/training/providers/worker-http.ts``) :
 
 - ``GET  /healthz``                  : ``{"ok": true}`` — SANS authentification ;
-- ``GET  /capabilities``             : GPU réels (``torch.cuda``) + CPU déclaré honnêtement ;
+- ``GET  /capabilities``             : GPU CUDA réels (``torch.cuda``) — jamais de CPU ;
 - ``POST /jobs``                     : 201 ``{"externalId": "..."}`` (tâche en arrière-plan) ;
 - ``GET  /jobs/{externalId}``        : état complet (ProviderJobState) ;
 - ``POST /jobs/{externalId}/cancel`` : 200 — annulation au prochain point de contrôle.
@@ -108,14 +108,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/capabilities", dependencies=[Depends(require_worker_token)])
     def capabilities() -> CapabilitiesResponse:
-        """Capacités réelles : GPU détectés + CPU déclaré (rag-index uniquement)."""
-        gpus = detect_gpus()
-        if settings.declare_cpu:
-            # Déclaration honnête : le CPU (0 Go de VRAM) ne permet à la plateforme
-            # d'exécuter que rag-index (minVramGb 0) — jamais text-lora (8 Go).
-            gpus.append(GpuInfo(name="cpu", vramGb=0.0, available=True))
+        """Capacités réelles : GPU CUDA détectés — jamais de CPU déclaré.
+
+        gen3 est conçu pour exploiter les ressources GPU disponibles (L4, A100…).
+        Le CPU n'est pas une capacité de calcul pour l'IA : un hôte sans GPU
+        déclare une liste vide et ne reçoit jamais de tâche d'entraînement.
+        """
         return CapabilitiesResponse(
-            gpus=gpus, maxDurationMinutes=settings.max_duration_minutes
+            gpus=detect_gpus(), maxDurationMinutes=settings.max_duration_minutes
         )
 
     @app.post("/jobs", status_code=201, dependencies=[Depends(require_worker_token)])

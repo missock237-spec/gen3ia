@@ -11,8 +11,9 @@ Ce package implémente le contrat consommé par la plateforme Next.js côté
 
 Règle d'honnêteté du studio (docs/training-studio.md §1) : **aucune simulation
 d'entraînement en production**. Le moteur ``fake`` n'est accepté que lorsque
-``WORKER_ALLOW_FAKE_ENGINE=true`` (réservé aux tests). Le CPU est déclaré
-honnêtement dans les capacités : il ne permet d'exécuter que ``rag-index``.
+``WORKER_ALLOW_FAKE_ENGINE=true`` (réservé aux tests). gen3 est conçu pour
+exploiter les ressources GPU disponibles : ``/capabilities`` ne déclare que des
+GPU CUDA réels — jamais le CPU, qui n'est pas une capacité de calcul pour l'IA.
 
 Toutes les dépendances lourdes (torch, transformers, peft, sentence-transformers,
 boto3) sont importées **paresseusement** : importer ce package ne doit jamais

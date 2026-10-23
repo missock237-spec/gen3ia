@@ -96,6 +96,8 @@ class TextEvalEngine(BaseEngine):
             collate_fn=collator,
             shuffle=False,
         )
+        # GPU si disponible (cible réelle de gen3) ; repli interne réservé aux
+        # tests CI avec micro-modèles — jamais annoncé comme capacité de calcul.
         device = "cuda" if use_cuda else "cpu"
         model.to(device)
         model.eval()

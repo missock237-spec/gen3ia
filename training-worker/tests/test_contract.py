@@ -29,7 +29,7 @@ def _poll_state(client: TestClient, external_id: str, timeout: float = 5.0) -> d
 
 
 def test_capabilities_forme_complete(client: TestClient) -> None:
-    """/capabilities : forme exacte — GPU réels + entrée cpu + maxDurationMinutes."""
+    """/capabilities : forme exacte — GPU réels uniquement + maxDurationMinutes."""
     response = client.get("/capabilities", headers=AUTH)
     assert response.status_code == 200
     body = response.json()
@@ -38,14 +38,16 @@ def test_capabilities_forme_complete(client: TestClient) -> None:
     assert body["maxDurationMinutes"] is None
     gpus = body["gpus"]
     assert isinstance(gpus, list)
-    cpu_entries = [gpu for gpu in gpus if gpu["name"] == "cpu"]
-    assert len(cpu_entries) == 1, "l'entrée cpu déclarée doit être présente et unique"
-    assert cpu_entries[0]["vramGb"] == 0.0
-    assert cpu_entries[0]["available"] is True
+    # gen3 fonctionne sur les ressources GPU disponibles — le CPU n'est jamais
+    # une capacité de calcul pour l'IA : aucune entrée « cpu » ne doit apparaître.
+    assert all(gpu["name"] != "cpu" for gpu in gpus), (
+        "le CPU ne doit jamais être déclaré dans /capabilities"
+    )
     for gpu in gpus:
         assert set(gpu.keys()) == {"name", "vramGb", "available"}
         assert isinstance(gpu["name"], str)
         assert isinstance(gpu["vramGb"], (int, float))
+        assert gpu["vramGb"] > 0, "un GPU déclaré a une VRAM réelle"
         assert isinstance(gpu["available"], bool)
 
 

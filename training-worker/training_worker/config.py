@@ -56,8 +56,6 @@ class Settings:
     max_duration_minutes: int | None
     #: Nombre de tâches exécutées réellement en parallèle (les autres attendent en file).
     max_concurrent_jobs: int
-    #: Déclarer honnêtement une entrée « cpu » dans /capabilities (rag-index seulement).
-    declare_cpu: bool
     #: Autoriser le moteur « fake » (TESTS UNIQUEMENT — défaut : faux).
     allow_fake_engine: bool
     #: Répertoire de travail (téléchargements, artefacts locaux, une dir par tâche).
@@ -99,7 +97,6 @@ def load_settings() -> Settings:
         worker_token=_env_str("WORKER_TOKEN"),
         max_duration_minutes=duration,
         max_concurrent_jobs=concurrency,
-        declare_cpu=_env_bool("WORKER_DECLARE_CPU", True),
         allow_fake_engine=_env_bool("WORKER_ALLOW_FAKE_ENGINE", False),
         work_dir=Path(os.environ.get("WORK_DIR") or "./work").expanduser(),
         jobs_state_file=Path(os.environ.get("JOBS_STATE_FILE") or "./jobs-state/jobs.json").expanduser(),

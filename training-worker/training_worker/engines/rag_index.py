@@ -23,7 +23,7 @@ from .dataset_io import chunk_text, load_records, record_to_text
 
 
 class RagIndexEngine(BaseEngine):
-    """Indexation RAG — méthode ``rag``. Fonctionne aussi sur CPU (minVramGb 0)."""
+    """Indexation RAG — méthode ``rag`` (utilitaire documentaire, sans inférence gen3)."""
 
     engine_id = "rag-index"
     methods = ("rag",)
