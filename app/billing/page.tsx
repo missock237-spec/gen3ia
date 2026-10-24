@@ -388,28 +388,31 @@ export default function BillingPage() {
           (sale.amount.value → applyTopup), jamais un palier prédéfini. */}
       {!free && <p style={styles.note}>Au montant de ton choix : sur la page de paiement Chariow, saisis librement le montant à recharger.</p>}
 
-      {/* Recharge RAPIDE (demande n°4) : widget boutique officiel du produit
-          « Recharge Wallet API » (prd_llfosdp1) — raccourci de paiement direct
-          à côté du flux Mobile Money ci-dessus, qui reste disponible. Le
-          webhook Pulse crédite le solde automatiquement (vente reconnue par
-          identifiant produit, idempotence chariow_<saleId>). */}
-      {!free && (
-        <div style={styles.widgetsBlock}>
-          <div style={styles.widgetsTitle}>Recharge rapide du wallet</div>
-          <div style={styles.widgetCard}>
-            <div style={styles.widgetLabel}>{CHARIOW_TOPUP_WIDGET.label}</div>
-            <div style={styles.widgetNote}>{CHARIOW_TOPUP_WIDGET.note}</div>
-            <ChariowWidget productId={CHARIOW_TOPUP_WIDGET.productId} />
-          </div>
-          <p style={styles.note}>C&apos;est toi qui choisis le montant : saisis-le librement sur la page de paiement — le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow).</p>
-          {storeUrl && (
-            <p style={styles.note}>
-              Recharge également possible sur la boutique :{" "}
-              <a href={storeUrl} target="_blank" rel="noopener noreferrer" style={styles.storeLink}>{storeUrl}</a>
-            </p>
-          )}
+      {/* Recharge RAPIDE (demande n°4 + demande propriétaire 10-2026) :
+          widget boutique officiel du produit « Recharge Wallet API »
+          (prd_llfosdp1, code d'embed exact de la boutique) — VISIBLE EN TOUT
+          TEMPS, y compris en mode accès libre : les entrées d'argent réel
+          (recharge Chariow) restent opérationnelles en mode libre (aucune
+          garde BILLING_ENABLED sur topup/verify/webhook), le solde crédité
+          est conservé pour la reprise de la facturation. Le webhook Pulse
+          crédite le solde automatiquement (vente reconnue par identifiant
+          produit, idempotence chariow_<saleId>). */}
+      <div style={styles.widgetsBlock}>
+        <div style={styles.widgetsTitle}>Recharge rapide du wallet</div>
+        <div style={styles.widgetCard}>
+          <div style={styles.widgetLabel}>{CHARIOW_TOPUP_WIDGET.label}</div>
+          <div style={styles.widgetNote}>{CHARIOW_TOPUP_WIDGET.note}</div>
+          <ChariowWidget productId={CHARIOW_TOPUP_WIDGET.productId} />
         </div>
-      )}
+        <p style={styles.note}>C&apos;est toi qui choisis le montant : saisis-le librement sur la page de paiement — le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow).</p>
+        {free && <p style={styles.note}>Mode accès libre : rien n&apos;est débité de ton solde tant que ce mode est actif — ta recharge reste disponible pour la reprise de la facturation.</p>}
+        {storeUrl && (
+          <p style={styles.note}>
+            Recharge également possible sur la boutique :{" "}
+            <a href={storeUrl} target="_blank" rel="noopener noreferrer" style={styles.storeLink}>{storeUrl}</a>
+          </p>
+        )}
+      </div>
 
       {success && <p style={styles.success}>{success}</p>}
       {notice && <p style={styles.notice}>{notice}</p>}

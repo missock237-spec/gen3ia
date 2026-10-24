@@ -151,6 +151,10 @@ describe("intégration page /billing + CSP forteresse", () => {
     expect(page).toContain("Recharger avec Chariow");
     // Repli boutique (CHARIOW_TOPUP_STORE_URL via /api/billing/wallet) en lien secondaire.
     expect(page).toContain("storeUrl");
+    // DEMANDE PROPRIÉTAIRE (10-2026) : la recharge rapide est VISIBLE EN TOUT
+    // TEMPS — plus aucun conditionnement {!free} autour du bloc widget (les
+    // entrées d'argent réel restent opérationnelles en mode accès libre).
+    expect(page).not.toMatch(/\{!free && \(\s*<div style=\{styles\.widgetsBlock\}/);
   });
 
   it("la CSP autorise le CDN widget (script + style) sans ouvrir le reste", () => {
