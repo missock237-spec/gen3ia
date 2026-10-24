@@ -3,13 +3,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { type User } from "firebase/auth";
 import { watchAuth } from "@/lib/firebase/client";
 import { authFetch, readJsonSafely, useSessionAvailable } from "@/lib/firebase/auth-client";
+import ChariowWidget, { CHARIOW_ESPACE_WIDGETS } from "@/components/billing/chariow-widget";
 
 type ImportedFile = { id: string; filename: string; contentType: string; sizeBytes: number; kind: string; charCount: number; conversion: "full" | "metadata-only"; createdAt?: string };
 
 type PermanentFile = { path: string; filename: string; sizeBytes: number };
 type CameraRequest = { id: string; reason: string; facingMode: string };
+type StorageLicenceView = { licenceId: string; label: string; extraBytes: number; grantedAt: number };
 type StoragePlanInfo = { id: "free" | "storage-pro5" | "storage-pro10"; label: string; quotaBytes: number; priceMinor: number; priceLabel: string; highlight?: boolean };
-type StorageProfile = { plan: StoragePlanInfo; renewalAt: number | null; lastRenewalError: string | null };
+type StorageProfile = { plan: StoragePlanInfo; renewalAt: number | null; lastRenewalError: string | null; licenceExtraBytes: number; licences: StorageLicenceView[] };
 type StorageUsage = { usedBytes: number; quotaBytes: number; fileCount: number };
 
 /** Tailles en unités FR canoniques (Ko/Mo — aligné sur formatBytes du workspace). */
@@ -139,6 +141,7 @@ export default function StoragePage() {
           <div className={`h-full rounded-full transition-all ${quotaFull ? "bg-[var(--g3-danger)]" : "bg-[var(--g3-gradient)]"}`} style={{ width: `${Math.max(2, Math.round(usedRatio * 100))}%` }} />
         </div>
         {profile?.renewalAt && <p className="mt-2 text-xs text-[var(--g3-faint)]">Prochain renouvellement le {new Date(profile.renewalAt).toLocaleDateString("fr-FR")} — débité automatiquement sur votre portefeuille Gen3ia.</p>}
+        {profile && profile.licenceExtraBytes > 0 && <p className="mt-2 text-xs text-[var(--g3-success-strong)]">+ {formatBytesFr(profile.licenceExtraBytes)} d&apos;espace acheté (permanent) — {profile.licences.map(l => l.label).join(" · ")}.</p>}
         {profile?.lastRenewalError && <p className="mt-2 text-xs text-[var(--g3-warning-strong)]">Dernier renouvellement impossible : {profile.lastRenewalError} Le compte est repassé sur le plan de base — vos fichiers sont conservés.</p>}
         {quotaFull && <p className="mt-2 text-sm text-[var(--g3-warning-strong)]">Stockage plein : supprimez des fichiers ci-dessous ou étendez votre quota avec un plan payant.</p>}
       </div>}
@@ -172,6 +175,20 @@ export default function StoragePage() {
           <button type="button" disabled={busy || planBusy || active} onClick={() => void choosePlan(plan.id)} className="mt-4 w-full rounded-full bg-[var(--g3-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--g3-on-primary)] hover:bg-[var(--g3-primary-strong)] disabled:cursor-not-allowed disabled:opacity-50">{active ? "Plan actuel" : plan.id === "free" ? "Revenir au plan de base" : `Passer à ${plan.label.split(" ").pop()}`}</button>
         </div>;
       })}{!plans.length && loaded && <p className="text-sm text-[var(--g3-faint)]">Offres indisponibles pour le moment.</p>}</div>
+
+      {/* Achat DIRECT d'espace (boutique Chariow) : licences PERMANENTES sans abonnement.
+          Le quota est accordé automatiquement après paiement (webhook Pulse) et s'empile
+          au-dessus du plan courant — il survit à une retombée au plan de base. */}
+      <h3 className="mt-7 font-serif text-lg font-semibold">Achat direct d&apos;espace — permanent</h3>
+      <p className="mt-1 text-sm text-[var(--g3-muted)]">Achète ton espace en un clic sur la boutique officielle (Mobile Money ou carte) : la licence est ajoutée automatiquement à ton quota après paiement — sans abonnement, sans renouvellement, tes fichiers sont toujours conservés. <span className="font-semibold text-[var(--g3-text)]">Important : paie avec l&apos;adresse e-mail de ton compte Gen3ia</span> — l&apos;espace est rapproché de ton compte par cet e-mail.</p>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">{CHARIOW_ESPACE_WIDGETS.map(widget => (
+        <div key={widget.productId} className="rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-5">
+          <h4 className="font-semibold">{widget.label}</h4>
+          <p className="mt-1 text-xs text-[var(--g3-muted)]">{widget.note}</p>
+          <div className="mt-3"><ChariowWidget productId={widget.productId} /></div>
+        </div>
+      ))}</div>
+      <p className="mt-3 text-xs text-[var(--g3-faint)]">Payé avec une autre adresse ? Contacte le support : la vente est conservée et peut être rapprochée manuellement de ton compte.</p>
     </div>
 
     <div className="mt-6 rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[var(--gen3ia-shadow-md)]"><h2 className="font-serif text-xl font-semibold">Demandes caméra des agents</h2><p className="mt-2 text-sm text-[var(--g3-muted)]">La caméra n’est jamais activée silencieusement. Une demande d’agent doit être acceptée par l’utilisateur et expire automatiquement.</p><video ref={videoRef} className="mt-4 hidden w-full max-w-xl rounded-xl" playsInline muted /> <div className="mt-5 space-y-3">{requests.map(r => <div key={r.id} className="rounded-xl border border-[var(--g3-warning-border)] bg-[var(--g3-warning-soft)] p-4"><p className="text-sm">{r.reason}</p><button disabled={busy} onClick={() => capture(r.id, r.facingMode === "user" ? "user" : "environment")} className="mt-3 rounded-full bg-[var(--g3-success)] px-4 py-2 text-sm font-semibold text-[var(--g3-on-primary)] hover:brightness-110">Autoriser et prendre la photo</button></div>)}{loaded && !requests.length && <p className="text-sm text-[var(--g3-faint)]">Aucune demande en attente.</p>}</div></div></div></div>;

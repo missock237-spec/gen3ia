@@ -7,6 +7,7 @@ import { settleChariowExtensionPurchase } from "@/lib/extensions/entitlements";
 import { getChariowTopupProductId } from "./chariow";
 import { applyTopup, WALLET_CURRENCY, type WalletSnapshot } from "./wallet";
 import { activatePlanFromSale } from "./abonnements";
+import { resolveStorageLicenceForProduct, grantStorageLicence, type StorageLicenceDefinition } from "@/lib/storage/licences";
 
 /**
  * Livraisons du webhook Chariow Pulse (Task 104-b — rejeu résilient).
@@ -68,6 +69,7 @@ export type ChariowWebhookPayload = {
 export type ChariowProcessResult =
   | { kind: "extension_purchase"; granted: boolean }
   | { kind: "plan_subscription"; planId: string; userId: string; activated: boolean }
+  | { kind: "storage_licence"; userId: string; licence: string; granted: boolean }
   | { kind: "ignored" }
   | { kind: "user_not_found" }
   | { kind: "duplicate_sale" }
@@ -211,6 +213,60 @@ function extensionSaleMetadata(payload: ChariowWebhookPayload) {
     userId: String(metadata.userId ?? ""),
     extensionId: String(metadata.extensionId ?? ""),
   };
+}
+
+/**
+ * Traitement d'une vente de LICENCE D'ESPACE (achat direct boutique, widget
+ * tap sans métadonnées — lib/storage/licences.ts). Même squelette que la
+ * branche plan_subscription : statut créditable obligatoire, rapprochement
+ * du compte Gen3ia par l'e-mail client Chariow, idempotence garantie en aval
+ * par grantStorageLicence (document `chariow_${saleId}`).
+ */
+async function handleStorageLicenceSale(
+  payload: ChariowWebhookPayload,
+  deliveryRef: { update: (data: Record<string, unknown>) => Promise<unknown> },
+  licence: StorageLicenceDefinition,
+): Promise<ChariowProcessResult> {
+  const saleId = String(payload?.sale?.id ?? "");
+  const saleStatus = String(payload?.sale?.status ?? "completed").toLowerCase();
+  const customerEmail = String(payload.customer?.email ?? "").trim().toLowerCase();
+  const productId = String(payload?.product?.id ?? "");
+
+  if (!saleId) throw new Error("Storage licence payload is missing sale reference.");
+  if (!CREDITABLE_STATUSES.has(saleStatus)) {
+    throw new Error(`Sale status ${saleStatus} is not creditable.`);
+  }
+
+  let userId: string;
+  try {
+    const user = await getAuth(getApps()[0]!).getUserByEmail(customerEmail);
+    userId = user.uid;
+  } catch {
+    // Compte Gen3ia introuvable pour cet e-mail : la livraison reste
+    // REPRISEABLE (rapprochement admin) dès que le compte existe — les
+    // clients doivent payer avec l'e-mail de leur compte Gen3ia.
+    await deliveryRef.update({
+      status: "failed",
+      reason: "firebase_user_not_found",
+      customerEmail,
+      saleId,
+      failedAt: new Date(),
+    });
+    return { kind: "user_not_found" };
+  }
+
+  const grant = await grantStorageLicence({ userId, licence, saleId, productId });
+  await deliveryRef.update({
+    status: "processed",
+    kind: "storage_licence",
+    licenceId: grant.licenceId,
+    userId,
+    saleId,
+    productId,
+    granted: grant.granted,
+    processedAt: new Date(),
+  });
+  return { kind: "storage_licence", userId, licence: grant.label, granted: grant.granted };
 }
 
 /**
@@ -365,6 +421,13 @@ export async function processChariowSale(
         userId,
         activated: result.kind === "activated",
       };
+    }
+
+    // Licences d'espace (100/600 Go permanents) : reconnues par identifiant
+    // produit AVANT la recharge wallet (produits distincts — aucune collision).
+    const storageLicence = resolveStorageLicenceForProduct(payload?.product?.id);
+    if (storageLicence) {
+      return await handleStorageLicenceSale(payload, deliveryRef, storageLicence);
     }
 
     if (!isTopupSale(payload)) {

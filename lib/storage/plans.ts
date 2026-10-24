@@ -12,6 +12,11 @@
  * DÉTERMINISTE par période (`storageplan_{planId}_{periodKey}`) : un double
  * appel de renouvellement ne peut jamais débiter deux fois le même mois.
  *
+ * S'ajoutent depuis 10-2025 les LICENCES D'ESPACE achetées directement sur
+ * la boutique Chariow (lib/storage/licences.ts : +100 Go / +600 Go
+ * permanents) : le quota EFFECTIF = quota du plan + somme des licences. Une
+ * retombée au plan free (échéance impayée) conserve donc l'espace acheté.
+ *
  * Renouvellement « lazy » : la échéance est vérifiée au moment où le profil
  * est lu (GET /api/storage/plan, chaque upload, chaque consultation) — aucun
  * cron externe n'est requis. Si le solde est insuffisant à l'échéance, le
@@ -23,6 +28,7 @@
 import { FieldValue, Timestamp, type DocumentSnapshot } from "@/lib/r2fs";
 import { adminDb } from "@/lib/firebase/admin";
 import { getWallet, reserveFunds, settleReservation } from "@/lib/billing/wallet";
+import { listStorageLicences, type StorageLicenceView } from "@/lib/storage/licences";
 
 /** Quota du plan gratuit (unités SI — 1 Go = 1024³ octets). */
 export const FREE_QUOTA_BYTES = 1024 ** 3;
@@ -77,6 +83,10 @@ export interface StorageProfile {
   /** Dernière erreur de renouvellement (solde insuffisant…), le cas échéant. */
   lastRenewalError: string | null;
   updatedAt: number;
+  /** Quota ADDITIONNEL permanent accordé par les licences d'espace Chariow. */
+  licenceExtraBytes: number;
+  /** Détail des licences actives (affichage /storage). */
+  licences: StorageLicenceView[];
 }
 
 const PLANS_COLLECTION = "storagePlans";
@@ -108,7 +118,8 @@ function planDocRef(userId: string) {
   return adminDb.collection(PLANS_COLLECTION).doc(userId);
 }
 
-function snapshotToProfile(snap: DocumentSnapshot): StorageProfile {
+/** Profil du PLAN seul (sans les licences d'espace — enrichi par getStorageProfile). */
+function planProfileFromSnapshot(snap: DocumentSnapshot): Omit<StorageProfile, "licenceExtraBytes" | "licences"> {
   const data = snap.data() as Partial<PlanDoc> | undefined;
   const plan = findStoragePlan(data?.planId ?? "free") ?? STORAGE_PLANS[0];
   const renewalAt = plan.priceMinor > 0 ? toMillis(data?.renewalAt) || null : null;
@@ -120,13 +131,29 @@ function snapshotToProfile(snap: DocumentSnapshot): StorageProfile {
   };
 }
 
+/** Profil COMPLET : plan + licences d'espace (quota effectif affiché). */
+async function completeProfile(
+  userId: string,
+  planProfile: Omit<StorageProfile, "licenceExtraBytes" | "licences">,
+): Promise<StorageProfile> {
+  // La panne de lecture des licences ne doit jamais masquer le plan (ni
+  // bloquer les uploads) : repli honnête à zéro — seule la consultation
+  // /storage montrerait l'absence temporaire du détail des licences.
+  const licences = await listStorageLicences(userId).catch(() => [] as StorageLicenceView[]);
+  return {
+    ...planProfile,
+    licenceExtraBytes: licences.reduce((total, licence) => total + licence.extraBytes, 0),
+    licences,
+  };
+}
+
 /** Quota effectif d'un utilisateur, avec renouvellement lazy si échu. */
 export async function getStorageProfile(userId: string): Promise<StorageProfile> {
   const snap = await planDocRef(userId).get();
-  if (!snap.exists) return snapshotToProfile(snap);
-  const profile = snapshotToProfile(snap);
-  if (profile.plan.id === "free" || !profile.renewalAt) return profile;
-  if (profile.renewalAt > Date.now()) return profile;
+  if (!snap.exists) return completeProfile(userId, planProfileFromSnapshot(snap));
+  const profile = planProfileFromSnapshot(snap);
+  if (profile.plan.id === "free" || !profile.renewalAt) return completeProfile(userId, profile);
+  if (profile.renewalAt > Date.now()) return completeProfile(userId, profile);
 
   // Échéance atteinte : tenter le renouvellement immédiat (lazy).
   const renewed = await renewStoragePlan(userId).catch((error: unknown) => ({
@@ -135,7 +162,7 @@ export async function getStorageProfile(userId: string): Promise<StorageProfile>
   }));
   if (renewed.ok) {
     const refreshed = await planDocRef(userId).get();
-    return snapshotToProfile(refreshed);
+    return completeProfile(userId, planProfileFromSnapshot(refreshed));
   }
 
   // Solde insuffisant (ou erreur de facturation) → retour au plan free.
@@ -151,13 +178,16 @@ export async function getStorageProfile(userId: string): Promise<StorageProfile>
     { merge: true },
   );
   const downgraded = await planDocRef(userId).get();
-  return snapshotToProfile(downgraded);
+  return completeProfile(userId, planProfileFromSnapshot(downgraded));
 }
 
-/** Quota octets effectif (après renouvellement lazy éventuel). */
+/**
+ * Quota octets EFFECTIF (après renouvellement lazy éventuel) : quota du plan
+ * + licences d'espace permanentes achetées sur la boutique (100/600 Go).
+ */
 export async function getQuotaBytesForUser(userId: string): Promise<number> {
   const profile = await getStorageProfile(userId);
-  return profile.plan.quotaBytes;
+  return profile.plan.quotaBytes + profile.licenceExtraBytes;
 }
 
 /** Clé de période stable (YYYY-MM) — référence de facturation idempotente. */
@@ -226,7 +256,7 @@ export async function changeStoragePlan(userId: string, planId: StoragePlanId): 
     { merge: true },
   );
   const snap = await planDocRef(userId).get();
-  return snapshotToProfile(snap);
+  return completeProfile(userId, planProfileFromSnapshot(snap));
 }
 
 /** Aperçu d'achat pour l'UI : prix des plans + solde disponible. */

@@ -66,6 +66,14 @@ export async function POST(request: Request) {
           userId: result.userId,
           activated: result.activated,
         });
+      case "storage_licence":
+        return Response.json({
+          received: true,
+          kind: "storage_licence",
+          licence: result.licence,
+          userId: result.userId,
+          granted: result.granted,
+        });
       case "ignored":
         return Response.json({ received: true, ignored: true });
       case "duplicate_sale":

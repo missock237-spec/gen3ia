@@ -6,7 +6,8 @@ créée par la plateforme est rattachée à Gen3ia (métadonnées + redirection 
 origine déclarée), et le webhook Pulse active l'offre automatiquement après
 paiement. Les **trois produits payants sont publiés dans la boutique** et
 payables directement via les widgets officiels Chariow rendus sur `/billing`
-(components/billing/chariow-widget.tsx).
+(components/billing/chariow-widget.tsx). Les **licences d'espace de stockage**
+(« 100Go », « 600Go ») sont vendues de la même façon sur `/storage` — voir §9.
 
 ## 1. Les quatre offres
 
@@ -130,6 +131,8 @@ CHARIOW_TOPUP_STORE_URL=                    # optionnel : repli boutique affich�
 CHARIOW_PLAN_PRO_PRODUCT_ID=                # vide → produit boutique prd_svqonju7
 CHARIOW_PLAN_ENTREPRISE_PRODUCT_ID=         # vide → produit boutique prd_v76f5kjl
 CHARIOW_PLAN_SUR_MESURE_PRODUCT_ID=         # vide → produit boutique prd_646qpmge
+CHARIOW_ESPACE_100_PRODUCT_ID=              # vide → produit boutique prd_645l06yr (+100 Go)
+CHARIOW_ESPACE_600_PRODUCT_ID=              # vide → produit boutique prd_vkequ0dn (+600 Go)
 CHARIOW_EUR_XAF_RATE=655.957                # parité fixe franc CFA
 ```
 
@@ -211,3 +214,56 @@ rapprochement admin) ; le webhook reste la SEULE voie de crédit automatique.
   de crédit automatique) et `CHARIOW_API_KEY` (checkouts API + vérification
   des ventes). Le produit `prd_llfosdp1` étant branché par défaut,
   `CHARIOW_TOPUP_PRODUCT_ID` est optionnel.
+
+## 9. Licences d'espace de stockage — « 100Go » / « 600Go » (`/storage`)
+
+Deux produits de la boutique vendent du **quota de stockage PERMANENT** en
+paiement direct (widgets tap sur `/storage`, section « Achat direct d'espace ») :
+
+| Produit boutique | Quantité accordée | Prix (boutique) | Produit Chariow |
+|---|---|---|---|
+| « 100Go » | +100 Go permanents | 3 000 FCFA | `prd_645l06yr` |
+| « 600Go » | +600 Go permanents | 6 000 FCFA | `prd_vkequ0dn` |
+
+Quantités vérifiées sur la vitrine publique le 2026-10-25 (les produits ont
+été MODIFIÉS côté Chariow : l'ancienne offre 10 Go est devenue 100 Go, une
+offre 600 Go a été ajoutée) — les libellés affichés sur `/storage` sont
+alignés sur ces quantités et ces prix.
+
+### Cycle d'un achat d'espace
+
+```
+Achat (widget « tap » prd_645l06yr / prd_vkequ0dn sur /storage)
+  → page de paiement Chariow (Mobile Money, carte…)
+  → webhook Pulse successful.sale → /api/webhooks/chariow (signature HMAC vérifiée)
+  → resolveStorageLicenceForProduct (lib/storage/licences.ts) :
+      vente reconnue par product.id (env CHARIOW_ESPACE_100/600_PRODUCT_ID
+      → défauts boutique prd_645l06yr / prd_vkequ0dn)
+  → rapprochement du compte Gen3ia par l'E-MAIL du client Chariow
+    (l'acheteur doit payer avec l'e-mail de son compte Gen3ia ; sinon la
+    livraison passe en failed « firebase_user_not_found » et reste
+    repriseable par le rapprochement admin une fois le compte créé)
+  → grantStorageLicence : document idempotent chariow_<saleId> dans la
+    collection storageLicences — une même vente ne peut jamais accorder
+    deux fois l'espace
+  → quota EFFECTIF = quota du plan (1 Go inclus / 5 Go / 10 Go) + somme des
+    licences — appliqué partout (uploads, barre d'utilisation /storage) et
+    SURVIT à une retombée au plan free (échéance wallet impayée)
+```
+
+Les licences s'EMPILENT (plusieurs achats = quota additionnel cumulé) et ne
+sont PAS des abonnements : aucun renouvellement, aucun débit wallet, fichiers
+toujours conservés. Le détail des licences accordées est affiché sur
+`/storage` (« + X Go d'espace acheté (permanent) »).
+
+### Notes opérationnelles
+
+- **Surcharge env** : `CHARIOW_ESPACE_100_PRODUCT_ID` /
+  `CHARIOW_ESPACE_600_PRODUCT_ID` REMPLACENT les défauts boutique (même
+  sémantique que `resolvePlanProductId`).
+- **Prix modifiés côté Chariow ?** Mettre à jour les libellés affichés
+  (`lib/storage/licences.ts` pour le prix, `chariow-widgets-config.ts` pour
+  les cartes widgets) — la boutique reste la source de vérité du paiement,
+  jamais le code.
+- Les plans d'abonnement wallet (5 Go / 10 Go mensuels, §1 et Task 150)
+  restent inchangés et coexistent avec les licences d'espace.

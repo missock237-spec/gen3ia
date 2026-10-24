@@ -16,9 +16,17 @@ const docSet = vi.fn();
 let planStore: Record<string, unknown> | null;
 const docRef = { get: docGet, set: docSet };
 
+/** Simule les licences d'espace accordées (collection storageLicences). */
+let licenceDocs: Array<{ data: () => Record<string, unknown> }> = [];
+const licencesWhereGet = vi.fn();
+
 vi.mock("@/lib/firebase/admin", () => ({
   adminDb: {
-    collection: vi.fn(() => ({ doc: vi.fn(() => docRef) })),
+    collection: vi.fn((name: string) =>
+      name === "storageLicences"
+        ? { where: vi.fn(() => ({ limit: vi.fn(() => ({ get: licencesWhereGet })) })) }
+        : { doc: vi.fn(() => docRef) },
+    ),
   },
 }));
 
@@ -53,6 +61,8 @@ const ts = (ms: number) => ({ ms, toMillis: () => ms });
 beforeEach(() => {
   vi.clearAllMocks();
   planStore = null;
+  licenceDocs = [];
+  licencesWhereGet.mockImplementation(async () => ({ docs: licenceDocs }));
   docGet.mockImplementation(() => ({ exists: planStore !== null, data: () => planStore }));
   docSet.mockImplementation((data: Record<string, unknown>) => {
     planStore = { ...(planStore ?? {}), ...data };
@@ -99,6 +109,42 @@ describe("getStorageProfile", () => {
     expect(profile.plan.quotaBytes).toBe(5 * 1024 ** 3);
     expect(reserveFundsMock).not.toHaveBeenCalled();
     expect(await getQuotaBytesForUser("u-pro")).toBe(5 * 1024 ** 3);
+  });
+
+  it("ajoute les licences d'espace Chariow au quota du plan (quota EFFECTIF)", async () => {
+    const GO = 1024 ** 3;
+    planStore = { planId: "storage-pro5", renewalAt: ts(Date.now() + 10 * DAY) };
+    licenceDocs = [
+      { data: () => ({ licenceId: "espace-100", label: "Espace 100 Go", extraBytes: 100 * GO }) },
+      { data: () => ({ licenceId: "espace-600", label: "Espace 600 Go", extraBytes: 600 * GO }) },
+    ];
+    const profile = await getStorageProfile("u-pro");
+    expect(profile.licenceExtraBytes).toBe(700 * GO);
+    expect(profile.licences).toHaveLength(2);
+    // Quota effectif = plan (5 Go) + licences (700 Go) — les uploads suivent.
+    expect(await getQuotaBytesForUser("u-pro")).toBe(705 * GO);
+  });
+
+  it("l'espace acheté SURVIT à une retombée au plan free (échéance impayée)", async () => {
+    const GO = 1024 ** 3;
+    reserveFundsMock.mockRejectedValue(new Error("Insufficient wallet balance for this execution."));
+    planStore = { planId: "storage-pro5", renewalAt: ts(Date.now() - DAY) };
+    licenceDocs = [
+      { data: () => ({ licenceId: "espace-600", label: "Espace 600 Go", extraBytes: 600 * GO }) },
+    ];
+    const profile = await getStorageProfile("u-broke");
+    expect(profile.plan.id).toBe("free");
+    expect(profile.licenceExtraBytes).toBe(600 * GO);
+    expect(await getQuotaBytesForUser("u-broke")).toBe(601 * GO); // 1 Go free + licence
+  });
+
+  it("une panne de lecture des licences ne masque jamais le plan (repli à zéro)", async () => {
+    planStore = { planId: "storage-pro5", renewalAt: ts(Date.now() + 10 * DAY) };
+    licencesWhereGet.mockRejectedValue(new Error("Firestore indisponible"));
+    const profile = await getStorageProfile("u-pro");
+    expect(profile.plan.quotaBytes).toBe(5 * 1024 ** 3);
+    expect(profile.licenceExtraBytes).toBe(0);
+    expect(profile.licences).toEqual([]);
   });
 
   it("renouvelle automatiquement une échéance passée quand le solde couvre", async () => {

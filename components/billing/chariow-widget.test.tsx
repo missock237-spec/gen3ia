@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  CHARIOW_ESPACE_WIDGETS,
   CHARIOW_PLAN_WIDGETS,
   CHARIOW_STORE_DOMAIN,
   CHARIOW_TOPUP_WIDGET,
@@ -86,6 +87,46 @@ describe("widget de recharge du wallet API (prd_llfosdp1, demande n°4)", () => 
     const chariow = await import("@/lib/billing/chariow");
     expect(chariow.getChariowTopupProductId()).toBe("prd_remplacement");
     delete process.env.CHARIOW_TOPUP_PRODUCT_ID;
+  });
+});
+
+describe("widgets d'achat direct d'espace (licences permanentes 100/600 Go)", () => {
+  it("expose exactement les deux produits espace publiés avec leurs quantités modifiées", () => {
+    expect(CHARIOW_ESPACE_WIDGETS.map((w) => w.productId)).toEqual(["prd_645l06yr", "prd_vkequ0dn"]);
+    expect(CHARIOW_ESPACE_WIDGETS.map((w) => w.label)).toEqual([
+      "Espace 100 Go — 3 000 FCFA",
+      "Espace 600 Go — 6 000 FCFA",
+    ]);
+    for (const widget of CHARIOW_ESPACE_WIDGETS) {
+      expect(widget.note).toContain("PERMANENT");
+      expect(widget.note).toContain("webhook Chariow");
+      // Le rapprochement par e-mail est CRUCIAL (achat sans session plateforme).
+      expect(widget.note).toContain("e-mail de ton compte Gen3ia");
+    }
+    // Hors grille : ni un plan, ni la recharge wallet.
+    expect(CHARIOW_PLAN_WIDGETS.map((w) => w.productId)).not.toContain(CHARIOW_ESPACE_WIDGETS[0].productId);
+    expect(CHARIOW_TOPUP_WIDGET.productId).not.toBe(CHARIOW_ESPACE_WIDGETS[0].productId);
+  });
+
+  it("cohérence avec le serveur : les 2 produits sont reconnus par lib/storage/licences", async () => {
+    delete process.env.CHARIOW_ESPACE_100_PRODUCT_ID;
+    delete process.env.CHARIOW_ESPACE_600_PRODUCT_ID;
+    const licences = await import("@/lib/storage/licences");
+    const [espace100, espace600] = CHARIOW_ESPACE_WIDGETS;
+    expect(licences.resolveStorageLicenceForProduct(espace100.productId)?.id).toBe("espace-100");
+    expect(licences.resolveStorageLicenceForProduct(espace600.productId)?.id).toBe("espace-600");
+    // Quantités affichées = quantités accordées (pas de fausse promesse).
+    expect(licences.STORAGE_LICENCES.map((l) => l.extraBytes)).toEqual([100 * 1024 ** 3, 600 * 1024 ** 3]);
+  });
+
+  it("la page /storage rend l'achat direct d'espace avec les widgets et l'avertissement e-mail", () => {
+    const page = read("app/storage/page.tsx");
+    expect(page).toContain("CHARIOW_ESPACE_WIDGETS");
+    expect(page).toContain("ChariowWidget productId={widget.productId}");
+    expect(page).toContain("Achat direct d&apos;espace — permanent");
+    expect(page).toContain("e-mail de ton compte Gen3ia");
+    // Le quota effectif affiché inclut les licences d'espace accordées.
+    expect(page).toContain("licenceExtraBytes");
   });
 });
 

@@ -18,6 +18,7 @@ const runTransaction = vi.fn();
 const getUserByEmail = vi.fn();
 const applyTopupMock = vi.fn();
 const settleExtensionMock = vi.fn();
+const grantLicenceMock = vi.fn();
 
 vi.mock("@/lib/firebase/admin", () => ({
   adminDb: {
@@ -41,6 +42,16 @@ vi.mock("./wallet", () => ({
 vi.mock("@/lib/extensions/entitlements", () => ({
   settleChariowExtensionPurchase: (...args: unknown[]) => settleExtensionMock(...args),
 }));
+// Licences d'espace : le RÉSOLVEUR reste réel (reconnaissance produit + surcharges
+// env testées en bout en bout) — seule l'écriture Firestore de l'accord est mockée
+// (elle possède son propre fichier de tests : lib/storage/licences.test.ts).
+vi.mock("@/lib/storage/licences", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/storage/licences")>();
+  return {
+    ...actual,
+    grantStorageLicence: (...args: unknown[]) => grantLicenceMock(...args),
+  };
+});
 
 import {
   buildChariowPayloadSnapshot,
@@ -97,7 +108,10 @@ beforeEach(() => {
   getUserByEmail.mockReset();
   applyTopupMock.mockReset();
   settleExtensionMock.mockReset();
+  grantLicenceMock.mockReset();
   delete process.env.CHARIOW_TOPUP_PRODUCT_ID;
+  delete process.env.CHARIOW_ESPACE_100_PRODUCT_ID;
+  delete process.env.CHARIOW_ESPACE_600_PRODUCT_ID;
 });
 
 describe("claimChariowDelivery (transaction)", () => {
@@ -370,6 +384,123 @@ describe("reconnaissance du produit de recharge wallet API (widget boutique prd_
     expect(deliveryDoc.update).toHaveBeenCalledWith(
       expect.objectContaining({ status: "ignored", reason: "not_a_wallet_topup_sale" }),
     );
+  });
+});
+
+describe("ventes de licences d'espace (boutique « 100Go » prd_645l06yr / « 600Go » prd_vkequ0dn)", () => {
+  // Achat DIRECT via les widgets d'espace sur /storage : aucune custom_metadata,
+  // reconnaissance par identifiant produit (lib/storage/licences.ts), quota
+  // permanent accordé par grantStorageLicence (idempotence par saleId).
+  const ESPACE_PAYLOAD = {
+    event: "successful.sale",
+    customer: { email: "Client@Example.com" },
+    product: { id: "prd_645l06yr" },
+    sale: {
+      id: "sale-espace-1",
+      status: "completed",
+      amount: { value: 3000, currency: "XAF" },
+    },
+  };
+
+  it("vente « 100Go » sans métadonnées → licence espace-100 accordée au compte rapproché", async () => {
+    dedupGet.mockResolvedValue({ docs: [] });
+    getUserByEmail.mockResolvedValue({ uid: "user-1" });
+    grantLicenceMock.mockResolvedValue({ licenceId: "espace-100", label: "Espace 100 Go", extraBytes: 100 * 1024 ** 3, granted: true });
+
+    const result = await processChariowSale(ESPACE_PAYLOAD, "d1");
+    expect(result).toEqual({ kind: "storage_licence", userId: "user-1", licence: "Espace 100 Go", granted: true });
+    expect(grantLicenceMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-1", saleId: "sale-espace-1", productId: "prd_645l06yr" }),
+    );
+    expect(grantLicenceMock.mock.calls[0][0].licence.id).toBe("espace-100");
+    expect(deliveryDoc.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "processed", kind: "storage_licence", licenceId: "espace-100", saleId: "sale-espace-1", granted: true }),
+    );
+    // Aucun crédit wallet ni renouvellement de plan en parallèle.
+    expect(applyTopupMock).not.toHaveBeenCalled();
+  });
+
+  it("vente « 600Go » → licence espace-600", async () => {
+    dedupGet.mockResolvedValue({ docs: [] });
+    getUserByEmail.mockResolvedValue({ uid: "user-2" });
+    grantLicenceMock.mockResolvedValue({ licenceId: "espace-600", label: "Espace 600 Go", extraBytes: 600 * 1024 ** 3, granted: true });
+
+    const result = await processChariowSale({ ...ESPACE_PAYLOAD, product: { id: "prd_vkequ0dn" }, sale: { ...ESPACE_PAYLOAD.sale, id: "sale-espace-2" } }, "d2");
+    expect(result).toEqual({ kind: "storage_licence", userId: "user-2", licence: "Espace 600 Go", granted: true });
+    expect(grantLicenceMock.mock.calls[0][0].licence.id).toBe("espace-600");
+  });
+
+  it("vente déjà créditée (granted:false) → livraison clôturée, aucun double quota", async () => {
+    dedupGet.mockResolvedValue({ docs: [] });
+    getUserByEmail.mockResolvedValue({ uid: "user-1" });
+    grantLicenceMock.mockResolvedValue({ licenceId: "espace-100", label: "Espace 100 Go", extraBytes: 100 * 1024 ** 3, granted: false });
+
+    const result = await processChariowSale(ESPACE_PAYLOAD, "d1");
+    expect(result).toEqual({ kind: "storage_licence", userId: "user-1", licence: "Espace 100 Go", granted: false });
+    expect(deliveryDoc.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "processed", granted: false }),
+    );
+  });
+
+  it("e-mail client sans compte Gen3ia → livraison échec REPRISEABLE (user_not_found)", async () => {
+    dedupGet.mockResolvedValue({ docs: [] });
+    getUserByEmail.mockRejectedValue(new Error("User not found"));
+
+    const result = await processChariowSale(ESPACE_PAYLOAD, "d1");
+    expect(result).toEqual({ kind: "user_not_found" });
+    expect(grantLicenceMock).not.toHaveBeenCalled();
+    expect(deliveryDoc.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", reason: "firebase_user_not_found", customerEmail: "client@example.com", saleId: "sale-espace-1" }),
+    );
+  });
+
+  it("statut de vente non créditable → échec (Chariow re-délivrera)", async () => {
+    dedupGet.mockResolvedValue({ docs: [] });
+    const result = await processChariowSale(
+      { ...ESPACE_PAYLOAD, sale: { ...ESPACE_PAYLOAD.sale, status: "refunded" } },
+      "d1",
+    );
+    expect(result.kind).toBe("failed");
+    expect(grantLicenceMock).not.toHaveBeenCalled();
+  });
+
+  it("surcharge env CHARIOW_ESPACE_100_PRODUCT_ID : le nouveau produit prime, l'ancien est ignoré", async () => {
+    process.env.CHARIOW_ESPACE_100_PRODUCT_ID = "prd_remplacement";
+    dedupGet.mockResolvedValue({ docs: [] });
+    getUserByEmail.mockResolvedValue({ uid: "user-1" });
+    grantLicenceMock.mockResolvedValue({ licenceId: "espace-100", label: "Espace 100 Go", extraBytes: 100 * 1024 ** 3, granted: true });
+
+    const overridden = await processChariowSale(
+      { ...ESPACE_PAYLOAD, product: { id: "prd_remplacement" } },
+      "d2",
+    );
+    expect(overridden).toEqual({ kind: "storage_licence", userId: "user-1", licence: "Espace 100 Go", granted: true });
+
+    grantLicenceMock.mockClear();
+    deliveryDoc.update.mockClear();
+    const ancien = await processChariowSale(ESPACE_PAYLOAD, "d3");
+    expect(ancien).toEqual({ kind: "ignored" });
+    expect(grantLicenceMock).not.toHaveBeenCalled();
+  });
+
+  it("la recharge wallet (produit différent) n'est PAS capturée par la branche espace", async () => {
+    dedupGet.mockResolvedValue({ docs: [] });
+    getUserByEmail.mockResolvedValue({ uid: "user-1" });
+    applyTopupMock.mockResolvedValue(WALLET);
+
+    const topupPayload = {
+      event: "successful.sale",
+      customer: { email: "Client@Example.com" },
+      product: { id: "prd_llfosdp1" },
+      sale: {
+        id: "sale-widget-1",
+        status: "completed",
+        amount: { value: 5000, currency: "XAF" },
+      },
+    };
+    const result = await processChariowSale(topupPayload, "d1");
+    expect(result).toEqual({ kind: "credited", wallet: WALLET });
+    expect(grantLicenceMock).not.toHaveBeenCalled();
   });
 });
 

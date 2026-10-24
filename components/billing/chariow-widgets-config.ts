@@ -55,6 +55,30 @@ export const CHARIOW_TOPUP_WIDGET: ChariowPlanWidget = {
   note: "Choisis toi-même le montant de ta recharge, paie par Mobile Money ou carte — le crédit est ajouté automatiquement à ton solde après paiement (webhook Chariow)",
 } as const;
 
+/**
+ * Widgets d'ACHAT DIRECT D'ESPACE DE STOCKAGE (boutique officielle). Hors
+ * grille : chaque achat accorde une licence PERMANENTE de quota additionnel
+ * (pas d'abonnement, pas de renouvellement, fichiers conservés) — le webhook
+ * Pulse reconnaît ses ventes par identifiant produit (lib/storage/licences.ts,
+ * surcharge env CHARIOW_ESPACE_100/600_PRODUCT_ID) et étend le quota du compte
+ * rapproché par l'e-mail du client Chariow.
+ *
+ * Quantités et prix ALIGNÉS sur les produits réellement publiés (vitrine
+ * vérifiée le 2026-10-25) : « 100Go » 3 000 FCFA, « 600Go » 6 000 FCFA.
+ */
+export const CHARIOW_ESPACE_WIDGETS: readonly ChariowPlanWidget[] = [
+  {
+    productId: "prd_645l06yr",
+    label: "Espace 100 Go — 3 000 FCFA",
+    note: "+100 Go de stockage PERMANENT ajoutés à ton compte dès le paiement (webhook Chariow). Paie avec l'e-mail de ton compte Gen3ia.",
+  },
+  {
+    productId: "prd_vkequ0dn",
+    label: "Espace 600 Go — 6 000 FCFA",
+    note: "+600 Go de stockage PERMANENT ajoutés à ton compte dès le paiement (webhook Chariow). Paie avec l'e-mail de ton compte Gen3ia.",
+  },
+] as const;
+
 /** URLs officielles du loader widget (script + feuille de style). */
 export const WIDGET_SCRIPT_SRC = "https://js.chariowcdn.com/v1/widget.min.js";
 export const WIDGET_STYLE_HREF = "https://js.chariowcdn.com/v1/widget.min.css";
