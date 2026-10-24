@@ -1,6 +1,5 @@
 import { describe, it } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
-
 import {
   genererVisuelNeuralBrut,
   genererAudioNeuralEtPersister,
@@ -23,6 +22,13 @@ import {
 
 const SORTIE = process.env.GEN3IA_MEDIA_OUT ?? "/tmp/gen3ia-medias";
 
+// FIX (10-2026) : le dossier de sortie était créé manuellement hors test —
+// un /tmp nettoyé (nouvelle sandbox, runner CI) faisait échouer les 3 écritures
+// avec ENOENT. Création récursive idempotente avant chaque campagne.
+function assurerSortie(): void {
+  mkdirSync(SORTIE, { recursive: true });
+}
+
 function decoderDataUri(uri: string): { mime: string; bytes: Buffer } {
   const m = /^data:([^;,]+)(;base64)?,(.*)$/s.exec(uri);
   if (!m) throw new Error(`URI inattendue : ${uri.slice(0, 60)}…`);
@@ -33,6 +39,7 @@ function decoderDataUri(uri: string): { mime: string; bytes: Buffer } {
 
 describe("génération média gen3 (campagne de tests)", () => {
   it("IMAGE — scène photoréaliste structurée « chat au bord de la mer au coucher de soleil »", async () => {
+    assurerSortie();
     const rendu = await genererVisuelNeuralBrut({
       prompt: "un chat noir au bord de la mer au coucher de soleil",
       ratio: "16:9",
@@ -45,6 +52,7 @@ describe("génération média gen3 (campagne de tests)", () => {
   });
 
   it("AUDIO — synthèse acoustique SNN « narration chaleureuse »", async () => {
+    assurerSortie();
     const rendu = await genererAudioNeuralEtPersister({
       userId: "testeur-campagne",
       prompt: "voix off chaude et posée pour présenter la plateforme gen3ia",
@@ -56,6 +64,7 @@ describe("génération média gen3 (campagne de tests)", () => {
   });
 
   it("VIDÉO — storyboard animé « un phare dans la tempête. puis la ville la nuit »", async () => {
+    assurerSortie();
     const rendu = await genererVideoNeuralEtPersister({
       userId: "testeur-campagne",
       prompt: "un phare dans la tempête. puis la ville la nuit",

@@ -181,10 +181,11 @@ describe("API — RESTREINT (deny-by-default, hors demande n°7)", () => {
     // Business (studio métier)
     "/api/business/automations",
     "/api/business/pulse",
-    // Neural (hors stats publiques)
-    "/api/neural/train",
-    "/api/neural/state",
-    "/api/neural/brain",
+    // Neural — SEUL le reset global reste restreint (défense en profondeur) :
+    // le studio d'entraînement /neural est ouvert aux utilisateurs
+    // (demande propriétaire 10-2026), train POST reste requireAdmin dans la
+    // route, reset est bloqué ICI (middleware) ET dans la route.
+    "/api/neural/reset",
     // Divers modules non demandés
     "/api/identity/twin",
     "/api/monde/simuler",
@@ -224,9 +225,18 @@ describe("API — RESTREINT (deny-by-default, hors demande n°7)", () => {
     expect(classifyApiPath("/api/agents").access).toBe("user");
   });
 
-  it("ne confond PAS /api/neural/public-stats (public) avec /api/neural (restreint)", () => {
+  it("ne confond PAS /api/neural/public-stats (public) avec /api/neural (user training)", () => {
     expect(classifyApiPath("/api/neural/public-stats").access).toBe("public");
-    expect(classifyApiPath("/api/neural/public-stats-x").access).toBe("restreint");
+    // Le reste du préfixe est UTILISATEUR (studio d'entraînement ouvert,
+    // demande propriétaire 10-2026) — sauf /api/neural/reset (restreint).
+    expect(classifyApiPath("/api/neural/public-stats-x").access).toBe("user");
+    expect(classifyApiPath("/api/neural/state").access).toBe("user");
+    expect(classifyApiPath("/api/neural/brain").access).toBe("user");
+    expect(classifyApiPath("/api/neural/cycle").access).toBe("user");
+    expect(classifyApiPath("/api/neural/train").access).toBe("user");
+    expect(classifyApiPath("/api/neural/media").access).toBe("user");
+    expect(classifyApiPath("/api/neural/reset").access).toBe("restreint");
+    expect(classifyApiPath("/api/neural/state").family).toBe("training");
   });
 
   it("ne confond PAS /api/video/worker (public) avec /api/video/projects (user studio)", () => {
@@ -290,6 +300,10 @@ describe("Pages — LISTE BLANCHE UTILISATEUR", () => {
     ["/memory", "memoire"],
     ["/observability", "observabilite"],
     ["/integrations", "integrations"],
+    // STUDIO D'ENTRAÎNEMENT IA (demande propriétaire 10-2026)
+    ["/neural", "training"],
+    // PLANIFICATIONS (tâches automatisées — surface recréée)
+    ["/planifications", "planifications"],
     // AGENT LIVE (réouverture propriétaire — PC et Android)
     ["/live", "live"],
   ] as const;
@@ -309,7 +323,6 @@ describe("Pages — RESTREINT (deny-by-default)", () => {
     "/arene",
     "/essaim",
     "/monde",
-    "/neural",
     "/ondes",
     // Surfaces workspace/studio supprimées : hors liste blanche → restreint
     // (en pratique, next.config les redirige vers /dashboard AVANT le

@@ -50,9 +50,9 @@
  *
  * TOUT le reste est interdit : admin, IDE développeur (/studio/console,
  * /api/developer/*), monde, essaim, arène, ondes, inventaire publicitaire
- * admin (/api/ads/campaigns), extensions, terminal, workflows,
- * orchestrator, notifications push, etc. La matrice COMPLÈTE allow/deny
- * est documentée dans la PR de cette branche.
+ * admin (/api/ads/campaigns), reset neuronal (/api/neural/reset),
+ * extensions, terminal, workflows, orchestrator, notifications push, etc.
+ * La matrice COMPLÈTE allow/deny est documentée dans la PR de cette branche.
  */
 
 export type AccessLevel = "public" | "user" | "restreint";
@@ -148,6 +148,12 @@ const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   // de configuration de l'entraînement au sens de la demande n°7.
   ["/api/training", "training"],
   ["/api/ia/auto-apprentissage", "training"],
+  // CONSOLE NEURONALE (studio d'entraînement — demande propriétaire 10-2026) :
+  // /neural appelle /api/neural/{brain,state,cycle,media,train,evolve}. Les
+  // routes authentifient elles-mêmes (requireUser) ; POST /api/neural/train
+  // exige ADMIN dans la route (lancement d'un job global) — défense en
+  // profondeur conservée. Exception /api/neural/reset ci-dessous.
+  ["/api/neural", "training"],
   // Connecteurs (API personnalisées)
   ["/api/custom-apis", "connecteurs"],
   // Planifications (API agents/schedules — surface UI dédiée supprimée,
@@ -227,6 +233,11 @@ const RESTRICTED_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   // ouverte (demande propriétaire). Exception évaluée AVANT le préfixe
   // /api/ads de la liste blanche.
   ["/api/ads/campaigns", "systeme"],
+  // RESET NEURONAL (défense en profondeur) : avec /api/neural ouvert au
+  // studio d'entraînement, le reset GLOBAL du cerveau (purge var/neural)
+  // reste INTERDIT aux utilisateurs standard — la route exige déjà
+  // requireAdmin, l'exception bloque en plus au niveau middleware.
+  ["/api/neural/reset", "systeme"],
 ];
 
 /* ------------------------------------------------------------------ */
@@ -297,6 +308,18 @@ const USER_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/integrations": "integrations",
   "/storage": "fichiers",
   "/settings": "parametres",
+  // STUDIO D'ENTRAÎNEMENT IA (demande propriétaire 10-2026 — « le studio
+  // d'entraînement d'IA doit être accessible aux utilisateurs ») : la
+  // console neuronale (/neural, Aurora OS V6) est ouverte à TOUS LES
+  // COMPTES. Les actions à privilège restent gardées : POST /api/neural/train
+  // (requireAdmin dans la route) et /api/neural/reset (exception restreinte
+  // ci-dessous + requireAdmin) — l'utilisateur OBSERVE, conversse et génère
+  // des médias mais ne relance pas l'entraînement global ni le reset.
+  "/neural": "training",
+  // PLANIFICATIONS (demande propriétaire — tâches planifiées automatisées) :
+  // surface UI dédiée /planifications branchée sur /api/agents/schedules
+  // (déjà allowlistée). Scoping propriétaire assuré par les routes.
+  "/planifications": "planifications",
 };
 
 const USER_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [

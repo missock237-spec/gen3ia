@@ -12,11 +12,13 @@
  * des tableaux séparés par page.
  *
  * Note (suppression surfaces workspace/studio) : les anciennes entrées
- * « Conversations » (/workspace), « Entraînement IA », « Bases de
- * connaissances », « Projets », « Fichiers », « Automatisations » (/studio),
- * « Planifications », « Connecteurs », « Bibliothèque » et « Workshop IDE »
- * (/studio/console) ont été retirées avec leurs surfaces — le dashboard
- * (chat IA) est le point d'entrée unique.
+ * « Conversations » (/workspace), « Bases de connaissances », « Projets »,
+ * « Fichiers », « Automatisations » (/studio), « Connecteurs »,
+ * « Bibliothèque » et « Workshop IDE » (/studio/console) ont été retirées
+ * avec leurs surfaces — le dashboard (chat IA) est le point d'entrée unique.
+ * RESTAURATIONS DEMANDÉES (propriétaire) : « Cerveau IA » (/neural, studio
+ * d'entraînement) est réouvert à tous les comptes et la surface
+ * « Planifications » (/planifications) est recréée — voir user-access.ts.
  */
 
 export type NavContext = "workspace" | "developer" | "admin";
@@ -105,16 +107,20 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     href: "/neural",
     label: "Cerveau IA",
     icon: "◉",
-    description: "Le moteur neural Gen3 en direct : santé, cycles, état du réseau",
+    description: "Studio d'entraînement IA : constellation synaptique, conversation, médias et apprentissage",
     contexts: ["workspace"],
     section: "primary",
-    minRole: "admin", // réserver admin — voir demande masquage
-    keywords: ["cerveau", "neural", "neurones", "snn", "réseau", "santé", "moteur", "ia"],
+    // OUVERT À TOUS (demande propriétaire 10-2026 : « le studio d'entraînement
+    // d'IA doit être accessible aux utilisateurs ») — les actions à privilège
+    // (lancement d'entraînement global, reset) restent gardées côté routes
+    // (requireAdmin) et masquées dans la console pour un compte standard.
+    keywords: ["cerveau", "neural", "neurones", "snn", "réseau", "santé", "moteur", "ia", "entraînement", "studio"],
   },
 ];
 
 const WORKSPACE_SECONDARY: NavRoute[] = [
   { id: "team", href: "/team", label: "Équipe", icon: "◎", description: "Membres, rôles et activité partagée", contexts: ["workspace"], section: "secondary", keywords: ["équipe", "membres", "rôles"] },
+  { id: "planifications", href: "/planifications", label: "Planifications", icon: "⏱", description: "Tâches automatisées : vos agents s'exécutent seuls, de façon récurrente ou ponctuelle", contexts: ["workspace"], section: "secondary", keywords: ["planifications", "tâches", "automatisées", "cron", "récurrent", "veille", "webhook", "agenda"] },
   { id: "live", href: "/live", label: "Agent Live", icon: "◉", description: "Contrôler un poste de travail", contexts: ["workspace"], section: "secondary", keywords: ["live", "pc"] },
   { id: "memory", href: "/memory", label: "Mémoire permanente", icon: "◆", description: "Souvenirs et connaissances des agents", contexts: ["workspace"], section: "secondary", keywords: ["mémoire", "knowledge"] },
   { id: "billing", href: "/billing", label: "Facturation", icon: "₣", description: "Abonnements et consommation", contexts: ["workspace"], section: "secondary", keywords: ["facturation", "abonnement"] },

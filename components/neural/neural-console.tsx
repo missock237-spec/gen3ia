@@ -258,6 +258,28 @@ const ONGLETS: Array<{ id: OngletV6; label: string }> = [
 export function NeuralConsole() {
   const [onglet, setOnglet] = useState<OngletV6>("cerveau");
 
+  // Rôle plateforme : les actions à privilège (lancement d'un job
+  // d'entraînement global, reset du cerveau) sont réservées aux opérateurs
+  // (requireAdmin côté routes) — masquées ici pour un compte standard, qui
+  // OBSERVE le cerveau, conversse et génère des médias.
+  const [estOperateur, setEstOperateur] = useState(false);
+  useEffect(() => {
+    let annule = false;
+    void (async () => {
+      try {
+        const reponse = await fetch("/api/auth/access", { cache: "no-store" });
+        if (!reponse.ok) return;
+        const donnees = (await reponse.json()) as { role?: string };
+        if (!annule && donnees?.role === "admin") setEstOperateur(true);
+      } catch {
+        /* défaut : compte standard */
+      }
+    })();
+    return () => {
+      annule = true;
+    };
+  }, []);
+
   const { donnees: cerveau, rafraichir: rafraichirCerveau } = useTelechargement<EtatCerveau>("/api/neural/brain", 6000);
   const { donnees: etat } = useTelechargement<EtatNeural>("/api/neural/state", 8000);
 
@@ -591,12 +613,20 @@ export function NeuralConsole() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <button type="button" onClick={() => void lancerEntrainement()} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl bg-[var(--g3-primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--g3-primary-strong)] disabled:opacity-50">
-                  {jobEnCours ? `Epoch ${job?.epochCourante ?? 0}/${job?.epochs ?? "?"}…` : "Lancer un entraînement"}
-                </button>
-                <button type="button" onClick={() => void reinitialiser()} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl border border-[var(--g3-border)] px-4 py-2.5 text-sm text-[var(--g3-muted)] transition hover:bg-[var(--g3-hover)] disabled:opacity-50">
-                  Réinitialiser
-                </button>
+                {estOperateur ? (
+                  <>
+                    <button type="button" onClick={() => void lancerEntrainement()} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl bg-[var(--g3-primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--g3-primary-strong)] disabled:opacity-50">
+                      {jobEnCours ? `Epoch ${job?.epochCourante ?? 0}/${job?.epochs ?? "?"}…` : "Lancer un entraînement"}
+                    </button>
+                    <button type="button" onClick={() => void reinitialiser()} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl border border-[var(--g3-border)] px-4 py-2.5 text-sm text-[var(--g3-muted)] transition hover:bg-[var(--g3-hover)] disabled:opacity-50">
+                      Réinitialiser
+                    </button>
+                  </>
+                ) : (
+                  <p className="max-w-xs rounded-xl border border-[var(--g3-border)] px-4 py-2.5 text-[11px] text-[var(--g3-muted)]">
+                    Le lancement d&apos;un entraînement global et la réinitialisation sont réservés aux opérateurs — vous suivez ici l&apos;apprentissage du cerveau en temps réel.
+                  </p>
+                )}
               </div>
             </div>
             {lancement ? <p className="mt-3 text-xs text-[var(--g3-v6-spike, var(--g3v6-spike))]">{lancement}</p> : null}

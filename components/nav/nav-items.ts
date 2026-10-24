@@ -5,9 +5,11 @@
  * et la palette de commandes.
  *
  * Architecture IA-FIRST : la navigation principale est
- * Chat IA · Cerveau IA ; le reste est des capacités secondaires.
- * (Surfaces workspace/studio supprimées : conversations, entraînement,
- * connaissances, projets, fichiers, automatisations, planifications.)
+ * Chat IA · Cerveau IA (studio d'entraînement, ouvert à tous) ; le reste
+ * est des capacités secondaires. RESTAURATION (propriétaire) : la surface
+ * Planifications (/planifications) est de retour dans « Automatisations ».
+ * (Surfaces toujours supprimées : conversations, connaissances, projets,
+ * fichiers, automatisations /studio.)
  */
 import { NAV_REGISTRY, navCommandIndex, type NavRoute } from "@/components/shells/nav-registry";
 
@@ -47,7 +49,7 @@ export const WORKSPACE: NavItem[] = groupByIds(
 
 /** Automatisations (agents) — surfaces transverses, secondaires. */
 export const AGENTS: NavItem[] = [
-  ...groupByIds(["live"]),
+  ...groupByIds(["live", "planifications"]),
   { href: "/observability", label: "Observabilité", icon: "∿", hint: "Traces, coûts et alertes de vos exécutions" },
   { href: "/integrations", label: "Intégrations", icon: "⧉", hint: "Connecter vos services externes" },
 ];
