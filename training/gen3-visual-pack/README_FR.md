@@ -1,10 +1,10 @@
-# Pack visuel gen3 — l'école visuelle (images, voix off, vidéos)
+# Pack visuel gen3 — l'école visuelle + l'école des métiers (vague 2)
 
-Ce pack met gen3 **à l'école visuelle** : gen3ia joue le professeur, gen3 est
-l'élève. Le cours n'est **plus textuel mais visuel** : six vraies leçons
+Ce pack met gen3 **à l'école** : gen3ia joue le professeur, gen3 est
+l'élève. Le cours n'est **plus textuel mais visuel** : quinze vraies leçons
 illustrées, chacune avec son image générée et vérifiée, sa **voix off** et sa
 **mini-leçon vidéo**. L'élève apprend à **décrire ce qui est visible** — pas à
-inventer.
+inventer — puis à **exécuter des métiers réels**.
 
 ## Le principe du professeur (anti-hallucination par construction)
 
@@ -17,6 +17,8 @@ corpus d'entraînement sale produit un élève qui divague.
 
 ## Le programme visuel
 
+Vague 1 — apprendre à voir, écouter, comprendre :
+
 | Leçon | Titre | Matière | Image | Voix off | Vidéo |
 |---|---|---|---|---|---|
 | lecon01 | Le cycle de l'eau | sciences | 1344x768 | 86 s | 88 s |
@@ -26,7 +28,27 @@ corpus d'entraînement sale produit un élève qui divague.
 | lecon05 | L'atelier du développeur | technologie | 1344x768 | 86 s | 88 s |
 | lecon06 | Les énergies renouvelables | sciences | 1344x768 | 90 s | 92 s |
 
-Trois modules, un seul dataset :
+Vague 2 — l'école des métiers (leçons 07 → 15) : chaque métier demandé au
+professeur devient une leçon visuelle, puis des **tâches à exécuter** :
+
+| Leçon | Métier enseigné | Tâches exécutées (exemples) |
+|---|---|---|
+| lecon07 | Rédiger des documents | ordre du jour, compte rendu modèle |
+| lecon08 | Analyser des données | ventes de Yaoundé, étals comparés |
+| lecon09 | Répondre aux questionnaires | réponse polie et honnête, clarification |
+| lecon10 | Créer des vidéos réalistes | storyboard marché à l'aube (4 plans) |
+| lecon11 | Générer des images photoréalistes | description pêcheur à l'aube |
+| lecon12 | Copier/créer des voix humaines | fiche de voix, refus éthique argumenté |
+| lecon13 | Web en temps réel | suivi du prix du maïs à Douala |
+| lecon14 | Rédiger des rapports | résumé/constats/preuves/recommandations |
+| lecon15 | Contrôler la cohérence | domaine FICTIF de Zanbara corrigé, île de Kanouma validée |
+
+La leçon 15 apprend le point le plus subtil : **mélanger des données même sur
+un domaine qui n'existe pas** (pays imaginaire, marché fictif) tout en restant
+**parfaitement cohérent** — unités, dates, ordres de grandeur, sources — et
+signaler honnêtement toute incohérence plutôt que de la laisser passer.
+
+Quatre modules, un seul dataset :
 
 - **voir** (images) — `task=decrire_image` : une image → sa description
   détaillée en français. Cœur de l'adaptateur vision-langage.
@@ -35,6 +57,12 @@ Trois modules, un seul dataset :
   texte passe par un ASR externe, voir « Frontières honnêtes » plus bas).
 - **comprendre** (vidéos) — `task=decrire_video` : 4 frames extraites de la
   mini-leçon (512 px, ffmpeg) → la même description vérifiée.
+- **métiers** (vague 2) — 9 nouvelles tâches (`rediger_document`,
+  `analyser_donnees`, `repondre_questionnaire`, `planifier_video`,
+  `creer_image_photorealiste`, `creer_voix`, `analyser_web_temps_reel`,
+  `rediger_rapport`, `controler_coherence`) : exemples dans
+  `data/metiers_taches.jsonl`, textes purs consommés tels quels par
+  `prepare_visual_dataset.py`.
 
 Le fichier `programme_visuel.json` (écrit par `professeur.py plan`) est la
 référence du cours : leçons, durées réelles des médias, étapes.
@@ -42,13 +70,13 @@ référence du cours : leçons, durées réelles des médias, étapes.
 ## Pipeline complet
 
 ```
-assets/images/*.jpg  (6 leçons générées + vérifiées visuellement)
-assets/audio/*.mp3   (voix off TTS, voice xiaochen, speed 0.9)
-assets/videos/*.mp4  (Ken Burns 960x540 + narration, H.264/AAC)
+assets/images/*.jpg  (15 leçons générées + vérifiées visuellement)
+assets/audio/*.mp3   (voix off TTS, voice xiaochen, speed 0.9 — 20 min)
+assets/videos/*.mp4  (Ken Burns 960x540 + narration, H.264/AAC — 20 min)
         │  professeur.py verifier    — contrôles (dimensions, durées, poids)
-        │  prepare_visual_dataset.py — frames vidéo + fusion des 3 modules
+        │  prepare_visual_dataset.py — frames vidéo + fusion des 4 modules
         ▼
-data/train_visual.jsonl (18 exemples) · data/validation_visual.jsonl (2)
+data/train_visual.jsonl (59 exemples) · data/validation_visual.jsonl (6)
         │  train_gen3_visuel.py  (GPU requis, QLoRA Gemma 3, l4 / a100_40g)
         ▼
 outputs/gen3-visual-lora/final_adapter
@@ -82,10 +110,11 @@ python prepare_visual_dataset.py           # extrait 4 frames/vidéo + fusionne
 python prepare_visual_dataset.py --pas-extraire   # réutilise les frames existantes
 ```
 
-Sortie : `data/train_visual.jsonl` (18 exemples : 6 images, 6 vidéos
-multi-frames, 6 textes) et `data/validation_visual.jsonl` (2 questions). Le
-schéma est celui des packs gen3 (`task`/`instruction`/`response`) : le dataset
-est directement consommable par `train_video.py` du pack vidéo également.
+Sortie : `data/train_visual.jsonl` (59 exemples : 15 images, 15 vidéos
+multi-frames, 15 textes, 14 tâches métiers) et `data/validation_visual.jsonl`
+(6 questions). Le schéma reste celui des packs gen3
+(`task`/`instruction`/`response`) : le dataset est directement consommable par
+`train_video.py` du pack vidéo également.
 
 ## 3. Entraîner l'élève — `train_gen3_visuel.py`
 
@@ -112,9 +141,10 @@ python train_gen3_visuel.py --dry_run                # plan sans GPU
   `l4` (4B au lieu de 12B) — l'inverse (monter de 4B vers 12B) ne se fait pas
   sur un GPU plus petit.
 
-Dataset visuel volontairement petit : 18 exemples × 4 passages
-(`--epochs 4`) suffisent à ancrer le **style de description** du professeur ;
-c'est un cours, pas un corpus de fondation.
+Dataset de cours volontairement compact : 59 exemples × 4 passages
+(`--epochs 4`) suffisent à ancrer le **style du professeur** (décrire sans
+inventer, exécuter un métier méthode par méthode) ; c'est un cours, pas un
+corpus de fondation.
 
 ## 4. L'élève décrit — `infer_gen3_visuel.py`
 
@@ -137,7 +167,7 @@ python bench_gen3_visuel.py --modele google/gemma-3-4b-it   # référence base
 Pour chaque leçon : couverture des 8 mots-clés attendus (rappel d'éléments,
 après normalisation des accents), longueur, latence, tokens/s →
 `bench_visual_results.json`. Les limites sont écrites dans le fichier de
-résultats lui-même : 6 leçons, mesure indicative, aucune comparaison valable
+résultats lui-même : 15 leçons, mesure indicative, aucune comparaison valable
 sans le même modèle de base.
 
 ## Frontières honnêtes
@@ -152,7 +182,9 @@ sans le même modèle de base.
 - **Voix off** : la voix « xiaochen » est un TTS générique ; son français est
   compréhensible mais son accent n'est pas natif. Remplaçable par n'importe
   quel TTS (les narrations `assets/audio/narrations/*.txt` sont la source).
-- **Poids** : ~28 Mo de médias dans le dépôt, pour que le cours soit
+  La leçon 12 enseigne l'éthique correspondante : reproduire la voix d'une
+  personne réelle exige son **consentement** — jamais sans accord.
+- **Poids** : ~50 Mo de médias dans le dépôt, pour que le cours soit
   **reproductible de bout en bout** (images, sons, vidéos, transcripts).
 
 ## Réutiliser la méthode (nouvelles leçons)

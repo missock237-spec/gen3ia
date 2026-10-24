@@ -29,7 +29,16 @@ N_FRAMES = 4
 TAILLE_FRAME = 512
 # garde-fou anti-hallucination : la réponse d'une leçon vidéo est la
 # description VERIFIÉE de la leçon (jamais générée automatiquement).
-TACHES = {"decrire_image", "decrire_video", "expliquer_lecon"}
+# Vague 2 (« école des métiers ») : 9 tâches métiers supplémentaires où gen3
+# s'entraîne à EXÉCUTER (documents, données, questionnaires, vidéo, image,
+# voix, web temps réel, rapports, cohérence).
+TACHES = {
+    "decrire_image", "decrire_video", "expliquer_lecon",
+    "rediger_document", "analyser_donnees", "repondre_questionnaire",
+    "planifier_video", "creer_image_photorealiste", "creer_voix",
+    "analyser_web_temps_reel", "rediger_rapport", "controler_coherence",
+}
+TACHES_IMAGE = {"decrire_image", "decrire_video"}
 
 
 def lire_jsonl(chemin: Path) -> list:
@@ -151,19 +160,38 @@ def main() -> int:
     validation = lire_jsonl(DATA / "validation_visuelle.jsonl")
 
     train = construire(lecons, args.extraire)
+
+    # vague 2 : exemples de tâches métiers (texte pur, sans média)
+    metiers_path = DATA / "metiers_taches.jsonl"
+    if metiers_path.exists():
+        taches_metiers = lire_jsonl(metiers_path)
+        for t in taches_metiers:
+            train.append({
+                "id": t["id"], "task": t["task"], "module": "metiers",
+                "matiere": "metier", "titre": t["task"], "langue": "fr",
+                "instruction": t["instruction"], "response": t["response"],
+            })
+
     for ex in train:
         if ex.get("task") not in TACHES:
             raise ValueError(f"tâche inconnue : {ex['task']}")
+        for t in TACHES_IMAGE:
+            if ex.get("task") == t and not ex.get("image") and not ex.get("images"):
+                raise ValueError(f"{ex['id']}: tâche {t} sans image(s)")
 
     ecrire_jsonl(DATA / "train_visual.jsonl", train)
     ecrire_jsonl(DATA / "validation_visual.jsonl", validation)
 
     n_frames_total = sum(len(e.get("images", [])) for e in train)
+    n_metiers = sum(1 for e in train if e.get("module") == "metiers"
+                    and e["task"] not in ("decrire_image", "decrire_video",
+                                          "expliquer_lecon"))
     print(f"OK — {len(train)} exemples d'entraînement "
           f"({sum(1 for e in train if e['task']=='decrire_image')} images, "
           f"{sum(1 for e in train if e['task']=='decrire_video')} vidéos "
           f"[{n_frames_total} frames], "
-          f"{sum(1 for e in train if e['task']=='expliquer_lecon')} textes) "
+          f"{sum(1 for e in train if e['task']=='expliquer_lecon')} textes, "
+          f"{n_metiers} tâches métiers) "
           f"+ {len(validation)} validations.")
     print("Suivant : python train_gen3_visuel.py --profil auto")
     return 0

@@ -104,7 +104,7 @@ def main():
         "limites": [
             "la couverture de mots-clés mesure le rappel d'éléments attendus, "
             "pas la qualité stylistique ;",
-            "6 leçons = petite échelle ; les chiffres sont indicatifs ;",
+            f"{len(lecons)} leçons = petite échelle ; les chiffres sont indicatifs ;",
             "aucune comparaison n'est valable sans le même modèle de base.",
         ],
         "resultats": resultats,

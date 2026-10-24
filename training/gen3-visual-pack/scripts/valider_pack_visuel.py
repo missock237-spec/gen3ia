@@ -3,16 +3,17 @@
 
 Groupes de contrôles :
   1. Syntaxe AST des 6 scripts Python du pack ;
-  2. Dataset curriculum (6 leçons + 2 validations, champs gen3 obligatoires) ;
-  3. Médias présents, dimensions d'image ≥ 512, narrations ≤ 1024 chars ;
-  4. Dataset fusionné train_visual.jsonl (18 exemples, 3 tâches, frames) ;
-  5. GPU forcé : sans CUDA → RuntimeError (jamais CPU) ;
-  6. Profils l4 / a100_40g : planchers VRAM, pas d'entrée CPU ;
-  7. dry_run sans GPU : OK (plan sans exécution) ;
-  8. professeur.py : les 3 modes s'exécutent (verifier/plan/stats) ;
-  9. Anti-hallucination : chaque description ne mentionne pas « texte »
-     affiché (les 6 images sont vérifiées sans écriture visible) ;
- 10. Anti-fuite de tokens (ghp_/hf_/sk-) dans tout le pack.
+  2. Curriculum (15 leçons + 6 validations, champs gen3 obligatoires) ;
+  3. Médias présents (45 : 3 par leçon), dimensions ≥ 512, narrations ≤ 1024 ;
+  4. Tâches métiers (metiers_taches.jsonl : 9 métiers, réponses riches) ;
+  5. Dataset fusionné train_visual.jsonl (59 exemples, 12 tâches, 60 frames) ;
+  6. GPU forcé : sans CUDA → RuntimeError (jamais CPU) ;
+  7. Profils l4 / a100_40g : planchers VRAM, pas d'entrée CPU ;
+  8. dry_run sans GPU : OK (plan sans exécution) ;
+  9. professeur.py : les 3 modes s'exécutent (verifier/plan/stats) ;
+ 10. Anti-hallucination : aucune description ne mentionne de « texte écrit »
+     (les 15 images sont vérifiées sans écriture lisible) ;
+ 11. Anti-fuite de tokens (ghp_/hf_/sk-) dans tout le pack.
 """
 from __future__ import annotations
 
@@ -75,18 +76,34 @@ def main() -> int:
     try:
         lecons = lire_jsonl(PACK / "data" / "lecons_images.jsonl")
         validation = lire_jsonl(PACK / "data" / "validation_visuelle.jsonl")
-        check("6 leçons + 2 validations", len(lecons) == 6 and len(validation) == 2,
+        check("15 leçons + 6 validations", len(lecons) == 15 and len(validation) == 6,
               f"{len(lecons)}/{len(validation)}")
         champs = ("id", "task", "instruction", "response", "image", "audio",
                   "video", "mots_cles")
         manquants = [l["id"] for l in lecons for c in champs if not l.get(c)]
-        check("champs gen3 obligatoires", not manquants, ", ".join(manquants) or "6/6")
+        check("champs gen3 obligatoires", not manquants,
+              ", ".join(manquants) or f"{len(lecons)}/{len(lecons)}")
         ids = [l["id"] for l in lecons]
         check("ids uniques", len(set(ids)) == len(ids))
         vides = [l["id"] for l in lecons if len(l["response"]) < 200]
-        check("descriptions riches (>200 chars)", not vides, ", ".join(vides) or "6/6")
+        check("descriptions riches (>200 chars)", not vides,
+              ", ".join(vides) or f"{len(lecons)}/{len(lecons)}")
         mc = [l["id"] for l in lecons if len(l["mots_cles"]) != 8]
-        check("8 mots-clés par leçon", not mc, ", ".join(mc) or "6/6")
+        check("8 mots-clés par leçon", not mc,
+              ", ".join(mc) or f"{len(lecons)}/{len(lecons)}")
+        metiers = [l for l in lecons if l.get("module") == "metiers"]
+        check("9 leçons métiers (module=metiers)", len(metiers) == 9,
+              str(len(metiers)))
+
+        taches_m = lire_jsonl(PACK / "data" / "metiers_taches.jsonl")
+        noms = sorted({t["task"] for t in taches_m})
+        check("9 métiers enseignés", len(noms) == 9, " ".join(noms))
+        faibles = [t["id"] for t in taches_m if len(t["response"]) < 200]
+        check("réponses métiers riches (>200 chars)", not faibles,
+              ", ".join(faibles) or f"{len(taches_m)}/{len(taches_m)}")
+        orphelines = [t["id"] for t in taches_m if t["lecon"] not in ids]
+        check("tâches métiers rattachées aux leçons", not orphelines,
+              ", ".join(orphelines) or f"{len(taches_m)}/{len(taches_m)}")
     except Exception as exc:  # noqa: BLE001
         check("curriculum", False, str(exc))
         return 1
@@ -98,7 +115,7 @@ def main() -> int:
             chemin = PACK / l[champ]
             if not chemin.exists() or chemin.stat().st_size < 10_000:
                 tout_ok = False
-    check("18 médias présents (>10 Ko)", tout_ok)
+    check(f"{len(lecons) * 3} médias présents (>10 Ko)", tout_ok)
 
     sys.path.insert(0, str(PACK))
     try:
@@ -113,8 +130,9 @@ def main() -> int:
         check("dimensions_image", False, str(exc))
 
     narr = list((PACK / "assets" / "audio" / "narrations").glob("*.txt"))
-    check("6 narrations ≤ 1024 chars",
-          len(narr) == 6 and all(len(n.read_text(encoding="utf-8")) <= 1024 for n in narr))
+    check(f"{len(lecons)} narrations ≤ 1024 chars",
+          len(narr) == len(lecons)
+          and all(len(n.read_text(encoding="utf-8")) <= 1024 for n in narr))
 
     # 4. Dataset fusionné ------------------------------------------------------
     try:
@@ -122,18 +140,22 @@ def main() -> int:
         tasks = {}
         for ex in train:
             tasks[ex["task"]] = tasks.get(ex["task"], 0) + 1
-        check("train_visual.jsonl 18 exemples / 3 tâches",
-              len(train) == 18 and tasks == {"decrire_image": 6,
-                                             "decrire_video": 6,
-                                             "expliquer_lecon": 6},
+        attendu = {"decrire_image": 15, "decrire_video": 15,
+                   "expliquer_lecon": 15}
+        taches_m = lire_jsonl(PACK / "data" / "metiers_taches.jsonl")
+        for t in taches_m:
+            attendu[t["task"]] = attendu.get(t["task"], 0) + 1
+        check("train_visual.jsonl 59 exemples / 12 tâches",
+              len(train) == 59 and tasks == attendu,
               str(tasks))
         frames_manquantes = [
             ex["id"] for ex in train if ex["task"] == "decrire_video"
             for f in ex["images"] if not (PACK / f).exists()
         ]
-        check("24 frames vidéo présentes", not frames_manquantes)
+        check("60 frames vidéo présentes", not frames_manquantes,
+              f"{len(frames_manquantes)} manquantes")
         valid = lire_jsonl(PACK / "data" / "validation_visual.jsonl")
-        check("validation fusionnée", len(valid) == 2)
+        check("validation fusionnée (6)", len(valid) == 6)
     except Exception as exc:  # noqa: BLE001
         check("dataset fusionné", False, str(exc))
 
@@ -181,7 +203,8 @@ def main() -> int:
     # 9. Anti-hallucination ---------------------------------------------------------
     sus = [l["id"] for l in lecons
            if re.search(r"(?i)\b(écrit|inscrit|titré|légendé)\b", l["response"])]
-    check("descriptions sans « texte écrit » fantôme", not sus, ", ".join(sus) or "6/6")
+    check("descriptions sans « texte écrit » fantôme", not sus,
+          ", ".join(sus) or f"{len(lecons)}/{len(lecons)}")
 
     # 10. Anti-fuite de tokens -----------------------------------------------------
     fuite = []

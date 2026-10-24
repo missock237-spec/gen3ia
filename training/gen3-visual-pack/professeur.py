@@ -172,8 +172,12 @@ def verifier(resoudre_erreurs: bool = False) -> int:
 def construire_plan() -> dict:
     lecons = lire_jsonl(DATA / "lecons_images.jsonl")
     validation = lire_jsonl(DATA / "validation_visuelle.jsonl")
+    taches_metiers = []
+    metiers_path = DATA / "metiers_taches.jsonl"
+    if metiers_path.exists():
+        taches_metiers = lire_jsonl(metiers_path)
 
-    modules = {"voir": [], "ecouter": [], "comprendre": []}
+    modules = {"voir": [], "ecouter": [], "comprendre": [], "metiers": []}
     for ex in lecons:
         duree_audio = duree_media(PACK / ex["audio"])
         duree_video = duree_media(PACK / ex["video"])
@@ -192,28 +196,41 @@ def construire_plan() -> dict:
             "duree_s": round(duree_video, 1) if duree_video > 0 else None,
             "frames_preparees": "assets/frames/" + ex["id"] + "/",
         })
+        if ex.get("module") == "metiers":
+            modules["metiers"].append({
+                "id": ex["id"], "titre": ex["titre"], "matiere": ex["matiere"],
+            })
 
     total_audio = sum(m["duree_s"] or 0 for m in modules["ecouter"])
     plan = {
-        "programme": "L'école visuelle de gen3 — cours v1",
+        "programme": "L'école visuelle de gen3 — cours v2 (vague 1 : voir/écouter/"
+                     "comprendre + vague 2 : école des métiers)",
         "professeur": "gen3ia (enseignant) → gen3 (élève)",
         "principe": (
             "Chaque leçon associe un média réel à une description vérifiée "
             "visuellement : gen3 apprend à décrire ce qui est visible, sans "
-            "inventer. Anti-hallucination par construction."
+            "inventer. Anti-hallucination par construction. Vague 2 : gen3 ne "
+            "se contente pas de décrire, il s'entraîne à EXÉCUTER les métiers "
+            "(documents, données, questionnaires, vidéo, image photoréaliste, "
+            "voix, web temps réel, rapports, cohérence) — y compris sur des "
+            "domaines fictifs mais parfaitement cohérents."
         ),
         "modules": modules,
+        "taches_metiers": sorted({t["task"] for t in taches_metiers}),
         "etapes_entrainement": [
             "1. prepare_visual_dataset.py — extraire 4 frames par vidéo (ffmpeg) "
-            "et fusionner les 3 modules en data/train_visual.jsonl",
-            "2. train_gen3_visuel.py — QLoRA Gemma 3 sur les leçons "
-            "(profils l4 / a100_40g, GPU obligatoire, --resume_from_checkpoint)",
+            "et fusionner les 4 modules en data/train_visual.jsonl",
+            "2. train_gen3_visuel.py — QLoRA Gemma 3 sur les leçons et les tâches "
+            "métiers (profils l4 / a100_40g, GPU obligatoire, "
+            "--resume_from_checkpoint)",
             "3. infer_gen3_visuel.py — gen3 décrit une nouvelle image",
             "4. bench_gen3_visuel.py — couverture des mots-clés, longueur, latence",
         ],
         "validation": [v["id"] for v in validation],
         "metriques": {
             "lecons": len(lecons),
+            "lecons_metiers": len(modules["metiers"]),
+            "exemples_taches_metiers": len(taches_metiers),
             "exemples_validation": len(validation),
             "mots_cles_total": sum(len(m["mots_cles"]) for m in modules["voir"]),
             "minutes_audio": round(total_audio / 60.0, 1),
@@ -245,11 +262,20 @@ def stats() -> int:
     for ex in lecons:
         par_matiere.setdefault(ex["matiere"], []).append(ex["id"])
     for matiere, ids in sorted(par_matiere.items()):
-        print(f"  {matiere:<12} : {', '.join(ids)}")
+        print(f"  {matiere:<16} : {', '.join(ids)}")
     total_chars = sum(len(ex["response"]) for ex in lecons)
     total_mots = sum(len(ex["response"].split()) for ex in lecons)
     print(f"  descriptions : {total_chars} chars, {total_mots} mots au total")
     print(f"  mots-clés    : {sum(len(ex['mots_cles']) for ex in lecons)}")
+    metiers_path = DATA / "metiers_taches.jsonl"
+    if metiers_path.exists():
+        taches = lire_jsonl(metiers_path)
+        par_tache = {}
+        for t in taches:
+            par_tache[t["task"]] = par_tache.get(t["task"], 0) + 1
+        print(f"  tâches métiers : {len(taches)} exemples")
+        for nom, n in sorted(par_tache.items()):
+            print(f"    - {nom} : {n}")
     return 0
 
 

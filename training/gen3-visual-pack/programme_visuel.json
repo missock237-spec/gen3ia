@@ -1,7 +1,7 @@
 {
-  "programme": "L'école visuelle de gen3 — cours v1",
+  "programme": "L'école visuelle de gen3 — cours v2 (vague 1 : voir/écouter/comprendre + vague 2 : école des métiers)",
   "professeur": "gen3ia (enseignant) → gen3 (élève)",
-  "principe": "Chaque leçon associe un média réel à une description vérifiée visuellement : gen3 apprend à décrire ce qui est visible, sans inventer. Anti-hallucination par construction.",
+  "principe": "Chaque leçon associe un média réel à une description vérifiée visuellement : gen3 apprend à décrire ce qui est visible, sans inventer. Anti-hallucination par construction. Vague 2 : gen3 ne se contente pas de décrire, il s'entraîne à EXÉCUTER les métiers (documents, données, questionnaires, vidéo, image photoréaliste, voix, web temps réel, rapports, cohérence) — y compris sur des domaines fictifs mais parfaitement cohérents.",
   "modules": {
     "voir": [
       {
@@ -105,6 +105,159 @@
           "crepuscule"
         ],
         "duree_audio_s": 89.9
+      },
+      {
+        "id": "lecon07",
+        "titre": "Rédiger des documents professionnels",
+        "matiere": "redaction",
+        "image": "assets/images/lecon07_redaction_documents.jpg",
+        "mots_cles": [
+          "documents",
+          "dossiers",
+          "page",
+          "clavier",
+          "crayon",
+          "tasse",
+          "bureau",
+          "fenetre"
+        ],
+        "duree_audio_s": 88.9
+      },
+      {
+        "id": "lecon08",
+        "titre": "Analyser des données",
+        "matiere": "donnees",
+        "image": "assets/images/lecon08_analyse_donnees.jpg",
+        "mots_cles": [
+          "barres",
+          "fleche",
+          "bleues",
+          "orange",
+          "cubes",
+          "ecrans",
+          "salle",
+          "lueur"
+        ],
+        "duree_audio_s": 79.4
+      },
+      {
+        "id": "lecon09",
+        "titre": "Répondre aux questionnaires des utilisateurs",
+        "matiere": "relation_client",
+        "image": "assets/images/lecon09_questionnaires.jpg",
+        "mots_cles": [
+          "femme",
+          "souriante",
+          "ordinateur",
+          "coches",
+          "bulles",
+          "plantes",
+          "pull",
+          "lumineuse"
+        ],
+        "duree_audio_s": 76.7
+      },
+      {
+        "id": "lecon10",
+        "titre": "Créer des vidéos réalistes",
+        "matiere": "video",
+        "image": "assets/images/lecon10_video_realiste.jpg",
+        "mots_cles": [
+          "camera",
+          "trepied",
+          "claquette",
+          "projecteurs",
+          "softbox",
+          "fauteuil",
+          "cable",
+          "lumieres"
+        ],
+        "duree_audio_s": 74.2
+      },
+      {
+        "id": "lecon11",
+        "titre": "Générer des images photoréalistes",
+        "matiere": "image",
+        "image": "assets/images/lecon11_image_photorealiste.jpg",
+        "mots_cles": [
+          "photographe",
+          "galerie",
+          "dunes",
+          "appareil",
+          "reflets",
+          "mur",
+          "projecteurs",
+          "chemise"
+        ],
+        "duree_audio_s": 53.4
+      },
+      {
+        "id": "lecon12",
+        "titre": "Copier et créer des voix humaines",
+        "matiere": "voix",
+        "image": "assets/images/lecon12_voix_humaines.jpg",
+        "mots_cles": [
+          "micro",
+          "filtre",
+          "casque",
+          "studio",
+          "panneaux",
+          "ecran",
+          "ondes",
+          "bois"
+        ],
+        "duree_audio_s": 80.6
+      },
+      {
+        "id": "lecon13",
+        "titre": "Analyser les données du web en temps réel",
+        "matiere": "web",
+        "image": "assets/images/lecon13_web_temps_reel.jpg",
+        "mots_cles": [
+          "monde",
+          "carte",
+          "arcs",
+          "operateurs",
+          "ecrans",
+          "nuit",
+          "bleue",
+          "controle"
+        ],
+        "duree_audio_s": 76.8
+      },
+      {
+        "id": "lecon14",
+        "titre": "Rédiger des rapports",
+        "matiere": "rapport",
+        "image": "assets/images/lecon14_rapports.jpg",
+        "mots_cles": [
+          "presentatrice",
+          "reunion",
+          "ecran",
+          "graphiques",
+          "camembert",
+          "courbes",
+          "table",
+          "carnets"
+        ],
+        "duree_audio_s": 85.5
+      },
+      {
+        "id": "lecon15",
+        "titre": "Contrôler l'information et garder la cohérence",
+        "matiere": "coherence",
+        "image": "assets/images/lecon15_coherence_information.jpg",
+        "mots_cles": [
+          "balance",
+          "cubes",
+          "bronze",
+          "bokeh",
+          "marbre",
+          "chaines",
+          "plateaux",
+          "lumineux"
+        ],
+        "duree_audio_s": 74.7
       }
     ],
     "ecouter": [
@@ -143,6 +296,60 @@
         "audio": "assets/audio/lecon06_les_energies_renouvelables.mp3",
         "duree_s": 89.9,
         "transcript": "assets/audio/narrations/lecon06.txt"
+      },
+      {
+        "id": "lecon07",
+        "audio": "assets/audio/lecon07_redaction_documents.mp3",
+        "duree_s": 88.9,
+        "transcript": "assets/audio/narrations/lecon07.txt"
+      },
+      {
+        "id": "lecon08",
+        "audio": "assets/audio/lecon08_analyse_donnees.mp3",
+        "duree_s": 79.4,
+        "transcript": "assets/audio/narrations/lecon08.txt"
+      },
+      {
+        "id": "lecon09",
+        "audio": "assets/audio/lecon09_questionnaires.mp3",
+        "duree_s": 76.7,
+        "transcript": "assets/audio/narrations/lecon09.txt"
+      },
+      {
+        "id": "lecon10",
+        "audio": "assets/audio/lecon10_video_realiste.mp3",
+        "duree_s": 74.2,
+        "transcript": "assets/audio/narrations/lecon10.txt"
+      },
+      {
+        "id": "lecon11",
+        "audio": "assets/audio/lecon11_image_photorealiste.mp3",
+        "duree_s": 53.4,
+        "transcript": "assets/audio/narrations/lecon11.txt"
+      },
+      {
+        "id": "lecon12",
+        "audio": "assets/audio/lecon12_voix_humaines.mp3",
+        "duree_s": 80.6,
+        "transcript": "assets/audio/narrations/lecon12.txt"
+      },
+      {
+        "id": "lecon13",
+        "audio": "assets/audio/lecon13_web_temps_reel.mp3",
+        "duree_s": 76.8,
+        "transcript": "assets/audio/narrations/lecon13.txt"
+      },
+      {
+        "id": "lecon14",
+        "audio": "assets/audio/lecon14_rapports.mp3",
+        "duree_s": 85.5,
+        "transcript": "assets/audio/narrations/lecon14.txt"
+      },
+      {
+        "id": "lecon15",
+        "audio": "assets/audio/lecon15_coherence_information.mp3",
+        "duree_s": 74.7,
+        "transcript": "assets/audio/narrations/lecon15.txt"
       }
     ],
     "comprendre": [
@@ -181,24 +388,142 @@
         "video": "assets/videos/lecon06_les_energies_renouvelables.mp4",
         "duree_s": 91.5,
         "frames_preparees": "assets/frames/lecon06/"
+      },
+      {
+        "id": "lecon07",
+        "video": "assets/videos/lecon07_redaction_documents.mp4",
+        "duree_s": 90.5,
+        "frames_preparees": "assets/frames/lecon07/"
+      },
+      {
+        "id": "lecon08",
+        "video": "assets/videos/lecon08_analyse_donnees.mp4",
+        "duree_s": 81.0,
+        "frames_preparees": "assets/frames/lecon08/"
+      },
+      {
+        "id": "lecon09",
+        "video": "assets/videos/lecon09_questionnaires.mp4",
+        "duree_s": 78.3,
+        "frames_preparees": "assets/frames/lecon09/"
+      },
+      {
+        "id": "lecon10",
+        "video": "assets/videos/lecon10_video_realiste.mp4",
+        "duree_s": 75.8,
+        "frames_preparees": "assets/frames/lecon10/"
+      },
+      {
+        "id": "lecon11",
+        "video": "assets/videos/lecon11_image_photorealiste.mp4",
+        "duree_s": 55.0,
+        "frames_preparees": "assets/frames/lecon11/"
+      },
+      {
+        "id": "lecon12",
+        "video": "assets/videos/lecon12_voix_humaines.mp4",
+        "duree_s": 82.2,
+        "frames_preparees": "assets/frames/lecon12/"
+      },
+      {
+        "id": "lecon13",
+        "video": "assets/videos/lecon13_web_temps_reel.mp4",
+        "duree_s": 78.3,
+        "frames_preparees": "assets/frames/lecon13/"
+      },
+      {
+        "id": "lecon14",
+        "video": "assets/videos/lecon14_rapports.mp4",
+        "duree_s": 87.1,
+        "frames_preparees": "assets/frames/lecon14/"
+      },
+      {
+        "id": "lecon15",
+        "video": "assets/videos/lecon15_coherence_information.mp4",
+        "duree_s": 76.3,
+        "frames_preparees": "assets/frames/lecon15/"
+      }
+    ],
+    "metiers": [
+      {
+        "id": "lecon07",
+        "titre": "Rédiger des documents professionnels",
+        "matiere": "redaction"
+      },
+      {
+        "id": "lecon08",
+        "titre": "Analyser des données",
+        "matiere": "donnees"
+      },
+      {
+        "id": "lecon09",
+        "titre": "Répondre aux questionnaires des utilisateurs",
+        "matiere": "relation_client"
+      },
+      {
+        "id": "lecon10",
+        "titre": "Créer des vidéos réalistes",
+        "matiere": "video"
+      },
+      {
+        "id": "lecon11",
+        "titre": "Générer des images photoréalistes",
+        "matiere": "image"
+      },
+      {
+        "id": "lecon12",
+        "titre": "Copier et créer des voix humaines",
+        "matiere": "voix"
+      },
+      {
+        "id": "lecon13",
+        "titre": "Analyser les données du web en temps réel",
+        "matiere": "web"
+      },
+      {
+        "id": "lecon14",
+        "titre": "Rédiger des rapports",
+        "matiere": "rapport"
+      },
+      {
+        "id": "lecon15",
+        "titre": "Contrôler l'information et garder la cohérence",
+        "matiere": "coherence"
       }
     ]
   },
+  "taches_metiers": [
+    "analyser_donnees",
+    "analyser_web_temps_reel",
+    "controler_coherence",
+    "creer_image_photorealiste",
+    "creer_voix",
+    "planifier_video",
+    "rediger_document",
+    "rediger_rapport",
+    "repondre_questionnaire"
+  ],
   "etapes_entrainement": [
-    "1. prepare_visual_dataset.py — extraire 4 frames par vidéo (ffmpeg) et fusionner les 3 modules en data/train_visual.jsonl",
-    "2. train_gen3_visuel.py — QLoRA Gemma 3 sur les leçons (profils l4 / a100_40g, GPU obligatoire, --resume_from_checkpoint)",
+    "1. prepare_visual_dataset.py — extraire 4 frames par vidéo (ffmpeg) et fusionner les 4 modules en data/train_visual.jsonl",
+    "2. train_gen3_visuel.py — QLoRA Gemma 3 sur les leçons et les tâches métiers (profils l4 / a100_40g, GPU obligatoire, --resume_from_checkpoint)",
     "3. infer_gen3_visuel.py — gen3 décrit une nouvelle image",
     "4. bench_gen3_visuel.py — couverture des mots-clés, longueur, latence"
   ],
   "validation": [
     "val01",
-    "val02"
+    "val02",
+    "val03",
+    "val04",
+    "val05",
+    "val06"
   ],
   "metriques": {
-    "lecons": 6,
-    "exemples_validation": 2,
-    "mots_cles_total": 48,
-    "minutes_audio": 8.7,
-    "minutes_video": 8.9
+    "lecons": 15,
+    "lecons_metiers": 9,
+    "exemples_taches_metiers": 14,
+    "exemples_validation": 6,
+    "mots_cles_total": 120,
+    "minutes_audio": 20.2,
+    "minutes_video": 20.6
   }
 }
