@@ -1,5 +1,8 @@
 # Feuille de route SaaS — Gen3ia
 
+> ⚠️ **Document archivé** (2026-10-24, restructuration Phase 1) : fusionné dans
+> [`docs/roadmap.md`](../roadmap.md). Contenu conservé tel quel.
+
 État d'implémentation du plan « SaaS de niveau enterprise » au moment de la
 passe multi-tenant + connecteurs @ (septembre 2026). Chaque axe indique ce qui
 est **implémenté** (dans le code, vérifiable) et ce qui reste (infra externe ou
@@ -82,7 +85,7 @@ phase suivante).
 
 - **Implémenté** :
   - README complet (architecture, fonctionnalités, démarrage, déploiement).
-  - Cette feuille de route (`docs/saas-roadmap.md`).
+  - Cette feuille de route (archivée : `docs/archive/saas-roadmap.md`).
   - Page `/features` ouvrant les fonctionnalités cachées (portail client,
     approbations à distance, API publique, webhooks, voix, orchestrateur,
     MCP, PWA/desktop).

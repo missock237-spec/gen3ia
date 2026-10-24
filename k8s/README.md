@@ -4,7 +4,7 @@
 > production reste le **VPS 2 Go + PM2 + nginx** (CD `deploy-vps.yml` — ne
 > pas toucher). Ces manifestes préparent la **Phase 3 (GKE)** dont les
 > déclencheurs explicites sont dans
-> `docs/feuille-de-route-google-grade.md` §6 (charge, coût, équipe).
+> `docs/roadmap.md` § « Phases structurelles » (charge, coût, équipe).
 
 ## Pourquoi kustomize (et PAS Helm)
 

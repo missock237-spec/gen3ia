@@ -1,10 +1,14 @@
 # Feuille de route « Google-grade » — Gen3ia
 
+> ⚠️ **Document archivé** (2026-10-24, restructuration Phase 1) : fusionné dans
+> [`docs/roadmap.md`](../roadmap.md). Contenu conservé tel quel pour
+> l'historique ; les liens ont été mis à jour vers les nouveaux emplacements.
+
 > Livrable central de la vision 4 piliers : où la plateforme se situe
 > aujourd'hui par rapport au standard d'ingénierie Google, élément par
 > élément, avec un statut **honnête** et des chemins réels du dépôt comme
 > preuves. Document vivant : réévalué à chaque revue trimestrielle
-> (cf. [`docs/processus-ingenierie.md`](processus-ingenierie.md) §8).
+> (cf. [`docs/processus-ingenierie.md`](../processus-ingenierie.md) §8).
 
 ## Légende des statuts
 
@@ -73,7 +77,7 @@ la vérification finale reste le run CI/CD sur `main`.
 | Webhooks signés HMAC (timing-safe) | **[FAIT — sur VPS]** | `app/api/webhooks/chariow/route.ts` (`x-chariow-signature`) + `app/api/webhooks/agent-triggers/[token]/route.ts` (`X-Gen3ia-Signature`, `timingSafeStringEqual`) | — |
 | Garde des routes coûteuses + quotas | **[FAIT — sur VPS]** | `app/api/monde/simuler/route.ts` (protectRoute avant tout calcul, corps plafonné), rate limits distribué/local (`lib/cache/redis`, `lib/security/rate-limit`) | — |
 | Identité de service (endpoints système uniquement) | **[FAIT — sur VPS]** | `app/api/training/_internal/system-only.ts` (403 clair sans détail d'infra), workers système `app/api/video/worker/*`, crons `app/api/cron/*` | — |
-| Scans automatisés (SAST, DAST, secrets, dépendances) | **[FAIT — sur VPS]** | `codeql.yml` (CodeQL), `security.yml` (OWASP ZAP baseline), `ci.yml` (gitleaks + `npm audit --omit=dev`), triage documenté `docs/codeql-triage.md` + `docs/security/bug-bounty.md` | — |
+| Scans automatisés (SAST, DAST, secrets, dépendances) | **[FAIT — sur VPS]** | `codeql.yml` (CodeQL), `security.yml` (OWASP ZAP baseline), `ci.yml` (gitleaks + `npm audit --omit=dev`), triage documenté `docs/codeql-triage.md` + `docs/securite/bug-bounty.md` | — |
 | CSP stricte sans `unsafe-eval`, frame-ancestors none | **[FAIT — sur VPS]** | `middleware.ts` (CSP + CSP artefact dédiée) | — |
 | IAP (Zero Trust) + mTLS service mesh | **[PHASE 3 — migration GCP]** | — | IAP sur les surfaces admin, mesh Anthos/Istio : Workload Identity remplace les clés de compte de service |
 

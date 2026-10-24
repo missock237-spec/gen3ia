@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Sonde d'accessibilité Gen3ia (Rec 8 — roadmap-enterprise).
+ * Sonde d'accessibilité Gen3ia (Rec 8 — docs/archive/roadmap-enterprise.md).
  *
  * Scanne les pages publiques avec axe-core (WCAG 2.1 AA) via Playwright
  * et ÉCHOUE (exit 1) sur toute violation `critical` ou `serious` non

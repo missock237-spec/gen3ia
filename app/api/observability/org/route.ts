@@ -4,7 +4,7 @@ import { requireOrgContext } from "@/lib/tenants/organizations";
 import { buildOrgUsageOverview } from "@/lib/observability/org-queries";
 
 /**
- * Usage agrégé PAR ORGANISATION (saas-roadmap §3, Task 43) : exécutions,
+ * Usage agrégé PAR ORGANISATION (docs/archive/saas-roadmap.md §3, Task 43) : exécutions,
  * coûts, tokens des membres de l'org, agrégés par agent / outil / jour.
  *
  * Accès : tout membre de l'organisation peut consulter la vue d'usage

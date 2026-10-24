@@ -137,4 +137,4 @@ même doctrine que le scan ZAP de `.github/workflows/security.yml`).
    (`Ctrl+C`).
 5. **Les rapports de tests de charge non autorisés** sont explicitement
    exclus du programme de divulgation responsable — voir
-   `docs/security/bug-bounty.md` § Exclusions.
+   `docs/securite/bug-bounty.md` § Exclusions.

@@ -135,7 +135,7 @@ Consultez les documents dans le dossier `docs/` :
 
 - 📖 **[Guide Technique & Référence API](docs/guide-technique.md)** : cartographie des modules `lib/`, endpoints API, variables d'environnement et stack.
 - 📐 **[Décisions d'Architecture (ADR)](docs/architecture-decisions.md)** : journal des choix techniques structurants.
-- 🗺️ **[Feuille de Route SaaS](docs/saas-roadmap.md)** : état d'implémentation de la couverture entreprise.
+- 🗺️ **[Feuille de route](docs/roadmap.md)** : synthèse honnête par axe, chantiers ouverts et phases structurelles.
 
 ### Observabilité & données
 - **Sentry** : erreurs + traces via le pont asynchrone (zéro coût First Load), tunnel `/monitoring`, source maps au build. Voir ADR-005.

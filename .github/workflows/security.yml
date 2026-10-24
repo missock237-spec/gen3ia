@@ -8,7 +8,7 @@ name: Security
 #   - security.yml (ce workflow) → DAST baseline EXÉCUTÉ contre la cible :
 #     en-têtes de sécurité, cookies, TLS, formulaires, fuites passives et
 #     sondes actives modérées (spider borné). Rapport archivé en artefact
-#     pour triage selon docs/security/pentest-checklist.md.
+#     pour triage selon docs/securite/pentest-checklist.md.
 
 on:
   schedule:

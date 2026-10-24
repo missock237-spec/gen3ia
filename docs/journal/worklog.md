@@ -3982,3 +3982,22 @@ Stage Summary:
 - Les 3 P0 « cœur IA » (fuite de contexte inter-comptes, courses de persistance, synapses toxiques) et les 3 P1 « visibilité » (repli signalé, version /api/status réelle, CD vérifié de bout en bout + blacklist) sont implémentés et testés.
 - Restent pour une prochaine vague (volontairement hors de cette PR pour rester réversible) : backup R2 du cerveau, durcissement gen3-local (timebox/anti-zombie), encodage du dernier message utilisateur dans le SNN, alertes uptime externes.
 - PR vers main = déploiement production automatique (deploy-vps.yml) avec vérification BUILD_ID intégrée.
+
+---
+
+Task ID: RESTRUCT-PHASE1
+Agent: orchestrateur (principal)
+Task: Plan de restructuration — Phase 1 (nettoyage immédiat, sans risque).
+
+Work Log:
+- 14 tests déplacés vers tests/unit/ (13 racine app/ + docs/openapi.test.ts) ; les ~44 route.test.ts co-localisés restent en place (option « co-localiser » du plan). tests/unit/openapi.test.ts : chemins import.meta.url remontés d'un niveau. deploy-auto-update.test.ts : 6 imports dynamiques relatifs convertis en alias @/ (repérés par la suite vitest, pas par la lecture statique).
+- vitest.config.mts : motif docs/**/*.test.ts retiré, commentaires à jour ; app/**/*.test.ts conservé (co-localisés).
+- worklog.md + CHANGELOG.md → docs/journal/ ; worklog reste VERSIONNÉ (journal manuel, pas un log généré) ; commentaires lib/storage/user-data-store.ts et lib/r2fs/db.ts mis à jour.
+- docs/security/ + docs/securite/ fusionnés → docs/securite/ (standard français, cohérent SECURITE.md) ; refs mises à jour (load-testing, security.yml, bug-bounty, pentest-checklist, archive feuille-de-route).
+- 3 roadmaps archivées dans docs/archive/ (bannières + liens corrigés) et remplacées par docs/roadmap.md unique ; 12 références mises à jour (README, processus-ingenierie ×3, analyse-projet, deploiement-k8s, ssh-bloque-runbook, k8s/README, k8s/base/deployment-app.yaml, org-queries.ts, org/route.ts, a11y_prod.mjs).
+- « Dossiers vides » : hypothèse du plan corrigée — agent-ctx/, live-agent/, orchestrator-24h/, pipeline/ contiennent du code réel (0 dossier vide dans le dépôt) ; rien supprimé, sort traité en Phase 2.
+- docs/plan-restructuration.md créé (plan 4 phases, décisions, contraintes C1/L1/S1, registre de vérifications).
+
+Stage Summary:
+- Suite vitest complète : 433 fichiers verts, 4890 tests passés, 0 échec (sandbox deps installées via npm ci --prefix sandbox).
+- Phase 1 livrée ; Phases 2-4 planifiées dans docs/plan-restructuration.md.

@@ -109,7 +109,7 @@ Gen3ia est une jeune plateforme : le programme est aujourd'hui
 - Urgence (critique confirmée, données exposées) : objet préfixé
   « [URGENT] » — tri prioritaire sous 48 h y compris week-end.
 
-*Ressources internes associées : `docs/security/pentest-checklist.md`
+*Ressources internes associées : `docs/securite/pentest-checklist.md`
 (méthodologie et sévérités), `docs/load-testing.md` (cadre des tests de
 charge), `.github/workflows/security.yml` (scan ZAP hebdomadaire),
 `docs/enterprise-security.md` (MFA, SSO, CMEK).*

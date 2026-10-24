@@ -16,7 +16,7 @@ import { assertValidUid, estAbsenceR2 } from "@/lib/identity/r2-identity-store";
  *
  * Modèle : UN document JSON par objet, clés canoniques sous `users/{uid}/...`
  * (conversations, messages, mémoire, agents, runs — voir le contrat lot 109-0
- * dans worklog.md). Les lots suivants (109-b/c/d) composent leurs clés via
+ * dans docs/journal/worklog.md). Les lots suivants (109-b/c/d) composent leurs clés via
  * userDir/userKey, génèrent leurs identifiants via newUlid, et lisent/écrivent
  * via readJson/readJsonIfExists/writeJson/patchJson ; removePrefix sert aux
  * purges RGPD, listKeys/listJson aux scans par préfixe.

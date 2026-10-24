@@ -8,7 +8,7 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 > Le projet n'a pas encore de release taguée : la section active est `[Non publié]`
 > (intégration continue sur `main`, chaque tâche validée par tsc/eslint/vitest puis
 > déployée sur <https://gen3ia.online>). L'historique antérieur est condensé par
-> grandes vagues de travaux ; le détail complet vit dans `worklog.md`.
+> grandes vagues de travaux ; le détail complet vit dans `docs/journal/worklog.md`.
 
 ## [Non publié]
 
@@ -368,7 +368,7 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Historique condensé
 
-> Condensé par grandes vagues — le détail par tâche vit dans `worklog.md`.
+> Condensé par grandes vagues — le détail par tâche vit dans `docs/journal/worklog.md`.
 
 ### Vague « Fondations production » (Tasks 41–57)
 

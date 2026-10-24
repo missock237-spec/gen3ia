@@ -28,6 +28,10 @@ export default defineConfig({
       // Règles Firestore — isolation multi-tenant (Task I, Pilier 3 Zero
       // Trust) : s'auto-désactive sans émulateur, tourne dans
       // `firebase emulators:exec --only firestore`.
+      // Tests unitaires transverses (restructuration Phase 1) : les tests
+      // non co-localisés avec leur module vivent dans tests/unit/ — dont la
+      // spécification OpenAPI exécutable (tests/unit/openapi.test.ts,
+      // ex-docs/openapi.test.ts — docs/ ne contient plus de code).
       "tests/**/*.test.ts",
       // Primitifs UI partagés (Task 1-c : cadre de progression média) —
       // tests Node sans jsdom (logique pure + verrous structurels).
@@ -39,10 +43,6 @@ export default defineConfig({
       "sdk/test/**/*.test.ts",
       // Helpers des sondes de production — Tâche 57.
       "scripts/lib/**/*.test.mjs",
-      // Documentation exécutable — Task 129 : la spécification OpenAPI
-      // (docs/api/openapi.json) est validée contre le code réel
-      // (aucun chemin documenté sans route effectivement livrée).
-      "docs/**/*.test.ts",
     ],
     env: {
       // Dummy Firebase Admin credentials so server modules that initialize

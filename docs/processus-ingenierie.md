@@ -7,7 +7,7 @@
 > pas tel qu'on rêverait qu'il soit. Compléments : tableau de bord fiabilité
 > [`docs/sre/sli-slo.md`](sre/sli-slo.md), postmortems
 > [`docs/sre/postmortem-modele.md`](sre/postmortem-modele.md), roadmap
-> [`docs/feuille-de-route-google-grade.md`](feuille-de-route-google-grade.md).
+> [`docs/roadmap.md`](roadmap.md).
 
 ## 1. Principe directeur
 
@@ -148,7 +148,7 @@ par cohorte d'utilisateurs. **Phase 3 (non déclenchée) :** un service type
 LaunchDarkly/Unleash est INUTILE à notre échelle (un process PM2, un VPS
 2 Go, pas de flotte multi-instance) — n'introduire un tel service que si
 un jour plusieurs instances doivent basculer de façon coordonnée sans
-restart, et le noter alors dans `docs/feuille-de-route-google-grade.md`.
+restart, et le noter alors dans `docs/roadmap.md`.
 
 ## 3. CI/CD standardisé
 
@@ -303,7 +303,7 @@ mémoire collective.
 | Avant déploiement majeur | Test de charge | Smoke k6 (workflow manuel) ; stress si changement d'architecture |
 | Hebdo | Fiabilité | Relecture SLI/SLO + budget d'erreur (`docs/sre/sli-slo.md`) : budget épuisé ⇒ gel features |
 | Sous 72 h après incident | Postmortem | Modèle sans blâme, actions correctives suivies jusqu'à clôture |
-| Trimestriel | Revue de roadmap | `docs/feuille-de-route-google-grade.md` : statuts réévalués, conditions de déclenchement des phases vérifiées |
+| Trimestriel | Revue de roadmap | `docs/roadmap.md` : statuts réévalués, conditions de déclenchement des phases vérifiées |
 
 ## 9. Ce que ce processus N'EST PAS
 

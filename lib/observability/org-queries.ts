@@ -5,7 +5,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { summarizeExecution, type ExecutionSummary } from "./queries";
 
 /**
- * Métriques d'usage agrégées PAR ORGANISATION (saas-roadmap §3, Task 43).
+ * Métriques d'usage agrégées PAR ORGANISATION (docs/archive/saas-roadmap.md §3, Task 43).
  *
  * Complète buildObservabilityOverview (vue utilisateur) avec une vue
  * entreprise : toutes les exécutions des membres de l'organisation, dans la

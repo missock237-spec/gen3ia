@@ -26,7 +26,7 @@ import { FsError, isConflictError, rawDelete, rawGet, rawListKeys, rawPut, type 
  *   - serverTimestamp → horodatage du commit (millisecondes) ;
  *   - ref.parent / doc.ref.parent.parent?.id (collections imbriquées).
  *
- * Limites assumées (documentées dans worklog.md) :
+ * Limites assumées (documentées dans docs/journal/worklog.md) :
  *   - requêtes = scan préfixe + filtre mémoire (plafond 2000 docs) ;
  *   - FieldValue.increment DANS un set() écrasant résout contre un doc vide
  *     (Firestore relirait la version serveur) — le projet l'utilise

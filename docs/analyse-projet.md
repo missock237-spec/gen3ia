@@ -17,7 +17,7 @@ Les couches demandées sont désormais présentes et déployées :
 | Sécurité | CSP centralisée middleware + `upgrade-insecure-requests`, `X-Frame-Options: DENY`, 401 corrélés, rate limiting, guardrails | `middleware.ts`, `next.config.ts`, `lib/security/*` |
 | Observabilité | `traceId` par requête (réutilisé de `x-gen3ia-trace-id`/`x-request-id`), logs pino enfants avec userId/route, événements `request.authorized`/`request.rate_limited` | `lib/observability/logger.ts`, `lib/security/route-guard.ts` |
 | Découvrabilité | Page `/features` (portail client, approbations à distance, API publique, webhooks, voix, orchestrateur, MCP, PWA/desktop) + entrée de navigation | `app/features/page.tsx`, `components/nav/nav-items.ts` |
-| Documentation | README complet + feuille de route SaaS avec état d'implémentation honnête | `README.md`, `docs/saas-roadmap.md` |
+| Documentation | README complet + feuille de route SaaS avec état d'implémentation honnête | `README.md`, `docs/roadmap.md` |
 
 Vérifications production (compte de test créé puis parcours complet) :
 - `/features`, `/studio`, `/team`, `/integrations` → HTTP 200.

@@ -58,7 +58,7 @@ describe("Endpoint /api/deploy-info — empreinte du déploiement actif", () => 
     process.env.VERCEL_DEPLOYMENT_ID = "dpl_test";
     process.env.GEN3IA_RELEASE = "release-factice";
     mockBuildId.mockReturnValue("_X5VyoPm2wkmqVd3BpbiX");
-    const { GET } = await import("./api/deploy-info/route");
+    const { GET } = await import("@/app/api/deploy-info/route");
     const response = GET();
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     const body = (await response.json()) as { ok: boolean; deploymentId: string; generatedAt: string };
@@ -71,7 +71,7 @@ describe("Endpoint /api/deploy-info — empreinte du déploiement actif", () => 
   it("l'empreinte suit le swap atomique : deux requêtes successives reflètent un nouveau build", async () => {
     grabEnv();
     mockBuildId.mockReturnValueOnce("build-precedent").mockReturnValueOnce("build-nouveau");
-    const { GET } = await import("./api/deploy-info/route");
+    const { GET } = await import("@/app/api/deploy-info/route");
     const first = (await GET().json()) as { deploymentId: string };
     const second = (await GET().json()) as { deploymentId: string };
     expect(first.deploymentId).toBe("build-precedent");
@@ -83,7 +83,7 @@ describe("Endpoint /api/deploy-info — empreinte du déploiement actif", () => 
     delete process.env.VERCEL_DEPLOYMENT_ID;
     delete process.env.VERCEL_GIT_COMMIT_SHA;
     delete process.env.GEN3IA_RELEASE;
-    const { GET } = await import("./api/deploy-info/route");
+    const { GET } = await import("@/app/api/deploy-info/route");
     const body = (await GET().json()) as { deploymentId: string };
     expect(body.deploymentId).toBe("local-dev");
     expect(body.deploymentId.length).toBeGreaterThan(0);
@@ -94,7 +94,7 @@ describe("Endpoint /api/deploy-info — empreinte du déploiement actif", () => 
     delete process.env.VERCEL_DEPLOYMENT_ID;
     delete process.env.VERCEL_GIT_COMMIT_SHA;
     process.env.GEN3IA_RELEASE = "release-2026.10";
-    const { GET } = await import("./api/deploy-info/route");
+    const { GET } = await import("@/app/api/deploy-info/route");
     const body = (await GET().json()) as { deploymentId: string };
     expect(body.deploymentId).toBe("release-2026.10");
   });
@@ -102,7 +102,7 @@ describe("Endpoint /api/deploy-info — empreinte du déploiement actif", () => 
   it("repli variables Vercel quand BUILD_ID et GEN3IA_RELEASE sont absents", async () => {
     grabEnv();
     process.env.VERCEL_GIT_COMMIT_SHA = "sha-1";
-    const { GET } = await import("./api/deploy-info/route");
+    const { GET } = await import("@/app/api/deploy-info/route");
     const body = (await GET().json()) as { deploymentId: string };
     expect(body.deploymentId).toBe("sha-1");
   });
@@ -110,7 +110,7 @@ describe("Endpoint /api/deploy-info — empreinte du déploiement actif", () => 
   it("l'empreinte est lue À LA REQUÊTE : le swap de .next est visible dès la requête suivante", async () => {
     grabEnv();
     mockBuildId.mockReturnValueOnce("avant-swap").mockReturnValueOnce("apres-swap");
-    const { GET } = await import("./api/deploy-info/route");
+    const { GET } = await import("@/app/api/deploy-info/route");
     const first = (await GET().json()) as { deploymentId: string };
     const second = (await GET().json()) as { deploymentId: string };
     expect(first.deploymentId).toBe("avant-swap");

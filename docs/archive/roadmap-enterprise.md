@@ -1,5 +1,8 @@
 # Roadmap Enterprise — Gen3ia (Task 39)
 
+> ⚠️ **Document archivé** (2026-10-24, restructuration Phase 1) : fusionné dans
+> [`docs/roadmap.md`](../roadmap.md). Contenu conservé tel quel.
+
 Ce document couvre les recommandations du plan d'action qui nécessitent une
 **décision produit ou un compte externe** (contrairement aux travaux
 implémentés directement dans le code : CI e2e émulateurs, tests de règles

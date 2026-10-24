@@ -8,7 +8,7 @@
 
 ## 1. Pourquoi ce travail est préparatoire
 
-La feuille de route (`docs/feuille-de-route-google-grade.md` §6) fixe
+La feuille de route (`docs/roadmap.md`, section « Phases structurelles ») fixe
 **trois déclencheurs de migration** — un seul suffit, tous mesurés :
 
 | Déclencheur | Seuil |

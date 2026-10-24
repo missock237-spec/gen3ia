@@ -13,7 +13,9 @@ import { existsSync, readFileSync } from "node:fs";
  * La spec ne peut donc pas dériver du code sans faire échouer la CI.
  */
 
-const SPEC_URL = new URL("./api/openapi.json", import.meta.url);
+// Test déplacé depuis docs/openapi.test.ts (restructuration Phase 1) :
+// les chemins remontent d'un niveau supplémentaire vers la racine du dépôt.
+const SPEC_URL = new URL("../../docs/api/openapi.json", import.meta.url);
 
 /** Méthodes HTTP reconnues comme opérations OpenAPI dans un Path Item. */
 const HTTP_METHODS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"] as const;
@@ -49,7 +51,7 @@ function routeFileUrl(apiPath: string): URL {
     .replace(/^\//, "")
     .replace(/\{/g, "[")
     .replace(/\}/g, "]");
-  return new URL(`../app/${segments}/route.ts`, import.meta.url);
+  return new URL(`../../app/${segments}/route.ts`, import.meta.url);
 }
 
 /** Méthodes HTTP réellement documentées pour un Path Item. */

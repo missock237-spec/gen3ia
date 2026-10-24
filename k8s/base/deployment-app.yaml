@@ -22,7 +22,7 @@
 #     core pour absorber les pics de rendu de réponse.
 #   - 2 replicas × 1Gi = 2 Gi de limite RAM app — c'est le « VPS 2 Go »
 #     dédoublé, la taille minimale de départ cohérente avec la Phase 3
-#     (déclencheurs de migration : docs/feuille-de-route-google-grade.md §6).
+#     (déclencheurs de migration : docs/roadmap.md, section « Phases structurelles »).
 # =============================================================================
 apiVersion: apps/v1
 kind: Deployment
