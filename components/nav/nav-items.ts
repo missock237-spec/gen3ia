@@ -6,10 +6,11 @@
  *
  * Architecture IA-FIRST : la navigation principale est
  * Chat IA · Cerveau IA (studio d'entraînement, ouvert à tous) ; le reste
- * est des capacités secondaires. RESTAURATION (propriétaire) : la surface
- * Planifications (/planifications) est de retour dans « Automatisations ».
+ * est des capacités secondaires. RESTRUCTURATION DES PARCOURS : l'Espace
+ * Automatisations (/automations — agents + planifications) est une entrée
+ * principale ; Intégrations et Bibliothèque rejoignent le groupe ressources.
  * (Surfaces toujours supprimées : conversations, connaissances, projets,
- * fichiers, automatisations /studio.)
+ * automatisations /studio.)
  */
 import { NAV_REGISTRY, navCommandIndex, type NavRoute } from "@/components/shells/nav-registry";
 
@@ -41,21 +42,21 @@ function groupByIds(ids: string[], extras: Record<string, Partial<NavItem>> = {}
 
 /** Espace de travail — centre de gravité « IA » (Chat IA en tête). */
 export const WORKSPACE: NavItem[] = groupByIds(
-  ["chat-ia", "cerveau"],
+  ["chat-ia", "lab", "data", "automations", "cerveau"],
   {
     "chat-ia": { shortcut: "C" },
   },
 );
 
-/** Automatisations (agents) — surfaces transverses, secondaires. */
+/** Automatisations — surfaces transverses, secondaires. */
 export const AGENTS: NavItem[] = [
-  ...groupByIds(["live", "planifications"]),
+  ...groupByIds(["live"]),
   { href: "/observability", label: "Observabilité", icon: "∿", hint: "Traces, coûts et alertes de vos exécutions" },
-  { href: "/integrations", label: "Intégrations", icon: "⧉", hint: "Connecter vos services externes" },
 ];
 
 /** Ressources. */
 export const LIBRARY: NavItem[] = [
+  ...groupByIds(["integrations", "storage"]),
   ...groupByIds(["memory"]),
   ...groupByIds(["billing", "settings"]),
 ];

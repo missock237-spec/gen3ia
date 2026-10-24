@@ -11,10 +11,12 @@ import { navFor } from "@/components/shells/nav-registry";
  *     COMPTES — page allowlistée, API /api/neural ouverte (reset excepté),
  *     entrée « Cerveau IA » visible dès le rôle "user", actions à privilège
  *     (train POST / reset) masquées dans la console pour un compte standard.
- *  2. PLANIFICATIONS (/planifications) : surface UI recréée pour les tâches
- *     planifiées automatisées — branchée sur /api/agents/schedules
- *     (déjà requireUser + scoping propriétaire), entrée de navigation dans
- *     le groupe « Automatisations ».
+ *  2. PLANIFICATIONS : surface UI recréée pour les tâches planifiées
+ *     automatisées — branchée sur /api/agents/schedules (requireUser +
+ *     scoping propriétaire). RESTRUCTURATION DES PARCOURS (10-2026) : la
+ *     surface est FONDUE dans l'Espace Automatisations /automations comme
+ *     onglet « Planifications » (aux côtés de l'onglet « Agents ») ;
+ *     /planifications redirige vers /automations#planifications.
  *  3. RECHARGE WALLET : le widget Chariow du produit de recharge
  *     (prd_llfosdp1) reste branché sur /billing (verrou chariow-widget).
  *
@@ -27,6 +29,8 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf
 const USER_ACCESS = "lib/security/user-access.ts";
 const NAV_ITEMS = "components/nav/nav-items.ts";
 const PAGE = "app/planifications/page.tsx";
+const AUTOMATIONS_PAGE = "app/automations/page.tsx";
+const CONSOLE_AUTOMATIONS = "components/automations/automations-console.tsx";
 const WORKSPACE = "components/planifications/planifications-workspace.tsx";
 const CONSOLE = "components/neural/neural-console.tsx";
 
@@ -54,18 +58,21 @@ describe("Restauration — studio d'entraînement IA (/neural)", () => {
 });
 
 describe("Restauration — planifications (tâches automatisées)", () => {
-  it("la page /planifications est allowlistée et branchée sur le scheduler", () => {
+  it("l'espace Automatisations est allowlisté et branché sur le scheduler", () => {
     const access = read(USER_ACCESS);
-    expect(access).toContain('"/planifications": "planifications"');
+    // L'espace unifié est allowlisté (l'ancienne entrée /planifications
+    // reste allowlistée pour la page de redirection).
+    expect(access).toContain('"/automations": "automatisation"');
     // L'API schedules reste allowlistée utilisateur (contrat existant).
     expect(access).toContain('["/api/agents/schedules", "planifications"]');
   });
 
-  it("l'entrée « Planifications » est visible dès le rôle user et dans le groupe Automatisations", () => {
+  it("l'entrée « Automatisations » est visible dès le rôle user (navigation principale)", () => {
     const visibles = navFor("workspace", "user").map((route) => route.href);
-    expect(visibles).toContain("/planifications");
+    expect(visibles).toContain("/automations");
     const navItems = read(NAV_ITEMS);
-    expect(navItems).toContain('groupByIds(["live", "planifications"])');
+    // Le groupe principal du workspace embarque l'espace automatisations.
+    expect(navItems).toContain('["chat-ia", "lab", "data", "automations", "cerveau"]');
   });
 
   it("le workspace couvre le cycle complet des planifications", () => {
@@ -83,11 +90,17 @@ describe("Restauration — planifications (tâches automatisées)", () => {
     expect(workspace).toContain("resolvedOptions().timeZone");
     // Garde de session (pas de rendu anonyme).
     expect(workspace).toContain("useSessionAvailable");
+    // Mode embarqué (onglet de l'espace unifié).
+    expect(workspace).toContain("embedded = false");
+    const consoleAutomations = read(CONSOLE_AUTOMATIONS);
+    expect(consoleAutomations).toContain("<PlanificationsWorkspace embedded />");
   });
 
-  it("la page serveur existe avec métadonnées FR", () => {
+  it("/planifications redirige vers /automations#planifications (un seul parcours)", () => {
     const page = read(PAGE);
-    expect(page).toContain("PlanificationsWorkspace");
-    expect(page).toContain("Planifications — tâches automatisées");
+    expect(page).toContain("/automations#planifications");
+    expect(page).toContain("RedirectRoute");
+    const automations = read(AUTOMATIONS_PAGE);
+    expect(automations).toContain("AutomationsConsole");
   });
 });

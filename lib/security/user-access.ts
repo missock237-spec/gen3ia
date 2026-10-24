@@ -324,6 +324,10 @@ const USER_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/lab": "training",
   "/data": "training",
   "/automations": "automatisation",
+  // REDIRECTION (restructuration des parcours) : l'ancienne surface
+  // /planifications renvoie vers /automations#planifications — la page de
+  // redirection reste allowlistée pour compatibilité des liens existants.
+  "/planifications": "planifications",
 };
 
 const USER_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [

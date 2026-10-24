@@ -133,7 +133,7 @@ async function lireErreur(response: Response, repli: string): Promise<string> {
 /* Composant                                                           */
 /* ------------------------------------------------------------------ */
 
-export function PlanificationsWorkspace() {
+export function PlanificationsWorkspace({ embedded = false }: { embedded?: boolean } = {}) {
   const session = useSessionAvailable();
 
   const [chargement, setChargement] = useState(true);
@@ -405,7 +405,8 @@ export function PlanificationsWorkspace() {
       : datePonctuelle !== "" && new Date(datePonctuelle).getTime() > Date.now());
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 pb-20 pt-6 sm:px-6 sm:pt-10">
+    <div className={embedded ? "" : "mx-auto w-full max-w-6xl px-4 pb-20 pt-6 sm:px-6 sm:pt-10"}>
+      {embedded ? null : (
       <header>
         <p className="text-xs font-medium uppercase tracking-wide text-[var(--g3-muted)]">Automatisations</p>
         <h1 className="mt-1 text-2xl font-semibold sm:text-3xl">Planifications</h1>
@@ -414,6 +415,7 @@ export function PlanificationsWorkspace() {
           RSS/Web ou webhook entrant. Chaque exécution produit un compte rendu et, le cas échéant, des livrables.
         </p>
       </header>
+      )}
 
       {erreur ? <div className="mt-4 rounded-xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] px-4 py-3 text-sm text-[var(--g3-danger-strong)]">{erreur}</div> : null}
       {notice ? <div className="mt-4 rounded-xl border border-[var(--g3-success-soft)] bg-[var(--g3-success-soft)] px-4 py-3 text-sm text-[var(--g3-success-strong)]">{notice}</div> : null}
