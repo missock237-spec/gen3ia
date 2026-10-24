@@ -55,6 +55,19 @@ const CFG = {
   cadenceEcriture: 24,
 };
 
+/* ---- CONFIDENTIALITÉ (correctif 2026-10-24) ----
+ * Le cache local des conversations est SCOPÉ PAR UTILISATEUR : sur un
+ * appareil partagé, le compte suivant ne voit JAMAIS le cache du précédent.
+ * L'ancienne clé NON scopée (« gen3ia-nova-chat ») est supprimée au montage
+ * (migration à sens unique) — elle ne doit jamais survivre à un changement
+ * de compte. Avant résolution de l'identité, les écritures vont dans un
+ * compartiment « invite » isolé (jamais dans la clé partagée). */
+let cleActive = `${CFG.cle}:invite`;
+
+function clePourUtilisateur(uid: string | null | undefined): string {
+  return uid ? `${CFG.cle}:u:${uid}` : `${CFG.cle}:invite`;
+}
+
 type EffortId = "rapide" | "equilibre" | "expert";
 
 interface EffortDef {
@@ -368,7 +381,7 @@ function fallbackCopier(texte: string): boolean {
 function chargerEtat(): { convs: NovaConversation[]; activeId: string | null; effort: EffortId } {
   const vide = { convs: [] as NovaConversation[], activeId: null, effort: "equilibre" as EffortId };
   try {
-    const brut = localStorage.getItem(CFG.cle);
+    const brut = localStorage.getItem(cleActive);
     if (!brut) return vide;
     const d = JSON.parse(brut) as {
       convs?: NovaConversation[];
@@ -580,7 +593,7 @@ export default function NovaChat() {
     try {
       const tries = [...convsRef.current].sort((a, b) => b.maj - a.maj).slice(0, CFG.maxConvs);
       localStorage.setItem(
-        CFG.cle,
+        cleActive,
         JSON.stringify({ convs: tries, activeId: activeIdRef.current, effort: effortRef.current }),
       );
     } catch {
@@ -590,16 +603,39 @@ export default function NovaChat() {
 
   /* ---- Chargement initial ---- */
   React.useEffect(() => {
-    const etat = chargerEtat();
-    let actif = etat.activeId;
-    if (!etat.convs.some((c) => c.id === actif)) actif = etat.convs[0]?.id ?? null;
-    convsRef.current = etat.convs;
-    activeIdRef.current = actif;
-    effortRef.current = etat.effort;
-    setConvs(etat.convs);
-    setActiveId(actif);
-    setEffort(etat.effort);
-    setCharge(true);
+    let annule = false;
+    (async () => {
+      // CONFIDENTIALITÉ : l'identité est résolue AVANT tout chargement du
+      // cache local (deux systèmes d'auth couverts par /api/auth/session).
+      let uid: string | null = null;
+      try {
+        const reponse = await fetch("/api/auth/session", { credentials: "include", cache: "no-store" });
+        if (reponse.ok) {
+          const corps = (await reponse.json()) as { authenticated?: boolean; uid?: string };
+          if (corps.authenticated && typeof corps.uid === "string" && corps.uid.length > 0) uid = corps.uid;
+        }
+      } catch {
+        uid = null;
+      }
+      if (annule) return;
+      // Migration à sens unique : l'ancienne clé partagée est supprimée —
+      // aucune conversation ne doit survivre à un changement de compte.
+      try { localStorage.removeItem(CFG.cle); } catch { /* stockage indisponible */ }
+      cleActive = clePourUtilisateur(uid);
+      const etat = chargerEtat();
+      let actif = etat.activeId;
+      if (!etat.convs.some((c) => c.id === actif)) actif = etat.convs[0]?.id ?? null;
+      convsRef.current = etat.convs;
+      activeIdRef.current = actif;
+      effortRef.current = etat.effort;
+      setConvs(etat.convs);
+      setActiveId(actif);
+      setEffort(etat.effort);
+      setCharge(true);
+    })();
+    return () => {
+      annule = true;
+    };
   }, []);
 
   /* ---- ÉCRITURE PROGRESSIVE (tampon lissé) ----
