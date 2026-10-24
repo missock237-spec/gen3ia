@@ -21,8 +21,8 @@ image (`gen3-image-pack`) et média (`gen3-media-pack`) déjà intégrés.
 | `profils.py` | Les deux niveaux de performance gen3, GPU obligatoire, refus propre sans CUDA |
 | `format_prompt.py` | Gabarit de prompt unique (train = inférence = bench) + langages supportés |
 | `scripts/validate_dataset.py` | Validateur autonome des JSONL (doublons, fuite train/validation, stats) |
-| `data/train.jsonl` | 36 exemples création de sites : HTML 12, JS 9, CSS 8, TS/React 4, Python 2, SQL 1 |
-| `data/validation.jsonl` | 8 exemples, **sans fuite** avec le train (vérifié) |
+| `data/train.jsonl` | 1 015 exemples création de sites et de code : HTML 302, CSS 216, JS 215, TS/React 111, Python 94, SQL 53, Bash 24 |
+| `data/validation.jsonl` | 75 exemples, **sans fuite** avec le train (vérifié) |
 
 ## Format des données
 
@@ -109,11 +109,13 @@ Google Drive et propose un push optionnel sur le Hub Hugging Face.
 - **Licences** : vérifiez la licence du modèle de base choisi ET de vos
   données. `Qwen2.5-Coder-7B-Instruct` est Apache-2.0 ; d'autres bases codeuses
   sont plus restrictives.
-- **Limites honnêtes** : 36+8 exemples suffisent pour un comportement de base
-  (« style gen3 » de création de sites) et pour valider la chaîne complète ;
-  pour un niveau professionnel, enrichissez le dataset (1 000+ exemples
-  variés) et entraînez 3-5 epochs. Aucun chiffre de qualité n'est affirmé ici
-  sans mesure : utilisez `bench_gen3_code.py` et vos propres essais.
+- **Limites honnêtes** : 1 015+75 exemples couvrent un comportement de base
+  solide (« style gen3 » de création de sites : structures complètes,
+  composants accessibles, formulaires métiers, CSS moderne, JS vanilla,
+  Flask/FastAPI, SQL) ; pour un niveau professionnel, continuez d'enrichir
+  le dataset avec VOS projets réels et entraînez 3-5 epochs. Aucun chiffre
+  de qualité n'est affirmé ici sans mesure : utilisez `bench_gen3_code.py`
+  et vos propres essais.
 
 ## Intégration à gen3ia
 
