@@ -4,6 +4,8 @@ import { type User } from "firebase/auth";
 import { watchAuth } from "@/lib/firebase/client";
 import { authFetch, readJsonSafely, useSessionAvailable } from "@/lib/firebase/auth-client";
 
+type ImportedFile = { id: string; filename: string; contentType: string; sizeBytes: number; kind: string; charCount: number; conversion: "full" | "metadata-only"; createdAt?: string };
+
 type PermanentFile = { path: string; filename: string; sizeBytes: number };
 type CameraRequest = { id: string; reason: string; facingMode: string };
 type StoragePlanInfo = { id: "free" | "storage-pro5" | "storage-pro10"; label: string; quotaBytes: number; priceMinor: number; priceLabel: string; highlight?: boolean };
@@ -20,7 +22,7 @@ function formatBytesFr(bytes: number): string {
 }
 
 export default function StoragePage() {
-  const [_user, setUser] = useState<User | null>(null); const [files, setFiles] = useState<PermanentFile[]>([]); const [requests, setRequests] = useState<CameraRequest[]>([]); const [busy, setBusy] = useState(false); const videoRef = useRef<HTMLVideoElement>(null);
+  const [_user, setUser] = useState<User | null>(null); const [files, setFiles] = useState<PermanentFile[]>([]); const [artifacts, setArtifacts] = useState<ImportedFile[]>([]); const [requests, setRequests] = useState<CameraRequest[]>([]); const [busy, setBusy] = useState(false); const videoRef = useRef<HTMLVideoElement>(null);
   const [loaded, setLoaded] = useState(false); const [loadError, setLoadError] = useState<string | null>(null); const [actionError, setActionError] = useState<string | null>(null);
   const [usage, setUsage] = useState<StorageUsage | null>(null); const [profile, setProfile] = useState<StorageProfile | null>(null); const [plans, setPlans] = useState<StoragePlanInfo[]>([]); const [planBusy, setPlanBusy] = useState(false); const [planDone, setPlanDone] = useState<string | null>(null);
   const sessionDisponible = useSessionAvailable();
@@ -30,14 +32,17 @@ export default function StoragePage() {
   const refresh = useCallback(async () => {
     setLoadError(null);
     try {
-      const [f, r, p] = await Promise.all([
+      const [f, r, p, a] = await Promise.all([
         authFetch("/api/storage/permanent", { cache: "no-store" }),
         authFetch("/api/camera/requests", { cache: "no-store" }),
         authFetch("/api/storage/plan", { cache: "no-store" }),
+        authFetch("/api/files/imported", { cache: "no-store" }),
       ]);
       if (f.ok) { const data = await readJsonSafely<{ files?: PermanentFile[]; usage?: StorageUsage }>(f); setFiles(data?.files ?? []); if (data?.usage) setUsage(data.usage); }
       if (r.ok) setRequests((await readJsonSafely<{ requests?: CameraRequest[] }>(r))?.requests ?? []);
       if (p.ok) { const data = await readJsonSafely<{ profile?: StorageProfile; usage?: StorageUsage; plans?: StoragePlanInfo[] }>(p); if (data?.profile) setProfile(data.profile); if (data?.usage) setUsage(data.usage); if (data?.plans) setPlans(data.plans); }
+      // Artefacts des conversations : non bloquant (section complémentaire).
+      if (a.ok) setArtifacts((await readJsonSafely<{ files?: ImportedFile[] }>(a))?.files ?? []);
       if (!f.ok || !r.ok) {
         setLoadError(f.status === 401 || r.status === 401 ? "Session expirée : reconnectez-vous." : "Impossible de charger vos fichiers pour le moment.");
       }
@@ -119,7 +124,7 @@ export default function StoragePage() {
   const usedRatio = usage && usage.quotaBytes > 0 ? Math.min(1, usage.usedBytes / usage.quotaBytes) : 0;
   const quotaFull = usage ? usage.usedBytes >= usage.quotaBytes : false;
 
-  return <div className="min-h-full bg-[var(--g3-bg)] text-[var(--g3-text)] p-6"><div className="mx-auto max-w-6xl"><h1 className="font-serif text-3xl font-bold">Stockage permanent</h1><p className="mt-2 text-[var(--g3-muted)]">Vos fichiers restent associés à votre compte. Les agents peuvent les lire et les manipuler uniquement selon leurs permissions.</p>
+  return <div className="min-h-full bg-[var(--g3-bg)] text-[var(--g3-text)] p-6"><div className="mx-auto max-w-6xl"><h1 className="font-serif text-3xl font-bold">Bibliothèque de fichiers et d&apos;artefacts</h1><p className="mt-2 text-[var(--g3-muted)]">Destination « Stockage » de la plateforme : vos fichiers permanents ET les artefacts produits avec vos agents, au même endroit. Les agents ne lisent vos contenus que selon leurs permissions.</p>
     {actionError && <div className="mt-4 rounded-2xl border border-[var(--g3-danger-border)] bg-[var(--g3-danger-soft)] p-4 text-sm text-[var(--g3-danger-strong)]">{actionError}</div>}
     {planDone && <div className="mt-4 rounded-2xl border border-[var(--g3-success-border,var(--g3-info-border))] bg-[var(--g3-success-soft)] p-4 text-sm text-[var(--g3-success-strong)]">{planDone}</div>}
 
@@ -142,6 +147,13 @@ export default function StoragePage() {
       {loadError && <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[var(--g3-warning-border)] bg-[var(--g3-warning-soft)] p-4 text-sm text-[var(--g3-warning-strong)]"><span>{loadError}</span><button type="button" onClick={() => void refresh()} className="shrink-0 rounded-full bg-[var(--g3-warning)] px-4 py-2 text-xs font-semibold text-[var(--g3-on-primary)] hover:brightness-110">Réessayer</button></div>}
       {!loadError && !loaded && <p className="mt-4 text-sm text-[var(--g3-faint)]">Chargement de vos fichiers…</p>}
       <div className="mt-6 space-y-2">{files.map(file => <div key={file.path} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4"><span className="min-w-0 truncate" title={file.filename}>{file.filename}</span><span className="flex shrink-0 items-center gap-3"><span className="text-xs text-[var(--g3-muted)]">{formatBytesFr(file.sizeBytes)}</span><button type="button" disabled={busy} onClick={() => void removeFile(file.path)} className="rounded-full border border-[var(--g3-danger-border)] bg-[var(--g3-danger-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-danger-strong)] hover:brightness-110 disabled:opacity-50">Supprimer définitivement</button></span></div>)}{loaded && !loadError && !files.length && <p className="text-sm text-[var(--g3-faint)]">Aucun fichier permanent.</p>}</div>
+    </div>
+
+    {/* Artefacts des conversations — bibliothèque unifiée (restructuration des parcours) */}
+    <div className="mt-6 rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[var(--gen3ia-shadow-md)]">
+      <h2 className="font-serif text-xl font-semibold">Artefacts des conversations</h2>
+      <p className="mt-2 text-sm text-[var(--g3-muted)]">Documents, tableaux et médias importés ou générés avec vos agents — analysés réellement (caractères, pages, lignes) et conservés ici.</p>
+      <div className="mt-5 space-y-2">{artifacts.map(artifact => <div key={artifact.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4"><span className="min-w-0"><span className="block truncate" title={artifact.filename}>{artifact.filename}</span><span className="text-xs text-[var(--g3-faint)]">{artifact.kind} · {artifact.conversion === "full" ? `analyse complète · ${artifact.charCount.toLocaleString("fr-FR")} caractères` : "métadonnées"}</span></span><span className="flex shrink-0 items-center gap-3"><span className="text-xs text-[var(--g3-muted)]">{formatBytesFr(artifact.sizeBytes)}</span><a href={`/api/files/artifacts/${artifact.id}`} target="_blank" rel="noopener noreferrer" className="rounded-full bg-[var(--g3-primary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-primary-strong)]">Ouvrir</a></span></div>)}{loaded && !artifacts.length && <p className="text-sm text-[var(--g3-faint)]">Aucun artefact : importez un document dans le Chat IA, il apparaîtra ici.</p>}</div>
     </div>
 
     {/* Plans de stockage — 1 Go inclus, 5 Go à 2,5 €/mois, 10 Go à 5 €/mois */}

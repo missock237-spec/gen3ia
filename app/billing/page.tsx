@@ -358,9 +358,7 @@ export default function BillingPage() {
     (Math.abs(minor) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   return <div style={styles.main}>
-    <div style={{ gridColumn: "1 / -1", width: "100%", maxWidth: 980, margin: "0 auto", justifySelf: "center" }}>
-    </div>
-    <section style={styles.card}>
+    <section style={styles.card} data-testid="wallet-card">
       <div style={styles.eyebrow}>GEN3IA WALLET</div>
       <h1 className="font-serif">Solde de votre compte</h1>
       {free && <div style={styles.freeBanner}>{FREE_MODE_BANNER}</div>}
@@ -504,8 +502,8 @@ export default function BillingPage() {
       ) : (
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
           {transactions.map((transaction) => (
-            <li key={transaction.id} style={{ display: "flex", alignItems: "baseline", gap: 12, padding: "10px 12px", borderRadius: 12, border: "1px solid var(--g3-border)", background: "#faf9f6" }}>
-              <span style={{ fontWeight: 800, minWidth: 28, color: transactionSign(transaction.type) === "+" ? "#0A6E82" : transactionSign(transaction.type) === "−" ? "#5B2BE0" : "#0E5F73" }}>
+            <li key={transaction.id} style={{ display: "flex", alignItems: "baseline", gap: 12, padding: "10px 12px", borderRadius: 12, border: "1px solid var(--g3-border)", background: "var(--g3-elevated)" }}>
+              <span style={{ fontWeight: 800, minWidth: 28, color: transactionSign(transaction.type) === "+" ? "var(--g3-success-strong)" : transactionSign(transaction.type) === "−" ? "var(--g3-danger-strong)" : "var(--g3-info)" }}>
                 {transactionSign(transaction.type)}{formatAmount(transaction.amountMinor)}
               </span>
               <span style={{ flex: 1, minWidth: 0 }}>
@@ -525,37 +523,40 @@ export default function BillingPage() {
   </div>;
 }
 
-const styles: Record<string, CSSProperties> = {
-  main: { minHeight: "100%", display: "grid", placeItems: "center", padding: 24, background: "#f6f4ef", color: "#171717" },
-  card: { width: "100%", maxWidth: 620, padding: 32, borderRadius: 24, border: "1px solid var(--g3-border)", background: "#ffffff", boxShadow: "0 14px 40px -18px rgba(28,27,24,0.22)" },
+  // Incohérences de présentation corrigées : la page suit DÉSORMAIS le
+  // thème utilisateur (tokens --g3-*) au lieu d'un clair codé en dur,
+  // cohérent avec le reste de la plateforme (Aurora dark par défaut).
+  const styles: Record<string, CSSProperties> = {
+  main: { minHeight: "100%", display: "grid", placeItems: "center", padding: 24, background: "var(--g3-bg)", color: "var(--g3-text)" },
+  card: { width: "100%", maxWidth: 620, padding: 32, borderRadius: 24, border: "1px solid var(--g3-border)", background: "var(--g3-surface)", boxShadow: "0 14px 40px -18px rgba(28,27,24,0.22)" },
   eyebrow: { fontSize: 12, letterSpacing: 2, opacity: .65, marginBottom: 10 },
-  freeBanner: { marginTop: 18, padding: 16, borderRadius: 12, background: "#E9F8EE", border: "1px solid rgba(26,148,74,0.35)", color: "#0A6E82", fontSize: 14, lineHeight: 1.5, fontWeight: 600 },
-  welcome: { marginTop: 18, padding: 14, borderRadius: 12, background: "#E9F5F8", border: "1px solid rgba(8,153,180,0.35)", color: "#0A6E82", fontSize: 14, lineHeight: 1.5 },
+  freeBanner: { marginTop: 18, padding: 16, borderRadius: 12, background: "var(--g3-success-soft)", border: "1px solid var(--g3-success)", color: "var(--g3-success-strong)", fontSize: 14, lineHeight: 1.5, fontWeight: 600 },
+  welcome: { marginTop: 18, padding: 14, borderRadius: 12, background: "var(--g3-info-soft)", border: "1px solid var(--g3-info)", color: "var(--g3-info)", fontSize: 14, lineHeight: 1.5 },
   balance: { fontSize: 44, fontWeight: 800, margin: "24px 0 8px" },
   muted: { opacity: .7 },
-  locked: { marginTop: 18, padding: 16, borderRadius: 12, background: "#F0EAFF", border: "1px solid rgba(91,43,224,0.35)", color: "#5B2BE0", lineHeight: 1.5 },
+  locked: { marginTop: 18, padding: 16, borderRadius: 12, background: "var(--g3-warning-soft)", border: "1px solid var(--g3-warning)", color: "var(--g3-warning-strong)", lineHeight: 1.5 },
   note: { marginTop: 20, fontSize: 13, lineHeight: 1.6, opacity: .6 },
   phoneForm: { marginTop: 24, display: "grid", gap: 10 },
   label: { fontSize: 13, opacity: .75 },
-  input: { width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 10, border: "1px solid var(--g3-border)", background: "#ffffff", color: "#171717", fontSize: 15 },
-  button: { marginTop: 8, width: "100%", border: 0, borderRadius: 999, padding: "14px 18px", fontWeight: 700, cursor: "pointer", background: "#171717", color: "white" },
-  success: { marginTop: 16, padding: 12, borderRadius: 10, background: "#E9F5F8", border: "1px solid rgba(8,153,180,0.35)", color: "#0A6E82", lineHeight: 1.5 },
-  notice: { marginTop: 16, padding: 12, borderRadius: 10, background: "#E9F5F8", border: "1px solid rgba(8,153,180,0.35)", color: "#0E5F73", lineHeight: 1.5 },
-  error: { marginTop: 16, color: "#5B2BE0" },
+  input: { width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 10, border: "1px solid var(--g3-border)", background: "var(--g3-elevated)", color: "var(--g3-text)", fontSize: 15 },
+  button: { marginTop: 8, width: "100%", border: 0, borderRadius: 999, padding: "14px 18px", fontWeight: 700, cursor: "pointer", background: "var(--g3-primary)", color: "var(--g3-on-primary)" },
+  success: { marginTop: 16, padding: 12, borderRadius: 10, background: "var(--g3-info-soft)", border: "1px solid var(--g3-info)", color: "var(--g3-info)", lineHeight: 1.5 },
+  notice: { marginTop: 16, padding: 12, borderRadius: 10, background: "var(--g3-info-soft)", border: "1px solid var(--g3-info)", color: "var(--g3-info)", lineHeight: 1.5 },
+  error: { marginTop: 16, color: "var(--g3-danger-strong)" },
   plansGrid: { marginTop: 18, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 },
-  planCard: { display: "flex", flexDirection: "column", gap: 8, padding: 18, borderRadius: 16, border: "1px solid var(--g3-border)", background: "#faf9f6" },
-  planHighlight: { border: "2px solid #0A6E82", background: "#f2fafa" },
-  planBadge: { fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", padding: "4px 10px", borderRadius: 999, background: "#0A6E82", color: "#fff" },
+  planCard: { display: "flex", flexDirection: "column", gap: 8, padding: 18, borderRadius: 16, border: "1px solid var(--g3-border)", background: "var(--g3-elevated)" },
+  planHighlight: { border: "2px solid var(--g3-primary)", background: "var(--g3-primary-soft)" },
+  planBadge: { fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", padding: "4px 10px", borderRadius: 999, background: "var(--g3-primary)", color: "var(--g3-on-primary)" },
   planPrice: { fontSize: 20, fontWeight: 800 },
   planAudience: { fontSize: 12, opacity: 0.65, fontStyle: "italic" },
   planFeatures: { margin: 0, paddingLeft: 18, display: "grid", gap: 6, fontSize: 13, lineHeight: 1.45 },
   planNote: { fontSize: 13, fontWeight: 700, opacity: 0.6 },
-  widgetsBlock: { marginTop: 26, padding: 18, borderRadius: 16, border: "1px dashed var(--g3-border)", background: "#faf9f6" },
+  widgetsBlock: { marginTop: 26, padding: 18, borderRadius: 16, border: "1px dashed var(--g3-border)", background: "var(--g3-elevated)" },
   widgetsTitle: { fontSize: 14, fontWeight: 800, letterSpacing: 0.4, marginBottom: 12 },
   widgetsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 },
-  widgetCard: { display: "flex", flexDirection: "column", gap: 6, padding: 14, borderRadius: 12, border: "1px solid var(--g3-border)", background: "#ffffff" },
+  widgetCard: { display: "flex", flexDirection: "column", gap: 6, padding: 14, borderRadius: 12, border: "1px solid var(--g3-border)", background: "var(--g3-surface)" },
   widgetLabel: { fontSize: 14, fontWeight: 700 },
   widgetNote: { fontSize: 12, lineHeight: 1.45, opacity: 0.65, marginBottom: 6 },
-  storeLink: { color: "#0A6E82", fontWeight: 700 },
+  storeLink: { color: "var(--g3-info)", fontWeight: 700 },
   licenseForm: { marginTop: 24, display: "grid", gap: 8, paddingTop: 18, borderTop: "1px solid var(--g3-border)" },
 };

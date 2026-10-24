@@ -11,14 +11,24 @@
  * commandes, fil d'Ariane) consomment ce registre typé au lieu de maintenir
  * des tableaux séparés par page.
  *
- * Note (suppression surfaces workspace/studio) : les anciennes entrées
- * « Conversations » (/workspace), « Bases de connaissances », « Projets »,
- * « Fichiers », « Automatisations » (/studio), « Connecteurs »,
- * « Bibliothèque » et « Workshop IDE » (/studio/console) ont été retirées
- * avec leurs surfaces — le dashboard (chat IA) est le point d'entrée unique.
- * RESTAURATIONS DEMANDÉES (propriétaire) : « Cerveau IA » (/neural, studio
- * d'entraînement) est réouvert à tous les comptes et la surface
- * « Planifications » (/planifications) est recréée — voir user-access.ts.
+ * Note (restructuration des parcours — demande propriétaire) : les
+ * destinations majeures sont RÉTABLIES et hiérarchisées. Le dashboard
+ * (chat IA) reste le point d'entrée central, mais chaque fonctionnalité
+ * présentée sur la page d'accueil conduit désormais à un espace adapté :
+ *  - « Entraînement de modèles » → /lab (Laboratoire de modèles : UI du
+ *    AI Training Studio — projets, datasets, plans, jobs, modèles, exports) ;
+ *  - « Gestion des datasets » → /data (Centre de données) ;
+ *  - « Création d'agents » + tâches planifiées → /automations (Espace
+ *    Automatisations unifié : agents + planifications — l'ancienne surface
+ *    /planifications y est fusionnée et redirige vers #planifications) ;
+ *  - « Connecteurs » → /integrations (Centre des intégrations) ;
+ *  - « Stockage » → /storage (Bibliothèque de fichiers et d'artefacts) ;
+ *  - « API et SDK » → /developer/api (Espace Développeurs).
+ * RESTAURATION CONNEXE (propriétaire) : « Cerveau IA » (/neural, studio
+ * d'entraînement) est réouvert à tous les comptes (voir user-access.ts) —
+ * l'entrée perd son minRole admin.
+ * Les surfaces expérimentales (Ondes, Arène, Monde, Essaim) restent
+ * réservées admin.
  */
 
 export type NavContext = "workspace" | "developer" | "admin";
@@ -53,6 +63,41 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
     contexts: ["workspace"],
     section: "primary",
     keywords: ["chat", "ia", "intelligence", "conversation", "parler", "assistant", "dashboard", "nova"],
+  },
+  {
+    // RESTRUCTURATION DES PARCOURS (demande propriétaire) : chaque
+    // fonctionnalité présentée sur la page d'accueil conduit désormais à
+    // un espace réellement adapté. « Entraînement de modèles » →
+    // Laboratoire de modèles (l'UI du AI Training Studio décrite par les
+    // API /api/training — restauration CRITIQUE du diagnostic).
+    id: "lab",
+    href: "/lab",
+    label: "Laboratoire",
+    icon: "⚗",
+    description: "Laboratoire de modèles : entraînement, évaluation, modèles et exports",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["lab", "laboratoire", "entraînement", "entrainement", "training", "studio", "modèle", "modèles", "évaluation", "evaluation", "précision", "export", "dataset", "fine-tuning", "lora"],
+  },
+  {
+    id: "data",
+    href: "/data",
+    label: "Données",
+    icon: "▤",
+    description: "Centre de données : datasets, import fichier et hubs HF/Kaggle, validation",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["données", "donnees", "dataset", "datasets", "centre", "import", "huggingface", "kaggle", "csv", "jsonl", "corpus"],
+  },
+  {
+    id: "automations",
+    href: "/automations",
+    label: "Automatisations",
+    icon: "◷",
+    description: "Création d'agents et tâches planifiées récurrentes — l'espace des automatisations",
+    contexts: ["workspace"],
+    section: "primary",
+    keywords: ["automatisation", "automatisations", "agent", "agents", "planification", "planifiée", "cron", "récurrent", "veille", "tâche", "tâches", "schedule"],
   },
   {
     id: "ondes",
@@ -120,7 +165,12 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
 
 const WORKSPACE_SECONDARY: NavRoute[] = [
   { id: "team", href: "/team", label: "Équipe", icon: "◎", description: "Membres, rôles et activité partagée", contexts: ["workspace"], section: "secondary", keywords: ["équipe", "membres", "rôles"] },
-  { id: "planifications", href: "/planifications", label: "Planifications", icon: "⏱", description: "Tâches automatisées : vos agents s'exécutent seuls, de façon récurrente ou ponctuelle", contexts: ["workspace"], section: "secondary", keywords: ["planifications", "tâches", "automatisées", "cron", "récurrent", "veille", "webhook", "agenda"] },
+  // RESTRUCTURATION DES PARCOURS : « Connecteurs » → Centre des
+  // intégrations ; « Stockage » → Bibliothèque de fichiers et d'artefacts.
+  // (L'ancienne entrée « Planifications » /planifications est FONDUE dans
+  // l'Espace Automatisations /automations — onglet Planifications.)
+  { id: "integrations", href: "/integrations", label: "Intégrations", icon: "⇄", description: "Connecteurs, messageries et webhooks de vos agents", contexts: ["workspace"], section: "secondary", keywords: ["intégrations", "connecteurs", "composio", "whatsapp", "telegram", "slack", "webhook", "oauth"] },
+  { id: "storage", href: "/storage", label: "Bibliothèque", icon: "▣", description: "Bibliothèque de fichiers et d'artefacts — stockage permanent", contexts: ["workspace"], section: "secondary", keywords: ["bibliothèque", "fichiers", "stockage", "artefacts", "storage", "quota"] },
   { id: "live", href: "/live", label: "Agent Live", icon: "◉", description: "Contrôler un poste de travail", contexts: ["workspace"], section: "secondary", keywords: ["live", "pc"] },
   { id: "memory", href: "/memory", label: "Mémoire permanente", icon: "◆", description: "Souvenirs et connaissances des agents", contexts: ["workspace"], section: "secondary", keywords: ["mémoire", "knowledge"] },
   { id: "billing", href: "/billing", label: "Facturation", icon: "₣", description: "Abonnements et consommation", contexts: ["workspace"], section: "secondary", keywords: ["facturation", "abonnement"] },

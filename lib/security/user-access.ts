@@ -316,10 +316,14 @@ const USER_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   // ci-dessous + requireAdmin) — l'utilisateur OBSERVE, conversse et génère
   // des médias mais ne relance pas l'entraînement global ni le reset.
   "/neural": "training",
-  // PLANIFICATIONS (demande propriétaire — tâches planifiées automatisées) :
-  // surface UI dédiée /planifications branchée sur /api/agents/schedules
-  // (déjà allowlistée). Scoping propriétaire assuré par les routes.
-  "/planifications": "planifications",
+  // RESTRUCTURATION DES PARCOURS (demande propriétaire) : les espaces
+  // majeurs présentés sur la page d'accueil redeviennent des destinations
+  // accessibles à tout compte connecté (scoping propriétaire assuré par
+  // les routes API elles-mêmes). /planifications est fondue dans
+  // /automations (Espace Automatisations unifié) — redirection conservée.
+  "/lab": "training",
+  "/data": "training",
+  "/automations": "automatisation",
 };
 
 const USER_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
