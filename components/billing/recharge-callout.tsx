@@ -20,7 +20,7 @@ export function RechargeCallout({ message }: { message: string }) {
         borderRadius: 14,
         border: "1px solid rgba(91,43,224,0.35)",
         background: "#F4EEFF",
-        color: "#4A1FB8",
+        color: "#5633E8",
         fontSize: 14,
         lineHeight: 1.55,
       }}
@@ -35,7 +35,7 @@ export function RechargeCallout({ message }: { message: string }) {
           display: "inline-block",
           padding: "9px 16px",
           borderRadius: 999,
-          background: "#4A1FB8",
+          background: "#5633E8",
           color: "#fff",
           fontWeight: 700,
           textDecoration: "none",

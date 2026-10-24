@@ -52,6 +52,9 @@ export function GET(request: NextRequest) {
         { method: "GET", path: "/api/public/agents/{agentId}", auth: "aucune", sdk: "client.publicAgents.get() / chat()" },
         { method: "GET", path: "/api/public/commercial/{slug}", auth: "aucune", sdk: "client.commercial.get() / chat()" },
         { method: "GET", path: "/api/public/health", auth: "aucune", sdk: "client.health()" },
+        { method: "POST", path: "/api/v1/chat", auth: "clé développeur (Bearer g3a_…) — PORTefeuille au réel, sans abonnement", sdk: "client.v1.chat()" },
+        { method: "GET", path: "/api/v1/wallet", auth: "clé développeur (Bearer g3a_…) — solde/réserves/disponible", sdk: "client.v1.wallet()" },
+        { method: "GET", path: "/api/v1/capabilities", auth: "aucune — inventaire honnête des capacités", sdk: "client.v1.capabilities()" },
       ],
       quickstart: {
         import: `import { Gen3iaClient } from "${SDK_PACKAGE_NAME}";`,

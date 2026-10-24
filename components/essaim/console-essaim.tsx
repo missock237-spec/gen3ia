@@ -537,7 +537,7 @@ export default function ConsoleEssaim() {
               ))}
             </ul>
             <div>
-              <h3 style={{ margin: "0 0 8px", fontSize: "0.9rem", color: "#c4b5fd" }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: "0.9rem", color: "var(--g3-primary-strong)" }}>
                 Décisions du cortex Gen3
               </h3>
               <ul className="essaim-liste">
@@ -750,7 +750,7 @@ export default function ConsoleEssaim() {
           </div>
           <div className="essaim-grille">
             <div>
-              <h3 style={{ margin: "0 0 8px", fontSize: "0.9rem", color: "#c4b5fd" }}>Journal de résonance</h3>
+              <h3 style={{ margin: "0 0 8px", fontSize: "0.9rem", color: "var(--g3-primary-strong)" }}>Journal de résonance</h3>
               <div className="essaim-journal">
                 {journalResilience.length === 0 ? (
                   <div className="ligne"><span className="type">calme</span><span>aucune rupture — toutes les ondes sont en phase.</span></div>
@@ -766,7 +766,7 @@ export default function ConsoleEssaim() {
               </div>
             </div>
             <div>
-              <h3 style={{ margin: "0 0 8px", fontSize: "0.9rem", color: "#c4b5fd" }}>Amplitudes observées</h3>
+              <h3 style={{ margin: "0 0 8px", fontSize: "0.9rem", color: "var(--g3-primary-strong)" }}>Amplitudes observées</h3>
               <ul className="essaim-liste">
                 {traces.length === 0 ? (
                   <li className="essaim-item detail">Aucune onde distante observée — le nœud local est le seul de l&apos;essaim.</li>

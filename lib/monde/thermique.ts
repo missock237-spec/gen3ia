@@ -109,8 +109,8 @@ export function diffusionChaleur(p: ParamsDiffusion): ResultatSimulation {
     alpha > 1e-4 ? "cuivre (excellent conducteur)" : alpha > 5e-5 ? "aluminium" : alpha > 2e-5 ? "verre" : "air / isolant";
 
   const series: Serie[] = [
-    { nom: "Température maximale", abscisses: tempsSeries, valeurs: tMaxSeries, unite: "°C", couleur: "#f472b6" },
-    { nom: "Température minimale", abscisses: tempsSeries, valeurs: tMinSeries, unite: "°C", couleur: "#22d3ee" },
+    { nom: "Température maximale", abscisses: tempsSeries, valeurs: tMaxSeries, unite: "°C", couleur: "#C9AEFF" },
+    { nom: "Température minimale", abscisses: tempsSeries, valeurs: tMinSeries, unite: "°C", couleur: "#2AD4E8" },
   ];
 
   return {
@@ -240,7 +240,7 @@ export function gazParfait(p: ParamsGazParfait): ResultatSimulation {
     abscisses: volumes,
     valeurs: pressions,
     unite: "Pa",
-    couleur: "#f472b6",
+    couleur: "#C9AEFF",
   };
 
   return {

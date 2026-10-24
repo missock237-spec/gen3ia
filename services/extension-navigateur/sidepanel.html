@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>gen3ia — panneau</title>
+  <style>
+    /* Contrat 2 couleurs gen3ia (Aurora OS) : violet #7C5CFF / cyan #2AD4E8. */
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; height: 100vh; display: flex; flex-direction: column;
+      font-family: Inter, system-ui, sans-serif; background: #05060C; color: #F4F5FB;
+    }
+    header {
+      padding: 12px 14px 10px;
+      background: linear-gradient(115deg, rgba(124,92,255,.14), rgba(42,212,232,.11));
+    }
+    h1 { font-size: 14px; margin: 0 0 2px; }
+    h1 span {
+      background: linear-gradient(115deg, #7C5CFF, #2AD4E8);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .sous { font-size: 10.5px; color: #9AA0C2; margin: 0; }
+    #fil { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+    .bulle { max-width: 88%; padding: 9px 12px; border-radius: 14px; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; }
+    .utilisateur { align-self: flex-end; background: rgba(124, 92, 255, 0.18); }
+    .gen3 { align-self: flex-start; background: #0B0D17; }
+    .gen3 b { color: #7FE9F5; font-weight: 600; }
+    .systeme { align-self: center; font-size: 10.5px; color: #6B7194; }
+    footer { padding: 10px 12px 12px; background: #05060C; }
+    .options { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+    .options label { font-size: 10.5px; color: #C7CBE4; display: flex; gap: 5px; align-items: center; cursor: pointer; }
+    select {
+      background: #0B0D17; color: #F4F5FB; border: none; border-radius: 8px;
+      font-size: 10.5px; padding: 4px 6px;
+    }
+    .saisie { display: flex; gap: 8px; }
+    textarea {
+      flex: 1; resize: none; height: 44px; border: none; border-radius: 12px;
+      background: #0B0D17; color: #F4F5FB; padding: 10px 12px; font-size: 12.5px; font-family: inherit;
+    }
+    textarea:focus { outline: 2px solid rgba(124, 92, 255, 0.5); }
+    #envoyer {
+      border: none; border-radius: 12px; padding: 0 14px; cursor: pointer;
+      color: white; font-weight: 600; font-size: 12px;
+      background: linear-gradient(115deg, #7C5CFF, #2AD4E8);
+    }
+    #envoyer:disabled { opacity: 0.5; cursor: default; }
+    .debit { font-size: 9.5px; color: #6B7194; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>gen3ia — <span>nœud navigateur de l'essaim</span></h1>
+    <p class="sous">Le contexte de page ne part QUE si vous cochez « joindre la page ».</p>
+  </header>
+  <div id="fil">
+    <div class="systeme">Configurez votre clé g3a_ via l'icône de l'extension.</div>
+  </div>
+  <footer>
+    <div class="options">
+      <label><input type="checkbox" id="inclurePage" /> Joindre la page courante</label>
+      <select id="specialite">
+        <option value="">— tâche d'essaim —</option>
+        <option value="veille">Sentinelle (veille)</option>
+        <option value="tri">Trieur (tri)</option>
+        <option value="calcul">Calculateur (calcul)</option>
+      </select>
+    </div>
+    <div class="saisie">
+      <textarea id="texte" placeholder="Écrire à gen3…"></textarea>
+      <button id="envoyer">Envoyer</button>
+    </div>
+    <div class="debit" id="debit"></div>
+  </footer>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

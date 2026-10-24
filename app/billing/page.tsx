@@ -526,7 +526,7 @@ const styles: Record<string, CSSProperties> = {
   main: { minHeight: "100%", display: "grid", placeItems: "center", padding: 24, background: "#f6f4ef", color: "#171717" },
   card: { width: "100%", maxWidth: 620, padding: 32, borderRadius: 24, border: "1px solid var(--g3-border)", background: "#ffffff", boxShadow: "0 14px 40px -18px rgba(28,27,24,0.22)" },
   eyebrow: { fontSize: 12, letterSpacing: 2, opacity: .65, marginBottom: 10 },
-  freeBanner: { marginTop: 18, padding: 16, borderRadius: 12, background: "#E9F8EE", border: "1px solid rgba(26,148,74,0.35)", color: "#1A944A", fontSize: 14, lineHeight: 1.5, fontWeight: 600 },
+  freeBanner: { marginTop: 18, padding: 16, borderRadius: 12, background: "#E9F8EE", border: "1px solid rgba(26,148,74,0.35)", color: "#0A6E82", fontSize: 14, lineHeight: 1.5, fontWeight: 600 },
   welcome: { marginTop: 18, padding: 14, borderRadius: 12, background: "#E9F5F8", border: "1px solid rgba(8,153,180,0.35)", color: "#0A6E82", fontSize: 14, lineHeight: 1.5 },
   balance: { fontSize: 44, fontWeight: 800, margin: "24px 0 8px" },
   muted: { opacity: .7 },

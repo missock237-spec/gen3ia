@@ -114,7 +114,7 @@ describe("Cadre de progression (structurel) — barres, thèmes, a11y, chronomè
   it("deux thèmes : dark (atelier par défaut) et light (crème neutre §14 + accents tokens 2 couleurs — Task 125)", () => {
     expect(frame).toContain('tone = "dark"');
     expect(frame).toContain('dark: "border-neutral-200 bg-white"');
-    expect(frame).toContain('light: "border-[#E5E1D5] bg-[#FAF9F5]"');
+    expect(frame).toContain('light: "border-[var(--g3-border)] bg-[var(--g3-bg)]"');
     // Accents 2 couleurs : fill/dot dark = cyan secondaire, light = violet primaire.
     expect(frame).toContain('dark: "bg-[var(--g3-secondary)]"');
     expect(frame).toContain('light: "bg-[var(--g3-primary)]"');

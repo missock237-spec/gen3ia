@@ -11,6 +11,7 @@ import {
   saveJob,
 } from "./repository";
 import { assertJobConcurrency, assertTrainingMinutesBudget } from "./quotas";
+import { monterAdaptateurTermine } from "./montage-adaptateurs";
 import { JOB_EVENT_CAP, trainingJobSchema, type TrainingEvent, type TrainingJob, type TrainingPlan } from "./types";
 import { providerSupportsVram, resolveProviders } from "./providers";
 import type { GpuProvider, GpuProviderCapabilities } from "./providers";
@@ -294,6 +295,25 @@ export async function refreshJob(uid: string, job: TrainingJob): Promise<Trainin
         })),
       };
       updated = withEvent(updated, makeEvent("info", "Tâche terminée : artefacts enregistrés, prêts pour l'évaluation."));
+
+      // MONTAGE AUTOMATIQUE (B-P0) : le chaînon « entraîner → servir » —
+      // l'artefact principal est enregistré dans le registre MLOps et promu
+      // en production (pointeur fait foi). Fail-soft : un échec de montage
+      // n'annule JAMAIS la complétion ; la raison honnête est journalisée.
+      try {
+        const montage = await monterAdaptateurTermine(updated);
+        updated = withEvent(
+          updated,
+          montage.monte
+            ? makeEvent("info", `Adaptateur monté en production : ${montage.modelId} v${montage.version} (registre MLOps).`)
+            : makeEvent("warn", `Adaptateur NON monté : ${montage.erreur ?? "raison inconnue."}`),
+        );
+      } catch (montageErreur) {
+        updated = withEvent(
+          updated,
+          makeEvent("warn", `Montage de l'adaptateur en échec (le job reste terminé) : ${montageErreur instanceof Error ? montageErreur.message : "erreur inconnue"}.`),
+        );
+      }
     } else if (state.status === "failed") {
       updated = {
         ...updated,

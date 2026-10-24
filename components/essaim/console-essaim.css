@@ -8,20 +8,22 @@
 
 .essaim-console {
   --fond: #0a0714;
-  --carte: rgba(139, 92, 246, 0.07);
-  --bord: rgba(139, 92, 246, 0.22);
+  /* Contrat 2 couleurs (Task 125) : noms conservés, valeurs migrées vers
+     les familles VIOLET #7C5CFF / CYAN #2AD4E8 + neutres. */
+  --carte: rgba(124, 92, 255, 0.07);
+  --bord: rgba(124, 92, 255, 0.22);
   --texte: #e2e8f0;
   --souris: rgba(226, 232, 240, 0.55);
-  --violet: #8b5cf6;
-  --cyan: #22d3ee;
-  --vert: #34d399;
-  --jaune: #fde047;
-  --rouge: #fb7185;
+  --violet: #7c5cff;
+  --cyan: #2ad4e8;
+  --vert: #7fe9f5;
+  --jaune: #9e85ff;
+  --rouge: #b18aff;
 
   min-height: 100vh;
   background:
-    radial-gradient(1200px 600px at 12% -10%, rgba(124, 58, 237, 0.17), transparent 60%),
-    radial-gradient(900px 500px at 88% 8%, rgba(34, 211, 238, 0.10), transparent 55%),
+    radial-gradient(1200px 600px at 12% -10%, rgba(124, 92, 255, 0.17), transparent 60%),
+    radial-gradient(900px 500px at 88% 8%, rgba(42, 212, 232, 0.10), transparent 55%),
     var(--fond);
   color: var(--texte);
   padding: 28px clamp(16px, 4vw, 56px) 48px;
@@ -47,7 +49,7 @@
   margin: 0;
   font-size: clamp(1.5rem, 3.4vw, 2.1rem);
   letter-spacing: 0.02em;
-  background: linear-gradient(92deg, #c4b5fd, #67e8f9 70%);
+  background: linear-gradient(92deg, #9E85FF, #7FE9F5 70%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -217,7 +219,7 @@
 .essaim-panneau h2 {
   margin: 0;
   font-size: 1.02rem;
-  color: #c4b5fd;
+  color: #9E85FF;
 }
 
 .essaim-panneau .note {
@@ -319,7 +321,7 @@
 .badge.cyan { color: var(--cyan); border-color: rgba(34, 211, 238, 0.4); }
 .badge.jaune { color: var(--jaune); border-color: rgba(253, 224, 71, 0.4); }
 .badge.rouge { color: var(--rouge); border-color: rgba(251, 113, 133, 0.45); }
-.badge.violet { color: #c4b5fd; border-color: var(--bord); }
+.badge.violet { color: #9E85FF; border-color: var(--bord); }
 
 /* ——— Journal d'événements ——— */
 
@@ -346,7 +348,7 @@
 }
 
 .essaim-journal .type {
-  color: #c4b5fd;
+  color: #9E85FF;
   flex-shrink: 0;
   min-width: 10ch;
 }
@@ -364,7 +366,7 @@
 .essaim-message.erreur {
   border-color: rgba(251, 113, 133, 0.45);
   background: rgba(251, 113, 133, 0.08);
-  color: #fecdd3;
+  color: #C9AEFF;
 }
 
 /* ——— Responsive ——— */

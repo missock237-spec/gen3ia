@@ -82,7 +82,7 @@ export function ecoulementCylindre(p: ParamsEcoulement): ResultatSimulation {
     abscisses: Array.from({ length: n }, (_, i) => (i - centre) * dx),
     valeurs: Array.from({ length: n }, (_, i) => coefficientPression[Math.floor(n / 2) * n + i]),
     unite: "m",
-    couleur: "#22d3ee",
+    couleur: "#2AD4E8",
   };
 
   const pressionStagnation = 0.5 * p.densite * U * U;
@@ -180,8 +180,8 @@ export function torricelli(
       "Q = s·v",
     ],
     series: [
-      { nom: "Niveau d'eau", abscisses, valeurs: niveaux, unite: "m", couleur: "#22d3ee" },
-      { nom: "Vitesse de sortie", abscisses, valeurs: vitesses, unite: "m/s", couleur: "#8b5cf6" },
+      { nom: "Niveau d'eau", abscisses, valeurs: niveaux, unite: "m", couleur: "#2AD4E8" },
+      { nom: "Vitesse de sortie", abscisses, valeurs: vitesses, unite: "m/s", couleur: "#7C5CFF" },
     ],
     champ: null,
     scalaires: [

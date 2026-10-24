@@ -57,23 +57,23 @@ export interface MediaProgressFrameProps {
    (globals.css §14 — Task 125 : accents 2 couleurs via tokens, crèmes neutres). */
 const TONE_CARD: Record<MediaProgressTone, string> = {
   dark: "border-neutral-200 bg-white",
-  light: "border-[#E5E1D5] bg-[#FAF9F5]",
+  light: "border-[var(--g3-border)] bg-[var(--g3-bg)]",
 };
 const TONE_STAGE: Record<MediaProgressTone, string> = {
   dark: "text-neutral-900",
-  light: "text-[#1F1E1A]",
+  light: "text-[var(--g3-text)]",
 };
 const TONE_DETAIL: Record<MediaProgressTone, string> = {
   dark: "text-neutral-500",
-  light: "text-[#83817A]",
+  light: "text-[var(--g3-muted)]",
 };
 const TONE_ELAPSED: Record<MediaProgressTone, string> = {
   dark: "text-neutral-400",
-  light: "text-[#A9A79E]",
+  light: "text-[var(--g3-faint)]",
 };
 const TONE_TRACK: Record<MediaProgressTone, string> = {
   dark: "bg-neutral-100",
-  light: "bg-[#EAE5D9]",
+  light: "bg-[var(--g3-elevated)]",
 };
 const TONE_FILL: Record<MediaProgressTone, string> = {
   dark: "bg-[var(--g3-secondary)]",
@@ -89,7 +89,7 @@ const TONE_ERROR: Record<MediaProgressTone, string> = {
 };
 const TONE_CANCEL: Record<MediaProgressTone, string> = {
   dark: "border-neutral-200 text-neutral-600 hover:bg-neutral-50",
-  light: "border-[#D3CDBB] text-[#3D3B34] hover:bg-[#EAE5D9]",
+  light: "border-[var(--g3-border-strong)] text-[var(--g3-text-secondary)] hover:bg-[var(--g3-elevated)]",
 };
 const TONE_RETRY: Record<MediaProgressTone, string> = {
   dark: "border-[var(--g3-secondary-soft)] text-[var(--g3-info)] hover:bg-[var(--g3-secondary-soft)]",
@@ -98,7 +98,7 @@ const TONE_RETRY: Record<MediaProgressTone, string> = {
 const STATUS_PILL: Record<MediaProgressStatus, Record<MediaProgressTone, string>> = {
   queued: {
     dark: "bg-neutral-100 text-neutral-600",
-    light: "bg-[#EAE5D9] text-[#3D3B34]",
+    light: "bg-[var(--g3-elevated)] text-[var(--g3-text-secondary)]",
   },
   running: {
     dark: "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)]",
@@ -118,7 +118,7 @@ const STATUS_PILL: Record<MediaProgressStatus, Record<MediaProgressTone, string>
   },
   cancelled: {
     dark: "bg-neutral-100 text-neutral-500",
-    light: "bg-[#EAE5D9] text-[#83817A]",
+    light: "bg-[var(--g3-elevated)] text-[var(--g3-muted)]",
   },
 };
 

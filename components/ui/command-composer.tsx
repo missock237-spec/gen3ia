@@ -302,35 +302,35 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
     const light = tone === "light";
     const styles = {
       form: light
-        ? "g3-composer-card rounded-[24px] border border-[#DED9CB] bg-white p-2.5 transition-colors duration-300 focus-within:border-[#C9C2AE]"
+        ? "g3-composer-card rounded-[24px] border border-[var(--g3-border)] bg-white p-2.5 transition-colors duration-300 focus-within:border-[var(--g3-border-strong)]"
         : "rounded-[28px] border border-white/10 bg-[var(--g3-elevated)] p-2.5 shadow-[0_18px_50px_-20px_rgba(0,0,0,0.85)] transition-colors duration-300 focus-within:border-white/20",
       ghost: light
         ? "text-[var(--g3-faint)] transition hover:bg-[var(--g3-hover)] hover:text-[var(--g3-text)]"
         : "text-[var(--g3-faint)] transition hover:bg-[var(--g3-surface)]/10 hover:text-white",
       modePill: light
-        ? "border-[#E5E1D5] bg-[#F5F3EC] text-[#6B695F] hover:bg-[#EDEAE0] hover:text-[#1F1E1A]"
+        ? "border-[var(--g3-border)] bg-[var(--g3-elevated)] text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)] hover:text-[var(--g3-text)]"
         : "border-white/10 bg-[var(--g3-surface)]/5 text-[var(--g3-faint)] hover:bg-[var(--g3-surface)]/10 hover:text-white",
       menu: light
-        ? "border-[#E5E1D5] bg-white shadow-[0_24px_60px_-24px_rgba(59,56,45,0.35)]"
+        ? "border-[var(--g3-border)] bg-white shadow-[0_24px_60px_-24px_rgba(16,27,38,0.35)]"
         : "border-white/10 bg-[var(--g3-elevated)] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)]",
-      menuItemActive: light ? "bg-[#F5F3EC]" : "bg-[var(--g3-surface)]/10",
-      menuItemHover: light ? "hover:bg-[#FAF9F5]" : "hover:bg-[var(--g3-surface)]/5",
+      menuItemActive: light ? "bg-[var(--g3-elevated)]" : "bg-[var(--g3-surface)]/10",
+      menuItemHover: light ? "hover:bg-[var(--g3-bg)]" : "hover:bg-[var(--g3-surface)]/5",
       chip: light
-        ? "border-[#E5E1D5] bg-[var(--g3-surface)] text-[var(--g3-text-secondary)]"
+        ? "border-[var(--g3-border)] bg-[var(--g3-surface)] text-[var(--g3-text-secondary)]"
         : "border-white/10 bg-[var(--g3-surface)]/5 text-[var(--g3-text-secondary)]",
       chipAmber: "border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)]",
-      chipIcon: light ? "bg-[#F0EEE6] text-[#83817A]" : "bg-[var(--g3-surface)]/5 text-[var(--g3-faint)]",
+      chipIcon: light ? "bg-[var(--g3-elevated)] text-[var(--g3-muted)]" : "bg-[var(--g3-surface)]/5 text-[var(--g3-faint)]",
       send: light
-        ? "bg-[#1F1E1A] text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-[#EAE5D9] disabled:text-[#A9A79E]"
+        ? "bg-[var(--g3-deep)] text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-[var(--g3-elevated)] disabled:text-[var(--g3-faint)]"
         : "bg-[var(--g3-surface)] text-[var(--g3-text)] shadow-[0_6px_18px_-6px_rgba(255,255,255,0.35)] transition hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed disabled:bg-[var(--g3-elevated)] disabled:text-[var(--g3-muted)] disabled:shadow-none",
       listening: light ? "bg-[var(--g3-primary-soft)] text-[var(--g3-primary-strong)]" : "bg-[var(--g3-surface)]/15 text-white",
       voiceError: light
-        ? "border-[#E5E1D5] bg-white text-[#83817A]"
+        ? "border-[var(--g3-border)] bg-white text-[var(--g3-muted)]"
         : "border-white/10 bg-[var(--g3-elevated)] text-[var(--g3-faint)]",
-      dotActive: light ? "bg-[#1F1E1A]" : "bg-[var(--g3-surface)]",
-      dotIdle: light ? "bg-[#D3CDBB]" : "bg-neutral-600",
-      optLabel: light ? "text-[#3D3B34]" : "text-[var(--g3-text-secondary)]",
-      optDesc: light ? "text-[#A9A79E]" : "text-[var(--g3-faint)]",
+      dotActive: light ? "bg-[var(--g3-deep)]" : "bg-[var(--g3-surface)]",
+      dotIdle: light ? "bg-[var(--g3-border-strong)]" : "bg-neutral-600",
+      optLabel: light ? "text-[var(--g3-text-secondary)]" : "text-[var(--g3-text-secondary)]",
+      optDesc: light ? "text-[var(--g3-faint)]" : "text-[var(--g3-faint)]",
     };
 
     const canSend = !disabled && value.trim().length > 0;

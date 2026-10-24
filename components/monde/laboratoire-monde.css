@@ -8,19 +8,20 @@
 
 .monde-lab {
   --monde-fond: #0b0716;
-  --monde-carte: rgba(139, 92, 246, 0.07);
-  --monde-bord: rgba(139, 92, 246, 0.22);
+  --monde-carte: rgba(124, 92, 255, 0.07);
+  --monde-bord: rgba(124, 92, 255, 0.22);
   --monde-texte: #e2e8f0;
   --monde-souris: rgba(226, 232, 240, 0.55);
-  --monde-violet: #8b5cf6;
-  --monde-cyan: #22d3ee;
-  --monde-jaune: #fde047;
-  --monde-rouge: #fb7185;
+  /* Contrat 2 couleurs (Task 125) : noms conservés, valeurs migrées. */
+  --monde-violet: #7c5cff;
+  --monde-cyan: #2ad4e8;
+  --monde-jaune: #9e85ff;
+  --monde-rouge: #b18aff;
 
   min-height: 100vh;
   background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(124, 58, 237, 0.16), transparent 60%),
-    radial-gradient(900px 500px at 90% 10%, rgba(34, 211, 238, 0.09), transparent 55%),
+    radial-gradient(1200px 600px at 15% -10%, rgba(124, 92, 255, 0.16), transparent 60%),
+    radial-gradient(900px 500px at 90% 10%, rgba(42, 212, 232, 0.09), transparent 55%),
     var(--monde-fond);
   color: var(--monde-texte);
   padding: 28px clamp(16px, 4vw, 56px) 48px;
@@ -132,7 +133,7 @@
   font-size: 14.5px;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, var(--monde-violet), #6d28d9);
+  background: linear-gradient(135deg, var(--monde-violet), #6C48FF);
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
   box-shadow: 0 4px 18px rgba(139, 92, 246, 0.35);
@@ -340,7 +341,7 @@
 }
 
 .monde-panneau li.sain .monde-diag-puce {
-  color: #34d399;
+  color: #7FE9F5;
 }
 
 .monde-panneau li.vigilance .monde-diag-puce {

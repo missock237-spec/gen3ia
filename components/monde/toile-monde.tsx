@@ -26,12 +26,12 @@ export interface DonneesToile {
 /** Interpole une couleur de la colormap scientifique (t ∈ [0,1]). */
 function couleurColormap(t: number): string {
   const x = Math.min(1, Math.max(0, t));
-  // Violet #7c3aed → cyan #22d3ee → jaune #fde047
+  // Contrat 2 couleurs : violet #7C5CFF → cyan #2AD4E8 → cyan clair #7FE9F5
   const stops: Array<[number, [number, number, number]]> = [
     [0, [26, 12, 48]],
-    [0.35, [124, 58, 237]],
-    [0.65, [34, 211, 238]],
-    [1, [253, 224, 71]],
+    [0.35, [124, 92, 255]],
+    [0.65, [42, 212, 232]],
+    [1, [127, 233, 245]],
   ];
   for (let i = 0; i < stops.length - 1; i++) {
     const [t0, c0] = stops[i];
@@ -42,7 +42,7 @@ function couleurColormap(t: number): string {
       return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
     }
   }
-  return "rgb(253,224,71)";
+  return "rgb(127,233,245)";
 }
 
 /** Formate un nombre compact pour les axes. */

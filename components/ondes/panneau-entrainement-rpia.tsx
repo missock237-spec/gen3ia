@@ -47,7 +47,7 @@ function CourbeErreur({ historique }: { historique: number[] }) {
 
   return (
     <svg viewBox="0 0 100 30" className="h-12 w-full" preserveAspectRatio="none" aria-hidden="true">
-      <path d={chemin} fill="none" stroke="#8b5cf6" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+      <path d={chemin} fill="none" stroke="#7C5CFF" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }

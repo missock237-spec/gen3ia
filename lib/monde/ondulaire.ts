@@ -122,7 +122,7 @@ export function onde2D(p: ParamsOnde2D): ResultatSimulation {
       abscisses: tempsSeries,
       valeurs: energieSeries,
       unite: "m",
-      couleur: "#22d3ee",
+      couleur: "#2AD4E8",
     },
   ];
 
@@ -197,8 +197,8 @@ export function fentesYoung(p: ParamsYoung): ResultatSimulation {
       "Δfranges = λ·D/d",
     ],
     series: [
-      { nom: "Intensité lumineuse", abscisses, valeurs: intensite, unite: "u.a.", couleur: "#8b5cf6" },
-      { nom: "Enveloppe de diffraction", abscisses, valeurs: enveloppe, unite: "u.a.", couleur: "#f59e0b" },
+      { nom: "Intensité lumineuse", abscisses, valeurs: intensite, unite: "u.a.", couleur: "#7C5CFF" },
+      { nom: "Enveloppe de diffraction", abscisses, valeurs: enveloppe, unite: "u.a.", couleur: "#9E85FF" },
     ],
     champ: null,
     scalaires: [
@@ -259,7 +259,7 @@ export function ondeLumiere(longueurOndeM: number): ResultatSimulation {
       "Dans le vide, toute onde électromagnétique voyage exactement à c. Sa fréquence f = c/λ décide de sa nature : invisible sous 400 nm (UV), visible entre 400 et 700 nm, infrarouge au-delà. Le Monde trace trois périodes de l'onde et la classe dans le spectre.",
     equations: ["c = λ·f", "E = h·f (photon)"],
     series: [
-      { nom: "Champ E (t)", abscisses, valeurs: champ, unite: "fs", couleur: "#8b5cf6" },
+      { nom: "Champ E (t)", abscisses, valeurs: champ, unite: "fs", couleur: "#7C5CFF" },
     ],
     champ: null,
     scalaires: [

@@ -13,7 +13,7 @@ import { G_TERRE, G_NEWTON, M_TERRE, R_TERRE } from "./constantes";
 import { integrerRk4, type SecondMembre, type SerieTemporelle } from "./solveurs";
 import { borner, CAPS_MONDE, fin, type Diagnostic, type ResultatSimulation, type Serie } from "./types";
 
-const COULEURS = ["#8b5cf6", "#22d3ee", "#f59e0b", "#34d399", "#f472b6"];
+const COULEURS = ["#7C5CFF", "#2AD4E8", "#9E85FF", "#7FE9F5", "#C9AEFF"];
 
 /** Paramètres du projectile. */
 export interface ParamsProjectile {

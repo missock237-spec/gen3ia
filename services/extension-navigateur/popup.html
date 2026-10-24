@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>gen3ia</title>
+  <style>
+    /* Contrat 2 couleurs gen3ia : violet #7C5CFF / cyan #2AD4E8, fond Nebula. */
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; width: 340px; font-family: Inter, system-ui, sans-serif;
+      background: #05060C; color: #F4F5FB; padding: 16px;
+    }
+    h1 {
+      font-size: 15px; margin: 0 0 4px;
+      background: linear-gradient(115deg, #7C5CFF, #2AD4E8);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    p.sous { margin: 0 0 14px; font-size: 11.5px; color: #9AA0C2; }
+    label { display: block; font-size: 11px; color: #C7CBE4; margin: 10px 0 4px; }
+    input, select {
+      width: 100%; padding: 8px 10px; border: none; border-radius: 10px;
+      background: #0B0D17; color: #F4F5FB; font-size: 12.5px;
+    }
+    input:focus { outline: 2px solid rgba(124, 92, 255, 0.5); }
+    button {
+      margin-top: 14px; width: 100%; padding: 10px; border: none; border-radius: 12px;
+      font-weight: 600; font-size: 13px; cursor: pointer; color: white;
+      background: linear-gradient(115deg, #7C5CFF, #2AD4E8);
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    .etat { margin-top: 10px; font-size: 11.5px; color: #7FE9F5; min-height: 15px; }
+    .erreur { color: #B18AFF; }
+    .note { margin-top: 12px; font-size: 10.5px; color: #6B7194; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1>gen3ia — nœud navigateur</h1>
+  <p class="sous">L'essaim gen3ia dans votre navigateur. Confidentialité : rien ne quitte la page sans votre action.</p>
+  <label for="instance">Instance gen3ia</label>
+  <input id="instance" placeholder="https://gen3ia.online" />
+  <label for="cle">Clé développeur (g3a_…)</label>
+  <input id="cle" type="password" placeholder="g3a_…" />
+  <label for="projet">ID de projet Gen3ia</label>
+  <input id="projet" placeholder="ex. proj_abc123" />
+  <button id="enregistrer">Enregistrer</button>
+  <div class="etat" id="etat"></div>
+  <p class="note">
+    La clé est stockée localement (chrome.storage.local) et ne transite QUE vers
+    l'instance indiquée. Ouvrez ensuite le panneau latéral gen3ia depuis
+    l'icône de l'extension.
+  </p>
+  <script src="popup.js"></script>
+</body>
+</html>

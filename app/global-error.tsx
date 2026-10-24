@@ -40,10 +40,10 @@ export default function GlobalRouteError({
     bg: "var(--g3-bg, #0B0D1A)",
     card: "var(--g3-surface, #14162B)",
     text: "var(--g3-text, #F2F3FA)",
-    muted: "var(--g3-muted, #8B90AB)",
-    border: "var(--g3-border, #262A47)",
-    dangerSoft: "var(--g3-danger-soft, rgba(246, 98, 110, 0.13))",
-    dangerStrong: "var(--g3-danger-strong, #FB8E96)",
+    muted: "var(--g3-muted, #9AA0C2)",
+    border: "var(--g3-border, #1B1F35)",
+    dangerSoft: "var(--g3-danger-soft, rgba(177, 138, 255, 0.11))",
+    dangerStrong: "var(--g3-danger-strong, #B18AFF)",
     primary: "var(--g3-primary, #7C5CFF)",
   } as const;
 

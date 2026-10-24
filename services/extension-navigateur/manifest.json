@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "gen3ia — Assistant neuronal",
+  "version": "1.0.0",
+  "description": "Le nœud navigateur de l'essaim gen3ia : chat Gen3 dans n'importe quelle page, contexte de page sur action explicite uniquement, confidentialité stricte.",
+  "minimum_chrome_version": "116",
+  "permissions": ["sidePanel", "storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://gen3ia.online/*",
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Ouvrir gen3ia",
+    "default_popup": "popup.html"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}

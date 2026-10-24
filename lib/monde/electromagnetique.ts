@@ -87,7 +87,7 @@ export function champElectrique(p: ParamsChampE): ResultatSimulation {
       abscisses: Array.from({ length: n }, (_, i) => i * dx),
       valeurs: Array.from({ length: n }, (_, i) => champNorme[Math.floor(n / 2) * n + i]),
       unite: "V/m",
-      couleur: "#8b5cf6",
+      couleur: "#7C5CFF",
     },
   ];
 
@@ -196,8 +196,8 @@ export function circuitRLC(p: ParamsRLC, duree = 1e-3): ResultatSimulation {
       "ρ = R/(2L) décide du régime",
     ],
     series: [
-      { nom: "Tension condensateur u(t)", abscisses: res.t, valeurs: tension, unite: "V", couleur: "#8b5cf6" },
-      { nom: "Courant i(t)", abscisses: res.t, valeurs: courant, unite: "A", couleur: "#22d3ee" },
+      { nom: "Tension condensateur u(t)", abscisses: res.t, valeurs: tension, unite: "V", couleur: "#7C5CFF" },
+      { nom: "Courant i(t)", abscisses: res.t, valeurs: courant, unite: "A", couleur: "#2AD4E8" },
     ],
     champ: null,
     scalaires: [

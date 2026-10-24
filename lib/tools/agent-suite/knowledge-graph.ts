@@ -343,13 +343,13 @@ const CENTER_Y = 310;
 const RING_RADII = [120, 200, 280];
 
 const NODE_TYPE_COLORS: Record<KnowledgeNodeType, string> = {
-  concept: "#2563eb",
-  tool: "#059669",
-  person: "#d97706",
-  organization: "#7c3aed",
-  metric: "#dc2626",
-  event: "#0891b2",
-  place: "#db2777",
+  concept: "#0899B4",
+  tool: "#0A6E82",
+  person: "#9E85FF",
+  organization: "#7C5CFF",
+  metric: "#B18AFF",
+  event: "#0899B4",
+  place: "#B18AFF",
 };
 
 const NODE_TYPE_LABELS: Record<KnowledgeNodeType, string> = {
@@ -443,7 +443,7 @@ export function buildKnowledgeGraphSvg(nodes: GraphRenderNode[], edges: GraphRen
     if (!source || !target) continue;
     const opacity = (0.15 + 0.12 * Math.min(edge.strength, 4)).toFixed(2);
     parts.push(
-      `<line x1="${source.x.toFixed(1)}" y1="${source.y.toFixed(1)}" x2="${target.x.toFixed(1)}" y2="${target.y.toFixed(1)}" stroke="#64748b" stroke-width="1.5" stroke-opacity="${opacity}"/>`,
+      `<line x1="${source.x.toFixed(1)}" y1="${source.y.toFixed(1)}" x2="${target.x.toFixed(1)}" y2="${target.y.toFixed(1)}" stroke="#9AA0C2" stroke-width="1.5" stroke-opacity="${opacity}"/>`,
     );
   }
 
@@ -466,14 +466,14 @@ export function buildKnowledgeGraphSvg(nodes: GraphRenderNode[], edges: GraphRen
   const legendY = SVG_HEIGHT - 16;
   let legendX = 40;
   parts.push(
-    `<text x="${legendX}" y="${legendY}" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#475569">Légende :</text>`,
+    `<text x="${legendX}" y="${legendY}" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#6B7194">Légende :</text>`,
   );
   legendX += 58;
   for (const type of presentTypes) {
     parts.push(`<rect x="${legendX}" y="${legendY - 9}" width="10" height="10" rx="2" fill="${NODE_TYPE_COLORS[type]}"/>`);
     const label = NODE_TYPE_LABELS[type];
     parts.push(
-      `<text x="${legendX + 14}" y="${legendY}" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#334155">${escapeXml(label)}</text>`,
+      `<text x="${legendX + 14}" y="${legendY}" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#6B7194">${escapeXml(label)}</text>`,
     );
     legendX += 14 + Math.round(label.length * 5.6) + 18;
   }

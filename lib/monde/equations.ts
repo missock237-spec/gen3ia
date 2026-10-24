@@ -71,7 +71,7 @@ export function resoudreOde(d: DemandeOde): ResultatSimulation {
       abscisses: res.t,
       valeurs: res.series.map((s) => s[0]),
       unite: "y",
-      couleur: "#8b5cf6",
+      couleur: "#7C5CFF",
     },
   ];
   if (ordre === 2) {
@@ -80,7 +80,7 @@ export function resoudreOde(d: DemandeOde): ResultatSimulation {
       abscisses: res.t,
       valeurs: res.series.map((s) => s[1]),
       unite: "y/s",
-      couleur: "#22d3ee",
+      couleur: "#2AD4E8",
     });
   }
 
@@ -216,7 +216,7 @@ export function resoudreRacines(d: DemandeRacine): ResultatSimulation {
       "Le Monde évalue votre fonction sur tout l'intervalle, repère chaque changement de signe (théorème des valeurs intermédiaires) puis affine par dichotomie jusqu'à 10⁻¹⁰. Chaque racine est donc CERTIFIÉE par le changement de signe — pas extrapolée. Les tangences (contact sans traversée) sont signalées comme non détectables par cette méthode.",
     equations: [`f(x) = ${d.expression.trim()} = 0`, `x ∈ [${a} ; ${b}]`],
     series: [
-      { nom: "f(x)", abscisses, valeurs, unite: "f(x)", couleur: "#8b5cf6" },
+      { nom: "f(x)", abscisses, valeurs, unite: "f(x)", couleur: "#7C5CFF" },
       { nom: "zéro", abscisses, valeurs: zeroLine, unite: "f(x)", couleur: "#6b7280" },
     ],
     champ: null,
@@ -282,7 +282,7 @@ export function resoudreIntegrale(d: DemandeIntegrale): ResultatSimulation {
       "Monte-Carlo : I ≈ (b−a)·⟨f⟩ ± σ/√N",
       "Simpson : erreur O(h⁴)",
     ],
-    series: [{ nom: "f(x) à intégrer", abscisses, valeurs, unite: "f(x)", couleur: "#f59e0b" }],
+    series: [{ nom: "f(x) à intégrer", abscisses, valeurs, unite: "f(x)", couleur: "#9E85FF" }],
     champ: null,
     scalaires: [
       { nom: "Intégrale (Simpson)", valeur: simpson, unite: "u.a.", note: "référence haute précision" },
@@ -342,7 +342,7 @@ export function resoudreOptimisation(d: DemandeOptimisation): ResultatSimulation
       `min f(x) = ${d.expression.trim()} sur [${a} ; ${b}]`,
       "f'(x_min) = 0 (condition d'extremum)",
     ],
-    series: [{ nom: "f(x)", abscisses, valeurs, unite: "f(x)", couleur: "#34d399" }],
+    series: [{ nom: "f(x)", abscisses, valeurs, unite: "f(x)", couleur: "#7FE9F5" }],
     champ: null,
     scalaires: [
       { nom: "x au minimum", valeur: xMin, unite: "x", note: "position du minimum trouvé" },

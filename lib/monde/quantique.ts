@@ -26,7 +26,7 @@ export function particuleDansBoite(
   const energies: number[] = [];
   const series: Serie[] = [];
   const points = 256;
-  const couleurs = ["#8b5cf6", "#22d3ee", "#f59e0b", "#34d399", "#f472b6", "#60a5fa", "#fb7185", "#a3e635"];
+  const couleurs = ["#7C5CFF", "#2AD4E8", "#9E85FF", "#7FE9F5", "#B9A6FF", "#C9AEFF", "#6B7194", "#9AA0C2"];
 
   for (let n = 1; n <= nb; n++) {
     const e = (n * n * Math.PI * Math.PI * H_BARRE * H_BARRE) / (2 * m * L * L);
@@ -180,8 +180,8 @@ export function paquetOnde(p: ParamsSchrödinger): ResultatSimulation {
     return x;
   };
 
-  const densites: Serie = { nom: "Probabilité totale (doit rester 1)", abscisses: [], valeurs: [], unite: "u.a.", couleur: "#34d399" };
-  const positionMoyenne: Serie = { nom: "Position moyenne ⟨x⟩", abscisses: [], valeurs: [], unite: "m", couleur: "#22d3ee" };
+  const densites: Serie = { nom: "Probabilité totale (doit rester 1)", abscisses: [], valeurs: [], unite: "u.a.", couleur: "#7FE9F5" };
+  const positionMoyenne: Serie = { nom: "Position moyenne ⟨x⟩", abscisses: [], valeurs: [], unite: "m", couleur: "#2AD4E8" };
   const echantillonFinal = new Float64Array(n);
 
   const pas = 200;
@@ -227,14 +227,14 @@ export function paquetOnde(p: ParamsSchrödinger): ResultatSimulation {
     abscisses: Array.from({ length: n }, (_, i) => i * dx),
     valeurs: Array.from(echantillonFinal),
     unite: "m⁻¹",
-    couleur: "#f472b6",
+    couleur: "#C9AEFF",
   };
   const densiteInitiale: Serie = {
     nom: "|ψ|² initiale",
     abscisses: Array.from({ length: n }, (_, i) => i * dx),
     valeurs: psiRe.map((r, i) => r * r + psiIm[i] * psiIm[i]),
     unite: "m⁻¹",
-    couleur: "#60a5fa",
+    couleur: "#7FE9F5",
   };
 
   const deriveeNorme = Math.abs(normeFinale - 1);

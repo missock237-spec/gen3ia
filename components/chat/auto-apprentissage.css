@@ -78,7 +78,7 @@
 }
 
 .auto-carte-erreur {
-  color: var(--g3-danger, #d64545);
+  color: var(--g3-danger, #B18AFF);
 }
 
 .auto-carte-dernier {
@@ -92,11 +92,11 @@
 }
 
 .auto-carte-dernier.statut-termine {
-  color: var(--g3-success, #2e9e6b);
+  color: var(--g3-success, #2AD4E8);
 }
 
 .auto-carte-dernier.statut-echec {
-  color: var(--g3-danger, #d64545);
+  color: var(--g3-danger, #B18AFF);
 }
 
 .auto-carte-bouton {
@@ -139,8 +139,8 @@
 }
 
 .auto-carte-phase.phase-autonomie {
-  color: var(--g3-success, #2e9e6b);
-  background: color-mix(in srgb, var(--g3-success, #2e9e6b) 12%, transparent);
+  color: var(--g3-success, #2AD4E8);
+  background: color-mix(in srgb, var(--g3-success, #2AD4E8) 12%, transparent);
 }
 
 .auto-carte-bilan {

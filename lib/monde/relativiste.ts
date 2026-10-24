@@ -47,7 +47,7 @@ export function dilatationTemps(p: ParamsLorentz): ResultatSimulation {
       abscisses,
       valeurs: gammas,
       unite: "β = v/c",
-      couleur: "#8b5cf6",
+      couleur: "#7C5CFF",
     },
   ];
 
@@ -177,7 +177,7 @@ export function redshiftGravitationnel(
         abscisses,
         valeurs,
         unite: "m",
-        couleur: "#22d3ee",
+        couleur: "#2AD4E8",
       },
     ],
     champ: null,

@@ -13,6 +13,7 @@ import { planUniversalAgent } from "./runtime/unified-agent";
 import type { RuntimePlan } from "./runtime/types";
 import { policyForAgent } from "./personalized-plan";
 import { buildAgentCharter, labelForAgent } from "./charter";
+import { conditionnerRequeteRPIA, graineTourChat } from "./conditionnement-rpia";
 import { getAgentForUser } from "./repository";
 import { twinDirectiveForUser } from "../identity/twin";
 import type { AgentRecord } from "./schema";
@@ -267,6 +268,13 @@ export async function answerAsAgent(
   const truth = await buildTruthContext(userId, message, history);
   const grounding = formatTruthContext(truth);
   const userContent = `${grounding}${contextNote ? `\n\n${contextNote}` : ""}\n\nDEMANDE ACTUELLE :\n${message}`;
+  // MODULATION RPIA (pont symbolique A-P0) : la couche PHYSIQUE RPIA résonne
+  // déjà chaque message dans le moteur neuronal (lib/neural/engine.ts →
+  // fusionnerEnergies) ; ici le profil MESURÉ de la résonance pilote aussi les
+  // directives linguistiques du prompt (structure, densité, ambiguïté).
+  // Fail-soft total : une couche indisponible répond sans modulation.
+  const conditionnement = conditionnerRequeteRPIA(message, graineTourChat(userId, message));
+  const directivesRPIA = conditionnement?.directives ?? [];
   // Task 138 — INGÉNIERIE DE PROMPT STRUCTURÉE : le prompt système suit
   // désormais le squelette normalisé RÔLE → MÉTHODE (raisonnement par
   // étapes) → CONTRAINTES → FORMAT → EXEMPLES, au lieu d'un empilement
@@ -280,6 +288,7 @@ export async function answerAsAgent(
       "N'invente jamais un fait, une action exécutée, un résultat ou une source.",
       "Si une information manque, dis-le au lieu de la compléter par supposition.",
       "Retourne uniquement le résultat demandé par l'utilisateur ; ta réflexion préparatoire reste interne.",
+      ...directivesRPIA,
     ],
     outputFormat: RESPONSE_FORMAT_RULES,
     // Few-shot : 1 à 2 exemples de qualité supérieure, sélectionnés

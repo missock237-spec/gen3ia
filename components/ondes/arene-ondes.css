@@ -148,11 +148,11 @@
 }
 
 .arene-mesure[data-sens="plus"] .arene-mesure-valeur {
-  color: #22d3ee;
+  color: #2AD4E8;
 }
 
 .arene-mesure[data-sens="moins"] .arene-mesure-valeur {
-  color: #fb7185;
+  color: #B18AFF;
 }
 
 .arene-mesure-valeur {
@@ -263,8 +263,8 @@
 }
 
 .arene-bouton-arreter {
-  color: #fb7185;
-  background: color-mix(in srgb, #fb7185 14%, transparent);
+  color: #B18AFF;
+  background: color-mix(in srgb, #B18AFF 14%, transparent);
 }
 
 .arene-message {
@@ -331,11 +331,11 @@
 }
 
 .arene-historique li[data-action="renforcee"] .arene-historique-verdict {
-  color: #22d3ee;
+  color: #2AD4E8;
 }
 
 .arene-historique li[data-action="distillee"] .arene-historique-verdict {
-  color: #fb7185;
+  color: #B18AFF;
 }
 
 .arene-historique li[data-action="ignoree"] .arene-historique-verdict {
@@ -394,6 +394,6 @@
 }
 
 .arene-pedagogie em {
-  color: #a78bfa;
+  color: #9E85FF;
   font-style: normal;
 }

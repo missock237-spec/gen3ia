@@ -69,7 +69,7 @@
   --g3-deep: #060710;
   --g3-hover: rgba(124, 92, 255, 0.06);
   --g3-border: #1B1F35;
-  --g3-border-strong: #292E4D;
+  --g3-border-strong: rgba(124, 92, 255, 0.30);
   /* Texte (ratios documentés en tête de section) */
   --g3-text: #F4F5FB;
   --g3-text-secondary: #C7CBE4;
@@ -133,10 +133,10 @@
      ─────────────────────────────────────────────────────────── */
   /* Signature neuronale : violet synaptique profond + cyan spike */
   --g3v6-neural: #7C5CFF;
-  --g3v6-neural-strong: #A78BFF;
+  --g3v6-neural-strong: #9E85FF;
   --g3v6-spike: #2AD4E8;
   --g3v6-spike-soft: rgba(42, 212, 232, 0.13);
-  --g3v6-resonance: #F0ABFC;
+  --g3v6-resonance: #C9AEFF;
   --g3v6-synapse: rgba(124, 92, 255, 0.32);
   /* Surfaces V6 : verre orbital — profondeur accrue derrière les
      visualisations cérébrales (la constellation doit flotter). */
@@ -2178,7 +2178,7 @@ textarea:focus-visible, [tabindex]:focus-visible {
    le texte secondaire du thème (canard profond) y serait illisible. On
    impose une encre bleu-gris claire (≈ 12.5:1 sur #101B26). Task 108-c. */
 [data-theme="light"] :where(.g3-code, .g3-console-output, .g3-console-editor, .g3-console-input textarea, .g3-workspace-task-execution-result pre) {
-  color: #C9DEE8;
+  color: #7FE9F5;
 }
 /* ============================================================
    THÈME SOMBRE — COUCHE DE COMPATIBILITÉ (pastels clairs en dur)
@@ -2230,17 +2230,17 @@ textarea:focus-visible, [tabindex]:focus-visible {
    ============================================================ */
 .g3-agent-light {
   color-scheme: light;
-  --g3-bg: #F0EEE6;
-  --g3-surface: #FAF9F5;
-  --g3-elevated: #EAE5D9;
-  --g3-deep: #F0EEE6;
+  --g3-bg: var(--g3-elevated);
+  --g3-surface: var(--g3-bg);
+  --g3-elevated: var(--g3-elevated);
+  --g3-deep: var(--g3-elevated);
   --g3-hover: rgba(31, 30, 26, 0.05);
-  --g3-border: #E5E1D5;
-  --g3-border-strong: #D3CDBB;
-  --g3-text: #1F1E1A;
-  --g3-text-secondary: #3D3B34;
-  --g3-muted: #83817A;
-  --g3-faint: #A9A79E;
+  --g3-border: var(--g3-border);
+  --g3-border-strong: var(--g3-border-strong);
+  --g3-text: var(--g3-deep);
+  --g3-text-secondary: var(--g3-text-secondary);
+  --g3-muted: var(--g3-muted);
+  --g3-faint: var(--g3-faint);
   --g3-primary: #6C48FF;
   --g3-primary-strong: #5633E8;
   --g3-primary-soft: rgba(108, 72, 255, 0.10);
