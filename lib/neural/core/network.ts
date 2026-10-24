@@ -236,4 +236,59 @@ export class ReseauNeuronalGen3 {
     this.learningRate = config.learningRate;
     this.config = config;
   }
+
+  /**
+   * MIGRATION V3 — restaure un état persisté en l'étendant à `tailleCible`
+   * neurones (ex. 100 → 140 pour la couche des 18 domaines). Garanties :
+   *  - les synapses appris du cerveau historique sont restaurées À
+   *    L'IDENTIQUE (aucune re-génération, aucune perte) ;
+   *  - les nouveaux neurones (ancienne taille .. tailleCible-1) sont créés
+   *    et câblés déterministiquement (flux RNG dédié seed `config.seed +
+   *    7919` — indépendant du câblage initial) pour que la migration d'un
+   *    même fichier produise toujours le même réseau ;
+   *  - l'ordre d'insertion des neurones reste 0..tailleCible-1.
+   */
+  importStateEtendu(state: ReseauStateExport, tailleCible: number): void {
+    // 1. Restauration fidèle de l'état historique.
+    this.importState(state);
+    if (tailleCible <= this.config.size) return;
+
+    const ancienneTaille = this.config.size;
+    const config: NeuralConfig = { ...this.config, size: tailleCible };
+
+    // 2. Création des neurones manquants (même seuil/décroissance).
+    for (let i = ancienneTaille; i < tailleCible; i++) {
+      this.neurones.set(
+        i,
+        new Neurone(config.defaultThreshold, config.defaultDecay),
+      );
+    }
+
+    // 3. Câblage initial des nouveaux neurones : chaque paire impliquant au
+    //    moins un neurone nouveau reçoit sa synapse initiale selon la même
+    //    règle que genererConnexionsInitiales (probabilité density, poids
+    //    uniforme [0.1, 0.5]) — mais via un flux RNG DÉDIÉ (seed + 7919)
+    //    pour rester indépendant du câblage historique ET reproductible.
+    const existantes = new Set(
+      this.synapses.map((s) => `${s.sourceId}->${s.targetId}`),
+    );
+    const rng = createRng(config.seed + 7919);
+    for (let src = 0; src < tailleCible; src++) {
+      const srcNouveau = src >= ancienneTaille;
+      for (let tgt = 0; tgt < tailleCible; tgt++) {
+        if (src === tgt) continue;
+        if (!srcNouveau && tgt < ancienneTaille) continue;
+        // Même ordre que genererConnexionsInitiales : tirage d'existence
+        // PUIS tirage du poids.
+        if (rng() >= config.density) continue;
+        const cle = `${src}->${tgt}`;
+        if (existantes.has(cle)) continue;
+        this.synapses.push(new Synapse(src, tgt, randUniform(rng, 0.1, 0.5)));
+        existantes.add(cle);
+      }
+    }
+
+    this.config = config;
+    this.learningRate = config.learningRate;
+  }
 }

@@ -22,6 +22,10 @@ import { composerDepuisConnaissances } from "./connaissances-pont";
 import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
 import type { CoucheOndesNeuronales } from "./core/couche-rpia";
 import { INTENSITE_MAX_PAR_NEURONE } from "./encoding/text-encoder";
+import {
+  DOMAINE_PAR_LABEL,
+  predireDomaineLexical,
+} from "./training/domaines";
 
 /** Nombre d'époques de résonance RPIA par tour de chat (latence bornée : chaque époque = O(100) ops). */
 export const EPOQUES_RPIA_CHAT = 12;
@@ -116,6 +120,41 @@ export interface NeuralStreamHandlers {
     provider: NeuralProvider,
     model: string,
   ) => void | Promise<void>;
+}
+
+/**
+ * DÉTECTION DU DOMAINE (couche des 18 domaines, v3) — détection lexicale
+ * (predireDomaineLexical), pattern exact de labelText pour les actions :
+ * déterministe, testable, ancrée dans les mots-clés réels des datasets.
+ *
+ * Pourquoi pas la résonance SNN en repli : mesuré empiriquement, la zone
+ * d'entrée SNN (38 neurones de hachage) ne sépare pas 18 classes aux
+ * vocabulaires recouvrants — les résonances des pools de domaine
+ * convergent et l'argmax serait biaisé (bruit). La couche SNN des domaines
+ * reste entraînée (plasticité réelle, accuracy rapportée au Studio) comme
+ * substrat vivant ; le ROUTAGE, lui, est lexical — même architecture que
+ * la couche d'actions (INTENT_KEYWORDS + labelText).
+ */
+function detecterDomaine(
+  texte: string,
+): { label: string; nom: string; nomEn: string | null; score: number; source: "lexical" } | null {
+  const lexicale = predireDomaineLexical(texte);
+  if (!lexicale) return null;
+  return {
+    label: lexicale.label,
+    nom: lexicale.nomFr,
+    nomEn: lexicale.nomEn,
+    score: lexicale.score,
+    source: "lexical",
+  };
+}
+
+/**
+ * Phrase de domaine — honnête : elle rapporte les mots-clés réellement
+ * reconnus (score lexical) sans prétendre exécuter quoi que ce soit ici.
+ */
+function phraseDomaine(nomFr: string, score: number): string {
+  return `(Domaine reconnu : ${nomFr} — mots-clés de domaine, score ${score}. Je peux aider sur ce domaine : formulez votre demande précise.)`;
 }
 
 export class NeuralEngine {
@@ -311,10 +350,12 @@ export class NeuralEngine {
     // cortex et décodeur, comme avant.
     const knowledgeContext = options.knowledgeContext?.trim() ?? "";
     const memoire = this.memoirePour(options);
+    // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
+    const domaine = detecterDomaine(messageUtilisateur);
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
-      this.composer(messageUtilisateur, decode, memoire);
+      this.composer(messageUtilisateur, decode, memoire, domaine);
     this.memoriser(messageUtilisateur, composition.texte, memoire);
     this.evoluer(messageUtilisateur, composition);
 
@@ -324,6 +365,7 @@ export class NeuralEngine {
       decode,
       Date.now() - debut,
       resonance?.telemetrie,
+      domaine,
     );
   }
 
@@ -390,10 +432,12 @@ export class NeuralEngine {
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const knowledgeContext = options.knowledgeContext?.trim() ?? "";
+    // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
+    const domaine = detecterDomaine(messageUtilisateur);
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
-      this.composer(messageUtilisateur, decode);
+      this.composer(messageUtilisateur, decode, undefined, domaine);
 
     // La réponse composée est émise par segments (phrases réelles). Les
     // télémétries de cycles restent disponibles dans raw (plus de bruit de
@@ -413,6 +457,7 @@ export class NeuralEngine {
       decode,
       Date.now() - debut,
       resonance?.telemetrie,
+      domaine,
     );
   }
 
@@ -465,9 +510,11 @@ export class NeuralEngine {
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const memoire = this.memoirePour(options);
+    // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
+    const domaine = detecterDomaine(messageUtilisateur);
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
-      this.composer(messageUtilisateur, decode, memoire);
+      this.composer(messageUtilisateur, decode, memoire, domaine);
 
     for (const segment of segmenterTexte(composition.texte)) {
       yield segment;
@@ -481,6 +528,7 @@ export class NeuralEngine {
       decode,
       Date.now() - debut,
       resonance?.telemetrie,
+      domaine,
     );
   }
 
@@ -525,6 +573,7 @@ export class NeuralEngine {
     prompt: string,
     decode: NeuralDecodedResponse,
     memoire?: HippocampusMemory,
+    domaine?: { label: string; nom: string; score: number; source: string } | null,
   ): CompositionReponse {
     if (this.cortex) {
       const contexte: ContexteLangage = {};
@@ -553,7 +602,11 @@ export class NeuralEngine {
     }
 
     // Repli : composition conversationnelle du décodeur (intention + réelles).
-    return { texte: decode.texte, source: "decoder_intention" };
+    let texte = decode.texte;
+    if (domaine) {
+      texte += ` ${phraseDomaine(domaine.nom, domaine.score)}`;
+    }
+    return { texte, source: "decoder_intention" };
   }
 
   /**
@@ -607,6 +660,7 @@ export class NeuralEngine {
     decode: NeuralDecodedResponse,
     latencyMs: number,
     telemetrieRPIA?: TelemetrieRPIA,
+    domaine?: { label: string; nom: string; nomEn: string | null; score: number; source: string } | null,
   ): NeuralAIResponse {
     // Estimation honnête documentée : un SNN ne compte pas de tokens de LLM,
     // on rapporte les mots réels du prompt et de la réponse.
@@ -641,6 +695,19 @@ export class NeuralEngine {
         // réellement exécutée pour ce tour (null sans couche — jamais un
         // chiffre inventé).
         rpia: telemetrieRPIA ?? null,
+        // COUCHE DES 18 DOMAINES : domaine reconnu pour ce tour (détection
+        // lexicale sur les mots-clés réels des datasets — null si aucun).
+        ...(domaine
+          ? {
+              domaine: {
+                label: domaine.label,
+                nom: domaine.nom,
+                nomEn: domaine.nomEn,
+                score: domaine.score,
+                source: domaine.source,
+              },
+            }
+          : {}),
       },
     };
   }

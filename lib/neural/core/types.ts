@@ -210,6 +210,59 @@ export const POOL_INTENTION_GENERALE: readonly number[] = [68, 69];
  */
 export const POOL_SYSTEM_ACTION: readonly number[] = [96, 97, 98, 99];
 
+/* ============================================================================
+ * COUCHE DES 18 DOMAINES (extension v3) — neurones 100..139
+ *
+ * Chaque domaine expert de gen3 dispose de son PROPRE pool de 2 neurones
+ * (disjoint des pools d'action) : le réseau apprend à reconnaître le domaine
+ * d'un prompt (cf. training/domaines.ts + trainer.trainDomaines) et le moteur
+ * peut ainsi router/specialiser ses réponses. La lecture est BIVOUAC :
+ * résonance des pools d'action → intention ; résonance des pools de domaine
+ * → domaine (deux argmax indépendants sur des pools disjoints).
+ * ==========================================================================*/
+
+/** Taille du réseau avec la couche des domaines (v3). */
+export const TAILLE_RESEAU_GEN3 = 140;
+
+/**
+ * Seuil des neurones des pools de DOMAINE (0.75 < 1.0 global).
+ *
+ * Pourquoi : l'énergie transmise par une synapse est décadée (× (1-decay))
+ * AVANT le test de seuil — un token unique renforcé à poids 1.0 arrive à
+ * 0.9 et ne déclencherait jamais un pool au seuil 1.0 (il faudrait ≥ 2
+ * tokens simultanés). La couche domaine est une couche DÉDIÉE de
+ * reconnaissance : son seuil abaissé rend un mot-clé de domaine suffisant
+ * (sensible) tout en restant étanche au câblage aléatoire initial
+ * (poids 0.1-0.5 → décadés ≤ 0.45 < 0.75). Ré-appliqué à chaque démarrage
+ * (les neurones recréés par importState reprennent le seuil global).
+ */
+export const SEUIL_POOL_DOMAINE = 0.75;
+
+/** Première base des pools de domaine (neurones 100-135). */
+export const ZONE_DOMAINES = { debut: 100, fin: 135 } as const;
+
+export const POOL_DOM_GENERATION_IMAGES: readonly number[] = [100, 101];
+export const POOL_DOM_VIDEO: readonly number[] = [102, 103];
+export const POOL_DOM_SON: readonly number[] = [104, 105];
+export const POOL_DOM_CLIPS_MUSICAUX: readonly number[] = [106, 107];
+export const POOL_DOM_DEVELOPPEMENT_WEB: readonly number[] = [108, 109];
+export const POOL_DOM_TEST: readonly number[] = [110, 111];
+export const POOL_DOM_REDACTION_DOCUMENTS: readonly number[] = [112, 113];
+export const POOL_DOM_SCIENCES_HUMAINES: readonly number[] = [114, 115];
+export const POOL_DOM_RECHERCHE_SCIENTIFIQUE: readonly number[] = [116, 117];
+export const POOL_DOM_CYBERSECURITE: readonly number[] = [118, 119];
+export const POOL_DOM_RECHERCHE_WEB: readonly number[] = [120, 121];
+export const POOL_DOM_MULTIMODAL: readonly number[] = [122, 123];
+export const POOL_DOM_HACKER: readonly number[] = [124, 125];
+export const POOL_DOM_CONSTRUCTION_MACHINES: readonly number[] = [126, 127];
+export const POOL_DOM_VENTE: readonly number[] = [128, 129];
+export const POOL_DOM_SANTE_MEDICAL: readonly number[] = [130, 131];
+export const POOL_DOM_ANALYSE_DONNEES: readonly number[] = [132, 133];
+export const POOL_DOM_CONSEILLER_COMMERCIAL: readonly number[] = [134, 135];
+
+/** Neurones libres de la couche v3 (réservés aux extensions futures). */
+export const NEURONES_LIBRES_V3: readonly number[] = [136, 137, 138, 139];
+
 /** Neurones libres (interneurones) : 40-41, 56-59, 70-95. */
 export const NEURONES_LIBRES: readonly number[] = [
   40, 41, 56, 57, 58, 59,

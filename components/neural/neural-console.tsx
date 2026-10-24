@@ -76,6 +76,7 @@ interface JobEntrainement {
   epochCourante: number;
   accuracyCourante: number;
   nbEchantillons: number;
+  nbEchantillonsDomaines?: number;
   statsDataset: Record<string, number>;
   erreur?: string;
   rapport?: {
@@ -85,6 +86,34 @@ interface JobEntrainement {
     accuracyTest: number;
     history: Array<{ epoch: number; accuracy: number }>;
     dureeMs: number;
+  };
+  rapportDomaines?: {
+    epochs: number;
+    samples: number;
+    accuracyTrain: number;
+    accuracyTest: number;
+    history: Array<{ epoch: number; accuracy: number }>;
+    parDomaine: Record<string, number>;
+    dureeMs: number;
+  };
+}
+
+interface DomaineDataset {
+  id: string;
+  nomFr: string;
+  nomEn: string;
+  lignesDisponibles: number;
+  lignesComplet: number | null;
+  echantillonsCommis: boolean;
+  taches: string[];
+}
+
+interface ReponseDomaines {
+  datasets: DomaineDataset[];
+  coucheDomaines: {
+    synapses: number;
+    neurones: string;
+    tailleReseau: number;
   };
 }
 
@@ -112,6 +141,7 @@ function useTelechargement<T>(url: string, intervalMs: number | null) {
   const [erreurAuth, setErreurAuth] = useState(false);
 
   const rafraichir = useCallback(async () => {
+    if (!url) return;
     try {
       const reponse = await fetch(url, { cache: "no-store" });
       if (reponse.status === 401 || reponse.status === 403) {
@@ -125,11 +155,12 @@ function useTelechargement<T>(url: string, intervalMs: number | null) {
   }, [url]);
 
   useEffect(() => {
+    if (!url) return;
     void rafraichir();
     if (intervalMs === null) return;
     const interval = setInterval(() => void rafraichir(), intervalMs);
     return () => clearInterval(interval);
-  }, [rafraichir, intervalMs]);
+  }, [rafraichir, intervalMs, url]);
 
   return { donnees, erreurAuth, rafraichir };
 }
@@ -298,6 +329,11 @@ export function NeuralConsole() {
 
   // Entraînement
   const [lancement, setLancement] = useState<string | null>(null);
+  // Couche des 18 domaines (datasets + état appris)
+  const { donnees: domaines, rafraichir: rafraichirDomaines } = useTelechargement<ReponseDomaines>(
+    onglet === "entrainement" ? "/api/neural/domaines" : "",
+    15000,
+  );
 
   const jobEnCours = etat?.dernierJobEntrainement?.status === "en_cours";
   useEffect(() => {
@@ -380,18 +416,23 @@ export function NeuralConsole() {
 
   /* ---------------- Entraînement ---------------- */
 
-  const lancerEntrainement = useCallback(async () => {
+  const lancerEntrainement = useCallback(async (source: "corpus" | "domaines" | "complet" = "corpus") => {
     if (lancement) return;
-    setLancement("démarrage…");
+    setLancement(source === "corpus" ? "démarrage…" : `démarrage (${source})…`);
     try {
-      const reponse = await fetch("/api/neural/train", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const reponse = await fetch("/api/neural/train", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(source === "corpus" ? {} : { source }),
+      });
       const data = await reponse.json();
       setLancement(reponse.ok ? (data.job?.status === "en_cours" ? "en cours — la courbe se met à jour en direct." : "terminé.") : `échec : ${String(data.error ?? "")}`);
       void rafraichirCerveau();
+      void rafraichirDomaines();
     } catch (error) {
       setLancement(`échec : ${error instanceof Error ? error.message : "erreur"}`);
     }
-  }, [lancement, rafraichirCerveau]);
+  }, [lancement, rafraichirCerveau, rafraichirDomaines]);
 
   const reinitialiser = useCallback(async () => {
     if (lancement) return;
@@ -604,6 +645,72 @@ export function NeuralConsole() {
       {/* Onglet ENTRAÎNEMENT */}
       {onglet === "entrainement" && (
         <div className="space-y-6">
+          {/* LES 18 DOMAINES — couche d'expertise v3 (neurones 100-135) */}
+          <div className="g3v6-card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[var(--g3-text)]">
+                  Les 18 domaines de gen3 — datasets bilingues FR/EN
+                </p>
+                <p className="mt-1 text-[11px] text-[var(--g3-muted)]">
+                  18 datasets JSONL de 100 000 lignes chacun (générateur reproductible), 120 échantillons/domaine commis.
+                  La couche des domaines (neurones {domaines?.coucheDomaines.neurones ?? "100-135"}, réseau {domaines?.coucheDomaines.tailleReseau ?? 140}) apprend à RECONNAÎTRE le domaine de chaque prompt.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => void lancerEntrainement("domaines")} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl bg-[var(--g3-primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--g3-primary-strong)] disabled:opacity-50">
+                  Entraîner sur mes 18 domaines
+                </button>
+                <button type="button" onClick={() => void lancerEntrainement("complet")} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl border border-[var(--g3-border)] px-4 py-2.5 text-sm text-[var(--g3-muted)] transition hover:bg-[var(--g3-hover)] disabled:opacity-50">
+                  Corpus + domaines
+                </button>
+              </div>
+            </div>
+
+            {domaines ? (
+              <div className="mt-4 space-y-3">
+                <div className="flex flex-wrap gap-2 text-[11px] text-[var(--g3-muted)]">
+                  <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">
+                    Synapses domaine apprises : <strong className="text-[var(--g3v6-spike)]">{domaines.coucheDomaines.synapses}</strong>
+                  </span>
+                  {domaines.datasets.some((d) => d.lignesComplet !== null) ? (
+                    <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">Datasets complets détectés sur disque</span>
+                  ) : (
+                    <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">Entraînement sur les échantillons commis (datasets complets générables localement)</span>
+                  )}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {domaines.datasets.map((d) => (
+                    <div key={d.id} className="rounded-xl border border-[var(--g3-border)] p-3">
+                      <p className="text-xs font-semibold text-[var(--g3-text)]">
+                        {d.nomFr}
+                        <span className="ml-1 text-[10px] font-normal text-[var(--g3-faint)]">/ {d.nomEn}</span>
+                      </p>
+                      <p className="mt-1 text-[10px] text-[var(--g3-muted)]">
+                        {d.lignesComplet !== null
+                          ? `${d.lignesComplet.toLocaleString("fr-FR")} lignes complètes disponibles`
+                          : d.echantillonsCommis
+                            ? `${d.lignesDisponibles} échantillons commis · dataset complet générable`
+                            : "dataset non trouvé sur disque"}
+                      </p>
+                      <p className="mt-1 text-[10px] text-[var(--g3-faint)]">{d.taches.join(" · ")}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-[var(--g3-faint)]">Chargement de l&apos;inventaire des domaines…</p>
+            )}
+
+            {job?.rapportDomaines ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <Metrique label="Domaines · accuracy train" valeur={PCT(job.rapportDomaines.accuracyTrain)} sous={`${job.rapportDomaines.epochs} epochs · ${job.rapportDomaines.samples} échantillons`} />
+                <Metrique label="Domaines · accuracy test" valeur={PCT(job.rapportDomaines.accuracyTest)} sous="Reconnaissance jamais vue" />
+                <Metrique label="Domaines · durée" valeur={`${(job.rapportDomaines.dureeMs / 1000).toFixed(1)} s`} sous={`${Object.keys(job.rapportDomaines.parDomaine ?? {}).length} domaines entraînés`} />
+              </div>
+            ) : null}
+          </div>
+
           <div className="g3v6-card p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>

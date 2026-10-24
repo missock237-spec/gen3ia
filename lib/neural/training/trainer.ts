@@ -20,6 +20,7 @@ import { encodeText } from "../encoding/text-encoder";
 import { poidsResonanceParCycle } from "../decoding/response-decoder";
 import type { TrainingSample } from "./dataset";
 import { nouvelleFenetreNeuronale } from "../core/v2/effecteur-cortex";
+import { DOMAIN_POOLS } from "./domaines";
 
 /**
  * ENTRAÎNEUR SUPERVISÉ DU RÉSEAU NEURONAL — la boucle d'apprentissage RÉELLE.
@@ -66,6 +67,52 @@ export function enregistrerPoolsDIntention(espace: EspaceFiltreResonant): void {
   for (const [label, pool] of Object.entries(LABEL_POOLS)) {
     espace.registerOutputPool(label, [...pool]);
   }
+}
+
+/**
+ * Enregistre les 18 pools de DOMAINES (couche v3, neurones 100-135).
+ * Idempotent — séparé des pools d'action : deux classifications
+ * indépendantes sur des pools disjoints.
+ */
+export function enregistrerPoolsDomaines(espace: EspaceFiltreResonant): void {
+  for (const [label, pool] of Object.entries(DOMAIN_POOLS)) {
+    espace.registerOutputPool(label, [...pool]);
+  }
+}
+
+/**
+ * Prédiction de DOMAINE : argmax strict sur les pools de domaine uniquement.
+ * null si aucune résonance de domaine (aucun domaine reconnu) — honnêteté
+ * : « je ne sais pas » vaut mieux qu'un domaine inventé.
+ */
+export function predireDomaineDepuisResonances(
+  resonances: Record<string, number>,
+): { label: string; score: number } | null {
+  let meilleur: string | null = null;
+  let meilleurScore = 0;
+  for (const label of Object.keys(DOMAIN_POOLS)) {
+    const score = resonances[label] ?? 0;
+    if (score > meilleurScore) {
+      meilleur = label;
+      meilleurScore = score;
+    }
+  }
+  return meilleur && meilleurScore > 0
+    ? { label: meilleur, score: meilleurScore }
+    : null;
+}
+
+/** Rapport d'entraînement de la couche des domaines (données réelles). */
+export interface RapportDomaines {
+  epochs: number;
+  samples: number;
+  accuracyTrain: number;
+  accuracyTest: number;
+  history: Array<{ epoch: number; accuracy: number }>;
+  /** Répartition des échantillons par domaine (ids de dataset). */
+  parDomaine: Record<string, number>;
+  dureeMs: number;
+  startedAt: string;
 }
 
 /** Rapport d'entraînement (données 100 % réelles). */
@@ -189,6 +236,7 @@ export class NeuralTrainer {
           cyclesParEchantillon,
           lrBoost,
           indexSynapses,
+          LABEL_POOLS,
         );
         if (prediction === echantillon.label) corrects += 1;
 
@@ -218,6 +266,111 @@ export class NeuralTrainer {
   }
 
   /**
+   * ENTRAÎNEMENT DE LA COUCHE DES DOMAINES (v3) — même boucle supervisée
+   * que train(), mais contre les 18 pools de domaine uniquement (neurones
+   * 100-135, disjoints des pools d'action) : la plasticité renforce les
+   * chemins entrée → pool du domaine cible et punit compétitivement les
+   * pools de domaine concurrents (jamais les pools d'action).
+   */
+  async trainDomaines(
+    samples: TrainingSample[],
+    opts: TrainingOptions = {},
+  ): Promise<RapportDomaines> {
+    const epochs = opts.epochs ?? 4;
+    const lrBoost = opts.lrBoost ?? 0.15;
+    const cyclesParEchantillon = opts.cyclesParEchantillon ?? 4;
+    const testRatio = opts.testRatio ?? 0.15;
+    const startedAt = new Date().toISOString();
+    const debut = Date.now();
+
+    // Shuffle seedé — même graine que train() : reproductible.
+    const melange = [...samples];
+    const rng = createRng(2024);
+    for (let i = melange.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const tmp = melange[i];
+      melange[i] = melange[j];
+      melange[j] = tmp;
+    }
+
+    const nbTest = Math.max(
+      samples.length >= 10 ? 1 : 0,
+      Math.floor(samples.length * testRatio),
+    );
+    const train = melange.slice(0, melange.length - nbTest);
+    const test = melange.slice(melange.length - nbTest);
+
+    // Répartition honnête par domaine (ids de dataset dérivés des labels).
+    const parDomaine: Record<string, number> = {};
+    for (const echantillon of train) {
+      const id = echantillon.label.replace(/^DOM_/, "").toLowerCase();
+      parDomaine[id] = (parDomaine[id] ?? 0) + 1;
+    }
+
+    const indexSynapses = indexerSynapses(this.reseau);
+    const history: Array<{ epoch: number; accuracy: number }> = [];
+    let accuracyTrain = 0;
+
+    for (let epoch = 1; epoch <= epochs; epoch++) {
+      let corrects = 0;
+      for (let i = 0; i < train.length; i++) {
+        const echantillon = train[i];
+        const prediction = this.apprendreSurEchantillon(
+          echantillon,
+          cyclesParEchantillon,
+          lrBoost,
+          indexSynapses,
+          DOMAIN_POOLS,
+        );
+        if (prediction === echantillon.label) corrects += 1;
+
+        if ((i + 1) % 25 === 0) {
+          await new Promise<void>((resoudre) => setImmediate(resoudre));
+        }
+      }
+      accuracyTrain = train.length > 0 ? corrects / train.length : 0;
+      history.push({ epoch, accuracy: accuracyTrain });
+      opts.onProgress?.({ epoch, accuracy: accuracyTrain });
+    }
+
+    // Évaluation finale sans plasticité (jeu de test jamais vu).
+    const accuracyTest = this.evaluerEchantillonsDomaines(
+      test,
+      cyclesParEchantillon,
+    );
+
+    return {
+      epochs,
+      samples: train.length,
+      accuracyTrain,
+      accuracyTest,
+      history,
+      parDomaine,
+      dureeMs: Date.now() - debut,
+      startedAt,
+    };
+  }
+
+  /** Évalue la reconnaissance de domaine SANS plasticité. */
+  evaluerEchantillonsDomaines(
+    samples: TrainingSample[],
+    cyclesParEchantillon = 4,
+  ): number {
+    if (samples.length === 0) return 0;
+    let corrects = 0;
+    for (const echantillon of samples) {
+      const { resonances } = this.propagerEchantillon(
+        echantillon,
+        cyclesParEchantillon,
+        Object.keys(DOMAIN_POOLS),
+      );
+      const predite = predireDomaineDepuisResonances(resonances);
+      if (predite && predite.label === echantillon.label) corrects += 1;
+    }
+    return corrects / samples.length;
+  }
+
+  /**
    * Évalue un jeu d'échantillons SANS plasticité : encode, propage k cycles,
    * lit les résonances (maximum par pool) et prédit l'intention. Utilisé pour
    * le jeu de test et pour mesurer une accuracy de référence avant training.
@@ -232,6 +385,7 @@ export class NeuralTrainer {
       const { resonances } = this.propagerEchantillon(
         echantillon,
         cyclesParEchantillon,
+        Object.keys(LABEL_POOLS),
       );
       if (predireIntention(resonances) === echantillon.label) corrects += 1;
     }
@@ -241,22 +395,32 @@ export class NeuralTrainer {
   /**
    * Un pas d'apprentissage complet sur un échantillon : retourne
    * l'intention prédite AVANT plasticité (prédiction en ligne honnête).
-   * `indexSynapses` est fourni par train() (construit une fois — cf. (e)).
+   * `indexSynapses` est fourni par train()/trainDomaines() (construit une
+   * fois — cf. (e)) ; `registrePools` désigne la famille de pools visée
+   * (actions ou domaines — jamais les deux mélangées).
    */
   private apprendreSurEchantillon(
     echantillon: TrainingSample,
     cyclesParEchantillon: number,
     lrBoost: number,
     indexSynapses: Map<string, Synapse>,
+    registrePools: Record<string, readonly number[]>,
   ): string {
     const { encodage, resonances } = this.propagerEchantillon(
       echantillon,
       cyclesParEchantillon,
+      Object.keys(registrePools),
     );
-    const prediction = predireIntention(resonances);
+    // Prédiction en ligne : argmax sur la famille apprise — les échantillons
+    // de domaine (label DOM_*) sont prédits par predireDomaineDepuisResonances
+    // (fallback « non reconnu » = "" : compté incorrect, honnête), les autres
+    // par predireIntention (repli INTENTION_GENERALE).
+    const prediction = echantillon.label.startsWith("DOM_")
+      ? predireDomaineDepuisResonances(resonances)?.label ?? ""
+      : predireIntention(resonances);
 
     // ----- (5) PLASTICITÉ SUPERVISÉE -------------------------------------
-    const poolCible = LABEL_POOLS[echantillon.label];
+    const poolCible = registrePools[echantillon.label];
     const neuronesEntree = Object.keys(encodage.inputs).map(Number);
 
     if (poolCible) {
@@ -268,10 +432,11 @@ export class NeuralTrainer {
         }
       }
 
-      // Punition compétitive : un pool non-cible qui résonne PLUS que le pool
-      // cible voit ses synapses depuis la zone d'entrée affaiblies (× 0.95).
+      // Punition compétitive : un pool CONCURRENT du même registre qui
+      // résonne PLUS que le pool cible voit ses synapses depuis la zone
+      // d'entrée affaiblies (× 0.95) — les autres familles sont épargnées.
       const scoreCible = resonances[echantillon.label] ?? 0;
-      for (const [label, pool] of Object.entries(LABEL_POOLS)) {
+      for (const [label, pool] of Object.entries(registrePools)) {
         if (label === echantillon.label) continue;
         const score = resonances[label] ?? 0;
         if (score > scoreCible) {
@@ -286,14 +451,16 @@ export class NeuralTrainer {
   /**
    * Propage un échantillon : reset COMPLET des énergies (adaptation (d)),
    * encodage, k cycles via le noyau, puis résonance pondérée PAR LATENCE de
-   * chaque pool = maximum observé sur la fenêtre de cycles (un pool
+   * chaque pool ÉCOUTÉ = maximum observé sur la fenêtre de cycles (un pool
    * entraîné spiker TÔT dans la fenêtre — poids fort — alors qu'un pool
    * activé par le bruit synaptique aléatoire n'atteint le seuil qu'en fin de
    * fenêtre — poids faible : cf. poidsResonanceParCycle).
+   * `labelsPools` borne la lecture aux pools de la famille concernée.
    */
   private propagerEchantillon(
     echantillon: TrainingSample,
     cyclesParEchantillon: number,
+    labelsPools: string[],
   ): {
     encodage: ReturnType<typeof encodeText>;
     resonances: Record<string, number>;
@@ -331,7 +498,7 @@ export class NeuralTrainer {
           : { intensite: 0 };
       const spiked = this.noyau.executerCycle(requete, contexte).spikedNeurones;
       const poids = poidsResonanceParCycle(c);
-      for (const label of Object.keys(LABEL_POOLS)) {
+      for (const label of labelsPools) {
         const score = this.espace.readResonance(spiked, label) * poids;
         if (score > (resonances[label] ?? 0)) resonances[label] = score;
       }

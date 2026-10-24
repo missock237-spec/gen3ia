@@ -27,6 +27,9 @@ const TrainBodySchema = z.object({
   maxTotal: z.number().int().min(2).max(8000).optional(),
   lrBoost: z.number().min(0.01).max(0.5).optional(),
   cyclesParEchantillon: z.number().int().min(2).max(8).optional(),
+  source: z.enum(["corpus", "domaines", "complet"]).optional(),
+  maxParDomaine: z.number().int().min(10).max(2000).optional(),
+  complet: z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {

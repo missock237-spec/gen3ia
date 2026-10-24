@@ -4,13 +4,20 @@ import { randomUUID } from "node:crypto";
 
 import { getNeuralRuntime, sauvegarderCerveauRuntime } from "../runtime";
 import { NeuralTrainer } from "./trainer";
-import type { TrainingReport } from "./trainer";
+import type { TrainingReport, RapportDomaines } from "./trainer";
 import {
   buildDatasetFromCorpus,
   loadCorpusFromPublic,
   SEED_EXAMPLES,
 } from "./dataset";
-import { enregistrerPoolsDIntention } from "./trainer";
+import {
+  enregistrerPoolsDIntention,
+  enregistrerPoolsDomaines,
+} from "./trainer";
+import {
+  chargerEchantillonsDomaines,
+  construirePairesDomaines,
+} from "./domaines";
 import { CORPUS_GEN3 } from "../generation/corpus";
 import type { StatsApprentissageLangage } from "../generation/language";
 import { executionLogger } from "@/lib/observability/logger";
@@ -26,6 +33,13 @@ import { executionLogger } from "@/lib/observability/logger";
  * Le job est asynchrone et CHUNKÉ (cf. NeuralTrainer : setImmediate tous
  * les 25 échantillons) : le serveur reste réactif pendant l'entraînement,
  * la progression est interrogeable via GET /api/neural/train.
+ *
+ * SOURCES (v3) :
+ *  - « corpus »   : intentions d'action sur le corpus du projet (llms* +
+ *    amorçage canonique) — comportement historique ;
+ *  - « domaines » : couche des 18 domaines (échantillons JSONL commis ou
+ *    datasets complets si présents) + paires du cortex langagier ;
+ *  - « complet »  : les deux, dans le même job.
  */
 
 /** État d'un job d'entraînement (données 100 % réelles). */
@@ -38,7 +52,7 @@ export interface NeuralTrainingJob {
   demarreLe: string;
   /** Date ISO de fin (si terminé). */
   termineLe?: string;
-  /** Source du corpus (« llms » = public/llms*.txt du dépôt). */
+  /** Source demandée : corpus | domaines | complet. */
   source: string;
   /** Nombre d'époques demandé. */
   epochs: number;
@@ -46,17 +60,27 @@ export interface NeuralTrainingJob {
   epochCourante: number;
   /** Accuracy de la dernière époque mesurée (progression). */
   accuracyCourante: number;
-  /** Nombre d'échantillons d'entraînement du job. */
+  /** Nombre d'échantillons d'entraînement du job (intentions). */
   nbEchantillons: number;
-  /** Répartition par label du jeu construit. */
+  /** Nombre d'échantillons de domaine du job (couche v3). */
+  nbEchantillonsDomaines: number;
+  /** Répartition par label du jeu d'intentions construit. */
   statsDataset: Record<string, number>;
+  /** Répartition par domaine du jeu de domaines construit. */
+  statsDomaines?: {
+    parDomaine: Record<string, number>;
+    parLangue: Record<string, number>;
+    fichiersAbsents: string[];
+  };
   /** Message d'erreur si status = echec. */
   erreur?: string;
-  /** Rapport final complet si status = termine. */
+  /** Rapport final complet si status = termine (intentions). */
   rapport?: TrainingReport;
+  /** Rapport final de la couche des domaines si entraînée. */
+  rapportDomaines?: RapportDomaines;
   /**
-   * Apprentissage langagier du cortex (corpus conversationnel + amorçage) —
-   * stats réelles du dernier passage (données réelles).
+   * Apprentissage langagier du cortex (corpus conversationnel + amorçage +
+   * paires de domaine) — stats réelles du dernier passage.
    */
   langage?: StatsApprentissageLangage;
 }
@@ -89,12 +113,19 @@ export interface LancerEntrainementOptions {
   lrBoost?: number;
   /** Cycles du noyau par échantillon (défaut 4). */
   cyclesParEchantillon?: number;
+  /** Source : corpus (défaut) | domaines | complet. */
+  source?: "corpus" | "domaines" | "complet";
+  /** Cap d'échantillons de domaine par dataset (défaut 120). */
+  maxParDomaine?: number;
+  /** Utiliser les datasets complets si présents sur disque (défaut false). */
+  complet?: boolean;
 }
 
 /**
- * Lance l'entraînement du cerveau neuronal sur le corpus du projet
- * (public/llms*.txt + SEED_EXAMPLES canoniques). Refuse (Error « conflit »)
- * si un entraînement est déjà en cours.
+ * Lance l'entraînement du cerveau neuronal. Refuse (Error « conflit ») si un
+ * entraînement est déjà en cours. Selon la source : intentions (corpus),
+ * 18 domaines (domaines) ou les deux (complet) — le cortex langagier reçoit
+ * dans tous les cas les paires de domaine disponibles.
  */
 export function lancerEntrainement(
   options: LancerEntrainementOptions = {},
@@ -105,11 +136,16 @@ export function lancerEntrainement(
     );
   }
 
+  const source = options.source ?? "corpus";
   const epochs = Math.max(1, Math.min(10, options.epochs ?? 4));
   const maxParLabel = Math.max(1, Math.min(500, options.maxParLabel ?? 120));
   const maxTotal = Math.max(
     SEED_EXAMPLES.length + 1,
     Math.min(8000, options.maxTotal ?? 2500),
+  );
+  const maxParDomaine = Math.max(
+    10,
+    Math.min(2000, options.maxParDomaine ?? 120),
   );
   const lrBoost = options.lrBoost ?? 0.15;
   const cyclesParEchantillon = options.cyclesParEchantillon ?? 4;
@@ -118,11 +154,12 @@ export function lancerEntrainement(
     id: randomUUID(),
     status: "en_cours",
     demarreLe: new Date().toISOString(),
-    source: "llms",
+    source,
     epochs,
     epochCourante: 0,
     accuracyCourante: 0,
     nbEchantillons: 0,
+    nbEchantillonsDomaines: 0,
     statsDataset: {},
   };
   globalAvecJobs.__gen3NeuralTrainingJob = job;
@@ -131,24 +168,6 @@ export function lancerEntrainement(
   void (async () => {
     try {
       const runtime = getNeuralRuntime();
-
-      // 1. Corpus réel du dépôt + amorçage canonique supervisé.
-      const corpus = await loadCorpusFromPublic();
-      const jeuCorpus = buildDatasetFromCorpus(corpus, {
-        maxParLabel,
-        maxTotal,
-      });
-      const samples = [...jeuCorpus.samples, ...SEED_EXAMPLES];
-      job.nbEchantillons = samples.length;
-      // Répartition réelle du jeu combiné (corpus + amorçage canonique).
-      const stats: Record<string, number> = {};
-      for (const echantillon of samples) {
-        stats[echantillon.label] = (stats[echantillon.label] ?? 0) + 1;
-      }
-      job.statsDataset = stats;
-
-      // 2. Pools d'intention + entraîneur sur le cerveau singleton.
-      enregistrerPoolsDIntention(runtime.espace);
       const trainer = new NeuralTrainer(
         runtime.reseau,
         runtime.espace,
@@ -156,27 +175,96 @@ export function lancerEntrainement(
         runtime.noyau,
       );
 
-      // 3. Boucle réelle avec progression observable.
-      const rapport = await trainer.train(samples, {
-        epochs,
-        lrBoost,
-        cyclesParEchantillon,
-        onProgress: ({ epoch, accuracy }) => {
-          job.epochCourante = epoch;
-          job.accuracyCourante = accuracy;
-        },
-      });
+      // ── 1. INTENTIONS (sources « corpus » et « complet ») ────────────────
+      if (source === "corpus" || source === "complet") {
+        const corpus = await loadCorpusFromPublic();
+        const jeuCorpus = buildDatasetFromCorpus(corpus, {
+          maxParLabel,
+          maxTotal,
+        });
+        const samples = [...jeuCorpus.samples, ...SEED_EXAMPLES];
+        job.nbEchantillons = samples.length;
+        const stats: Record<string, number> = {};
+        for (const echantillon of samples) {
+          stats[echantillon.label] = (stats[echantillon.label] ?? 0) + 1;
+        }
+        job.statsDataset = stats;
 
-      // 3-bis. CORTEX LANGAGIER : le corpus conversationnel d'amorçage est
-      // réaffirmé à chaque session (idempotent) — les paires personnalisées
-      // déjà apprises sont conservées (le cortex est idempotent sur les
-      // doublons de motifs).
-      job.langage = runtime.cortex.apprendre(CORPUS_GEN3);
+        enregistrerPoolsDIntention(runtime.espace);
+        const rapport = await trainer.train(samples, {
+          epochs,
+          lrBoost,
+          cyclesParEchantillon,
+          onProgress: ({ epoch, accuracy }) => {
+            job.epochCourante = epoch;
+            job.accuracyCourante = accuracy;
+          },
+        });
+        job.rapport = rapport;
+        runtime.historiqueEntrainement.push(rapport);
+      }
 
-      // 4. Persistance du cerveau appris (synapses + cortex langagier)
-      //    + historique du runtime.
+      // ── 2. DOMAINES (sources « domaines » et « complet ») ────────────────
+      if (source === "domaines" || source === "complet") {
+        const chargement = await chargerEchantillonsDomaines({
+          maxParDomaine,
+          complet: options.complet,
+        });
+        if (chargement.samples.length > 0) {
+          job.nbEchantillonsDomaines = chargement.samples.length;
+          job.statsDomaines = {
+            parDomaine: chargement.parDomaine,
+            parLangue: chargement.parLangue,
+            fichiersAbsents: chargement.fichiersAbsents,
+          };
+          enregistrerPoolsDomaines(runtime.espace);
+          const rapportDomaines = await trainer.trainDomaines(
+            chargement.samples,
+            {
+              epochs,
+              lrBoost,
+              cyclesParEchantillon,
+              onProgress: ({ epoch, accuracy }) => {
+                job.epochCourante = epoch;
+                job.accuracyCourante = accuracy;
+              },
+            },
+          );
+          job.rapportDomaines = rapportDomaines;
+        } else {
+          executionLogger({
+            requestId: "neural-training",
+            userId: `job:${job.id}`,
+          }).warn(
+            `Entraînement « ${source} » : aucun échantillon de domaine trouvé (fichiers absents : ${chargement.fichiersAbsents.join(", ") || "aucun"}).`,
+          );
+        }
+      }
+
+      // ── 3. CORTEX LANGAGIER ─────────────────────────────────────────────
+      //    Corpus d'amorçage canonique (idempotent) + paires de domaine
+      //    réelles extraites des datasets (plafonnées).
+      let statsLangage = runtime.cortex.apprendre(CORPUS_GEN3);
+      try {
+        const pairesDomaines = await construirePairesDomaines();
+        if (pairesDomaines.length > 0) {
+          const statsDomaines = runtime.cortex.apprendre(pairesDomaines);
+          statsLangage = {
+            pairesAjoutees:
+              statsLangage.pairesAjoutees + statsDomaines.pairesAjoutees,
+            pairesDoublons:
+              statsLangage.pairesDoublons + statsDomaines.pairesDoublons,
+            vocabulaire: statsDomaines.vocabulaire,
+            totalPaires: statsDomaines.totalPaires,
+          };
+        }
+      } catch {
+        // Paires de domaine indisponibles : le corpus canonique suffit.
+      }
+      job.langage = statsLangage;
+
+      // ── 4. PERSISTANCE + historique ─────────────────────────────────────
       const sauvegarde = await sauvegarderCerveauRuntime();
-      runtime.historiqueEntrainement.push(rapport);
       if (runtime.historiqueEntrainement.length > 20) {
         runtime.historiqueEntrainement.splice(
           0,
@@ -186,11 +274,19 @@ export function lancerEntrainement(
 
       job.status = "termine";
       job.termineLe = new Date().toISOString();
-      job.rapport = rapport;
       executionLogger({
         requestId: "neural-training",
         userId: `job:${job.id}`,
-      }).info(`Entraînement neuronal terminé (accuracy test: ${rapport.accuracyTest}, langage: ${job.langage.pairesAjoutees} paires ajoutées, sauvegarde: ${sauvegarde})`);
+      }).info(
+        `Entraînement neuronal « ${source} » terminé` +
+          (job.rapport
+            ? ` (intentions: accuracy test ${job.rapport.accuracyTest})`
+            : "") +
+          (job.rapportDomaines
+            ? ` (domaines: accuracy test ${job.rapportDomaines.accuracyTest}, ${job.rapportDomaines.samples} échantillons)`
+            : "") +
+          `, langage: ${job.langage.pairesAjoutees} paires ajoutées, sauvegarde: ${sauvegarde}`,
+      );
     } catch (error) {
       job.status = "echec";
       job.termineLe = new Date().toISOString();

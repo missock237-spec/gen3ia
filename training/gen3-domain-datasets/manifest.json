@@ -1,0 +1,584 @@
+{
+  "generator": "gen3ia/gen3-domain-datasets/generateur.py",
+  "seed": 20261024,
+  "target_lines_per_domain": 100000,
+  "window_months": 24,
+  "anchor": "2026-10-24T18:00:00Z",
+  "languages": [
+    "fr",
+    "en"
+  ],
+  "license": "CC-BY-4.0-synthetic-gen3ia",
+  "domains": [
+    {
+      "id": "generation_images",
+      "nom_fr": "génération d'images",
+      "nom_en": "image generation",
+      "lignes": 100000,
+      "mots_cles": [
+        "image",
+        "visuel",
+        "prompt",
+        "style",
+        "photo",
+        "illustration"
+      ],
+      "taches": {
+        "text_to_prompt": {
+          "poids": 0.4,
+          "generees": 39876
+        },
+        "style_guide": {
+          "poids": 0.2,
+          "generees": 19883
+        },
+        "critique_image": {
+          "poids": 0.2,
+          "generees": 20091
+        },
+        "variations_prompt": {
+          "poids": 0.2,
+          "generees": 20150
+        }
+      },
+      "langues": {
+        "fr": 49956,
+        "en": 50044
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 6.7
+    },
+    {
+      "id": "video",
+      "nom_fr": "vidéo",
+      "nom_en": "video",
+      "lignes": 100000,
+      "mots_cles": [
+        "video",
+        "clip",
+        "film",
+        "storyboard",
+        "montage",
+        "rendu"
+      ],
+      "taches": {
+        "storyboard": {
+          "poids": 0.35,
+          "generees": 34852
+        },
+        "scenario_video": {
+          "poids": 0.25,
+          "generees": 24998
+        },
+        "parametres_rendu": {
+          "poids": 0.2,
+          "generees": 20224
+        },
+        "feuille_montage": {
+          "poids": 0.2,
+          "generees": 19926
+        }
+      },
+      "langues": {
+        "fr": 50105,
+        "en": 49895
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 7.1
+    },
+    {
+      "id": "son",
+      "nom_fr": "son",
+      "nom_en": "sound",
+      "lignes": 100000,
+      "mots_cles": [
+        "son",
+        "audio",
+        "voix",
+        "ambiance",
+        "sonore",
+        "sound"
+      ],
+      "taches": {
+        "synthese_sonore": {
+          "poids": 0.4,
+          "generees": 40930
+        },
+        "voix_off": {
+          "poids": 0.3,
+          "generees": 28858
+        },
+        "chaine_audio": {
+          "poids": 0.3,
+          "generees": 30212
+        }
+      },
+      "langues": {
+        "fr": 49978,
+        "en": 50022
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 5.8
+    },
+    {
+      "id": "clips_musicaux",
+      "nom_fr": "clips musicaux",
+      "nom_en": "music clips",
+      "lignes": 100000,
+      "mots_cles": [
+        "musique",
+        "clip",
+        "refrain",
+        "bpm",
+        "genre",
+        "music"
+      ],
+      "taches": {
+        "concept_clip": {
+          "poids": 0.4,
+          "generees": 40616
+        },
+        "structure_musicale": {
+          "poids": 0.3,
+          "generees": 30666
+        },
+        "ecriture_paroles": {
+          "poids": 0.3,
+          "generees": 28718
+        }
+      },
+      "langues": {
+        "fr": 49906,
+        "en": 50094
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 6.0
+    },
+    {
+      "id": "developpement_web",
+      "nom_fr": "développement web",
+      "nom_en": "web development",
+      "lignes": 100000,
+      "mots_cles": [
+        "web",
+        "html",
+        "css",
+        "javascript",
+        "react",
+        "api",
+        "site"
+      ],
+      "taches": {
+        "implementation_web": {
+          "poids": 0.4,
+          "generees": 62458
+        },
+        "debug_web": {
+          "poids": 0.3,
+          "generees": 24036
+        },
+        "conception_api": {
+          "poids": 0.3,
+          "generees": 13506
+        }
+      },
+      "langues": {
+        "en": 50042,
+        "fr": 49958
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 8.2
+    },
+    {
+      "id": "test",
+      "nom_fr": "test",
+      "nom_en": "testing",
+      "lignes": 100000,
+      "mots_cles": [
+        "test",
+        "tests",
+        "qualite",
+        "couverture",
+        "ci",
+        "qa"
+      ],
+      "taches": {
+        "plan_test": {
+          "poids": 0.35,
+          "generees": 49390
+        },
+        "cas_limite": {
+          "poids": 0.35,
+          "generees": 47810
+        },
+        "ci_tests": {
+          "poids": 0.3,
+          "generees": 2800
+        }
+      },
+      "langues": {
+        "fr": 50036,
+        "en": 49964
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 7.5
+    },
+    {
+      "id": "construction_machines",
+      "nom_fr": "construction des machines",
+      "nom_en": "machine building",
+      "lignes": 100000,
+      "mots_cles": [
+        "machine",
+        "robot",
+        "moteur",
+        "capteur",
+        "arduino",
+        "pid"
+      ],
+      "taches": {
+        "conception_machine": {
+          "poids": 0.35,
+          "generees": 47132
+        },
+        "depannage_machine": {
+          "poids": 0.3,
+          "generees": 8874
+        },
+        "programmation_controle": {
+          "poids": 0.35,
+          "generees": 43994
+        }
+      },
+      "langues": {
+        "en": 49992,
+        "fr": 50008
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 7.6
+    },
+    {
+      "id": "cybersecurite",
+      "nom_fr": "cybersécurité",
+      "nom_en": "cybersecurity",
+      "lignes": 100000,
+      "mots_cles": [
+        "securite",
+        "cyber",
+        "incident",
+        "vulnerabilite",
+        "patch"
+      ],
+      "taches": {
+        "reponse_incident": {
+          "poids": 0.55,
+          "generees": 55206
+        },
+        "hygiene_numerique": {
+          "poids": 0.45,
+          "generees": 44794
+        }
+      },
+      "langues": {
+        "en": 49885,
+        "fr": 50115
+      },
+      "safety_label": "recherche_defensive",
+      "duree_s": 6.2
+    },
+    {
+      "id": "hacker",
+      "nom_fr": "hacker (éthique / CTF)",
+      "nom_en": "hacker (ethical / CTF)",
+      "lignes": 100000,
+      "mots_cles": [
+        "ctf",
+        "hacker",
+        "flag",
+        "challenge",
+        "pentest"
+      ],
+      "taches": {
+        "ctf_educatif": {
+          "poids": 0.5,
+          "generees": 83308
+        },
+        "analyse_defensive": {
+          "poids": 0.5,
+          "generees": 16692
+        }
+      },
+      "langues": {
+        "fr": 50047,
+        "en": 49953
+      },
+      "safety_label": "ctf_educatif",
+      "duree_s": 9.1
+    },
+    {
+      "id": "redaction_documents",
+      "nom_fr": "rédaction de documents",
+      "nom_en": "document writing",
+      "lignes": 100000,
+      "mots_cles": [
+        "document",
+        "rapport",
+        "rediger",
+        "courrier",
+        "manuel"
+      ],
+      "taches": {
+        "plan_document": {
+          "poids": 0.55,
+          "generees": 61538
+        },
+        "relecture": {
+          "poids": 0.45,
+          "generees": 38462
+        }
+      },
+      "langues": {
+        "fr": 50101,
+        "en": 49899
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 6.3
+    },
+    {
+      "id": "sciences_humaines",
+      "nom_fr": "sciences humaines",
+      "nom_en": "humanities",
+      "lignes": 100000,
+      "mots_cles": [
+        "histoire",
+        "sociologie",
+        "philosophie",
+        "culture",
+        "societe"
+      ],
+      "taches": {
+        "analyse_sh": {
+          "poids": 0.55,
+          "generees": 86633
+        },
+        "pedagogie_sh": {
+          "poids": 0.45,
+          "generees": 13367
+        }
+      },
+      "langues": {
+        "fr": 49980,
+        "en": 50020
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 8.8
+    },
+    {
+      "id": "recherche_scientifique",
+      "nom_fr": "recherche scientifique",
+      "nom_en": "scientific research",
+      "lignes": 100000,
+      "mots_cles": [
+        "science",
+        "recherche",
+        "protocole",
+        "hypothese",
+        "experience"
+      ],
+      "taches": {
+        "protocole_recherche": {
+          "poids": 0.55,
+          "generees": 57582
+        },
+        "vulgarisation": {
+          "poids": 0.45,
+          "generees": 42418
+        }
+      },
+      "langues": {
+        "fr": 49879,
+        "en": 50121
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 6.2
+    },
+    {
+      "id": "recherche_web",
+      "nom_fr": "recherche web",
+      "nom_en": "web search",
+      "lignes": 100000,
+      "mots_cles": [
+        "recherche",
+        "web",
+        "source",
+        "verifier",
+        "internet"
+      ],
+      "taches": {
+        "strategie_recherche": {
+          "poids": 0.55,
+          "generees": 95520
+        },
+        "verification_information": {
+          "poids": 0.45,
+          "generees": 4480
+        }
+      },
+      "langues": {
+        "fr": 50146,
+        "en": 49854
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 9.0
+    },
+    {
+      "id": "multimodal",
+      "nom_fr": "multimodal",
+      "nom_en": "multimodal",
+      "lignes": 100000,
+      "mots_cles": [
+        "multimodal",
+        "image texte",
+        "ocr",
+        "alignement",
+        "modalite"
+      ],
+      "taches": {
+        "alignement_multimodal": {
+          "poids": 0.5,
+          "generees": 82229
+        },
+        "pipeline_multimodal": {
+          "poids": 0.5,
+          "generees": 17771
+        }
+      },
+      "langues": {
+        "fr": 50167,
+        "en": 49833
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 9.5
+    },
+    {
+      "id": "vente",
+      "nom_fr": "vente",
+      "nom_en": "sales",
+      "lignes": 100000,
+      "mots_cles": [
+        "vente",
+        "client",
+        "objection",
+        "pitch",
+        "prospect"
+      ],
+      "taches": {
+        "traitement_objection": {
+          "poids": 0.55,
+          "generees": 54740
+        },
+        "pitch_vente": {
+          "poids": 0.45,
+          "generees": 45260
+        }
+      },
+      "langues": {
+        "fr": 49970,
+        "en": 50030
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 6.3
+    },
+    {
+      "id": "sante_medical",
+      "nom_fr": "santé / médical",
+      "nom_en": "health / medical",
+      "lignes": 100000,
+      "mots_cles": [
+        "sante",
+        "medical",
+        "symptome",
+        "traitement",
+        "consultation"
+      ],
+      "taches": {
+        "information_sante": {
+          "poids": 0.55,
+          "generees": 89920
+        },
+        "preparation_consultation": {
+          "poids": 0.45,
+          "generees": 10080
+        }
+      },
+      "langues": {
+        "fr": 49945,
+        "en": 50055
+      },
+      "safety_label": "info_medicale_generale",
+      "duree_s": 9.9
+    },
+    {
+      "id": "analyse_donnees",
+      "nom_fr": "analyse de données",
+      "nom_en": "data analysis",
+      "lignes": 100000,
+      "mots_cles": [
+        "donnees",
+        "analyse",
+        "graphique",
+        "statistique",
+        "csv"
+      ],
+      "taches": {
+        "nettoyage_donnees": {
+          "poids": 0.35,
+          "generees": 49275
+        },
+        "plan_analyse": {
+          "poids": 0.35,
+          "generees": 41766
+        },
+        "visualisation_donnees": {
+          "poids": 0.3,
+          "generees": 8959
+        }
+      },
+      "langues": {
+        "en": 49973,
+        "fr": 50027
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 11.7
+    },
+    {
+      "id": "conseiller_commercial",
+      "nom_fr": "conseiller commercial",
+      "nom_en": "commercial advisor",
+      "lignes": 100000,
+      "mots_cles": [
+        "conseil",
+        "commercial",
+        "recommandation",
+        "suivi",
+        "client"
+      ],
+      "taches": {
+        "recommandation_conseil": {
+          "poids": 0.55,
+          "generees": 97760
+        },
+        "suivi_client": {
+          "poids": 0.45,
+          "generees": 2240
+        }
+      },
+      "langues": {
+        "fr": 50005,
+        "en": 49995
+      },
+      "safety_label": "sans_objet",
+      "duree_s": 8.9
+    }
+  ]
+}

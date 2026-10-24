@@ -1,7 +1,11 @@
 import "server-only";
 
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { createRng } from "./core/rng";
 import { ReseauNeuronalGen3 } from "./core/network";
+import { Synapse } from "./core/synapse";
 import { EspaceFiltreResonant } from "./core/resonant-space";
 import { GenerateurAutoOscillation } from "./core/auto-oscillation";
 import { NoyauCentralGen3 } from "./core/central-core";
@@ -10,6 +14,9 @@ import {
   POOL_INTENTION_GENERALE,
   CANAL_UTILISATEUR_IN,
   CANAL_INTENTION_GENERALE,
+  TAILLE_RESEAU_GEN3,
+  ZONE_DOMAINES,
+  SEUIL_POOL_DOMAINE,
 } from "./core/types";
 import { SystemeExploitationOutils } from "./effectors/tool-os";
 import { MoteurSelectionCompetencesOutils } from "./effectors/skills-engine";
@@ -39,6 +46,9 @@ import { genererVideoNeural, videoVersDataUri } from "./generation/video-engine"
 import { CentralSupervisor, HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import { piloterPlateforme } from "./pilotage/gen3ia";
+import {
+  enregistrerPoolsDomaines,
+} from "./training/trainer";
 import { CortexColumnnaire, CORTEX_CONFIG_DEFAUTS } from "./core/v2/cortex-columnnaire";
 import { ChampCorticalGen3, TAILLE_CHAMP } from "./core/v2/champ-cortical";
 import { EffecteurCortexV2 } from "./core/v2/effecteur-cortex";
@@ -48,7 +58,6 @@ import {
   lireArtefactV2,
   supprimerArtefactV2,
 } from "./core/v2/persistance-v2";
-import { join } from "node:path";
 
 /**
  * RUNTIME NEURONAL — singleton caché sur globalThis (résiste au HMR de
@@ -135,6 +144,28 @@ const globalAvecNeural = globalThis as typeof globalThis & {
 /** Graine par défaut du runtime (reproductibilité). */
 export const SEED_RUNTIME = 42;
 
+/** Artefact PRÉ-ENTRAÎNÉ de la couche des 18 domaines (commité). */
+export const BRAIN_DOMAINES_PRETRAIN_PATH = join(
+  process.cwd(),
+  "assets/neural-pretrained/brain-domaines-v1.json",
+);
+
+/** État sérialisé de la couche des domaines (pré-entraînée hors prod). */
+export interface EtatDomainesPretrain {
+  version: number;
+  genereLe: string;
+  /** Synapses de la couche domaine : [sourceId, targetId, weight]. */
+  synapses: Array<[number, number, number]>;
+  /** Métadonnées d'entraînement (honnêteté : provenance + accuracies). */
+  entrainement: {
+    samples: number;
+    epochs: number;
+    accuracyTrain: number;
+    accuracyTest: number;
+    parDomaine: Record<string, number>;
+  };
+}
+
 /** Chemin de l'artefact Cortex v2 de l'installation (état appris local). */
 export const CORTEX_V2_PATH = join(
   process.cwd(),
@@ -178,7 +209,11 @@ export function getNeuralRuntime(): NeuralRuntime {
   if (existant) return existant;
 
   // 1. Cerveau + espace résonant + veille (RNG seedé pour le bruit de fond).
-  const reseau = new ReseauNeuronalGen3({ seed: SEED_RUNTIME });
+  //    v3 : 140 neurones — la couche 100-135 porte les 18 pools de domaine.
+  const reseau = new ReseauNeuronalGen3({
+    seed: SEED_RUNTIME,
+    size: TAILLE_RESEAU_GEN3,
+  });
   const espace = new EspaceFiltreResonant();
   const veille = new GenerateurAutoOscillation(
     reseau,
@@ -284,9 +319,12 @@ export function getNeuralRuntime(): NeuralRuntime {
   if (cortexV2) noyau.enregistrerEffecteur(cortexV2);
 
   // 5. Pools d'entrée/sortie du runtime (les pools média sont enregistrés
-  //    par leurs effecteurs respectifs — cf. constructeurs ci-dessus).
+  //    par leurs effecteurs respectifs — cf. constructeurs ci-dessus) +
+  //    les 18 pools de DOMAINE de la couche v3 (idempotent, neurones
+  //    100-135 présents dans le réseau 140).
   espace.registerInputPool(CANAL_UTILISATEUR_IN, [...POOL_UTILISATEUR_IN]);
   espace.registerOutputPool(CANAL_INTENTION_GENERALE, [...POOL_INTENTION_GENERALE]);
+  enregistrerPoolsDomaines(espace);
 
   // 6. VRAIS outils fonctionnels du Tool OS : données réelles du réseau +
   //    génération média locale réelle (contenu complet dans la réponse).
@@ -376,10 +414,20 @@ export function getNeuralRuntime(): NeuralRuntime {
     creeLe: new Date().toISOString(),
   };
 
-  // 10. Démarrage : tente de restaurer le cerveau persisté (synchrone, unique).
+  // 10. Démarrage : tente de restaurer le cerveau persisté (synchrone,
+  //     unique) en le MIGRANT vers la taille v3 (140 — couche des domaines),
+  //     puis fusionne l'artefact pré-entraîné des 18 domaines si le cerveau
+  //     restauré n'a encore AUCUNE synapse dans la couche 100-135.
   const etat = loadBrainState();
   if (etat) {
-    reseau.importState({ config: etat.config, synapses: etat.synapses });
+    if (etat.config.size < TAILLE_RESEAU_GEN3) {
+      reseau.importStateEtendu(etat, TAILLE_RESEAU_GEN3);
+      console.log(
+        `[NEURAL] Cerveau migré ${etat.config.size} → ${TAILLE_RESEAU_GEN3} neurones (couche des 18 domaines ajoutée, apprentissage historique conservé).`,
+      );
+    } else {
+      reseau.importState(etat);
+    }
     importerRegistreTokens(etat.tokenRegistry);
     runtime.historiqueEntrainement = [...etat.trainingHistory];
     // Paires langagières personnalisées + poids d'usage appris.
@@ -408,7 +456,31 @@ export function getNeuralRuntime(): NeuralRuntime {
     console.log(
       `[NEURAL] Cerveau persisté restauré : ${etat.synapses.length} synapses, ${Object.keys(etat.tokenRegistry).length} neurones lexicaux (sauvegardé le ${etat.sauvegardeLe}).`,
     );
+    // AMORÇAGE DOMAINE : si le cerveau restauré n'a jamais été entraîné sur
+    // les 18 domaines (aucune synapse dans la couche 100-135), l'artefact
+    // pré-entraîné commité est fusionné (additif, idempotent) — gen3 arrive
+    // en production DÉJÀ entraîné sur ses domaines ; un entraînement Studio
+    // ultérieur reprend depuis cet état.
+    const synapsesDomaineLocales = reseau.synapses.some(
+      (s) =>
+        s.sourceId >= ZONE_DOMAINES.debut || s.targetId >= ZONE_DOMAINES.debut,
+    );
+    if (!synapsesDomaineLocales) {
+      const fusion = fusionnerSynapsesDomainesPretrain(reseau);
+      if (fusion > 0) {
+        console.log(
+          `[NEURAL] Couche des 18 domaines amorcée depuis l'artefact pré-entraîné : ${fusion} synapse(s) fusionnée(s).`,
+        );
+      }
+    }
   } else {
+    // Cerveau neuf : l'artefact des domaines fournit l'amorçage de la couche.
+    const fusion = fusionnerSynapsesDomainesPretrain(reseau);
+    if (fusion > 0) {
+      console.log(
+        `[NEURAL] Cerveau neuf + couche des 18 domaines pré-entraînée : ${fusion} synapse(s) fusionnée(s).`,
+      );
+    }
     console.log(
       `[NEURAL] Cortex langagier amorcé : ${statsCorpus.pairesAjoutees} paires, vocabulaire ${statsCorpus.vocabulaire} tokens.`,
     );
@@ -452,6 +524,12 @@ export function getNeuralRuntime(): NeuralRuntime {
     }
   }
 
+  // 12. COUCHE DOMAINE — accorde les seuils des neurones 100-135 (après
+  //     toute restauration : les neurones recréés reprennent le seuil
+  //     global). Sans cet accord, un token de domaine renforcé (poids 1.0,
+  //     décadé 0.9) ne déclencherait jamais ses pools.
+  appliquerSeuilsDomaines(reseau);
+
   globalAvecNeural.__gen3NeuralRuntime = runtime;
   return runtime;
 }
@@ -468,6 +546,74 @@ export function resetBrain(): NeuralRuntime {
   reinitialiserRegistreTokens();
   globalAvecNeural.__gen3NeuralRuntime = undefined;
   return getNeuralRuntime();
+}
+
+/**
+ * SEUILS DE LA COUCHE DOMAINE — abaisse le seuil des neurones 100-135 à
+ * SEUIL_POOL_DOMAINE (0.75). Idempotent, appelé à chaque construction du
+ * runtime (les neurones recréés par importState reprennent le seuil global
+ * 1.0 — la couche doit être ré-accordée après chaque restauration).
+ */
+export function appliquerSeuilsDomaines(reseau: ReseauNeuronalGen3): void {
+  for (let id = ZONE_DOMAINES.debut; id <= ZONE_DOMAINES.fin; id++) {
+    const neurone = reseau.neurones.get(id);
+    if (neurone) neurone.threshold = SEUIL_POOL_DOMAINE;
+  }
+}
+
+/**
+ * FUSION DE L'ARTEFACT PRÉ-ENTRAÎNÉ DES 18 DOMAINES — lit
+ * assets/neural-pretrained/brain-domaines-v1.json et fusionne ADDITIVEMENT
+ * ses synapses de la couche domaine (100-135) dans le réseau courant :
+ *  - seules les synapses VALIDES sont reprises (ids < taille du réseau,
+ *    poids fini) ;
+ *  - une synapse déjà présente garde son poids LOCAL (le cerveau courant
+ *    prime — jamais d'écrasement d'un apprentissage plus récent) ;
+ *  - échec non fatal (fichier absent/corrompu → 0 fusion, log d'avertissement).
+ * @returns le nombre de synapses réellement ajoutées.
+ */
+export function fusionnerSynapsesDomainesPretrain(
+  reseau: ReseauNeuronalGen3,
+): number {
+  try {
+    if (!existsSync(BRAIN_DOMAINES_PRETRAIN_PATH)) return 0;
+    const brut = readFileSync(BRAIN_DOMAINES_PRETRAIN_PATH, "utf8");
+    const etat = JSON.parse(brut) as Partial<EtatDomainesPretrain>;
+    if (!Array.isArray(etat.synapses)) return 0;
+
+    const existantes = new Set(
+      reseau.synapses.map((s) => `${s.sourceId}->${s.targetId}`),
+    );
+    let ajoutees = 0;
+    for (const entree of etat.synapses) {
+      if (!Array.isArray(entree) || entree.length < 3) continue;
+      const [sourceId, targetId, weight] = entree;
+      if (
+        !Number.isInteger(sourceId) ||
+        !Number.isInteger(targetId) ||
+        sourceId < 0 ||
+        targetId < 0 ||
+        sourceId >= reseau.config.size ||
+        targetId >= reseau.config.size ||
+        typeof weight !== "number" ||
+        !Number.isFinite(weight)
+      ) {
+        continue;
+      }
+      const cle = `${sourceId}->${targetId}`;
+      if (existantes.has(cle)) continue;
+      reseau.synapses.push(new Synapse(sourceId, targetId, weight));
+      existantes.add(cle);
+      ajoutees += 1;
+    }
+    return ajoutees;
+  } catch (erreur: unknown) {
+    console.warn(
+      "[NEURAL] Artefact des domaines illisible (non fatal) :",
+      erreur instanceof Error ? erreur.message : String(erreur),
+    );
+    return 0;
+  }
 }
 
 /**

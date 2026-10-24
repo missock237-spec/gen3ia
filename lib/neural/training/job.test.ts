@@ -18,7 +18,7 @@ describe("Job d'entraînement neuronal (E2E)", () => {
     });
 
     expect(job.status).toBe("en_cours");
-    expect(job.source).toBe("llms");
+    expect(job.source).toBe("corpus");
 
     // Attend la fin du job asynchrone (timeout large, corpus volontairement
     // petit via maxTotal pour garder le test rapide).

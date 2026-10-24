@@ -1,0 +1,4 @@
+# Jeux de données complets (1,8 M lignes) — reproductibles via generateur.py
+data/complet/
+__pycache__/
+*.pyc
