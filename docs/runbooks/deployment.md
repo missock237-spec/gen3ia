@@ -42,7 +42,7 @@ Exécutés à chaque push/PR sur `main` (Node 22, cache npm + build Next.js) :
 | 6 | **Budget bundle** | `npm run check:bundle` (First Load JS par route, gzip — 240 kB max) | tout dépassement de budget |
 
 Le job construit aussi le SDK public `@gen3ia/sdk` (`npm run sdk:build`) et
-installe les dépendances isolées de `sandbox/` en amont de ces checks.
+installe les dépendances isolées de `services/sandbox/` en amont de ces checks.
 
 Jobs satellites en parallèle : **E2E** (émulateur Firebase auth — les tests e2e
 ne touchent JAMAIS la production), **a11y** (axe-core sur les pages publiques
@@ -217,7 +217,7 @@ nouvelle version, par une chaîne à triple redondance :
    (jamais de boucle). Les deux sources divergent (bascule/rollback en
    cours) : aucune décision ce cycle.
 3. **Côté serveur web** : le dépôt fournit
-   `deploy/nginx/gen3ia-cache.conf` — à intégrer au vhost `server { }` de
+   `infra/deploy/nginx/gen3ia-cache.conf` — à intégrer au vhost `server { }` de
    gen3ia.online. La couche Next impose déjà `no-store` sur
    `/version.json` ; le bloc nginx est la double ceinture (et protège du
    jour où un CDN/intermédiaire s'insérera).
@@ -228,7 +228,7 @@ Application sur le VPS (une fois, en root — le bloc doit être adapté au
 ```bash
 # 1. Sauvegarder le vhost actuel, y intégrer les blocs du snippet
 #    (assets immuables ^~ /_next/static/, location = /version.json,
-#    regex \.(html|json)$ — cf. deploy/nginx/gen3ia-cache.conf)
+#    regex \.(html|json)$ — cf. infra/deploy/nginx/gen3ia-cache.conf)
 cp /etc/nginx/conf.d/gen3ia.conf /etc/nginx/conf.d/gen3ia.conf.bak
 #    … éditer le vhost pour y coller les blocs …
 
@@ -237,7 +237,7 @@ nginx -t && systemctl reload nginx
 
 # 3. Vérifier : le manifeste n'est plus cachable, les assets hashés le
 #    restent (commandes de vérification en tête de
-#    deploy/nginx/gen3ia-cache.conf)
+#    infra/deploy/nginx/gen3ia-cache.conf)
 curl -sI https://gen3ia.online/version.json | grep -i cache-control
 ```
 

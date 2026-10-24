@@ -40,12 +40,12 @@ jobs:
 
       # Tâche 56 : la suite vitest intègre désormais les services annexes
       # (sandbox — tests comportementaux Fastify). Leurs dépendances sont
-      # isolées dans sandbox/ (pas de hoisting racine) → installation dédiée.
+      # isolées dans services/sandbox/ (pas de hoisting racine) → installation dédiée.
       # live-agent n'est PAS installé : sa dépendance @nut-tree/nut-js n'existe
       # plus sur le registre public (pré-existant, documenté T56) et ses tests
       # n'en dépendent pas (modules purs + builtins).
       - name: Install sandbox service dependencies
-        run: npm ci --no-audit --no-fund --prefix sandbox
+        run: npm ci --no-audit --no-fund --prefix services/sandbox
 
       # Task 61 : le SDK public @gen3ia/sdk est typechecké avec un tsc strict
       # dédié et émis en double format (ESM + CJS). Son échec bloque la CI

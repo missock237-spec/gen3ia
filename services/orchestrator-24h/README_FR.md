@@ -25,7 +25,7 @@ Corpus / soumissions ──► POST /jobs (modality=data) ──► worker-data 
                                                                                        │
 Soumissions créatives ─► POST /jobs (image/audio/video, priority 1-10) ─► workers ─────┤──► endpoints de
                                                                                         │    génération gen3ia
-Entraînement de l'adaptateur gen3 : passe par le Training Studio / training-worker/     │
+Entraînement de l'adaptateur gen3 : passe par le Training Studio / services/training-worker/     │
 (ou le notebook Colab) — ce n'est PAS le rôle de cet orchestrateur.                     │
                                                                                         ▼
                                                                         résultats → qualité → review

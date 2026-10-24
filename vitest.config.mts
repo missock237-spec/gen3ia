@@ -1,7 +1,7 @@
 import path from "node:path";
 import { generateKeyPairSync } from "node:crypto";
 
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // A throwaway but cryptographically valid RSA key: firebase-admin `cert()`
 // parses the PEM at import time, so a malformed dummy would throw.
@@ -37,12 +37,19 @@ export default defineConfig({
       // tests Node sans jsdom (logique pure + verrous structurels).
       "components/**/*.test.{ts,tsx}",
       // Services annexes (logique pure + comportemental inject) — Tâche 56.
-      "live-agent/src/**/*.test.ts",
-      "sandbox/src/**/*.test.ts",
+      "services/live-agent/src/**/*.test.ts",
+      "services/sandbox/src/**/*.test.ts",
       // SDK public @gen3ia/sdk (client, erreurs, SSE, suivi missions) — Tâche 61.
-      "sdk/test/**/*.test.ts",
+      "services/sdk/test/**/*.test.ts",
       // Helpers des sondes de production — Tâche 57.
       "scripts/lib/**/*.test.mjs",
+    ],
+    exclude: [
+      // e2e Firebase (tests/e2e/, ex-racine e2e/ — Phase 2) : ils exigent les
+      // émulateurs et tournent UNIQUEMENT via `npm run test:e2e`
+      // (vitest.e2e.config.mts) — jamais dans le run principal ni la couverture.
+      ...configDefaults.exclude,
+      "tests/e2e/**",
     ],
     env: {
       // Dummy Firebase Admin credentials so server modules that initialize

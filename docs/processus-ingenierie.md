@@ -183,7 +183,7 @@ addition ou suppression passe par une mise à jour explicite de ce test.
 1. Le build Next.js est fait **sur le runner GitHub** (le VPS 2 Go ne peut
    pas compiler : `next build` réclame > 3,5 Go de RSS) ;
 2. `SCP` du `.next` packagé + du finisher vers le VPS (retry réseau) ;
-3. `deploy/cd-finisher.sh` applique le **swap atomique** : staging isolé
+3. `infra/deploy/cd-finisher.sh` applique le **swap atomique** : staging isolé
    (l'app en ligne continue de servir pendant l'envoi), swap `.next` +
    `node_modules` via `cp -al`, la version précédente est conservée
    (`.next.old` / `node_modules.old` — couple cohérent de rollback) ;

@@ -227,7 +227,7 @@ describe("Mise à jour forcée — manifeste version.json aligné sur le BUILD_I
   });
 
   it("chaîne CD : le tar n'embarque que .next → cd-finisher copie .next/version.json dans public/ APRÈS git reset", () => {
-    const finisher = read("deploy/cd-finisher.sh");
+    const finisher = read("infra/deploy/cd-finisher.sh");
     expect(finisher).toContain('cp "$STAGING_DIR/.next/version.json" "$PROD_DIR/public/version.json"');
     expect(finisher.indexOf("git reset --hard")).toBeLessThan(
       finisher.indexOf('cp "$STAGING_DIR/.next/version.json"'),
@@ -246,7 +246,7 @@ describe("Mise à jour forcée — manifeste version.json aligné sur le BUILD_I
   });
 
   it("le snippet nginx (étape 1) protège le cache immutable des assets hashés tout en interdisant le cache HTML/JSON", () => {
-    const nginx = read("deploy/nginx/gen3ia-cache.conf");
+    const nginx = read("infra/deploy/nginx/gen3ia-cache.conf");
     expect(nginx).toContain("location ^~ /_next/static/");
     expect(nginx).toContain("location = /version.json");
     expect(nginx).toContain("location ~* \\.(html|json)$");

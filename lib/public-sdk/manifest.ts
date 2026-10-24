@@ -3,7 +3,7 @@
  * de route : « SDK distribué depuis app/api/public »).
  *
  * SOURCE UNIQUE de vérité pour les routes de distribution : la version
- * déclarée ici DOIT rester identique à sdk/package.json et au tarball
+ * déclarée ici DOIT rester identique à services/sdk/package.json et au tarball
  * committé public/sdk/gen3ia-sdk-<version>.tgz. Un test dédié
  * (app/api/public/sdk/route.test.ts) échoue dès que les trois sources
  * divergent — c'est la garde anti-dérive qui rend cette triple écriture sûre.

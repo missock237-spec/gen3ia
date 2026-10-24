@@ -10,7 +10,7 @@
 | Phase | Périmètre | Statut |
 |---|---|---|
 | Phase 1 — Nettoyage immédiat | tests, journal, doublons docs, roadmaps | ✅ **LIVRÉE 2026-10-24** |
-| Phase 2 — Restructuration de la racine | infra/, services/, e2e | ⏳ Planifiée (1-2 j) |
+| Phase 2 — Restructuration de la racine | infra/, services/, tests/e2e | ✅ **LIVRÉE 2026-10-24** |
 | Phase 3 — Logique métier | modules lib/, intégrations, app/, i18n | ⏳ Planifiée (1-2 sem.) |
 | Phase 4 — Gouvernance & hygiène | CONTRIBUTING, ESLint, CI structure | ⏳ En continu |
 
@@ -91,7 +91,75 @@ notes `agent-ctx/` est inscrite en Phase 3.
 
 ---
 
-## Phase 2 — Restructuration de la racine ⏳
+## Phase 2 — Restructuration de la racine ✅ (livrée 2026-10-24)
+
+### Réalisations (état réel vs cible)
+
+1. **`infra/` créé** : `Dockerfile`, `docker-compose.yml`, `k8s/`, `deploy/`
+   (`cd-finisher.sh`, `nginx/`, `render.yaml`), `firebase.json`, `.firebaserc`,
+   `firestore.rules`, `firestore.indexes.json` — tous en `git mv` (renames R,
+   historique préservé). Adaptations :
+   - `deploy-vps.yml` : le SCP livre désormais `infra/deploy/cd-finisher.sh` ;
+   - `ci.yml` : `npm ci --prefix services/sandbox` ;
+   - `Makefile` + `package.json` (`test:e2e`, `test:e2e:firebase`) :
+     `--config infra/firebase.json` (décision S1 appliquée) ;
+   - `infra/docker-compose.yml` : `build: context: ..` + `dockerfile:
+     infra/Dockerfile` (les chemins relatifs d'un compose se résolvent depuis
+     son propre dossier) et `env_file ../.env` ;
+   - `tests/firestore/rules.test.ts` : chemin des règles `../../infra/firestore.rules` ;
+   - `infra/Dockerfile` : note de build ajoutée — `docker build -f
+     infra/Dockerfile .` depuis la racine (contexte inchangé, COPY inchangés) ;
+   - `scripts/k8s/valider-manifestes.sh` : cibles `infra/k8s/…` ;
+   - `scripts/vps-auto-deploy/deploy.sh` : détection pipeline bivoie
+     (`services/pipeline/` d'abord, ancien chemin toléré pour un worktree
+     VPS pas encore resynchronisé).
+2. **`services/` créé** : les 6 packages (`sandbox`, `sdk`, `training-worker`,
+   `live-agent`, `orchestrator-24h`, `pipeline`) en `git mv`. Adaptations :
+   - `services/sdk/build.mjs` : `repoRoot` remonte d'un niveau de plus
+     (`../..`) et `sdkDir = join(repoRoot, "services", "sdk")` — `npm run
+     sdk:build` re-vérifié vert après coup ;
+   - `package.json` : `sdk:build` / `sdk:pack` / `sdk:test` → `services/sdk` ;
+   - `vitest.config.mts` : motifs `services/{live-agent,sandbox,sdk}/…` ;
+   - `tsconfig.json` : exclude `services` (remplace les 4 entrées) ;
+   - `eslint.config.mjs` : ignore `services/**` ;
+   - `app/api/public/sdk/route.test.ts` : lecture `services/sdk/package.json`
+     (garde anti-dérive re-vérifiée) ; `tests/unit/nova-dashboard.test.ts` :
+     lecture `services/live-agent/package.json`.
+3. **`e2e/` → `tests/e2e/`** (3 tests + helpers) :
+   - `vitest.e2e.config.mts` : include `tests/e2e/**/*.test.ts` ;
+   - **`vitest.config.mts` : `exclude: [...configDefaults.exclude,
+     "tests/e2e/**"]` AJOUTÉ — sans lui, le run principal aurait attrapé les
+     tests e2e exigeant les émulateurs** (vérifié : 4 890 tests verts,
+     aucun test e2e attrapé) ;
+   - `.gitleaks.toml` : allowlist `tests/e2e/`.
+4. **Vérifications** : typecheck, lint, `sdk:build`, suite vitest complète
+   (433 fichiers / 4 890 tests verts / 12 auto-skip firestore), `npm run
+   build` (BUILD_ID régénéré), YAML compose + 18 manifestes k8s, syntaxe
+   bash des 3 scripts shell, JSON (firebase, package, tsconfig).
+
+### Décisions Phase 2 (corrections du plan initial)
+
+- **S2 — `.dockerignore` RESTE à la racine** (le plan le mettait dans
+  `infra/`) : Docker lit le fichier d'ignore depuis la RACINE DU CONTEXTE
+  de build, pas depuis le dossier du Dockerfile. Comme le contexte reste la
+  racine (`docker build -f infra/Dockerfile .`), déplacer `.dockerignore`
+  aurait silencieusement invalidé toutes les exclusions (secrets `.env*`,
+  `var`, binaires neuronaux) — inacceptable. Contenu mis à jour : entrée
+  `services` unique (remplace les 5 packages) et `tests/e2e`.
+- **S3 — `firebase.json` déplacé avec `--config`** (S1 tranchée à
+  l'exécution) : `Makefile`, `package.json` ×2 et `zero-trust.md` passent
+  par `--config infra/firebase.json` ; les chemins internes
+  (`firestore.rules`, `firestore.indexes.json`) restent relatifs au
+  `firebase.json` et ont donc migré avec lui sans modification.
+- **Impact VPS assumé** : `infra/deploy/cd-finisher.sh` fait
+  `git reset --hard <SHA>` sur `/opt/gen3ia` — après le prochain déploiement,
+  le worktree VPS reflétera la nouvelle arborescence (`.env.production`
+  non suivi, intact ; `deploy.sh` no-op déjà en bivoie pour
+  `services/pipeline/`).
+- Docs datées non mises à jour (volontaire, valeur historique) :
+  `docs/archive/`, `docs/journal/`, `agent-ctx/`, `docs/plan-plateforme-
+  enterprise.md`, `docs/analyse-suppression-conversation.md`,
+  `docs/codeql-triage.md`.
 
 ### Cible (adaptée à la réalité du dépôt)
 
@@ -173,6 +241,14 @@ gen3ia/
    résidus locaux ; garder `worklog.md` versionné (décision 1.2).
 
 ---
+
+## Registre des vérifications Phase 2
+
+- Résidus : 0 référence vivante aux anciens chemins (balayage des fichiers
+  suivis, hors archives/journaux listés ci-dessus et faux positifs
+  `lib/deploy/` — module métier homonyme).
+- Suite vitest complète verte AVANT push : 433 fichiers / 4 890 tests.
+- Historique Git préservé : tous les déplacements en `git mv` (renames R).
 
 ## Registre des vérifications Phase 1
 

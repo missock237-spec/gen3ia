@@ -7,7 +7,7 @@
 #   - séparation nette avec les composants d'infrastructure du cluster
 #     (ingress-nginx, cert-manager vivent dans kube-system / cert-manager) ;
 #   - les overlays (prod/staging) réaffirment `namespace: gen3ia` pour que
-#     `kubectl apply -k k8s/overlays/prod` ne dépende jamais du contexte
+#     `kubectl apply -k infra/k8s/overlays/prod` ne dépende jamais du contexte
 #     courant de kubectl.
 #
 # Phase 3 (GKE) : un projet GCP par environnement reste la barrière forte ;

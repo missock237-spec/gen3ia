@@ -90,7 +90,7 @@ Voir `.env.example` (section AI TRAINING STUDIO). Toutes facultatives. Sans `TRA
 
 ## 5. Limites connues (v1)
 
-1. **Aucun worker GPU déployé à ce jour** : l'exécution réelle exige le service Python `training-worker/` (FastAPI + PyTorch/Transformers/PEFT, contrat conforme à `lib/training/providers/worker-http.ts` : capabilities/submit/status/cancel), exposé par `TRAINING_WORKER_URL` et protégé par `TRAINING_WORKER_TOKEN`. Son déploiement (GPU dédié — RunPod, Modal, Vast.ai, machine locale) reste une décision utilisateur : aucun hébergement payant n'est activé sans autorisation explicite. Un hôte CPU ne sert honnêtement que le moteur `rag-index` (entrée `cpu` déclarée à `vramGb` 0).
+1. **Aucun worker GPU déployé à ce jour** : l'exécution réelle exige le service Python `services/training-worker/` (FastAPI + PyTorch/Transformers/PEFT, contrat conforme à `lib/training/providers/worker-http.ts` : capabilities/submit/status/cancel), exposé par `TRAINING_WORKER_URL` et protégé par `TRAINING_WORKER_TOKEN`. Son déploiement (GPU dédié — RunPod, Modal, Vast.ai, machine locale) reste une décision utilisateur : aucun hébergement payant n'est activé sans autorisation explicite. Un hôte CPU ne sert honnêtement que le moteur `rag-index` (entrée `cpu` déclarée à `vramGb` 0).
    Par ailleurs, `GET /api/cron/training-sweep` (protégée par `CRON_SECRET`) balaye les tâches actives de tous les utilisateurs — dispatch et rafraîchissement même onglet fermé.
 2. Moteurs image/audio/vidéo : non implémentés — le catalogue n'affiche que les capacités réelles (`available`), les familles non supportées sont déclarées mais marquées indisponibles.
 3. Uploads en une seule requête multipart (jusqu'à 200 Mo par défaut) : le téléversement reprenable (multipart R2 natif) est une évolution prévue.
@@ -107,7 +107,7 @@ Voir `.env.example` (section AI TRAINING STUDIO). Toutes facultatives. Sans `TRA
 - `app/api/training/projects/route.test.ts` — 401, validation des champs, création, transmission des quotas.
 - `lib/training/hub/*.test.ts` (v1.1) — connecteurs HF/Kaggle (normalisation, aperçus, plafonds), sélection de fichiers, audit, budget de minutes.
 - `lib/training/sweep.test.ts` — balayage global (recensement des uid, plafonds, isolation des erreurs, propagation des pannes de stockage).
-- Worker Python : `training-worker/tests/` (contrat API, auth Bearer, schémas, hygiène des imports — exécutables sans torch ni boto3 via `requirements-dev.txt`).
+- Worker Python : `services/training-worker/tests/` (contrat API, auth Bearer, schémas, hygiène des imports — exécutables sans torch ni boto3 via `requirements-dev.txt`).
 
 ## 7. v1.1 — Import de datasets depuis les hubs
 

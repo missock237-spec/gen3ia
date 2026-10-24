@@ -3,7 +3,7 @@
 # GEN3IA — Image Docker multi-stage (node:22-alpine)
 #
 # ⚠️ CONTEXTE (lire avant d'utiliser) :
-#   - La production ACTUELLE reste PM2 + nginx sur le VPS (deploy/cd-finisher.sh,
+#   - La production ACTUELLE reste PM2 + nginx sur le VPS (infra/deploy/cd-finisher.sh,
 #     swap atomique .next) — ce Dockerfile N'EST PAS le runtime de prod.
 #   - Objectif : PORTABILITÉ (reproductibilité locale, future GKE Phase 3,
 #     environnements de pré-prod jetables).
@@ -15,6 +15,9 @@
 #     .next + node_modules PROD (npm ci --omit=dev) + `next start`.
 #
 # node:22 : borne haute du champ engines du projet (">=20.9.0 <23").
+#
+# BUILD (depuis la racine du dépôt — le contexte est la racine, .dockerignore
+# y reste donc) : docker build -f infra/Dockerfile .
 ###############################################################################
 
 # -----------------------------------------------------------------------------
@@ -80,7 +83,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/next.config.ts ./next.config.ts
 
-# Même sémantique que deploy/cd-finisher.sh : la version FINALE (BUILD_ID)
+# Même sémantique que infra/deploy/cd-finisher.sh : la version FINALE (BUILD_ID)
 # écrite dans .next/version.json par version-manifest finalize devient la
 # sonde /version.json. Sans ce fichier (build atypique), on garde le
 # manifeste provisoire — la sonde reste servie.

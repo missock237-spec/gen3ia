@@ -34,7 +34,7 @@ import {
  */
 
 const PROJECT_ID = "demo-gen3ia-rules";
-const CHEMIN_REGLES = fileURLToPath(new URL("../../firestore.rules", import.meta.url));
+const CHEMIN_REGLES = fileURLToPath(new URL("../../infra/firestore.rules", import.meta.url));
 
 /** L'émulateur Firestore doit être détecté (exec firebase) pour tourner. */
 const EMULATEUR_DISPONIBLE = Boolean(

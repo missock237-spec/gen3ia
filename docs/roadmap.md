@@ -26,11 +26,11 @@
 | CI/CD & exploitation | ✅ | CI complète (typecheck, lint, tests + couverture, audit, build, budget bundle, a11y axe-core, e2e émulateurs, gitleaks) ; CD VPS avec swap atomique, rollback, blacklist SHA ; sondes `/api/health`, `/status`, `/deploy-info`, `/health/infra` ; runbooks + postmortem modèle ; smoke k6 manuel |
 | Observabilité | ✅ | Logs pino structurés, corrélation `traceId` + propagation W3C `traceparent`, spans HTTP OpenTelemetry, `/api/metrics` (Prometheus, SLI/SLO + budget d'erreur), Sentry pont asynchrone + tunnel `/monitoring` |
 | Sécurité | ✅ | Deny-by-default (middleware + `route-guard`), webhooks HMAC timing-safe, CSP stricte, scans CodeQL/ZAP/gitleaks, identité de service system-only, zéro-trust documenté (`docs/securite/`) |
-| MLOps & moteur IA gen3 | ✅ (local) / ⏳ (managé) | Registre de modèles, pipeline d'entraînement à porte (quotas, audit, timebox), arène d'évaluation, packs d'entraînement réels (`training/` : code, image, visuel, médias, RPIA) ; worker GPU `training-worker/` ; Vertex AI managé = PHASE 3 |
+| MLOps & moteur IA gen3 | ✅ (local) / ⏳ (managé) | Registre de modèles, pipeline d'entraînement à porte (quotas, audit, timebox), arène d'évaluation, packs d'entraînement réels (`training/` : code, image, visuel, médias, RPIA) ; worker GPU `services/training-worker/` ; Vertex AI managé = PHASE 3 |
 | Multi-tenant SaaS | 🟡 | Organisations + membres + invitations + règles Firestore d'isolation + quotas par plan ; reste : rattacher les collections métier à `orgId` (migration douce par copies lazy) |
 | Facturation | 🟡 | Wallet + crédits + compteurs + moteur de coûts + Chariow (SEULE passerelle, décision 2026-10-23) ; conformité à compléter : CGU + politique de confidentialité (RGPD) publiées sur gen3ia.online |
 | Scalabilité | 🟡 | Exécutions asynchrones à checkpoints, files logiques idempotentes, ISR ; reste (infra externe) : Redis distribué, file éphémère managée, base analytique |
-| Expérience développeur | 🟡 | README, guide technique, SDK TypeScript (`sdk/`), tests vitest + e2e, Makefile ; reste : publication npm du SDK, site de documentation, IaC Terraform/Pulumi |
+| Expérience développeur | 🟡 | README, guide technique, SDK TypeScript (`services/sdk/`), tests vitest + e2e, Makefile ; reste : publication npm du SDK, site de documentation, IaC Terraform/Pulumi |
 
 ## 2. Chantiers ouverts (court terme)
 

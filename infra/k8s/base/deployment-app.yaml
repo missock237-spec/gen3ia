@@ -41,7 +41,7 @@ spec:
     type: RollingUpdate
     # maxUnavailable 0 : JAMAIS moins de 2 pods disponibles pendant un
     # rollout — l'équivalent conteneur du « swap atomique » de
-    # deploy/cd-finisher.sh (la version en ligne continue de servir).
+    # infra/deploy/cd-finisher.sh (la version en ligne continue de servir).
     # maxSurge 1 : on ajoute au plus un pod à la fois (coût maîtrisé,
     # progressif — l'esprit du rollback .next.old sans le prix).
     rollingUpdate:

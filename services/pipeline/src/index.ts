@@ -30,7 +30,7 @@ import {
  */
 
 function chargerEnvLocal(cwd: string): void {
-  // pipeline/.env (jamais commité) : GEN3IA_INGEST_URL, GEN3IA_CRON_SECRET…
+  // services/pipeline/.env (jamais commité) : GEN3IA_INGEST_URL, GEN3IA_CRON_SECRET…
   // Sur le VPS, deploy.sh y copie CRON_SECRET depuis .env.production.
   try {
     const brut = readFileSync(join(cwd, ".env"), "utf-8");

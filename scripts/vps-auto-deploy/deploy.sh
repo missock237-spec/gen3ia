@@ -119,11 +119,15 @@ fi
 # Le site est déjà swappé et sain : toute erreur ci-dessous est
 # journalisée mais ne fait JAMAIS échouer le déploiement ni retenter
 # un rollback. Le daemon scrape en tâche de fond et alimente le corpus
-# (JSONL partagé) — cf. pipeline/README.md.
-if [ -d "$PROD_DIR/pipeline" ]; then
+# (JSONL partagé) — cf. services/pipeline/README.md.
+# Phase 2 : le package vit dans services/pipeline/ (ancien chemin toléré
+# pour un worktree VPS pas encore resynchronisé).
+PIPELINE_DIR="$PROD_DIR/services/pipeline"
+[ -d "$PIPELINE_DIR" ] || PIPELINE_DIR="$PROD_DIR/pipeline"
+if [ -d "$PIPELINE_DIR" ]; then
   log "Pipeline : mise à jour du daemon d'auto-apprentissage…"
   (
-    cd "$PROD_DIR/pipeline" || exit 0
+    cd "$PIPELINE_DIR" || exit 0
     mkdir -p logs data
 
     # Secret d'ingestion : copie locale depuis .env.production (jamais

@@ -5,7 +5,7 @@ name: Déploiement continu VPS
 # compiler l'application (`next build` réclame > 3,5 Go de RSS — cf.
 # next.config.ts : le type-check/lint sont déjà déplacés en CI pour la
 # même raison). Le runner (7 Go) build, puis livre le .next au VPS qui
-# applique son swap atomique (cf. deploy/cd-finisher.sh) :
+# applique son swap atomique (cf. infra/deploy/cd-finisher.sh) :
 #   · staging isolé — l'app en ligne continue de servir pendant l'envoi ;
 #   · swap .next + node_modules via cp -al / rsync, version précédente
 #     conservée (.next.old) jusqu'au health check ;
@@ -106,7 +106,7 @@ jobs:
                  /tmp/next-build.tar.gz \
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/next-build.tar.gz" \
             && scp -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
-                 deploy/cd-finisher.sh \
+                 infra/deploy/cd-finisher.sh \
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/cd-finisher.sh"; then
               ok=1; break
             fi

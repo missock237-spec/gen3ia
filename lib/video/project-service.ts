@@ -284,7 +284,7 @@ export const VERSIONS_LIST_LIMIT = 20;
  * seuls), GET /versions (le client n'affiche que numéro, label, date),
  * contrôle goto_version (présence du numéro) — tous consomment les
  * métadonnées seules. Requête directe adossée à l'index composite
- * (projectId ASC, versionNumber DESC) déclaré dans firestore.indexes.json ;
+ * (projectId ASC, versionNumber DESC) déclaré dans infra/firestore.indexes.json ;
  * en cas d'erreur (index pas encore déployé, incident), repli sur la couche
  * résiliente historique (lecture complète) triée et bornée au même plafond —
  * le service se dégrade, il ne casse pas.

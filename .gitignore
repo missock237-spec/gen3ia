@@ -45,7 +45,7 @@ ui-debug.log
 .vscode/
 *.swp
 .env*
-!orchestrator-24h/.env.example
+!services/orchestrator-24h/.env.example
 scripts/push_github.sh
 firestore-debug.log
 

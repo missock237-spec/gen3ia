@@ -17,7 +17,7 @@ const repoRoot = process.cwd();
 
 /**
  * Garde anti-dérive de la distribution du SDK (Task 61) : la version
- * exposée par les routes, celle de sdk/package.json et celle du tarball
+ * exposée par les routes, celle de services/sdk/package.json et celle du tarball
  * committé doivent rester strictement alignées. Toute modification du SDK
  * passe par : bump de version → npm run sdk:build → npm run sdk:pack.
  */
@@ -49,7 +49,7 @@ describe("GET /api/public/sdk — métadonnées de distribution", () => {
   });
 
   it("la version du manifeste EST celle de sdk/package.json (source unique)", () => {
-    const sdkPkg = JSON.parse(readFileSync(join(repoRoot, "sdk", "package.json"), "utf8")) as { name: string; version: string };
+    const sdkPkg = JSON.parse(readFileSync(join(repoRoot, "services", "sdk", "package.json"), "utf8")) as { name: string; version: string };
     expect(sdkPkg.name).toBe(SDK_PACKAGE_NAME);
     expect(sdkPkg.version).toBe(SDK_VERSION);
   });

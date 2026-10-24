@@ -1,7 +1,7 @@
 /**
  * CORPUS GLOBAL GEN3IA — périmètre de connaissances « auto-apprentissage ».
  *
- * Architecture (découplage asynchrone, cf. pipeline/README.md) :
+ * Architecture (découplage asynchrone, cf. services/pipeline/README.md) :
  *   1. un daemon PM2 `gen3ia-pipeline` (process de FOND) scrape le web,
  *      nettoie les textes et les ajoute ATOMIQUEMENT (append-only) dans
  *      var/pipeline/output.jsonl (format JSON Lines, une ligne = un
@@ -50,7 +50,7 @@ export const PIPELINE_MIN_WORDS = 100;
  */
 export const PIPELINE_MAX_SEEN_HASHES = 20_000;
 
-/** Format JSONL canonique écrit par le daemon (cf. pipeline/src/pipeline.ts). */
+/** Format JSONL canonique écrit par le daemon (cf. services/pipeline/src/pipeline.ts). */
 export interface PipelineRecord {
   /** SHA-256 hexadécimal du contenu nettoyé (identifiant de dédoublonnage). */
   id: string;

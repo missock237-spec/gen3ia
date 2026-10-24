@@ -15,7 +15,7 @@ import winston from "winston";
  *   · moteur Puppeteer (headless, interception des assets lourds, User-
  *     Agent rotatif) UNIQUEMENT pour les cibles « requiresJs » — chargé
  *     par import dynamique, dégradation gracieuse si non installé
- *     (npm i puppeteer dans pipeline/ pour l'activer) ;
+ *     (npm i puppeteer dans services/pipeline/ pour l'activer) ;
  *   · déduplication SHA-256 persistée (cache_hashes.json) : jamais de
  *     re-scraping ni de doublon dans le JSONL ;
  *   · écriture APPEND-ONLY (une ligne = un document, fs.appendFile) :

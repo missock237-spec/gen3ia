@@ -21,7 +21,7 @@ export type LiveSessionStatus = z.infer<typeof LiveSessionStatusSchema>;
  *   natif getDisplayMedia, aucun téléchargement requis). Les actions clavier,
  *   souris et fichiers ne sont pas exécutables — l'agent observe, décrit et
  *   attend.
- * - "desktop" : un client installé (client Node live-agent/) pilote le PC.
+ * - "desktop" : un client installé (client Node services/live-agent/) pilote le PC.
  */
 export const LiveSessionModeSchema = z.enum(["browser", "desktop"]);
 export type LiveSessionMode = z.infer<typeof LiveSessionModeSchema>;

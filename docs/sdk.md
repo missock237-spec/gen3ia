@@ -210,10 +210,10 @@ try {
 
 ## 6. Cycle de vie du SDK (dépôt)
 
-Le SDK vit dans `sdk/` du dépôt principal ; la distribution repose sur trois
+Le SDK vit dans `services/sdk/` du dépôt principal ; la distribution repose sur trois
 sources verrouillées ensemble par des tests :
 
-1. `sdk/package.json` — version du package ;
+1. `services/sdk/package.json` — version du package ;
 2. `lib/public-sdk/manifest.ts` — version exposée par les routes ;
 3. `public/sdk/gen3ia-sdk-<version>.tgz` — tarball committé.
 
@@ -223,6 +223,6 @@ npm run sdk:test    # 36 tests (client, erreurs, retry, SSE, follow)
 npm run sdk:pack    # régénère le tarball (après bump de version)
 ```
 
-Procédure de publication : modifier `sdk/src` → bump des **deux** versions →
+Procédure de publication : modifier `services/sdk/src` → bump des **deux** versions →
 `npm run sdk:build && npm run sdk:pack` → commit + push (la CI typecheck,
 build, teste et vérifie la cohérence tarball/version).

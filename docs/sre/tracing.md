@@ -170,7 +170,7 @@ contexte métrique correspondants.
 | Récepteur (routes système) | `verifyServiceRequest` | parse strict, log + retour dans le verdict `ok` |
 | Moteur IA → worker GPU | `lib/training/providers/worker-http.ts` | émis automatiquement quand l'AsyncLocalStorage est remplie |
 
-**Worker Python (training-worker/)** : son code n'a PAS été modifié
+**Worker Python (services/training-worker/)** : son code n'a PAS été modifié
 (volontaire — pas de fichier client unique, suite pytest non exécutable ici).
 Le worker EST un serveur : pour lire le traceparent reçu, ajouter plus tard
 une middleware FastAPI triviale dans `training_worker/app.py` :

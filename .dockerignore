@@ -38,12 +38,9 @@ assets/neural-pretrained/*.bin
 
 # --- Services annexes : builds/images PROPRES (hors image Next.js) ---
 # tsconfig.json exclut déjà ces répertoires du typecheck : aucun n'est importé
-# par l'application (lib/sandbox/* ≠ sandbox/, lib/pipeline/* ≠ pipeline/).
-training-worker
-pipeline
-sandbox
-live-agent
-sdk
+# par l'application (lib/sandbox/* ≠ services/sandbox/, lib/pipeline/* ≠
+# services/pipeline/).
+services
 
-# --- Tests de bout en bout (Playwright, exécutés hors image) ---
-e2e
+# --- Tests de bout en bout (émulateurs Firebase, exécutés hors image) ---
+tests/e2e

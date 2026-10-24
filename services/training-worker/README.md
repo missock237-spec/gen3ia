@@ -15,7 +15,7 @@ le contrat consommé par la plateforme Next.js dans
 ## 1. Architecture
 
 ```
-training-worker/
+services/training-worker/
 ├── Dockerfile                  image de déploiement (+ variante CUDA commentée)
 ├── requirements.txt            dépendances de déploiement (torch, peft, boto3…)
 ├── requirements-dev.txt        dépendances de test (pytest, httpx — ni torch ni boto3)

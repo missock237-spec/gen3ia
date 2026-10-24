@@ -30,7 +30,7 @@ function estAutorisee(request: NextRequest): boolean {
 /**
  * CRON Knowledge Ingest — consommation du corpus de scraping (auto-apprentissage).
  *
- * ARCHITECTURE DÉCOUPLÉE (pipeline/README.md) : le daemon PM2
+ * ARCHITECTURE DÉCOUPLÉE (services/pipeline/README.md) : le daemon PM2
  * `gen3ia-pipeline` (process de fond) scrape le web en continu et écrit
  * des documents JSONL en append-only dans var/pipeline/output.jsonl.
  * CE process (le serveur d'inférence) reste 100 % disponible pour les
@@ -43,7 +43,7 @@ function estAutorisee(request: NextRequest): boolean {
  * rend les passages concurrents impossibles) :
  *   · le daemon lui-même (worker d'apprentissage) : dès que 1 000
  *     nouveaux documents s'accumulent OU toutes les heures, il POSTe ici
- *     (Queue & Batching, cf. pipeline/src/trainer.ts) ;
+ *     (Queue & Batching, cf. services/pipeline/src/trainer.ts) ;
  *   · le planificateur cron externe (même mécanisme que training-sweep) :
  *     filet de sécurité horaire.
  *

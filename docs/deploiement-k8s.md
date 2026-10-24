@@ -3,7 +3,7 @@
 > **STATUT : PRÉPARATOIRE.** Rien n'est déployé sur Kubernetes aujourd'hui.
 > La production actuelle est le **VPS 2 Go (AlmaLinux) + PM2 + nginx**,
 > livrée par `.github/workflows/deploy-vps.yml` (swap atomique
-> `deploy/cd-finisher.sh`). Ce document et l'arborescence `k8s/` préparent
+> `infra/deploy/cd-finisher.sh`). Ce document et l'arborescence `infra/k8s/` préparent
 > la **Phase 3 — migration GCP**, qui NE DÉMARRE PAS sans déclencheur.
 
 ## 1. Pourquoi ce travail est préparatoire
@@ -79,14 +79,14 @@ kubectl create configmap gen3ia-app-config \
   --from-literal=OTEL_EXPORTER_OTLP_ENDPOINT=
 
 # 3) Épingler le tag d'image dans l'overlay prod
-cd k8s/overlays/prod
+cd infra/k8s/overlays/prod
 kustomize edit set image \
   ghcr.io/missock237-spec/gen3ia=ghcr.io/missock237-spec/gen3ia:v1.0.0-k8s
 cd ../..
-# (sans binaire kustomize : éditer newTag de k8s/overlays/prod/kustomization.yaml)
+# (sans binaire kustomize : éditer newTag de infra/k8s/overlays/prod/kustomization.yaml)
 
 # 4) Application — déploie namespace, qdrant, app, ingress, hpa, pdb
-kubectl apply -k k8s/overlays/prod
+kubectl apply -k infra/k8s/overlays/prod
 
 # 5) Vérifications
 kubectl -n gen3ia get pods -w                      # gen3ia-app-x2 + gen3ia-qdrant-0 Ready
@@ -177,7 +177,7 @@ collections (mémoires, connaissances) vivent aujourd'hui sur le VPS :
 | WebSocket (upgrade nginx natif) | natif ingress-nginx, **aucune annotation** — ne pas en inventer |
 | `client_max_body_size` | `proxy-body-size: "25m"` |
 | Sticky/affinité : jamais mis | idem — **pas de session-affinity** (app stateless, cf. `service-app.yaml`) |
-| `deploy/nginx/gen3ia-cache.conf` (cache immutable `/_next/static/`, `no-store` sur `version.json`) | les en-têtes sont déjà posés **par l'app** (Next/next.config.ts) ; si on veut les redoubler au bord : annotation `configuration-snippet`, ou Cloud CDN en Phase 3 (feuille de route §6) — ne pas dupliquer sans décision |
+| `infra/deploy/nginx/gen3ia-cache.conf` (cache immutable `/_next/static/`, `no-store` sur `version.json`) | les en-têtes sont déjà posés **par l'app** (Next/next.config.ts) ; si on veut les redoubler au bord : annotation `configuration-snippet`, ou Cloud CDN en Phase 3 (feuille de route §6) — ne pas dupliquer sans décision |
 | Bloqué 401 sur /api/* internes (garde Task A) | inchangé : c'est applicatif (middleware) |
 
 ## 8. HPA et coûts estimatifs

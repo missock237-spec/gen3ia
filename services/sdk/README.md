@@ -83,4 +83,4 @@ npm run sdk:test    # suite vitest dédiée
 npm run sdk:pack    # tarball public/sdk/gen3ia-sdk-<version>.tgz
 ```
 
-Après toute modification du SDK : bump de version dans `sdk/package.json` **ET** `lib/public-sdk/manifest.ts`, rebuild, repack — un test dédié échoue sinon.
+Après toute modification du SDK : bump de version dans `services/sdk/package.json` **ET** `lib/public-sdk/manifest.ts`, rebuild, repack — un test dédié échoue sinon.

@@ -25,7 +25,7 @@ resources:
   - qdrant/service-qdrant.yaml
 
 # Image : le tag du placeholder est INVALIDE volontairement (A-REMPLACER) :
-# un `kubectl apply -k k8s/base` nu échoue au pull au lieu de déployer un
+# un `kubectl apply -k infra/k8s/base` nu échoue au pull au lieu de déployer un
 # build inconnu. Chaque overlay épingle son tag (cf. overlays/prod et la
 # doc : `kustomize edit set image ...`).
 images:

@@ -19,7 +19,7 @@ import { describe, expect, it } from "vitest";
  *  4. ÉCRITURE PROGRESSIVE : un tampon lissé révèle le texte mot à mot
  *     (empilerDelta → horloge → terminerEcriture) — l'IA « écrit » sa
  *     réponse au lieu de l'afficher d'un bloc.
- *  5. LIVE AGENT PRÉSERVÉ : le répertoire live-agent/ reste en place,
+ *  5. LIVE AGENT PRÉSERVÉ : le répertoire services/live-agent/ reste en place,
  *     intact, hors de portée de la refonte du dashboard.
  *
  * Convention du dépôt : ces verrous lisent les sources (theme-consistency,
@@ -149,8 +149,8 @@ describe("Exigence 4 — écriture progressive mot à mot", () => {
 });
 
 describe("Exigence 5 — live agent préservé", () => {
-  it("le répertoire live-agent/ reste en place, intact", () => {
-    const pkg = JSON.parse(read("live-agent/package.json")) as { name?: string };
+  it("le répertoire services/live-agent/ reste en place, intact", () => {
+    const pkg = JSON.parse(read("services/live-agent/package.json")) as { name?: string };
     expect(pkg.name).toBeTruthy();
   });
 });

@@ -14,7 +14,7 @@
 #      pas cachées dans la base).
 #
 # Épingler le tag d'image à une release :
-#   cd k8s/overlays/prod
+#   cd infra/k8s/overlays/prod
 #   kustomize edit set image ghcr.io/missock237-spec/gen3ia=ghcr.io/missock237-spec/gen3ia:v1.2.3
 #   # (sans binaire kustomize : éditer newTag ci-dessous — git diff = la release)
 #   kubectl apply -k .

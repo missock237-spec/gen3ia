@@ -73,7 +73,7 @@
 
 ### 2.3 Règles Firestore + isolation multi-tenant — Task I
 
-- **`firestore.rules`** (racine) : deny-by-default total, puis ouvertures
+- **`infra/firestore.rules`** : deny-by-default total, puis ouvertures
   minimales sur le noyau multi-tenant RÉEL (cartographié dans le code) :
   `users/{uid}`, `organizations/{orgId}` (+ `members/`, `invitations/`),
   index `orgMemberships/`, ressources métier `ownerId`/`orgId` (agents,
@@ -94,7 +94,7 @@
   système. Le test **s'auto-désactive sans émulateur** (`npm test` reste
   vert) et s'exécute ainsi :
   ```bash
-  npx firebase-tools emulators:exec --only firestore \
+  npx firebase-tools emulators:exec --config infra/firebase.json --only firestore \
     "vitest run tests/firestore/rules.test.ts"
   ```
 - **DÉPLOIEMENT DES RÈGLES = MANUEL, PAR LE CLIENT** (jamais automatisé dans
@@ -151,6 +151,6 @@ fail-closed, rétrocompatibilité prouvée par tests.
 | Identité de service | `lib/security/service-identity.ts` (+ tests) |
 | Webhook HMAC entrant | `app/api/webhooks/agent-triggers/[token]/route.ts` |
 | Isolation multi-tenant serveur | `lib/tenants/resource-access.ts`, `lib/tenants/organizations.ts` |
-| Règles Firestore | `firestore.rules`, `firebase.json`, `firestore.indexes.json` |
+| Règles Firestore | `infra/firestore.rules`, `infra/firebase.json`, `infra/firestore.indexes.json` |
 | Tests règles | `tests/firestore/rules.test.ts` |
 | Secrets documentés | `.env.example` (sections AGENT SCHEDULER, ZERO TRUST) |

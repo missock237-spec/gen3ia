@@ -18,7 +18,7 @@ description = "Placeholders de tests, clés publiques du SDK Firebase Web (non s
 paths = [
   '''(^|/)\.env\.example$''',
   '''(^|/)vitest/stubs/''',
-  '''(^|/)e2e/''',
+  '''(^|/)tests/e2e/''',
   '''(^|/)docs/''',
   '''package-lock\.json$''',
   '''pnpm-lock\.yaml$''',

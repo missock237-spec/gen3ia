@@ -14,7 +14,7 @@ setup: ## Installation complète (dépendances + hooks git + .env.local)
 	@echo "✔ Setup terminé — complétez .env.local (voir README › Démarrage en 5 minutes)"
 
 emulators: ## Démarre l'émulateur Firebase auth (9099, UI 4000)
-	npx firebase-tools emulators:start --only auth
+	npx firebase-tools emulators:start --config infra/firebase.json --only auth
 
 seed: ## Peuple les émulateurs (5 users, 2 équipes, 3 agents, 10 conversations)
 	npm run seed

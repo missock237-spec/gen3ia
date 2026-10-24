@@ -24,7 +24,7 @@ L'intelligence de Gen3ia n'est ni un LLM externe ni un simulacre : c'est un **sy
 
 ### Persistance & entraînement
 - **Cerveau persisté** (`var/neural/brain-v1.json`, format v2) : synapses, registre lexical, état du cortex langagier, historique d'entraînement — écriture atomique, rétrocompatible v1.
-- **AI Training Studio** : datasets du dépôt, import **Hugging Face** et **Kaggle**, quotas, audit, worker GPU Python (`training-worker/`), cron de balayage.
+- **AI Training Studio** : datasets du dépôt, import **Hugging Face** et **Kaggle**, quotas, audit, worker GPU Python (`services/training-worker/`), cron de balayage.
 - **Rapports réels** : époques, échantillons, précision train/test — rien de décoratif.
 
 ### Création média neuronale
@@ -83,9 +83,9 @@ npm run dev         # http://localhost:3000
 | `app/` | Routes Next.js 15.5 (App Router) : `(auth)`, `admin`, `api`, `chat`, `neural`, `workspace`, `studio`, `memory`, `observability`, `billing`, `team` |
 | `components/` | Composants UI React 19 modulaires (`neural`, `chat`, `training`, `shells`, `nav`, `knowledge`, `pilotage`, `ui`…) |
 | `lib/` | Logique métier : `ai` (routeur → moteur neural), `chat`, `knowledge`, `memory`, `agents` (automatisations), `billing`, `integrations`, `security`, `tenants`, `training` |
-| `training-worker/` | Worker GPU Python pour les entraînements lourds (contrat + tests) |
-| `sandbox/` | Sandbox d'exécution de code (Fastify) |
-| `e2e/` & `vitest/` | Tests d'intégration E2E et suites unitaires (4 000+ tests) |
+| `services/` | Microservices externes : `sandbox` (exécution de code, Fastify), `training-worker` (worker GPU Python), `sdk` (SDK public), `live-agent`, `orchestrator-24h`, `pipeline` |
+| `infra/` | Infrastructure : `Dockerfile`, `docker-compose.yml`, `k8s/` (Kustomize), `deploy/` (CD + nginx), Firebase (`firebase.json`, règles) |
+| `tests/` & `vitest/` | Tests unitaires (`tests/unit/`, co-localisés `app/**`), e2e Firebase (`tests/e2e/`), règles Firestore (4 000+ tests) |
 
 ### Flux d'une requête IA
 
@@ -123,7 +123,7 @@ Message utilisateur
 ## 🚢 Déploiement (VPS)
 
 - **CD** : un push sur `main` déclenche `.github/workflows/deploy-vps.yml` — le runner GitHub (7 Go) installe et compile (`npm ci` + `next build`, le VPS de 2 Go ne peut pas builder), puis livre `.next` au VPS (`/opt/gen3ia`, PM2 + nginx).
-- **Swap atomique** (`deploy/cd-finisher.sh`) : staging isolé pendant le transfert, bascule `.next` + `node_modules` avec conservation de la version précédente, health check `localhost:3000`, **rollback automatique** et blacklist des SHA en échec.
+- **Swap atomique** (`infra/deploy/cd-finisher.sh`) : staging isolé pendant le transfert, bascule `.next` + `node_modules` avec conservation de la version précédente, health check `localhost:3000`, **rollback automatique** et blacklist des SHA en échec.
 - **Vérification de bout en bout** : le workflow prouve que la production sert exactement le build livré (`/api/deploy-info` + `/version.json`).
 - **Artefact neuronal pré-entraîné** : `assets/neural-pretrained/cortex-v2.bin` (≈ 12 Mo) n'est **plus versionné** — récupération/régénération documentées dans `assets/neural-pretrained/README.md` (l'app démarre sans lui, cortex amorcé à neuf).
 

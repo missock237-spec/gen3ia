@@ -22,8 +22,8 @@ import { writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const sdkDir = join(repoRoot, "sdk");
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const sdkDir = join(repoRoot, "services", "sdk");
 const tscBin = join(repoRoot, "node_modules", "typescript", "bin", "tsc");
 
 function runTsc(project) {

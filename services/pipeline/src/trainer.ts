@@ -131,7 +131,7 @@ export async function verifierEtDeclencher(
 
   if (!options.cronSecret) {
     logger.warn(
-      `Déclenchement ${motif} bloqué : GEN3IA_CRON_SECRET absent — configurez pipeline/.env (les documents restent en attente, aucune perte).`,
+      `Déclenchement ${motif} bloqué : GEN3IA_CRON_SECRET absent — configurez services/pipeline/.env (les documents restent en attente, aucune perte).`,
     );
     return suivant;
   }

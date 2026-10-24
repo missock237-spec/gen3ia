@@ -1,7 +1,7 @@
 /**
  * Chaîne d'exécution de code (Task 122 — terminal FONCTIONNEL) :
  *
- *  1. « sandbox » — exécution Docker isolée (service sandbox/, réseau none,
+ *  1. « sandbox » — exécution Docker isolée (service services/sandbox/, réseau none,
  *     read-only) lorsque SANDBOX_URL + SANDBOX_SHARED_SECRET sont configurés.
  *
  *  2. « serverless » — EXÉCUTION RÉELLE en-processus (nouveau DÉFAUT lorsque

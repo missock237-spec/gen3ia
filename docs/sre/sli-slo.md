@@ -3,9 +3,9 @@
 > Contrat de fiabilité de la plateforme (<https://gen3ia.online>).
 > Contexte d'exécution : VPS 2 Go RAM (AlmaLinux), PM2 (process `gen3ia`,
 > port 3000), nginx devant l'application, déploiement automatisé
-> (`.github/workflows/deploy-vps.yml` → `deploy/cd-finisher.sh`, swap
-> atomique `.next` + health check + rollback). Le Docker (`Dockerfile`,
-> `docker-compose.yml`) est une préparation de portabilité (Phase 2/3),
+> (`.github/workflows/deploy-vps.yml` → `infra/deploy/cd-finisher.sh`, swap
+> atomique `.next` + health check + rollback). Le Docker (`infra/Dockerfile`,
+> `infra/docker-compose.yml`) est une préparation de portabilité (Phase 2/3),
 > PAS le runtime actuel.
 >
 > Compléments : runbooks `docs/runbooks/deployment.md` et

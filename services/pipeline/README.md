@@ -45,14 +45,14 @@ npm run once           # cycle unique (debug/cron externe)
 
 - **Moteur fetch** (défaut) : pages statiques, ~60 Mo RAM, aucune dépendance native.
 - **Moteur Puppeteer** (optionnel) : uniquement pour les cibles `"requiresJs": true` —
-  `npm install puppeteer` dans `pipeline/` pour l'activer ; absence = dégradation
+  `npm install puppeteer` dans `services/pipeline/` pour l'activer ; absence = dégradation
   gracieuse (cibles requiresJs sautées avec avertissement).
 - **`config/targets.json`** : cibles déclaratives (url, customSelector, selectorsToRemove,
   rateLimitMs, requiresJs). Politesse : délais humanisés ±30 %, User-Agent rotatif.
 - **`ecosystem.config.js`** : PM2 `gen3ia-pipeline`, `max_memory_restart: '1G'`,
   autorestart — le serveur `gen3ia` n'est PAS géré ici.
 
-### Variables d'environnement (pipeline/.env, jamais commité)
+### Variables d'environnement (services/pipeline/.env, jamais commité)
 
 | Variable | Défaut | Rôle |
 |---|---|---|
@@ -62,7 +62,7 @@ npm run once           # cycle unique (debug/cron externe)
 | `GEN3IA_INGEST_URL` | `https://gen3ia.online/api/cron/knowledge-ingest` | Endpoint serveur |
 | `GEN3IA_CRON_SECRET` | — | **Requis** pour déclencher (= `CRON_SECRET` du serveur) |
 
-Sur le VPS, `deploy.sh` synchronise automatiquement `CRON_SECRET` depuis `.env.production` vers `pipeline/.env`.
+Sur le VPS, `deploy.sh` synchronise automatiquement `CRON_SECRET` depuis `.env.production` vers `services/pipeline/.env`.
 
 ## Côté serveur (dans le dépôt principal)
 

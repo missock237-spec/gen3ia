@@ -1,4 +1,4 @@
-# k8s/ — Manifestes Kubernetes (préparatoire Phase 3)
+# infra/k8s/ — Manifestes Kubernetes (préparatoire Phase 3)
 
 > **⚠️ RIEN N'EST DÉPLOYÉ SUR KUBERNETES AUJOURD'HUI.** Le runtime de
 > production reste le **VPS 2 Go + PM2 + nginx** (CD `deploy-vps.yml` — ne
@@ -51,7 +51,7 @@ bash scripts/k8s/valider-manifestes.sh   # rendu kustomize offline (+ kubeconfor
 1. Prérequis cluster : ingress-nginx + cert-manager (ClusterIssuers) ;
 2. Créer `gen3ia-app-secrets` + `gen3ia-app-config` (`kubectl create …`) ;
 3. Épingler le tag d'image dans `overlays/prod` ;
-4. `kubectl apply -k k8s/overlays/prod` puis vérifier les probes.
+4. `kubectl apply -k infra/k8s/overlays/prod` puis vérifier les probes.
 
 Le README racine et `docs/deploiement-k8s.md` font foi pour les étapes
 de déploiement, la migration des données Qdrant et la correspondance

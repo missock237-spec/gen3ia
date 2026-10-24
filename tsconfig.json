@@ -37,11 +37,8 @@
   ],
   "exclude": [
     "node_modules",
-    "live-agent",
-    "pipeline",
+    "services",
     "functions",
-    "sandbox",
-    "sdk",
     "vitest",
     "vitest.config.mts",
     "**/*.test.ts",

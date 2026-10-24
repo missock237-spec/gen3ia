@@ -5,7 +5,7 @@ import { creerMockR2Memoire } from "./helpers/r2-memoire";
  * E2E Firebase ÉMULATEURS — parcours critiques multi-tenant (Task 39, Rec 2.2).
  *
  * Cible : émulateurs locaux UNIQUEMENT (jamais la production) —
- *   auth 127.0.0.1:9099 · firestore 127.0.0.1:8080 (firebase.json).
+ *   auth 127.0.0.1:9099 · firestore 127.0.0.1:8080 (infra/firebase.json).
  * Couvre trois parcours critiques au-delà de l'auth :
  *   1. ORGANISATION : création d'équipe → invitation → acceptation →
  *      changement de rôle → retrait de membre.
@@ -20,7 +20,7 @@ import { creerMockR2Memoire } from "./helpers/r2-memoire";
 // Task 109 — le plan de données utilisateur (agents, conversations, mémoire)
 // vit dans R2. L'environnement E2E (émulateurs Firebase) n'a PAS de bucket R2 :
 // le CLIENT R2 (lib/storage/r2) est simulé EN MÉMOIRE — même approche que
-// e2e/firebase-auth-wallet.e2e.test.ts (Task 108). Les parcours métier restent
+// tests/e2e/firebase-auth-wallet.e2e.test.ts (Task 108). Les parcours métier restent
 // testés contre les vrais émulateurs Firestore.
 
 const mockR2 = creerMockR2Memoire();

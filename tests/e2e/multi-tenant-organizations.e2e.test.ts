@@ -22,7 +22,7 @@ import { creerMockR2Memoire } from "./helpers/r2-memoire";
 // Task 109 — le plan de données utilisateur (agents, conversations, mémoire)
 // vit dans R2. L'environnement E2E (émulateurs Firebase) n'a PAS de bucket R2 :
 // le CLIENT R2 (lib/storage/r2) est simulé EN MÉMOIRE — même approche que
-// e2e/firebase-auth-wallet.e2e.test.ts (Task 108). Les parcours multi-tenant
+// tests/e2e/firebase-auth-wallet.e2e.test.ts (Task 108). Les parcours multi-tenant
 // restent testés contre les vrais émulateurs Firestore.
 
 const mockR2 = creerMockR2Memoire();

@@ -28,7 +28,7 @@ lui montre). Une section vide est un signal d'alarme, pas un raccourci.
 
 <!-- Ce qui peut casser (perf, sécurité, données, prod) et comment revenir en
      arrière : revert git du commit, redirection next.config.ts si pages
-     supprimées, rollback automatique .next.old côté VPS (deploy/cd-finisher.sh),
+     supprimées, rollback automatique .next.old côté VPS (infra/deploy/cd-finisher.sh),
      variable d'environnement à retirer… Un changement sans plan de rollback
      n'est pas un changement déployable. -->
 

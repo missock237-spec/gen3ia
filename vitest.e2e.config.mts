@@ -4,7 +4,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { defineConfig } from "vitest/config";
 
 /**
- * Configuration vitest DÉDIÉE aux tests e2e Firebase (dossier e2e/).
+ * Configuration vitest DÉDIÉE aux tests e2e Firebase (dossier tests/e2e/).
  *
  * Ces tests exigent les émulateurs Firebase (auth 9099 + firestore 8080) :
  * ils ne participent JAMAIS au run unitaire principal (vitest.config.mts)
@@ -25,18 +25,18 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["e2e/**/*.test.ts"],
+    include: ["tests/e2e/**/*.test.ts"],
     testTimeout: 60_000,
     hookTimeout: 60_000,
     env: {
       FIREBASE_PROJECT_ID: "demo-gen3ia",
       FIREBASE_CLIENT_EMAIL: "test@demo-gen3ia.iam.gserviceaccount.com",
       FIREBASE_PRIVATE_KEY: dummyPrivateKeyPem,
-      // Émulateur Firebase AUTH (port aligné sur firebase.json) — défini
+      // Émulateur Firebase AUTH (port aligné sur infra/firebase.json) — défini
       // AVANT tout import : firebase-admin lit ces variables à l'init.
       // MIGRATION R2 : les DONNÉES ne passent plus par Firestore (émulateur
       // firestore supprimé) — le moteur r2fs est adossé au mock R2 mémoire
-      // de e2e/helpers/r2-memoire.ts.
+      // de tests/e2e/helpers/r2-memoire.ts.
       GCLOUD_PROJECT: "demo-gen3ia",
       FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
       // Task 161 : défaut = mode libre en production ; les e2e valident la

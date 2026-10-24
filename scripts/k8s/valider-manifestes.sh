@@ -27,7 +27,7 @@ set -euo pipefail
 # Chemins : le script vit dans scripts/k8s/, la racine du dépôt est ../..
 # -----------------------------------------------------------------------------
 RACINE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CIBLES=("k8s/base" "k8s/overlays/prod" "k8s/overlays/staging")
+CIBLES=("infra/k8s/base" "infra/k8s/overlays/prod" "infra/k8s/overlays/staging")
 REPERTOIRE_RENDU="$(mktemp -d)"
 trap 'rm -rf "${REPERTOIRE_RENDU}"' EXIT
 

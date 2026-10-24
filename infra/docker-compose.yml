@@ -4,13 +4,13 @@
 # ⚠️ CE N'EST PAS LE RUNTIME DE PRODUCTION ACTUEL.
 #   La production est un VPS 2 Go (AlmaLinux) avec PM2 (process « gen3ia »,
 #   port 3000) + nginx + https://gen3ia.online, déployée par
-#   .github/workflows/deploy-vps.yml → deploy/cd-finisher.sh (swap atomique
+#   .github/workflows/deploy-vps.yml → infra/deploy/cd-finisher.sh (swap atomique
 #   .next). Cette composition sert :
 #     - au DÉVELOPPEMENT LOCAL reproductible (`docker compose up`) ;
 #     - de socle à la migration conteneurs (GKE Phase 3).
 #
-# Usage local :
-#   docker compose up --build          # app (Next.js) + qdrant
+# Usage local (depuis la racine du dépôt) :
+#   docker compose -f infra/docker-compose.yml up --build   # app + qdrant
 #   curl http://localhost:3000/api/health
 #
 # Configuration : les variables d'environnement (.env à la racine, modèle
@@ -21,17 +21,21 @@
 
 services:
   # ---------------------------------------------------------------------------
-  # Application Next.js (construite depuis ./Dockerfile multi-stage)
+  # Application Next.js (construite depuis infra/Dockerfile multi-stage)
   # ---------------------------------------------------------------------------
   app:
-    build: .
+    build:
+      # Contexte = racine du dépôt (compose résout les chemins relatifs à ce
+      # fichier, désormais dans infra/) ; le Dockerfile vit dans infra/ aussi.
+      context: ..
+      dockerfile: infra/Dockerfile
     image: gen3ia:local
     # L'app écoute sur 3000 dans le conteneur ; nginx/traefik s'interposera
     # en Phase 3 (même rôle que nginx sur le VPS actuel).
     ports:
       - "3000:3000"
     env_file:
-      - path: .env
+      - path: ../.env
         required: false # tolérant : build/healthcheck marchent sans .env
     environment:
       # Qdrant joignable par le NOM DE SERVICE du réseau compose (DNS interne).

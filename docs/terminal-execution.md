@@ -43,7 +43,7 @@ exécuté est un subprocess `child_process.spawn` soumis à :
   python retombent en simulation annoncée (node et bash sont toujours réels).
 - Pas de réseau sortant pour les agents (network: "none" dans le contrat).
 
-## Déployer le service `sandbox/` (Docker) — sessions persistantes
+## Déployer le service `services/sandbox/` (Docker) — sessions persistantes
 
 Pour une isolation conteneur complète (réseau `none`, read-only, limites
 pids/mémoire/CPU) et des sessions qui ne dépendent pas du cycle de vie des

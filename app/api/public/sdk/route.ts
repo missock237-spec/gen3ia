@@ -20,7 +20,7 @@ import {
  * Le tarball lui-même est servi par GET /api/public/sdk/download (redirection
  * vers l'asset statique public/sdk/<version>.tgz). La version est ISSUE D'UNE
  * SEULE SOURCE (lib/public-sdk/manifest.ts) — un test échoue si elle diverge
- * de sdk/package.json ou du tarball committé.
+ * de services/sdk/package.json ou du tarball committé.
  */
 
 export const runtime = "nodejs";
