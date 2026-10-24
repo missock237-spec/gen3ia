@@ -11,3 +11,4 @@ export * from "./network";
 export * from "./resonant-space";
 export * from "./auto-oscillation";
 export * from "./central-core";
+export * from "./couche-rpia";
