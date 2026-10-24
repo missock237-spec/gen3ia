@@ -4001,3 +4001,29 @@ Work Log:
 Stage Summary:
 - Suite vitest complète : 433 fichiers verts, 4890 tests passés, 0 échec (sandbox deps installées via npm ci --prefix sandbox).
 - Phase 1 livrée ; Phases 2-4 planifiées dans docs/plan-restructuration.md.
+
+---
+
+Task ID: RESTRUCT-PHASE2
+Agent: orchestrateur (principal)
+Task: Plan de restructuration gen3ia — Phase 2 (réorganisation de la racine : infra/, services/, tests/e2e).
+
+Work Log:
+- Contexte : Phase 1 livrée (f817720, 2026-10-24) ; RPIA déjà branchée au chat (22a4104 + 7b50b2d) ; bruit de worktree = 2 023 changements de mode 644→755 du sandbox → TOUS les git en -c core.fileMode=false.
+- Audit : script persistant scripts/audit_phase2_refs.py (132 couples label×fichier) ; tri code/config réels vs commentaires vs faux positifs (lib/deploy/ = module métier homonyme, « sandbox/CI », /sdk/ = URL publique).
+- git mv : Dockerfile, docker-compose.yml, k8s/, deploy/, firebase.json, .firebaserc, firestore.rules, firestore.indexes.json → infra/ ; sandbox, sdk, training-worker, live-agent, orchestrator-24h, pipeline → services/ ; e2e → tests/e2e/. Renames R100 conservés.
+- Script d'adaptation persistant scripts/phase2_adapt_refs.py : 55 fichiers + 1 regex, échec bruyant si occurrence absente. Bugs pris en route : regex Python qui écrivait « \n » littéral dans vitest.e2e.config.mts (fermait le docblock via */) → fixé ; script non idempotent → git checkout -- . puis re-run propre.
+- Décision S2 (correction du plan) : .dockerignore RESTE à la racine — Docker lit le fichier d'ignore depuis la racine du CONTEXTE (docker build -f infra/Dockerfile .), le déplacer aurait invalidé les exclusions secrets/var. Contenu mis à jour (services, tests/e2e).
+- Décision S3 : firebase.json déplacé, tous les appels firebase-tools passent par --config infra/firebase.json (Makefile, package.json ×2, zero-trust.md) ; chemins internes relatifs inchangés.
+- Piège compose : infra/docker-compose.yml → build: context: .. + dockerfile: infra/Dockerfile, env_file ../.env (chemins relatifs résolus depuis le dossier du compose, plus celui du cwd).
+- Piège sdk : services/sdk/build.mjs repoRoot ../.. et sdkDir services/sdk ; garde anti-dérive app/api/public/sdk/route.test.ts relit services/sdk/package.json.
+- Piège vitest : vitest.config.mts include tests/** aurait attrapé tests/e2e (émulateurs requis) → exclude [...configDefaults.exclude, "tests/e2e/**"] ajouté ; suite pleine 433 fichiers / 4 890 tests verts confirme 0 test e2e attrapé.
+- Impact VPS assumé : infra/deploy/cd-finisher.sh fait git reset --hard SHA sur /opt/gen3ia → le worktree VPS reflète la nouvelle arborescence au prochain déploiement (.env.production non suivi, intact) ; scripts/vps-auto-deploy/deploy.sh en bivoie services/pipeline.
+- Piège commit : git mv avait stage les renames AVANT les éditions de contenu des fichiers déplacés (18 fichiers M restés hors commit) → amend 4ba979d AVANT push ; vérif blob hash identiques = zéro churn de mode dans l'historique.
+- Vérifications locales : typecheck, lint (fix 1 erreur), sdk:build, vitest pleine (4 890 verts / 12 auto-skip firestore), npm run build (BUILD_ID régénéré), YAML compose + 18 manifestes k8s, bash -n ×3, JSON ×5.
+- CI/CD : CI ✓, CD VPS ✓, CodeQL ✓ (runs 4ba979d) ; prod gen3ia.online /version.json gitSha=4ba979d…, /api/health ok.
+
+Stage Summary:
+- Phase 2 livrée sur main (4ba979d) et DÉPLOYÉE en prod (version.json aligné, health ok).
+- Racine cible atteinte : app/ components/ lib/ tests/ infra/ scripts/ services/ training/ docs/ public/ + configs racine ; décisions S2/S3 consignées dans docs/plan-restructuration.md.
+- Reste : Phase 3 (lib/ par domaine, app/ routes, i18n), Phase 4 (gouvernance), CGU/RGPD, révoquer tokens GitHub ghp_26B1… ET HF hf_OnaO… en fin de session.
