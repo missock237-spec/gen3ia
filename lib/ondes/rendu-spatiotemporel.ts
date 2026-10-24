@@ -139,50 +139,7 @@ export class MoteurRenduSpatiotemporel {
    * normalisées → gris [0, 255] → RGBA opaque. Déterministe.
    */
   rendreTrame(temps: number): Float32Array {
-    const { largeur: w, hauteur: h, nbNoeuds } = this;
-    const trame = new Float32Array(w * h * 4);
-    const accumulateur = new Float32Array(w * h);
-    const poidsPixels = new Float32Array(w * h);
-
-    // Rayon d'éclatement : couvre l'image quel que soit le nombre de nœuds.
-    const rayon = Math.max(3, Math.sqrt((w * h) / nbNoeuds) * 1.5);
-    const rayon2 = rayon * rayon;
-
-    for (let i = 0; i < nbNoeuds; i++) {
-      const noeud = this.noeuds[i];
-      const valeur =
-        noeud.amplitude *
-        Math.cos(noeud.frequence * temps + noeud.phase + noeud.posX * 0.01 + noeud.posY * 0.01);
-
-      const x0 = Math.max(0, Math.floor(noeud.posX - rayon));
-      const x1 = Math.min(w - 1, Math.ceil(noeud.posX + rayon));
-      const y0 = Math.max(0, Math.floor(noeud.posY - rayon));
-      const y1 = Math.min(h - 1, Math.ceil(noeud.posY + rayon));
-
-      for (let y = y0; y <= y1; y++) {
-        for (let x = x0; x <= x1; x++) {
-          const dx = x - noeud.posX;
-          const dy = y - noeud.posY;
-          const d2 = dx * dx + dy * dy;
-          if (d2 >= rayon2) continue;
-          const poids = Math.exp(-d2 / (rayon2 * 0.4));
-          const idx = y * w + x;
-          accumulateur[idx] += valeur * poids;
-          poidsPixels[idx] += poids;
-        }
-      }
-    }
-
-    for (let p = 0; p < w * h; p++) {
-      const valeur = poidsPixels[p] > 0 ? accumulateur[p] / poidsPixels[p] : 0;
-      const gris = Math.round(borner(valeur * 0.5 + 0.5, 0, 1) * 255);
-      const o = p * 4;
-      trame[o] = gris;
-      trame[o + 1] = gris;
-      trame[o + 2] = gris;
-      trame[o + 3] = 255;
-    }
-    return trame;
+    return rasteriserTrame(this.noeuds, this.largeur, this.hauteur, temps);
   }
 
   /**
@@ -231,4 +188,66 @@ export class MoteurRenduSpatiotemporel {
       }
     }
   }
+}
+
+/**
+ * PROJECTION « NŒUDS → TRAME » — la fonction pure partagée par le miroir
+ * CPU (ci-dessus) et le moteur WebGPU (moteurs-webgpu.ts) : éclatement
+ * gaussien de l'onde de chaque nœud, somme des contributions, normalisation
+ * → gris [0, 255] → RGBA opaque. Le shader jumeau (SHADER_RASTERISATION_VIDEO
+ * + SHADER_FINALISATION_VIDEO) implémente la MÊME physique en virgule fixe
+ * entière (déterministe sous exécution parallèle).
+ */
+export function rasteriserTrame(
+  noeuds: readonly NoeudOnde3D[],
+  largeur: number,
+  hauteur: number,
+  temps: number,
+): Float32Array {
+  const w = largeur;
+  const h = hauteur;
+  const nbNoeuds = noeuds.length;
+  const trame = new Float32Array(w * h * 4);
+  const accumulateur = new Float32Array(w * h);
+  const poidsPixels = new Float32Array(w * h);
+
+  // Rayon d'éclatement : couvre l'image quel que soit le nombre de nœuds.
+  const rayon = Math.max(3, Math.sqrt((w * h) / nbNoeuds) * 1.5);
+  const rayon2 = rayon * rayon;
+
+  for (let i = 0; i < nbNoeuds; i++) {
+    const noeud = noeuds[i];
+    const valeur =
+      noeud.amplitude *
+      Math.cos(noeud.frequence * temps + noeud.phase + noeud.posX * 0.01 + noeud.posY * 0.01);
+
+    const x0 = Math.max(0, Math.floor(noeud.posX - rayon));
+    const x1 = Math.min(w - 1, Math.ceil(noeud.posX + rayon));
+    const y0 = Math.max(0, Math.floor(noeud.posY - rayon));
+    const y1 = Math.min(h - 1, Math.ceil(noeud.posY + rayon));
+
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const dx = x - noeud.posX;
+        const dy = y - noeud.posY;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= rayon2) continue;
+        const poids = Math.exp(-d2 / (rayon2 * 0.4));
+        const idx = y * w + x;
+        accumulateur[idx] += valeur * poids;
+        poidsPixels[idx] += poids;
+      }
+    }
+  }
+
+  for (let p = 0; p < w * h; p++) {
+    const valeur = poidsPixels[p] > 0 ? accumulateur[p] / poidsPixels[p] : 0;
+    const gris = Math.round(borner(valeur * 0.5 + 0.5, 0, 1) * 255);
+    const o = p * 4;
+    trame[o] = gris;
+    trame[o + 1] = gris;
+    trame[o + 2] = gris;
+    trame[o + 3] = 255;
+  }
+  return trame;
 }

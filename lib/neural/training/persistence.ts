@@ -9,6 +9,7 @@ import type { ReseauNeuronalGen3 } from "../core/network";
 import type { NeuralConfig } from "../core/types";
 import type { TrainingReport } from "./trainer";
 import type { EtatLangage } from "../generation/language";
+import type { EtatRPIA } from "../core/couche-rpia";
 
 /**
  * PERSISTANCE DU CERVEAU NEURONAL — état structural (config + synapses) et
@@ -67,6 +68,13 @@ export interface BrainState {
    * Absent des cerveaux v1 — restauration optionnelle.
    */
   langage?: EtatLangage;
+  /**
+   * État de la couche d'ondes RPIA (poids [a, f, φ, d] × N + temps global).
+   * Absent des cerveaux antérieurs au pont RPIA — restauration optionnelle :
+   * sans elle, la couche repart de son état seedé (reprise dégradée, jamais
+   * une erreur bloquante).
+   */
+  rpia?: EtatRPIA;
 }
 
 /**
@@ -80,10 +88,11 @@ export function saveBrainState(
   tokenRegistry: Record<number, string[]>,
   trainingHistory: TrainingReport[],
   langage?: EtatLangage,
+  rpia?: EtatRPIA,
 ): Promise<boolean> {
   // Sérialisation : chaque écriture attend la fin de la précédente.
   fileDeSauvegarde = fileDeSauvegarde.then(() =>
-    ecrireCerveauSansCourse(reseau, tokenRegistry, trainingHistory, langage),
+    ecrireCerveauSansCourse(reseau, tokenRegistry, trainingHistory, langage, rpia),
   );
   // Jamais de rejet propagé : un échec de sauvegarde ne doit casser personne.
   return fileDeSauvegarde.catch(() => false);
@@ -94,6 +103,7 @@ async function ecrireCerveauSansCourse(
   tokenRegistry: Record<number, string[]>,
   trainingHistory: TrainingReport[],
   langage?: EtatLangage,
+  rpia?: EtatRPIA,
 ): Promise<boolean> {
   try {
     // Le répertoire var/ doit rester hors git (seul fichier hors lib/neural
@@ -112,6 +122,7 @@ async function ecrireCerveauSansCourse(
       tokenRegistry,
       trainingHistory,
       ...(langage ? { langage } : {}),
+      ...(rpia ? { rpia } : {}),
     };
 
     // Écriture atomique : .tmp UNIQUE (pid + uuid — deux sauvegardes
@@ -147,6 +158,30 @@ async function ecrireCerveauSansCourse(
     );
     return false;
   }
+}
+
+/**
+ * Lecture défensive de l'état RPIA persisté : un état incomplet ou non
+ * fini (poids NaN/Infinity, taille non entière) est rejeté en silencieux —
+ * la couche repart alors de son état seedé (jamais d'erreur bloquante au
+ * démarrage pour une télémétrie de résonance).
+ */
+function lireEtatRpiaDefensif(brut: unknown): EtatRPIA | undefined {
+  if (!brut || typeof brut !== "object") return undefined;
+  const etat = brut as Partial<EtatRPIA>;
+  const tailleOk = Number.isInteger(etat.taille) && (etat.taille ?? 0) > 0;
+  const pasOk =
+    typeof etat.pasTotaux === "number" && Number.isFinite(etat.pasTotaux);
+  const poidsOk =
+    Array.isArray(etat.poids) &&
+    etat.poids.length > 0 &&
+    etat.poids.every((v) => Number.isFinite(v));
+  if (!tailleOk || !pasOk || !poidsOk) return undefined;
+  return {
+    taille: etat.taille as number,
+    pasTotaux: etat.pasTotaux as number,
+    poids: etat.poids as number[],
+  };
 }
 
 /**
@@ -217,6 +252,7 @@ function lireFichierCerveau(chemin: string): BrainState | null {
                   : {},
             }
           : undefined,
+      rpia: lireEtatRpiaDefensif(etat.rpia),
     };
   } catch (erreur: unknown) {
     console.warn(

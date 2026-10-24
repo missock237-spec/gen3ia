@@ -39,12 +39,10 @@ import { genererVideoNeural, videoVersDataUri } from "./generation/video-engine"
 import { CentralSupervisor, HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import { piloterPlateforme } from "./pilotage/gen3ia";
-import {
-  CortexColumnnaire,
-  CORTEX_CONFIG_DEFAUTS,
-} from "./core/v2/cortex-columnnaire";
+import { CortexColumnnaire, CORTEX_CONFIG_DEFAUTS } from "./core/v2/cortex-columnnaire";
 import { ChampCorticalGen3, TAILLE_CHAMP } from "./core/v2/champ-cortical";
 import { EffecteurCortexV2 } from "./core/v2/effecteur-cortex";
+import { CoucheOndesNeuronales } from "./core/couche-rpia";
 import {
   ecrireArtefactV2,
   lireArtefactV2,
@@ -116,6 +114,13 @@ export interface NeuralRuntime {
    * noyau via l'effecteur dédié. Null si désactivé (GEN3_CORTEX_V2=off).
    */
   cortexV2: EffecteurCortexV2 | null;
+  /**
+   * COUCHE RPIA — le pont d'ondes branché au flux du chat : chaque message
+   * utilisateur est mis en résonance (lib/ondes/entrainement-rpia.ts) et
+   * les énergies obtenues sont injectées dans les cycles du cerveau. Un
+   * nœud d'onde par neurone (taille = config.size).
+   */
+  coucheRPIA: CoucheOndesNeuronales;
   /** Historique des rapports d'entraînement persistés (données réelles). */
   historiqueEntrainement: TrainingReport[];
   /** Date ISO de création du runtime. */
@@ -323,9 +328,16 @@ export function getNeuralRuntime(): NeuralRuntime {
     "Génère une animation vectorielle SVG SMIL calculée depuis l'état réel du réseau (moteur local).",
   );
 
-  // 7. Hippocampe + Superviseur central (boucle cognitive de l'utilisateur).
+  // 8. Hippocampe + Superviseur central (boucle cognitive de l'utilisateur).
   const hippocampe = new HippocampusMemory(10);
   const superviseur = new CentralSupervisor(noyau, reseau, 5);
+
+  // 8-bis. COUCHE RPIA — 1 nœud d'onde PAR neurone (100), graine dédiée
+  //    (45 : 42 réseau, 43 veille, 44 champ v2). La restauration depuis le
+  //    cerveau persisté survient à l'étape 10 (après lecture du fichier).
+  const coucheRPIA = new CoucheOndesNeuronales(reseau.config.size, {
+    graine: SEED_RUNTIME + 3,
+  });
 
   // 8. Cortex langagier : corpus d'amorçage canonique (réappris à chaque
   //    démarrage, pur et déterministe) — les paires personnalisées seront
@@ -340,7 +352,7 @@ export function getNeuralRuntime(): NeuralRuntime {
   const evolution = new MoteurEvolutionGen3(cortex);
   const engine = new NeuralEngine(noyau, espace, cortex, hippocampe, evolution, () => {
     void sauvegarderCerveauRuntime().catch(() => undefined);
-  }, piloterPlateforme);
+  }, piloterPlateforme, coucheRPIA);
 
   const runtime: NeuralRuntime = {
     reseau,
@@ -358,6 +370,7 @@ export function getNeuralRuntime(): NeuralRuntime {
     superviseur,
     cortex,
     evolution,
+    coucheRPIA,
     cortexV2,
     historiqueEntrainement: [],
     creeLe: new Date().toISOString(),
@@ -375,6 +388,22 @@ export function getNeuralRuntime(): NeuralRuntime {
       console.log(
         `[NEURAL] Langage restauré : ${statsLangage.pairesAjoutees} paire(s) personnalisée(s), vocabulaire ${cortex.tailleVocabulaire} tokens.`,
       );
+    }
+    // Couche RPIA : l'état résonnant accumulé fait partie du cerveau — sans
+    // restauration, la couche repartirait de son état seedé (reprise
+    // dégradée). État invalide → repli silencieux (lireEtatRpiaDefensif).
+    if (etat.rpia) {
+      try {
+        coucheRPIA.importerEtat(etat.rpia);
+        console.log(
+          `[NEURAL] Couche RPIA restaurée : ${etat.rpia.taille} nœuds d'onde, ${etat.rpia.pasTotaux} pas de résonance accumulés.`,
+        );
+      } catch (erreurRpia) {
+        console.warn(
+          `[NEURAL] État RPIA incompatible (taille ${etat.rpia.taille} ≠ ${reseau.config.size}) — couche seedée.`,
+          erreurRpia instanceof Error ? erreurRpia.message : erreurRpia,
+        );
+      }
     }
     console.log(
       `[NEURAL] Cerveau persisté restauré : ${etat.synapses.length} synapses, ${Object.keys(etat.tokenRegistry).length} neurones lexicaux (sauvegardé le ${etat.sauvegardeLe}).`,
@@ -454,6 +483,7 @@ export async function sauvegarderCerveauRuntime(): Promise<boolean> {
     exporterRegistreTokens(),
     runtime.historiqueEntrainement,
     langage,
+    runtime.coucheRPIA.exporterEtat(),
   );
   // CORTEX V2 — artefact columnnaire (poids CSR + champ) sauvegardé en
   // parallèle ; échec non fatal (comme v1).

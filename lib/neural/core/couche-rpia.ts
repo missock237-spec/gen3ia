@@ -31,6 +31,13 @@ import type { ConfigRPIA, NoeudOnde, OndeCible, RapportEntrainement } from "@/li
 const ENERGIE_MAX = 0.5;
 const GAIN_ENERGIE = 0.2;
 
+/** État sérialisable de la couche (persistance du cerveau). */
+export interface EtatRPIA {
+  taille: number;
+  pasTotaux: number;
+  poids: number[];
+}
+
 /** Options de la couche (transmises à l'entraîneur interne). */
 export interface OptionsCoucheRPIA {
   /** Graine déterministe (défaut 42). */
@@ -53,6 +60,22 @@ export class CoucheOndesNeuronales {
   /** État des nœuds d'onde (copie défensive), indexés comme les neurones. */
   noeuds(): NoeudOnde[] {
     return this.entraineur.etat();
+  }
+
+  /** Temps global d'interférence accumulé (télémétrie de la couche). */
+  get pasTotaux(): number {
+    return this.entraineur.pasTotaux;
+  }
+
+  /**
+   * RÉSONANCE DE CHAT — un appel unique pour le flux conversationnel :
+   * entraîne la couche vers l'onde cible du message PUIS retourne les
+   * énergies prêtes à fusionner dans les entrées du cycle 1. Nombre
+   * d'époques borné par l'appelant (latence du tour de chat).
+   */
+  resonnerVersTexte(texte: string, epoques = 12): ResultatPontRPIA {
+    const rapport = this.entrainerVersTexte(texte, epoques);
+    return { rapport, energies: this.energiesResonance() };
   }
 
   /** Onde cible d'un texte (conditionneur déterministe, longueur = taille). */
@@ -123,7 +146,7 @@ export class CoucheOndesNeuronales {
    * État sérialisable (JSON-safe) pour la persistance : poids arrondis
    * (6 décimales) — même contrat que training/persistence.ts.
    */
-  exporterEtat(): { taille: number; pasTotaux: number; poids: number[] } {
+  exporterEtat(): EtatRPIA {
     const poids = Array.from(this.entraineur.exporterPoids()).map(
       (v) => Math.round(v * 1e6) / 1e6,
     );
@@ -131,7 +154,7 @@ export class CoucheOndesNeuronales {
   }
 
   /** Réinjecte un état exporté (même taille) — reprise sans ré-entraînement. */
-  importerEtat(etat: { taille: number; pasTotaux?: number; poids: number[] }): void {
+  importerEtat(etat: EtatRPIA & { pasTotaux?: number }): void {
     if (etat.taille !== this.taille) {
       throw new Error(`État incompatible : taille ${etat.taille} ≠ ${this.taille}.`);
     }

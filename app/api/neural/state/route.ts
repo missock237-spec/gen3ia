@@ -62,6 +62,14 @@ export async function GET(request: NextRequest) {
       competences: Array.from(
         runtime.moteurCompetences.catalogueSkills.entries(),
       ).map(([nom, meta]) => ({ nom, ...meta })),
+      // COUCHE RPIA BRANCHÉE AU FLUX DU CHAT — état réel de la couche d'ondes
+      // (1 nœud par neurone) : temps global d'interférence accumulé et taille.
+      rpia: {
+        taille: runtime.coucheRPIA.taille,
+        pasTotaux: runtime.coucheRPIA.pasTotaux,
+        noeuds: runtime.coucheRPIA.noeuds().length,
+        brancheAuChat: true,
+      },
       historiqueEntrainement: runtime.historiqueEntrainement,
       dernierJobEntrainement: getDernierJob(),
     });

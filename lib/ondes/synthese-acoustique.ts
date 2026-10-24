@@ -131,11 +131,29 @@ export class SynthetiseurAcoustique {
       throw new Error(`Durée invalide : ${dureeSecondes} (0 < durée ≤ 60 s).`);
     }
     const nbEchantillons = Math.round(dureeSecondes * this.frequenceEchantillonnage);
+    return this.mixerIntervalle(0, nbEchantillons);
+  }
+
+  /**
+   * MIXE UN INTERVALLE d'échantillons [debut, debut + nbEchantillons) —
+   * la fonction pure partagée par genererBuffer, le traitement PAR BLOCS
+   * du moteur WebGPU (moteurs-webgpu.ts, blockStep 1024 de la source) et
+   * le shader jumeau SHADER_MIX_AUDIO. Mêmes formules partout : somme des
+   * oscillateurs pondérée par l'amortissement (anti-saturation),
+   * normalisation 1/N puis ×2, bornée [-1, 1].
+   */
+  mixerIntervalle(debut: number, nbEchantillons: number): Float32Array {
+    if (!Number.isInteger(debut) || debut < 0) {
+      throw new Error(`Début d'intervalle invalide : ${debut} (entier ≥ 0 requis).`);
+    }
+    if (!Number.isInteger(nbEchantillons) || nbEchantillons < 1) {
+      throw new Error(`Nombre d'échantillons invalide : ${nbEchantillons} (entier ≥ 1 requis).`);
+    }
     const pcm = new Float32Array(nbEchantillons);
     const normalisation = 1 / Math.max(1, this.nbNoeuds);
 
     for (let s = 0; s < nbEchantillons; s++) {
-      const temps = s / this.frequenceEchantillonnage;
+      const temps = (debut + s) / this.frequenceEchantillonnage;
       let somme = 0;
       for (let i = 0; i < this.nbNoeuds; i++) {
         const noeud = this.noeuds[i];

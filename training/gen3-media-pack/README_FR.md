@@ -36,6 +36,8 @@ de 3-5 s crédibles — c'est déjà un bond de ~2/10 à ~6/10 en génération m
                    train_tts_f5.py       --profil auto|l4|a100_40g
                    train_video_ltx.py    --profil auto|l4|a100_40g
                    train_av_neural.py    (vae_v → vae_a → cache → dit → sample)
+                   voice_audio_system.py (vocodeur HiFi-GAN sons/SFX, empreintes
+                                          ECAPA, clonage F5 zero-shot)
 3) benchmark       bench_media.py  → bench_media.json (latence/RTF RÉELS mesurés)
 4) inférence       infer_media.py  (image|tts|video|av)
 5) intégration     bridge/gen3_media_bridge.py → API REST pour gen3ia.online
@@ -64,6 +66,23 @@ s'entraîne pas et ne génère pas sur CPU, par conception.
   LibriSpeech « french » (CC-BY, parole). Vos propres médias restent sous VOS droits.
 - Le dataset `gen3_multimodal_792k` (texte FR synthétique, sans médias binaires) sert au
   volet storyboard/instructions — il ne contient aucun média et ne sert PAS au photoréalisme.
+
+## 4-bis. Système voix & sons (`voice_audio_system.py`)
+
+Trois voies distinctes, honnêteté maintenue :
+
+| Voie | Ce qui est RÉEL | Ce qu'il faut savoir |
+|---|---|---|
+| **Sons / SFX** (`prepare` → `train` → `sample`/`sfx`) | Vocodeur **HiFi-GAN v1 entraîné from scratch** sur VOTRE corpus (24 kHz, 80 mels) | La qualité dépend du corpus : des heures d'audio propres et variées ; 200k pas (~1-2 j L4) |
+| **Mémorisation de voix** (`memorize`) | Empreinte **ECAPA-TDNN 192-d** (768 octets/voix) — identification et vérification d'identité vocale | Embedding uniquement : ne génère pas de parole |
+| **Clonage zero-shot** (`clone`) | **F5-TTS** pré-entraîné — ~6-10 s de référence + transcription | Mêmes contraintes de licence que `train_tts_f5.py` (CC-BY-NC → Kokoro pour commercial) |
+
+Garde GPU : `train` **refuse proprement sans CUDA** (standard du pack). L'entraînement
+n'affecte PAS le clonage (F5 zero-shot marche sans vocodeur). `sfx --label` propose 6
+catégories (explosion, impact, porte, pas, ambiance, musique) via un prior spectral —
+un vrai conditionnement textuel demanderait un entraînement dédié (documenté dans le code).
+
+Validation sans GPU : `python3 scripts/valider_voice_system.py` (19 vérifications AST).
 
 ## 5. Intégration à gen3ia.online (VPS 2 Go, sans GPU)
 
@@ -96,8 +115,10 @@ gen3-media-pack/
 ├── train_video_ltx.py          # LoRA LTX-Video (flow matching diffusers)
 ├── train_av_neural.py          # AV-DiT gen3 « ondes » (expérimental)
 ├── infer_media.py              # CLI unifié image|tts|video|av
+├── voice_audio_system.py       # HiFi-GAN sons/SFX + ECAPA + clonage F5
 ├── bench_media.py              # latence/RTF réels → JSON
 ├── bridge/gen3_media_bridge.py # API REST GPU-only pour gen3ia.online
+├── scripts/valider_voice_system.py # 19 vérifications AST (sans GPU)
 ├── requirements.txt            # versions épinglées
 └── README_FR.md                # ce fichier
 ```

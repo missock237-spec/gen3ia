@@ -13,6 +13,7 @@ bitsandbytes>=0.45.0       # Adam 8 bits optionnel
 sentencepiece>=0.2.0       # tokenizer T5
 
 # --- médias & datasets ---
+librosa>=0.10.2              # mel + Griffin-Lim (voice_audio_system.py)
 pillow>=10.4
 imageio>=2.35
 imageio-ffmpeg>=0.5
@@ -23,6 +24,8 @@ huggingface_hub>=0.27.0
 # --- TTS ---
 f5-tts==1.1.22             # fine-tuning voix (poids de base CC-BY-NC-4.0)
 kokoro>=0.9.4              # alternative Apache-2.0 (inférence, voix fr si dispo)
+
+speechbrain>=1.0.0           # ECAPA-TDNN (empreintes voix 192-d)
 
 # --- pont API ---
 fastapi>=0.115.0

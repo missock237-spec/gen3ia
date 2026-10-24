@@ -55,6 +55,8 @@ texte ──conditionneur──► onde cible ──RPIA──► résonance app
 | Trames vidéo RGBA                        | `MoteurRenduSpatiotemporel.genererSequence`                                 |
 | Diagnostic complet                       | `executerSuiteValidationGen3()` (3 familles de tests)                       |
 | Pont cerveau                             | `entrainerCerveauParResonance(taille, texte)`                               |
+| **Résonance du FLUX DU CHAT**            | `CoucheOndesNeuronales.resonnerVersTexte(message)` — branchée au runtime    |
+| Moteurs WebGPU vidéo / audio             | `creerMoteurVideoRPIA` / `creerMoteurAudioRPIA` (repli CPU automatique)     |
 
 ## Interface utilisateur
 
@@ -62,6 +64,34 @@ Le laboratoire `/ondes` expose un **panneau d'entraînement RPIA** :
 requête → courbe d'erreur réelle (convergence ou non, rien n'est
 décoré), grille d'énergie des 100 neurones après apprentissage, écoute
 de la synthèse acoustique (WAV), suite de validation en un clic.
+
+## Le chat met gen3 en résonance (branchement au flux conversationnel)
+
+Depuis le pont runtime, la couche RPIA n'est plus un laboratoire
+séparé : elle fait partie du cerveau persisté et **chaque message de
+chat** traverse la résonance AVANT les cycles neuronaux :
+
+1. le message utilisateur conditionne l'onde cible (conditionneur
+   déterministe — la charte système ne résonne jamais à sa place) ;
+2. la couche s'entraîne un nombre d'époques BORNÉ (12 — la latence du
+   tour reste dominée par les cycles du noyau) et son état est
+   PERSISTÉ dans `var/neural/brain-v1.json` (bloc `rpia`) : le temps
+   global d'interférence accumulé survit aux redémarrages ;
+3. les énergies résonnantes (bornées [0, 0.5], plafond de fusion =
+   celui de l'encodage) sont fusionnées à la volée unique du cycle 1 —
+   le cerveau « ressent » la requête avant de décoder ;
+4. la télémétrie honnête transite dans `raw.rpia` de chaque réponse
+   (`epoques`, `erreurInitiale`, `erreurFinale`, `convergence`,
+   `noeudsEnergises`, `pasTotaux`) et l'état complet est exposé par
+   `GET /api/neural/state` (bloc `rpia`).
+
+Moteurs vidéo et audio (portages `Gen3VideoEngine` / `Gen3AudioEngine`)
+: la dynamique des nœuds vit sur le GPU avec les uniformes des sources
+(guidage 0.8 vidéo, 0.7 audio, blocs de 1 024 échantillons) ; deux
+corrections documentées — la projection pixels (la source copiait des
+tampons de tailles inégales) est une rasterisation gaussienne en
+virgule fixe entière déterministe, et le placeholder `sin(t × 440)` du
+mix audio est remplacé par le VRAI mix des oscillateurs.
 
 ## Limites honnêtes
 

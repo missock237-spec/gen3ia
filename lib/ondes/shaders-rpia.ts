@@ -159,3 +159,150 @@ fn principal(@builtin(global_invocation_id) id : vec3<u32>) {
   noeuds[idx] = noeud;
 }
 `;
+
+// ---------------------------------------------------------------------------
+// PROJECTION « NŒUDS → TRAME » (portage corrigé de Gen3VideoEngine.ts) :
+// la source copiait le tampon de nœuds (N×24 octets) vers une trame de
+// largeur×hauteur×4 octets — tailles INÉGALES, copyBufferToBuffer impossible.
+// La projection réelle est un éclatement gaussien (même physique que le
+// miroir CPU rendu-spatiotemporel.ts), en DEUX passes :
+//  1. RASTERISATION : chaque nœud accumule sa valeur dans une fenêtre
+//     gaussienne — accumulation ENTIÈRE (atomic<i32>/<u32>, valeur×poids
+//     en virgule fixe 2^-16) : l'addition entière est associative, le
+//     résultat est DÉTERMINISTE quel que soit l'ordre des threads ;
+//  2. FINALISATION : par pixel, normalisation → gris [0, 255] → RGBA.
+// ---------------------------------------------------------------------------
+
+export const SHADER_RASTERISATION_VIDEO = /* wgsl */ `
+struct NoeudOnde3D {
+  amplitude : f32,
+  frequence : f32,
+  phase : f32,
+  amortissement : f32,
+  posX : f32,
+  posY : f32,
+};
+
+struct ParametresRaster {
+  temps : f32,
+  largeur : u32,
+  hauteur : u32,
+  pad0 : f32,
+};
+
+@group(0) @binding(0) var<storage, read> noeuds : array<NoeudOnde3D>;
+@group(0) @binding(1) var<uniform> parametres : ParametresRaster;
+@group(0) @binding(2) var<storage, read_write> accumulateur : array<atomic<i32>>;
+@group(0) @binding(3) var<storage, read_write> poidsPixels : array<atomic<u32>>;
+
+@compute @workgroup_size(256)
+fn principal(@builtin(global_invocation_id) id : vec3<u32>) {
+  let idx = id.x;
+  if (idx >= arrayLength(&noeuds)) { return; }
+  let noeud = noeuds[idx];
+  let w = f32(parametres.largeur);
+  let h = f32(parametres.hauteur);
+  let nb = f32(arrayLength(&noeuds));
+
+  // Rayon identique au miroir CPU : couvre l'image quel que soit N.
+  let rayon = max(3.0, sqrt((w * h) / nb) * 1.5);
+  let rayon2 = rayon * rayon;
+
+  // Valeur du nœud : onde spatiotemporelle (formule du miroir).
+  let valeur = noeud.amplitude * cos(noeud.frequence * parametres.temps + noeud.phase + noeud.posX * 0.01 + noeud.posY * 0.01);
+
+  let x0 = max(0, i32(floor(noeud.posX - rayon)));
+  let x1 = min(parametres.largeur - 1, u32(ceil(noeud.posX + rayon)));
+  let y0 = max(0, i32(floor(noeud.posY - rayon)));
+  let y1 = min(parametres.hauteur - 1, u32(ceil(noeud.posY + rayon)));
+
+  for (var y = y0; y <= i32(y1); y++) {
+    for (var x = x0; x <= i32(x1); x++) {
+      let dx = f32(x) - noeud.posX;
+      let dy = f32(y) - noeud.posY;
+      let d2 = dx * dx + dy * dy;
+      if (d2 < rayon2) {
+        let poids = exp(-d2 / (rayon2 * 0.4));
+        let p = u32(y) * parametres.largeur + u32(x);
+        // Virgule fixe 2^-16 : l'ajout ATOMIQUE ENTIER reste déterministe.
+        atomicAdd(&accumulateur[p], i32(round(valeur * poids * 65536.0)));
+        atomicAdd(&poidsPixels[p], u32(round(poids * 65536.0)));
+      }
+    }
+  }
+}
+`;
+
+export const SHADER_FINALISATION_VIDEO = /* wgsl */ `
+struct ParametresFinal {
+  largeur : u32,
+  hauteur : u32,
+  pad0 : f32,
+  pad1 : f32,
+};
+
+@group(0) @binding(0) var<storage, read> accumulateur : array<i32>;
+@group(0) @binding(1) var<storage, read> poidsPixels : array<u32>;
+@group(0) @binding(2) var<uniform> parametres : ParametresFinal;
+@group(0) @binding(3) var<storage, read_write> trame : array<u32>;
+
+@compute @workgroup_size(256)
+fn principal(@builtin(global_invocation_id) id : vec3<u32>) {
+  let p = id.x;
+  if (p >= parametres.largeur * parametres.hauteur) { return; }
+  let poids = f32(poidsPixels[p]);
+  var gris : u32 = 128u; // poids nul → gris neutre (miroir : valeur 0)
+  if (poids > 0.0) {
+    let valeur = f32(accumulateur[p]) / poids;
+    // Même formule que le miroir : [-1, 1] → [0, 1] → [0, 255].
+    let normalisee = clamp(valeur * 0.5 + 0.5, 0.0, 1.0);
+    gris = u32(round(normalisee * 255.0));
+  }
+  let rgba = (255u << 24) | (gris << 16) | (gris << 8) | gris;
+  trame[p] = rgba;
+}
+`;
+
+// ---------------------------------------------------------------------------
+// MIX AUDIO « NŒUDS → PCM » (portage corrigé de Gen3AudioEngine.ts) : la
+// source remplissait le PCM avec le placeholder `sin(t × 440)` (son propre
+// commentaire demandait « Remplacement par le mix des nœuds GPU »). Ici le
+// mix RÉEL des oscillateurs est calculé sur GPU : un thread PAR échantillon,
+// somme bornée et normalisée — même formule que synthese-acoustique.ts.
+// ---------------------------------------------------------------------------
+
+export const SHADER_MIX_AUDIO = /* wgsl */ `
+struct NoeudAcoustique {
+  amplitude : f32,
+  frequence : f32,
+  phase : f32,
+  amortissement : f32,
+};
+
+struct ParametresMix {
+  tempsDebutBloc : f32,
+  frequenceEchantillonnage : f32,
+  indexSortie : u32,
+  nbEchantillonsBloc : u32,
+};
+
+@group(0) @binding(0) var<storage, read> noeuds : array<NoeudAcoustique>;
+@group(0) @binding(1) var<uniform> parametres : ParametresMix;
+@group(0) @binding(2) var<storage, read_write> pcm : array<f32>;
+
+@compute @workgroup_size(256)
+fn principal(@builtin(global_invocation_id) id : vec3<u32>) {
+  let s = id.x;
+  if (s >= parametres.nbEchantillonsBloc) { return; }
+  let t = parametres.tempsDebutBloc + f32(s) / parametres.frequenceEchantillonnage;
+  let normalisation = 1.0 / f32(arrayLength(&noeuds));
+  var somme : f32 = 0.0;
+  for (var i = 0u; i < arrayLength(&noeuds); i++) {
+    let noeud = noeuds[i];
+    // L'amortissement contrôle la contribution (anti-saturation, miroir).
+    let contribution = noeud.amplitude * (1.0 - min(1.0, noeud.amortissement * 8.0));
+    somme += contribution * sin(2.0 * 3.14159 * noeud.frequence * t + noeud.phase);
+  }
+  pcm[parametres.indexSortie + s] = clamp(somme * normalisation * 2.0, -1.0, 1.0);
+}
+`;

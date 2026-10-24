@@ -20,6 +20,11 @@ import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
 import { composerDepuisConnaissances } from "./connaissances-pont";
 import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
+import type { CoucheOndesNeuronales } from "./core/couche-rpia";
+import { INTENSITE_MAX_PAR_NEURONE } from "./encoding/text-encoder";
+
+/** Nombre d'époques de résonance RPIA par tour de chat (latence bornée : chaque époque = O(100) ops). */
+export const EPOQUES_RPIA_CHAT = 12;
 
 /** Source du langage de la réponse (télémétrie honnête). */
 export type SourceLangage =
@@ -84,6 +89,25 @@ export interface NeuralAIResponse extends Omit<AIResponse, "provider"> {
   model: typeof NEURAL_MODEL;
 }
 
+/**
+ * Télémétrie de la résonance RPIA du tour (données 100 % mesurées :
+ * courbe d'erreur réelle de la couche d'ondes, temps global accumulé).
+ */
+export interface TelemetrieRPIA {
+  /** Temps global d'interférence accumulé par la couche (tous tours). */
+  pasTotaux: number;
+  /** Époques de résonance exécutées pour CE tour (bornées). */
+  epoques: number;
+  /** Erreur d'interférence moyenne avant la première époque. */
+  erreurInitiale: number;
+  /** Erreur d'interférence moyenne après la dernière époque. */
+  erreurFinale: number;
+  /** true si l'erreur finale < erreur initiale (progrès réel). */
+  convergence: boolean;
+  /** Nombre de neurones énergisés par la résonance (injectés cycle 1). */
+  noeudsEnergises: number;
+}
+
 /** Handlers de streaming — signature identique à lib/ai/router.ts. */
 export interface NeuralStreamHandlers {
   onDelta: (delta: string) => void | Promise<void>;
@@ -119,6 +143,14 @@ export class NeuralEngine {
       message: string,
       options: AIRequest,
     ) => Promise<CompositionReponse | null>,
+    /**
+     * COUCHE RPIA (BRANCHÉE AU FLUX DU CHAT) : avant chaque génération, le
+     * message utilisateur est mis en résonance sur la couche d'ondes et les
+     * énergies obtenues sont fusionnées dans la volée unique du cycle 1 —
+     * le cerveau « ressent » la requête avant de décoder. Absente (tests,
+     * intégrations minimales) → le moteur tourne comme avant.
+     */
+    private readonly coucheRPIA?: CoucheOndesNeuronales,
   ) {}
 
   /**
@@ -172,6 +204,57 @@ export class NeuralEngine {
   }
 
   /**
+   * RÉSONANCE RPIA DU TOUR DE CHAT : entraîne la couche d'ondes vers le
+   * message (nombre d'époques BORNÉ — la latence du tour reste dominée par
+   * les cycles du noyau) et retourne les énergies + télémétrie honnête.
+   * La couche est PERSISTANTE : chaque message enrichit l'état résonnant
+   * (le temps global avance — c'est le mode d'apprentissage natif de gen3).
+   */
+  private resonnerRPIA(message: string): {
+    energies: Record<number, number>;
+    telemetrie: TelemetrieRPIA;
+  } | null {
+    if (!this.coucheRPIA || message.trim().length === 0) return null;
+    const { rapport, energies } = this.coucheRPIA.resonnerVersTexte(
+      message,
+      EPOQUES_RPIA_CHAT,
+    );
+    return {
+      energies,
+      telemetrie: {
+        pasTotaux: this.coucheRPIA.pasTotaux,
+        epoques: rapport.epoques,
+        erreurInitiale: Math.round(rapport.erreurInitiale * 1e6) / 1e6,
+        erreurFinale: Math.round(rapport.erreurFinale * 1e6) / 1e6,
+        convergence: rapport.convergence,
+        noeudsEnergises: Object.keys(energies).length,
+      },
+    };
+  }
+
+  /**
+   * Fusionne les énergies de résonance dans les entrées du cycle 1 (même
+   * format { idNeurone → intensité }, plafond identique à l'encodage : la
+   * résonance RENFORCE les neurones déjà excités par les tokens et en
+   * éveille d'autres — jamais un dépassement de plafond).
+   */
+  private fusionnerEnergies(
+    inputs: Record<number, number>,
+    energies: Record<number, number>,
+  ): Record<number, number> {
+    const fusionnes: Record<number, number> = { ...inputs };
+    for (const [idBrut, energie] of Object.entries(energies)) {
+      const id = Number(idBrut);
+      if (!Number.isInteger(id) || !Number.isFinite(energie)) continue;
+      fusionnes[id] = Math.min(
+        INTENSITE_MAX_PAR_NEURONE,
+        (fusionnes[id] ?? 0) + energie,
+      );
+    }
+    return fusionnes;
+  }
+
+  /**
    * Génération neuronale complète : encodage du prompt (texte extrait des
    * messages), fenêtre de cycles réels du noyau avec inférence propre
    * (adaptation (d) : reset complet des énergies — la mémoire vit dans les
@@ -184,6 +267,15 @@ export class NeuralEngine {
 
     const encodage = encodeText(prompt);
     const motsCles = selectionnerMotsCles(encodage.tokens);
+    const messageUtilisateur = extraireDernierMessageUtilisateur(options);
+
+    // RÉSONANCE RPIA (branchée au flux du chat) : le MESSAGE (pas la charte
+    // système) est mis en résonance, puis ses énergies fusionnent dans la
+    // volée unique du cycle 1 — même format et même plafond que l'encodage.
+    const resonance = this.resonnerRPIA(messageUtilisateur || prompt);
+    const entreesCycle1 = resonance
+      ? this.fusionnerEnergies(encodage.inputs, resonance.energies)
+      : encodage.inputs;
 
     // Adaptation (d) : inférence propre — reset complet des énergies.
     this.reinitialiserEnergies();
@@ -198,7 +290,7 @@ export class NeuralEngine {
     for (let cycle = 1; cycle <= NEURAL_CYCLES_PAR_GENERATION; cycle++) {
       dernierRapport = this.noyau.executerCycle(
         cycle === 1
-          ? { intensite: 0, inputsDirects: encodage.inputs }
+          ? { intensite: 0, inputsDirects: entreesCycle1 }
           : { intensite: 0 },
         { prompt, __fenetreNeuronale: fenetre },
       );
@@ -213,7 +305,6 @@ export class NeuralEngine {
     }
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
-    const messageUtilisateur = extraireDernierMessageUtilisateur(options);
     // PILOTAGE PLATEFORME d'abord (données réelles du compte) — puis le PONT
     // CONNAISSANCES (fragments réellement recherchés pour ce tour — c'est ce
     // qui rend les documents ingérés visibles dans les réponses), puis
@@ -232,6 +323,7 @@ export class NeuralEngine {
       composition,
       decode,
       Date.now() - debut,
+      resonance?.telemetrie,
     );
   }
 
@@ -251,6 +343,13 @@ export class NeuralEngine {
 
     const encodage = encodeText(prompt);
     const motsCles = selectionnerMotsCles(encodage.tokens);
+    const messageUtilisateur = extraireDernierMessageUtilisateur(options);
+
+    // RÉSONANCE RPIA (cf. generate) — même contrat, même plafond.
+    const resonance = this.resonnerRPIA(messageUtilisateur || prompt);
+    const entreesCycle1 = resonance
+      ? this.fusionnerEnergies(encodage.inputs, resonance.energies)
+      : encodage.inputs;
 
     let providerSignale = false;
     const emettre = async (delta: string): Promise<void> => {
@@ -275,7 +374,7 @@ export class NeuralEngine {
     for (let cycle = 1; cycle <= NEURAL_CYCLES_PAR_GENERATION; cycle++) {
       dernierRapport = this.noyau.executerCycle(
         cycle === 1
-          ? { intensite: 0, inputsDirects: encodage.inputs }
+          ? { intensite: 0, inputsDirects: entreesCycle1 }
           : { intensite: 0 },
         { prompt, __fenetreNeuronale: fenetre },
       );
@@ -290,7 +389,6 @@ export class NeuralEngine {
     }
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
-    const messageUtilisateur = extraireDernierMessageUtilisateur(options);
     const knowledgeContext = options.knowledgeContext?.trim() ?? "";
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
@@ -314,6 +412,7 @@ export class NeuralEngine {
       composition,
       decode,
       Date.now() - debut,
+      resonance?.telemetrie,
     );
   }
 
@@ -330,6 +429,13 @@ export class NeuralEngine {
 
     const encodage = encodeText(prompt);
     const motsCles = selectionnerMotsCles(encodage.tokens);
+    const messageUtilisateur = extraireDernierMessageUtilisateur(options);
+
+    // RÉSONANCE RPIA (cf. generate) — même contrat, même plafond.
+    const resonance = this.resonnerRPIA(messageUtilisateur || prompt);
+    const entreesCycle1 = resonance
+      ? this.fusionnerEnergies(encodage.inputs, resonance.energies)
+      : encodage.inputs;
 
     // Adaptation (d) : inférence propre — reset complet des énergies.
     this.reinitialiserEnergies();
@@ -342,7 +448,7 @@ export class NeuralEngine {
     for (let cycle = 1; cycle <= NEURAL_CYCLES_PAR_GENERATION; cycle++) {
       dernierRapport = this.noyau.executerCycle(
         cycle === 1
-          ? { intensite: 0, inputsDirects: encodage.inputs }
+          ? { intensite: 0, inputsDirects: entreesCycle1 }
           : { intensite: 0 },
         { prompt, __fenetreNeuronale: fenetre },
       );
@@ -358,7 +464,6 @@ export class NeuralEngine {
     }
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
-    const messageUtilisateur = extraireDernierMessageUtilisateur(options);
     const memoire = this.memoirePour(options);
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
@@ -375,6 +480,7 @@ export class NeuralEngine {
       composition,
       decode,
       Date.now() - debut,
+      resonance?.telemetrie,
     );
   }
 
@@ -500,6 +606,7 @@ export class NeuralEngine {
     composition: CompositionReponse,
     decode: NeuralDecodedResponse,
     latencyMs: number,
+    telemetrieRPIA?: TelemetrieRPIA,
   ): NeuralAIResponse {
     // Estimation honnête documentée : un SNN ne compte pas de tokens de LLM,
     // on rapporte les mots réels du prompt et de la réponse.
@@ -530,6 +637,10 @@ export class NeuralEngine {
           theme: composition.theme ?? null,
           scoreAppariement: composition.scoreAppariement ?? null,
         },
+        // COUCHE RPIA BRANCHÉE AU FLUX DU CHAT : télémétrie de la résonance
+        // réellement exécutée pour ce tour (null sans couche — jamais un
+        // chiffre inventé).
+        rpia: telemetrieRPIA ?? null,
       },
     };
   }
