@@ -20,6 +20,11 @@ import {
   CORPUS_USER_ID,
 } from "@/lib/pipeline/corpus";
 
+import {
+  fusionRRF,
+  poolPourHybride,
+} from "./hybrid-search";
+
 /**
  * Plafond du repli Firestore quand Qdrant n'est PAS configuré (chemin
  * récurrent, pas un incident) : 100 fragments AU TOTAL, répartis entre les
@@ -131,13 +136,17 @@ export async function searchKnowledge(
   // Qdrant configuré ? Sinon pas d'appel vectoriel du tout (le client
   // répondrait null) — et surtout : null = « pas de réponse » (non
   // configuré OU erreur), [] = « réponse légitime sans hit ».
+  // FENÊTRE ÉLARGIE (pool ×5) : le rerank hybride BM25+RRF a besoin de
+  // candidats pour remonter les termes rares — on rappelle plus large puis
+  // on rend le top `limit` fusionné.
   const qdrantConfigured = isVectorStoreConfigured();
+  const pool = poolPourHybride(limit);
   const hits = qdrantConfigured
     ? await searchVectorPoints(
         VECTOR_COLLECTION_KNOWLEDGE,
         queryEmbedding,
         {
-          limit,
+          limit: pool,
           filter: { userId, projectId, orgIds },
         },
       )
@@ -151,14 +160,23 @@ export async function searchKnowledge(
     // de scraping (userId gen3ia-corpus) concourent avec les résultats
     // personnels/org, même score minimum, plafond identique — fail-soft
     // total (un incident corpus ne peut pas dégrader la recherche).
-    const fusionnes = await fusionnerCorpusGlobal(hits, queryEmbedding, limit);
-    return fusionnes.map((hit) => ({
+    const fusionnes = await fusionnerCorpusGlobal(hits, queryEmbedding, pool);
+    // FUSION HYBRIDE (BM25 + RRF) : le classement final combine rang vectoriel
+    // et rang lexical (termes rares/entités remontés) ; le score COSINUS
+    // d'origine reste exposé (contrat de seuils des consommateurs).
+    const fusionnesMappees = fusionnes.map((hit) => ({
       id: hit.id,
       documentId: String(hit.payload.documentId ?? ""),
       text: String(hit.payload.text ?? hit.payload.preview ?? ""),
       chunkIndex: Number(hit.payload.chunkIndex ?? 0),
       score: hit.score,
     }));
+    return fusionRRF(
+      query,
+      fusionnesMappees,
+      (candidat) => candidat.text,
+      limit,
+    );
   }
 
   // Repli Firestore (Qdrant non configuré OU en erreur) : union personnel
@@ -212,7 +230,8 @@ export async function searchKnowledge(
     }
   }
 
-  return [...byId.values()]
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+  const valeurs = [...byId.values()].sort((a, b) => b.score - a.score);
+  // Même fusion hybride sur le chemin de repli Firestore (pool plus grand,
+  // même contrat de score).
+  return fusionRRF(query, valeurs, (candidat) => candidat.text, limit);
 }

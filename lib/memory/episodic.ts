@@ -187,3 +187,54 @@ export async function summarizeConversation(params: {
     // Le résumé est un plus : jamais bloquant.
   }
 }
+
+/**
+ * Variante CHAT (sans agent dédié) : résumé automatique des conversations
+ * universelles de l'assistant. Archivé comme souvenir « decision » lié à la
+ * conversation (metadata.conversationId, surface chat) — rappelable par la
+ * recherche sémantique et visible dans les souvenirs de l'utilisateur.
+ */
+export async function summarizeChatConversation(params: {
+  userId: string;
+  conversationId: string;
+  history: Array<{ role: "user" | "assistant"; content: string }>;
+}): Promise<void> {
+  try {
+    const transcript = params.history
+      .slice(-24)
+      .map((item) => `${item.role === "user" ? "Utilisateur" : "Assistant"} : ${excerpt(item.content, 700)}`)
+      .join("\n\n");
+
+    const response = await generate({
+      task: "chat",
+      messages: [
+        {
+          role: "system",
+          content:
+            "Tu résumes une conversation entre un utilisateur et l'assistant Gen3ia. Produis un résumé factuel et compact (8 phrases maximum) qui préserve : les décisions prises, les faits et préférences exprimés, les livrables produits et les points en suspens. Ne commente pas, ne salue pas : renvoie UNIQUEMENT le résumé.",
+        },
+        { role: "user", content: transcript },
+      ],
+      preferFree: true,
+      maxTokens: 800,
+      metadata: { purpose: "chat-auto-summary", conversationId: params.conversationId },
+    });
+
+    const summary = response.text.trim();
+    if (!summary) return;
+
+    await writeMemory({
+      userId: params.userId,
+      type: "decision",
+      content: `Résumé de conversation (${new Date().toISOString().slice(0, 10)}) : ${summary}`.slice(0, EXCHANGE_CONTENT_MAX),
+      importance: 0.7,
+      metadata: {
+        kind: "auto-summary",
+        surface: "chat",
+        conversationId: params.conversationId,
+      },
+    });
+  } catch {
+    // Le résumé est un plus : jamais bloquant.
+  }
+}

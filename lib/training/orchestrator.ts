@@ -83,8 +83,9 @@ export async function createJobFromPlan(
   if (planErrors.length > 0) return { ok: false, error: planErrors.join(" ") };
 
   const datasets = await listDatasets(uid, plan.projectId);
+  const datasetsUtilises = datasets.filter((d) => d.status === "valid");
   if (plan.method !== "rag" && plan.method !== "eval-only") {
-    const trainSplit = datasets.filter((d) => d.split === "train" && d.status === "valid");
+    const trainSplit = datasetsUtilises.filter((d) => d.split === "train");
     if (trainSplit.length === 0) {
       return {
         ok: false,
@@ -92,6 +93,21 @@ export async function createJobFromPlan(
       };
     }
   }
+
+  // DATA LINEAGE — snapshot figé au moment de la création : chaque job reste
+  // rattachable aux données EXACTES qui l'ont produit (sha256, taille, origine
+  // upload / huggingface / kaggle + référence hub). Reproductibilité + audit.
+  const dataLineage = datasetsUtilises.map((d) => ({
+    assetId: d.id,
+    name: d.name,
+    split: d.split,
+    sha256: d.sha256,
+    sizeBytes: d.sizeBytes,
+    origin:
+      d.source === "huggingface" || d.source === "kaggle"
+        ? `${d.source}${d.hubRef ? `:${d.hubRef}` : ""}`
+        : d.source,
+  }));
 
   const active = await listActiveJobsForUser(uid);
   try {
@@ -121,11 +137,21 @@ export async function createJobFromPlan(
     progressPercent: null,
     epochsTotal: typeof plan.parameters.epochs === "number" ? plan.parameters.epochs : null,
     simulated: false,
+    ...(dataLineage.length > 0 ? { dataLineage } : {}),
     events: [],
     createdAt: stamp,
     updatedAt: stamp,
   });
   job = withEvent(job, makeEvent("info", `Tâche créée depuis le plan ${plan.id} (moteur ${engine.name}, méthode ${plan.method}).`));
+  if (dataLineage.length > 0) {
+    job = withEvent(
+      job,
+      makeEvent(
+        "info",
+        `Lineage : ${dataLineage.length} dataset(s) figé(s) — empreintes sha256 enregistrées pour la reproductibilité.`,
+      ),
+    );
+  }
 
   job = await dispatchJob(uid, job, plan);
   await saveJob(uid, job);

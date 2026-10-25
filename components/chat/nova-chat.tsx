@@ -178,6 +178,9 @@ interface NovaFichierMsg {
 
 interface NovaMessage {
   id: string;
+  /** Identifiant serveur du message (événements message_complete/done) —
+   *  sert à la cible du feedback 👍/👎. */
+  serverId?: string;
   role: "user" | "assistant";
   content: string;
   date: number;
@@ -186,6 +189,27 @@ interface NovaMessage {
   enCours?: boolean;
   imageUrl?: string;
   fichiers?: NovaFichierMsg[];
+  /** Télémétrie brute du tour (événement turn_telemetry — mode debug). */
+  telemetrie?: TelemetrieTour;
+  /** Retour utilisateur déjà envoyé (anti-double-vote, miroir visuel). */
+  feedback?: "up" | "down";
+}
+
+/** Télémétrie langage d'un tour (miroir de turn_telemetry côté serveur). */
+interface TelemetrieTour {
+  moteur: string;
+  intention: string;
+  scoreResonance: number;
+  resonances: Record<string, number>;
+  motsCles: string[];
+  langage: {
+    source: string;
+    theme: string | null;
+    scoreAppariement: number | null;
+    cle: string | null;
+    cache: "hit" | "miss" | null;
+  };
+  latenceMs: number | null;
 }
 
 interface NovaConversation {
@@ -424,11 +448,13 @@ interface MessageViewProps {
   onCopier: (texte: string) => void;
   onRegenerer: () => void;
   onModifier: () => void;
+  onFeedback: (m: NovaMessage, note: "up" | "down") => void;
 }
 
-const MessageView = React.memo(function MessageView({ m, dernierBot, dernierUser, onCopier, onRegenerer, onModifier }: MessageViewProps) {
+const MessageView = React.memo(function MessageView({ m, dernierBot, dernierUser, onCopier, onRegenerer, onModifier, onFeedback }: MessageViewProps) {
   const bot = m.role === "assistant";
   const blocs = React.useMemo(() => (bot ? blocsMarkdown(m.content || "") : []), [bot, m.content]);
+  const [debugOuvert, setDebugOuvert] = React.useState(false);
 
   return (
     <div className={`nova-msg ${bot ? "assistant" : "utilisateur"}`}>
@@ -479,6 +505,37 @@ const MessageView = React.memo(function MessageView({ m, dernierBot, dernierUser
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
               Copier
             </button>
+            {bot && m.serverId ? (
+              <>
+                <button
+                  type="button"
+                  aria-label="Bonne réponse"
+                  className={m.feedback === "up" ? "nova-feedback actif" : "nova-feedback"}
+                  onClick={() => onFeedback(m, "up")}
+                >
+                  <svg viewBox="0 0 24 24" fill={m.feedback === "up" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" /></svg>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Réponse à améliorer"
+                  className={m.feedback === "down" ? "nova-feedback actif" : "nova-feedback"}
+                  onClick={() => onFeedback(m, "down")}
+                >
+                  <svg viewBox="0 0 24 24" fill={m.feedback === "down" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3zm7-13h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17" /></svg>
+                </button>
+              </>
+            ) : null}
+            {bot && m.telemetrie ? (
+              <button
+                type="button"
+                className="nova-feedback"
+                aria-expanded={debugOuvert}
+                onClick={() => setDebugOuvert((v) => !v)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+                Neurones
+              </button>
+            ) : null}
             {bot && dernierBot ? (
               <button type="button" aria-label="Régénérer la réponse" onClick={onRegenerer}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M23 4v6h-6M1 20v-6h6" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" /></svg>
@@ -490,6 +547,27 @@ const MessageView = React.memo(function MessageView({ m, dernierBot, dernierUser
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
                 Modifier
               </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {debugOuvert && m.telemetrie ? (
+          <div className="nova-telemetrie" role="status">
+            <div className="ligne"><span>Source</span><code>{m.telemetrie.langage.source}</code></div>
+            <div className="ligne"><span>Intention</span><code>{m.telemetrie.intention}</code></div>
+            {m.telemetrie.langage.scoreAppariement !== null ? (
+              <div className="ligne"><span>Score d&apos;appariement</span><code>{m.telemetrie.langage.scoreAppariement.toFixed(3)}</code></div>
+            ) : null}
+            <div className="ligne"><span>Cache</span><code>{m.telemetrie.langage.cache ?? "—"}</code></div>
+            <div className="ligne"><span>Résonance max</span><code>{m.telemetrie.scoreResonance.toFixed(3)}</code></div>
+            {m.telemetrie.latenceMs !== null ? (
+              <div className="ligne"><span>Latence moteur</span><code>{m.telemetrie.latenceMs} ms</code></div>
+            ) : null}
+            {m.telemetrie.motsCles.length > 0 ? (
+              <div className="ligne"><span>Mots-clés</span><code>{m.telemetrie.motsCles.join(", ")}</code></div>
+            ) : null}
+            {Object.keys(m.telemetrie.resonances).length > 0 ? (
+              <div className="ligne"><span>Pools actifs</span><code>{Object.entries(m.telemetrie.resonances).map(([p, v]) => `${p} ${v.toFixed(2)}`).slice(0, 6).join(" · ")}</code></div>
             ) : null}
           </div>
         ) : null}
@@ -586,6 +664,57 @@ export default function NovaChat() {
       else afficherToast("Copie impossible");
     },
     [afficherToast],
+  );
+
+  /**
+   * FEEDBACK 👍/👎 — POST /api/ai/feedback avec la clé de paire cortex
+   * (télémétrie du tour) : le signal humain pilote DIRECTEMENT la plasticité
+   * d'usage (👍 renforce, 👎 affaiblit) en plus d'alimenter les leçons qualité.
+   */
+  const envoyerFeedback = React.useCallback(
+    (message: NovaMessage, note: "up" | "down") => {
+      const conv = convsRef.current.find((c) => c.id === activeIdRef.current);
+      if (!conv?.serverId || !message.serverId) return;
+      if (message.feedback) return; // anti-double-vote
+      majConvs(
+        convsRef.current.map((c) =>
+          c.id !== conv.id
+            ? c
+            : { ...c, messages: c.messages.map((m) => (m.id === message.id ? { ...m, feedback: note } : m)) },
+        ),
+      );
+      void (async () => {
+        try {
+          const response = await authFetch("/api/ai/feedback", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              conversationId: conv.serverId,
+              messageId: message.serverId,
+              rating: note,
+              ...(message.telemetrie?.langage.cle ? { pairKey: message.telemetrie.langage.cle } : {}),
+            }),
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          afficherToast(
+            note === "up"
+              ? "Merci — le cortex renforce cette paire"
+              : "Noté — cette réponse perd du poids à chaque rappel",
+          );
+        } catch {
+          // Retire le miroir visuel : l'utilisateur peut réessayer.
+          majConvs(
+            convsRef.current.map((c) =>
+              c.id !== conv.id
+                ? c
+                : { ...c, messages: c.messages.map((m) => (m.id === message.id ? { ...m, feedback: undefined } : m)) },
+            ),
+          );
+          afficherToast("Feedback non transmis — réessayez");
+        }
+      })();
+    },
+    [afficherToast, majConvs],
   );
 
   /* ---- Persistance ---- */
@@ -1030,10 +1159,16 @@ export default function NovaChat() {
               terminerEcriture(streamId);
               majMessage(conv.id, streamId, (m) => ({
                 ...m,
+                serverId: event.message.id,
                 content: contenu,
                 modele: event.message.model || m.modele,
                 ...(event.message.imageUrl ? { imageUrl: event.message.imageUrl } : {}),
               }));
+              break;
+            case "turn_telemetry":
+              // Mode debug : télémétrie brute attachée au message en cours
+              // (source cortex, score, intention, cache — jamais le contenu).
+              majMessage(conv.id, streamId, (m) => ({ ...m, telemetrie: event.raw }));
               break;
             case "done": {
               const final = event.assistantMessage;
@@ -1041,6 +1176,7 @@ export default function NovaChat() {
               terminerEcriture(streamId);
               majMessage(conv.id, streamId, (m) => ({
                 ...m,
+                serverId: final.id || m.serverId,
                 content: final.content || contenu,
                 modele: final.model || def.nom,
                 enCours: false,
@@ -1624,6 +1760,7 @@ export default function NovaChat() {
                     void regenerer();
                   }}
                   onModifier={modifierDernier}
+                  onFeedback={envoyerFeedback}
                 />
               ))}
               {suggestions ? (

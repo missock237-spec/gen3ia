@@ -244,6 +244,18 @@ export const trainingJobSchema = z.object({
   epochsDone: z.number().int().nonnegative().nullish(),
   trainLoss: z.number().nullish(),
   metrics: z.record(z.string(), z.number()).default({}),
+  /** DATA LINEAGE — provenance figée des données utilisées par CE job
+   *  (snapshot au moment de la création) : nom, empreinte sha256, taille,
+   *  origine (upload/hub) et nombre d'exemples détectés. Reproductibilité
+   *  et conformité : chaque résultat reste rattachable à ses données. */
+  dataLineage: z.array(z.object({
+    assetId: z.string(),
+    name: z.string().max(300),
+    split: z.string().max(20).default("train"),
+    sha256: z.string().max(128).default(""),
+    sizeBytes: z.number().int().nonnegative().default(0),
+    origin: z.string().max(60).default("upload"),
+  })).max(200).optional(),
   /** Raison d'attente honnête (ex. "no-gpu-provider") quand rien n'est disponible. */
   waitingReason: z.string().nullish(),
   /** Vrai UNIQUEMENT pour le fournisseur mock (tests/dev) — jamais en production. */

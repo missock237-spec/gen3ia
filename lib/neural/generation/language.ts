@@ -46,6 +46,21 @@ export const BONUS_SOUS_ENSEMBLE = 1.6;
 /** Poids des tokens du tour précédent (contexte anaphorique). */
 export const POIDS_CONTEXTE = 0.35;
 
+/**
+ * Décroissance du poids de contexte pour les tours plus anciens : le tour
+ * N-1 pèse POIDS_CONTEXTE, le tour N-2 pèse POIDS_CONTEXTE × DÉCROISSANCE
+ * (0.57), le tour N-3 pèse POIDS_CONTEXTE × DÉCROISSANCE² (0.33)…
+ * Fenêtre utile bornée à 3 tours (au-delà le signal lexical est dilué).
+ */
+export const DÉCROISSANCE_CONTEXTE = 0.57;
+export const MAX_TOURS_CONTEXTE = 3;
+
+/** Facteur d'affaiblissement d'une paire signalée inutile (feedback 👎). */
+export const FACTEUR_AFFAIBLISSEMENT = 0.85;
+
+/** Plancher du poids d'usage (une paire affaiblie reste rappelable). */
+export const POIDS_USAGE_MIN = 0.6;
+
 /** Poids d'usage initial d'une paire. */
 export const POIDS_USAGE_INITIAL = 1.0;
 
@@ -111,6 +126,8 @@ export interface ReponseLangage {
   score: number;
   /** Provenance : corpus d'amorçage, paire personnalisée, ou contexte (reprise). */
   source: "corpus" | "personnalisee" | "contexte";
+  /** Clé de motif de la paire gagnante — sert à la plasticité par feedback. */
+  cle?: string;
 }
 
 /** Contexte conversationnel fourni par le moteur (hippocampe). */
@@ -119,6 +136,13 @@ export interface ContexteLangage {
   messagePrecedent?: string;
   /** Réponse de l'IA précédente (pour éviter les répétitions totales). */
   reponsePrecedente?: string;
+  /**
+   * Historique étendu (tours antérieurs, du plus récent au plus ancien).
+   * Permet au cortex de résoudre les reprises sur 2-3 tours avec décroissance
+   * (DÉCROISSANCE_CONTEXTE) — la fenêtre longue reste gérée par le
+   * contexte LLM (buildContextWindow), ici on n'alimente que le score lexical.
+   */
+  historique?: { message: string; reponse?: string }[];
 }
 
 /** Statistiques d'apprentissage retournées par apprendre(). */
@@ -251,6 +275,27 @@ export class CortexLangagierGen3 {
         )
       : [];
 
+    // Contexte étendu : jusqu'à MAX_TOURS_CONTEXTE tours antérieurs, chacun
+    // pesant POIDS_CONTEXTE × DÉCROISSANCE_CONTEXTE^age (décroissance géométrique).
+    const poidsHistorique = new Map<string, number>();
+    if (Array.isArray(contexte.historique)) {
+      const déjàVus = new Set([...tokensRequete, ...tokensContexte]);
+      contexte.historique
+        .slice(0, MAX_TOURS_CONTEXTE)
+        .forEach((tour, position) => {
+          if (!tour?.message) return;
+          const poids = POIDS_CONTEXTE * Math.pow(DÉCROISSANCE_CONTEXTE, position + 1);
+          if (poids < 0.05) return;
+          for (const token of tokensInformatifs([
+            ...new Set(tokenize(tour.message)),
+          ])) {
+            if (déjàVus.has(token)) continue;
+            déjàVus.add(token);
+            poidsHistorique.set(token, poids);
+          }
+        });
+    }
+
     const totalPaires = this.paires.length;
 
     // Accumulateur paire → score brut.
@@ -272,6 +317,10 @@ export class CortexLangagierGen3 {
 
     for (const token of tokensRequete) accumuler(token, 1.0, false);
     for (const token of tokensContexte) accumuler(token, POIDS_CONTEXTE, true);
+    // Contexte étendu (tours N-2, N-3…) : poids décroissant, compté comme contexte.
+    for (const [token, poids] of poidsHistorique) {
+      accumuler(token, poids, true);
+    }
 
     if (scores.size === 0) return null;
 
@@ -327,7 +376,43 @@ export class CortexLangagierGen3 {
       theme: gagnante.theme,
       score: Number(meilleurScore.toFixed(4)),
       source,
+      cle: cleMotif(gagnante.motif),
     };
+  }
+
+  /**
+   * PLASTICITÉ PAR FEEDBACK — renforce une paire (👍) : signal qualité
+   * humain qui s'ajoute au comptage de rappels. Idempotent et plafonné.
+   */
+  renforcer(cle: string): boolean {
+    const paire = this.trouverParCle(cle);
+    if (!paire) return false;
+    paire.poidsUsage = Math.min(POIDS_USAGE_MAX, paire.poidsUsage + GAIN_USAGE * 2);
+    this.poidsParCle.set(cle, paire.poidsUsage);
+    return true;
+  }
+
+  /**
+   * PLASTICITÉ PAR FEEDBACK — affaiblit une paire (👎) : la réponse jugée
+   * inutile régresse (facteur FACTEUR_AFFAIBLISSEMENT, plancher POIDS_USAGE_MIN)
+   * sans jamais disparaître (le corpus d'amorçage reste la base honnête).
+   */
+  affaiblir(cle: string): boolean {
+    const paire = this.trouverParCle(cle);
+    if (!paire) return false;
+    paire.poidsUsage = Math.max(
+      POIDS_USAGE_MIN,
+      paire.poidsUsage * FACTEUR_AFFAIBLISSEMENT,
+    );
+    this.poidsParCle.set(cle, paire.poidsUsage);
+    return true;
+  }
+
+  /** Retrouve une paire indexée par sa clé de motif. */
+  private trouverParCle(cle: string): PaireIndexee | null {
+    if (!cle) return null;
+    const indice = this.paires.findIndex((p) => cleMotif(p.motif) === cle);
+    return indice >= 0 ? this.paires[indice] : null;
   }
 
   /** Nombre de paires personnalisées indexées. */

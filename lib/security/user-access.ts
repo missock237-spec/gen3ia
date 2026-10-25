@@ -302,6 +302,7 @@ const RESTRICTED_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = 
 const USER_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/chat": "chat",
   "/dashboard": "chat",
+  "/training": "training",
   "/billing": "facturation",
   "/memory": "memoire",
   "/observability": "observabilite",

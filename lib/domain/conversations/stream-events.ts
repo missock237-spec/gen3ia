@@ -63,6 +63,29 @@ export type ConversationStreamEvent =
       inputTokens: number;
       outputTokens: number;
     }
+  /** TÉLÉMÉTRIE BRUTE DU TOUR (mode debug développeur) : provenance du
+   *  langage (cortex_corpus/personnalisee/contexte/decoder…), score
+   *  d'appariement, clé de paire gagnante (plasticité par feedback),
+   *  intention détectée, résonances des pools, cache hit/miss. Émis juste
+   *  avant « message_complete » ; ignoré par les clients qui n'en veulent pas. */
+  | {
+      type: "turn_telemetry";
+      raw: {
+        moteur: string;
+        intention: string;
+        scoreResonance: number;
+        resonances: Record<string, number>;
+        motsCles: string[];
+        langage: {
+          source: string;
+          theme: string | null;
+          scoreAppariement: number | null;
+          cle: string | null;
+          cache: "hit" | "miss" | null;
+        };
+        latenceMs: number | null;
+      };
+    }
   /** Erreur en cours de tour (le client affiche une erreur inline). */
   | { type: "error"; message: string };
 

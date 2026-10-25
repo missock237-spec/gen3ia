@@ -43,6 +43,10 @@ export interface ContexteRequete {
 
   /** Utilisateur connu après authentification. */
   userId?: string;
+
+  /** Conversation en cours (chat) — corrélation bout-en-bout des logs d'un
+   *  tour conversationnel avec le traceId et la facturation. */
+  conversationId?: string;
 }
 
 const als = new AsyncLocalStorage<ContexteRequete>();
@@ -82,6 +86,7 @@ export function definirContexteRequeteTenant(
   if (partial.route) courant.route = partial.route.slice(0, 256);
   if (partial.orgId) courant.orgId = partial.orgId.slice(0, 128);
   if (partial.userId) courant.userId = partial.userId.slice(0, 128);
+  if (partial.conversationId) courant.conversationId = partial.conversationId.slice(0, 128);
 }
 
 /**
@@ -98,6 +103,7 @@ export function contextePino(): Record<string, string> {
   if (contexte.orgId) champs.orgId = contexte.orgId;
   if (contexte.userId) champs.userId = contexte.userId;
   if (contexte.route) champs.route = contexte.route;
+  if (contexte.conversationId) champs.conversationId = contexte.conversationId;
   return champs;
 }
 

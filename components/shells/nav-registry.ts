@@ -164,6 +164,7 @@ const WORKSPACE_PRIMARY: NavRoute[] = [
 ];
 
 const WORKSPACE_SECONDARY: NavRoute[] = [
+  { id: "training-studio", href: "/training", label: "Studio d'entraînement", icon: "🎓", description: "Datasets, plans IA, tâches GPU réelles, rapports par époque et lineage", contexts: ["workspace"], section: "secondary", keywords: ["entraînement", "training", "studio", "dataset", "gpu", "modèle", "fine-tuning", "lora"] },
   { id: "team", href: "/team", label: "Équipe", icon: "◎", description: "Membres, rôles et activité partagée", contexts: ["workspace"], section: "secondary", keywords: ["équipe", "membres", "rôles"] },
   // RESTRUCTURATION DES PARCOURS : « Connecteurs » → Centre des
   // intégrations ; « Stockage » → Bibliothèque de fichiers et d'artefacts.

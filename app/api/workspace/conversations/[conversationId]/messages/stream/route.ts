@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { clientIp } from "@/lib/security/rate-limit";
 import { rateLimitDistributed } from "@/lib/cache/redis";
+import { definirContexteRequeteTenant } from "@/lib/observability/contexte-requete";
 import { runConversationTurn } from "@/lib/domain/conversations/engine";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
 import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
@@ -68,6 +69,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
     const user = await requireUser(request);
     const { conversationId } = await params;
+
+    // Corrélation logs : TOUTE la chaîne async du tour (moteur, mémoires,
+    // facturation) hérite de conversationId dans le contexte pino (ALS).
+    definirContexteRequeteTenant({ conversationId, userId: user.uid });
 
     const limit = await rateLimitDistributed(`ws-msg:${user.uid}:${clientIp(request)}`, {
       limit: 40,

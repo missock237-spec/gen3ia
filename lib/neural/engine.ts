@@ -15,6 +15,7 @@ import { encodeText } from "./encoding/text-encoder";
 import { decodeResponse, poidsResonanceParCycle } from "./decoding/response-decoder";
 import type { NeuralDecodedResponse } from "./decoding/response-decoder";
 import type { CortexLangagierGen3, ContexteLangage } from "./generation/language";
+import { creerCacheReponses } from "./generation/cache-reponses";
 import { HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
@@ -47,6 +48,10 @@ export interface CompositionReponse {
   theme?: string;
   /** Score d'appariement du cortex (sinon undefined). */
   scoreAppariement?: number;
+  /** Clé de motif de la paire gagnante — cible de la plasticité par feedback. */
+  clePair?: string;
+  /** « hit » si la réponse vient du cache d'inférence (télémétrie honnête). */
+  cache?: "hit" | "miss";
 }
 
 /**
@@ -86,6 +91,13 @@ export const NEURAL_CYCLES_PAR_GENERATION = 4;
 
 /** Nombre maximal de mots-clés remontés dans la réponse décodée. */
 export const MAX_MOTS_CLES = 8;
+
+/**
+ * Nombre de tours antérieurs que le cortex langagier consulte pour les
+ * reprises (en plus du tour N-1) : aligné sur MAX_TOURS_CONTEXTE de
+ * lib/neural/generation/language.ts (+1 pour le tour courant exclu du slice).
+ */
+export const MAX_TOURS_MEMOIRE_CORTEX = 3;
 
 /** Réponse du moteur neuronal : AIResponse complet, provider neural. */
 export interface NeuralAIResponse extends Omit<AIResponse, "provider"> {
@@ -158,6 +170,13 @@ function phraseDomaine(nomFr: string, score: number): string {
 }
 
 export class NeuralEngine {
+  /**
+   * CACHE D'INFÉRENCE (par moteur — cf. creerCacheReponses) : les redites
+   * identiques au sein d'une même conversation court-circuitent le scoring
+   * du cortex. Scopé par compte/conversation (voir cleMemoirePour).
+   */
+  private readonly cacheReponses = creerCacheReponses();
+
   constructor(
     private readonly noyau: NoyauCentralGen3,
     private readonly espace: EspaceFiltreResonant,
@@ -294,6 +313,20 @@ export class NeuralEngine {
   }
 
   /**
+   * Clé d'identité de la fenêtre de mémoire (même logique que memoirePour) :
+   * sert à SCOPER le cache d'inférence par compte/conversation — les paires
+   * personnalisées (enseignées) d'un utilisateur ne doivent JAMAIS servir de
+   * réponse en cache à un autre.
+   */
+  private cleMemoirePour(options: AIRequest): string {
+    const meta = options.metadata ?? {};
+    const userId = typeof meta.userId === "string" ? meta.userId : "";
+    const conversationId =
+      typeof meta.conversationId === "string" ? meta.conversationId : "";
+    return `${userId || "sans-compte"}|${conversationId || "hors-conversation"}`;
+  }
+
+  /**
    * Génération neuronale complète : encodage du prompt (texte extrait des
    * messages), fenêtre de cycles réels du noyau avec inférence propre
    * (adaptation (d) : reset complet des énergies — la mémoire vit dans les
@@ -355,7 +388,7 @@ export class NeuralEngine {
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
-      this.composer(messageUtilisateur, decode, memoire, domaine);
+      this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
     this.memoriser(messageUtilisateur, composition.texte, memoire);
     this.evoluer(messageUtilisateur, composition);
 
@@ -432,12 +465,16 @@ export class NeuralEngine {
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const knowledgeContext = options.knowledgeContext?.trim() ?? "";
+    // FLUX = CHEMIN RÉEL DU CHAT : la mémoire de travail DOIT être consultée
+    // ici aussi (correction — avant, seul generate() non-flux la consultait :
+    // les reprises anaphoriques ne fonctionnaient jamais en production).
+    const memoire = this.memoirePour(options);
     // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
     const domaine = detecterDomaine(messageUtilisateur);
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
-      this.composer(messageUtilisateur, decode, undefined, domaine);
+      this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
 
     // La réponse composée est émise par segments (phrases réelles). Les
     // télémétries de cycles restent disponibles dans raw (plus de bruit de
@@ -449,7 +486,7 @@ export class NeuralEngine {
       await new Promise<void>((resoudre) => setImmediate(resoudre));
     }
 
-    this.memoriser(messageUtilisateur, composition.texte);
+    this.memoriser(messageUtilisateur, composition.texte, memoire);
     this.evoluer(messageUtilisateur, composition);
     return this.construireReponse(
       prompt,
@@ -514,7 +551,7 @@ export class NeuralEngine {
     const domaine = detecterDomaine(messageUtilisateur);
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
-      this.composer(messageUtilisateur, decode, memoire, domaine);
+      this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
 
     for (const segment of segmenterTexte(composition.texte)) {
       yield segment;
@@ -573,7 +610,8 @@ export class NeuralEngine {
     prompt: string,
     decode: NeuralDecodedResponse,
     memoire?: HippocampusMemory,
-    domaine?: { label: string; nom: string; score: number; source: string } | null,
+    cleMemoire: string = "sans-compte|hors-conversation",
+    domaine?: { label: string; nom: string; nomEn: string | null; score: number; source: string } | null,
   ): CompositionReponse {
     if (this.cortex) {
       const contexte: ContexteLangage = {};
@@ -584,10 +622,34 @@ export class NeuralEngine {
           contexte.messagePrecedent = dernierTour.user;
           contexte.reponsePrecedente = dernierTour.system;
         }
+        // FENÊTRE DE CONTEXTE ÉTENDUE : les tours N-2 et N-3 (du plus récent
+        // au plus ancien) participent au score lexical avec décroissance —
+        // le cortex résout les reprises jusqu'à 3 tours en arrière.
+        const anterieurs = historique.slice(
+          Math.max(0, historique.length - (MAX_TOURS_MEMOIRE_CORTEX + 1)),
+          historique.length - 1,
+        );
+        if (anterieurs.length > 0) {
+          contexte.historique = anterieurs
+            .slice()
+            .reverse()
+            .map((tour) => ({ message: tour.user, reponse: tour.system }));
+        }
       }
+
+      // CACHE D'INFÉRENCE (scopé par compte/conversation) : les requêtes
+      // identiques au sein d'une MÊME conversation court-circuitent le
+      // scoring du cortex pendant la durée de vie courte du cache — gain
+      // direct sur les redites, sans jamais fuiter entre comptes.
+      const cleCache = this.cacheReponses.cle(cleMemoire, prompt, contexte);
+      const enCache = this.cacheReponses.lire(cleCache);
+      if (enCache) {
+        return { ...enCache, cache: "hit" };
+      }
+
       const reponse = this.cortex.repondre(prompt, contexte);
       if (reponse) {
-        return {
+        const composition: CompositionReponse = {
           texte: reponse.texte,
           source:
             reponse.source === "personnalisee"
@@ -597,7 +659,11 @@ export class NeuralEngine {
                 : "cortex_corpus",
           theme: reponse.theme,
           scoreAppariement: reponse.score,
+          clePair: reponse.cle,
+          cache: "miss",
         };
+        this.cacheReponses.stocker(cleCache, composition);
+        return composition;
       }
     }
 
@@ -690,6 +756,8 @@ export class NeuralEngine {
           source: composition.source,
           theme: composition.theme ?? null,
           scoreAppariement: composition.scoreAppariement ?? null,
+          cle: composition.clePair ?? null,
+          cache: composition.cache ?? null,
         },
         // COUCHE RPIA BRANCHÉE AU FLUX DU CHAT : télémétrie de la résonance
         // réellement exécutée pour ce tour (null sans couche — jamais un

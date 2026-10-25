@@ -7,6 +7,7 @@ import "server-only";
 import { buildContextWindow, estimateTokens } from "./context-window";
 import { buildFollowUpSuggestions } from "./follow-ups";
 import { safeEmitter } from "./stream-events";
+import type { ConversationStreamEvent } from "./stream-events";
 import type { ConversationMessage } from "./types";
 import { detectImageRatio, enhanceImagePrompt, extractImagePrompt } from "@/lib/ai/image-intent";
 import { languageDirective } from "@/lib/ai/prompt-enhancer";
@@ -16,6 +17,7 @@ import { ThinkTagStreamFilter, stripThinkTags } from "@/lib/ai/think-filter";
 import { imagesForModel } from "@/lib/ai/vision-input";
 import { appendMessage } from "@/lib/chat/repository";
 import type { ChatConversation, ChatMessage } from "@/lib/chat/repository";
+import { shouldSummarize, summarizeChatConversation } from "@/lib/memory/episodic";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 import { attachmentImageCandidates } from "@/lib/files/image-source";
 import type { TurnIntent } from "./engine-intent";
@@ -49,6 +51,51 @@ export interface TurnBase extends ConversationTurnInput {
 
 export interface TurnContext extends TurnBase {
   intent: TurnIntent;
+}
+
+/**
+ * Normalise la télémétrie brute du moteur (AIResponse.raw — forme « unknown »
+ * par contrat) en payload d'événement turn_telemetry pour le panneau debug.
+ * Retourne null si la réponse ne transporte pas de télémétrie langage
+ * (ne doit JAMAIS bloquer le tour).
+ */
+function construireTelemetrie(
+  response: { raw?: unknown; latencyMs?: number } | undefined,
+): Extract<ConversationStreamEvent, { type: "turn_telemetry" }> | null {
+  try {
+    const raw = (response?.raw ?? null) as Record<string, unknown> | null;
+    if (!raw || typeof raw !== "object" || !("langage" in raw)) return null;
+    const langage = (raw.langage ?? {}) as Record<string, unknown>;
+    const resonances: Record<string, number> = {};
+    for (const [canal, valeur] of Object.entries(
+      (raw.resonances ?? {}) as Record<string, unknown>,
+    )) {
+      if (typeof valeur === "number") resonances[canal] = valeur;
+    }
+    return {
+      type: "turn_telemetry",
+      raw: {
+        moteur: typeof raw.moteur === "string" ? raw.moteur : "snn",
+        intention: typeof raw.intention === "string" ? raw.intention : "inconnue",
+        scoreResonance: typeof raw.scoreResonance === "number" ? raw.scoreResonance : 0,
+        resonances,
+        motsCles: Array.isArray(raw.motsCles)
+          ? (raw.motsCles as unknown[]).filter((m): m is string => typeof m === "string").slice(0, 8)
+          : [],
+        langage: {
+          source: typeof langage.source === "string" ? langage.source : "inconnue",
+          theme: typeof langage.theme === "string" ? langage.theme : null,
+          scoreAppariement:
+            typeof langage.scoreAppariement === "number" ? langage.scoreAppariement : null,
+          cle: typeof langage.cle === "string" ? langage.cle : null,
+          cache: langage.cache === "hit" || langage.cache === "miss" ? langage.cache : null,
+        },
+        latenceMs: typeof response?.latencyMs === "number" ? response.latencyMs : null,
+      },
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
@@ -163,6 +210,8 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
       provider = response.provider;
       model = response.model;
       usage = response.usage;
+      const telemetrie = construireTelemetrie(response);
+      if (telemetrie) await onEvent(telemetrie);
     } catch (error) {
       if (streamedText.length > 0) {
         // Flux interrompu en cours de route : le texte partiel déjà affiché
@@ -193,6 +242,8 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
           provider = response.provider;
           model = response.model;
           usage = response.usage;
+          const telemetrieRepli = construireTelemetrie(response);
+          if (telemetrieRepli) await onEvent(telemetrieRepli);
           await onEvent({ type: "message_delta", delta: content });
         } catch (fallbackError) {
           content =
@@ -223,6 +274,8 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
       provider = response.provider;
       model = response.model;
       usage = response.usage;
+      const telemetrieNonFlux = construireTelemetrie(response);
+      if (telemetrieNonFlux) await onEvent(telemetrieNonFlux);
     } catch (error) {
       // Échec/timeout IA : réponse honnête persistée dans le fil (jamais de 504
       // opaque), l'utilisateur peut renvoyer le message.
@@ -260,6 +313,30 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
     ...(generationStatus === "complete" ? { suggestions: buildFollowUpSuggestions(ctx.message, content) } : {}),
   });
   await onEvent({ type: "message_complete", message: assistantMessage });
+
+  // RÉSUMÉ ÉPISODIQUE (fire-and-forget, jamais bloquant) : tous les 8 messages
+  // d'une conversation, un résumé compact est généré et archivé comme souvenir
+  // « decision » lié à la conversation — cohérence long terme sans saturer le
+  // SNN, rappelable par la recherche sémantique.
+  try {
+    const nbMessages = ctx.priorHistory.length + 2;
+    if (shouldSummarize(nbMessages)) {
+      void summarizeChatConversation({
+        userId: ctx.userId,
+        conversationId: ctx.conversationId,
+        history: [
+          ...ctx.priorHistory.slice(-23).map((message) => ({
+            role: message.role as "user" | "assistant",
+            content: message.content,
+          })),
+          { role: "user", content: ctx.message },
+          { role: "assistant", content },
+        ],
+      });
+    }
+  } catch {
+    // Le résumé est un gain, jamais une dépendance.
+  }
 
   return {
     conversationId: ctx.conversationId,

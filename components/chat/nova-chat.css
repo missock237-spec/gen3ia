@@ -1160,3 +1160,61 @@
   font-size: 12px; font-weight: 600; color: var(--g3-primary);
 }
 .nova-lecture-vocale button:hover { text-decoration: underline; }
+
+/* ================= Feedback 👍/👎 + panneau télémétrie ================= */
+
+.nova-meta .nova-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--g3-muted, #8b93a7);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 4px;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.nova-meta .nova-feedback svg { width: 13px; height: 13px; }
+.nova-meta .nova-feedback:hover {
+  color: var(--g3-primary, #e8ecf4);
+  background: rgba(128, 138, 160, 0.12);
+}
+.nova-meta .nova-feedback.actif {
+  color: var(--g3-accent, #ffc82e);
+}
+
+.nova-telemetrie {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(128, 138, 160, 0.25);
+  border-radius: 10px;
+  background: rgba(10, 14, 22, 0.55);
+  font-size: 12px;
+  display: grid;
+  gap: 4px;
+  max-width: 560px;
+}
+.nova-telemetrie .ligne {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.nova-telemetrie .ligne span {
+  flex: 0 0 140px;
+  color: var(--g3-muted, #8b93a7);
+  font-weight: 600;
+}
+.nova-telemetrie .ligne code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--g3-primary, #e8ecf4);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+html[data-theme="light"] .nova-telemetrie {
+  background: rgba(240, 242, 247, 0.9);
+  border-color: rgba(60, 70, 90, 0.18);
+}
+html[data-theme="light"] .nova-telemetrie .ligne code { color: #1e2430; }

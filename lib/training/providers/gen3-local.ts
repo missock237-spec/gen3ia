@@ -91,6 +91,8 @@ interface SessionGen3 {
   logs: ProviderLogLine[];
   artifactKey: string | null;
   artifactTaille: number;
+  /** Métriques complémentaires du run (early stopping, époques économisées). */
+  metriquesSupplementaires: Record<string, number>;
 }
 
 const sessions = new Map<string, SessionGen3>();
@@ -113,6 +115,15 @@ function parametreNombre(payload: SubmitJobPayload, cle: string, defaut: number,
   const nombre = typeof brut === "number" ? brut : Number(brut);
   if (!Number.isFinite(nombre)) return defaut;
   return Math.min(max, Math.max(min, nombre));
+}
+
+/** Paramètre booléen tolérant d'un plan (bool/number/string). */
+function parametreBooleen(payload: SubmitJobPayload, cle: string, defaut: boolean): boolean {
+  const brut = payload.parameters[cle];
+  if (typeof brut === "boolean") return brut;
+  if (typeof brut === "number") return brut !== 0;
+  if (typeof brut === "string") return ["1", "true", "vrai", "on", "yes"].includes(brut.trim().toLowerCase());
+  return defaut;
 }
 
 /** Construit l'artefact JSON du modèle entraîné (état réel + traçabilité). */
@@ -193,9 +204,19 @@ async function executer(session: SessionGen3): Promise<void> {
     );
 
     // ── 4. Époques réelles : mesure + plasticité d'usage ───────────────
+    // EARLY STOPPING (2026-10-25) : quand la précision train stagne pendant
+    // « patience » époques consécutives (minDelta 0.5 pt), l'entraînement
+    // s'arrête honnêtement — la plasticité d'usage n'apporte plus rien, les
+    // époques restantes ne feraient que brûler du temps.
     const epochs = parametreNombre(session.payload, "epochs", 5, 1, 30);
+    const earlyStopping = parametreBooleen(session.payload, "earlyStopping", true);
+    const patience = 2;
+    const minDelta = 0.005;
     session.epochsTotal = epochs;
     session.etapeCourante = "Époques d'entraînement";
+    let meilleurePrecision = 0;
+    let epoquesSansGain = 0;
+    let arretAnticipe = false;
     for (let epoch = 1; epoch <= epochs && !session.annulee; epoch += 1) {
       let reussites = 0;
       for (const paire of train) {
@@ -210,7 +231,32 @@ async function executer(session: SessionGen3): Promise<void> {
       session.epochsDone = epoch;
       session.progression = Math.min(90, 15 + Math.round((epoch / epochs) * 75));
       log(session, "info", `Époque ${epoch}/${epochs} : précision train ${(precision * 100).toFixed(1)} %.`);
+
+      // Early stopping : plateau détecté → arrêt économique documenté.
+      if (earlyStopping) {
+        if (precision > meilleurePrecision + minDelta) {
+          meilleurePrecision = precision;
+          epoquesSansGain = 0;
+        } else {
+          epoquesSansGain += 1;
+          if (epoquesSansGain >= patience && epoch < epochs) {
+            arretAnticipe = true;
+            log(
+              session,
+              "info",
+              `ARRÊT ANTICIPÉ à l'époque ${epoch}/${epochs} : précision en plateau depuis ${patience} époques (meilleur : ${(meilleurePrecision * 100).toFixed(1)} %) — sur-apprentissage évité, époques restantes économisées.`,
+            );
+            break;
+          }
+        }
+      }
       await new Promise((resolve) => setImmediate(resolve));
+    }
+    if (arretAnticipe) {
+      session.metriquesSupplementaires = {
+        early_stopped: 1,
+        epochs_effectuees: session.epochsDone,
+      };
     }
     if (session.annulee) {
       session.terminee = true;
@@ -303,6 +349,7 @@ export function creerFournisseurGen3Local(): GpuProvider {
         ],
         artifactKey: null,
         artifactTaille: 0,
+        metriquesSupplementaires: {},
       };
       sessions.set(externalId, session);
       void executer(session);
@@ -331,6 +378,7 @@ export function creerFournisseurGen3Local(): GpuProvider {
           ...(session.precisionTest !== null ? { precisionTest: session.precisionTest } : {}),
           pairesApprises: session.paires,
           vocabulaire: session.vocabulaire,
+          ...session.metriquesSupplementaires,
         },
         logs: session.logs,
         error: session.erreur,
