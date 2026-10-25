@@ -1,0 +1,16 @@
+{
+  "name": "gen3ia-conversational_memory-v4",
+  "description": "Mémoire conversationnelle : rappel et combinaison de faits multi-tours",
+  "rows": 20000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "memory_combine",
+    "memory_recall"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/conversational_memory/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:21+00:00"
+}

@@ -1,0 +1,29 @@
+{
+  "name": "gen3ia-professions-v4",
+  "description": "15 métiers : marketing, e-commerce, support, finance, compta, droit, éducation, RH, immobilier, agriculture, logistique, journalisme, tourisme, projets, entrepreneuriat",
+  "rows": 95000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "accounting_sort",
+    "campaign_plan",
+    "crop_plan",
+    "finance_calc",
+    "itinerary",
+    "job_ad",
+    "journalistic_check",
+    "legal_assist",
+    "lesson_plan",
+    "logistics_plan",
+    "market_study",
+    "product_sheet",
+    "project_plan",
+    "real_estate_ad",
+    "support_reply"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/professions/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:39+00:00"
+}

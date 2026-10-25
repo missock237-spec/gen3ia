@@ -1,0 +1,18 @@
+{
+  "name": "gen3ia-ml_management-v4",
+  "description": "Gestion : sharding GPU d'essaim, coûts, checkpoints, supervision de convergence",
+  "rows": 12000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "checkpoint_rotation",
+    "gpu_cost",
+    "gpu_sharding",
+    "training_monitoring"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/ml_management/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:36+00:00"
+}

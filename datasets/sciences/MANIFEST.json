@@ -1,0 +1,17 @@
+{
+  "name": "gen3ia-sciences-v4",
+  "description": "Sciences : 40 faits exacts (physique, chimie, bio, astro, géo, env, élec, robotique) × 3 formats",
+  "rows": 20000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "science_application",
+    "science_fact",
+    "true_false_science"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/sciences/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:40+00:00"
+}

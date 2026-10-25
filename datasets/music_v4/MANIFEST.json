@@ -1,0 +1,15 @@
+{
+  "name": "gen3ia-music_v4-v4",
+  "description": "Musique : briefs de composition mesurés (genre, tempo, tonalité, structure)",
+  "rows": 15000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "music_composition_brief"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/music_v4/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:32+00:00"
+}

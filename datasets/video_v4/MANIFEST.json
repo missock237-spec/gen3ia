@@ -1,0 +1,17 @@
+{
+  "name": "gen3ia-video_v4-v4",
+  "description": "Vidéo : storyboards keyframes à graines dérivées, sous-titres SRT, math de montage",
+  "rows": 45000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "subtitle_generation",
+    "video_editing_math",
+    "video_storyboard"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/video_v4/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:33+00:00"
+}

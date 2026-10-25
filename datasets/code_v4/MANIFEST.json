@@ -1,0 +1,22 @@
+{
+  "name": "gen3ia-code_v4-v4",
+  "description": "Programmation : React typé, Python calculé, debug, SQL, regex, API REST, complexité, CSS",
+  "rows": 60000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "bug_fix",
+    "complexity_analysis",
+    "css_layout",
+    "python_function",
+    "react_component",
+    "regex_authoring",
+    "rest_api_design",
+    "sql_query"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/code_v4/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:27+00:00"
+}

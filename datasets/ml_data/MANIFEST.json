@@ -1,0 +1,19 @@
+{
+  "name": "gen3ia-ml_data-v4",
+  "description": "Préparation de données : dédup calculée, PII, annotation, qualité, collecte conforme",
+  "rows": 15000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "annotation_guideline",
+    "data_collection",
+    "dataset_quality",
+    "dedup_computation",
+    "pii_detection"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/ml_data/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:35+00:00"
+}

@@ -1,0 +1,16 @@
+{
+  "name": "gen3ia-audio_understanding-v4",
+  "description": "Audio : classification d'environnements sonores, plans de transcription",
+  "rows": 15000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "sound_classification",
+    "transcription_plan"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/audio_understanding/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:32+00:00"
+}

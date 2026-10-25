@@ -1,0 +1,16 @@
+{
+  "name": "gen3ia-contextual_understanding-v4",
+  "description": "Compréhension contextuelle : résolution de références, questions implicites",
+  "rows": 25000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "implicit_question",
+    "reference_resolution"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/contextual_understanding/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:20+00:00"
+}

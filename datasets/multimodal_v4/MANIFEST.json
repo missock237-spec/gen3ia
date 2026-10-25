@@ -1,0 +1,16 @@
+{
+  "name": "gen3ia-multimodal_v4-v4",
+  "description": "Orchestration multimodale : pipelines texte→image→voix→vidéo avec replis honnêtes",
+  "rows": 30000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "engine_selection",
+    "multimodal_orchestration"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/multimodal_v4/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:34+00:00"
+}

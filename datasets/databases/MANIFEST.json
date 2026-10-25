@@ -1,0 +1,18 @@
+{
+  "name": "gen3ia-databases-v4",
+  "description": "Bases de données : SQL de lecture sur 4 schémas métier, agrégats et index",
+  "rows": 15000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "sql_aggregate",
+    "sql_filter",
+    "sql_join",
+    "sql_temporal"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/databases/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:29+00:00"
+}

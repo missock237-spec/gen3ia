@@ -1,12 +1,19 @@
 {
   "gen3ia-media-datasets": {
-    "version": 3,
-    "generated_at": "2026-10-25T16:02:05+00:00",
+    "version": 4,
+    "generated_at": "2026-10-25T19:19:40+00:00",
     "datasets": [
       {
         "id": "abbreviations",
         "path": "datasets/abbreviations/train.jsonl",
         "rows": 2145
+      },
+      {
+        "id": "audio_understanding",
+        "path": "datasets/audio_understanding/train.jsonl",
+        "rows": 15000,
+        "phase": "8-audio",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/audio_understanding/train.jsonl"
       },
       {
         "id": "business",
@@ -19,9 +26,58 @@
         "rows": 12000
       },
       {
+        "id": "code_v4",
+        "path": "datasets/code_v4/train.jsonl",
+        "rows": 60000,
+        "phase": "3-programmation",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/code_v4/train.jsonl"
+      },
+      {
+        "id": "contextual_understanding",
+        "path": "datasets/contextual_understanding/train.jsonl",
+        "rows": 25000,
+        "phase": "1-langage",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/contextual_understanding/train.jsonl"
+      },
+      {
+        "id": "conversational_memory",
+        "path": "datasets/conversational_memory/train.jsonl",
+        "rows": 20000,
+        "phase": "1-langage",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/conversational_memory/train.jsonl"
+      },
+      {
+        "id": "databases",
+        "path": "datasets/databases/train.jsonl",
+        "rows": 15000,
+        "phase": "4-outils",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/databases/train.jsonl"
+      },
+      {
+        "id": "image_analysis",
+        "path": "datasets/image_analysis/train.jsonl",
+        "rows": 35000,
+        "phase": "6-vision",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/image_analysis/train.jsonl"
+      },
+      {
+        "id": "image_generation",
+        "path": "datasets/image_generation/train.jsonl",
+        "rows": 30000,
+        "phase": "7-images",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/image_generation/train.jsonl"
+      },
+      {
         "id": "images",
         "path": "datasets/images/train.jsonl",
         "rows": 20473
+      },
+      {
+        "id": "intent_recognition",
+        "path": "datasets/intent_recognition/train.jsonl",
+        "rows": 33000,
+        "phase": "1-langage",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/intent_recognition/train.jsonl"
       },
       {
         "id": "knowledge",
@@ -29,9 +85,51 @@
         "rows": 3000
       },
       {
+        "id": "math",
+        "path": "datasets/math/train.jsonl",
+        "rows": 125000,
+        "phase": "2-raisonnement",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/math/train.jsonl"
+      },
+      {
+        "id": "ml_data",
+        "path": "datasets/ml_data/train.jsonl",
+        "rows": 15000,
+        "phase": "11-modeles",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/ml_data/train.jsonl"
+      },
+      {
+        "id": "ml_evaluation",
+        "path": "datasets/ml_evaluation/train.jsonl",
+        "rows": 12000,
+        "phase": "11-modeles",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/ml_evaluation/train.jsonl"
+      },
+      {
+        "id": "ml_management",
+        "path": "datasets/ml_management/train.jsonl",
+        "rows": 12000,
+        "phase": "11-modeles",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/ml_management/train.jsonl"
+      },
+      {
+        "id": "ml_training",
+        "path": "datasets/ml_training/train.jsonl",
+        "rows": 15000,
+        "phase": "11-modeles",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/ml_training/train.jsonl"
+      },
+      {
         "id": "multimodal",
         "path": "datasets/multimodal/train.jsonl",
         "rows": 5400
+      },
+      {
+        "id": "multimodal_v4",
+        "path": "datasets/multimodal_v4/train.jsonl",
+        "rows": 30000,
+        "phase": "10-orchestration",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/multimodal_v4/train.jsonl"
       },
       {
         "id": "music",
@@ -39,9 +137,79 @@
         "rows": 7300
       },
       {
+        "id": "music_v4",
+        "path": "datasets/music_v4/train.jsonl",
+        "rows": 15000,
+        "phase": "8-audio",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/music_v4/train.jsonl"
+      },
+      {
+        "id": "nlp_comprehension",
+        "path": "datasets/nlp_comprehension/train.jsonl",
+        "rows": 60000,
+        "phase": "1-langage",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/nlp_comprehension/train.jsonl"
+      },
+      {
+        "id": "problem_solving",
+        "path": "datasets/problem_solving/train.jsonl",
+        "rows": 25000,
+        "phase": "2-raisonnement",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/problem_solving/train.jsonl"
+      },
+      {
+        "id": "professions",
+        "path": "datasets/professions/train.jsonl",
+        "rows": 95000,
+        "phase": "metiers",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/professions/train.jsonl"
+      },
+      {
+        "id": "rag_documents",
+        "path": "datasets/rag_documents/train.jsonl",
+        "rows": 20000,
+        "phase": "5-rag",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/rag_documents/train.jsonl"
+      },
+      {
+        "id": "reasoning",
+        "path": "datasets/reasoning/train.jsonl",
+        "rows": 45000,
+        "phase": "2-raisonnement",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/reasoning/train.jsonl"
+      },
+      {
+        "id": "sciences",
+        "path": "datasets/sciences/train.jsonl",
+        "rows": 20000,
+        "phase": "sciences",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/sciences/train.jsonl"
+      },
+      {
         "id": "security",
         "path": "datasets/security/train.jsonl",
         "rows": 6000
+      },
+      {
+        "id": "security_v4",
+        "path": "datasets/security_v4/train.jsonl",
+        "rows": 50000,
+        "phase": "12-securite",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/security_v4/train.jsonl"
+      },
+      {
+        "id": "text_generation",
+        "path": "datasets/text_generation/train.jsonl",
+        "rows": 28000,
+        "phase": "1-langage",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/text_generation/train.jsonl"
+      },
+      {
+        "id": "tools",
+        "path": "datasets/tools/train.jsonl",
+        "rows": 35000,
+        "phase": "4-outils",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/tools/train.jsonl"
       },
       {
         "id": "video",
@@ -49,9 +217,23 @@
         "rows": 8349
       },
       {
+        "id": "video_v4",
+        "path": "datasets/video_v4/train.jsonl",
+        "rows": 45000,
+        "phase": "9-video",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/video_v4/train.jsonl"
+      },
+      {
         "id": "voice",
         "path": "datasets/voice/train.jsonl",
         "rows": 15733
+      },
+      {
+        "id": "voice_speech",
+        "path": "datasets/voice_speech/train.jsonl",
+        "rows": 20000,
+        "phase": "8-audio",
+        "data": "huggingface:Kings237/gen3ia-media-engine@v4/voice_speech/train.jsonl"
       },
       {
         "id": "writing",
@@ -70,6 +252,6 @@
       "metadata",
       "content_hash"
     ],
-    "purpose": "Curriculum Gen3ia v3 « géants » : média (images/vidéo/voix/musique), abréviations et 13 domaines métier (dev web, tests, sciences, humaines, santé, machines, recherche web, analyse de données, vente, conseiller commercial, cybersécurité défensive, rédaction, orchestration multimodale) — bilingue FR/EN, dédupliqué."
+    "purpose": "Curriculum Gen3ia v4 « tous domaines » : 1 000 000 lignes exactement, 37 datasets bilingues FR/EN couvrant les 8 catégories (langage, raisonnement, programmation, outils/RAG, vision, audio, vidéo, orchestration multimodale, entraînement de modèles, sécurité défensive, métiers professionnels, sciences). v1-v3 : données complètes dans le dépôt ; v4 : données complètes sur Hugging Face (Kings237/gen3ia-media-engine, v4/<domaine>/train.jsonl), sample 200 lignes ici. Dédupliqué par hash de contenu, déterministe (seed 20261026)."
   }
 }

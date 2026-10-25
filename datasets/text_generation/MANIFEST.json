@@ -1,0 +1,16 @@
+{
+  "name": "gen3ia-text_generation-v4",
+  "description": "Génération : plans + amorce d'articles/emails/histoires/annonces, réécriture de style",
+  "rows": 28000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "rewrite_style",
+    "text_generation"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/text_generation/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:20+00:00"
+}

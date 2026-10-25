@@ -65,3 +65,33 @@ assets/neural-pretrained/*.bin
 
 # Manifeste de version généré au build (mise à jour forcée navigateur — plan 4 étapes)
 /public/version.json
+
+# Curriculum v4 « tous domaines » — données complètes sur Hugging Face
+# (Kings237/gen3ia-media-engine, v4/<domaine>/train.jsonl) ; le dépôt garde
+# MANIFEST.json + sample.jsonl + le générateur déterministe (seed 20261026).
+datasets/nlp_comprehension/train.jsonl
+datasets/text_generation/train.jsonl
+datasets/contextual_understanding/train.jsonl
+datasets/conversational_memory/train.jsonl
+datasets/intent_recognition/train.jsonl
+datasets/reasoning/train.jsonl
+datasets/math/train.jsonl
+datasets/problem_solving/train.jsonl
+datasets/code_v4/train.jsonl
+datasets/tools/train.jsonl
+datasets/rag_documents/train.jsonl
+datasets/databases/train.jsonl
+datasets/image_analysis/train.jsonl
+datasets/image_generation/train.jsonl
+datasets/voice_speech/train.jsonl
+datasets/audio_understanding/train.jsonl
+datasets/music_v4/train.jsonl
+datasets/video_v4/train.jsonl
+datasets/multimodal_v4/train.jsonl
+datasets/ml_data/train.jsonl
+datasets/ml_training/train.jsonl
+datasets/ml_evaluation/train.jsonl
+datasets/ml_management/train.jsonl
+datasets/security_v4/train.jsonl
+datasets/professions/train.jsonl
+datasets/sciences/train.jsonl

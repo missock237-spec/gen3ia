@@ -1,0 +1,15 @@
+{
+  "name": "gen3ia-rag_documents-v4",
+  "description": "RAG : réponse ancrée sur politiques paramétrées ; ~17 % non répondables (anti-hallucination)",
+  "rows": 20000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "grounded_qa"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/rag_documents/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:29+00:00"
+}

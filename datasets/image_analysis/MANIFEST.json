@@ -1,0 +1,18 @@
+{
+  "name": "gen3ia-image_analysis-v4",
+  "description": "Analyse d'images : scènes, OCR, lecture de graphiques, comptage spatial",
+  "rows": 35000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "chart_reading",
+    "counting_spatial",
+    "ocr_transcription",
+    "scene_description"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/image_analysis/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:30+00:00"
+}

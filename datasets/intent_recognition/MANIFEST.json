@@ -1,0 +1,15 @@
+{
+  "name": "gen3ia-intent_recognition-v4",
+  "description": "Reconnaissance d'intention : 20 intentions FR/EN, entités, action suivante",
+  "rows": 33000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "intent_classification"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/intent_recognition/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:22+00:00"
+}

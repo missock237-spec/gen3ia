@@ -1,0 +1,16 @@
+{
+  "name": "gen3ia-tools-v4",
+  "description": "Utilisation d'outils : appels JSON stricts et chaînes d'appels avec replis",
+  "rows": 35000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "tool_call_json",
+    "tool_chain"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/tools/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:28+00:00"
+}

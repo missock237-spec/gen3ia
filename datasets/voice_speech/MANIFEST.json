@@ -1,0 +1,16 @@
+{
+  "name": "gen3ia-voice_speech-v4",
+  "description": "Voix : briefs TTS prosodiques, design de voix de marque, éthique",
+  "rows": 20000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "brand_voice_design",
+    "tts_brief"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/voice_speech/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:31+00:00"
+}

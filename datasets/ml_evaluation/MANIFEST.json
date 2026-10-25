@@ -1,0 +1,18 @@
+{
+  "name": "gen3ia-ml_evaluation-v4",
+  "description": "Évaluation : grilles et seuils, verdicts performance, A/B, audit de biais",
+  "rows": 12000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "ab_decision",
+    "bias_audit",
+    "eval_grid",
+    "performance_verdict"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/ml_evaluation/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:35+00:00"
+}

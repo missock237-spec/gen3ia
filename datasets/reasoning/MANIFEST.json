@@ -1,0 +1,18 @@
+{
+  "name": "gen3ia-reasoning-v4",
+  "description": "Raisonnement : syllogismes, suites numériques, classements, logique conditionnelle",
+  "rows": 45000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "conditional_logic",
+    "number_sequence",
+    "ordering_puzzle",
+    "syllogism"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/reasoning/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:22+00:00"
+}

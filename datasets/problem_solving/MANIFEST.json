@@ -1,0 +1,16 @@
+{
+  "name": "gen3ia-problem_solving-v4",
+  "description": "Résolution de problèmes : plans jalonnés et décisions argumentées",
+  "rows": 25000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "decision_with_tradeoffs",
+    "solution_plan"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/problem_solving/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:25+00:00"
+}

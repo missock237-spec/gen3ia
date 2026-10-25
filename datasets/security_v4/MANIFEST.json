@@ -1,0 +1,20 @@
+{
+  "name": "gen3ia-security_v4-v4",
+  "description": "Sécurité STRICTEMENT défensive : revue de code tracée, injection de prompt, hallucinations, empoisonnement, secrets, permissions",
+  "rows": 50000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "data_poisoning_response",
+    "hallucination_eval",
+    "permission_check",
+    "prompt_injection_defense",
+    "secret_rotation",
+    "security_review"
+  ],
+  "full_data": "huggingface:Kings237/gen3ia-media-engine@v4/security_v4/train.jsonl",
+  "sample_rows": 200,
+  "generated_at": "2026-10-25T19:19:37+00:00"
+}
