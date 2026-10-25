@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 
 import { lancerEntrainement, getDernierJob } from "./job";
-import { getNeuralRuntime, resetBrain } from "../runtime";
+import { resetBrain } from "../runtime";
 
 /**
  * JOB D'ENTRAÎNEMENT SUR LES 18 DOMAINES — source « domaines » : charge les

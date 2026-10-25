@@ -27,10 +27,7 @@ import { composerDepuisConnaissances } from "./connaissances-pont";
 import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
 import type { CoucheOndesNeuronales } from "./core/couche-rpia";
 import { INTENSITE_MAX_PAR_NEURONE } from "./encoding/text-encoder";
-import {
-  DOMAINE_PAR_LABEL,
-  predireDomaineLexical,
-} from "./training/domaines";
+import { predireDomaineLexical } from "./training/domaines";
 
 /** Nombre d'époques de résonance RPIA par tour de chat (latence bornée : chaque époque = O(100) ops). */
 export const EPOQUES_RPIA_CHAT = 12;

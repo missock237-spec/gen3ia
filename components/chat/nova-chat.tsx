@@ -1325,7 +1325,7 @@ export default function NovaChat() {
         dernierTourVocalRef.current = false; // tour terminé : réarmement voix
       }
     },
-    [descendre, empilerDelta, majConvs, majMessage, sauvegarder, terminerEcriture],
+    [descendre, empilerDelta, majConvs, majMessage, mediaWebGpu, sauvegarder, terminerEcriture],
   );
 
   /* ---- Envoi d'un message ---- */
