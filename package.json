@@ -98,7 +98,8 @@
     "postcss": "^8.5.23",
     "undici": "7.30.1",
     "dompurify": "^3.4.16",
-    "@grpc/grpc-js": "^1.14.5"
+    "@grpc/grpc-js": "^1.14.5",
+    "sharp": "^0.35.5"
   },
   "allowScripts": {
     "@sentry/cli@2.58.6": true
