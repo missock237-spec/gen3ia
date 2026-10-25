@@ -1,0 +1,18 @@
+{
+  "name": "gen3ia-code-v3",
+  "description": "Dev web, API, tests, debug, SQL et CSS — instructions bilingues avec sorties structurées correctes.",
+  "rows": 12000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "api_design",
+    "brief_to_component",
+    "bug_to_fix",
+    "css_layout",
+    "feature_to_tests",
+    "sql_query"
+  ],
+  "generated_at": "2026-10-25T16:02:05+00:00"
+}

@@ -1,0 +1,17 @@
+{
+  "name": "gen3ia-knowledge-v3",
+  "description": "Sciences, sciences humaines, santé grand public, conception mécanique, recherche web — réponses cadrées et honnêtes.",
+  "rows": 3000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "machine_conception",
+    "qa_humaines",
+    "qa_sciences",
+    "sante_information",
+    "web_research_plan"
+  ],
+  "generated_at": "2026-10-25T16:02:05+00:00"
+}

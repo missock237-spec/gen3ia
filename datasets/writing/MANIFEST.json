@@ -1,0 +1,16 @@
+{
+  "name": "gen3ia-writing-v3",
+  "description": "Rédaction professionnelle : plans, emails, sections de rapport, réécriture de style.",
+  "rows": 8000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "brief_to_outline",
+    "email_professionnel",
+    "report_section",
+    "style_rewrite"
+  ],
+  "generated_at": "2026-10-25T16:02:05+00:00"
+}

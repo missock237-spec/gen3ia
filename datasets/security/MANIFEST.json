@@ -1,0 +1,16 @@
+{
+  "name": "gen3ia-security-v3",
+  "description": "Cybersécurité STRICTEMENT défensive : revue de code, analyse de menaces, CTF labo éducatif, durcissement.",
+  "rows": 6000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "ctf_guided",
+    "hardening_plan",
+    "secure_code_review",
+    "threat_analysis"
+  ],
+  "generated_at": "2026-10-25T16:02:05+00:00"
+}

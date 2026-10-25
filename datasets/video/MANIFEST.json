@@ -1,7 +1,7 @@
 {
   "name": "gen3ia-video-v2",
   "description": "Découpage de scènes en keyframes photoréalistes + direction caméra, FR+EN.",
-  "rows": 6649,
+  "rows": 8349,
   "languages": [
     "en",
     "fr"
@@ -10,5 +10,6 @@
     "camera_direction",
     "scene_to_keyframes"
   ],
-  "generated_at": "2026-10-25T12:14:25+00:00"
+  "generated_at": "2026-10-25T16:02:05+00:00",
+  "v3_topup": 1700
 }

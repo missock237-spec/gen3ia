@@ -1,0 +1,16 @@
+{
+  "name": "gen3ia-business-v3",
+  "description": "Analyse de données, pitchs de vente, conseil commercial, stratégie tarifaire.",
+  "rows": 11600,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "commercial_advice",
+    "data_analysis",
+    "pricing_strategy",
+    "sales_pitch"
+  ],
+  "generated_at": "2026-10-25T16:02:05+00:00"
+}

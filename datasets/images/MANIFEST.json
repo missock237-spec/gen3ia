@@ -1,7 +1,7 @@
 {
   "name": "gen3ia-images-v2",
   "description": "Briefs photoréalistes (sujet/lumière/optique/matière/post) FR+EN + classification de style.",
-  "rows": 16442,
+  "rows": 20473,
   "languages": [
     "en",
     "fr"
@@ -10,5 +10,6 @@
     "prompt_to_photoreal_brief",
     "style_classification"
   ],
-  "generated_at": "2026-10-25T12:14:25+00:00"
+  "generated_at": "2026-10-25T16:02:05+00:00",
+  "v3_topup": 4031
 }

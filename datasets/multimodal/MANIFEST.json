@@ -1,0 +1,17 @@
+{
+  "name": "gen3ia-multimodal-v3",
+  "description": "Orchestration des pipelines média gen3 (image/voix/vidéo/musique/web) et lecture de scènes.",
+  "rows": 5400,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "brand_voice",
+    "campaign_multimedia",
+    "media_qa",
+    "pipeline_orchestration",
+    "storyboard_multimedia"
+  ],
+  "generated_at": "2026-10-25T16:02:05+00:00"
+}
