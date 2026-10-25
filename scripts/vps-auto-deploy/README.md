@@ -56,3 +56,42 @@ bash install.sh   # installe le poller PM2 + état initial
 ```bash
 bash /opt/gen3ia-updater/deploy.sh   # déploie origin/main si différent
 ```
+
+---
+
+# Mode PULL (2026-10-26) — déploiement sans SSH entrant
+
+**Problème résolu** : le transfert SCP runner→VPS dépend du SSH *entrant*,
+régulièrement bloqué côté VPS (PerSourcePenalties / fail2ban / bruit SSH
+partagé des IP GitHub — vagues #43-#49 puis #79-#88, ~16 h d'interruption CD).
+
+**Principe** : le runner GitHub compile puis publie le build sur la release
+`cd-latest` (dépôt public → téléchargement anonyme). Le VPS déploie en
+HTTPS **sortant** uniquement, avec les garanties inchangées (swap atomique,
+rollback, blacklist — `cd-finisher.sh` au SHA cible, jamais obsolète).
+
+```
+runner GitHub ──build──▶ release cd-latest (tar + sha256 + meta.json)
+                              │
+VPS poller updater (2 min) ──▶ pull-deploy.sh ──▶ cd-finisher.sh <sha>
+```
+
+### Installation (une fois, root, console fournisseur — aucun SSH requis)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/missock237-spec/gen3ia/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash
+```
+
+Installe `pull-deploy.sh`, rebanche le poller existant (`deploy.sh` → shim,
+ancien mode conservé en `deploy.sh.build`) et lance un premier déploiement.
+
+### Fichiers
+
+| Fichier | Rôle |
+|---|---|
+| `pull-deploy.sh` | Télécharge la release `cd-latest`, vérifie le sha256, délègue au finisher |
+| `install-pull-mode.sh` | Installation idempotente en une commande (console) |
+| `state/pull-current.txt` | Stamp anti-reboucle du poller (supprimer pour forcer) |
+
+Le mode build historique (ce README, ci-dessus) reste documenté et archivé :
+il redevient pertinent si le VPS gagne un jour la RAM nécessaire au `next build`.

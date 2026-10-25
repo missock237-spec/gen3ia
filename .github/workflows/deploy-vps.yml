@@ -30,6 +30,11 @@ concurrency:
   group: deploy-vps
   cancel-in-progress: false
 
+# contents:write : publication du build sur la release « cd-latest »
+# (repli mode pull du VPS — cf. scripts/vps-auto-deploy/pull-deploy.sh).
+permissions:
+  contents: write
+
 jobs:
   deploy:
     name: Build runner → swap atomique VPS
@@ -77,6 +82,30 @@ jobs:
       - name: Empaqueter .next (sans cache)
         run: tar czf /tmp/next-build.tar.gz --exclude='.next/cache' -C .next .
 
+      # Durcissement 2026-10-26 (runs #79→#88 rouges : SCP reset par les
+      # pénalités/fail2ban du VPS pendant ~16 h) : le build est publié en
+      # release AVANT toute tentative SSH. Dépôt public → le VPS peut le
+      # télécharger en HTTPS SORTANT (mode pull, zéro SSH entrant) via
+      # scripts/vps-auto-deploy/pull-deploy.sh — un blocage SSH ne bloque
+      # plus jamais la mise en production.
+      # meta.json est téléversé en DERNIER : sa présence = build complet.
+      - name: Publier le build sur la release cd-latest (repli mode pull)
+        run: |
+          SOMME=$(sha256sum /tmp/next-build.tar.gz | cut -d' ' -f1)
+          printf '%s  next-build.tar.gz\n' "$SOMME" > /tmp/next-build.tar.gz.sha256
+          printf '{"sha":"%s","buildId":"%s","publishedAt":"%s"}\n' \
+            "$GITHUB_SHA" "$BUILD_ID" "$(date -u +%FT%TZ)" > /tmp/meta.json
+          gh release view cd-latest -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create cd-latest -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Build CD — dernier build runner" \
+              --notes "Artefact de déploiement continu (mode pull VPS). Écrasé à chaque run."
+          gh release upload cd-latest -R "$GITHUB_REPOSITORY" --clobber \
+            /tmp/next-build.tar.gz /tmp/next-build.tar.gz.sha256
+          gh release upload cd-latest -R "$GITHUB_REPOSITORY" --clobber /tmp/meta.json
+          echo "Build $BUILD_ID (sha $GITHUB_SHA) publié sur la release cd-latest."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Configurer la clé SSH VPS
         run: |
           mkdir -p ~/.ssh
@@ -113,7 +142,7 @@ jobs:
             echo "Tentative $i/6 échouée (réseau / PerSourcePenalties ?) — nouvel essai dans 180 s…"
             [ "$i" = "6" ] || sleep 180
           done
-          [ "$ok" = "1" ] || { echo "::error::Transfert SCP impossible après 6 tentatives espacées (voir docs/exploitation/ssh-bloque-runbook.md)"; exit 1; }
+          [ "$ok" = "1" ] || { echo "::error::Transfert SCP impossible après 6 tentatives espacées — le build EST publié sur la release cd-latest : déployer en mode pull (curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash) ou rétablir le SSH (docs/exploitation/ssh-bloque-runbook.md)"; exit 1; }
 
       - name: Swap atomique + health check (rollback auto, retry raisonné)
         run: |
