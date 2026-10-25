@@ -1,4 +1,5 @@
 import type { StatsApprentissageLangage } from "./generation/language";
+import { détecterLangue } from "./generation/language";
 /**
  * MOTEUR D'ÉVOLUTION CONTINUE GEN3 — le système qui fait que l'IA
  * progresse à chaque conversation, sans jamais inventer.
@@ -128,9 +129,16 @@ export class MoteurEvolutionGen3 {
     this.echangesObserves += 1;
     const question = echange.question?.trim() ?? "";
     const reponse = echange.reponse?.trim() ?? "";
+    // FILTRE D'ÉCRITURE — une réponse en écriture NON LATINE (arabe,
+    // cyrillique…) ne devient jamais mémoire longue : le cortex
+    // conversationnel de la plateforme latine ne consolide que ce qu'il
+    // peut re-servir (bug réel : paire arabe consolidée, servie à tous).
+    // Les réponses courtes neutres (« 312 neurones actifs ») restent admises.
+    const langue = détecterLangue(reponse);
     const consolidable =
       question.length > 0 &&
       reponse.length > 0 &&
+      langue !== "autre" &&
       SOURCES_CONSOLIDABLES.has(echange.source) &&
       echange.score >= this.seuilScore;
     if (!consolidable) {

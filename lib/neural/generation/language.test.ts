@@ -232,6 +232,30 @@ describe("CortexLangagierGen3 — gardes anti-hors-sujet (rectifications UI)", (
     expect(r).toBeNull();
   });
 
+  it("rétrogradation à la restauration : une paire « consolide » non fr/en devient mesure (bug réel)", () => {
+    // Le cerveau persisté du VPS contient des paires consolidées d'échanges
+    // arabes (thème « consolide », PAS « hub: ») — elles ne doivent plus
+    // répondre au chat dès la restauration, sans reset destructeur.
+    const cortex = new CortexLangagierGen3();
+    cortex.apprendre(CORPUS_GEN3);
+    cortex.apprendre(
+      [
+        {
+          motif: "متى تجي مقاس 38",
+          reponse: "عندنا آخر قطعة مقاس 38. ما أريدك تجي بكره وتندم",
+          theme: "consolide",
+        },
+      ],
+      { personnalisees: true }, // restaurée « personnalisée » comme l'ancien format
+    );
+    // Chat : JAMAIS de réponse (paire rétrogradée en mesure + tokenizer
+    // latin qui vide la requête arabe — double ceinture).
+    expect(cortex.repondre("متى تجي مقاس 38")).toBeNull();
+    expect(cortex.repondre("متى تجي مقاس 38", {}, { inclureMesure: true })).toBeNull();
+    // Une question FR voisine ne peut pas non plus la réveiller.
+    expect(cortex.repondre("Calcule 47 + 38 en montrant chaque étape du calcul.")).toBeNull();
+  });
+
   it("garde de langue : une paire EN ne répond plus à une question FR", async () => {
     const { détecterLangue } = await import("./language");
     expect(détecterLangue("Qu'est-ce que l'effet de serre ? Explique le mécanisme.")).toBe("fr");

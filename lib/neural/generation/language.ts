@@ -259,9 +259,13 @@ export class CortexLangagierGen3 {
 
       // Provenance : les paires hub (thème « hub:… ») sont toujours de la
       // MATIÈRE DE MESURE — même restaurées d'un cerveau persisté ancien où
-      // elles étaient rangées comme personnalisées.
+      // elles étaient rangées comme personnalisées. Idem pour toute paire
+      // « personnalisée » en écriture NON LATINE (échanges consolidés
+      // arabes/cyrilliques… — neutralisés sans suppression).
+      const langueReponse = personnalisees ? détecterLangue(paire.reponse) : null;
+      const horsPlateforme = personnalisees && langueReponse === "autre";
       const provenance: ProvenancePaire =
-        opts.pourMesure || paire.theme.startsWith("hub:")
+        opts.pourMesure || paire.theme.startsWith("hub:") || horsPlateforme
           ? "mesure"
           : personnalisees
             ? "personnalisee"
