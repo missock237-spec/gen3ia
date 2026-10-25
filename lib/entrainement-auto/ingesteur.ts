@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { PaireLangage } from "@/lib/neural/generation/corpus";
+import { détecterLangue } from "@/lib/neural/generation/language";
 import {
   LABELS_INTENTION,
   labelText,
@@ -400,7 +401,12 @@ function convertirLignes(
     for (const ligne of lignes) {
       // 1. Structures de chat modernes (messages/conversations…) — la forme
       //    dominante des datasets d'instructions des hubs.
+      //    FILTRE DE LANGUE : seules les paires fr/en nourrissent le cortex
+      //    (bug réel : des paires arabes/commerciales d'un dataset hub
+      //    répondaient hors-sujet aux questions françaises des utilisateurs).
       for (const paire of extrairePairesChat(ligne, theme)) {
+        const langue = détecterLangue(paire.reponse);
+        if (langue !== "fr" && langue !== "en") continue;
         const cle = cleMotif(paire.motif);
         if (clesVues.has(cle)) continue;
         clesVues.add(cle);
@@ -412,6 +418,8 @@ function convertirLignes(
       //    aplaties en minuscules pour reconnaître toutes les casses.
       const paire = convertirPaire(aplatirCles(ligne), theme);
       if (!paire) continue;
+      const languePaire = détecterLangue(paire.reponse);
+      if (languePaire !== "fr" && languePaire !== "en") continue;
       const cle = cleMotif(paire.motif);
       if (clesVues.has(cle)) continue;
       clesVues.add(cle);

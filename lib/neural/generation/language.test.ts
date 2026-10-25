@@ -150,6 +150,26 @@ describe("CortexLangagierGen3 — gardes anti-hors-sujet (rectifications UI)", (
     }
   });
 
+  it("garde d'écriture : une paire ARABE ne répond plus à une question FR (bug réel)", () => {
+    // Bug réel (test UI) : « Calcule 47 + 38… » recevait une paire arabe
+    // de vente de vêtements apprise par l'auto-apprentissage, matchée sur
+    // le seul chiffre « 38 ».
+    const cortex = new CortexLangagierGen3();
+    cortex.apprendre(
+      [
+        {
+          motif: "مقاس 38 قطعة",
+          reponse: "عندنا آخر قطعة مقاس 38. ما أريدك تجي بكره وتندم",
+          theme: "vente",
+        },
+      ],
+      { personnalisees: true },
+    );
+    for (let i = 0; i < 30; i++) cortex.repondre("مقاس 38 قطعة"); // usage max
+    const r = cortex.repondre("Calcule 47 + 38 en montrant chaque étape du calcul, puis vérifie le résultat.");
+    expect(r).toBeNull();
+  });
+
   it("garde de langue : une paire EN ne répond plus à une question FR", async () => {
     const { détecterLangue } = await import("./language");
     expect(détecterLangue("Qu'est-ce que l'effet de serre ? Explique le mécanisme.")).toBe("fr");

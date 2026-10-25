@@ -51,9 +51,17 @@ const MARQUEURS_FR_RE =
 const MARQUEURS_EN_RE =
   /\b(the|a|an|is|are|was|were|there|that|this|of|to|and|or|with|for|you|your|our|we|i|it|its|can|will|would|yes|no|not|please|how|what|why|when)\b/i;
 const ACCENTS_FR_RE = /[éèêëàâçîïôûùü]/i;
+/** Écritures NON-LATINES (arabe, cyrillique, CJK, devanagari, hébreu…) :
+ *  une paire apprise dans une autre écriture ne peut pas répondre à une
+ *  requête latine — bug réel : une paire ARABE (dataset commercial appris
+ *  par l'auto-apprentissage) répondait « عندنا آخر قطعة مقاس 38… » à une
+ *  question de calcul français, matchée sur le seul chiffre « 38 ». */
+const NON_LATIN_RE = /[\u0400-\u04FF\u0590-\u05FF\u0600-\u06FF\u0900-\u097F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/;
 
-/** Détecte la langue dominante d'un texte : "fr" | "en" | null (indéterminé). */
-export function détecterLangue(texte: string): "fr" | "en" | null {
+/** Détecte la langue dominante d'un texte : "fr" | "en" | "autre" | null.
+ *  "autre" = écriture non latine (rejet systématique hors sous-ensemble). */
+export function détecterLangue(texte: string): "fr" | "en" | "autre" | null {
+  if (NON_LATIN_RE.test(texte)) return "autre";
   const fr = (texte.match(MARQUEURS_FR_RE)?.length ?? 0) + (ACCENTS_FR_RE.test(texte) ? 2 : 0);
   const en = texte.match(MARQUEURS_EN_RE)?.length ?? 0;
   if (fr === 0 && en === 0) return null;
@@ -377,11 +385,18 @@ export class CortexLangagierGen3 {
       // GARDE DE COUVERTURE — un verbe générique partagé (« écris ») ne suffit
       // plus à faire répondre une paire sur une demande riche : il faut ≥ 2
       // tokens partagés, OU une requête courte (suivi conversationnel), OU le
-      // motif posé intégralement. Bug réel : « Écris une fonction TypeScript… »
-      // recevait la paire générique « J'écris, oui… ».
-      const partagés = [...paire.tokens].filter((t) => tokensActifs.has(t)).length;
+      // motif posé intégralement. Les NOMBRES PURS (« 38 ») ne comptent PAS
+      // dans la couverture : un chiffre isolé d'un calcul n'est jamais un
+      // sujet. Bug réel : une paire commerciale matchée sur « 38 ».
+      const nonNumérique = (t: string): boolean => !/^\d+([.,]\d+)?$/.test(t);
+      const partagés = [...paire.tokens].filter(
+        (t) => tokensActifs.has(t) && nonNumérique(t),
+      ).length;
       const requêteCourte = tokensRequete.length <= 3;
-      const couvertureOK = sousEnsemble || partagés >= 2 || (requêteCourte && partagés >= 1);
+      const couvertureOK =
+        (sousEnsemble && [...paire.tokens].some(nonNumérique)) ||
+        partagés >= 2 ||
+        (requêteCourte && partagés >= 1);
       if (!couvertureOK) continue;
       // GARDE DE LANGUE — une paire d'une autre langue que la requête ne
       // répond QUE si son motif est posé intégralement (sous-ensemble exact) :
