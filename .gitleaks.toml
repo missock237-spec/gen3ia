@@ -50,6 +50,17 @@ paths = [
   # est un JEUX D'ESSAI volontaire du masquage de credentials (assertion du
   # message d'erreur) — placeholder factice, jamais une clé réelle.
   '''lib/memory/keyvalue\.test\.ts$''',
+  # Curriculum d'entraînement gen3ia (JSONL synthétiques bilingues FR/EN,
+  # générés de façon déterministe par scripts/build_curriculum_v3.py) :
+  # du TEXTE pédagogique sans aucun secret réel — ex. « LinkedIn post »
+  # déclenche à tort la règle linkedin-client-id. Générateurs versionnés :
+  # toute vraie fuite dans ces fichiers serait aussi dans les scripts, non
+  # couverts par cette exclusion.
+  '''^datasets/[^/]+/train\.jsonl$''',
+  # README de l'orchestrateur : la version historique (e6951d8) contenait des
+  # placeholders « X-API-Key: … » déjà corrigés en $QUEUE_API_KEY (2c90d2a) ;
+  # les anciens commits restent dans l'historique scanné par la CI.
+  '''^orchestrator-24h/README_FR\.md$''',
 ]
 # Clés d'API Web Firebase NEXT_PUBLIC_* : par conception publiques
 # (identifient le projet, ne donnent aucun accès sans règles de sécurité).
