@@ -11,7 +11,7 @@ import type { ConversationStreamEvent } from "./stream-events";
 import type { ConversationMessage } from "./types";
 import { detectImageRatio, enhanceImagePrompt, extractImagePrompt } from "@/lib/ai/image-intent";
 import { languageDirective } from "@/lib/ai/prompt-enhancer";
-import { RESPONSE_FORMAT_RULES, preferFreeForVisibleAnswers } from "@/lib/ai/response-quality";
+import { RESPONSE_FORMAT_RULES, EXCELLENCE_PAR_DOMAINE, preferFreeForVisibleAnswers } from "@/lib/ai/response-quality";
 import { generate, generateStream } from "@/lib/ai/router";
 import { ThinkTagStreamFilter, stripThinkTags } from "@/lib/ai/think-filter";
 import { imagesForModel } from "@/lib/ai/vision-input";
@@ -114,6 +114,10 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
     // sujet saisi, structure markdown, zéro invention) — aligné sur l'exigence
     // « qualité ChatGPT à chaque requête ».
     RESPONSE_FORMAT_RULES,
+    // Curriculum gen3 v4 — exigence de PRÉCISION et de DÉTAIL par domaine
+    // entraîné (maths étape par étape, code exécutable, mécanismes sciences,
+    // sécurité défensive, chiffres business…) — demande utilisateur directe.
+    EXCELLENCE_PAR_DOMAINE,
     // Compréhension exacte : répondre dans la LANGUE du dernier message.
     languageDirective(ctx.message),
     "La génération d'IMAGES, la production de VIDÉOS, la synthèse d'AUDIOS (moteur audio neural local — composition sonore, pas de parole naturelle) et l'analyse de médias (mesures réelles : format, dimensions, durée, codecs, palette) sont effectuées par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré un média comme s'il était affiché, et n'invente jamais d'URL.",

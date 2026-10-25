@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  EXCELLENCE_PAR_DOMAINE,
   RESPONSE_FORMAT_RULES,
   RESPONSE_QUALITY_SYSTEM,
   preferFreeForUnderstanding,
@@ -74,6 +75,34 @@ describe("preferFreeForUnderstanding (tâches de compréhension : classification
   });
 });
 
+describe("EXCELLENCE_PAR_DOMAINE (curriculum gen3 v4 — précision et détail)", () => {
+  it("couvre chaque domaine entraîné avec un contrat vérifiable", () => {
+    const e = EXCELLENCE_PAR_DOMAINE;
+    expect(e).toContain("PRÉCIS et DÉTAILLÉ");
+    expect(e).toContain("MATHS / CALCUL");
+    expect(e).toContain("étape par étape");
+    expect(e).toContain("RAISONNEMENT / PROBLÈMES");
+    expect(e).toContain("CODE");
+    expect(e).toContain("exécutable");
+    expect(e).toContain("SCIENCES / TECHNIQUES");
+    expect(e).toContain("MÉCANISME");
+    expect(e).toContain("SÉCURITÉ / CYBERSÉCURITÉ");
+    expect(e).toContain("DÉFENSIF");
+    expect(e).toContain("MÉTIERS / BUSINESS / FINANCE");
+    expect(e).toContain("LANGAGE / ÉCRITURE");
+    expect(e).toContain("MÉDIA");
+    expect(e).toContain("HORS CAPACITÉ");
+  });
+
+  it("est injecté dans le system de qualité complet ET dans la composition avec charte", () => {
+    expect(RESPONSE_QUALITY_SYSTEM).toContain("EXIGENCE PAR DOMAINE");
+    const composé = withResponseStyle("Charte métier existante.");
+    expect(composé).toContain("Charte métier existante.");
+    expect(composé).toContain("EXIGENCE PAR DOMAINE");
+    expect(composé.indexOf("Charte métier existante.")).toBeLessThan(composé.indexOf("EXIGENCE PAR DOMAINE"));
+  });
+});
+
 describe("RESPONSE_FORMAT_RULES (contrat de présentation)", () => {
   it("couvre les exigences qualité : langue, réponse directe, structure, précision, honnêteté, clarification", () => {
     const rules = RESPONSE_FORMAT_RULES;
@@ -126,6 +155,9 @@ describe("withResponseStyle", () => {
     const long = "X".repeat(12_000);
     const composed = withResponseStyle(long);
     expect(composed.startsWith(long)).toBe(true);
-    expect(composed.endsWith(RESPONSE_FORMAT_RULES)).toBe(true);
+    // Aucune troncature : les règles de format ET le contrat d'excellence
+    // sont entiers, le composé se termine par le contrat par domaine.
+    expect(composed).toContain(RESPONSE_FORMAT_RULES);
+    expect(composed.endsWith(EXCELLENCE_PAR_DOMAINE)).toBe(true);
   });
 });
