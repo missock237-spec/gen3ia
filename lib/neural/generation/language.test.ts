@@ -132,6 +132,51 @@ describe("CortexLangagierGen3 — appariement", () => {
   });
 });
 
+describe("CortexLangagierGen3 — gardes anti-hors-sujet (rectifications UI)", () => {
+  it("garde de langue : une paire EN ne répond plus à une question FR", async () => {
+    const { détecterLangue } = await import("./language");
+    expect(détecterLangue("Qu'est-ce que l'effet de serre ? Explique le mécanisme.")).toBe("fr");
+    expect(détecterLangue("Yes, there is a 65 nonrefundable application fee.")).toBe("en");
+    const cortex = new CortexLangagierGen3();
+    cortex.apprendre(
+      [
+        {
+          motif: "application fee admission portal",
+          reponse: "Yes, there is a 65 nonrefundable application fee, which can be processed in the personal application portal.",
+          theme: "admissions",
+        },
+      ],
+      { personnalisees: true },
+    );
+    // Renforce 30× (usage max) : même avec un poids maximal, la paire EN
+    // ne répond PAS à une question française hors-sujet.
+    for (let i = 0; i < 30; i++) cortex.repondre("application fee admission portal");
+    const r = cortex.repondre("Qu'est-ce que l'effet de serre ? Explique le mécanisme cause à effet avec un ordre de grandeur.");
+    expect(r).toBeNull();
+  });
+
+  it("plasticité d'usage : une paire très utilisée ne secours PAS une correspondance médiocre", async () => {
+    const { BARRE_BASE_USAGE } = await import("./language");
+    expect(BARRE_BASE_USAGE).toBeGreaterThan(0);
+    const cortex = new CortexLangagierGen3();
+    cortex.apprendre(
+      [
+        {
+          motif: "recette gateau chocolat",
+          reponse: "Mélangez farine, œufs et chocolat fondu puis enfournez 30 minutes.",
+          theme: "cuisine",
+        },
+      ],
+      { personnalisees: true },
+    );
+    for (let i = 0; i < 30; i++) cortex.repondre("recette gateau chocolat");
+    // Question voisine mais SANS rapport au motif (recouvrement faible) :
+    // même avec usage maximal, la paire ne doit pas répondre.
+    const r = cortex.repondre("Explique le mécanisme de la photosynthèse avec un ordre de grandeur.");
+    expect(r).toBeNull();
+  });
+});
+
 describe("CortexLangagierGen3 — plasticité d'usage", () => {
   it("renforce le poids d'usage d'une paire rappelée (plafonné)", async () => {
     const cortex = new CortexLangagierGen3();

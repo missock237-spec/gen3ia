@@ -155,6 +155,17 @@ const PREMIERE_PERSONNE_EN_RE =
 const PREMIERE_PERSONNE_RE = /\b(?:je|j'|nous|on)\s+(?:me\s+|nous\s+)?(?:pr[eé]par|envoi|g[eé]n[eè]r|r[eé]dig|v[eé]rifi|surveill|analys|publi|fais|collect|r[eé]sum|synth[eé]tis|pass|aim)/i;
 
 /**
+ * QUESTION pure (calcul, définition, explication, vérification demandée) :
+ * JAMAIS une demande de planification — même si la phrase contient un mot
+ * de récurrence (« chaque étape du calcul ») et un verbe d'action
+ * (« vérifie »). Bug réel : « Calcule 47 + 38… chaque étape… vérifie »
+ * créait une tâche planifiée quotidienne. La garde se lève dès qu'un VRAI
+ * verbe d'automatisation est présent (« peux-tu PLANIFIER chaque lundi… »).
+ */
+const QUESTION_PURE_RE =
+  /(^|\s)(calcule|calculer|combien|qu'est-?ce|qu'est que|est-?ce que|c'est quoi|quel(?:le)?s?|comment|pourquoi|explique[rz]?|d[eé]finis?(?:-moi)?|détaille[rz]?|démontre[rz]?|prouve[rz]?|montre[rz]?|peux-?tu|pouvez-?vous|pourrais-?tu|what|how|why|calculate|compute|explain|define|show)\b/i;
+
+/**
  * Détecte une demande de tâche planifiée RÉCURRENTE, formulée naturellement.
  * Retourne l'entrée exacte de schedule.create, ou null si la demande n'est
  * pas une planification claire (recurrence + verbe d'automatisation).
@@ -171,6 +182,10 @@ export function detectScheduleIntent(message: string): ScheduleIntent | null {
 
   // Constat à la première personne (FR ou EN) : pas une demande d'automatisation.
   if (PREMIERE_PERSONNE_RE.test(lower) || PREMIERE_PERSONNE_EN_RE.test(lower)) return null;
+
+  // QUESTION pure : jamais une planification — sauf verbe d'automatisation
+  // explicite (« peux-tu planifier chaque lundi à 9h… » reste accepté).
+  if (QUESTION_PURE_RE.test(lower) && !SCHEDULE_VERB_RE.test(lower)) return null;
 
   if (!RECURRENCE_RE.test(lower)) return null;
   if (!SCHEDULE_VERB_RE.test(lower) && !SCHEDULE_ACTION_RE.test(lower)) return null;

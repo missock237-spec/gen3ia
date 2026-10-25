@@ -33,6 +33,35 @@ import type { PaireLangage } from "./corpus";
 /** Seuil d'appariement (score cosinus pondéré IDF) au-delà duquel une paire répond. */
 export const SEUIL_APPARIEMENT = 0.34;
 
+/**
+ * BARRE DE QUALITÉ DE BASE — un score normalisé en dessous de cette barre
+ * ne bénéficie PAS de la plasticité d'usage (poidsUsage) : une paire très
+ * utilisée ne peut plus faire passer une correspondance médiocre au-dessus
+ * du seuil (bug réel : une paire apprise hors-sujet répondait à des
+ * questions sans rapport parce que son poids d'usage la propulsait).
+ */
+export const BARRE_BASE_USAGE = SEUIL_APPARIEMENT;
+
+/** Marqueurs de langue FR/EN (pure, testée) — garde de cohérence : une paire
+ *  ne répond que dans la langue de la requête (hors sous-ensemble exact),
+ *  sinon le cortex serait silencieux OU délivrerait une réponse hors-sujet
+ *  traduite d'un autre corpus appris. */
+const MARQUEURS_FR_RE =
+  /\b(le|la|les|un|une|des|du|de|d'|l'|et|ou|est|sont|que|qui|quoi|comment|pourquoi|quand|combien|je|tu|il|elle|nous|vous|on|dans|sur|pour|avec|pas|plus|moins|c'est|qu'est)\b/i;
+const MARQUEURS_EN_RE =
+  /\b(the|a|an|is|are|was|were|there|that|this|of|to|and|or|with|for|you|your|our|we|i|it|its|can|will|would|yes|no|not|please|how|what|why|when)\b/i;
+const ACCENTS_FR_RE = /[éèêëàâçîïôûùü]/i;
+
+/** Détecte la langue dominante d'un texte : "fr" | "en" | null (indéterminé). */
+export function détecterLangue(texte: string): "fr" | "en" | null {
+  const fr = (texte.match(MARQUEURS_FR_RE)?.length ?? 0) + (ACCENTS_FR_RE.test(texte) ? 2 : 0);
+  const en = texte.match(MARQUEURS_EN_RE)?.length ?? 0;
+  if (fr === 0 && en === 0) return null;
+  if (fr > en) return "fr";
+  if (en > fr) return "en";
+  return null;
+}
+
 /** Bonus multiplicatif des paires personnalisées (connaissances enseignées). */
 export const BONUS_PERSONNALISEE = 1.25;
 
@@ -341,8 +370,26 @@ export class CortexLangagierGen3 {
       const bonifie = normalise * (paire.personnalisee ? BONUS_PERSONNALISEE : 1);
       // Sous-ensemble exact : le motif entier est posé dans la requête.
       const sousEnsemble = [...paire.tokens].every((t) => requeteSet.has(t));
+      // GARDE DE LANGUE — une paire d'une autre langue que la requête ne
+      // répond QUE si son motif est posé intégralement (sous-ensemble exact) :
+      // jamais de réponse hors-sujet héritée d'un corpus d'une autre langue.
+      if (!sousEnsemble) {
+        const langueRequête = détecterLangue(requete);
+        const langueRéponse = détecterLangue(paire.reponse);
+        if (
+          langueRequête !== null &&
+          langueRéponse !== null &&
+          langueRequête !== langueRéponse
+        ) {
+          continue;
+        }
+      }
+      // La plasticité d'usage NE SECOURS PAS une correspondance médiocre :
+      // le multiplicateur ne s'applique que si la paire passe déjà la barre
+      // de base en score normalisé (sinon poids 1 — zéro inflation).
+      const usageQualifié = normalise >= BARRE_BASE_USAGE ? paire.poidsUsage : 1;
       const final =
-        bonifie * paire.poidsUsage * (sousEnsemble ? BONUS_SOUS_ENSEMBLE : 1);
+        bonifie * usageQualifié * (sousEnsemble ? BONUS_SOUS_ENSEMBLE : 1);
       if (final > meilleurScore) {
         meilleurScore = final;
         meilleurIndice = indice;

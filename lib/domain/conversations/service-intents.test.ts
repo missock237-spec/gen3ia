@@ -42,6 +42,26 @@ describe("détection heures/jours/intervalles", () => {
 });
 
 describe("détection de tâche planifiée", () => {
+  it("QUESTION pure (calcul) : JAMAIS une planification — bug réel rectifié", () => {
+    // « chaque étape » (récurrence) + « vérifie » (action) ne doivent PAS
+    // créer une tâche planifiée quotidienne.
+    expect(
+      detectScheduleIntent("Calcule 47 + 38 en montrant chaque étape du calcul, puis vérifie le résultat."),
+    ).toBeNull();
+    expect(
+      detectScheduleIntent("Explique chaque étape de la photosynthèse et analyse le mécanisme."),
+    ).toBeNull();
+    expect(
+      detectScheduleIntent("How does photosynthesis work? Check each step."),
+    ).toBeNull();
+  });
+
+  it("question FORMULÉE avec verbe d'automatisation explicite : reste acceptée", () => {
+    const intent = detectScheduleIntent("Peux-tu planifier chaque lundi à 9h la préparation de mon rapport ?");
+    expect(intent).not.toBeNull();
+    expect(intent!.daysOfWeek).toEqual([1]);
+  });
+
   it("détecte une planification hebdomadaire complète", () => {
     const intent = detectScheduleIntent("Chaque lundi à 9h, prépare-moi un rapport des actualités IA de la semaine");
     expect(intent).not.toBeNull();
