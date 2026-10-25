@@ -1,5 +1,5 @@
-import { CortexLangagierGen3 } from "/home/z/my-project/gen3ia/lib/neural/generation/language";
-import { CORPUS_GEN3 } from "/home/z/my-project/gen3ia/lib/neural/generation/corpus";
+import { CortexLangagierGen3 } from "../lib/neural/generation/language";
+import { CORPUS_GEN3 } from "../lib/neural/generation/corpus";
 
 const cortex = new CortexLangagierGen3();
 cortex.apprendre(CORPUS_GEN3);
