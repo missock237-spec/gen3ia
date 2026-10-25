@@ -95,3 +95,4 @@ datasets/ml_management/train.jsonl
 datasets/security_v4/train.jsonl
 datasets/professions/train.jsonl
 datasets/sciences/train.jsonl
+scripts/.smoke_adaptateur/

@@ -90,20 +90,30 @@ self.addEventListener("message", (event) => {
 
   if (data.type === "gen3-agent:précache") {
     // La page demande de mettre au chaud des poids (URLs du manifeste).
+    // Progression rapportée URL par URL (précache_prog) puis bilan (précache_ok).
     event.waitUntil(
       (async () => {
         const cache = await caches.open(CACHE_AGENT);
         const urls = Array.isArray(data.urls) ? data.urls.slice(0, 12) : [];
+        let ok = 0;
         await Promise.allSettled(
-          urls.map(async (u) => {
+          urls.map(async (u, i) => {
+            let réussi = false;
             try {
               await cache.add(u);
+              réussi = true;
+              ok += 1;
             } catch {
               /* poids volumineux : cache progressif, pas d'échec fatal */
             }
+            try {
+              répondre({ type: "gen3-agent:précache_prog", i, total: urls.length, ok: réussi });
+            } catch {
+              /* le canal de réponse peut être fermé (onglet parti) */
+            }
           }),
         );
-        répondre({ type: "gen3-agent:précache_ok", n: urls.length });
+        répondre({ type: "gen3-agent:précache_ok", n: ok });
       })(),
     );
     return;

@@ -34,12 +34,32 @@ function nœud(
   r.battre(id, `user-${id}`, { webgpu: true, memoireGo, adaptateur: "test" });
 }
 
+/** Re-battement d'un nœud EXISTANT (onde de vie) — sans toucher aux bails
+ *  de fragments : sert à garder un appareil vivant à travers les sauts de
+ *  temps des tests de sentinelle/bail. */
+function rebattre(r: RegistreEssaim, id: string, memoireGo: number): void {
+  r.battre(id, `user-${id}`, { webgpu: true, memoireGo, adaptateur: "test" });
+}
+
 describe("planifierFragments", () => {
-  it("image = 1 fragment unique", () => {
+  it("image = mosaïque 2×2 de tuiles (grille 512, overlap 32, graines dérivées)", () => {
     const { o } = banc();
     const plan = o.planifierFragments({ kind: "image", prompt: "un chat", seed: 42 });
-    expect(plan).toHaveLength(1);
-    expect(plan[0]).toMatchObject({ sous: "image", seed: 42, steps: BORNES_ESSAIM.stepsHaute });
+    expect(plan).toHaveLength(BORNES_ESSAIM.tuilesGrille ** 2);
+    const dims = dimensionsPourRatio("1:1");
+    // Chaque tuile est une génération SD complète, positionnée dans la grille.
+    expect(plan[0]).toMatchObject({
+      sous: "tuile", seed: 42, steps: BORNES_ESSAIM.stepsHaute,
+      largeur: dims.w, hauteur: dims.h,
+      grilleX: 2, grilleY: 2, tuileX: 0, tuileY: 0, overlap: BORNES_ESSAIM.tuileOverlapPx,
+    });
+    expect(plan[1]).toMatchObject({ tuileX: 1, tuileY: 0, seed: 59 });
+    expect(plan[2]).toMatchObject({ tuileX: 0, tuileY: 1, seed: 76 });
+    expect(plan[3]).toMatchObject({ tuileX: 1, tuileY: 1, seed: 93 });
+    // Chaque tuile porte un cadrage positionnel distinct (diversité visuelle).
+    const cadrages = new Set(plan.map((c) => (c as { prompt: string }).prompt));
+    expect(cadrages.size).toBe(4);
+    for (const c of plan) expect((c as { prompt: string }).prompt).toContain("un chat");
   });
 
   it("vidéo = 6 keyframes QUALITÉ HAUTE, graines liées, dims du ratio", () => {
@@ -211,9 +231,10 @@ describe("SENTINELLE DE RELANCE (déconnexions brusques)", () => {
     const registreRelais = (): void => nœud(r, "gpu-relais", 3);
     const j = o.créerJob({ conversationId: "c", userId: "user-gpu-vif", kind: "image", prompt: "aurore boréale" });
     const confiés = o.attribuer();
-    expect(confiés).toHaveLength(1);
-    const fragment = confiés[0];
-    expect(fragment.noeudId).toBe("gpu-vif");
+    // Mosaïque 2×2 : deux GPU vivants → deux tuiles confiées d'emblée.
+    expect(confiés).toHaveLength(2);
+    const fragment = confiés.find((f) => f.noeudId === "gpu-vif");
+    expect(fragment).toBeDefined();
 
     // Le nœud meurt BRUSQUEMENT (plus de battements). Le relais, lui,
     // continue d'émettre ses ondes de vie.
@@ -228,7 +249,10 @@ describe("SENTINELLE DE RELANCE (déconnexions brusques)", () => {
     const jFrais = o.étatJob(j!.jobId, "user-gpu-vif");
     expect(jFrais!.relances).toHaveLength(1);
 
-    // Un autre agent reçoit la part re-relancée.
+    // gpu-relais rend D'ABORD sa propre tuile (charge libérée), puis peut
+    // reprendre la part re-relancée de l'appareil déconnecté.
+    const sienne = confiés.find((f) => f.noeudId === "gpu-relais")!;
+    expect(o.déclarerRésultat(sienne.fragmentId, "gpu-relais", new Uint8Array([1])).ok).toBe(true);
     const reconfiés = o.attribuer();
     expect(reconfiés).toHaveLength(1);
     expect(reconfiés[0].noeudId).toBe("gpu-relais");
@@ -322,5 +346,110 @@ describe("bornes et purge", () => {
     expect(o.étatJob(j!.jobId, "bob")).toBeNull();
     expect(o.jobParOrigine("origine-1", "alice")?.jobId).toBe(j!.jobId);
     expect(o.jobParOrigine("origine-1", "bob")).toBeNull();
+  });
+});
+
+describe("bail des fragments (renouvellement pendant le rendu)", () => {
+  it("démarrerFragment rafraîchit attribueA à chaque appel (bail prolongé)", () => {
+    const { o, r, avancer } = banc();
+    nœud(r, "gpu-lent", 4);
+    const j = o.créerJob({ conversationId: "c", userId: "u", kind: "voice", prompt: "Phrase une. Phrase deux. Phrase trois. Phrase quatre." });
+    o.attribuer();
+    const f = j!.fragments[0];
+    expect(o.démarrerFragment(f.fragmentId, f.noeudId!)?.état).toBe("en-cours");
+    const bail1 = f.attribueA!;
+    avancer(120_000); // ≪ rendu long mais > 2× période de battement
+    rebattre(r, "gpu-lent", 4); // le NŒUD reste vivant (ondes de vie)
+    expect(o.démarrerFragment(f.fragmentId, f.noeudId!)).not.toBeNull();
+    expect(f.attribueA!).toBeGreaterThan(bail1);
+    // Un rendu de 3 min avec baux renouvelés NE doit PAS être relancé.
+    avancer(60_000);
+    rebattre(r, "gpu-lent", 4);
+    const { relancés } = o.surveiller();
+    expect(relancés).toHaveLength(0);
+    // Sans renouvellement au-delà du TTL fragment → relance.
+    avancer(BORNES_ESSAIM.ttlFragmentMs + 1_000);
+    rebattre(r, "gpu-lent", 4);
+    const { relancés: relancés2 } = o.surveiller();
+    expect(relancés2.length).toBeGreaterThan(0);
+  });
+
+  it("un nœud non-propriétaire ne peut pas renouveler un bail", () => {
+    const { o, r } = banc();
+    nœud(r, "gpu-a", 4);
+    nœud(r, "gpu-b", 2);
+    const j = o.créerJob({ conversationId: "c", userId: "u", kind: "image", prompt: "p" });
+    o.attribuer();
+    const f = j!.fragments[0];
+    const avant = f.attribueA!;
+    expect(o.démarrerFragment(f.fragmentId, "gpu-b")).toBeNull();
+    expect(f.attribueA).toBe(avant);
+  });
+});
+
+describe("résultats tardifs (historique des attributions)", () => {
+  it("le résultat d'un ancien détenteur est ACCEPTÉ tant que la part est re-en file", () => {
+    const { o, r, avancer } = banc();
+    nœud(r, "gpu-lent", 4);
+    o.créerJob({ conversationId: "c", userId: "u", kind: "voice", prompt: "Phrase une. Phrase deux. Phrase trois. Phrase quatre." });
+    const confiés = o.attribuer();
+    expect(confiés.length).toBeGreaterThan(0);
+    const f = confiés[0];
+    const ancienNoeud = f.noeudId!;
+    expect(f.historique?.[0]).toEqual({ noeudId: ancienNoeud, génération: 0 });
+    // gpu-lent DÉCONNECTE (plus d'ondes) → sentinelle : rupture + relance,
+    // la part repasse en file SANS porteur et SANS autre appareil vivant.
+    avancer(BORNES_ESSAIM.ttlFragmentMs + 1_000);
+    const { relancés } = o.surveiller();
+    expect(relancés.map((x) => x.fragmentId)).toContain(f.fragmentId);
+    expect(f.état).toBe("en-attente");
+    expect(f.noeudId).toBeUndefined();
+    expect(o.attribuer()).toHaveLength(0);
+    // Le TRAVAIL TARDIF du premier détenteur arrive : accepté, jamais jeté.
+    const tardif = o.déclarerRésultat(f.fragmentId, ancienNoeud, new Uint8Array([7, 7, 7]));
+    expect(tardif.ok).toBe(true);
+    expect(f.état).toBe("termine");
+    expect(f.noeudId).toBe(ancienNoeud);
+  });
+
+  it("le résultat d'un ancien détenteur est REFUSÉ si un autre appareil porte la part", () => {
+    const { o, r, avancer } = banc();
+    nœud(r, "gpu-lent", 4);
+    nœud(r, "gpu-relais", 2);
+    o.créerJob({ conversationId: "c", userId: "u", kind: "voice", prompt: "Phrase une. Phrase deux. Phrase trois. Phrase quatre." });
+    const confiés = o.attribuer();
+    const f = confiés[0];
+    const ancien = f.noeudId!;
+    // gpu-lent DÉCONNECTE BRUSQUEMENT (plus de battement) : la sentinelle le
+    // sort du registre et relance sa part ; gpu-relais, vivant, la prend.
+    avancer(BORNES_ESSAIM.ttlFragmentMs + 1_000);
+    rebattre(r, "gpu-relais", 2);
+    o.surveiller();
+    const reconfiés = o.attribuer();
+    expect(reconfiés.length).toBeGreaterThan(0);
+    const nouveau = f.noeudId!;
+    expect(nouveau).not.toBe(ancien);
+    // Le résultat TARDIF de l'ancien arrive : refus — la part a un porteur.
+    const refus = o.déclarerRésultat(f.fragmentId, ancien, new Uint8Array([1]));
+    expect(refus.ok).toBe(false);
+    expect(refus.erreur).toContain("re-assignée");
+    // Le porteur légitime, lui, passe toujours.
+    expect(o.déclarerRésultat(f.fragmentId, nouveau, new Uint8Array([1])).ok).toBe(true);
+  });
+
+  it("l'historique d'attributions est borné (générationsMax + 1)", () => {
+    const { o, r, avancer } = banc();
+    nœud(r, "gpu-1", 4);
+    nœud(r, "gpu-2", 3);
+    o.créerJob({ conversationId: "c", userId: "u", kind: "voice", prompt: "Phrase une. Phrase deux. Phrase trois. Phrase quatre." });
+    const [f] = o.attribuer();
+    for (let g = 0; g < 5; g++) {
+      avancer(BORNES_ESSAIM.ttlFragmentMs + 1_000);
+      rebattre(r, "gpu-1", 4);
+      rebattre(r, "gpu-2", 3);
+      o.surveiller();
+      o.attribuer();
+    }
+    expect((f.historique ?? []).length).toBeLessThanOrEqual(BORNES_ESSAIM.générationsMax + 1);
   });
 });

@@ -66,6 +66,10 @@ export interface OptionsImageWebGpu {
    *  (mémoire ≥ 2,2 Go) — le mode essaim l'impose par défaut. */
   qualité?: "standard" | "haute";
   seed?: number;
+  /** Dimensions EXPLICITES (mode essaim : tuiles / keyframes) — l'emportent
+   *  sur le ratio. Arrondies à /8 (contrainte VAE) et bornées 256…768. */
+  largeur?: number;
+  hauteur?: number;
   onProgress?: (info: { étape: string; pourcent: number }) => void;
 }
 
@@ -270,8 +274,9 @@ export async function générerImageWebGpu(opts: OptionsImageWebGpu): Promise<R�
   const ratio = opts.ratio ?? "1:1";
   const dimsHaute = haute && (await grilleHautePossible()) ? DIMENSIONS_HAUTES[ratio] : undefined;
   const dims = dimsHaute ?? DIMENSIONS[ratio] ?? DIMENSIONS["1:1"];
-  const W = dims.w;
-  const H = dims.h;
+  const caler8 = (v: number): number => Math.min(768, Math.max(256, Math.round(v / 8) * 8));
+  const W = opts.largeur ? caler8(opts.largeur) : dims.w;
+  const H = opts.hauteur ? caler8(opts.hauteur) : dims.h;
   const pas = Math.min(Math.max(opts.steps ?? (haute ? await pasQualitéHaute() : 20), 4), 34);
   const guidance = Math.min(Math.max(opts.guidance ?? (haute ? 5.0 : 4.5), 1), 12);
   const graine = (opts.seed ?? Date.now()) % 2 ** 31;

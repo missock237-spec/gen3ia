@@ -87,7 +87,49 @@ export class OrchestrateurEssaim {
     const steps = BORNES_ESSAIM.stepsHaute;
     const guidance = BORNES_ESSAIM.guidanceHaute;
     if (params.kind === "image") {
-      return [{ sous: "image", prompt: params.prompt, ratio, seed: params.seed, steps, guidance }];
+      // IMAGE GRAND FORMAT EN MOSAÏQUE — chaque tuile est UNE génération SD
+      // complète (grille 512, /8) confiée à un appareil différent ; l'IA
+      // centrale coud le tout à mi-chevauchement (fusion.assemblerTuiles).
+      // Honnêteté de rendu : les tuiles partagent le prompt et un cadrage
+      // positionnel, mais des graines dérivées → coutures visibles possibles
+      // (l'essaim privilégie la TAILLE et le parallélisme, pas la continuité
+      // parfaite d'un latent unique — hors de portée WebGPU fiable).
+      const grille = BORNES_ESSAIM.tuilesGrille;
+      const dims = dimensionsPourRatio(ratio);
+      const overlap = BORNES_ESSAIM.tuileOverlapPx;
+      const cadrage = [
+        "coin supérieur gauche de la scène",
+        "coin supérieur droit de la scène",
+        "coin inférieur gauche de la scène",
+        "coin inférieur droit de la scène",
+        "bande centrale gauche de la scène",
+        "bande centrale droite de la scène",
+        "bande centrale haute de la scène",
+        "bande centrale basse de la scène",
+        "zone centrale de la scène",
+      ];
+      const charges: ChargeFragment[] = [];
+      for (let ty = 0; ty < grille; ty++) {
+        for (let tx = 0; tx < grille; tx++) {
+          const i = ty * grille + tx;
+          charges.push({
+            sous: "tuile",
+            prompt: `${params.prompt} — cadrage : ${cadrage[i % cadrage.length]}`,
+            ratio,
+            seed: (params.seed + i * 17) % 2 ** 31,
+            steps,
+            guidance,
+            largeur: dims.w,
+            hauteur: dims.h,
+            grilleX: grille,
+            grilleY: grille,
+            tuileX: tx,
+            tuileY: ty,
+            overlap,
+          });
+        }
+      }
+      return charges.slice(0, BORNES_ESSAIM.tuilesMax);
     }
     if (params.kind === "video") {
       // Vidéo HAUTE QUALITÉ : 6 keyframes par défaut (jusqu'à 8) — chaque
@@ -186,6 +228,10 @@ export class OrchestrateurEssaim {
         fragment.état = "attribue";
         fragment.noeudId = élu.noeudId;
         fragment.attribueA = this.maintenant();
+        fragment.historique = [
+          ...(fragment.historique ?? []).slice(-(BORNES_ESSAIM.générationsMax + 1)),
+          { noeudId: élu.noeudId, génération: fragment.génération },
+        ];
         confiés.push(fragment);
       }
       if (job.état === "planifie" && job.fragments.some((f) => f.état !== "en-attente")) {
@@ -195,13 +241,19 @@ export class OrchestrateurEssaim {
     return confiés;
   }
 
-  /** L'agent annonce qu'il EXÉCUTE le fragment (idempotent, propriété vérifiée). */
+  /**
+   * L'agent annonce qu'il EXÉCUTE le fragment — et RAFRAÎCHIT SON BAIL :
+   * chaque appel repousse l'échéance sentinelle (attribueA), ce qui permet
+   * à un rendu WebGPU long (> ttlFragmentMs) de ne pas être volé à mi-route.
+   * Idempotent, propriété vérifiée.
+   */
   démarrerFragment(fragmentId: string, noeudId: string): FragmentTravail | null {
     for (const job of this.jobs.values()) {
       const f = job.fragments.find((x) => x.fragmentId === fragmentId);
       if (!f) continue;
       if (f.noeudId !== noeudId) return null; // pas le propriétaire
       if (f.état === "attribue") f.état = "en-cours";
+      if (f.état === "en-cours") f.attribueA = this.maintenant(); // bail
       return f;
     }
     return null;
@@ -222,7 +274,25 @@ export class OrchestrateurEssaim {
     for (const job of this.jobs.values()) {
       const f = job.fragments.find((x) => x.fragmentId === fragmentId);
       if (!f) continue;
-      if (f.noeudId !== noeudId) return { ok: false, erreur: "Fragment non attribué à ce nœud." };
+      if (f.noeudId !== noeudId) {
+        // RÉSULTAT TARDIF d'un ancien détenteur ? Accepté UNIQUEMENT si la
+        // part est encore en file (relance, pas encore re-confiée) — le
+        // travail GPU n'est pas jeté. Si un autre appareil la porte déjà,
+        // refus honnête : le doublon serait écrasé en silence sinon.
+        const ancien = (f.historique ?? []).some((h) => h.noeudId === noeudId);
+        if (ancien && f.état === "en-attente") {
+          f.noeudId = noeudId; // re-prise tardive : l'ancien détenteur gagne
+          f.attribueA = this.maintenant();
+        } else {
+          return {
+            ok: false,
+            erreur:
+              f.état === "termine"
+                ? "Fragment déjà réceptionné."
+                : "Trop tard — part re-assignée à un autre appareil.",
+          };
+        }
+      }
       if (f.état === "termine") return { ok: false, erreur: "Fragment déjà réceptionné." };
       if (octets.byteLength > BORNES_ESSAIM.tailleFragmentMax) {
         return { ok: false, erreur: "Fragment trop volumineux." };

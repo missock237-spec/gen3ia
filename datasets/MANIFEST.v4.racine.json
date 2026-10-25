@@ -1,0 +1,852 @@
+{
+  "name": "gen3ia-media-engine",
+  "version": 4,
+  "statut": "v4.0-datasets — manifeste pré-entraînement ; sera remplacé par le notebook Colab v4 (cellule 16) après exécution GPU effective",
+  "generated_at": "2026-10-25T20:10:19Z",
+  "curriculum": {
+    "total_lignes": 1000000,
+    "datasets": {
+      "abbreviations": 2145,
+      "audio_understanding": 15000,
+      "business": 11600,
+      "code": 12000,
+      "code_v4": 60000,
+      "contextual_understanding": 25000,
+      "conversational_memory": 20000,
+      "databases": 15000,
+      "image_analysis": 35000,
+      "image_generation": 30000,
+      "images": 20473,
+      "intent_recognition": 33000,
+      "knowledge": 3000,
+      "math": 125000,
+      "ml_data": 15000,
+      "ml_evaluation": 12000,
+      "ml_management": 12000,
+      "ml_training": 15000,
+      "multimodal": 5400,
+      "multimodal_v4": 30000,
+      "music": 7300,
+      "music_v4": 15000,
+      "nlp_comprehension": 60000,
+      "problem_solving": 25000,
+      "professions": 95000,
+      "rag_documents": 20000,
+      "reasoning": 45000,
+      "sciences": 20000,
+      "security": 6000,
+      "security_v4": 50000,
+      "text_generation": 28000,
+      "tools": 35000,
+      "video": 8349,
+      "video_v4": 45000,
+      "voice": 15733,
+      "voice_speech": 20000,
+      "writing": 8000
+    },
+    "datasets_v4": [
+      "audio_understanding",
+      "code_v4",
+      "contextual_understanding",
+      "conversational_memory",
+      "databases",
+      "image_analysis",
+      "image_generation",
+      "intent_recognition",
+      "math",
+      "ml_data",
+      "ml_evaluation",
+      "ml_management",
+      "ml_training",
+      "multimodal_v4",
+      "music_v4",
+      "nlp_comprehension",
+      "problem_solving",
+      "professions",
+      "rag_documents",
+      "reasoning",
+      "sciences",
+      "security_v4",
+      "text_generation",
+      "tools",
+      "video_v4",
+      "voice_speech"
+    ],
+    "phases": 12,
+    "phases_detail": [
+      {
+        "phase": 1,
+        "titre": "Langage et compréhension",
+        "datasets": [
+          "nlp_comprehension",
+          "text_generation",
+          "contextual_understanding",
+          "conversational_memory",
+          "intent_recognition"
+        ],
+        "lignes": 166000
+      },
+      {
+        "phase": 2,
+        "titre": "Raisonnement et maths",
+        "datasets": [
+          "reasoning",
+          "math",
+          "problem_solving"
+        ],
+        "lignes": 195000
+      },
+      {
+        "phase": 3,
+        "titre": "Programmation",
+        "datasets": [
+          "code",
+          "code_v4"
+        ],
+        "lignes": 72000
+      },
+      {
+        "phase": 4,
+        "titre": "Outils et exécution",
+        "datasets": [
+          "tools",
+          "databases"
+        ],
+        "lignes": 50000
+      },
+      {
+        "phase": 5,
+        "titre": "Recherche documentaire",
+        "datasets": [
+          "rag_documents",
+          "knowledge"
+        ],
+        "lignes": 23000
+      },
+      {
+        "phase": 6,
+        "titre": "Analyse d'images",
+        "datasets": [
+          "image_analysis"
+        ],
+        "lignes": 35000
+      },
+      {
+        "phase": 7,
+        "titre": "Génération d'images",
+        "datasets": [
+          "image_generation",
+          "images"
+        ],
+        "lignes": 50473
+      },
+      {
+        "phase": 8,
+        "titre": "Audio et voix",
+        "datasets": [
+          "voice",
+          "voice_speech",
+          "audio_understanding",
+          "music",
+          "music_v4"
+        ],
+        "lignes": 73033
+      },
+      {
+        "phase": 9,
+        "titre": "Vidéo",
+        "datasets": [
+          "video",
+          "video_v4"
+        ],
+        "lignes": 53349
+      },
+      {
+        "phase": 10,
+        "titre": "Orchestration multimodale",
+        "datasets": [
+          "multimodal",
+          "multimodal_v4"
+        ],
+        "lignes": 35400
+      },
+      {
+        "phase": 11,
+        "titre": "Entraînement de modèles",
+        "datasets": [
+          "ml_data",
+          "ml_training",
+          "ml_evaluation",
+          "ml_management"
+        ],
+        "lignes": 54000
+      },
+      {
+        "phase": 12,
+        "titre": "Sécurité et optimisation",
+        "datasets": [
+          "security",
+          "security_v4"
+        ],
+        "lignes": 56000
+      }
+    ],
+    "langues": [
+      "fr",
+      "en"
+    ],
+    "determinisme": "seed 20261026, déduplication hash de contenu 64 bits"
+  },
+  "licences": {
+    "validees_le": "2026-10-26",
+    "texte_base": {
+      "google/gemma-3-4b-it": {
+        "licence": "gemma",
+        "gated": "manual",
+        "acces_token_Kings237": "200 OK — licence acceptée"
+      },
+      "Qwen/Qwen2.5-3B-Instruct": {
+        "licence": "apache-2.0 (repli sans gate)"
+      }
+    },
+    "image_base": {
+      "stabilityai/stable-diffusion-2-1-base": {
+        "licence": "CreativeML OpenRAIL-M",
+        "gated": false
+      },
+      "coco_train_2017": {
+        "licence": "CC-BY 4.0 (images Flickr), annotations CC-BY 4.0"
+      }
+    },
+    "voix": {
+      "hexgrad/Kokoro-82M": {
+        "licence": "apache-2.0",
+        "voice_fr": "ff_siwis"
+      }
+    },
+    "datasets_gen3ia": {
+      "licence": "usage projet gen3ia, contenu généré programmatique bilingue FR/EN, dédupliqué par hash de contenu"
+    }
+  },
+  "training": {
+    "statut": "en_attente_execution_colab",
+    "notebook": "training/colab/gen3ia_tous_domaines_v4.ipynb",
+    "plan_langage": {
+      "base": "google/gemma-3-4b-it (licence Gemma acceptée) ou Qwen/Qwen2.5-3B-Instruct",
+      "methode": "QLoRA 4-bit NF4 r16/α32, masquage loss réponse-seule, ctx 1024",
+      "cap_stratifie": 400000,
+      "profils": {
+        "T4": 3000,
+        "L4": 6000,
+        "A100": 12000
+      }
+    },
+    "plan_photorealisme": {
+      "base": "stabilityai/stable-diffusion-2-1-base",
+      "methode": "LoRA r32/α64 fusionné, min-SNR γ=5, CFG dropout 10 %",
+      "photos_reelles": "COCO train2017 en streaming HF (118k, cap 12 000)"
+    },
+    "publication_apres_entrainement": [
+      "text-lora-gemma3/",
+      "sd-photoreal-v2/",
+      "MANIFEST.json (complet)"
+    ]
+  },
+  "browser_inference": {
+    "runtime": "onnxruntime-web (WebGPU) + kokoro-js",
+    "sd": {
+      "dir": "sd-photoreal",
+      "dtype": "fp16",
+      "steps": 26,
+      "steps_haute": 30,
+      "grille_haute": 768,
+      "poids": "a_publier_apres_colab — repli API jusqu'ici"
+    },
+    "kokoro": {
+      "dir": "kokoro",
+      "voice_fr": "ff_siwis",
+      "dtype": "fp32",
+      "poids": "a_publier_apres_colab — repli API jusqu'ici"
+    }
+  },
+  "datasets_index": [
+    {
+      "name": "abbreviations",
+      "hf_path": "datasets/abbreviations/train.jsonl",
+      "rows": 2145,
+      "task_types": [
+        "abbreviation_reverse",
+        "contextual_comprehension",
+        "expansion",
+        "sentence_rewrite"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Sigles réels FR/EN : expansion, tâche inverse, reformulations, compréhension contextuelle."
+    },
+    {
+      "name": "audio_understanding",
+      "hf_path": "v4/audio_understanding/train.jsonl",
+      "rows": 15000,
+      "task_types": [
+        "sound_classification",
+        "transcription_plan"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Audio : classification d'environnements sonores, plans de transcription"
+    },
+    {
+      "name": "business",
+      "hf_path": "datasets/business/train.jsonl",
+      "rows": 11600,
+      "task_types": [
+        "commercial_advice",
+        "data_analysis",
+        "pricing_strategy",
+        "sales_pitch"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Analyse de données, pitchs de vente, conseil commercial, stratégie tarifaire."
+    },
+    {
+      "name": "code",
+      "hf_path": "datasets/code/train.jsonl",
+      "rows": 12000,
+      "task_types": [
+        "api_design",
+        "brief_to_component",
+        "bug_to_fix",
+        "css_layout",
+        "feature_to_tests",
+        "sql_query"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Dev web, API, tests, debug, SQL et CSS — instructions bilingues avec sorties structurées correctes."
+    },
+    {
+      "name": "code_v4",
+      "hf_path": "v4/code_v4/train.jsonl",
+      "rows": 60000,
+      "task_types": [
+        "bug_fix",
+        "complexity_analysis",
+        "css_layout",
+        "python_function",
+        "react_component",
+        "regex_authoring",
+        "rest_api_design",
+        "sql_query"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Programmation : React typé, Python calculé, debug, SQL, regex, API REST, complexité, CSS"
+    },
+    {
+      "name": "contextual_understanding",
+      "hf_path": "v4/contextual_understanding/train.jsonl",
+      "rows": 25000,
+      "task_types": [
+        "implicit_question",
+        "reference_resolution"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Compréhension contextuelle : résolution de références, questions implicites"
+    },
+    {
+      "name": "conversational_memory",
+      "hf_path": "v4/conversational_memory/train.jsonl",
+      "rows": 20000,
+      "task_types": [
+        "memory_combine",
+        "memory_recall"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Mémoire conversationnelle : rappel et combinaison de faits multi-tours"
+    },
+    {
+      "name": "databases",
+      "hf_path": "v4/databases/train.jsonl",
+      "rows": 15000,
+      "task_types": [
+        "sql_aggregate",
+        "sql_filter",
+        "sql_join",
+        "sql_temporal"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Bases de données : SQL de lecture sur 4 schémas métier, agrégats et index"
+    },
+    {
+      "name": "image_analysis",
+      "hf_path": "v4/image_analysis/train.jsonl",
+      "rows": 35000,
+      "task_types": [
+        "chart_reading",
+        "counting_spatial",
+        "ocr_transcription",
+        "scene_description"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Analyse d'images : scènes, OCR, lecture de graphiques, comptage spatial"
+    },
+    {
+      "name": "image_generation",
+      "hf_path": "v4/image_generation/train.jsonl",
+      "rows": 30000,
+      "task_types": [
+        "image_editing_plan",
+        "prompt_to_photoreal_brief"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Génération d'images : prompts photoréalistes à 8 dimensions, plans de retouche"
+    },
+    {
+      "name": "images",
+      "hf_path": "datasets/images/train.jsonl",
+      "rows": 20473,
+      "task_types": [
+        "prompt_to_photoreal_brief",
+        "style_classification"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Briefs photoréalistes (sujet/lumière/optique/matière/post) FR+EN + classification de style."
+    },
+    {
+      "name": "intent_recognition",
+      "hf_path": "v4/intent_recognition/train.jsonl",
+      "rows": 33000,
+      "task_types": [
+        "intent_classification"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Reconnaissance d'intention : 20 intentions FR/EN, entités, action suivante"
+    },
+    {
+      "name": "knowledge",
+      "hf_path": "datasets/knowledge/train.jsonl",
+      "rows": 3000,
+      "task_types": [
+        "machine_conception",
+        "qa_humaines",
+        "qa_sciences",
+        "sante_information",
+        "web_research_plan"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Sciences, sciences humaines, santé grand public, conception mécanique, recherche web — réponses cadrées et honnêtes."
+    },
+    {
+      "name": "math",
+      "hf_path": "v4/math/train.jsonl",
+      "rows": 125000,
+      "task_types": [
+        "arithmetic",
+        "geometry",
+        "linear_equation",
+        "percentage",
+        "proportion",
+        "rate_problem"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Mathématiques : calcul exact (priorités, %, équations, géométrie, proportions, taux)"
+    },
+    {
+      "name": "ml_data",
+      "hf_path": "v4/ml_data/train.jsonl",
+      "rows": 15000,
+      "task_types": [
+        "annotation_guideline",
+        "data_collection",
+        "dataset_quality",
+        "dedup_computation",
+        "pii_detection"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Préparation de données : dédup calculée, PII, annotation, qualité, collecte conforme"
+    },
+    {
+      "name": "ml_evaluation",
+      "hf_path": "v4/ml_evaluation/train.jsonl",
+      "rows": 12000,
+      "task_types": [
+        "ab_decision",
+        "bias_audit",
+        "eval_grid",
+        "performance_verdict"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Évaluation : grilles et seuils, verdicts performance, A/B, audit de biais"
+    },
+    {
+      "name": "ml_management",
+      "hf_path": "v4/ml_management/train.jsonl",
+      "rows": 12000,
+      "task_types": [
+        "checkpoint_rotation",
+        "gpu_cost",
+        "gpu_sharding",
+        "training_monitoring"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Gestion : sharding GPU d'essaim, coûts, checkpoints, supervision de convergence"
+    },
+    {
+      "name": "ml_training",
+      "hf_path": "v4/ml_training/train.jsonl",
+      "rows": 15000,
+      "task_types": [
+        "distillation_plan",
+        "lora_config",
+        "resume_training"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Entraînement : configs LoRA/QLoRA CALCULÉES, reprise, distillation"
+    },
+    {
+      "name": "multimodal",
+      "hf_path": "datasets/multimodal/train.jsonl",
+      "rows": 5400,
+      "task_types": [
+        "brand_voice",
+        "campaign_multimedia",
+        "media_qa",
+        "pipeline_orchestration",
+        "storyboard_multimedia"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Orchestration des pipelines média gen3 (image/voix/vidéo/musique/web) et lecture de scènes."
+    },
+    {
+      "name": "multimodal_v4",
+      "hf_path": "v4/multimodal_v4/train.jsonl",
+      "rows": 30000,
+      "task_types": [
+        "engine_selection",
+        "multimodal_orchestration"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Orchestration multimodale : pipelines texte→image→voix→vidéo avec replis honnêtes"
+    },
+    {
+      "name": "music",
+      "hf_path": "datasets/music/train.jsonl",
+      "rows": 7300,
+      "task_types": [
+        "clip_storyboard",
+        "prompt_to_music_brief"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Briefs musicaux (genre/tempo/tonalité/instrumentation/structure/mixage) + storyboards de clips."
+    },
+    {
+      "name": "music_v4",
+      "hf_path": "v4/music_v4/train.jsonl",
+      "rows": 15000,
+      "task_types": [
+        "music_composition_brief"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Musique : briefs de composition mesurés (genre, tempo, tonalité, structure)"
+    },
+    {
+      "name": "nlp_comprehension",
+      "hf_path": "v4/nlp_comprehension/train.jsonl",
+      "rows": 60000,
+      "task_types": [
+        "comprehension_qa",
+        "event_ordering",
+        "main_idea"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Compréhension de textes : QA vérifiables par construction, idée principale, ordre des événements"
+    },
+    {
+      "name": "problem_solving",
+      "hf_path": "v4/problem_solving/train.jsonl",
+      "rows": 25000,
+      "task_types": [
+        "decision_with_tradeoffs",
+        "solution_plan"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Résolution de problèmes : plans jalonnés et décisions argumentées"
+    },
+    {
+      "name": "professions",
+      "hf_path": "v4/professions/train.jsonl",
+      "rows": 95000,
+      "task_types": [
+        "accounting_sort",
+        "campaign_plan",
+        "crop_plan",
+        "finance_calc",
+        "itinerary",
+        "job_ad",
+        "journalistic_check",
+        "legal_assist",
+        "lesson_plan",
+        "logistics_plan",
+        "market_study",
+        "product_sheet",
+        "project_plan",
+        "real_estate_ad",
+        "support_reply"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "15 métiers : marketing, e-commerce, support, finance, compta, droit, éducation, RH, immobilier, agriculture, logistique, journalisme, tourisme, projets, entrepreneuriat"
+    },
+    {
+      "name": "rag_documents",
+      "hf_path": "v4/rag_documents/train.jsonl",
+      "rows": 20000,
+      "task_types": [
+        "grounded_qa"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "RAG : réponse ancrée sur politiques paramétrées ; ~17 % non répondables (anti-hallucination)"
+    },
+    {
+      "name": "reasoning",
+      "hf_path": "v4/reasoning/train.jsonl",
+      "rows": 45000,
+      "task_types": [
+        "conditional_logic",
+        "number_sequence",
+        "ordering_puzzle",
+        "syllogism"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Raisonnement : syllogismes, suites numériques, classements, logique conditionnelle"
+    },
+    {
+      "name": "sciences",
+      "hf_path": "v4/sciences/train.jsonl",
+      "rows": 20000,
+      "task_types": [
+        "science_application",
+        "science_fact",
+        "true_false_science"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Sciences : 40 faits exacts (physique, chimie, bio, astro, géo, env, élec, robotique) × 3 formats"
+    },
+    {
+      "name": "security",
+      "hf_path": "datasets/security/train.jsonl",
+      "rows": 6000,
+      "task_types": [
+        "ctf_guided",
+        "hardening_plan",
+        "secure_code_review",
+        "threat_analysis"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Cybersécurité STRICTEMENT défensive : revue de code, analyse de menaces, CTF labo éducatif, durcissement."
+    },
+    {
+      "name": "security_v4",
+      "hf_path": "v4/security_v4/train.jsonl",
+      "rows": 50000,
+      "task_types": [
+        "data_poisoning_response",
+        "hallucination_eval",
+        "permission_check",
+        "prompt_injection_defense",
+        "secret_rotation",
+        "security_review"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Sécurité STRICTEMENT défensive : revue de code tracée, injection de prompt, hallucinations, empoisonnement, secrets, permissions"
+    },
+    {
+      "name": "text_generation",
+      "hf_path": "v4/text_generation/train.jsonl",
+      "rows": 28000,
+      "task_types": [
+        "rewrite_style",
+        "text_generation"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Génération : plans + amorce d'articles/emails/histoires/annonces, réécriture de style"
+    },
+    {
+      "name": "tools",
+      "hf_path": "v4/tools/train.jsonl",
+      "rows": 35000,
+      "task_types": [
+        "tool_call_json",
+        "tool_chain"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Utilisation d'outils : appels JSON stricts et chaînes d'appels avec replis"
+    },
+    {
+      "name": "video",
+      "hf_path": "datasets/video/train.jsonl",
+      "rows": 8349,
+      "task_types": [
+        "camera_direction",
+        "scene_to_keyframes"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Découpage de scènes en keyframes photoréalistes + direction caméra, FR+EN."
+    },
+    {
+      "name": "video_v4",
+      "hf_path": "v4/video_v4/train.jsonl",
+      "rows": 45000,
+      "task_types": [
+        "subtitle_generation",
+        "video_editing_math",
+        "video_storyboard"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Vidéo : storyboards keyframes à graines dérivées, sous-titres SRT, math de montage"
+    },
+    {
+      "name": "voice",
+      "hf_path": "datasets/voice/train.jsonl",
+      "rows": 15733,
+      "task_types": [
+        "long_form_narration",
+        "prosody_annotation",
+        "text_to_voice_directive"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Directives de synthèse vocale humaine, prosodie et narrations longues segmentables."
+    },
+    {
+      "name": "voice_speech",
+      "hf_path": "v4/voice_speech/train.jsonl",
+      "rows": 20000,
+      "task_types": [
+        "brand_voice_design",
+        "tts_brief"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Voix : briefs TTS prosodiques, design de voix de marque, éthique"
+    },
+    {
+      "name": "writing",
+      "hf_path": "datasets/writing/train.jsonl",
+      "rows": 8000,
+      "task_types": [
+        "brief_to_outline",
+        "email_professionnel",
+        "report_section",
+        "style_rewrite"
+      ],
+      "languages": [
+        "en",
+        "fr"
+      ],
+      "description": "Rédaction professionnelle : plans, emails, sections de rapport, réécriture de style."
+    }
+  ]
+}

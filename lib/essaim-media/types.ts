@@ -75,7 +75,8 @@ export interface NoeudEssaim {
  * Un FRAGMENT : une part atomique de tâche exécutable via WebGPU.
  *  - vidéo  → 1 keyframe SD (seed dérivée) ;
  *  - voix   → 1 segment de texte (≤ BORNES.tailleSegment) ;
- *  - image  → l'image entière (1 seul fragment).
+ *  - image  → 1 TUILE de la mosaïque grand format (grille 2×2, couture
+ *    centrale) — l'essaim rend des images PLUS GRANDES qu'un GPU seul.
  */
 export interface FragmentTravail {
   fragmentId: string;
@@ -96,6 +97,13 @@ export interface FragmentTravail {
   charge: ChargeFragment;
   /** Octets du résultat (une fois terminé). */
   tailleRésultat?: number;
+  /**
+   * Historique des attributions (noeudId + génération) — permet d'ACCEPTER
+   * un résultat TARDIF d'un ancien détenteur tant que la part n'a pas été
+   * re-confiée (le GPU travail n'est jamais jeté inutilement). Borne : les
+   * générationsMax+1 dernières entrées.
+   */
+  historique?: Array<{ noeudId: string; génération: number }>;
 }
 
 /** Charge exécutable d'un fragment (JSON compact, jamais de binaire). */
@@ -123,6 +131,23 @@ export type ChargeFragment =
       seed: number;
       steps: number;
       guidance: number;
+    }
+  | {
+      sous: "tuile";
+      prompt: string;
+      ratio: string;
+      seed: number;
+      steps: number;
+      guidance: number;
+      /** Dimensions RENDUES de la tuile (grille 512, /8 — contrainte VAE). */
+      largeur: number;
+      hauteur: number;
+      /** Géométrie de la mosaïque (grille × grille, overlap px). */
+      grilleX: number;
+      grilleY: number;
+      tuileX: number;
+      tuileY: number;
+      overlap: number;
     };
 
 /** Un job d'essaim : la requête d'un utilisateur décomposée en fragments. */
@@ -185,6 +210,17 @@ export const BORNES_ESSAIM = {
   stepsHaute: 26,
   /** Guidance CFG mode haute qualité. */
   guidanceHaute: 5.0,
+  /** Mosaïque image : côté de grille (2 → 4 tuiles = 4 GPU en parallèle). */
+  tuilesGrille: 2,
+  /** Chevauchement des tuiles (px) — la couture coupe à mi-chevauchement. */
+  tuileOverlapPx: 32,
+  /** Tuiles max par image (garde-fou mémoire centrale). */
+  tuilesMax: 9,
+  /** Rafraîchissement de bail pendant l'exécution d'une part (client, ms).
+   *  Doit rester ≪ ttlFragmentMs : un long rendu n'est plus volé à mi-route. */
+  bailPartielMs: 30_000,
+  /** Reconnexion SSE : plafond du backoff exponentiel. */
+  reconnexionMaxMs: 15_000,
 } as const;
 
 /** Calcule le score de capacité d'un nœud ∈ [0, 1] (fonction pure).
@@ -269,4 +305,99 @@ export function découperEnSegments(
   }
   pousser(courant);
   return segments;
+}
+
+/** BACKOFF DE RECONNEXION SSE (pur) — 1 s, 2 s, 4 s, 8 s puis plafond 15 s.
+ *  Quand l'onde porteuse est perdue, l'agent se re-syntonise sans recharger
+ *  la page ; l'intervalle double jusqu'au plafond (jamais de tempête de
+ *  reconnexions). */
+export function backoffReconnexion(essais: number): number {
+  const base = Math.min(essais, 4); // 0→1s 1→2s 2→4s 3→8s 4+→15s
+  const ms = essais >= 4 ? BORNES_ESSAIM.reconnexionMaxMs : 1000 * 2 ** base;
+  return Math.min(ms, BORNES_ESSAIM.reconnexionMaxMs);
+}
+
+/** URLS DE PRÉCACHAGE DES POIDS (pur) — la liste exacte que le Service
+ *  Worker /gen3-agent/ doit mettre au chaud dans le Cache API à
+ *  l'inscription, dérivée des répertoires publiés par le manifeste.
+ *  Les noms de fichiers sont ceux des exports ONNX du notebook (cellule 8)
+ *  et du bundle Kokoro (kokoro-js). Plafonné à la borne du SW (12 URLs). */
+export function urlsPoidsPourPrécachage(dirSd: string, dirKokoro: string): string[] {
+  const urls = [
+    `${dirSd}/text_encoder.onnx`,
+    `${dirSd}/unet.onnx`,
+    `${dirSd}/vae_decoder.onnx`,
+    `${dirSd}/scheduler_config.json`,
+    `${dirKokoro}/kokoro-v1.0.onnx`,
+    `${dirKokoro}/voices.json`,
+  ];
+  return urls.slice(0, 12);
+}
+
+/** Géométrie de couture d'une mosaïque de tuiles (pur — testé).
+ *
+ * Chaque tuile est rendue à (largeur × hauteur) et chevauche sa voisine de
+ * `overlap` px. La couture coupe À MI-CHEVAUCHEMENT : la tuile (tx, ty) est
+ * rognée de overlap/2 sur chaque bord intérieur, puis collée à
+ * (tx·(largeur−overlap) + rognéGauche, …). Une tuile de bord ne se fait pas
+ * rogner côté extérieur → l'image finale garde ses dimensions pleines.
+ * Retourne null si le plan n'est pas une mosaïque cohérente.
+ */
+export interface ZoneTuile {
+  tuileX: number;
+  tuileY: number;
+  /** Rognage de la tuile rendue (px) avant collage. */
+  rogner: { left: number; top: number; width: number; height: number };
+  /** Position de collage dans l'image finale (px). */
+  coller: { left: number; top: number };
+}
+
+export interface PlanAssemblage {
+  largeur: number;
+  hauteur: number;
+  zones: ZoneTuile[];
+}
+
+export function planAssemblageTuiles(charges: ChargeFragment[]): PlanAssemblage | null {
+  if (charges.length === 0) return null;
+  const première = charges[0];
+  if (première.sous !== "tuile") return null;
+  const { largeur, hauteur, overlap, grilleX, grilleY } = première;
+  if (
+    charges.length !== grilleX * grilleY ||
+    grilleX < 1 || grilleY < 1 ||
+    overlap < 0 || overlap >= Math.min(largeur, hauteur) ||
+    largeur % 8 !== 0 || hauteur % 8 !== 0
+  ) return null;
+  const demi = Math.floor(overlap / 2);
+  const zones: ZoneTuile[] = [];
+  for (const c of charges) {
+    if (c.sous !== "tuile") return null;
+    if (c.largeur !== largeur || c.hauteur !== hauteur || c.overlap !== overlap) return null;
+    if (c.tuileX < 0 || c.tuileX >= grilleX || c.tuileY < 0 || c.tuileY >= grilleY) return null;
+    const gaucheIntérieur = c.tuileX > 0;
+    const droiteIntérieur = c.tuileX < grilleX - 1;
+    const hautIntérieur = c.tuileY > 0;
+    const basIntérieur = c.tuileY < grilleY - 1;
+    const left = gaucheIntérieur ? demi : 0;
+    const top = hautIntérieur ? demi : 0;
+    const width = largeur - (gaucheIntérieur ? demi : 0) - (droiteIntérieur ? demi : 0);
+    const height = hauteur - (hautIntérieur ? demi : 0) - (basIntérieur ? demi : 0);
+    zones.push({
+      tuileX: c.tuileX,
+      tuileY: c.tuileY,
+      rogner: { left, top, width, height },
+      coller: {
+        left: c.tuileX * (largeur - overlap) + left,
+        top: c.tuileY * (hauteur - overlap) + top,
+      },
+    });
+  }
+  const largeurFinale = (grilleX - 1) * (largeur - overlap) + largeur;
+  const hauteurFinale = (grilleY - 1) * (hauteur - overlap) + hauteur;
+  // Le collage couvre exactement le canevas (sanité géométrique).
+  const maxX = Math.max(...zones.map((z) => z.coller.left + z.rogner.width));
+  const maxY = Math.max(...zones.map((z) => z.coller.top + z.rogner.height));
+  if (maxX !== largeurFinale || maxY !== hauteurFinale) return null;
+  return { largeur: largeurFinale, hauteur: hauteurFinale, zones };
 }

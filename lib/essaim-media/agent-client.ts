@@ -23,6 +23,7 @@
 
 import { authFetch } from "@/lib/firebase/auth-client";
 import { détecterWebGpu } from "@/lib/neural/webgpu/detect";
+import { backoffReconnexion, BORNES_ESSAIM, urlsPoidsPourPrécachage } from "./types";
 
 /* --------------------------------------------------------------- états --- */
 
@@ -36,6 +37,8 @@ export interface ÉtatAgentGen3 {
   partEnCours?: string;
   partsTerminées: number;
   relancesReçues: number;
+  /** Précachage des poids dans le Cache API du SW (progression honnête). */
+  poids?: { cachés: number; total: number; prêt: boolean };
   raison?: string;
 }
 
@@ -74,12 +77,15 @@ export function étatAgentActuel(): ÉtatAgentGen3 {
 
 const CLÉ_NOEUD = "gen3-agent-noeud";
 
+/** Identité PERSISTANTE de l'appareil (localStorage — l'essaim retrouve
+ *  l'appareil après un nouvel onglet / un redémarrage ; la réputation
+ *  accumulée ne repart pas de zéro). Repli mémoire si le stockage est bloqué. */
 function identitéNoeud(): string {
   try {
-    const existant = sessionStorage.getItem(CLÉ_NOEUD);
+    const existant = localStorage.getItem(CLÉ_NOEUD);
     if (existant && /^[a-zA-Z0-9_-]{8,80}$/.test(existant)) return existant;
     const frais = `essaim-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
-    sessionStorage.setItem(CLÉ_NOEUD, frais);
+    localStorage.setItem(CLÉ_NOEUD, frais);
     return frais;
   } catch {
     return `essaim-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
@@ -96,7 +102,8 @@ interface AffectationBrute {
   total: number;
   génération: number;
   charge:
-    | { sous: "keyframe" | "image"; prompt: string; ratio: string; seed: number; steps: number; guidance: number; largeur?: number; hauteur?: number }
+    | { sous: "keyframe"; prompt: string; ratio: string; seed: number; steps: number; guidance: number; largeur?: number; hauteur?: number }
+    | { sous: "tuile"; prompt: string; ratio: string; seed: number; steps: number; guidance: number; largeur: number; hauteur: number }
     | { sous: "segment"; texte: string; voix: string; vitesse: number };
 }
 
@@ -149,12 +156,20 @@ async function battre(fragmentId?: string): Promise<AffectationBrute[]> {
 function libelléPart(f: AffectationBrute): string {
   if (f.charge.sous === "segment") return `segment vocal ${f.index + 1}/${f.total}`;
   if (f.charge.sous === "keyframe") return `keyframe ${f.index + 1}/${f.total}`;
+  if (f.charge.sous === "tuile") return `tuile ${f.index + 1}/${f.total} (mosaïque)`;
   return "image photoréaliste";
 }
 
 async function exécuterPart(f: AffectationBrute): Promise<void> {
   état.partEnCours = libelléPart(f);
   notifier();
+  // BAIL CONTINU — l'agent annonce le démarrage réel puis renouvelle son
+  // bail toutes les 30 s pendant le rendu : un long calcul WebGPU n'est
+  // plus volé à mi-route par la sentinelle (ttlFragmentMs = 180 s).
+  void battre(f.fragmentId);
+  const bail = setInterval(() => {
+    void battre(f.fragmentId);
+  }, BORNES_ESSAIM.bailPartielMs);
   try {
     let blob: Blob;
     if (f.charge.sous === "segment") {
@@ -166,6 +181,8 @@ async function exécuterPart(f: AffectationBrute): Promise<void> {
       });
       blob = res.blob;
     } else {
+      // keyframe ET tuile : mêmes moteurs SD, dimensions explicites si
+      // fournies (tuiles de mosaïque, keyframes au calibre du plan).
       const { générerImageWebGpu } = await import("@/lib/neural/webgpu/image-engine");
       const res = await générerImageWebGpu({
         prompt: f.charge.prompt,
@@ -173,6 +190,9 @@ async function exécuterPart(f: AffectationBrute): Promise<void> {
         seed: f.charge.seed,
         steps: f.charge.steps,
         guidance: f.charge.guidance,
+        ...(f.charge.largeur && f.charge.hauteur
+          ? { largeur: f.charge.largeur, hauteur: f.charge.hauteur }
+          : {}),
       });
       blob = res.blob;
     }
@@ -199,6 +219,7 @@ async function exécuterPart(f: AffectationBrute): Promise<void> {
       /* la sentinelle centrale détectera le nœud muet de toute façon */
     }
   } finally {
+    clearInterval(bail);
     état.partEnCours = undefined;
     notifier();
   }
@@ -231,6 +252,9 @@ function enqueuer(f: AffectationBrute): void {
 
 /* -------------------------------------------------------- onde porteuse -- */
 
+let essaisPorteuse = 0;
+let reconnexionTimer: ReturnType<typeof setTimeout> | null = null;
+
 function syntoniser(): void {
   if (!noeudCourant || porteuse) return;
   try {
@@ -249,13 +273,79 @@ function syntoniser(): void {
     };
     porteuse.addEventListener("affectation", traiter as EventListener);
     porteuse.addEventListener("relance", traiter as EventListener);
+    porteuse.onopen = () => {
+      // Onde recaptée : le backoff repart de zéro.
+      essaisPorteuse = 0;
+    };
     porteuse.onerror = () => {
-      // Onde SSE perdue : le battement POST reste la double ceinture.
+      // Onde SSE perdue : RECONNEXION AUTOMATIQUE en backoff exponentiel
+      // (1s, 2s, 4s… plafond 15 s) — le battement POST reste la double
+      // ceinture pendant la traversée du silence.
       porteuse?.close();
       porteuse = null;
+      if (reconnexionTimer) clearTimeout(reconnexionTimer);
+      const délai = backoffReconnexion(essaisPorteuse++);
+      reconnexionTimer = setTimeout(() => {
+        reconnexionTimer = null;
+        syntoniser();
+      }, délai);
     };
   } catch {
     porteuse = null;
+  }
+}
+
+/* ------------------------------------------------------------ précachage -- */
+
+/** Écoute la progression du précachage rapportée par le SW. */
+function écouterPrécachage(sw: ServiceWorker): void {
+  navigator.serviceWorker.addEventListener("message", (event: MessageEvent) => {
+    const data = event.data as
+      | { type: "gen3-agent:précache_prog"; ok: boolean; total: number }
+      | { type: "gen3-agent:précache_ok"; n: number };
+    if (data?.type === "gen3-agent:précache_prog") {
+      état.poids = {
+        cachés: (état.poids?.cachés ?? 0) + (data.ok ? 1 : 0),
+        total: data.total,
+        prêt: false,
+      };
+      notifier();
+    }
+    if (data?.type === "gen3-agent:précache_ok") {
+      état.poids = { cachés: data.n, total: data.n, prêt: true };
+      notifier();
+    }
+  });
+  void sw;
+}
+
+/**
+ * LES POIDS SE TÉLÉCHARGENT DANS LE CACHE DE L'AGENT — la page résout les
+ * URLs depuis le manifeste HF ( ChargerManifeste ) et les confie au Service
+ * Worker /gen3-agent/ (Cache API) : les générations suivantes démarrent à
+ * froid sans réseau. Non bloquant, honnête (progression cachés/total).
+ */
+async function précacherPoidsAgent(): Promise<void> {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (!reg.active) return;
+    const [{ chargerManifeste }, { dirSd, dirKokoro }] = await Promise.all([
+      import("@/lib/neural/webgpu/manifest"),
+      import("@/lib/neural/webgpu/manifest"),
+    ]);
+    const [sd, kokoro] = await Promise.all([dirSd(), dirKokoro()]);
+    // Le manifeste peut être absent (poids non publiés) — on précache quand
+    // même les répertoires par défaut : le SW tolère les 404 individuels.
+    void chargerManifeste().catch(() => null);
+    const urls = urlsPoidsPourPrécachage(sd, kokoro).map(
+      (u) => new URL(u, `https://huggingface.co/Kings237/gen3ia-media-engine/resolve/main/`).toString(),
+    );
+    état.poids = { cachés: 0, total: urls.length, prêt: false };
+    notifier();
+    écouterPrécachage(reg.active);
+    reg.active.postMessage({ type: "gen3-agent:précache", urls });
+  } catch {
+    /* précachage impossible (SW inactif…) : non bloquant */
   }
 }
 
@@ -294,13 +384,21 @@ export function installerAgentGen3(): Promise<ÉtatAgentGen3> {
       }
       // 3. PREMIER BATTEMENT + 4. SYNTONIE SUR L'ONDE PORTEUSE.
       await battre();
-      if (cap.disponible) syntoniser();
+      if (cap.disponible) {
+        syntoniser();
+        // 5. LES POIDS SE METTENT AU CHAUD DANS LE CACHE DE L'AGENT.
+        void précacherPoidsAgent();
+      }
       battementTimer = setInterval(() => {
         void battre().then(() => {
           if (état.statut !== "actif") {
             état.statut = "actif";
             notifier();
           }
+          // Double ceinture SSE : si l'onde porteuse est morte, on se
+          // re-syntonise à chaque battement (le backoff interne étale
+          // les tentatives — aucune tempête de requêtes).
+          if (cap.disponible && !porteuse) syntoniser();
         });
       }, 12_000 + Math.floor(Math.random() * 1500));
       état.statut = cap.disponible ? "actif" : "échec";
@@ -321,6 +419,10 @@ export async function désinstallerAgentGen3(): Promise<void> {
   if (battementTimer) {
     clearInterval(battementTimer);
     battementTimer = null;
+  }
+  if (reconnexionTimer) {
+    clearTimeout(reconnexionTimer);
+    reconnexionTimer = null;
   }
   if (porteuse) {
     porteuse.close();

@@ -5,6 +5,7 @@ import { registreEssaim } from "@/lib/essaim-media/registre";
 import { orchestrateurEssaim } from "@/lib/essaim-media/orchestrateur";
 import { ondePorteuse } from "@/lib/essaim-media/onde-porteuse";
 import { fusionnerOeuvre, vérifierTaille } from "@/lib/essaim-media/fusion";
+import type { ChargeFragment } from "@/lib/essaim-media/types";
 import { persistGeneratedBuffer } from "@/lib/media/persist";
 import { appendMessage } from "@/lib/chat/repository";
 import { createArtifact } from "@/lib/domain/artifacts/repository";
@@ -28,7 +29,7 @@ export const maxDuration = 120;
 
 const LIBELLÉS: Record<string, (n: number, appareils: number) => string> = {
   image: (n, a) =>
-    `Image photoréaliste générée par l'essaim gen3 — ${n} part(s) calculée(s) via le WebGPU de ${a} appareil(s), fusionnées par l'IA centrale.`,
+    `Image photoréaliste GRAND FORMAT générée par l'essaim gen3 — mosaïque de ${n} tuile(s) calculée(s) via le WebGPU de ${a} appareil(s), cousue par l'IA centrale.`,
   voice: (n, a) =>
     `Voix humaine haute qualité générée par l'essaim gen3 — ${n} segment(s) synthétisé(s) par ${a} appareil(s), assemblé(s) en une voix continue.`,
   video: (n, a) =>
@@ -95,8 +96,9 @@ export async function POST(request: NextRequest) {
     /* --------------------------------- dernière part : ASSOCIATION finale -- */
     if (reçu.fusion) {
       const { job, résultats } = reçu.fusion;
+      const plan: ChargeFragment[] = job.fragments.map((f) => f.charge);
       try {
-        const oeuvre = await fusionnerOeuvre(job.kind, résultats);
+        const oeuvre = await fusionnerOeuvre(job.kind, résultats, {}, plan);
         vérifierTaille(oeuvre.octets);
 
         const persisté = await persistGeneratedBuffer({

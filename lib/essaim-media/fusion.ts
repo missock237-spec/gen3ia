@@ -17,8 +17,10 @@ import "server-only";
 import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import sharp from "sharp";
+import type { OverlayOptions } from "sharp";
 import { FfmpegError, runFfmpeg, cleanupTmpDir } from "@/lib/video/ffmpeg";
-import { BORNES_ESSAIM } from "./types";
+import { BORNES_ESSAIM, planAssemblageTuiles, type ChargeFragment } from "./types";
 import { concaténerWav } from "./wav";
 
 export { concaténerWav }; // ré-export partagé (serveur + navigateur)
@@ -96,6 +98,45 @@ export async function fusionnerVidéoEssaim(
   }
 }
 
+/* ------------------------------------------------------------- tuiles (mosaïque) --- */
+
+/**
+ * COUTURE DE LA MOSAÏQUE — N PNG de tuiles → UN PNG grand format.
+ * La géométrie (rogner/coller) vient de planAssemblageTuiles (pur, testé) ;
+ * le collage réel utilise sharp (extract + composite, blend « over » — la
+ * tuile postérieure couvre la bande de chevauchement à mi-distance).
+ * Honnêteté : coutures visibles possibles entre tuiles (graines dérivées).
+ */
+export async function assemblerTuiles(
+  résultats: Map<number, Uint8Array>,
+  charges: ChargeFragment[],
+): Promise<Uint8Array> {
+  const plan = planAssemblageTuiles(charges);
+  if (!plan) throw new Error("Plan de mosaïque incohérent — assemblage impossible.");
+  const calques: OverlayOptions[] = [];
+  // plan.zones suit l'ORDRE des charges → l'index de zone == l'index du fragment.
+  for (const [i, zone] of plan.zones.entries()) {
+    const octets = résultats.get(i);
+    if (!octets) throw new Error(`Tuile (${zone.tuileX}, ${zone.tuileY}) absente — fusion impossible.`);
+    const découpé = await sharp(Buffer.from(octets))
+      .extract(zone.rogner)
+      .toBuffer();
+    calques.push({ input: découpé, left: zone.coller.left, top: zone.coller.top });
+  }
+  const png = await sharp({
+    create: {
+      width: plan.largeur,
+      height: plan.hauteur,
+      channels: 3,
+      background: { r: 12, g: 12, b: 16 },
+    },
+  })
+    .composite(calques)
+    .png({ compressionLevel: 6 })
+    .toBuffer();
+  return new Uint8Array(png);
+}
+
 /* ------------------------------------------------------------- complétion --- */
 
 export interface OeuvreFusionnée {
@@ -104,15 +145,20 @@ export interface OeuvreFusionnée {
   extension: "png" | "wav" | "mp4";
 }
 
-/** Dispatch de fusion selon le kind (image = passage direct). */
+/** Dispatch de fusion selon le kind — image : mosaïque si le plan est en tuiles. */
 export async function fusionnerOeuvre(
   kind: "image" | "voice" | "video",
   résultats: Map<number, Uint8Array>,
   opts: OptionsFusionVidéo = {},
+  plan?: ChargeFragment[],
 ): Promise<OeuvreFusionnée> {
   const triés = [...résultats.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v);
   if (triés.length === 0) throw new Error("Aucun fragment reçu — fusion impossible.");
   if (kind === "image") {
+    if (plan && plan.length > 1 && plan[0].sous === "tuile") {
+      const mosaïque = await assemblerTuiles(résultats, plan);
+      return { octets: mosaïque, mime: "image/png", extension: "png" };
+    }
     return { octets: triés[0], mime: "image/png", extension: "png" };
   }
   if (kind === "voice") {
