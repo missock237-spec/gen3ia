@@ -131,8 +131,12 @@ describe("MoteurEvolutionGen3 — intégration avec le vrai cortex", () => {
     });
     const resultat = moteur.consoliderSiPret();
     expect(resultat!.enseignees).toBe(1);
-    // Le cortex retrouvé par une formulation légèrement différente.
-    const reponse = cortex.repondre("quel est le code promo du lancement ?");
-    expect(reponse?.texte).toBe("Le code GEN3LANCE offre 20 % pendant le lancement.");
+    // La consolidation ENSEIGNE le cortex (mesure de rétention possible)…
+    const mesure = cortex.repondre("quel est le code promo du lancement ?", {}, { inclureMesure: true });
+    expect(mesure?.texte).toBe("Le code GEN3LANCE offre 20 % pendant le lancement.");
+    // …mais ne répond PLUS au chat : la consolidation automatique d'échanges
+    // est globale au serveur — seuls l'enseignement explicite et les
+    // abréviations restent conversationnels (rectification hors-sujets).
+    expect(cortex.repondre("quel est le code promo du lancement ?")).toBeNull();
   });
 });

@@ -169,9 +169,7 @@ export class MoteurEvolutionGen3 {
     const candidats = this.file
       .splice(0, Math.min(this.maxParCycle, this.file.length))
       .map((e) => ({ motif: e.question, reponse: e.reponse, theme: "consolide" }));
-    const avant = this.cortex.compterPersonnalisees();
     const stats = this.cortex.apprendre(candidats, { personnalisees: true });
-    const apres = this.cortex.compterPersonnalisees();
 
     this.cycles += 1;
     this.echangesConsolides += stats.pairesAjoutees;
@@ -179,7 +177,10 @@ export class MoteurEvolutionGen3 {
     this.derniereConsolidation = new Date().toISOString();
 
     return {
-      enseignees: Math.max(0, apres - avant),
+      // Paires réellement apprises (y compris en provenance « mesure » —
+      // les paires consolidées sont enseignées au cortex, mais gardées
+      // hors conversation : cf. garde de provenance).
+      enseignees: stats.pairesAjoutees,
       ecarts: candidats.length - stats.pairesAjoutees - stats.pairesDoublons,
       dejaConnues: stats.pairesDoublons,
       stats,
