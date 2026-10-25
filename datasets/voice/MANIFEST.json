@@ -1,0 +1,14 @@
+{
+  "name": "gen3ia-voice-v1",
+  "description": "Directives de synthèse vocale humaine FR+EN : styles, prosodie, émotion, format sortie.",
+  "rows": 1853,
+  "languages": [
+    "fr",
+    "en"
+  ],
+  "task_types": [
+    "prosody_annotation",
+    "text_to_voice_directive"
+  ],
+  "generated_at": "2026-10-25T06:02:38+00:00"
+}

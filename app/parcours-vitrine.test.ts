@@ -56,6 +56,14 @@ describe("Restructuration des parcours — page d'accueil", () => {
     expect(home).toContain('href: "/lab"');
     expect(home).toContain("Ouvrir le Laboratoire de modèles");
   });
+
+  it("l'entraînement de gen3 elle-même est annoncé depuis le chat (entrée unique)", () => {
+    // Directive utilisateur : gen3 s'entraîne DANS le chat IA (« apprends
+    // que… » → outil brain.train) ; le Laboratoire est pour les modèles
+    // métier des utilisateurs — deux entraînements distincts, deux espaces.
+    expect(home).toContain("DEPUIS LE CHAT IA");
+    expect(home).toContain("apprends que");
+  });
 });
 
 describe("Restructuration des parcours — registre de navigation", () => {

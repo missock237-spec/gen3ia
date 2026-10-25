@@ -87,7 +87,26 @@ export type ConversationStreamEvent =
       };
     }
   /** Erreur en cours de tour (le client affiche une erreur inline). */
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  /** MÉDIA WEBGPU — le tour est délégué au GPU de l'UTILISATEUR : le
+   *  navigateur télécharge les modèles du repo gen3ia-media-engine et
+   *  génère localement (photoréalisme SD via onnxruntime-web, voix
+   *  humaine Kokoro, vidéo keyframes + ffmpeg.wasm). Si le client ne
+   *  peut pas (pas de WebGPU, mobile, échec), il appelle l'API de repli
+   *  qui reprend le tour côté serveur (moteur neuronal abstrait). */
+  | {
+      type: "webgpu_media";
+      jobId: string;
+      conversationId: string;
+      kind: "image" | "voice" | "video";
+      /** Prompt de génération (brief photoréaliste / texte à vocaliser). */
+      prompt: string;
+      ratio?: string;
+      /** Secondes pour la voix/vidéo. */
+      durationSeconds?: number;
+      /** Répertoire des modèles sur le repo Hugging Face public. */
+      engine: { repo: string; manifest: string };
+    };
 
 /** Émetteur d'événements : ne doit JAMAIS interrompre le tour (client
  *  déconnecté, sérialisation impossible…) — les erreurs d'émission sont

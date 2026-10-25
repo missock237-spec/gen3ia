@@ -13,6 +13,11 @@ import { attachmentImageCandidates, resolveEditableImageSources } from "@/lib/fi
 import { produceConversationImage } from "./engine-chat";
 import type { TurnBase } from "./engine-chat";
 import type { ConversationTurnResult } from "./engine-turn";
+import { randomUUID } from "node:crypto";
+
+/** Repo public des modèles média WebGPU (publié par le notebook Colab
+ *  training/colab/gen3ia_gpu_media_training.ipynb — SD photoréalisme + Kokoro). */
+const WEBGPU_MEDIA_REPO = "Kings237/gen3ia-media-engine";
 
 /**
  * Tour « ÉDITION d'image » (étape 8) : une image EXISTANTE — jointe au
@@ -94,9 +99,59 @@ export async function runImageEditTurn(ctx: TurnBase, lastConversationImage: str
   }
 }
 
+/** Détection PHOTORÉALISTE (déterministe, aucune variance LLM) : la demande
+ *  vise un rendu photographique réaliste → la génération est déléguée au
+ *  GPU de l'UTILISATEUR (WebGPU, modèles gen3ia-media-engine). Le moteur
+ *  neuronal abstrait reste le repli honnête (API webgpu-fallback). */
+const PHOTOREAL_PATTERN =
+  /\b(photor[eé]aliste|photorealistic|photor[eé]alisme|tr[eè]s r[eé]aliste|hyper r[eé]aliste|ultra r[eé]aliste|rendu photo|r[eé]aliste comme une vraie|comme une vraie photo|vraie photo|r[eé]alistic|hyperrealistic|true[- ]to[- ]life|photographique)\b/i;
+
+export function looksLikePhotorealRequest(message: string): boolean {
+  return PHOTOREAL_PATTERN.test(message);
+}
+
 export async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   try {
+    // MÉDIA WEBGPU : demande photoréaliste → directive de génération
+    // LOCALE sur le GPU de l'utilisateur (SD 2.1 + LoRA photoréalisme,
+    // repo public gen3ia-media-engine). Le message persisté explique
+    // honnêtement la prise en charge et le repli automatique.
+    if (looksLikePhotorealRequest(ctx.message)) {
+      const jobId = randomUUID();
+      await onEvent({
+        type: "webgpu_media",
+        jobId,
+        conversationId: ctx.conversationId,
+        kind: "image",
+        prompt: ctx.message.trim().slice(0, 2000),
+        ratio: detectImageRatio(ctx.message),
+        engine: { repo: WEBGPU_MEDIA_REPO, manifest: "MANIFEST.json" },
+      });
+      const messageWebGpu = await appendMessage({
+        conversationId: ctx.conversationId,
+        userId: ctx.userId,
+        role: "assistant",
+        content:
+          "Génération photoréaliste confiée à votre GPU local (WebGPU) — les modèles Gen3 " +
+          "téléchargent et génèrent directement dans votre navigateur, rien ne quitte votre appareil. " +
+          "Première génération : téléchargement du modèle (~1 à 2 Go, une seule fois). " +
+          "Si votre navigateur ne prend pas en charge WebGPU, je basculerai automatiquement sur mon moteur neuronal abstrait.",
+        provider: "gen3-webgpu",
+        model: "gen3-media-engine-v1",
+        generationStatus: "complete",
+      });
+      await onEvent({ type: "message_complete", message: messageWebGpu });
+      return {
+        conversationId: ctx.conversationId,
+        userMessage: ctx.userMessage,
+        assistantMessage: messageWebGpu,
+        artifacts: [],
+        approvals: [],
+        intent: { mode: "chat", understanding: "Génération d'image photoréaliste via WebGPU local." },
+      };
+    }
+
     // Progression RÉELLE émise par le serveur au fil des étapes réelles
     // (amélioration → génération → enregistrement) — cadre de progression
     // temps réel côté client (Task « cadre de progression »).

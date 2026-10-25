@@ -40,6 +40,7 @@ import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
 import { useVoiceInput } from "./use-voice-input";
 import { cancelSpeech, speakFr } from "./voice-speak";
+import { useWebGpuMedia } from "./use-webgpu-media";
 import "./nova-chat.css";
 
 /* ================= Configuration ================= */
@@ -603,6 +604,40 @@ export default function NovaChat() {
   const [dropActif, setDropActif] = React.useState(false);
   /* Chat voix : indicateur « lecture vocale en cours » de la réponse IA. */
   const [lectureVocale, setLectureVocale] = React.useState(false);
+
+  /* MÉDIA WEBGPU — le GPU de l'utilisateur génère (photoréalisme, voix
+   * humaine, vidéo). Le hook consomme les événements `webgpu_media` du
+   * flux et insère les médias générés localement dans le fil. */
+  const mediaWebGpu = useWebGpuMedia({
+    onMessage: (message, _artifact) => {
+      const id = activeIdRef.current;
+      if (!id) return;
+      majConvs(
+        convsRef.current.map((c) =>
+          c.id !== id
+            ? c
+            : {
+                ...c,
+                messages: [
+                  ...c.messages,
+                  {
+                    id: message.id,
+                    role: "assistant" as const,
+                    content: message.content,
+                    date: Date.now(),
+                    modele: "gen3-media-engine-v1",
+                    enCours: false,
+                    ...(message.imageUrl ? { imageUrl: message.imageUrl } : {}),
+                  },
+                ],
+              },
+        ),
+      );
+      descendre();
+    },
+    onProgress: () => undefined,
+    onStatut: (s) => setStatut(s ?? "Prête — demandez-lui tout"),
+  });
 
   const convsRef = React.useRef<NovaConversation[]>([]);
   const activeIdRef = React.useRef<string | null>(null);
@@ -1170,6 +1205,21 @@ export default function NovaChat() {
               // (source cortex, score, intention, cache — jamais le contenu).
               majMessage(conv.id, streamId, (m) => ({ ...m, telemetrie: event.raw }));
               break;
+            case "webgpu_media": {
+              // MÉDIA WEBGPU — le tour est délégué au GPU de l'utilisateur :
+              // génération locale (photoréalisme / voix / vidéo) puis
+              // persistance serveur. Repli automatique via l'API dédiée.
+              void mediaWebGpu.traiter({
+                jobId: event.jobId,
+                conversationId: event.conversationId,
+                kind: event.kind,
+                prompt: event.prompt,
+                ratio: event.ratio,
+                durationSeconds: event.durationSeconds,
+                engine: event.engine,
+              });
+              break;
+            }
             case "done": {
               const final = event.assistantMessage;
               const suggestions = final.suggestions ?? [];
@@ -1190,14 +1240,25 @@ export default function NovaChat() {
                 );
               }
               /* Chat voix : réponse LUE uniquement si le tour a été dicté —
-               * les tours écrits normaux restent silencieux (pas de TTS intrusif). */
+               * les tours écrits normaux restent silencieux (pas de TTS intrusif).
+               * VOIX HUMAINE : Kokoro (WebGPU local) d'abord — vraie voix
+               * neuronale française ; repli Web Speech puis textuel. */
               if (dernierTourVocalRef.current) {
                 dernierTourVocalRef.current = false;
                 const texteVoix = final.content || contenu;
                 if (texteVoix.trim()) {
                   setLectureVocale(true);
-                  const parle = speakFr(texteVoix, { onFin: () => setLectureVocale(false) });
-                  if (!parle) setLectureVocale(false); // synthèse indisponible : reste textuel
+                  // Lecture asynchrone HORS du dispatch (fonction sync) :
+                  void (async () => {
+                    const humaine = await mediaWebGpu.lireVoixHumaine(texteVoix.slice(0, 2000));
+                    if (humaine) {
+                      // Indicateur approximatif (fin réelle dans le blob audio).
+                      setTimeout(() => setLectureVocale(false), Math.min(texteVoix.length * 80, 60000));
+                    } else {
+                      const parle = speakFr(texteVoix, { onFin: () => setLectureVocale(false) });
+                      if (!parle) setLectureVocale(false); // synthèse indisponible : reste textuel
+                    }
+                  })();
                 }
               }
               break;

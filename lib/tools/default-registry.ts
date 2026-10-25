@@ -32,6 +32,7 @@ import { isEmailProviderConfigured } from "@/lib/integrations/email/send";
 import { socialPublishTool } from "@/lib/integrations/social/tools";
 import { webhookEmitTool } from "@/lib/integrations/webhooks/tools";
 import { githubCreateRepositoryTool } from "@/lib/integrations/github/tools";
+import { brainTrainTool } from "@/lib/tools/brain-train";
 import { generateImageNeuralTool } from "@/lib/tools/media/generate-image-neural";
 // Analyse média LOCALE réelle (sharp + ffprobe + images clés) : rend réel
 // le contrat « media.analyze » annoncé au registre — l'outil fantôme cité
@@ -176,6 +177,7 @@ export function createDefaultToolRegistry(): ToolRegistry {
   // externe, aucune clé requise) et production vidéo autonome (file
   // interne : scénario → visuels neuronaux → narration utilisateur →
   // montage Ken Burns → rendu).
+  registry.register(brainTrainTool);
   registry.register(generateImageNeuralTool);
   registry.register(createVideoTool);
   // media.analyze RÉEL : lecture locale des images/audios/vidéos du compte

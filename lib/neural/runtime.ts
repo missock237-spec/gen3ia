@@ -34,6 +34,10 @@ import type { TrainingReport } from "./training/trainer";
 import { CortexLangagierGen3 } from "./generation/language";
 import type { EtatLangage } from "./generation/language";
 import { CORPUS_GEN3 } from "./generation/corpus";
+// ABRÉVIATIONS FR/EN : ingestion cortex one-shot au démarrage (demande
+// utilisateur « entraîne gen3 à comprendre les abréviations ») — idempotent
+// via marqueur var/neural, jamais bloquant.
+import { ingérerAbréviationsDansCortex } from "./abbreviations";
 import {
   exporterRegistreTokens,
   importerRegistreTokens,
@@ -382,6 +386,10 @@ export function getNeuralRuntime(): NeuralRuntime {
   //    restaurées à l'étape 9 depuis la persistance du cerveau.
   const cortex = new CortexLangagierGen3();
   const statsCorpus = cortex.apprendre(CORPUS_GEN3);
+  // Ingestion des abréviations (fire-and-forget : le démarrage ne l'attend
+  // pas — la compréhension à l'encodage est immédiate, la réponse pédagogique
+  // cortex arrive une fraction de seconde plus tard, une seule fois).
+  void ingérerAbréviationsDansCortex((paires, opts) => cortex.apprendre(paires, opts));
 
   // 9. Moteur IA adapté au contrat du projet (cortex + hippocampe câblés :
   //    conversation réelle + mémoire de reprise) — et ÉVOLUTION CONTINUE :

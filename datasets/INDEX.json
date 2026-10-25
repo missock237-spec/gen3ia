@@ -1,0 +1,37 @@
+{
+  "gen3ia-media-datasets": {
+    "version": 1,
+    "generated_at": "2026-10-25T06:02:38+00:00",
+    "datasets": [
+      {
+        "id": "abbreviations",
+        "path": "datasets/abbreviations/train.jsonl",
+        "rows": 836
+      },
+      {
+        "id": "images",
+        "path": "datasets/images/train.jsonl"
+      },
+      {
+        "id": "voice",
+        "path": "datasets/voice/train.jsonl"
+      },
+      {
+        "id": "video",
+        "path": "datasets/video/train.jsonl"
+      }
+    ],
+    "schema_common": [
+      "id",
+      "domain",
+      "task_type",
+      "language",
+      "instruction",
+      "input",
+      "output",
+      "metadata",
+      "content_hash"
+    ],
+    "purpose": "Entraînement Gen3 : compréhension des abréviations + routage/génération média photoréaliste, voix humaine, vidéo."
+  }
+}

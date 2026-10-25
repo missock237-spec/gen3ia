@@ -41,6 +41,10 @@ import type { TurnBase } from "./engine-chat";
 import { IntentSchema, buildIntentSystemPrompt, detectExplicitToolIntent, extractApiUrlFromMessage, extractSearchQuery } from "./engine-intent";
 import type { ExplicitToolIntent, TurnIntent } from "./engine-intent";
 import { runImageEditTurn, runImageTurn, runVideoTurn } from "./engine-media";
+// ENTRAÎNEMENT DEPUIS LE CHAT — entrée UNIQUE (demande utilisateur) : les
+// messages « apprends que / retiens que / entraîne-toi » entraînent
+// réellement le cortex via l'outil brain.train.
+import { estIntentionEntrainement, runTrainingTurn } from "./engine-training";
 import { runPlanTurn } from "./engine-plan";
 import { runAgentIntentTurn, runScheduleIntentTurn, runServiceControlTurn, runWorkflowIntentTurn } from "./engine-services";
 import { conversationToolCatalog } from "./engine-tools";
@@ -273,6 +277,21 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   })) {
     await onEvent({ type: "status", phase: "image", label: "Édition de l'image en cours…" });
     const result = await runImageEditTurn({ ...input, conversation, project, projectId, userMessage, priorHistory }, lastConversationImage);
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+  // 2 bis) ENTRAÎNEMENT DEPUIS LE CHAT (entrée unique) : « apprends que… »,
+  // « retiens que… », « entraîne-toi sur… » → apprentissage RÉEL du cortex
+  // langagier (outil brain.train) + réponse honnête avec compteurs. Priorité
+  // sur les autres tours : enseigner est une intention explicite.
+  if (estIntentionEntrainement(input.message)) {
+    await onEvent({ type: "status", phase: "execution", label: "Entraînement du cerveau en cours…" });
+    const result = await runTrainingTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,

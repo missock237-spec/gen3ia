@@ -1,0 +1,38 @@
+{
+  "name": "gen3ia-abbreviations-v1",
+  "description": "Compréhension bilingue FR/EN des abréviations : expansion, réécriture, sigle inverse, compréhension en contexte.",
+  "rows": 836,
+  "categories": [
+    "admin_fr",
+    "business",
+    "chat",
+    "gaming",
+    "institutions",
+    "medical",
+    "social",
+    "tech",
+    "units"
+  ],
+  "task_types": [
+    "abbreviation_reverse",
+    "contextual_comprehension",
+    "expansion",
+    "sentence_rewrite"
+  ],
+  "languages": [
+    "fr",
+    "en"
+  ],
+  "generated_at": "2026-10-25T06:01:14+00:00",
+  "schema": [
+    "id",
+    "domain",
+    "task_type",
+    "language",
+    "instruction",
+    "input",
+    "output",
+    "metadata",
+    "content_hash"
+  ]
+}

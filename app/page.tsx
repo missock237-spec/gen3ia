@@ -114,10 +114,10 @@ const PRODUCTS = [
   {
     href: "/lab",
     eyebrow: "Gen3ia Training",
-    title: "Studio d'entraînement IA",
+    title: "Studio d'entraînement IA — chat d'abord",
     description:
-      "Gen entraîne VOS modèles : confiez-lui vos datasets (paires question/réponse, Hugging Face, Kaggle) et son moteur neuronal natif les apprend réellement — précision mesurée à chaque époque, modèle exportable. Et pendant que vous travaillez, elle continue d'évoluer par l'usage et la consolidation de ses conversations.",
-    points: ["Gen entraîne vos modèles (moteur natif, sans GPU requis)", "Import de datasets HF/Kaggle + fine-tuning LoRA sur GPU", "Précision train/test réelle + modèle exportable", "Évaluation : rapports de précision par exécution"],
+      "Entraîner GEN3 elle-même se fait DEPUIS LE CHAT IA (entrée unique) : dites « apprends que… », « retiens que… » — le cortex langagier apprend réellement, les abréviations FR/EN sont comprises, et les médias photoréalistes se génèrent sur votre GPU (WebGPU). Le Laboratoire reste dédié à l'entraînement de VOS modèles métier (datasets HF/Kaggle, LoRA, précision par époque).",
+    points: ["Entraînement conversationnel de gen3 : « apprends que X signifie Y » (cortex réel, entrée unique)", "Compréhension des abréviations FR/EN intégrée à l'encodage neuronal", "Images photoréalistes, voix humaine, vidéo — sur le GPU de l'utilisateur (WebGPU)", "Laboratoire : datasets HF/Kaggle + fine-tuning LoRA pour vos modèles + rapports de précision"],
     cta: "Ouvrir le Laboratoire de modèles",
     icon: "M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z",
     badge: null as string | null,

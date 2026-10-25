@@ -12,6 +12,10 @@ import type { CycleReport } from "./core/types";
 import type { NoyauCentralGen3 } from "./core/central-core";
 import type { EspaceFiltreResonant } from "./core/resonant-space";
 import { encodeText } from "./encoding/text-encoder";
+// ABRÉVIATIONS FR/EN : tout prompt entrant est enrichi de la forme longue de
+// chaque abréviation connue AVANT l'encodage neuronal (compréhension
+// structurelle — le dataset datasets/abbreviations est la source de vérité).
+import { promptAvecAbréviations } from "./abbreviations";
 import { decodeResponse, poidsResonanceParCycle } from "./decoding/response-decoder";
 import type { NeuralDecodedResponse } from "./decoding/response-decoder";
 import type { CortexLangagierGen3, ContexteLangage } from "./generation/language";
@@ -335,7 +339,7 @@ export class NeuralEngine {
    */
   async generate(options: AIRequest): Promise<NeuralAIResponse> {
     const debut = Date.now();
-    const prompt = extrairePrompt(options);
+    const prompt = promptAvecAbréviations(extrairePrompt(options));
 
     const encodage = encodeText(prompt);
     const motsCles = selectionnerMotsCles(encodage.tokens);
@@ -414,7 +418,7 @@ export class NeuralEngine {
     handlers: NeuralStreamHandlers,
   ): Promise<NeuralAIResponse> {
     const debut = Date.now();
-    const prompt = extrairePrompt(options);
+    const prompt = promptAvecAbréviations(extrairePrompt(options));
 
     const encodage = encodeText(prompt);
     const motsCles = selectionnerMotsCles(encodage.tokens);
@@ -507,7 +511,7 @@ export class NeuralEngine {
     options: AIRequest,
   ): AsyncGenerator<string, NeuralAIResponse, void> {
     const debut = Date.now();
-    const prompt = extrairePrompt(options);
+    const prompt = promptAvecAbréviations(extrairePrompt(options));
 
     const encodage = encodeText(prompt);
     const motsCles = selectionnerMotsCles(encodage.tokens);
