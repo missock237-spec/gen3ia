@@ -149,6 +149,8 @@ interface PaireIndexee {
   tailleTokens: number;
   /** Paire enseignée par l'utilisateur (Studio d'entraînement). */
   personnalisee: boolean;
+  /** Provenance réelle — les paires « mesure » ne répondent JAMAIS au chat. */
+  provenance: ProvenancePaire;
   /** Poids d'usage (plasticité de rappel). */
   poidsUsage: number;
 }
@@ -166,6 +168,18 @@ export interface ReponseLangage {
   /** Clé de motif de la paire gagnante — sert à la plasticité par feedback. */
   cle?: string;
 }
+
+/**
+ * Provenance d'une paire indexée :
+ *  - "corpus"       : socle d'amorçage canonique (réponda au chat) ;
+ *  - "personnalisee": enseignée EXPLICITEMENT par un utilisateur (brain.train,
+ *    Studio — répond au chat) ;
+ *  - "mesure"       : matière d'auto-apprentissage hub (thème « hub:… ») —
+ *    apprise pour la MESURE DE RÉTENTION du Studio d'entraînement, JAMAIS
+ *    utilisée pour répondre dans la conversation. Bug réel : des paires
+ *    commerciales/arabes hub répondaient hors-sujet à tous les comptes.
+ */
+export type ProvenancePaire = "corpus" | "personnalisee" | "mesure";
 
 /** Contexte conversationnel fourni par le moteur (hippocampe). */
 export interface ContexteLangage {
@@ -228,7 +242,7 @@ export class CortexLangagierGen3 {
    */
   apprendre(
     paires: readonly PaireLangage[],
-    opts: { personnalisees?: boolean } = {},
+    opts: { personnalisees?: boolean; pourMesure?: boolean } = {},
   ): StatsApprentissageLangage {
     const personnalisees = opts.personnalisees ?? false;
     let ajoutees = 0;
@@ -243,8 +257,22 @@ export class CortexLangagierGen3 {
         continue;
       }
 
+      // Provenance : les paires hub (thème « hub:… ») sont toujours de la
+      // MATIÈRE DE MESURE — même restaurées d'un cerveau persisté ancien où
+      // elles étaient rangées comme personnalisées.
+      const provenance: ProvenancePaire =
+        opts.pourMesure || paire.theme.startsWith("hub:")
+          ? "mesure"
+          : personnalisees
+            ? "personnalisee"
+            : "corpus";
+
       // Budget de paires personnalisées (le corpus d'amorçage n'y compte pas).
-      if (personnalisees && this.compterPersonnalisees() >= MAX_PAIRES_PERSONNALISEES) {
+      if (
+        personnalisees &&
+        provenance === "personnalisee" &&
+        this.compterPersonnalisees() >= MAX_PAIRES_PERSONNALISEES
+      ) {
         break;
       }
 
@@ -260,7 +288,8 @@ export class CortexLangagierGen3 {
         theme: paire.theme,
         tokens,
         tailleTokens: Math.max(1, tokens.size),
-        personnalisee: personnalisees,
+        personnalisee: personnalisees && provenance !== "mesure",
+        provenance,
         poidsUsage: this.poidsParCle.get(cle) ?? POIDS_USAGE_INITIAL,
       };
 
@@ -299,6 +328,7 @@ export class CortexLangagierGen3 {
   repondre(
     requete: string,
     contexte: ContexteLangage = {},
+    opts: { inclureMesure?: boolean } = {},
   ): ReponseLangage | null {
     if (this.paires.length === 0) return null;
 
@@ -372,6 +402,10 @@ export class CortexLangagierGen3 {
     for (const token of poidsHistorique.keys()) tokensActifs.add(token);
     for (const [indice, brut] of scores) {
       const paire = this.paires[indice];
+      // GARDE DE PROVENANCE — les paires « mesure » (matière hub de
+      // l'auto-apprentissage) servent UNIQUEMENT à la mesure de rétention du
+      // Studio : elles ne répondent JAMAIS dans la conversation.
+      if (paire.provenance === "mesure" && !opts.inclureMesure) continue;
       const cumul = cumulLongueur.get(indice)!;
       const longueurEffective = Math.max(
         1,

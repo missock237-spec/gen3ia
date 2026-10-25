@@ -56,7 +56,13 @@ export async function appliquerEntrainementAuto(
   const resultat: ResultatEntrainementAuto = { cerveauSauvegarde: false };
 
   if (apports.paires.length > 0) {
-    const stats = rt.cortex.apprendre(apports.paires, { personnalisees: true });
+    // POUR MESURE : la matière hub nourrit la mesure de rétention du Studio,
+    // PAS la conversation — les paires hub ne répondent jamais au chat
+    // (bug réel : hors-sujets inter-langues pour tous les comptes).
+    const stats = rt.cortex.apprendre(apports.paires, {
+      personnalisees: true,
+      pourMesure: true,
+    });
     resultat.langage = {
       pairesAjoutees: stats.pairesAjoutees,
       doublons: stats.pairesDoublons,

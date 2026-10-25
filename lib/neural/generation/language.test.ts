@@ -132,6 +132,68 @@ describe("CortexLangagierGen3 — appariement", () => {
   });
 });
 
+describe("CortexLangagierGen3 — provenance « mesure » (séparation chat / Studio)", () => {
+  it("les paires hub ne répondent JAMAIS au chat, mais restent mesurables", () => {
+    const cortex = new CortexLangagierGen3();
+    cortex.apprendre(CORPUS_GEN3);
+    cortex.apprendre(
+      [
+        {
+          motif: "quel est le résultat de mon entraînement",
+          reponse: "Voici le résultat de ton entraînement : cycles exécutés.",
+          theme: "hub:huggingface:dialogue-x",
+        },
+      ],
+      { personnalisees: true, pourMesure: true },
+    );
+    // Chat : la paire hub est INVISIBLE même sur son motif exact.
+    expect(cortex.repondre("quel est le résultat de mon entraînement")).toBeNull();
+    // Mesure de rétention : la même paire reste rappelable.
+    const retention = cortex.repondre(
+      "quel est le résultat de mon entraînement",
+      {},
+      { inclureMesure: true },
+    );
+    expect(retention).not.toBeNull();
+    expect(retention!.texte).toContain("entraînement");
+  });
+
+  it("une paire hub héritée d'un cerveau persisté (thème « hub: ») est rétrogradée en mesure", () => {
+    const cortex = new CortexLangagierGen3();
+    cortex.apprendre(CORPUS_GEN3);
+    // Restaurée « personnalisée » (format ancien) mais thème hub: → mesure.
+    cortex.apprendre(
+      [
+        {
+          motif: "soldes chaussures ville montpellier",
+          reponse: "Les soldes de chaussures à Montpellier démarrent en janvier.",
+          theme: "hub:kaggle:ventes",
+        },
+      ],
+      { personnalisees: true },
+    );
+    expect(cortex.repondre("soldes chaussures ville montpellier")).toBeNull();
+  });
+
+  it("une paire enseignée EXPLICITEMENT (sans thème hub) répond toujours au chat", () => {
+    const cortex = new CortexLangagierGen3();
+    cortex.apprendre(CORPUS_GEN3);
+    cortex.apprendre(
+      [
+        {
+          motif: "quand est le lancement du produit orion",
+          reponse: "Le produit Orion sort le 15 mars.",
+          theme: "connaissances",
+        },
+      ],
+      { personnalisees: true },
+    );
+    const r = cortex.repondre("quand est le lancement du produit orion ?");
+    expect(r).not.toBeNull();
+    expect(r!.texte).toContain("Orion");
+  });
+});
+
 describe("CortexLangagierGen3 — gardes anti-hors-sujet (rectifications UI)", () => {
   it("garde de couverture : un verbe partagé seul ne déclenche plus la paire générique", () => {
     // Bug réel (test UI) : « Écris une fonction TypeScript typée qui calcule

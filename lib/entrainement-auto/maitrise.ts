@@ -462,7 +462,13 @@ export interface ResultatRetention {
  * Aucun échantillon de validation n'a servi à l'entraînement du cycle.
  */
 export function evaluerRetentionCortex(
-  cortex: { repondre(requete: string): { texte: string } | null },
+  cortex: {
+    repondre(
+      requete: string,
+      contexte?: unknown,
+      opts?: { inclureMesure?: boolean },
+    ): { texte: string } | null;
+  },
   validation: readonly PaireLangage[],
 ): ResultatRetention {
   let succes = 0;
@@ -470,7 +476,8 @@ export function evaluerRetentionCortex(
   for (const paire of validation) {
     if (!paire.motif.trim() || !paire.reponse.trim()) continue;
     unites += 1;
-    const reponse = cortex.repondre(paire.motif);
+    // La rétention MESURE la matière apprise — inclureMesure: true.
+    const reponse = cortex.repondre(paire.motif, {}, { inclureMesure: true });
     if (reponse && reponseCorrespond(reponse.texte, paire.reponse)) succes += 1;
   }
   return { accuracy: unites === 0 ? 0 : succes / unites, unites };
@@ -571,7 +578,13 @@ export async function entrainerEtEvaluerDomaine(
     // restitue encore exactement — la capacité de production réelle.
     // (Mesurer sur des paires jamais vues serait absurde : une mémoire de
     // récupération ne « généralise » pas sur des contenus inconnus.)
-    const stats = rt.cortex.apprendre(matiere.paires, { personnalisees: true });
+    // POUR MESURE : la matière du cycle est apprise pour la MESURE DE
+    // RÉTENTION uniquement — jamais utilisée pour répondre au chat
+    // (garde de provenance dans CortexLangagierGen3.repondre).
+    const stats = rt.cortex.apprendre(matiere.paires, {
+      personnalisees: true,
+      pourMesure: true,
+    });
     resultat.unitesEntraînees = stats.pairesAjoutees;
     resultat.detail.vocabulaire = stats.vocabulaire;
     resultat.detail.doublons = stats.pairesDoublons;
