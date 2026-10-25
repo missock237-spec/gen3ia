@@ -1,0 +1,14 @@
+{
+  "name": "gen3ia-music-v2",
+  "description": "Briefs musicaux (genre/tempo/tonalité/instrumentation/structure/mixage) + storyboards de clips.",
+  "rows": 6000,
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "task_types": [
+    "clip_storyboard",
+    "prompt_to_music_brief"
+  ],
+  "generated_at": "2026-10-25T12:14:25+00:00"
+}

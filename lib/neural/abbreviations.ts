@@ -17,9 +17,10 @@ import "server-only";
  *     seule fois (idempotent via marqueur var/neural/abbreviations-v1.json)
  *     — l'IA RÉPOND correctement à « que signifie API ? » même sans réseau.
  *
- * Source de vérité : datasets/abbreviations/train.jsonl (836 paires réelles,
- * FR/EN, dédupliquées — voir INDEX.json). Le dataset vit aussi sur le repo
- * Hugging Face gen3ia-media-engine (publication training/colab).
+ * Source de vérité : datasets/abbreviations/train.jsonl (2 145 lignes réelles
+ * en v2 « géants » — ≈520 sigles FR/EN dédupliqués, voir INDEX.json). Le
+ * dataset vit aussi sur le repo Hugging Face gen3ia-media-engine (publication
+ * training/colab).
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
@@ -146,7 +147,7 @@ export function promptAvecAbréviations(prompt: string): string {
 }
 
 /** Convertit le dataset en paires cortex (motif → réponse), limité au quota. */
-export function pairesAbréviationsPourCortex(max = 600): PaireLangage[] {
+export function pairesAbréviationsPourCortex(max = 800): PaireLangage[] {
   const paires: PaireLangage[] = [];
   for (const [sigle, réponse] of REPONSES) {
     if (paires.length >= max) break;

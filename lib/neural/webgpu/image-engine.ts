@@ -18,7 +18,7 @@
  * — importées DYNAMIQUEMENT pour ne pas alourdir le bundle principal.
  */
 
-import { BASE_HF, REPO_MEDIA_GEN3IA, dirSd } from "./manifest";
+import { BASE_HF, REPO_MEDIA_GEN3IA, dirSd, pasQualitéHaute } from "./manifest";
 import { détecterWebGpu } from "./detect";
 
 /** Dimensions par ratio (grille SD 512, multiples de 8 — VAE safe). */
@@ -272,7 +272,7 @@ export async function générerImageWebGpu(opts: OptionsImageWebGpu): Promise<R�
   const dims = dimsHaute ?? DIMENSIONS[ratio] ?? DIMENSIONS["1:1"];
   const W = dims.w;
   const H = dims.h;
-  const pas = Math.min(Math.max(opts.steps ?? (haute ? 26 : 20), 4), 34);
+  const pas = Math.min(Math.max(opts.steps ?? (haute ? await pasQualitéHaute() : 20), 4), 34);
   const guidance = Math.min(Math.max(opts.guidance ?? (haute ? 5.0 : 4.5), 1), 12);
   const graine = (opts.seed ?? Date.now()) % 2 ** 31;
 

@@ -10,15 +10,15 @@ import {
 
 /**
  * Tests de la compréhension des abréviations FR/EN : le dataset réel
- * datasets/abbreviations/train.jsonl est chargé (836 lignes), l'expansion
- * à l'entrée double chaque sigle connu de sa forme longue, et les paires
- * cortex couvrent « que signifie X ? ».
+ * datasets/abbreviations/train.jsonl est chargé (2 145 lignes en v2),
+ * l'expansion à l'entrée double chaque sigle connu de sa forme longue, et les
+ * paires cortex couvrent « que signifie X ? ».
  */
 describe("abbreviations — chargement du dataset réel", () => {
   it("charge le dataset et expose un dictionnaire substantiel", async () => {
     await chargerAbréviations();
     const taille = tailleDictionnaireAbréviations();
-    expect(taille).toBeGreaterThan(80); // 150+ sigles dans le lexique curé
+    expect(taille).toBeGreaterThan(300); // 520+ sigles dans le lexique curé v2
   });
 
   it("reconnaît une abréviation présente dans un texte", async () => {

@@ -1,24 +1,32 @@
 {
   "gen3ia-media-datasets": {
-    "version": 1,
-    "generated_at": "2026-10-25T06:02:38+00:00",
+    "version": 2,
+    "generated_at": "2026-10-25T12:14:25+00:00",
     "datasets": [
       {
         "id": "abbreviations",
         "path": "datasets/abbreviations/train.jsonl",
-        "rows": 836
+        "rows": 2145
       },
       {
         "id": "images",
-        "path": "datasets/images/train.jsonl"
-      },
-      {
-        "id": "voice",
-        "path": "datasets/voice/train.jsonl"
+        "path": "datasets/images/train.jsonl",
+        "rows": 16442
       },
       {
         "id": "video",
-        "path": "datasets/video/train.jsonl"
+        "path": "datasets/video/train.jsonl",
+        "rows": 6649
+      },
+      {
+        "id": "voice",
+        "path": "datasets/voice/train.jsonl",
+        "rows": 13133
+      },
+      {
+        "id": "music",
+        "path": "datasets/music/train.jsonl",
+        "rows": 6000
       }
     ],
     "schema_common": [
@@ -32,6 +40,6 @@
       "metadata",
       "content_hash"
     ],
-    "purpose": "Entraînement Gen3 : compréhension des abréviations + routage/génération média photoréaliste, voix humaine, vidéo."
+    "purpose": "Entraînement Gen3 v2 « géants » : abréviations étendues, photoréalisme, vidéo, voix humaine longue durée et musique — curriculum bilingue FR/EN dédupliqué."
   }
 }

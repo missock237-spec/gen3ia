@@ -16,7 +16,15 @@ export interface ManifesteMédia {
   name?: string;
   version?: number;
   browser_inference?: {
-    sd?: { dir?: string; steps?: number; dtype?: string };
+    sd?: {
+      dir?: string;
+      steps?: number;
+      dtype?: string;
+      /** Pas DDIM du mode qualité « haute » (v2 « géants » — défaut 26). */
+      steps_haute?: number;
+      /** Grille (côté carré) du mode haute si la VRAM le permet. */
+      grille_haute?: number;
+    };
     kokoro?: { dir?: string; voice_fr?: string; dtype?: string };
   };
   [k: string]: unknown;
@@ -60,5 +68,19 @@ export async function dirKokoro(): Promise<string> {
     return m.browser_inference?.kokoro?.dir ?? "kokoro";
   } catch {
     return "kokoro";
+  }
+}
+
+/**
+ * Pas DDIM du mode qualité « haute » — lu depuis le manifeste v2
+ * (steps_haute, publié par le notebook « géants »). Repli : 26.
+ * La valeur manifeste est bornée 12…34 côté image-engine.
+ */
+export async function pasQualitéHaute(): Promise<number> {
+  try {
+    const m = await chargerManifeste();
+    return m.browser_inference?.sd?.steps_haute ?? 26;
+  } catch {
+    return 26;
   }
 }

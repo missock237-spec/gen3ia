@@ -1,14 +1,15 @@
 {
-  "name": "gen3ia-voice-v1",
-  "description": "Directives de synthèse vocale humaine FR+EN : styles, prosodie, émotion, format sortie.",
-  "rows": 1853,
+  "name": "gen3ia-voice-v2",
+  "description": "Directives de synthèse vocale humaine, prosodie et narrations longues segmentables.",
+  "rows": 13133,
   "languages": [
-    "fr",
-    "en"
+    "en",
+    "fr"
   ],
   "task_types": [
+    "long_form_narration",
     "prosody_annotation",
     "text_to_voice_directive"
   ],
-  "generated_at": "2026-10-25T06:02:38+00:00"
+  "generated_at": "2026-10-25T12:14:25+00:00"
 }
