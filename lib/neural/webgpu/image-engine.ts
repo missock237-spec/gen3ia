@@ -19,6 +19,7 @@
  */
 
 import { BASE_HF, REPO_MEDIA_GEN3IA, dirSd } from "./manifest";
+import { détecterWebGpu } from "./detect";
 
 /** Dimensions par ratio (grille SD 512, multiples de 8 — VAE safe). */
 const DIMENSIONS: Record<string, { w: number; h: number }> = {
@@ -32,6 +33,28 @@ const DIMENSIONS: Record<string, { w: number; h: number }> = {
   "21:9": { w: 640, h: 288 },
 };
 
+/** Dimensions HAUTE QUALITÉ (grille 768, multiples de 8 — 2,25× de pixels). */
+const DIMENSIONS_HAUTES: Record<string, { w: number; h: number }> = {
+  "1:1": { w: 768, h: 768 },
+  "3:4": { w: 672, h: 864 },
+  "4:3": { w: 864, h: 672 },
+  "16:9": { w: 864, h: 480 },
+  "9:16": { w: 480, h: 864 },
+  "2:3": { w: 624, h: 912 },
+  "3:2": { w: 912, h: 624 },
+  "21:9": { w: 960, h: 432 },
+};
+
+/** La grille 768 exige une mémoire GPU confortable (latents + activations). */
+async function grilleHautePossible(): Promise<boolean> {
+  try {
+    const cap = await détecterWebGpu();
+    return (cap.memoireGo ?? 0) >= 2.2;
+  } catch {
+    return false;
+  }
+}
+
 export interface OptionsImageWebGpu {
   prompt: string;
   ratio?: string;
@@ -39,6 +62,9 @@ export interface OptionsImageWebGpu {
   steps?: number;
   /** Guidance CFG (défaut 4.5 — photoréalisme sans sur-cuisson). */
   guidance?: number;
+  /** PROFIL QUALITÉ HAUTE : 26 pas + CFG 5.0 + grille 768 sur GPU capable
+   *  (mémoire ≥ 2,2 Go) — le mode essaim l'impose par défaut. */
+  qualité?: "standard" | "haute";
   seed?: number;
   onProgress?: (info: { étape: string; pourcent: number }) => void;
 }
@@ -240,11 +266,14 @@ async function encoderTexte(
 export async function générerImageWebGpu(opts: OptionsImageWebGpu): Promise<RésultatImageWebGpu> {
   const début = Date.now();
   const s = await chargerSessions(opts.onProgress);
-  const dims = DIMENSIONS[opts.ratio ?? "1:1"] ?? DIMENSIONS["1:1"];
+  const haute = opts.qualité === "haute";
+  const ratio = opts.ratio ?? "1:1";
+  const dimsHaute = haute && (await grilleHautePossible()) ? DIMENSIONS_HAUTES[ratio] : undefined;
+  const dims = dimsHaute ?? DIMENSIONS[ratio] ?? DIMENSIONS["1:1"];
   const W = dims.w;
   const H = dims.h;
-  const pas = Math.min(Math.max(opts.steps ?? 20, 4), 30);
-  const guidance = Math.min(Math.max(opts.guidance ?? 4.5, 1), 12);
+  const pas = Math.min(Math.max(opts.steps ?? (haute ? 26 : 20), 4), 34);
+  const guidance = Math.min(Math.max(opts.guidance ?? (haute ? 5.0 : 4.5), 1), 12);
   const graine = (opts.seed ?? Date.now()) % 2 ** 31;
 
   opts.onProgress?.({ étape: "Encodage du brief visuel…", pourcent: 5 });

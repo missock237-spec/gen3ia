@@ -4,15 +4,18 @@
  * MOTEUR VIDÉO WEBGPU — keyframes photoréalistes → MP4, 100 % local.
  *
  * Stratégie honnête de génération vidéo réaliste côté navigateur :
- *  1. 3 à 4 KEYFRAMES photoréalistes générées par le moteur SD WebGPU
- *     (graines liées pour la continuité chromatique) ;
+ *  1. 4 à 8 KEYFRAMES photoréalistes générées par le moteur SD WebGPU
+ *     (graines liées pour la continuité chromatique, profil QUALITÉ HAUTE) ;
  *  2. ASSEMBLAGE ffmpeg.wasm : fondus enchaînés (xfade), 24 img/s, H.264
  *     yuv420p — un vrai fichier MP4 lisible partout.
  *
+ * MODE ESSAIM (recommandé) : la vidéo n'est PAS générée ici — l'orchestrateur
+ * central décompose la requête en 6 fragments (1 keyframe chacun), les
+ * distribute aux 5 meilleurs GPU du maillage (PARALLÈLE) et fusionne côté
+ * serveur (lib/essaim-media/fusion). Ce moteur reste la voie locale autonome.
  * Aucun modèle vidéo lourd (CogVideoX ≈ 5 Md de paramètres) ne tourne dans
  * un navigateur en 2026 : la décomposition keyframes + transitions est la
- * voie réellement exécutable sur le GPU utilisateur, cohérente avec le
- * pipeline serveur lib/video (mêmes principes, mêmes formats).
+ * voie réellement exécutable sur le GPU utilisateur.
  */
 
 import { générerImageWebGpu } from "./image-engine";
@@ -20,12 +23,14 @@ import { générerImageWebGpu } from "./image-engine";
 export interface OptionsVidéoWebGpu {
   /** Brief de scène (FR ou EN). */
   prompt: string;
-  /** Nombre de keyframes (3–5). */
+  /** Nombre de keyframes (3–8 — défaut 6, haute qualité). */
   keyframes?: number;
   /** Durée d'affichage de chaque keyframe avant fondu (s). */
   duréeParKeyframe?: number;
   /** Ratio d'aspect du rendu. */
   ratio?: string;
+  /** Profil qualité des keyframes (défaut « haute »). */
+  qualité?: "standard" | "haute";
   seed?: number;
   onProgress?: (info: { étape: string; pourcent: number }) => void;
 }
@@ -75,8 +80,8 @@ async function chargerFfmpeg(): Promise<FfmpegMin | null> {
  */
 export async function générerVidéoWebGpu(opts: OptionsVidéoWebGpu): Promise<RésultatVidéoWebGpu> {
   const début = Date.now();
-  const nbKeyframes = Math.min(Math.max(opts.keyframes ?? 3, 3), 5);
-  const duréeKf = opts.duréeParKeyframe ?? 1.4;
+  const nbKeyframes = Math.min(Math.max(opts.keyframes ?? 6, 3), 8);
+  const duréeKf = opts.duréeParKeyframe ?? 1.6;
   const graineBase = opts.seed ?? Date.now();
 
   // 1) Keyframes photoréalistes (graines liées : continuité visuelle).
@@ -86,6 +91,7 @@ export async function générerVidéoWebGpu(opts: OptionsVidéoWebGpu): Promise<
       prompt: opts.prompt,
       ratio: opts.ratio ?? "16:9",
       seed: graineBase + k * 17,
+      qualité: opts.qualité ?? "haute",
       onProgress: (info) =>
         opts.onProgress?.({
           étape: `Keyframe ${k + 1}/${nbKeyframes} — ${info.étape}`,

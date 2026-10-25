@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { LabConsole } from "@/components/lab/lab-console";
+import { EssaimPanneau } from "@/components/agent-gen3/essaim-panneau";
 
 export const metadata: Metadata = {
   title: "Laboratoire de modèles",
@@ -17,6 +18,9 @@ export const metadata: Metadata = {
 export default function LabPage() {
   return (
     <div className="min-h-full bg-[var(--g3-bg)] text-[var(--g3-text)]">
+      <div className="mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6">
+        <EssaimPanneau />
+      </div>
       <LabConsole />
     </div>
   );

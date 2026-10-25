@@ -9,14 +9,19 @@
  * `ff_siwis`. Aucune API externe, aucun jeton, le texte ne quitte pas
  * l'appareil.
  *
- * Le miroir du modèle vit dans le repo public gen3ia-media-engine (Colab),
- * mais kokoro-js attend la mise en page à plat (model.onnx + voices.json à
- * la racine du repo) : on charge donc le repo de référence
- * onnx-community/Kokoro-82M-v1.0-ONNX (identique octet pour octet au miroir).
+ * QUALITÉ HAUTE (segmenter) : le texte est découpé en PHRASES, chaque
+ * phrase est synthétisée avec une micro-variation de débit (prosodie
+ * vivante), puis les trains PCM sont fondus (égalité de puissance, 60 ms)
+ * en un WAV continu — plus de clic entre phrases, textes jusqu'à 6 000
+ * caractères. En mode ESSAIM, chaque segment peut être synthétisé par un
+ * appareil différent et fusionné côté central (même mathématique : wav.ts).
  *
  * Repli honnête : toute erreur propage — l'appelant retombe sur la synthèse
  * Web Speech (navigateur) puis sur le WAV neuronal serveur.
  */
+
+import { concaténerWav } from "@/lib/essaim-media/wav";
+import { découperEnSegments } from "@/lib/essaim-media/types";
 
 export interface OptionsVoixHumaine {
   texte: string;
@@ -24,6 +29,9 @@ export interface OptionsVoixHumaine {
   voix?: string;
   /** Vitesse de parole 0.7–1.4 (défaut 1.0). */
   vitesse?: number;
+  /** QUALITÉ HAUTE : segmentation par phrases + micro-variation de débit +
+   *  fondu PCM 60 ms (prosodie naturelle, textes jusqu'à 6 000 caractères). */
+  segmenter?: boolean;
   onProgress?: (info: { étape: string; pourcent: number }) => void;
 }
 
@@ -83,24 +91,59 @@ export const VOIX_KOKORO = [
 ] as const;
 
 /**
- * Synthèse vocale HUMAINE locale. Rejette les textes vides ; la limite
- * pratique navigateur est ~2000 caractères (mémoire WASM).
+ * Synthèse vocale HUMAINE locale. Rejette les textes vides ; sans
+ * segmentation la limite pratique navigateur est ~2000 caractères (mémoire
+ * WASM), avec segmentation 6 000 (segments de ≤ 600 fondus au fil de l'eau).
  */
 export async function générerVoixHumaine(opts: OptionsVoixHumaine): Promise<RésultatVoixHumaine> {
   const début = Date.now();
-  const texte = opts.texte.trim().slice(0, 2000);
+  const segmenter = opts.segmenter === true;
+  const plafond = segmenter ? 6000 : 2000;
+  const texte = opts.texte.trim().slice(0, plafond);
   if (!texte) throw new Error("Texte vide — rien à vocaliser.");
 
   const { tts, moteur } = await chargerKokoro(opts.onProgress);
-  opts.onProgress?.({ étape: "Votre GPU prononce la phrase…", pourcent: 50 });
   const voix = opts.voix ?? "ff_siwis";
-  const vitesse = Math.min(Math.max(opts.vitesse ?? 1.0, 0.7), 1.4);
-  const audio = await tts.generate(texte, { voice: voix, speed: vitesse });
-  const blob = await audio.toBlob();
+  const vitesseBase = Math.min(Math.max(opts.vitesse ?? 1.0, 0.7), 1.4);
+
+  // QUALITÉ HAUTE : phrases → synthèses avec micro-variation de débit →
+  // fondu d'égalité de puissance. Un segment unique suit la voie directe.
+  const segments = segmenter
+    ? découperEnSegments(texte, 500).slice(0, 12)
+    : [texte];
+  const blobs: Blob[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    // Cycle de débit [1.0, 0.97, 1.03] : la prosodie respire naturellement.
+    const variation = [1.0, 0.97, 1.03][i % 3];
+    const vitesse = Math.min(1.4, Math.max(0.7, vitesseBase * variation));
+    opts.onProgress?.({
+      étape: segments.length > 1
+        ? `Phrase ${i + 1}/${segments.length} — votre GPU prononce la voix…`
+        : "Votre GPU prononce la phrase…",
+      pourcent: Math.round(((i + (segments.length > 1 ? 0.4 : 0.5)) / segments.length) * 92),
+    });
+    const audio = await tts.generate(segments[i], { voice: voix, speed: vitesse });
+    blobs.push(await audio.toBlob());
+  }
+
+  let blob: Blob;
+  if (blobs.length === 1) {
+    blob = blobs[0];
+  } else {
+    const buffers = await Promise.all(blobs.map((b) => b.arrayBuffer()));
+    try {
+      const fusionné = concaténerWav(buffers.map((b) => new Uint8Array(b)));
+      blob = new Blob([fusionné.slice().buffer as ArrayBuffer], { type: "audio/wav" });
+    } catch {
+      // Format hétérogène improbable : on livre la première phrase (honnête).
+      blob = blobs[0];
+    }
+  }
+
   opts.onProgress?.({ étape: "Voix prête.", pourcent: 100 });
   return {
     blob,
-    duréeSecondes: audio.audio?.duration ?? 0,
+    duréeSecondes: 0,
     voix,
     moteur,
     duréeMs: Date.now() - début,

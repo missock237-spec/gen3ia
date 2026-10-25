@@ -133,10 +133,12 @@ export async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResul
         userId: ctx.userId,
         role: "assistant",
         content:
-          "Génération photoréaliste confiée à votre GPU local (WebGPU) — les modèles Gen3 " +
-          "téléchargent et génèrent directement dans votre navigateur, rien ne quitte votre appareil. " +
-          "Première génération : téléchargement du modèle (~1 à 2 Go, une seule fois). " +
-          "Si votre navigateur ne prend pas en charge WebGPU, je basculerai automatiquement sur mon moteur neuronal abstrait.",
+          "Génération photoréaliste lancée : votre requête part vers l'IA centrale de l'essaim gen3, " +
+          "qui la décompose en parts et les distribue aux 5 meilleurs GPU disponibles (le vôtre " +
+          "participe via l'agent gen3 installé dans votre navigateur — les modèles téléchargent et " +
+          "génèrent en WebGPU, les résultats sont fusionnés puis renvoyés). " +
+          "Première génération : téléchargement des modèles (~1 à 2 Go, une seule fois). " +
+          "Si l'essaim ou votre navigateur ne peut pas calculer, je basculerai automatiquement sur mon moteur neuronal abstrait.",
         provider: "gen3-webgpu",
         model: "gen3-media-engine-v1",
         generationStatus: "complete",

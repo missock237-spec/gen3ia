@@ -3,19 +3,21 @@
 /**
  * HOOK MÉDIA WEBGPU — le GPU de l'utilisateur génère, gen3ia coordonne.
  *
- * Consomme les événements `webgpu_media` du flux de conversation :
- *  1. sonde WebGPU (honnête — refuse vite si absent) ;
- *  2. exécute le moteur local (image SD photoréalisme / voix Kokoro /
- *     vidéo keyframes+ffmpeg.wasm) avec progression affichée ;
- *  3. envoie le résultat à /api/media/webgpu-complete (persistance R2 +
- *     message + artefact dans la conversation) ;
- *  4. en cas d'échec quelconque → /api/media/webgpu-fallback : le serveur
- *     reprend le tour avec le moteur neuronal abstrait (jamais de faux
- *     succès, jamais de blocage).
+ * V2 — ESSAIM : la requête photoréaliste/voix/vidéo est d'abord SOUMISE À
+ * L'IA CENTRALE (/api/essaim/job) qui la décompose et distribue les parts
+ * aux 5 meilleurs GPU du maillage (l'appareil local participe via l'agent
+ * gen3). L'IA centrale associe les signaux, persiste l'œuvre et livre le
+ * message + artefact — le hook les affiche. Repli HONNÊTE en cascade :
+ *  essaim indisponible → génération LOCALE (votre GPU seul) → repli serveur
+ *  (moteur neuronal abstrait). Jamais de faux succès, jamais de blocage.
  */
 
 import { useCallback, useRef, useState } from "react";
 import { détecterWebGpu } from "@/lib/neural/webgpu/detect";
+import {
+  soumettreJobEssaim,
+  sonderJobEssaim,
+} from "@/lib/essaim-media/agent-client";
 
 export interface JobWebGpu {
   jobId: string;
@@ -110,6 +112,39 @@ export function useWebGpuMedia(options: {
     [onMessage],
   );
 
+  /** Suit un job d'essaim : sondage régulier, progression réelle par parts,
+   *  livraison finale. Retourne false si l'essaim a échoué/écoule le temps
+   *  (l'appelant bascule alors en génération locale). */
+  const suivreEssaim = useCallback(
+    async (job: JobWebGpu, jobId: string): Promise<boolean> => {
+      const début = Date.now();
+      const DURÉE_MAX = 8 * 60_000;
+      while (Date.now() - début < DURÉE_MAX) {
+        await new Promise((r) => setTimeout(r, 2_500));
+        const s = await sonderJobEssaim(jobId);
+        if (!s.ok) continue; // sonde ratée (réseau) : on persiste
+        if (s.état === "termine" && s.livraison) {
+          onMessage?.(
+            s.livraison.message as unknown as NonNullable<RéponseComplète["message"]>,
+            s.livraison.artifact as unknown as RéponseComplète["artifact"],
+          );
+          onProgress?.({ jobId: job.jobId, étape: "Œuvre d'essaim livrée.", pourcent: 100 });
+          onStatut?.(null);
+          return true;
+        }
+        if (s.état === "echoue") {
+          onStatut?.(`Essaim gen3 : ${s.erreur ?? "échec de fusion"}`);
+          return false;
+        }
+        const détail = `Essaim gen3 — ${s.terminés ?? 0}/${s.fragments ?? "?"} part(s) calculée(s)${(s.relances ?? 0) > 0 ? ` · ${s.relances} relance(s)` : ""}`;
+        onProgress?.({ jobId: job.jobId, étape: détail, pourcent: Math.max(3, s.pourcent ?? 0) });
+        onStatut?.(`${détail}…`);
+      }
+      return false; // délai épuisé : la voie locale prend la main
+    },
+    [onMessage, onProgress, onStatut],
+  );
+
   /** Point d'entrée : traiter un événement webgpu_media du flux. */
   const traiter = useCallback(
     async (job: JobWebGpu) => {
@@ -124,11 +159,32 @@ export function useWebGpuMedia(options: {
         return;
       }
       try {
+        // 1. ESSAIM GEN3 : décomposition + distribution aux 5 meilleurs GPU.
+        onStatut?.("L'IA centrale répartit votre requête dans l'essaim gen3…");
+        const soumission = await soumettreJobEssaim({
+          jobId: job.jobId,
+          conversationId: job.conversationId,
+          kind: job.kind,
+          prompt: job.prompt,
+          ratio: job.ratio,
+          durationSeconds: job.durationSeconds,
+        });
+        if (soumission.ok && soumission.jobId) {
+          const livré = await suivreEssaim(job, soumission.jobId);
+          if (livré) {
+            verrou.current.delete(job.jobId);
+            return;
+          }
+          // Essaim échoué (fusion, plafond…) : le GPU LOCAL prend le relais.
+          onStatut?.("Essaim indisponible — votre GPU prend le relais…");
+        }
+        // 2. GÉNÉRATION LOCALE (voie autonome, qualité haute).
         if (job.kind === "image") {
           const { générerImageWebGpu } = await import("@/lib/neural/webgpu/image-engine");
           const res = await générerImageWebGpu({
             prompt: job.prompt,
             ratio: job.ratio,
+            qualité: "haute",
             onProgress: (i) => {
               onProgress?.({ jobId: job.jobId, étape: i.étape, pourcent: i.pourcent });
               onStatut?.(i.étape);
@@ -147,6 +203,7 @@ export function useWebGpuMedia(options: {
           const { générerVoixHumaine } = await import("@/lib/neural/webgpu/voice-engine");
           const res = await générerVoixHumaine({
             texte: job.prompt,
+            segmenter: true,
             onProgress: (i) => {
               onProgress?.({ jobId: job.jobId, étape: i.étape, pourcent: i.pourcent });
               onStatut?.(i.étape);
@@ -183,14 +240,14 @@ export function useWebGpuMedia(options: {
         verrou.current.delete(job.jobId);
       }
     },
-    [compléter, lectureAutomatique, onProgress, onStatut, repli, sonder],
+    [compléter, lectureAutomatique, onProgress, onStatut, repli, sonder, suivreEssaim],
   );
 
   /** Lecture vocale HUMAINE d'un texte (mode chat voix — remplace speakFr). */
   const lireVoixHumaine = useCallback(async (texte: string): Promise<boolean> => {
     try {
       const { générerVoixHumaine } = await import("@/lib/neural/webgpu/voice-engine");
-      const res = await générerVoixHumaine({ texte });
+      const res = await générerVoixHumaine({ texte, segmenter: true });
       jouerBlobAudio(res.blob);
       return true;
     } catch {

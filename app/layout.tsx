@@ -8,6 +8,7 @@ import { DeployWatcher } from "@/components/deploy-watcher";
 import { UpdateBanner } from "@/components/nav/update-banner";
 import { ScrollReveal } from "@/components/nav/scroll-reveal";
 import { ViewportHeightSync } from "@/components/nav/viewport-height-sync";
+import { AgentGen3Register } from "@/components/agent-gen3/agent-gen3-register";
 
 import "./globals.css";
 
@@ -223,6 +224,11 @@ export default function RootLayout({
         <DeployWatcher />
         <UpdateBanner />
         <ViewportHeightSync />
+        {/* Essaim média gen3 : à l'inscription/connexion, le petit agent
+            gen3 se télécharge dans le cache du navigateur (SW /gen3-agent/)
+            et relie l'appareil à l'IA centrale par ondes — les 5 meilleurs
+            GPU du maillage calculent les médias photoréalistes/voix/vidéo. */}
+        <AgentGen3Register />
       </body>
     </html>
   );
