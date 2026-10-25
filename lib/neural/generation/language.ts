@@ -358,6 +358,10 @@ export class CortexLangagierGen3 {
     let meilleurIndice = -1;
     let meilleurScore = 0;
     const requeteSet = new Set(tokensRequete);
+    // Tokens ACTIFS = requête + contexte (reprises) : la couverture d'une
+    // paire s'évalue contre tout ce qui a nourri son score.
+    const tokensActifs = new Set([...requeteSet, ...tokensContexte]);
+    for (const token of poidsHistorique.keys()) tokensActifs.add(token);
     for (const [indice, brut] of scores) {
       const paire = this.paires[indice];
       const cumul = cumulLongueur.get(indice)!;
@@ -370,6 +374,15 @@ export class CortexLangagierGen3 {
       const bonifie = normalise * (paire.personnalisee ? BONUS_PERSONNALISEE : 1);
       // Sous-ensemble exact : le motif entier est posé dans la requête.
       const sousEnsemble = [...paire.tokens].every((t) => requeteSet.has(t));
+      // GARDE DE COUVERTURE — un verbe générique partagé (« écris ») ne suffit
+      // plus à faire répondre une paire sur une demande riche : il faut ≥ 2
+      // tokens partagés, OU une requête courte (suivi conversationnel), OU le
+      // motif posé intégralement. Bug réel : « Écris une fonction TypeScript… »
+      // recevait la paire générique « J'écris, oui… ».
+      const partagés = [...paire.tokens].filter((t) => tokensActifs.has(t)).length;
+      const requêteCourte = tokensRequete.length <= 3;
+      const couvertureOK = sousEnsemble || partagés >= 2 || (requêteCourte && partagés >= 1);
+      if (!couvertureOK) continue;
       // GARDE DE LANGUE — une paire d'une autre langue que la requête ne
       // répond QUE si son motif est posé intégralement (sous-ensemble exact) :
       // jamais de réponse hors-sujet héritée d'un corpus d'une autre langue.

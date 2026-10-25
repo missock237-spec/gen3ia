@@ -133,6 +133,23 @@ describe("CortexLangagierGen3 — appariement", () => {
 });
 
 describe("CortexLangagierGen3 — gardes anti-hors-sujet (rectifications UI)", () => {
+  it("garde de couverture : un verbe partagé seul ne déclenche plus la paire générique", () => {
+    // Bug réel (test UI) : « Écris une fonction TypeScript typée qui calcule
+    // la moyenne d'un tableau… » recevait « J'écris, oui : c'est même une de
+    // mes façons de penser… » via le seul token « écris ».
+    const cortex = new CortexLangagierGen3();
+    cortex.apprendre(CORPUS_GEN3);
+    const r = cortex.repondre(
+      "Écris une fonction TypeScript typée qui calcule la moyenne d'un tableau de nombres, avec gestion du cas vide.",
+    );
+    // La paire générique « écrire » ne doit PAS répondre : soit null (le
+    // moteur composera honnêtement par intention), soit une paire qui
+    // couvre réellement le sujet (jamais la réplique générique).
+    if (r !== null) {
+      expect(r.texte).not.toContain("une de mes façons de penser");
+    }
+  });
+
   it("garde de langue : une paire EN ne répond plus à une question FR", async () => {
     const { détecterLangue } = await import("./language");
     expect(détecterLangue("Qu'est-ce que l'effet de serre ? Explique le mécanisme.")).toBe("fr");
