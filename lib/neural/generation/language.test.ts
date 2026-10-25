@@ -256,6 +256,44 @@ describe("CortexLangagierGen3 — gardes anti-hors-sujet (rectifications UI)", (
     expect(cortex.repondre("Calcule 47 + 38 en montrant chaque étape du calcul.")).toBeNull();
   });
 
+  it("rétrogradation « consolide » : la consolidation auto ne répond plus au chat", () => {
+    // Bug réel (télémétrie UI) : une paire consolidée automatiquement
+    // (thème « consolide ») répondait hors-sujet avec un score élevé.
+    const cortex = new CortexLangagierGen3();
+    cortex.apprendre(CORPUS_GEN3);
+    cortex.apprendre(
+      [
+        {
+          motif: "vérifie le résultat de l'étape de calcul du cycle",
+          reponse: "Ma santé neuronale est suivie en continu : cycles exécutés, énergie moyenne.",
+          theme: "consolide",
+        },
+      ],
+      { personnalisees: true }, // format ancien du cerveau persisté
+    );
+    expect(cortex.repondre("Calcule 47 + 38 en montrant chaque étape du calcul, puis vérifie le résultat.")).toBeNull();
+    // Mesurable pour le Studio, jamais conversationnelle.
+    expect(cortex.repondre(
+      "vérifie le résultat de l'étape de calcul du cycle",
+      {},
+      { inclureMesure: true },
+    )).not.toBeNull();
+  });
+
+  it("les paires enseignées EXPLICITEMENT (enseigné-chat) et les abréviations restent conversationnelles", () => {
+    const cortex = new CortexLangagierGen3();
+    cortex.apprendre(CORPUS_GEN3);
+    cortex.apprendre(
+      [
+        { motif: "que signifie rpi ?", reponse: "RPI signifie Réseau Périphérique Intelligent.", theme: "enseigné-chat" },
+        { motif: "que signifie snn ?", reponse: "SNN signifie Spiking Neural Network (réseau de neurones à spikes).", theme: "abréviations" },
+      ],
+      { personnalisees: true },
+    );
+    expect(cortex.repondre("que signifie rpi ?")?.texte).toContain("RPI");
+    expect(cortex.repondre("que signifie snn ?")?.texte).toContain("Spiking");
+  });
+
   it("garde de langue : une paire EN ne répond plus à une question FR", async () => {
     const { détecterLangue } = await import("./language");
     expect(détecterLangue("Qu'est-ce que l'effet de serre ? Explique le mécanisme.")).toBe("fr");

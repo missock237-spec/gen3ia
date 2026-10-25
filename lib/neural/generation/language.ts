@@ -261,11 +261,19 @@ export class CortexLangagierGen3 {
       // MATIÈRE DE MESURE — même restaurées d'un cerveau persisté ancien où
       // elles étaient rangées comme personnalisées. Idem pour toute paire
       // « personnalisée » en écriture NON LATINE (échanges consolidés
-      // arabes/cyrilliques… — neutralisés sans suppression).
+      // arabes/cyrilliques… — neutralisés sans suppression) et pour les
+      // paires « consolide » (consolidation AUTOMATIQUE d'échanges, globale
+      // au serveur : jamais un savoir enseigné explicitement par un
+      // utilisateur — les thèmes légitimes du chat restent
+      // « enseigné-chat » et « abréviations »).
       const langueReponse = personnalisees ? détecterLangue(paire.reponse) : null;
       const horsPlateforme = personnalisees && langueReponse === "autre";
+      const consolidationAuto = personnalisees && paire.theme === "consolide";
       const provenance: ProvenancePaire =
-        opts.pourMesure || paire.theme.startsWith("hub:") || horsPlateforme
+        opts.pourMesure ||
+        paire.theme.startsWith("hub:") ||
+        horsPlateforme ||
+        consolidationAuto
           ? "mesure"
           : personnalisees
             ? "personnalisee"
