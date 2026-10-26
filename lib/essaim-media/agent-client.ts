@@ -349,6 +349,31 @@ async function précacherPoidsAgent(): Promise<void> {
   }
 }
 
+/**
+ * LE SIGNAL D'ONDE SE MET AU CHAUD — loi d'architecture (CONTRAINTE-ONDES) :
+ * les artefacts PERMANENTS de gen3 (manifeste central + profils de
+ * résonance v4/ondes/*.json) rejoignent le cache de l'agent. Les
+ * professeurs externes, eux, sont jetables — le signal d'onde reste.
+ * Non bloquant : un artefact non encore publié est simplement raté,
+ * le prochain registre retentera.
+ */
+async function précacherSignalOnde(): Promise<void> {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (!reg.active) return;
+    const racine = "https://huggingface.co/Kings237/gen3ia-media-engine/resolve/main/";
+    const urls = [
+      new URL("MANIFEST.json", racine).toString(),
+      ...["knowledge", "code", "business", "writing", "security", "music"].map(
+        (d) => new URL(`v4/ondes/ondes-${d}.json`, racine).toString(),
+      ),
+    ];
+    reg.active.postMessage({ type: "gen3-agent:précache", urls });
+  } catch {
+    /* SW inactif ou cache indisponible : non bloquant */
+  }
+}
+
 /* ------------------------------------------------------------- installer -- */
 
 /**
@@ -389,6 +414,8 @@ export function installerAgentGen3(): Promise<ÉtatAgentGen3> {
         // 5. LES POIDS SE METTENT AU CHAUD DANS LE CACHE DE L'AGENT.
         void précacherPoidsAgent();
       }
+      // 6. LE SIGNAL D'ONDE PERMANENT (v4/ondes) AU CHAUD AUSSI.
+      void précacherSignalOnde();
       battementTimer = setInterval(() => {
         void battre().then(() => {
           if (état.statut !== "actif") {
