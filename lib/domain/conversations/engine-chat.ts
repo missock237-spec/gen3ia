@@ -373,7 +373,7 @@ export async function produceConversationImage(
   ctx: Pick<TurnContext, "message" | "userId">,
   plannedPrompt?: string,
   onProgress?: (event: { label: string; stage: string; percent: number }) => Promise<void> | void,
-): Promise<{ imageUrl: string; model: string; storagePath?: string; inlineDataUrl?: string }> {
+): Promise<{ imageUrl: string; model: string; storagePath?: string; inlineDataUrl?: string; echafaudage?: boolean }> {
   const rawPrompt =
     typeof plannedPrompt === "string" && plannedPrompt.trim().length >= 3
       ? plannedPrompt.trim().slice(0, 4000)
@@ -393,7 +393,13 @@ export async function produceConversationImage(
     ratio: detectImageRatio(ctx.message),
   });
   await onProgress?.({ label: "Enregistrement sécurisé de l'image…", stage: "persisting", percent: 80 });
-  return { imageUrl: image.url, model: "gen3-snn-v1" };
+  return {
+    imageUrl: image.url,
+    // Modèle RÉEL (traçabilité honnête) : professeur temporaire ou moteur
+    // neuronal abstrait — le message du fil s'adapte au moteur effectif.
+    model: typeof image.meta?.moteur === "string" ? image.meta.moteur : "gen3-snn-v1",
+    ...(typeof image.meta?.echafaudage === "boolean" ? { echafaudage: image.meta.echafaudage } : {}),
+  };
 }
 
 

@@ -49,17 +49,20 @@ export async function POST(request: NextRequest) {
     const raison = (body.raison ?? "WebGPU indisponible").slice(0, 200);
 
     if (kind === "image" && prompt) {
-      // Repli réel : moteur neuronal abstrait du serveur (aucune IA externe).
+      // Repli réel : professeur temporaire (photoréalisme, loi
+      // CONTRAINTE-ONDES) ou moteur neuronal abstrait sans professeur.
       const image = await produceConversationImage({ message: prompt, userId }, prompt);
+      const prof = (image as { echafaudage?: boolean }).echafaudage === true;
       const message = await appendMessage({
         conversationId,
         userId,
         role: "assistant",
-        content:
-          `Votre navigateur ne peut pas exécuter la génération WebGPU (${raison}). ` +
-          "Je vous livre la composition de mon moteur neuronal interne — une composition abstraite, honnête, calculée depuis mon état synaptique.",
+        content: prof
+          ? "Votre navigateur ne peut pas exécuter la génération WebGPU — mon professeur média temporaire a produit cette image photoréaliste (échafaudage supprimable : le signal d'onde gen3 prendra le relais après distillation)."
+          : `Votre navigateur ne peut pas exécuter la génération WebGPU (${raison}). ` +
+            "Je vous livre la composition de mon moteur neuronal interne — une composition abstraite, honnête, calculée depuis mon état synaptique.",
         imageUrl: image.inlineDataUrl ?? image.imageUrl,
-        provider: "gen3-snn",
+        provider: prof ? "professeur-temporaire" : "gen3-snn",
         model: image.model,
         generationStatus: "complete",
       });
