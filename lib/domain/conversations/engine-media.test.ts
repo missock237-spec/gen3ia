@@ -3,8 +3,22 @@ import { describe, expect, it } from "vitest";
 import {
   estVideoCourteRéaliste,
   extrairePhraseÀDire,
+  intentionMédiaÉtiquetée,
   looksLikeVoixHumaineRequest,
 } from "./engine-media";
+
+describe("intentionMédiaÉtiquetée — format « Image : … » de l'utilisateur", () => {
+  it("reconnaît les 3 étiquettes exactes de la mission", () => {
+    expect(intentionMédiaÉtiquetée("Image : un homme au bord d'une route ( photoréaliste)")).toBe("image");
+    expect(intentionMédiaÉtiquetée("Voix: le message vocal doit être <<Je viens pour manger sur le bord de la route>> ( voix humaine)")).toBe("voix");
+    expect(intentionMédiaÉtiquetée("Vidéo : un homme qui marche sur une corde ( réaliste)")).toBe("video");
+  });
+
+  it("refuse les messages sans étiquette en tête", () => {
+    expect(intentionMédiaÉtiquetée("j'aimerais une image de chat")).toBeNull();
+    expect(intentionMédiaÉtiquetée("c'est quoi une bonne vidéo ?")).toBeNull();
+  });
+});
 
 describe("estVideoCourteRéaliste — routage vidéo direct (loi CONTRAINTE-ONDES)", () => {
   it("accepte la demande de référence de l'utilisateur", () => {

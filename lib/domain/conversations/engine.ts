@@ -40,7 +40,7 @@ import { findLastConversationImage, runChatTurn } from "./engine-chat";
 import type { TurnBase } from "./engine-chat";
 import { IntentSchema, buildIntentSystemPrompt, detectExplicitToolIntent, extractApiUrlFromMessage, extractSearchQuery } from "./engine-intent";
 import type { ExplicitToolIntent, TurnIntent } from "./engine-intent";
-import { runImageEditTurn, runImageTurn, runVideoTurn, runVoixTurn, looksLikeVoixHumaineRequest } from "./engine-media";
+import { runImageEditTurn, runImageTurn, runVideoTurn, runVoixTurn, looksLikeVoixHumaineRequest, intentionMédiaÉtiquetée } from "./engine-media";
 // ENTRAÎNEMENT DEPUIS LE CHAT — entrée UNIQUE (demande utilisateur) : les
 // messages « apprends que / retiens que / entraîne-toi » entraînent
 // réellement le cortex via l'outil brain.train.
@@ -300,7 +300,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     });
     return result;
   }
-  if (looksLikeImageRequest(input.message) || looksLikeExplicitDrawingRequest(input.message)) {
+  if (looksLikeImageRequest(input.message) || looksLikeExplicitDrawingRequest(input.message) || intentionMédiaÉtiquetée(input.message) === "image") {
     await onEvent({ type: "status", phase: "image", label: "Génération de l'image en cours…", stage: "generating", percent: 10 });
     const result = await runImageTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
     await onEvent({
@@ -315,7 +315,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   // 2 quinquies) DEMANDE DE VOIX HUMAINE : circuit média direct (essaim →
   // GPU local → repli serveur → professeur temporaire, loi CONTRAINTE-ONDES).
   // AVANT la vidéo : « une vidéo avec la voix de X » reste une vidéo.
-  if (looksLikeVoixHumaineRequest(input.message) && !looksLikeVideoRequest(input.message)) {
+  if ((looksLikeVoixHumaineRequest(input.message) || intentionMédiaÉtiquetée(input.message) === "voix") && !looksLikeVideoRequest(input.message)) {
     await onEvent({ type: "status", phase: "execution", label: "Synthèse de la voix humaine en cours…" });
     const result = await runVoixTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
     await onEvent({
@@ -351,7 +351,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     });
     return result;
   }
-  if (looksLikeVideoRequest(input.message)) {
+  if (intentionMédiaÉtiquetée(input.message) === "video" || looksLikeVideoRequest(input.message)) {
     await onEvent({ type: "status", phase: "execution", label: "Lancement de la production vidéo…" });
     const result = await runVideoTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
     await onEvent({

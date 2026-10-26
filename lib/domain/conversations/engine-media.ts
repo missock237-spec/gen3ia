@@ -160,6 +160,21 @@ export function extrairePhraseÀDire(message: string): string {
   return message.trim();
 }
 
+/**
+ * DEMANDE MÉDIA ÉTIQUETÉE : « Image : … », « Voix : … », « Vidéo : … » —
+ * format courant de test où la demande COMMENCE par le type de média suivi
+ * de deux-points (aucun verbe de création). Détection déterministe serrée
+ * : l'étiquette doit être le PREMIER mot du message.
+ */
+export function intentionMédiaÉtiquetée(message: string): "image" | "voix" | "video" | null {
+  const m = /^\s*(image|photo|photor[eé]aliste|voix|voice|vid[ée]o|video)\s*[:：]/iu.exec(message);
+  if (!m?.[1]) return null;
+  const étiquette = m[1].toLowerCase();
+  if (/voix|voice/.test(étiquette)) return "voix";
+  if (/vid/.test(étiquette)) return "video";
+  return "image";
+}
+
 export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   const phrase = extrairePhraseÀDire(ctx.message);
