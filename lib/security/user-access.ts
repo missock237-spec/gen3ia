@@ -211,6 +211,12 @@ const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   // protectRoute). L'INVENTAIRE ADMIN (/api/ads/campaigns) reste
   // RESTREINT (voir RESTRICTED_API_PREFIXES).
   ["/api/ads", "parametres"],
+  // MÉDIA WEBGPU (image photoréaliste, voix humaine, vidéo réaliste) :
+  // /api/media/webgpu-complete (persistance d'un média généré sur le GPU
+  // de l'utilisateur) et /api/media/webgpu-fallback (repli serveur —
+  // professeur temporaire / moteurs neuronaux). Chaque route protège
+  // elle-même (protectRoute, propriétaire forcé, plafond 25 Mo).
+  ["/api/media", "chat"],
 ];
 
 /* ------------------------------------------------------------------ */
