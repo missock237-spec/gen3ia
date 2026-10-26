@@ -144,6 +144,27 @@ jobs:
           done
           [ "$ok" = "1" ] || { echo "::error::Transfert SCP impossible après 6 tentatives espacées — le build EST publié sur la release cd-latest : déployer en mode pull (curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash) ou rétablir le SSH (docs/exploitation/ssh-bloque-runbook.md)"; exit 1; }
 
+      # PROFESSEUR MÉDIA TEMPORAIRE (loi CONTRAINTE-ONDES) : la config du
+      # professeur externe (image photoréaliste, voix humaine, vidéo) est
+      # déposée dans le répertoire applicatif (/opt/gen3ia/.z-ai-config,
+      # chmod 600) via SSH — JAMAIS dans la release publique cd-latest ni
+      # dans le dépôt. Non bloquant : sans SSH, le professeur est simplement
+      # absent du VPS et les moteurs neuronaux locaux prennent la main
+      # (compositions abstraites honnêtes).
+      - name: Installer la config du professeur média (via SSH, jamais en release)
+        run: |
+          printf '%s' "$ZAI_CONFIG_JSON_B64" | base64 -d > /tmp/zai-config.json
+          if ssh -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+               "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+               "cat > /opt/gen3ia/.z-ai-config && chmod 600 /opt/gen3ia/.z-ai-config && echo OK" < /tmp/zai-config.json; then
+            echo "Config professeur installée sur le VPS (/opt/gen3ia/.z-ai-config, chmod 600)."
+          else
+            echo "⚠️ SSH indisponible — config professeur non installée (repli neuronal honnête sur le VPS). Non bloquant."
+          fi
+          rm -f /tmp/zai-config.json
+        env:
+          ZAI_CONFIG_JSON_B64: ${{ secrets.ZAI_CONFIG_JSON_B64 }}
+
       - name: Swap atomique + health check (rollback auto, retry raisonné)
         run: |
           ok=0

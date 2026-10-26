@@ -17,6 +17,12 @@ import { genererVisuelScene } from "./generation/visual-scene";
 import { genererAudioScene, sceneSonore } from "./generation/audio-composition";
 import { genererVideoScene } from "./generation/video-storyboard";
 import { lexiqueMultimodal } from "./generation/lexique-serveur";
+import {
+  professeurDisponible,
+  professeurImage,
+  professeurVoix,
+  professeurVideo,
+} from "./professeur-media";
 import type { NeuralSnapshot } from "./generation/snapshot";
 import { persistGeneratedBuffer } from "@/lib/media/persist";
 import { headR2Object, isR2Configured, createR2DownloadUrl } from "@/lib/storage/r2";
@@ -54,7 +60,7 @@ export interface MediaNeuralGenere {
   /** "r2" = archivage permanent réussi ; "inline" = repli data URI. */
   storage: "r2" | "inline";
   /** Type MIME du contenu généré. */
-  mime: "image/png" | "image/svg+xml" | "audio/wav";
+  mime: "image/png" | "image/jpeg" | "image/svg+xml" | "audio/wav" | "video/mp4";
   /** Métadonnées réelles de génération (traçabilité honnête). */
   meta: Record<string, unknown>;
   /** Identifiant de génération (idempotence côté journalisation). */
@@ -274,6 +280,33 @@ export async function genererVisuelNeuralEtPersister(params: {
   prompt: string;
   ratio?: string;
 }): Promise<MediaNeuralGenere> {
+  // PROFESSEUR TEMPORAIRE (loi CONTRAINTE-ONDES) : médias photoréalistes
+  // RÉELS tant que le signal d'onde gen3 n'a pas été distillé. Échec =
+  // repli silencieux sur la composition neuronale abstraite (honnête).
+  if (professeurDisponible()) {
+    try {
+      const œuvre = await professeurImage({ prompt: params.prompt, ratio: params.ratio });
+      const cle = cleCacheMedia(params.userId, "visuel", `prof|${œuvre.meta.moteur}|${params.prompt}|${params.ratio ?? "1:1"}`, œuvre.mime === "image/png" ? "png" : "jpg");
+      const persiste = await persistGeneratedBuffer({
+        userId: params.userId,
+        buffer: œuvre.buffer,
+        contentType: œuvre.mime,
+        prefix: "professeur-media",
+        fixedKey: cle,
+        fallbackUrl: `data:${œuvre.mime};base64,${œuvre.buffer.toString("base64")}`,
+      });
+      return {
+        url: persiste.url,
+        storage: persiste.storage === "r2" ? "r2" : "inline",
+        mime: œuvre.mime as MediaNeuralGenere["mime"],
+        meta: { ...œuvre.meta, prompt: params.prompt, ratio: params.ratio ?? "1:1", cache: "professeur" },
+        generationId: `visuel-${randomUUID()}`,
+        ...(persiste.storagePath ? { cleStockage: persiste.storagePath } : {}),
+      };
+    } catch (erreur) {
+      console.warn("[media-neural] professeur image indisponible — composition neuronale :", erreur instanceof Error ? erreur.message : String(erreur));
+    }
+  }
   const { reseau } = getNeuralRuntime();
   const prompt = params.prompt.trim().slice(0, 2000) || "Fractale neuronale abstraite";
   const ratio = ratioSur(params.ratio);
@@ -359,6 +392,32 @@ export async function genererAudioNeuralEtPersister(params: {
   dureeSecondes?: number;
   frequenceEchantillonnage?: number;
 }): Promise<MediaNeuralGenere> {
+  // PROFESSEUR TEMPORAIRE : VOIX HUMAINE RÉELLE (TTS) tant que le signal
+  // d'onde gen3 n'a pas été distillé. Échec = nappe neuronale honnête.
+  if (professeurDisponible()) {
+    try {
+      const œuvre = await professeurVoix({ texte: params.prompt });
+      const cle = cleCacheMedia(params.userId, "audio", `prof|${œuvre.meta.moteur}|${params.prompt}`, "wav");
+      const persiste = await persistGeneratedBuffer({
+        userId: params.userId,
+        buffer: œuvre.buffer,
+        contentType: œuvre.mime,
+        prefix: "professeur-media",
+        fixedKey: cle,
+        fallbackUrl: `data:${œuvre.mime};base64,${œuvre.buffer.toString("base64")}`,
+      });
+      return {
+        url: persiste.url,
+        storage: persiste.storage === "r2" ? "r2" : "inline",
+        mime: œuvre.mime as MediaNeuralGenere["mime"],
+        meta: { ...œuvre.meta, prompt: params.prompt, cache: "professeur" },
+        generationId: `audio-${randomUUID()}`,
+        ...(persiste.storagePath ? { cleStockage: persiste.storagePath } : {}),
+      };
+    } catch (erreur) {
+      console.warn("[media-neural] professeur voix indisponible — nappe neuronale :", erreur instanceof Error ? erreur.message : String(erreur));
+    }
+  }
   const { reseau } = getNeuralRuntime();
   const prompt = params.prompt.trim().slice(0, 2000) || "Signal d'harmonique pure et pulsation fluide";
   const duree = params.dureeSecondes ?? 3;
@@ -434,6 +493,35 @@ export async function genererVideoNeuralEtPersister(params: {
   prompt: string;
   dureeSecondes?: number;
 }): Promise<MediaNeuralGenere> {
+  // PROFESSEUR TEMPORAIRE : VIDÉO RÉALISTE RÉELLE tant que le signal
+  // d'onde gen3 n'a pas été distillé. Échec = storyboard neuronal honnête.
+  if (professeurDisponible()) {
+    try {
+      const œuvre = await professeurVideo({ prompt: params.prompt, duréeSecondes: params.dureeSecondes });
+      const cle = cleCacheMedia(params.userId, "video", `prof|${œuvre.meta.moteur}|${params.prompt}|${params.dureeSecondes ?? 5}`, "mp4");
+      const persiste = await persistGeneratedBuffer({
+        userId: params.userId,
+        buffer: œuvre.buffer,
+        contentType: œuvre.mime,
+        prefix: "professeur-media",
+        fixedKey: cle,
+        fallbackUrl: "",
+      });
+      if (persiste.storage !== "r2") {
+        throw new Error("Stockage R2 indisponible — vidéo trop volumineuse pour l'inline.");
+      }
+      return {
+        url: persiste.url,
+        storage: "r2",
+        mime: "video/mp4",
+        meta: { ...œuvre.meta, prompt: params.prompt, cache: "professeur" },
+        generationId: `video-${randomUUID()}`,
+        ...(persiste.storagePath ? { cleStockage: persiste.storagePath } : {}),
+      };
+    } catch (erreur) {
+      console.warn("[media-neural] professeur vidéo indisponible — storyboard neuronal :", erreur instanceof Error ? erreur.message : String(erreur));
+    }
+  }
   const { reseau } = getNeuralRuntime();
   const prompt = params.prompt.trim().slice(0, 2000) || "Transition fluide de structures neuronales";
   const duree = params.dureeSecondes ?? 4;

@@ -3,16 +3,25 @@ import { protectRoute } from "@/lib/security/route-guard";
 import { appendMessage } from "@/lib/chat/repository";
 import { createArtifact } from "@/lib/domain/artifacts/repository";
 import { produceConversationImage } from "@/lib/domain/conversations/engine-chat";
+import {
+  genererAudioNeuralEtPersister,
+  genererVideoNeuralEtPersister,
+} from "@/lib/neural/media-service";
 
 export const runtime = "nodejs";
+/** La vidéo professeur (tâche asynchrone + sondage) peut prendre plusieurs
+ *  minutes — la route doit vivre au-delà du proxy par défaut. */
+export const maxDuration = 300;
 
 /**
  * /api/media/webgpu-fallback — repli HONNÊTE quand le navigateur ne peut
  * pas exécuter la génération WebGPU (pas de WebGPU, VRAM insuffisante,
  * échec de téléchargement…). Le serveur reprend le tour avec ses propres
- * moteurs : image → moteur neuronal abstrait (SD externe supprimé du
- * projet — composition synaptique honnête) ; voix/vidéo → message
- * explicatif sans faux succès.
+ * moteurs : image → photoréalisme du PROFESSEUR TEMPORAIRE (loi
+ * CONTRAINTE-ONDES — échafaudage supprimable) puis composition neuronale
+ * abstraite ; voix → voix humaine réelle du professeur ; vidéo → vidéo
+ * réaliste du professeur. Sans professeur configuré, moteurs neuronaux
+ * locaux + explication honnête, jamais de faux succès.
  */
 
 export async function POST(request: NextRequest) {
@@ -66,17 +75,102 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message, artifact });
     }
 
-    // Voix / vidéo : pas de repli trompeur — explication + alternatives réelles.
+    // Voix / vidéo : médias RÉELS du professeur temporaire (loi
+    // CONTRAINTE-ONDES) ; sans professeur, explication honnête.
+    if (kind === "voice" && prompt) {
+      try {
+        const audio = await genererAudioNeuralEtPersister({ userId, prompt });
+        const prof = audio.meta?.echafaudage === true;
+        const message = await appendMessage({
+          conversationId,
+          userId,
+          role: "assistant",
+          content:
+            (prof
+              ? "Voix humaine réelle générée par mon professeur média temporaire (échafaudage — le signal d'onde gen3 prendra le relais après distillation). "
+              : "Votre navigateur ne peut pas exécuter la synthèse WebGPU — voici la nappe sonore neuronale (composition abstraite, honnête). ") +
+            `Écoutez ici : ${audio.url}`,
+          provider: prof ? "professeur-temporaire" : "gen3-snn",
+          model: String(audio.meta?.moteur ?? "gen3-snn-audio"),
+          generationStatus: "complete",
+        });
+        const artifact = await createArtifact({
+          userId,
+          conversationId,
+          type: "audio",
+          title: prompt.slice(0, 80),
+          url: audio.url,
+          storagePath: audio.cleStockage,
+          note: prof ? "Voix du professeur temporaire (CONTRAINTE-ONDES)" : "Nappe neuronale",
+        });
+        return NextResponse.json({ success: true, message, artifact });
+      } catch (erreur) {
+        const message = await appendMessage({
+          conversationId,
+          userId,
+          role: "assistant",
+          content:
+            `La synthèse vocale humaine a échoué (${erreur instanceof Error ? erreur.message.slice(0, 140) : "erreur"}). ` +
+            "Alternatives : Chrome/Edge récent côté client (WebGPU), ou réessayez dans un instant.",
+          provider: "gen3",
+          model: "gen3-fallback",
+          generationStatus: "complete",
+        });
+        return NextResponse.json({ success: true, message });
+      }
+    }
+
+    if (kind === "video" && prompt) {
+      try {
+        const video = await genererVideoNeuralEtPersister({ userId, prompt, dureeSecondes: body.durationSeconds ?? 5 });
+        const prof = video.meta?.echafaudage === true;
+        const message = await appendMessage({
+          conversationId,
+          userId,
+          role: "assistant",
+          content:
+            (prof
+              ? "Vidéo réaliste générée par mon professeur média temporaire (échafaudage — le signal d'onde gen3 prendra le relais après distillation). "
+              : "Votre navigateur ne peut pas calculer les keyframes WebGPU — voici l'animation neuronale abstraite (honnête). ") +
+            `Regardez ici : ${video.url}`,
+          provider: prof ? "professeur-temporaire" : "gen3-snn",
+          model: String(video.meta?.moteur ?? "gen3-snn-video"),
+          generationStatus: "complete",
+        });
+        const artifact = await createArtifact({
+          userId,
+          conversationId,
+          type: "video",
+          title: prompt.slice(0, 80),
+          url: video.url,
+          storagePath: video.cleStockage,
+          note: prof ? "Vidéo du professeur temporaire (CONTRAINTE-ONDES)" : "Animation neuronale",
+        });
+        return NextResponse.json({ success: true, message, artifact });
+      } catch (erreur) {
+        const message = await appendMessage({
+          conversationId,
+          userId,
+          role: "assistant",
+          content:
+            `La génération vidéo a échoué (${erreur instanceof Error ? erreur.message.slice(0, 140) : "erreur"}). ` +
+            "Alternatives : Chrome/Edge récent côté client, ou la production vidéo autopilote du serveur (atelier vidéo).",
+          provider: "gen3",
+          model: "gen3-fallback",
+          generationStatus: "complete",
+        });
+        return NextResponse.json({ success: true, message });
+      }
+    }
+
+    // Repli générique (kind inconnu) : explication honnête, jamais de faux succès.
     const message = await appendMessage({
       conversationId,
       userId,
       role: "assistant",
       content:
-        kind === "voice"
-          ? `La synthèse vocale humaine s'exécute dans votre navigateur (WebGPU) — or il est indisponible ici (${raison}). ` +
-            "Alternatives : ouvrez gen3ia.online dans Chrome/Edge récent, ou utilisez la lecture native du navigateur (haut-parleur du message)."
-          : `La vidéo photoréaliste exige WebGPU pour les keyframes (${raison}). ` +
-            "Alternatives : Chrome/Edge récent côté client, ou la production vidéo autopilote du serveur (pipeline lib/video, moteur neuronal abstrait).",
+        `Génération WebGPU indisponible (${raison}). ` +
+        "Alternatives : Chrome/Edge récent côté client, ou mes moteurs serveur (image, voix, vidéo) — reformulez votre demande.",
       provider: "gen3",
       model: "gen3-fallback",
       generationStatus: "complete",

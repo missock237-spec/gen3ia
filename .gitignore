@@ -46,6 +46,9 @@ ui-debug.log
 *.swp
 .env*
 !services/orchestrator-24h/.env.example
+# Config du professeur média temporaire (loi CONTRAINTE-ONDES) — JAMAIS
+# versionnée : elle contient les identifiants du professeur externe.
+.z-ai-config
 scripts/push_github.sh
 firestore-debug.log
 

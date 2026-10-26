@@ -79,6 +79,7 @@ export const voiceSpeakTool: ToolDefinition<
     });
 
     const estPermanent = rendu.storage === "r2" && typeof rendu.cleStockage === "string";
+    const estProfesseur = rendu.meta?.echafaudage === true;
     return {
       // Contrat artefact : `url` = clé permanente résolvable (Task 113).
       ...(estPermanent ? { url: rendu.cleStockage } : {}),
@@ -89,9 +90,10 @@ export const voiceSpeakTool: ToolDefinition<
       mimeType: "audio/wav",
       dureeSecondes: typeof rendu.meta.duree === "number" ? rendu.meta.duree : 0,
       moteur: String(rendu.meta.moteur ?? "gen3-snn-audio-v1"),
-      note:
-        "Audio synthétisé localement par le moteur neuronal Gen3 (composition harmonique dérivée du texte). " +
-        "Ce rendu n'est pas une parole humaine naturelle — le moteur local n'inclut pas de synthèse vocale parlée.",
+      note: estProfesseur
+        ? "Voix humaine réelle générée par le professeur média temporaire (loi CONTRAINTE-ONDES — échafaudage supprimable ; le signal d'onde gen3 prendra le relais après distillation)."
+        : "Audio synthétisé localement par le moteur neuronal Gen3 (composition harmonique dérivée du texte). " +
+          "Ce rendu n'est pas une parole humaine naturelle — le moteur local n'inclut pas de synthèse vocale parlée.",
     };
   },
 };

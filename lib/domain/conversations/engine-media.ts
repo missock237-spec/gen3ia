@@ -15,6 +15,22 @@ import type { TurnBase } from "./engine-chat";
 import type { ConversationTurnResult } from "./engine-turn";
 import { randomUUID } from "node:crypto";
 
+/**
+ * VIDÉO COURTE RÉALISTE (loi CONTRAINTE-ONDES) : une demande de vidéo
+ * « réaliste » sans durée longue est servie par le circuit média direct
+ * (essaim → GPU local → repli serveur → professeur temporaire) plutôt que
+ * par la production autopilotée (storyboard complet, pensée pour les
+ * formats longs). Détection déterministe, zéro LLM.
+ */
+export function estVideoCourteRéaliste(message: string): boolean {
+  if (!/\b(r[eé]aliste|realistic|photor[eé]aliste|photorealistic)\b/i.test(message)) return false;
+  // Longueur longue → production autopilotée (storyboard, chapitres…).
+  if (/\b(dur[eé]e|minutes?|mins?|long|m[ée]trage|documentaire|film complet)\b.*\b(dur[eé]e|minutes?|mins?|long|m[ée]trage|documentaire)\b/i.test(message)) return false;
+  if (/\b([2-9]\d|\d{3,})\s*(s|sec|secondes|minutes?|mins?)\b/i.test(message)) return false;
+  if (/\b(\d{2,})\s*(s|sec|secondes)\b/i.test(message) && !/\b([1-9]|10)\s*(s|sec|secondes)\b/i.test(message)) return false;
+  return true;
+}
+
 /** Repo public des modèles média WebGPU (publié par le notebook Colab
  *  training/colab/gen3ia_gpu_media_training.ipynb — SD photoréalisme + Kokoro). */
 const WEBGPU_MEDIA_REPO = "Kings237/gen3ia-media-engine";
@@ -108,6 +124,76 @@ const PHOTOREAL_PATTERN =
 
 export function looksLikePhotorealRequest(message: string): boolean {
   return PHOTOREAL_PATTERN.test(message);
+}
+
+/**
+ * VOIX HUMAINE DEMANDÉE (loi CONTRAINTE-ONDES) : « génère une voix qui
+ * dit X », « fais une voix humaine disant X »… Détection déterministe
+ * VOLONTAIREMENT SERRÉE : il faut le mot VOIX + un verbe de création ou
+ * « qui dit/disant » — jamais les agents téléphoniques (« standardiste »)
+ * ni la lecture vocale native de l'interface.
+ */
+export function looksLikeVoixHumaineRequest(message: string): boolean {
+  const motVoix = /\b(voix humaine|voix\s+(?:de|qui|d'un|d'une)|synth[eè]se vocale|voice ?over|voix off)\b/iu.test(message)
+    || /\bvoix\b/iu.test(message) && /\b(g[eé]n[eè]re|g[eé]n[eé]ration|fais|fait|cr[ée]\p{L}*|produi\p{L}*|synth[ée]tis\p{L}*|enregistre|dire|dit|disant)\b/iu.test(message);
+  if (!motVoix) return false;
+  // Exclusions strictes : agents téléphoniques / standard / cloches…
+  if (/\b(standardiste|standard t[eé]l[eé]phonique|agent (?:t[eé]l[eé]phonique|vocal)|r[eé]pondeur)\b/i.test(message)) return false;
+  return true;
+}
+
+/**
+ * Phrase À DIRE extraite d'une demande de voix : la citation entre «…»,
+ * «…», “…” ou "…" est prioritaire (l'instruction n'est pas lue à voix
+ * haute). Sans citation, la demande entière est retournée.
+ */
+export function extrairePhraseÀDire(message: string): string {
+  // Doubles chevrons ASCII «<<…>>» (usage courant au clavier).
+  const chevrons = /<<\s*([^<>]{2,600}?)\s*>>/u.exec(message);
+  if (chevrons?.[1]) return chevrons[1].trim();
+  // Guillemets français «…»
+  const guillemets = /«\s*([^«»]{2,600}?)\s*»/u.exec(message);
+  if (guillemets?.[1]) return guillemets[1].trim();
+  // Guillemets droits / typographiques "…" “…”
+  const droits = /["“”]\s*([^"“”]{2,600}?)\s*["“”]/u.exec(message);
+  if (droits?.[1]) return droits[1].trim();
+  return message.trim();
+}
+
+export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  const phrase = extrairePhraseÀDire(ctx.message);
+  const jobId = randomUUID();
+  await onEvent({
+    type: "webgpu_media",
+    jobId,
+    conversationId: ctx.conversationId,
+    kind: "voice",
+    prompt: phrase.slice(0, 2000),
+    engine: { repo: WEBGPU_MEDIA_REPO, manifest: "MANIFEST.json" },
+  });
+  const messageVoix = await appendMessage({
+    conversationId: ctx.conversationId,
+    userId: ctx.userId,
+    role: "assistant",
+    content:
+      "Synthèse de voix humaine lancée : votre requête part vers l'IA centrale de l'essaim gen3, " +
+      "puis vers les GPU disponibles. Si aucun GPU du maillage ne peut calculer, mon professeur média " +
+      "temporaire synthétise la voix réelle et je vous la livre dans ce fil (échafaudage — loi " +
+      "CONTRAINTE-ONDES : le signal d'onde gen3 prendra le relais après distillation).",
+    provider: "gen3-webgpu",
+    model: "gen3-media-engine-v1",
+    generationStatus: "complete",
+  });
+  await onEvent({ type: "message_complete", message: messageVoix });
+  return {
+    conversationId: ctx.conversationId,
+    userMessage: ctx.userMessage,
+    assistantMessage: messageVoix,
+    artifacts: [],
+    approvals: [],
+    intent: { mode: "chat", understanding: "Demande de voix humaine via circuit média direct." },
+  };
 }
 
 export async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
@@ -244,6 +330,47 @@ export async function runVideoTurn(
 ): Promise<ConversationTurnResult> {
   const promptText = options.effectivePrompt?.trim() || ctx.message;
   const onEvent = safeEmitter(ctx.onEvent);
+
+  // VIDÉO COURTE RÉALISTE → circuit média direct (essaim → GPU local →
+  // repli serveur → professeur temporaire). Message honnête + événement
+  // webgpu_media kind=video : le hook client enchaîne la cascade réelle.
+  if (estVideoCourteRéaliste(promptText)) {
+    const jobId = randomUUID();
+    await onEvent({
+      type: "webgpu_media",
+      jobId,
+      conversationId: ctx.conversationId,
+      kind: "video",
+      prompt: promptText.trim().slice(0, 2000),
+      ratio: "16:9",
+      durationSeconds: 5,
+      engine: { repo: WEBGPU_MEDIA_REPO, manifest: "MANIFEST.json" },
+    });
+    const messageDirect = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content:
+        "Génération vidéo réaliste lancée : votre requête part vers l'IA centrale de l'essaim gen3, " +
+        "puis vers les GPU disponibles (le vôtre en premier). Si aucun GPU du maillage ne peut calculer, " +
+        "mon professeur média temporaire produit la vidéo réelle et je vous la livre dans ce fil " +
+        "(échafaudage — loi CONTRAINTE-ONDES : le signal d'onde gen3 prendra le relais après distillation). " +
+        "Comptez 1 à 4 minutes.",
+      provider: "gen3-webgpu",
+      model: "gen3-media-engine-v1",
+      generationStatus: "complete",
+    });
+    await onEvent({ type: "message_complete", message: messageDirect });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage: messageDirect,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Vidéo courte réaliste via circuit média direct." },
+    };
+  }
+
   try {
     const { createVideoProductionJob } = await import("@/lib/video/production-queue");
     // Task 106-a — production OPTIMALE : durée, cadrage, plateforme et
