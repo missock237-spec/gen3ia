@@ -47,6 +47,11 @@ function chargerConfigurationProfesseur(): ConfigurationProfesseur | null {
     () => lireFichier("/etc/.z-ai-config"),
     () => lireFichier(`${process.env.HOME ?? "/root"}/.z-ai-config`),
     () => lireFichier(`${process.cwd()}/.z-ai-config`),
+    // VPS de production : le cwd de PM2 peut différer du répertoire
+    // applicatif (le workflow CD y dépose la config via SSH). Chemin
+    // explicite + racine passée par variable d'environnement.
+    () => lireFichier("/opt/gen3ia/.z-ai-config"),
+    () => (process.env.GEN3IA_ROOT ? lireFichier(`${process.env.GEN3IA_ROOT}/.z-ai-config`) : null),
   ];
   for (const lire of candidats) {
     const brut = lire();
