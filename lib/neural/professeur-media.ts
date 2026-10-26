@@ -291,27 +291,38 @@ export async function professeurVideo(params: {
   const taille = TAILLES_VIDEO[params.ratio ?? "16:9"] ?? "1280x720";
   const durée = Math.min(10, Math.max(5, Math.round(params.duréeSecondes ?? 5)));
 
-  const création = await fetchAvecDélai(
-    `${config.baseUrl}/video/generation`,
-    {
-      method: "POST",
-      headers: enTetes(config),
-      body: JSON.stringify({
-        prompt,
-        quality: "speed",
-        with_audio: true,
-        size: taille,
-        fps: 30,
-        duration: durée,
-      }),
-    },
-    55_000,
-  );
-  if (!création.ok) {
-    throw new Error(`Professeur vidéo ${création.status}: ${(await création.text()).slice(0, 200)}`);
+  // Création de tâche avec re-tentatives (429 « Too many requests » du
+  // professeur : quota concurrent — on espace au lieu d'échouer net).
+  let tâche: TâcheVidéo | null = null;
+  for (let essai = 0; essai < 3; essai += 1) {
+    const création = await fetchAvecDélai(
+      `${config.baseUrl}/video/generation`,
+      {
+        method: "POST",
+        headers: enTetes(config),
+        body: JSON.stringify({
+          prompt,
+          quality: "speed",
+          with_audio: true,
+          size: taille,
+          fps: 30,
+          duration: durée,
+        }),
+      },
+      55_000,
+    );
+    if (création.ok) {
+      tâche = (await création.json()) as TâcheVidéo;
+      break;
+    }
+    const corps = (await création.text()).slice(0, 200);
+    if (création.status === 429 && essai < 2) {
+      await new Promise((r) => setTimeout(r, 45_000 * (essai + 1))); // 45 s puis 90 s
+      continue;
+    }
+    throw new Error(`Professeur vidéo ${création.status}: ${corps}`);
   }
-  const tâche = (await création.json()) as TâcheVidéo;
-  if (!tâche.id) throw new Error("Professeur vidéo : identifiant de tâche absent.");
+  if (!tâche?.id) throw new Error("Professeur vidéo : identifiant de tâche absent.");
 
   const début = Date.now();
   const délaiMax = params.délaiMaxMs ?? 240_000;
