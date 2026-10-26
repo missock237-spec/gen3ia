@@ -47,6 +47,9 @@ export const BRAIN_BAK_PATH = `${BRAIN_PATH}.bak`;
  */
 let fileDeSauvegarde: Promise<boolean> = Promise.resolve(true);
 
+/** Durée au-delà de laquelle un .tmp est un orphelin (process tué en vol). */
+const TMP_ORPHELIN_MS = 5_000;
+
 /** Version du format de persistance. */
 export const BRAIN_VERSION = 2;
 
@@ -141,6 +144,10 @@ async function ecrireCerveauSansCourse(
         }
       }
       await fsp.rename(tmp, BRAIN_PATH);
+      // Auto-guérison : écrème les orphelins des process tués entre
+      // writeFile et rename (worker terminé brutalement, OOM-kill…) —
+      // dans la chaîne sérialisée, donc sans course avec la purge.
+      await écrémerTmpOrphelins();
     } catch (erreur: unknown) {
       // Nettoyage du .tmp orphelin (jamais de déchet qui s'accumule).
       try {
@@ -157,6 +164,35 @@ async function ecrireCerveauSansCourse(
       erreur instanceof Error ? erreur.message : String(erreur),
     );
     return false;
+  }
+}
+
+/**
+ * ÉCRÉMAGE DES .TMP ORPHELINS — un process tué entre writeFile et rename
+ * laisse un .tmp derrière lui. Chaque sauvegarde écrème best-effort les
+ * .tmp périmés (> TMP_ORPHELIN_MS) du répertoire : jamais de déchet qui
+ * s'accumule, sans jamais toucher à une écriture EN COURS (fraîche).
+ */
+async function écrémerTmpOrphelins(): Promise<void> {
+  try {
+    const dossier = dirname(BRAIN_PATH);
+    const noms = await fsp.readdir(dossier);
+    const limite = Date.now() - TMP_ORPHELIN_MS;
+    await Promise.all(
+      noms
+        .filter((n) => n.endsWith(".tmp"))
+        .map(async (n) => {
+          const chemin = join(dossier, n);
+          try {
+            const stat = await fsp.stat(chemin);
+            if (stat.mtimeMs < limite) await fsp.unlink(chemin);
+          } catch {
+            /* parti entre-temps : rien à faire */
+          }
+        }),
+    );
+  } catch {
+    /* répertoire absent ou illisible : rien à écrémer */
   }
 }
 

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -29,7 +29,20 @@ function reseauTest(seed: number): ReseauNeuronalGen3 {
 function fichiersTmpResiduels(): string[] {
   const dir = BRAIN_PATH.replace(/\/[^/]+$/, "");
   if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter((f) => f.includes(".tmp"));
+  // HONNÊTETÉ DU TEST : en suite complète, d'autres workers vitest
+  // (processus séparés) peuvent avoir une écriture EN VOL au moment du
+  // listing — un .tmp FRAICHI n'est pas un orphelin. La garantie testée
+  // (et la garantie production, mono-processus PM2) : aucun .tmp PÉRIMÉ
+  // ne traîne (l'écrémage de persistence.ts purge les orphelins > 5 s).
+  const limite = Date.now() - 5_000;
+  return readdirSync(dir).filter((f) => {
+    if (!f.includes(".tmp")) return false;
+    try {
+      return statSync(join(dir, f)).mtimeMs < limite;
+    } catch {
+      return true; // disparu entre-temps : compté comme résidu aïeul parti
+    }
+  });
 }
 
 afterEach(() => {

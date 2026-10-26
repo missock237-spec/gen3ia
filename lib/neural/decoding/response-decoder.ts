@@ -188,15 +188,24 @@ export function decodeResponse(
 ): NeuralDecodedResponse {
   const seuil = opts.seuilIntention ?? 0.5;
 
-  // Pool gagnant : score maximal strictement au-dessus des autres (premier
-  // en cas d'égalité parfaite — ordre d'insertion déterministe).
-  let intentionGagnante: string | null = null;
+  // Pool gagnant : score maximal strictement au-dessus des autres. En cas
+  // d'ÉGALITÉ PARFAITE au sommet (cerveau neuf saturé : plusieurs pools à
+  // 1.0 — cf. dump d'interrogatoire), l'ordre d'insertion n'est pas un
+  // signal : privilégier le pool de DOMAINE (ancre conversationnelle
+  // reconnue) ; sans domaine au sommet, retomber sur l'intention générale
+  // (honnêteté : ne jamais forger une décision d'action sans signal appris).
   let meilleurScore = 0;
-  for (const [pool, score] of Object.entries(resonances)) {
-    if (score > meilleurScore) {
-      meilleurScore = score;
-      intentionGagnante = pool;
-    }
+  for (const score of Object.values(resonances)) {
+    if (score > meilleurScore) meilleurScore = score;
+  }
+  const auSommet = Object.entries(resonances)
+    .filter(([, score]) => score === meilleurScore)
+    .map(([pool]) => pool);
+  let intentionGagnante: string | null = null;
+  if (auSommet.length === 1) {
+    intentionGagnante = auSommet[0];
+  } else {
+    intentionGagnante = auSommet.find((pool) => pool.startsWith("DOM_")) ?? null;
   }
 
   const donnees: DonneesTemplate = {

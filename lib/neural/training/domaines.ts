@@ -113,7 +113,7 @@ export const DOMAINES_GEN3: readonly DomaineGen3[] = [
     nomFr: "clips musicaux",
     nomEn: "music clips",
     pool: POOL_DOM_CLIPS_MUSICAUX,
-    motsCles: ["musique", "clip", "refrain", "bpm", "genre", "music"],
+    motsCles: ["musique", "clip", "refrain", "bpm", "genre", "music", "musical", "musicale", "compose"],
     taches: ["concept_clip", "structure_musicale", "ecriture_paroles"],
   },
   {
@@ -145,7 +145,7 @@ export const DOMAINES_GEN3: readonly DomaineGen3[] = [
     nomFr: "sciences humaines",
     nomEn: "humanities",
     pool: POOL_DOM_SCIENCES_HUMAINES,
-    motsCles: ["histoire", "sociologie", "philosophie", "culture", "societe"],
+    motsCles: ["histoire", "sociologie", "philosophie", "culture", "societe", "sociolinguistique", "linguistique", "psychologie", "anthropologie"],
     taches: ["analyse_sh", "pedagogie_sh"],
   },
   {
@@ -161,7 +161,7 @@ export const DOMAINES_GEN3: readonly DomaineGen3[] = [
     nomFr: "cybersécurité",
     nomEn: "cybersecurity",
     pool: POOL_DOM_CYBERSECURITE,
-    motsCles: ["securite", "cyber", "incident", "vulnerabilite", "patch"],
+    motsCles: ["securite", "cyber", "incident", "vulnerabilite", "patch", "securiser", "chiffrement", "pare-feu", "brute"],
     taches: ["reponse_incident", "hygiene_numerique"],
   },
   {
@@ -177,7 +177,7 @@ export const DOMAINES_GEN3: readonly DomaineGen3[] = [
     nomFr: "multimodal",
     nomEn: "multimodal",
     pool: POOL_DOM_MULTIMODAL,
-    motsCles: ["multimodal", "ocr", "alignement", "modalite", "pipeline"],
+    motsCles: ["multimodal", "ocr", "alignement", "modalite", "pipeline", "multimodale", "multimodaux", "combiner", "combine"],
     taches: ["alignement_multimodal", "pipeline_multimodal"],
   },
   {
