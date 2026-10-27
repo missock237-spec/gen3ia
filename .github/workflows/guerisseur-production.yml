@@ -57,11 +57,14 @@ jobs:
           echo "main  = ${SHA_MAIN:-inconnu}"
           echo "prod  = ${SHA_PROD}"
           if [ -z "$SHA_MAIN" ]; then
-            echo "besoin=false"   # API GitHub muette : ne rien décider ce tick
+            echo "besoin=false" >> "$GITHUB_OUTPUT"   # API muette : ne rien décider ce tick
+            echo "besoin=false (API GitHub injoignable)"
           elif [ "$SHA_PROD" = "$SHA_MAIN" ]; then
-            echo "besoin=false"   # production alignée — guérisseur passif
+            echo "besoin=false" >> "$GITHUB_OUTPUT"   # production alignée — passif
+            echo "besoin=false (production alignée)"
           else
-            echo "besoin=true"    # en retard (ou version.json injoignable)
+            echo "besoin=true" >> "$GITHUB_OUTPUT"    # en retard (ou version.json injoignable)
+            echo "besoin=true (production en retard)"
           fi
           echo "sha_main=$SHA_MAIN" >> "$GITHUB_OUTPUT"
           echo "sha_prod=$SHA_PROD" >> "$GITHUB_OUTPUT"
