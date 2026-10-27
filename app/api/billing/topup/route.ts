@@ -1,4 +1,5 @@
 import { verifyFirebaseRequest } from "@/lib/auth/firebase";
+import { z } from "zod";
 import { isPaymentProviderActive } from "@/lib/billing/payment-provider";
 import {
   createChariowTopupCheckout,
@@ -16,6 +17,26 @@ function appOrigin(request: Request): string {
   if (configured) return configured.replace(/\/+$/, "");
   return new URL(request.url).origin;
 }
+
+// Validation Zod (durcissement audit 2026-10-28) : ces champs partent vers
+// l'API Chariow — on borne le format AVANT l'appel (garbage in, quota API
+// gaspillé, erreurs opaques côté passerelle). Aucune perte de fonctionnalité.
+const SchemaRecharge = z
+  .object({
+    phone: z
+      .object({
+        number: z
+          .string()
+          .trim()
+          .regex(/^[+0-9][0-9 ().-]{5,25}$/, "Numéro de téléphone invalide."),
+        country_code: z
+          .string()
+          .trim()
+          .regex(/^[A-Za-z0-9+]{1,8}$/, "Code pays invalide."),
+      })
+      .optional(),
+  })
+  .strict();
 
 /**
  * POST /api/billing/topup
@@ -62,6 +83,16 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
+    const lecture = SchemaRecharge.safeParse(body);
+    if (!lecture.success) {
+      return Response.json(
+        {
+          error: "Données de recharge invalides : " +
+            (lecture.error.issues[0]?.message ?? "format inattendu."),
+        },
+        { status: 422 },
+      );
+    }
     const productId = getChariowTopupProductId();
 
     if (!productId) {
@@ -74,8 +105,8 @@ export async function POST(request: Request) {
       return Response.json({ success: true, mode: "store", checkoutUrl: storeUrl });
     }
 
-    const phoneNumber = String(body?.phone?.number ?? "").trim();
-    const countryCode = String(body?.phone?.country_code ?? "").trim();
+    const phoneNumber = String(lecture.data?.phone?.number ?? "").trim();
+    const countryCode = String(lecture.data?.phone?.country_code ?? "").trim();
     if (!phoneNumber || !countryCode) {
       return Response.json({ success: true, mode: "checkout", requiresDetails: true });
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { estActive } from "@/lib/flags/feature-flags";
+import { clientIp } from "@/lib/security/rate-limit";
 import { formaterPrometheus } from "@/lib/observability/metrics-registry";
 import { timingSafeStringEqual } from "@/lib/security/timing-safe";
 
@@ -64,6 +65,27 @@ export async function GET(request: NextRequest) {
           error: "Jeton de métriques requis : en-tête « Authorization: Bearer <METRICS_TOKEN> ».",
         },
         { status: 401, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+  } else if (process.env.NODE_ENV === "production") {
+    // FAIL-CLOSED DE LA BOUCLE EXTERNE (durcissement audit 2026-10-28) :
+    // sans METRICS_TOKEN, l'exposition se limite au scraping LOCAL du VPS
+    // (collecteur sur la boucle, cf. docs/sre/sli-slo.md). Une requête
+    // venant d'Internet (x-real-ip posé par nginx depuis la connexion TCP,
+    // non falsifiable — lib/security/rate-limit.ts clientIp) reçoit 403 :
+    // les compteurs (uptime, mémoire, routes) ne sont plus une surface
+    // publique. Le scraping local (127.0.0.1 / ::1) reste inchangé.
+    const ip = clientIp(request);
+    const local = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+    if (!local) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Métriques réservées au collecteur local en production — définissez METRICS_TOKEN " +
+            "et scrapez avec « Authorization: Bearer <METRICS_TOKEN> » depuis l'extérieur.",
+        },
+        { status: 403, headers: { "Cache-Control": "no-store" } },
       );
     }
   }

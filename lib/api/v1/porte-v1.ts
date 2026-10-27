@@ -18,8 +18,11 @@ import { enforceRateLimit } from "@/lib/security/rate-limit";
  * Cette porte est le SEUL chemin d'entrée des routes /api/v1/* :
  *  1. AUTHENTIFICATION — authenticateDeveloper (clé `g3a_` + projet lié,
  *     rôle développeur revérifié à chaque appel) ;
- *  2. LIMITATION DE DÉBIT — enforceRateLimit (2 couches : locale + Redis
- *     distribuée), par clé API, par route.
+ *  2. LIMITATION DE DÉBIT — enforceRateLimit (2 couches : locale +
+ *     fenêtre fixe PAR-INSTANCE depuis Task 108 — l'ancienne « Redis
+ *     distribuée » n'existe plus, cf. lib/security/rate-limit.ts et
+ *     lib/cache/redis.ts ; équivalent global sur l'instance unique PM2),
+ *     par clé API, par route.
  */
 
 /** Limite de débit par défaut d'un endpoint v1 (par clé, par fenêtre). */

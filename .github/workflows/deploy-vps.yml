@@ -107,6 +107,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configurer la clé SSH VPS
+        id: ssh_key
+        continue-on-error: true
         run: |
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vps_deploy
@@ -120,7 +122,20 @@ jobs:
           ssh-keyscan -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || \
             echo "⚠️ keyscan échoué (blocage SSH passager ?) — known_hosts incomplet, accept-new prendra le relais."
 
+      # CANAUX DE DÉPLOIEMENT (double voie) :
+      #   · Canal PULL (faisant autorité) : la release ci-dessus est le
+      #     déploiement — le poller VPS la télécharge ≤ 2 min après
+      #     publication (pull-deploy.sh v2 : reprise avec backoff, zéro
+      #     boucle). Un échec SSH ne rend PLUS le run rouge : le build est
+      #     publié, la production rattrapera par elle-même.
+      #   · Canal SSH (accélérateur best-effort) : déploie IMMÉDIATEMENT
+      #     quand le sshd répond. Étapes suivantes court-circuitées si le
+      #     transfert échoue (pas de 20 min perdues contre un SSH bloqué).
+      #     L'étape « Swap atomique » reste STRICTE : un blacklist/rollback
+      #     vu par le finisher est une vraie anomalie de build → run rouge.
       - name: Envoyer build + finisher vers le VPS (retry PerSourcePenalties)
+        id: scp
+        continue-on-error: true
         run: |
           ok=0
           # PerSourcePenalties (OpenSSH 9.8+) : chaque connexion tentée PENDANT
@@ -152,6 +167,7 @@ jobs:
       # absent du VPS et les moteurs neuronaux locaux prennent la main
       # (compositions abstraites honnêtes).
       - name: Installer la config du professeur média (via SSH, jamais en release)
+        if: steps.scp.outcome == 'success'
         run: |
           printf '%s' "$ZAI_CONFIG_JSON_B64" | base64 -d > /tmp/zai-config.json
           if ssh -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
@@ -166,6 +182,8 @@ jobs:
           ZAI_CONFIG_JSON_B64: ${{ secrets.ZAI_CONFIG_JSON_B64 }}
 
       - name: Swap atomique + health check (rollback auto, retry raisonné)
+        if: steps.scp.outcome == 'success'
+        id: swap
         run: |
           ok=0
           for i in 1 2 3 4; do
@@ -200,6 +218,8 @@ jobs:
       # servir EXACTEMENT la même empreinte — c'est lui que les navigateurs
       # sondent pour se recharger tout seuls.
       - name: Vérifier que la production sert ce build exact
+        if: steps.swap.outcome == 'success'
+        id: verify_build
         run: |
           for i in 1 2 3 4 5; do
             reponse=$(ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
@@ -223,6 +243,24 @@ jobs:
           done
           echo "::error::La production ne sert PAS le build livré ($BUILD_ID) — déploiement à investiguer."
           exit 1
+
+      # RAPPORT DE FIN DE RUN (double canal) : état de chaque voie, action
+      # de contrôle pour l'exploitant. Vert = build publié sur la release
+      # (canal pull arme le déploiement) ; SSH = accélérateur éventuel.
+      - name: Rapport canaux de déploiement
+        if: always()
+        run: |
+          echo "=== RAPPORT CD — build $BUILD_ID (sha $GITHUB_SHA) ==="
+          echo "Canal PULL (faisant autorité) : release cd-latest publiée avec meta.json (sha $GITHUB_SHA)."
+          echo "  → Le poller VPS (PM2 updater, toutes les 2 min) télécharge et bascule ce build"
+          echo "    via pull-deploy.sh v2 (reprise backoff, blacklist, self-update du script)."
+          echo "  → Contrôle : curl -s https://gen3ia.online/version.json (attendu: $GITHUB_SHA)"
+          if [ "${{ steps.scp.outcome }}" = "success" ]; then
+            echo "Canal SSH : transfert + swap RÉUSSIS ce run (déploiement immédiat)."
+          else
+            echo "Canal SSH : indisponible ce run (${{ steps.scp.outcome }}) — SANS IMPACT : le canal pull assure la mise en production."
+            echo "  → Rétablissement facultatif : docs/exploitation/ssh-bloque-runbook.md"
+          fi
 
       - name: Nettoyage runner
         if: always()

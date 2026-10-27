@@ -101,29 +101,41 @@ export interface EnforcedRateLimitResult {
 
   retryAfterMs: number;
 
-  /** true si la décision est partagée entre toutes les instances (Redis). */
+  /**
+   * true si une couche partagée a été consultée. DEPUIS Task 108
+   * (suppression du service Redis externe) : la couche 2 est PAR-INSTANCE
+   * (fenêtre fixe en mémoire) — ce drapeau ne vaut plus « décision
+   * globalement atomique », mais « deuxième fenêtre indépendante
+   * consultée ». Périmètre réel : une instance (PM2 fork unique sur le
+   * VPS) → limite globalement exacte ; si l'application redevenait
+   * multi-instances un jour, le facteur = nombre d'instances chaudes
+   * (rétablir alors un store partagé — voir lib/cache/redis.ts).
+   */
   distributed: boolean;
 }
 
 /**
  * Rate limit RENFORCÉ à utiliser dans les routes API : combine la décision
- * locale (instantanée, couche 1) et la décision PAR-INSTANCE (fenêtre fixe)
- * (partagée par toutes les instances serverless, couche 2).
+ * locale (instantanée, couche 1) et une deuxième fenêtre fixe (couche 2).
  *
- * Sans cette combinaison, une limite définie en mémoire seule est contournée
- * par simple répartition des requêtes entre instances froides (chaque
- * instance serverless possède sa propre Map). La fenêtre distribuée est
- * atomique (INCR + PEXPIRE en pipeline) : un attaquant ne peut pas dépasser
- * le quota global, quelle que soit l'instance qui traite sa requête.
+ * Historique : la couche 2 était une fenêtre Redis partagée entre toutes
+ * les instances serverless. DEPUIS Task 108 (suppression du service Redis
+ * externe), elle est PAR-INSTANCE (lib/cache/redis.ts) — la combinaison
+ * garde un intérêt (deux fenêtres indépendantes, dont une à fenêtre fixe
+ * qui résiste au contournement par rafales de la couche glissante locale),
+ * mais le quota n'est PLUS globalement atomique entre instances. Sur le
+ * déploiement actuel (PM2 fork, UNE instance app) c'est équivalent ; en
+ * multi-instances, le facteur de multiplication = instances chaudes.
  *
  * Réapprovisionnement du résultat :
  *  - `allowed`    : les DEUX couches doivent autoriser ;
  *  - `retryAfterMs` : la fenêtre la plus contraignante ;
  *  - `remaining`  : le quota restant le plus faible ;
- *  - `distributed`: true dès qu'une décision Redis a été obtenue.
+ *  - `distributed`: true dès que la couche 2 a été consultée (par-instance
+ *    depuis Task 108 — voir le doc de ce champ).
  *
- * Échec Redis : repli transparent sur la décision locale uniquement
- * (jamais de blocage du trafic légitime pour une panne d'infrastructure).
+ * Échec de la couche 2 : repli transparent sur la décision locale
+ * uniquement (jamais de blocage du trafic légitime pour une panne).
  */
 export async function enforceRateLimit(
   key: string,

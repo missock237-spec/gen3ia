@@ -94,6 +94,58 @@ describe("deciderMutationApi — garde d'auth obligatoire (P0)", () => {
     expect(verdict).toMatchObject({ verdict: "refuser", statut: 401 });
   });
 
+  it("laisse passer le NŒUD MACHINE essaim porteur du jeton de service (vérifié à nouveau par la route)", async () => {
+    process.env.ESSAIM_NOEUD_TOKEN = "jeton-machine-essaim-tres-long-et-securise";
+    try {
+      for (const pathname of ["/api/essaim/ondes", "/api/essaim/resultat"]) {
+        const verdict = await deciderMutationApi(
+          requete("POST", { authorization: `Bearer jeton-machine-essaim-tres-long-et-securise` }),
+          pathname,
+        );
+        expect(verdict).toEqual({ verdict: "passer", uid: null, voie: "noeud-essaim" });
+      }
+      // La voie machine n'est PAS une identité Firebase : le verrou ne
+      // consulte pas verifyFirebaseAuth, la garde de route reste l'autorité.
+      expect(verifyFirebaseAuth).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.ESSAIM_NOEUD_TOKEN;
+    }
+  });
+
+  it("refuse 401 un Bearer essaim INVALIDE ou un jeton de service non configuré (fail-closed)", async () => {
+    process.env.ESSAIM_NOEUD_TOKEN = "jeton-machine-essaim-tres-long-et-securise";
+    try {
+      verifyFirebaseAuth.mockRejectedValueOnce(new Error("Missing authorization header."));
+      const faux = await deciderMutationApi(
+        requete("POST", { authorization: "Bearer autre-jeton-qui-ne-correspond-pas" }),
+        "/api/essaim/ondes",
+      );
+      expect(faux).toMatchObject({ verdict: "refuser", statut: 401 });
+    } finally {
+      delete process.env.ESSAIM_NOEUD_TOKEN;
+    }
+    verifyFirebaseAuth.mockRejectedValueOnce(new Error("Missing authorization header."));
+    const sansConfig = await deciderMutationApi(
+      requete("POST", { authorization: "Bearer jeton-machine-essaim-tres-long-et-securise" }),
+      "/api/essaim/resultat",
+    );
+    expect(sansConfig).toMatchObject({ verdict: "refuser", statut: 401 });
+  });
+
+  it("ne déverrouille PAS les autres chemins essaim (canal, état, job) avec le jeton machine", async () => {
+    process.env.ESSAIM_NOEUD_TOKEN = "jeton-machine-essaim-tres-long-et-securise";
+    try {
+      verifyFirebaseAuth.mockRejectedValueOnce(new Error("Missing authorization header."));
+      const verdict = await deciderMutationApi(
+        requete("POST", { authorization: "Bearer jeton-machine-essaim-tres-long-et-securise" }),
+        "/api/essaim/job",
+      );
+      expect(verdict).toMatchObject({ verdict: "refuser", statut: 401 });
+    } finally {
+      delete process.env.ESSAIM_NOEUD_TOKEN;
+    }
+  });
+
   it("les pages (hors /api) sont hors périmètre — classification lecture", async () => {
     // Le middleware n'appelle la garde que pour /api/* ; un appel direct
     // avec un chemin page reste néanmoins sûr : GET → lecture.

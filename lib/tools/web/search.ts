@@ -114,6 +114,9 @@ async function searchSerpApi(
 
   const response = await fetch(
     `https://serpapi.com/search?${params.toString()}`,
+    // Timeout (audit 2026-10-28) : un provider qui pend ne retient pas
+    // la requête utilisateur (budget chat amont non couvert ici).
+    { signal: AbortSignal.timeout(15_000) },
   );
 
   if (!response.ok) {
@@ -168,6 +171,8 @@ async function searchTavily(
       "https://api.tavily.com/search",
       {
         method: "POST",
+
+        signal: AbortSignal.timeout(15_000),
 
         headers: {
           "content-type":
@@ -238,6 +243,8 @@ async function searchSerper(
       "https://google.serper.dev/search",
       {
         method: "POST",
+
+        signal: AbortSignal.timeout(15_000),
 
         headers: {
           "X-API-KEY":
@@ -361,6 +368,7 @@ export async function searchDuckDuckGo(
       "user-agent": BROWSER_UA,
       "accept-language": "fr-FR,fr;q=0.9,en;q=0.8",
     },
+    signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error(`DuckDuckGo returned ${response.status}.`);
   const html = await response.text();
@@ -435,6 +443,7 @@ export async function searchWikipedia(
           "user-agent": "Gen3iaBot/1.0 (https://gen3ia.online; contact@gen3ia.online)",
           accept: "application/json",
         },
+        signal: AbortSignal.timeout(15_000),
       });
       if (!response.ok) continue;
       const data = (await response.json()) as {

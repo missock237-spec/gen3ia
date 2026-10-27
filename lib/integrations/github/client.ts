@@ -24,6 +24,10 @@ async function githubFetch<T>(
       {
         ...init,
 
+        // Timeout (audit 2026-10-28) : l'API GitHub qui pend ne retient
+        // pas la requête de l'utilisateur. Un signal appelant est respecté.
+        signal: init?.signal ?? AbortSignal.timeout(20_000),
+
         headers: {
           Accept:
             "application/vnd.github+json",

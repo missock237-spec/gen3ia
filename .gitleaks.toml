@@ -19,6 +19,15 @@ paths = [
   '''(^|/)\.env\.example$''',
   '''(^|/)vitest/stubs/''',
   '''(^|/)tests/e2e/''',
+  # ⚠️ COMPROMIS DOCUMENTÉ (audit 2026-10-28) : docs/ est exclu EN ENTIER —
+  # la documentation cite des exemples de clés/tokens (curl -H "Authorization:
+  # Bearer …", guides SDK) qui déclenchent des faux positifs en masse.
+  # RISQUE ACCEPTÉ : un vrai secret collé dans une doc échapperait à la CI.
+  # MITIGATION : le hook pre-commit (scripts/git-hooks/pre-commit) scanne le
+  # fichier staged INDIVIDUELLEMENT ; resserrer cette exclusion sur des
+  # fichiers précis (au lieu du dossier) dès que le jeu de règles est
+  # calibré par un scan gitleaks local complet (binaire absent de la
+  # sandbox d'audit — CI seule à jour).
   '''(^|/)docs/''',
   '''package-lock\.json$''',
   '''pnpm-lock\.yaml$''',

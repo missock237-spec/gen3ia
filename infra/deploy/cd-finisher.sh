@@ -165,5 +165,28 @@ fi
 # --- Succès ---
 rm -rf .next.old node_modules.old
 echo "$TARGET_SHA" > "$LAST_DEPLOYED"
+
+# --- Auto-sync du poller pull (boucle d'auto-guérison sans SSH) ---
+# Le poller PM2 exécute /opt/gen3ia-updater/pull-deploy.sh — une copie
+# installée une fois, qui ne suit pas le dépôt. On la remplace par la
+# version AU SHA DÉPLOYÉ : chaque déploiement réussi aligne le poller
+# (correctifs pull-deploy v2, backoff, self-update…). Non fatal :
+# un échec réseau ici n'invalide jamais un déploiement sain.
+POLLER_SRC="https://raw.githubusercontent.com/missock237-spec/gen3ia/$TARGET_SHA/scripts/vps-auto-deploy/pull-deploy.sh"
+if curl -fsSL -m 20 "$POLLER_SRC" -o "$UPDATER_DIR/pull-deploy.sh.new" 2>/dev/null \
+   && [ -s "$UPDATER_DIR/pull-deploy.sh.new" ] \
+   && head -1 "$UPDATER_DIR/pull-deploy.sh.new" | grep -q '^#!'; then
+  if ! cmp -s "$UPDATER_DIR/pull-deploy.sh.new" "$UPDATER_DIR/pull-deploy.sh" 2>/dev/null; then
+    mv "$UPDATER_DIR/pull-deploy.sh.new" "$UPDATER_DIR/pull-deploy.sh"
+    chmod +x "$UPDATER_DIR/pull-deploy.sh"
+    log "CD: poller pull-deploy.sh aligné sur le SHA $TARGET_SHA."
+  else
+    rm -f "$UPDATER_DIR/pull-deploy.sh.new"
+  fi
+else
+  rm -f "$UPDATER_DIR/pull-deploy.sh.new" 2>/dev/null || true
+  log "CD: sync du poller skippé (source inaccessible) — version courante conservée."
+fi
+
 log "CD DÉPLOIEMENT RÉUSSI : $(git log --oneline -1 | head -c 120)"
 exit 0

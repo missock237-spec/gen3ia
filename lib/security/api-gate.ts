@@ -43,6 +43,21 @@
  *   chaque route. La porte reconnaît la présence de l'en-tête `x-api-key`
  *   et laisse passer vers la route, qui seule peut valider la clé.
  *
+ * CAS /api/essaim/ondes + /api/essaim/resultat (NŒUDS MACHINE — Colab /
+ *   worker GPU distant, commit b8dd38c) : leur Bearer `ESSAIM_NOEUD_TOKEN`
+ *   est un jeton de service OPAQUE, pas un JWT Firebase — l'étape 4 ne
+ *   peut pas l'évaluer et renverrait 401 AVANT la garde de route, rendant
+ *   la voie machine inopérante en production. On reconnaît donc ce
+ *   credential ICI (comparaison timing-safe, FAIL-CLOSED si le jeton n'est
+ *   pas configuré) pour laisser passer vers la route, dont la garde
+ *   `résoudreIdentitéNœud` (lib/security/noeud-service.ts) fait la
+ *   VÉRIFICATION COMPLÈTE : même jeton re-comparé, rate limit IP, identité
+ *   de service « system-noeud-essaim ». Défense en profondeur conservée :
+ *   ce pré-contrôle n'autorise RIEN seul, il évite seulement une 401 pour
+ *   un credential que l'étape 4 ne sait pas lire. Les autres chemins
+ *   /api/essaim/* (canal, état, job) restent verrouillés : ils sont
+ *   réservés aux agents navigateur AUTHENTIFIÉS (contrat « demande n°7 »).
+ *
  * Ce module ne décide PAS de la réponse HTTP : il rend un verdict, le
  * middleware construit la 401 (traçage W3C + en-têtes de sécurité).
  */
@@ -61,9 +76,9 @@ export interface RequetePorte {
 export type VerdictPorte =
   | {
       verdict: "passer";
-      /** uid vérifié (identité) ou null (public / lecture / clé v1). */
+      /** uid vérifié (identité) ou null (public / lecture / clé v1 / nœud). */
       uid: string | null;
-      voie: "public" | "lecture" | "cle-api-v1" | "identite-verifiee";
+      voie: "public" | "lecture" | "cle-api-v1" | "noeud-essaim" | "identite-verifiee";
     }
   | {
       verdict: "refuser";
@@ -104,6 +119,19 @@ export async function deciderMutationApi(
   if (pathname === "/api/v1" || pathname.startsWith("/api/v1/")) {
     if (requete.headers.get("x-api-key")) {
       return { verdict: "passer", uid: null, voie: "cle-api-v1" };
+    }
+  }
+
+  // 3bis. Nœuds machine de l'essaim (Colab / worker GPU) : voir le CAS en
+  //    tête de fichier. Scoping EXACT aux deux routes machine — les autres
+  //    chemins /api/essaim/* restent soumis à l'identité Firebase.
+  if (pathname === "/api/essaim/ondes" || pathname === "/api/essaim/resultat") {
+    const authorization = requete.headers.get("authorization") ?? "";
+    if (authorization.toLowerCase().startsWith("bearer ")) {
+      const { jetonServiceValide } = await import("@/lib/security/noeud-service");
+      if (jetonServiceValide(authorization.slice(7).trim())) {
+        return { verdict: "passer", uid: null, voie: "noeud-essaim" };
+      }
     }
   }
 
