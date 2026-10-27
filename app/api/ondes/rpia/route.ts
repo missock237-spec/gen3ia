@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { CoucheOndesNeuronales } from "@/lib/neural/core/couche-rpia";
+import { clientIp, enforceRateLimit } from "@/lib/security/rate-limit";
+import { withAuth } from "@/lib/server/with-auth";
 
 /**
  * Entraînement RPIA côté serveur — met une requête utilisateur en
@@ -12,7 +14,15 @@ import { CoucheOndesNeuronales } from "@/lib/neural/core/couche-rpia";
  * Le serveur n'a pas de GPU utilisateur : le miroir CPU déterministe
  * exécute exactement la physique du shader WebGPU (même contrat que la
  * fabrique du champ d'ondes). Aucune donnée persistée : la route est
- * publique, bornée (nœuds, époques, longueur de texte), sans état.
+ * bornée (nœuds, époques, longueur de texte), sans état.
+ *
+ * P0 (durcissement calcul) : l'entraînement RPIA est un calcul CPU réel
+ * (jusqu'à 4096 nœuds × 500 époques) — il est maintenant soumis à une
+ * limite de débit par IP en plus de la garde d'auth obligatoire du
+ * middleware (mutation non publique ⇒ identité vérifiée exigée en amont).
+ * La route applique en outre SA PROPRE garde withAuth (défense en
+ * profondeur : elle ne dépend pas du middleware seul) et reçoit l'identité
+ * vérifiée en troisième argument — pattern canonique des nouvelles routes.
  */
 
 export const dynamic = "force-dynamic";
@@ -47,7 +57,20 @@ const SchemaRPIA = z.object({
 /** Historique d'erreur renvoyé plafonné (réponse légère). */
 const MAX_POINTS_HISTORIQUE = 120;
 
-export async function POST(requete: Request) {
+export const POST = withAuth(async (requete: Request) => {
+  // Limite de débit par IP : borne le coût CPU par client (calcul réel,
+  // même sans données persistées). 20 entraînements / 5 minutes.
+  const limite = await enforceRateLimit(`ondes-rpia:${clientIp(requete)}`, {
+    limit: 20,
+    windowMs: 5 * 60 * 1000,
+  });
+  if (!limite.allowed) {
+    return NextResponse.json(
+      { erreur: "Trop d'entraînements RPIA. Réessayez dans quelques minutes." },
+      { status: 429, headers: { "retry-after": String(Math.max(1, Math.ceil(limite.retryAfterMs / 1000))) } },
+    );
+  }
+
   let corps: unknown;
   try {
     corps = await requete.json();
@@ -103,4 +126,4 @@ export async function POST(requete: Request) {
       { status: 500 },
     );
   }
-}
+});

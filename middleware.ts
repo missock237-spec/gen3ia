@@ -16,6 +16,7 @@ import {
   createCachedAdminResolver,
   isAdminActor,
 } from "@/lib/security/user-access";
+import { deciderMutationApi } from "@/lib/security/api-gate";
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -285,6 +286,21 @@ function forbiddenApi(traceId: string, traceparent: string): NextResponse {
   return applySecurityHeaders(response, false);
 }
 
+/**
+ * 401 de la GARDE D'AUTH OBLIGATOIRE (P0 — lib/security/api-gate.ts) :
+ * mutation d'API non publique sans identité cryptographiquement vérifiée
+ * (Bearer RS256 Firebase ou cookie de session HMAC). La requête n'atteint
+ * JAMAIS la route — un anonyme ne peut plus écrire sur une seule route
+ * métier, y compris une future route oubliée.
+ */
+function unauthorizedApi(traceId: string, traceparent: string, raison: string): NextResponse {
+  const response = NextResponse.json(
+    { success: false, error: raison, code: "AUTH_REQUIRED" },
+    { status: 401, headers: { [TRACE_HEADER]: traceId, [TRACEPARENT_HEADER]: traceparent } },
+  );
+  return applySecurityHeaders(response, false);
+}
+
 function forbiddenPage(): NextResponse {
   const response = new NextResponse(FORBIDDEN_PAGE_HTML, {
     status: 403,
@@ -375,6 +391,24 @@ export async function middleware(request: NextRequest) {
   // Liste blanche d'accès (demande n°7) : AVANT la détection d'appareil
   // et la propagation de headers — un 403 n'a besoin de rien d'autre
   // (mais porte déjà le couple de corrélation, support production).
+  //
+  // GARDE D'AUTH OBLIGATOIRE (P0) — AVANT le contrôle de liste blanche :
+  // toute MUTATION d'API non publique exige une identité vérifiée
+  // cryptographiquement (RS256 Firebase ou cookie HMAC). Anonyme ou
+  // identité invalide → 401 immédiat. Les lectures et les chemins publics
+  // (webhooks signés, auth, cron…) poursuivent leur chemin existant.
+  // Périmètre strictement /api/* : les Server Actions (POST sur une page)
+  // et les navigations ne passent PAS par ce verrou — elles ont leur
+  // propre modèle de sécurité (routes + liste blanche pages).
+  if (isApiRoute) {
+    const porte = await deciderMutationApi(request, pathname);
+    if (porte.verdict === "refuser") {
+      const refusee = unauthorizedApi(traceId, traceparent, porte.raison);
+      noterRequeteSLI(pathname, refusee.status, debutMs);
+      return refusee;
+    }
+  }
+
   const denied = await applyAccessControl(request, pathname, isApiRoute, traceId, traceparent);
   if (denied) {
     noterRequeteSLI(pathname, denied.status, debutMs);
