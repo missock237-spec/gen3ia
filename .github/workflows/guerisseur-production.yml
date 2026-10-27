@@ -1,0 +1,125 @@
+name: Guérisseur production
+
+# Rattrapage automatique de la production (gen3ia.online) vers main.
+#
+# Contexte (audit 2026-10-28) :
+#   · Le canal SSH du CD est soumis à des blocages VPS par périodes
+#     (fail2ban / PerSourcePenalties — 15 h observés les 26-27 oct.) ;
+#   · Le canal pull « faisant autorité » (release cd-latest + poller VPS)
+#     ne devient actif qu'après l'installation console de
+#     scripts/vps-auto-deploy/install-pull-mode.sh — tant qu'elle n'est
+#     pas faite sur le VPS, RIEN ne rattrape la production quand le SSH
+#     est bloqué (runs #115/#116 verts, prod restée sur b8dd38c).
+#
+# Ce workflow surveille l'écart production ↔ main toutes les 30 min et
+# déclenche le déploiement continu dès que le SSH redevient joignable.
+# Une fois la production alignée (ou le poller installé), il reste
+# totalement passif : 1 GET public + 1 GET API par tick, zéro coût.
+#
+# Garde-fous anti-boucle :
+#   · pas de déclenchement si un run CD est déjà en cours ;
+#   · pas de déclenchement si le CD a déjà échoué sur CE sha exact
+#     (SHA blacklisté / health check en échec = retenter est inutile) ;
+#   · sondage SSH léger AVANT tout déclenchement (3 essais espacés) :
+#     un build runner n'est brûlé que si le sshd répond réellement.
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: guerisseur-production
+  cancel-in-progress: false
+
+jobs:
+  verifier:
+    name: Mesurer l'écart production ↔ main
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      besoin: ${{ steps.ecart.outputs.besoin }}
+      sha_main: ${{ steps.ecart.outputs.sha_main }}
+      sha_prod: ${{ steps.ecart.outputs.sha_prod }}
+    steps:
+      - name: Comparer les empreintes
+        id: ecart
+        run: |
+          cb=$(date +%s)
+          SHA_MAIN=$(curl -fsSL -m 20 "https://api.github.com/repos/${{ github.repository }}/commits/main" \
+            | jq -r '.sha // ""')
+          REPONSE=$(curl -fsSL -m 20 "https://gen3ia.online/version.json?cb=$cb" || true)
+          SHA_PROD=$(echo "$REPONSE" | jq -r '.gitSha // "absent"' 2>/dev/null || echo "absent")
+          echo "main  = ${SHA_MAIN:-inconnu}"
+          echo "prod  = ${SHA_PROD}"
+          if [ -z "$SHA_MAIN" ]; then
+            echo "besoin=false"   # API GitHub muette : ne rien décider ce tick
+          elif [ "$SHA_PROD" = "$SHA_MAIN" ]; then
+            echo "besoin=false"   # production alignée — guérisseur passif
+          else
+            echo "besoin=true"    # en retard (ou version.json injoignable)
+          fi
+          echo "sha_main=$SHA_MAIN" >> "$GITHUB_OUTPUT"
+          echo "sha_prod=$SHA_PROD" >> "$GITHUB_OUTPUT"
+
+  guerir:
+    name: Sondage SSH puis déclenchement CD
+    needs: verifier
+    if: needs.verifier.outputs.besoin == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Garde — CD déjà en cours ou déjà échoué sur ce sha ?
+        id: garde
+        run: |
+          SHA_MAIN="${{ needs.verifier.outputs.sha_main }}"
+          LECTURE=$(curl -fsSL -m 20 -H "Authorization: Bearer ${{ github.token }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/deploy-vps.yml/runs?per_page=30")
+          EN_COURS=$(echo "$LECTURE" | jq '[.workflow_runs[] | select(.status=="in_progress" or .status=="queued")] | length')
+          DERNIER_CE_SHA=$(echo "$LECTURE" | jq -r --arg sha "$SHA_MAIN" \
+            '[.workflow_runs[] | select(.head_sha==$sha)][0] | (.conclusion // .status // "aucun")')
+          echo "runs CD en cours  : $EN_COURS"
+          echo "dernier run CD $SHA_MAIN : $DERNIER_CE_SHA"
+          if [ "$EN_COURS" != "0" ]; then echo "verdict=bloque" ; \
+          elif [ "$DERNIER_CE_SHA" = "failure" ]; then echo "verdict=bloque" ; \
+          else echo "verdict=libre"; fi
+          echo "libre=$( [ "$(echo "$EN_COURS")" = "0" ] && [ "$DERNIER_CE_SHA" != "failure" ] && echo oui || echo non )" >> "$GITHUB_OUTPUT"
+
+      - name: Sondage SSH léger (3 essais espacés)
+        id: sonde
+        if: steps.garde.outputs.libre == 'oui'
+        run: |
+          ok=0
+          for i in 1 2 3; do
+            if timeout 12 ssh-keyscan -T 8 -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" 2>/dev/null | grep -q "ssh-"; then
+              ok=1
+              echo "Sondage $i/3 : sshd répond — déploiement possible."
+              break
+            fi
+            echo "Sondage $i/3 : SSH muet (fail2ban / PerSourcePenalties ?) — production rattrapée au prochain tick ou par le poller pull."
+            [ "$i" = "3" ] || sleep 30
+          done
+          echo "joignable=$([ $ok = 1 ] && echo oui || echo non)" >> "$GITHUB_OUTPUT"
+
+      - name: Déclencher le déploiement continu (canal SSH immédiat)
+        if: steps.sonde.outcome == 'success' && steps.sonde.outputs.joignable == 'oui'
+        run: |
+          gh workflow run deploy-vps.yml --ref main -R "${{ github.repository }}"
+          echo "✅ CD déclenché : production ${{ needs.verifier.outputs.sha_prod }} → main ${{ needs.verifier.outputs.sha_main }}."
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Rapport du tick
+        if: always()
+        run: |
+          echo "=== Guérisseur — tick $(date -u +%FT%TZ) ==="
+          echo "prod  = ${{ needs.verifier.outputs.sha_prod }}"
+          echo "main  = ${{ needs.verifier.outputs.sha_main }}"
+          echo "garde = ${{ steps.garde.outcome }} (${{ steps.garde.outputs.libre }})"
+          echo "sonde = ${{ steps.sonde.outcome }} (${{ steps.sonde.outputs.joignable }})"
+          echo "Rappel : le canal pull (poller VPS, install console unique) rend ce rattrapage instantané —"
+          echo "  curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash"
