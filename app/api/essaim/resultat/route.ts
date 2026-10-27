@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { protectRoute } from "@/lib/security/route-guard";
+import { résoudreIdentitéNœud } from "@/lib/security/noeud-service";
 import { registreEssaim } from "@/lib/essaim-media/registre";
 import { orchestrateurEssaim } from "@/lib/essaim-media/orchestrateur";
 import { ondePorteuse } from "@/lib/essaim-media/onde-porteuse";
@@ -37,7 +37,7 @@ const LIBELLÉS: Record<string, (n: number, appareils: number) => string> = {
 };
 
 export async function POST(request: NextRequest) {
-  const guard = await protectRoute(request);
+  const guard = await résoudreIdentitéNœud(request);
   if (!guard.ok) return guard.response;
 
   try {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { protectRoute } from "@/lib/security/route-guard";
+import { résoudreIdentitéNœud } from "@/lib/security/noeud-service";
 import { registreEssaim } from "@/lib/essaim-media/registre";
 import { orchestrateurEssaim } from "@/lib/essaim-media/orchestrateur";
 import { assurerBatteur, ondePorteuse } from "@/lib/essaim-media/onde-porteuse";
@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
 const NOEUD_RE = /^[a-zA-Z0-9_-]{8,80}$/;
 
 export async function POST(request: NextRequest) {
-  const guard = await protectRoute(request);
+  const guard = await résoudreIdentitéNœud(request);
   if (!guard.ok) return guard.response;
 
   try {
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
 
 /** Déconnexion PROPRE : l'agent prévient avant de partir (fermeture d'onglet). */
 export async function DELETE(request: NextRequest) {
-  const guard = await protectRoute(request);
+  const guard = await résoudreIdentitéNœud(request);
   if (!guard.ok) return guard.response;
   try {
     const body = (await request.json()) as { noeudId?: string };
