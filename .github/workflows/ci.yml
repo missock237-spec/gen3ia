@@ -191,6 +191,14 @@ jobs:
           node-version: 22
           cache: npm
 
+      # L'émulateur Firebase Auth exige un JDK ≥ 21 (firebase-tools refuse
+      # les runtimes antérieurs) — ubuntu-latest expose 17 par défaut.
+      - name: Setup Java 21 (émulateur Firebase Auth)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
