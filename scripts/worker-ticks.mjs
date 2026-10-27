@@ -66,6 +66,7 @@ if (!SECRET) {
 
 let arret = false;
 let joursSansIncident = new Date().toISOString().slice(0, 10);
+let derniereSentinelle = 0;
 let stats = { ticks: 0, echecs: 0, consecutifs: 0 };
 
 function log(niveau, message, extra = {}) {
@@ -98,12 +99,27 @@ async function passe() {
   const workflows = await appeler("/api/cron/workflow-triggers", "workflow-triggers").catch(
     (e) => ({ erreur: String(e.message || e) }),
   );
+  // Sentinelle d'observabilité : battement PROPRE (5 min) — les alertes ont
+  // leurs cooldowns, un échantillonnage à 10 s n'apporterait rien. Un échec
+  // de la sentinelle ne fait JAMAIS échouer la passe (file = priorité).
+  const maintenant = Date.now();
+  let observabilite = "skip";
+  if (maintenant - derniereSentinelle >= 5 * 60_000) {
+    derniereSentinelle = maintenant;
+    const reponse = await appeler("/api/cron/observability", "observability").catch(
+      (e) => ({ erreur: String(e.message || e) }),
+    );
+    observabilite = reponse?.erreur
+      ? `erreur: ${reponse.erreur}`
+      : `alertes=${(reponse?.alerts ?? []).length}`;
+  }
   stats.ticks += 1;
   stats.consecutifs = 0;
   log("info", "passe ok", {
     ms: Date.now() - t0,
     dispatch: dispatch?.dispatched ?? dispatch ?? "ok",
     workflows: workflows?.erreur ?? `${workflows?.parcourus ?? 0} parcourus`,
+    observabilite,
   });
 }
 

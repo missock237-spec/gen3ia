@@ -150,11 +150,11 @@ describe("ring buffer 500 — moyenne glissante", () => {
 });
 
 describe("formaterPrometheus — format texte Prometheus", () => {
-  it("expose les séries avec le préfixe gen3ia_ et les lignes HELP/TYPE", () => {
+  it("expose les séries avec le préfixe gen3ia_ et les lignes HELP/TYPE", async () => {
     enregistrerRequete("chat", 200, 150);
     enregistrerRequete("api", 503, 40);
 
-    const sortie = formaterPrometheus();
+    const sortie = await formaterPrometheus();
 
     expect(sortie).toContain("# HELP gen3ia_http_requests_total ");
     expect(sortie).toContain("# TYPE gen3ia_http_requests_total counter");
@@ -178,23 +178,23 @@ describe("formaterPrometheus — format texte Prometheus", () => {
     expect(sortie.endsWith("\n")).toBe(true);
   });
 
-  it("ne contient JAMAIS de chemin brut (fuite de cardinalité interdite)", () => {
+  it("ne contient JAMAIS de chemin brut (fuite de cardinalité interdite)", async () => {
     enregistrerRequete("api", 200, 5);
-    const sortie = formaterPrometheus();
+    const sortie = await formaterPrometheus();
     expect(sortie).not.toContain("/api/");
     expect(sortie).not.toContain("/chat/");
     expect(sortie).not.toContain("uid-");
   });
 
-  it("produit une sortie DÉTERMINISTE (ordre fixe, diffs et tests stables)", () => {
+  it("produit une sortie DÉTERMINISTE (ordre fixe, diffs et tests stables)", async () => {
     enregistrerRequete("pages", 200, 10);
     enregistrerRequete("chat", 200, 20);
     enregistrerRequete("chat", 403, 30);
-    const premiere = formaterPrometheus();
+    const premiere = await formaterPrometheus();
     // Le compteur évolue entre les deux captures → on compare la structure
     // (lignes HELP/TYPE) et l'ordre des séries, pas la valeur de l'uptime.
     enregistrerRequete("chat", 403, 30);
-    const seconde = formaterPrometheus();
+    const seconde = await formaterPrometheus();
 
     const lignesStructure = (sortie: string) => sortie.split("\n").filter((ligne) => ligne.startsWith("#"));
     expect(lignesStructure(seconde)).toEqual(lignesStructure(premiere));

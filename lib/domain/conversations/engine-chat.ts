@@ -13,6 +13,13 @@ import { detectImageRatio, enhanceImagePrompt, extractImagePrompt } from "@/lib/
 import { languageDirective } from "@/lib/ai/prompt-enhancer";
 import { RESPONSE_FORMAT_RULES, EXCELLENCE_PAR_DOMAINE, preferFreeForVisibleAnswers } from "@/lib/ai/response-quality";
 import { generate, generateStream } from "@/lib/ai/router";
+// Durcissement production — barrière anti-désinformation au niveau des
+// agents Studio, désormais appliquée AUSSI au chat principal : grounding
+// sémantique inter-conversations (mémoire vérifiable, plancher 0.55) +
+// passe de self-review AVANT livraison de la réponse.
+import { buildTruthContext } from "@/lib/ai/truth-context";
+import { reviewVisibleAnswer } from "@/lib/ai/self-review";
+import { enregistrerSelfReview } from "@/lib/observability/self-review-metrics";
 import { ThinkTagStreamFilter, stripThinkTags } from "@/lib/ai/think-filter";
 import { imagesForModel } from "@/lib/ai/vision-input";
 import { appendMessage } from "@/lib/chat/repository";
@@ -145,6 +152,23 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
   // possible) et remplace les messages évacués par un résumé déterministe
   // injecté comme message système additionnel (zéro LLM, zéro latence).
   const systemContent = systemParts.join("\n\n");
+  // GROUNDING SÉMANTIQUE INTER-CONVERSATIONS (fail-soft total : une panne
+  // de l'index vectoriel répond sans mémoire ancienne — jamais de tour
+  // bloqué). Seule la partie SÉMANTIQUE est injectée : les échanges récents
+  // sont déjà dans l'historique du modèle (doublon inutile sinon).
+  let memoireSemantique = "";
+  try {
+    const truth = await buildTruthContext(ctx.userId, ctx.message, [], { recentLimit: 0, semanticLimit: 6 });
+    if (truth.semantic.length > 0) {
+      memoireSemantique = [
+        truth.instructions,
+        "SOUVENIRS PERTINENTS D'AUTRES CONVERSATIONS (indices de contexte — vérifiables par l'utilisateur, jamais des preuves absolues) :",
+        ...truth.semantic.map((item) => `- (${item.score.toFixed(2)}) ${item.role}: ${item.preview}`),
+      ].join("\n");
+    }
+  } catch {
+    // Pas de mémoire ancienne disponible : le tour répond sans — honnête.
+  }
   const recentHistory = historyForModel(ctx.priorHistory);
   const turnTokens =
     estimateTokens(systemContent) +
@@ -168,6 +192,7 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
       ? [{ role: "system" as const, content: systemContent }]
       : []),
     ...(summaryPrefix ? [{ role: "system" as const, content: summaryPrefix }] : []),
+    ...(memoireSemantique ? [{ role: "system" as const, content: memoireSemantique }] : []),
     ...historyMessages,
     { role: "user" as const, content: ctx.message, ...(visionImages ? { images: visionImages } : {}) },
   ];
@@ -300,6 +325,42 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
       "Réessayez en renvoyant votre message — il reste dans la conversation.";
     provider = "gen3ia";
     generationStatus = "failed";
+  }
+
+  // SELF-REVIEW DU CHAT PRINCIPAL (barrière anti-désinformation — même
+  // niveau que les agents Studio, Task 138 généralisée) : sur une réponse
+  // COMPLETE uniquement (un flux interrompu porte déjà sa note honnête),
+  // le réviseur indépendant évalue exactitude / complétude / fiabilité /
+  // structure et peut CORRIGER la proposition. Budget temps borné
+  // (15 s — la latence ne doit pas doubler) ; fail-soft total : toute
+  // panne rend la proposition d'origine. En streaming, le message déjà
+  // affiché est remplacé par la version retenue via « message_complete »
+  // (contrat client : « remplace la version en cours »).
+  if (generationStatus === "complete") {
+    await onEvent({ type: "status", phase: "synthesis", label: "L'assistant relit sa réponse avant livraison…" });
+    const sourcesNote = [
+      ctx.filesContext ? "[Fichiers importés par l'utilisateur — fournis au modèle]" : "",
+      ctx.knowledgeContext ? "[Base de connaissances du projet — fournie au modèle]" : "",
+      ctx.webContext ? "[Pages web réellement récupérées — fournies au modèle]" : "",
+      memoireSemantique ? "[Mémoire sémantique d'autres conversations — fournie au modèle]" : "",
+    ].filter(Boolean).join(" ") || undefined;
+    try {
+      const resultat = await withTimeout(
+        reviewVisibleAnswer({ question: ctx.message, answer: content, contextNote: sourcesNote }),
+        15_000,
+        "self-review chat principal",
+      );
+      enregistrerSelfReview(
+        resultat.skipped
+          ? { verdict: "conforme", skipped: resultat.skipped }
+          : { verdict: resultat.verdict },
+      );
+      content = resultat.text;
+    } catch {
+      // Budget dépassé : la proposition d'origine est livrée (jamais de
+      // tour perdu pour une relecture), l'incident est compté.
+      enregistrerSelfReview({ verdict: "error" });
+    }
   }
 
   const assistantMessage = await appendMessage({

@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return new NextResponse(formaterPrometheus(), {
+  return new NextResponse(await formaterPrometheus(), {
     status: 200,
     headers: {
       // Format d'exposition Prometheus 0.0.4 (texte). no-store : chaque

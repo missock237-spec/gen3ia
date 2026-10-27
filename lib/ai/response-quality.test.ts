@@ -91,6 +91,7 @@ describe("EXCELLENCE_PAR_DOMAINE (curriculum gen3 v4 — précision et détail)"
     expect(e).toContain("MÉTIERS / BUSINESS / FINANCE");
     expect(e).toContain("LANGAGE / ÉCRITURE");
     expect(e).toContain("MÉDIA");
+    expect(e).toContain("SUJETS SENSIBLES");
     expect(e).toContain("HORS CAPACITÉ");
   });
 

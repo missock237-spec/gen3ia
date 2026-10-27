@@ -4,6 +4,9 @@ import { z } from "zod";
 
 import { franchirPorteV1, ErrorAccesV1 } from "@/lib/api/v1/porte-v1";
 import { runWithApiTokenBilling } from "@/lib/billing/api-usage";
+// Garde de charge : l'API publique partage le plafond de tours IA simultanés
+// du process (429 honnête + Retry-After en saturation).
+import { acquiertourIa, RETRY_AFTER_SECONDES } from "@/lib/security/concurrency";
 import { generate } from "@/lib/ai/router";
 import { conditionnerRequeteRPIA, graineTourChat } from "@/lib/agents/conditionnement-rpia";
 import { errorStatus } from "@/lib/security/http-errors";
@@ -68,25 +71,35 @@ export async function POST(request: NextRequest) {
         ]
       : corps.data.messages;
 
-    const { result, usage } = await runWithApiTokenBilling({
-      userId: porte.identite.userId,
-      apiKeyId: porte.identite.projectId ?? "sans-projet",
-      apiKeyPrefix: "g3a_",
-      endpoint: "POST /api/v1/chat",
-      objective: texteRequete.slice(0, 400),
-      executionId: requestId,
-      fn: () =>
-        generate({
-          task: "chat",
-          messages,
-          maxTokens: 4096,
-          metadata: { purpose: "api-v1-chat" },
+    // Garde de concurrence : admission de l'appel coûteux.
+    const jeton = acquiertourIa("v1-chat");
+    if (!jeton) {
+      return NextResponse.json(
+        { error: "La plateforme est à pleine capacité. Réessayez dans quelques secondes.", requestId },
+        { status: 429, headers: { "retry-after": String(RETRY_AFTER_SECONDES), "x-request-id": requestId } },
+      );
+    }
+
+    try {
+      const { result, usage } = await runWithApiTokenBilling({
+        userId: porte.identite.userId,
+        apiKeyId: porte.identite.projectId ?? "sans-projet",
+        apiKeyPrefix: "g3a_",
+        endpoint: "POST /api/v1/chat",
+        objective: texteRequete.slice(0, 400),
+        executionId: requestId,
+        fn: () =>
+          generate({
+            task: "chat",
+            messages,
+            maxTokens: 4096,
+            metadata: { purpose: "api-v1-chat" },
+          }),
+        measure: (reponse) => ({
+          inputTokens: reponse.usage.inputTokens,
+          outputTokens: reponse.usage.outputTokens,
         }),
-      measure: (reponse) => ({
-        inputTokens: reponse.usage.inputTokens,
-        outputTokens: reponse.usage.outputTokens,
-      }),
-    });
+      });
 
     return NextResponse.json(
       {
@@ -109,6 +122,9 @@ export async function POST(request: NextRequest) {
       },
       { status: 200, headers: { "x-request-id": requestId, ...porte.enTetesLimite } },
     );
+    } finally {
+      jeton.release();
+    }
   } catch (error) {
     if (error instanceof ErrorAccesV1) {
       return NextResponse.json(

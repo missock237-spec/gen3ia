@@ -26,6 +26,7 @@ import {
 // Task 153 — paiement par exécution : réservation avant génération,
 // règlement au coût réel (coûts externes + marge projet) après.
 import { runWithExecutionBilling } from "@/lib/billing/execution-gate";
+import { acquiertourIa, RETRY_AFTER_SECONDES } from "@/lib/security/concurrency";
 
 const RequestSchema =
   z.object({
@@ -98,6 +99,16 @@ export async function POST(
     const input =
       RequestSchema.parse(body);
 
+    // Garde de charge : admission d'un appel LLM coûteux (429 honnête si
+    // le process est déjà à son plafond de tours simultanés).
+    const jeton = acquiertourIa("ai-generate");
+    if (!jeton) {
+      return NextResponse.json(
+        { error: "La plateforme est à pleine capacité. Réessayez dans quelques secondes." },
+        { status: 429, headers: { "retry-after": String(RETRY_AFTER_SECONDES) } },
+      );
+    }
+
     // ── Task 153 — PORTILLON DE FACTURATION ──
     // Estimation conservatrice des tokens d'entrée (≈ 3 caractères/token).
     const inputTokens = Math.min(
@@ -107,38 +118,42 @@ export async function POST(
         Math.ceil(input.messages.reduce((total, message) => total + message.content.length, 0) / 3),
       ),
     );
-    const { result: response, billing } = await runWithExecutionBilling({
-      userId: user.uid,
-      label: "ai-generate",
-      estimate: {
+    try {
+      const { result: response, billing } = await runWithExecutionBilling({
+        userId: user.uid,
+        label: "ai-generate",
+        estimate: {
+          task: input.task,
+          provider: input.provider,
+          model: input.model,
+          inputTokens,
+          outputTokens: input.maxTokens ?? 2_048,
+          toolCalls: 1,
+          calls: 1,
+        },
+        fn: () =>
+          generate({
+            ...input,
+
+            metadata: {
+              userId: user.uid,
+            },
+          }),
+      });
+
+      await recordAIUsage({
+        userId: user.uid,
         task: input.task,
-        provider: input.provider,
-        model: input.model,
-        inputTokens,
-        outputTokens: input.maxTokens ?? 2_048,
-        toolCalls: 1,
-        calls: 1,
-      },
-      fn: () =>
-        generate({
-          ...input,
+        response,
+      }).catch(() => undefined);
 
-          metadata: {
-            userId: user.uid,
-          },
-        }),
-    });
-
-    await recordAIUsage({
-      userId: user.uid,
-      task: input.task,
-      response,
-    }).catch(() => undefined);
-
-    return NextResponse.json({
-      response,
-      billing,
-    });
+      return NextResponse.json({
+        response,
+        billing,
+      });
+    } finally {
+      jeton.release();
+    }
   } catch (error) {
     return NextResponse.json(
       {

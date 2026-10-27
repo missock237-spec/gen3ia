@@ -27,6 +27,10 @@ export interface AlertMetrics {
   tokenUsageRatio: number;
   /** Rapport heap utilisé/total (0..1). */
   heapUsedRatio: number;
+  /** OPTIONAL — part de passes de self-review en erreur parmi les passes EFFECTIVES (0..1). Laissé indéfini quand aucune passe n'a encore eu lieu (fenêtre process vide : pas d'alerte, pas d'aveuglement). */
+  selfReviewErrorRatio?: number;
+  /** OPTIONAL — la garde de concurrence refuse des tours (saturation réelle du process). */
+  concurrencySaturated?: boolean;
 }
 
 export type AlertSeverity = "warning" | "critical";
@@ -76,6 +80,20 @@ export const DEFAULT_ALERT_RULES: readonly AlertRule[] = [
     severity: "warning",
     message: "Heap Node > 90 % de sa capacité",
     cooldownSec: 600,
+  },
+  {
+    name: "Self-Review Degraded",
+    condition: (m) => typeof m.selfReviewErrorRatio === "number" && m.selfReviewErrorRatio > 0.5,
+    severity: "warning",
+    message: "La barrière self-review échoue sur plus de la moitié de ses passes effectives (barrière anti-désinformation dégradée — les réponses restent livrées sans relecture)",
+    cooldownSec: 900,
+  },
+  {
+    name: "Concurrency Saturated",
+    condition: (m) => m.concurrencySaturated === true,
+    severity: "warning",
+    message: "La garde de concurrence refuse des tours IA (saturation du process — 429 honnêtes émis)",
+    cooldownSec: 300,
   },
 ] as const;
 

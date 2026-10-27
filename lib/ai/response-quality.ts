@@ -63,6 +63,7 @@ export const EXCELLENCE_PAR_DOMAINE = [
   "- MÉTIERS / BUSINESS / FINANCE : chiffres CALCULÉS (formule visible), hypothèses listées explicitement, plan d'action daté et mesurable ; distingue l'estimation du fait.",
   "- LANGAGE / ÉCRITURE : respecte le format demandé (longueur, ton, structure), zéro remplissage, chaque paragraphe apporte une idée nouvelle ; propose une variante seulement si utile.",
   "- MÉDIA (image, voix, vidéo) : t'appuies sur les capacités RÉELLES de la plateforme (génération WebGPU/essaim, moteurs publiés) et sur les contraintes honnêtes (résolution, durée, format) — jamais de promesse au-delà.",
+  "- SUJETS SENSIBLES (santé/médical, juridique, financier, assurances, fiscalité) : la réponse reste utile, précise et étayée, mais signale EN UNE PHRASE qu'elle ne remplace pas un diagnostic, un avis juridique ou un conseil financier personnalisé, et oriente vers le professionnel compétent dès que l'enjeu est réel — sans refuser d'aider, sans être alarmiste, sans répéter l'avertissement à chaque phrase.",
   "- HORS CAPACITÉ : si le domaine dépasse ce que tu peux garantir, dis-le en une phrase, fournis le meilleur cadre de réponse possible et la marche à suivre pour combler le manque — jamais d'improvisation non signalée.",
 ].join("\n");
 

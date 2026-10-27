@@ -12,6 +12,9 @@ import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/att
 // Task 153 — paiement par exécution : réservation AVANT le flux (402
 // immédiat si solde insuffisant), règlement au réel à la fin du tour.
 import { openExecutionBilling } from "@/lib/billing/execution-gate";
+// Garde de charge (durcissement production) : admission des tours coûteux —
+// 429 honnête + Retry-After au-delà du plafond de tours simultanés.
+import { acquiertourIa, RETRY_AFTER_SECONDES } from "@/lib/security/concurrency";
 
 export const runtime = "nodejs";
 // Conversation turns may orchestrate multiple providers/tools; 5 minutes avoids
@@ -86,6 +89,18 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     }
 
     const body = BodySchema.parse(await request.json());
+
+    // ── GARDE DE CONCURRENCE (admission des tours coûteux) ──
+    // Le jeton est libéré quand le flux S'ACHÈVE (succès, échec ou
+    // déconnexion client — cancel) : le créneau couvre la durée RÉELLE
+    // du tour dans le stream, pas seulement l'ouverture.
+    const jeton = acquiertourIa("conversation-stream");
+    if (!jeton) {
+      return Response.json(
+        { error: "La plateforme est à pleine capacité. Réessayez dans quelques secondes." },
+        { status: 429, headers: { "retry-after": String(RETRY_AFTER_SECONDES) } },
+      );
+    }
 
     // ── Task 153 — PORTILLON DE FACTURATION (session à complétion différée) ──
     // La réservation est prise AVANT l'ouverture du flux : un solde
@@ -187,12 +202,17 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
             }
           }
         });
+        // Tour achevé (succès ou échec) : le créneau de concurrence est rendu.
+        jeton.release();
       },
       cancel() {
         closed = true;
         // Annulation client : la réservation sera libérée si le tour
         // échoue, réglée au réel s'il aboutit (la persistance reste
-        // autoritaire — on ne coupe pas le moteur ici).
+        // autoritaire — on ne coupe pas le moteur ici). Le créneau de
+        // concurrence est rendu immédiatement : la déconnexion libère la
+        // capacité même si le moteur finit son tour en arrière-plan.
+        jeton.release();
       },
     });
 

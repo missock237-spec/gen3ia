@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { readBuildId } from "@/lib/deploy/build-id";
-import { getAdminApp } from "@/lib/firebase/admin";
-import { pingR2 } from "@/lib/storage/r2";
-import { tickQueueConfigured } from "@/lib/queue/tick-queue";
+import { sonderServices } from "@/lib/observability/statut-services";
 
 /**
  * GET /api/status — STATUT PUBLIC pour moniteurs d'uptime entreprise
@@ -24,63 +21,22 @@ import { tickQueueConfigured } from "@/lib/queue/tick-queue";
  * `stale-while-revalidate` sert le cache pendant le re-remplissage. Complète
  * /api/health (heartbeat ultra-léger sans dépendance) et /api/health/infra
  * (détails complets, protégé).
+ *
+ * SOURCE UNIQUE (durcissement production) : les sondes vivent désormais dans
+ * lib/observability/statut-services.ts — la page publique /status consomme LE
+ * MÊME code, garantissant la cohérence entre la vue utilisateur et la sonde
+ * machine.
  */
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/** Empreinte de version — même chaîne que /api/deploy-info : le BUILD_ID
- * effectivement servi d'abord (change à CHAQUE déploiement VPS), puis les
- * replis historiques. DURCISSEMENT 2026-10-22 : l'ancienne chaîne Vercel
- * seule retombait sur « local-dev » constant sur le VPS auto-hébergé — le
- * smoke test du runbook ne pouvait jamais vérifier la version en ligne. */
-function resolveVersion(): string {
-  return (
-    readBuildId() ||
-    process.env.GEN3IA_RELEASE ||
-    process.env.VERCEL_DEPLOYMENT_ID ||
-    process.env.VERCEL_GIT_COMMIT_SHA ||
-    "local-dev"
-  );
-}
-
-interface ServiceHealth {
-  ok: boolean;
-  /** Raison stable de dégradation : "not_configured" | "timeout" | "error". */
-  reason?: string;
-}
-
-function authHealth(): ServiceHealth {
-  try {
-    getAdminApp();
-    return { ok: true };
-  } catch {
-    return { ok: false, reason: "not_configured" };
-  }
-}
-
 export async function GET() {
-  // R2 est sondé UNE fois : il fonde à la fois le service « r2 » et le
-  // service « ticks » (les tickets vivent dans le même bucket).
-  const r2 = await pingR2(3_000);
-  const ticks: ServiceHealth = tickQueueConfigured()
-    ? { ok: r2.ok, reason: r2.reason }
-    : { ok: false, reason: "not_configured" };
-  const auth = authHealth();
+  const statut = await sonderServices();
+  const degraded = statut.status === "degraded";
 
-  const services = { auth, r2, ticks };
-  const degraded = !auth.ok || !r2.ok || !ticks.ok;
-
-  return NextResponse.json(
-    {
-      status: degraded ? "degraded" : "ok",
-      version: resolveVersion(),
-      services,
-      checkedAt: new Date().toISOString(),
-    },
-    {
-      status: degraded ? 503 : 200,
-      headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=15" },
-    },
-  );
+  return NextResponse.json(statut, {
+    status: degraded ? 503 : 200,
+    headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=15" },
+  });
 }

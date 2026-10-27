@@ -233,7 +233,7 @@ export function instantane(): InstantaneMetriques {
  * déterministe (ordre fixe des classes et statuts) pour des diffs et des
  * tests stables.
  */
-export function formaterPrometheus(): string {
+export async function formaterPrometheus(): Promise<string> {
   const photo = instantane();
   const lignes: string[] = [];
 
@@ -274,6 +274,22 @@ export function formaterPrometheus(): string {
   lignes.push("# HELP gen3ia_memory_heap_used_bytes Tas V8 utilisé en octets.");
   lignes.push("# TYPE gen3ia_memory_heap_used_bytes gauge");
   lignes.push(`gen3ia_memory_heap_used_bytes ${photo.memoireTasUtiliseOctets}`);
+
+  // Barrières qualité & charge (durcissement production) : self-review
+  // anti-désinformation + garde de concurrence des tours IA. Import en
+  // fin de module (aucun cycle : ces modules ne dépendent pas du registre).
+  try {
+    const { selfReviewPrometheus } = await import("./self-review-metrics");
+    lignes.push(selfReviewPrometheus().trimEnd());
+  } catch {
+    // L'exposition des métriques ne doit jamais casser le scrape HTTP.
+  }
+  try {
+    const { concurrencePrometheus } = await import("../security/concurrency");
+    lignes.push(concurrencePrometheus().trimEnd());
+  } catch {
+    // Idem — le scrape reste vert même si un module de garde est indisponible.
+  }
 
   return `${lignes.join("\n")}\n`;
 }

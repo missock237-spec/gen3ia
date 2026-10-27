@@ -5,6 +5,13 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { clientIp } from "@/lib/security/rate-limit";
 import { rateLimitDistributed } from "@/lib/cache/redis";
+// Garde de charge (durcissement production) : un tour IA coûteux retient
+// mémoire + fournisseurs — au-delà du plafond de tours simultanés, 429
+// honnête avec Retry-After plutôt que dégradation de TOUT le monde.
+import {
+  acquiertourIa,
+  RETRY_AFTER_SECONDES,
+} from "@/lib/security/concurrency";
 import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
 import { runConversationTurn } from "@/lib/domain/conversations/engine";
 // Task 153 — paiement par exécution : réservation avant le tour complet
@@ -82,41 +89,54 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     const body = BodySchema.parse(await request.json());
 
-    // ── Task 153 — PORTILLON DE FACTURATION ──
-    // Un tour de conversation peut enchaîner détection d'intention, plan et
-    // synthèse finale : la réservation couvre le pire cas multi-appels.
-    const inputTokens = Math.min(
-      24_000,
-      Math.max(64, Math.ceil(body.message.length / 3) + 2_000),
-    );
-    const { result, billing } = await runWithExecutionBilling({
-      userId: user.uid,
-      label: "conversation-turn",
-      estimate: {
-        task: "agent",
-        inputTokens,
-        outputTokens: 2_048,
-        toolCalls: 3,
-        calls: 3,
-        complexity: 1.5,
-      },
-      fn: () =>
-        runConversationTurn({
-          userId: user.uid,
-          conversationId,
-          message: body.message,
-          attachments: body.attachments,
-          projectId: body.projectId,
-          provider: body.provider,
-          model: body.model,
-          connectors: body.connectors,
-          authorizationMode: body.authorizationMode,
-          agentId: body.agentId,
-          webSearch: body.webSearch,
-          timezone: body.timezone,
-        }),
-    });
-    return NextResponse.json({ ...result, billing });
+    // ── GARDE DE CONCURRENCE (admission des tours coûteux) ──
+    const jeton = acquiertourIa("conversation-turn");
+    if (!jeton) {
+      return NextResponse.json(
+        { error: "La plateforme est à pleine capacité. Réessayez dans quelques secondes." },
+        { status: 429, headers: { "retry-after": String(RETRY_AFTER_SECONDES) } },
+      );
+    }
+
+    try {
+      // ── Task 153 — PORTILLON DE FACTURATION ──
+      // Un tour de conversation peut enchaîner détection d'intention, plan et
+      // synthèse finale : la réservation couvre le pire cas multi-appels.
+      const inputTokens = Math.min(
+        24_000,
+        Math.max(64, Math.ceil(body.message.length / 3) + 2_000),
+      );
+      const { result, billing } = await runWithExecutionBilling({
+        userId: user.uid,
+        label: "conversation-turn",
+        estimate: {
+          task: "agent",
+          inputTokens,
+          outputTokens: 2_048,
+          toolCalls: 3,
+          calls: 3,
+          complexity: 1.5,
+        },
+        fn: () =>
+          runConversationTurn({
+            userId: user.uid,
+            conversationId,
+            message: body.message,
+            attachments: body.attachments,
+            projectId: body.projectId,
+            provider: body.provider,
+            model: body.model,
+            connectors: body.connectors,
+            authorizationMode: body.authorizationMode,
+            agentId: body.agentId,
+            webSearch: body.webSearch,
+            timezone: body.timezone,
+          }),
+      });
+      return NextResponse.json({ ...result, billing });
+    } finally {
+      jeton.release();
+    }
   } catch (error) {
     return NextResponse.json(errorBody(error, "Le message n'a pas pu être traité."), { status: errorStatus(error, 400) });
   }
