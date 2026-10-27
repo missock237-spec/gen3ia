@@ -177,3 +177,28 @@ jobs:
         uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  smoke:
+    name: Smoke — login · paiement · run d'agent (émulateurs Firebase)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Tests de fumée de bout en bout (P3) : les 3 parcours critiques
+      # métier — connexion Firebase Auth (firebase-auth-wallet), paiement
+      # wallet/facturation (teams-agents-billing), run d'agent + facturation
+      # (même fichier) et cloisonnement multi-tenant — exécutés CONTRE les
+      # émulateurs Firebase officiels (auth 9099). L'échec de l'un de ces
+      # parcours bloque la CI exactement comme une panne de production.
+      - name: Smoke E2E (émulateurs Firebase)
+        run: npm run test:e2e:firebase

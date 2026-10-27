@@ -57,7 +57,24 @@ export const WIZARD_AGENT_TYPES: WizardAgentType[] = [
     label: "Commercial",
     description: "Prospection, qualification de leads, propositions commerciales et suivi client.",
     suggestedSkills: ["Prospection", "Qualification de leads", "Argumentaire de vente", "Proposition commerciale", "Relance client"],
-    declaredTools: ["web.search", "artifact.create", "mcp.call"],
+    // messaging.send (P3) : les relances de prospection peuvent partir par
+    // WhatsApp/Telegram (HITL conservé — outil à effet de bord externe).
+    declaredTools: ["web.search", "artifact.create", "mcp.call", "messaging.send"],
+  },
+  {
+    // P3 — vertical restaurant WhatsApp (commandes par messagerie).
+    key: "restaurant-whatsapp",
+    baseType: "universal",
+    label: "Restaurant WhatsApp",
+    description:
+      "Prise de commande pour restaurant : reçoit la commande par WhatsApp, vérifie qu'elle est complète, confirme au client et transmet en cuisine.",
+    suggestedSkills: [
+      "Prise de commande WhatsApp",
+      "Saisie structurée (plats, quantités, adresse)",
+      "Confirmation client",
+      "Relance d'information manquante",
+    ],
+    declaredTools: ["messaging.send", "artifact.create"],
   },
   {
     key: "voice",
