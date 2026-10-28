@@ -4293,3 +4293,11 @@ Stage Summary:
 - Validation : tsc 0, eslint 0, vitest 5150/5150. Commit `c9fc554`, 5/5 workflows verts, prod vérifiée : racine 200 + md5 identique en prod (411b9afc…). 7ᵉ livraison autonome du poller.
 - Note environnement : node_modules du sandbox vidé entre ticks (restart) → réinstallation complète avant validations.
 - gen3 : /chat + /dashboard 200, marqueurs GLM re-confirmés (12 chunks), 18 domaines, notebook v4 prêt (GPU Colab propriétaire). Reste n°1 : rotation des secrets (propriétaire). Rapport : docs/rapports/rapport-job-478451-2026-10-29-0510.md
+
+## 478451-iter18-0645 — 2026-10-29 06:10–06:45 +08:00
+
+- Audit hygiène secrets (arbre + historique 153 commits) : **0 vraie fuite**. 36 hits investigués sans affichage de valeurs (longueurs/sha256/structure) : AIza ×30 = clé Firebase Web publique par conception (doctrine .gitleaks.toml), ghp_/AKIA/PEM = fixtures de masquage (PEM 27c sans END ni corps, token 24c ≠ ghp_36). Leçon outillage : quantificateurs {n,} échappés = faux négatifs sous grep -E.
+- Rate limiting prouvé en prod : 72 routes sur enforceRateLimit (USER 100/min, AI 20/h), double couche post-Redis (Task 108) ; test live /api/auth/r2/login → 8× 401 puis **429 dès la 9ᵉ** (limiteur IP exact). Middleware CSP par surface.
+- Livré : tests/unit/secret-hygiene.test.ts — scan arbre 1972 fichiers à motifs haute confiance + alignement allowlist CI ; toute future fuite casse la CI deux fois (gitleaks + vitest).
+- Validation : tsc 0, eslint 0, vitest 5152/5152. Commit `dc42229`, 6/6 workflows verts, prod saine (health ok, /chat 200).
+- gen3 : accessible, UI GLM en place, 18 domaines, notebook v4 prêt. Reste n°1 : rotation des secrets (propriétaire). Rapport : docs/rapports/rapport-job-478451-2026-10-29-0610.md
