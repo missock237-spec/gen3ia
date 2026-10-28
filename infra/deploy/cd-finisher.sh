@@ -84,6 +84,22 @@ if [ ! -x "$STAGING_DIR/node_modules/.bin/next" ] || [ "$STAGING_LOCK_HASH" != "
 fi
 
 # --- Extraction du build livré par le runner (dans le staging) ---
+# Durcissement 2026-10-28 (CD #133) : le tar a échoué sur un transfert
+# corrompu — le canal SSH ne vérifiait JAMAIS l'intégrité avant extraction
+# (le canal pull, lui, vérifie via sha256sum -c). On vérifie désormais le
+# checksum publié par le runner AVANT de toucher au staging : un transfert
+# incomplet est détecté en 1 s au lieu d'un tar à moitié extrait.
+log "CD: vérification de l'intégrité du build livré…"
+if [ -f /tmp/next-build.tar.gz.sha256 ]; then
+  if ! (cd /tmp && sha256sum -c next-build.tar.gz.sha256 >/dev/null 2>&1); then
+    log "CD ERREUR: checksum du build INVALIDE (transfert corrompu/incomplet) — SHA blacklisté, production intacte. Un nouveau build runner repartira proprement."
+    echo "$TARGET_SHA" >> "$FAILED_COMMITS"
+    exit 1
+  fi
+  log "CD: checksum build OK."
+else
+  log "CD AVERTISSEMENT: .sha256 absent (ancien canal ?) — extraction sans vérification d'intégrité."
+fi
 log "CD: extraction du build runner dans staging…"
 rm -rf "$STAGING_DIR/.next"
 mkdir -p "$STAGING_DIR/.next"

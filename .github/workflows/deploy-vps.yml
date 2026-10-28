@@ -282,8 +282,11 @@ jobs:
           echo "  → Le poller VPS (PM2 updater, toutes les 2 min) télécharge et bascule ce build"
           echo "    via pull-deploy.sh v2 (reprise backoff, blacklist, self-update du script)."
           echo "  → Contrôle : curl -s https://gen3ia.online/version.json (attendu: $GITHUB_SHA)"
-          if [ "${{ steps.scp.outcome }}" = "success" ]; then
+          if [ "${{ steps.swap.outcome }}" = "success" ]; then
             echo "Canal SSH : transfert + swap RÉUSSIS ce run (déploiement immédiat)."
+          elif [ "${{ steps.scp.outcome }}" = "success" ]; then
+            echo "Canal SSH : transfert OK mais swap EN ÉCHEC (${{ steps.swap.outcome }}) — le canal pull (release cd-latest) assure la mise en production du VPS."
+            echo "  → Cause probable documentée : extraction/checksum (cf. infra/deploy/cd-finisher.sh) — un nouveau SHA repart proprement."
           else
             echo "Canal SSH : indisponible ce run (${{ steps.scp.outcome }}) — SANS IMPACT : le canal pull assure la mise en production."
             echo "  → Rétablissement facultatif : docs/exploitation/ssh-bloque-runbook.md"
