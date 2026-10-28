@@ -85,7 +85,7 @@ describe("Inventaire des workflows (.github/workflows/)", () => {
   // Toute addition/suppression de workflow doit passer par la mise à jour
   // explicite de cette liste — un workflow est une surface d'exécution
   // (secrets, permissions, accès production), pas un fichier anodin.
-  it("exactement six workflows : CI, CodeQL, Security, Deploy VPS, Load test (manuel) et Ménage des branches", () => {
+  it("exactement sept workflows : CI, CodeQL, Security, Deploy VPS, Guérisseur production, Load test (manuel) et Ménage des branches", () => {
     const workflows = readdirSync(path.join(process.cwd(), ".github/workflows"))
       .filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"))
       .sort();
@@ -93,10 +93,40 @@ describe("Inventaire des workflows (.github/workflows/)", () => {
       "ci.yml",
       "codeql.yml",
       "deploy-vps.yml",
+      "guerisseur-production.yml",
       "load-test.yml",
       "menage-branches.yml",
       "security.yml",
     ]);
+  });
+});
+
+describe("Guérisseur production (.github/workflows/guerisseur-production.yml)", () => {
+  const guerisseur = read(".github/workflows/guerisseur-production.yml");
+
+  it("déclencheurs : push main + schedule décalé hors heures pleines + manuel", () => {
+    // Le cron évite les heures pleines (congestion GitHub documentée —
+    // ticks 23:30/00:00 du cron */30 perdus le 27-28 oct. 2026).
+    expect(guerisseur).toContain("branches: [main]");
+    expect(guerisseur).toContain("cron: '13,43 * * * *'");
+    expect(guerisseur).toContain("workflow_dispatch:");
+  });
+
+  it("anti-collision CD : garde runs en cours/échoués + concurrency sérielle", () => {
+    expect(guerisseur).toContain("group: guerisseur-production");
+    expect(guerisseur).toContain("cancel-in-progress: false");
+    expect(guerisseur).toContain("EN_COURS");
+    expect(guerisseur).toContain("DERNIER_CE_SHA");
+  });
+
+  it("armement du canal pull (poller idempotent) + secours CD explicites", () => {
+    expect(guerisseur).toContain("install-pull-mode.sh");
+    expect(guerisseur).toContain("gh workflow run deploy-vps.yml");
+  });
+
+  it("permissions minimales : contents: read + actions: write (moindre privilège)", () => {
+    expect(guerisseur).toContain("contents: read");
+    expect(guerisseur).toContain("actions: write");
   });
 });
 
