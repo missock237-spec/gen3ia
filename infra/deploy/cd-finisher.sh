@@ -92,9 +92,14 @@ fi
 log "CD: vérification de l'intégrité du build livré…"
 if [ -f /tmp/next-build.tar.gz.sha256 ]; then
   if ! (cd /tmp && sha256sum -c next-build.tar.gz.sha256 >/dev/null 2>&1); then
-    log "CD ERREUR: checksum du build INVALIDE (transfert corrompu/incomplet) — SHA blacklisté, production intacte. Un nouveau build runner repartira proprement."
-    echo "$TARGET_SHA" >> "$FAILED_COMMITS"
-    exit 1
+    # Code 4 = transfert SCP corrompu. AUCUN blacklist : la corruption est un
+    # problème du CHEMIN de transfert SSH, pas du build lui-même — la release
+    # cd-latest (téléchargée par le canal pull avec vérification checksum
+    # propre) reste intègre et DOIT rester déployable pour ce même SHA.
+    # Blacklister ici empoisonnerait le canal pull (FAILED_COMMITS partagé) —
+    # c'est exactement le blocage observé sur 7d45b992/9b3df9ad (CD #133/#134).
+    log "CD ERREUR: checksum du build INVALIDE (transfert SSH corrompu/incomplet) — PAS de blacklist (le canal pull reprendra ce même SHA depuis la release, intègre)."
+    exit 4
   fi
   log "CD: checksum build OK."
 else

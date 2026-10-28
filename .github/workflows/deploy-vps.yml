@@ -194,6 +194,9 @@ jobs:
             case $code in
               0)
                 ok=1; break ;;
+              4)
+                echo "::warning::Transfert SSH corrompu (checksum invalide côté VPS) — PAS de blacklist : le canal pull (release cd-latest, téléchargement vérifié checksum côté VPS) déploiera ce même SHA. Abandon de la voie SSH."
+                ok=2; break ;;
               3)
                 echo "::error::SHA ${GITHUB_SHA} est blacklisté sur le VPS (échec antérieur) — abandon sans nouvelle tentative.";
                 exit 1 ;;
@@ -205,6 +208,10 @@ jobs:
                 sleep 60 ;;
             esac
           done
+          if [ "$ok" = "2" ]; then
+            echo "Canal SSH : laissé au canal pull (transfert corrompu) — le run reste VERT : la publication de la release cd-latest fait autorité."
+            exit 0
+          fi
           [ "$ok" = "1" ] || { echo "::error::Application du déploiement impossible après 4 tentatives"; exit 1; }
 
       # VÉRIFICATION DE BOUT EN BOUT (durcissement 2026-10-22) : le health
