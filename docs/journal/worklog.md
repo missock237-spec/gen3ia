@@ -4080,3 +4080,16 @@ Work Log:
 Stage Summary:
 - Rapport : docs/rapports/rapport-job-478451-2026-10-28-1310.md (commit 5e6b4e75).
 - Déploiement du fix upload en attente du déblocage VPS uniquement.
+
+---
+Task ID: 478451-test-ssh
+Agent: zai-web (demande utilisateur)
+Task: Tester si le SSH VPS est résolu
+
+Work Log:
+- Sonde sandbox : 22/2222/2022 refus actifs (RST) ; 22022 bannière non-OpenSSH « Not allowed at this time ».
+- Guérisseur dispatché manuellement après fin du CD #131 : sondage SSH 1/3 « muet » → armement pull sauté, issue #105 re-commentée, escalade active.
+- Production : b8dd38c3 inchangé — preuve que le poller pull n'est pas installé.
+
+Stage Summary:
+- SSH NON résolu à la date du test (05:42 UTC). Les commandes console VPS (déblocage sshd + install-pull-mode.sh) restent la seule action requise.
