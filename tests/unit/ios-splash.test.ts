@@ -84,3 +84,27 @@ describe("Splash iOS — câblage dans le root layout", () => {
     expect(linksInHead).toBe(splashLinks.length);
   });
 });
+
+describe("Icône apple-touch — conventions racine et /icons alignées", () => {
+  // Itération 17 Job 478451 : le layout déclare /icons/apple-touch-icon.png
+  // (iOS lit les link rel=apple-touch-icon), mais les bots de preview
+  // (Telegram, Slack, iMessage…) demandent par convention /apple-touch-icon.png
+  // À LA RACINE. Sans ce fichier, ces clients retombent sur un favicon flou
+  // ou rien. Les deux emplacements doivent exister et rester identiques.
+
+  it("le fichier racine public/apple-touch-icon.png existe et est léger", () => {
+    expect(existsSync(path.join(process.cwd(), "public/apple-touch-icon.png"))).toBe(true);
+    expect(statSync(path.join(process.cwd(), "public/apple-touch-icon.png")).size)
+      .toBeLessThanOrEqual(200 * 1024);
+  });
+
+  it("racine et /icons portent EXACTEMENT les mêmes octets (aucune dérive)", () => {
+    const racine = readFileSync(path.join(process.cwd(), "public/apple-touch-icon.png"));
+    const icons = readFileSync(path.join(process.cwd(), "public/icons/apple-touch-icon.png"));
+    expect(racine.equals(icons)).toBe(true);
+  });
+
+  it("le layout continue de déclarer la variante /icons avec cache-buster ?v=", () => {
+    expect(layout).toContain('apple: [{ url: "/icons/apple-touch-icon.png?v=g3-logo-1", sizes: "180x180" }]');
+  });
+});
