@@ -172,14 +172,24 @@ export function AppNav() {
               type="button"
               onClick={() => setPaletteOpen(true)}
               className={"g3-nav-search " + (compact ? "is-compact" : "")}
-              aria-label="Rechercher une destination…"
+              /* Pas d'aria-label en mode étendu : le nom accessible vient du
+                 contenu visible (« Rechercher une destination… ») — axe 4.14
+                 (label-content-name-mismatch) inclut le kbd au texte visible
+                 même aria-hidden, donc un aria-label « qui ne dit pas ⌘K »
+                 casse la règle (lab itér. 19). En mode compact il n'y a plus
+                 de libellé visible → aria-label requis pour nommer le bouton. */
+              aria-label={compact ? "Rechercher une destination…" : undefined}
             >
               <span aria-hidden="true">⌕</span>
               {!compact && <><span className="min-w-0 flex-1 truncate text-left">Rechercher une destination…</span><kbd aria-hidden="true">⌘K</kbd></>}
             </button>
           </div>
 
-          <nav className="g3-nav-scroll flex-1 space-y-5 px-2.5 py-4" aria-label="Navigation principale">
+          <nav
+            className="g3-nav-scroll flex-1 space-y-5 px-2.5 py-4"
+            aria-label="Navigation principale"
+            tabIndex={0}
+          >
             {visibleGroups.map((group) => (
               <NavGroup key={group.title} title={group.title} items={group.items} />
             ))}

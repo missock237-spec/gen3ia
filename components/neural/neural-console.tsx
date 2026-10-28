@@ -458,7 +458,7 @@ export function NeuralConsole() {
       <header className="g3v6-card g3v6-sweep relative overflow-hidden px-6 py-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3v6-spike)]">Aurora OS · V6 · Moteur interne</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3v6-spike-text)]">Aurora OS · V6 · Moteur interne</p>
             <h1 className="mt-1 text-2xl font-bold text-[var(--g3-text)]">Système Neuronal Gen3</h1>
             <p className="mt-1 max-w-xl text-sm text-[var(--g3-muted)]">
               Réseau de neurones à spikes, plasticité hebbienne et corps sémantique — 100 % local, aucune IA externe.
@@ -512,7 +512,7 @@ export function NeuralConsole() {
                 {Object.entries(cerveau?.pools ?? {}).slice(0, 6).map(([canal, neurones]) => (
                   <li key={canal} className="flex items-center justify-between text-[11px]">
                     <span className="text-[var(--g3-text-secondary)]">{canal}</span>
-                    <span className="g3v6-metric text-[var(--g3v6-spike)]">#{neurones.join(" #")}</span>
+                    <span className="g3v6-metric text-[var(--g3v6-spike-text)]">#{neurones.join(" #")}</span>
                   </li>
                 ))}
               </ul>
@@ -538,7 +538,7 @@ export function NeuralConsole() {
                   : "bg-[var(--g3-elevated)] text-[var(--g3-text)]"}`}>
                   <p className="whitespace-pre-wrap">{m.texte}</p>
                   {m.meta?.intention ? (
-                    <p className="g3v6-metric mt-2 text-[10px] text-[var(--g3v6-spike)]">
+                    <p className="g3v6-metric mt-2 text-[10px] text-[var(--g3v6-spike-text)]">
                       intention {m.meta.intention} · résonance {m.meta.scoreResonance !== undefined ? PCT(m.meta.scoreResonance) : "—"}
                       {m.meta.latencyMs !== undefined ? ` · ${m.meta.latencyMs} ms` : ""}
                     </p>
@@ -591,7 +591,7 @@ export function NeuralConsole() {
                   aria-selected={typeMedia === t}
                   onClick={() => { setTypeMedia(t); setMedia(null); setErreurMedia(""); }}
                   className={`rounded-xl px-3 py-2 text-xs font-semibold capitalize transition ${typeMedia === t
-                    ? "bg-[var(--g3v6-spike-soft)] text-[var(--g3v6-spike)] ring-1 ring-[var(--g3v6-spike)]"
+                    ? "bg-[var(--g3v6-spike-soft)] text-[var(--g3v6-spike-text)] ring-1 ring-[var(--g3v6-spike)]"
                     : "text-[var(--g3-muted)] hover:bg-[var(--g3-hover)]"}`}
                 >
                   {t === "video" ? "vidéo" : t}
@@ -671,7 +671,7 @@ export function NeuralConsole() {
               <div className="mt-4 space-y-3">
                 <div className="flex flex-wrap gap-2 text-[11px] text-[var(--g3-muted)]">
                   <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">
-                    Synapses domaine apprises : <strong className="text-[var(--g3v6-spike)]">{domaines.coucheDomaines.synapses}</strong>
+                    Synapses domaine apprises : <strong className="text-[var(--g3v6-spike-text)]">{domaines.coucheDomaines.synapses}</strong>
                   </span>
                   {domaines.datasets.some((d) => d.lignesComplet !== null) ? (
                     <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">Datasets complets détectés sur disque</span>
@@ -736,7 +736,7 @@ export function NeuralConsole() {
                 )}
               </div>
             </div>
-            {lancement ? <p className="mt-3 text-xs text-[var(--g3-v6-spike, var(--g3v6-spike))]">{lancement}</p> : null}
+            {lancement ? <p className="mt-3 text-xs text-[var(--g3v6-spike-text)]">{lancement}</p> : null}
             {job?.rapport ? (
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <Metrique label="Accuracy train" valeur={PCT(job.rapport.accuracyTrain)} sous={`${job.rapport.epochs} epochs · ${job.rapport.samples} échantillons`} />
@@ -786,8 +786,8 @@ export function NeuralConsole() {
                       <td className="py-2 pr-4">{new Date(h.startedAt).toLocaleString("fr-FR")}</td>
                       <td className="py-2 pr-4">{h.epochs}</td>
                       <td className="py-2 pr-4">{h.samples}</td>
-                      <td className="py-2 pr-4 text-[var(--g3v6-spike)]">{PCT(h.accuracyTrain)}</td>
-                      <td className="py-2 text-[var(--g3v6-neural-strong)]">{PCT(h.accuracyTest)}</td>
+                      <td className="py-2 pr-4 text-[var(--g3v6-spike-text)]">{PCT(h.accuracyTrain)}</td>
+                      <td className="py-2 text-[var(--g3v6-neural-strong-text)]">{PCT(h.accuracyTest)}</td>
                     </tr>
                   ))}
                 </tbody>

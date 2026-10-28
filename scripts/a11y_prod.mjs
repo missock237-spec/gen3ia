@@ -106,13 +106,14 @@ async function scanPage(browser, pagePath, theme) {
 
     return {
       pagePath,
+      theme,
       url,
       ok: true,
       violations: results.violations || [],
       incomplete: results.incomplete || [],
     };
   } catch (error) {
-    return { pagePath, url, ok: false, error: String(error?.message || error), violations: [], incomplete: [] };
+    return { pagePath, theme, url, ok: false, error: String(error?.message || error), violations: [], incomplete: [] };
   } finally {
     await context.close();
   }

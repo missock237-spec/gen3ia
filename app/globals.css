@@ -140,6 +140,14 @@
   --g3v6-neural-strong: #9E85FF;
   --g3v6-spike: #2AD4E8;
   --g3v6-spike-soft: rgba(42, 212, 232, 0.13);
+  /* Encre TEXTE dérivée du spike : identique au spike en sombre (#2AD4E8
+     ≈ 10.8:1 sur verre orbital sombre) ; en clair le cyan brut (#2AD4E8)
+     tombe à ≈ 1.8:1 sur verre blanc — l'override [data-theme="light"]
+     la remplace par un cyan foncé ≥ 4.5:1. L'art SVG continue de
+     consommer --g3v6-spike (graphique, pas du texte). */
+  --g3v6-spike-text: #2AD4E8;
+  /* Même doctrine pour neural-strong (#9E85FF ≈ 2.9:1 sur blanc en clair). */
+  --g3v6-neural-strong-text: #9E85FF;
   --g3v6-resonance: #C9AEFF;
   --g3v6-synapse: rgba(124, 92, 255, 0.32);
   /* Surfaces V6 : verre orbital — profondeur accrue derrière les
@@ -233,6 +241,20 @@
   --gen3ia-shadow-md: 0 24px 60px -28px rgba(16, 27, 38, 0.24);
   --gen3ia-shadow-glow: 0 10px 40px -14px rgba(108, 72, 255, 0.40);
   --g3-glow-ring: 0 0 0 1px rgba(108, 72, 255, 0.26), 0 8px 34px -10px rgba(108, 72, 255, 0.26);
+  /* Couche V6 en thème clair (itér. 19) : le verre orbital sombre
+     (rgba(16,19,37,.66)) et le void #03040A ignoraient le thème clair —
+     les encres sombres du thème passaient dessus à ≈ 1.2-3:1. La
+     constellation flotte désormais sur un canvas clair ; les encres
+     texte V6 reçoivent des variantes foncées ≥ 4.5:1 (spike-text,
+     neural-strong-text) pendant que l'art SVG garde les couleurs vives. */
+  --g3v6-void: #EAF3F9;
+  --g3v6-glass: rgba(255, 255, 255, 0.82);
+  --g3v6-glass-border: rgba(108, 72, 255, 0.20);
+  --g3v6-grid: radial-gradient(circle at 1px 1px, rgba(108, 72, 255, 0.10) 1px, transparent 0);
+  --g3v6-halo: 0 0 90px -18px rgba(108, 72, 255, 0.32);
+  --g3v6-halo-spike: 0 0 60px -14px rgba(8, 153, 180, 0.28);
+  --g3v6-spike-text: #067589;
+  --g3v6-neural-strong-text: #5633E8;
 }
 
 /* ============================================================

@@ -77,7 +77,7 @@ export default function PrivacyPage() {
       <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
         Politique de confidentialité
       </h1>
-      <p className="mt-3 text-sm leading-6 text-neutral-500">
+      <p className="mt-3 text-sm leading-6 text-[var(--g3-muted)]">
         Dernière mise à jour : septembre 2026. La présente politique décrit
         comment vos données personnelles sont collectées, utilisées et
         protégées lorsque vous utilisez Gen3ia.
@@ -100,7 +100,7 @@ export default function PrivacyPage() {
         ))}
       </div>
 
-      <p className="mt-10 text-sm text-neutral-500">
+      <p className="mt-10 text-sm text-[var(--g3-muted)]">
         Une question sur vos données ?{" "}
         <Link href="/dashboard" className="font-semibold text-[var(--gen3ia-sky)] underline underline-offset-2">
           Revenir à votre espace

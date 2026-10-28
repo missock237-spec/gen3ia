@@ -54,7 +54,7 @@ export function NeuralLiveStrip() {
       className="g3v6-card mx-auto mt-10 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2 px-5 py-3"
       aria-label="État en direct du moteur neuronal Gen3"
     >
-      <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[var(--g3v6-track)] text-[var(--g3v6-spike)]">
+      <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[var(--g3v6-track)] text-[var(--g3v6-spike-text)]">
         <span className="g3v6-resonance-bar h-2 w-2" aria-hidden />
         Moteur en direct
       </span>
