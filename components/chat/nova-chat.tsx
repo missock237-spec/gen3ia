@@ -466,7 +466,7 @@ const MessageView = React.memo(function MessageView({ m, dernierBot, dernierUser
 
   return (
     <div className={`nova-msg ${bot ? "assistant" : "utilisateur"}`}>
-      <div className="nova-avatar" aria-hidden="true">{bot ? "✦" : "J"}</div>
+      <div className="nova-avatar" aria-hidden="true">{bot ? "G" : "J"}</div>
       <div className="nova-colonne">
         {m.fichiers && m.fichiers.length > 0 ? (
           <div className="nova-fichiers-msg">
@@ -599,8 +599,10 @@ export default function NovaChat() {
   const [enCours, setEnCours] = React.useState(false);
   const [statut, setStatut] = React.useState("Prête — demandez-lui tout");
   const [sidebarOuverte, setSidebarOuverte] = React.useState(false);
+  const [reduite, setReduite] = React.useState(false); // GLM : volet latéral repliable (desktop)
   const [popOutils, setPopOutils] = React.useState(false);
   const [popEffort, setPopEffort] = React.useState(false);
+  const [popModele, setPopModele] = React.useState(false); // GLM : sélecteur de modèle/effort (barre haute)
   const [apps, setApps] = React.useState<NovaAppConnectee[] | null>(null);
   const [apisPersos, setApisPersos] = React.useState<NovaApiPerso[]>([]);
   const [chargementApps, setChargementApps] = React.useState(false);
@@ -1579,6 +1581,7 @@ export default function NovaChat() {
       if (e.key === "Escape") {
         setPopOutils(false);
         setPopEffort(false);
+        setPopModele(false);
         setSidebarOuverte(false);
       }
     };
@@ -1686,7 +1689,7 @@ export default function NovaChat() {
   const envoiDesactive = enCours ? false : ((envoiVide && !saisieVocale.supported) || longueur > CFG.maxCaracteres);
 
   return (
-    <div className="nova">
+    <div className={`nova${reduite ? " reduite" : ""}`}>
       <div className={`nova-overlay${sidebarOuverte ? " ouvert" : ""}`} onClick={() => setSidebarOuverte(false)} />
 
       {/* ================= Sidebar historique ================= */}
@@ -1774,11 +1777,65 @@ export default function NovaChat() {
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
           </button>
-          <div className="nova-topbar-logo" aria-hidden="true">✦</div>
-          <div>
-            <div className="nova-titre">Gen3ia</div>
-            <div className="nova-statut" role="status">{statut}</div>
+          {/* GLM : replier/déplier le volet latéral (desktop) */}
+          <button
+            type="button"
+            className="nova-bouton-ico nova-replie"
+            aria-label={reduite ? "Afficher l'historique" : "Réduire l'historique"}
+            aria-pressed={reduite}
+            title={reduite ? "Afficher le volet latéral" : "Réduire le volet latéral"}
+            onClick={() => setReduite((r) => !r)}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg>
+          </button>
+
+          {/* GLM : sélecteur de modèle & effort dans la barre haute */}
+          <div className="nova-modele-zone nova-zone-relative">
+            <button
+              type="button"
+              className="nova-modele-chip"
+              aria-haspopup="true"
+              aria-expanded={popModele}
+              onClick={() => {
+                setPopEffort(false);
+                setPopOutils(false);
+                setPopModele((o) => !o);
+              }}
+              title="Modèle & effort de réflexion"
+            >
+              <span className="puce" aria-hidden="true" />
+              Gen3 · {EFFORT_LABEL_COURT[effort]}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true" width="13" height="13"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+            {popModele ? (
+              <div className="nova-popover modeles" role="menu">
+                <div className="nova-pop-titre">Effort de réflexion de Gen3</div>
+                {(Object.keys(EFFORTS) as EffortId[]).map((id) => (
+                  <button
+                    type="button"
+                    key={id}
+                    className={`nova-pop-item${effort === id ? " selected" : ""}`}
+                    role="menuitemradio"
+                    aria-checked={effort === id}
+                    onClick={() => {
+                      changerEffort(id);
+                      setPopModele(false);
+                    }}
+                  >
+                    <span className="ico" aria-hidden="true">{EFFORTS[id].ico}</span>
+                    <span className="txt">
+                      {EFFORTS[id].nom}
+                      <span className="sub">{EFFORTS[id].sub}</span>
+                    </span>
+                    <span className="coche" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
+
+          <div className="nova-statut" role="status">{statut}</div>
+
           <div className="nova-topbar-actions">
             <button type="button" className="nova-bouton-ico" onClick={exporterConversation} aria-label="Exporter la conversation en Markdown" title="Exporter (.md)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
@@ -1788,7 +1845,7 @@ export default function NovaChat() {
         </header>
 
         <section
-          className="nova-messages"
+          className={`nova-messages${messages.length === 0 ? " vide" : ""}`}
           ref={messagesRef}
           role="log"
           aria-live="polite"
@@ -1798,23 +1855,14 @@ export default function NovaChat() {
         >
           {messages.length === 0 ? (
             <div className="nova-accueil">
-              <div className="nova-accueil-logo" aria-hidden="true">✦</div>
+              <div className="nova-accueil-logo" aria-hidden="true">G</div>
               <h2>
-                Que puis-je faire <span className="gradient-text">pour vous ?</span>
+                Salut, je suis <span className="gradient-text">Gen3ia</span>
               </h2>
               <p>
                 Je pilote toute la plateforme : demandez-moi de créer un agent, de planifier une tâche, de générer
-                une image, une vidéo, un document — ou choisissez un départ ci-dessous.
+                une image, une vidéo, un document — décrivez simplement votre besoin.
               </p>
-              <div className="nova-cartes">
-                {CARTES_ACCUEIL.map((carte) => (
-                  <button type="button" key={carte.titre} className="nova-carte" onClick={() => void envoyer(carte.sugg)}>
-                    <div className="nova-carte-ico" aria-hidden="true">{carte.ico}</div>
-                    <div className="nova-carte-titre">{carte.titre}</div>
-                    <div className="nova-carte-desc">{carte.desc}</div>
-                  </button>
-                ))}
-              </div>
             </div>
           ) : (
             <div className="nova-fil">
@@ -1854,8 +1902,13 @@ export default function NovaChat() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true" width="15" height="15"><path d="M12 5v14M5 12l7 7 7-7" /></svg>
         </button>
 
-        {/* ================= Composer — 5 commandes ================= */}
-        <footer className="nova-composer">
+        {/* ================= Composer — 5 commandes =================
+            GLM : dans l'accueil vide, le composer se place au centre
+            (salutation → saisie → cartes de départ) ; dès le premier
+            message, il s'ancre en bas de l'écran. ================= */}
+        {(() => {
+          const composer = (
+          <footer className="nova-composer">
           <div className="nova-zone-relative">
             <div
               className={`nova-composer-boite${dropActif ? " drop" : ""}`}
@@ -2172,6 +2225,25 @@ export default function NovaChat() {
             Entrée pour envoyer · Maj + Entrée pour aller à la ligne · Gen3ia pilote toute la plateforme : agents, automatisations, médias, documents.
           </div>
         </footer>
+          );
+          if (messages.length === 0) {
+            return (
+              <div className="nova-accueil-bas">
+                {composer}
+                <div className="nova-cartes">
+                  {CARTES_ACCUEIL.map((carte) => (
+                    <button type="button" key={carte.titre} className="nova-carte" onClick={() => void envoyer(carte.sugg)}>
+                      <div className="nova-carte-ico" aria-hidden="true">{carte.ico}</div>
+                      <div className="nova-carte-titre">{carte.titre}</div>
+                      <div className="nova-carte-desc">{carte.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+          return composer;
+        })()}
       </main>
 
       {toast ? (

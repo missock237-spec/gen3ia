@@ -4260,3 +4260,11 @@ Stage Summary:
 - Anomalie corrigée : `/api/media/professeur-statut` renvoyait 500 vide au lieu du 401 JSON (requireUser hors try/catch) — scan systématique des 115 routes requireUser : seule route touchée ; filet maison errorBody/errorStatus/errorCode ajouté ; typecheck + eslint verts.
 - Entraînement gen3 : notebook v4 18 domaines prêt (GPU Colab propriétaire, inchangé) ; la chaîne CD réparée livrera désormais tout artefact de modèle automatiquement.
 - Reste n°1 : rotations de secrets par le propriétaire. Rapport : docs/rapports/rapport-job-478451-2026-10-29-0010.md
+
+## 478451-iter14-0020 — 2026-10-29 00:20–01:20 +08:00
+
+- Demande propriétaire : « l'interface de gen3 doit être comme celui de GLM » → reskin complet du Nova Chat (/dashboard) façon chat.z.ai, identité Aurora conservée, zéro perte fonctionnelle.
+- Accueil centré GLM : « Salut, je suis Gen3ia » → composer au centre → cartes de départ sous la saisie ; ancrage bas dès le 1er message (composer rendu via IIFE réutilisable).
+- Chip modèle « Gen3 · Effort ▾ » dans la topbar (popover 3 niveaux, synchronisé composer) ; volet latéral repliable desktop (grid 288px→0 animée) ; bulle utilisateur grise à droite sans avatar ; réponse Gen3 pleine largeur, avatar dégradé « G » ; composer arrondi 24px, envoi circulaire ; topbar épurée sans bordure ; « Nouvelle conversation » pill neutre.
+- Validation : tsc exit 0, eslint exit 0, vitest nova-dashboard 12/12 ; build local tué par OOM sandbox (137) — limite environnement, CI exécute le build complet.
+- Rapport : docs/rapports/rapport-job-478451-2026-10-29-0020.md

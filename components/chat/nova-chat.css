@@ -1218,3 +1218,203 @@ html[data-theme="light"] .nova-telemetrie {
   border-color: rgba(60, 70, 90, 0.18);
 }
 html[data-theme="light"] .nova-telemetrie .ligne code { color: #1e2430; }
+
+/* ============================================================
+   RESKIN « GLM » (demande propriétaire 2026-10-29) — la géométrie
+   et le rythme de chat.z.ai appliqués à l'identité Aurora :
+   • accueil centré : salutation → composer → cartes de départ ;
+   • sélecteur de modèle/effort dans la barre haute (chip pill) ;
+   • volet latéral repliable (desktop) ;
+   • bulles utilisateur alignées à droite, sans avatar, surface
+     neutre ; réponses Gen3 en pleine largeur avec avatar « G ».
+   Les règles ci-dessous SURCHAGENT les sections précédentes
+   (mêmes sélecteurs, déclarées plus loin = priorité CSS).
+   ============================================================ */
+
+/* ---- Volet latéral repliable (desktop uniquement) ---- */
+.nova {
+  transition: grid-template-columns 0.22s ease;
+}
+
+@media (min-width: 901px) {
+  .nova.reduite { grid-template-columns: 0 1fr; }
+  .nova.reduite .nova-sidebar {
+    border-right-color: transparent;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.nova-replie { display: grid; }
+
+@media (max-width: 900px) {
+  .nova-replie { display: none; }
+}
+
+/* ---- Barre haute façon GLM (sans bordure, chip modèle) ---- */
+.nova-topbar {
+  border-bottom-color: transparent;
+  background: transparent;
+  backdrop-filter: none;
+  padding: 12px 16px;
+  gap: 10px;
+}
+
+.nova-topbar .nova-statut {
+  margin-right: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--g3-faint);
+}
+
+.nova-topbar .nova-topbar-actions { margin-left: 0; flex: none; }
+
+.nova-modele-zone { position: relative; flex: none; }
+
+.nova-modele-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid var(--g3-border);
+  border-radius: 999px;
+  background: var(--g3-surface);
+  color: var(--g3-text);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+  white-space: nowrap;
+}
+
+.nova-modele-chip:hover {
+  border-color: var(--g3-primary-border);
+  background: var(--g3-hover);
+}
+
+.nova-modele-chip .puce {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--g3-gradient);
+  box-shadow: 0 0 8px -1px var(--g3-primary-strong);
+  flex: none;
+}
+
+.nova-popover.modeles {
+  bottom: auto;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 300px;
+}
+
+/* ---- Accueil centré façon GLM ---- */
+.nova-messages.vide {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.nova-accueil {
+  padding-top: 0;
+  padding-bottom: 4px;
+}
+
+.nova-accueil-logo {
+  width: 74px;
+  height: 74px;
+  border-radius: 24px;
+  font-size: 34px;
+  margin-bottom: 22px;
+}
+
+.nova-accueil h2 {
+  font-size: clamp(26px, 4.4vw, 34px);
+  margin-bottom: 10px;
+}
+
+.nova-accueil-bas {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 18px 4.5vh;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+}
+
+.nova-accueil-bas .nova-composer { padding: 0; }
+
+.nova-accueil-bas .nova-cartes { margin-top: 16px; }
+
+/* ---- Composer façon GLM ---- */
+.nova-composer-boite {
+  border-radius: 24px;
+  border-color: var(--g3-border);
+  box-shadow: 0 8px 30px -14px rgba(5, 6, 12, 0.35), 0 2px 8px -4px rgba(5, 6, 12, 0.18);
+}
+
+.nova-composer-boite:focus-within {
+  border-color: var(--g3-primary-border);
+  box-shadow: 0 0 0 3px var(--g3-primary-soft), 0 14px 38px -16px rgba(5, 6, 12, 0.42);
+}
+
+.nova-envoi { border-radius: 999px; }
+
+/* ---- Bouton « Nouvelle conversation » façon GLM ---- */
+.nova-nouveau {
+  background: var(--g3-elevated);
+  color: var(--g3-text);
+  border: 1px solid var(--g3-border-strong);
+  font-weight: 600;
+}
+
+.nova-nouveau:hover {
+  transform: none;
+  border-color: var(--g3-primary-border);
+  background: var(--g3-hover);
+  box-shadow: none;
+}
+
+/* ---- Messages : bulles façon GLM ---- */
+/* Utilisateur : aligné à droite, sans avatar, surface neutre. */
+.nova-msg.utilisateur { flex-direction: row-reverse; }
+
+.nova-msg.utilisateur .nova-avatar { display: none; }
+
+.nova-msg.utilisateur .nova-colonne {
+  align-items: flex-end;
+  max-width: min(86%, 620px);
+  margin-left: auto;
+}
+
+.nova-msg.utilisateur .nova-bulle {
+  background: var(--g3-elevated);
+  color: var(--g3-text);
+  border: 1px solid var(--g3-border);
+  border-radius: 18px 18px 6px 18px;
+}
+
+.nova-msg.utilisateur .nova-meta { justify-content: flex-end; }
+.nova-msg.utilisateur .nova-fichiers-msg { justify-content: flex-end; }
+
+/* Gen3 : réponse en pleine largeur, sans bulle (texte sur la page). */
+.nova-msg.assistant .nova-bulle {
+  background: transparent;
+  border: none;
+  padding: 2px 2px 0;
+  border-radius: 0;
+}
+
+.nova-msg.assistant .nova-colonne { max-width: calc(100% - 44px); }
+
+@media (max-width: 900px) {
+  .nova-accueil-bas { padding: 0 10px 3vh; }
+  .nova-msg.utilisateur .nova-colonne { max-width: 90%; }
+  .nova-modele-chip { padding: 6px 11px; font-size: 12.5px; }
+  .nova-topbar .nova-statut { display: none; }
+}
