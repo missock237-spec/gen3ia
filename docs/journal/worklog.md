@@ -4243,3 +4243,11 @@ Stage Summary:
 - Anomalie n°1 (haute) corrigée : précédence sshd — drop-in 00-gen3ia-nopenalties.conf (première valeur obtenue gagne, un drop-in fournisseur ne peut plus réactiver PerSourcePenalties) ; retrait auto si sshd -t rejette.
 - Anomalie n°2 (moyenne) : échec disque silencieux — diagnostic /opt + purge tar résiduel ; watchdog purge /tmp si disque ≥ 90 %.
 - Rapport : docs/rapports/rapport-job-478451-2026-10-28-2210.md. Script validé bash -n, idempotent.
+
+## 478451-iter12-2310 — 2026-10-28 23:10–23:20 +08:00
+
+- Propriétaire : « il a été exécuté » → RÉTABLISSEMENT PROUVÉ de bout en bout.
+- Prod 66a8563d → c5824740 (= HEAD main, build 14:59 UTC) : 2 builds rattrapés par le poller, SSH bannière réelle SSH-2.0-OpenSSH_9.9 (barrage PerSourcePenalties levé), health/status/accueil 200.
+- Chronologie complète documentée (script console ~14:3x → push durcissement 14:55 → 5/5 workflows verts → poller délivre ≤ 15:05).
+- #106 : refermeture auto attendue au tick du push de ce rapport (logique dans job verifier).
+- Aucune nouvelle anomalie ; rotations secrets = reste n°1 (propriétaire). Rapport : docs/rapports/rapport-job-478451-2026-10-28-2310.md
