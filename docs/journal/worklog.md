@@ -4111,3 +4111,19 @@ Work Log:
 
 Stage Summary:
 - VERROU VPS CLOS : canal pull opérationnel, prod alignée sur main, tous services verts. Rapport : docs/rapports/rapport-job-478451-2026-10-28-1510.md
+
+---
+Task ID: 478451-iter6
+Agent: zai-web (cron 16:10 +08:00)
+Task: Audit continu — prod stable, correctif CD, audit secret scanning, fermeture escalade
+
+Work Log:
+- Routine verte : prod auto-alignée 421037d2 (poller ≤ 3 min), health/status/SSH 22022 OK, CI+CodeQL+guérisseur success.
+- Diagnostic CD rouge à tort : boucle de vérification 5×10 s insuffisante vs redémarrage PM2/Next (>50 s) — prod correcte 3 min plus tard (runs ddebb763/421037d2).
+- Correctif v3 deploy-vps.yml : fenêtre 12×15 s + rattrapage public HTTPS (gen3ia.online/version.json), toujours strict en cas de vraie non-livraison. YAML validé.
+- Issue #105 refermée (completed) avec commentaire de résolution complet.
+- Secret scanning : alerte #2 (Stripe whsec) = constante de test factice → résolue false_positive via API ; alerte #1 (Google API Key AIzaSy) = vraie clé historique dans ~30 scripts e2e/verify, HEAD propre, historique contaminé → rotation propriétaire requise, laissée ouverte.
+- Dependabot 0 alerte ; PRs #100-#103 toujours reportées.
+
+Stage Summary:
+- CD v3 poussé (preuve attendue sur le run du nouveau sha). Escalade fermée. 1 vraie faille historique documentée (rotation Google API). Rapport : docs/rapports/rapport-job-478451-2026-10-28-1610.md

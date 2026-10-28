@@ -228,7 +228,14 @@ jobs:
         if: steps.swap.outcome == 'success'
         id: verify_build
         run: |
-          for i in 1 2 3 4 5; do
+          # v3 (2026-10-28) : le swap réussit puis PM2/Next peuvent mettre
+          # plus de 50 s à redémarrer (runs ddebb763/421037d2 rouges à tort
+          # alors que la prod servait le bon build 3 min plus tard).
+          # Fenêtre étendue à 12 essais × 15 s (3 min, couvre aussi le cycle
+          # poller de 2 min) + rattrapage public HTTPS : gen3ia.online sert
+          # la vérité utilisateur, quel que soit le canal qui a livré.
+          local_ok=0
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
             reponse=$(ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
                  "curl -fsS -m 15 http://127.0.0.1:3000/api/deploy-info && echo && curl -fsS -m 15 http://127.0.0.1:3000/version.json" 2>/dev/null || true)
@@ -242,13 +249,26 @@ jobs:
             empreinte=$(echo "$compacte" | grep -o '"deploymentId":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
             manifeste=$(echo "$compacte" | grep -o '"version":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
             if [ "$empreinte" = "$BUILD_ID" ] && [ "$manifeste" = "$BUILD_ID" ]; then
-              echo "Vérifié : la production sert le build $BUILD_ID (deploy-info + version.json alignés)."
+              echo "Vérifié (local VPS) : la production sert le build $BUILD_ID (deploy-info + version.json alignés)."
+              local_ok=1
+              break
+            fi
+            echo "Tentative $i/12 : deploy-info='$empreinte' version.json='$manifeste' ≠ attendu '$BUILD_ID' — nouvelle tentative dans 15 s…"
+            sleep 15
+          done
+          if [ "$local_ok" = "1" ]; then exit 0; fi
+          # Rattrapage public : ce que sert gen3ia.online fait foi — la
+          # livraison peut venir du swap SSH comme du poller pull.
+          for i in 1 2 3 4; do
+            public=$(curl -fsS -m 20 https://gen3ia.online/version.json 2>/dev/null | tr -d ' \n\r' | grep -o '"version":"[^"]*"' | sed -E 's/.*:"//; s/"$//' || true)
+            if [ "$public" = "$BUILD_ID" ]; then
+              echo "Vérifié (public) : gen3ia.online sert le build $BUILD_ID — le check local a manqué la fenêtre (course de démarrage PM2)."
               exit 0
             fi
-            echo "Tentative $i/5 : deploy-info='$empreinte' version.json='$manifeste' ≠ attendu '$BUILD_ID' — nouvelle tentative dans 10 s…"
-            sleep 10
+            echo "Rattrapage public $i/4 : gen3ia.online='$public' ≠ attendu '$BUILD_ID' — nouvelle tentative dans 20 s…"
+            sleep 20
           done
-          echo "::error::La production ne sert PAS le build livré ($BUILD_ID) — déploiement à investiguer."
+          echo "::error::La production ne sert PAS le build livré ($BUILD_ID) après la fenêtre étendue (local + public) — déploiement à investiguer."
           exit 1
 
       # RAPPORT DE FIN DE RUN (double canal) : état de chaque voie, action
