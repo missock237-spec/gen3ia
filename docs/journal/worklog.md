@@ -4027,3 +4027,25 @@ Stage Summary:
 - Phase 2 livrée sur main (4ba979d) et DÉPLOYÉE en prod (version.json aligné, health ok).
 - Racine cible atteinte : app/ components/ lib/ tests/ infra/ scripts/ services/ training/ docs/ public/ + configs racine ; décisions S2/S3 consignées dans docs/plan-restructuration.md.
 - Reste : Phase 3 (lib/ par domaine, app/ routes, i18n), Phase 4 (gouvernance), CGU/RGPD, révoquer tokens GitHub ghp_26B1… ET HF hf_OnaO… en fin de session.
+
+---
+## Itération 3 Job 478451 (cron 12:10 +08:00, 2026-10-28 ~04:10-04:45 UTC)
+
+Task: re-audit complet + corrections + vérification production + rapport.
+
+Work Log:
+- Clone frais (1774 commits, main=13698520) ; audit secrets approfondi : PAT complet JAMAIS commité (git log -S + git grep sur 300 révisions — seule forme tronquée documentaire), .env et HF token absents de tout l'historique → dépôt propre.
+- audit:auth ré-exécuté : 301 routes → 282 gardées / 19 publiques-par-design (6 POST publics vérifiés un à un : HMAC signé, ticket signé, token haché, facturation API key) / 0 nue. withAuth re-lu (défense en profondeur middleware+route).
+- Webhook Chariow re-vérifié : HMAC timing-safe + claim transactionnel idempotent — conforme.
+- Prod gen3ia.online : /, /login, /chat 200 ; /api/health 200 ; login R2 401 structuré propre ; /status 404 + sonde auth ancienne → prod gelée à b8dd38c (retard 14 commits après merges) ; build servi ≠ build publié (g5PkvuZlYYmdwWoicarlo ≠ xeOyTE_o3Fq7HU8Coo4GV).
+- Guérisseur re-dispatché (run 40631154321) : release cd-latest à jour, SSH muet 3/3 (04:14 UTC), issue #105 auto-commentée.
+- Anomalie détectée : ticks cron 13,43 (03:43/04:13) jamais démarrés (congestion GitHub Actions) — déclencheur push a compensé.
+- Faux positif écarté : « branches: ain] » dans 4 workflows = artefact d'affichage du bac à sable (suppression de [m dans les sorties) — od -c + git status prouvent [main] correct depuis l'origine ; aucun commit de bruit.
+- Dependabot (6 PRs) analysé avec checks CI réels : #99 setup-java 4→6 MERGÉ (b1169841), #104 pino 9→10 MERGÉ (ba65dfdd) ; #100-#103 checks rouges (eslint 10, sentry 11, eslint-config-next 16, groupe 10) → volontairement non mergés.
+- Chaîne CI/CD/guérisseur relancée sur ba65dfdd ; notebook Colab v4 re-validé (nbformat 4, 18 cellules).
+
+Stage Summary:
+- Rapport d'itération : docs/rapports/rapport-job-478451-2026-10-28-1210.md
+- Aucune nouvelle faille code ; verrou unique = exploitation VPS (poller non installé + SSH muet) — action console propriétaire : curl -fsSL https://raw.githubusercontent.com/missock237-spec/gen3ia/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash
+- Rotation PAT ghp_26B1… + HF hf_OnaO… toujours en attente côté propriétaire.
+- Prod core accessible (pages+login) ; durcissements servis dès déblocage VPS.
