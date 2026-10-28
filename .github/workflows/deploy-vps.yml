@@ -242,6 +242,15 @@ jobs:
           # Fenêtre étendue à 12 essais × 15 s (3 min, couvre aussi le cycle
           # poller de 2 min) + rattrapage public HTTPS : gen3ia.online sert
           # la vérité utilisateur, quel que soit le canal qui a livré.
+          # v4 (2026-10-28, itération 9 Job 478451) : deux runs concurrents
+          # sur le MÊME sha (push + workflow_dispatch) compilent deux
+          # BUILD_ID distincts ; le poller peut alors rebasculer la prod sur
+          # l'autre build du même commit (run 40680610999 rouge à tort :
+          # swap « Yk1Jf… » réussi, poller revenu au build « 4J86O… » du
+          # même sha). La vérification accepte donc AUSSI l'alignement par
+          # gitSha : code identique = déploiement valide, quel que soit le
+          # BUILD_ID qui a gagné la course. Le BUILD_ID exact reste le
+          # critère premier.
           local_ok=0
           for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
             reponse=$(ssh -o ServerAliveInterval=30 -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
@@ -256,8 +265,14 @@ jobs:
             compacte=$(echo "$reponse" | tr -d ' \n\r')
             empreinte=$(echo "$compacte" | grep -o '"deploymentId":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
             manifeste=$(echo "$compacte" | grep -o '"version":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
+            sha_prod=$(echo "$compacte" | grep -o '"gitSha":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
             if [ "$empreinte" = "$BUILD_ID" ] && [ "$manifeste" = "$BUILD_ID" ]; then
               echo "Vérifié (local VPS) : la production sert le build $BUILD_ID (deploy-info + version.json alignés)."
+              local_ok=1
+              break
+            fi
+            if [ -n "$sha_prod" ] && [ "$sha_prod" = "$GITHUB_SHA" ]; then
+              echo "Vérifié (local VPS, par sha) : la production sert le commit $GITHUB_SHA — build concurrent '$manifeste' du même commit (course push/dispatch, code identique)."
               local_ok=1
               break
             fi
@@ -268,15 +283,21 @@ jobs:
           # Rattrapage public : ce que sert gen3ia.online fait foi — la
           # livraison peut venir du swap SSH comme du poller pull.
           for i in 1 2 3 4; do
-            public=$(curl -fsS -m 20 https://gen3ia.online/version.json 2>/dev/null | tr -d ' \n\r' | grep -o '"version":"[^"]*"' | sed -E 's/.*:"//; s/"$//' || true)
+            public_json=$(curl -fsS -m 20 https://gen3ia.online/version.json 2>/dev/null | tr -d ' \n\r')
+            public=$(echo "$public_json" | grep -o '"version":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
+            public_sha=$(echo "$public_json" | grep -o '"gitSha":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
             if [ "$public" = "$BUILD_ID" ]; then
               echo "Vérifié (public) : gen3ia.online sert le build $BUILD_ID — le check local a manqué la fenêtre (course de démarrage PM2)."
+              exit 0
+            fi
+            if [ -n "$public_sha" ] && [ "$public_sha" = "$GITHUB_SHA" ]; then
+              echo "Vérifié (public, par sha) : gen3ia.online sert le commit $GITHUB_SHA — build concurrent du même commit (code identique)."
               exit 0
             fi
             echo "Rattrapage public $i/4 : gen3ia.online='$public' ≠ attendu '$BUILD_ID' — nouvelle tentative dans 20 s…"
             sleep 20
           done
-          echo "::error::La production ne sert PAS le build livré ($BUILD_ID) après la fenêtre étendue (local + public) — déploiement à investiguer."
+          echo "::error::La production ne sert NI le build livré ($BUILD_ID) NI le commit ($GITHUB_SHA) après la fenêtre étendue (local + public) — déploiement à investiguer."
           exit 1
 
       # RAPPORT DE FIN DE RUN (double canal) : état de chaque voie, action
