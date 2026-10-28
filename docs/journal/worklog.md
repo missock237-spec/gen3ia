@@ -4268,3 +4268,11 @@ Stage Summary:
 - Chip modèle « Gen3 · Effort ▾ » dans la topbar (popover 3 niveaux, synchronisé composer) ; volet latéral repliable desktop (grid 288px→0 animée) ; bulle utilisateur grise à droite sans avatar ; réponse Gen3 pleine largeur, avatar dégradé « G » ; composer arrondi 24px, envoi circulaire ; topbar épurée sans bordure ; « Nouvelle conversation » pill neutre.
 - Validation : tsc exit 0, eslint exit 0, vitest nova-dashboard 12/12 ; build local tué par OOM sandbox (137) — limite environnement, CI exécute le build complet.
 - Rapport : docs/rapports/rapport-job-478451-2026-10-29-0020.md
+
+## 478451-iter15-0150 — 2026-10-29 01:50 +08:00
+
+- Passe de surveillance à froid post-UI GLM : prod saine et alignée sur main (`f010cfd4`), health 200 (0,90 s), accueil 200 (1,32 s), /chat 200.
+- UI GLM prouvée en prod par ses chunks : `Salut, je suis` + `nova-modele-chip` présents dans les chunks JS servis par /chat (les marqueurs ne sont pas dans le HTML de la landing `/` — composant chargé par /chat et /dashboard).
+- CI/CD : 6/6 runs success sur f010cfd4 ; SSH 22022 ouvert (OpenSSH 9.9, 192 ms) — 5ᵉ livraison autonome consécutive du poller ; #106 reste fermée (15:17:39 UTC) ; 0 alerte Dependabot ouverte.
+- Issues : aucune nouvelle — toujours PRs #100–#103 (dependabot, en attente propriétaire) et phases #95–#97 (refactoring de fond) ; aucun commentaire propriétaire depuis septembre → silence positif sur l'UI livrée ; aucun defect à corriger, zéro commit de code.
+- Reste n°1 inchangé : rotation des secrets (PAT reproduit en clair dans le cron, clé Google, token HF). Rapport : docs/rapports/rapport-job-478451-2026-10-29-0150.md
