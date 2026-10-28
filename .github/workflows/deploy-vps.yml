@@ -247,9 +247,36 @@ jobs:
       # RAPPORT DE FIN DE RUN (double canal) : état de chaque voie, action
       # de contrôle pour l'exploitant. Vert = build publié sur la release
       # (canal pull arme le déploiement) ; SSH = accélérateur éventuel.
+      # v2 (2026-10-28) : résumé visible sur la page du run — vert ≠
+      # « production basculée » tant que le poller pull n'est pas armé.
       - name: Rapport canaux de déploiement
         if: always()
         run: |
+          SWAP="${{ steps.swap.outcome }}"
+          {
+            echo "### RAPPORT CD — build $BUILD_ID (sha $GITHUB_SHA)"
+            echo ""
+            echo "| Voie | État |"
+            echo "|---|---|"
+            echo "| Publication release cd-latest | ✅ meta.json (sha $GITHUB_SHA) |"
+            if [ "$SWAP" = "success" ]; then
+              echo "| Canal SSH — swap + vérification | ✅ production basculée ce run |"
+            else
+              echo "| Canal SSH — swap + vérification | ❌ non exécuté (${{ steps.scp.outcome }}) |"
+            fi
+            echo ""
+            if [ "$SWAP" = "success" ]; then
+              echo "La production sert CE build (deploy-info + version.json vérifiés)."
+            else
+              echo "**⚠️ Production NON basculée par ce run** — le canal pull du VPS reste l'unique rattrapage."
+              echo "Poller non installé ? Une seule fois depuis la console VPS : \`curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash\`"
+            fi
+            echo ""
+            echo "Contrôle : \`curl -s https://gen3ia.online/version.json\` (attendu : $GITHUB_SHA)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$SWAP" != "success" ]; then
+            echo "::warning::Production NON basculée par ce run (canal SSH indisponible, poller pull = seul rattrapage). Voir le résumé du run."
+          fi
           echo "=== RAPPORT CD — build $BUILD_ID (sha $GITHUB_SHA) ==="
           echo "Canal PULL (faisant autorité) : release cd-latest publiée avec meta.json (sha $GITHUB_SHA)."
           echo "  → Le poller VPS (PM2 updater, toutes les 2 min) télécharge et bascule ce build"

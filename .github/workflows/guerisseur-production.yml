@@ -6,26 +6,34 @@ name: Guérisseur production
 #   · Le canal SSH du CD est soumis à des blocages VPS par périodes
 #     (fail2ban / PerSourcePenalties — 15 h observés les 26-27 oct.) ;
 #   · Le canal pull « faisant autorité » (release cd-latest + poller VPS)
-#     ne devient actif qu'après l'installation console de
-#     scripts/vps-auto-deploy/install-pull-mode.sh — tant qu'elle n'est
-#     pas faite sur le VPS, RIEN ne rattrape la production quand le SSH
-#     est bloqué (runs #115/#116 verts, prod restée sur b8dd38c).
+#     ne devient actif qu'après l'installation de
+#     scripts/vps-auto-deploy/install-pull-mode.sh sur le VPS ;
+#   · Les ticks planifiés du cron « */30 » (23:30, 00:00) ont été PERDUS
+#     le 27-28 oct. — congestion GitHub documentée en tête d'heure.
 #
-# Ce workflow surveille l'écart production ↔ main toutes les 30 min et
-# déclenche le déploiement continu dès que le SSH redevient joignable.
-# Une fois la production alignée (ou le poller installé), il reste
-# totalement passif : 1 GET public + 1 GET API par tick, zéro coût.
+# v2 (2026-10-28, itération Job 478451) — trois correctifs structurels :
+#   1. CRON décalé hors des heures pleines ('13,43') + déclencheur PUSH :
+#      chaque push sur main re-mesure l'écart même si les ticks planifiés
+#      sont perdus (la garde anti-collision empêche toute course avec le
+#      run CD déclenché par le même push) ;
+#   2. ARMEMENT DU CANAL PULL PAR SSH : quand le sshd répond et que le
+#      build de la release cd-latest correspond à main, le guérisseur
+#      installe LUI-MÊME le poller sur le VPS (install-pull-mode.sh,
+#      idempotent, premier déploiement immédiat) — la production est
+#      rattrapée ET le VPS devient autonome vis-à-vis du SSH pour
+#      toujours ;
+#   3. SECOURS : si l'armement échoue ou si le build en release est
+#      périmé (≠ main), déclenchement du CD (canal SSH historique).
 #
-# Garde-fous anti-boucle :
-#   · pas de déclenchement si un run CD est déjà en cours ;
-#   · pas de déclenchement si le CD a déjà échoué sur CE sha exact
-#     (SHA blacklisté / health check en échec = retenter est inutile) ;
-#   · sondage SSH léger AVANT tout déclenchement (3 essais espacés) :
-#     un build runner n'est brûlé que si le sshd répond réellement.
+# Une fois la production alignée, il reste totalement passif :
+# 1 GET public + 1 GET API par tick, zéro coût.
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    # Décalé hors des heures pleines (congestion GitHub en tête d'heure).
+    - cron: '13,43 * * * *'
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -70,12 +78,20 @@ jobs:
           echo "sha_prod=$SHA_PROD" >> "$GITHUB_OUTPUT"
 
   guerir:
-    name: Sondage SSH puis déclenchement CD
+    name: Armement pull (SSH) puis rattrapage
     needs: verifier
     if: needs.verifier.outputs.besoin == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    # Premier déploiement pull = téléchargement de ~205 Mo sur le VPS
+    # (jusqu'à 10 min dans pull-deploy.sh) + marges → 20 min.
+    timeout-minutes: 20
     steps:
+      - name: Configurer la clé SSH VPS
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vps_deploy
+          chmod 600 ~/.ssh/vps_deploy
+
       - name: Garde — CD déjà en cours ou déjà échoué sur ce sha ?
         id: garde
         run: |
@@ -92,6 +108,17 @@ jobs:
           else echo "verdict=libre"; fi
           echo "libre=$( [ "$(echo "$EN_COURS")" = "0" ] && [ "$DERNIER_CE_SHA" != "failure" ] && echo oui || echo non )" >> "$GITHUB_OUTPUT"
 
+      - name: Empreinte du build publié sur la release cd-latest
+        id: release
+        if: steps.garde.outputs.libre == 'oui'
+        run: |
+          META=$(curl -fsSL -m 20 -H "Cache-Control: no-cache" \
+            "https://github.com/${{ github.repository }}/releases/download/cd-latest/meta.json?_=$(date +%s)" || true)
+          RS=$(printf '%s' "$META" | grep -o '"sha":"[0-9a-f]*"' | head -1 | sed 's/.*:"//; s/"$//' || true)
+          echo "release_sha=${RS:-absent}" >> "$GITHUB_OUTPUT"
+          echo "Release cd-latest : ${RS:-absent}"
+          echo "main              : ${{ needs.verifier.outputs.sha_main }}"
+
       - name: Sondage SSH léger (3 essais espacés)
         id: sonde
         if: steps.garde.outputs.libre == 'oui'
@@ -100,7 +127,7 @@ jobs:
           for i in 1 2 3; do
             if timeout 12 ssh-keyscan -T 8 -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" 2>/dev/null | grep -q "ssh-"; then
               ok=1
-              echo "Sondage $i/3 : sshd répond — déploiement possible."
+              echo "Sondage $i/3 : sshd répond — armement du canal pull possible."
               break
             fi
             echo "Sondage $i/3 : SSH muet (fail2ban / PerSourcePenalties ?) — production rattrapée au prochain tick ou par le poller pull."
@@ -108,8 +135,31 @@ jobs:
           done
           echo "joignable=$([ $ok = 1 ] && echo oui || echo non)" >> "$GITHUB_OUTPUT"
 
-      - name: Déclencher le déploiement continu (canal SSH immédiat)
-        if: steps.sonde.outcome == 'success' && steps.sonde.outputs.joignable == 'oui'
+      # ARMEMENT DU CANAL PULL (le cœur du correctif structurel) :
+      # install-pull-mode.sh est idempotent, non interactif, sans entrée
+      # clavier. Il installe le poller PM2 (toutes les 2 min) PUIS lance
+      # immédiatement le premier déploiement : la production rattrape main
+      # pendant ce step, puis le VPS se déploie seul pour toujours
+      # (téléchargement HTTPS sortant de la release, zéro SSH entrant).
+      # Si le build en release est PÉRIMÉ (≠ main), on ne l'arme pas :
+      # le secours CD publie un build frais d'abord.
+      - name: Armer le canal pull sur le VPS (poller idempotent + déploiement immédiat)
+        id: pull
+        if: steps.sonde.outputs.joignable == 'oui' && steps.release.outputs.release_sha == needs.verifier.outputs.sha_main
+        run: |
+          if ssh -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+               -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+               "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+               "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash"; then
+            echo "verdict=arme" >> "$GITHUB_OUTPUT"
+            echo "✅ Canal pull ARMÉ : poller PM2 installé, premier déploiement lancé."
+          else
+            echo "verdict=echec" >> "$GITHUB_OUTPUT"
+            echo "⚠️ Armement du canal pull échoué (permissions / coupure SSH ?) — secours CD."
+          fi
+
+      - name: Secours — déclencher le déploiement continu (canal SSH)
+        if: steps.sonde.outputs.joignable == 'oui' && steps.pull.outputs.verdict != 'arme'
         run: |
           gh workflow run deploy-vps.yml --ref main -R "${{ github.repository }}"
           echo "✅ CD déclenché : production ${{ needs.verifier.outputs.sha_prod }} → main ${{ needs.verifier.outputs.sha_main }}."
@@ -120,9 +170,11 @@ jobs:
         if: always()
         run: |
           echo "=== Guérisseur — tick $(date -u +%FT%TZ) ==="
-          echo "prod  = ${{ needs.verifier.outputs.sha_prod }}"
-          echo "main  = ${{ needs.verifier.outputs.sha_main }}"
-          echo "garde = ${{ steps.garde.outcome }} (${{ steps.garde.outputs.libre }})"
-          echo "sonde = ${{ steps.sonde.outcome }} (${{ steps.sonde.outputs.joignable }})"
+          echo "prod    = ${{ needs.verifier.outputs.sha_prod }}"
+          echo "main    = ${{ needs.verifier.outputs.sha_main }}"
+          echo "release = ${{ steps.release.outputs.release_sha }}"
+          echo "garde   = ${{ steps.garde.outcome }} (${{ steps.garde.outputs.libre }})"
+          echo "sonde   = ${{ steps.sonde.outcome }} (${{ steps.sonde.outputs.joignable }})"
+          echo "pull    = ${{ steps.pull.outcome }} (${{ steps.pull.outputs.verdict }})"
           echo "Rappel : le canal pull (poller VPS, install console unique) rend ce rattrapage instantané —"
           echo "  curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash"
