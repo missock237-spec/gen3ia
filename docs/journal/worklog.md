@@ -4049,3 +4049,19 @@ Stage Summary:
 - Aucune nouvelle faille code ; verrou unique = exploitation VPS (poller non installé + SSH muet) — action console propriétaire : curl -fsSL https://raw.githubusercontent.com/missock237-spec/gen3ia/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash
 - Rotation PAT ghp_26B1… + HF hf_OnaO… toujours en attente côté propriétaire.
 - Prod core accessible (pages+login) ; durcissements servis dès déblocage VPS.
+
+---
+## Correctif upload/analyse fichiers (Job 478451 — demande utilisateur « tout fichier importé doit pouvoir être analysé »)
+
+Task: corriger le refus des fichiers envoyés à gen3 + garantir l'analyse de tout fichier importé.
+
+Work Log:
+- Diagnostic : divergence client/serveur — la politique serveur (upload-policy : ~50 formats, 50 Mo, quota plan) était correcte, mais nova-chat.tsx codait en dur accept « .pdf,.docx,.xlsx,.csv,.txt,.md,.json,png/jpg/webp » et 20 Mo → zip, audio, vidéo, code, odt/ods/pptx/rtf/epub et les fichiers 20-50 Mo refusés au sélecteur ; PromptBox (composant exporté non monté) filtrait MIME + 20 Mo en rejet SILENCIEUX ; command-composer avait un 3e accept divergent.
+- Correctif client : ACCEPT_ATTRIBUTE exporté de upload-policy, DÉRIVÉ automatiquement de ALLOWED_EXTENSIONS (image/*, audio/*, video/* + extensions documents/code/archives) — étendre la liste serveur étend le sélecteur ; nova-chat aligné sur ATTACHMENT_MAX_FILES (10) et ATTACHMENT_MAX_FILE_BYTES (50 Mo) de la politique unifiée ; toasts explicites ; PromptBox rejet visible (role=alert) via validateAttachment ; command-composer default → ACCEPT_ATTRIBUTE.
+- Correctif analyse serveur : nouveau module lib/files/office-text.ts (readZipEntries via yauzl, opendocumentToText, odsToText → CSV, pptxToText avec tri numérique des slides, epubToText, rtfToText machine à états : \par/\line/\tab, \uN? → Unicode, groupes {\*} ignorés, \'hh, symboles échappés) ; import.ts dispatch .rtf/.odt/.odp/.ods/.pptx/.epub en full conversion, .doc/.ppt → notes actionnables « enregistrez en .docx/.pptx » ; ImportedFileKind étendu (rtf/odt/odp/ods/pptx/epub) ; note binaire générique rendue actionnable.
+- Tests : lib/files/office-text.test.ts (13 tests — helper ZIP stored maison zéro dépendance, CRC32 réel, tri numérique slides 1/2/10, RTF complet), 3 tests dispatch dans import.test.ts, 2 tests ACCEPT_ATTRIBUTE dans upload-policy.test.ts.
+- Validation : vitest ciblé vert, tsc --noEmit 0 erreur, eslint 0 erreur, SUITE COMPLÈTE 5143 passés / 12 skipped / 0 échec.
+
+Stage Summary:
+- Le chat accepte désormais TOUS les formats de la politique serveur (sélecteur dérivé automatiquement, 50 Mo, 10 fichiers) ; les formats bureautiques binaires (rtf/odt/odp/ods/pptx/epub) sont réellement CONVERTIS puis analysables par le modèle ; .doc/.ppt donnent une consigne de conversion claire au lieu d'un refus muet.
+- Les correctifs seront servis en production dès le déblocage VPS (issue #105) — le canal CD est prêt.

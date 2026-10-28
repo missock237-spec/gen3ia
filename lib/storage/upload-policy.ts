@@ -65,6 +65,26 @@ const BLOCKED_EXTENSIONS = new Set([
   "vbs", "jar", "app", "deb", "rpm", "dmg", "iso",
 ]);
 
+/**
+ * Valeur canonique de l'attribut `accept` des <input type="file"> : dérivée
+ * AUTOMATIQUEMENT de ALLOWED_EXTENSIONS pour que le sélecteur de fichiers du
+ * navigateur propose EXACTEMENT ce que le serveur accepte (divergence
+ * historique : le chat limitait à image/pdf/zip pendant que la politique
+ * serveur autorisait ~50 formats — les utilisateurs voyaient leurs fichiers
+ * « refusés » sans raison). Étendre la liste serveur ci-dessus étend
+ * automatiquement le sélecteur.
+ */
+export const ACCEPT_ATTRIBUTE: string = [
+  // Génériques multimédias (couvrent tous les sous-types du navigateur)
+  "image/*",
+  "audio/*",
+  "video/*",
+  // Documents bureautiques et texte (ext. explicites pour compat. maximale)
+  ...[...ALLOWED_EXTENSIONS]
+    .filter((ext) => !["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "svg", "bmp", "tiff", "tif", "mp3", "wav", "m4a", "ogg", "flac", "aac", "mp4", "mov", "webm", "avi", "mkv"].includes(ext))
+    .map((ext) => `.${ext}`),
+].join(",");
+
 export type UploadIntent = {
   filename: string;
   contentType: string;

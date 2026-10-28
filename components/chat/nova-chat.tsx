@@ -38,6 +38,8 @@ import { authFetch } from "@/lib/firebase/auth-client";
 import { safeClientTimezone } from "@/lib/domain/conversations/stream-client";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
+import { ACCEPT_ATTRIBUTE } from "@/lib/storage/upload-policy";
+import { ATTACHMENT_MAX_FILES, ATTACHMENT_MAX_FILE_BYTES } from "@/lib/files/attachment-policy";
 import { useVoiceInput } from "./use-voice-input";
 import { cancelSpeech, speakFr } from "./voice-speak";
 import { useWebGpuMedia } from "./use-webgpu-media";
@@ -49,8 +51,13 @@ const CFG = {
   cle: "gen3ia-nova-chat",
   maxCaracteres: 4000,
   seuilCompteur: 3000,
-  maxFichiers: 10,
-  maxFichierMo: 20,
+  // Politique UNIFIÉE des pièces jointes (lib/files/attachment-policy.ts) —
+  // historiquement 20 Mo et un sélecteur restrictif : les fichiers legitimes
+  // (zip, audio, vidéo, code, odt/ods/pptx, 50 Mo) étaient refusés au chat
+  // alors que la politique serveur les accepte — « fichier refusé » sans
+  // raison. Une seule source de vérité désormais.
+  maxFichiers: ATTACHMENT_MAX_FILES,
+  maxFichierOctets: ATTACHMENT_MAX_FILE_BYTES,
   maxConvs: 60,
   /** Cadence du tampon d'écriture progressive (ms). */
   cadenceEcriture: 24,
@@ -918,7 +925,8 @@ export default function NovaChat() {
 
   const ajouterFichiers = React.useCallback(
     (liste: FileList | File[]) => {
-      const max = CFG.maxFichierMo * 1024 * 1024;
+      const max = CFG.maxFichierOctets;
+      const maxMo = Math.round(max / (1024 * 1024));
       setFichiers((courants) => {
         const suivants = [...courants];
         for (const f of Array.from(liste)) {
@@ -927,7 +935,7 @@ export default function NovaChat() {
             break;
           }
           if (f.size > max) {
-            afficherToast(`« ${f.name} » dépasse ${CFG.maxFichierMo} Mo.`);
+            afficherToast(`« ${f.name} » dépasse ${maxMo} Mo.`);
             continue;
           }
           const image = f.type.startsWith("image/");
@@ -1948,7 +1956,7 @@ export default function NovaChat() {
                       type="file"
                       hidden
                       multiple
-                      accept=".pdf,.docx,.xlsx,.csv,.txt,.md,.json,.png,.jpg,.jpeg,.webp"
+                      accept={ACCEPT_ATTRIBUTE}
                       onChange={(e) => {
                         ajouterFichiers(e.target.files ?? []);
                         e.target.value = "";

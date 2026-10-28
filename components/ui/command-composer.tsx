@@ -9,6 +9,7 @@ import {
   authorizationModeLabel,
   type AuthorizationMode,
 } from "@/lib/security/authorization-mode";
+import { ACCEPT_ATTRIBUTE } from "@/lib/storage/upload-policy";
 import {
   detectCommandQuery,
   detectMentionQuery,
@@ -102,7 +103,11 @@ export const CommandComposer = React.forwardRef<CommandComposerHandle, CommandCo
     onDeactivateMention,
     commands = [],
     plusAction = "file",
-    fileAccept = "image/*,.pdf,.zip,.txt,.md,.csv,.json,.doc,.docx",
+    // Défaut = politique canonique dérivée de la liste serveur (upload-policy) :
+    // plus aucune divergence entre ce que le sélecteur propose et ce que le
+    // serveur accepte. Les appelants peuvent toujours passer un accept plus
+    // étroit pour un contexte spécialisé (datasets CSV/JSON, JSON d'ondes…).
+    fileAccept = ACCEPT_ATTRIBUTE,
     onFile,
     attachmentName = null,
     attachmentUploading = false,

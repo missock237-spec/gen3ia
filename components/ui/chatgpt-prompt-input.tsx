@@ -3,6 +3,9 @@
 import * as React from "react";
 import Image from "next/image";
 
+import { ACCEPT_ATTRIBUTE } from "@/lib/storage/upload-policy";
+import { validateAttachment } from "@/lib/files/attachment-policy";
+
 type Tool = {
   id: string;
   name: string;
@@ -44,6 +47,7 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
     const [localValue, setLocalValue] = React.useState(value);
     const [open, setOpen] = React.useState(false);
     const [preview, setPreview] = React.useState<string | null>(null);
+    const [erreurFichier, setErreurFichier] = React.useState<string | null>(null);
     const fileRef = React.useRef<HTMLInputElement>(null);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const controlled = onValueChange !== undefined;
@@ -66,16 +70,26 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
 
     const handleFile = (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
+      event.target.value = "";
       if (!file) return;
-      if (!file.type.startsWith("image/") && !file.type.includes("pdf") && !file.type.includes("zip")) return;
-      if (file.size > 20 * 1024 * 1024) return;
+      // Politique unifiée (attachment-policy) : AUCUN filtre de type ici —
+      // le sélecteur (ACCEPT_ATTRIBUTE, dérivé de la politique serveur)
+      // propose déjà exactement ce qui est accepté, et la validation de type
+      // finale a lieu au téléversement avec un message explicite. Le seul
+      // filtre local est taille/nom, avec message VISIBLE (plus aucun rejet
+      // silencieux « le fichier ne parvient pas » sans explication).
+      const verdict = validateAttachment({ name: file.name, size: file.size });
+      if (!verdict.ok) {
+        setErreurFichier(`« ${file.name} » : ${verdict.reason}`);
+        return;
+      }
+      setErreurFichier(null);
       if (file.type.startsWith("image/")) {
         const reader = new FileReader();
         reader.onload = () => setPreview(String(reader.result));
         reader.readAsDataURL(file);
       }
       onFile?.(file);
-      event.target.value = "";
     };
 
     const active = AGENT_TOOLS.find((tool) => tool.id === selectedTool);
@@ -83,7 +97,13 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
 
     return (
       <form onSubmit={onSubmit} className={`relative rounded-[26px] border border-[var(--g3-border)] bg-[var(--g3-surface)] p-2 shadow-[0_14px_40px_-18px_rgba(28,27,24,0.22)] transition-all duration-300 focus-within:border-[var(--g3-border-strong)] focus-within:shadow-[0_14px_40px_-18px_rgba(28,27,24,0.28)] ${className}`}>
-        <input ref={fileRef} type="file" className="hidden" accept="image/*,.pdf,.zip" onChange={handleFile} />
+        <input ref={fileRef} type="file" className="hidden" accept={ACCEPT_ATTRIBUTE} onChange={handleFile} />
+        {erreurFichier && (
+          <div role="alert" className="mb-1 flex items-center gap-2 rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-2 text-xs text-[var(--g3-text)]">
+            <span className="flex-1">{erreurFichier}</span>
+            <button type="button" onClick={() => setErreurFichier(null)} className="rounded-full p-1 text-[var(--g3-muted)] hover:text-[var(--g3-text)]" aria-label="Fermer l'alerte"><XIcon className="h-3.5 w-3.5"/></button>
+          </div>
+        )}
         {preview && (
           <div className="mb-1 flex items-center gap-2 rounded-2xl bg-[var(--g3-elevated)] p-2">
             <Image src={preview} alt="Aperçu de la pièce jointe" width={48} height={48} unoptimized className="h-12 w-12 rounded-xl object-cover" />

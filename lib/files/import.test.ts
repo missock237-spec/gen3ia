@@ -24,6 +24,7 @@ vi.mock("@/lib/firebase/admin", () => ({
 
 import { downloadFromR2 } from "@/lib/storage/r2";
 import {
+  convertFileBuffer,
   convertUploadedFile,
   detectCsvDelimiter,
   loadImportedFilesContext,
@@ -259,5 +260,64 @@ describe("loadImportedFilesContext — contenu réel injecté au tour", () => {
     const contexte = await loadImportedFilesContext(USER, [{ fileId: "file-2", filename: "compte-rendu.txt" }]);
     expect(contexte).toContain("Contenu RÉEL des fichiers importés (stockés en base de données)");
     expect(contexte).toContain("Texte stocké.");
+  });
+});
+
+describe("convertFileBuffer — nouveaux formats bureautiques (dispatch réel)", () => {
+  it(".doc binaire → métadonnées avec note actionnable (pas un muet)", async () => {
+    // Un flux OLE minimal (signature réelle du header Word 97-2003).
+    const ole = Buffer.concat([Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), Buffer.alloc(64, 0)]);
+    const résultat = await convertFileBuffer(ole, "ancien.doc", "application/msword", ole.length);
+    expect(résultat.conversion).toBe("metadata-only");
+    expect(résultat.note).toContain(".docx");
+  });
+
+  it(".rtf → texte débalisé (full)", async () => {
+    const rtf = Buffer.from("{\\rtf1\\ansi Contrat de bail.\\par Article 1 : objet du bail.}", "utf8");
+    const résultat = await convertFileBuffer(rtf, "contrat.rtf", "application/rtf", rtf.length);
+    expect(résultat.kind).toBe("rtf");
+    expect(résultat.conversion).toBe("full");
+    expect(résultat.text).toContain("Contrat de bail.");
+    expect(résultat.text).toContain("Article 1 : objet du bail.");
+  });
+
+  it(".odt → texte des paragraphes (full)", async () => {
+    // ZIP stored minimal — même structure que le helper du test office-text
+    // (locals d'abord, central directory ensuite, EOCD en dernier).
+    const table = (() => {
+      const t = new Uint32Array(256);
+      for (let n = 0; n < 256; n += 1) { let c = n; for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+      return t;
+    })();
+    const crc32 = (d: Buffer) => { let c = 0xffffffff; for (const o of d) c = table[(c ^ o) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+    const entries: Array<[string, Buffer]> = [
+      ["mimetype", Buffer.from("application/vnd.oasis.opendocument.text")],
+      ["content.xml", Buffer.from('<office:document-content><office:body><office:text><text:p>Rapport annuel 2026.</text:p><text:p>Chiffres consolidés.</text:p></office:text></office:body></office:document-content>')],
+    ];
+    const locals: Buffer[] = [];
+    const centraux: Buffer[] = [];
+    let offset = 0;
+    for (const [name, data] of entries) {
+      const nom = Buffer.from(name);
+      const local = Buffer.alloc(30);
+      local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4);
+      local.writeUInt32LE(crc32(data), 14); local.writeUInt32LE(data.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(nom.length, 26);
+      const central = Buffer.alloc(46);
+      central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(20, 4); central.writeUInt16LE(20, 6);
+      central.writeUInt32LE(crc32(data), 16); central.writeUInt32LE(data.length, 20); central.writeUInt32LE(data.length, 24); central.writeUInt16LE(nom.length, 28); central.writeUInt32LE(offset, 42);
+      locals.push(local, nom, data);
+      centraux.push(central, nom);
+      offset += 30 + nom.length + data.length;
+    }
+    const tailleCentrale = centraux.reduce((t, b) => t + b.length, 0);
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0); eocd.writeUInt16LE(2, 8); eocd.writeUInt16LE(2, 10);
+    eocd.writeUInt32LE(tailleCentrale, 12); eocd.writeUInt32LE(offset, 16);
+    const zip = Buffer.concat([...locals, ...centraux, eocd]);
+    const résultat = await convertFileBuffer(zip, "rapport.odt", "application/vnd.oasis.opendocument.text", zip.length);
+    expect(résultat.kind).toBe("odt");
+    expect(résultat.conversion).toBe("full");
+    expect(résultat.text).toContain("Rapport annuel 2026.");
+    expect(résultat.text).toContain("Chiffres consolidés.");
   });
 });

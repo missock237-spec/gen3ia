@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ACCEPT_ATTRIBUTE,
   PART_SIZE_BYTES,
   chunkCountFor,
   formatBytes,
@@ -118,5 +119,23 @@ describe("upload policy", () => {
     const vide = validateSingleUpload({ filename: "vide.pdf", contentType: "application/pdf", sizeBytes: 0 });
     expect(vide.ok).toBe(false);
     if (!vide.ok) expect(vide.reason).toContain("vide");
+  });
+});
+
+describe("ACCEPT_ATTRIBUTE — sélecteur dérivé de la politique serveur", () => {
+  it("couvre les génériques multimédias et les documents bureautiques", () => {
+    // Les multimédias passent par les génériques image/* audio/* video/* ;
+    // les documents, données et code par des extensions explicites.
+    for (const morceau of ["image/*", "audio/*", "video/*", ".pdf", ".docx", ".zip", ".txt", ".csv", ".json", ".odt", ".ods", ".pptx", ".epub", ".rtf", ".py", ".ts"]) {
+      expect(ACCEPT_ATTRIBUTE).toContain(morceau);
+    }
+  });
+
+  it("n'expose aucune extension bloquée et aucun doublon", () => {
+    for (const interdite of [".exe", ".dll", ".bat", ".msi", ".sh", ".iso"]) {
+      expect(ACCEPT_ATTRIBUTE).not.toContain(interdite);
+    }
+    const parties = ACCEPT_ATTRIBUTE.split(",");
+    expect(new Set(parties).size).toBe(parties.length);
   });
 });

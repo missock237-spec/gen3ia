@@ -4,6 +4,13 @@ import { randomUUID } from "crypto";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
+import {
+  epubToText,
+  odsToText,
+  opendocumentToText,
+  pptxToText,
+  rtfToText,
+} from "@/lib/files/office-text";
 import { pdfToText } from "@/lib/files/pdf-text";
 import { docxToText, htmlToText } from "@/lib/knowledge/ingestion";
 import { mapWithConcurrency } from "@/lib/video/concurrency";
@@ -42,7 +49,7 @@ export const IMPORT_MAX_TEXT_CHARS = 600_000;
 /** Nombre maximal de lignes structurées stockées (aperçu complet conservé via texte). */
 export const IMPORT_MAX_STRUCTURED_ROWS = 500;
 
-export type ImportedFileKind = "text" | "markdown" | "csv" | "json" | "html" | "docx" | "xlsx" | "pdf" | "image" | "audio" | "video" | "binary";
+export type ImportedFileKind = "text" | "markdown" | "csv" | "json" | "html" | "docx" | "xlsx" | "pdf" | "image" | "audio" | "video" | "rtf" | "odt" | "odp" | "ods" | "pptx" | "epub" | "binary";
 
 export interface ImportedFileRecord {
   id: string;
@@ -201,6 +208,62 @@ export async function convertFileBuffer(
     return { kind: "docx", text, conversion: text ? "full" : "metadata-only" };
   }
 
+  // Ancien format Word binaire (OLE) : aucune extraction fiable en Node sans
+  // dépendance lourde — l'utilisateur sait CE QU'IL DOIT FAIRE au lieu d'un
+  // « binaire non convertible » muet.
+  if (extension === "doc" || contentType === "application/msword") {
+    return {
+      kind: "binary",
+      text: "",
+      conversion: "metadata-only",
+      note: "Document Word ancien format (.doc binaire) : métadonnées stockées. Enregistrez-le en .docx ou .txt pour que Gen3ia puisse analyser le contenu.",
+    };
+  }
+
+  // RTF : texte balisé — débalisage réel (\par, \uN, groupes ignorés).
+  if (extension === "rtf" || contentType === "application/rtf") {
+    const text = rtfToText(buffer.toString("latin1"));
+    if (text.replace(/\s/g, "").length < 3) {
+      return { kind: "rtf", text: "", conversion: "metadata-only", note: "RTF sans texte extractible." };
+    }
+    return { kind: "rtf", text, conversion: "full" };
+  }
+
+  // OpenDocument Writer/Impress (zip de content.xml) → texte par paragraphes.
+  if (["odt", "odp"].includes(extension) || contentType.includes("opendocument")) {
+    const text = await opendocumentToText(buffer);
+    return { kind: extension === "odp" ? "odp" : "odt", text, conversion: text ? "full" : "metadata-only" };
+  }
+
+  // OpenDocument Calc → lignes CSV lisibles + compteur de lignes.
+  if (extension === "ods" || contentType.includes("opendocument.spreadsheet")) {
+    const text = await odsToText(buffer);
+    const rowCount = text ? text.split("\n").length : 0;
+    return { kind: "ods", text, rowCount, conversion: text ? "full" : "metadata-only" };
+  }
+
+  // PowerPoint moderne (zip de slides XML) → texte par diapositive triée.
+  if (extension === "pptx" || contentType.includes("presentationml.presentation")) {
+    const text = await pptxToText(buffer);
+    return { kind: "pptx", text, conversion: text ? "full" : "metadata-only" };
+  }
+
+  // Ancien PowerPoint binaire : note actionnable (comme .doc).
+  if (extension === "ppt" || contentType === "application/vnd.ms-powerpoint") {
+    return {
+      kind: "binary",
+      text: "",
+      conversion: "metadata-only",
+      note: "Présentation PowerPoint ancien format (.ppt binaire) : métadonnées stockées. Enregistrez-la en .pptx pour que Gen3ia puisse analyser les diapositives.",
+    };
+  }
+
+  // EPUB (zip de XHTML) → texte des chapitres.
+  if (extension === "epub" || contentType === "application/epub+zip") {
+    const text = await epubToText(buffer);
+    return { kind: "epub", text, conversion: text ? "full" : "metadata-only" };
+  }
+
   if (["xlsx", "xlsm"].includes(extension) || contentType.includes("spreadsheetml")) {
     const ExcelJS = (await import("exceljs")).default;
     const workbook = new ExcelJS.Workbook();
@@ -271,7 +334,12 @@ export async function convertFileBuffer(
   const text = buffer.toString("utf8");
   const looksBinary = text.slice(0, 2_000).includes("\u0000");
   if (looksBinary) {
-    return { kind: "binary", text: "", conversion: "metadata-only", note: "Fichier binaire : métadonnées stockées sans conversion." };
+    return {
+      kind: "binary",
+      text: "",
+      conversion: "metadata-only",
+      note: "Fichier binaire : métadonnées stockées sans conversion. Formats texte, bureautique (docx/odt/ods/pptx/rtf/epub), PDF, CSV/JSON, images, audio et vidéo sont analysables.",
+    };
   }
   return { kind: "text", text, conversion: "full" };
 }
