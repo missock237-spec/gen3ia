@@ -83,8 +83,9 @@ jobs:
     if: needs.verifier.outputs.besoin == 'true'
     runs-on: ubuntu-latest
     # Premier déploiement pull = téléchargement de ~205 Mo sur le VPS
-    # (jusqu'à 10 min dans pull-deploy.sh) + marges → 20 min.
-    timeout-minutes: 20
+    # (jusqu'à 10 min dans pull-deploy.sh) + marges → 20 min ; l'attente
+    # anti-course du CD (≤ 20 min, cf. garde) s'ajoute au pire cas.
+    timeout-minutes: 45
     steps:
       - name: Configurer la clé SSH VPS
         run: |
@@ -92,21 +93,60 @@ jobs:
           printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vps_deploy
           chmod 600 ~/.ssh/vps_deploy
 
-      - name: Garde — CD déjà en cours ou déjà échoué sur ce sha ?
+      # v3 (Job 478451, anomalie constatée 01:14 UTC) : un guérisseur
+      # déclenché par PUSH est TOUJOURS en course avec le run CD du même
+      # push (il le voit « in_progress » et s'éliminait) — et les ticks
+      # cron GitHub sont régulièrement PERDUS (congestion documentée) :
+      # résultat observé = prod en retard de 7 commits ~8 h sans aucun
+      # rattrapage. Correctif : au lieu de sauter quand le CD est en
+      # cours, le guérisseur ATTEND sa fin (poll 60 s, borné à 20 min —
+      # un build runner dure ~13-14 min) puis décide normalement.
+      #   · CD terminé « success » (build publié, canal SSH best-effort)
+      #     ou « cancelled » (la release peut être fraîche) → libre, la
+      #     vérification release_sha == main reste la garde finale ;
+      #   · CD « failure » → bloque (ne pas réarmer un build en échec) ;
+      #   · toujours en cours après 20 polls → bloque ce tick (un tick
+      #     suivant ou un push re-évaluera).
+      - name: "Garde — anti-course : attendre la fin du CD puis décider"
         id: garde
         run: |
           SHA_MAIN="${{ needs.verifier.outputs.sha_main }}"
-          LECTURE=$(curl -fsSL -m 20 -H "Authorization: Bearer ${{ github.token }}" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/deploy-vps.yml/runs?per_page=30")
-          EN_COURS=$(echo "$LECTURE" | jq '[.workflow_runs[] | select(.status=="in_progress" or .status=="queued")] | length')
-          DERNIER_CE_SHA=$(echo "$LECTURE" | jq -r --arg sha "$SHA_MAIN" \
-            '[.workflow_runs[] | select(.head_sha==$sha)][0] | (.conclusion // .status // "aucun")')
-          echo "runs CD en cours  : $EN_COURS"
-          echo "dernier run CD $SHA_MAIN : $DERNIER_CE_SHA"
-          if [ "$EN_COURS" != "0" ]; then echo "verdict=bloque" ; \
-          elif [ "$DERNIER_CE_SHA" = "failure" ]; then echo "verdict=bloque" ; \
-          else echo "verdict=libre"; fi
-          echo "libre=$( [ "$(echo "$EN_COURS")" = "0" ] && [ "$DERNIER_CE_SHA" != "failure" ] && echo oui || echo non )" >> "$GITHUB_OUTPUT"
+          lire_etat() {
+            LECTURE=$(curl -fsSL -m 20 -H "Authorization: Bearer ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/deploy-vps.yml/runs?per_page=30")
+            EN_COURS=$(echo "$LECTURE" | jq '[.workflow_runs[] | select(.status=="in_progress" or .status=="queued")] | length')
+            DERNIER_CE_SHA=$(echo "$LECTURE" | jq -r --arg sha "$SHA_MAIN" \
+              '[.workflow_runs[] | select(.head_sha==$sha)][0] | (.conclusion // .status // "aucun")')
+          }
+          for i in $(seq 1 20); do
+            lire_etat || true
+            # La release est la source de vérité du canal pull : dès que
+            # meta.json porte le SHA de main, le build est complet et
+            # disponible — inutile d'attendre la fin des phases SSH
+            # best-effort du CD (l'armement et le finisher sérialisent
+            # leurs swaps par flock).
+            RELEASE_SHA=$(curl -fsSL -m 20 -H "Cache-Control: no-cache" \
+              "https://github.com/${{ github.repository }}/releases/download/cd-latest/meta.json?_=$(date +%s)" 2>/dev/null \
+              | grep -o '"sha":"[0-9a-f]*"' | head -1 | sed 's/.*:"//; s/"$//' || true)
+            echo "poll $i/20 — CD en cours : $EN_COURS, dernier run : $DERNIER_CE_SHA, release : ${RELEASE_SHA:-absent}"
+            if [ "$RELEASE_SHA" = "$SHA_MAIN" ]; then
+              echo "Release cd-latest à jour ($SHA_MAIN) — le canal pull est autonome, fin d'attente."
+              EN_COURS=0
+              break
+            fi
+            if [ "$EN_COURS" != "0" ]; then sleep 60; else break; fi
+          done
+          if [ "$EN_COURS" != "0" ]; then
+            echo "verdict=bloque (CD toujours en cours après 20 min d'attente)"
+            LIBRE=non
+          elif [ "$DERNIER_CE_SHA" = "failure" ]; then
+            echo "verdict=bloque (build $SHA_MAIN en échec — ne pas réarmer)"
+            LIBRE=non
+          else
+            echo "verdict=libre"
+            LIBRE=oui
+          fi
+          echo "libre=$LIBRE" >> "$GITHUB_OUTPUT"
 
       - name: Empreinte du build publié sur la release cd-latest
         id: release
