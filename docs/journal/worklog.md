@@ -4185,3 +4185,16 @@ Work Log:
 
 Stage Summary:
 - Race structurellement impossible désormais ; preuve attendue sur le run CD du push (SCP/swap /tmp/cd-channel/ vert même avec poller concurrent). Rapport : docs/rapports/rapport-job-478451-2026-10-28-1910.md
+
+---
+Task ID: 478451-iter9-preuve
+Agent: zai-web (cron 19:10 +08:00)
+Task: Preuve du canal dédié /tmp/cd-channel/ en production
+
+Work Log:
+- Run CD #40679124518 (sha 598106d3, canaux séparés) : completed/success — publication release, SCP /tmp/cd-channel/, swap atomique et vérification finale TOUS success.
+- Prod : 598106d3 (build 11:23:12Z), /api/status auth/r2/ticks verts.
+- Historique de rebase résolu (conflit worklog iter8/iter9 — les deux entrées conservées) ; push 598106d3.
+
+Stage Summary:
+- Les deux canaux de déploiement (pull automatique + SSH accélérateur) sont fiables et sans race : pipeline CD entièrement rétabli et durci.
