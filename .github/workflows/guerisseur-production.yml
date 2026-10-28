@@ -39,6 +39,7 @@ on:
 permissions:
   contents: read
   actions: write
+  issues: write
 
 concurrency:
   group: guerisseur-production
@@ -218,3 +219,79 @@ jobs:
           echo "pull    = ${{ steps.pull.outcome }} (${{ steps.pull.outputs.verdict }})"
           echo "Rappel : le canal pull (poller VPS, install console unique) rend ce rattrapage instantané —"
           echo "  curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash"
+
+      # ESCALADE VISIBLE (correctif Job 478451 — constat du 2026-10-28) :
+      # quand la production est en retard ET le SSH muet, ce workflow
+      # finissait « success » sans rien faire ni rien dire — une production
+      # a pu rester gelée ~8 h (8 commits) sans AUCUN signal. Désormais :
+      # ouverture/mise à jour d'une issue dédiée avec l'action exacte à
+      # mener sur la console du fournisseur (installation du mode pull,
+      # une seule commande, sans SSH). L'issue est refermée automatiquement
+      # dès que la production est réalignée (tick « besoin=false »).
+      - name: "Escalade — issue visible quand prod en retard + SSH muet"
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA_MAIN: ${{ needs.verifier.outputs.sha_main }}
+          SHA_PROD: ${{ needs.verifier.outputs.sha_prod }}
+          BESOIN: ${{ needs.verifier.outputs.besoin }}
+          JOIGNABLE: ${{ steps.sonde.outputs.joignable }}
+          REPO: ${{ github.repository }}
+        run: |
+          TITRE="🚨 Production en retard sur main — intervention console VPS requise"
+          if [ "$BESOIN" != "true" ]; then
+            # Production alignée : refermer l'issue d'escalade si elle existe.
+            NUM=$(gh issue list -R "$REPO" --state open --search "$TITRE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+            if [ -n "$NUM" ]; then
+              gh issue close "$NUM" -R "$REPO" -c "✅ Production réalignée sur main ($SHA_MAIN) — escalade résolue automatiquement."
+              echo "Issue #$NUM refermée (production alignée)."
+            fi
+            exit 0
+          fi
+          # Production en retard : n'escalader que si SSH muet (sinon le
+          # guérisseur/CD gèrent le rattrapage sans bruit).
+          if [ "$JOIGNABLE" = "oui" ]; then
+            echo "SSH joignable — rattrapage en cours par les canaux normaux, pas d'escalade."
+            exit 0
+          fi
+          CORPS=$(cat <<'EOF'
+          ## Production gen3ia.online en retard sur main
+
+          - SHA main        : `%SHA_MAIN%`
+          - SHA production  : `%SHA_PROD%`
+          - SSH entrant     : muet (fail2ban / PerSourcePenalties côté VPS)
+          - Canal pull      : poller VPS non installé (bootstrap jamais fait)
+
+          **Conséquence** : les builds CD sont publiés sur la release `cd-latest`
+          mais la production ne les récupère jamais — corrections utilisateur
+          (anti-désinformation, statut, CVE) invisibles en production.
+
+          **Action unique à mener depuis la console du fournisseur VPS
+          (spaceship.com → console root)** — une seule commande, sans SSH :
+
+          ```
+          curl -fsSL https://raw.githubusercontent.com/missock237-spec/gen3ia/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash
+          ```
+
+          Elle installe le poller (2 min de cycle, HTTPS sortant uniquement),
+          lance immédiatement le premier déploiement, et rend le VPS autonome
+          vis-à-vis du SSH pour toujours. Vérification ensuite :
+
+          ```
+          curl -s https://gen3ia.online/version.json
+          ```
+
+          _Issue ouverte automatiquement par le guérisseur (Job 478451).
+          Refermeture automatique dès que la production est alignée._
+          EOF
+          )
+          CORPS="${CORPS//\%SHA_MAIN\%/$SHA_MAIN}"
+          CORPS="${CORPS//\%SHA_PROD\%/$SHA_PROD}"
+          NUM=$(gh issue list -R "$REPO" --state open --search "$TITRE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$NUM" ]; then
+            gh issue comment "$NUM" -R "$REPO" -b "Tick $(date -u +%FT%TZ) — toujours en retard : prod=$SHA_PROD, main=$SHA_MAIN, SSH muet."
+            echo "Issue #$NUM commentée (escalade en cours)."
+          else
+            gh issue create -R "$REPO" --title "$TITRE" --body "$CORPS" >/dev/null \
+              && echo "Issue d'escalade créée."
+          fi

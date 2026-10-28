@@ -1,7 +1,6 @@
 import "server-only";
 
 import { readBuildId } from "@/lib/deploy/build-id";
-import { getAdminApp } from "@/lib/firebase/admin";
 import { pingR2 } from "@/lib/storage/r2";
 import { tickQueueConfigured } from "@/lib/queue/tick-queue";
 
@@ -46,13 +45,32 @@ function resolverVersion(): string {
   );
 }
 
-function authHealth(): ServiceHealth {
-  try {
-    getAdminApp();
-    return { ok: true };
-  } catch {
-    return { ok: false, reason: "not_configured" };
-  }
+/**
+ * Sonde AUTH (corrigée 2026-10-28, Job 478451) — mesure la VRAIE voie
+ * d'authentification servie aux utilisateurs, plus une dépendance legacy :
+ *
+ *   · e-mail + mot de passe (voie principale) : comptes scrypt stockés
+ *     dans R2 (lib/auth/r2-accounts.ts) + cookie de session signé
+ *     (lib/server/session-cookie.ts) — vit et meurt avec R2 ;
+ *   · Google : SDK client Firebase + vérification JWT du serveur contre
+ *     les certificats PUBLICS Google (lib/firebase/auth-server.ts) —
+ *     aucun compte de service requis.
+ *
+ * L'ancienne sonde appelait getAdminApp() (compte de service Firebase
+ * Admin) : en production ce composant n'est requis par AUCUN flux
+ * utilisateur (uniquement des outils d'admin ponctuels — migration
+ * Firestore→R2, suppression de compte Firebase). Un VPS sans
+ * FIREBASE_PRIVATE_KEY affichait donc publiquement « Authentification :
+ * dégradé » et des 503 aux moniteurs d'uptime ALORS QUE la connexion
+ * fonctionnait (constaté en production le 2026-10-28 : login R2 répond
+ * 401 structuré, /api/status = 503). Désinformation d'état corrigée.
+ */
+function authHealth(r2: ServiceHealth): ServiceHealth {
+  // Voie principale e-mail/mot de passe : si R2 est indisponible, la
+  // connexion par identifiants l'est aussi — auth suit la panne avec la
+  // même raison (diagnostic unique côté exploitation).
+  if (!r2.ok) return { ok: false, reason: r2.reason ?? "r2-indisponible" };
+  return { ok: true };
 }
 
 /** Sondes complètes (R2 borné 3 s — la page et la JSON partagent le contrat). */
@@ -63,7 +81,7 @@ export async function sonderServices(): Promise<StatutServices> {
   const ticks: ServiceHealth = tickQueueConfigured()
     ? { ok: r2.ok, reason: r2.reason }
     : { ok: false, reason: "not_configured" };
-  const auth = authHealth();
+  const auth = authHealth(r2);
 
   const services = { auth, r2, ticks };
   const degraded = !auth.ok || !r2.ok || !ticks.ok;

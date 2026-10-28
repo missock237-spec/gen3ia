@@ -25,6 +25,9 @@ const PUBLIQUES_PAR_DESIGN = [
   "app/api/version",
   "app/api/public",
   "app/api/webhooks",            // signature HMAC Chariow / token trigger
+  // Trigger de workflow par token d'URL (gwtr_<32 hex> haché SHA-256 en base,
+  // recherche par égalité, rate limit IP, HMAC corps optionnel) — Job 478451
+  "app/api/workflows/triggers/webhook",
   "app/api/integrations/webhooks",
   "app/api/cron",                // CRON_SECRET vérifié dans la route
   "app/api/metrics",             // METRICS_TOKEN (gate feature flag)
@@ -51,6 +54,7 @@ const PUBLIQUES_PAR_DESIGN = [
 ];
 
 const GARDES = [
+  "withAuth",                 // garde canonique des routes récentes (export const X = withAuth(...)) — lib/server/with-auth.ts
   "verifyFirebaseRequest",
   "verifyFirebaseAuth",
   "verifyFirebaseToken",
@@ -78,6 +82,9 @@ const GARDES = [
   "authenticateDeveloper",    // clé API g3a_ (porte-v1)
   "timingSafeEqual",          // comparaison de token/secret manuelle
   "verifySignature",
+  // Gardes avancées reconnues (correctif Job 478451 — faux positifs) :
+  "résoudreIdentitéNœud",     // garde essaim (jeton machine timing-safe OU identité complète) — lib/security/noeud-service.ts
+  "jetonServiceValide",       // comparaison timing-safe du jeton nœud essaim
   "verifyChariowSignature",
 ];
 
@@ -95,7 +102,14 @@ function listRouteFiles(dir) {
 function methodsOf(src) {
   const methods = [];
   for (const m of ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]) {
-    if (new RegExp(`export\\s+(?:async\\s+)?function\\s+${m}\\b`).test(src)) methods.push(m);
+    // Deux styles d'export reconnus :
+    //   1. export async function POST(…) / export function GET(…)
+    //   2. export const POST = withAuth(…) (pattern canonique des routes
+    //      récentes — correctif Job 478451 : sans lui, une route 100 %
+    //      gardée était classée « nue » à tort, ex. /api/ondes/rpia)
+    const fct = new RegExp(`export\\s+(?:async\\s+)?function\\s+${m}\\b`).test(src);
+    const cst = new RegExp(`export\\s+const\\s+${m}\\s*=`).test(src);
+    if (fct || cst) methods.push(m);
   }
   return methods;
 }

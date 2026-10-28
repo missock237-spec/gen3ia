@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 };
 
 const LIBELLÉS_SERVICES: Record<string, { nom: string; description: string }> = {
-  auth: { nom: "Authentification", description: "Connexion sécurisée des comptes (Firebase Auth)" },
+  auth: { nom: "Authentification", description: "Connexion sécurisée des comptes (e-mail + Google)" },
   r2: { nom: "Stockage des fichiers", description: "Documents, images et médias des conversations" },
   ticks: { nom: "File d'exécution", description: "Tâches planifiées, agents et workflows en arrière-plan" },
 };

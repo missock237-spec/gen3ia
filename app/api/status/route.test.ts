@@ -7,13 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * de déploiement, cache CDN 30 s.
  */
 
-const getAdminAppMock = vi.fn();
 const pingR2Mock = vi.fn();
 const tickQueueConfiguredMock = vi.fn();
-
-vi.mock("@/lib/firebase/admin", () => ({
-  getAdminApp: () => getAdminAppMock(),
-}));
 
 vi.mock("@/lib/storage/r2", () => ({
   pingR2: (...args: unknown[]) => pingR2Mock(...args),
@@ -37,7 +32,6 @@ import { GET } from "./route";
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.VERCEL_DEPLOYMENT_ID = "dpl-test-126";
-  getAdminAppMock.mockReturnValue({});
   pingR2Mock.mockResolvedValue({ ok: true });
   tickQueueConfiguredMock.mockReturnValue(true);
 });
@@ -74,13 +68,29 @@ describe("GET /api/status", () => {
     expect(body.services.ticks.reason).toBe("not_configured");
   });
 
-  it("dégrade quand l'initialisation Firebase Admin échoue", async () => {
-    getAdminAppMock.mockImplementation(() => {
-      throw new Error("service account manquant");
-    });
+  it("auth suit la panne R2 : la connexion e-mail (comptes scrypt R2) devient indisponible", async () => {
+    // Correctif Job 478451 : la sonde auth mesure la VRAIE voie de connexion
+    // (comptes R2 + cookie signé), plus le compte de service Firebase Admin.
+    pingR2Mock.mockResolvedValue({ ok: false, reason: "timeout" });
     const response = await GET();
     expect(response.status).toBe(503);
-    const body = (await response.json()) as { services: { auth: { ok: boolean } } };
+    const body = (await response.json()) as {
+      services: { auth: { ok: boolean; reason: string }; r2: { ok: boolean } };
+    };
     expect(body.services.auth.ok).toBe(false);
+    expect(body.services.auth.reason).toBe("timeout");
+    expect(body.services.r2.ok).toBe(false);
+  });
+
+  it("auth reste OK sans compte de service Firebase Admin (dépendance legacy hors flux utilisateur)", async () => {
+    // Constat production 2026-10-28 : un VPS sans FIREBASE_PRIVATE_KEY
+    // servait un faux « auth: degraded » alors que le login R2 répondait.
+    // Le compte de service n'est requis par aucun flux utilisateur — son
+    // absence ne dégrade plus le statut public.
+    pingR2Mock.mockResolvedValue({ ok: true });
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { services: { auth: { ok: boolean } } };
+    expect(body.services.auth.ok).toBe(true);
   });
 });
