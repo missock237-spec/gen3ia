@@ -4251,3 +4251,12 @@ Stage Summary:
 - Chronologie complète documentée (script console ~14:3x → push durcissement 14:55 → 5/5 workflows verts → poller délivre ≤ 15:05).
 - #106 : refermeture auto attendue au tick du push de ce rapport (logique dans job verifier).
 - Aucune nouvelle anomalie ; rotations secrets = reste n°1 (propriétaire). Rapport : docs/rapports/rapport-job-478451-2026-10-28-2310.md
+
+## 478451-iter13-0010 — 2026-10-29 00:10–00:30 +08:00
+
+- Pérennité du rétablissement CONFIRMÉE : prod = main = `37e6a637` (build 15:17 UTC) — 3ᵉ build livré en autonomie par le poller depuis le déblocage ; SSH 22022 ouvert (OpenSSH 9.9), health/status/accueil 200.
+- #106 refermée automatiquement à 15:17:39 UTC par le guérisseur (comme prédit itération 12) — cycle détection→escalade→réparation→refermeture complet.
+- 5/5 workflows verts sur HEAD (CI, CodeQL, CD, Ménage, Guérisseur).
+- Anomalie corrigée : `/api/media/professeur-statut` renvoyait 500 vide au lieu du 401 JSON (requireUser hors try/catch) — scan systématique des 115 routes requireUser : seule route touchée ; filet maison errorBody/errorStatus/errorCode ajouté ; typecheck + eslint verts.
+- Entraînement gen3 : notebook v4 18 domaines prêt (GPU Colab propriétaire, inchangé) ; la chaîne CD réparée livrera désormais tout artefact de modèle automatiquement.
+- Reste n°1 : rotations de secrets par le propriétaire. Rapport : docs/rapports/rapport-job-478451-2026-10-29-0010.md

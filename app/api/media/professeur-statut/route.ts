@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/security/authenticated-request";
+import { errorBody, errorStatus, errorCode } from "@/lib/security/http-errors";
 import { professeurDisponible, configurationProfesseur, professeurVoix } from "@/lib/neural/professeur-media";
 
 export const runtime = "nodejs";
@@ -65,7 +66,17 @@ function sonderChemins(): DiagnosticChemin[] {
 }
 
 export async function GET(_request: NextRequest) {
-  await requireUser(_request);
+  try {
+    await requireUser(_request);
+  } catch (error) {
+    // Sans ce filet, le HttpError(401) de requireUser se propage et Next.js
+    // répond « 500 » avec corps vide au lieu du 401 JSON attendu (aligné sur
+    // l'idiome maison : settings/preferences, essaim/etat…).
+    return NextResponse.json(errorBody(error), {
+      status: errorStatus(error),
+      headers: { "x-gen3ia-error-code": errorCode(error) },
+    });
+  }
 
   const disponible = professeurDisponible();
   const config = configurationProfesseur();
