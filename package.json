@@ -58,7 +58,7 @@
     "next": "15.5.28",
     "onnxruntime-web": "^1.30.0",
     "pdf-lib": "^1.17.1",
-    "pino": "^9.0.0",
+    "pino": "^10.4.0",
     "pptxgenjs": "^4.0.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
