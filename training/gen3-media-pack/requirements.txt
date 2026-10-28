@@ -1,13 +1,18 @@
 # Gen3 Media Pack — dépendances d'entraînement GPU (Colab / L4 / A100)
-# Versions ÉPINGLÉES pour reproductibilité ; testées ensemble sur Colab T4/L4/A100.
+# Versions ÉPINGLÉES pour reproductibilité.
+# Mise à jour 2026-10-28 (audit Job 478451) : epinglage relevé vers les
+# versions corrigées des alertes Dependabot (transformers CVE-2026-9856,
+# diffusers CVE-2026-45804, accelerate CVE-2026-69112). Le pipeline LTX
+# étant sensible aux versions, REVALIDER un run vidéo court avant un
+# entraînement long.
 
 # --- socle deep learning ---
 torch>=2.4.1,<2.8
 torchvision>=0.19,<0.24
-accelerate==1.2.1
-diffusers==0.32.2          # LTXPipeline incluse (>=0.32)
-transformers==4.47.2
-peft==0.14.0
+accelerate==1.15.0
+diffusers==0.42.1          # LTXPipeline incluse (>=0.32)
+transformers==5.21.0
+peft==0.21.2
 safetensors>=0.4.5
 bitsandbytes>=0.45.0       # Adam 8 bits optionnel
 sentencepiece>=0.2.0       # tokenizer T5

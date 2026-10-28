@@ -1,10 +1,12 @@
 # Kit d'orchestration multimodal gen3 — dépendances
 # torch est FOURNI par l'environnement GPU (Colab / machine CUDA) : vérifier la
 # compatibilité avec le driver CUDA du serveur au lieu de le réinstaller.
-transformers>=4.44,<5
-diffusers>=0.31
-accelerate>=0.33
-peft>=0.12
+# Floors corrigés (audit 2026-10-28) : transformers CVE-2026-9856, diffusers CVE-2026-45804,
+# accelerate CVE-2026-69112 (alertes Dependabot)
+transformers>=5.10
+diffusers>=0.38
+accelerate>=1.15
+peft>=0.21
 datasets>=2.20
 safetensors>=0.4
 sentencepiece>=0.1.99

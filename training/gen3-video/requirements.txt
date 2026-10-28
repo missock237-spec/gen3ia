@@ -2,9 +2,11 @@
 # (Colab L4 / A100 40 Go). Sur Colab, torch est déjà fourni : NE PAS le
 # réinstaller. La génération Wan exige aussi le dépôt cloné
 # Wan-Video/Wan2.1 (generate.py) et les poids Wan-AI/Wan2.1-T2V-1.3B (HF).
-transformers>=4.50
-accelerate>=0.30
-peft>=0.11
+# Floor 5.10 : corrige les alertes Dependabot transformers (CVE-2026-9856…)
+transformers>=5.10
+# Floor 1.15 : corrige CVE-2026-69112 (alerte Dependabot 46)
+accelerate>=1.15
+peft>=0.21
 datasets>=2.19
 bitsandbytes>=0.43
 pillow>=10.0

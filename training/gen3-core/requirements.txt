@@ -1,8 +1,10 @@
 torch>=2.3
-transformers>=4.53
+# Floor 5.10 : corrige les alertes Dependabot transformers (CVE-2026-9856…)
+transformers>=5.10
 datasets>=2.19
-accelerate>=0.31
-peft>=0.11
+# Floor 1.15 : corrige CVE-2026-69112 (alerte Dependabot 46)
+accelerate>=1.15
+peft>=0.21
 bitsandbytes>=0.43
 sentencepiece
 pillow
