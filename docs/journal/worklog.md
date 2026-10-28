@@ -4140,3 +4140,18 @@ Work Log:
 
 Stage Summary:
 - Le pipeline CD est 100 % vert de bout en bout. Aucune anomalie restante côté déploiement.
+
+---
+Task ID: 478451-iter7
+Agent: zai-web (cron 17:10 +08:00)
+Task: Audit continu — headers sécurité, PR Dependabot #100, chaîne entraînement, runbook rotation
+
+Work Log:
+- Routine verte : prod c53edf13, 2e run CD vert consécutif, sondes auth/r2/ticks OK, SSH 22022 stable. Run CD fantôme e1b192b1 = double-déclenchement sans conséquence (garde anti-course OK).
+- Headers HTTP audités : HSTS 2 ans preload, CSP complète (Chariow/Firebase/Ads/Sentry DE), X-Frame DENY, COOP/CORP, permissions-policy — niveau géant, rien à corriger. /.env et /package.json 404, robots/sitemap 200.
+- PR #100 : 4 checks rouges (E2E Auth, Tests/Budget, Accessibilité, Smoke) → écartée sur preuve ; OTEL 0.223→0.300 et composio 0.25→0.27 cassent la CI. #101-#103 confirmées écartées.
+- Entraînement : notebook v4 validé (nbformat 4, 18 cellules), manifest 18 domaines × 100 000 lignes fr/en vérifié, générateur + échantillons présents — prêt pour Colab utilisateur.
+- Livré : docs/exploitation/rotation-secrets-runbook.md (clé Google API, PAT ghp_26B1…, HF hf_OnaO…, checklist post-rotation).
+
+Stage Summary:
+- Aucune faille nouvelle côté prod ; 1 PR écartée sur preuve ; runbook rotation prêt pour l'Action propriétaire. Rapport : docs/rapports/rapport-job-478451-2026-10-28-1710.md
