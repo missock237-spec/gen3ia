@@ -4276,3 +4276,12 @@ Stage Summary:
 - CI/CD : 6/6 runs success sur f010cfd4 ; SSH 22022 ouvert (OpenSSH 9.9, 192 ms) — 5ᵉ livraison autonome consécutive du poller ; #106 reste fermée (15:17:39 UTC) ; 0 alerte Dependabot ouverte.
 - Issues : aucune nouvelle — toujours PRs #100–#103 (dependabot, en attente propriétaire) et phases #95–#97 (refactoring de fond) ; aucun commentaire propriétaire depuis septembre → silence positif sur l'UI livrée ; aucun defect à corriger, zéro commit de code.
 - Reste n°1 inchangé : rotation des secrets (PAT reproduit en clair dans le cron, clé Google, token HF). Rapport : docs/rapports/rapport-job-478451-2026-10-29-0150.md
+
+## 478451-iter16-0440 — 2026-10-29 04:10–04:40 +08:00
+
+- Audit de sécurité de surface d'attaque en prod, façon chercheur de vulnérabilités : en-têtes HTTP conformes (HSTS preload 2 ans, XFO DENY, CSP stricte frame-ancestors none, nosniff, Referrer/Permissions-Policy) — résidus acceptables notés (unsafe-inline Next.js, bannière nginx versionnée).
+- 20 routes API sensibles sondées sans token → 401 JSON propre partout, 0 fuite, 0 500 ; fix iter13 toujours en place. Webhook Chariow verrouillé (401 sans/fausse signature — règle d'or paiement). 6 endpoints cron → 401 sans secret GET et POST. Endpoints publics bénins. Dependabot ouvert : 0.
+- Faille de conformité corrigée : /.well-known/security.txt absent (404) malgré le bug bounty documenté → security.txt RFC 9116 (contact security@gen3ia.online, expires 2027, canonical, policy → bug-bounty.md) + test unitaire 4 garde-fous.
+- Validation : tsc 0, eslint 0, vitest 5147/5147 (461 fichiers). Commit `f992b64`, 5/5 workflows verts, **security.txt → 200 en prod vérifié** (6ᵉ livraison autonome du poller).
+- Entraînement gen3 : 18 domaines confirmés dans manifest (datasets), notebook v4 prêt, GPU Colab propriétaire inchangé. gen3 accessible : /chat et /dashboard 200 avec UI GLM.
+- Reste n°1 : rotation des secrets (propriétaire). Rapport : docs/rapports/rapport-job-478451-2026-10-29-0410.md
