@@ -4093,3 +4093,21 @@ Work Log:
 
 Stage Summary:
 - SSH NON résolu à la date du test (05:42 UTC). Les commandes console VPS (déblocage sshd + install-pull-mode.sh) restent la seule action requise.
+
+---
+Task ID: 478451-iter5
+Agent: zai-web (cron 15:10 +08:00)
+Task: Vérifier le déploiement post-console et confirmer « tout est en ligne »
+
+Work Log:
+- version.json prod : gitSha ddebb763 (build 2026-10-28T06:45Z) = HEAD exact de main — fin du gel b8dd38c3.
+- Release cd-latest : next-build.tar.gz 195 Mo + sha256 + meta.json re-publiés 06:45:43Z, meta.sha = ddebb763.
+- SSH : port 22022 ouvert, bannière SSH-2.0-OpenSSH_9.9 (fin du tarpit « Not allowed at this time ») ; 22/2222/2022 refus.
+- Guérisseur 06:40Z (run 40645319075) : sondage SSH success, armer canal pull success, aucun écart prod↔main.
+- /api/health 200 ok ; /api/status auth ok + r2 ok + ticks ok (sonde auth passée de not_configured à ok) ; /, /chat, /login 200.
+- Garde P0 en prod : 401 sur /api/chat, /api/upload, /api/fichiers, /api/conversations sans token.
+- CI + CodeQL success sur ddebb763 ; CD failure = étape SCP connue (le commit laisse le canal pull déployer le même SHA — comportement documenté).
+- Artefact sandbox : 10 faux-modifiés (0 diff textuel, chmod seulement) — stash supprimé, rien commité de bruit.
+
+Stage Summary:
+- VERROU VPS CLOS : canal pull opérationnel, prod alignée sur main, tous services verts. Rapport : docs/rapports/rapport-job-478451-2026-10-28-1510.md
