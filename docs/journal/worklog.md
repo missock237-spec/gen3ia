@@ -4127,3 +4127,16 @@ Work Log:
 
 Stage Summary:
 - CD v3 poussé (preuve attendue sur le run du nouveau sha). Escalade fermée. 1 vraie faille historique documentée (rotation Google API). Rapport : docs/rapports/rapport-job-478451-2026-10-28-1610.md
+
+---
+Task ID: 478451-iter6-preuve
+Agent: zai-web (cron 16:10 +08:00)
+Task: Preuve du correctif CD v3 en production
+
+Work Log:
+- Run CD #40655785478 (sha e1b192b1, patch v3) : completed/success — premier run vert après la série de rouges course-de-démarrage.
+- Prod : e1b192b1 (build 08:21:46Z), deploy-info + version.json alignés (DsQCwMIzf7rsXhAq-wMIQ).
+- Guérisseur + CI + CodeQL + ménage : success sur e1b192b1.
+
+Stage Summary:
+- Le pipeline CD est 100 % vert de bout en bout. Aucune anomalie restante côté déploiement.
