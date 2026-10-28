@@ -4155,3 +4155,18 @@ Work Log:
 
 Stage Summary:
 - Aucune faille nouvelle côté prod ; 1 PR écartée sur preuve ; runbook rotation prêt pour l'Action propriétaire. Rapport : docs/rapports/rapport-job-478451-2026-10-28-1710.md
+
+---
+Task ID: 478451-iter8
+Agent: zai-web (cron 18:10 +08:00)
+Task: Audit continu — perf HTTP, SEO/GEO/PWA, hygiène robots.txt + test de régression
+
+Work Log:
+- Routine verte : prod 430f8c29 (3e auto-déploiement consécutif), sondes auth/r2/ticks OK, SSH 22022 stable.
+- Perf HTTP : TTFB < 0,9 s partout ; accueil 195 Ko HTML SSR (point d'amélioration non bloquant, fenêtre perf dédiée) ; /pricing 404 normal (route inexistante).
+- SEO/GEO/PWA : sitemap 11/11 en 200, hreflang fr/en, llms.txt verrouillés, og-image 200, manifest.webmanifest + sw.js 200, robots GEO (20 crawlers IA autorisés).
+- Correctif robots.ts : DISALLOWED complété de 7 à 22 surfaces app authentifiées (dashboard, chat, settings, data, automations, memory, monde, lab, ondes, training, planifications, approvals, monitoring, observability, status) — crawl budget + pas d'indexation d'écrans vides.
+- Test de régression geo-routes.test.ts renforcé (22 assertions disallow + 4 assertions vitrine non bloquée) — 6/6 verts en local avant push.
+
+Stage Summary:
+- Hygiène GEO renforcée et verrouillée par test ; preuve prod attendue sur /robots.txt après déploiement du push. Rapport : docs/rapports/rapport-job-478451-2026-10-28-1810.md

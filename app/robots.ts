@@ -33,7 +33,34 @@ const AI_CRAWLERS = [
   "cohere-ai",
 ];
 
-const DISALLOWED_FOR_BOTS = ["/api/", "/admin", "/developer", "/team", "/billing", "/storage", "/client"];
+// Surfaces app authentifiées (redirect vers /login pour un crawler) :
+// inutile de brûler du crawl budget ni d'indexer des écrans vides.
+// Les pages marketing/contenu (/, /en, /faq, /neural, /integrations, /live,
+// /essaim, /arene, /privacy) restent indexables — cf. sitemap.xml.
+const DISALLOWED_FOR_BOTS = [
+  "/api/",
+  "/admin",
+  "/developer",
+  "/team",
+  "/billing",
+  "/storage",
+  "/client",
+  "/dashboard",
+  "/chat",
+  "/settings",
+  "/data",
+  "/automations",
+  "/memory",
+  "/monde",
+  "/lab",
+  "/ondes",
+  "/training",
+  "/planifications",
+  "/approvals",
+  "/monitoring",
+  "/observability",
+  "/status",
+];
 
 export default function robots(): MetadataRoute.Robots {
   return {

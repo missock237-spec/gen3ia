@@ -24,9 +24,44 @@ describe("GEO : routes robots / sitemap / llms", () => {
 
   it("robots.txt protège les surfaces privées sans bloquer la vitrine", () => {
     const rules = robots().rules as Array<{ userAgent: string | string[]; disallow?: string[] }>;
+    // Toutes les surfaces app authentifiées (redirect /login pour un crawler)
+    // doivent être interdites aux bots — économie de crawl budget + aucune
+    // indexation d'écrans vides (régression 2026-10-28, itération 8).
+    const surfacesPrivees = [
+      "/api/",
+      "/admin",
+      "/developer",
+      "/team",
+      "/billing",
+      "/storage",
+      "/client",
+      "/dashboard",
+      "/chat",
+      "/settings",
+      "/data",
+      "/automations",
+      "/memory",
+      "/monde",
+      "/lab",
+      "/ondes",
+      "/training",
+      "/planifications",
+      "/approvals",
+      "/monitoring",
+      "/observability",
+      "/status",
+    ];
     for (const rule of rules) {
-      expect(rule.disallow).toContain("/api/");
-      expect(rule.disallow).toContain("/admin");
+      for (const surface of surfacesPrivees) {
+        expect(rule.disallow, `surface privée manquante au disallow : ${surface}`).toContain(surface);
+      }
+    }
+    // La vitrine reste indexable : aucun Disallow trop large.
+    for (const rule of rules) {
+      expect(rule.disallow).not.toContain("/");
+      expect(rule.disallow).not.toContain("/faq");
+      expect(rule.disallow).not.toContain("/neural");
+      expect(rule.disallow).not.toContain("/integrations");
     }
     expect(robots().sitemap).toContain("/sitemap.xml");
   });
