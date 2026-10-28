@@ -4236,3 +4236,10 @@ Stage Summary:
 - Watchdog journalisé /var/log/gen3ia-watchdog.log ; script complet journalisé /var/log/gen3ia-fix.log.
 - Patterns validés (extraction SHA meta.json, purge blacklist grep -vxF, syntaxe bash -n du script + heredoc watchdog) ; README du dossier mis à jour.
 - État au moment du push : prod gelée 66a8563d (11:30Z), SSH barré, release cd-latest=58bf6077 prête — l'exécution console du script par le propriétaire rétablit tout en une commande.
+
+## 478451-iter11-2210 — 2026-10-28 22:10–22:40 +08:00
+
+- Demande propriétaire : code définitif pour le blocage VPS → audit + durcissement de fix-definitif-vps.sh (créé itération 10).
+- Anomalie n°1 (haute) corrigée : précédence sshd — drop-in 00-gen3ia-nopenalties.conf (première valeur obtenue gagne, un drop-in fournisseur ne peut plus réactiver PerSourcePenalties) ; retrait auto si sshd -t rejette.
+- Anomalie n°2 (moyenne) : échec disque silencieux — diagnostic /opt + purge tar résiduel ; watchdog purge /tmp si disque ≥ 90 %.
+- Rapport : docs/rapports/rapport-job-478451-2026-10-28-2210.md. Script validé bash -n, idempotent.

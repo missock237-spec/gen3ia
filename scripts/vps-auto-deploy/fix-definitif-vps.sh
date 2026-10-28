@@ -73,6 +73,8 @@ echo "  build publié (cd-latest) : $TARGET_SHA"
 echo "  prod en service          : ${PROD_SHA:-inconnue}"
 echo "  last-deployed            : $(cat "$STATE_DIR/last-deployed.txt" 2>/dev/null || echo 'aucun')"
 echo "  blacklist                : $(wc -l < "$STATE_DIR/failed_commits.txt" 2>/dev/null || echo 0) SHA(s)"
+echo "  disque /opt              : $(df -Ph /opt 2>/dev/null | awk 'NR==2{print $4" libres ("$5" utilisé)"}')"
+echo "  tar résiduel /tmp        : $(du -h /tmp/next-build.tar.gz 2>/dev/null | cut -f1 || echo 'aucun')"
 UPD_PID=$(pm2 pid updater 2>/dev/null | tr -d '[:space:]')
 if [ -n "$UPD_PID" ] && [ "$UPD_PID" != "0" ]; then
   echo "  updater PM2              : online (pid $UPD_PID)"
@@ -103,12 +105,25 @@ if printf '%s' "$VER" | grep -Eq 'OpenSSH_(9\.[89]|[1-9][0-9]\.)'; then
     fi
     ok "PerSourcePenalties no écrit dans sshd_config"
   fi
+  # Priorité sshd : « la PREMIÈRE valeur obtenue gagne ». Sur Ubuntu/Debian
+  # le Include sshd_config.d/*.conf est en tête de sshd_config → les
+  # drop-ins sont lus AVANT le corps principal. Un drop-in fournisseur qui
+  # définirait PerSourcePenalties yes écraserait donc notre ligne ajoutée
+  # en bas. Contre-mesure : drop-in 00- (tri alphabétique en premier) →
+  # notre valeur est lue la première et prévaut systématiquement.
+  SSHD_D=/etc/ssh/sshd_config.d
+  if [ -d "$SSHD_D" ]; then
+    printf '%s\n' '# gen3ia — lu en premier : prévaut sur tout autre drop-in' \
+      'PerSourcePenalties no' > "$SSHD_D/00-gen3ia-nopenalties.conf"
+    ok "drop-in 00-gen3ia-nopenalties.conf posé (priorité maximale)"
+  fi
   if command -v sshd >/dev/null 2>&1; then
     if ! sshd -t 2>/dev/null; then
       [ -f "$SSHD_BAK" ] && cp -a "$SSHD_BAK" "$SSHD_CONF"
-      warn "sshd -t a rejeté la config — sauvegarde restaurée (option inconnue ?)"
+      rm -f "$SSHD_D/00-gen3ia-nopenalties.conf"
+      warn "sshd -t a rejeté la config — sauvegarde restaurée + drop-in retiré (option inconnue ?)"
     else
-      ok "sshd -t : configuration valide"
+      ok "sshd -t : configuration valide (config principale + drop-in)"
     fi
   fi
 else
@@ -162,9 +177,11 @@ chmod +x "$UPDATER_DIR/deploy.sh"
 ok "shim deploy.sh → pull-deploy.sh en place"
 
 # ------------------------------------------------- 4. Purge états bloquants
-etape 4 "Purge des états bloquants (backoff + blacklist du SHA cible)"
+etape 4 "Purge des états bloquants (backoff + blacklist du SHA cible + tar résiduel)"
 rm -f "$STATE_DIR/pull-fail.txt"
 ok "backoff purgé (pull-fail.txt)"
+rm -f /tmp/next-build.tar.gz /tmp/next-build.tar.gz.sha256
+ok "tar résiduel /tmp purgé (téléchargements partiels impossibles à valider)"
 if [ -f "$STATE_DIR/failed_commits.txt" ] && grep -qxF "$TARGET_SHA" "$STATE_DIR/failed_commits.txt"; then
   grep -vxF "$TARGET_SHA" "$STATE_DIR/failed_commits.txt" > "$STATE_DIR/failed_commits.txt.new" \
     && mv "$STATE_DIR/failed_commits.txt.new" "$STATE_DIR/failed_commits.txt"
@@ -229,6 +246,12 @@ fi
 if ! curl -fsS -m 10 -o /dev/null http://127.0.0.1:3000/ 2>/dev/null; then
   say "app injoignable sur :3000 — pm2 restart gen3ia"
   pm2 restart gen3ia --update-env >/dev/null 2>&1 || true
+fi
+# disque saturé ? un /opt plein fait échouer les téléchargements en silence
+U=$(df -P /opt 2>/dev/null | awk 'NR==2{gsub("%",""); print $5}')
+if [ -n "${U:-}" ] && [ "$U" -ge 90 ]; then
+  say "ALERTE disque : /opt à ${U}% — purge du tar résiduel /tmp (195 Mo)"
+  rm -f /tmp/next-build.tar.gz /tmp/next-build.tar.gz.sha256
 fi
 # livraison à jour ? (pull-deploy.sh gère lui-même blacklist/backoff/idempotence)
 META=$(curl -fsSL -m 20 -H "Cache-Control: no-cache" \
