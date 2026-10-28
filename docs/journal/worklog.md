@@ -4214,3 +4214,17 @@ Work Log:
 
 Stage Summary:
 - Pipeline CD durci (v4 + v4.1), incident dernier-kilomètre documenté avec preuves horodatées et escalade active (#106). Rapport : docs/rapports/rapport-job-478451-2026-10-28-2010.md
+
+---
+Task ID: 478451-iter10-2110
+Agent: zai-web (cron 21:10 +08:00)
+Task: Audit continu — watchdog poller implémenté dans le guérisseur (preuve horodatée du gel)
+
+Work Log:
+- Routine : prod 66a8563d saine (health/status verts), gel dernier kilomètre persistant (SSH barré, poller inactif), #106 ouverte (1 tick à 13:01Z), action console propriétaire pas encore exécutée.
+- Correctif v4 guérisseur : extraction publishedAt de meta.json + âge release en minutes ; corps d'escalade fondé sur les preuves (« release X publiée il y a N min non délivrée → poller inactif/absent ») au lieu du diagnostic à l'aveugle ; commentaires de tick enrichis (shas abrégés + durée du gel).
+- YAML validé (8 étapes guerir) ; auto-démonstration attendue au tick push.
+- Entraînement gen3 : notebook v4 + manifest 18 domaines prêts (inchangé, GPU côté Colab).
+
+Stage Summary:
+- Le gel est désormais mesuré et visible à chaque tick (durée exacte sur #106) ; détection immédiate du scénario « SSH revenu mais poller mort ». Rapport : docs/rapports/rapport-job-478451-2026-10-28-2110.md

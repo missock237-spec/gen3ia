@@ -178,8 +178,21 @@ jobs:
           META=$(curl -fsSL -m 20 -H "Cache-Control: no-cache" \
             "https://github.com/${{ github.repository }}/releases/download/cd-latest/meta.json?_=$(date +%s)" || true)
           RS=$(printf '%s' "$META" | grep -o '"sha":"[0-9a-f]*"' | head -1 | sed 's/.*:"//; s/"$//' || true)
+          # v4 (2026-10-28, itération 10 Job 478451) : WATCHDOG POLLER —
+          # extraire publishedAt et calculer l'âge du build publié. Une
+          # release fraîche (sha = main) non délivrée à la prod après
+          # plusieurs cycles de 2 min = preuve directe que le poller VPS
+          # est inactif/absent — signalé tel quel dans l'escalade au lieu
+          # du diagnostic à l'aveugle (« bootstrap jamais fait »).
+          RP=$(printf '%s' "$META" | grep -o '"publishedAt":"[^"]*"' | head -1 | sed 's/.*:"//; s/"$//' || true)
+          AGE=""
+          if [ -n "$RP" ]; then
+            TS=$(date -u -d "$RP" +%s 2>/dev/null || true)
+            [ -n "$TS" ] && AGE=$(( ($(date -u +%s) - TS) / 60 ))
+          fi
           echo "release_sha=${RS:-absent}" >> "$GITHUB_OUTPUT"
-          echo "Release cd-latest : ${RS:-absent}"
+          echo "release_age_min=${AGE}" >> "$GITHUB_OUTPUT"
+          echo "Release cd-latest : ${RS:-absent} (publiée il y a ${AGE:-?} min)"
           echo "main              : ${{ needs.verifier.outputs.sha_main }}"
 
       - name: Sondage SSH léger (3 essais espacés)
@@ -235,7 +248,7 @@ jobs:
           echo "=== Guérisseur — tick $(date -u +%FT%TZ) ==="
           echo "prod    = ${{ needs.verifier.outputs.sha_prod }}"
           echo "main    = ${{ needs.verifier.outputs.sha_main }}"
-          echo "release = ${{ steps.release.outputs.release_sha }}"
+          echo "release = ${{ steps.release.outputs.release_sha }} (âge ${{ steps.release.outputs.release_age_min || '?' }} min)"
           echo "garde   = ${{ steps.garde.outcome }} (${{ steps.garde.outputs.libre }})"
           echo "sonde   = ${{ steps.sonde.outcome }} (${{ steps.sonde.outputs.joignable }})"
           echo "pull    = ${{ steps.pull.outcome }} (${{ steps.pull.outputs.verdict }})"
@@ -258,6 +271,8 @@ jobs:
           SHA_PROD: ${{ needs.verifier.outputs.sha_prod }}
           BESOIN: ${{ needs.verifier.outputs.besoin }}
           JOIGNABLE: ${{ steps.sonde.outputs.joignable }}
+          RELEASE_SHA: ${{ steps.release.outputs.release_sha }}
+          RELEASE_AGE_MIN: ${{ steps.release.outputs.release_age_min }}
           REPO: ${{ github.repository }}
         run: |
           TITRE="🚨 Production en retard sur main — intervention console VPS requise"
@@ -282,7 +297,9 @@ jobs:
           - SHA main        : `%SHA_MAIN%`
           - SHA production  : `%SHA_PROD%`
           - SSH entrant     : muet (fail2ban / PerSourcePenalties côté VPS)
-          - Canal pull      : poller VPS non installé (bootstrap jamais fait)
+          - Canal pull      : release cd-latest `%REL8%` publiée il y a %AGE% min
+            — **non délivrée** à la production (≥ %CYCLES% cycles de 2 min manqués)
+            → **poller VPS inactif ou absent** (watchdog, preuve horodatée)
 
           **Conséquence** : les builds CD sont publiés sur la release `cd-latest`
           mais la production ne les récupère jamais — corrections utilisateur
@@ -309,9 +326,14 @@ jobs:
           )
           CORPS="${CORPS//\%SHA_MAIN\%/$SHA_MAIN}"
           CORPS="${CORPS//\%SHA_PROD\%/$SHA_PROD}"
+          REL8="${RELEASE_SHA:0:8}"
+          CYCLES=$(( ${RELEASE_AGE_MIN:-0} / 2 ))
+          CORPS="${CORPS//\%REL8\%/${REL8:-absent}}"
+          CORPS="${CORPS//\%AGE\%/${RELEASE_AGE_MIN:-?}}"
+          CORPS="${CORPS//\%CYCLES\%/$CYCLES}"
           NUM=$(gh issue list -R "$REPO" --state open --search "$TITRE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
           if [ -n "$NUM" ]; then
-            gh issue comment "$NUM" -R "$REPO" -b "Tick $(date -u +%FT%TZ) — toujours en retard : prod=$SHA_PROD, main=$SHA_MAIN, SSH muet."
+            gh issue comment "$NUM" -R "$REPO" -b "Tick $(date -u +%FT%TZ) — toujours en retard : prod=${SHA_PROD:0:8}, main=${SHA_MAIN:0:8}, SSH muet, release cd-latest=${REL8:-absent} non délivrée depuis ${RELEASE_AGE_MIN:-?} min (= poller inactif)."
             echo "Issue #$NUM commentée (escalade en cours)."
           else
             gh issue create -R "$REPO" --title "$TITRE" --body "$CORPS" >/dev/null \
