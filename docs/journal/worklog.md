@@ -4285,3 +4285,11 @@ Stage Summary:
 - Validation : tsc 0, eslint 0, vitest 5147/5147 (461 fichiers). Commit `f992b64`, 5/5 workflows verts, **security.txt → 200 en prod vérifié** (6ᵉ livraison autonome du poller).
 - Entraînement gen3 : 18 domaines confirmés dans manifest (datasets), notebook v4 prêt, GPU Colab propriétaire inchangé. gen3 accessible : /chat et /dashboard 200 avec UI GLM.
 - Reste n°1 : rotation des secrets (propriétaire). Rapport : docs/rapports/rapport-job-478451-2026-10-29-0410.md
+
+## 478451-iter17-0555 — 2026-10-29 05:10–05:55 +08:00
+
+- Audit performance/découvrabilité en prod : cache _next/static immutable ✓, compression ~6× ✓, TTFB 0,56–0,61 s ✓, cache public calibré SWR 7j ✓, sitemap 11/11 URL → 200 + hreflang fr/en ✓, robots.txt déclare sitemap ✓, metas/canonical/og complets ✓, 404 brandée fr ✓, llms.txt 5,5 Ko structurés ✓.
+- Écart corrigé : /apple-touch-icon.png racine en 404 (bots preview Telegram/Slack/iMessage + fallback Safari la demandent par convention) → copie octet-pour-octet de /icons/ + 3 garde-fous test ios-splash (identité Buffer.equals, poids ≤ 200 Ko, layout ?v= inchangé).
+- Validation : tsc 0, eslint 0, vitest 5150/5150. Commit `c9fc554`, 5/5 workflows verts, prod vérifiée : racine 200 + md5 identique en prod (411b9afc…). 7ᵉ livraison autonome du poller.
+- Note environnement : node_modules du sandbox vidé entre ticks (restart) → réinstallation complète avant validations.
+- gen3 : /chat + /dashboard 200, marqueurs GLM re-confirmés (12 chunks), 18 domaines, notebook v4 prêt (GPU Colab propriétaire). Reste n°1 : rotation des secrets (propriétaire). Rapport : docs/rapports/rapport-job-478451-2026-10-29-0510.md
