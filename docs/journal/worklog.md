@@ -4065,3 +4065,18 @@ Work Log:
 Stage Summary:
 - Le chat accepte désormais TOUS les formats de la politique serveur (sélecteur dérivé automatiquement, 50 Mo, 10 fichiers) ; les formats bureautiques binaires (rtf/odt/odp/ods/pptx/epub) sont réellement CONVERTIS puis analysables par le modèle ; .doc/.ppt donnent une consigne de conversion claire au lieu d'un refus muet.
 - Les correctifs seront servis en production dès le déblocage VPS (issue #105) — le canal CD est prêt.
+
+---
+Task ID: 478451-iter4 (13:10 +08:00)
+Agent: zai-web (cron agent-loop)
+Task: Vérification de bout en bout du fix upload + audit continu + rapport d'itération
+
+Work Log:
+- Chaîne 7caad8fa vérifiée : CI/CodeQL verts, build publié sur cd-latest (05:04Z), tests ciblés 54/54 re-exécutés.
+- Parcours fichiers complet re-audité (sélecteur, drop, pré-validation, multipart R2, import réel, analyse bureautique, garde-fous zip-bomb) — conforme à la mission « tout fichier importé doit pouvoir être analysé ».
+- Audit gardes re-exécuté : 282/19/0 ; 0 alerte Dependabot ouverte.
+- Production toujours gelée à b8dd38c ; commandes console VPS re-documentées dans le rapport d'itération.
+
+Stage Summary:
+- Rapport : docs/rapports/rapport-job-478451-2026-10-28-1310.md (commit 5e6b4e75).
+- Déploiement du fix upload en attente du déblocage VPS uniquement.
