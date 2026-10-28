@@ -78,6 +78,28 @@ jobs:
           echo "sha_main=$SHA_MAIN" >> "$GITHUB_OUTPUT"
           echo "sha_prod=$SHA_PROD" >> "$GITHUB_OUTPUT"
 
+      # Bug constaté 2026-10-28 06:00 UTC : la refermeture de l'escalade
+      # vivait dans l'étape « Escalade » du job `guerir` (if: always() AU
+      # NIVEAU STEP seulement) — mais ce job entier est SKIPPÉ quand
+      # besoin=false, exactement au moment où il faut refermer l'issue.
+      # La refermeture vit donc ICI, dans le job `verifier` qui tourne
+      # TOUJOURS (aligné ou non).
+      - name: "Refermer l'escalade — production réalignée"
+        if: steps.ecart.outputs.besoin != 'true' && steps.ecart.outputs.sha_main != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA_MAIN: ${{ steps.ecart.outputs.sha_main }}
+          REPO: ${{ github.repository }}
+        run: |
+          TITRE="🚨 Production en retard sur main — intervention console VPS requise"
+          NUM=$(gh issue list -R "$REPO" --state open --search "$TITRE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$NUM" ]; then
+            gh issue close "$NUM" -R "$REPO" -c "✅ Production réalignée sur main ($SHA_MAIN) — escalade résolue automatiquement."
+            echo "Issue #$NUM refermée (production alignée)."
+          else
+            echo "Aucune escalade ouverte — rien à refermer."
+          fi
+
   guerir:
     name: Armement pull (SSH) puis rattrapage
     needs: verifier
