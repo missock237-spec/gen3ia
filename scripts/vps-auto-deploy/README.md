@@ -85,12 +85,29 @@ curl -fsSL https://raw.githubusercontent.com/missock237-spec/gen3ia/main/scripts
 Installe `pull-deploy.sh`, rebanche le poller existant (`deploy.sh` → shim,
 ancien mode conservé en `deploy.sh.build`) et lance un premier déploiement.
 
+### Rétablissement DÉFINITIF du blocage VPS (gel dernier kilomètre)
+
+Si la prod est figée (release `cd-latest` non délivrée) et/ou que le SSH
+entrant renvoie `Not allowed at this time` (pénalités source OpenSSH ≥ 9.8),
+un seul script traite les deux causes et blinde contre la récidive :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/missock237-spec/gen3ia/main/scripts/vps-auto-deploy/fix-definitif-vps.sh | bash
+```
+
+8 étapes idempotentes (diagnostic, déblocage SSH `PerSourcePenalties no`
++ fail2ban + ufw, réinstallation poller, purge backoff/blacklist, réparation
+PM2 « updater » + persistances, déploiement immédiat, **watchdog anti-récidive**
+toutes les 5 min, verdict). Journaux : `/var/log/gen3ia-fix.log`,
+`/var/log/gen3ia-watchdog.log`.
+
 ### Fichiers
 
 | Fichier | Rôle |
 |---|---|
 | `pull-deploy.sh` | Télécharge la release `cd-latest`, vérifie le sha256, délègue au finisher |
 | `install-pull-mode.sh` | Installation idempotente en une commande (console) |
+| `fix-definitif-vps.sh` | Rétablissement définitif blocage VPS (SSH barré + poller mort) + watchdog |
 | `state/pull-current.txt` | Stamp anti-reboucle du poller (supprimer pour forcer) |
 
 Le mode build historique (ce README, ci-dessus) reste documenté et archivé :

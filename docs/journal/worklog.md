@@ -4228,3 +4228,11 @@ Work Log:
 
 Stage Summary:
 - Le gel est désormais mesuré et visible à chaque tick (durée exacte sur #106) ; détection immédiate du scénario « SSH revenu mais poller mort ». Rapport : docs/rapports/rapport-job-478451-2026-10-28-2110.md
+
+## 478451-fix-definitif-2220 — 2026-10-28 22:20 +08:00 (surcouche itération 10)
+
+- Demande propriétaire : « donne-moi le code pour résoudre définitivement le blocage sur le VPS ».
+- Nouveau `scripts/vps-auto-deploy/fix-definitif-vps.sh` : 8 étapes idempotentes exécutables depuis la console fournisseur (aucun SSH requis) — diagnostic, déblocage SSH définitif (`PerSourcePenalties no` validé par `sshd -t` avec restauration auto + fail2ban unban + ufw 22022), réinstallation poller pull (auto-update.sh/pull-deploy.sh/shim), purge backoff + dé-blacklist du SHA cible, recréation PM2 « updater » + pm2 save/startup, déploiement immédiat cd-latest, **watchdog anti-récidive systemd 5 min (repli cron)** — updater/app relancés si morts, resurrect pm2 après reboot, pull forcé si la prod prend du retard — verdict final.
+- Watchdog journalisé /var/log/gen3ia-watchdog.log ; script complet journalisé /var/log/gen3ia-fix.log.
+- Patterns validés (extraction SHA meta.json, purge blacklist grep -vxF, syntaxe bash -n du script + heredoc watchdog) ; README du dossier mis à jour.
+- État au moment du push : prod gelée 66a8563d (11:30Z), SSH barré, release cd-latest=58bf6077 prête — l'exécution console du script par le propriétaire rétablit tout en une commande.
