@@ -146,12 +146,20 @@ jobs:
           # persistant au-delà de ce step = blocage VPS côté sshd/firewall,
           # à lever sur le VPS (cf. docs/exploitation/ssh-bloque-runbook.md).
           for i in 1 2 3 4 5 6; do
-            if scp -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+            # CANAL DÉDIÉ /tmp/cd-channel/ (2026-10-28, run 0c0e21aa) : le
+            # poller pull utilise /tmp/next-build.tar.gz + /tmp/cd-finisher.sh
+            # et le finisher PURGE ses artefacts à l'exit (trap) — les
+            # artefacts du canal SSH doivent donc vivre ailleurs, sinon le
+            # poller détruit le tar/finisher du CD entre le SCP et le swap
+            # (127 « No such file or directory » ×4).
+            if ssh -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "mkdir -p /tmp/cd-channel" \
+            && scp -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
                  /tmp/next-build.tar.gz \
-                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/next-build.tar.gz" \
+                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/cd-channel/next-build.tar.gz" \
             && scp -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -P "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
                  infra/deploy/cd-finisher.sh \
-                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/cd-finisher.sh"; then
+                 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/cd-channel/cd-finisher.sh"; then
               ok=1; break
             fi
             echo "Tentative $i/6 échouée (réseau / PerSourcePenalties ?) — nouvel essai dans 180 s…"
@@ -189,7 +197,7 @@ jobs:
           for i in 1 2 3 4; do
             sortie=$(ssh -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
                  "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-                 "bash /tmp/cd-finisher.sh ${GITHUB_SHA}" 2>&1) && code=0 || code=$?
+                 "bash /tmp/cd-channel/cd-finisher.sh ${GITHUB_SHA} /tmp/cd-channel/next-build.tar.gz" 2>&1) && code=0 || code=$?
             echo "$sortie"
             case $code in
               0)

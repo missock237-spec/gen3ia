@@ -4170,3 +4170,18 @@ Work Log:
 
 Stage Summary:
 - Hygiène GEO renforcée et verrouillée par test ; preuve prod attendue sur /robots.txt après déploiement du push. Rapport : docs/rapports/rapport-job-478451-2026-10-28-1810.md
+
+---
+Task ID: 478451-iter9
+Agent: zai-web (cron 19:10 +08:00)
+Task: Audit continu — race CD/poller diagnostiquée et éliminée, suite de tests complète
+
+Work Log:
+- Routine verte : prod 0c0e21aa (preuve robots.txt 462 disallow), sondes OK, SSH stable, CI/CodeQL/guérisseur verts.
+- Anomalie : run CD 0c0e21aa rouge — swap 127 ×4 « /tmp/cd-finisher.sh: No such file or directory » ; prod basculée par le poller (aucun impact).
+- Cause racine démontrée : cd-finisher purgé à l'exit (trap + idempotence) sur des chemins PARTAGÉS entre canal SSH du CD et poller pull — le poller détruisait les artefacts du CD entre SCP et swap.
+- Correctif : séparation des canaux — TAR_PATH paramétrable (2e arg, défaut historique), purge_canal ciblé ($TAR_PATH + $0 seulement si sous /tmp), CD vers /tmp/cd-channel/ (mkdir + SCP + swap avec 2e argument). pull-deploy.sh inchangé (compat).
+- Validations : bash -n OK, YAML 15 étapes OK, 49 tests CD/GEO verts, suite vitest complète 5143 passés / 12 skipped / 0 échec.
+
+Stage Summary:
+- Race structurellement impossible désormais ; preuve attendue sur le run CD du push (SCP/swap /tmp/cd-channel/ vert même avec poller concurrent). Rapport : docs/rapports/rapport-job-478451-2026-10-28-1910.md

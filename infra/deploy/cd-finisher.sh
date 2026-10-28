@@ -22,7 +22,14 @@
 # =====================================================================
 set -u
 
-TARGET_SHA="${1:?Usage: cd-finisher.sh <SHA>}"
+TARGET_SHA="${1:?Usage: cd-finisher.sh <SHA> [TAR_PATH]}"
+# Canal d'artefacts (séparation 2026-10-28, run 0c0e21aa) : le canal SSH du
+# CD et le poller pull exécutent le MÊME finisher mais dans des répertoires
+# DISTINCTS. Le trap purge les artefacts à l'exit — s'ils étaient partagés,
+# le canal le plus rapide détruisait ceux de l'autre (race observée :
+# poller déployé à 10:20 → purge → swap SSH du CD en 127 ×4 sur
+# /tmp/cd-finisher.sh absent). 2e argument optionnel = chemin du tar.
+TAR_PATH="${2:-/tmp/next-build.tar.gz}"
 PROD_DIR=/opt/gen3ia
 STAGING_DIR=/opt/gen3ia-staging
 UPDATER_DIR=/opt/gen3ia-updater
@@ -45,10 +52,16 @@ if ! flock -n 9; then log "CD: un déploiement est déjà en cours — abandon."
 pm2 stop updater >/dev/null 2>&1 || true
 # trap combiné : updater relancé + artefacts temporaires purgés (aucun tar
 # orphelin dans /tmp, même en cas d'échec) — durcissement 2026-10-22.
-trap 'pm2 start updater >/dev/null 2>&1 || true; rm -f /tmp/next-build.tar.gz /tmp/cd-finisher.sh' EXIT
+purge_canal() {
+  rm -f "$TAR_PATH"
+  # $0 purgé SEULEMENT s'il vit dans /tmp (copie SCP / téléchargement poller)
+  # — jamais le script du dépôt si un dev l'exécute depuis son checkout.
+  case "$0" in /tmp/*) rm -f "$0";; esac
+}
+trap 'pm2 start updater >/dev/null 2>&1 || true; purge_canal' EXIT
 
 # --- Vérifier le SHA cible ---
-[ -f /tmp/next-build.tar.gz ] || { log "CD ERREUR: /tmp/next-build.tar.gz absent (scp a échoué ?)"; exit 1; }
+[ -f "$TAR_PATH" ] || { log "CD ERREUR: $TAR_PATH absent (scp a échoué ?)"; exit 1; }
 cd "$PROD_DIR" || { log "CD ERREUR: $PROD_DIR introuvable"; exit 1; }
 git fetch origin --quiet || { log "CD ERREUR: git fetch a échoué (réseau ?)"; exit 1; }
 git cat-file -e "$TARGET_SHA" 2>/dev/null || { log "CD ERREUR: SHA $TARGET_SHA inconnu du dépôt"; exit 1; }
@@ -65,7 +78,8 @@ fi
 DEPLOYED=$(cat "$LAST_DEPLOYED" 2>/dev/null || git rev-parse HEAD)
 if [ "$TARGET_SHA" = "$DEPLOYED" ] && curl -fsS -m 10 -o /dev/null http://127.0.0.1:3000/ 2>/dev/null; then
   log "CD: $TARGET_SHA déjà déployé et site en bonne santé — rien à faire."
-  rm -f /tmp/next-build.tar.gz /tmp/cd-finisher.sh
+  rm -f "$TAR_PATH"
+  case "$0" in /tmp/*) rm -f "$0";; esac
   exit 0
 fi
 
@@ -90,8 +104,8 @@ fi
 # checksum publié par le runner AVANT de toucher au staging : un transfert
 # incomplet est détecté en 1 s au lieu d'un tar à moitié extrait.
 log "CD: vérification de l'intégrité du build livré…"
-if [ -f /tmp/next-build.tar.gz.sha256 ]; then
-  if ! (cd /tmp && sha256sum -c next-build.tar.gz.sha256 >/dev/null 2>&1); then
+if [ -f "$TAR_PATH.sha256" ]; then
+  if ! (cd "$(dirname "$TAR_PATH")" && sha256sum -c "$(basename "$TAR_PATH").sha256" >/dev/null 2>&1); then
     # Code 4 = transfert SCP corrompu. AUCUN blacklist : la corruption est un
     # problème du CHEMIN de transfert SSH, pas du build lui-même — la release
     # cd-latest (téléchargée par le canal pull avec vérification checksum
@@ -108,7 +122,7 @@ fi
 log "CD: extraction du build runner dans staging…"
 rm -rf "$STAGING_DIR/.next"
 mkdir -p "$STAGING_DIR/.next"
-if ! tar xzf /tmp/next-build.tar.gz -C "$STAGING_DIR/.next"; then
+if ! tar xzf "$TAR_PATH" -C "$STAGING_DIR/.next"; then
   log "CD ERREUR: extraction tar — SHA blacklisté, production intacte."
   echo "$TARGET_SHA" >> "$FAILED_COMMITS"
   exit 1
