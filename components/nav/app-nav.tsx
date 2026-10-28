@@ -172,10 +172,10 @@ export function AppNav() {
               type="button"
               onClick={() => setPaletteOpen(true)}
               className={"g3-nav-search " + (compact ? "is-compact" : "")}
-              aria-label="Rechercher une destination"
+              aria-label="Rechercher une destination…"
             >
               <span aria-hidden="true">⌕</span>
-              {!compact && <><span className="min-w-0 flex-1 truncate text-left">Rechercher une destination…</span><kbd>⌘K</kbd></>}
+              {!compact && <><span className="min-w-0 flex-1 truncate text-left">Rechercher une destination…</span><kbd aria-hidden="true">⌘K</kbd></>}
             </button>
           </div>
 

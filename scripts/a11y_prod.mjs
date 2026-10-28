@@ -23,17 +23,45 @@ import AxeBuilder from "@axe-core/playwright";
 
 const BASE_URL = (process.env.BASE_URL || "https://gen3ia.online").replace(/\/$/, "");
 
-/** Pages publiques scannées (Rec 8 : /, /login — + pages publiques utiles). */
-const PAGES = ["/", "/login"];
+/**
+ * Pages publiques scannées — alignées sur app/sitemap.ts (les 11 surfaces
+ * déclarées aux moteurs). La parité sitemap ↔ sonde est verrouillée par
+ * tests/unit/a11y-couverture-publique.test.ts : toute nouvelle page
+ * publique ajoutée au sitemap DOIT être couverte ici (et inversement).
+ */
+const PAGES = [
+  "/",
+  "/en",
+  "/faq",
+  "/neural",
+  "/integrations",
+  "/live",
+  "/essaim",
+  "/arene",
+  "/signup",
+  "/login",
+  "/privacy",
+];
+
+/**
+ * Thèmes scannés : sombre (défaut, localStorage absent) ET clair
+ * (localStorage "gen3ia-theme" = "light", même convention que le layout
+ * racine). L'itération 19 a prouvé qu'un thème peut violer pendant que
+ * l'autre passe : les deux sont désormais bloquants en CI.
+ */
+const THEMES = [
+  { name: "sombre", localStorage: null },
+  { name: "clair", localStorage: "light" },
+];
 
 /**
  * Allowlist d'exceptions documentées.
- * Clé : `${page}::${ruleId}` — Valeur : raison documentée.
+ * Clé : `${page}::${theme}::${ruleId}` — Valeur : raison documentée.
  * Vide à l'installation : toute violation critical/serious fait échouer
  * la sonde et doit être corrigée (ou ajoutée ici avec justification).
  */
 const ALLOWLIST = {
-  // " /::color-contrast": "Exemple : dégradé marketing validé AA 3:1 en texte large",
+  // " /::clair::color-contrast": "Exemple : dégradé marketing validé AA 3:1 en texte large",
 };
 
 /** Règles axe exclues avec justification permanente. */
@@ -49,14 +77,24 @@ function selectors(node, max = 3) {
   return target.slice(0, max).map((t) => (typeof t === "string" ? t : JSON.stringify(t))).join(", ");
 }
 
-async function scanPage(browser, pagePath) {
+async function scanPage(browser, pagePath, theme) {
   const url = `${BASE_URL}${pagePath}`;
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await context.newPage();
   try {
+    // Thème fixé AVANT navigation (même convention que le layout racine :
+    // localStorage "gen3ia-theme"), pour couvrir sombre ET clair.
+    if (theme.localStorage) {
+      await page.addInitScript(
+        (value) => {
+          try { localStorage.setItem("gen3ia-theme", value); } catch { /* noop */ }
+        },
+        theme.localStorage,
+      );
+    }
     const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
     if (!response || !response.ok()) {
-      return { pagePath, url, ok: false, error: `HTTP ${response ? response.status() : "inconnu"}`, violations: [], incomplete: [] };
+      return { pagePath, theme, url, ok: false, error: `HTTP ${response ? response.status() : "inconnu"}`, violations: [], incomplete: [] };
     }
     // Laisse l'hydratation React se stabiliser (réduise les faux positifs
     // sur les éléments montés/remplacés après le premier rendu).
@@ -88,36 +126,38 @@ function filterBlocking(violations) {
 
 async function main() {
   console.log(`\n=== Sonde accessibilité Gen3ia — ${BASE_URL} ===`);
-  console.log(`Pages : ${PAGES.join(", ")} — tags : ${TAGS.join(", ")}\n`);
+  console.log(`Pages : ${PAGES.join(", ")}`);
+  console.log(`Thèmes : ${THEMES.map((t) => t.name).join(", ")} — tags : ${TAGS.join(", ")}\n`);
 
   const browser = await chromium.launch({ args: ["--no-sandbox", "--disable-dev-shm-usage"] });
   const reports = [];
   try {
     for (const pagePath of PAGES) {
-      const report = await scanPage(browser, pagePath);
-      reports.push(report);
-      const blocking = report.ok ? filterBlocking(report.violations) : [];
-      const tolerated = blocking.filter((v) => ALLOWLIST[`${report.pagePath}::${v.id}`]);
-      const unexpected = blocking.filter((v) => !ALLOWLIST[`${report.pagePath}::${v.id}`]);
+      for (const theme of THEMES) {
+        const report = await scanPage(browser, pagePath, theme);
+        reports.push(report);
+        const blocking = report.ok ? filterBlocking(report.violations) : [];
+        const unexpected = blocking.filter((v) => !ALLOWLIST[`${report.pagePath}::${theme.name}::${v.id}`]);
 
-      if (!report.ok) {
-        console.log(`✗ ${report.pagePath} — INACCESSIBLE : ${report.error}`);
-        continue;
-      }
-      if (blocking.length === 0) {
-        console.log(`✓ ${report.pagePath} — aucune violation critical/serious`);
-      } else {
-        console.log(`${unexpected.length === 0 ? "○" : "✗"} ${report.pagePath} — ${blocking.length} violation(s) critical/serious :`);
-        for (const v of blocking) {
-          const tag = ALLOWLIST[`${report.pagePath}::${v.id}`] ? "TOLÉRÉE (documentée)" : "BLOQUANTE";
-          console.log(`    [${v.impact}] ${v.id} — ${v.help} — ${v.nodes} élément(s) — ${tag}`);
-          console.log(`      ${v.helpUrl}`);
+        if (!report.ok) {
+          console.log(`✗ ${report.pagePath} [${theme.name}] — INACCESSIBLE : ${report.error}`);
+          continue;
         }
+        if (blocking.length === 0) {
+          console.log(`✓ ${report.pagePath} [${theme.name}] — aucune violation critical/serious`);
+        } else {
+          console.log(`${unexpected.length === 0 ? "○" : "✗"} ${report.pagePath} [${theme.name}] — ${blocking.length} violation(s) critical/serious :`);
+          for (const v of blocking) {
+            const tag = ALLOWLIST[`${report.pagePath}::${theme.name}::${v.id}`] ? "TOLÉRÉE (documentée)" : "BLOQUANTE";
+            console.log(`    [${v.impact}] ${v.id} — ${v.help} — ${v.nodes} élément(s) — ${tag}`);
+            console.log(`      ${v.helpUrl}`);
+          }
+        }
+        // Stocke le détail pour le rapport final (sélecteurs des nœuds).
+        report.detail = (report.violations || [])
+          .filter((v) => BLOCKING_IMPACTS.has(v.impact))
+          .map((v) => ({ id: v.id, nodes: v.nodes.slice(0, 5).map((n) => selectors(n)) }));
       }
-      // Stocke le détail pour le rapport final (sélecteurs des nœuds).
-      report.detail = (report.violations || [])
-        .filter((v) => BLOCKING_IMPACTS.has(v.impact))
-        .map((v) => ({ id: v.id, nodes: v.nodes.slice(0, 5).map((n) => selectors(n)) }));
     }
   } finally {
     await browser.close();
@@ -126,7 +166,7 @@ async function main() {
   const unreachable = reports.filter((r) => !r.ok);
   const blockingTotal = reports.reduce((acc, r) => {
     if (!r.ok) return acc;
-    return acc + (r.violations || []).filter((v) => BLOCKING_IMPACTS.has(v.impact) && !ALLOWLIST[`${r.pagePath}::${v.id}`]).length;
+    return acc + (r.violations || []).filter((v) => BLOCKING_IMPACTS.has(v.impact) && !ALLOWLIST[`${r.pagePath}::${r.theme.name}::${v.id}`]).length;
   }, 0);
 
   if (reports.some((r) => r.detail?.length)) {
@@ -134,13 +174,13 @@ async function main() {
     for (const r of reports) {
       if (!r.detail?.length) continue;
       for (const v of r.detail) {
-        console.log(`  ${r.pagePath} :: ${v.id}`);
+        console.log(`  ${r.pagePath} [${r.theme.name}] :: ${v.id}`);
         for (const sel of v.nodes) console.log(`      ${sel}`);
       }
     }
   }
 
-  console.log(`\n=== Bilan : ${blockingTotal} violation(s) bloquante(s), ${unreachable.length} page(s) inaccessible(s) ===\n`);
+  console.log(`\n=== Bilan : ${blockingTotal} violation(s) bloquante(s), ${unreachable.length} page(s)-thème inaccessible(s) ===\n`);
 
   if (unreachable.length > 0 || blockingTotal > 0) process.exit(1);
 }
