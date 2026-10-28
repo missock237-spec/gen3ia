@@ -4198,3 +4198,19 @@ Work Log:
 
 Stage Summary:
 - Les deux canaux de déploiement (pull automatique + SSH accélérateur) sont fiables et sans race : pipeline CD entièrement rétabli et durci.
+
+---
+Task ID: 478451-iter9-2010
+Agent: zai-web (cron 20:10 +08:00)
+Task: Audit continu — anomalies CD (double run même sha), incident gel du dernier kilomètre documenté et escaladé
+
+Work Log:
+- Routine verte : prod 66a8563d (build 4J86O…, 11:30Z), health/status/deploy-info OK, zéro impact utilisateur.
+- Anomalie n°1 : run CD 40680610999 (workflow_dispatch, même sha que le run push) rouge à tort — deux BUILD_ID distincts pour un même commit, poller/roll-back ayant fait gagner l'autre build ; correctif v4 : la vérification finale accepte l'alignement par gitSha en secours (f9778cf7).
+- Fausse alerte levée : « branches: ain] » était un artefact d'affichage (séquence ANSI [m avalée) — od -c prouve branches: [main] intact ; aucun correctif (leçon consignée).
+- INCIDENT en cours : SSH entrant muet global (bannière « Not allowed at this time » — sondes locales 3/3, SCP runner 6/6, keyscan guérisseur 3/3) + poller pull ne délivre plus (release cd-latest f9778cf7 fraîche à 12:26, prod inchangée à 12:50). Issue #106 auto-ouverte par le guérisseur avec la commande console unique. Prod saine, rétablissement auto dès SSH levé ou action console propriétaire.
+- Correctif v4.1 : pré-sondage ssh-keyscan 3×20 s avant la boucle SCP 6×180 s — sshd muet = sortie immédiate (run vert, ~1 min au lieu de ~21, arrêt du martèlement).
+- Entraînement gen3 : notebook v4 + manifest 18 domaines prêts (exécution GPU côté Colab, inchangé).
+
+Stage Summary:
+- Pipeline CD durci (v4 + v4.1), incident dernier-kilomètre documenté avec preuves horodatées et escalade active (#106). Rapport : docs/rapports/rapport-job-478451-2026-10-28-2010.md

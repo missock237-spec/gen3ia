@@ -145,6 +145,27 @@ jobs:
           # Chaque run GitHub part d'une IP egress différente : un blocage
           # persistant au-delà de ce step = blocage VPS côté sshd/firewall,
           # à lever sur le VPS (cf. docs/exploitation/ssh-bloque-runbook.md).
+          # Pré-sondage (v4.1, itération 9 Job 478451) : quand sshd est fermé
+          # (« Not allowed at this time », fail2ban / PerSourcePenalties),
+          # marteler 6×180 s ne sert à rien — ~20 min de runner gaspillées
+          # par push et blocage entretenu. Sondage léger d'abord (ssh-keyscan,
+          # 3 essais espacés de 20 s) : muet → sortir IMMÉDIATEMENT en échec
+          # (exit 1 : le continue-on-error du step garde le run VERT et les
+          # étapes SSH aval sautées, la release cd-latest fait foi — même
+          # parcours que 40687150238 mais en ~1 min au lieu de ~21).
+          # sshd répondant → boucle de transfert normale ci-dessous.
+          ssh_vivant=0
+          for i in 1 2 3; do
+            if timeout 12 ssh-keyscan -T 8 -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" 2>/dev/null | grep -q "ssh-"; then
+              ssh_vivant=1; break
+            fi
+            echo "Pré-sondage $i/3 : sshd muet (fail2ban / PerSourcePenalties / port fermé ?) — nouvel essai dans 20 s…"
+            [ "$i" = "3" ] || sleep 20
+          done
+          if [ "$ssh_vivant" != "1" ]; then
+            echo "::warning::SSH entrant muet — canal SSH sauté d'office (économie ~20 min de runner). La release cd-latest fait foi : le canal pull (poller VPS) ou le guérisseur assurent la mise en production. Console VPS (si poller absent) : curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash"
+            exit 1
+          fi
           for i in 1 2 3 4 5 6; do
             # CANAL DÉDIÉ /tmp/cd-channel/ (2026-10-28, run 0c0e21aa) : le
             # poller pull utilise /tmp/next-build.tar.gz + /tmp/cd-finisher.sh
