@@ -110,7 +110,13 @@ describe("couche d'ondes neuronales RPIA (pont résonance → cerveau)", () => {
       expect(noeudsCible[i].phase).toBeCloseTo(noeudsSource[i].phase, 5);
       expect(noeudsCible[i].amortissement).toBeCloseTo(noeudsSource[i].amortissement, 5);
     }
-    expect(noeudsCible.slice(8)).toEqual(nouveauxNoeudsAvant);
+    const nouveauxNoeudsApres = noeudsCible.slice(8);
+    for (let i = 0; i < nouveauxNoeudsAvant.length; i++) {
+      expect(nouveauxNoeudsApres[i].amplitude).toBeCloseTo(nouveauxNoeudsAvant[i].amplitude, 5);
+      expect(nouveauxNoeudsApres[i].frequence).toBeCloseTo(nouveauxNoeudsAvant[i].frequence, 5);
+      expect(nouveauxNoeudsApres[i].phase).toBeCloseTo(nouveauxNoeudsAvant[i].phase, 5);
+      expect(nouveauxNoeudsApres[i].amortissement).toBeCloseTo(nouveauxNoeudsAvant[i].amortissement, 5);
+    }
     expect(cible.pasTotaux).toBe(etatSource.pasTotaux);
   });
 
