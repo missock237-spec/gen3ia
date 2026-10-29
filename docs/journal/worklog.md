@@ -4313,3 +4313,14 @@ Stage Summary:
 - Validation : tsc 0, eslint 0, vitest **5157/5157**. 4 commits (2546dc3, eed09be, 1aab40c, 51d9d9b) → CI 9/9 + CodeQL + Guérisseur + CD verts → **prod vérifiée : 4/4 marqueurs CSS + sonde 22/22 zéro violation** (contre 32 au départ). Régressions it16-18 nulles. 8ᵉ livraison autonome.
 - gen3 : 18 domaines (1,8 M lignes fr/en), échantillons .jsonl + notebook v4 prêts, GPU Colab propriétaire. /chat + /dashboard 200.
 - Reste n°1 : **rotation des secrets (propriétaire) — rappel n°19**. Rapport : docs/rapports/rapport-job-478451-2026-10-29-0710.md
+
+## 478451-iter20-0915 — 2026-10-29 09:10–09:55 +08:00
+
+- Découverte de session : itération 19 (a11y WCAG + CVE re2js) déjà livrée par le tick 08:10 (51d9d9b6 + 0efb1b7, prod alignée 00:25:36Z) → ce tick = **itération 20**.
+- Régression prod 10/10 endpoints 200 (TTFB 0,54–0,72 s) : aucune régression it16→19, marqueurs a11y en prod.
+- **Forensique issue #107** : faux positif d'escalade reconstitué minute par minute — le CD avait livré main à 00:25:36Z mais l'escalade a commenté « toujours en retard » à 00:27:51Z avec le SHA du job verifier (mesuré 5 min plus tôt, jamais re-relu) ; ticks cron 00:43/01:13 PERDUS (congestion GitHub) → refermeture jamais déclenchée.
+- **Guérisseur v5 livré (5d0ecb2)** : re-mesure fraîche prod (3 lectures cache-buster) avant tout commentaire d'escalade + refermeture immédiate si alignement entre-temps ; garde « CD en cours » (livraison légitime ≠ poller mort) ; cron 13,43 → 17,47 (anti-perdition). +2 garde-fous structurels vitest verrouillant le comportement.
+- Validation : tsc 0, eslint 0, vitest **5159/5159**, CI 11/11 verts, YAML parsé. **Preuve v5 en prod** : tick 01:30:39Z commenté avec SHA RE-MESURé (0efb1b7a — exact) ; run dispatché manuellement conforme. Faux positif structurellement mort.
+- État infra honnête : SSH muet depuis runners GitHub (5 sondes échouées), release cd-latest à jour (5d0ecb2, 01:28:46Z), poller VPS inactif → lag docs/workflow uniquement, **zéro impact utilisateur** (tout le code applicatif est en prod). Reprise auto : chaque push + cron 17/47 retente l'armement ; sinon action owner console unique (#107).
+- gen3 : 18 domaines, notebook v4 prêt (GPU Colab owner), /chat + /dashboard 200 UI GLM.
+- Reste n°1 : **rotation des secrets (owner) — rappel n°20** + commande console VPS (#107). Rapport : docs/rapports/rapport-job-478451-2026-10-29-0910.md
