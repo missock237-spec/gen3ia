@@ -32,6 +32,26 @@ describe("CerveauOndulatoireGen3", () => {
     expect(cerveau.percevoir("bonjour").sortie).toBe("Bonjour de nouveau.");
   });
 
+  it("borne la mémoire à long terme", () => {
+    const cerveau = new CerveauOndulatoireGen3({ taille: 16, budgetActif: 3, capaciteMemoire: 2, epoquesParAssociation: 1 });
+    cerveau.apprendre("première entrée", "première réponse");
+    cerveau.apprendre("deuxième entrée", "deuxième réponse");
+    cerveau.apprendre("troisième entrée", "troisième réponse");
+    expect(cerveau.statistiques().associationsMemorisees).toBe(2);
+    expect(cerveau.percevoir("première entrée").sortie).toBeNull();
+    expect(cerveau.percevoir("troisième entrée").sortie).toBe("troisième réponse");
+  });
+
+  it("refuse une horloge ondulatoire corrompue sans toucher au cerveau actif", () => {
+    const cerveau = new CerveauOndulatoireGen3({ taille: 24, budgetActif: 4, epoquesParAssociation: 2, graine: 17 });
+    cerveau.apprendre("question stable", "réponse stable");
+    const checkpoint = cerveau.exporterEtat();
+    checkpoint.souvenirs[0].etatOnde.pasDeTemps = Number.NaN;
+
+    expect(() => cerveau.importerEtat(checkpoint)).toThrow(/horloge RPIA/);
+    expect(cerveau.percevoir("question stable").sortie).toBe("réponse stable");
+  });
+
   it("conserve les associations après export et restauration", () => {
     const source = new CerveauOndulatoireGen3({ taille: 24, budgetActif: 4, epoquesParAssociation: 2, graine: 17 });
     source.apprendre("Capitale du Cameroun", "Yaoundé");
