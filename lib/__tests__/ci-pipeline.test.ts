@@ -184,6 +184,31 @@ describe("Guérisseur production (.github/workflows/guerisseur-production.yml)",
     expect(guerisseur).toContain("gh workflow run deploy-vps.yml");
   });
 
+  it("v6.2 secours SANS SSH : renouvellement d'IP runner quand release à jour + âge ≥ 10 min + SSH muet", () => {
+    // Constat 07:26→08:10Z (itération 26) : release cd-latest à jour,
+    // poller silencieux, SSH muet → prod gelée ~45 min ; la livraison
+    // n'a été rétablie que par un dispatch CD MANUEL (IP runner neuve).
+    // Le guérisseur doit savoir faire ce que l'opérateur a fait à la main.
+    expect(guerisseur).toContain("Secours sans SSH — redéclencher le CD (renouvellement d'IP runner)");
+    const secours = guerisseur.split("id: secours-ip")[1]?.split("- name: Rapport du tick")[0] ?? "";
+    // Conditions conjonctives strictes (anti-spam) — les trois doivent coexister :
+    expect(secours).toContain("steps.sonde.outputs.joignable != 'oui'");
+    expect(secours).toContain("steps.release.outputs.release_sha == needs.verifier.outputs.sha_main");
+    expect(secours).toContain(">= 10");
+    // C'est bien un dispatch CD (canal à IP renouvelée), pas un appel SSH direct.
+    expect(secours).toContain("gh workflow run deploy-vps.yml");
+    // Observabilité : le rapport du tick trace le secours.
+    expect(guerisseur).toContain("secours-ip =");
+  });
+
+  it("v6.2 garde d'escalade : pas d'issue si le secours vient de s'armer ce tick (anti-race API)", () => {
+    // Le CD dispatched construit ~6-8 min avant de livrer ; le garde
+    // « CD en cours » (API) ne le verrait pas encore — l'escalade ne
+    // peut pas brailler le même tick où l'action vient d'être prise.
+    expect(guerisseur).toContain("GARDE « SECOURS VENANT DE S'ARMER »");
+    expect(guerisseur).toContain("steps.secours-ip.outcome");
+  });
+
   it("permissions minimales : contents: read + actions: write (moindre privilège)", () => {
     expect(guerisseur).toContain("contents: read");
     expect(guerisseur).toContain("actions: write");

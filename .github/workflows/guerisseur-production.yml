@@ -266,6 +266,32 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      # V6.2 (2026-10-29, itération 26 Job 478451) — SECOURS SANS SSH :
+      # constat 07:26→08:10Z : release cd-latest à jour, poller silencieux,
+      # SSH muet (fail2ban/PerSourcePenalties) → prod gelée ~45 min. La
+      # sortie de secours ne peut PAS être SSH : c'est le RENOUVELLEMENT
+      # D'IP — chaque runner GitHub part d'une IP egress différente, et le
+      # CD dispatched prend une fenêtre SSH neuve (livraison e5279375
+      # prouvée 08:10Z par ce mécanisme, exécuté manuellement). Conditions
+      # conjonctives strictes (anti-spam) : release PUBLIÉE et à jour
+      # (release_sha == main), âge ≥ 10 min (le poller a eu ses 5 cycles
+      # — même seuil du watchdog v6.1), sonde SSH muette. Le CD référencé
+      # est sérialisé par sa concurrency (deploy-vps) ; l'escalade v6.1
+      # voit ce CD « in_progress » via son garde existant → pas de faux
+      # positif pendant qu'il livre.
+      - name: "Secours sans SSH — redéclencher le CD (renouvellement d'IP runner)"
+        id: secours-ip
+        if: steps.sonde.outputs.joignable != 'oui' && steps.release.outputs.release_sha == needs.verifier.outputs.sha_main && (steps.release.outputs.release_age_min || 0) >= 10
+        run: |
+          gh workflow run deploy-vps.yml --ref main -R "${{ github.repository }}"
+          echo "✅ CD déclenché SANS SSH (renouvellement d'IP runner) : release cd-latest ${RELEASE_SHA:0:8} publiée depuis ${RELEASE_AGE} min, poller silencieux, prod = ${SHA_PROD:0:8} → main = ${SHA_MAIN:0:8}."
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA_MAIN: ${{ needs.verifier.outputs.sha_main }}
+          SHA_PROD: ${{ needs.verifier.outputs.sha_prod }}
+          RELEASE_SHA: ${{ steps.release.outputs.release_sha }}
+          RELEASE_AGE: ${{ steps.release.outputs.release_age_min }}
+
       - name: Rapport du tick
         if: always()
         run: |
@@ -276,6 +302,7 @@ jobs:
           echo "garde   = ${{ steps.garde.outcome }} (${{ steps.garde.outputs.libre }})"
           echo "sonde   = ${{ steps.sonde.outcome }} (${{ steps.sonde.outputs.joignable }})"
           echo "pull    = ${{ steps.pull.outcome }} (${{ steps.pull.outputs.verdict }})"
+          echo "secours-ip = ${{ steps.secours-ip.outcome || 'skipped' }} (v6.2 renouvellement d'IP)"
           echo "Rappel : le canal pull (poller VPS, install console unique) rend ce rattrapage instantané —"
           echo "  curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash"
 
@@ -313,6 +340,19 @@ jobs:
           # guérisseur/CD gèrent le rattrapage sans bruit).
           if [ "$JOIGNABLE" = "oui" ]; then
             echo "SSH joignable — rattrapage en cours par les canaux normaux, pas d'escalade."
+            exit 0
+          fi
+
+          # v6.2 — GARDE « SECOURS VENANT DE S'ARMER » : si le nouveau
+          # secours sans SSH vient de déclencher un CD CE tick (renouvellement
+          # d'IP runner), pas d'escalade — l'action vient d'être prise et le
+          # CD construit ~6-8 min avant de livrer ; le garde « CD en cours »
+          # ci-dessous ne verrait pas encore le run (latence API) et ouvrirait
+          # un faux positif. Le prochain tick escaladera si CE secours-là
+          # échoue à son tour (escalade = preuve d'échec en chaîne, pas
+          # d'impatience).
+          if [ "${{ steps.secours-ip.outcome || '' }}" = "success" ]; then
+            echo "Secours sans SSH déclenché ce tick (renouvellement d'IP) — pas d'escalade, le prochain tick jugera le résultat."
             exit 0
           fi
 
