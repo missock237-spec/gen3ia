@@ -32,8 +32,14 @@ concurrency:
 
 # contents:write : publication du build sur la release « cd-latest »
 # (repli mode pull du VPS — cf. scripts/vps-auto-deploy/pull-deploy.sh).
+# issues:write (v6, itération 21 Job 478451) : REFERMETURE À LA SOURCE —
+# l'acteur qui PROUVE la livraison (verify_build) referme lui-même
+# l'escalade « Production en retard », sans dépendre d'un tick guérisseur
+# ultérieur (ticks cron régulièrement perdus : 00:43, 01:13, 01:47 le
+# 29 oct. 2026 → escalades périmées laissées ouvertes jusqu'au push suivant).
 permissions:
   contents: write
+  issues: write
 
 jobs:
   deploy:
@@ -320,6 +326,31 @@ jobs:
           done
           echo "::error::La production ne sert NI le build livré ($BUILD_ID) NI le commit ($GITHUB_SHA) après la fenêtre étendue (local + public) — déploiement à investiguer."
           exit 1
+
+      # v6 (2026-10-29, itération 21 Job 478451) — REFERMETURE À LA SOURCE :
+      # ce run vient de PROUVER que la production sert ce build exact
+      # (verify_build : deploy-info + version.json alignés) — l'écart
+      # prod↔main est résolu par définition. Refermer l'escalade ICI :
+      # le constat #108 du 29 oct. 01:45Z est resté ouvert 25 min alors que
+      # la livraison était intervenue 1 min après sa création (le tick
+      # cron de refermeture a été perdu). Échec non bloquant : la
+      # refermeture est un confort opérationnel, jamais une condition de
+      # déploiement (un tick guérisseur refermerait sinon).
+      - name: "Refermer l'escalade production ↔ main (livraison prouvée)"
+        if: steps.verify_build.outcome == 'success'
+        run: |
+          TITRE="🚨 Production en retard sur main — intervention console VPS requise"
+          NUM=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "$TITRE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$NUM" ]; then
+            gh issue close "$NUM" -R "$GITHUB_REPOSITORY" \
+              -c "✅ Livraison CD prouvée : la production sert le commit $GITHUB_SHA (vérification deploy-info + version.json de bout en bout). Escalade refermée À LA SOURCE par le déploiement continu." \
+              || echo "⚠️ Refermeture impossible (quota API ?) — un tick guérisseur la refermera."
+            echo "Issue #$NUM refermée à la source (livraison prouvée)."
+          else
+            echo "Aucune escalade ouverte — rien à refermer."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # RAPPORT DE FIN DE RUN (double canal) : état de chaque voie, action
       # de contrôle pour l'exploitant. Vert = build publié sur la release

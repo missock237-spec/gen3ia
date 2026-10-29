@@ -143,6 +143,21 @@ describe("Guérisseur production (.github/workflows/guerisseur-production.yml)",
     );
   });
 
+  it("v6 garde fail-closed : API muette = renonciation à l'escalade, jamais de faux positif", () => {
+    // Fait constaté 01:45 UTC le 29 oct. : l'appel API « runs du CD » a
+    // échoué (rate limit) et le repli « || echo 0 » a FAIL-OPEN → escalade
+    // #108 créée pendant que le CD du même push livrait (swap ~1 min
+    // après). La garde doit réessayer 3× puis RENONCER à escalader ce tick
+    // (fail-closed) — et le filtre couvre les états d'attente des files de
+    // concurrency (waiting/pending), pas seulement in_progress/queued.
+    expect(guerisseur).toContain("GARDE FAIL-CLOSED");
+    expect(guerisseur).toContain(
+      "État du CD indéterminable (API injoignable 3×)",
+    );
+    expect(guerisseur).toContain("garde fail-closed");
+    expect(guerisseur).toContain('or .status=="waiting" or .status=="pending"');
+  });
+
   it("anti-collision CD : garde runs en cours/échoués + concurrency sérielle", () => {
     expect(guerisseur).toContain("group: guerisseur-production");
     expect(guerisseur).toContain("cancel-in-progress: false");
@@ -158,6 +173,43 @@ describe("Guérisseur production (.github/workflows/guerisseur-production.yml)",
   it("permissions minimales : contents: read + actions: write (moindre privilège)", () => {
     expect(guerisseur).toContain("contents: read");
     expect(guerisseur).toContain("actions: write");
+  });
+});
+
+describe("CD VPS (.github/workflows/deploy-vps.yml) — refermeture à la source", () => {
+  const cd = read(".github/workflows/deploy-vps.yml");
+
+  it("permissions : contents: write (release) + issues: write (refermeture)", () => {
+    // Moindre privilège étendu de façon mesurée : issues:write n'existe
+    // que (v6, itération 21) pour refermer l'escalade après livraison
+    // prouvée — aucune autre écriture d'issue dans le workflow.
+    expect(cd).toContain("contents: write");
+    expect(cd).toContain("issues: write");
+  });
+
+  it("v6 : l'escalade est refermée APRÈS la vérification de bout en bout du build", () => {
+    // L'acteur qui PROUVE la livraison (verify_build : deploy-info +
+    // version.json alignés) referme l'escalade lui-même — sans dépendre
+    // d'un tick guérisseur ultérieur (ticks cron perdus : 00:43, 01:13,
+    // 01:47 le 29 oct. 2026 → escalades périmées laissées ouvertes).
+    expect(cd).toContain(
+      "Refermer l'escalade production ↔ main (livraison prouvée)",
+    );
+    expect(cd).toContain("steps.verify_build.outcome == 'success'");
+    expect(cd).toContain(
+      "Escalade refermée À LA SOURCE par le déploiement continu",
+    );
+    // L'ordre compte : la refermeture suit STRICTEMENT la vérification.
+    const verif = cd.indexOf("Vérifier que la production sert ce build exact");
+    const fermeture = cd.indexOf("Refermer l'escalade production ↔ main");
+    expect(verif).toBeGreaterThan(-1);
+    expect(fermeture).toBeGreaterThan(verif);
+  });
+
+  it("refermeture non bloquante : un échec de clôture n'annule jamais un déploiement réussi", () => {
+    expect(cd).toContain(
+      "Refermeture impossible (quota API ?) — un tick guérisseur la refermera",
+    );
   });
 });
 
