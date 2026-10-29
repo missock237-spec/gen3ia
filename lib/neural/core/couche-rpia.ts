@@ -48,6 +48,8 @@ export class CoucheOndesNeuronales {
   /** Taille = nombre de neurones couverts (1 nœud d'onde par neurone). */
   readonly taille: number;
   private entraineur: EntraineurRPIA;
+  /** Dernier pas de temps appris : conserve le même rythme pour lire l'onde. */
+  private dernierPasDeTemps = RPIA_DEFAUTS.pasDeTemps;
 
   constructor(taille = 100, options?: OptionsCoucheRPIA) {
     if (!Number.isInteger(taille) || taille < 1 || taille > 4096) {
@@ -95,6 +97,7 @@ export class CoucheOndesNeuronales {
     if (typeof texte !== "string" || texte.length === 0) {
       throw new Error("Texte de requête vide — rien à mettre en résonance.");
     }
+    this.dernierPasDeTemps = config.pasDeTemps;
     return this.entraineur.entrainer(this.cibleDepuisTexte(texte), epoques, config);
   }
 
@@ -104,6 +107,7 @@ export class CoucheOndesNeuronales {
     epoques = 120,
     config: ConfigRPIA = RPIA_DEFAUTS,
   ): RapportEntrainement {
+    this.dernierPasDeTemps = config.pasDeTemps;
     return this.entraineur.entrainer(cible, epoques, config);
   }
 
@@ -121,8 +125,21 @@ export class CoucheOndesNeuronales {
   energiesResonance(): Record<number, number> {
     const etat = this.entraineur.etat();
     const energies: Record<number, number> = {};
+    // Lire la valeur instantanée de l'onde à l'instant suivant : amplitude
+    // seule ne distingue pas les phases apprises de deux requêtes différentes.
+    // Math.fround reproduit la précision de l'horloge float32 envoyée au shader.
+    const tempsGlobal = Math.fround(this.dernierPasDeTemps * this.entraineur.pasTotaux);
+    if (!Number.isFinite(tempsGlobal)) {
+      throw new Error("Temps de lecture RPIA non fini.");
+    }
     for (let i = 0; i < etat.length; i++) {
-      const energie = Math.min(ENERGIE_MAX, etat[i].amplitude * GAIN_ENERGIE);
+      const noeud = etat[i];
+      const ondeInstantanee =
+        noeud.amplitude * Math.cos(noeud.frequence * tempsGlobal + noeud.phase);
+      // Le noyau SNN reçoit des énergies excitatrices : les phases négatives
+      // ne deviennent pas des inhibitions implicites. L'amplitude, la phase,
+      // la fréquence et le temps déterminent néanmoins chaque excitation.
+      const energie = Math.min(ENERGIE_MAX, Math.max(0, ondeInstantanee * GAIN_ENERGIE));
       if (energie > 0) energies[i] = energie;
     }
     return energies;
@@ -137,7 +154,8 @@ export class CoucheOndesNeuronales {
     const noeud = this.entraineur.etat()[idNeurone];
     if (!noeud) return 0;
     const cible = this.cibleDepuisTexte(texte);
-    const onde = noeud.amplitude * Math.cos(noeud.frequence * 0.1 * this.entraineur.pasTotaux + noeud.phase);
+    const tempsGlobal = Math.fround(this.dernierPasDeTemps * this.entraineur.pasTotaux);
+    const onde = noeud.amplitude * Math.cos(noeud.frequence * tempsGlobal + noeud.phase);
     const interference = Math.abs(onde - cible[idNeurone]);
     return Math.max(0, 1 - interference);
   }
