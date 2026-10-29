@@ -71,10 +71,11 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 100 endpoints orphelins au 2026-10-29 (it.30 ;    */
+/* Baseline honnête — 96 endpoints orphelins au 2026-10-29 (it.31 ;     */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
-/* memory/consent câblés). Classés par motif. Réviser à chaque          */
-/* suppression/ajout d'UI.                                              */
+/* memory/consent câblés (it.29-30), puis le lot marketplace            */
+/* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
+/* (it.31)). Classés par motif. Réviser à chaque suppression/ajout d'UI. */
 /* ------------------------------------------------------------------ */
 
 const BASELINE_ORPHELINS: Record<string, string[]> = {
@@ -140,8 +141,9 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *  utilisateur détectée. Chaque entrée est un candidat UI (ou un
    *  doublon mort à supprimer). Ex. : /business/* (lot métier sans
    *  écran), /orchestrator* (l'UI passe par /api/team/{id}/orchestrator),
-   *  /settings/export-data (constat it.27), /extensions/{installed,
-   *  licenses,purchases,usage} (lot marketplace), /skills* … */
+   *  /settings/export-data (constat it.27, câblé it.29),
+   *  /extensions/{installed,licenses,purchases,usage} (lot marketplace,
+   *  câblé it.31 sur /extensions), /skills* … */
   "orphelin-connu": [
     "/admin/billing/reconcile",
     "/admin/extensions/reviews",
@@ -170,10 +172,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/deployments/create",
     "/developer/secrets",
     "/developer/simulation",
-    "/extensions/installed",
-    "/extensions/licenses",
-    "/extensions/purchases",
-    "/extensions/usage",
     "/files/workspaces",
     "/ia/auto-apprentissage/rapport",
     "/knowledge",

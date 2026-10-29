@@ -171,6 +171,12 @@ const WORKSPACE_SECONDARY: NavRoute[] = [
   // (L'ancienne entrée « Planifications » /planifications est FONDUE dans
   // l'Espace Automatisations /automations — onglet Planifications.)
   { id: "integrations", href: "/integrations", label: "Intégrations", icon: "⇄", description: "Connecteurs, messageries et webhooks de vos agents", contexts: ["workspace"], section: "secondary", keywords: ["intégrations", "connecteurs", "composio", "whatsapp", "telegram", "slack", "webhook", "oauth"] },
+  // it. 31 (Job 478451) : « Mes extensions » — les 4 endpoints marketplace
+  // (/api/extensions/{installed,purchases,licenses,usage}) existaient sans
+  // AUCUNE surface utilisateur (garde anti-code-mort it. 29). La page
+  // /extensions donne à l'utilisateur la vue compte de ses installations,
+  // achats, licences et usage réel.
+  { id: "extensions", href: "/extensions", label: "Mes extensions", icon: "⧉", description: "Vos extensions installées, achats, licences et usage réel", contexts: ["workspace"], section: "secondary", keywords: ["extensions", "marketplace", "installations", "achats", "licences", "usage", "abonnements"] },
   { id: "storage", href: "/storage", label: "Bibliothèque", icon: "▣", description: "Bibliothèque de fichiers et d'artefacts — stockage permanent", contexts: ["workspace"], section: "secondary", keywords: ["bibliothèque", "fichiers", "stockage", "artefacts", "storage", "quota"] },
   { id: "live", href: "/live", label: "Agent Live", icon: "◉", description: "Contrôler un poste de travail", contexts: ["workspace"], section: "secondary", keywords: ["live", "pc"] },
   { id: "memory", href: "/memory", label: "Mémoire permanente", icon: "◆", description: "Souvenirs et connaissances des agents", contexts: ["workspace"], section: "secondary", keywords: ["mémoire", "knowledge"] },
