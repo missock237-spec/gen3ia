@@ -106,10 +106,41 @@ describe("Guérisseur production (.github/workflows/guerisseur-production.yml)",
 
   it("déclencheurs : push main + schedule décalé hors heures pleines + manuel", () => {
     // Le cron évite les heures pleines (congestion GitHub documentée —
-    // ticks 23:30/00:00 du cron */30 perdus le 27-28 oct. 2026).
+    // ticks 23:30/00:00 du cron */30 perdus le 27-28 oct. 2026) ET les
+    // minutes :13/:43 (ticks 00:43/01:13 perdus le 29 oct. 2026).
     expect(guerisseur).toContain("branches: [main]");
-    expect(guerisseur).toContain("cron: '13,43 * * * *'");
+    expect(guerisseur).toContain("cron: '17,47 * * * *'");
     expect(guerisseur).toContain("workflow_dispatch:");
+  });
+
+  it("v5 anti-faux-positif : re-mesure fraîche de la prod AVANT toute escalade", () => {
+    // Fait constaté 00:27 UTC le 29 oct. : l'escalade a commenté
+    // « toujours en retard » avec le SHA du job verifier (mesuré ~5 min
+    // plus tôt) ALORS que le CD du même push avait déjà livré main à
+    // 00:25:36. L'escalade doit donc re-mesurer la production elle-même
+    // (3 lectures espacées, cache-buster) avant tout bruit, et refermer
+    // l'issue si l'alignement est détecté entre-temps.
+    expect(guerisseur).toContain("version.json?rm=");
+    expect(guerisseur).toContain("RE-MESURE FRAÎCHE");
+    expect(guerisseur).toContain("SHA_PROD_REEL");
+    expect(guerisseur).toContain("alignement détecté par re-mesure fraîche");
+    // Le commentaire de tick doit porter le SHA re-mesuré, jamais le SHA
+    // périmé du verifier.
+    expect(guerisseur).toContain("SHA_PROD=\"${SHA_PROD_REEL:-$SHA_PROD}\"");
+    expect(guerisseur).toContain("re-mesuré à");
+  });
+
+  it("v5 garde « CD en cours » : pas d'escalade pendant une livraison légitime", () => {
+    // Un run deploy-vps in_progress/queued sur le SHA de main est un canal
+    // de livraison légitime — escalader « poller inactif » pendant ce
+    // temps = faux positif garanti (constaté 00:27 UTC le 29 oct.).
+    expect(guerisseur).toContain("CD_EN_COURS");
+    expect(guerisseur).toContain(
+      "actions/workflows/deploy-vps.yml/runs?per_page=10",
+    );
+    expect(guerisseur).toContain(
+      "pas d'escalade ce tick (livraison possible en cours)",
+    );
   });
 
   it("anti-collision CD : garde runs en cours/échoués + concurrency sérielle", () => {
