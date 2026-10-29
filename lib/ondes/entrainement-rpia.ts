@@ -103,6 +103,16 @@ export class EntraineurRPIA {
     // WebGPU consomme des f32 ; normaliser aussi les tableaux JS en f32
     // pour que le chemin CPU travaille sur la même cible numérique.
     const cibleFloat32 = cible instanceof Float32Array ? cible : Float32Array.from(cible);
+    return this.executerPasValide(cibleFloat32, config);
+  }
+
+  /**
+   * Pas interne après validation des entrées. L'entraînement multi-époques
+   * l'utilise pour ne pas reparcourir la cible et la configuration à chaque
+   * époque : la vérification reste aux frontières publiques, pas dans la
+   * boucle numérique chaude.
+   */
+  private executerPasValide(cible: Float32Array, config: ConfigRPIA): number {
     const lr = config.tauxApprentissage;
     // Le shader évalue l'onde avec le pasDeTemps passé en uniforme — le
     // miroir utilise le même temps pour l'évaluation et la correction du
@@ -166,7 +176,7 @@ export class EntraineurRPIA {
     const erreurAvantEntrainement = erreurInterference(this.noeuds, cibleFloat32, tempsInitial);
     const historique: number[] = [];
     for (let e = 0; e < epoques; e++) {
-      historique.push(this.pasEntrainement(cibleFloat32, config));
+      historique.push(this.executerPasValide(cibleFloat32, config));
     }
     return rapportDepuisHistorique(historique, erreurAvantEntrainement);
   }
