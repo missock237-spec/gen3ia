@@ -16,6 +16,29 @@ describe("couche d'ondes neuronales RPIA (pont résonance → cerveau)", () => {
     expect(reseau.neurones.size).toBe(couche.taille);
   });
 
+  it("les énergies d'injection reflètent la phase de l'onde, pas seulement son amplitude", () => {
+    const coucheA = new CoucheOndesNeuronales(100, { graine: 42 });
+    const etatB = coucheA.exporterEtat();
+    for (let i = 0; i < etatB.taille; i++) {
+      etatB.poids[i * 4 + 2] += Math.PI;
+    }
+    const coucheB = new CoucheOndesNeuronales(100, { graine: 42 });
+    coucheB.importerEtat(etatB);
+
+    const energiesA = coucheA.energiesResonance();
+    const energiesB = coucheB.energiesResonance();
+    let distance = 0;
+    for (let i = 0; i < 100; i++) {
+      distance += Math.abs((energiesA[i] ?? 0) - (energiesB[i] ?? 0));
+    }
+
+    expect(distance).toBeGreaterThan(1);
+    for (const energie of [...Object.values(energiesA), ...Object.values(energiesB)]) {
+      expect(energie).toBeGreaterThan(0);
+      expect(energie).toBeLessThanOrEqual(0.5);
+    }
+  });
+
   it("l'entraînement RPIA converge réellement vers l'onde cible du texte", () => {
     const couche = new CoucheOndesNeuronales(256);
     const rapport = couche.entrainerVersTexte("rédiger un rapport d'analyse de données", 200);
