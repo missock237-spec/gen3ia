@@ -123,7 +123,7 @@ export class EntraineurRPIA {
     for (let i = 0; i < this.nbNoeuds; i++) {
       const noeud = this.noeuds[i];
       const ondeAvant = noeud.amplitude * Math.cos(noeud.frequence * tempsOnde + noeud.phase);
-      const interference = ondeAvant - cibleFloat32[i];
+      const interference = ondeAvant - cible[i];
 
       if (Math.abs(interference) < BORNES_RPIA.seuilConstructif) {
         // Interférence constructive : renforcement de la résonance.
@@ -149,7 +149,7 @@ export class EntraineurRPIA {
     }
 
     this.compteurPas++;
-    return erreurInterference(this.noeuds, cibleFloat32, tempsOnde);
+    return erreurInterference(this.noeuds, cible, tempsOnde);
   }
 
   /**
