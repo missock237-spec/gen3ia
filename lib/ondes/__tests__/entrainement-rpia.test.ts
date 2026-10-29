@@ -62,6 +62,40 @@ describe("entraîneur RPIA (miroir CPU du shader waveTrainer)", () => {
     expect(copie.erreurCourante(cible, 0.1)).toBeCloseTo(source.erreurCourante(cible, 0.1), 6);
   });
 
+  it("refuse une amplitude initiale non finie ou hors bornes physiques", () => {
+    expect(() => new EntraineurRPIA(8, { amplitudeInitiale: Number.NaN })).toThrow(
+      /Amplitude initiale invalide/,
+    );
+    expect(() => new EntraineurRPIA(8, { amplitudeInitiale: 2.1 })).toThrow(
+      /Amplitude initiale invalide/,
+    );
+  });
+
+  it("refuse les poids corrompus sans modifier partiellement le réseau", () => {
+    const entraineur = new EntraineurRPIA(8);
+    const avant = Array.from(entraineur.exporterPoids());
+    const corrompus = entraineur.exporterPoids();
+    corrompus[5] = Number.NaN;
+
+    expect(() => entraineur.importerPoids(corrompus)).toThrow(/Poids RPIA non fini/);
+    expect(Array.from(entraineur.exporterPoids())).toEqual(avant);
+
+    const debordementF32 = entraineur.exporterPoids();
+    debordementF32[1] = Number.POSITIVE_INFINITY;
+    expect(() => entraineur.importerPoids(debordementF32)).toThrow(/Poids RPIA non fini/);
+  });
+
+  it("refuse une configuration d'ondes non finie ou physiquement invalide", () => {
+    const entraineur = new EntraineurRPIA(8);
+    const cible = new Float32Array(8).fill(0.25);
+    expect(() => entraineur.pasEntrainement(cible, { tauxApprentissage: Number.NaN, pasDeTemps: 0.1 })).toThrow(
+      /Configuration RPIA invalide/,
+    );
+    expect(() => entraineur.pasEntrainement(cible, { tauxApprentissage: 0.01, pasDeTemps: 0 })).toThrow(
+      /Configuration RPIA invalide/,
+    );
+  });
+
   it("rejette proprement les entrées invalides (taille de cible, époques, nœuds)", () => {
     const entraineur = new EntraineurRPIA(32);
     expect(() => entraineur.entrainer(new Float32Array(16), 5)).toThrow(/Cible incompatible/);
