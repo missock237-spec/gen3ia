@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { authFetch } from "@/lib/firebase/auth-client";
+import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 import { MetricCard, LoadingState } from "@/components/shells/states";
 import { StatusBadge } from "@/components/shells/status-badge";
 
@@ -26,6 +27,24 @@ const METRIC_LABELS: Array<[string, string, string]> = [
   ["executions", "Exécutions", "Exécutions enregistrées"],
   ["memories", "Mémoires", "Souvenirs permanents"],
 ];
+
+/**
+ * Fallback compact d'une zone isolée par ErrorBoundary : seul le panneau
+ * cassé affiche un état d'erreur — le reste de la console reste vivant.
+ */
+function ZoneFallback({ reset }: { error: Error; reset: () => void }) {
+  return (
+    <div
+      className="rounded-2xl border border-[var(--g3-danger-soft)] bg-[var(--g3-danger-soft)] p-4 text-sm text-[var(--g3-danger-strong)]"
+      role="alert"
+    >
+      Cette zone n&apos;a pas pu s&apos;afficher.{" "}
+      <button type="button" onClick={reset} className="underline underline-offset-2">
+        Réessayer
+      </button>
+    </div>
+  );
+}
 
 export default function AdminPlatformPage() {
   const [data, setData] = useState<PlatformMetrics | null>(null);
@@ -60,17 +79,22 @@ export default function AdminPlatformPage() {
 
   return (
     <div className="space-y-7">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {METRIC_LABELS.map(([key, label, hint]) => (
-          <MetricCard
-            key={key}
-            label={label}
-            value={data?.metrics[key] !== undefined && data.metrics[key] >= 0 ? data.metrics[key] : "—"}
-            hint={hint}
-          />
-        ))}
-      </div>
+      {/* Containment granulaire : un crash de rendu dans la grille ne coûte
+          que la grille — la section missions reste affichée (et inversement). */}
+      <ErrorBoundary fallback={ZoneFallback}>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {METRIC_LABELS.map(([key, label, hint]) => (
+            <MetricCard
+              key={key}
+              label={label}
+              value={data?.metrics[key] !== undefined && data.metrics[key] >= 0 ? data.metrics[key] : "—"}
+              hint={hint}
+            />
+          ))}
+        </div>
+      </ErrorBoundary>
 
+      <ErrorBoundary fallback={ZoneFallback}>
       <section aria-label="Missions par statut" className="rounded-3xl border border-white/10 bg-[var(--g3-surface)]/5 p-6">
         <h2 className="text-lg font-bold text-[var(--g3-text-secondary)]">Missions par statut</h2>
         <p className="mt-1 text-xs text-[var(--g3-faint)]">Répartition des 500 missions les plus récentes.</p>
@@ -87,6 +111,7 @@ export default function AdminPlatformPage() {
           )}
         </div>
       </section>
+      </ErrorBoundary>
     </div>
   );
 }
