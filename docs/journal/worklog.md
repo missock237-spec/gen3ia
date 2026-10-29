@@ -4324,3 +4324,13 @@ Stage Summary:
 - État infra honnête : SSH muet depuis runners GitHub (5 sondes échouées), release cd-latest à jour (5d0ecb2, 01:28:46Z), poller VPS inactif → lag docs/workflow uniquement, **zéro impact utilisateur** (tout le code applicatif est en prod). Reprise auto : chaque push + cron 17/47 retente l'armement ; sinon action owner console unique (#107).
 - gen3 : 18 domaines, notebook v4 prêt (GPU Colab owner), /chat + /dashboard 200 UI GLM.
 - Reste n°1 : **rotation des secrets (owner) — rappel n°20** + commande console VPS (#107). Rapport : docs/rapports/rapport-job-478451-2026-10-29-0910.md
+
+## 478451-iter21-1025 — 2026-10-29 10:10–10:55 +08:00
+
+- Découverte de session : itération 20 livrée (v5 5d0ecb2 + docs 75d7865, #107 auto-fermée 01:34:45Z, prod alignée) → ce tick = **itération 21**. Prod 8/8 endpoints 200, TTFB 0,51–0,89 s. CI 75d7865 : 11/11 verts. Dependabot 0.
+- **Forensique #108 (logs horodatés)** : escalade créée 01:45:58Z PENDANT que le CD du même push livrait — la garde v5 CD_EN_COURS a évalué 0 car l'appel API a échoué (rate limit après 6 polls) et le repli « || echo 0 » a **FAIL-OPEN** ; swap CD intervenu ~1 min après ; tick cron de refermeture perdu (4ᵉ du jour : 00:13/00:43/01:13/01:47) → issue périmée laissée ouverte.
+- **v6 livré (e291912)**, défense en profondeur : (1) garde guérisseur fail-closed — 3 essais API espacés puis RENONCIATION à l'escalade si indéterminable, filtre waiting/pending ajouté ; (2) **refermeture à la source dans le CD** — nouvelle étape conditionnée strictement à verify_build (livraison prouvée) qui referme l'escalade elle-même, zéro dépendance aux ticks cron ; permissions CD +issues:write mesurée ; refermeture non bloquante.
+- Validation : tsc 0, eslint 0, vitest **5163/5163** (+4 garde-fous : fail-closed + ordre verify_build→refermeture + non-bloquant + permissions), YAML parsé (ordre étapes CD vérifié par indices), bash -n OK sur les 2 blocs.
+- Preuve v6 en prod : tick 02:28:14Z commenté avec SHA RE-MESURÉ (prod=75d7865a, main=e2919121, release prête) — honnête, lag workflow-only, zéro impact utilisateur.
+- gen3 : 18 domaines, notebook v4 prêt (GPU Colab owner), /chat + /dashboard 200 UI GLM.
+- Reste n°1 : **rotation des secrets (owner) — rappel n°21** + commande console VPS (#108). Rapport : docs/rapports/rapport-job-478451-2026-10-29-1010.md
