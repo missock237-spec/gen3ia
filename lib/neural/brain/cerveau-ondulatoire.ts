@@ -248,6 +248,12 @@ export class CerveauOndulatoireGen3 {
     if (!Number.isInteger(capaciteMemoire) || capaciteMemoire < 1 || capaciteMemoire > 10_000) {
       throw new Error("capaciteMemoire doit être un entier compris entre 1 et 10000.");
     }
+    // Budget de mémoire numérique : chaque souvenir garde un vecteur et 4 poids
+    // par oscillateur. La borne empêche une configuration taille × capacité
+    // de demander silencieusement une quantité excessive de RAM.
+    if (capaciteMemoire * taille > 1_000_000) {
+      throw new Error("La configuration taille × capaciteMemoire dépasse le budget mémoire expérimental.");
+    }
     if (!Number.isFinite(seuilRappel) || seuilRappel < -1 || seuilRappel > 1) {
       throw new Error("seuilRappel doit être compris entre -1 et 1.");
     }
@@ -374,7 +380,7 @@ export class CerveauOndulatoireGen3 {
     return {
       sortie: rappelAccepte && meilleur ? meilleur.sortie : null,
       mode,
-      confiance: rappelAccepte ? meilleurScore : Math.max(0, meilleurScore),
+      confiance: rappelAccepte ? meilleurScore : 0,
       idMemoire: rappelAccepte && meilleur ? meilleur.id : null,
       souvenirsEvalues: this.souvenirs.length,
       comparaisonsVectorielles: this.souvenirs.length * this.taille,
