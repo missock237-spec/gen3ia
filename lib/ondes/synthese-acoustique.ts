@@ -38,8 +38,18 @@ export class SynthetiseurAcoustique {
     if (!Number.isInteger(nbNoeuds) || nbNoeuds < 1) {
       throw new Error(`Nombre de nœuds invalide : ${nbNoeuds} (entier ≥ 1 requis).`);
     }
+    const frequenceEchantillonnage = options?.frequenceEchantillonnage ?? 44100;
+    if (
+      !Number.isInteger(frequenceEchantillonnage) ||
+      frequenceEchantillonnage < 8000 ||
+      frequenceEchantillonnage > 192000
+    ) {
+      throw new Error(
+        `Fréquence d'échantillonnage invalide : ${frequenceEchantillonnage} (entier entre 8000 et 192000 Hz requis).`,
+      );
+    }
     this.nbNoeuds = nbNoeuds;
-    this.frequenceEchantillonnage = options?.frequenceEchantillonnage ?? 44100;
+    this.frequenceEchantillonnage = frequenceEchantillonnage;
     this.noeuds = new Array<NoeudAcoustique>(nbNoeuds);
 
     let graine = (options?.graine ?? 42) >>> 0;
@@ -233,6 +243,20 @@ export class SynthetiseurAcoustique {
  * système, navigateur). Retourne un ArrayBuffer autonome.
  */
 export function versWav(pcm: Float32Array, frequenceEchantillonnage = 44100): ArrayBuffer {
+  if (
+    !Number.isInteger(frequenceEchantillonnage) ||
+    frequenceEchantillonnage < 8000 ||
+    frequenceEchantillonnage > 192000
+  ) {
+    throw new Error(
+      `Fréquence WAV invalide : ${frequenceEchantillonnage} (entier entre 8000 et 192000 Hz requis).`,
+    );
+  }
+  for (let i = 0; i < pcm.length; i++) {
+    if (!Number.isFinite(pcm[i])) {
+      throw new Error(`Échantillon PCM non fini à l'index ${i}.`);
+    }
+  }
   const nbEchantillons = pcm.length;
   const octetsDonnees = nbEchantillons * 2;
   const tampon = new ArrayBuffer(44 + octetsDonnees);
