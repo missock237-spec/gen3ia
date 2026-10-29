@@ -19,8 +19,16 @@ const BATCH_LIMIT = 400;
 /** Nombre maximal d'objets par passe removePrefix (taille de page R2). */
 const R2_PURGE_PAGE = 1000;
 
-/** Nombre maximal de passes de purge R2 (garde anti-dérive : 50 000 objets). */
+/** Nombre maximal de passes de purge R2 d'un namespace nommé (garde anti-dérive : 50 000 objets). */
 const R2_PURGE_MAX_PASSES = 50;
+
+/**
+ * Nombre maximal de passes de la purge RACINE `users/{uid}/` (100 000 objets).
+ * La racine agrège tous les namespaces de l'utilisateur (conversations,
+ * mémoire, agents, training, exports, prompt-templates, runs…) : sa borne
+ * est plus large qu'une purge de namespace isolé.
+ */
+const R2_ROOT_PURGE_MAX_PASSES = 100;
 
 const FIREBASE_IDENTITY_API = "https://identitytoolkit.googleapis.com/v1/accounts:delete";
 const FIREBASE_API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "";
@@ -88,15 +96,39 @@ async function purgerPrefixeUtilisateur(prefix: string): Promise<number> {
 }
 
 /**
- * DELETE /api/auth/account — droit a l'effacement (RGPD art. 17).
+ * Purge du préfixe RACINE `users/{uid}/` — même boucle, borne de passes
+ * relevée (la racine agrège tous les namespaces de l'utilisateur).
+ */
+async function purgerPrefixeRacineUtilisateur(prefix: string): Promise<number> {
+  let supprimes = 0;
+  for (let passe = 0; passe < R2_ROOT_PURGE_MAX_PASSES; passe += 1) {
+    const supprimesDeLaPasse = await removePrefix(prefix, { maxObjects: R2_PURGE_PAGE });
+    supprimes += supprimesDeLaPasse;
+    if (supprimesDeLaPasse === 0) break;
+  }
+  return supprimes;
+}
+
+/**
+ * DELETE /api/auth/account — droit a l'effacement (RGPD art. 17) — ÉTANCHE.
  *
  * Supprime l'ensemble des donnees personnelles rattachees a l'utilisateur :
  * identité (base R2, Task 108-b), profil, portefeuille, equipes, agents,
- * executions, documents, memoire conversationnelle R2 (Task 109 :
+ * executions, documents, retours IA (aiFeedback + leçons), artefacts de
+ * conversation, consentements outils, memoire conversationnelle R2 (Task 109 :
  * users/{uid}/conversations + memoire KV users/{uid}/memories et
- * memory-items), puis le compte Firebase Auth lui-meme. Les evenements
- * d'audit (interet legitime securite) sont conserves mais anonymises par la
- * suppression du profil.
+ * memory-items), puis le compte Firebase Auth lui-meme.
+ *
+ * Filet d'étanchéité R2 (Job 478451 it.27) : après les purges nommées à
+ * vocation de MÉTRIQUES, le préfixe RACINE `users/{uid}/` est purgé en
+ * entier — aucun objet personnel ne peut survivre à l'effacement, y
+ * compris dans les namespaces créés après cette migration (agents,
+ * exports RGPD, training*, prompt-templates, runs, privacy/consent…).
+ * Toute future section utilisateur stockée sous `users/{uid}/` est
+ * automatiquement couverte, sans modification de ce fichier.
+ *
+ * Les evenements d'audit (interet legitime securite) sont conserves mais
+ * anonymises par la suppression du profil.
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -107,6 +139,13 @@ export async function DELETE(request: NextRequest) {
     const agents = await deleteWhere("agents", "ownerId", uid);
     const executions = await deleteWhere("executions", "userId", uid);
     const documents = await deleteWhere("documents", "ownerId", uid);
+    // 1-ter. Données personnelles Firestore longtemps oubliées (it.27) :
+    // retours IA, leçons apprises, artefacts de conversation, consentements
+    // outils — toutes rattachées à l'utilisateur par le champ `userId`.
+    const aiFeedback = await deleteWhere("aiFeedback", "userId", uid);
+    const aiFeedbackLessons = await deleteWhere("aiFeedbackLessons", "userId", uid);
+    const artifacts = await deleteWhere("conversationArtifacts", "userId", uid);
+    const toolConsents = await deleteWhere("toolConsents", "userId", uid);
 
     // 1-bis. Mémoire R2 PAR UTILISATEUR (Task 109) : conversations + messages
     // (un objet par message sous conversations/{cid}/messages/) et mémoire
@@ -119,6 +158,14 @@ export async function DELETE(request: NextRequest) {
     // Les messages vivent DANS le préfixe conversations (plus de collection
     // séparée) : compteur conservé à 0 pour la forme de réponse historique.
     const messages = 0;
+
+    // 2-bis. FILET D'ÉTANCHÉITÉ R2 (it.27) : purge du préfixe RACINE de
+    // l'utilisateur. Les purges nommées ci-dessus produisent les métriques
+    // d'audit ; celle-ci GARANTIT qu'aucun objet personnel ne survit —
+    // quel que soit le namespace (agents, exports, training*, runs,
+    // prompt-templates, privacy/consent, namespaces futurs…). Idempotente :
+    // une panne R2 interrompt la suppression, l'utilisateur peut réessayer.
+    const racine = await purgerPrefixeRacineUtilisateur(`${userDir(uid)}/`);
 
     const research = await deleteWhere("researchJobs", "userId", uid);
 
@@ -157,11 +204,11 @@ export async function DELETE(request: NextRequest) {
       executionId: `account_deletion_${Date.now()}`,
       toolName: "gdpr.account_deleted",
       event: "completed",
-      input: { agents, executions, documents, conversations, messages, memories, memoryItems, researchJobs: research, identityDeleted },
+      input: { agents, executions, documents, aiFeedback, aiFeedbackLessons, artifacts, toolConsents, conversations, messages, memories, memoryItems, r2RacinePurge: racine, researchJobs: research, identityDeleted },
     }).catch(() => undefined);
 
     return new NextResponse(
-      JSON.stringify({ success: true, deleted: { agents, executions, documents, conversations, messages, research, identityDeleted } }),
+      JSON.stringify({ success: true, deleted: { agents, executions, documents, aiFeedback, aiFeedbackLessons, artifacts, toolConsents, conversations, messages, research, r2RacinePurge: racine, identityDeleted } }),
       {
         status: 200,
         headers: {
