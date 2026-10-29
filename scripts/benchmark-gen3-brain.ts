@@ -49,12 +49,13 @@ const cerveau = new CerveauOndulatoireGen3({
   graine: 42,
 });
 
-let memoireObservee = process.memoryUsage().heapUsed;
+const heapInitialBytes = process.memoryUsage().heapUsed;
+let heapObservedPeakBytes = heapInitialBytes;
 const depart = performance.now();
 const apprentissages = [];
 for (const exemple of entrainement) {
   apprentissages.push(cerveau.apprendre(exemple.entree, exemple.sortie));
-  memoireObservee = Math.max(memoireObservee, process.memoryUsage().heapUsed);
+  heapObservedPeakBytes = Math.max(heapObservedPeakBytes, process.memoryUsage().heapUsed);
 }
 const dureeApprentissageMs = performance.now() - depart;
 
@@ -64,7 +65,7 @@ for (const exemple of entrainement) {
   if (resultat.mode === "RAPPEL_EXACT" && resultat.sortie === exemple.sortie) {
     rappelsExactsCorrects += 1;
   }
-  memoireObservee = Math.max(memoireObservee, process.memoryUsage().heapUsed);
+  heapObservedPeakBytes = Math.max(heapObservedPeakBytes, process.memoryUsage().heapUsed);
 }
 
 let rappelsApproximatifsCorrects = 0;
@@ -76,7 +77,7 @@ const rapportsVariantes = variantes.map((variante) => {
   ) {
     rappelsApproximatifsCorrects += 1;
   }
-  memoireObservee = Math.max(memoireObservee, process.memoryUsage().heapUsed);
+  heapObservedPeakBytes = Math.max(heapObservedPeakBytes, process.memoryUsage().heapUsed);
   return {
     entree: variante.entree,
     attendu: variante.attendu,
@@ -91,7 +92,7 @@ let inconnuesRejetees = 0;
 const rapportsInconnus = inconnues.map((entree) => {
   const resultat = cerveau.percevoir(entree);
   if (resultat.sortie === null && resultat.mode === "INCONNU") inconnuesRejetees += 1;
-  memoireObservee = Math.max(memoireObservee, process.memoryUsage().heapUsed);
+  heapObservedPeakBytes = Math.max(heapObservedPeakBytes, process.memoryUsage().heapUsed);
   return {
     entree,
     rejete: resultat.sortie === null,
@@ -134,7 +135,8 @@ const rapport = {
   },
   ressourcesObservees: {
     dureeTotaleMs: Math.round((performance.now() - depart) * 100) / 100,
-    heapInitialBytes: memoireObservee,
+    heapInitialBytes,
+    heapObservedPeakBytes,
     heapActuelBytes: memoireFinale.heapUsed,
     rssActuelBytes: memoireFinale.rss,
     tailleCheckpointJsonBytes: Buffer.byteLength(JSON.stringify(etatFinal), "utf8"),
