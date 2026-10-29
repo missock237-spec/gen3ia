@@ -87,7 +87,43 @@ describe("NeuralEngine — couche RPIA branchée au flux du chat", () => {
     expect(rpia.pasTotaux).toBeGreaterThan(0);
   });
 
-  it("la résonance est PERSISTANTE : le temps global avance de tour en tour", async () => {
+  it("isole l'apprentissage RPIA par compte et conversation", async () => {
+    const { engine, couche } = monterMoteur();
+    const requeteScopee = (
+      message: string,
+      userId: string,
+      conversationId: string,
+    ): AIRequest => ({
+      ...requete(message),
+      metadata: { userId, conversationId },
+    });
+
+    const premiere = await engine.generate(
+      requeteScopee("question alpha", "compte-a", "conversation-1"),
+    );
+    const seconde = await engine.generate(
+      requeteScopee("question beta", "compte-a", "conversation-1"),
+    );
+    const autreConversation = await engine.generate(
+      requeteScopee("question gamma", "compte-a", "conversation-2"),
+    );
+    const autreCompte = await engine.generate(
+      requeteScopee("question delta", "compte-b", "conversation-1"),
+    );
+
+    const pasPremiere = premiere.raw.rpia?.pasTotaux ?? 0;
+    expect(pasPremiere).toBe(12);
+    expect(seconde.raw.rpia?.pasTotaux).toBe(pasPremiere + 12);
+    // Une conversation neuve repart de la couche de base, pas des poids
+    // entraînés par la conversation précédente.
+    expect(autreConversation.raw.rpia?.pasTotaux).toBe(pasPremiere);
+    // Un autre compte reste isolé, même avec le même ID de conversation.
+    expect(autreCompte.raw.rpia?.pasTotaux).toBe(pasPremiere);
+    // Les conversations authentifiées ne mutent pas l'état de base partagé.
+    expect(couche?.pasTotaux).toBe(0);
+  });
+
+  it("la résonance est PERSISTANTE pour les appels sans identité", async () => {
     const { engine } = monterMoteur();
     const r1 = await engine.generate(requete("première question"));
     const r2 = await engine.generate(requete("deuxième question différente"));
