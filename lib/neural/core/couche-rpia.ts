@@ -15,9 +15,8 @@
  *   · deux requêtes différentes produisent deux motifs d'énergie
  *     distincts — le cerveau « ressent » la différence avant même de
  *     décoder ;
- *   · les énergies sont bornées [0, 0.5] : l'homéostasie du noyau
- *     central (alerte au-delà de 0.75 de moyenne) n'est jamais
- *     déclenchée par la couche (moyenne typique ≈ 0.2).
+ *   · les énergies injectées sont bornées [0, 0.5] ; seul le lobe
+ *     excitateur de la valeur instantanée de l'onde alimente le SNN.
  *
  * Module PUR — aucune dépendance Node ; déterministe (graine 42).
  */
@@ -35,6 +34,8 @@ const GAIN_ENERGIE = 0.2;
 export interface EtatRPIA {
   taille: number;
   pasTotaux: number;
+  /** Pas temporel de la simulation ; absent dans les checkpoints historiques (défaut 0.1). */
+  pasDeTemps?: number;
   poids: number[];
 }
 
@@ -97,8 +98,11 @@ export class CoucheOndesNeuronales {
     if (typeof texte !== "string" || texte.length === 0) {
       throw new Error("Texte de requête vide — rien à mettre en résonance.");
     }
+    // Le taux de temps devient l'horloge de lecture de l'onde jusqu'au
+    // prochain entraînement ; sa validation est portée par l'entraîneur.
+    const rapport = this.entraineur.entrainer(this.cibleDepuisTexte(texte), epoques, config);
     this.dernierPasDeTemps = config.pasDeTemps;
-    return this.entraineur.entrainer(this.cibleDepuisTexte(texte), epoques, config);
+    return rapport;
   }
 
   /** Variante directe : entraînement vers une onde cible fournie. */
@@ -107,8 +111,9 @@ export class CoucheOndesNeuronales {
     epoques = 120,
     config: ConfigRPIA = RPIA_DEFAUTS,
   ): RapportEntrainement {
+    const rapport = this.entraineur.entrainer(cible, epoques, config);
     this.dernierPasDeTemps = config.pasDeTemps;
-    return this.entraineur.entrainer(cible, epoques, config);
+    return rapport;
   }
 
   /** Erreur d'interférence courante contre une cible (diagnostic honnête). */
@@ -190,6 +195,7 @@ export class CoucheOndesNeuronales {
     // de la couche cible reste dans son état initial/appris courant.
     this.entraineur.importerPoids(poidsCibles);
     this.entraineur.restaurerPas(etat.pasTotaux);
+    this.dernierPasDeTemps = source.dernierPasDeTemps;
   }
 
   /**
@@ -200,11 +206,16 @@ export class CoucheOndesNeuronales {
     const poids = Array.from(this.entraineur.exporterPoids()).map(
       (v) => Math.round(v * 1e6) / 1e6,
     );
-    return { taille: this.taille, pasTotaux: this.entraineur.pasTotaux, poids };
+    return {
+      taille: this.taille,
+      pasTotaux: this.entraineur.pasTotaux,
+      pasDeTemps: this.dernierPasDeTemps,
+      poids,
+    };
   }
 
   /** Réinjecte un état exporté (même taille) — reprise sans ré-entraînement. */
-  importerEtat(etat: EtatRPIA & { pasTotaux?: number }): void {
+  importerEtat(etat: Omit<EtatRPIA, "pasTotaux"> & { pasTotaux?: number }): void {
     if (etat.taille !== this.taille) {
       throw new Error(`État incompatible : taille ${etat.taille} ≠ ${this.taille}.`);
     }
@@ -226,6 +237,15 @@ export class CoucheOndesNeuronales {
     ) {
       throw new Error(`Compteur de pas invalide : ${etat.pasTotaux} (entier ≥ 0 requis).`);
     }
+    const pasDeTemps = etat.pasDeTemps ?? RPIA_DEFAUTS.pasDeTemps;
+    if (
+      !Number.isFinite(pasDeTemps) ||
+      !Number.isFinite(Math.fround(pasDeTemps)) ||
+      pasDeTemps <= 0 ||
+      Math.fround(pasDeTemps) <= 0
+    ) {
+      throw new Error("Pas de temps RPIA invalide : valeur positive et représentable en float32 requise.");
+    }
     const poids = new Float32Array(etat.poids);
     // Float32Array peut convertir des nombres finis mais trop grands en
     // Infinity : le validateur du moteur rejette aussi ce cas avant mutation.
@@ -235,6 +255,7 @@ export class CoucheOndesNeuronales {
     if (etat.pasTotaux !== undefined) {
       this.entraineur.restaurerPas(etat.pasTotaux);
     }
+    this.dernierPasDeTemps = pasDeTemps;
   }
 }
 
