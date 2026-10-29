@@ -4358,3 +4358,10 @@ Stage Summary:
 - Diagnostic chaîne de livraison (honnête) : prod = aec87fdd, a9aa08dc (docs) non servi — swap CD skippé SSH muet + poller en retard > seuil v6.1 ; ticks cron 04:17/04:47Z perdus ; impact fonctionnel NUL (docs-only) ; réarmement par le push 634f1f1 (boucle auto-réparatrice).
 - Validation : node --check OK, tsc 0, eslint 0, vitest **5200/5200** (+19).
 - Rappel owner : mise en œuvre initiale sauvegarde ≈ 30 min (bucket GCS + clé VPS + PITR + 2 crontabs) — couverture effective dépend de cette exécution ; rappel PAT rotation n°23.
+
+### 478451-iter24-0610 (14:10 +08:00) — surveillance synthétique continue de production
+- Amélioration évolutive : dernier angle mort observabilité — le guérisseur surveille l'alignement SHA, RIEN ne sonde la santé HTTP réelle entre deux déploiements (statuts + TTFB des 10 endpoints critiques).
+- Livré (commit **1e1d20b**) : workflow surveillance-production.yml (cron 7,37 décalé, permissions mesurées issues:write, concurrence sérielle) ; scripts/surveillance_prod.mjs (statut 2xx/3xx/401 + TTFB ≤ 3000 ms, livraison bloquée = lag SHA ET build > 3 h — anti-faux-positif leçon #107/#108, results.md, fail-closed) ; cycle d'issue anti-spam (ouvrir → éditer corps → clôturer RÉTABLI avec preuve) ; garde-fou 11 tests (parité endpoints verrouillée avec sonde régression, node --check réel) ; inventaire workflows 7 → 8 (mise à jour explicite du garde-fou 3045173).
+- Ouverture tick : prod alignée 334682e (poller a tout livré), 10/10, CI 11/11, 0 alerte — aucune faille bloquante ce tick.
+- Validation : node --check OK, YAML valide, tsc 0, eslint 0, vitest **5211/5211** (+11).
+- Rappel PAT rotation n°24 ; rappel mise en œuvre sauvegarde données (it.23) toujours en attente owner.
