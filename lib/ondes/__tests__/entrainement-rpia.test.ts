@@ -51,6 +51,19 @@ describe("entraîneur RPIA (miroir CPU du shader waveTrainer)", () => {
     expect(ra.historiqueErreur).toEqual(rb.historiqueErreur);
   });
 
+  it("normalise un tableau numérique comme la cible float32 du GPU", () => {
+    const cibleArray = Array.from({ length: 64 }, (_, i) => Math.sin(i * 0.03) + i * 1e-9);
+    const cibleFloat32 = Float32Array.from(cibleArray);
+    const a = new EntraineurRPIA(64);
+    const b = new EntraineurRPIA(64);
+
+    const rapportArray = a.entrainer(cibleArray, 12);
+    const rapportFloat32 = b.entrainer(cibleFloat32, 12);
+
+    expect(rapportArray).toEqual(rapportFloat32);
+    expect(Array.from(a.exporterPoids())).toEqual(Array.from(b.exporterPoids()));
+  });
+
   it("mesure l'erreur initiale avant le premier pas (et non après)", () => {
     const entraineur = new EntraineurRPIA(64);
     const cible = new Float32Array(64).map((_, i) => Math.cos(i * 0.07));
