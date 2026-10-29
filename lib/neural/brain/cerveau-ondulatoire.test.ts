@@ -51,6 +51,34 @@ describe("CerveauOndulatoireGen3", () => {
     expect(cerveau.percevoir("bonjour").sortie).toBe("Bonjour de nouveau.");
   });
 
+  it("apprend les expériences successives dans un même cortex RPIA partagé", () => {
+    const cerveau = new CerveauOndulatoireGen3({
+      taille: 32,
+      budgetActif: 5,
+      epoquesParAssociation: 3,
+      graine: 31,
+    });
+    const avant = cerveau.statistiques().pasRPIATotaux;
+    cerveau.apprendre("La capitale du Cameroun", "Yaoundé");
+    const apresPremiereExperience = cerveau.statistiques().pasRPIATotaux;
+    cerveau.apprendre("Deux plus deux", "Quatre");
+    const apresDeuxiemeExperience = cerveau.statistiques().pasRPIATotaux;
+
+    expect(apresPremiereExperience).toBeGreaterThan(avant);
+    expect(apresDeuxiemeExperience).toBeGreaterThan(apresPremiereExperience);
+    expect(cerveau.exporterEtat().etatOndulatoire.pasTotaux).toBe(apresDeuxiemeExperience);
+
+    const restaure = new CerveauOndulatoireGen3({
+      taille: 32,
+      budgetActif: 5,
+      epoquesParAssociation: 3,
+      graine: 31,
+    });
+    restaure.importerEtat(cerveau.exporterEtat());
+    restaure.apprendre("Le coeur pompe le sang", "Oui");
+    expect(restaure.statistiques().pasRPIATotaux).toBeGreaterThan(apresDeuxiemeExperience);
+  });
+
   it("rejoue les souvenirs hippocampiques pour consolider les connexions", () => {
     const cerveau = new CerveauOndulatoireGen3({ taille: 32, budgetActif: 5, epoquesParAssociation: 2 });
     cerveau.apprendre("Comment se nomme la capitale du Cameroun ?", "Yaoundé");
