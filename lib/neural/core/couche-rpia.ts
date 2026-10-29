@@ -163,6 +163,11 @@ export class CoucheOndesNeuronales {
         `Poids incompatibles : ${Array.isArray(etat.poids) ? etat.poids.length : "format invalide"} valeurs reçues, ${this.taille * 4} attendues.`,
       );
     }
+    // JSON.stringify transforme NaN/Infinity en null. Valider les types
+    // AVANT Float32Array, qui convertirait silencieusement null en zéro.
+    if (!etat.poids.every((poids) => Number.isFinite(poids))) {
+      throw new Error("État RPIA invalide : chaque poids doit être un nombre fini.");
+    }
     // Vérifier le compteur avant l'import des poids évite de laisser un
     // réseau partiellement restauré si le checkpoint est incohérent.
     if (
