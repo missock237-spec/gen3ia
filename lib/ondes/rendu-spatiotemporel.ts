@@ -258,6 +258,28 @@ export function rasteriserTrame(
   hauteur: number,
   temps: number,
 ): Float32Array {
+  if (!Number.isInteger(largeur) || largeur < 1 || !Number.isInteger(hauteur) || hauteur < 1) {
+    throw new Error(`Dimensions de trame invalides : ${largeur}×${hauteur} (entiers positifs requis).`);
+  }
+  if (!Number.isFinite(temps) || temps < 0) {
+    throw new Error(`Temps de rendu invalide : ${temps} (nombre fini ≥ 0 requis).`);
+  }
+  if (!Array.isArray(noeuds) || noeuds.length < 1) {
+    throw new Error("Rasterisation impossible : au moins un nœud d'onde est requis.");
+  }
+  for (let i = 0; i < noeuds.length; i++) {
+    const n = noeuds[i];
+    if (
+      !Number.isFinite(n.amplitude) ||
+      !Number.isFinite(n.frequence) ||
+      !Number.isFinite(n.phase) ||
+      !Number.isFinite(n.posX) ||
+      !Number.isFinite(n.posY)
+    ) {
+      throw new Error(`Nœud vidéo invalide à l'index ${i} : paramètres non finis.`);
+    }
+  }
+
   const w = largeur;
   const h = hauteur;
   const nbNoeuds = noeuds.length;
