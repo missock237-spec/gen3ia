@@ -119,6 +119,17 @@ describe("NeuralEngine — couche RPIA branchée au flux du chat", () => {
     expect(autreConversation.raw.rpia?.pasTotaux).toBe(pasPremiere);
     // Un autre compte reste isolé, même avec le même ID de conversation.
     expect(autreCompte.raw.rpia?.pasTotaux).toBe(pasPremiere);
+    // Des identifiants opaques contenant le séparateur ne doivent pas faire
+    // entrer deux couples distincts dans la même couche/caché de conversation.
+    const collisionA = await engine.generate(
+      requeteScopee("isolé alpha", "u|v", "w"),
+    );
+    const collisionB = await engine.generate(
+      requeteScopee("isolé beta", "u", "v|w"),
+    );
+    expect(collisionA.raw.rpia?.pasTotaux).toBe(12);
+    expect(collisionB.raw.rpia?.pasTotaux).toBe(12);
+
     // Les conversations authentifiées ne mutent pas l'état de base partagé.
     expect(couche?.pasTotaux).toBe(0);
   });
