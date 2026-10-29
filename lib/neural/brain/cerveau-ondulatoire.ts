@@ -18,7 +18,8 @@
 
 import { CoucheOndesNeuronales } from "../core/couche-rpia";
 import type { EtatRPIA } from "../core/couche-rpia";
-import { encoderTexteEnOndeCible, hachagePrompt } from "../../ondes/conditionneur";
+import { hachagePrompt } from "../../ondes/conditionneur";
+import { encoderTexteLexicalEnOnde } from "./encodeur-lexical-ondulatoire";
 import { RPIA_DEFAUTS } from "../../ondes/types-entrainement";
 import type { ConfigRPIA, RapportEntrainement } from "../../ondes/types-entrainement";
 
@@ -282,8 +283,8 @@ export class CerveauOndulatoireGen3 {
     validerTexte(entree, "entree");
     validerTexte(sortie, "sortie");
     const entreeNormalisee = normaliserTexte(entree);
-    const representation = Array.from(encoderTexteEnOndeCible(entreeNormalisee, this.taille));
-    const cibleSortie = Array.from(encoderTexteEnOndeCible(normaliserTexte(sortie), this.taille));
+    const representation = Array.from(encoderTexteLexicalEnOnde(entreeNormalisee, this.taille));
+    const cibleSortie = Array.from(encoderTexteLexicalEnOnde(normaliserTexte(sortie), this.taille));
 
     const ancienIndex = this.souvenirs.findIndex((item) => item.entreeNormalisee === entreeNormalisee);
     const remplaceMemoire = ancienIndex >= 0;
@@ -340,7 +341,7 @@ export class CerveauOndulatoireGen3 {
   percevoir(entree: string): RapportPerceptionCerveau {
     validerTexte(entree, "entree");
     const normalisee = normaliserTexte(entree);
-    const representation = Array.from(encoderTexteEnOndeCible(normalisee, this.taille));
+    const representation = Array.from(encoderTexteLexicalEnOnde(normalisee, this.taille));
 
     let meilleur: SouvenirCerveauGen3 | null = null;
     let meilleurScore = -1;
