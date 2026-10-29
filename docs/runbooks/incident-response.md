@@ -80,6 +80,9 @@ Ordre à dérouler SANS sauter d'étape ; consigner l'heure de chaque constat
 4. **Firebase console** (si `services.auth` dégradé ou suspicion données) :
    santé du projet `gen3ia`, quotas Firestore, règles de sécurité déployées
    (comparez avec `scripts/backup_firebase_rules.mjs` si besoin).
+   **Suspicion de perte de données** → suivre `docs/runbooks/sauvegarde-restauration.md`
+   (PITR 7 j, exports GCS quotidiens, RPO 24 h / RTO 2 h ; état courant :
+   `node scripts/verify_backup_restore.mjs`).
 5. **Décision** :
    - Cause liée au **dernier déploiement** → rollback immédiat
      (voir `docs/runbooks/deployment.md` §5) — ne pas tenter un correctif à chaud
