@@ -93,6 +93,22 @@ describe("couche d'ondes neuronales RPIA (pont résonance → cerveau)", () => {
     expect(erreurCopie).toBeCloseTo(erreurSource, 3);
   });
 
+  it("refuse un checkpoint ondulatoire corrompu sans altérer l'état courant", () => {
+    const couche = new CoucheOndesNeuronales(8);
+    couche.resonnerVersTexte("checkpoint valide", 4);
+    const avant = couche.exporterEtat();
+
+    const poidsNan = avant.poids.slice();
+    poidsNan[2] = Number.NaN;
+    expect(() => couche.importerEtat({ ...avant, poids: poidsNan })).toThrow(/Poids RPIA non fini/);
+    expect(couche.exporterEtat()).toEqual(avant);
+
+    expect(() => couche.importerEtat({ ...avant, pasTotaux: Number.NaN })).toThrow(
+      /Compteur de pas invalide/,
+    );
+    expect(couche.exporterEtat()).toEqual(avant);
+  });
+
   it("entrées invalides refusées (taille, texte vide, état incompatible)", () => {
     expect(() => new CoucheOndesNeuronales(0)).toThrow(/Taille de couche invalide/);
     expect(() => new CoucheOndesNeuronales(5000)).toThrow(/Taille de couche invalide/);
