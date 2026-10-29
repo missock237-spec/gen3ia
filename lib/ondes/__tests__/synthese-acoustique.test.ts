@@ -94,12 +94,20 @@ describe("synthèse acoustique par résonance (miroir node.amplitude.pdf)", () =
     expect(lire(36)).toBe("data");
     expect(vue.getUint32(24, true)).toBe(44100); // fréquence d'échantillonnage
     expect(vue.getUint16(22, true)).toBe(1); // mono
+    expect(() => versWav(new Float32Array([0, Number.NaN]))).toThrow(/PCM non fini/);
+    expect(() => versWav(new Float32Array(4), 1)).toThrow(/Fréquence WAV invalide/);
   });
 
   it("entrées invalides refusées (durée, taille de cible)", () => {
     const synth = new SynthetiseurAcoustique(64);
     expect(() => synth.genererBuffer(0)).toThrow(/Durée invalide/);
     expect(() => synth.genererBuffer(61)).toThrow(/Durée invalide/);
+    expect(() => new SynthetiseurAcoustique(64, { frequenceEchantillonnage: 0 })).toThrow(
+      /Fréquence d'échantillonnage invalide/,
+    );
+    expect(() => new SynthetiseurAcoustique(64, { frequenceEchantillonnage: 44100.5 })).toThrow(
+      /Fréquence d'échantillonnage invalide/,
+    );
     expect(() => synth.entrainerVers(new Float32Array(32), 5)).toThrow(/Cible incompatible/);
   });
 });
