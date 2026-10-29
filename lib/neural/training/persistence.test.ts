@@ -140,6 +140,7 @@ describe("persistence du cerveau neuronal", () => {
       { ...validRpia, poids: poidsTropCourts },
       { ...validRpia, pasTotaux: -1 },
       { ...validRpia, pasTotaux: 1.5 },
+      { ...validRpia, pasTotaux: Number.MAX_SAFE_INTEGER + 1 },
       { ...validRpia, poids: poidsAvecNull },
       { ...validRpia, taille: 4097, poids: new Array(4097 * 4).fill(0) },
     ];
