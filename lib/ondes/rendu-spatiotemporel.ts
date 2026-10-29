@@ -84,7 +84,8 @@ export class MoteurRenduSpatiotemporel {
    */
   pasGuidage(cibleMouvement: OndeCible, guidage: number, temps: number): number {
     this.verifierCible(cibleMouvement);
-    let somme = 0;
+    this.verifierGuidage(guidage);
+    this.verifierTemps(temps);
     for (let i = 0; i < this.nbNoeuds; i++) {
       const noeud = this.noeuds[i];
       const ondeSpatio =
@@ -106,10 +107,20 @@ export class MoteurRenduSpatiotemporel {
         BORNES_RPIA.amplitudeMin,
         BORNES_RPIA.amplitudeMax,
       );
-
-      somme += Math.abs(interference);
     }
-    return somme / this.nbNoeuds;
+
+    // Mesurer APRÈS les mises à jour, au même instant : l'ancien code
+    // renvoyait l'erreur calculée avant la mise à jour alors que le contrat
+    // annonçait une erreur post-pas. Cela décalait aussi les rapports d'une
+    // itération et pouvait masquer une régression.
+    return this.calculerErreur(cibleMouvement, temps);
+  }
+
+  /** Erreur moyenne du champ courant à un instant donné. */
+  erreurCourante(cibleMouvement: OndeCible, temps: number): number {
+    this.verifierCible(cibleMouvement);
+    this.verifierTemps(temps);
+    return this.calculerErreur(cibleMouvement, temps);
   }
 
   /** Entraîne le champ de mouvement vers la cible pendant `pas` pas. */
@@ -120,16 +131,31 @@ export class MoteurRenduSpatiotemporel {
     config: ConfigRPIA = RPIA_DEFAUTS,
   ): RapportEntrainement {
     this.verifierCible(cibleMouvement);
-    if (!Number.isInteger(pas) || pas < 1) {
-      throw new Error(`Nombre de pas invalide : ${pas} (entier ≥ 1 requis).`);
+    if (!Number.isInteger(pas) || pas < 1 || pas > 1_000_000) {
+      throw new Error(`Nombre de pas invalide : ${pas} (entier entre 1 et 1 000 000 requis).`);
     }
+    this.verifierGuidage(guidage);
+    if (
+      !config ||
+      typeof config !== "object" ||
+      !Number.isFinite(config.tauxApprentissage) ||
+      config.tauxApprentissage < 0 ||
+      !Number.isFinite(config.pasDeTemps) ||
+      config.pasDeTemps <= 0 ||
+      !Number.isFinite((pas - 1) * config.pasDeTemps)
+    ) {
+      throw new Error(
+        "Configuration vidéo invalide : taux fini ≥ 0 et pas de temps fini > 0 requis.",
+      );
+    }
+    const erreurAvant = this.erreurCourante(cibleMouvement, 0);
     const historique: number[] = [];
     let temps = 0;
     for (let p = 0; p < pas; p++) {
       historique.push(this.pasGuidage(cibleMouvement, guidage, temps));
       temps += config.pasDeTemps;
     }
-    return rapportDepuisHistorique(historique);
+    return rapportDepuisHistorique(historique, erreurAvant);
   }
 
   /**
@@ -159,9 +185,13 @@ export class MoteurRenduSpatiotemporel {
     onTrame?: (indexTrame: number, totalTrames: number) => void,
   ): { trames: Float32Array[]; totalTrames: number } {
     this.verifierCible(ondeCible);
+    if (!Number.isFinite(dureeSecondes) || dureeSecondes <= 0) {
+      throw new Error(`Durée vidéo invalide : ${dureeSecondes} (nombre fini > 0 requis).`);
+    }
     if (!Number.isFinite(fps) || fps <= 0 || fps > 60) {
       throw new Error(`Fréquence d'images invalide : ${fps} (0 < fps ≤ 60).`);
     }
+    this.verifierGuidage(guidage);
     const totalDemande = Math.round(dureeSecondes * fps);
     const totalTrames = Math.min(MAX_TRAMES, Math.max(1, totalDemande));
 
@@ -174,6 +204,30 @@ export class MoteurRenduSpatiotemporel {
       onTrame?.(f + 1, totalTrames);
     }
     return { trames, totalTrames };
+  }
+
+  private calculerErreur(cible: OndeCible, temps: number): number {
+    let somme = 0;
+    for (let i = 0; i < this.nbNoeuds; i++) {
+      const noeud = this.noeuds[i];
+      const onde =
+        noeud.amplitude *
+        Math.cos(noeud.frequence * temps + noeud.phase + noeud.posX * 0.01 + noeud.posY * 0.01);
+      somme += Math.abs(onde - cible[i]);
+    }
+    return somme / this.nbNoeuds;
+  }
+
+  private verifierGuidage(guidage: number): void {
+    if (!Number.isFinite(guidage) || guidage < 0) {
+      throw new Error(`Guidage invalide : ${guidage} (nombre fini ≥ 0 requis).`);
+    }
+  }
+
+  private verifierTemps(temps: number): void {
+    if (!Number.isFinite(temps) || temps < 0) {
+      throw new Error(`Temps vidéo invalide : ${temps} (nombre fini ≥ 0 requis).`);
+    }
   }
 
   private verifierCible(cible: OndeCible): void {
