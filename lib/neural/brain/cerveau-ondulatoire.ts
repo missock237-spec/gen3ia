@@ -103,10 +103,13 @@ interface SynapseMemorisee {
 }
 
 export interface EtatCerveauGen3 {
-  version: 1;
+  version: 2;
   taille: number;
   graine: number;
   prochainId: number;
+  configRPIA: ConfigRPIA;
+  /** État courant du cortex ondulatoire partagé entre toutes les expériences. */
+  etatOndulatoire: EtatRPIA;
   souvenirs: SouvenirCerveauGen3[];
   synapses: SynapseMemorisee[];
   hippocampe: Array<{ entree: string; sortie: string }>;
@@ -235,6 +238,8 @@ export class CerveauOndulatoireGen3 {
   readonly configRPIA: ConfigRPIA;
 
   private souvenirs: SouvenirCerveauGen3[] = [];
+  /** Cortex RPIA partagé : chaque nouvel apprentissage modifie ce même réseau. */
+  private coucheRPIA: CoucheOndesNeuronales;
   /** source = index d'entrée 0..taille-1 ; cible = taille..2*taille-1. */
   private synapses = new Map<number, Map<number, number>>();
   private hippocampe: Array<{ entree: string; sortie: string }> = [];
@@ -286,6 +291,7 @@ export class CerveauOndulatoireGen3 {
     this.tauxPlasticite = plasticite;
     this.configRPIA = { ...(options.configRPIA ?? RPIA_DEFAUTS) };
     validerConfigRPIA(this.configRPIA);
+    this.coucheRPIA = new CoucheOndesNeuronales(this.taille, { graine: this.graine });
   }
 
   /** Apprend une association entrée → réponse en entraînant son état ondulatoire. */
@@ -299,14 +305,15 @@ export class CerveauOndulatoireGen3 {
     const ancienIndex = this.souvenirs.findIndex((item) => item.entreeNormalisee === entreeNormalisee);
     const remplaceMemoire = ancienIndex >= 0;
     const id = remplaceMemoire ? this.souvenirs[ancienIndex].id : `m-${(this.prochainId++).toString(36)}`;
-    const graineOnde = (Math.abs(hachagePrompt(`${this.graine}:${entreeNormalisee}`)) >>> 0);
-    const couche = new CoucheOndesNeuronales(this.taille, { graine: graineOnde });
-    const rapportRPIA: RapportEntrainement = couche.entrainerVersOnde(
+    // Toutes les expériences entraînent le MÊME cortex ondulatoire : les
+    // modifications s'accumulent dans le réseau partagé, tandis que chaque
+    // souvenir conserve un instantané épisodique de l'état d'onde appris.
+    const rapportRPIA: RapportEntrainement = this.coucheRPIA.entrainerVersOnde(
       Float32Array.from(representation),
       this.epoquesParAssociation,
       this.configRPIA,
     );
-    const etatOnde = couche.exporterEtat();
+    const etatOnde = this.coucheRPIA.exporterEtat();
 
     const nouveauSouvenir: SouvenirCerveauGen3 = {
       id,
@@ -380,10 +387,17 @@ export class CerveauOndulatoireGen3 {
     // Le cortex reçoit une fusion du signal sensoriel et de l'état ondulatoire appris.
     // Pour une entrée inconnue, il ne fabrique pas d'état mémorisé : il propage
     // seulement le fingerprint sensoriel courant.
-    const signatureOnde = rappelAccepte && meilleur
+    const signatureGlobale = signatureDepuisOnde(this.coucheRPIA.exporterEtat(), this.taille);
+    const signatureSouvenir = rappelAccepte && meilleur
       ? signatureDepuisOnde(meilleur.etatOnde, this.taille)
       : null;
-    const propagation = this.propagerEvenements(representation, signatureOnde ?? undefined);
+    // Le cortex courant est toujours actif ; lorsqu'un souvenir est rappelé,
+    // sa trace épisodique module aussi la propagation, comme un rappel
+    // hippocampo-cortical, sans inventer une réponse textuelle.
+    const modulationOnde = signatureSouvenir
+      ? signatureGlobale.map((valeur, i) => (valeur + signatureSouvenir[i]) / 2)
+      : signatureGlobale;
+    const propagation = this.propagerEvenements(representation, modulationOnde);
     const mode: ModeRappelCerveau = rappelAccepte
       ? exact ? "RAPPEL_EXACT" : "RAPPEL_ASSOCIATIF"
       : "INCONNU";
@@ -443,7 +457,7 @@ export class CerveauOndulatoireGen3 {
     pasRPIATotaux: number;
   } {
     const synapsesApprises = this.compterSynapses();
-    const pasRPIATotaux = this.souvenirs.reduce((total, item) => total + item.etatOnde.pasTotaux, 0);
+    const pasRPIATotaux = this.coucheRPIA.pasTotaux;
     return {
       associationsMemorisees: this.souvenirs.length,
       capaciteMemoire: this.capaciteMemoire,
@@ -462,10 +476,12 @@ export class CerveauOndulatoireGen3 {
       for (const [cible, poids] of cibles) synapses.push({ source, cible, poids });
     }
     return {
-      version: 1,
+      version: 2,
       taille: this.taille,
       graine: this.graine,
       prochainId: this.prochainId,
+      configRPIA: { ...this.configRPIA },
+      etatOndulatoire: this.coucheRPIA.exporterEtat(),
       souvenirs: this.souvenirs.map((souvenir) => ({
         ...souvenir,
         representation: [...souvenir.representation],
@@ -481,9 +497,17 @@ export class CerveauOndulatoireGen3 {
    * temporaires avant de remplacer l'état actuellement actif du cerveau.
    */
   importerEtat(etat: EtatCerveauGen3): void {
-    if (!etat || etat.version !== 1 || etat.taille !== this.taille || etat.graine !== this.graine) {
+    if (!etat || etat.version !== 2 || etat.taille !== this.taille || etat.graine !== this.graine) {
       throw new Error("Checkpoint Gen3 incompatible (version, taille ou graine).");
     }
+    validerConfigRPIA(etat.configRPIA);
+    if (
+      etat.configRPIA.tauxApprentissage !== this.configRPIA.tauxApprentissage ||
+      etat.configRPIA.pasDeTemps !== this.configRPIA.pasDeTemps
+    ) {
+      throw new Error("Checkpoint Gen3 incompatible : configuration RPIA différente.");
+    }
+    validerEtatOnde(etat.etatOndulatoire, this.taille);
     if (!Number.isSafeInteger(etat.prochainId) || etat.prochainId < 1) {
       throw new Error("Checkpoint Gen3 invalide : prochainId.");
     }
@@ -549,10 +573,16 @@ export class CerveauOndulatoireGen3 {
       return { entree: tour.entree, sortie: tour.sortie };
     });
 
+    // Créer et valider le cortex candidat avant de muter l'état actif :
+    // un checkpoint ondulatoire invalide ne peut pas laisser un demi-cerveau.
+    const coucheCandidate = new CoucheOndesNeuronales(this.taille, { graine: this.graine });
+    coucheCandidate.importerEtat(etat.etatOndulatoire);
+
     this.souvenirs = souvenirs;
     this.synapses = indexSynapses;
     this.hippocampe = hippocampe;
     this.prochainId = etat.prochainId;
+    this.coucheRPIA = coucheCandidate;
   }
 
   private apprendreSynapses(entree: readonly number[], sortie: readonly number[]): number {
