@@ -93,6 +93,36 @@ describe("couche d'ondes neuronales RPIA (pont résonance → cerveau)", () => {
     expect(erreurCopie).toBeCloseTo(erreurSource, 3);
   });
 
+  it("étend un ancien état RPIA en préservant les poids appris et les nouveaux nœuds", () => {
+    const source = new CoucheOndesNeuronales(8, { graine: 45 });
+    source.resonnerVersTexte("mémoire ondulatoire à préserver", 20);
+    const etatSource = source.exporterEtat();
+
+    const cible = new CoucheOndesNeuronales(12, { graine: 45 });
+    const nouveauxNoeudsAvant = cible.noeuds().slice(8);
+    cible.importerEtatEtendu(etatSource);
+
+    const noeudsSource = source.noeuds();
+    const noeudsCible = cible.noeuds();
+    for (let i = 0; i < 8; i++) {
+      expect(noeudsCible[i].amplitude).toBeCloseTo(noeudsSource[i].amplitude, 5);
+      expect(noeudsCible[i].frequence).toBeCloseTo(noeudsSource[i].frequence, 5);
+      expect(noeudsCible[i].phase).toBeCloseTo(noeudsSource[i].phase, 5);
+      expect(noeudsCible[i].amortissement).toBeCloseTo(noeudsSource[i].amortissement, 5);
+    }
+    expect(noeudsCible.slice(8)).toEqual(nouveauxNoeudsAvant);
+    expect(cible.pasTotaux).toBe(etatSource.pasTotaux);
+  });
+
+  it("refuse une extension impossible sans modifier la couche cible", () => {
+    const cible = new CoucheOndesNeuronales(8, { graine: 12 });
+    const avant = cible.exporterEtat();
+    expect(() => cible.importerEtatEtendu({ taille: 9, pasTotaux: 1, poids: new Array(36).fill(0.1) })).toThrow(
+      /Extension impossible/,
+    );
+    expect(cible.exporterEtat()).toEqual(avant);
+  });
+
   it("refuse un checkpoint ondulatoire corrompu sans altérer l'état courant", () => {
     const couche = new CoucheOndesNeuronales(8);
     couche.resonnerVersTexte("checkpoint valide", 4);
