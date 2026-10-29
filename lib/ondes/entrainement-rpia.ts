@@ -150,11 +150,18 @@ export class EntraineurRPIA {
     if (!Number.isInteger(epoques) || epoques < 1) {
       throw new Error(`Nombre d'époques invalide : ${epoques} (entier ≥ 1 requis).`);
     }
+    this.verifierConfig(config);
+    // Mesurer le point de départ avant toute mise à jour. L'ancien code
+    // prenait historique[0], donc l'erreur APRÈS le premier pas, comme
+    // "erreur initiale" : le rapport pouvait masquer une régression au
+    // premier pas et ne représentait pas réellement l'état de départ.
+    const tempsInitial = config.pasDeTemps * this.compteurPas;
+    const erreurAvantEntrainement = erreurInterference(this.noeuds, cible, tempsInitial);
     const historique: number[] = [];
     for (let e = 0; e < epoques; e++) {
       historique.push(this.pasEntrainement(cible, config));
     }
-    return rapportDepuisHistorique(historique);
+    return rapportDepuisHistorique(historique, erreurAvantEntrainement);
   }
 
   /**
