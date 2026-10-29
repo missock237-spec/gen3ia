@@ -56,6 +56,15 @@ export interface RapportApprentissageCerveau {
   epoquesRPIA: number;
 }
 
+export interface RapportConsolidationCerveau {
+  /** Nombre d'expériences hippocampiques rejouées dans le cortex. */
+  toursRejoues: number;
+  /** Nombre de connexions dont le poids a réellement augmenté. */
+  synapsesRenforcees: number;
+  /** Nombre total de connexions après consolidation. */
+  synapsesTotales: number;
+}
+
 export interface RapportPerceptionCerveau {
   /** Réponse mémorisée ou null si le cerveau ne dispose pas d'un rappel fiable. */
   sortie: string | null;
@@ -393,6 +402,33 @@ export class CerveauOndulatoireGen3 {
   /** Contexte récent, limité à dix tours pour contenir la RAM. */
   contexteCourtTerme(): Array<{ entree: string; sortie: string }> {
     return this.hippocampe.map((tour) => ({ ...tour }));
+  }
+
+  /**
+   * REJEU HIPPOCAMPIQUE — consolidation de type "sommeil".
+   *
+   * Les expériences récentes sont rejouées dans le graphe cortical pour
+   * renforcer les associations déjà observées. La mémoire à court terme n'est
+   * pas effacée et aucun nouveau texte n'est inventé. Cette opération est
+   * déterministe et bornée à dix tours.
+   */
+  consoliderHippocampe(): RapportConsolidationCerveau {
+    let synapsesRenforcees = 0;
+    const tours = [...this.hippocampe];
+    for (const tour of tours) {
+      const entree = Array.from(
+        encoderTexteLexicalEnOnde(normaliserTexte(tour.entree), this.taille),
+      );
+      const sortie = Array.from(
+        encoderTexteLexicalEnOnde(normaliserTexte(tour.sortie), this.taille),
+      );
+      synapsesRenforcees += this.apprendreSynapses(entree, sortie);
+    }
+    return {
+      toursRejoues: tours.length,
+      synapsesRenforcees,
+      synapsesTotales: this.compterSynapses(),
+    };
   }
 
   /** Statistiques réelles du noyau et de la mémoire. */
