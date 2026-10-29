@@ -18,6 +18,7 @@
     "format": "prettier --write .",
     "live:gateway": "NODE_OPTIONS='--conditions react-server' tsx lib/live/gateway-server.ts",
     "test:coverage": "vitest run --coverage",
+    "benchmark:brain": "tsx scripts/benchmark-gen3-brain.ts",
     "analyze": "ANALYZE=true next build",
     "test:e2e": "npx firebase-tools emulators:exec --config infra/firebase.json --project demo-gen3ia \"vitest run --config vitest.e2e.config.mts\"",
     "check:bundle": "node scripts/check_bundle_budget.mjs",
