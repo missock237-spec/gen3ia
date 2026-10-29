@@ -5,7 +5,7 @@
 Ce module crée une première architecture cognitive locale fondée sur le système RPIA existant. Il n'emploie pas de LLM distant et exécute ses calculs en TypeScript/JavaScript sur CPU.
 
 Il relie cinq éléments :
-1. un encodeur déterministe texte → cible ondulatoire ;
+1. un encodeur lexical déterministe texte → vecteur ondulatoire, combinant mots, paires de mots et trigrammes de caractères ;
 2. une couche RPIA entraînée séparément pour chaque association ;
 3. une mémoire associative bornée ;
 4. un hippocampe de dix tours pour le contexte immédiat ;
@@ -49,7 +49,7 @@ cerveau.importerEtat(checkpoint);
 
 ## Limites à ne pas masquer
 
-Le conditionneur texte actuel dérive son vecteur d'un hachage déterministe. Ce n'est pas une représentation sémantique entraînée : deux phrases différentes ne sont pas garanties proches, et une similarité vectorielle ne prouve pas qu'elles signifient la même chose. Le seuil de rappel doit rester conservateur jusqu'à l'implémentation d'un encodeur appris et l'évaluation des faux rappels.
+L'encodeur lexical actuel projette par hachage signé les mots, paires de mots et trigrammes de caractères. Il capture un recouvrement lexical/morphologique de base, mais ce n'est pas une représentation sémantique entraînée : il ne comprend pas de façon fiable la négation, la paraphrase ou le contexte. Une similarité cosinus n'est pas une probabilité calibrée. Le rappel approximatif doit être activé et évalué explicitement avec un seuil prudent.
 
 Ce module apprend des associations et réutilise des états RPIA ; il ne génère pas encore du langage libre, ne comprend pas toutes les connaissances générales et ne constitue pas un cerveau biologique. Il s'agit d'un noyau expérimental qu'il faut évaluer avant de le raccorder au runtime de conversation de production.
 
