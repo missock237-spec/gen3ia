@@ -55,6 +55,23 @@ describe("Workflow surveillance-production", () => {
     expect(wf.indexOf("OUVERTES")).toBeLessThan(wf.indexOf("gh issue create"));
   });
 
+  it("it.31 — le canal d'alarme ne peut plus être cassé par un label absent", () => {
+    // Incident réel du 2026-10-29 13:37Z : sonde ROUGE (health TTFB 3282 ms
+    // > 3000) PUIS crash du step (« could not add label: 'surveillance-prod'
+    // not found » → exit 1) : AUCUNE issue créée — alarme muette depuis
+    // l'it.24. Verrou : le label est auto-réparé de façon idempotente
+    // AVANT l'ouverture, et la création est secourue SANS label.
+    const ouverture = wf.slice(
+      wf.indexOf("Ouvrir ou mettre à jour"),
+      wf.indexOf("Clôturer l'issue"),
+    );
+    expect(ouverture).toContain('gh label create "$LABEL"');
+    expect(ouverture).toContain("--force || true");
+    // Défense en profondeur : si la création avec label échoue malgré tout,
+    // l'issue part SANS label (une alarme nue vaut mieux qu'aucune alarme).
+    expect(ouverture).toContain('|| gh issue create --title "$TITRE" --body-file results.md');
+  });
+
   it("concurrence sérielle et timeout borné", () => {
     expect(wf).toContain("group: surveillance-production");
     expect(wf).toContain("cancel-in-progress: false");

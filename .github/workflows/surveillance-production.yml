@@ -12,6 +12,16 @@ name: Surveillance synthétique production
 #   (pas de spam de commentaires) ;
 #   sonde VERT après une période ROUGE → commente « RÉTABLI » avec preuve et
 #   ferme l'issue.
+#
+# ITÉRATION 31 — Job 478451 — réparation du canal d'alarme. Incident réel du
+# 2026-10-29 13:37Z : sonde ROUGE (health TTFB 3282 ms > 3000) PUIS crash du
+# step d'ouverture (« could not add label: 'surveillance-prod' not found » →
+# exit 1) : AUCUNE issue créée — le canal d'alarme était structurellement
+# cassé depuis l'it.24 (jamais déclenché sur une vraie dégradation avant ce
+# jour). Double correction : (1) le label est auto-réparé de façon idempotente
+# (gh label create --force || true) avant chaque ouverture ; (2) si la création
+# avec label échoue malgré tout, l'issue est créée SANS label — une alarme
+# sans étiquette vaut mieux qu'aucune alarme.
 
 on:
   schedule:
@@ -55,10 +65,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           LABEL="surveillance-prod"
+          # Auto-réparation idempotente du label (jamais bloquante) —
+          # un label absent ne doit JAMAIS casser le canal d'alarme.
+          gh label create "$LABEL" --color "D93F0B" \
+            --description "Dégradation production détectée par la surveillance synthétique (sonde 10 endpoints)" \
+            --force || true
           OUVERTES=$(gh issue list --label "$LABEL" --state open --json number --jq 'length')
           TITRE="🚨 Surveillance prod — production dégradée"
           if [ "$OUVERTES" -eq 0 ]; then
-            gh issue create --title "$TITRE" --body-file results.md --label "$LABEL"
+            gh issue create --title "$TITRE" --body-file results.md --label "$LABEL" \
+              || gh issue create --title "$TITRE" --body-file results.md
             echo "issue de dégradation créée"
           else
             NUM=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number')
