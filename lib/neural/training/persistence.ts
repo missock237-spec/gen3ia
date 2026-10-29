@@ -209,7 +209,7 @@ function lireEtatRpiaDefensif(brut: unknown): EtatRPIA | undefined {
   const taille = etat.taille ?? 0;
   const pasTotaux = etat.pasTotaux;
   const tailleOk = Number.isInteger(taille) && taille >= 1 && taille <= 4096;
-  const pasOk = Number.isInteger(pasTotaux) && (pasTotaux ?? -1) >= 0;
+  const pasOk = Number.isSafeInteger(pasTotaux) && (pasTotaux ?? -1) >= 0;
   // Un nœud possède exactement quatre paramètres [amplitude, fréquence,
   // phase, amortissement]. Une taille discordante doit faire rejeter l'état,
   // pas être reportée jusqu'à l'import dans le moteur au démarrage.
