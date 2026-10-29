@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { FeatureAuthGate } from "@/components/auth/feature-auth-gate";
 import { ApiKeysSection } from "@/components/settings/api-keys-section";
+import { DataGovernanceSection } from "@/components/settings/data-governance-section";
 import { PwaInstallSection } from "@/components/settings/pwa-install-section";
 import { SettingsAdSpace } from "@/components/settings/settings-ad-space";
 import { ThemeChoice } from "@/components/ui/theme-choice";
@@ -51,6 +52,8 @@ function SettingsContent() {
         <NativeNotificationsSetting />
 
         <ApiKeysSection />
+
+        <DataGovernanceSection />
 
         <PwaInstallSection />
 
