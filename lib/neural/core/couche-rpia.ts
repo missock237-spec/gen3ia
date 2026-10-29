@@ -204,7 +204,7 @@ export class CoucheOndesNeuronales {
     // réseau partiellement restauré si le checkpoint est incohérent.
     if (
       etat.pasTotaux !== undefined &&
-      (!Number.isInteger(etat.pasTotaux) || etat.pasTotaux < 0)
+      (!Number.isSafeInteger(etat.pasTotaux) || etat.pasTotaux < 0)
     ) {
       throw new Error(`Compteur de pas invalide : ${etat.pasTotaux} (entier ≥ 0 requis).`);
     }
