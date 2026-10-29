@@ -20,6 +20,7 @@ describe("CerveauOndulatoireGen3", () => {
     const resultat = cerveau.percevoir("demande totalement différente");
     expect(resultat.sortie).toBeNull();
     expect(resultat.mode).toBe("INCONNU");
+    expect(resultat.confiance).toBe(0);
   });
 
   it("remplace une entrée normalisée sans dupliquer le souvenir", () => {
