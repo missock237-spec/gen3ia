@@ -25,7 +25,7 @@ import type { ConfigRPIA, RapportEntrainement } from "../../ondes/types-entraine
 export interface OptionsCerveauGen3 {
   /** Dimensions de l'espace ondulatoire et du cortex clairsemé (8–512). */
   taille?: number;
-  /** Nombre maximal d'unités activées par perception (1–taille). */
+  /** Nombre maximal d'unités activées par étage (1–taille). */
   budgetActif?: number;
   /** Nombre maximal d'associations à long terme conservées. */
   capaciteMemoire?: number;
@@ -529,7 +529,7 @@ export class CerveauOndulatoireGen3 {
           poidsAvant + this.tauxPlasticite * source.valeur * cible.valeur,
         );
         connexions.set(idCible, poidsApres);
-        renforcees += 1;
+        if (poidsApres > poidsAvant) renforcees += 1;
       }
     }
     return renforcees;
@@ -559,7 +559,12 @@ export class CerveauOndulatoireGen3 {
       }
     }
 
-    const activesSortie = [...sorties.values()].filter((valeur) => valeur > 1e-8).length;
+    const vecteurSortie = new Array<number>(this.taille).fill(0);
+    for (const [cible, valeur] of sorties) {
+      const index = cible - this.taille;
+      if (index >= 0 && index < this.taille) vecteurSortie[index] = valeur;
+    }
+    const activesSortie = topK(vecteurSortie, this.budgetActif).length;
     return {
       unitesSourceActives: sources.length,
       unitesSortieActives: activesSortie,
