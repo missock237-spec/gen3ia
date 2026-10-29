@@ -11,6 +11,11 @@ import { describe, expect, it } from "vitest";
  * compliance-gdpr {processing, requests, kpis}, documents-onboarding
  * {flows, kpis}) — avec tables secondaires et honnêteté KPI (hr-leaves
  * n'a PAS de kpis serveur : aucun inventé).
+ * it.36 lot 3 : les 4 derniers modules de lecture (documents-contracts
+ * {contracts}, marketing-landing {pages}, marketing-webinar {assets},
+ * automations {workflows, runs, notifications} — notifications NON
+ * dupliquées, elles ont leur centre dédié) ; /business/pulse reste
+ * volontairement hors vue lecture (mission agent POST coûteuse).
  *
  * Constat d'audit (garde anti-code-mort it.29) : les 12 endpoints
  * /api/business/* (≈ 2 000 lignes, CRUD complet, Zod, rate-limit,
@@ -78,9 +83,10 @@ describe("it.33 lot 1 — les 4 modules KPI sont appelés avec le bon contrat", 
 });
 
 describe("it.33 lot 1 — honnêteté et a11y", () => {
-  it("la page annonce les lots suivants (12 modules, 7 câblés après le lot 2)", () => {
-    expect(vue).toContain("7 des 12 modules métier");
-    expect(vue).toContain("prochaines versions");
+  it("la page annonce la couverture honnête (11 modules câblés, pulse exclu)", () => {
+    expect(vue).toContain("11 des 12 modules métier");
+    // Honnêteté sur le 12e : mission agent coûteuse, pas une omission.
+    expect(vue).toContain("volontairement hors vue lecture");
   });
 
   it("page strictement en lecture (aucun appel POST/PATCH/DELETE)", () => {
@@ -148,6 +154,54 @@ describe("it.35 lot 2 — les 3 modules composites sont câblés avec le bon con
 
   it("format taille : comptage STRUCTUREL d'une liste, jamais un calcul métier", () => {
     expect(vue).toContain('format: "taille"');
-    expect(vue).toContain('Array.isArray(brut) ? String(brut.length) : "—"');
+    // it.36 : le formateur gère listes ET objets — toujours structurel.
+    expect(vue).toContain("if (Array.isArray(brut)) return String(brut.length);");
+    expect(vue).toContain("jamais un");
+  });
+});
+
+describe("it.36 lot 3 — les 4 derniers modules de lecture sont câblés", () => {
+  it("les 4 endpoints sont configurés avec leurs clés serveur", () => {
+    expect(vue).toContain('"/api/business/documents-contracts"');
+    expect(vue).toContain('"/api/business/marketing-landing"');
+    expect(vue).toContain('"/api/business/marketing-webinar"');
+    expect(vue).toContain('"/api/business/automations"');
+    expect(vue).toContain('recordsKey: "contracts"');
+    expect(vue).toContain('recordsKey: "pages"');
+    expect(vue).toContain('recordsKey: "assets"');
+    expect(vue).toContain('recordsKey: "workflows"');
+  });
+
+  it("modules sans kpis serveur : AUCUN indicateur inventé", () => {
+    // contrats, landing, webinars et automatisations n'ont pas de kpis
+    // serveur — ils déclarent kpis: [] (comme congés en it.35).
+    expect(vue).toContain("kpis: [],");
+  });
+
+  it("automatisations : workflows + exécutions en table secondaire, notifications NON dupliquées", () => {
+    expect(vue).toContain('recordsKey: "workflows"');
+    expect(vue).toContain('recordsKey: "runs"');
+    // Honnêteté : la 3e liste du serveur a déjà son centre dédié.
+    expect(vue).toContain("centre dédié");
+    expect(vue).toContain("ne les duplique pas");
+  });
+
+  it("formateurs structurels : notation pointée, declencheur, date-ms, oui-non", () => {
+    // Lecture de chemin (trigger.type) — résolution, pas transformation.
+    expect(vue).toContain('"trigger.type"');
+    expect(vue).toContain("function lireValeur");
+    expect(vue).toContain('format: "declencheur"');
+    expect(vue).toContain('format: "date-ms"');
+    expect(vue).toContain('format: "oui-non"');
+    // taille étendu aux objets (contenus d'un kit) — toujours structurel.
+    expect(vue).toContain("Object.keys(brut).length");
+  });
+
+  it("pulse exclu honnêtement de la vue lecture (mission agent POST)", () => {
+    // Mention volontairement SANS le chemin littéral : une mention
+    // d'URL blanchirait l'endpoint hors de la baseline du garde it.29
+    // (une mention n'est pas une UI).
+    expect(vue).toContain("(pulse)");
+    expect(vue).toContain("mission agent coûteuse");
   });
 });

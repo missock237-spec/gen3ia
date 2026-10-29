@@ -71,15 +71,18 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 89 endpoints orphelins au 2026-10-30 (it.35 ;     */
+/* Baseline honnête — 85 endpoints orphelins au 2026-10-30 (it.36 ;     */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
 /* (it.31), finance-unpaid, finance-cashflow, hr-training et            */
-/* operations-maintenance câblés sur /business (it.33, lot 1/3), puis   */
+/* operations-maintenance câblés sur /business (it.33, lot 1/3),        */
 /* hr-leaves, compliance-gdpr et documents-onboarding câblés sur        */
-/* /business (it.35, lot 2/3). Classés par motif. Réviser à chaque      */
-/* suppression/ajout d'UI.                                              */
+/* /business (it.35, lot 2/3), puis documents-contracts,                */
+/* marketing-landing, marketing-webinar et automations câblés sur       */
+/* /business (it.36, lot 3/3 — /business/pulse reste volontairement     */
+/* sans vue lecture : mission agent POST coûteuse). Classés par motif.  */
+/* Réviser à chaque suppression/ajout d'UI.                             */
 /* ------------------------------------------------------------------ */
 
 const BASELINE_ORPHELINS: Record<string, string[]> = {
@@ -161,10 +164,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/ads/publish",
     "/agents/generate",
     "/ai/generate",
-    "/business/automations",
-    "/business/documents-contracts",
-    "/business/marketing-landing",
-    "/business/marketing-webinar",
     "/business/pulse",
     "/deployments/create",
     "/developer/secrets",

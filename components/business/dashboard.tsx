@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { authFetch } from "@/lib/firebase/auth-client";
 
 /**
- * Espace Business — page /business (Job 478451, it. 33 lot 1/3, it. 35 lot 2/3).
+ * Espace Business — page /business (Job 478451, it. 33 lot 1/3, it. 35
+ * lot 2/3, it. 36 lot 3/3).
  *
  * Constat d'audit (garde anti-code-mort it. 29) : douze endpoints du lot
  * /api/business/* (≈ 2 000 lignes, CRUD complet, Zod, rate-limit, moteur
@@ -24,24 +25,32 @@ import { authFetch } from "@/lib/firebase/auth-client";
  *  - GET /api/business/compliance-gdpr   → {processing, requests, kpis} (RGPD)
  *  - GET /api/business/documents-onboarding → {flows, kpis}            (onboarding)
  *
- * Leur forme composite introduit la notion de TABLE SECONDAIRE
- * (module.secondaire) : le serveur renvoie deux listes utiles (demandes
- * de congé + soldes par employé ; demandes DSR + registre des
- * traitements). La correspondance serveur (Record → lignes) est une
- * transformation PUREMENT STRUCTURELLE (Object.entries + spread des
- * valeurs telles quelles) — aucune valeur n'est recalculée côté client.
- * hr-leaves n'a PAS de KPI serveur : le module déclare kpis: [] et aucun
- * indicateur n'est inventé (honnêteté copiée du serveur).
+ * LOT 3 (it. 36) — les 4 derniers modules de lecture :
+ *  - GET /api/business/documents-contracts → {contracts}              (contrats)
+ *  - GET /api/business/marketing-landing   → {pages}                  (landing)
+ *  - GET /api/business/marketing-webinar   → {assets}                 (webinars)
+ *  - GET /api/business/automations         → {workflows, runs, notifications}
+ *    (la 3e liste est volontairement non dupliquée : les notifications
+ *    ont déjà leur centre dédié — components/notifications/).
+ *  Le 12e endpoint du lot (pulse) est une mission agent COÛTEUSE
+ *  (POST) : volontairement hors vue lecture, documenté sur la page.
  *
- * LOT 3 (à venir, annoncé honnêtement sur la page) : marketing-landing +
- * marketing-webinar + documents-contracts + automations (et /business/
- * pulse, mission agent — hors lecture).
+ * TABLES SECONDAIRES (it. 35) : les modules composites renvoient deux
+ * listes utiles (demandes + soldes ; DSR + registre ; workflows + runs).
+ * La correspondance serveur (Record → lignes) est une transformation
+ * PUREMENT STRUCTURELLE (Object.entries + spread des valeurs telles
+ * quelles) — aucune valeur n'est recalculée côté client.
  *
- * Honnêteté copiée du serveur : les KPI affichent les valeurs TELLES QUE
- * calculées par le serveur (y compris les libellés monétaires formatés
- * côté serveur — aucun recalcul client) ; chaque module se charge
- * INDÉPENDAMMENT (Promise.allSettled) — une panne d'un module n'emporte
- * pas les autres, et l'erreur est affichée telle quelle.
+ * HONNÊTETÉ KPI : les indicateurs affichent les valeurs TELLES QUE
+ * calculées par le serveur ; les modules SANS KPI serveur déclarent
+ * kpis: [] et aucun indicateur n'est inventé (5 modules concernés).
+ *
+ * FORMATEURS STRUCTURELS (jamais de calcul métier) : date (AAAA-MM-JJ),
+ * date-ms (horodatage epoch), montant (nombre + devise ligne), direction
+ * (in/out), taille (longueur d'une liste ou d'un objet serveur),
+ * declencheur (trigger.type/eventType), oui-non (booléens). Les clés de
+ * colonne acceptent la notation pointée (trigger.type) — lecture de
+ * chemin, pas de transformation.
  *
  * Accessibilité : table natifs (en-têtes th scope), sections
  * aria-labelledby, zone role="status", aucun widget artificiel. Palette :
@@ -51,7 +60,11 @@ import { authFetch } from "@/lib/firebase/auth-client";
 type Kpis = Record<string, unknown>;
 type Ligne = Record<string, unknown>;
 
-type Colonne = { key: string; libelle: string; format?: "date" | "montant" | "direction" | "taille" };
+type Colonne = {
+  key: string;
+  libelle: string;
+  format?: "date" | "date-ms" | "montant" | "direction" | "taille" | "declencheur" | "oui-non";
+};
 
 type ModuleDef = {
   id: string;
@@ -239,18 +252,116 @@ const MODULES: ModuleDef[] = [
       { key: "status", libelle: "Statut" },
     ],
   },
+  {
+    id: "contrats",
+    titre: "Contrats",
+    description:
+      "Contrats générés par le moteur documentaire (clauses comptées côté serveur) avec leurs conditions financières.",
+    endpoint: "/api/business/documents-contracts",
+    recordsKey: "contracts",
+    // Le serveur ne renvoie pas de kpis : aucun indicateur inventé.
+    kpis: [],
+    colonnes: [
+      { key: "title", libelle: "Contrat" },
+      { key: "clientName", libelle: "Client" },
+      { key: "type", libelle: "Type" },
+      { key: "amount", libelle: "Montant", format: "montant" },
+      { key: "startDate", libelle: "Début", format: "date" },
+      { key: "clausesCount", libelle: "Clauses" },
+    ],
+  },
+  {
+    id: "landing",
+    titre: "Landing pages",
+    description:
+      "Pages d'atterrissage générées pour un produit et une audience, avec leur statut de production.",
+    endpoint: "/api/business/marketing-landing",
+    recordsKey: "pages",
+    // Le serveur ne renvoie pas de kpis : aucun indicateur inventé.
+    kpis: [],
+    colonnes: [
+      { key: "name", libelle: "Nom" },
+      { key: "product", libelle: "Produit" },
+      { key: "audience", libelle: "Audience" },
+      { key: "tone", libelle: "Ton" },
+      { key: "language", libelle: "Langue" },
+      { key: "status", libelle: "Statut" },
+    ],
+  },
+  {
+    id: "webinars",
+    titre: "Kits webinar",
+    description:
+      "Transcriptions de webinars recyclées en kits de contenus (LinkedIn, e-mail, blog, thread) par l'IA Engine.",
+    endpoint: "/api/business/marketing-webinar",
+    recordsKey: "assets",
+    // Le serveur ne renvoie pas de kpis : aucun indicateur inventé.
+    kpis: [],
+    colonnes: [
+      { key: "title", libelle: "Titre" },
+      { key: "audience", libelle: "Audience" },
+      { key: "outputs", libelle: "Contenus du kit", format: "taille" },
+    ],
+  },
+  {
+    id: "automatisations",
+    titre: "Automatisations",
+    description:
+      "Workflows configurés et leurs exécutions récentes (déclencheurs manuels ou événementiels). Les notifications générées restent dans leur centre dédié — cette vue ne les duplique pas.",
+    endpoint: "/api/business/automations",
+    recordsKey: "workflows",
+    // Le serveur ne renvoie pas de kpis : aucun indicateur inventé.
+    kpis: [],
+    colonnes: [
+      { key: "name", libelle: "Workflow" },
+      { key: "trigger.type", libelle: "Déclencheur", format: "declencheur" },
+      { key: "conditions", libelle: "Conditions", format: "taille" },
+      { key: "steps", libelle: "Étapes", format: "taille" },
+      { key: "enabled", libelle: "Active", format: "oui-non" },
+    ],
+    secondaire: {
+      recordsKey: "runs",
+      libelleCle: "Exécution",
+      titre: "Exécutions récentes (journal serveur)",
+      colonnes: [
+        { key: "workflowName", libelle: "Workflow" },
+        { key: "status", libelle: "Statut" },
+        { key: "startedAt", libelle: "Début", format: "date-ms" },
+        { key: "finishedAt", libelle: "Fin", format: "date-ms" },
+      ],
+    },
+  },
 ];
 
 const TAILLE_PAGE = 8;
 
+/** Lecture d'une clé de colonne, avec notation pointée (trigger.type) —
+ *  simple résolution de chemin, aucune transformation de valeur. */
+function lireValeur(ligne: Ligne, cle: string): unknown {
+  if (!cle.includes(".")) return ligne[cle];
+  return cle
+    .split(".")
+    .reduce<unknown>(
+      (acc, part) => (acc && typeof acc === "object" ? (acc as Record<string, unknown>)[part] : undefined),
+      ligne,
+    );
+}
+
 function formaterValeur(ligne: Ligne, colonne: Colonne): string {
-  const brut = ligne[colonne.key];
+  const brut = lireValeur(ligne, colonne.key);
   if (brut === undefined || brut === null || brut === "") return "—";
   if (colonne.format === "date") {
     const t = new Date(`${String(brut)}T00:00:00Z`).getTime();
     return Number.isNaN(t)
       ? String(brut)
       : new Date(t).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+  }
+  if (colonne.format === "date-ms") {
+    // Horodatage epoch (ms) renvoyé par le journal d'exécution serveur.
+    const t = Number(brut);
+    return Number.isFinite(t) && t > 0
+      ? new Date(t).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+      : String(brut);
   }
   if (colonne.format === "montant") {
     const devise = String(ligne.currency ?? "");
@@ -262,9 +373,27 @@ function formaterValeur(ligne: Ligne, colonne: Colonne): string {
     return texte === "in" ? "Entrée" : texte === "out" ? "Sortie" : texte;
   }
   if (colonne.format === "taille") {
-    // Comptage STRUCTUREL d'une liste renvoyée par le serveur (ex. :
-    // étapes d'un parcours) — jamais un calcul métier.
-    return Array.isArray(brut) ? String(brut.length) : "—";
+    // Comptage STRUCTUREL d'une liste ou d'un objet renvoyé par le
+    // serveur (ex. : étapes, conditions, contenus d'un kit) — jamais un
+    // calcul métier.
+    if (Array.isArray(brut)) return String(brut.length);
+    if (brut && typeof brut === "object") return String(Object.keys(brut).length);
+    return "—";
+  }
+  if (colonne.format === "declencheur") {
+    // Libellé du type de déclencheur (valeur serveur mappée, pas calculée).
+    const type = String(brut);
+    if (type === "manual") return "Manuel";
+    if (type === "event") {
+      const evenement = String(lireValeur(ligne, "trigger.eventType") ?? "");
+      return evenement ? `Événement : ${evenement}` : "Événement";
+    }
+    return type;
+  }
+  if (colonne.format === "oui-non") {
+    if (brut === true) return "Oui";
+    if (brut === false) return "Non";
+    return String(brut);
   }
   return String(brut);
 }
@@ -358,10 +487,10 @@ export function BusinessDashboard() {
         </h1>
         <p className="mt-2 text-sm leading-6 text-[var(--g3-muted)]">
           Vue lecture de vos modules métier : impayés, trésorerie, formations, maintenance,
-          congés, conformité RGPD et onboarding. Les indicateurs sont calculés par les moteurs
-          serveur et affichés tels quels ; les tableaux montrent les {TAILLE_PAGE} enregistrements
-          les plus récents. Cette vague couvre 7 des 12 modules métier — marketing (landing,
-          webinar), documents-contracts et automatisations arriveront dans les prochaines versions.
+          congés, conformité RGPD, onboarding, contrats, landing pages, kits webinar et
+          automatisations. Les indicateurs sont calculés par les moteurs serveur et affichés
+          tels quels ; les tableaux montrent les {TAILLE_PAGE} enregistrements les plus récents.
+          Cette vague couvre 11 des 12 modules métier — le dernier (pulse), mission agent coûteuse, reste volontairement hors vue lecture.
         </p>
         <div role="status" aria-live="polite" className="mt-3">
           {toutChargement ? (
