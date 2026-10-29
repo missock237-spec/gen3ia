@@ -199,13 +199,15 @@ export class CoucheOndesNeuronales {
   }
 
   /**
-   * État sérialisable (JSON-safe) pour la persistance : poids arrondis
-   * (6 décimales) — même contrat que training/persistence.ts.
+   * État sérialisable (JSON-safe) pour la persistance.
+   *
+   * Conserver les valeurs float32 exactes garantit qu'une restauration ne
+   * change pas silencieusement la phase ou l'amplitude des oscillateurs. Le
+   * JSON conserve assez de chiffres pour reconstruire exactement chaque
+   * valeur float32, contrairement à un arrondi arbitraire à six décimales.
    */
   exporterEtat(): EtatRPIA {
-    const poids = Array.from(this.entraineur.exporterPoids()).map(
-      (v) => Math.round(v * 1e6) / 1e6,
-    );
+    const poids = Array.from(this.entraineur.exporterPoids());
     return {
       taille: this.taille,
       pasTotaux: this.entraineur.pasTotaux,
