@@ -100,7 +100,12 @@ describe("couche d'ondes neuronales RPIA (pont résonance → cerveau)", () => {
 
     const poidsNan = avant.poids.slice();
     poidsNan[2] = Number.NaN;
-    expect(() => couche.importerEtat({ ...avant, poids: poidsNan })).toThrow(/Poids RPIA non fini/);
+    expect(() => couche.importerEtat({ ...avant, poids: poidsNan })).toThrow(/État RPIA invalide/);
+    expect(couche.exporterEtat()).toEqual(avant);
+
+    const poidsNull = avant.poids.slice();
+    (poidsNull as unknown[])[3] = null;
+    expect(() => couche.importerEtat({ ...avant, poids: poidsNull })).toThrow(/État RPIA invalide/);
     expect(couche.exporterEtat()).toEqual(avant);
 
     expect(() => couche.importerEtat({ ...avant, pasTotaux: Number.NaN })).toThrow(
