@@ -23,6 +23,24 @@ describe("CerveauOndulatoireGen3", () => {
     expect(resultat.confiance).toBe(0);
   });
 
+  it("permet un rappel lexical approximatif uniquement quand il est explicitement activé", () => {
+    const cerveau = new CerveauOndulatoireGen3({
+      taille: 128,
+      budgetActif: 8,
+      epoquesParAssociation: 2,
+      seuilRappel: 0.6,
+    });
+    cerveau.apprendre("Quelle est la capitale du Cameroun ?", "Yaoundé");
+    const proche = cerveau.percevoir("Capitale du Cameroun");
+    const inconnue = cerveau.percevoir("La météo demain à Tokyo");
+
+    expect(proche.mode).toBe("RAPPEL_ASSOCIATIF");
+    expect(proche.sortie).toBe("Yaoundé");
+    expect(proche.confiance).toBeGreaterThanOrEqual(0.6);
+    expect(inconnue.sortie).toBeNull();
+    expect(inconnue.mode).toBe("INCONNU");
+  });
+
   it("remplace une entrée normalisée sans dupliquer le souvenir", () => {
     const cerveau = new CerveauOndulatoireGen3({ taille: 24, budgetActif: 4, epoquesParAssociation: 2 });
     const premier = cerveau.apprendre("Bonjour", "Salut.");
