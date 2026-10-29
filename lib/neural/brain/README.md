@@ -6,7 +6,7 @@ Ce module crée une première architecture cognitive locale fondée sur le syst�
 
 Il relie cinq éléments :
 1. un encodeur lexical déterministe texte → vecteur ondulatoire, combinant mots, paires de mots et trigrammes de caractères ;
-2. une couche RPIA entraînée séparément pour chaque association ;
+2. un cortex RPIA partagé qui apprend progressivement à partir de plusieurs expériences et sauvegarde une trace ondulatoire épisodique par souvenir ;
 3. une mémoire associative bornée ;
 4. un hippocampe de dix tours pour le contexte immédiat ;
 5. un graphe synaptique clairsemé avec plasticité additive bornée et propagation événementielle depuis les unités actives ;
@@ -44,7 +44,8 @@ cerveau.importerEtat(checkpoint);
 - Nombre d'unités actives borné par étage par `budgetActif`.
 - La propagation parcourt uniquement les synapses sortantes des unités actives.
 - Mémoire associative plafonnée, budget taille × souvenirs limité à un million de cellules et budget textuel cumulé limité à vingt millions de caractères ; hippocampe limité à dix tours.
-- Checkpoints exportables en JSON et validation avant restauration.
+- Checkpoints JSON version 2 comprenant le cortex RPIA partagé, sa configuration et les mémoires ; validation avant restauration.
+- Rejeu hippocampique contrôlé qui renforce les associations déjà apprises sans inventer de réponse.
 - Rappel exact normalisé par défaut (seuil 1.0) ; le rappel approximatif doit être activé explicitement et évalué ; les réponses inconnues restent `null` plutôt que d'être inventées.
 - Métriques de base disponibles pour compter associations, synapses, unités actives et comparaisons.
 
