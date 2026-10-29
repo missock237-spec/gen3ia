@@ -71,7 +71,7 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 85 endpoints orphelins au 2026-10-30 (it.36 ;     */
+/* Baseline honnête — 79 endpoints orphelins au 2026-10-30 (it.37 ;     */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
@@ -81,7 +81,11 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* /business (it.35, lot 2/3), puis documents-contracts,                */
 /* marketing-landing, marketing-webinar et automations câblés sur       */
 /* /business (it.36, lot 3/3 — /business/pulse reste volontairement     */
-/* sans vue lecture : mission agent POST coûteuse). Classés par motif.  */
+/* sans vue lecture : mission agent POST coûteuse), puis les 6          */
+/* doublons morts /orchestrator* SUPPRIMÉS (it.37 — la lib du workflow  */
+/* d'approbation reste vivante via agent/chat/approve, ads/*,           */
+/* messaging ; les entrées HTTP n'avaient AUCUN appelant, l'UI passe     */
+/* par /api/team/[teamId]/orchestrator). Classés par motif.             */
 /* Réviser à chaque suppression/ajout d'UI.                             */
 /* ------------------------------------------------------------------ */
 
@@ -147,10 +151,10 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
   /** Vrais orphelins connus : fonctionnalités livrées SANS surface
    *  utilisateur détectée. Chaque entrée est un candidat UI (ou un
    *  doublon mort à supprimer). Ex. : /business/* (lot métier sans
-   *  écran), /orchestrator* (l'UI passe par /api/team/{id}/orchestrator),
-   *  /settings/export-data (constat it.27, câblé it.29),
+   *  écran), /settings/export-data (constat it.27, câblé it.29),
    *  /extensions/{installed,licenses,purchases,usage} (lot marketplace,
-   *  câblé it.31 sur /extensions), /skills* … */
+   *  câblé it.31 sur /extensions), /skills* … ; les doublons morts
+   *  /orchestrator* ont été SUPPRIMÉS à l'it.37 (voir verrou dédié) */
   "orphelin-connu": [
     "/admin/billing/reconcile",
     "/admin/extensions/reviews",
@@ -177,12 +181,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/monde/stats",
     "/neural/evolve",
     "/observability/org",
-    "/orchestrator",
-    "/orchestrator/action-plan",
-    "/orchestrator/actions",
-    "/orchestrator/actions/[id]/approve",
-    "/orchestrator/actions/[id]/execute",
-    "/orchestrator/actions/[id]/reject",
     "/provisioning/intent",
     "/skills",
     "/skills/create",
@@ -296,6 +294,45 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
         `${ep} (RGPD) n'est plus référencé depuis app/components/public — régressions it.25/it.27`,
       ).toBeGreaterThan(0);
       expect(baselineUnion, `${ep} ne doit JAMAIS être baseliné`).not.toContain(ep);
+    }
+  });
+
+  it("les 6 doublons morts /orchestrator* restent SUPPRIMÉS (it.37) — la porte HTTP morte ne doit pas renaître", () => {
+    // Constat it.37 : la lib du workflow d'approbation est VIVANTE
+    // (agent/chat/approve avec UI notification-center, ads/generate,
+    // ads/publish, integrations/messaging, autonomy-guard), mais ses 6
+    // entrées HTTP /api/orchestrator* n'avaient AUCUN appelant : ni fetch
+    // frontend, ni fetch serveur, ni SDK documenté. L'UI d'orchestration
+    // passe par /api/team/[teamId]/orchestrator (adhésion équipe vérifiée).
+    // Ces routes étaient donc des doublons morts : supprimées, pas câblées.
+    const doublonsSupprimes = [
+      "app/api/orchestrator/route.ts",
+      "app/api/orchestrator/action-plan/route.ts",
+      "app/api/orchestrator/actions/route.ts",
+      "app/api/orchestrator/actions/[id]/approve/route.ts",
+      "app/api/orchestrator/actions/[id]/execute/route.ts",
+      "app/api/orchestrator/actions/[id]/reject/route.ts",
+    ];
+    for (const rel of doublonsSupprimes) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} a été supprimé à l'it.37 (doublon mort sans appelant) — ne le recréez pas sans UI ; l'orchestration passe par /api/team/[teamId]/orchestrator`,
+      ).toBe(false);
+    }
+    // La LIB du workflow reste vivante et consommée — si l'un de ces
+    // fichiers disparaît, c'est une régression fonctionnelle (approbations
+    // agent/chat, ads, messaging cassées), pas un nettoyage.
+    const libVivantes = [
+      "lib/agents/action-approvals.ts",
+      "lib/orchestrator/team-coordination.ts",
+      "app/api/team/[teamId]/orchestrator/route.ts",
+      "app/api/agent/chat/approve/route.ts",
+    ];
+    for (const rel of libVivantes) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est VIVANT (consommé par l'UI ou d'autres entrées HTTP) — sa disparition est une régression, pas un nettoyage`,
+      ).toBe(true);
     }
   });
 });
