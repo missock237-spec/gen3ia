@@ -116,7 +116,7 @@ interface RapportPropagation {
 const TAILLE_DEFAUT = 64;
 const BUDGET_DEFAUT = 8;
 const CAPACITE_MEMOIRE_DEFAUT = 512;
-const SEUIL_RAPPEL_DEFAUT = 0.985;
+const SEUIL_RAPPEL_DEFAUT = 1.0;
 const EPOQUES_DEFAUT = 24;
 const PLASTICITE_DEFAUT = 0.12;
 const MAX_HIPPOCAMPE = 10;
@@ -353,8 +353,12 @@ export class CerveauOndulatoireGen3 {
       }
     }
 
+    // Avec le seuil par défaut (1.0), seul le texte normalisé identique est
+    // rappelé. L'association approximative est une option explicite : elle
+    // doit être activée en choisissant un seuil strictement inférieur à 1,
+    // car l'empreinte actuelle n'est pas un embedding sémantique appris.
     const rappelAccepte = Boolean(
-      meilleur && (exact || meilleurScore >= this.seuilRappel),
+      meilleur && (exact || (this.seuilRappel < 1 && meilleurScore >= this.seuilRappel)),
     );
     // Le cortex reçoit une fusion du signal sensoriel et de l'état ondulatoire appris.
     // Pour une entrée inconnue, il ne fabrique pas d'état mémorisé : il propage
