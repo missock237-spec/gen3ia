@@ -104,9 +104,18 @@ export interface RapportEntrainement {
   historiqueErreur: number[];
 }
 
-/** Fabrique un rapport depuis un historique d'erreurs (jamais vide). */
-export function rapportDepuisHistorique(historique: number[]): RapportEntrainement {
-  const erreurInitiale = historique[0] ?? 0;
+/**
+ * Fabrique un rapport depuis l'historique post-pas.
+ *
+ * `erreurAvantEntrainement`, lorsqu'elle est fournie, est mesurée AVANT le
+ * premier pas. Sans cette valeur, le comportement historique est conservé
+ * pour les appelants qui ne disposent que de l'historique.
+ */
+export function rapportDepuisHistorique(
+  historique: number[],
+  erreurAvantEntrainement?: number,
+): RapportEntrainement {
+  const erreurInitiale = erreurAvantEntrainement ?? historique[0] ?? 0;
   const erreurFinale = historique[historique.length - 1] ?? 0;
   return {
     epoques: historique.length,
