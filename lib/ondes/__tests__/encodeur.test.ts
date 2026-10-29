@@ -75,7 +75,7 @@ describe("encodeur fréquentiel (W-DNN)", () => {
     const sig128 = signatureMot("photon", 128);
     expect(carte.motLePlusProche(sig64.x, sig64.y, 64)).toBe("photon");
     expect(carte.motLePlusProche(sig128.x, sig128.y, 128)).toBe("photon");
-    expect(carte.motLePlusProche(sig64.x, sig64.y, 32, 0)).toBeNull();
+    expect(carte.motLePlusProche(0, 0, 32, 0)).toBeNull();
     expect(carte.taille).toBe(2);
   });
 
