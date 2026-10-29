@@ -9,7 +9,8 @@ Il relie cinq éléments :
 2. une couche RPIA entraînée séparément pour chaque association ;
 3. une mémoire associative bornée ;
 4. un hippocampe de dix tours pour le contexte immédiat ;
-5. un graphe synaptique clairsemé avec plasticité additive bornée et propagation événementielle depuis les unités actives.
+5. un graphe synaptique clairsemé avec plasticité additive bornée et propagation événementielle depuis les unités actives ;
+6. un mécanisme de rejeu hippocampique qui consolide les associations récentes sans effacer la mémoire de travail.
 
 ## API minimale
 
@@ -42,7 +43,7 @@ cerveau.importerEtat(checkpoint);
 - Graine déterministe pour l'initialisation des oscillateurs.
 - Nombre d'unités actives borné par étage par `budgetActif`.
 - La propagation parcourt uniquement les synapses sortantes des unités actives.
-- Mémoire associative plafonnée, budget total taille × souvenirs limité à un million de cellules numériques, et hippocampe limité à dix tours.
+- Mémoire associative plafonnée, budget taille × souvenirs limité à un million de cellules et budget textuel cumulé limité à vingt millions de caractères ; hippocampe limité à dix tours.
 - Checkpoints exportables en JSON et validation avant restauration.
 - Rappel exact normalisé par défaut (seuil 1.0) ; le rappel approximatif doit être activé explicitement et évalué ; les réponses inconnues restent `null` plutôt que d'être inventées.
 - Métriques de base disponibles pour compter associations, synapses, unités actives et comparaisons.
@@ -53,10 +54,12 @@ L'encodeur lexical actuel projette par hachage signé les mots, paires de mots e
 
 Ce module apprend des associations et réutilise des états RPIA ; il ne génère pas encore du langage libre, ne comprend pas toutes les connaissances générales et ne constitue pas un cerveau biologique. Il s'agit d'un noyau expérimental qu'il faut évaluer avant de le raccorder au runtime de conversation de production.
 
-## Étapes techniques suivantes
+## Validation et étapes techniques suivantes
 
-1. Ajouter des jeux de tests pour rappel exact, faux rappels, oubli, persistance et stabilité RPIA.
-2. Construire un benchmark reproductible CPU mesurant mémoire maximale, durée, nombre de synapses visitées et qualité sur données tenues à l'écart.
-3. Remplacer l'empreinte de hachage par un encodeur appris sur données, avec une vraie mesure de généralisation.
-4. Concevoir la consolidation de mémoire et les mécanismes anti-oubli avant d'autoriser un apprentissage continu.
+Le banc d'essai initial est disponible via `npm run benchmark:brain` et s'exécute aussi dans la CI. Il contrôle un petit ensemble d'associations connues, trois variantes lexicales et trois requêtes étrangères au jeu d'apprentissage. Ce test est un garde-fou de régression, pas une mesure de performance générale.
+
+1. Exécuter la CI et examiner les résultats du benchmark CPU et des tests de sécurité.
+2. Agrandir l'évaluation avec plusieurs tailles, graines, longueurs de texte et jeux de test séparés ; mesurer faux rappels, oubli, persistance, mémoire et latence.
+3. Apprendre une représentation sémantique à partir de données plutôt que supposer qu'une empreinte lexicale comprend le sens.
+4. Ajouter des mécanismes d'anti-oubli et une persistance durable isolée par compte/utilisateur.
 5. Intégrer progressivement ce noyau au runtime existant après validation, sans basculer automatiquement le trafic de production.
