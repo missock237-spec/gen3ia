@@ -37,9 +37,14 @@ concurrency:
 # l'escalade « Production en retard », sans dépendre d'un tick guérisseur
 # ultérieur (ticks cron régulièrement perdus : 00:43, 01:13, 01:47 le
 # 29 oct. 2026 → escalades périmées laissées ouvertes jusqu'au push suivant).
+# actions:write (v7, itération 34 Job 478451) : SURVEILLANCE AUTO-ARMÉE —
+# chaque livraison PROUVÉE émet un dispatch de surveillance-production.yml
+# (cf. l'étape « Réarmer la surveillance » plus bas) : la cadence de
+# monitorage ne dépend plus ni du cron fantôme ni du réflexe manuel.
 permissions:
   contents: write
   issues: write
+  actions: write
 
 jobs:
   deploy:
@@ -349,6 +354,38 @@ jobs:
           else
             echo "Aucune escalade ouverte — rien à refermer."
           fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # v7 (2026-10-30, itération 34 Job 478451) — SURVEILLANCE AUTO-ARMÉE :
+      # le cron '7,37' de la surveillance est structurellement muet — 3 jours
+      # d'historique : 16 dispatchs MANUELS vs 1 SEUL tick planifié (le
+      # 13:37Z de l'incident it.31) ; congestion GitHub documentée ici-même
+      # (ticks 00:43/01:13/01:47 perdus) et chez le guérisseur. La cadence
+      # de monitorage ne peut pas dépendre d'un planificateur fantôme ni du
+      # réflexe manuel des itérations (dispatchs 14:23/14:40/15:45/16:32/
+      # 16:34 le 29 oct.). Chaque livraison PROUVÉE (verify_build) réarme
+      # donc ELLE-MÊME la sonde : le run dispatché part ~1 min après le
+      # swap sur le build frais (la tolérance post-swap it.32 absorbe les
+      # transitoires résiduels). Un réarmement impossible = run ROUGE :
+      # échouer BRUYAMMENT, jamais perdre la cadence en silence (leçon
+      # it.31 : une alarme silencieuse est un bug).
+      - name: "Réarmer la surveillance (livraison prouvée)"
+        if: steps.verify_build.outcome == 'success'
+        run: |
+          ok=0
+          for i in 1 2 3; do
+            if gh api -X POST "repos/$GITHUB_REPOSITORY/actions/workflows/surveillance-production.yml/dispatches" -f ref=main 2>/tmp/err_rearmement; then
+              ok=1; break
+            fi
+            echo "Tentative $i/3 échouée ($(cat /tmp/err_rearmement)) — nouvel essai dans 20 s…"
+            [ "$i" = "3" ] || sleep 20
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::Surveillance NON réarmée après 3 tentatives — la cadence de monitorage ne doit jamais se perdre en silence (leçon it.31 : une alarme silencieuse est un bug)."
+            exit 1
+          fi
+          echo "Surveillance réarmée : un run dispatché sondra les 10 endpoints sur le build $BUILD_ID (sha $GITHUB_SHA) d'ici ~1 min."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

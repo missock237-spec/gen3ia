@@ -17,7 +17,11 @@ import { describe, expect, it } from "vitest";
  * 2. la sonde (10 endpoints conformes à la sonde de régression, seuils
  *    explicites, verdict fail-closed, pas de faux positif de livraison
  *    bloquée quand main n'a pas bougé) ;
- * 3. la syntaxe exécutable réelle (node --check).
+ * 3. la syntaxe exécutable réelle (node --check) ;
+ * 4. it.34 — la cadence auto-armée : deploy-vps réarme la sonde à chaque
+ *    livraison PROUVÉE, le guérisseur la réarme si elle s'endort — le cron
+ *    fantôme (1 tick planifié en 3 jours) ne porte plus seul la cadence,
+ *    et la surveillance ne dispatche elle-même rien (anti-boucle).
  */
 
 const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
@@ -141,5 +145,78 @@ describe("Sonde surveillance_prod.mjs", () => {
   it("aucun secret en dur (token passé par environnement)", () => {
     expect(sonde).toContain("process.env.GITHUB_TOKEN");
     expect(sonde).not.toMatch(/ghp_[A-Za-z0-9]{20,}/);
+  });
+});
+
+describe("it.34 — surveillance auto-armée (la cadence ne dépend plus du cron fantôme ni du réflexe manuel)", () => {
+  // Constat à l'origine du verrou : 3 jours d'historique de surveillance =
+  // 16 dispatchs MANUELS (réflexe des itérations) vs 1 SEUL tick planifié
+  // (le 13:37Z de l'incident it.31). Congestion GitHub documentée chez
+  // deploy-vps (00:43/01:13/01:47 perdus) ET chez le guérisseur : les
+  // planifications sont droppées en masse. La cadence de monitorage ne
+  // peut donc pas reposer sur le cron : elle doit être réarmée par les
+  // événements qui, eux, arrivent — chaque livraison prouvée (deploy-vps)
+  // et chaque push/cron survivant du guérisseur (relais d'endormissement).
+  const deploy = read(".github/workflows/deploy-vps.yml");
+  const guerisseur = read(".github/workflows/guerisseur-production.yml");
+  const surveillance = read(".github/workflows/surveillance-production.yml");
+
+  it("deploy-vps — permission actions:write ajoutée, mesurée (jamais write-all)", () => {
+    expect(deploy).toContain("actions: write");
+    expect(deploy).not.toContain("write-all");
+  });
+
+  it("deploy-vps — réarmement À LA SOURCE, après la livraison prouvée (verify_build)", () => {
+    expect(deploy).toContain("Réarmer la surveillance (livraison prouvée)");
+    // Le réarmement n'a de sens QUE si verify_build a prouvé que la prod
+    // sert CE build : même condition `if` que la refermeture d'escalade —
+    // jamais de sonde dispatchée sur une livraison non prouvée.
+    const etape = deploy.slice(deploy.indexOf("Réarmer la surveillance (livraison prouvée)"));
+    expect(etape.slice(0, 400)).toContain("steps.verify_build.outcome == 'success'");
+    // POST dispatch sur main + retries bornés (3 × 20 s).
+    expect(deploy).toContain("actions/workflows/surveillance-production.yml/dispatches");
+    expect(deploy).toContain("-f ref=main");
+    expect(deploy).toContain("for i in 1 2 3");
+    // Position : APRÈS le step de vérification de bout en bout.
+    expect(deploy.indexOf("Réarmer la surveillance (livraison prouvée)")).toBeGreaterThan(
+      deploy.indexOf("Vérifier que la production sert ce build exact"),
+    );
+  });
+
+  it("deploy-vps — l'échec du réarmement est BRUYANT (run ROUGE, jamais silencieux)", () => {
+    // Leçon it.31 : une alarme silencieuse est un bug. Si la sonde ne peut
+    // pas être réarmée après retries, le run doit mourir en rouge — perdre
+    // la cadence en silence recréerait l'angle mort d'it.24.
+    expect(deploy).toContain("::error::Surveillance NON réarmée après 3 tentatives");
+  });
+
+  it("guérisseur — relais de cadence : réarme la sonde si elle s'endort (> 50 min)", () => {
+    expect(guerisseur).toContain("Relais de cadence");
+    // Âge du dernier run = première entrée de l'historique (desc), seuil
+    // 50 min > cadence visée 30 min avec marge pour les runs en cours.
+    expect(guerisseur).toContain("surveillance-production.yml/runs?per_page=1");
+    expect(guerisseur).toContain("-gt 50");
+    expect(guerisseur).toContain("actions/workflows/surveillance-production.yml/dispatches");
+    // Le relais vit dans le job `verifier` (tourne TOUJOURS, aligné ou
+    // non) — PAS dans `guerir` (skippé quand la prod est alignée, exacte-
+    // ment le moment où un relais serait utile).
+    expect(guerisseur.indexOf("Relais de cadence")).toBeLessThan(guerisseur.indexOf("  guerir:"));
+  });
+
+  it("guérisseur — l'échec du relais est BRUYANT (distinct du fail-closed des escalades v6)", () => {
+    // Nuance v6 : ici, échouer fort est VOLONTAIRE — un relais impossible
+    // n'est pas une fausse alerte sur la prod, c'est la preuve que le
+    // monitorage ne peut pas être garanti.
+    expect(guerisseur).toContain("::error::Surveillance endormie");
+    expect(guerisseur).toContain("exit 1");
+  });
+
+  it("anti-boucle : la surveillance elle-même ne dispatche aucun workflow", () => {
+    // deploy-vps et le guérisseur dispatchent la surveillance ; la
+    // surveillance ne dispatche RIEN (pas de cycle self-healer ↔ sonde).
+    expect(surveillance).not.toContain("dispatches");
+    // Et ses permissions restent mesurées : contents:read + issues:write,
+    // SANS actions:write (elle n'en a pas l'usage ni le droit).
+    expect(surveillance).not.toContain("actions: write");
   });
 });

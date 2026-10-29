@@ -124,6 +124,48 @@ jobs:
             echo "Aucune escalade ouverte — rien à refermer."
           fi
 
+      # v7 (2026-10-30, itération 34 Job 478451) — RELAIS DE CADENCE :
+      # le cron '7,37' de la surveillance est structurellement muet — 3 jours
+      # d'historique : 16 dispatchs MANUELS vs 1 SEUL tick planifié (le
+      # 13:37Z de l'incident it.31) ; congestion GitHub documentée ci-dessus
+      # chez CE guérisseur (ticks 00:43/01:13/01:47 perdus le 29 oct.).
+      # Ce job `verifier` tourne À CHAQUE push main ET à chaque tick cron
+      # qui survit — l'endroit idéal pour réarmer la sonde si elle s'endort :
+      # dernier run > 50 min → dispatch immédiat (seuil > 30 min de cadence
+      # visée, marge pour les runs en cours). Contrairement aux décisions
+      # d'ESCALADE (v6 : fail-closed pour éviter les fausses alertes), un
+      # réarmement impossible est un échec BRUYANT : ce n'est pas une alerte
+      # sur la prod, c'est la preuve que le monitorage ne peut pas être
+      # garanti — leçon it.31, une alarme silencieuse est un bug.
+      - name: "Relais de cadence — réarmer la surveillance si elle s'endort"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          DERNIER=$(gh api "repos/$REPO/actions/workflows/surveillance-production.yml/runs?per_page=1" --jq '.workflow_runs[0].created_at // ""' 2>/dev/null || echo "")
+          if [ -z "$DERNIER" ]; then
+            echo "Aucun run de surveillance connu — réarmement immédiat."
+            AGE_MIN=9999
+          else
+            AGE_MIN=$(( ( $(date +%s) - $(date -d "$DERNIER" +%s) ) / 60 ))
+            echo "Dernier run de surveillance : $DERNIER (il y a $AGE_MIN min)."
+          fi
+          if [ "$AGE_MIN" -gt 50 ]; then
+            ok=0
+            for i in 1 2 3; do
+              if gh api -X POST "repos/$REPO/actions/workflows/surveillance-production.yml/dispatches" -f ref=main 2>/tmp/err_relais; then ok=1; break; fi
+              echo "Tentative $i/3 échouée ($(cat /tmp/err_relais)) — nouvel essai dans 20 s…"
+              [ "$i" = "3" ] || sleep 20
+            done
+            if [ "$ok" != "1" ]; then
+              echo "::error::Surveillance endormie ($AGE_MIN min) et réarmement impossible après 3 tentatives — échec BRUYANT requis (une alarme silencieuse est un bug, leçon it.31)."
+              exit 1
+            fi
+            echo "Surveillance réarmée (silencieuse depuis $AGE_MIN min) — le run dispatché sondra gen3ia.online d'ici ~1 min."
+          else
+            echo "Cadence de surveillance saine (dernier run il y a $AGE_MIN min ≤ 50) — rien à faire."
+          fi
+
   guerir:
     name: Armement pull (SSH) puis rattrapage
     needs: verifier
