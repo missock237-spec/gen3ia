@@ -4393,3 +4393,12 @@ Stage Summary:
 - Validation : tsc 0, eslint 0, vitest **5237/5237** (+11 gardes : comportementaux mocks vi.hoisted auto-contenus + structurels anti-régression).
 - Livraison : CI 5a442b4 déclenchée 09:36Z ; canal guéri (it.26) → build servi en prod, vérifié version.json + sonde en fin de tick.
 - Rappels owner : PAT rotation n°28 (27 itérations d'exposition) ; sauvegardes it.23 en attente ; PR #100-#103 ; phases #95-#97.
+
+### 478451-iter28-1010 (18:10 +08:00) — couplage guérisseur → surveillance : les crons GitHub sont défaillants
+- Ouverture tick : sandbox RESET (standard) ; main = b1279fc ; PROD = b1279fc = HEAD (commit docs inclus — canal guéri à 100 %) ; sonde 10/10 (TTFB 180-639 ms) ; CI 5/5 ; issues connues seulement.
+- ANOMALIE MAJEURE (API GitHub) : surveillance-production (cron 7,37, créée it.24) — 0 run cron sur 4 slots passés (08:37→10:07Z) ; guérisseur (cron 17,47) — 1 run schedule sur 8. La sonde HTTP it.24 était INERTE en pratique ; l'angle mort santé HTTP restait ouvert.
+- Leçon méthodologique : faux constat « branches: ain] » dans 5 workflows — démystifié octet par octet (ord() : [91,109,97,105,110,93] = [main]) : artefact d'affichage de l'agent (séquence [m avalée), dépôt SAIN, aucun dommage (remplacements no-ops, git status propre). Discipline : toute suspicion de corruption de littéraux doit être prouvée par ord() avant modification.
+- Livré (commit **fe19087**) : job sonder en fin de guérisseur (needs [verifier, guerir], if always() && !cancelled(), continue-on-error) → gh workflow run surveillance-production.yml — déclencheur ÉVÉNEMENTIEL fiable (le guérisseur tourne à chaque push main) ; cron 7,37 = filet ; anti-spam it.24 tolère la fréquence ; pas de boucle ; permissions actions:write déjà présentes. +2 gardes structurels (couplage complet verrouillé + filet cron/dispatch conservés).
+- Validation : YAML parsé (verifier/guerir/sonder), tsc 0, eslint 0, vitest **5239/5239** (+2).
+- Livraison : push fe19087 → CI 5/5 ; PREMIER TEST LIVE du couplage : guérisseur a dispatché la surveillance, run VERT (10/10), anti-spam silencieux ; prod = fe19087, sonde locale 10/10.
+- Rappels owner : PAT rotation n°29 (28 itérations d'exposition) ; sauvegardes it.23 en attente ; PR #100-#103 ; phases #95-#97 ; gen3 GPU Colab.
