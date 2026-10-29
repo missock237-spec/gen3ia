@@ -1,0 +1,82 @@
+name: Surveillance synthétique production
+
+# ITÉRATION 24 — Job 478451 — complément du guérisseur.
+# Le guérisseur (17,47) surveille l'ALIGNEMENT main↔prod (version.json).
+# Cette surveillance sonde l'EXPÉRIENCE UTILISATEUR réelle (10 endpoints,
+# statut + TTFB) entre deux déploiements, et détecte une livraison bloquée
+# (lag SHA + build > 3 h). Slots décalés (7,37) pour éviter la congestion
+# des ticks des autres workflows.
+#
+# Cycle d'issue (label surveillance-prod) :
+#   sonde ROUGE → ouvre l'issue si aucune ouverte, sinon MET À JOUR son corps
+#   (pas de spam de commentaires) ;
+#   sonde VERT après une période ROUGE → commente « RÉTABLI » avec preuve et
+#   ferme l'issue.
+
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: surveillance-production
+  cancel-in-progress: false
+
+jobs:
+  sonde:
+    name: Sonde 10 endpoints + verdict
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Sonde synthétique (statut + TTFB + livraison bloquée)
+        id: sonde
+        env:
+          BASE_URL: https://gen3ia.online
+          MAX_TTFB_MS: '3000'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/surveillance_prod.mjs
+
+      - name: Ouvrir ou mettre à jour l'issue de dégradation
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LABEL="surveillance-prod"
+          OUVERTES=$(gh issue list --label "$LABEL" --state open --json number --jq 'length')
+          TITRE="🚨 Surveillance prod — production dégradée"
+          if [ "$OUVERTES" -eq 0 ]; then
+            gh issue create --title "$TITRE" --body-file results.md --label "$LABEL"
+            echo "issue de dégradation créée"
+          else
+            NUM=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number')
+            gh issue edit "$NUM" --body-file results.md
+            echo "issue #$NUM mise à jour (pas de nouveau commentaire — anti-spam)"
+          fi
+
+      - name: Clôturer l'issue si rétabli
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LABEL="surveillance-prod"
+          OUVERTES=$(gh issue list --label "$LABEL" --state open --json number --jq 'length')
+          if [ "$OUVERTES" -gt 0 ]; then
+            NUM=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number')
+            gh issue close "$NUM" --comment "RÉTABLI — sonde verte à $(date -u '+%Y-%m-%dT%H:%M:%SZ') : 10/10 endpoints conformes (statut + TTFB), version.json lisible, aucune livraison bloquée. Preuve dans les logs du run $GITHUB_RUN_ID."
+            echo "issue #$NUM refermée (rétablissement prouvé)"
+          else
+            echo "aucune issue ouverte — rien à clôturer"
+          fi
