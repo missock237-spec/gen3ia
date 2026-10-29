@@ -67,6 +67,11 @@ jobs:
       - name: Tests (couverture avec seuils)
         run: npm run test:coverage
 
+      # Prototype cognitif CPU-only : le rapport dans les logs vérifie aussi
+      # les rappels exacts, quelques variantes lexicales et le rejet d'inconnues.
+      - name: Gen3 Brain — benchmark CPU et garde-fous de rappel
+        run: npm run benchmark:brain
+
       - name: Build production
         run: npm run build
         env:
