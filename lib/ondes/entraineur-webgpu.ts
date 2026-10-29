@@ -17,7 +17,13 @@
 
 import { EntraineurRPIA } from "./entrainement-rpia";
 import { SHADER_ENTRAINEMENT_RPIA } from "./shaders-rpia";
-import { RPIA_DEFAUTS, rapportDepuisHistorique } from "./types-entrainement";
+import {
+  RPIA_DEFAUTS,
+  calculerTempsGlobalRPIA,
+  rapportDepuisHistorique,
+  validerCibleRPIA,
+  validerConfigRPIA,
+} from "./types-entrainement";
 import type { ConfigRPIA, OndeCible, RapportEntrainement } from "./types-entrainement";
 import { webgpuDisponible } from "./moteur";
 
@@ -105,7 +111,11 @@ export class EntraineurWebGPU implements EntraineurOndes {
    * bind group. Lève si WebGPU est indisponible — l'appelant retombe
    * sur le miroir CPU via `creerEntraineurRPIA`.
    */
-  static async creer(nbNoeuds: number, codeShader?: string): Promise<EntraineurWebGPU> {
+  static async creer(
+    nbNoeuds: number,
+    codeShader?: string,
+    graine = 42,
+  ): Promise<EntraineurWebGPU> {
     const gpu = webgpuDisponible() ? navigator.gpu : undefined;
     if (!gpu) {
       throw new Error("WebGPU non disponible sur cet environnement.");
@@ -119,6 +129,17 @@ export class EntraineurWebGPU implements EntraineurOndes {
     }
     const device = await adaptateur.requestDevice();
 
+    const tailleNoeuds = nbNoeuds * 16;
+    if (
+      tailleNoeuds > device.limits.maxStorageBufferBindingSize ||
+      tailleNoeuds > device.limits.maxBufferSize
+    ) {
+      device.destroy();
+      throw new Error(
+        `Réseau trop grand pour ce GPU : ${tailleNoeuds} octets requis, limite de stockage ${device.limits.maxStorageBufferBindingSize} octets.`,
+      );
+    }
+
     const moduleShader = device.createShaderModule({ code: codeShader ?? SHADER_ENTRAINEMENT_RPIA });
     const pipeline = await device.createComputePipelineAsync({
       layout: "auto",
@@ -126,7 +147,6 @@ export class EntraineurWebGPU implements EntraineurOndes {
     });
 
     // Buffers : nœuds (4 f32/nœud, read_write), cible (f32/nœud), uniformes.
-    const tailleNoeuds = nbNoeuds * 16;
     const tailleCible = nbNoeuds * 4;
     const tamponNoeuds = device.createBuffer({
       size: tailleNoeuds,
@@ -150,9 +170,8 @@ export class EntraineurWebGPU implements EntraineurOndes {
       ],
     });
 
-    // État initial des nœuds sur GPU : identique au miroir CPU (graine 42),
-    // pour que GPU et CPU partent du même point (parité physique).
-    const initial = new EntraineurRPIA(nbNoeuds);
+    // État initial des nœuds sur GPU : même graine que le repli CPU.
+    const initial = new EntraineurRPIA(nbNoeuds, { graine });
     const poidsInitiaux = initial.exporterPoids();
     device.queue.writeBuffer(tamponNoeuds, 0, poidsInitiaux);
 
@@ -168,20 +187,18 @@ export class EntraineurWebGPU implements EntraineurOndes {
   }
 
   async pasEntrainement(cible: OndeCible, config: ConfigRPIA = RPIA_DEFAUTS): Promise<number> {
-    if (cible.length !== this.nbNoeuds) {
-      throw new Error(
-        `Cible incompatible : ${cible.length} valeurs reçues, ${this.nbNoeuds} nœuds.`,
-      );
-    }
-    // Uniformes : [tauxApprentissage, interfCible (réservé), pasDeTemps, pad]
-    // — ordre fidèle à la source (learningRate, targetInterference, timeStep).
+    validerCibleRPIA(cible, this.nbNoeuds);
+    validerConfigRPIA(config);
+    const tempsGlobal = calculerTempsGlobalRPIA(config, this.compteurPas);
+    // Uniformes : [tauxApprentissage, interfCible réservé, temps global, pad].
+    // Le CPU calcule également t = Δt × compteur de pas avant l'update.
     const uniformes = new Float32Array([
       config.tauxApprentissage,
       0.0,
-      config.pasDeTemps,
+      tempsGlobal,
       0.0,
     ]);
-    const donnees = cible instanceof Float32Array ? cible : Float32Array.from(cible);
+    const donnees = Float32Array.from(cible);
     this.device.queue.writeBuffer(this.tamponCible, 0, donnees);
     this.device.queue.writeBuffer(this.tamponParametres, 0, uniformes);
 
@@ -198,7 +215,7 @@ export class EntraineurWebGPU implements EntraineurOndes {
     // Erreur mesurée sur CPU via l'export des poids (lecture déférée,
     // throttlable par l'appelant) — ici au pas courant :
     const poids = await this.exporterPoids();
-    return this.erreurDepuisPoids(poids, cible, config.pasDeTemps * (this.compteurPas - 1));
+    return this.erreurDepuisPoids(poids, donnees, tempsGlobal);
   }
 
   async entrainer(
@@ -206,18 +223,19 @@ export class EntraineurWebGPU implements EntraineurOndes {
     epoques: number,
     config: ConfigRPIA = RPIA_DEFAUTS,
   ): Promise<RapportEntrainement> {
-    if (cible.length !== this.nbNoeuds) {
-      throw new Error(
-        `Cible incompatible : ${cible.length} valeurs reçues, ${this.nbNoeuds} nœuds.`,
-      );
-    }
+    validerCibleRPIA(cible, this.nbNoeuds);
+    validerConfigRPIA(config);
     if (!Number.isInteger(epoques) || epoques < 1) {
       throw new Error(`Nombre d'époques invalide : ${epoques} (entier ≥ 1 requis).`);
     }
+    const donnees = Float32Array.from(cible);
+    const tempsInitial = calculerTempsGlobalRPIA(config, this.compteurPas);
+    const poidsInitiaux = await this.exporterPoids();
+    const erreurInitiale = this.erreurDepuisPoids(poidsInitiaux, donnees, tempsInitial);
     const historique: number[] = [];
-    const donnees = cible instanceof Float32Array ? cible : Float32Array.from(cible);
     for (let e = 0; e < epoques; e++) {
-      const uniformes = new Float32Array([config.tauxApprentissage, 0.0, config.pasDeTemps, 0.0]);
+      const tempsGlobal = calculerTempsGlobalRPIA(config, this.compteurPas);
+      const uniformes = new Float32Array([config.tauxApprentissage, 0.0, tempsGlobal, 0.0]);
       this.device.queue.writeBuffer(this.tamponCible, 0, donnees);
       this.device.queue.writeBuffer(this.tamponParametres, 0, uniformes);
 
@@ -232,11 +250,9 @@ export class EntraineurWebGPU implements EntraineurOndes {
 
       this.compteurPas++;
       const poids = await this.exporterPoids();
-      historique.push(
-        this.erreurDepuisPoids(poids, cible, config.pasDeTemps * (this.compteurPas - 1)),
-      );
+      historique.push(this.erreurDepuisPoids(poids, donnees, tempsGlobal));
     }
-    return rapportDepuisHistorique(historique);
+    return rapportDepuisHistorique(historique, erreurInitiale);
   }
 
   /**
@@ -253,12 +269,16 @@ export class EntraineurWebGPU implements EntraineurOndes {
     encodeur.copyBufferToBuffer(this.tamponNoeuds, 0, staging, 0, taille);
     this.device.queue.submit([encodeur.finish()]);
 
-    await staging.mapAsync(GPUMapMode.READ);
-    const plage = staging.getMappedRange();
-    const poids = new Float32Array(plage.slice(0));
-    staging.unmap();
-    staging.destroy();
-    return poids;
+    try {
+      await staging.mapAsync(GPUMapMode.READ);
+      const plage = staging.getMappedRange();
+      const poids = new Float32Array(plage.slice(0));
+      staging.unmap();
+      return poids;
+    } finally {
+      if (staging.mapState === "mapped") staging.unmap();
+      staging.destroy();
+    }
   }
 
   /** Erreur d'interférence moyenne recalculée depuis les poids GPU. */
@@ -279,6 +299,7 @@ export class EntraineurWebGPU implements EntraineurOndes {
     this.tamponNoeuds.destroy();
     this.tamponCible.destroy();
     this.tamponParametres.destroy();
+    this.device.destroy();
   }
 
   /** Nombre de pas GPU exécutés (métrique). */
@@ -306,7 +327,11 @@ export async function creerEntraineurRPIA(
 ): Promise<ResultatFabriqueEntraineur> {
   if (webgpuDisponible()) {
     try {
-      const entraineur = await EntraineurWebGPU.creer(nbNoeuds, options?.codeShader);
+      const entraineur = await EntraineurWebGPU.creer(
+        nbNoeuds,
+        options?.codeShader,
+        options?.graine ?? 42,
+      );
       return { entraineur, type: "webgpu" };
     } catch (erreur) {
       return {
