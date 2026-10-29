@@ -24,8 +24,11 @@ import {
   BORNES_RPIA,
   RPIA_DEFAUTS,
   borner,
+  calculerTempsGlobalRPIA,
   erreurInterference,
   rapportDepuisHistorique,
+  validerCibleRPIA,
+  validerConfigRPIA,
 } from "./types-entrainement";
 import type { ConfigRPIA, NoeudOnde, OndeCible, RapportEntrainement } from "./types-entrainement";
 
@@ -102,7 +105,7 @@ export class EntraineurRPIA {
     // miroir utilise le même temps pour l'évaluation et la correction du
     // pas, puis mesure l'erreur APRÈS correction au même temps : la
     // courbe d'erreur reflète l'apprentissage seul (pas la dérive du temps).
-    const tempsOnde = config.pasDeTemps * this.compteurPas;
+    const tempsOnde = calculerTempsGlobalRPIA(config, this.compteurPas);
 
     for (let i = 0; i < this.nbNoeuds; i++) {
       const noeud = this.noeuds[i];
@@ -155,7 +158,7 @@ export class EntraineurRPIA {
     // prenait historique[0], donc l'erreur APRÈS le premier pas, comme
     // "erreur initiale" : le rapport pouvait masquer une régression au
     // premier pas et ne représentait pas réellement l'état de départ.
-    const tempsInitial = config.pasDeTemps * this.compteurPas;
+    const tempsInitial = calculerTempsGlobalRPIA(config, this.compteurPas);
     const erreurAvantEntrainement = erreurInterference(this.noeuds, cible, tempsInitial);
     const historique: number[] = [];
     for (let e = 0; e < epoques; e++) {
@@ -216,8 +219,8 @@ export class EntraineurRPIA {
    * physique dépend du temps global, pas seulement des poids).
    */
   restaurerPas(pas: number): void {
-    if (!Number.isInteger(pas) || pas < 0) {
-      throw new Error(`Compteur de pas invalide : ${pas} (entier ≥ 0 requis).`);
+    if (!Number.isSafeInteger(pas) || pas < 0) {
+      throw new Error(`Compteur de pas invalide : ${pas} (entier sûr ≥ 0 requis).`);
     }
     this.compteurPas = pas;
   }
@@ -229,30 +232,10 @@ export class EntraineurRPIA {
   }
 
   private verifierConfig(config: ConfigRPIA): void {
-    if (
-      !config ||
-      typeof config !== "object" ||
-      !Number.isFinite(config.tauxApprentissage) ||
-      config.tauxApprentissage < 0 ||
-      !Number.isFinite(config.pasDeTemps) ||
-      config.pasDeTemps <= 0
-    ) {
-      throw new Error(
-        "Configuration RPIA invalide : le taux d'apprentissage doit être fini et positif ou nul, et le pas de temps fini et strictement positif.",
-      );
-    }
+    validerConfigRPIA(config);
   }
 
   private verifierCible(cible: OndeCible): void {
-    if (cible.length !== this.nbNoeuds) {
-      throw new Error(
-        `Cible incompatibles : ${cible.length} valeurs reçues, ${this.nbNoeuds} nœuds.`,
-      );
-    }
-    for (let i = 0; i < cible.length; i++) {
-      if (!Number.isFinite(cible[i])) {
-        throw new Error(`Cible non finie à l'index ${i}.`);
-      }
-    }
+    validerCibleRPIA(cible, this.nbNoeuds);
   }
 }
