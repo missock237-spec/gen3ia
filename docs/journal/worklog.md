@@ -4351,3 +4351,10 @@ Stage Summary:
 - Ouverture tick : prod 10/10, gitSha=19c6093 aligné main (poller vivant re-confirmé) ; CI 11/11 ; Dependabot 0 ; ticks cron 03:17/03:47Z perdus (sans impact — poller).
 - Validation : tsc 0, eslint 0, vitest **5181/5181** (+17). CI 603534e annulée par concurrence (push docs aec87fd) → CI aec87fd 9/9 success + CD/armement ; prod livrée par poller (gitSha=aec87fdd), 10/10 re-sondés.
 - Rappel PAT rotation : n°22 (priorité n°1 owner).
+
+### 478451-iter23-0510 (13:10 +08:00) — stratégie de sauvegarde des données Firestore
+- Amélioration évolutive demandée (niveau grandes entreprises) : le dernier pilier de résilience absent — seules les RÈGLES étaient sauvegardées, les DONNÉES (10 collections critiques) n'avaient aucune couverture → perte irréversible possible.
+- Livré (commit **634f1f1**) : lib/db/backup-policy.ts (RPO 24 h / RTO 2 h / rétention 30 j / PITR 7 j, calculs fail-closed) ; scripts/backup_firestore_data.mjs (--status/--export GCS/--enable-pitr, zéro mode destructif) ; scripts/verify_backup_restore.mjs (4 contrôles PASS/FAIL, cron mensuel --strict) ; runbook docs/runbooks/sauvegarde-restauration.md (3 couches, base d'écart gen3ia-import, exercice trimestriel obligatoire) ; câblage incident-response.md ; garde-fou 19 tests.
+- Diagnostic chaîne de livraison (honnête) : prod = aec87fdd, a9aa08dc (docs) non servi — swap CD skippé SSH muet + poller en retard > seuil v6.1 ; ticks cron 04:17/04:47Z perdus ; impact fonctionnel NUL (docs-only) ; réarmement par le push 634f1f1 (boucle auto-réparatrice).
+- Validation : node --check OK, tsc 0, eslint 0, vitest **5200/5200** (+19).
+- Rappel owner : mise en œuvre initiale sauvegarde ≈ 30 min (bucket GCS + clé VPS + PITR + 2 crontabs) — couverture effective dépend de cette exécution ; rappel PAT rotation n°23.
