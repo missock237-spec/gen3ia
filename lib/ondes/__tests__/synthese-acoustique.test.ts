@@ -44,6 +44,43 @@ describe("synthèse acoustique par résonance (miroir node.amplitude.pdf)", () =
     }
   });
 
+  it("rapport audio : mesure l'état initial réel puis l'erreur post-guidage", () => {
+    const synth = new SynthetiseurAcoustique(32, {
+      graine: 19,
+      frequenceEchantillonnage: 8000,
+    });
+    const cible = new Float32Array(32).fill(0.4);
+    const erreurAvant = synth.erreurCourante(cible, 0);
+
+    const rapport = synth.entrainerVers(cible, 7, 0.5, {
+      tauxApprentissage: 0.01,
+      pasDeTemps: 0.001,
+    });
+
+    expect(rapport.erreurInitiale).toBeCloseTo(erreurAvant, 10);
+    expect(rapport.historiqueErreur).toHaveLength(7);
+    expect(rapport.erreurFinale).toBeCloseTo(rapport.historiqueErreur[6]!, 10);
+    expect(rapport.erreurFinale).toBeCloseTo(synth.erreurCourante(cible, 0.006), 10);
+  });
+
+  it("paramètres audio invalides refusés sans altérer l'état des oscillateurs", () => {
+    const synth = new SynthetiseurAcoustique(64);
+    const cible = new Float32Array(64).fill(0.25);
+    const avant = synth.etat();
+
+    expect(() => synth.pasGuidage(cible, Number.NaN, 0)).toThrow(/Guidage invalide/);
+    expect(() => synth.pasGuidage(cible, 0.5, Number.NaN)).toThrow(/Temps audio invalide/);
+    expect(() =>
+      synth.entrainerVers(cible, 4, 0.5, {
+        tauxApprentissage: 0.01,
+        pasDeTemps: Number.NaN,
+      }),
+    ).toThrow(/Configuration audio invalide/);
+    expect(() => synth.genererBuffer(Number.NaN)).toThrow(/Durée invalide/);
+
+    expect(synth.etat()).toEqual(avant);
+  });
+
   it("encodeur WAV : en-tête RIFF correct et taille attendue", () => {
     const pcm = new Float32Array(1000);
     const wav = versWav(pcm, 44100);
