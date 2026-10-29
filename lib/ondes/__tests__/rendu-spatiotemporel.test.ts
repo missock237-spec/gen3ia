@@ -55,6 +55,34 @@ describe("rendu spatiotemporel par ondes (miroir node.amplitude 3D)", () => {
     }
   });
 
+  it("rapport vidéo : mesure le vrai état initial puis l'erreur après chaque mise à jour", () => {
+    const moteur = new MoteurRenduSpatiotemporel(32, 24, 32, { graine: 19 });
+    const cible = new Float32Array(32).fill(0.4);
+    const erreurAvant = moteur.erreurCourante(cible, 0);
+
+    const rapport = moteur.entrainerVers(cible, 7, 0.5);
+
+    expect(rapport.erreurInitiale).toBeCloseTo(erreurAvant, 10);
+    expect(rapport.historiqueErreur).toHaveLength(7);
+    expect(rapport.erreurFinale).toBeCloseTo(rapport.historiqueErreur[6]!, 10);
+    expect(rapport.erreurFinale).toBeCloseTo(moteur.erreurCourante(cible, 0.6), 10);
+  });
+
+  it("refuse les paramètres invalides sans corrompre l'état du champ", () => {
+    const moteur = new MoteurRenduSpatiotemporel(32, 24, 32);
+    const cible = new Float32Array(32).fill(0.25);
+    const avant = moteur.etat();
+
+    expect(() => moteur.pasGuidage(cible, Number.NaN, 0)).toThrow(/Guidage invalide/);
+    expect(() => moteur.pasGuidage(cible, 0.5, Number.NaN)).toThrow(/Temps vidéo invalide/);
+    expect(() =>
+      moteur.entrainerVers(cible, 4, 0.5, { tauxApprentissage: 0.01, pasDeTemps: Number.NaN }),
+    ).toThrow(/Configuration vidéo invalide/);
+    expect(() => moteur.genererSequence(Number.NaN, 24, cible)).toThrow(/Durée vidéo invalide/);
+
+    expect(moteur.etat()).toEqual(avant);
+  });
+
   it("séquence : la boucle d'enregistrement produit le bon nombre de trames (garde MAX_TRAMES)", () => {
     const moteur = new MoteurRenduSpatiotemporel(64, 48, 256);
     const cible = new Float32Array(256).fill(0.5);
