@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { MoteurRenduSpatiotemporel, MAX_TRAMES } from "@/lib/ondes/rendu-spatiotemporel";
+import {
+  MoteurRenduSpatiotemporel,
+  MAX_TRAMES,
+  rasteriserTrame,
+} from "@/lib/ondes/rendu-spatiotemporel";
 import { BORNES_RPIA } from "@/lib/ondes/types-entrainement";
 
 describe("rendu spatiotemporel par ondes (miroir node.amplitude 3D)", () => {
@@ -98,6 +102,23 @@ describe("rendu spatiotemporel par ondes (miroir node.amplitude 3D)", () => {
     // Garde-fou : une demande absurde est plafonnée, jamais explosée.
     const garde = moteur.genererSequence(3600, 60, cible);
     expect(garde.totalTrames).toBe(MAX_TRAMES);
+  });
+
+  it("rasteriseur exporté : refuse un temps invalide, aucun nœud ou des paramètres non finis", () => {
+    expect(() => rasteriserTrame([], 16, 16, 0)).toThrow(/au moins un nœud/);
+    const noeud = {
+      amplitude: 1,
+      frequence: 1,
+      phase: 0,
+      amortissement: 0.01,
+      posX: 8,
+      posY: 8,
+    };
+    expect(() => rasteriserTrame([noeud], 16, 16, Number.NaN)).toThrow(/Temps de rendu invalide/);
+    expect(() => rasteriserTrame([{ ...noeud, phase: Number.NaN }], 16, 16, 0)).toThrow(
+      /Nœud vidéo invalide/,
+    );
+    expect(() => rasteriserTrame([noeud], 0, 16, 0)).toThrow(/Dimensions de trame invalides/);
   });
 
   it("entrées invalides refusées (dimensions, nœuds, fps, cible)", () => {
