@@ -4365,3 +4365,12 @@ Stage Summary:
 - Ouverture tick : prod alignée 334682e (poller a tout livré), 10/10, CI 11/11, 0 alerte — aucune faille bloquante ce tick.
 - Validation : node --check OK, YAML valide, tsc 0, eslint 0, vitest **5211/5211** (+11).
 - Rappel PAT rotation n°24 ; rappel mise en œuvre sauvegarde données (it.23) toujours en attente owner.
+
+### 478451-iter25-0710 (15:10 +08:00) — gouvernance des données : portabilité complète + droits enfin accessibles
+- Amélioration évolutive (niveau grandes entreprises) : l'arc it.23 (sauvegarde) manquait du maillon utilisateur — export RGPD limité à la mémoire, et endpoints d'export/effacement NON EXPOSÉS (dead code côté utilisateur, pathologie ErrorBoundary it.22).
+- Cartographie réelle (vérifiée code) : R2 users/{uid} = memories/feedback/lessons/consent (couverts Task 42) + conversations/messages imbriqués + agents — ces deux derniers SANS portabilité.
+- Livré (commit **48558ad**) : lib/privacy/account-export.ts (export complet gen3ia.account-export v1 : mémoire + conversations/messages chronologiques + agents ; manifest HONNÊTE {count, tronque, erreur} par namespace — « un export qui tronque sans le dire est un mensonge » ; fail-soft par section, 500 = dernière option ; caps 50 fils/200 msgs/100 agents exposées) ; app/api/account/export/route.ts (protectRoute key account-export, rate limit 5/h, pièce jointe horodatée, no-store) ; components/settings/data-governance-section.tsx (section « Mes données » : export complet, export mémoire, effacement mémoire à double consentement armement→confirm:true, role=status, tokens g3 existants) ; câblage app/settings/page.tsx ; garde-fou 13 tests (manifest honnête, fail-soft, caps signalées, refus uid vide, garde route, double consentement UI, câblage réel, contrat Task 42 intact).
+- Ouverture tick : sandbox reset complet (vieux snapshot 1369852, node_modules absent) — rebuild ; prod 10/10 gitSha=496881d2 PARFAITEMENT aligné (it.24 livrée par poller) ; CI 5/5 ; Dependabot 0 ; surveillance it.24 active (premier slot souvent sauté par GitHub pour workflow neuf — non-défaut).
+- Livraison : CI 48558ad 5/5 success ; CD swap skippé (SSH muet, pattern récurrent it.23) → build publié sur cd-latest, bascule par poller ; push docs re-ouvre fenêtre SSH (auto-réparation démontrée it.23).
+- Validation : tsc 0 (1 fix statut ?? "active"), eslint 0, vitest **5224/5224** (+13).
+- Rappels owner : PAT rotation n°26 ; mise en œuvre sauvegarde données (it.23) toujours en attente ; PR #100-#103 + phases #95-#97 inchangés.
