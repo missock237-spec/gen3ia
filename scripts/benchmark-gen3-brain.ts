@@ -9,6 +9,7 @@
 import { performance } from "node:perf_hooks";
 
 import { CerveauOndulatoireGen3 } from "../lib/neural/brain/cerveau-ondulatoire";
+import type { RapportApprentissageCerveau } from "../lib/neural/brain/cerveau-ondulatoire";
 
 interface Exemple {
   entree: string;
@@ -44,7 +45,7 @@ const cerveau = new CerveauOndulatoireGen3({
   taille: 128,
   budgetActif: 8,
   capaciteMemoire: 64,
-  seuilRappel: 0.6,
+  seuilRappel: 0.4,
   epoquesParAssociation: 12,
   graine: 42,
 });
@@ -52,7 +53,7 @@ const cerveau = new CerveauOndulatoireGen3({
 const heapInitialBytes = process.memoryUsage().heapUsed;
 let heapObservedPeakBytes = heapInitialBytes;
 const depart = performance.now();
-const apprentissages = [];
+const apprentissages: RapportApprentissageCerveau[] = [];
 for (const exemple of entrainement) {
   apprentissages.push(cerveau.apprendre(exemple.entree, exemple.sortie));
   heapObservedPeakBytes = Math.max(heapObservedPeakBytes, process.memoryUsage().heapUsed);
@@ -102,6 +103,7 @@ const rapportsInconnus = inconnues.map((entree) => {
 });
 
 const etatFinal = cerveau.exporterEtat();
+heapObservedPeakBytes = Math.max(heapObservedPeakBytes, process.memoryUsage().heapUsed);
 const statistiques = cerveau.statistiques();
 const memoireFinale = process.memoryUsage();
 const rapport = {
@@ -145,6 +147,17 @@ const rapport = {
 };
 
 console.log(JSON.stringify(rapport, null, 2));
+
+const controlesReussis =
+  rappelsExactsCorrects === entrainement.length &&
+  rappelsApproximatifsCorrects === variantes.length &&
+  inconnuesRejetees === inconnues.length;
+if (!controlesReussis) {
+  console.error(
+    "ÉCHEC DU BENCHMARK : un rappel exact, un rappel lexical attendu ou un rejet d'inconnue n'a pas satisfait le scénario de référence.",
+  );
+  process.exitCode = 1;
+}
 
 function moyenne(valeurs: number[]): number {
   if (valeurs.length === 0) return 0;
