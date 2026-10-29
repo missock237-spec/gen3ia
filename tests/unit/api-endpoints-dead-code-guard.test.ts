@@ -71,8 +71,10 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 103 endpoints orphelins au 2026-10-29 (it.29),   */
-/* classés par motif. Réviser à chaque suppression/ajout d'UI.         */
+/* Baseline honnête — 100 endpoints orphelins au 2026-10-29 (it.30 ;    */
+/* 103 à l'it.29, puis settings/export-data, tool-consents et           */
+/* memory/consent câblés). Classés par motif. Réviser à chaque          */
+/* suppression/ajout d'UI.                                              */
 /* ------------------------------------------------------------------ */
 
 const BASELINE_ORPHELINS: Record<string, string[]> = {
@@ -178,7 +180,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/knowledge/triggers",
     "/knowledge/triggers/[id]",
     "/media/professeur-statut",
-    "/memory/consent",
     "/monde/stats",
     "/neural/evolve",
     "/observability/org",
@@ -189,7 +190,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/orchestrator/actions/[id]/execute",
     "/orchestrator/actions/[id]/reject",
     "/provisioning/intent",
-    "/settings/tool-consents",
     "/skills",
     "/skills/create",
     "/skills/import",

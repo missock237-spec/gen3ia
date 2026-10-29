@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { FeatureAuthGate } from "@/components/auth/feature-auth-gate";
 import { ApiKeysSection } from "@/components/settings/api-keys-section";
+import { ConsentsSection } from "@/components/settings/consents-section";
 import { DataGovernanceSection } from "@/components/settings/data-governance-section";
 import { PwaInstallSection } from "@/components/settings/pwa-install-section";
 import { SettingsAdSpace } from "@/components/settings/settings-ad-space";
@@ -54,6 +55,8 @@ function SettingsContent() {
         <ApiKeysSection />
 
         <DataGovernanceSection />
+
+        <ConsentsSection />
 
         <PwaInstallSection />
 
