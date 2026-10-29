@@ -66,6 +66,32 @@ describe("encodeur fréquentiel (W-DNN)", () => {
     expect(carte.motLePlusProche(0, 0, dim, 2)).toBe(null);
   });
 
+  it("les grilles distinctes ne partagent jamais leurs coordonnées dans la carte inverse", () => {
+    const carte = new CarteInverse();
+    carte.enregistrer("photon", 64);
+    carte.enregistrer("photon", 128);
+
+    const sig64 = signatureMot("photon", 64);
+    const sig128 = signatureMot("photon", 128);
+    expect(carte.motLePlusProche(sig64.x, sig64.y, 64)).toBe("photon");
+    expect(carte.motLePlusProche(sig128.x, sig128.y, 128)).toBe("photon");
+    expect(carte.motLePlusProche(sig64.x, sig64.y, 32, 0)).toBeNull();
+    expect(carte.taille).toBe(2);
+  });
+
+  it("refuse les dimensions, mots, coordonnées et limites d'impulsions invalides", () => {
+    expect(() => signatureMot("photon", 0)).toThrow(/Dimension de grille invalide/);
+    expect(() => signatureMot("photon", 1.5)).toThrow(/Dimension de grille invalide/);
+    expect(() => signatureMot("", 64)).toThrow(/Mot invalide/);
+    expect(() => encoderTexte("bonjour", 64, -1)).toThrow(/Limite d'impulsions invalide/);
+    expect(() => encoderTexte("bonjour", 64, 1.5)).toThrow(/Limite d'impulsions invalide/);
+    expect(encoderTexte("bonjour monde", 64, 0)).toEqual([]);
+
+    const carte = new CarteInverse();
+    expect(() => carte.motLePlusProche(-1, 0, 64)).toThrow(/Coordonnées invalides/);
+    expect(() => carte.motLePlusProche(0, 0, 64, -1)).toThrow(/Rayon de recherche invalide/);
+  });
+
   it("la carte inverse survit à un ré-enregistrement (même mot)", () => {
     const carte = new CarteInverse();
     carte.enregistrer("hologramme", 128);
