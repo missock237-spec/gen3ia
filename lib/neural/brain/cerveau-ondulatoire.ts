@@ -2,23 +2,23 @@
  * CERVEAU ONDULATOIRE GEN3 — prototype CPU d'architecture cognitive adaptative.
  *
  * Assemble sans modèle externe :
- *   - encodage déterministe texte → onde ;
- *   - entraînement RPIA par association, sauvegardé par souvenir ;
+ *   - encodage lexical déterministe texte → onde ;
+ *   - un cortex RPIA partagé entraîné progressivement sur les expériences ;
+ *   - des instantanés ondulatoires par souvenir épisodique;
  *   - mémoire associative à long terme avec refus de rappel incertain ;
  *   - hippocampe à court terme ;
  *   - graphe synaptique clairsemé dont la propagation ne parcourt que les
  *     connexions sortantes des unités activées ;
  *   - budget d'activation borné et état exportable/importable.
  *
- * Limite importante : l'encodage texte actuel est un fingerprint fondé sur
- * le hachage, pas un embedding sémantique appris. Cette première version
+ * Limite importante : l'encodage lexical actuel utilise des caractéristiques
+ * hachées, pas un embedding sémantique appris. Cette première version
  * apprend/rappelle des associations, mais ne constitue pas à elle seule un
  * modèle de langage général ni une reproduction biologique du cerveau.
  */
 
 import { CoucheOndesNeuronales } from "../core/couche-rpia";
 import type { EtatRPIA } from "../core/couche-rpia";
-import { hachagePrompt } from "../../ondes/conditionneur";
 import { encoderTexteLexicalEnOnde } from "./encodeur-lexical-ondulatoire";
 import { RPIA_DEFAUTS, validerConfigRPIA } from "../../ondes/types-entrainement";
 import type { ConfigRPIA, RapportEntrainement } from "../../ondes/types-entrainement";
