@@ -520,7 +520,7 @@ export default function ConsoleEssaim() {
             <em>{dernierResume}</em>
           </p>
           <div className="essaim-grille">
-            <ul className="essaim-liste">
+            <ul className="essaim-liste" tabIndex={0}>
               {microAgents.map((agent) => (
                 <li key={agent.id} className="essaim-item">
                   <div className="titre">
@@ -540,7 +540,7 @@ export default function ConsoleEssaim() {
               <h3 style={{ margin: "0 0 8px", fontSize: "0.9rem", color: "var(--g3-primary-strong)" }}>
                 Décisions du cortex Gen3
               </h3>
-              <ul className="essaim-liste">
+              <ul className="essaim-liste" tabIndex={0}>
                 {decisions.length === 0 ? (
                   <li className="essaim-item detail">Le cortex attend ses premiers comptes-rendus — lancez une tâche.</li>
                 ) : (
@@ -609,7 +609,7 @@ export default function ConsoleEssaim() {
           </div>
 
           {entreesCoffre.length > 0 ? (
-            <ul className="essaim-liste">
+            <ul className="essaim-liste" tabIndex={0}>
               {entreesCoffre.map((e) => (
                 <li key={e.id} className="essaim-item">
                   <div className="titre">
@@ -641,7 +641,7 @@ export default function ConsoleEssaim() {
           </div>
 
           {reponseRag ? (
-            <ul className="essaim-liste">
+            <ul className="essaim-liste" tabIndex={0}>
               {reponseRag.vide ? (
                 <li className="essaim-item detail">
                   Aucun fragment au-dessus du seuil — l&apos;essaim s&apos;est tu : personne ne
@@ -705,7 +705,7 @@ export default function ConsoleEssaim() {
             </div>
           </div>
 
-          <ul className="essaim-liste">
+          <ul className="essaim-liste" tabIndex={0}>
             {competences.length === 0 ? (
               <li className="essaim-item detail">Aucune compétence installée — créez la vôtre ou attendez une onde.</li>
             ) : (
@@ -767,7 +767,7 @@ export default function ConsoleEssaim() {
             </div>
             <div>
               <h3 style={{ margin: "0 0 8px", fontSize: "0.9rem", color: "var(--g3-primary-strong)" }}>Amplitudes observées</h3>
-              <ul className="essaim-liste">
+              <ul className="essaim-liste" tabIndex={0}>
                 {traces.length === 0 ? (
                   <li className="essaim-item detail">Aucune onde distante observée — le nœud local est le seul de l&apos;essaim.</li>
                 ) : (
