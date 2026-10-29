@@ -112,6 +112,32 @@ describe("Sonde surveillance_prod.mjs", () => {
     expect(sonde).toContain("MAX_TTFB_MS ?? 3000");
   });
 
+  it("it.32 — tolérance post-swap : re-test UNIQUE des échecs 5xx/TTFB/ERR, jamais des 4xx", () => {
+    // Série documentée : it.29 502 dans la fenêtre de swap, it.31 TTFB 3282 ms
+    // ~6 min post-swap (rétabli 944 ms) — deux faux positifs de verdict.
+    // Principe : réchauffement = passe au re-test ; vraie panne = persiste.
+    expect(sonde).toContain("RETEST_DELAY_MS ?? 60_000");
+    // Éligibilité limitée aux signatures transitoires (ERR réseau, 5xx, TTFB) —
+    // un 4xx inattendu (route manquante, auth cassée) reste un ROUGE immédiat.
+    expect(sonde).toContain('r.statut === "ERR"');
+    expect(sonde).toContain("r.statut >= 500");
+    expect(sonde).toContain('r.raison.startsWith("TTFB")');
+    // TOUS les échecs doivent être éligibles (un seul 4xx → ROUGE immédiat).
+    expect(sonde).toContain("echecsEndpoints.every(eligibleRetest)");
+    // Fail-closed : version.json illisible et livraison bloquée ne sont
+    // JAMAIS re-testées (par définition non transitoires).
+    expect(sonde).toContain("!livraisonBloquee");
+  });
+
+  it("it.32 — le re-test est visible, jamais silencieux (log + results.md)", () => {
+    // Une absorption de transitoire DOIT apparaître dans le log et le corps
+    // d'issue — un VERT sans explication masquerait la fragilité observée.
+    expect(sonde).toContain("re-test unique dans");
+    expect(sonde).toContain("transitoire post-swap absorbé");
+    expect(sonde).toContain("PERSISTE au re-test");
+    expect(sonde).toContain("Tolérance post-swap (it.32)");
+  });
+
   it("aucun secret en dur (token passé par environnement)", () => {
     expect(sonde).toContain("process.env.GITHUB_TOKEN");
     expect(sonde).not.toMatch(/ghp_[A-Za-z0-9]{20,}/);
