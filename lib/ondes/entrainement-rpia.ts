@@ -57,6 +57,15 @@ export class EntraineurRPIA {
     };
 
     const amplitude = options?.amplitudeInitiale ?? 1.0;
+    if (
+      !Number.isFinite(amplitude) ||
+      amplitude < BORNES_RPIA.amplitudeMin ||
+      amplitude > BORNES_RPIA.amplitudeMax
+    ) {
+      throw new Error(
+        `Amplitude initiale invalide : ${amplitude} (valeur finie entre ${BORNES_RPIA.amplitudeMin} et ${BORNES_RPIA.amplitudeMax} requise).`,
+      );
+    }
     for (let i = 0; i < nbNoeuds; i++) {
       this.noeuds[i] = {
         amplitude,
@@ -87,6 +96,7 @@ export class EntraineurRPIA {
    */
   pasEntrainement(cible: OndeCible, config: ConfigRPIA = RPIA_DEFAUTS): number {
     this.verifierCible(cible);
+    this.verifierConfig(config);
     const lr = config.tauxApprentissage;
     // Le shader évalue l'onde avec le pasDeTemps passé en uniforme — le
     // miroir utilise le même temps pour l'évaluation et la correction du
@@ -171,6 +181,14 @@ export class EntraineurRPIA {
         `Poids incompatibles : ${poids.length} valeurs reçues, ${this.nbNoeuds * 4} attendues.`,
       );
     }
+    // Valider l'intégralité du buffer AVANT de muter le réseau : un seul
+    // NaN/Infinity venant d'un checkpoint corrompu rendrait toute la
+    // dynamique d'ondes inutilisable et pourrait contaminer les métriques.
+    for (let i = 0; i < poids.length; i++) {
+      if (!Number.isFinite(poids[i])) {
+        throw new Error(`Poids RPIA non fini à l'index ${i}.`);
+      }
+    }
     for (let i = 0; i < this.nbNoeuds; i++) {
       this.noeuds[i] = {
         amplitude: borner(poids[i * 4], BORNES_RPIA.amplitudeMin, BORNES_RPIA.amplitudeMax),
@@ -201,6 +219,21 @@ export class EntraineurRPIA {
   erreurCourante(cible: OndeCible, temps: number): number {
     this.verifierCible(cible);
     return erreurInterference(this.noeuds, cible, temps);
+  }
+
+  private verifierConfig(config: ConfigRPIA): void {
+    if (
+      !config ||
+      typeof config !== "object" ||
+      !Number.isFinite(config.tauxApprentissage) ||
+      config.tauxApprentissage < 0 ||
+      !Number.isFinite(config.pasDeTemps) ||
+      config.pasDeTemps <= 0
+    ) {
+      throw new Error(
+        "Configuration RPIA invalide : le taux d'apprentissage doit être fini et positif ou nul, et le pas de temps fini et strictement positif.",
+      );
+    }
   }
 
   private verifierCible(cible: OndeCible): void {
