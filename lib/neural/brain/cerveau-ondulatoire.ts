@@ -326,8 +326,11 @@ export class CerveauOndulatoireGen3 {
     // Le cortex reçoit une fusion du signal sensoriel et de l'état ondulatoire appris.
     // Pour une entrée inconnue, il ne fabrique pas d'état mémorisé : il propage
     // seulement le fingerprint sensoriel courant.
-    const signalCortical = rappelAccepte && meilleur
-      ? representation.map((valeur, i) => (valeur + signatureDepuisOnde(meilleur!.etatOnde, this.taille)[i]) / 2)
+    const signatureOnde = rappelAccepte && meilleur
+      ? signatureDepuisOnde(meilleur.etatOnde, this.taille)
+      : null;
+    const signalCortical = signatureOnde
+      ? representation.map((valeur, i) => (valeur + signatureOnde[i]) / 2)
       : representation;
     const propagation = this.propagerEvenements(signalCortical);
     const mode: ModeRappelCerveau = rappelAccepte
