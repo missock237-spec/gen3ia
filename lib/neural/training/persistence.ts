@@ -208,8 +208,17 @@ function lireEtatRpiaDefensif(brut: unknown): EtatRPIA | undefined {
   // Aligner les bornes du checkpoint sur celles de CoucheOndesNeuronales.
   const taille = etat.taille ?? 0;
   const pasTotaux = etat.pasTotaux;
+  const pasDeTemps = etat.pasDeTemps;
   const tailleOk = Number.isInteger(taille) && taille >= 1 && taille <= 4096;
   const pasOk = Number.isSafeInteger(pasTotaux) && (pasTotaux ?? -1) >= 0;
+  // Les anciens checkpoints omettent pasDeTemps : l'import RPIA reprend 0.1.
+  const pasDeTempsOk =
+    pasDeTemps === undefined ||
+    (typeof pasDeTemps === "number" &&
+      Number.isFinite(pasDeTemps) &&
+      Number.isFinite(Math.fround(pasDeTemps)) &&
+      pasDeTemps > 0 &&
+      Math.fround(pasDeTemps) > 0);
   // Un nœud possède exactement quatre paramètres [amplitude, fréquence,
   // phase, amortissement]. Une taille discordante doit faire rejeter l'état,
   // pas être reportée jusqu'à l'import dans le moteur au démarrage.
@@ -217,10 +226,11 @@ function lireEtatRpiaDefensif(brut: unknown): EtatRPIA | undefined {
     Array.isArray(etat.poids) &&
     etat.poids.length === taille * 4 &&
     etat.poids.every((v) => typeof v === "number" && Number.isFinite(v));
-  if (!tailleOk || !pasOk || !poidsOk) return undefined;
+  if (!tailleOk || !pasOk || !pasDeTempsOk || !poidsOk) return undefined;
   return {
     taille: etat.taille as number,
     pasTotaux: etat.pasTotaux as number,
+    ...(pasDeTemps === undefined ? {} : { pasDeTemps }),
     poids: etat.poids as number[],
   };
 }
