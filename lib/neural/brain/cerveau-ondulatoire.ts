@@ -20,7 +20,7 @@ import { CoucheOndesNeuronales } from "../core/couche-rpia";
 import type { EtatRPIA } from "../core/couche-rpia";
 import { hachagePrompt } from "../../ondes/conditionneur";
 import { encoderTexteLexicalEnOnde } from "./encodeur-lexical-ondulatoire";
-import { RPIA_DEFAUTS } from "../../ondes/types-entrainement";
+import { RPIA_DEFAUTS, validerConfigRPIA } from "../../ondes/types-entrainement";
 import type { ConfigRPIA, RapportEntrainement } from "../../ondes/types-entrainement";
 
 export interface OptionsCerveauGen3 {
@@ -258,14 +258,14 @@ export class CerveauOndulatoireGen3 {
     if (!Number.isInteger(capaciteMemoire) || capaciteMemoire < 1 || capaciteMemoire > 10_000) {
       throw new Error("capaciteMemoire doit être un entier compris entre 1 et 10000.");
     }
-    // Budget de mémoire numérique : chaque souvenir garde un vecteur et 4 poids
-    // par oscillateur. La borne empêche une configuration taille × capacité
-    // de demander silencieusement une quantité excessive de RAM.
-    if (capaciteMemoire * taille > 1_000_000) {
-      throw new Error("La configuration taille × capaciteMemoire dépasse le budget mémoire expérimental.");
+    // Budget mémoire : chaque souvenir garde un vecteur, un état RPIA et du
+    // texte utilisateur/réponse. On borne les vecteurs et la taille cumulée
+    // maximale des textes pour éviter une configuration démesurée.
+    if (capaciteMemoire * taille > 1_000_000 || capaciteMemoire * MAX_TEXTE > 20_000_000) {
+      throw new Error("La configuration dépasse le budget mémoire expérimental (vecteurs ou textes stockés).");
     }
-    if (!Number.isFinite(seuilRappel) || seuilRappel < -1 || seuilRappel > 1) {
-      throw new Error("seuilRappel doit être compris entre -1 et 1.");
+    if (!Number.isFinite(seuilRappel) || seuilRappel < 0 || seuilRappel > 1) {
+      throw new Error("seuilRappel doit être compris entre 0 et 1.");
     }
     if (!Number.isSafeInteger(graine) || graine < 0) {
       throw new Error("graine doit être un entier sûr positif ou nul.");
@@ -284,7 +284,8 @@ export class CerveauOndulatoireGen3 {
     this.graine = graine;
     this.epoquesParAssociation = epoques;
     this.tauxPlasticite = plasticite;
-    this.configRPIA = options.configRPIA ?? RPIA_DEFAUTS;
+    this.configRPIA = { ...(options.configRPIA ?? RPIA_DEFAUTS) };
+    validerConfigRPIA(this.configRPIA);
   }
 
   /** Apprend une association entrée → réponse en entraînant son état ondulatoire. */
