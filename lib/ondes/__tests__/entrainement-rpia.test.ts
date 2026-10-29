@@ -15,6 +15,19 @@ describe("entraîneur RPIA (miroir CPU du shader waveTrainer)", () => {
     expect(ra.historiqueErreur).toEqual(rb.historiqueErreur);
   });
 
+  it("mesure l'erreur initiale avant le premier pas (et non après)", () => {
+    const entraineur = new EntraineurRPIA(64);
+    const cible = new Float32Array(64).map((_, i) => Math.cos(i * 0.07));
+    const tempsInitial = 0.1 * entraineur.pasTotaux;
+    const erreurAvant = entraineur.erreurCourante(cible, tempsInitial);
+
+    const rapport = entraineur.entrainer(cible, 10);
+
+    expect(rapport.erreurInitiale).toBeCloseTo(erreurAvant, 12);
+    expect(rapport.historiqueErreur).toHaveLength(10);
+    expect(rapport.erreurFinale).toBeCloseTo(rapport.historiqueErreur[9]!, 12);
+  });
+
   it("convergence réelle : l'erreur d'interférence décroît (courbe honnête)", () => {
     const n = 256;
     const entraineur = new EntraineurRPIA(n);
