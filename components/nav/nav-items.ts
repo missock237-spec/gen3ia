@@ -58,7 +58,7 @@ export const AGENTS: NavItem[] = [
 export const LIBRARY: NavItem[] = [
   ...groupByIds(["integrations", "extensions", "storage"]),
   ...groupByIds(["memory"]),
-  ...groupByIds(["billing", "settings"]),
+  ...groupByIds(["business", "billing", "settings"]),
 ];
 
 /** Espaces spécialisés (filtrés par rôle côté AppNav). */

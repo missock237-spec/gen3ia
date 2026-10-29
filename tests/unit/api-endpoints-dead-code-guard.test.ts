@@ -71,11 +71,13 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 96 endpoints orphelins au 2026-10-29 (it.31 ;     */
+/* Baseline honnête — 92 endpoints orphelins au 2026-10-29 (it.33 ;     */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
-/* memory/consent câblés (it.29-30), puis le lot marketplace            */
+/* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
-/* (it.31)). Classés par motif. Réviser à chaque suppression/ajout d'UI. */
+/* (it.31), puis finance-unpaid, finance-cashflow, hr-training et       */
+/* operations-maintenance câblés sur /business (it.33, lot 1/3).        */
+/* Classés par motif. Réviser à chaque suppression/ajout d'UI.          */
 /* ------------------------------------------------------------------ */
 
 const BASELINE_ORPHELINS: Record<string, string[]> = {
@@ -161,13 +163,9 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/business/compliance-gdpr",
     "/business/documents-contracts",
     "/business/documents-onboarding",
-    "/business/finance-cashflow",
-    "/business/finance-unpaid",
     "/business/hr-leaves",
-    "/business/hr-training",
     "/business/marketing-landing",
     "/business/marketing-webinar",
-    "/business/operations-maintenance",
     "/business/pulse",
     "/deployments/create",
     "/developer/secrets",

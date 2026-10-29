@@ -182,6 +182,12 @@ const WORKSPACE_SECONDARY: NavRoute[] = [
   { id: "memory", href: "/memory", label: "Mémoire permanente", icon: "◆", description: "Souvenirs et connaissances des agents", contexts: ["workspace"], section: "secondary", keywords: ["mémoire", "knowledge"] },
   { id: "billing", href: "/billing", label: "Facturation", icon: "₣", description: "Abonnements et consommation", contexts: ["workspace"], section: "secondary", keywords: ["facturation", "abonnement"] },
   { id: "settings", href: "/settings", label: "Paramètres", icon: "⚙", description: "Compte, sécurité, numéros et préférences", contexts: ["workspace"], section: "secondary", keywords: ["paramètres", "compte"] },
+  // it. 33 (Job 478451) : « Business » — les 12 endpoints /api/business/*
+  // (≈ 2 000 lignes, CRUD complet) existaient sans AUCUNE surface
+  // utilisateur (garde anti-code-mort it. 29). Lot 1 : les 4 modules à
+  // réponse homogène {records, kpis} sur la page /business ; lots 2-3 à
+  // venir (congés, RGPD, documents, marketing, automatisations).
+  { id: "business", href: "/business", label: "Business", icon: "⌗", description: "Impayés, trésorerie, formations et maintenance — vos modules métier", contexts: ["workspace"], section: "secondary", keywords: ["business", "métier", "impayés", "factures", "trésorerie", "cashflow", "formations", "hr", "maintenance", "kpi"] },
 ];
 
 const DEVELOPER_NAV: NavRoute[] = [
