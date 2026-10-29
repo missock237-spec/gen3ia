@@ -4342,3 +4342,12 @@ Stage Summary:
 - **v6.1 (même itération)** : diagnostic « poller inactif » interdit avant 10 min d'âge release (5 cycles × 2 min + marge téléchargement) ; âge non numérique → 0 (bash -e safe). +1 garde-fou.
 - #108 refermée à **02:47:30Z** par run dispatché (verifier → alignée → refermeture auto). prod = main = cf7ef146.
 - Validation : tsc 0, eslint 0, vitest **5164/5164**, bash -n OK. L'action owner console devient optionnelle (poller fonctionnel).
+
+### 478451-iter22-0410 (12:10 +08:00) — containment erreurs runtime par segment
+- Audit résilience (domaine non couvert it.15–21) : **9 segments à loading.tsx sans error.tsx** (dashboard/admin/settings/team/developer/live/billing/memory/neural) → un crash de rendu remontait à app/error.tsx et remplaçait la PAGE ENTIÈRE (navigation perdue).
+- `ErrorBoundary` (components/error) : composant MORT — importé nulle part, 0 test.
+- Correction (commit **603534e**) : `components/error/segment-error.tsx` partagé (tokens g3-*, pont Sentry async tag segment+digest, role=alert, Réessayer + retour contextuel) ; 9 error.tsx générés (`scripts/gen_segment_errors.mjs`) — crash contenu au segment ; page admin : 2 ErrorBoundary granulaires (grille métriques / missions) fallback compact — composant réanimé ; garde-fou `segment-error-boundaries.test.ts` (17 tests).
+- Sonde régression réutilisable `scripts/sonde_regression_prod.mjs` (10 endpoints + version.json).
+- Ouverture tick : prod 10/10, gitSha=19c6093 aligné main (poller vivant re-confirmé) ; CI 11/11 ; Dependabot 0 ; ticks cron 03:17/03:47Z perdus (sans impact — poller).
+- Validation : tsc 0, eslint 0, vitest **5181/5181** (+17). CI 603534e verte, prod livrée par poller, 10/10 re-sondés.
+- Rappel PAT rotation : n°22 (priorité n°1 owner).
