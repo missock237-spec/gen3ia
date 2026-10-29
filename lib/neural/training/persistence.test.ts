@@ -121,6 +121,35 @@ describe("persistence du cerveau neuronal", () => {
     expect(restaure?.synapses).toHaveLength(reseauV1.synapses.length);
   });
 
+  it("rejette au chargement les checkpoints RPIA de forme ou de temps invalides", async () => {
+    const reseau = reseauTest(8);
+    const validRpia = {
+      taille: 50,
+      pasTotaux: 12,
+      poids: Array.from({ length: 50 * 4 }, (_, i) => i / 1000),
+    };
+    await saveBrainState(reseau, {}, [], undefined, validRpia);
+
+    const original = JSON.parse(readFileSync(BRAIN_PATH, "utf8")) as Record<string, unknown>;
+    expect(loadBrainState()?.rpia).toEqual(validRpia);
+
+    const poidsTropCourts = validRpia.poids.slice(0, -1);
+    const poidsAvecNull: unknown[] = validRpia.poids.slice();
+    poidsAvecNull[0] = null;
+    const casInvalides: unknown[] = [
+      { ...validRpia, poids: poidsTropCourts },
+      { ...validRpia, pasTotaux: -1 },
+      { ...validRpia, pasTotaux: 1.5 },
+      { ...validRpia, poids: poidsAvecNull },
+      { ...validRpia, taille: 4097, poids: new Array(4097 * 4).fill(0) },
+    ];
+
+    for (const rpia of casInvalides) {
+      writeFileSync(BRAIN_PATH, JSON.stringify({ ...original, rpia }), "utf8");
+      expect(loadBrainState()?.rpia).toBeUndefined();
+    }
+  });
+
   it("deleteBrainState purge le cerveau ET sa .bak (reset complet)", async () => {
     const reseau = reseauTest(6);
     await saveBrainState(reseau, {}, []);
