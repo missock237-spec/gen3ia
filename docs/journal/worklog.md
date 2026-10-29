@@ -4334,3 +4334,11 @@ Stage Summary:
 - Preuve v6 en prod : tick 02:28:14Z commenté avec SHA RE-MESURÉ (prod=75d7865a, main=e2919121, release prête) — honnête, lag workflow-only, zéro impact utilisateur.
 - gen3 : 18 domaines, notebook v4 prêt (GPU Colab owner), /chat + /dashboard 200 UI GLM.
 - Reste n°1 : **rotation des secrets (owner) — rappel n°21** + commande console VPS (#108). Rapport : docs/rapports/rapport-job-478451-2026-10-29-1010.md
+
+### it21-suite — découverte poller vivant + v6.1 (même tick, 10:45 +08:00)
+
+- En suivant la livraison de e2919121 : CD swap SKIPPÉ (SSH muet, outcome≠success malgré conclusion verte via continue-on-error), armement guérisseur SKIPPÉ — **et prod passée à e2919121 puis cf7ef146 quand même** → le **poller pull est VIVANT** (205 Mo + swap ≈ 5-15 min).
+- Conséquence : le diagnostic « poller inactif dès l'âge 0 min » des ticks du jour = **faux diagnostic systématique** (#107/#108 créées alors que le poller livrait normalement).
+- **v6.1 (même itération)** : diagnostic « poller inactif » interdit avant 10 min d'âge release (5 cycles × 2 min + marge téléchargement) ; âge non numérique → 0 (bash -e safe). +1 garde-fou.
+- #108 refermée à **02:47:30Z** par run dispatché (verifier → alignée → refermeture auto). prod = main = cf7ef146.
+- Validation : tsc 0, eslint 0, vitest **5164/5164**, bash -n OK. L'action owner console devient optionnelle (poller fonctionnel).

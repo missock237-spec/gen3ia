@@ -158,6 +158,19 @@ describe("Guérisseur production (.github/workflows/guerisseur-production.yml)",
     expect(guerisseur).toContain('or .status=="waiting" or .status=="pending"');
   });
 
+  it("v6.1 seuil du watchdog : diagnostic « poller inactif » interdit avant 10 min d'âge release", () => {
+    // Constat du 29 oct. : toute la journée, les ticks ont clamé « publiée
+    // il y a 0 min … poller inactif » alors que le poller VPS livrait en
+    // ~10 min (téléchargement ~205 Mo + swap). Le diagnostic « poller
+    // inactif » exige que la release ait eu le temps d'être téléchargée
+    // et basculée (≥ 10 min = 5 cycles de 2 min + marge) ; avant ce seuil,
+    // le tick se tait et réévalue. Âge non numérique → 0 (bash -e safe).
+    expect(guerisseur).toContain("SEUIL DU WATCHDOG");
+    expect(guerisseur).toContain("Release trop récente (");
+    expect(guerisseur).toContain("case $AGE_RELEASE in ''|*[!0-9]*) AGE_RELEASE=0 ;; esac");
+    expect(guerisseur).toContain('"$AGE_RELEASE" -lt 10');
+  });
+
   it("anti-collision CD : garde runs en cours/échoués + concurrency sérielle", () => {
     expect(guerisseur).toContain("group: guerisseur-production");
     expect(guerisseur).toContain("cancel-in-progress: false");

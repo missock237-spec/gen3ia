@@ -369,6 +369,23 @@ jobs:
             exit 0
           fi
           SHA_PROD="${SHA_PROD_REEL:-$SHA_PROD}"  # le tick commente le SHA RE-MESURÉ, jamais le SHA périmé
+
+          # v6.1 (2026-10-29, itération 21) — SEUIL DU WATCHDOG : le
+          # téléchargement du build (~205 Mo, reprise backoff) + swap prennent
+          # 5-15 min ; clamer « poller inactif » dès l'âge 0 min de la release
+          # = faux diagnostic systématique (constaté toute la journée du
+          # 29 oct. : ticks « publiée il y a 0 min … poller inactif » alors
+          # que le poller livrait en ~10 min — cf. #108, prod alignée sans
+          # aucun swap CD). Ne conclure au poller inactif QUE si la release
+          # a eu LE TEMPS d'être téléchargée et basculée (≥ 10 min = 5 cycles
+          # de 2 min + marge de téléchargement). Avant ce seuil : réévaluation
+          # au prochain tick, sans bruit.
+          AGE_RELEASE=${RELEASE_AGE_MIN:-0}
+          case $AGE_RELEASE in ''|*[!0-9]*) AGE_RELEASE=0 ;; esac
+          if [ "$AGE_RELEASE" -lt 10 ]; then
+            echo "Release trop récente (${AGE_RELEASE} min) pour conclure au poller inactif — téléchargement ~205 Mo + swap ≈ 5-15 min. Réévaluation au prochain tick (sans bruit)."
+            exit 0
+          fi
           CORPS=$(cat <<'EOF'
           ## Production gen3ia.online en retard sur main
 
