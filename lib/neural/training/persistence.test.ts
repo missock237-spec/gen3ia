@@ -134,6 +134,13 @@ describe("persistence du cerveau neuronal", () => {
     const original = JSON.parse(readFileSync(BRAIN_PATH, "utf8")) as Record<string, unknown>;
     expect(loadBrainState()?.rpia).toEqual(validRpia);
 
+    // Compatibilité ascendante : les anciens checkpoints n'avaient pas
+    // pasDeTemps et doivent continuer à être acceptés (défaut appliqué à l'import).
+    const legacyRpia = { ...validRpia };
+    delete (legacyRpia as { pasDeTemps?: number }).pasDeTemps;
+    writeFileSync(BRAIN_PATH, JSON.stringify({ ...original, rpia: legacyRpia }), "utf8");
+    expect(loadBrainState()?.rpia?.pasDeTemps).toBeUndefined();
+
     const poidsTropCourts = validRpia.poids.slice(0, -1);
     const poidsAvecNull: unknown[] = validRpia.poids.slice();
     poidsAvecNull[0] = null;
