@@ -42,7 +42,7 @@ cerveau.importerEtat(checkpoint);
 - Graine déterministe pour l'initialisation des oscillateurs.
 - Nombre d'unités actives borné par étage par `budgetActif`.
 - La propagation parcourt uniquement les synapses sortantes des unités actives.
-- Mémoire associative plafonnée et hippocampe limité à dix tours.
+- Mémoire associative plafonnée, budget total taille × souvenirs limité à un million de cellules numériques, et hippocampe limité à dix tours.
 - Checkpoints exportables en JSON et validation avant restauration.
 - Rappel exact normalisé par défaut (seuil 1.0) ; le rappel approximatif doit être activé explicitement et évalué ; les réponses inconnues restent `null` plutôt que d'être inventées.
 - Métriques de base disponibles pour compter associations, synapses, unités actives et comparaisons.
