@@ -159,6 +159,39 @@ function topK(valeurs: readonly number[], k: number): Activation[] {
     .slice(0, k);
 }
 
+function validerEtatOnde(etat: EtatRPIA | undefined, taille: number): asserts etat is EtatRPIA {
+  if (!etat || typeof etat !== "object" || etat.taille !== taille) {
+    throw new Error("Checkpoint Gen3 invalide : dimensions de l'état RPIA.");
+  }
+  if (
+    !Number.isSafeInteger(etat.pasTotaux) ||
+    etat.pasTotaux < 0 ||
+    (etat.pasDeTemps !== undefined &&
+      (!Number.isFinite(etat.pasDeTemps) ||
+        !Number.isFinite(Math.fround(etat.pasDeTemps)) ||
+        etat.pasDeTemps <= 0 ||
+        Math.fround(etat.pasDeTemps) <= 0))
+  ) {
+    throw new Error("Checkpoint Gen3 invalide : horloge RPIA.");
+  }
+  if (
+    !Array.isArray(etat.poids) ||
+    etat.poids.length !== taille * 4 ||
+    !etat.poids.every((valeur) => Number.isFinite(valeur) && Number.isFinite(Math.fround(valeur)))
+  ) {
+    throw new Error("Checkpoint Gen3 invalide : poids RPIA.");
+  }
+  for (let i = 0; i < taille; i++) {
+    const offset = i * 4;
+    const amplitude = etat.poids[offset];
+    const frequence = etat.poids[offset + 1];
+    const amortissement = etat.poids[offset + 3];
+    if (amplitude < 0 || amplitude > 2 || frequence < 0 || amortissement < 0.001 || amortissement > 0.5) {
+      throw new Error(`Checkpoint Gen3 invalide : oscillateur hors limites à l'indice ${i}.`);
+    }
+  }
+}
+
 function signatureDepuisOnde(etat: EtatRPIA, taille: number): number[] {
   if (etat.taille !== taille || etat.poids.length !== taille * 4) {
     throw new Error("État RPIA incompatible avec la taille du cerveau.");
@@ -419,6 +452,7 @@ export class CerveauOndulatoireGen3 {
     const souvenirs = etat.souvenirs.map((souvenir) => {
       validerTexte(souvenir.entree, "Checkpoint entree");
       validerTexte(souvenir.sortie, "Checkpoint sortie");
+      validerEtatOnde(souvenir.etatOnde, this.taille);
       if (
         typeof souvenir.id !== "string" ||
         souvenir.id.length > 80 ||
@@ -429,13 +463,7 @@ export class CerveauOndulatoireGen3 {
         !Number.isFinite(souvenir.erreurRPIAInitiale) ||
         !Number.isFinite(souvenir.erreurRPIAFinale) ||
         !Number.isSafeInteger(souvenir.epoquesRPIA) ||
-        souvenir.epoquesRPIA < 1 ||
-        souvenir.etatOnde?.taille !== this.taille ||
-        !Array.isArray(souvenir.etatOnde.poids) ||
-        souvenir.etatOnde.poids.length !== this.taille * 4 ||
-        !souvenir.etatOnde.poids.every((valeur) => Number.isFinite(valeur)) ||
-        !Number.isSafeInteger(souvenir.etatOnde.pasTotaux) ||
-        souvenir.etatOnde.pasTotaux < 0
+        souvenir.epoquesRPIA < 1
       ) {
         throw new Error("Checkpoint Gen3 invalide : association ou état ondulatoire corrompu.");
       }
