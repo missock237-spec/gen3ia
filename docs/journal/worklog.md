@@ -4301,3 +4301,15 @@ Stage Summary:
 - Livré : tests/unit/secret-hygiene.test.ts — scan arbre 1972 fichiers à motifs haute confiance + alignement allowlist CI ; toute future fuite casse la CI deux fois (gitleaks + vitest).
 - Validation : tsc 0, eslint 0, vitest 5152/5152. Commit `dc42229`, 6/6 workflows verts, prod saine (health ok, /chat 200).
 - gen3 : accessible, UI GLM en place, 18 domaines, notebook v4 prêt. Reste n°1 : rotation des secrets (propriétaire). Rapport : docs/rapports/rapport-job-478451-2026-10-29-0610.md
+
+## 478451-iter19-0805 — 2026-10-29 07:10–08:05 +08:00
+
+- Découverte de session : l'itération 18 (secrets + rate limit) était déjà livrée par le tick précédent (dc42229 + 863fd34) → ce tick = **itération 19**, axe retenu : accessibilité WCAG 2.1 AA + robustesse frontend.
+- Boundaries auditées (error/global-error/not-found) : niveau géant confirmé, 0 modification.
+- Sonde axe-core étendue : 2 → **11 pages du sitemap × 2 thèmes = 22 scans bloquants CI** + garde-fou parité sitemap↔sonde (5 tests, a11y-couverture-publique.test.ts).
+- **32 violations réelles révélées** (invisible avant : / et /login n'ont pas de sidebar) : faint 4.25:1 → #7E84A8/#567080 ; sidebar claire bleu nuit → verre blanc ; couche V6 ignorait le clair → void/verre re-thématisés + encres spike-text #067589 / neural-strong-text #5633E8 (art SVG intact) ; label-content-name-mismatch (lab axe 4.14 : le kbd compte même aria-hidden → aria-label conditionnel) ; 6 listes essaim + nav-scroll tabIndex 0 ; privacy neutral-500 → --g3-muted.
+- Bug sonde corrigé (champ theme manquant dans 2 retours scanPage → crash avant section détail).
+- Incident parallèle : CVE high re2js GHSA-gg6h-894w-4m9c (avisé 2026-10-28 08:42 UTC, entre deux CI) → override ^2.9.1 (eed09be), audit 0 vuln, compat firebase prouvée par Smoke/E2E.
+- Validation : tsc 0, eslint 0, vitest **5157/5157**. 4 commits (2546dc3, eed09be, 1aab40c, 51d9d9b) → CI 9/9 + CodeQL + Guérisseur + CD verts → **prod vérifiée : 4/4 marqueurs CSS + sonde 22/22 zéro violation** (contre 32 au départ). Régressions it16-18 nulles. 8ᵉ livraison autonome.
+- gen3 : 18 domaines (1,8 M lignes fr/en), échantillons .jsonl + notebook v4 prêts, GPU Colab propriétaire. /chat + /dashboard 200.
+- Reste n°1 : **rotation des secrets (propriétaire) — rappel n°19**. Rapport : docs/rapports/rapport-job-478451-2026-10-29-0710.md
