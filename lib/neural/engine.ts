@@ -25,7 +25,7 @@ import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
 import { composerDepuisConnaissances } from "./connaissances-pont";
 import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
-import type { CoucheOndesNeuronales } from "./core/couche-rpia";
+import { CoucheOndesNeuronales } from "./core/couche-rpia";
 import { INTENSITE_MAX_PAR_NEURONE } from "./encoding/text-encoder";
 import { predireDomaineLexical } from "./training/domaines";
 
@@ -226,6 +226,20 @@ export class NeuralEngine {
     { memoire: HippocampusMemory; dernierAcces: number }
   >();
 
+  /**
+   * Couches RPIA de travail isolées par compte/conversation. La couche de base
+   * reste un point de départ immuable pour les requêtes authentifiées : les
+   * poids appris par un compte ne doivent pas devenir l'état de départ d'un
+   * autre compte via le singleton du runtime.
+   */
+  private readonly couchesRPIAParConversation = new Map<
+    string,
+    { couche: CoucheOndesNeuronales; dernierAcces: number }
+  >();
+
+  /** Borne mémoire pour les couches de travail vivantes du processus. */
+  private static readonly LIMITE_COUCHES_RPIA = 200;
+
   /** Plafond de fenêtres vivantes : au-delà, la moins récemment utilisée est
    * évacuée (une fenêtre = ~10 tours × 2 × 2000 caractères au pire). */
   private static readonly LIMITE_FENETRES_MEMOIRE = 500;
@@ -263,25 +277,73 @@ export class NeuralEngine {
   }
 
   /**
-   * RÉSONANCE RPIA DU TOUR DE CHAT : entraîne la couche d'ondes vers le
-   * message (nombre d'époques BORNÉ — la latence du tour reste dominée par
-   * les cycles du noyau) et retourne les énergies + télémétrie honnête.
-   * La couche est PERSISTANTE : chaque message enrichit l'état résonnant
-   * (le temps global avance — c'est le mode d'apprentissage natif de gen3).
+   * Retourne la couche RPIA de travail du compte/conversation.
+   * Les appels sans identité explicite (tests, tâches système) gardent la
+   * couche de base. Les appels attribués à un compte utilisent une copie
+   * indépendante : ils n'écrivent jamais dans le modèle de base partagé.
+   *
+   * NOTE : les couches de travail sont conservées en mémoire du processus,
+   * avec un plafond LRU. La persistance durable par conversation est une
+   * étape distincte ; une éviction ou un redémarrage réinitialise la couche
+   * de travail depuis le checkpoint de base.
    */
-  private resonnerRPIA(message: string): {
+  private coucheRPIAPour(options: AIRequest): CoucheOndesNeuronales | undefined {
+    if (!this.coucheRPIA) return undefined;
+
+    const meta = options.metadata ?? {};
+    const userId = typeof meta.userId === "string" ? meta.userId : "";
+    const conversationId =
+      typeof meta.conversationId === "string" ? meta.conversationId : "";
+
+    // Ne pas changer le comportement des appels système/test sans identité.
+    if (!userId && !conversationId) return this.coucheRPIA;
+
+    const cle = `${userId || "sans-compte"}|${conversationId || "hors-conversation"}`;
+    let entree = this.couchesRPIAParConversation.get(cle);
+    if (!entree) {
+      if (this.couchesRPIAParConversation.size >= NeuralEngine.LIMITE_COUCHES_RPIA) {
+        let clePlusAncienne: string | null = null;
+        let plusAncien = Number.POSITIVE_INFINITY;
+        for (const [cleExistante, valeur] of this.couchesRPIAParConversation) {
+          if (valeur.dernierAcces < plusAncien) {
+            plusAncien = valeur.dernierAcces;
+            clePlusAncienne = cleExistante;
+          }
+        }
+        if (clePlusAncienne) this.couchesRPIAParConversation.delete(clePlusAncienne);
+      }
+
+      const couche = new CoucheOndesNeuronales(this.coucheRPIA.taille);
+      couche.importerEtat(this.coucheRPIA.exporterEtat());
+      entree = { couche, dernierAcces: Date.now() };
+      this.couchesRPIAParConversation.set(cle, entree);
+    }
+
+    entree.dernierAcces = Date.now();
+    return entree.couche;
+  }
+
+  /**
+   * RÉSONANCE RPIA DU TOUR DE CHAT : entraîne la couche de travail vers le
+   * message et retourne les énergies ainsi que la télémétrie mesurée. Les
+   * poids d'une conversation authentifiée ne contaminent plus la couche
+   * d'une autre conversation ou d'un autre compte.
+   */
+  private resonnerRPIA(message: string, options: AIRequest): {
     energies: Record<number, number>;
     telemetrie: TelemetrieRPIA;
   } | null {
-    if (!this.coucheRPIA || message.trim().length === 0) return null;
-    const { rapport, energies } = this.coucheRPIA.resonnerVersTexte(
+    const couche = this.coucheRPIAPour(options);
+    if (!couche || message.trim().length === 0) return null;
+
+    const { rapport, energies } = couche.resonnerVersTexte(
       message,
       EPOQUES_RPIA_CHAT,
     );
     return {
       energies,
       telemetrie: {
-        pasTotaux: this.coucheRPIA.pasTotaux,
+        pasTotaux: couche.pasTotaux,
         epoques: rapport.epoques,
         erreurInitiale: Math.round(rapport.erreurInitiale * 1e6) / 1e6,
         erreurFinale: Math.round(rapport.erreurFinale * 1e6) / 1e6,
@@ -345,7 +407,7 @@ export class NeuralEngine {
     // RÉSONANCE RPIA (branchée au flux du chat) : le MESSAGE (pas la charte
     // système) est mis en résonance, puis ses énergies fusionnent dans la
     // volée unique du cycle 1 — même format et même plafond que l'encodage.
-    const resonance = this.resonnerRPIA(messageUtilisateur || prompt);
+    const resonance = this.resonnerRPIA(messageUtilisateur || prompt, options);
     const entreesCycle1 = resonance
       ? this.fusionnerEnergies(encodage.inputs, resonance.energies)
       : encodage.inputs;
@@ -422,7 +484,7 @@ export class NeuralEngine {
     const messageUtilisateur = extraireDernierMessageUtilisateur(options);
 
     // RÉSONANCE RPIA (cf. generate) — même contrat, même plafond.
-    const resonance = this.resonnerRPIA(messageUtilisateur || prompt);
+    const resonance = this.resonnerRPIA(messageUtilisateur || prompt, options);
     const entreesCycle1 = resonance
       ? this.fusionnerEnergies(encodage.inputs, resonance.energies)
       : encodage.inputs;
@@ -515,7 +577,7 @@ export class NeuralEngine {
     const messageUtilisateur = extraireDernierMessageUtilisateur(options);
 
     // RÉSONANCE RPIA (cf. generate) — même contrat, même plafond.
-    const resonance = this.resonnerRPIA(messageUtilisateur || prompt);
+    const resonance = this.resonnerRPIA(messageUtilisateur || prompt, options);
     const entreesCycle1 = resonance
       ? this.fusionnerEnergies(encodage.inputs, resonance.energies)
       : encodage.inputs;
