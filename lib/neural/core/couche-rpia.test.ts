@@ -51,7 +51,12 @@ describe("couche d'ondes neuronales RPIA (pont résonance → cerveau)", () => {
     copie.importerEtat(JSON.parse(JSON.stringify(etat)));
     expect(copie.exporterEtat().pasDeTemps).toBe(0.25);
     expect(copie.pasTotaux).toBe(source.pasTotaux);
-    expect(copie.energiesResonance()).toEqual(source.energiesResonance());
+    const energiesSource = source.energiesResonance();
+    const energiesCopie = copie.energiesResonance();
+    expect(Object.keys(energiesCopie)).toEqual(Object.keys(energiesSource));
+    for (const [id, energieSource] of Object.entries(energiesSource)) {
+      expect(energiesCopie[Number(id)]).toBeCloseTo(energieSource, 6);
+    }
   });
 
   it("l'entraînement RPIA converge réellement vers l'onde cible du texte", () => {
@@ -120,8 +125,8 @@ describe("couche d'ondes neuronales RPIA (pont résonance → cerveau)", () => {
     couche.entrainerVersTexte("contrôle de cohérence de données", 50);
     const etat = couche.exporterEtat();
 
-    // JSON-safe : sérialisation/désérialisation réelle (poids arrondis
-    // 1e-6 → reprise quasi identique, précision 1e-3 vérifiée honnêtement).
+    // JSON-safe : sérialisation/désérialisation réelle ; l'état est restauré
+    // sans ré-entraînement et l'erreur est vérifiée à une tolérance numérique explicite.
     const copie = new CoucheOndesNeuronales(64);
     copie.importerEtat(JSON.parse(JSON.stringify(etat)));
 
