@@ -5,7 +5,7 @@ import { BusinessDashboard } from "@/components/business/dashboard";
 export const metadata: Metadata = {
   title: "Business",
   description:
-    "Modules métier Gen3ia : impayés, trésorerie, formations et maintenance — indicateurs calculés par les moteurs serveur, tables des enregistrements récents.",
+    "Modules métier Gen3ia : impayés, trésorerie, formations, maintenance, congés, conformité RGPD et onboarding — indicateurs calculés par les moteurs serveur, tables des enregistrements récents.",
 };
 
 export default function BusinessPage() {

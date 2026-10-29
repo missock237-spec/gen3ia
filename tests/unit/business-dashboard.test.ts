@@ -3,14 +3,19 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Verrous structurels — ESPACE BUSINESS, LOT 1 (itération 33, Job 478451).
+ * Verrous structurels — ESPACE BUSINESS (Job 478451).
+ *
+ * it.33 lot 1 : les 4 modules à réponse homogène {records, kpis}
+ * (finance-unpaid, finance-cashflow, hr-training, operations-maintenance).
+ * it.35 lot 2 : les 3 modules composites (hr-leaves {leaves, balances},
+ * compliance-gdpr {processing, requests, kpis}, documents-onboarding
+ * {flows, kpis}) — avec tables secondaires et honnêteté KPI (hr-leaves
+ * n'a PAS de kpis serveur : aucun inventé).
  *
  * Constat d'audit (garde anti-code-mort it.29) : les 12 endpoints
  * /api/business/* (≈ 2 000 lignes, CRUD complet, Zod, rate-limit,
  * moteur IA) étaient livrés, testés, déployés — sans AUCUNE surface
- * utilisateur. Lot 1 : /business avec les 4 modules à réponse homogène
- * {records, kpis} (finance-unpaid, finance-cashflow, hr-training,
- * operations-maintenance) ; lots 2-3 annoncés honnêtement.
+ * utilisateur.
  *
  * Convention du dépôt : ces verrous lisent les sources pour empêcher
  * toute régression (cf. extensions-account-page.test.ts, it.31).
@@ -73,8 +78,8 @@ describe("it.33 lot 1 — les 4 modules KPI sont appelés avec le bon contrat", 
 });
 
 describe("it.33 lot 1 — honnêteté et a11y", () => {
-  it("la page annonce les lots suivants (12 modules, 4 câblés)", () => {
-    expect(vue).toContain("4 des 12 modules métier");
+  it("la page annonce les lots suivants (12 modules, 7 câblés après le lot 2)", () => {
+    expect(vue).toContain("7 des 12 modules métier");
     expect(vue).toContain("prochaines versions");
   });
 
@@ -100,5 +105,49 @@ describe("it.33 lot 1 — honnêteté et a11y", () => {
   it("palette : tokens g3-* uniquement (convention du dépôt)", () => {
     const couleursBrutes = vue.match(/(bg|text|border)-\[(?!var\(--g3-)/g) ?? [];
     expect(couleursBrutes).toEqual([]);
+  });
+});
+
+describe("it.35 lot 2 — les 3 modules composites sont câblés avec le bon contrat", () => {
+  it("les 3 endpoints composites sont configurés avec leurs clés serveur", () => {
+    expect(vue).toContain('"/api/business/hr-leaves"');
+    expect(vue).toContain('"/api/business/compliance-gdpr"');
+    expect(vue).toContain('"/api/business/documents-onboarding"');
+    // Clés d'enregistrements conformes aux contrats serveur.
+    expect(vue).toContain('recordsKey: "leaves"');
+    expect(vue).toContain('recordsKey: "requests"');
+    expect(vue).toContain('recordsKey: "flows"');
+  });
+
+  it("hr-leaves : AUCUN KPI inventé (le serveur ne renvoie pas de kpis)", () => {
+    // Le module déclare kpis: [] — aucun indicateur calculé côté client.
+    expect(vue).toContain("kpis: [],");
+    // Les soldes (balances) sont la table secondaire, pas des KPI.
+    expect(vue).toContain('recordsKey: "balances"');
+  });
+
+  it("tables secondaires : transformation STRUCTURELLE, valeurs telles quelles", () => {
+    // La correspondance serveur (Record) devient des lignes via
+    // Object.entries + SPREAD des valeurs — aucun recalcul métier.
+    expect(vue).toContain("Object.entries(brutSec as Record<string, unknown>)");
+    expect(vue).toContain("...(valeurs && typeof valeurs === \"object\" ? (valeurs as Ligne) : {})"
+    );
+    expect(vue).toContain("transformation structurelle");
+    // Registre des traitements (deuxième liste du serveur) affichée.
+    expect(vue).toContain('recordsKey: "processing"');
+  });
+
+  it("KPI serveur affichés tels quels pour conformité RGPD et onboarding", () => {
+    // SLA DSR calculés serveur (openRequests, breached) et compteurs
+    // onboarding (total, active, completed) — jamais recalculés.
+    expect(vue).toContain('key: "openRequests"');
+    expect(vue).toContain('key: "breached"');
+    expect(vue).toContain('key: "active"');
+    expect(vue).toContain('key: "completed"');
+  });
+
+  it("format taille : comptage STRUCTUREL d'une liste, jamais un calcul métier", () => {
+    expect(vue).toContain('format: "taille"');
+    expect(vue).toContain('Array.isArray(brut) ? String(brut.length) : "—"');
   });
 });
