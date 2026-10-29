@@ -314,3 +314,32 @@ describe("Scan OWASP ZAP (.github/workflows/security.yml)", () => {
     expect(versionsAction(security, "actions/upload-artifact")).toEqual(["v7"]);
   });
 });
+
+describe("Couplage guérisseur → surveillance (it. 28 — crons GitHub défaillants)", () => {
+  const guerisseur = read(".github/workflows/guerisseur-production.yml");
+
+  it("le guérisseur dispatch la sonde HTTP en fin de run (déclencheur événementiel)", () => {
+    // Constat it.28 : les crons GitHub du dépôt sont massivement sautés
+    // (surveillance : 0 run cron sur 4 slots 08:37→10:07Z ; guérisseur :
+    // 1 run schedule sur 8) — la sonde it. 24 ne s'exécutait jamais en
+    // cron. Le couplage événementiel (fin du guérisseur, lui-même
+    // déclenché à chaque push) garantit une sonde HTTP après chaque
+    // évaluation de production, sans dépendre du scheduler GitHub.
+    expect(guerisseur).toContain("sonder:");
+    expect(guerisseur).toContain("gh workflow run surveillance-production.yml");
+    expect(guerisseur).toContain("needs: [verifier, guerir]");
+    // Le dispatch s'exécute même si la réparation a échoué (la mesure
+    // HTTP est justement la plus précieuse quand quelque chose casse) —
+    // mais jamais si le run est annulé.
+    expect(guerisseur).toContain("if: always() && !cancelled()");
+    // Un échec de dispatch ne rend PAS le guérisseur rouge (le filet
+    // cron 7,37 reste en place).
+    expect(guerisseur).toContain("continue-on-error: true");
+  });
+
+  it("la surveillance garde son déclencheur cron ET son dispatch manuel (filet)", () => {
+    const surveillance = read(".github/workflows/surveillance-production.yml");
+    expect(surveillance).toContain("cron: '7,37 * * * *'");
+    expect(surveillance).toContain("workflow_dispatch");
+  });
+});

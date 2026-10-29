@@ -474,3 +474,28 @@ jobs:
             gh issue create -R "$REPO" --title "$TITRE" --body "$CORPS" >/dev/null \
               && echo "Issue d'escalade créée."
           fi
+
+  sonder:
+    name: Déclencher la surveillance synthétique (crons GitHub défaillants)
+    needs: [verifier, guerir]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch de la sonde HTTP (déclencheur événementiel fiable)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Constat it.28 : les crons GitHub de ce dépôt sont massivement
+          # sautés (surveillance : 0 run cron sur 4 slots 08:37→10:07Z ;
+          # guérisseur : 1 run schedule sur 8). Le couplage par ÉVÉNEMENT
+          # (fin du guérisseur, lui-même déclenché à chaque push) garantit
+          # que la sonde HTTP s'exécute après chaque évaluation de prod.
+          # Le cron 7,37 reste le filet ; le cycle d'issue anti-spam
+          # (édition du corps d'issue, pas de commentaire) tolère la
+          # fréquence. Pas de boucle : la surveillance ne dispatch rien.
+          gh workflow run surveillance-production.yml -R "$REPO" --ref main \
+            && echo "Sonde HTTP dispatchée (exécution asynchrone)." \
+            || echo "Dispatch impossible (transitoire) — le cron 7,37 reste le filet."
