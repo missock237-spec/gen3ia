@@ -252,7 +252,11 @@ export class NeuralEngine {
       typeof meta.conversationId === "string" ? meta.conversationId : "";
     if (!userId && !conversationId) return this.hippocampe;
 
-    const cle = `${userId || "sans-compte"}|${conversationId || "hors-conversation"}`;
+    // JSON tuple avoids collisions if an opaque ID itself contains "|".
+    const cle = JSON.stringify([
+      userId || "sans-compte",
+      conversationId || "hors-conversation",
+    ]);
     let entree = this.fenetresMemoire.get(cle);
     if (!entree) {
       if (this.fenetresMemoire.size >= NeuralEngine.LIMITE_FENETRES_MEMOIRE) {
@@ -298,7 +302,11 @@ export class NeuralEngine {
     // Ne pas changer le comportement des appels système/test sans identité.
     if (!userId && !conversationId) return this.coucheRPIA;
 
-    const cle = `${userId || "sans-compte"}|${conversationId || "hors-conversation"}`;
+    // JSON tuple avoids collisions if an opaque ID itself contains "|".
+    const cle = JSON.stringify([
+      userId || "sans-compte",
+      conversationId || "hors-conversation",
+    ]);
     let entree = this.couchesRPIAParConversation.get(cle);
     if (!entree) {
       if (this.couchesRPIAParConversation.size >= NeuralEngine.LIMITE_COUCHES_RPIA) {
@@ -386,7 +394,11 @@ export class NeuralEngine {
     const userId = typeof meta.userId === "string" ? meta.userId : "";
     const conversationId =
       typeof meta.conversationId === "string" ? meta.conversationId : "";
-    return `${userId || "sans-compte"}|${conversationId || "hors-conversation"}`;
+    // Serialize the pair as a tuple so delimiters inside IDs cannot collide.
+    return JSON.stringify([
+      userId || "sans-compte",
+      conversationId || "hors-conversation",
+    ]);
   }
 
   /**
