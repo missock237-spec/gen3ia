@@ -4349,5 +4349,5 @@ Stage Summary:
 - Correction (commit **603534e**) : `components/error/segment-error.tsx` partagé (tokens g3-*, pont Sentry async tag segment+digest, role=alert, Réessayer + retour contextuel) ; 9 error.tsx générés (`scripts/gen_segment_errors.mjs`) — crash contenu au segment ; page admin : 2 ErrorBoundary granulaires (grille métriques / missions) fallback compact — composant réanimé ; garde-fou `segment-error-boundaries.test.ts` (17 tests).
 - Sonde régression réutilisable `scripts/sonde_regression_prod.mjs` (10 endpoints + version.json).
 - Ouverture tick : prod 10/10, gitSha=19c6093 aligné main (poller vivant re-confirmé) ; CI 11/11 ; Dependabot 0 ; ticks cron 03:17/03:47Z perdus (sans impact — poller).
-- Validation : tsc 0, eslint 0, vitest **5181/5181** (+17). CI 603534e verte, prod livrée par poller, 10/10 re-sondés.
+- Validation : tsc 0, eslint 0, vitest **5181/5181** (+17). CI 603534e annulée par concurrence (push docs aec87fd) → CI aec87fd 9/9 success + CD/armement ; prod livrée par poller (gitSha=aec87fdd), 10/10 re-sondés.
 - Rappel PAT rotation : n°22 (priorité n°1 owner).
