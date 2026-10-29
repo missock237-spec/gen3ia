@@ -40,11 +40,11 @@ cerveau.importerEtat(checkpoint);
 
 - Aucune dépendance GPU, modèle distant, API externe ou accès réseau.
 - Graine déterministe pour l'initialisation des oscillateurs.
-- Nombre d'unités actives borné par `budgetActif`.
+- Nombre d'unités actives borné par étage par `budgetActif`.
 - La propagation parcourt uniquement les synapses sortantes des unités actives.
 - Mémoire associative plafonnée et hippocampe limité à dix tours.
 - Checkpoints exportables en JSON et validation avant restauration.
-- Rappel textuel exact normalisé ; les réponses inconnues restent `null` plutôt que d'être inventées.
+- Rappel exact normalisé par défaut (seuil 1.0) ; le rappel approximatif doit être activé explicitement et évalué ; les réponses inconnues restent `null` plutôt que d'être inventées.
 - Métriques de base disponibles pour compter associations, synapses, unités actives et comparaisons.
 
 ## Limites à ne pas masquer
