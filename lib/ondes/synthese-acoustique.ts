@@ -72,7 +72,8 @@ export class SynthetiseurAcoustique {
    */
   pasGuidage(cible: OndeCible, guidage: number, temps: number): number {
     this.verifierCible(cible);
-    let somme = 0;
+    this.verifierGuidage(guidage);
+    this.verifierTemps(temps);
     for (let i = 0; i < this.nbNoeuds; i++) {
       const noeud = this.noeuds[i];
       const onde = noeud.amplitude * Math.sin(2.0 * Math.PI * noeud.frequence * temps + noeud.phase);
@@ -91,10 +92,18 @@ export class SynthetiseurAcoustique {
         BORNES_RPIA.amortissementAudioMin,
         BORNES_RPIA.amortissementAudioMax,
       );
-
-      somme += Math.abs(interference);
     }
-    return somme / this.nbNoeuds;
+
+    // Le rapport doit refléter les oscillateurs APRÈS la mise à jour, et
+    // non réutiliser l'interférence calculée avant la plasticité.
+    return this.calculerErreur(cible, temps);
+  }
+
+  /** Erreur moyenne des oscillateurs courants à un instant donné. */
+  erreurCourante(cible: OndeCible, temps: number): number {
+    this.verifierCible(cible);
+    this.verifierTemps(temps);
+    return this.calculerErreur(cible, temps);
   }
 
   /**
@@ -108,16 +117,31 @@ export class SynthetiseurAcoustique {
     config: ConfigRPIA = RPIA_DEFAUTS,
   ): RapportEntrainement {
     this.verifierCible(cible);
-    if (!Number.isInteger(pas) || pas < 1) {
-      throw new Error(`Nombre de pas invalide : ${pas} (entier ≥ 1 requis).`);
+    if (!Number.isInteger(pas) || pas < 1 || pas > 1_000_000) {
+      throw new Error(`Nombre de pas invalide : ${pas} (entier entre 1 et 1 000 000 requis).`);
     }
+    this.verifierGuidage(guidage);
+    if (
+      !config ||
+      typeof config !== "object" ||
+      !Number.isFinite(config.tauxApprentissage) ||
+      config.tauxApprentissage < 0 ||
+      !Number.isFinite(config.pasDeTemps) ||
+      config.pasDeTemps <= 0 ||
+      !Number.isFinite((pas - 1) * config.pasDeTemps)
+    ) {
+      throw new Error(
+        "Configuration audio invalide : taux fini ≥ 0 et pas de temps fini > 0 requis.",
+      );
+    }
+    const erreurAvant = this.erreurCourante(cible, 0);
     const historique: number[] = [];
     let temps = 0;
     for (let p = 0; p < pas; p++) {
       historique.push(this.pasGuidage(cible, guidage, temps));
       temps += config.pasDeTemps;
     }
-    return rapportDepuisHistorique(historique);
+    return rapportDepuisHistorique(historique, erreurAvant);
   }
 
   /**
@@ -165,6 +189,28 @@ export class SynthetiseurAcoustique {
       pcm[s] = borner(somme * normalisation * 2, -1, 1);
     }
     return pcm;
+  }
+
+  private calculerErreur(cible: OndeCible, temps: number): number {
+    let somme = 0;
+    for (let i = 0; i < this.nbNoeuds; i++) {
+      const noeud = this.noeuds[i];
+      const onde = noeud.amplitude * Math.sin(2.0 * Math.PI * noeud.frequence * temps + noeud.phase);
+      somme += Math.abs(onde - cible[i]);
+    }
+    return somme / this.nbNoeuds;
+  }
+
+  private verifierGuidage(guidage: number): void {
+    if (!Number.isFinite(guidage) || guidage < 0) {
+      throw new Error(`Guidage invalide : ${guidage} (nombre fini ≥ 0 requis).`);
+    }
+  }
+
+  private verifierTemps(temps: number): void {
+    if (!Number.isFinite(temps) || temps < 0) {
+      throw new Error(`Temps audio invalide : ${temps} (nombre fini ≥ 0 requis).`);
+    }
   }
 
   private verifierCible(cible: OndeCible): void {
