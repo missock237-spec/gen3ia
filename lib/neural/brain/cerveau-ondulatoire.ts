@@ -123,7 +123,7 @@ const MAX_HIPPOCAMPE = 10;
 const MAX_TEXTE = 20_000;
 
 function normaliserTexte(texte: string): string {
-  return texte.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  return texte.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function validerTexte(texte: unknown, champ: string): asserts texte is string {
