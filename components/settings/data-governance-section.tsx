@@ -14,6 +14,12 @@ import { authFetch } from "@/lib/firebase/auth-client";
  * Cette section les rend accessibles et ajoute l'export COMPLET du compte
  * (/api/account/export : mémoire + conversations + agents).
  *
+ * it. 29 : l'export des PARAMÈTRES (/api/settings/export-data — préférences,
+ * artefacts, jobs, manifeste honnête {count, tronque}) était livré depuis
+ * l'it. 27 sans aucune surface utilisateur — la garde anti-code-mort
+ * (tests/unit/api-endpoints-dead-code-guard.test.ts) l'a signalé, cette
+ * section le câble et la baseline se rétrécit d'autant.
+ *
  * Effacement : double consentement applicatif — la première action arme la
  * confirmation, la seconde envoie `{ confirm: true }` (le serveur répond
  * 428 sans lui). Un seul clic ne peut jamais effacer quoi que ce soit.
@@ -21,7 +27,7 @@ import { authFetch } from "@/lib/firebase/auth-client";
  * Palette : tokens existants UNIQUEMENT (g3-*) — aucune nouvelle couleur.
  */
 
-type ActionKey = "export-compte" | "export-memoire" | "purge-memoire";
+type ActionKey = "export-compte" | "export-memoire" | "export-parametres" | "purge-memoire";
 
 function horodate(): string {
   return new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
@@ -67,6 +73,19 @@ export function DataGovernanceSection() {
     try {
       await telecharge(true, "/api/memory/export", `gen3ia-memoire-${horodate()}.json`);
       setMessage({ ton: "ok", texte: "Export de la mémoire personnalisée téléchargé." });
+    } catch (cause) {
+      setMessage({ ton: "erreur", texte: cause instanceof Error ? cause.message : "Export impossible." });
+    } finally {
+      setEnCours(null);
+    }
+  }, []);
+
+  const exportParametres = useCallback(async () => {
+    setEnCours("export-parametres");
+    setMessage(null);
+    try {
+      await telecharge(true, "/api/settings/export-data", `gen3ia-parametres-${horodate()}.json`);
+      setMessage({ ton: "ok", texte: "Export des paramètres téléchargé (préférences, artefacts, jobs — manifeste inclus)." });
     } catch (cause) {
       setMessage({ ton: "erreur", texte: cause instanceof Error ? cause.message : "Export impossible." });
     } finally {
@@ -131,6 +150,14 @@ export function DataGovernanceSection() {
           className="inline-flex items-center gap-2 rounded-full border border-[var(--g3-border)] px-4 py-2.5 text-sm font-semibold text-[var(--g3-text)] transition hover:border-[var(--g3-primary)] disabled:opacity-50"
         >
           {enCours === "export-memoire" ? "Préparation…" : "Exporter la mémoire seule"}
+        </button>
+        <button
+          type="button"
+          onClick={exportParametres}
+          disabled={occuppe}
+          className="inline-flex items-center gap-2 rounded-full border border-[var(--g3-border)] px-4 py-2.5 text-sm font-semibold text-[var(--g3-text)] transition hover:border-[var(--g3-primary)] disabled:opacity-50"
+        >
+          {enCours === "export-parametres" ? "Préparation…" : "Exporter les paramètres"}
         </button>
       </div>
 
