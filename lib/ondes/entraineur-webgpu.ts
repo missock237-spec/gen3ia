@@ -130,13 +130,12 @@ export class EntraineurWebGPU implements EntraineurOndes {
     const device = await adaptateur.requestDevice();
 
     const tailleNoeuds = nbNoeuds * 16;
-    if (
-      tailleNoeuds > device.limits.maxStorageBufferBindingSize ||
-      tailleNoeuds > device.limits.maxBufferSize
-    ) {
+    const limiteStockage = device.limits.maxStorageBufferBindingSize;
+    const limiteBuffer = device.limits.maxBufferSize;
+    if (tailleNoeuds > limiteStockage || tailleNoeuds > limiteBuffer) {
       device.destroy();
       throw new Error(
-        `Réseau trop grand pour ce GPU : ${tailleNoeuds} octets requis, limite de stockage ${device.limits.maxStorageBufferBindingSize} octets.`,
+        `Réseau trop grand pour ce GPU : ${tailleNoeuds} octets requis, limite de stockage ${limiteStockage} octets (taille maximale d'un buffer : ${limiteBuffer} octets).`,
       );
     }
 
