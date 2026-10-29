@@ -39,6 +39,21 @@ describe("couche d'ondes neuronales RPIA (pont résonance → cerveau)", () => {
     }
   });
 
+  it("préserve le pas de temps demandé dans l'état exporté et restauré", () => {
+    const config = { tauxApprentissage: 0.01, pasDeTemps: 0.25 };
+    const source = new CoucheOndesNeuronales(32, { graine: 43 });
+    source.entrainerVersTexte("checkpoint avec horloge personnalisée", 15, config);
+    const etat = source.exporterEtat();
+
+    expect(etat.pasDeTemps).toBe(0.25);
+
+    const copie = new CoucheOndesNeuronales(32, { graine: 43 });
+    copie.importerEtat(JSON.parse(JSON.stringify(etat)));
+    expect(copie.exporterEtat().pasDeTemps).toBe(0.25);
+    expect(copie.pasTotaux).toBe(source.pasTotaux);
+    expect(copie.energiesResonance()).toEqual(source.energiesResonance());
+  });
+
   it("l'entraînement RPIA converge réellement vers l'onde cible du texte", () => {
     const couche = new CoucheOndesNeuronales(256);
     const rapport = couche.entrainerVersTexte("rédiger un rapport d'analyse de données", 200);
