@@ -126,6 +126,7 @@ describe("persistence du cerveau neuronal", () => {
     const validRpia = {
       taille: 50,
       pasTotaux: 12,
+      pasDeTemps: 0.25,
       poids: Array.from({ length: 50 * 4 }, (_, i) => i / 1000),
     };
     await saveBrainState(reseau, {}, [], undefined, validRpia);
@@ -141,6 +142,8 @@ describe("persistence du cerveau neuronal", () => {
       { ...validRpia, pasTotaux: -1 },
       { ...validRpia, pasTotaux: 1.5 },
       { ...validRpia, pasTotaux: Number.MAX_SAFE_INTEGER + 1 },
+      { ...validRpia, pasDeTemps: 0 },
+      { ...validRpia, pasDeTemps: 1e100 },
       { ...validRpia, poids: poidsAvecNull },
       { ...validRpia, taille: 4097, poids: new Array(4097 * 4).fill(0) },
     ];
