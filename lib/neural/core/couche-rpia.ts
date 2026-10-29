@@ -158,10 +158,26 @@ export class CoucheOndesNeuronales {
     if (etat.taille !== this.taille) {
       throw new Error(`État incompatible : taille ${etat.taille} ≠ ${this.taille}.`);
     }
-    this.entraineur.importerPoids(new Float32Array(etat.poids));
+    if (!Array.isArray(etat.poids) || etat.poids.length !== this.taille * 4) {
+      throw new Error(
+        `Poids incompatibles : ${Array.isArray(etat.poids) ? etat.poids.length : "format invalide"} valeurs reçues, ${this.taille * 4} attendues.`,
+      );
+    }
+    // Vérifier le compteur avant l'import des poids évite de laisser un
+    // réseau partiellement restauré si le checkpoint est incohérent.
+    if (
+      etat.pasTotaux !== undefined &&
+      (!Number.isInteger(etat.pasTotaux) || etat.pasTotaux < 0)
+    ) {
+      throw new Error(`Compteur de pas invalide : ${etat.pasTotaux} (entier ≥ 0 requis).`);
+    }
+    const poids = new Float32Array(etat.poids);
+    // Float32Array peut convertir des nombres finis mais trop grands en
+    // Infinity : le validateur du moteur rejette aussi ce cas avant mutation.
+    this.entraineur.importerPoids(poids);
     // Le temps global fait partie de l'état : sans lui, la reprise
     // évaluerait les ondes à un autre instant que la source.
-    if (typeof etat.pasTotaux === "number") {
+    if (etat.pasTotaux !== undefined) {
       this.entraineur.restaurerPas(etat.pasTotaux);
     }
   }
