@@ -100,6 +100,9 @@ export class EntraineurRPIA {
   pasEntrainement(cible: OndeCible, config: ConfigRPIA = RPIA_DEFAUTS): number {
     this.verifierCible(cible);
     this.verifierConfig(config);
+    // WebGPU consomme des f32 ; normaliser aussi les tableaux JS en f32
+    // pour que le chemin CPU travaille sur la même cible numérique.
+    const cibleFloat32 = cible instanceof Float32Array ? cible : Float32Array.from(cible);
     const lr = config.tauxApprentissage;
     // Le shader évalue l'onde avec le pasDeTemps passé en uniforme — le
     // miroir utilise le même temps pour l'évaluation et la correction du
@@ -110,7 +113,7 @@ export class EntraineurRPIA {
     for (let i = 0; i < this.nbNoeuds; i++) {
       const noeud = this.noeuds[i];
       const ondeAvant = noeud.amplitude * Math.cos(noeud.frequence * tempsOnde + noeud.phase);
-      const interference = ondeAvant - cible[i];
+      const interference = ondeAvant - cibleFloat32[i];
 
       if (Math.abs(interference) < BORNES_RPIA.seuilConstructif) {
         // Interférence constructive : renforcement de la résonance.
@@ -136,7 +139,7 @@ export class EntraineurRPIA {
     }
 
     this.compteurPas++;
-    return erreurInterference(this.noeuds, cible, tempsOnde);
+    return erreurInterference(this.noeuds, cibleFloat32, tempsOnde);
   }
 
   /**
@@ -154,15 +157,16 @@ export class EntraineurRPIA {
       throw new Error(`Nombre d'époques invalide : ${epoques} (entier ≥ 1 requis).`);
     }
     this.verifierConfig(config);
+    const cibleFloat32 = cible instanceof Float32Array ? cible : Float32Array.from(cible);
     // Mesurer le point de départ avant toute mise à jour. L'ancien code
     // prenait historique[0], donc l'erreur APRÈS le premier pas, comme
     // "erreur initiale" : le rapport pouvait masquer une régression au
     // premier pas et ne représentait pas réellement l'état de départ.
     const tempsInitial = calculerTempsGlobalRPIA(config, this.compteurPas);
-    const erreurAvantEntrainement = erreurInterference(this.noeuds, cible, tempsInitial);
+    const erreurAvantEntrainement = erreurInterference(this.noeuds, cibleFloat32, tempsInitial);
     const historique: number[] = [];
     for (let e = 0; e < epoques; e++) {
-      historique.push(this.pasEntrainement(cible, config));
+      historique.push(this.pasEntrainement(cibleFloat32, config));
     }
     return rapportDepuisHistorique(historique, erreurAvantEntrainement);
   }
@@ -228,7 +232,8 @@ export class EntraineurRPIA {
   /** Erreur d'interférence moyenne courante contre une cible. */
   erreurCourante(cible: OndeCible, temps: number): number {
     this.verifierCible(cible);
-    return erreurInterference(this.noeuds, cible, temps);
+    const cibleFloat32 = cible instanceof Float32Array ? cible : Float32Array.from(cible);
+    return erreurInterference(this.noeuds, cibleFloat32, temps);
   }
 
   private verifierConfig(config: ConfigRPIA): void {
