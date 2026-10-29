@@ -4374,3 +4374,12 @@ Stage Summary:
 - Livraison : CI 48558ad 5/5 success ; CD swap skippé (SSH muet) + STAGNATION CONFIRMÉE à 08:04Z — release cd-latest à jour (16aece9) mais poller silencieux, prod = 496881d2 ; escalade v6.1 conforme (anti-faux-positif, seuil 10 min) → issue visible attendue aux ticks 08:17/08:47Z ; action owner console unique (install-pull-mode.sh) ; it.25 visible dès rétablissement du canal.
 - Validation : tsc 0 (1 fix statut ?? "active"), eslint 0, vitest **5224/5224** (+13).
 - Rappels owner : PAT rotation n°26 ; mise en œuvre sauvegarde données (it.23) toujours en attente ; PR #100-#103 + phases #95-#97 inchangés.
+
+### 478451-iter26-0810 (16:10 +08:00) — incident livraison résolu + guérisseur v6.2 (secours sans SSH)
+- Ouverture tick : sandbox INTACT (1ère fois) ; prod figée 496881d2 (100 min) — stagnation persistante ; escalade pas encore ouverte (seuil 10 min anti-faux-positif conforme) ; surveillance 0 run (2e slot sauté — comportement workflow neuf).
+- Diagnostic final : étape CD = pré-sondage ssh-keyscan → muet = exit 1 silencieux (continue-on-error) → swap skipped ; poller silencieux depuis 06:40Z ; TOUS les canaux CI verts — maillon VPS-side exclusif.
+- RÉSOLUTION : dispatch CD manuel (runner neuf = IP egress neuve) → fenêtre SSH prise → prod e5279375 (08:10Z build) 10/10 ; it.25 (gouvernance données) EN PROD : /api/account/export → 401 cryptographique (plus jamais 404) ; aucune escalade ouverte.
+- Surveillance : dispatch manuel 1er run → #1 VERT (10/10, TTFB 7-448 ms, détection conjonctive correctement silencieuse à 1.7 h < 3 h).
+- Livré (commit **12b8de4**) : guérisseur v6.2 — étape « Secours sans SSH — redéclencher le CD (renouvellement d'IP runner) » (conditions conjonctives : SSH muet ET release_sha==main ET âge ≥ 10 min) ; garde d'escalade anti-race « SECOURS VENANT DE S'ARMER » (pas d'issue le tick du dispatch) ; rapport du tick trace secours-ip ; 2 gardiens ci-pipeline.
+- Validation : vitest **5226/5226** (+2), tsc 0, YAML valide ; push 12b8de4 = test live du mécanisme.
+- Rappels owner : PAT n°27 ; poller silencieux (v6.2 rend autonome mais passage console recommandé) ; sauvegardes it.23 toujours en attente.
