@@ -51,6 +51,24 @@ describe("CerveauOndulatoireGen3", () => {
     expect(cerveau.percevoir("bonjour").sortie).toBe("Bonjour de nouveau.");
   });
 
+  it("rejoue les souvenirs hippocampiques pour consolider les connexions", () => {
+    const cerveau = new CerveauOndulatoireGen3({ taille: 32, budgetActif: 5, epoquesParAssociation: 2 });
+    cerveau.apprendre("Comment se nomme la capitale du Cameroun ?", "Yaoundé");
+    cerveau.apprendre("Combien font deux plus deux ?", "Quatre");
+    const avant = cerveau.statistiques().synapsesApprises;
+    const rapport = cerveau.consoliderHippocampe();
+
+    expect(rapport.toursRejoues).toBe(2);
+    expect(rapport.synapsesRenforcees).toBeGreaterThan(0);
+    expect(rapport.synapsesTotales).toBeGreaterThan(0);
+    expect(cerveau.statistiques().synapsesApprises).toBe(avant);
+    expect(cerveau.contexteCourtTerme()).toHaveLength(2);
+  });
+
+  it("refuse une configuration susceptible de consommer trop de mémoire", () => {
+    expect(() => new CerveauOndulatoireGen3({ taille: 512, capaciteMemoire: 3000 })).toThrow(/budget mémoire/);
+  });
+
   it("borne la mémoire à long terme", () => {
     const cerveau = new CerveauOndulatoireGen3({ taille: 16, budgetActif: 3, capaciteMemoire: 2, epoquesParAssociation: 1 });
     cerveau.apprendre("première entrée", "première réponse");
