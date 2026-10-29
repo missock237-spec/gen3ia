@@ -329,10 +329,7 @@ export class CerveauOndulatoireGen3 {
     const signatureOnde = rappelAccepte && meilleur
       ? signatureDepuisOnde(meilleur.etatOnde, this.taille)
       : null;
-    const signalCortical = signatureOnde
-      ? representation.map((valeur, i) => (valeur + signatureOnde[i]) / 2)
-      : representation;
-    const propagation = this.propagerEvenements(signalCortical);
+    const propagation = this.propagerEvenements(representation, signatureOnde ?? undefined);
     const mode: ModeRappelCerveau = rappelAccepte
       ? exact ? "RAPPEL_EXACT" : "RAPPEL_ASSOCIATIF"
       : "INCONNU";
@@ -506,7 +503,10 @@ export class CerveauOndulatoireGen3 {
     return renforcees;
   }
 
-  private propagerEvenements(signal: readonly number[]): RapportPropagation {
+  private propagerEvenements(
+    signal: readonly number[],
+    modulationOnde?: readonly number[],
+  ): RapportPropagation {
     const sources = topK(signal, this.budgetActif);
     const sorties = new Map<number, number>();
     let evenementsSynaptiques = 0;
@@ -517,7 +517,12 @@ export class CerveauOndulatoireGen3 {
       if (!connexions) continue;
       for (const [cible, poids] of connexions) {
         evenementsSynaptiques += 1;
-        const contribution = source.valeur * poids;
+        // L'onde apprise module l'efficacité de transmission sans changer
+        // le classement d'activation sensoriel du cortex.
+        const facteurOnde = modulationOnde
+          ? 0.5 + 0.5 * Math.abs(modulationOnde[source.index] ?? 0)
+          : 1;
+        const contribution = source.valeur * facteurOnde * poids;
         sorties.set(cible, (sorties.get(cible) ?? 0) + contribution);
       }
     }
