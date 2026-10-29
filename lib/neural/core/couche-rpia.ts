@@ -143,6 +143,38 @@ export class CoucheOndesNeuronales {
   }
 
   /**
+   * Restaure un état ancien dans une couche plus grande sans perdre les
+   * poids appris des neurones existants. Les neurones nouvellement ajoutés
+   * gardent l'initialisation déterministe de la couche cible. Cette méthode
+   * sert aux migrations de taille (par exemple 100 → 140 neurones).
+   *
+   * La couche source est validée dans une instance temporaire AVANT toute
+   * mutation de la cible ; un checkpoint invalide ne laisse donc pas un
+   * cerveau partiellement restauré.
+   */
+  importerEtatEtendu(etat: EtatRPIA): void {
+    if (etat.taille > this.taille) {
+      throw new Error(
+        `Extension impossible : état de ${etat.taille} nœuds pour une couche de ${this.taille} nœuds.`,
+      );
+    }
+    if (etat.taille === this.taille) {
+      this.importerEtat(etat);
+      return;
+    }
+
+    const source = new CoucheOndesNeuronales(etat.taille);
+    source.importerEtat(etat);
+    const poidsCibles = this.entraineur.exporterPoids();
+    poidsCibles.set(source.entraineur.exporterPoids());
+
+    // Les poids existants remplacent le préfixe correspondant ; le suffixe
+    // de la couche cible reste dans son état initial/appris courant.
+    this.entraineur.importerPoids(poidsCibles);
+    this.entraineur.restaurerPas(etat.pasTotaux);
+  }
+
+  /**
    * État sérialisable (JSON-safe) pour la persistance : poids arrondis
    * (6 décimales) — même contrat que training/persistence.ts.
    */
