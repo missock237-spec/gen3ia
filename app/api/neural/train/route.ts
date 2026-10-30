@@ -16,6 +16,9 @@ import { getNeuralRuntime } from "@/lib/neural/runtime";
  * POST (admin) : boucle supervisée RÉELLE — plasticité synaptique guidée par
  * label, accuracy mesurée par époque, évaluation sur jeu de test jamais vu,
  * puis persistance du cerveau appris (var/neural/brain-v1.json).
+ * it.57 : source « ondes » = entraînement PAR ONDES (analyse + traitement
+ * d'ondes sur le cortex v1M, domaines choisis — cf.
+ * docs/entrainement/methode-ondes.md).
  * GET : progression du job en cours / dernier rapport.
  */
 export const dynamic = "force-dynamic";
@@ -27,9 +30,13 @@ const TrainBodySchema = z.object({
   maxTotal: z.number().int().min(2).max(8000).optional(),
   lrBoost: z.number().min(0.01).max(0.5).optional(),
   cyclesParEchantillon: z.number().int().min(2).max(8).optional(),
-  source: z.enum(["corpus", "domaines", "complet"]).optional(),
+  // it.57 : « ondes » = NOUVEAU moyen d'entraînement par analyse et
+  // traitement des ondes (cortex v1M, domaines CHOISIS via domainesOndes).
+  source: z.enum(["corpus", "domaines", "complet", "ondes"]).optional(),
   maxParDomaine: z.number().int().min(10).max(2000).optional(),
   complet: z.boolean().optional(),
+  // it.57 — domaines CHOISIS pour l'entraînement par ondes (vide = les 18).
+  domainesOndes: z.array(z.string().trim().min(1).max(80)).max(24).optional(),
 });
 
 export async function POST(request: NextRequest) {

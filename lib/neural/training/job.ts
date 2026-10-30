@@ -19,6 +19,8 @@ import {
   construirePairesDomaines,
 } from "./domaines";
 import { CORPUS_GEN3 } from "../generation/corpus";
+import { entrainerDomainesParOndes } from "./entrainement-ondes";
+import type { RapportEntrainementOndes } from "./entrainement-ondes";
 import type { StatsApprentissageLangage } from "../generation/language";
 import { executionLogger } from "@/lib/observability/logger";
 
@@ -39,7 +41,9 @@ import { executionLogger } from "@/lib/observability/logger";
  *    amorçage canonique) — comportement historique ;
  *  - « domaines » : couche des 18 domaines (échantillons JSONL commis ou
  *    datasets complets si présents) + paires du cortex langagier ;
- *  - « complet »  : les deux, dans le même job.
+ *  - « complet »  : les deux, dans le même job ;
+ *  - « ondes »    : it.57 — NOUVEAU MOYEN D'ENTRAÎNEMENT par analyse et
+ *    traitement des ONDES (cortex v1M, domaines CHOISIS via domainesOndes).
  */
 
 /** État d'un job d'entraînement (données 100 % réelles). */
@@ -78,6 +82,8 @@ export interface NeuralTrainingJob {
   rapport?: TrainingReport;
   /** Rapport final de la couche des domaines si entraînée. */
   rapportDomaines?: RapportDomaines;
+  /** it.57 — rapport de la session d'entraînement PAR ONDES (source « ondes »). */
+  rapportOndes?: RapportEntrainementOndes;
   /**
    * Apprentissage langagier du cortex (corpus conversationnel + amorçage +
    * paires de domaine) — stats réelles du dernier passage.
@@ -113,12 +119,16 @@ export interface LancerEntrainementOptions {
   lrBoost?: number;
   /** Cycles du noyau par échantillon (défaut 4). */
   cyclesParEchantillon?: number;
-  /** Source : corpus (défaut) | domaines | complet. */
-  source?: "corpus" | "domaines" | "complet";
+  /** Source : corpus (défaut) | domaines | complet | ondes (it.57). */
+  source?: "corpus" | "domaines" | "complet" | "ondes";
   /** Cap d'échantillons de domaine par dataset (défaut 120). */
   maxParDomaine?: number;
   /** Utiliser les datasets complets si présents sur disque (défaut false). */
   complet?: boolean;
+  /** it.57 — ENTRAÎNEMENT PAR ONDES : domaines CHOISIS (liste de labels ;
+   *  vide = tous les 18). Analysés puis traités SOUS ONDES par le cortex
+   *  v1M (lib/neural/training/entrainement-ondes.ts). */
+  domainesOndes?: string[];
 }
 
 /**
@@ -241,6 +251,46 @@ export function lancerEntrainement(
         }
       }
 
+      // ── 2-bis. ONDES (source « ondes » — it.57, demande propriétaire) ───
+      //    NOUVEAU MOYEN D'ENTRAÎNEMENT : analyse des ondes + traitement
+      //    des ondes sur le cortex v1M, domaines CHOISIS par le propriétaire.
+      if (source === "ondes") {
+        const chargementOndes = await chargerEchantillonsDomaines({
+          maxParDomaine,
+          complet: options.complet,
+        });
+        const filtre = options.domainesOndes?.length
+          ? new Set(options.domainesOndes.map((d) => d.trim().toLowerCase()).filter(Boolean))
+          : null;
+        const exemplesOndes = chargementOndes.samples
+          .filter((s) => !filtre || filtre.has(s.label.toLowerCase()))
+          .map((s) => ({ texte: s.text, domaine: s.label }));
+        if (runtime.cortexV2 && exemplesOndes.length > 0) {
+          job.nbEchantillonsDomaines = exemplesOndes.length;
+          job.statsDomaines = {
+            parDomaine: chargementOndes.parDomaine,
+            parLangue: chargementOndes.parLangue,
+            fichiersAbsents: chargementOndes.fichiersAbsents,
+          };
+          const rapportOndes = entrainerDomainesParOndes(
+            runtime.cortexV2.cortex,
+            runtime.cortexV2.champ,
+            exemplesOndes,
+            { cyclesParEchantillon, lrBoost, maxParDomaine },
+          );
+          job.rapportOndes = rapportOndes;
+        } else {
+          executionLogger({
+            requestId: "neural-training",
+            userId: `job:${job.id}`,
+          }).warn(
+            runtime.cortexV2
+              ? `Entraînement « ondes » : aucun échantillon de domaine trouvé (fichiers absents : ${chargementOndes.fichiersAbsents.join(", ") || "aucun"}).`
+              : "Entraînement « ondes » : cortex v2 indisponible (trop de mémoire ?) — session ignorée.",
+          );
+        }
+      }
+
       // ── 3. CORTEX LANGAGIER ─────────────────────────────────────────────
       //    Corpus d'amorçage canonique (idempotent) + paires de domaine
       //    réelles extraites des datasets (plafonnées).
@@ -284,6 +334,9 @@ export function lancerEntrainement(
             : "") +
           (job.rapportDomaines
             ? ` (domaines: accuracy test ${job.rapportDomaines.accuracyTest}, ${job.rapportDomaines.samples} échantillons)`
+            : "") +
+          (job.rapportOndes
+            ? ` (ondes: ${job.rapportOndes.totalEchantillons} échantillons, ${job.rapportOndes.domaines.length} domaine(s), énergie transportée par le bus consolidée)`
             : "") +
           `, langage: ${job.langage.pairesAjoutees} paires ajoutées, sauvegarde: ${sauvegarde}`,
       );

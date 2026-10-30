@@ -246,6 +246,18 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* MÉTABOLISME V2 (MetabolismePasV2 : évaluées/reposées/transmissions/ms */
 /* mesurés par pas) ; doc docs/cerveau/architecture-cible-1m.md (loi     */
 /* CONTRAINTE-ONDES formalisée) ; verrou bidirectionnel (24e).           */
+/* Puis it.57 : ENTRAÎNEMENT PAR ONDES DE DOMAINE (EOD) — demande         */
+/* propriétaire : NOUVEAU moyen d'entraînement selon les domaines CHOISIS */
+/* (lib/neural/training/entrainement-ondes.ts) : 1) ANALYSE DES ONDES —   */
+/* chaque token devient un paquet [fréquence, phase, amplitude]           */
+/* déterministe ; 2) TRAITEMENT DES ONDES — la colonne cible est dérivée  */
+/* de l'ONDE (sin phase + porteur), intensité = amplitude ; 3)            */
+/* CONSOLIDATION ONDULAIRE — plasticité supervisée vers la bande-porteuse */
+/* du domaine (porteur ω dérivé du label, même vocabulaire que le bus)    */
+/* + émission au bus inter-régions (la « partie » du domaine grandit) ;   */
+/* branchée sur POST /api/neural/train { source: "ondes", domainesOndes } */
+/* + rapport honnête par domaine (résonance, paquets, métabolisme cumulé) */
+/* + doc docs/entrainement/methode-ondes.md ; verrou bidirectionnel (25e).*/
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -1360,5 +1372,33 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     expect(existsSync(path.join(RACINE, "docs/cerveau/architecture-cible-1m.md")), "La doc d'architecture 1M (loi CONTRAINTE-ONDES) doit rester en place — régression it.56").toBe(true);
     // TESTS : le bus garde ses tests unitaires.
     expect(existsSync(path.join(RACINE, "lib/neural/core/v2/bus-ondes-regions.test.ts")), "Le test du bus d'ondes doit rester en place — régression it.56").toBe(true);
+  });
+
+  it("l'entraînement par ondes de domaine existe et est branché (it.57)", () => {
+    // it.57 : demande propriétaire (« un tout nouveau moyen d'entraînement
+    // basé sur l'analyse des ondes et le traitement de ces ondes, selon les
+    // domaines que l'on choisira » + fichier explicatif).
+    const eod = readFileSync(path.join(RACINE, "lib/neural/training/entrainement-ondes.ts"), "utf8");
+    const job = readFileSync(path.join(RACINE, "lib/neural/training/job.ts"), "utf8");
+    const route = readFileSync(path.join(RACINE, "app/api/neural/train/route.ts"), "utf8");
+
+    // Les TROIS phases réelles : analyse des ondes → traitement des ondes
+    // (colonne dérivée de l'onde) → consolidation ondulaire (bus inter-régions).
+    expect(eod.includes("export function analyserOndeTexte"), "L'analyse des ondes doit rester la phase 1 — régression it.57").toBe(true);
+    expect(eod.includes("export function colonnesDepuisOndes"), "Le traitement des ondes doit rester la phase 2 — régression it.57").toBe(true);
+    expect(eod.includes("champ.propagerOndes"), "La consolidation ondulaire doit passer par le bus inter-régions — régression it.57").toBe(true);
+    expect(eod.includes("cortex.plasticiteSupervisee"), "La plasticité supervisée vers la bande-porteuse doit rester réelle — régression it.57").toBe(true);
+    // Chaque domaine a son porteur dérivé de son nom (extensible sans code).
+    expect(eod.includes("export function bandeDuDomaine"), "La bande-porteuse dérivée du nom du domaine doit rester — régression it.57").toBe(true);
+    // Branché sur la porte d'entraînement : source « ondes » + domaines CHOISIS.
+    expect(route.includes('"ondes"'), "La porte /api/neural/train doit accepter la source « ondes » — régression it.57").toBe(true);
+    expect(route.includes("domainesOndes"), "Les domaines choisis par le propriétaire doivent être acceptés — régression it.57").toBe(true);
+    expect(job.includes('source === "ondes"'), "Le job doit exécuter la session d'ondes — régression it.57").toBe(true);
+    expect(job.includes("entrainerDomainesParOndes"), "Le job doit appeler le trainer par ondes — régression it.57").toBe(true);
+    expect(job.includes("rapportOndes"), "Le rapport honnête de la session d'ondes doit rester exposé — régression it.57").toBe(true);
+    // Le fichier explicatif demandé par le propriétaire reste en place.
+    expect(existsSync(path.join(RACINE, "docs/entrainement/methode-ondes.md")), "Le fichier explicatif de la méthode d'entraînement par ondes doit rester en place — régression it.57").toBe(true);
+    // Tests unitaires de la méthode.
+    expect(existsSync(path.join(RACINE, "lib/neural/training/entrainement-ondes.test.ts")), "Le test de la méthode d'ondes doit rester en place — régression it.57").toBe(true);
   });
 });
