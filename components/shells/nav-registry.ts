@@ -187,6 +187,15 @@ const WORKSPACE_SECONDARY: NavRoute[] = [
   // l'espace documents scopés par projet, consommé par l'outil
   // knowledge.search des agents.
   { id: "knowledge", href: "/knowledge", label: "Connaissances", icon: "❑", description: "Bibliothèque RAG de vos projets : documents indexés, consultés par vos agents", contexts: ["workspace"], section: "secondary", keywords: ["connaissances", "knowledge", "rag", "documents", "indexation", "bibliothèque", "recherche"] },
+  // it. 51 (Job 478451) : « Usage organisation » — la vue d'usage AGRÉGÉ
+  // PAR ORGANISATION (Task 43, saas-roadmap §3) : la porte
+  // /api/observability/org (requireUser + requireOrgContext — 404
+  // uniforme si l'appelant n'est pas membre) existait sans AUCUNE
+  // surface utilisateur (garde anti-code-mort). La page
+  // /observability/org restitue exécutions, coûts, tokens, adoption des
+  // agents, outils et activité quotidienne de l'org — jumeau entreprise
+  // de la vue personnelle /observability.
+  { id: "usage-org", href: "/observability/org", label: "Usage organisation", icon: "∑", description: "Usage agrégé de vos organisations : exécutions, coûts, tokens et adoption des agents", contexts: ["workspace"], section: "secondary", keywords: ["usage", "organisation", "org", "équipe", "entreprise", "exécutions", "coûts", "tokens", "quota", "budget", "adoption", "agents"] },
   { id: "billing", href: "/billing", label: "Facturation", icon: "₣", description: "Abonnements et consommation", contexts: ["workspace"], section: "secondary", keywords: ["facturation", "abonnement"] },
   { id: "settings", href: "/settings", label: "Paramètres", icon: "⚙", description: "Compte, sécurité, numéros et préférences", contexts: ["workspace"], section: "secondary", keywords: ["paramètres", "compte"] },
   // it. 33 (Job 478451) : « Business » — les 12 endpoints /api/business/*

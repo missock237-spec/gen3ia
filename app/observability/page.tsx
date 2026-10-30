@@ -56,7 +56,13 @@ export default function ObservabilityPage() {
         title="Observabilité des agents"
         description="Traces d'exécution, coûts, tokens, usage des outils et alertes : gardez la visibilité totale sur ce que vos agents font, dépensent et décident."
         actions={
-          <Link href="/dashboard" className="g3-btn g3-btn-ghost text-xs">← Retour au tableau de bord</Link>
+          <>
+            {/* it.51 : le jumeau entreprise de cette vue — usage agrégé
+                par organisation (orgs dont l'appelant est membre, garde
+                requireOrgContext côté porte). */}
+            <Link href="/observability/org" className="g3-btn g3-btn-ghost text-xs">Usage organisation →</Link>
+            <Link href="/dashboard" className="g3-btn g3-btn-ghost text-xs">← Retour au tableau de bord</Link>
+          </>
         }
       />
 

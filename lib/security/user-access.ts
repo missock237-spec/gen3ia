@@ -312,6 +312,12 @@ const USER_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/billing": "facturation",
   "/memory": "memoire",
   "/observability": "observabilite",
+  // USAGE PAR ORGANISATION (it.51 — Task 43, saas-roadmap §3) : la vue
+  // d'usage agrégé d'une organisation est accessible à tout compte
+  // connecté — la porte vérifie elle-même l'appartenance
+  // (requireOrgContext, 404 uniforme sinon) et ne restitue que des
+  // métriques agrégées, sans aucun contenu conversationnel.
+  "/observability/org": "observabilite",
   "/integrations": "integrations",
   "/storage": "fichiers",
   "/settings": "parametres",

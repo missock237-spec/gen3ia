@@ -71,7 +71,7 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 63 endpoints orphelins au 2026-10-31 (it.50 ;      */
+/* Baseline honnête — 62 endpoints orphelins au 2026-10-31 (it.51 ;      */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
@@ -182,6 +182,17 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* /api/skills/import catalogue skills.sh idempotent restitué item par    */
 /* item) ; 4 tests structurels + verrou bidirectionnel (19ᵉ) — les 5      */
 /* entrées sortent du registre (pre-ui-roadmap 10→5, total 68→63).        */
+/* Puis it.51 : USAGE PAR ORGANISATION — la porte /observability/org est  */
+/* CÂBLÉE dans la vue entreprise (nouvelle page /observability/org +      */
+/* components/observability/org-usage-console : GET /api/organizations   */
+/* pour le sélecteur (rôle + membres restitués), GET /api/observability/ */
+/* org?orgId=…&days=… pour l'usage agrégé — totaux, adoption par agent,  */
+/* outils, activité quotidienne, membres couverts ; 404 uniforme de la   */
+/* porte (org absente OU non-membre) restitué tel quel, garde            */
+/* anti-course, allowlist page + entrée nav secondaire + lien croisé     */
+/* depuis la vue personnelle ; 4 tests structurels + verrou              */
+/* bidirectionnel (20e) — l'entrée sort du registre (pre-ui-roadmap      */
+/* 5→4, total 63→62).                                                    */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -293,6 +304,9 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *   - /observability/org : usage agrégé PAR ORGANISATION (Task 43,
    *     saas-roadmap §3) — requireOrgContext vérifie l'appartenance ; la
    *     vue usage org n'est pas encore une surface (UI pas échue).
+   *     it.51 : SORT de cette catégorie — la vue entreprise
+   *     (/observability/org + org-usage-console) consomme désormais la
+   *     porte (sélecteur d'orgs + usage agrégé par agent / outil / jour).
    *   - /knowledge : ingestion RAG réelle (GET liste, POST
    *     fichiers/URL, DELETE) — API de données de l'agent, UI classée
    *     LOT 6 du plan plateforme (Knowledge Spaces).
@@ -310,7 +324,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/agents/generate",
     "/developer/simulation",
     "/files/workspaces",
-    "/observability/org",
     "/workspace/tasks/clarify",
   ],
   /** VIDÉE à l'it.45 (audit 4 canaux du 6e lot) : les 10 dernières
@@ -1134,6 +1147,35 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
       for (const entree of ["/knowledge/triggers", "/knowledge/triggers/[id]", "/skills", "/skills/create", "/skills/import"]) {
         expect(endpoints, `${entree} est CÂBLÉE depuis l'it.50 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain(entree);
       }
+    }
+  });
+
+  it("l'usage par organisation reste câblé dans la vue entreprise (it.51) — porte vivante, registre à jour", () => {
+    // it.51 : la porte /observability/org est consommée par la vue
+    // entreprise (page /observability/org + org-usage-console :
+    // sélecteur d'orgs via /api/organizations, usage agrégé par
+    // agent / outil / jour, membres couverts, 404 uniforme restitué tel
+    // quel, garde anti-course) — l'entrée a quitté pre-ui-roadmap
+    // (63→62).
+    const consoleData = readFileSync(path.join(RACINE, "components/observability/org-usage-console.tsx"), "utf8");
+    expect(consoleData.includes("`/api/observability/org?${params.toString()}`"), "La vue entreprise doit interroger la porte d'usage org (orgId + days) — régression du câblage it.51").toBe(true);
+    expect(consoleData.includes('authFetch("/api/organizations", { cache: "no-store" })'), "Le sélecteur doit interroger les organisations réelles du compte — régression it.51").toBe(true);
+    expect(consoleData.includes("usage.membersCovered"), "La vue doit restituer les membres couverts (preuve du périmètre organisation) — régression it.51").toBe(true);
+    expect(consoleData.includes("aucun contenu conversationnel"), "L'honnêteté du périmètre (données agrégées) doit rester affichée — régression it.51").toBe(true);
+    // La page est réelle et allowlistée utilisateur.
+    expect(existsSync(path.join(RACINE, "app/observability/org/page.tsx")), "La page /observability/org est la surface entreprise — sa suppression est une régression").toBe(true);
+    const userAccess = readFileSync(path.join(RACINE, "lib/security/user-access.ts"), "utf8");
+    expect(userAccess.includes('"/observability/org": "observabilite"'), "La page /observability/org doit rester allowlistée utilisateur — régression d'accès it.51").toBe(true);
+    // La porte reste réelle (contrat GET buildOrgUsageOverview).
+    expect(existsSync(path.join(RACINE, "app/api/observability/org/route.ts")), "La porte /api/observability/org est le socle de la vue entreprise — sa suppression est une régression").toBe(true);
+    // La lib servie reste vivante.
+    expect(existsSync(path.join(RACINE, "lib/observability/org-queries.ts")), "lib/observability/org-queries.ts est l'agrégation d'usage org (I/O + pure) — sa disparition est une régression fonctionnelle").toBe(true);
+    // Le test structurel du composant reste en place.
+    expect(existsSync(path.join(RACINE, "components/observability/org-usage-console.test.ts")), "Le test structurel de la vue organisation doit rester en place — il verrouille le contrat UI↔porte").toBe(true);
+    // Registre : l'entrée est sortie (et n'est revenue dans aucune autre
+    // catégorie).
+    for (const [categorie, endpoints] of Object.entries(BASELINE_ORPHELINS)) {
+      expect(endpoints, `/observability/org est CÂBLÉE depuis l'it.51 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain("/observability/org");
     }
   });
 });
