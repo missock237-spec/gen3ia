@@ -117,7 +117,11 @@ describe("lancement du pulse", () => {
     expect(createQueuedMissionMock).not.toHaveBeenCalled();
   });
 
-  it("mission réellement enfilée (file configurée) + ledger", async () => {
+  it("mission réellement enfilée (file configurée) + ledger", { timeout: 20_000 }, async () => {
+    // timeout 20 s (défaut 5 s) : ce test partage un worker avec le banc
+    // neuronal 1M (it.56, performance.test.ts) — sur un runner CI chargé,
+    // la construction CSR du cortex peut affamer ce test au-delà de 5 s
+    // (2 occurrences : it.56 et it.58). Marge honnête, aucune logique changée.
     const result = await runBusinessPulse({ userId: "u1" });
     expect(result.executed).toBe(true);
     expect(result.runId).toBeTruthy();
