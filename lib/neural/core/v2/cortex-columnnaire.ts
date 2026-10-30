@@ -37,9 +37,26 @@
  * Module PUR — aucune dépendance Node, entièrement déterministe (seed).
  */
 
+/**
+ * Métabolisme du DERNIER pas (it.56 — extension au cortex v2 du modèle
+ * v1 : le coût est ∝ ACTIVITÉ, le repos est gratuit — « très faible
+ * quantité d'énergie tel un cerveau humain »). Mesuré, jamais estimé.
+ */
+export interface MetabolismePasV2 {
+  /** Colonnes réellement évaluées (recevant énergie ou transmission). */
+  evaluees: number;
+  /** Colonnes au repos ce cycle (coût ZÉRO — total − évaluées). */
+  reposes: number;
+  /** Transmissions CSR poussées le long des colonnes qui ont spiké. */
+  transmissions: number;
+  /** Coût réel du pas en millisecondes (performance.now). */
+  ms: number;
+}
+
 /** Configuration du cortex columnnaire. */
 export interface CortexColumnnaireConfig {
-  /** Nombre de colonnes (unités neurales réelles). Défaut 262 144 = 2^18. */
+  /** Nombre de colonnes (unités neurales réelles). Défaut 1 048 576 = 2^20
+   *  (it.56 — demande propriétaire : « un million de neurones »). */
   colonnes: number;
   /** Arêtes sortantes par colonne. Défaut 12 : 8 vers les bandes de
    *  lecture (1 garantie par bande) + 4 intra-cortex aléatoires. */
@@ -65,9 +82,13 @@ export interface CortexColumnnaireConfig {
   bandes: number;
 }
 
-/** Valeurs par défaut — dimensionnées pour un VPS 2 Go (~31 Mo en RAM). */
+/** Valeurs par défaut — it.56 (demande propriétaire : « un million de
+ *  neurones ») : 1 048 576 colonnes = 2^20 (×4 l'ancien 2^18). Budget
+ *  mémoire ~117 Mo (CSR 12 arêtes/colonne) — compatible VPS 2 Go ; la
+ *  persistance gère la migration honnête (artefact de taille ≠ → cortex
+ *  neuf seedé, message [NEURAL-V2] explicite). */
 export const CORTEX_CONFIG_DEFAUTS: CortexColumnnaireConfig = {
-  colonnes: 262144,
+  colonnes: 1048576,
   voisins: 12,
   bandesLecture: 8,
   seuil: 1.0,
@@ -128,6 +149,14 @@ export class CortexColumnnaire {
 
   /** Résonance SPIKE par bande du dernier pas (mécanique pulsaire). */
   private dernierResonance: Float32Array;
+
+  /** Métabolisme du dernier pas (it.56 — coût ∝ activité, repos gratuit). */
+  readonly metabolismeDernierPas: MetabolismePasV2 = {
+    evaluees: 0,
+    reposes: 0,
+    transmissions: 0,
+    ms: 0,
+  };
 
   /**
    * LECTURE GRADUÉE : énergie totale reçue par bande via les transmissions
@@ -271,14 +300,17 @@ export class CortexColumnnaire {
 
     // ---- (1)+(2) Évaluation : transmissions en attente + injections ------
     // (une colonne ne franchit le seuil que lorsqu'elle reçoit de l'énergie)
+    let evaluees = 0;
     if (this.enAttente.length > 0) {
       const attente = this.enAttente;
       this.enAttente = [];
+      evaluees += attente.length;
       for (const c of attente) {
         if (this.evaluerColonne(c, 0, t)) spikes.push(c);
       }
     }
     if (injections && injections.length > 0) {
+      evaluees += injections.length;
       for (const [c, valeur] of injections) {
         if (c < 0 || c >= colonnes) continue;
         if (this.evaluerColonne(c, valeur, t)) spikes.push(c);
@@ -323,6 +355,13 @@ export class CortexColumnnaire {
     // EMA du coût (mesure réelle, télémétrie honnête).
     const cout = performance.now() - debut;
     this.msCycle = this.msCycle === 0 ? cout : this.msCycle * 0.9 + cout * 0.1;
+
+    // Métabolisme v2 (it.56) : coût ∝ activité — les colonnes non
+    // stimulées sont au REPOS (coût zéro, jamais itérées).
+    this.metabolismeDernierPas.evaluees = evaluees;
+    this.metabolismeDernierPas.reposes = colonnes - evaluees;
+    this.metabolismeDernierPas.transmissions = spikes.length * voisins;
+    this.metabolismeDernierPas.ms = cout;
 
     return spikes;
   }

@@ -40,7 +40,7 @@ describe("Benchmark neuronal (mesures réelles)", () => {
       const msV1 = mesurer(200, 20, fenetreV1);
       let tCycle = 0;
 
-      // ----- Cortex v2 (262 144 colonnes, format production) -------------
+      // ----- Cortex v2 (1 048 576 colonnes, format production it.56) ------
       const cortex = new CortexColumnnaire();
       const tokens = tokenize(
         "génère une image d'un coucher de soleil sur l'océan avec des nuages roses",
@@ -59,9 +59,9 @@ describe("Benchmark neuronal (mesures réelles)", () => {
       const msV2Cycle = msV2 / 4;
 
       // Cycle avec activité massive (1000 colonnes sur-stimulées → ~1000
-      // spikes → 2M arêtes potentiellement touchées via CSR).
+      // spikes → arêtes touchées via CSR, coût ∝ activité).
       const massif: Array<[number, number]> = [];
-      for (let c = 0; c < 1000; c++) massif.push([c * 262, 3.0]);
+      for (let c = 0; c < 1000; c++) massif.push([c * 1049, 3.0]);
       const msV2Massif = mesurer(50, 5, () => {
         cortex.reinitialiserEnergies();
         cortex.pas(massif, 1);
@@ -75,11 +75,11 @@ describe("Benchmark neuronal (mesures réelles)", () => {
 
       const rapport = {
         "v1_noyau_100_neurones_ms_par_fenetre_4_cycles": Number(msV1.toFixed(4)),
-        "v2_cortex_262144_colonnes_ms_par_fenetre_4_cycles": Number(msV2.toFixed(4)),
+        "v2_cortex_1048576_colonnes_ms_par_fenetre_4_cycles": Number(msV2.toFixed(4)),
         "v2_cortex_ms_par_cycle": Number(msV2Cycle.toFixed(4)),
         "v2_cycle_massif_1000_spikes_ms": Number(msV2Massif.toFixed(4)),
         "v2_champ_1e9_echantillon_4096_ms": Number(msChamp.toFixed(4)),
-        "unites_traitees_v2_par_v1": Math.round(262144 / 100),
+        "unites_traitees_v2_par_v1": Math.round(1048576 / 100),
         "fenetres_v2_par_seconde": Math.round(1000 / msV2),
       };
       console.log("BENCHMARK NEURONAL:", JSON.stringify(rapport, null, 2));

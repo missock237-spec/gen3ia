@@ -26,6 +26,8 @@
  */
 
 import { createRng } from "../rng";
+import { propagerOndesInterRegions } from "./bus-ondes-regions";
+import type { BilanOndes, PaquetOnde } from "./bus-ondes-regions";
 
 /** Taille exacte du champ cortical : 1 milliard de neurones adressables. */
 export const TAILLE_CHAMP = 1_000_000_000;
@@ -151,6 +153,19 @@ export class ChampCorticalGen3 {
       const cible = somme / nb;
       this.modulation[r] = this.modulation[r] * 0.7 + cible * 0.3;
     }
+  }
+
+  /**
+   * BUS D'ONDES INTER-RÉGIONS (it.56 — canal HORIZONTAL, demande
+   * propriétaire : « chaque partie ou cellule communique via des ondes »)
+   * : les régions actives émettent des paquets d'onde (vocabulaire
+   * fréquence/phase/amplitude), les 1000 régions résonnent — renfort en
+   * phase, annulation en opposition (même physique que le consensus de
+   * l'essaim). Délègue à propagerOndesInterRegions (module pur, bilan
+   * honnête, déterministe).
+   */
+  propagerOndes(t: number, paquets: readonly PaquetOnde[]): BilanOndes {
+    return propagerOndesInterRegions(this.modulation, t, paquets);
   }
 
   /**

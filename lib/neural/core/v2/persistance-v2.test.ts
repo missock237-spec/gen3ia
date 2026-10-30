@@ -109,10 +109,10 @@ describe("persistance v2 (artefact binaire)", () => {
     expect(lireArtefactV2("/tmp/gen3-inexistant-cortex-v2.bin")).toBeNull();
   });
 
-  it("taille d'artefact au format par défaut ≈ 12-13 Mo (colonnes × voisins × f32)", () => {
-    const octets = 38 + 262144 * 12 * 4 + 1000 * 4;
-    expect(octets / 1048576).toBeGreaterThan(12);
-    expect(octets / 1048576).toBeLessThan(13);
+  it("taille d'artefact au format par défaut ≈ 47-49 Mio (colonnes × voisins × f32, it.56 : 1 048 576 colonnes)", () => {
+    const octets = 38 + 1048576 * 12 * 4 + 1000 * 4;
+    expect(octets / 1048576).toBeGreaterThan(47);
+    expect(octets / 1048576).toBeLessThan(49);
     void readFileSync; // (import conservé pour les tests disque)
   });
 });

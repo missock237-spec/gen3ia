@@ -239,14 +239,15 @@ describe("CortexColumnnaire", () => {
     expect(stats.memoireMo).toBeGreaterThanOrEqual(0);
     expect(stats.msCycleEma).toBeGreaterThanOrEqual(0);
     const defauts = CORTEX_CONFIG_DEFAUTS;
-    expect(defauts.colonnes).toBe(262144);
+    // it.56 (demande propriétaire : « un million de neurones ») : 2^20.
+    expect(defauts.colonnes).toBe(1048576);
     expect(defauts.voisins).toBe(12);
     expect(defauts.bandesLecture).toBe(8);
-    // Mémoire du format par défaut : entre 25 et 40 Mo (31,7 Mo attendus).
+    // Mémoire du format par défaut : entre 100 et 140 Mo (127 Mo attendus).
     const octetsDefauts =
       defauts.colonnes * 25 + defauts.colonnes * defauts.voisins * 8;
-    expect(octetsDefauts / 1048576).toBeGreaterThan(25);
-    expect(octetsDefauts / 1048576).toBeLessThan(40);
+    expect(octetsDefauts / 1048576).toBeGreaterThan(100);
+    expect(octetsDefauts / 1048576).toBeLessThan(140);
   });
 
   it("garantit une arête de chaque colonne vers chaque bande de lecture", () => {

@@ -228,6 +228,24 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* mobile promise par it.52 — elle ne s'applique plus qu'au partage      */
 /* d'écran (la caméra est honnête partout) ; picker d'arrêt conservé     */
 /* en override manuel ; verrou bidirectionnel (23e).                     */
+/* Puis it.55 : DÉBLOCAGE DU VOLET BUSINESS — demande propriétaire : la   */
+/* suite métier (12 modules CRUD réels) était complète mais 403 par       */
+/* défaut allowlist : "/business" + "/api/business" ajoutés à la liste    */
+/* blanche (famille studio, requireUser + scoping par route), copie 403  */
+/* mise à jour, verrou test inversé — pulse garde son exclusion          */
+/* volontaire de la vue lecture.                                         */
+/* Puis it.56 : LE CERVEAU À UN MILLION DE NEURONES — demande            */
+/* propriétaire : CORTEX_CONFIG_DEFAUTS.colonnes = 1 048 576 (2^20, ×4)  */
+/* — neurones spiking réels en TypedArrays, coût ∝ activité ; BUS D'ONDES */
+/* INTER-RÉGIONS (lib/neural/core/v2/bus-ondes-regions.ts) : canal       */
+/* HORIZONTAL du champ cortical — les bandes d'intention émettent des    */
+/* paquets d'onde (porteur fréquentiel VOCABULAIRE par bande, région     */
+/* émettrice en rotation déterministe), les 1000 régions résonnent par   */
+/* couplage de Kuramoto (renfort en phase, annulation en opposition),    */
+/* intégré À CHAQUE CYCLE via EffecteurCortexV2 + télémétrie busOndes ;  */
+/* MÉTABOLISME V2 (MetabolismePasV2 : évaluées/reposées/transmissions/ms */
+/* mesurés par pas) ; doc docs/cerveau/architecture-cible-1m.md (loi     */
+/* CONTRAINTE-ONDES formalisée) ; verrou bidirectionnel (24e).           */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -1311,5 +1329,36 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     expect(startRoute.includes('if (source === "screen" && !device.isLiveCapable)'), "La garde PC-only ne doit s'appliquer qu'au partage d'écran (caméra mobile légitime) — régression it.54").toBe(true);
     // L'override manuel reste disponible APRÈS un arrêt (picker de l'exécuteur).
     expect(executeur.includes('aria-pressed={sourceActuelle === "screen"}'), "L'override manuel de source doit rester disponible après arrêt — régression it.54").toBe(true);
+  });
+
+  it("le cerveau gen3 possède un million de neurones, des parties et un bus d'ondes (it.56)", () => {
+    // it.56 : demande propriétaire (« un million de neurones, plusieurs
+    // parties réparties, un langage réparti sous des ondes, les parties
+    // communiquent via des ondes, ressources matérielles = ondes gen3,
+    // très faible énergie »).
+    const cortex = readFileSync(path.join(RACINE, "lib/neural/core/v2/cortex-columnnaire.ts"), "utf8");
+    const bus = readFileSync(path.join(RACINE, "lib/neural/core/v2/bus-ondes-regions.ts"), "utf8");
+    const champ = readFileSync(path.join(RACINE, "lib/neural/core/v2/champ-cortical.ts"), "utf8");
+    const effecteur = readFileSync(path.join(RACINE, "lib/neural/core/v2/effecteur-cortex.ts"), "utf8");
+
+    // SUBSTRAT 1M : défaut 2^20 (un million de neurones spiking réels).
+    expect(cortex.includes("colonnes: 1048576"), "Le cortex columnnaire doit avoir 1 048 576 colonnes par défaut (un million de neurones) — régression it.56").toBe(true);
+    // MÉTABOLISME V2 : coût ∝ activité, repos gratuit, MESURÉ.
+    expect(cortex.includes("metabolismeDernierPas"), "Le métabolisme v2 (évaluées/reposées/transmissions/ms) doit rester mesuré par pas — régression it.56").toBe(true);
+    // BUS D'ONDES : le canal horizontal existe, est PUR et borné.
+    expect(bus.includes("export function propagerOndesInterRegions"), "Le bus d'ondes inter-régions doit rester le canal horizontal du champ — régression it.56").toBe(true);
+    expect(bus.includes("PAQUETS_MAX = 64"), "Le bus doit plafonner les paquets (garde-fou de coût) — régression it.56").toBe(true);
+    expect(bus.includes("Math.cos"), "Le couplage doit être physique (Kuramoto, cos du déphasage) — régression it.56").toBe(true);
+    // CHAMP : le bus est exposé sur le champ cortical (1000 régions).
+    expect(champ.includes("propagerOndes(t: number, paquets"), "Le champ cortical doit exposer la propagation d'ondes inter-régions — régression it.56").toBe(true);
+    // EFFECTEUR : le bus tourne À CHAQUE CYCLE (émission + propagation) et
+    // la télémétrie honnête est exposée.
+    expect(effecteur.includes("emettrePaquetsDepuisBandes(activation, this.horloge)"), "L'effecteur v2 doit émettre des paquets d'onde depuis les bandes actives à chaque cycle — régression it.56").toBe(true);
+    expect(effecteur.includes("this.champ.propagerOndes"), "L'effecteur v2 doit propager les ondes inter-régions à chaque cycle — régression it.56").toBe(true);
+    expect(effecteur.includes("busOndes:"), "La télémétrie busOndes doit rester exposée (bilan honnête) — régression it.56").toBe(true);
+    // DOC : l'architecture cible + la loi CONTRAINTE-ONDES sont formalisées.
+    expect(existsSync(path.join(RACINE, "docs/cerveau/architecture-cible-1m.md")), "La doc d'architecture 1M (loi CONTRAINTE-ONDES) doit rester en place — régression it.56").toBe(true);
+    // TESTS : le bus garde ses tests unitaires.
+    expect(existsSync(path.join(RACINE, "lib/neural/core/v2/bus-ondes-regions.test.ts")), "Le test du bus d'ondes doit rester en place — régression it.56").toBe(true);
   });
 });

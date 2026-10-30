@@ -48,6 +48,8 @@ import { tokenize } from "../../encoding/text-encoder";
 import { CortexColumnnaire } from "./cortex-columnnaire";
 import type { CortexColumnnaireStats } from "./cortex-columnnaire";
 import { ChampCorticalGen3 } from "./champ-cortical";
+import { emettrePaquetsDepuisBandes } from "./bus-ondes-regions";
+import type { BilanOndes } from "./bus-ondes-regions";
 
 /**
  * Miroir de LABEL_POOLS (training/trainer.ts — module `server-only`,
@@ -111,6 +113,16 @@ export interface EtatCortexV2 {
     fractionActive: number;
     erreurEchantillon: number;
   };
+  /** it.56 — bus d'ondes inter-régions : dernier bilan (paquets, renforts,
+   *  annulations, énergie transportée) et total de paquets émis. */
+  busOndes: BilanOndes & { paquetsEmisTotal: number };
+  /** it.56 — métabolisme columnnaire du dernier pas (coût ∝ activité). */
+  metabolisme: {
+    evaluees: number;
+    reposes: number;
+    transmissions: number;
+    ms: number;
+  };
   horlogeColumnnaire: number;
   fenetresTraitees: number;
   consolidation: { epochs: number; samples: number };
@@ -148,6 +160,10 @@ export class EffecteurCortexV2 implements Effecteur {
   /** Statistiques d'évolution. */
   private fenetresTraitees = 0;
   private consolidation = { epochs: 0, samples: 0 };
+
+  /** it.56 — télémétrie du bus d'ondes (dernier bilan + total émis). */
+  private dernierBilanOndes: BilanOndes = { paquets: 0, regionsTouchees: 0, renforts: 0, annulations: 0, energieTransportee: 0 };
+  private paquetsEmisTotal = 0;
 
   constructor(
     reseau: ReseauInjectable,
@@ -232,6 +248,14 @@ export class EffecteurCortexV2 implements Effecteur {
       }
     }
     this.champ.couplerBandes(activation);
+    // ---- (3.5) BUS D'ONDES INTER-RÉGIONS (it.56) --------------------------
+    // Chaque bande d'intention active fait émettre une région (rotation
+    // déterministe) sur son porteur fréquentiel VOCABULAIRE — les 1000
+    // régions résonnent : renfort en phase, annulation en opposition.
+    // Le langage est réparti SOUS ONDES, partie ↔ partie, à coût borné.
+    const paquets = emettrePaquetsDepuisBandes(activation, this.horloge);
+    this.paquetsEmisTotal += paquets.length;
+    this.dernierBilanOndes = this.champ.propagerOndes(this.horloge, paquets);
     if (!prompt) this.champ.veille(this.horloge);
 
     // ---- (4) Remontée columnnaire → pools v1 (pathway multi-échelle) -----
@@ -337,6 +361,8 @@ export class EffecteurCortexV2 implements Effecteur {
     return {
       cortex: this.cortex.stats(),
       champ: this.champ.statsRapides(this.horloge),
+      busOndes: { ...this.dernierBilanOndes, paquetsEmisTotal: this.paquetsEmisTotal },
+      metabolisme: { ...this.cortex.metabolismeDernierPas },
       horlogeColumnnaire: this.horloge,
       fenetresTraitees: this.fenetresTraitees,
       consolidation: { ...this.consolidation },
