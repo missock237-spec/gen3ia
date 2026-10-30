@@ -36,11 +36,16 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "web.open", description: "Open and extract text from a public web page.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "file.read", description: "Read a REAL file: an attachment from the owner's permanent storage (users/<uid>/permanent/...) or an authorized workspace file (input { path, workspaceId? }). Returns converted text plus metadata.", risk: "read", permission: "file.read", sideEffect: false },
   { name: "file.create", description: "Create a workspace file.", risk: "write", permission: "file.create", sideEffect: true },
-  { name: "file.modify", description: "Modify a workspace file.", risk: "write", permission: "file.write", sideEffect: true },
+  // it.58 — file.modify RETIRÉ du catalogue : aucun exécuteur n'a jamais
+  // existé (fantôme — le planner pouvait planifier un échec garanti).
+  // La modification passe par file.create (écrasement) ou file.read + code.
   { name: "zip.analyze", description: "Analyze a ZIP archive safely.", risk: "read", permission: "file.read", sideEffect: false },
   { name: "zip.create", description: "Create and persist a ZIP artifact.", risk: "write", permission: "file.create", sideEffect: true },
   { name: "artifact.create", description: "Create a persistent document artifact.", risk: "write", permission: "file.create", sideEffect: true },
-  { name: "artifact.download", description: "Download an authorized artifact.", risk: "read", permission: "file.read", sideEffect: false },
+  // it.58 — renommé artifact.get : c'est l'ID RÉEL de l'exécuteur
+  // (lib/tools/files/get-artifact.ts) — l'ancien alias artifact.download
+  // produisait « Unknown tool » à l'exécution (fantôme).
+  { name: "artifact.get", description: "Get metadata and content of an authorized persistent document artifact.", risk: "read", permission: "file.read", sideEffect: false },
   { name: "zip.extract", description: "Extract a ZIP archive into the authorized workspace.", risk: "write", permission: "file.create", sideEffect: true },
   { name: "file.delete", description: "Delete an authorized workspace file.", risk: "destructive", permission: "file.delete", sideEffect: true },
   { name: "memory.read", description: "Read the user memory available to the agent.", risk: "read", permission: "memory.read", sideEffect: false },
@@ -55,8 +60,11 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "ads.read", description: "Read data from an authorized advertising account.", risk: "read", permission: "ads.read", sideEffect: false },
   { name: "ads.publish", description: "Publish an advertising action to an authorized account.", risk: "external", permission: "ads.write", sideEffect: true },
   { name: "github.create_repository", description: "Create a GitHub repository for a generated project.", risk: "external", permission: "tool.external", sideEffect: true },
-  { name: "voice.list", description: "List available voice profiles.", risk: "read", permission: "network.read", sideEffect: false },
-  { name: "phone.call", description: "Place a bounded outbound AI phone call.", risk: "external", permission: "tool.external", sideEffect: true },
+  // it.58 — voice.list et phone.call RETIRÉS du catalogue : les exécuteurs
+  // externes (Bland, ElevenLabs) ont été retirés de la plateforme (règle
+  // zéro service IA externe) — planifier ces outils garantissait un échec.
+  // La voix locale reste disponible via voice.speak ; le répondeur via
+  // voicemail.respond.
   { name: "code.execute", description: "Execute code in the isolated sandbox.", risk: "external", permission: "code.execute", sideEffect: true },
   { name: "code.simulate", description: "Simulate code execution without side effects (VM restreinte Node, analyse statique Python/shell) et retourne le mode réel utilisé.", risk: "read", permission: "code.execute", sideEffect: false },
   { name: "knowledge.search", description: "Search the project knowledge base (indexed documents, tenant-scoped vector search).", risk: "read", permission: "file.read", sideEffect: false },
@@ -66,11 +74,25 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "email.send", description: "Send an email from the agent on behalf of the platform.", risk: "external", permission: "tool.external", sideEffect: true },
   { name: "social.publish", description: "Publish content on a connected social platform via Composio.", risk: "external", permission: "tool.external", sideEffect: true },
   { name: "webhook.emit", description: "Emit a signed Gen3ia event to the user's declared outgoing webhook endpoints.", risk: "external", permission: "tool.external", sideEffect: true },
-  { name: "ui.components", description: "Search and retrieve professional UI components from the 21st.dev catalog (code agents only).", risk: "read", permission: "tool.external", sideEffect: false },
+  // it.58 — ui.components RETIRÉ du catalogue : le connecteur 21st.dev
+  // n'a jamais existé (fantôme — le planner planifiait un échec garanti).
+  // it.58 — SCHEDULES + WORKFLOWS exposés au planner : exécutables RÉELS
+  // (lib/tools/schedules.ts, lib/tools/workflows.ts) et allowlistés par
+  // PROJECT_SERVICE_TOOLS depuis longtemps, ils étaient ABSENTS du
+  // catalogue — le planner les jugeait « INDISPONIBLE » à tort.
+  { name: "schedule.create", description: "Planifier une tâche récurrente ou différée de l'agent (cron, intervalle, une fois) — exécution réelle par le scheduler.", risk: "write", permission: "tool.write", sideEffect: true },
+  { name: "schedule.list", description: "Lister les tâches planifiées du propriétaire avec leur état réel.", risk: "read", permission: "tool.read", sideEffect: false },
+  { name: "schedule.update", description: "Mettre à jour une tâche planifiée (pause, reprise, horaire).", risk: "write", permission: "tool.write", sideEffect: true },
+  { name: "schedule.delete", description: "Supprimer une tâche planifiée du propriétaire.", risk: "write", permission: "tool.write", sideEffect: true },
+  { name: "workflow.create", description: "Créer un workflow d'automatisation (étapes séquentielles réelles exécutées par le moteur de workflows).", risk: "write", permission: "tool.write", sideEffect: true },
+  { name: "workflow.list", description: "Lister les workflows du propriétaire avec leur état réel.", risk: "read", permission: "tool.read", sideEffect: false },
+  { name: "workflow.run", description: "Exécuter un workflow existant (déclenchement réel du moteur d'exécution).", risk: "write", permission: "tool.write", sideEffect: true },
+  { name: "workflow.delete", description: "Supprimer un workflow du propriétaire.", risk: "write", permission: "tool.write", sideEffect: true },
   { name: "notion.search", description: "Search pages and databases in the authorized Notion workspace.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "notion.create_page", description: "Create a page in the authorized Notion workspace.", risk: "external", permission: "tool.external", sideEffect: true },
-  { name: "jules.create_task", description: "Start an asynchronous coding task with the Jules agent on a GitHub repository.", risk: "external", permission: "tool.external", sideEffect: true },
-  { name: "jules.get_task", description: "Read the state of a Jules coding session.", risk: "read", permission: "network.read", sideEffect: false },
+  // it.58 — jules.create_task / jules.get_task RETIRÉS du catalogue :
+  // l'intégration Jules n'existe pas (JULES_API_KEY seulement citée) —
+  // le planner planifiait deux échecs garantis.
   { name: "cloudflare.zones.list", description: "List Cloudflare zones accessible to the integration.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "cloudflare.dns.list", description: "List DNS records of a Cloudflare zone.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "cloudflare.dns.create", description: "Create a DNS record in an authorized Cloudflare zone.", risk: "external", permission: "tool.external", sideEffect: true },

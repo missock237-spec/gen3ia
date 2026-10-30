@@ -97,9 +97,9 @@ export function resolveAllowedTools(level: AgentSecurityLevel, agent: AgentRecor
     exclusions.add("terminal.run");
   }
   if (caps?.fileGeneration === false) exclusions.add("artifact.create");
-  // ui.components est l'outil EXCLUSIF des agents de type "code" : aucun
-  // autre type ne peut l'obtenir, ni en le déclarant, ni via la sentinelle.
-  if (!isCodeAgent) exclusions.add("ui.components");
+  // it.58 : l'exclusivité ui.components (agents code) est supprimée —
+  // l'outil fantôme (connecteur 21st.dev jamais câblé) est retiré du
+  // catalogue et des permissions.
 
   // Étape 7 (défense en profondeur) : seuls les outils RÉELLEMENT présents au
   // registre Gen3ia rejoignent la whitelist — les records legacy contenant des

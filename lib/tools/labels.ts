@@ -14,13 +14,13 @@ const TOOL_LABELS: Record<string, string> = {
   "web.api": "Service web",
   "file.read": "Lecture de fichier",
   "file.create": "Création de fichier",
-  "file.modify": "Modification de fichier",
+  // it.58 : file.modify retiré (fantôme — jamais d'exécuteur).
   "file.delete": "Suppression de fichier",
   "zip.analyze": "Analyse d'archive",
   "zip.create": "Création d'archive",
   "zip.extract": "Extraction d'archive",
   "artifact.create": "Création de document",
-  "artifact.download": "Téléchargement de document",
+  "artifact.get": "Consultation de document",
   "memory.read": "Consultation de la mémoire",
   "memory.write": "Enregistrement en mémoire",
   "terminal.execute": "Commande en environnement isolé",
@@ -30,8 +30,8 @@ const TOOL_LABELS: Record<string, string> = {
   "ads.publish": "Publication publicitaire",
   "github.create_repository": "Création de dépôt GitHub",
   "voice.speak": "Synthèse audio (locale)",
-  "voice.list": "Consultation des voix",
-  "phone.call": "Appel téléphonique IA",
+  // it.58 : voice.list / phone.call retirés (fantômes — exécuteurs externes
+  // retirés de la plateforme).
   "code.execute": "Exécution de code",
   "code.simulate": "Simulation de code",
   "knowledge.search": "Recherche dans les documents",

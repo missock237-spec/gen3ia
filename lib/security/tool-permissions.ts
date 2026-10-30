@@ -7,17 +7,19 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "web.open": { name: "web.open", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "file.read": { name: "file.read", risk: "read", requiredPermissions: ["tool.read", "file.read"], filesystemRead: true },
   "file.create": { name: "file.create", risk: "write", requiredPermissions: ["tool.write", "file.create", "file.write"], filesystemWrite: true },
-  "file.modify": { name: "file.modify", risk: "write", requiredPermissions: ["tool.write", "file.write"], filesystemWrite: true },
+  // it.58 — renommé artifact.get (ID réel de l'exécuteur) ; file.modify,
+  // voice.list, phone.call, ui.components, jules.* RETIRÉS (fantômes —
+  // aucun exécuteur au registre, le planner ne doit plus les planifier).
+  "artifact.get": { name: "artifact.get", risk: "read", requiredPermissions: ["tool.read", "file.read"] },
   "file.delete": { name: "file.delete", risk: "destructive", requiredPermissions: ["tool.destructive", "file.delete"], filesystemWrite: true, destructive: true },
   "zip.analyze": { name: "zip.analyze", risk: "read", requiredPermissions: ["tool.read", "file.read"], filesystemRead: true },
   "zip.create": { name: "zip.create", risk: "write", requiredPermissions: ["tool.write", "file.write"], filesystemRead: true, filesystemWrite: true },
   "zip.extract": { name: "zip.extract", risk: "write", requiredPermissions: ["tool.write", "file.write", "file.create"], filesystemRead: true, filesystemWrite: true },
   "artifact.create": { name: "artifact.create", risk: "write", requiredPermissions: ["tool.write", "file.write"], filesystemRead: true, filesystemWrite: true },
-  "artifact.download": { name: "artifact.download", risk: "read", requiredPermissions: ["tool.read", "file.read"] },
+  // it.58 : l'alias artifact.download est supprimé — l'ID réel est artifact.get.
   "composio.execute": { name: "composio.execute", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   "mcp.call": { name: "mcp.call", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   "code.execute": { name: "code.execute", risk: "destructive", requiredPermissions: ["code.execute"] },
-  "ui.components": { name: "ui.components", risk: "read", requiredPermissions: ["tool.external", "network.read"], network: true },
   "terminal.execute": { name: "terminal.execute", risk: "destructive", requiredPermissions: ["terminal.execute"] },
   // Task 122 — terminal.run : exécution RÉELLE en-processus (microVM
   // serverless de la plateforme : env NETTOYÉ, cwd /tmp, deny-list durcie,
@@ -34,13 +36,11 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "github.create_repository": { name: "github.create_repository", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   // voice.speak : synthèse audio NEURONALE LOCALE (audit multimodal) —
   // plus aucun appel réseau (l'ancien moteur ElevenLabs a été supprimé).
+  // it.58 : voice.list et phone.call retirés (fantômes — exécuteurs
+  // externes retirés de la plateforme, règle zéro service IA externe).
   "voice.speak": { name: "voice.speak", risk: "write", requiredPermissions: ["tool.write"] },
-  "voice.list": { name: "voice.list", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
-  "phone.call": { name: "phone.call", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   "notion.search": { name: "notion.search", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "notion.create_page": { name: "notion.create_page", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
-  "jules.create_task": { name: "jules.create_task", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
-  "jules.get_task": { name: "jules.get_task", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "cloudflare.zones.list": { name: "cloudflare.zones.list", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "cloudflare.dns.list": { name: "cloudflare.dns.list", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "cloudflare.dns.create": { name: "cloudflare.dns.create", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
@@ -76,12 +76,18 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "network.send_message": { name: "network.send_message", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
   "network.read_inbox": { name: "network.read_inbox", risk: "read", requiredPermissions: ["tool.read"] },
   "network.mark_read": { name: "network.mark_read", risk: "read", requiredPermissions: ["tool.read"] },
+  // it.58 — brain.train : entraînement du cortex depuis le chat (exécuteur
+  // réel lib/tools/brain-train.ts, invoqué en direct par engine-training).
+  // Une définition manquait ici — un routage par le pipeline standard
+  // levait une exception. Outil INTERNE (pas de réseau, pas de fichier).
+  "brain.train": { name: "brain.train", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
   // Médias générés (audit outils médias ; reclassification 10-10 — directive
   // « aucune approbation pour un outil interne »).
-  // image.generate : génération d'image sur l'infrastructure Gen3ia (Agnes
-  // AI + repli Hugging Face) — outil INTERNE : aucune app utilisateur
-  // ciblée, aucun secret manipulé → jamais de carte de validation. Ancienne
-  // classification « external » la forçait dans le plan HITL (captures 07:24).
+  // image.generate : génération d'image sur l'infrastructure Gen3ia (moteur
+  // neuronal local — l'ancien service Agnes AI a été supprimé) — outil
+  // INTERNE : aucune app utilisateur ciblée, aucun secret manipulé → jamais
+  // de carte de validation. Ancienne classification « external » la forçait
+  // dans le plan HITL (captures 07:24).
   "image.generate": { name: "image.generate", risk: "write", requiredPermissions: ["tool.write", "network.read"], network: true },
   // video.create : l'outil se contente d'ENCHERIR un job dans la file de
   // production interne (lib/video/production-queue) — la capacité est une

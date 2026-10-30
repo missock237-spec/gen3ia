@@ -258,6 +258,17 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* branchée sur POST /api/neural/train { source: "ondes", domainesOndes } */
 /* + rapport honnête par domaine (résonance, paquets, métabolisme cumulé) */
 /* + doc docs/entrainement/methode-ondes.md ; verrou bidirectionnel (25e).*/
+/* Puis it.58 : EXCELLENCE DES OUTILS — demande propriétaire (« gen3 reçoit */
+/* les meilleurs outils pour un fonctionnement optimal ») : 6 FANTÔMES    */
+/* retirés du catalogue GEN3IA_TOOLS + TOOL_SECURITY + labels (file.modify,*/
+/* voice.list, phone.call, ui.components, jules.* — le planner planifiait */
+/* des échecs garantis) ; alias artifact.download → artifact.get (ID réel */
+/* de l'exécuteur) ; 8 outils EXÉCUTABLES enfin exposés au planner       */
+/* (schedule.create/list/update/delete, workflow.create/list/run/delete — */
+/* réels mais jugés « INDISPONIBLES » faute d'entrée catalogue) ;         */
+/* brain.train reçu sa définition TOOL_SECURITY (lève une exception sinon) */
+/* ; exclusivité ui.components retirée du plan personnalisé ; commentaire */
+/* Agnes périmé corrigé ; verrou bidirectionnel (26e).                    */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -1400,5 +1411,31 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     expect(existsSync(path.join(RACINE, "docs/entrainement/methode-ondes.md")), "Le fichier explicatif de la méthode d'entraînement par ondes doit rester en place — régression it.57").toBe(true);
     // Tests unitaires de la méthode.
     expect(existsSync(path.join(RACINE, "lib/neural/training/entrainement-ondes.test.ts")), "Le test de la méthode d'ondes doit rester en place — régression it.57").toBe(true);
+  });
+
+  it("le catalogue d'outils est SAIN — zéro fantôme, exécutables exposés (it.58)", () => {
+    // it.58 : demande propriétaire (« gen3 reçoit les meilleurs outils pour
+    // un fonctionnement optimal de chaque fonctionnalité ») — le planner ne
+    // doit plus pouvoir planifier un outil sans exécuteur (échec garanti),
+    // et tout outil exécutable légitime doit être visible du planner.
+    const registry = readFileSync(path.join(RACINE, "lib/tools/registry.ts"), "utf8");
+    const permissions = readFileSync(path.join(RACINE, "lib/security/tool-permissions.ts"), "utf8");
+
+    // ZÉRO FANTÔME : ces noms n'avaient AUCUN exécuteur au registre.
+    for (const fantome of ["file.modify", "voice.list", "phone.call", "ui.components", "jules.create_task", "jules.get_task", "artifact.download"]) {
+      const dansCatalogue = new RegExp(`name: "${fantome.replace(/\./g, "\\.")}"`).test(registry);
+      expect(dansCatalogue, `Le fantôme ${fantome} ne doit PAS revenir au catalogue du planner — régression it.58`).toBe(false);
+      const dansPermissions = permissions.includes(`"${fantome}": {`);
+      expect(dansPermissions, `Le fantôme ${fantome} ne doit PAS revenir aux permissions fines — régression it.58`).toBe(false);
+    }
+    // ALIAS RÉEL : artifact.get est l'ID de l'exécuteur (get-artifact.ts).
+    expect(registry.includes('name: "artifact.get"'), "artifact.get doit rester au catalogue (ID réel de l'exécuteur) — régression it.58").toBe(true);
+    expect(permissions.includes('"artifact.get": {'), "artifact.get doit garder sa définition de permissions — régression it.58").toBe(true);
+    // EXÉCUTABLES EXPOSÉS : schedules + workflows visibles du planner.
+    for (const outil of ["schedule.create", "schedule.list", "schedule.update", "schedule.delete", "workflow.create", "workflow.list", "workflow.run", "workflow.delete"]) {
+      expect(registry.includes(`name: "${outil}"`), `L'outil exécutable ${outil} doit rester exposé au planner — régression it.58`).toBe(true);
+    }
+    // brain.train garde sa définition de permissions (sinon exception au routage).
+    expect(permissions.includes('"brain.train": {'), "brain.train doit garder sa définition TOOL_SECURITY — régression it.58").toBe(true);
   });
 });

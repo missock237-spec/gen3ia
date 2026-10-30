@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createPersonalizedPlan, policyForAgent, resolveAllowedTools, securityLevelForAgent } from "./personalized-plan";
+import { GEN3IA_TOOLS } from "@/lib/tools/registry";
 import { isToolAllowed } from "@/lib/security/execution-policy";
 import type { AgentRecord } from "./schema";
 
@@ -102,26 +103,14 @@ describe("resolveAllowedTools — modèle whitelist Task 107 (« * » sauf exclu
     expect(allowed).not.toContain("web.search");
   });
 
-  it("non-code → JAMAIS ui.components (exclusivité conservée)", () => {
+  it("non-code et code : le fantôme ui.components a DISPARU du catalogue (it.58)", () => {
+    // it.58 : le connecteur 21st.dev n'a jamais existé — l'outil fantôme est
+    // retiré du catalogue (aucun exécuteur), l'exclusivité est devenue sans
+    // objet. Sans exclusion résiduelle, la sentinelle « * » reste compacte.
     const allowed = resolveAllowedTools("standard", makeAgent({ type: "content" }));
     expect(allowed).not.toContain("ui.components");
-    expect(allowed).toContain("web.search");
-    expect(allowed).toContain("file.create");
-  });
-
-  it("code → ui.components présent (via '*' ou en liste explicite)", () => {
-    // Sans exclusion : la sentinelle accorde tout le catalogue, ui.components inclus.
-    const sentinel = resolveAllowedTools("power", makeAgent({ type: "code" }));
-    expect(sentinel).toContain("*");
-    // Avec une exclusion (webSearch:false) : la liste explicite d'un agent de
-    // code contient littéralement ui.components.
-    const explicit = resolveAllowedTools(
-      "power",
-      makeAgent({ type: "code", persona: personaWith({ webSearch: false }) }),
-    );
-    expect(explicit).toContain("ui.components");
-    expect(explicit).toContain("code.execute");
-    expect(explicit).not.toContain("web.search");
+    const code = resolveAllowedTools("power", makeAgent({ type: "code" }));
+    expect(code).not.toContain("ui.components");
   });
 
   it("caps.codeExecution:false retire TOUT le panel code (exécution, simulation, terminal)", () => {
@@ -136,12 +125,15 @@ describe("resolveAllowedTools — modèle whitelist Task 107 (« * » sauf exclu
     expect(allowed).toContain("image.generate");
   });
 
-  it("caps.fileGeneration:false retire artifact.create", () => {
+  it("caps.fileGeneration:false retire artifact.create (it.58 : artifact.get est l'ID réel)", () => {
     const allowed = resolveAllowedTools(
       "standard",
       makeAgent({ persona: personaWith({ fileGeneration: false }) }),
     );
-    expect(allowed).toContain("artifact.download");
+    // it.58 : le catalogue expose artifact.get (ID réel de l'exécuteur),
+    // plus l'alias fantôme artifact.download.
+    expect(allowed).toContain("artifact.get");
+    expect(allowed).not.toContain("artifact.download");
     expect(allowed).not.toContain("artifact.create");
   });
 
@@ -168,29 +160,35 @@ describe("resolveAllowedTools — modèle whitelist Task 107 (« * » sauf exclu
 });
 
 describe("policyForAgent", () => {
-  it("autorise code.execute et ui.components pour un agent de code (sentinelle '*')", () => {
+  it("autorise code.execute pour un agent de code (sentinelle '*') — le fantôme ui.components n'existe plus (it.58)", () => {
     const policy = policyForAgent(makeAgent({ type: "code" }));
     expect(policy.allowedTools).toContain("*");
     expect(isToolAllowed(policy, "code.execute")).toBe(true);
-    expect(isToolAllowed(policy, "ui.components")).toBe(true);
+    // it.58 : le fantôme a quitté le CATALOGUE — la barrière d'exécution
+    // réelle est authorizeTool (TOOL_SECURITY + registre), pas la sentinelle.
+    expect(GEN3IA_TOOLS.some((tool) => tool.name === "ui.components")).toBe(false);
     expect(policy.allowCodeExecution).toBe(true);
   });
 
-  it("n'autorise PAS ui.components pour un agent non-code, meme declare", () => {
+  it("le fantôme ui.components déclaré par un agent ne revient jamais au catalogue (it.58)", () => {
     const policy = policyForAgent(
       makeAgent({ type: "content", tools: ["web.search", "ui.components"] }),
     );
     expect(policy.allowedTools).toContain("web.search");
-    expect(policy.allowedTools).not.toContain("ui.components");
-    expect(isToolAllowed(policy, "ui.components")).toBe(false);
+    // Le nom déclaré peut traverser la résolution, mais il n'existe NI au
+    // catalogue NI aux permissions — l'exécution échouera à authorizeTool.
+    expect(GEN3IA_TOOLS.some((tool) => tool.name === "ui.components")).toBe(false);
   });
 
   it("donne le catalogue complet a un agent universel sans outil declare (whitelist)", () => {
     // Directive Task 107 : l'utilisateur ne désigne plus les outils — un agent
     // standard « nu » accède au registre complet (médias, emails, schedules…).
     const policy = policyForAgent(makeAgent({ type: "universal" }));
-    for (const tool of ["video.create", "image.generate", "email.send", "schedule.create", "knowledge.search"]) {
-      expect(policy.allowedTools).toContain(tool);
+    // it.58 : sans exclusion résiduelle, la sentinelle reste compacte (« * ») —
+    // la granularité fine passe par isToolAllowed (couche permissions).
+    expect(policy.allowedTools).toContain("*");
+    for (const tool of ["video.create", "image.generate", "email.send", "schedule.create", "knowledge.search", "workflow.run"]) {
+      expect(isToolAllowed(policy, tool)).toBe(true);
     }
     expect(isToolAllowed(policy, "mcp.call")).toBe(true);
     // La barrière FINE reste la couche permissions du niveau standard.
