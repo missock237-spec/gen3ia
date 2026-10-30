@@ -71,7 +71,7 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 72 endpoints orphelins au 2026-10-30 (it.44 ;     */
+/* Baseline honnête — 71 endpoints orphelins au 2026-10-30 (it.46 ;      */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
@@ -139,6 +139,13 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* /observability/org vue usage org, /training/hub/inspect console Data) */
 /* — la catégorie orphelin-connu est VIDÉ : registre 100 % motivé,       */
 /* total inchangé 72. Classés par motif.                                */
+/* Puis it.46 : ÉVOLUTION PILOTÉE — la porte /neural/evolve est CÂBLÉE   */
+/* dans l'onglet Cerveau de la console neuronale (métriques GET via      */
+/* useTelechargement conditionné à l'onglet, POST « Consolider          */
+/* maintenant » avec retour honnête enseignées/déjà connues/écartés/     */
+/* sauvegarde + rafraîchissement cerveau+métriques ; 4 tests             */
+/* structurels + verrou bidirectionnel) — l'entrée sort du registre      */
+/* (pre-ui-roadmap 14→13, total 72→71).                                  */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -238,6 +245,8 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *     naturelle = console neuronale (components/neural/neural-console,
    *     vivante : brain/state/domaines/cycle/media/train) qui ne consomme
    *     pas encore cette porte ; cohérence cerveau métabolique (it.42).
+   *     it.46 : SORT de cette catégorie — l'onglet Cerveau consomme
+   *     désormais la porte (métriques GET + consolidation POST).
    *   - /ia/auto-apprentissage/rapport : HISTORIQUE COMPLET des
    *     évaluations (10/domaine, validité statistique honnête) — la carte
    *     auto-apprentissage du chat (vivante) ne consomme que le GET
@@ -258,7 +267,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/knowledge",
     "/knowledge/triggers",
     "/knowledge/triggers/[id]",
-    "/neural/evolve",
     "/observability/org",
     "/skills",
     "/skills/create",
@@ -935,6 +943,32 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     const testBusiness = readFileSync(path.join(RACINE, "tests/unit/business-dashboard.test.ts"), "utf8");
     expect(testBusiness.includes("/business/pulse reste"), "Le test studio métier doit continuer à documenter l'exclusion volontaire de /business/pulse (mission POST coûteuse) — motif candidat-ui-documente à réviser sinon").toBe(true);
     const consoleNeurale = readFileSync(path.join(RACINE, "components/neural/neural-console.tsx"), "utf8");
-    expect(consoleNeurale.includes("/api/neural/brain"), "La console neuronale (surface naturelle d'/neural/evolve) doit rester vivante — entrée pre-ui-roadmap à réviser sinon").toBe(true);
+    expect(consoleNeurale.includes("/api/neural/brain"), "La console neuronale doit rester vivante — surface du système neuronal à réviser sinon").toBe(true);
+    // it.46 : le câblage de la porte est maintenant RÉEL — verrouillé
+    // aussi par le 15e test (évolution pilotée).
+    expect(consoleNeurale.includes("/api/neural/evolve"), "La console neuronale doit rester câblée à la porte /api/neural/evolve (it.46, évolution pilotée) — régression sinon").toBe(true);
+  });
+
+  it("l'évolution pilotée reste câblée dans la console neuronale (it.46) — porte vivante, registre à jour", () => {
+    // it.46 : la porte /neural/evolve est consommée par l'onglet Cerveau
+    // de la console neuronale (métriques GET + consolidation POST
+    // auditable, cohérence cerveau métabolique it.42) — l'entrée a quitté
+    // pre-ui-roadmap (total 72→71).
+    const consoleNeurale = readFileSync(path.join(RACINE, "components/neural/neural-console.tsx"), "utf8");
+    expect(consoleNeurale.includes('onglet === "cerveau" ? "/api/neural/evolve" : ""'), "La console doit interroger les métriques d'évolution pendant l'onglet Cerveau — régression du câblage it.46").toBe(true);
+    expect(consoleNeurale.includes('fetch("/api/neural/evolve", { method: "POST" })'), "Le bouton de consolidation doit poster vers /api/neural/evolve — régression du câblage it.46").toBe(true);
+    expect(consoleNeurale.includes("Consolider maintenant"), "L'action de consolidation doit rester visible (bouton) — régression UI it.46").toBe(true);
+    // La porte reste réelle (contrats GET + POST).
+    expect(existsSync(path.join(RACINE, "app/api/neural/evolve/route.ts")), "La porte /api/neural/evolve est le socle de l'évolution pilotée — sa suppression est une régression").toBe(true);
+    // Les libs servies restent vivantes.
+    expect(existsSync(path.join(RACINE, "lib/neural/evolution.ts")), "lib/neural/evolution.ts est le moteur de l'évolution — sa disparition est une régression fonctionnelle").toBe(true);
+    expect(existsSync(path.join(RACINE, "lib/neural/runtime.ts")), "lib/neural/runtime.ts est le socle du cerveau persisté — sa disparition est une régression fonctionnelle").toBe(true);
+    // Le test structurel du composant reste en place.
+    expect(existsSync(path.join(RACINE, "components/neural/neural-evolution-pilotee.test.ts")), "Le test structurel de l'évolution pilotée doit rester en place — il verrouille le contrat UI↔porte").toBe(true);
+    // Registre : l'entrée est sortie (et n'est revenue dans aucune autre
+    // catégorie).
+    for (const [categorie, endpoints] of Object.entries(BASELINE_ORPHELINS)) {
+      expect(endpoints, `/neural/evolve est CÂBLÉE depuis l'it.46 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain("/neural/evolve");
+    }
   });
 });

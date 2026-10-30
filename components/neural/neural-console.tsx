@@ -14,7 +14,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  *  - l'entraînement apprend réellement le corpus (/api/neural/train) ;
  *  - la génération média produit de VRAIS fichiers (SVG/WAV/SVG animé)
  *    calculés depuis l'état du cerveau (/api/neural/media) ;
- *  - l'hippocampe compte les tours MÉMORISÉS du runtime.
+ *  - l'hippocampe compte les tours MÉMORISÉS du runtime ;
+ *  - l'évolution est PILOTABLE : l'onglet Cerveau consomme les métriques
+ *    réelles de /api/neural/evolve (GET) et force un cycle de
+ *    consolidation audité (POST) — les échanges réussis observés
+ *    deviennent des connaissances durables.
  */
 
 /* ------------------------------------------------------------------ */
@@ -105,6 +109,20 @@ interface JobEntrainement {
     parDomaine: Record<string, number>;
     dureeMs: number;
   };
+}
+
+/* Contrats GET + POST /api/neural/evolve (it.46 — évolution pilotée). */
+
+interface MetriquesEvolution {
+  moteur: string;
+  evolution: EtatCerveau["evolution"];
+  cortex: EtatCerveau["langage"];
+}
+
+interface ReponseConsolidation {
+  consolidation: { enseignees: number; dejaConnues: number; ecarts: number; pairesApprises: number };
+  evolution: EtatCerveau["evolution"];
+  sauvegarde: boolean;
 }
 
 interface DomaineDataset {
@@ -363,6 +381,18 @@ export function NeuralConsole() {
     15000,
   );
 
+  // ÉVOLUTION PILOTÉE (it.46) : métriques réelles de l'évolution du
+  // cerveau (GET /api/neural/evolve) rafraîchies pendant l'onglet Cerveau,
+  // et consolidation forcée (POST, auth + rate-limit + audit) —
+  // l'utilisateur voit son cerveau apprendre et peut sceller les
+  // apprentissages quand il le décide.
+  const { donnees: evolution, rafraichir: rafraichirEvolution } = useTelechargement<MetriquesEvolution>(
+    onglet === "cerveau" ? "/api/neural/evolve" : "",
+    10000,
+  );
+  const [consolidationEnCours, setConsolidationEnCours] = useState(false);
+  const [messageConsolidation, setMessageConsolidation] = useState("");
+
   const jobEnCours = etat?.dernierJobEntrainement?.status === "en_cours";
   useEffect(() => {
     if (!jobEnCours) return;
@@ -475,6 +505,28 @@ export function NeuralConsole() {
     }
   }, [lancement, rafraichirCerveau]);
 
+  /* ---------------- Évolution pilotée (it.46) ---------------- */
+
+  const consoliderMaintenant = useCallback(async () => {
+    if (consolidationEnCours) return;
+    setConsolidationEnCours(true);
+    setMessageConsolidation("");
+    try {
+      const reponse = await fetch("/api/neural/evolve", { method: "POST" });
+      const data = (await reponse.json()) as ReponseConsolidation & { error?: string };
+      if (!reponse.ok) throw new Error(data.error ?? "Consolidation impossible.");
+      setMessageConsolidation(
+        `${data.consolidation.enseignees} connaissance(s) enseignée(s) · ${data.consolidation.dejaConnues} déjà connue(s) · ${data.consolidation.ecarts} écartée(s) · cerveau ${data.sauvegarde ? "sauvegardé" : "inchangé"}.`,
+      );
+      void rafraichirEvolution();
+      void rafraichirCerveau();
+    } catch (error) {
+      setMessageConsolidation(`échec : ${error instanceof Error ? error.message : "erreur"}`);
+    } finally {
+      setConsolidationEnCours(false);
+    }
+  }, [consolidationEnCours, rafraichirEvolution, rafraichirCerveau]);
+
   /* ---------------- Rendu ---------------- */
 
   const sante = etat?.sante ?? cerveau?.sante;
@@ -545,6 +597,51 @@ export function NeuralConsole() {
               valeur={cerveau ? `${cerveau.evolution.echangesConsolides} consolidés` : "—"}
               sous={cerveau ? `${cerveau.evolution.cyclesConsolidation} cycle(s) · ${cerveau.evolution.echangesObserves} échange(s) observé(s) · ${cerveau.langage.pairesPersonnalisees} paires personnelles` : undefined}
             />
+            {/* it.46 : ÉVOLUTION PILOTÉE — métriques réelles de la porte
+                /api/neural/evolve (GET) ; le bouton force un cycle de
+                consolidation audité (POST, débit limité côté serveur). */}
+            <div className="g3v6-card px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-[200px]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">Évolution pilotée</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-[var(--g3-muted)]">
+                    Les échanges réussis observés deviennent des connaissances durables — consolidation auditable, débit limité côté serveur.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void consoliderMaintenant()}
+                  disabled={consolidationEnCours}
+                  className="rounded-full bg-[var(--g3-primary)] px-4 py-1.5 text-xs font-semibold text-white shadow-[var(--gen3ia-shadow-glow)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {consolidationEnCours ? "consolidation…" : "Consolider maintenant"}
+                </button>
+              </div>
+              {evolution ? (
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+                  <div className="flex justify-between gap-2"><dt className="text-[var(--g3-muted)]">Échanges observés</dt><dd className="g3v6-metric text-[var(--g3-text)]">{evolution.evolution.echangesObserves.toLocaleString("fr-FR")}</dd></div>
+                  <div className="flex justify-between gap-2"><dt className="text-[var(--g3-muted)]">Consolidés</dt><dd className="g3v6-metric text-[var(--g3-text)]">{evolution.evolution.echangesConsolides.toLocaleString("fr-FR")}</dd></div>
+                  <div className="flex justify-between gap-2"><dt className="text-[var(--g3-muted)]">Écartés (qualité)</dt><dd className="g3v6-metric text-[var(--g3-text)]">{evolution.evolution.echangesEcarts.toLocaleString("fr-FR")}</dd></div>
+                  <div className="flex justify-between gap-2"><dt className="text-[var(--g3-muted)]">Cycles</dt><dd className="g3v6-metric text-[var(--g3-text)]">{evolution.evolution.cyclesConsolidation.toLocaleString("fr-FR")}</dd></div>
+                  <div className="flex justify-between gap-2"><dt className="text-[var(--g3-muted)]">Paires / personnalisées</dt><dd className="g3v6-metric text-[var(--g3-text)]">{evolution.cortex.paires.toLocaleString("fr-FR")} / {evolution.cortex.pairesPersonnalisees.toLocaleString("fr-FR")}</dd></div>
+                  <div className="flex justify-between gap-2"><dt className="text-[var(--g3-muted)]">Vocabulaire</dt><dd className="g3v6-metric text-[var(--g3-text)]">{evolution.cortex.vocabulaire.toLocaleString("fr-FR")}</dd></div>
+                  <div className="flex justify-between gap-2"><dt className="text-[var(--g3-muted)]">Thèmes</dt><dd className="g3v6-metric text-[var(--g3-text)]">{evolution.cortex.themes.toLocaleString("fr-FR")}</dd></div>
+                  <div className="col-span-2 flex justify-between gap-2">
+                    <dt className="text-[var(--g3-muted)]">Dernière consolidation</dt>
+                    <dd className="g3v6-metric text-[var(--g3-text)]">
+                      {evolution.evolution.derniereConsolidation
+                        ? new Date(evolution.evolution.derniereConsolidation).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "medium" })
+                        : "jamais"}
+                    </dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="mt-3 text-[11px] text-[var(--g3-faint)]">Métriques d&apos;évolution indisponibles pour l&apos;instant.</p>
+              )}
+              {messageConsolidation ? (
+                <p className="mt-2 text-[11px] text-[var(--g3-text-secondary)]" role="status">{messageConsolidation}</p>
+              ) : null}
+            </div>
             <div className="g3v6-card px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">Pools résonants</p>
               <ul className="mt-2 space-y-1.5">
