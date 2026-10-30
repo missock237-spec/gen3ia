@@ -71,7 +71,7 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 71 endpoints orphelins au 2026-10-30 (it.46 ;      */
+/* Baseline honnête — 70 endpoints orphelins au 2026-10-30 (it.47 ;      */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
@@ -146,6 +146,13 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* sauvegarde + rafraîchissement cerveau+métriques ; 4 tests             */
 /* structurels + verrou bidirectionnel) — l'entrée sort du registre      */
 /* (pre-ui-roadmap 14→13, total 72→71).                                  */
+/* Puis it.47 : HISTORIQUE COMPLET DES ÉVALUATIONS — la porte            */
+/* /ia/auto-apprentissage/rapport est CÂBLÉE dans la carte               */
+/* auto-apprentissage du chat (bloc dépliable chargé À LA DEMANDE via    */
+/* onToggle — protocole restitué, sous-seuil « non comptable » signalé,  */
+/* résumés par domaine, instantané daté, 4 tests structurels + verrou    */
+/* bidirectionnel) — l'entrée sort du registre (pre-ui-roadmap 13→12,    */
+/* total 71→70).                                                         */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -252,6 +259,8 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *     auto-apprentissage du chat (vivante) ne consomme que le GET
    *     principal (dernière évaluation) ; l'extension « historique »
    *     est l'étape suivante naturelle.
+   *     it.47 : SORT de cette catégorie — la carte consomme désormais la
+   *     porte (bloc « Historique des évaluations » chargé au dépliage).
    *   - /observability/org : usage agrégé PAR ORGANISATION (Task 43,
    *     saas-roadmap §3) — requireOrgContext vérifie l'appartenance ; la
    *     vue usage org n'est pas encore une surface (UI pas échue).
@@ -263,7 +272,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/agents/generate",
     "/developer/simulation",
     "/files/workspaces",
-    "/ia/auto-apprentissage/rapport",
     "/knowledge",
     "/knowledge/triggers",
     "/knowledge/triggers/[id]",
@@ -969,6 +977,28 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     // catégorie).
     for (const [categorie, endpoints] of Object.entries(BASELINE_ORPHELINS)) {
       expect(endpoints, `/neural/evolve est CÂBLÉE depuis l'it.46 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain("/neural/evolve");
+    }
+  });
+
+  it("l'historique des évaluations reste câblé dans la carte auto-apprentissage (it.47) — porte vivante, registre à jour", () => {
+    // it.47 : la porte /ia/auto-apprentissage/rapport est consommée par la
+    // carte du chat (bloc dépliable chargé à la demande, honnêteté
+    // statistique restituée) — l'entrée a quitté pre-ui-roadmap (71→70).
+    const carte = readFileSync(path.join(RACINE, "components/chat/auto-apprentissage-carte.tsx"), "utf8");
+    expect(carte.includes('fetch("/api/ia/auto-apprentissage/rapport", { cache: "no-store" })'), "La carte doit interroger la porte rapport (historique complet) — régression du câblage it.47").toBe(true);
+    expect(carte.includes("onToggle={ouvrirRapport}"), "Le rapport doit être chargé À LA DEMANDE (dépliage) — régression du pattern it.47").toBe(true);
+    expect(carte.includes("non comptable (sous-seuil)"), "Les évaluations sous-seuil doivent rester signalées (honnêteté statistique) — régression it.47").toBe(true);
+    // La porte reste réelle (contrat GET exportable).
+    expect(existsSync(path.join(RACINE, "app/api/ia/auto-apprentissage/rapport/route.ts")), "La porte /ia/auto-apprentissage/rapport est le socle de l'historique — sa suppression est une régression").toBe(true);
+    // Les libs servies restent vivantes.
+    expect(existsSync(path.join(RACINE, "lib/entrainement-auto/etat.ts")), "lib/entrainement-auto/etat.ts est l'état persisté des évaluations — sa disparition est une régression fonctionnelle").toBe(true);
+    expect(existsSync(path.join(RACINE, "lib/entrainement-auto/maitrise.ts")), "lib/entrainement-auto/maitrise.ts est le calcul de maîtrise — sa disparition est une régression fonctionnelle").toBe(true);
+    // Le test structurel du composant reste en place.
+    expect(existsSync(path.join(RACINE, "components/chat/auto-apprentissage-rapport.test.ts")), "Le test structurel de l'historique doit rester en place — il verrouille le contrat UI↔porte").toBe(true);
+    // Registre : l'entrée est sortie (et n'est revenue dans aucune autre
+    // catégorie).
+    for (const [categorie, endpoints] of Object.entries(BASELINE_ORPHELINS)) {
+      expect(endpoints, `/ia/auto-apprentissage/rapport est CÂBLÉE depuis l'it.47 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain("/ia/auto-apprentissage/rapport");
     }
   });
 });

@@ -10,6 +10,10 @@
  *    PHASE COURANTE (absorption avec compte à rebours / autonomie) ;
  *  - POST : déclenche un cycle complet à la demande — REFUSÉ en autonomie
  *    (hubs coupés définitivement, apprentissage par les utilisateurs) ;
+ *  - GET /api/ia/auto-apprentissage/rapport (it.47, À LA DEMANDE) :
+ *    l'HISTORIQUE COMPLET des évaluations persistées (10/domaine) avec
+ *    validité statistique honnête — les évaluations sous-seuil restent
+ *    visibles et signalées, jamais maquillées ;
  *  - 401 (non connecté) : la carte le dit — aucune donnée fabriquée.
  */
 
@@ -59,6 +63,41 @@ interface VueMaitrise {
   domainesMaitrises: number;
   domainesTotal: number;
   domaines: DomaineMaitriseVue[];
+}
+
+/* Contrat GET /api/ia/auto-apprentissage/rapport (it.47 — historique
+ * complet des évaluations, 10/domaine, validité honnête).              */
+
+interface DomaineRapport {
+  id: string;
+  label: string;
+  objectif: string;
+  seuil: number;
+  minUnites: number;
+  maitriseA: string | null;
+  unitesIngerees: number;
+  resume: {
+    evaluationsConsignees: number;
+    evaluationsValides: number;
+    derniereAccuracy: number | null;
+    derniereDate: string | null;
+    meilleureAccuracy: number | null;
+    tendance: number | null;
+  };
+  evaluations: Array<{ dateA: string; accuracy: number; unites: number; valide: boolean }>;
+}
+
+interface RapportComplet {
+  rapport: {
+    genereA: string;
+    protocole: string;
+    maitriseComplete: boolean;
+    domainesMaitrises: number;
+    domainesTotal: number;
+    evaluationsTotales: number;
+    cyclesSansProgres: number;
+  };
+  domaines: DomaineRapport[];
 }
 
 interface EtatAutoApprentissage {
@@ -132,6 +171,12 @@ export default function CarteAutoApprentissage() {
   const [charge, setCharge] = React.useState(true);
   const [occupe, setOccupe] = React.useState(false);
 
+  // it.47 : historique complet des évaluations — chargé À LA DEMANDE
+  // (dépliage du bloc) pour ne pas alourdir le montage de la carte.
+  const [rapport, setRapport] = React.useState<RapportComplet | null>(null);
+  const [rapportEnCours, setRapportEnCours] = React.useState(false);
+  const [rapportErreur, setRapportErreur] = React.useState<string | null>(null);
+
   const restantMs = useCompteRebours(phase === "absorption" ? restantInitial : null);
 
   const charger = React.useCallback(async () => {
@@ -171,6 +216,41 @@ export default function CarteAutoApprentissage() {
   React.useEffect(() => {
     void charger();
   }, [charger]);
+
+  // it.47 : historique complet — GET /api/ia/auto-apprentissage/rapport
+  // (métriques réelles de l'état persisté, validité statistique honnête).
+  const chargerRapport = React.useCallback(async () => {
+    if (rapportEnCours) return;
+    setRapportEnCours(true);
+    try {
+      const res = await fetch("/api/ia/auto-apprentissage/rapport", { cache: "no-store" });
+      if (res.status === 401) {
+        setRapportErreur("Connectez-vous pour consulter l'historique des évaluations.");
+        return;
+      }
+      if (res.status === 429) {
+        setRapportErreur("Trop de consultations : patientez un instant.");
+        return;
+      }
+      if (!res.ok) {
+        setRapportErreur(`Historique indisponible (${res.status}).`);
+        return;
+      }
+      setRapport((await res.json()) as RapportComplet);
+      setRapportErreur(null);
+    } catch {
+      setRapportErreur("Historique indisponible (réseau).");
+    } finally {
+      setRapportEnCours(false);
+    }
+  }, [rapportEnCours]);
+
+  const ouvrirRapport = React.useCallback(
+    (e: React.SyntheticEvent<HTMLDetailsElement>) => {
+      if (e.currentTarget.open && !rapport && !rapportEnCours) void chargerRapport();
+    },
+    [rapport, rapportEnCours, chargerRapport],
+  );
 
   const autonomie = phase === "autonomie";
   const regimeMaitrise = phase === "maitrise";
@@ -257,6 +337,67 @@ export default function CarteAutoApprentissage() {
               </details>
             </>
           ) : null}
+          {/* it.47 : HISTORIQUE COMPLET des évaluations (porte
+              /api/ia/auto-apprentissage/rapport) — chargé au dépliage,
+              validité statistique honnête, exportable. */}
+          <details className="auto-carte-bilan" onToggle={ouvrirRapport}>
+            <summary>
+              Historique des évaluations{rapport ? ` (${rapport.rapport.evaluationsTotales})` : ""}
+              {rapportEnCours ? " — chargement…" : ""}
+            </summary>
+            {rapportErreur ? (
+              <p className="auto-carte-bilan-message auto-carte-erreur">{rapportErreur}</p>
+            ) : null}
+            {rapport ? (
+              <>
+                <p className="auto-carte-bilan-message">
+                  {rapport.rapport.protocole}{" "}
+                  {rapport.rapport.maitriseComplete
+                    ? "Maîtrise complète du catalogue atteinte."
+                    : `${rapport.rapport.domainesMaitrises}/${rapport.rapport.domainesTotal} domaine(s) maîtrisé(s) · ${rapport.rapport.cyclesSansProgres} cycle(s) sans progrès.`}
+                </p>
+                {rapport.domaines.map((domaine) => (
+                  <details key={domaine.id} className="auto-carte-bilan">
+                    <summary>
+                      {domaine.maitriseA ? "✓" : "·"} {domaine.label} — {domaine.resume.evaluationsConsignees} évaluation(s)
+                      {" "}
+                      ({domaine.resume.evaluationsValides} valide(s))
+                      {domaine.resume.derniereAccuracy !== null
+                        ? ` · dernière ${Math.round(domaine.resume.derniereAccuracy * 100)} %`
+                        : ""}
+                      {domaine.resume.meilleureAccuracy !== null
+                        ? ` · meilleure ${Math.round(domaine.resume.meilleureAccuracy * 100)} %`
+                        : ""}
+                      {domaine.resume.tendance !== null
+                        ? ` · tendance ${domaine.resume.tendance > 0 ? "+" : ""}${(domaine.resume.tendance * 100).toFixed(1)} pts`
+                        : ""}
+                    </summary>
+                    <ul className="auto-carte-bilan-axes">
+                      {domaine.evaluations.length === 0 ? (
+                        <li>Aucune évaluation consignée pour ce domaine.</li>
+                      ) : (
+                        domaine.evaluations.map((ev, i) => (
+                          <li key={`${domaine.id}-${i}`}>
+                            {ev.dateA.slice(0, 10)} {ev.dateA.slice(11, 16)} — précision {Math.round(ev.accuracy * 100)} % ·{" "}
+                            {ev.unites} unité(s)
+                            {ev.valide ? "" : " · non comptable (sous-seuil)"}
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </details>
+                ))}
+                <p className="auto-carte-bilan-message auto-carte-note">
+                  Rapport généré le {rapport.rapport.genereA.slice(0, 10)} {rapport.rapport.genereA.slice(11, 16)} — copie
+                  intégrale exportable (JSON /api/ia/auto-apprentissage/rapport).
+                </p>
+              </>
+            ) : !rapportErreur ? (
+              <p className="auto-carte-bilan-message">
+                {rapportEnCours ? "Chargement de l&apos;historique…" : "Dépliez pour charger l&apos;historique complet."}
+              </p>
+            ) : null}
+          </details>
           {!autonomie ? (
             <div className="auto-carte-hubs">
               {integrations.map((h) => (
