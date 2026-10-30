@@ -71,7 +71,7 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 73 endpoints orphelins au 2026-10-30 (it.43 ;      */
+/* Baseline honnête — 72 endpoints orphelins au 2026-10-30 (it.44 ;     */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
@@ -120,6 +120,13 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* 74→73 — RECTIFICATION du comptage : les totaux « 81/80 » cités aux    */
 /* it.39-42 étaient surestimés de 6 (comptage embrassant les commentaires*/
 /* de catégorie) ; le registre réel ci-dessus fait foi, 73 entrées).     */
+/* Puis it.44 : /workspace/conversations/search CÂBLÉ — la Recherche     */
+/* globale (LOT 13) est livrée dans la sidebar du chat : requête serveur */
+/* débouncée (350 ms) vers /api/workspace/conversations/search via       */
+/* authFetch, badge sémantique/titres, extrait du message retrouvé,      */
+/* ouverture locale par serverId ou IMPORT fidèle via la porte détail    */
+/* GET /api/workspace/conversations/[id] (ownership re-vérifié) ;        */
+/* l'entrée sort du registre (total 73→72).                              */
 /* Classés par motif.                                                    */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
@@ -200,12 +207,7 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *  décision produit « système réservé » (demande n°5 : les users
    *  passent par le chat, l'admin conservé) est codée en dur dans
    *  lib/security/agent-system-access.ts.
-   *  it.43 : 4 portes reculées ici après audit 4 canaux —
-   *   - /workspace/conversations/search : recherche sémantique de
-   *     conversations (Qdrant + repli textuel R2, défense multi-tenant
-   *     en profondeur, rate-limit) — décision produit LOT 13 « Recherche
-   *     globale » du plan (recherche contenu API + intégration palette),
-   *     UI pas échue ; matrice user-access (« chat ») + sonde e2e_wave19.
+   *  it.43 : 3 portes reculées ici après audit 4 canaux —
    *   - /workspace/tasks/clarify : clarification plan-mode (lib/ai/router
    *     + repli heuristique) — panneau tâches existant, étape pas échue.
    *   - /files/workspaces : création d'espace d'exécution — chaîne lib
@@ -213,7 +215,11 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *     sonde e2e_cycle01, UI atelier pas échue.
    *   - /developer/simulation : simulation SANS side-effect (VM V8
    *     restreinte / analyse statique) — chemin vivant côté runtime
-   *     (secure-tool-executor), bouton « Simuler » de l'IDE pas échu. */
+   *     (secure-tool-executor), bouton « Simuler » de l'IDE pas échu.
+   *  it.44 : /workspace/conversations/search SORT de cette catégorie —
+   *  la Recherche globale (LOT 13) est CÂBLÉE dans la sidebar du chat
+   *  (nova-chat : requête débouncée, badge sémantique/titres, extrait,
+   *  ouverture locale par serverId ou import via la porte détail). */
   "pre-ui-roadmap": [
     "/agents/generate",
     "/developer/simulation",
@@ -224,7 +230,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/skills",
     "/skills/create",
     "/skills/import",
-    "/workspace/conversations/search",
     "/workspace/tasks/clarify",
   ],
   /** Vrais orphelins connus : fonctionnalités livrées SANS surface
@@ -655,7 +660,8 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     //  - /workspace/conversations/search : recherche sémantique de
     //    conversations (Qdrant + repli textuel R2, re-vérification
     //    d'ownership par getConversation) — décision produit LOT 13
-    //    « Recherche globale » (UI pas échue).
+    //    « Recherche globale » ; UI CÂBLÉE à l'it.44 (sidebar du chat,
+    //    voir le verrou dédié it.44 ci-dessous).
     //  - /workspace/tasks/clarify : clarification plan-mode (lib/ai/router,
     //    repli heuristique sans 500) — étape du panneau tâches pas échue.
     //  - /files/workspaces : création d'espace d'exécution — chaîne lib
@@ -719,15 +725,64 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
       ).toBe(true);
     }
     // Anti-dérive roadmap : le plan doit toujours classer la Recherche
-    // globale (LOT 13) — sinon réviser la catégorie pre-ui-roadmap ET ce
-    // verrou.
+    // globale (LOT 13) — depuis l'it.44 elle est CÂBLÉE (sortie du
+    // registre pre-ui-roadmap) : l'assertion garde le cap produit.
     const plan = readFileSync(
       path.join(RACINE, "docs/plan-plateforme-enterprise.md"),
       "utf8",
     );
     expect(
       plan.includes("Recherche globale"),
-      "Le plan plateforme doit toujours référencer la Recherche globale (LOT 13) — entrée pre-ui-roadmap /workspace/conversations/search à réviser sinon",
+      "Le plan plateforme doit toujours référencer la Recherche globale (LOT 13) — câblée en UI depuis l'it.44, à réviser sinon",
     ).toBe(true);
+  });
+
+  it("la Recherche globale reste câblée dans la sidebar du chat (it.44) — porte sémantique + ouverture sûre", () => {
+    // Constat it.44 : la décision produit LOT 13 « Recherche globale » est
+    // livrée dans la sidebar du chat (nova-chat). Le champ de recherche
+    // câble la porte sémantique /api/workspace/conversations/search :
+    // requête débouncée (350 ms) via authFetch (jamais de fetch brut),
+    // badge de mode (sémantique = correspondance par le SENS du contenu /
+    // titres = repli textuel), extrait du message retrouvé, et ouverture
+    // d'un résultat : sélection locale par serverId si la conversation est
+    // déjà en cache, sinon IMPORT fidèle via la porte détail
+    // GET /api/workspace/conversations/[id] (ownership re-vérifié côté
+    // route — une conversation d'un autre compte reste impossible à
+    // ouvrir). Anti-réponse périmée : compteur d'ordre, une réponse
+    // arrivée après une frappe plus récente est ignorée.
+    const chat = readFileSync(path.join(RACINE, "components/chat/nova-chat.tsx"), "utf8");
+    for (const fragment of [
+      "/api/workspace/conversations/search?q=",
+      "encodeURIComponent(requete)",
+      "authFetch",
+      "350",
+      "ouvrirResultatRecherche",
+      'role="button"',
+      "nova-rg-badge",
+      "sémantique",
+      "r.excerpt",
+      "r.messageCount",
+      'c.serverId === resultat.conversationId',
+      "/api/workspace/conversations/${encodeURIComponent(resultat.conversationId)}",
+      "monOrdre !== ordreRechercheRef.current",
+    ]) {
+      expect(
+        chat.includes(fragment),
+        `components/chat/nova-chat.tsx doit continuer à câbler la Recherche globale (fragment attendu : ${fragment})`,
+      ).toBe(true);
+    }
+    // La porte détail (import d'une conversation d'un autre appareil) et
+    // la porte search restent en place — leur suppression casserait la
+    // fonctionnalité livrée.
+    const portes = [
+      "app/api/workspace/conversations/search/route.ts",
+      "app/api/workspace/conversations/[conversationId]/route.ts",
+    ];
+    for (const rel of portes) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est une porte réelle de la Recherche globale (LOT 13) — sa suppression est une régression`,
+      ).toBe(true);
+    }
   });
 });

@@ -261,6 +261,20 @@ interface NovaPiece {
   apercu: string | null;
 }
 
+/** Résultat de la recherche globale (miroir du contrat de la route
+ *  /api/workspace/conversations/search) : une conversation retrouvée par
+ *  son TITRE (mode « text ») ou par le SENS d'un de ses messages (mode
+ *  « semantic », avec un extrait du message retrouvé). */
+interface ResultatRechercheGlobale {
+  conversationId: string;
+  title: string;
+  updatedAt: string;
+  messageCount: number;
+  excerpt?: string;
+  role?: string;
+  score?: number;
+}
+
 /**
  * Import RÉEL d'un fichier téléversé : POST /api/files/import (canal R2
  * { path }) — le serveur convertit le contenu et le persiste en base
@@ -618,6 +632,16 @@ export default function NovaChat() {
   const [fichiers, setFichiers] = React.useState<NovaPiece[]>([]);
   const [saisie, setSaisie] = React.useState("");
   const [recherche, setRecherche] = React.useState("");
+  /* RECHERCHE GLOBALE (LOT 13, it.44) : le champ de la sidebar câble la
+   * porte sémantique /api/workspace/conversations/search (Qdrant + repli
+   * textuel R2) — on retrouve une conversation par le SENS de son contenu,
+   * pas seulement par son titre. */
+  const [rechercheGlobale, setRechercheGlobale] = React.useState<{
+    enCours: boolean;
+    mode: "semantic" | "text" | null;
+    resultats: ResultatRechercheGlobale[];
+    erreur: string | null;
+  }>({ enCours: false, mode: null, resultats: [], erreur: null });
   const [enCours, setEnCours] = React.useState(false);
   const [statut, setStatut] = React.useState("Prête — demandez-lui tout");
   const [sidebarOuverte, setSidebarOuverte] = React.useState(false);
@@ -1497,6 +1521,121 @@ export default function NovaChat() {
     [majActiveId, sauvegarder, viderFichiers],
   );
 
+  /* ---- Recherche globale (LOT 13, it.44) ----
+   * Requête SERVEUR débouncée (350 ms) vers /api/workspace/conversations/
+   * search — session développeur/utilisateur via authFetch (jamais de
+   * fetch brut). Garde anti-réponse périmée : un compteur d'ordre fait
+   * qu'une réponse arrivée après une frappe plus récente est ignorée. */
+  const ordreRechercheRef = React.useRef(0);
+  React.useEffect(() => {
+    const requete = recherche.trim();
+    if (requete.length < 2) {
+      ordreRechercheRef.current += 1;
+      setRechercheGlobale({ enCours: false, mode: null, resultats: [], erreur: null });
+      return;
+    }
+    const monOrdre = ++ordreRechercheRef.current;
+    setRechercheGlobale((courant) => ({ ...courant, enCours: true, erreur: null }));
+    const minuterie = setTimeout(async () => {
+      try {
+        const response = await authFetch(
+          `/api/workspace/conversations/search?q=${encodeURIComponent(requete)}`,
+        );
+        // Une frappe plus récente a déjà lancé une autre requête : on ignore
+        // cette réponse périmée (jamais de résultats contradictoires à l'écran).
+        if (monOrdre !== ordreRechercheRef.current) return;
+        const data = (await response.json().catch(() => ({}))) as {
+          mode?: "semantic" | "text";
+          results?: ResultatRechercheGlobale[];
+          error?: string;
+        };
+        if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
+        setRechercheGlobale({
+          enCours: false,
+          mode: data.mode ?? "text",
+          resultats: Array.isArray(data.results) ? data.results.slice(0, 10) : [],
+          erreur: null,
+        });
+      } catch (e) {
+        if (monOrdre !== ordreRechercheRef.current) return;
+        setRechercheGlobale({
+          enCours: false,
+          mode: null,
+          resultats: [],
+          erreur: e instanceof Error ? e.message : "Recherche indisponible.",
+        });
+      }
+    }, 350);
+    return () => clearTimeout(minuterie);
+  }, [recherche]);
+
+  /** Ouvre un résultat de la recherche globale : la conversation existe
+   *  déjà dans le cache local (même appareil) → sélection directe ;
+   *  sinon (créée sur un autre appareil) → IMPORT depuis la porte serveur
+   *  GET /api/workspace/conversations/[id] (détail complet, ownership
+   *  re-vérifié côté route) puis sélection. Un résultat d'un autre compte
+   *  ne peut jamais être ouvert (404 côté serveur, ligne du cache R2
+   *  scopée par utilisateur). */
+  const ouvrirResultatRecherche = React.useCallback(
+    async (resultat: ResultatRechercheGlobale) => {
+      const locale = convsRef.current.find((c) => c.serverId === resultat.conversationId);
+      if (locale) {
+        selectionnerConversation(locale.id);
+        return;
+      }
+      try {
+        setRechercheGlobale((courant) => ({ ...courant, enCours: true }));
+        const response = await authFetch(
+          `/api/workspace/conversations/${encodeURIComponent(resultat.conversationId)}`,
+        );
+        const data = (await response.json().catch(() => ({}))) as {
+          conversation?: { id?: string; title?: string; updatedAt?: string };
+          messages?: Array<{
+            id?: string;
+            role?: string;
+            content?: string;
+            createdAt?: string;
+            model?: string;
+          }>;
+        };
+        if (!response.ok || !data.conversation) throw new Error("Conversation introuvable.");
+        // Import fidèle au format local (messages serveur → NovaMessage) ;
+        // le contenu reste l'autorité serveur (même mécanique que /workspace).
+        const convImportee: NovaConversation = {
+          id: idSuivant(),
+          serverId: data.conversation.id ?? resultat.conversationId,
+          titre: data.conversation.title ?? resultat.title,
+          maj: Date.parse(data.conversation.updatedAt ?? "") || Date.now(),
+          messages: (data.messages ?? []).map((m, index) => ({
+            id: m.id ?? `srv-${index}-${idSuivant()}`,
+            serverId: typeof m.id === "string" && !m.id.startsWith("srv-") ? m.id : undefined,
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: String(m.content ?? ""),
+            date: Date.parse(m.createdAt ?? "") || Date.now(),
+            modele: m.model,
+          })),
+        };
+        // Anti-doublon : un import concurrent pourrait déjà avoir ajouté la
+        // conversation entre-temps (double-clic sur le même résultat).
+        if (convsRef.current.some((c) => c.serverId === convImportee.serverId)) {
+          selectionnerConversation(
+            convsRef.current.find((c) => c.serverId === convImportee.serverId)!.id,
+          );
+          return;
+        }
+        majConvs([convImportee, ...convsRef.current]);
+        majActiveId(convImportee.id);
+        setSidebarOuverte(false);
+        sauvegarder();
+      } catch {
+        afficherToast("Impossible d'ouvrir cette conversation ici.");
+      } finally {
+        setRechercheGlobale((courant) => ({ ...courant, enCours: false }));
+      }
+    },
+    [afficherToast, majActiveId, majConvs, sauvegarder, selectionnerConversation],
+  );
+
   const supprimerConversation = React.useCallback(
     async (id: string) => {
       const conv = convsRef.current.find((c) => c.id === id);
@@ -1739,6 +1878,48 @@ export default function NovaChat() {
           onChange={(e) => setRecherche(e.target.value)}
         />
         <nav className="nova-liste" aria-label="Conversations">
+          {/* RECHERCHE GLOBALE (LOT 13) : résultats serveur (sémantique ou
+           * texte) au-dessus de l'historique local — on retrouve une
+           * conversation par le SENS de son contenu, pas seulement par son
+           * titre. */}
+          {recherche.trim().length >= 2 ? (
+            <section className="nova-recherche-globale" aria-label="Résultats de la recherche globale">
+              <div className="nova-rg-entete">
+                <span>Recherche globale</span>
+                {rechercheGlobale.mode === "semantic" ? (
+                  <span className="nova-rg-badge" title="Correspondance par le sens du contenu">sémantique</span>
+                ) : rechercheGlobale.mode === "text" ? (
+                  <span className="nova-rg-badge nova-rg-badge-texte" title="Correspondance par les titres">titres</span>
+                ) : null}
+                {rechercheGlobale.enCours ? <span className="nova-rg-charge">…</span> : null}
+              </div>
+              {rechercheGlobale.erreur ? (
+                <div className="nova-rg-erreur" role="alert">{rechercheGlobale.erreur}</div>
+              ) : rechercheGlobale.resultats.length === 0 && !rechercheGlobale.enCours ? (
+                <div className="nova-rg-vide">Aucune conversation retrouvée</div>
+              ) : (
+                rechercheGlobale.resultats.map((r) => (
+                  <div
+                    key={r.conversationId}
+                    className="nova-rg-resultat"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => void ouvrirResultatRecherche(r)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void ouvrirResultatRecherche(r);
+                    }}
+                  >
+                    <span className="nova-conv-titre">{r.title}</span>
+                    {r.excerpt ? <span className="nova-rg-extrait">« {r.excerpt} »</span> : null}
+                    <span className="nova-rg-meta">
+                      {r.messageCount} message{r.messageCount > 1 ? "s" : ""}
+                      {typeof r.score === "number" ? ` · pertinence ${Math.round(r.score * 100)} %` : ""}
+                    </span>
+                  </div>
+                ))
+              )}
+            </section>
+          ) : null}
           {charge && groupes.length === 0 ? (
             <div className="nova-vide">{convs.length ? "Aucun résultat" : "Aucune conversation pour le moment"}</div>
           ) : null}
