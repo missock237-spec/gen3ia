@@ -13,12 +13,19 @@ import {
 
 const StartSchema = z.object({
   deviceId: z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9._-]+$/, "deviceId invalide"),
+  // it.54 (demande propriétaire : « un seul bouton, le système détecte
+  // l'appareil ») : la source de capture est déclarée à l'armement — la
+  // garde « PC only » ne s'applique QU'au partage d'écran ; la caméra
+  // (téléphone OU webcam PC) est admise pour tout appareil — l'ancien
+  // 403 LIVE_PC_ONLY inconditionnel bloquait la caméra mobile promise
+  // par it.52 (anomalie corrigée).
+  source: z.enum(["screen", "camera"]).default("screen"),
 });
 
 type Params = { params: Promise<{ id: string }> };
 
 const PC_ONLY_MESSAGE =
-  "L'agent Live est reserve aux ordinateurs (Windows/Linux/macOS) : il utilise le partage d'ecran natif du navigateur.";
+  "Le partage d'écran de l'agent Live est réservé aux ordinateurs (Windows/Linux/macOS) : sur téléphone, le système bascule automatiquement sur la caméra.";
 
 /**
  * Démarre une session Live depuis le navigateur (mode « browser »).
@@ -30,8 +37,12 @@ const PC_ONLY_MESSAGE =
  */
 export async function POST(request: Request, { params }: Params) {
   try {
+    // it.54 : la source est lue AVANT la garde — l'écran exige un
+    // ordinateur (getDisplayMedia n'existe pas sur les navigateurs
+    // mobiles), la caméra est honnête partout.
+    const { deviceId, source } = StartSchema.parse(await request.json());
     const device = detectDeviceFromHeaders(request.headers);
-    if (!device.isLiveCapable) {
+    if (source === "screen" && !device.isLiveCapable) {
       return NextResponse.json(
         { error: PC_ONLY_MESSAGE, code: "LIVE_PC_ONLY", device: device.type, os: device.os },
         { status: 403 },
@@ -49,8 +60,6 @@ export async function POST(request: Request, { params }: Params) {
     if (session.inFlightAction) {
       return NextResponse.json({ error: "Une action interrompue exige un réessai explicite avant de reprendre." }, { status: 409 });
     }
-
-    const { deviceId } = StartSchema.parse(await request.json());
 
     await updateLiveSessionStatus(id, "running", deviceId);
     await startLiveRuntime(id, deviceId);

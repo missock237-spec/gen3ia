@@ -46,10 +46,13 @@ describe("Agent live — carte d'activation du chat (câblage it.52 + it.53)", (
     // Erreur d'activation signalée (role=alert) + 429 restitué.
     expect(panel).toContain('role="alert"');
     expect(panel).toContain("Trop de sessions créées rapprochées");
-    // Les sources de capture sont choisies AVANT l'activation (bascule
-    // explicite, accessible).
-    expect(panel).toContain('aria-pressed={source === "screen"}');
-    expect(panel).toContain('aria-pressed={source === "camera"}');
+    // it.54 — UN SEUL BOUTON, détection automatique de l'appareil : le
+    // picker manuel (Écran PC / Caméra mobile) est SUPPRIMÉ de la carte.
+    expect(panel).not.toContain('aria-pressed={source === "screen"}');
+    expect(panel).not.toContain('aria-pressed={source === "camera"}');
+    expect(panel).toContain("Source détectée automatiquement par le système");
+    expect(panel).toContain("partageEcranPossible ? \"screen\" : \"camera\"");
+    expect(panel).toContain('sourceInitiale={sourceDetectee ?? "screen"}');
     // Consentement explicite avant toute capture.
     expect(panel).toContain("les images capturées alimentent le moteur de vision interne de ma session");
     // Le moteur interne est nommé (transparence du périmètre).
@@ -61,11 +64,12 @@ describe("Agent live — carte d'activation du chat (câblage it.52 + it.53)", (
     expect(panel).toContain('import { LiveExecuteur } from "@/components/live/live-executeur"');
     expect(panel).toContain("<LiveExecuteur");
     expect(panel).toContain("sessionId={sessionIdActif}");
-    expect(panel).toContain("sourceInitiale={source}");
-    expect(panel).toContain("cameraFacingInitiale={cameraFacing}");
+    expect(panel).toContain('sourceInitiale={sourceDetectee ?? "screen"}');
     expect(panel).toContain("onFermer={() => setSessionIdActif(null)}");
-    // La copie locale de la boucle est bien SUPPRIMÉE (it.53).
-    expect(panel).not.toContain("getDisplayMedia");
+    // La copie locale de la boucle est bien SUPPRIMÉE (it.53) — la
+    // simple sonde de capacité de it.54 (Boolean(navigator.mediaDevices?
+    // .getDisplayMedia)) est licite : seul l'APPEL de capture est interdit.
+    expect(panel).not.toContain("getDisplayMedia({");
     expect(panel).not.toContain("getUserMedia");
     expect(panel).not.toContain("/frames`");
     expect(panel).not.toContain("setInterval");

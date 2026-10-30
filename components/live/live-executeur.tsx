@@ -367,10 +367,33 @@ export function LiveExecuteur({ sessionId, sourceInitiale = "screen", cameraFaci
     loggedPauseRef.current = null;
     try {
       const deviceId = makeDeviceId();
+
+      // it.54 (demande propriétaire : « un seul bouton, le système
+      // détecte l'appareil ») : la source est DÉTECTÉE PAR LE SYSTÈME
+      // AVANT l'armement — la vérité est la capacité réelle du
+      // navigateur (le partage d'écran n'existe pas sur les navigateurs
+      // mobiles, la caméra existe partout) : si l'écran est demandé mais
+      // indisponible, la bascule vers la caméra est automatique et
+      // annoncée. La source est déclarée à la porte /start (la garde
+      // « PC only » ne concerne que l'écran).
+      let sourceEffective = sourceRef.current;
+      if (sourceEffective === "screen" && !navigator.mediaDevices?.getDisplayMedia) {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Ni partage d'écran ni caméra disponibles dans ce navigateur.");
+        }
+        sourceEffective = "camera";
+        sourceRef.current = "camera";
+        setSourceActuelle("camera");
+        log("info", "Détection automatique : partage d'écran indisponible ici (téléphone) — bascule sur la caméra.");
+      }
+      if (sourceEffective === "camera" && !navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Caméra indisponible dans ce navigateur.");
+      }
+
       const startResponse = await authFetch(`/api/live/sessions/${sessionId}/start`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ deviceId }),
+        body: JSON.stringify({ deviceId, source: sourceEffective }),
       });
       if (!startResponse.ok) {
         const data = (await startResponse.json().catch(() => ({}))) as FrameResponse;
@@ -378,20 +401,10 @@ export function LiveExecuteur({ sessionId, sourceInitiale = "screen", cameraFaci
       }
       if (generation !== generationRef.current) return;
 
-      // Source de capture : écran natif sur PC (getDisplayMedia), caméra
-      // sur mobile ou à la demande (getUserMedia) — le partage d'écran
-      // n'existe pas sur les navigateurs mobiles, la caméra est la source
-      // visuelle honnête équivalente.
       let stream: MediaStream;
-      if (sourceRef.current === "screen") {
-        if (!navigator.mediaDevices?.getDisplayMedia) {
-          throw new Error("Partage d'écran indisponible dans ce navigateur : basculez sur la caméra (mobile) ou utilisez Chrome/Edge/Firefox sur ordinateur.");
-        }
+      if (sourceEffective === "screen") {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 2 }, audio: false });
       } else {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error("Caméra indisponible dans ce navigateur.");
-        }
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: facingRef.current, width: { ideal: 1280 } },
           audio: false,
@@ -421,8 +434,8 @@ export function LiveExecuteur({ sessionId, sourceInitiale = "screen", cameraFaci
 
       setStatut("actif");
       log("info", sourceRef.current === "screen"
-        ? "Écran partagé — le moteur interne gen3 observe et vous guide."
-        : "Caméra active — le moteur interne gen3 observe et vous guide.");
+        ? "Source détectée : écran (ordinateur) — le moteur interne gen3 observe et vous guide."
+        : "Source détectée : caméra (téléphone) — le moteur interne gen3 observe et vous guide.");
 
       stopCaptureLoop();
       loopRef.current = setInterval(() => {

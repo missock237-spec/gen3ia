@@ -217,6 +217,17 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* (StrictMode) ; PERMISSION_LABELS unifiés dans lib/live/types ;        */
 /* 3 tests structurels du panneau réécrits + 4 tests de l'exécuteur +    */
 /* verrou bidirectionnel (22e).                                          */
+/* Puis it.54 : UN SEUL BOUTON, L'APPAREIL DÉTECTÉ PAR LE SYSTÈME —       */
+/* demande propriétaire : le choix manuel Écran PC / Caméra mobile est   */
+/* SUPPRIMÉ de la carte d'activation du chat ET du dashboard — le        */
+/* SYSTÈME détecte l'appareil via la capacité réelle du navigateur       */
+/* (getDisplayMedia = ordinateur, sinon caméra = téléphone) et l'        */
+/* exécuteur reconfirme au démarrage (bascule automatique annoncée,      */
+/* source déclarée à la porte /start) ; ANOMALIE CORRIGÉE au passage :   */
+/* la garde LIVE_PC_ONLY inconditionnelle de /start bloquait la caméra   */
+/* mobile promise par it.52 — elle ne s'applique plus qu'au partage      */
+/* d'écran (la caméra est honnête partout) ; picker d'arrêt conservé     */
+/* en override manuel ; verrou bidirectionnel (23e).                     */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -1255,14 +1266,16 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     expect(dashboard.includes('from "@/components/live/live-executeur"'), "Le dashboard /live doit exécuter via l'exécuteur unique — régression it.53").toBe(true);
     expect(dashboard.includes("getDisplayMedia"), "Le dashboard ne doit PLUS copier la boucle de capture (getDisplayMedia supprimé) — régression it.53").toBe(false);
     expect(dashboard.includes("captureAndSendFrame"), "Le dashboard ne doit PLUS copier la boucle de frames — régression it.53").toBe(false);
-    expect(panel.includes("getDisplayMedia"), "Le panneau du chat ne doit PLUS copier la capture — régression it.53").toBe(false);
+    expect(panel.includes("getDisplayMedia({") || panel.includes("getUserMedia"), "Le panneau ne doit PAS capturer (la sonde de capacité it.54 est licite, l'appel de capture ne l'est pas) — régression it.53").toBe(false);
 
     // L'unicité est vérifiée par balayage : un seul fichier client dans
-    // components/live contient getDisplayMedia (l'exécuteur).
+    // components/live EFFECTUE la capture d'écran (l'exécuteur) — le
+    // marqueur est l'APPEL de capture, la sonde de capacité it.54 du
+    // panneau (Boolean(...?getDisplayMedia)) n'est pas une capture.
     const dossierLive = path.join(RACINE, "components/live");
     const fichiersAvecCapture = readdirSync(dossierLive).filter((file) =>
       file.endsWith(".tsx") && !file.endsWith(".test.ts") &&
-      readFileSync(path.join(dossierLive, file), "utf8").includes("getDisplayMedia"),
+      readFileSync(path.join(dossierLive, file), "utf8").includes("getDisplayMedia({"),
     );
     expect(fichiersAvecCapture, "Un SEUL composant client doit contenir la capture d'écran (l'exécuteur) — régression it.53").toEqual(["live-executeur.tsx"]);
 
@@ -1272,5 +1285,31 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
 
     // Le test structurel de l'exécuteur reste en place.
     expect(existsSync(path.join(RACINE, "components/live/live-executeur.test.ts")), "Le test structurel de l'exécuteur doit rester en place — régression it.53").toBe(true);
+  });
+
+  it("l'activation du live est UN SEUL BOUTON — l'appareil est détecté par le système (it.54)", () => {
+    // it.54 : demande propriétaire (« le live agent doit s'activer à
+    // travers un seul bouton et c'est le système qui doit détecter si
+    // l'utilisateur utilise un PC ou un téléphone portable »).
+    const panel = readFileSync(path.join(RACINE, "components/live/live-interne-panel.tsx"), "utf8");
+    const executeur = readFileSync(path.join(RACINE, "components/live/live-executeur.tsx"), "utf8");
+    const dashboard = readFileSync(path.join(RACINE, "app/live/live-dashboard.tsx"), "utf8");
+    const startRoute = readFileSync(path.join(RACINE, "app/api/live/sessions/[id]/start/route.ts"), "utf8");
+
+    // Plus AUCUN picker manuel sur la carte d'activation (chat ni dashboard).
+    expect(panel.includes('aria-pressed={source === "screen"}') || panel.includes('aria-pressed={source === "camera"}'), "La carte du chat ne doit PLUS proposer de choix manuel de source — régression it.54").toBe(false);
+    expect(dashboard.includes("sourceLocale") || dashboard.includes("facingLocale"), "Le dashboard ne doit PLUS proposer de picker pré-montage — régression it.54").toBe(false);
+    // Le SYSTÈME détecte : capacité réelle du navigateur à l'activation
+    // (panneau), reconfirmation + bascule automatique annoncée (exécuteur).
+    expect(panel.includes('partageEcranPossible ? "screen" : "camera"'), "Le panneau doit détecter l'appareil via la capacité réelle — régression it.54").toBe(true);
+    expect(panel.includes("Source détectée automatiquement par le système"), "La carte doit annoncer la détection automatique — régression it.54").toBe(true);
+    expect(executeur.includes('body: JSON.stringify({ deviceId, source: sourceEffective })'), "L'exécuteur doit déclarer la source détectée à la porte /start — régression it.54").toBe(true);
+    expect(executeur.includes("bascule sur la caméra."), "La bascule automatique écran→caméra doit être annoncée dans le journal — régression it.54").toBe(true);
+    // La garde LIVE_PC_ONLY ne concerne PLUS que le partage d'écran
+    // (anomalie it.52 corrigée : la caméra mobile doit pouvoir s'armer).
+    expect(startRoute.includes('source: z.enum(["screen", "camera"]).default("screen")'), "La porte /start doit accepter la source déclarée — régression it.54").toBe(true);
+    expect(startRoute.includes('if (source === "screen" && !device.isLiveCapable)'), "La garde PC-only ne doit s'appliquer qu'au partage d'écran (caméra mobile légitime) — régression it.54").toBe(true);
+    // L'override manuel reste disponible APRÈS un arrêt (picker de l'exécuteur).
+    expect(executeur.includes('aria-pressed={sourceActuelle === "screen"}'), "L'override manuel de source doit rester disponible après arrêt — régression it.54").toBe(true);
   });
 });

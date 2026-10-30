@@ -11,9 +11,11 @@ import { describe, expect, it } from "vitest";
  *  1. LES PORTES INTERNES SONT CONSOMMÉES : POST /start (armement),
  *     POST frames (images → décisions du moteur de vision interne),
  *     PUT frames (résultat d'action), approve (HITL), stop (arrêt réel).
- *  2. LES SOURCES DE CAPTURE SONT HONNÊTES : écran PC (getDisplayMedia)
- *     OU caméra mobile (getUserMedia, avant/arrière) — le picker est
- *     explicite, le fallback est annoncé.
+ *  2. LA SOURCE EST DÉTECTÉE PAR LE SYSTÈME (it.54) : écran PC
+ *     (getDisplayMedia) OU caméra (getUserMedia, avant/arrière) — la
+ *     capacité réelle du navigateur est la vérité, la bascule est
+ *     automatique et annoncée, déclarée à la porte /start ; le picker
+ *     d'arrêt reste en override manuel.
  *  3. LA BOUCLE EST ROBUSTE : jeton de génération anti-course
  *     (reactStrictMode double le montage), garde sendingRef, arrêt
  *     propre sur les codes terminaux de la porte (LIVE_STOPPED,
@@ -45,18 +47,23 @@ describe("Agent live — exécuteur navigateur unique (câblage it.53)", () => {
     expect(executeur).toContain('body: JSON.stringify({ action: "stop" })');
   });
 
-  it("les sources de capture sont honnêtes : écran PC (getDisplayMedia) ou caméra mobile (getUserMedia, avant/arrière)", () => {
+  it("la source est détectée par le système et honnête : écran (PC) ou caméra mobile, bascule automatique annoncée", () => {
     expect(executeur).toContain("navigator.mediaDevices.getDisplayMedia");
     expect(executeur).toContain("navigator.mediaDevices.getUserMedia");
     expect(executeur).toContain("facingMode: facingRef.current");
-    // Le picker d'arrêt est explicite et accessible (aria-pressed).
+    // it.54 — détection AVANT l'armement, source déclarée à la porte.
+    expect(executeur).toContain("source: sourceEffective");
+    expect(executeur).toContain('partage d\'écran indisponible ici (téléphone) — bascule sur la caméra.');
+    expect(executeur).toContain("Ni partage d'écran ni caméra disponibles dans ce navigateur.");
+    expect(executeur).toContain("Source détectée : écran (ordinateur)");
+    expect(executeur).toContain("Source détectée : caméra (téléphone)");
+    // Le picker d'arrêt reste disponible en override manuel (aria-pressed).
     expect(executeur).toContain('aria-pressed={sourceActuelle === "screen"}');
     expect(executeur).toContain('aria-pressed={sourceActuelle === "camera"}');
     expect(executeur).toContain("Relancer la capture");
     expect(executeur).toContain('cameraFacing === "environment" ? "arrière" : "avant"');
-    // Le fallback est annoncé (pas de message d'erreur brut).
-    expect(executeur).toContain("Partage d'écran indisponible dans ce navigateur");
-    expect(executeur).toContain("Caméra indisponible dans ce navigateur");
+    // Le fallback caméra est annoncé (pas de message d'erreur brut).
+    expect(executeur).toContain("Caméra indisponible dans ce navigateur.");
   });
 
   it("la boucle est robuste : anti-course, codes terminaux, échecs visibles, nettoyage, honnêteté", () => {

@@ -8,7 +8,7 @@ import type { Permission } from "@/lib/live/types";
 import { PERMISSION_LABELS } from "@/lib/live/types";
 
 import { LiveExecuteur } from "@/components/live/live-executeur";
-import type { CameraFacing, SourceCapture } from "@/components/live/live-executeur";
+import type { SourceCapture } from "@/components/live/live-executeur";
 
 /**
  * AGENT LIVE — CARTE D'ACTIVATION DU CHAT IA (it.52, demande
@@ -17,13 +17,21 @@ import type { CameraFacing, SourceCapture } from "@/components/live/live-execute
  *
  * it.53 (« un seul exécuteur, deux surfaces ») : ce panneau ne garde que
  * son rôle propre — la CRÉATION de la session (POST /api/live/sessions,
- * mode navigateur, permissions, consentement explicite) et le choix de
- * la source de capture. Dès la session créée, l'EXÉCUTION est déléguée
- * à l'exécuteur navigateur UNIQUE components/live/live-executeur (le
- * même que l'espace /live) : armement, boucle d'images 3 s, décisions du
- * moteur de vision INTERNE lib/live/vision-decider, HITL inline, arrêt.
- * Avant it.53, la boucle vivait ici en double copie avec le dashboard —
- * déjà divergentes ; la duplication est supprimée.
+ * mode navigateur, permissions, consentement explicite). Dès la session
+ * créée, l'EXÉCUTION est déléguée à l'exécuteur navigateur UNIQUE
+ * components/live/live-executeur (le même que l'espace /live) : armement,
+ * boucle d'images 3 s, décisions du moteur de vision INTERNE
+ * lib/live/vision-decider, HITL inline, arrêt. Avant it.53, la boucle
+ * vivait ici en double copie avec le dashboard — déjà divergentes ; la
+ * duplication est supprimée.
+ *
+ * it.54 (demande propriétaire : « un seul bouton, le système détecte
+ * l'appareil ») : le choix manuel de la source (Écran PC / Caméra
+ * mobile) est SUPPRIMÉ de la carte — le SYSTÈME détecte l'appareil à
+ * l'activation via la capacité réelle du navigateur (partage d'écran
+ * disponible = ordinateur, sinon caméra = téléphone) et l'exécuteur
+ * reconfirme au démarrage (bascule automatique annoncée). Un seul
+ * bouton, aucun réglage.
  *
  * Honnêteté : 401 → connexion, 429/403 → message de la porte, aucun
  * canal externe (l'ancien « Gemini Live » est retiré depuis it.52) —
@@ -36,12 +44,15 @@ const PERMISSION_KEYS = Object.keys(PERMISSION_LABELS) as Permission[];
 export function LiveInternePanel() {
   const sessionDisponible = useSessionAvailable();
 
-  // Formulaire d'activation (carte « Activer »).
+  // Formulaire d'activation (carte « Activer ») — UN SEUL BOUTON : la
+  // source de capture est DÉTECTÉE PAR LE SYSTÈME au moment de
+  // l'activation (capacité réelle du navigateur : partage d'écran =
+  // ordinateur, sinon caméra = téléphone), jamais choisie par
+  // l'utilisateur (it.54, demande propriétaire).
   const [nom, setNom] = useState("Live — chat IA");
   const [objectif, setObjectif] = useState("");
   const [permissions, setPermissions] = useState<Permission[]>(["screen.read"]);
-  const [source, setSource] = useState<SourceCapture>("screen");
-  const [cameraFacing, setCameraFacing] = useState<CameraFacing>("environment");
+  const [sourceDetectee, setSourceDetectee] = useState<SourceCapture | null>(null);
   const [consentement, setConsentement] = useState(false);
   const [busy, setBusy] = useState(false);
   const [activationError, setActivationError] = useState<string | null>(null);
@@ -63,6 +74,13 @@ export function LiveInternePanel() {
       return;
     }
     if (!nom.trim() || objectif.trim().length < 10 || permissions.length === 0 || !consentement || busy) return;
+    // it.54 : le SYSTÈME détecte l'appareil — la capacité réelle du
+    // navigateur est la vérité (partage d'écran = ordinateur, sinon
+    // caméra = téléphone) ; l'exécuteur reconfirme cette détection au
+    // démarrage (double filet de sécurité honnête).
+    const partageEcranPossible = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia);
+    const source: SourceCapture = partageEcranPossible ? "screen" : "camera";
+    setSourceDetectee(source);
     setBusy(true);
     setActivationError(null);
     try {
@@ -102,8 +120,7 @@ export function LiveInternePanel() {
     return (
       <LiveExecuteur
         sessionId={sessionIdActif}
-        sourceInitiale={source}
-        cameraFacingInitiale={cameraFacing}
+        sourceInitiale={sourceDetectee ?? "screen"}
         onFermer={() => setSessionIdActif(null)}
       />
     );
@@ -117,6 +134,11 @@ export function LiveInternePanel() {
         <p className="mt-1 text-xs leading-5 text-[var(--g3-muted)]">
           L&apos;agent observe votre écran (PC) ou votre caméra (mobile) depuis le navigateur et vous guide
           étape par étape — décision par le moteur IA INTERNE de gen3, aucune clé API, aucun service externe.
+        </p>
+        <p className="mt-2 rounded-lg border border-[var(--g3-border)] bg-[var(--g3-elevated)] px-3 py-2 text-[11px] leading-4 text-[var(--g3-muted)]">
+          Source détectée automatiquement par le système : écran (ordinateur) ou caméra (téléphone) —
+          un seul bouton, aucun réglage requis. La bascule caméra avant/arrière reste disponible
+          dans l&apos;agent après un arrêt.
         </p>
         <label className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-[var(--g3-faint)]">Nom de la session</label>
         <input
@@ -135,36 +157,6 @@ export function LiveInternePanel() {
           className="g3-textarea mt-1 min-h-20 text-sm"
           aria-label="Objectif de la mission live"
         />
-        <div className="mt-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--g3-faint)]">Source de capture</div>
-          <div className="mt-1.5 flex flex-wrap gap-2">
-            <button
-              type="button"
-              aria-pressed={source === "screen"}
-              onClick={() => setSource("screen")}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${source === "screen" ? "bg-[var(--g3-deep)] text-white" : "border border-[var(--g3-border-strong)] text-[var(--g3-muted)]"}`}
-            >
-              Écran (PC)
-            </button>
-            <button
-              type="button"
-              aria-pressed={source === "camera"}
-              onClick={() => setSource("camera")}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${source === "camera" ? "bg-[var(--g3-deep)] text-white" : "border border-[var(--g3-border-strong)] text-[var(--g3-muted)]"}`}
-            >
-              Caméra (mobile)
-            </button>
-            {source === "camera" ? (
-              <button
-                type="button"
-                onClick={() => setCameraFacing((facing) => (facing === "environment" ? "user" : "environment"))}
-                className="rounded-full border border-[var(--g3-border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-muted)]"
-              >
-                Caméra {cameraFacing === "environment" ? "arrière" : "avant"} ⇄
-              </button>
-            ) : null}
-          </div>
-        </div>
         <div className="mt-3">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--g3-faint)]">Permissions accordées</div>
           <div className="mt-1.5 flex flex-wrap gap-1.5">

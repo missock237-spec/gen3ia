@@ -11,7 +11,6 @@ import type { Permission } from "@/lib/live/types";
 import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
 import { LiveExecuteur } from "@/components/live/live-executeur";
-import type { CameraFacing, SourceCapture } from "@/components/live/live-executeur";
 
 // it.52 (demande propriétaire : « le live doit fonctionner en interne avec
 // gen3 ») : l'ancien canal externe « Gemini Live » (clé opérateur +
@@ -102,10 +101,10 @@ export function LiveDashboard() {
   const [error, setError] = useState("");
 
   // Session exécutée dans CE navigateur via l'exécuteur partagé
-  // (components/live/live-executeur — le même que le chat).
+  // (components/live/live-executeur — le même que le chat). it.54 : la
+  // source de capture n'est plus choisie ici — l'exécuteur DÉTECTE
+  // automatiquement l'appareil (écran = ordinateur, sinon caméra).
   const [sessionActive, setSessionActive] = useState<string | null>(null);
-  const [sourceLocale, setSourceLocale] = useState<SourceCapture>("screen");
-  const [facingLocale, setFacingLocale] = useState<CameraFacing>("environment");
 
   const sessionDisponible = useSessionAvailable();
 
@@ -336,8 +335,6 @@ export function LiveDashboard() {
                 <LiveExecuteur
                   key={sessionActive}
                   sessionId={sessionActive}
-                  sourceInitiale={sourceLocale}
-                  cameraFacingInitiale={facingLocale}
                   onFermer={() => { setSessionActive(null); void loadSessions(); }}
                 />
               </div>
@@ -346,38 +343,10 @@ export function LiveDashboard() {
                 <p className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-3 text-xs leading-5 text-[var(--g3-muted)]">
                   Aucune session exécutée dans ce navigateur. Créez une session ci-contre puis
                   « Tester dans ce navigateur », reprenez une session récente, ou activez le live
-                  directement depuis le Chat IA (bouton « Agent Live »).
+                  directement depuis le Chat IA (bouton « Agent Live »). it.54 : un seul bouton —
+                  le système détecte automatiquement l&apos;appareil (écran = ordinateur, caméra =
+                  téléphone) et la bascule avant/arrière reste disponible dans l&apos;agent après un arrêt.
                 </p>
-                <div className="mt-3">
-                  <div className="text-xs uppercase tracking-widest text-[var(--g3-muted)]">Source de capture de l’exécuteur</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      aria-pressed={sourceLocale === "screen"}
-                      onClick={() => setSourceLocale("screen")}
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold ${sourceLocale === "screen" ? "bg-[var(--g3-deep)] text-white" : "border border-[var(--g3-border-strong)] text-[var(--g3-muted)]"}`}
-                    >
-                      Écran (PC)
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={sourceLocale === "camera"}
-                      onClick={() => setSourceLocale("camera")}
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold ${sourceLocale === "camera" ? "bg-[var(--g3-deep)] text-white" : "border border-[var(--g3-border-strong)] text-[var(--g3-muted)]"}`}
-                    >
-                      Caméra (mobile)
-                    </button>
-                    {sourceLocale === "camera" ? (
-                      <button
-                        type="button"
-                        onClick={() => setFacingLocale((facing) => (facing === "environment" ? "user" : "environment"))}
-                        className="rounded-full border border-[var(--g3-border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-muted)]"
-                      >
-                        Caméra {facingLocale === "environment" ? "arrière" : "avant"} ⇄
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
               </div>
             )}
 
