@@ -71,7 +71,7 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 68 endpoints orphelins au 2026-10-30 (it.49 ;      */
+/* Baseline honnête — 63 endpoints orphelins au 2026-10-31 (it.50 ;      */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
@@ -168,6 +168,20 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* secondaire + robots disallow ; 4 tests structurels + verrou           */
 /* bidirectionnel) — l'entrée sort du registre (pre-ui-roadmap 11→10,    */
 /* total 69→68).                                                         */
+/* Puis it.50 : LOT 6 COMPLET — DÉCLENCHEURS + COMPÉTENCES — les 5        */
+/* portes restantes du lot Knowledge Spaces sont CÂBLÉES dans l'espace    */
+/* Connaissances (onglets secondaires chargés À LA DEMANDE, liens         */
+/* profonds #declencheurs/#competences) : Déclencheurs d'ingestion        */
+/* (GET/POST /api/knowledge/triggers — règle any/filename_contains/       */
+/* mime_type → mission RÉELLE enfilée à l'ingestion d'un document         */
+/* correspondant, agent cible choisi parmi les agents actifs du Studio    */
+/* et validé serveur, jetons {{document.*}} annoncés ; PATCH/DELETE       */
+/* [id] activer/pause/supprimer) et Compétences (GET /api/skills          */
+/* bibliothèque système+privées actives, POST /api/skills/create Skill    */
+/* Factory LOCALE déterministe — zéro service externe, POST               */
+/* /api/skills/import catalogue skills.sh idempotent restitué item par    */
+/* item) ; 4 tests structurels + verrou bidirectionnel (19ᵉ) — les 5      */
+/* entrées sortent du registre (pre-ui-roadmap 10→5, total 68→63).        */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -284,18 +298,19 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *     LOT 6 du plan plateforme (Knowledge Spaces).
    *     it.49 : SORT de cette catégorie — l'espace Connaissances
    *     (page /knowledge + knowledge-console) consomme désormais la
-   *     porte dans ses trois modes ; /knowledge/triggers* et /skills*
-   *     restent à câbler (prochaines étapes du même LOT 6). */
+   *     porte dans ses trois modes.
+   *   it.50 : les 5 entrées restantes du LOT 6 SORTENT de cette
+   *   catégorie — l'espace Connaissances consomme désormais les portes
+   *   déclencheurs (GET/POST /knowledge/triggers, PATCH/DELETE [id] :
+   *   règles de correspondance → missions réelles, agent cible validé
+   *   serveur) et compétences (GET /skills bibliothèque, POST /create
+   *   Skill Factory locale déterministe, POST /import catalogue
+   *   skills.sh idempotent) via deux onglets à la demande. */
   "pre-ui-roadmap": [
     "/agents/generate",
     "/developer/simulation",
     "/files/workspaces",
-    "/knowledge/triggers",
-    "/knowledge/triggers/[id]",
     "/observability/org",
-    "/skills",
-    "/skills/create",
-    "/skills/import",
     "/workspace/tasks/clarify",
   ],
   /** VIDÉE à l'it.45 (audit 4 canaux du 6e lot) : les 10 dernières
@@ -1064,6 +1079,61 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     // catégorie).
     for (const [categorie, endpoints] of Object.entries(BASELINE_ORPHELINS)) {
       expect(endpoints, `/knowledge est CÂBLÉE depuis l'it.49 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain("/knowledge");
+    }
+  });
+
+  it("les déclencheurs et les compétences restent câblés dans l'espace Connaissances (it.50) — 5 portes vivantes, registre à jour", () => {
+    // it.50 : les 5 portes restantes du LOT 6 sont consommées par les
+    // onglets à la demande de l'espace Connaissances — déclencheurs
+    // (GET/POST /api/knowledge/triggers + PATCH/DELETE [id] : règles de
+    // correspondance → missions réelles, agent cible actif validé serveur)
+    // et compétences (GET /api/skills + POST /create + POST /import) —
+    // elles ont quitté pre-ui-roadmap (68→63).
+    const consoleData = readFileSync(path.join(RACINE, "components/knowledge/knowledge-console.tsx"), "utf8");
+    // Les 5 portes sont toutes interrogées depuis la console.
+    expect(consoleData.includes('authFetch("/api/knowledge/triggers", { cache: "no-store" })'), "La console doit interroger la liste des déclencheurs — régression du câblage it.50").toBe(true);
+    expect(consoleData.includes('action: { type: "run_agent_mission", agentId: triggerAgent, objectiveTemplate: triggerObjectif.trim() }'), "La création de déclencheur doit poster l'action réelle (agent + objectif) — régression it.50").toBe(true);
+    expect(consoleData.includes("`/api/knowledge/triggers/${trigger.id}`"), "La console doit permettre activer/pause/supprimer un déclencheur (PATCH/DELETE [id]) — régression it.50").toBe(true);
+    expect(consoleData.includes('authFetch("/api/skills?status=active"'), "La console doit interroger la bibliothèque de compétences — régression it.50").toBe(true);
+    expect(consoleData.includes('authFetch("/api/skills/create"'), "La Skill Factory locale doit rester joignable depuis la console — régression it.50").toBe(true);
+    expect(consoleData.includes('authFetch("/api/skills/import"'), "L'import idempotent du catalogue skills.sh doit rester joignable — régression it.50").toBe(true);
+    // Honnêteté conservée : idempotence restituée, agent actif exigé.
+    expect(consoleData.includes("déjà dans la bibliothèque"), "L'idempotence de l'import doit rester restituée (déjà présent = rien d'écrit) — régression it.50").toBe(true);
+    expect(consoleData.includes('agent.status === "active"'), "L'agent cible d'un déclencheur doit être choisi parmi les agents ACTIFS — régression it.50").toBe(true);
+    // Les 5 portes restent réelles (contrats serveur intacts).
+    for (const rel of [
+      "app/api/knowledge/triggers/route.ts",
+      "app/api/knowledge/triggers/[id]/route.ts",
+      "app/api/skills/route.ts",
+      "app/api/skills/create/route.ts",
+      "app/api/skills/import/route.ts",
+    ]) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est une porte réelle du LOT 6 (câblée it.50) — sa suppression est une régression`,
+      ).toBe(true);
+    }
+    // Les libs servies restent vivantes.
+    for (const rel of [
+      "lib/knowledge/triggers.ts",
+      "lib/skills/factory.ts",
+      "lib/skills/sh-importer.ts",
+      "lib/skills/repository.ts",
+      "lib/skills/schema.ts",
+    ]) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est le socle d'une porte câblée it.50 — sa disparition est une régression fonctionnelle`,
+      ).toBe(true);
+    }
+    // Le test structurel du composant reste en place.
+    expect(existsSync(path.join(RACINE, "components/knowledge/knowledge-console-onglets.test.ts")), "Le test structurel des onglets doit rester en place — il verrouille le contrat UI↔portes").toBe(true);
+    // Registre : les 5 entrées sont sorties (et ne sont revenues dans
+    // aucune autre catégorie).
+    for (const [categorie, endpoints] of Object.entries(BASELINE_ORPHELINS)) {
+      for (const entree of ["/knowledge/triggers", "/knowledge/triggers/[id]", "/skills", "/skills/create", "/skills/import"]) {
+        expect(endpoints, `${entree} est CÂBLÉE depuis l'it.50 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain(entree);
+      }
     }
   });
 });
