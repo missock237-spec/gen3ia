@@ -450,9 +450,12 @@ export function getNeuralRuntime(): NeuralRuntime {
     // dégradée). État invalide → repli silencieux (lireEtatRpiaDefensif).
     if (etat.rpia) {
       try {
-        coucheRPIA.importerEtat(etat.rpia);
+        // Un ancien réseau peut avoir moins de neurones que la version courante.
+        // Étendre le checkpoint préserve ses poids appris et initialise seulement
+        // les nouveaux nœuds au lieu de réinitialiser toute la couche d'ondes.
+        coucheRPIA.importerEtatEtendu(etat.rpia);
         console.log(
-          `[NEURAL] Couche RPIA restaurée : ${etat.rpia.taille} nœuds d'onde, ${etat.rpia.pasTotaux} pas de résonance accumulés.`,
+          `[NEURAL] Couche RPIA restaurée : ${etat.rpia.taille} → ${coucheRPIA.taille} nœuds d'onde, ${etat.rpia.pasTotaux} pas de résonance accumulés.`,
         );
       } catch (erreurRpia) {
         console.warn(

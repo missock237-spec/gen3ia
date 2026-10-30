@@ -74,6 +74,9 @@ export function encoderImageEnOndeCible(
   if (!Number.isInteger(nbNoeuds) || nbNoeuds < 1) {
     throw new Error(`Nombre de nœuds invalide : ${nbNoeuds} (entier ≥ 1 requis).`);
   }
+  if (!Number.isInteger(largeur) || largeur < 1 || !Number.isInteger(hauteur) || hauteur < 1) {
+    throw new Error(`Dimensions d'image invalides : ${largeur}×${hauteur} (entiers positifs requis).`);
+  }
   if (largeur * hauteur * 4 !== pixels.length) {
     throw new Error(
       `Taille d'image incohérente : ${pixels.length} octets pour ${largeur}×${hauteur} RGBA.`,
@@ -81,14 +84,23 @@ export function encoderImageEnOndeCible(
   }
   const ondeCible = new Float32Array(nbNoeuds);
   const totalPixels = largeur * hauteur;
-  const pas = Math.max(1, Math.floor((totalPixels * 4) / nbNoeuds));
 
-  for (let i = 0; i < nbNoeuds; i++) {
-    const indexPixel = i * pas;
-    if (indexPixel + 2 >= pixels.length) break; // au-delà du contenu → 0
-    const r = pixels[indexPixel] ?? 0;
-    const g = pixels[indexPixel + 1] ?? 0;
-    const b = pixels[indexPixel + 2] ?? 0;
+  // Les indices sont des INDICES DE PIXELS, jamais des offsets d'octets.
+  // L'ancien calcul avançait dans le buffer RGBA avec un pas arbitraire :
+  // certains nœuds lisaient le canal alpha comme du rouge et mélangeaient
+  // les canaux RGB de pixels voisins, ce qui corrompait l'encodage spatial.
+  // Quand il y a assez de pixels, on les échantillonne régulièrement ;
+  // quand il y en a moins que de nœuds, chaque pixel est utilisé une fois
+  // puis le suffixe reste à zéro (valeur neutre documentée).
+  const nbEchantillons = Math.min(totalPixels, nbNoeuds);
+  for (let i = 0; i < nbEchantillons; i++) {
+    const indexPixel = totalPixels <= nbNoeuds
+      ? i
+      : Math.floor((i * totalPixels) / nbNoeuds);
+    const indexOctet = indexPixel * 4;
+    const r = pixels[indexOctet] ?? 0;
+    const g = pixels[indexOctet + 1] ?? 0;
+    const b = pixels[indexOctet + 2] ?? 0;
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
     ondeCible[i] = luminance * 2.0 - 1.0;
   }

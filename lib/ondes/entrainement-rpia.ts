@@ -24,8 +24,11 @@ import {
   BORNES_RPIA,
   RPIA_DEFAUTS,
   borner,
+  calculerTempsGlobalRPIA,
   erreurInterference,
   rapportDepuisHistorique,
+  validerCibleRPIA,
+  validerConfigRPIA,
 } from "./types-entrainement";
 import type { ConfigRPIA, NoeudOnde, OndeCible, RapportEntrainement } from "./types-entrainement";
 
@@ -57,6 +60,15 @@ export class EntraineurRPIA {
     };
 
     const amplitude = options?.amplitudeInitiale ?? 1.0;
+    if (
+      !Number.isFinite(amplitude) ||
+      amplitude < BORNES_RPIA.amplitudeMin ||
+      amplitude > BORNES_RPIA.amplitudeMax
+    ) {
+      throw new Error(
+        `Amplitude initiale invalide : ${amplitude} (valeur finie entre ${BORNES_RPIA.amplitudeMin} et ${BORNES_RPIA.amplitudeMax} requise).`,
+      );
+    }
     for (let i = 0; i < nbNoeuds; i++) {
       this.noeuds[i] = {
         amplitude,
@@ -87,12 +99,26 @@ export class EntraineurRPIA {
    */
   pasEntrainement(cible: OndeCible, config: ConfigRPIA = RPIA_DEFAUTS): number {
     this.verifierCible(cible);
+    this.verifierConfig(config);
+    // WebGPU consomme des f32 ; normaliser aussi les tableaux JS en f32
+    // pour que le chemin CPU travaille sur la même cible numérique.
+    const cibleFloat32 = cible instanceof Float32Array ? cible : Float32Array.from(cible);
+    return this.executerPasValide(cibleFloat32, config);
+  }
+
+  /**
+   * Pas interne après validation des entrées. L'entraînement multi-époques
+   * l'utilise pour ne pas reparcourir la cible et la configuration à chaque
+   * époque : la vérification reste aux frontières publiques, pas dans la
+   * boucle numérique chaude.
+   */
+  private executerPasValide(cible: Float32Array, config: ConfigRPIA): number {
     const lr = config.tauxApprentissage;
     // Le shader évalue l'onde avec le pasDeTemps passé en uniforme — le
     // miroir utilise le même temps pour l'évaluation et la correction du
     // pas, puis mesure l'erreur APRÈS correction au même temps : la
     // courbe d'erreur reflète l'apprentissage seul (pas la dérive du temps).
-    const tempsOnde = config.pasDeTemps * this.compteurPas;
+    const tempsOnde = calculerTempsGlobalRPIA(config, this.compteurPas);
 
     for (let i = 0; i < this.nbNoeuds; i++) {
       const noeud = this.noeuds[i];
@@ -149,11 +175,19 @@ export class EntraineurRPIA {
     if (!Number.isInteger(epoques) || epoques < 1) {
       throw new Error(`Nombre d'époques invalide : ${epoques} (entier ≥ 1 requis).`);
     }
+    this.verifierConfig(config);
+    const cibleFloat32 = cible instanceof Float32Array ? cible : Float32Array.from(cible);
+    // Mesurer le point de départ avant toute mise à jour. L'ancien code
+    // prenait historique[0], donc l'erreur APRÈS le premier pas, comme
+    // "erreur initiale" : le rapport pouvait masquer une régression au
+    // premier pas et ne représentait pas réellement l'état de départ.
+    const tempsInitial = calculerTempsGlobalRPIA(config, this.compteurPas);
+    const erreurAvantEntrainement = erreurInterference(this.noeuds, cibleFloat32, tempsInitial);
     const historique: number[] = [];
     for (let e = 0; e < epoques; e++) {
-      historique.push(this.pasEntrainement(cible, config));
+      historique.push(this.executerPasValide(cibleFloat32, config));
     }
-    return rapportDepuisHistorique(historique);
+    return rapportDepuisHistorique(historique, erreurAvantEntrainement);
   }
 
   /**
@@ -180,6 +214,14 @@ export class EntraineurRPIA {
         `Poids incompatibles : ${poids.length} valeurs reçues, ${this.nbNoeuds * 4} attendues.`,
       );
     }
+    // Valider l'intégralité du buffer AVANT de muter le réseau : un seul
+    // NaN/Infinity venant d'un checkpoint corrompu rendrait toute la
+    // dynamique d'ondes inutilisable et pourrait contaminer les métriques.
+    for (let i = 0; i < poids.length; i++) {
+      if (!Number.isFinite(poids[i])) {
+        throw new Error(`Poids RPIA non fini à l'index ${i}.`);
+      }
+    }
     for (let i = 0; i < this.nbNoeuds; i++) {
       this.noeuds[i] = {
         amplitude: borner(poids[i * 4], BORNES_RPIA.amplitudeMin, BORNES_RPIA.amplitudeMax),
@@ -200,8 +242,8 @@ export class EntraineurRPIA {
    * physique dépend du temps global, pas seulement des poids).
    */
   restaurerPas(pas: number): void {
-    if (!Number.isInteger(pas) || pas < 0) {
-      throw new Error(`Compteur de pas invalide : ${pas} (entier ≥ 0 requis).`);
+    if (!Number.isSafeInteger(pas) || pas < 0) {
+      throw new Error(`Compteur de pas invalide : ${pas} (entier sûr ≥ 0 requis).`);
     }
     this.compteurPas = pas;
   }
@@ -209,19 +251,15 @@ export class EntraineurRPIA {
   /** Erreur d'interférence moyenne courante contre une cible. */
   erreurCourante(cible: OndeCible, temps: number): number {
     this.verifierCible(cible);
-    return erreurInterference(this.noeuds, cible, temps);
+    const cibleFloat32 = cible instanceof Float32Array ? cible : Float32Array.from(cible);
+    return erreurInterference(this.noeuds, cibleFloat32, temps);
+  }
+
+  private verifierConfig(config: ConfigRPIA): void {
+    validerConfigRPIA(config);
   }
 
   private verifierCible(cible: OndeCible): void {
-    if (cible.length !== this.nbNoeuds) {
-      throw new Error(
-        `Cible incompatibles : ${cible.length} valeurs reçues, ${this.nbNoeuds} nœuds.`,
-      );
-    }
-    for (let i = 0; i < cible.length; i++) {
-      if (!Number.isFinite(cible[i])) {
-        throw new Error(`Cible non finie à l'index ${i}.`);
-      }
-    }
+    validerCibleRPIA(cible, this.nbNoeuds);
   }
 }
