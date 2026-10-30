@@ -127,7 +127,18 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* ouverture locale par serverId ou IMPORT fidèle via la porte détail    */
 /* GET /api/workspace/conversations/[id] (ownership re-vérifié) ;        */
 /* l'entrée sort du registre (total 73→72).                              */
-/* Classés par motif.                                                    */
+/* Puis it.45 : AUDIT 4 CANAUX du 6e lot (10 orphelin-connu restants) —  */
+/* AUCUN doublon mort, 10 portes réelles reclassées avec motif :         */
+/* conserver-motive ×2 (/media/professeur-statut diagnostic ops de la    */
+/* loi CONTRAINTE-ONDES, /monde/stats transparence publique + audit      */
+/* ops), candidat-ui-documente ×4 (/deployments/create et                */
+/* /tools/execute documentés au plan, /business/pulse exclusion          */
+/* volontaire documentée au test studio métier, /provisioning/intent     */
+/* concept post-SaaS #4 au CHANGELOG), pre-ui-roadmap ×4 (/neural/evolve */
+/* console neuronale, /ia/auto-apprentissage/rapport carte live,         */
+/* /observability/org vue usage org, /training/hub/inspect console Data) */
+/* — la catégorie orphelin-connu est VIDÉ : registre 100 % motivé,       */
+/* total inchangé 72. Classés par motif.                                */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -219,34 +230,54 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *  it.44 : /workspace/conversations/search SORT de cette catégorie —
    *  la Recherche globale (LOT 13) est CÂBLÉE dans la sidebar du chat
    *  (nova-chat : requête débouncée, badge sémantique/titres, extrait,
-   *  ouverture locale par serverId ou import via la porte détail). */
+   *  ouverture locale par serverId ou import via la porte détail).
+   *  it.45 : audit 4 canaux du 6e lot — 4 portes rejoint cette catégorie
+   *  avec leur surface naturelle documentée (UI pas échue) :
+   *   - /neural/evolve : télémétrie d'évolution RÉELLE (GET) + cycle de
+   *     consolidation forcé (POST, auth + rate-limit + audit) — surface
+   *     naturelle = console neuronale (components/neural/neural-console,
+   *     vivante : brain/state/domaines/cycle/media/train) qui ne consomme
+   *     pas encore cette porte ; cohérence cerveau métabolique (it.42).
+   *   - /ia/auto-apprentissage/rapport : HISTORIQUE COMPLET des
+   *     évaluations (10/domaine, validité statistique honnête) — la carte
+   *     auto-apprentissage du chat (vivante) ne consomme que le GET
+   *     principal (dernière évaluation) ; l'extension « historique »
+   *     est l'étape suivante naturelle.
+   *   - /observability/org : usage agrégé PAR ORGANISATION (Task 43,
+   *     saas-roadmap §3) — requireOrgContext vérifie l'appartenance ; la
+   *     vue usage org n'est pas encore une surface (UI pas échue).
+   *   - /training/hub/inspect : inspection RÉELLE des jeux du hub
+   *     (fichiers, splits, licence, échantillon) — la console Data
+   *     (components/data/data-console) consomme déjà /training/hub/search
+   *     (sibling) ; l'inspection est l'étape suivante de la même surface. */
   "pre-ui-roadmap": [
     "/agents/generate",
     "/developer/simulation",
     "/files/workspaces",
+    "/ia/auto-apprentissage/rapport",
     "/knowledge",
     "/knowledge/triggers",
     "/knowledge/triggers/[id]",
+    "/neural/evolve",
+    "/observability/org",
     "/skills",
     "/skills/create",
     "/skills/import",
+    "/training/hub/inspect",
     "/workspace/tasks/clarify",
   ],
-  /** Vrais orphelins connus : fonctionnalités livrées SANS surface
-   *  utilisateur détectée. Chaque entrée est un candidat UI (ou un
-   *  doublon mort à supprimer). Ex. : /business/* (lot métier sans
-   *  écran), /settings/export-data (constat it.27, câblé it.29),
-   *  /extensions/{installed,licenses,purchases,usage} (lot marketplace,
-   *  câblé it.31 sur /extensions) … ; les doublons morts
-   *  /orchestrator* ont été SUPPRIMÉS à l'it.37 (voir verrou dédié) ;
-   *  les 6 /skills* + /knowledge* sont partis en « pre-ui-roadmap »
-   *  à l'it.38 (décision produit LOT 6, voir cette catégorie) ; les
-   *  4 /admin/* + /ads/{generate,publish} sont partis en
-   *  « conserver-motive » / « candidat-ui-documente » à l'it.40
-   *  (classification affinée, voir ces catégories) ; à l'it.43,
-   *  /developer/secrets est CÂBLÉ (panneau Secrets de l'onglet Extensions
-   *  du portail développeur) et 5 entrées rejoignent « conserver-motive »
-   *  / « pre-ui-roadmap » (audit 4 canaux, voir ces catégories). */
+  /** VIDÉE à l'it.45 (audit 4 canaux du 6e lot) : les 10 dernières
+   *  « vrais orphelins connus » ont été reclassées avec motif — voir les
+   *  catégories conserver-motive, candidat-ui-documente et
+   *  pre-ui-roadmap. Historique de la catégorie : /business/* (lot métier
+   *  sans écran, câblé it.33/35), /settings/export-data (constat it.27,
+   *  câblé it.29), /extensions/{installed,licenses,purchases,usage} (lot
+   *  marketplace, câblé it.31) ; les doublons morts /orchestrator* ont
+   *  été SUPPRIMÉS à l'it.37 ; les 6 /skills* + /knowledge* partis en
+   *  « pre-ui-roadmap » à l'it.38 ; les 4 /admin/* + /ads/* en
+   *  « conserver-motive » / « candidat-ui-documente » à l'it.40 ;
+   *  /developer/secrets câblé et 5 entrées reclassées à l'it.43 ;
+   *  /workspace/conversations/search câblé à l'it.44 (Recherche globale). */
   /** Outils d'EXPLOITATION (ops) invoqués par un opérateur authentifié
    *  (console, curl, cron VPS) — PAS D'UI par conception : l'utilisateur
    *  final n'a pas à déclencher un rapprochement de paiements ni une
@@ -272,12 +303,25 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *     listing, création bucket, CORS, cycle put/get/delete) — double
    *     garde session ADMIN + header x-diag-secret à temps constant :
    *     outil opérateur (curl/console) par conception, jamais une UI.
+   *   - /media/professeur-statut (it.45) : diagnostic ops du professeur
+   *     média TEMPORAIRE (loi CONTRAINTE-ONDES — échafaudage externe tant
+   *     que les poids média ne sont pas distillés dans le signal d'onde
+   *     natif) : familles de chemins sondés, état de config SANS secret,
+   *     ping TTS réel bout-en-bout ; lib vivante (media-service,
+   *     capabilities) ; invocation opérateur par conception.
+   *   - /monde/stats (it.45) : transparence PUBLIQUE de l'essaim global
+   *     (admissions, refus, équité Jain, mémoire) — chiffres qui PROUVENT
+   *     les garanties du répartiteur ; données volatiles sans auth par
+   *     conception, consommé par l'audit ops scripts/audit-gardes-auth.mjs
+   *     (liste « Stats publiques volatiles ») et toute sonde externe.
    *  Verrou dédié it.40 en fin de fichier (routes + libs + docs). */
   "conserver-motive": [
     "/admin/billing/reconcile",
     "/admin/extensions/reviews",
     "/admin/migrate-firestore-r2",
     "/storage/r2-diagnostic",
+    "/media/professeur-statut",
+    "/monde/stats",
   ],
   /** API documentées au CONTRAT PRODUIT sans appelant dans le dépôt :
    *  les supprimer serait un breaking change contractuel (leçon it.39
@@ -293,24 +337,39 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *     élevé en catégorie explicite — guide-technique.md les documente
    *     (« Génération de contenu publicitaire multi-canal », « Publication
    *     de campagnes ») avec flux payant complet (wallet, media-meter,
-   *     action-approvals). */
+   *     action-approvals).
+   *   - it.45 (audit 4 canaux du 6e lot) :
+   *     · /deployments/create — Deployments RÉELS (GitHub PAT plateforme +
+   *       Vercel + Render) documentés au plan plateforme (inventaire
+   *       « réel ») ; deployProject (lib/deployments/service) vivant.
+   *     · /tools/execute — EXÉCUTION DURCIE documentée au plan
+   *       (emergency-stop → permissions → audit toolAuditLogs) ; test
+   *       agent-driven (lib) vérifie que la route autorise la suite ;
+   *       executor.ts la nomme surface d'exécution à part entière.
+   *     · /business/pulse — concept post-SaaS #7 (Autonomous Business
+   *       Cloud) : KPIs réels + mission d'analyse bornée (dryRun, jamais
+   *       de dépense) ; exclusion VOLONTAIRE de la vue lecture studio
+   *       métier documentée au test business-dashboard (mission POST
+   *       coûteuse) ; famille /business vivante (12 modules câblés).
+   *     · /provisioning/intent — concept post-SaaS #4 (Intent-to-
+   *       Infrastructure) documenté au CHANGELOG (vague Tasks 64–68) :
+   *       une phrase → ressources réelles (agent, automatisation,
+   *       planification, projet), dryRun. */
   "candidat-ui-documente": [
     "/admin/security/mfa-requirement",
     "/ads/generate",
     "/ads/publish",
-  ],
-  "orphelin-connu": [
-    "/business/pulse",
     "/deployments/create",
-    "/ia/auto-apprentissage/rapport",
-    "/media/professeur-statut",
-    "/monde/stats",
-    "/neural/evolve",
-    "/observability/org",
-    "/provisioning/intent",
     "/tools/execute",
-    "/training/hub/inspect",
+    "/business/pulse",
+    "/provisioning/intent",
   ],
+  /** VIDÉ à l'it.45 : les 10 entrées du 6e lot ont été auditées 4 canaux
+   *  et reclassées avec motif (conserver-motive ×2, candidat-ui-documente
+   *  ×4, pre-ui-roadmap ×4 — voir ces catégories). Le registre est
+   *  désormais 100 % motivé : plus AUCUN orphelin « connu » sans verdict.
+   *  Toute NOUVELLE entrée ici devra passer le même audit. */
+  "orphelin-connu": [],
 };
 
 /* Endpoints dont le câblage UI est une EXIGENCE produit (RGPD) — ils ne
@@ -784,5 +843,98 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
         `${rel} est une porte réelle de la Recherche globale (LOT 13) — sa suppression est une régression`,
       ).toBe(true);
     }
+  });
+
+  it("le 6e lot orphelin (it.45) est entièrement reclassé — 10 portes réelles, libs vivantes, registre 100 % motivé", () => {
+    // Constat it.45 : audit 4 canaux des 10 derniers « orphelins connus ».
+    // AUCUN doublon mort : 10 portes réelles reclassées avec motif —
+    //  conserver-motive ×2 :
+    //   · /media/professeur-statut — diagnostic ops du professeur média
+    //     TEMPORAIRE (loi CONTRAINTE-ONDES : échafaudage externe tant que
+    //     les poids média ne sont pas distillés dans le signal d'onde
+    //     natif) ; lib vivante (media-service + capabilities) ;
+    //   · /monde/stats — transparence PUBLIQUE de l'essaim global
+    //     (équité Jain, files bornées), consommée par l'audit ops
+    //     scripts/audit-gardes-auth.mjs ;
+    //  candidat-ui-documente ×4 :
+    //   · /deployments/create — plan plateforme : « Deployments : GitHub
+    //     + Vercel + Render réels via /api/deployments/create » ;
+    //   · /tools/execute — plan plateforme : « Exécution durcie »
+    //     (emergency-stop → permissions → audit toolAuditLogs) ;
+    //   · /business/pulse — exclusion volontaire de la vue lecture
+    //     documentée au test business-dashboard (mission POST coûteuse) ;
+    //   · /provisioning/intent — concept post-SaaS #4 (vague Tasks 64–68
+    //     documentée au CHANGELOG) ;
+    //  pre-ui-roadmap ×4 :
+    //   · /neural/evolve — surface naturelle = console neuronale vivante
+    //     (cohérence cerveau métabolique it.42) ;
+    //   · /ia/auto-apprentissage/rapport — carte auto-apprentissage
+    //     vivante (historique complet = étape suivante) ;
+    //   · /observability/org — vue usage org (Task 43, saas-roadmap §3) ;
+    //   · /training/hub/inspect — console Data vivante (hub/search
+    //     sibling déjà câblé).
+    // Verrous structurels :
+    expect(
+      BASELINE_ORPHELINS["orphelin-connu"].length,
+      "La catégorie orphelin-connu doit rester VIDÉE (registre 100 % motivé depuis l'it.45) — toute nouvelle entrée doit passer l'audit 4 canaux",
+    ).toBe(0);
+    // Les 10 portes du lot restent en place (reclassées, pas supprimées) —
+    // leur suppression détruirait une capacité réelle.
+    const portes = [
+      "app/api/business/pulse/route.ts",
+      "app/api/deployments/create/route.ts",
+      "app/api/ia/auto-apprentissage/rapport/route.ts",
+      "app/api/media/professeur-statut/route.ts",
+      "app/api/monde/stats/route.ts",
+      "app/api/neural/evolve/route.ts",
+      "app/api/observability/org/route.ts",
+      "app/api/provisioning/intent/route.ts",
+      "app/api/tools/execute/route.ts",
+      "app/api/training/hub/inspect/route.ts",
+    ];
+    for (const rel of portes) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est une porte réelle du 6e lot (reclassée avec motif à l'it.45) — sa suppression est une régression`,
+      ).toBe(true);
+    }
+    // Les libs servies par ces portes doivent rester vivantes.
+    const libsServies = [
+      "lib/business/pulse.ts",
+      "lib/deployments/service.ts",
+      "lib/entrainement-auto/etat.ts",
+      "lib/entrainement-auto/maitrise.ts",
+      "lib/neural/professeur-media.ts",
+      "lib/neural/media-service.ts",
+      "lib/essaim-global/repartiteur.ts",
+      "lib/neural/runtime.ts",
+      "lib/observability/org-queries.ts",
+      "lib/provisioning/intent.ts",
+      "lib/execution/execution-gateway.ts",
+      "lib/training/hub",
+    ];
+    for (const rel of libsServies) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est le socle d'une porte du 6e lot — sa disparition est une régression fonctionnelle`,
+      ).toBe(true);
+    }
+    // Ancres documentaires des motifs (anti-dérive) : le plan plateforme
+    // documente les contrats /deployments/create et /tools/execute ; le
+    // CHANGELOG documente la vague post-SaaS ; la console Data consomme
+    // déjà le sibling hub/search ; le test studio métier documente
+    // l'exclusion volontaire du pulse ; la console neuronale est la
+    // surface naturelle d'/neural/evolve.
+    const plan = readFileSync(path.join(RACINE, "docs/plan-plateforme-enterprise.md"), "utf8");
+    expect(plan.includes("/api/deployments/create"), "Le plan doit continuer à documenter Deployments via /api/deployments/create — motif candidat-ui-documente à réviser sinon").toBe(true);
+    expect(plan.includes("/api/tools/execute"), "Le plan doit continuer à documenter l'exécution durcie /api/tools/execute — motif candidat-ui-documente à réviser sinon").toBe(true);
+    const changelog = readFileSync(path.join(RACINE, "docs/journal/CHANGELOG.md"), "utf8");
+    expect(changelog.includes("post-SaaS"), "Le CHANGELOG doit continuer à documenter la vague concepts post-SaaS (/business/pulse #7, /provisioning/intent #4) — motifs candidat-ui-documente à réviser sinon").toBe(true);
+    const dataConsole = readFileSync(path.join(RACINE, "components/data/data-console.tsx"), "utf8");
+    expect(dataConsole.includes("/training/hub/search"), "La console Data doit rester câblée au sibling /training/hub/search — surface naturelle d'/training/hub/inspect à réviser sinon").toBe(true);
+    const testBusiness = readFileSync(path.join(RACINE, "tests/unit/business-dashboard.test.ts"), "utf8");
+    expect(testBusiness.includes("/business/pulse reste"), "Le test studio métier doit continuer à documenter l'exclusion volontaire de /business/pulse (mission POST coûteuse) — motif candidat-ui-documente à réviser sinon").toBe(true);
+    const consoleNeurale = readFileSync(path.join(RACINE, "components/neural/neural-console.tsx"), "utf8");
+    expect(consoleNeurale.includes("/api/neural/brain"), "La console neuronale (surface naturelle d'/neural/evolve) doit rester vivante — entrée pre-ui-roadmap à réviser sinon").toBe(true);
   });
 });
