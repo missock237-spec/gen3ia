@@ -193,6 +193,17 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* depuis la vue personnelle ; 4 tests structurels + verrou              */
 /* bidirectionnel (20e) — l'entrée sort du registre (pre-ui-roadmap      */
 /* 5→4, total 63→62).                                                    */
+/* Puis it.52 : LE LIVE PASSE AU MOTEUR INTERNE GEN3 — demande           */
+/* propriétaire (« activation depuis le Chat IA, live en interne avec    */
+/* gen3 ») : le canal externe « Gemini Live » (clé opérateur, service    */
+/* tiers) est RETIRÉ (panneau, client, tests, doc — 4 fichiers           */
+/* supprimés) et remplacé sous le chat par le panneau INTERNE            */
+/* components/live/live-interne-panel (mêmes portes que /live : POST     */
+/* /api/live/sessions + /start + frames + approve HITL + stop, moteur    */
+/* de vision interne lib/live/vision-decider ; écran PC getDisplayMedia  */
+/* OU caméra mobile getUserMedia — la caméra redevient accessible SANS   */
+/* service externe) ; l'espace /live devient la surface de suivi HITL    */
+/* avec renvoi honnête vers le chat ; verrou bidirectionnel (21e).       */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -1177,5 +1188,32 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     for (const [categorie, endpoints] of Object.entries(BASELINE_ORPHELINS)) {
       expect(endpoints, `/observability/org est CÂBLÉE depuis l'it.51 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain("/observability/org");
     }
+  });
+
+  it("l'agent live du chat reste sur le moteur interne gen3 (it.52) — portes vivantes, zéro canal externe", () => {
+    // it.52 : demande propriétaire (« activation depuis le Chat IA, live
+    // en interne avec gen3 ») — le canal externe « Gemini Live » (clé
+    // opérateur, service tiers) est SUPPRIMÉ et remplacé sous le chat
+    // par le panneau interne (mêmes portes que /live).
+    const chat = readFileSync(path.join(RACINE, "components/chat/nova-chat.tsx"), "utf8");
+    expect(chat.includes('import("@/components/live/live-interne-panel")'), "Le chat doit charger le panneau live INTERNE (lazy) — régression du câblage it.52").toBe(true);
+    expect(chat.includes("live-gemini-panel"), "Plus AUCUNE référence au canal externe Gemini dans le chat — régression it.52").toBe(false);
+    // Le panneau interne est réel et consomme les portes maison.
+    const panel = readFileSync(path.join(RACINE, "components/live/live-interne-panel.tsx"), "utf8");
+    expect(panel.includes('authFetch("/api/live/sessions", {'), "Le panneau interne doit créer des sessions réelles via la porte /api/live/sessions — régression it.52").toBe(true);
+    expect(panel.includes("/actions/${pendingApproval.actionId}/approve`"), "L'approbation HITL doit rester possible depuis le chat — régression it.52").toBe(true);
+    expect(panel.includes("navigator.mediaDevices.getUserMedia"), "La caméra mobile doit rester accessible via le moteur INTERNE (fallback honnête) — régression it.52").toBe(true);
+    // Le canal externe est BIEN supprimé du dépôt (code + tests).
+    expect(existsSync(path.join(RACINE, "app/live/live-gemini-panel.tsx")), "Le panneau Gemini externe doit rester supprimé (moteur interne gen3) — régression it.52").toBe(false);
+    expect(existsSync(path.join(RACINE, "lib/live/gemini-live-client.ts")), "Le client Gemini externe doit rester supprimé — régression it.52").toBe(false);
+    // Les portes internes et le moteur de vision restent vivants.
+    expect(existsSync(path.join(RACINE, "app/api/live/sessions/route.ts")), "La porte /api/live/sessions est le socle du live interne — sa suppression est une régression").toBe(true);
+    expect(existsSync(path.join(RACINE, "lib/live/vision-decider.ts")), "lib/live/vision-decider.ts est le moteur de vision INTERNE — sa disparition est une régression fonctionnelle").toBe(true);
+    // L'espace /live reste la surface de suivi (renvoi honnête vers le chat).
+    const dashboard = readFileSync(path.join(RACINE, "app/live/live-dashboard.tsx"), "utf8");
+    expect(dashboard.includes("Le mode Live s&apos;active depuis le Chat IA"), "L'espace /live doit renvoyer honnêtement vers l'activation dans le chat — régression it.52").toBe(true);
+    expect(dashboard.includes("LiveGeminiPanel"), "L'espace /live ne doit plus embarquer le canal externe — régression it.52").toBe(false);
+    // Le test structurel du panneau reste en place.
+    expect(existsSync(path.join(RACINE, "components/live/live-interne-panel.test.ts")), "Le test structurel du panneau interne doit rester en place — il verrouille le contrat UI↔portes").toBe(true);
   });
 });

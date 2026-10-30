@@ -14,11 +14,14 @@
  *  5. Bouton de RECHERCHE WEB (toggle : force une recherche réelle
  *     web.search pour le tour — champ « webSearch » de l'API) ;
  *  6. Bouton AGENT LIVE (demande du propriétaire 2026-10-30 : « le système
- *     agent live doit passer sous le chat pour l'activer dans le chat ») —
- *     ouvre l'agent live (vision écran/caméra + voix) EN OVERLAY DANS LE
- *     CHAT, sans quitter la conversation. Le panneau est chargé en
- *     LAZY (next/dynamic) : aucun octet Gemini Live ne pèse sur le chat
- *     tant que l'utilisateur ne l'active pas (métabolisme cérébral).
+ *     agent live doit passer sous le chat pour l'activer dans le chat » ;
+ *     it.52 2026-10-31 : « le live doit fonctionner en interne avec gen3 »)
+ *     — ouvre l'agent live (vision écran PC / caméra mobile + guidage par
+ *     le moteur de vision INTERNE) EN OVERLAY DANS LE CHAT, sans quitter
+ *     la conversation. Le panneau est chargé en LAZY (next/dynamic) :
+ *     aucun octet du live ne pèse sur le chat tant que l'utilisateur ne
+ *     l'active pas (métabolisme cérébral) — et plus AUCUN canal externe
+ *     (l'ancien « Gemini Live » à clé opérateur est retiré).
  *
  * Toutes les fonctionnalités d'agents IA passent sous la commande de l'IA :
  * l'utilisateur DEMANDE en langage naturel (« crée un agent commercial
@@ -53,12 +56,16 @@ import { useWebGpuMedia } from "./use-webgpu-media";
 import "./nova-chat.css";
 
 /**
- * AGENT LIVE SOUS LE CHAT (demande du propriétaire) : le panneau Gemini
- * Live (vision écran/caméra + voix, même mécanique que /live) est chargé
+ * AGENT LIVE SOUS LE CHAT — MOTEUR INTERNE GEN3 (it.52, demande du
+ * propriétaire : activation DEPUIS le chat, moteur 100 % interne).
+ * Le panneau live (vision écran/caméra + guidage, MÊME pipeline que
+ * /live : /api/live/sessions + moteur de vision interne) est chargé
  * DYNAMIQUEMENT — chunk séparé, téléchargé uniquement à l'activation.
+ * L'ancien canal externe « Gemini Live » (clé opérateur, service tiers)
+ * est RETIRÉ — le live fonctionne désormais en interne avec gen3.
  */
-const LiveGeminiPanel = dynamic(
-  () => import("@/app/live/live-gemini-panel").then((m) => m.LiveGeminiPanel),
+const LiveInternePanel = dynamic(
+  () => import("@/components/live/live-interne-panel").then((m) => m.LiveInternePanel),
   {
     ssr: false,
     loading: () => (
@@ -2374,13 +2381,14 @@ export default function NovaChat() {
                   </button>
 
                   {/* 6) AGENT LIVE (sous le chat — demande du propriétaire :
-                      activable DANS la conversation, sans changer de page). */}
+                      activable DANS la conversation, moteur interne gen3
+                      depuis la it.52 — aucune clé externe). */}
                   <button
                     type="button"
                     className={`nova-pill${liveOuvert ? " actif" : ""}`}
                     aria-pressed={liveOuvert}
                     onClick={() => setLiveOuvert((o) => !o)}
-                    title={liveOuvert ? "Fermer l'agent live" : "Activer l'agent live (vision + voix) ici, dans le chat"}
+                    title={liveOuvert ? "Fermer l'agent live" : "Activer l'agent live (vision écran/caméra, moteur interne) ici, dans le chat"}
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" /></svg>
                     <span className="txt-long">Agent Live</span>
@@ -2471,9 +2479,9 @@ export default function NovaChat() {
         </div>
       ) : null}
 
-      {/* AGENT LIVE SOUS LE CHAT : voile plein écran — même panneau que /live
-          (clé API Gemini dans le sessionStorage du navigateur, jamais côté
-          serveur), fermable d'un clic sur le fond ou via la croix. */}
+      {/* AGENT LIVE SOUS LE CHAT : voile plein écran — MOTEUR INTERNE gen3
+          (it.52 : mêmes portes que /live, aucune clé externe, aucun service
+          tiers), fermable d'un clic sur le fond ou via la croix. */}
       {liveOuvert ? (
         <div
           className="nova-live-voile"
@@ -2487,7 +2495,7 @@ export default function NovaChat() {
               <div>
                 <p className="nova-live-titre">Agent Live — dans le chat</p>
                 <p className="nova-live-sous">
-                  Vision (écran/caméra) + voix en direct, sans quitter la conversation. Tableau de bord complet :{" "}
+                  Vision (écran PC / caméra mobile) et guidage par le moteur interne gen3, sans quitter la conversation. Suivi complet :{" "}
                   <a href="/live" onClick={() => setLiveOuvert(false)}>/live</a>
                 </p>
               </div>
@@ -2502,7 +2510,7 @@ export default function NovaChat() {
               </button>
             </div>
             <div className="nova-live-corps">
-              <LiveGeminiPanel />
+              <LiveInternePanel />
             </div>
           </div>
         </div>

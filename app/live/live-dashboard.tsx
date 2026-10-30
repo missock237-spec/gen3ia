@@ -9,7 +9,13 @@ import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import type { LiveAction } from "@/lib/live/types";
 import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
-import { LiveGeminiPanel } from "./live-gemini-panel";
+// it.52 (demande propriétaire : « le live doit fonctionner en interne avec
+// gen3 ») : l'ancien canal externe « Gemini Live » (clé opérateur +
+// service tiers) est RETIRÉ. L'activation du mode live vit
+// désormais DANS LE CHAT IA (bouton « Agent Live » → panneau interne
+// components/live/live-interne-panel) ; cet espace reste la surface de
+// suivi HITL (sessions, décisions, approbations, arrêt) sur le même
+// pipeline interne.
 
 type Permission =
   | "screen.read"
@@ -832,9 +838,15 @@ export function LiveDashboard() {
         </div>
       </div>
 
-      {/* Canal complémentaire Gemini Live (écran + voix) — Task 2-a :
-          le flux sessions/frames existant ci-dessus reste inchangé. */}
-      <LiveGeminiPanel />
+      <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-warning-soft)] p-6">
+        <h2 className="font-serif text-xl font-semibold text-[var(--g3-warning-strong)]">Le mode Live s&apos;active depuis le Chat IA</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--g3-text-secondary)]">
+          it.52 (demande propriétaire) : l&apos;agent live s&apos;active désormais directement dans la conversation
+          (bouton « Agent Live » sous le chat) — moteur de vision INTERNE gen3, écran PC ou caméra mobile,
+          aucune clé externe. Cet espace reste votre tableau de bord : sessions, décisions, approbations et arrêt.
+        </p>
+        <Link href="/chat" className="g3-btn g3-btn-primary mt-4 inline-flex text-xs">Ouvrir le Chat IA pour activer le live</Link>
+      </section>
     </div>
   );
 }

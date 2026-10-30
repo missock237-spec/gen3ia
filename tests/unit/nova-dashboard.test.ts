@@ -159,9 +159,16 @@ describe("Exigence 5 — live agent préservé", () => {
  * Exigence 6 (demande du propriétaire, 2026-10-30) — « le système agent
  * live doit passer sous le chat pour l'activer dans le chat » : l'agent
  * live est activable DEPUIS le composer du chat (6e commande), en voile
- * plein écran, SANS quitter la conversation. Le panneau Gemini Live est
- * chargé en LAZY (next/dynamic) : aucune dépendance live dans le bundle
- * du chat tant que l'utilisateur ne l'active pas.
+ * plein écran, SANS quitter la conversation. Le panneau est chargé en
+ * LAZY (next/dynamic) : aucune dépendance live dans le bundle du chat
+ * tant que l'utilisateur ne l'active pas.
+ *
+ * it.52 (demande du propriétaire, 2026-10-31) — « le live doit
+ * fonctionner en interne avec gen3 » : le panneau embarqué est le
+ * MOTEUR INTERNE (components/live/live-interne-panel — mêmes portes que
+ * /live : /api/live/sessions + moteur de vision interne) ; l'ancien
+ * canal externe « Gemini Live » (clé opérateur, service tiers) est
+ * retiré.
  */
 describe("Exigence 6 — l'agent live s'active DANS le chat", () => {
   const CSS = "components/chat/nova-chat.css";
@@ -174,17 +181,19 @@ describe("Exigence 6 — l'agent live s'active DANS le chat", () => {
     expect(nova).toContain("Agent Live");
   });
 
-  it("le panneau Gemini Live réel est embarqué en voile modal (pas une redirection)", () => {
+  it("le panneau du MOTEUR INTERNE gen3 est embarqué en voile modal (pas une redirection)", () => {
     const nova = read(NOVA);
-    // Chargement LAZY du VRAI panneau /live — même mécanique, zéro copie.
-    expect(nova).toContain('import("@/app/live/live-gemini-panel")');
+    // it.52 : chargement LAZY du panneau interne — même pipeline que /live.
+    expect(nova).toContain('import("@/components/live/live-interne-panel")');
     expect(nova).toContain("ssr: false,");
+    // Plus AUCUNE trace du canal externe retiré.
+    expect(nova).not.toContain("live-gemini-panel");
     // Voile modal accessible : dialog + aria-modal + fermeture.
     expect(nova).toContain('className="nova-live-voile"');
     expect(nova).toContain('aria-modal="true"');
     expect(nova).toContain('aria-label="Agent live"');
     expect(nova).toContain('aria-label="Fermer l\'agent live"');
-    expect(nova).toContain("<LiveGeminiPanel />");
+    expect(nova).toContain("<LiveInternePanel />");
     // Lien honnête vers le tableau de bord complet.
     expect(nova).toContain('href="/live"');
   });

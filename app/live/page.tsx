@@ -14,30 +14,37 @@ export const metadata = {
  * Page Agent Live — accessible SUR PC ET ANDROID (réouverture demandée
  * par le propriétaire : « l'agent live accessible via Android et PC »).
  *
- * Source de capture adaptée par le panneau Gemini Live selon l'appareil :
- *  - PC (Windows/Linux/macOS) : partage d'écran natif (getDisplayMedia)
- *    + micro — l'IA voit l'écran en direct ;
- *  - Android / iOS / tablette : CAMÉRA (avant/arrière, getUserMedia) +
- *    micro — le partage d'écran n'existe pas sur ces navigateurs, la
- *    caméra est la source visuelle honnête équivalente.
+ * it.52 (demande propriétaire : « activation depuis le Chat IA, live en
+ * interne avec gen3 ») : l'ACTIVATION vit désormais dans le chat IA
+ * (bouton « Agent Live » → panneau interne components/live/
+ * live-interne-panel) ; cette page reste la surface de SUIVI HITL
+ * (sessions, décisions, approbations, arrêt) sur le pipeline interne.
  *
- * Le tableau de bord HITL (sessions, frames, décisions) fonctionne
- * identiquement : l'API /api/live/sessions accepte désormais tous les
- * appareils (garde PC-only retiré).
+ * Source de capture choisie à l'activation dans le chat :
+ *  - PC (Windows/Linux/macOS) : partage d'écran natif (getDisplayMedia)
+ *    — l'IA voit l'écran en direct ;
+ *  - Android / iOS / tablette : CAMÉRA (avant/arrière, getUserMedia) —
+ *    le partage d'écran n'existe pas sur ces navigateurs, la caméra est
+ *    la source visuelle honnête équivalente.
+ *
+ * MOTEUR 100 % INTERNE : décisions rendues par le moteur de vision gen3
+ * (lib/live/vision-decider) via les portes /api/live/sessions — AUCUNE
+ * clé externe, AUCUN service tiers (l'ancien canal « Gemini Live » est
+ * retiré).
  */
 export default async function LivePage() {
   const device = detectDeviceFromHeaders(await headers());
   const sourceHint =
     device.isLiveCapable
-      ? "Partage d'écran natif (getDisplayMedia) + micro."
-      : "Mode caméra : l'IA voit ce que votre appareil pointe (caméra avant/arrière) et vous entend.";
+      ? "Partage d'écran natif (getDisplayMedia) depuis le Chat IA."
+      : "Mode caméra depuis le Chat IA : l'agent voit ce que votre appareil pointe (caméra avant/arrière).";
 
   return (
     <div className="min-h-full bg-[var(--g3-bg)] p-3 text-[var(--g3-text)] md:p-8">
       <div className="mx-auto max-w-6xl">
         <p className="mb-3 rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-surface)] px-4 py-2.5 text-xs leading-5 text-[var(--g3-muted)] md:mb-5">
           <strong className="text-[var(--g3-text)]">Agent Live — {device.type === "mobile" ? "Android/iOS" : device.type === "tablet" ? "tablette" : "ordinateur"}.</strong>{" "}
-          {sourceHint} Votre clé API Gemini reste dans votre navigateur (sessionStorage).
+          {sourceHint} Activation dans le Chat IA (bouton « Agent Live »), moteur interne gen3 — aucune clé externe.
         </p>
         <LiveDashboard />
       </div>
