@@ -101,7 +101,13 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* avis, migration Firestore→R2) et « candidat-ui-documente » (API au    */
 /* contrat produit : mfa-requirement dans enterprise-security.md,        */
 /* generate/publish dans guide-technique — sous-statut it.39 élevé).     */
-/* Classés par motif.                                                    */
+/* Puis it.41 : /ai/generate SUPPRIMÉ (doublon mort — le chemin LLM      */
+/* vivant passe par les 26 consommateurs directs de lib/ai/router :      */
+/* engines conversations, SDK v1/chat, training ; 4 canaux à zéro),      */
+/* /agents/generate RECULÉ en « pre-ui-roadmap » (route génération de    */
+/* config construite — LLM réel, billing, resolveAndHarden — décision    */
+/* produit « système réservé » (demande n°5) et UI d'acceptation         */
+/* classées LOT 3 du plan ; total 81→80). Classés par motif.             */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -173,8 +179,16 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *  classée LOT 6). Constat it.38 : 4 canaux vérifiés (aucun fetch
    *  frontend, aucun fetch serveur, SDK hors scope, tests = unitaires lib)
    *  — ce ne sont NI des candidats UI imminents NI des doublons morts :
-   *  ce sont les API de données de l'agent, en attente de leur LOT. */
+   *  ce sont les API de données de l'agent, en attente de leur LOT.
+   *  it.41 : /agents/generate rejoint cette catégorie — la ROUTE de
+   *  génération de config par langage naturel est construite (LLM réel,
+   *  billing Task 153, resolveAndHarden outils réels) mais l'UI
+   *  d'acceptation est classée LOT 3 du plan (priorité Bas) et la
+   *  décision produit « système réservé » (demande n°5 : les users
+   *  passent par le chat, l'admin conservé) est codée en dur dans
+   *  lib/security/agent-system-access.ts. */
   "pre-ui-roadmap": [
+    "/agents/generate",
     "/knowledge",
     "/knowledge/triggers",
     "/knowledge/triggers/[id]",
@@ -241,8 +255,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/ads/publish",
   ],
   "orphelin-connu": [
-    "/agents/generate",
-    "/ai/generate",
     "/business/pulse",
     "/deployments/create",
     "/developer/secrets",
@@ -547,6 +559,49 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     expect(
       docSecurite.includes("mfa-requirement"),
       "docs/enterprise-security.md doit toujours documenter la politique MFA admin — catégorie candidat-ui-documente à réviser sinon",
+    ).toBe(true);
+  });
+
+  it("la porte LLM générique /ai/generate reste SUPPRIMÉE (it.41) — le chemin vivant passe par lib/ai/router consommée en direct", () => {
+    // Constat it.41 : POST /api/ai/generate (passerelle LLM générique
+    // requireUser) n'avait AUCUN appelant sur 4 canaux — ni fetch
+    // frontend, ni fetch serveur, ni doc SDK (sdk.md ne la mentionne
+    // pas), ni test d'intégration. La capacité LLM vit dans lib/ai/router
+    // avec 26 consommateurs directs (engines conversations chat/plan/
+    // turn/apps/training/media, SDK v1/chat, training assistant) : la
+    // porte HTTP n'apportait rien et ouvrait une surface d'appel LLM
+    // générique sans cas d'usage. Supprimée, pas câblée.
+    expect(
+      existsSync(path.join(RACINE, "app/api/ai/generate")),
+      "app/api/ai/generate a été supprimé à l'it.41 (doublon mort — consommez lib/ai/router en direct comme les engines) — ne le recréez pas sans appelant",
+    ).toBe(false);
+    // Le chemin LLM vivant doit rester : la lib, le chemin conversations
+    // (chat utilisateur réel), la porte SDK v1, et la porte pre-UI
+    // /agents/generate (LOT 3) avec sa décision produit.
+    const cheminVivant = [
+      "lib/ai/router.ts",
+      "lib/domain/conversations/engine-chat.ts",
+      "app/api/v1/chat/route.ts",
+      "app/api/agents/generate/route.ts",
+      "lib/security/agent-system-access.ts",
+      "lib/agents/system-activation.ts",
+    ];
+    for (const rel of cheminVivant) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est le chemin LLM VIVANT (libs consommées en direct, SDK, pre-UI LOT 3) — sa disparition est une régression, pas un nettoyage`,
+      ).toBe(true);
+    }
+    // Anti-dérive roadmap : le plan doit toujours classer l'UI
+    // d'acceptation de la génération d'agent (LOT 3) — sinon réviser la
+    // catégorie pre-ui-roadmap ET ce verrou.
+    const plan = readFileSync(
+      path.join(RACINE, "docs/plan-plateforme-enterprise.md"),
+      "utf8",
+    );
+    expect(
+      plan.includes("UI d'acceptation"),
+      "Le plan plateforme doit toujours référencer l'UI d'acceptation de la génération d'agent (LOT 3) — entrée pre-ui-roadmap /agents/generate à réviser sinon",
     ).toBe(true);
   });
 });
