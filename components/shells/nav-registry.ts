@@ -180,6 +180,13 @@ const WORKSPACE_SECONDARY: NavRoute[] = [
   { id: "storage", href: "/storage", label: "Bibliothèque", icon: "▣", description: "Bibliothèque de fichiers et d'artefacts — stockage permanent", contexts: ["workspace"], section: "secondary", keywords: ["bibliothèque", "fichiers", "stockage", "artefacts", "storage", "quota"] },
   { id: "live", href: "/live", label: "Agent Live", icon: "◉", description: "Contrôler un poste de travail", contexts: ["workspace"], section: "secondary", keywords: ["live", "pc"] },
   { id: "memory", href: "/memory", label: "Mémoire permanente", icon: "◆", description: "Souvenirs et connaissances des agents", contexts: ["workspace"], section: "secondary", keywords: ["mémoire", "knowledge"] },
+  // it. 49 (Job 478451) : « Connaissances » — Knowledge Spaces (LOT 6 du
+  // plan plateforme) : la porte /api/knowledge (ingestion RAG réelle :
+  // GET liste, POST fichiers/URL, DELETE) existait sans AUCUNE surface
+  // utilisateur (garde anti-code-mort). La page /knowledge donne
+  // l'espace documents scopés par projet, consommé par l'outil
+  // knowledge.search des agents.
+  { id: "knowledge", href: "/knowledge", label: "Connaissances", icon: "❑", description: "Bibliothèque RAG de vos projets : documents indexés, consultés par vos agents", contexts: ["workspace"], section: "secondary", keywords: ["connaissances", "knowledge", "rag", "documents", "indexation", "bibliothèque", "recherche"] },
   { id: "billing", href: "/billing", label: "Facturation", icon: "₣", description: "Abonnements et consommation", contexts: ["workspace"], section: "secondary", keywords: ["facturation", "abonnement"] },
   { id: "settings", href: "/settings", label: "Paramètres", icon: "⚙", description: "Compte, sécurité, numéros et préférences", contexts: ["workspace"], section: "secondary", keywords: ["paramètres", "compte"] },
   // it. 33 (Job 478451) : « Business » — les 12 endpoints /api/business/*

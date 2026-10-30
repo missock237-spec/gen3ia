@@ -49,6 +49,7 @@ const DISALLOWED_FOR_BOTS = [
   "/chat",
   "/settings",
   "/data",
+  "/knowledge",
   "/automations",
   "/memory",
   "/monde",

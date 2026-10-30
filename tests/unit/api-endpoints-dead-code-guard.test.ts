@@ -71,7 +71,7 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 69 endpoints orphelins au 2026-10-30 (it.48 ;      */
+/* Baseline honnête — 68 endpoints orphelins au 2026-10-30 (it.49 ;      */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
@@ -159,6 +159,15 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* déclarés, fichiers, échantillon réel, limites honnêtes restituées,    */
 /* instantané daté — 4 tests structurels + verrou bidirectionnel) —      */
 /* l'entrée sort du registre (pre-ui-roadmap 12→11, total 70→69).        */
+/* Puis it.49 : KNOWLEDGE SPACES — ESPACE DOCUMENTS — la porte           */
+/* /knowledge est CÂBLÉE dans l'espace Connaissances (nouvelle page      */
+/* /knowledge + components/knowledge/knowledge-console : GET liste       */
+/* scopée par projet, POST ingestion fichiers multipart + JSON URL       */
+/* (SSRF-guard serveur), DELETE retrait fragments+miroir ; résultats     */
+/* par fichier restitués tels quels, allowlist page + entrée nav         */
+/* secondaire + robots disallow ; 4 tests structurels + verrou           */
+/* bidirectionnel) — l'entrée sort du registre (pre-ui-roadmap 11→10,    */
+/* total 69→68).                                                         */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -270,17 +279,17 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *   - /observability/org : usage agrégé PAR ORGANISATION (Task 43,
    *     saas-roadmap §3) — requireOrgContext vérifie l'appartenance ; la
    *     vue usage org n'est pas encore une surface (UI pas échue).
-   *   - /training/hub/inspect : inspection RÉELLE des jeux du hub
-   *     (fichiers, splits, licence, échantillon) — la console Data
-   *     (components/data/data-console) consomme déjà /training/hub/search
-   *     (sibling) ; l'inspection est l'étape suivante de la même surface.
-   *     it.48 : SORT de cette catégorie — la console Data consomme
-   *     désormais la porte (bouton « Inspecter » + panneau détaillé). */
+   *   - /knowledge : ingestion RAG réelle (GET liste, POST
+   *     fichiers/URL, DELETE) — API de données de l'agent, UI classée
+   *     LOT 6 du plan plateforme (Knowledge Spaces).
+   *     it.49 : SORT de cette catégorie — l'espace Connaissances
+   *     (page /knowledge + knowledge-console) consomme désormais la
+   *     porte dans ses trois modes ; /knowledge/triggers* et /skills*
+   *     restent à câbler (prochaines étapes du même LOT 6). */
   "pre-ui-roadmap": [
     "/agents/generate",
     "/developer/simulation",
     "/files/workspaces",
-    "/knowledge",
     "/knowledge/triggers",
     "/knowledge/triggers/[id]",
     "/observability/org",
@@ -1029,6 +1038,32 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     // catégorie).
     for (const [categorie, endpoints] of Object.entries(BASELINE_ORPHELINS)) {
       expect(endpoints, `/training/hub/inspect est CÂBLÉE depuis l'it.48 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain("/training/hub/inspect");
+    }
+  });
+
+  it("l'espace Connaissances reste câblé à la porte /knowledge (it.49) — porte vivante, registre à jour", () => {
+    // it.49 : la porte /knowledge est consommée par l'espace Connaissances
+    // (page /knowledge + knowledge-console : GET liste scopée par projet,
+    // POST ingestion fichiers + URL, DELETE retrait — allowlist page,
+    // entrée nav secondaire, robots disallow) — l'entrée a quitté
+    // pre-ui-roadmap (69→68).
+    const consoleData = readFileSync(path.join(RACINE, "components/knowledge/knowledge-console.tsx"), "utf8");
+    expect(consoleData.includes("`/api/knowledge?projectId=${projectId}`"), "La console doit interroger la liste des documents scopée par projet — régression du câblage it.49").toBe(true);
+    expect(consoleData.includes('authFetch("/api/knowledge", { method: "POST", body: form }'), "La console doit ingérer des fichiers via POST multipart — régression it.49").toBe(true);
+    expect(consoleData.includes('`/api/knowledge?id=${id}`'), "La console doit permettre le retrait d'un document (DELETE) — régression it.49").toBe(true);
+    expect(consoleData.includes("vide (aucun texte extrait)"), "Les documents vides doivent rester signalés comme tels (honnêteté d'ingestion) — régression it.49").toBe(true);
+    // La page est réelle et allowlistée utilisateur.
+    expect(existsSync(path.join(RACINE, "app/knowledge/page.tsx")), "La page /knowledge est la surface Knowledge Spaces — sa suppression est une régression").toBe(true);
+    const userAccess = readFileSync(path.join(RACINE, "lib/security/user-access.ts"), "utf8");
+    expect(userAccess.includes('"/knowledge": "connaissances"'), "La page /knowledge doit rester allowlistée utilisateur — régression d'accès it.49").toBe(true);
+    // Les libs servies restent vivantes.
+    expect(existsSync(path.join(RACINE, "lib/knowledge/ingestion.ts")), "lib/knowledge/ingestion.ts est le pipeline d'extraction+indexation — sa disparition est une régression fonctionnelle").toBe(true);
+    // Le test structurel du composant reste en place.
+    expect(existsSync(path.join(RACINE, "components/knowledge/knowledge-console.test.ts")), "Le test structurel de l'espace Connaissances doit rester en place — il verrouille le contrat UI↔porte").toBe(true);
+    // Registre : l'entrée est sortie (et n'est revenue dans aucune autre
+    // catégorie).
+    for (const [categorie, endpoints] of Object.entries(BASELINE_ORPHELINS)) {
+      expect(endpoints, `/knowledge est CÂBLÉE depuis l'it.49 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain("/knowledge");
     }
   });
 });

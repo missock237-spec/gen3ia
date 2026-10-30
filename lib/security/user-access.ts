@@ -331,6 +331,11 @@ const USER_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/lab": "training",
   "/data": "training",
   "/automations": "automatisation",
+  // KNOWLEDGE SPACES (LOT 6 — it.49) : la bibliothèque RAG des projets est
+  // accessible à tout compte connecté — le scoping est assuré par la porte
+  // elle-même (documents scopés par compte ET par projet, isolation
+  // stricte côté serveur).
+  "/knowledge": "connaissances",
   // REDIRECTION (restructuration des parcours) : l'ancienne surface
   // /planifications renvoie vers /automations#planifications — la page de
   // redirection reste allowlistée pour compatibilité des liens existants.
