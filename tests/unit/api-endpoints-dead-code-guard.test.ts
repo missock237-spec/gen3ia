@@ -71,7 +71,7 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 79 endpoints orphelins au 2026-10-30 (it.38 ;     */
+/* Baseline honnête — 81 endpoints orphelins au 2026-10-30 (it.39 ;     */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
@@ -88,8 +88,13 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* par /api/team/[teamId]/orchestrator), puis RECULS DE /skills* et     */
 /* /knowledge* vers « pre-ui-roadmap » (it.38 — API de données de       */
 /* l'agent, UI classée LOT 6 du plan plateforme, décision produit        */
-/* documentée ; total inchangé, classification corrigée). Classés par    */
-/* motif. Réviser à chaque suppression/ajout d'UI.                       */
+/* documentée ; total inchangé, classification corrigée), puis les 4     */
+/* doublons morts /ads/{connect,connections,composio/*} SUPPRIMÉS        */
+/* (it.39 — la connexion Composio vivante passe par la porte GÉNÉRIQUE  */
+/* /api/integrations/composio/connect appelée par nova-chat +           */
+/* connectors-panel ; /ads/generate + /ads/publish restent des candidats */
+/* UI documentés — guide-technique). Classés par motif.                  */
+/* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
 const BASELINE_ORPHELINS: Record<string, string[]> = {
@@ -183,10 +188,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/admin/extensions/reviews",
     "/admin/migrate-firestore-r2",
     "/admin/security/mfa-requirement",
-    "/ads/composio/connect",
-    "/ads/composio/connections",
-    "/ads/connect",
-    "/ads/connections",
     "/ads/generate",
     "/ads/publish",
     "/agents/generate",
@@ -397,5 +398,48 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
       plan.includes("UI Knowledge Spaces"),
       "Le plan plateforme doit toujours référencer l'UI Knowledge Spaces (LOT 6) — catégorie pre-ui-roadmap à réviser sinon",
     ).toBe(true);
+  });
+
+  it("les 4 doublons morts /ads/{connect,connections,composio/*} restent SUPPRIMÉS (it.39) — la porte générique Composio est la voie vivante", () => {
+    // Constat it.39 : la connexion Composio de la plateforme passe par la
+    // porte GÉNÉRIQUE /api/integrations/composio/connect (nova-chat,
+    // developer/tabs/connectors-panel) et /api/integrations/composio/
+    // connections (integrations-workspace, nova-chat, lab ondes). Les
+    // variantes /ads/* en dupliquaient la fonction pour 3 providers :
+    // supprimées, pas câblées. /ads/callback reste (infra, référencé par
+    // lib/ad-connections consommée par ad-publisher) ; /ads/generate et
+    // /ads/publish restent des candidats UI documentés (guide-technique).
+    const doublonsAds = [
+      "app/api/ads/connect/route.ts",
+      "app/api/ads/connections/route.ts",
+      "app/api/ads/composio/connect/route.ts",
+      "app/api/ads/composio/connections/route.ts",
+    ];
+    for (const rel of doublonsAds) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} a été supprimé à l'it.39 (doublon de la porte générique /api/integrations/composio/connect) — ne le recréez pas sans UI`,
+      ).toBe(false);
+    }
+    // Les chaînes vivantes doivent rester : porte générique Composio (UI),
+    // campagnes (UI admin), placement, et les 2 candidats UI documentés.
+    const chainesVivantes = [
+      "app/api/integrations/composio/connect/route.ts",
+      "app/api/integrations/composio/connections/route.ts",
+      "app/api/ads/callback/route.ts",
+      "app/api/ads/campaigns/route.ts",
+      "app/api/ads/my-campaigns/route.ts",
+      "app/api/ads/placement/route.ts",
+      "app/api/ads/generate/route.ts",
+      "app/api/ads/publish/route.ts",
+      "lib/ads/ad-connections.ts",
+      "lib/ads/ad-publisher.ts",
+    ];
+    for (const rel of chainesVivantes) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est VIVANT (UI générique, infra OAuth, ou candidat UI documenté) — sa disparition est une régression, pas un nettoyage`,
+      ).toBe(true);
+    }
   });
 });
