@@ -152,6 +152,14 @@ describe("API — liste blanche UTILISATEUR (14 familles de la demande)", () => 
     ["/api/live/sessions", "live"],
     ["/api/live/sessions/s1", "live"],
     ["/api/live/sessions/s1/frames", "live"],
+    // SUITE BUSINESS (it.55 — demande propriétaire : déblocage du volet
+    // business) : 12 modules CRUD réels, chaque route authentifie
+    // elle-même (requireUser + scoping + rate-limit) ; pulse inclus
+    // (POST authentifié, sans vue lecture — exclusion volontaire
+    // documentée au garde anti-code-mort).
+    ["/api/business/finance-unpaid", "studio"],
+    ["/api/business/automations", "studio"],
+    ["/api/business/pulse", "studio"],
   ] as const;
 
   it.each(utilisateurs)("%s → user (%s)", (path, family) => {
@@ -178,9 +186,9 @@ describe("API — RESTREINT (deny-by-default, hors demande n°7)", () => {
     // il est couvert par le préfixe /api/ads utilisateur.
     "/api/ads/campaigns",
     "/api/ads/campaigns/c1",
-    // Business (studio métier)
-    "/api/business/automations",
-    "/api/business/pulse",
+    // Business (studio métier) — OUVERT à tous les comptes depuis it.55
+    // (demande propriétaire : « débloquer la fonctionnalité business ») :
+    // voir la liste blanche ci-dessus (requireUser + scoping par route).
     // Neural — SEUL le reset global reste restreint (défense en profondeur) :
     // le studio d'entraînement /neural est ouvert aux utilisateurs
     // (demande propriétaire 10-2026), train POST reste requireAdmin dans la
@@ -306,6 +314,8 @@ describe("Pages — LISTE BLANCHE UTILISATEUR", () => {
     ["/planifications", "planifications"],
     // AGENT LIVE (réouverture propriétaire — PC et Android)
     ["/live", "live"],
+    // SUITE BUSINESS (it.55 — demande propriétaire : déblocage)
+    ["/business", "studio"],
   ] as const;
 
   it.each(utilisateurs)("%s → user (%s)", (path, family) => {

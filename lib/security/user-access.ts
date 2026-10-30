@@ -217,6 +217,12 @@ const USER_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
   // professeur temporaire / moteurs neuronaux). Chaque route protège
   // elle-même (protectRoute, propriétaire forcé, plafond 25 Mo).
   ["/api/media", "chat"],
+  // SUITE BUSINESS (it.55 — demande propriétaire : déblocage du volet
+  // business) : 12 modules CRUD réels (finance, RH, opérations,
+  // conformité, documents, marketing, automatisations, pulse) — chaque
+  // route authentifie elle-même (requireUser, Zod, scoping userId/org,
+  // rate-limit 120/5 min) ; aucune route business n'exige admin.
+  ["/api/business", "studio"],
 ];
 
 /* ------------------------------------------------------------------ */
@@ -346,6 +352,16 @@ const USER_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   // /planifications renvoie vers /automations#planifications — la page de
   // redirection reste allowlistée pour compatibilité des liens existants.
   "/planifications": "planifications",
+  // SUITE BUSINESS (it.55 — demande propriétaire : « débloquer la
+  // fonctionnalité business pour qu'elle soit accessible aux
+  // utilisateurs ») : le tableau de bord métier (12 modules CRUD réels
+  // — finance, RH, opérations, conformité, documents, marketing,
+  // automatisations) est ouvert à TOUT COMPTE CONNECTÉ — les 12 routes
+  // /api/business/* authentifient elles-mêmes (requireUser + scoping
+  // userId/org) et rate-limit 120/5 min. L'entrée nav existait déjà
+  // pour tous (incohérence 403 corrigée). Le module pulse reste SANS
+  // vue lecture (exclusion volontaire documentée au garde).
+  "/business": "studio",
 };
 
 const USER_PAGE_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
