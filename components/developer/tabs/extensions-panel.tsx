@@ -1,11 +1,20 @@
 "use client";
 
+import { useState } from "react";
+
 import { useDeveloper } from "@/components/developer/developer-context";
 import { Panel, TabEmpty } from "@/components/developer/tabs/panel";
+import { ExtensionSecrets } from "@/components/developer/tabs/secrets-panel";
 
-/** Onglet Extensions — versions, permissions, installations, exécutions. */
+/** Onglet Extensions — versions, permissions, installations, exécutions,
+ *  et gestion des SECRETS d'extension (it.43 : câblage de l'API
+ *  /api/developer/secrets — valeurs serveur uniquement, jamais retournées). */
 export function ExtensionsPanel() {
   const { extensions } = useDeveloper();
+  const [secretsOuverts, setSecretsOuverts] = useState<Record<string, boolean>>({});
+
+  const basculerSecrets = (id: string) =>
+    setSecretsOuverts((courants) => ({ ...courants, [id]: !courants[id] }));
 
   return (
     <section>
@@ -28,6 +37,12 @@ export function ExtensionsPanel() {
                       {permission}
                     </span>
                   ))}
+                </div>
+                <div className="mt-3">
+                  <button type="button" onClick={() => basculerSecrets(extension.id)} className="text-xs underline">
+                    {secretsOuverts[extension.id] ? "Masquer les secrets" : "Secrets…"}
+                  </button>
+                  {secretsOuverts[extension.id] && <ExtensionSecrets extensionId={extension.id} />}
                 </div>
               </div>
             ))}

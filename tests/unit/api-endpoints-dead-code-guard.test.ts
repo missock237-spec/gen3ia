@@ -71,7 +71,7 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 81 endpoints orphelins au 2026-10-30 (it.39 ;     */
+/* Baseline honnête — 73 endpoints orphelins au 2026-10-30 (it.43 ;      */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
@@ -107,7 +107,20 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* /agents/generate RECULÉ en « pre-ui-roadmap » (route génération de    */
 /* config construite — LLM réel, billing, resolveAndHarden — décision    */
 /* produit « système réservé » (demande n°5) et UI d'acceptation         */
-/* classées LOT 3 du plan ; total 81→80). Classés par motif.             */
+/* classées LOT 3 du plan ; total 81→80). Puis it.43 : audit 4 canaux du */
+/* 5e lot orphelin (6 endpoints) — /developer/secrets CÂBLÉ (panneau     */
+/* Secrets dans l'onglet Extensions du portail développeur : GET refs,   */
+/* PUT valeur, DELETE retrait — valeurs serveur uniquement, jamais       */
+/* retournées), /storage/r2-diagnostic reclassé « conserver-motive »     */
+/* (diagnostic ops double-garde, SEUL diagnostic R2 bout-en-bout depuis  */
+/* le runtime prod), /workspace/conversations/search (décision produit   */
+/* LOT 13 « Recherche globale »), /workspace/tasks/clarify,              */
+/* /files/workspaces et /developer/simulation reculés                    */
+/* « pre-ui-roadmap » (ateliers/étapes pas encore échus ; total RÉEL     */
+/* 74→73 — RECTIFICATION du comptage : les totaux « 81/80 » cités aux    */
+/* it.39-42 étaient surestimés de 6 (comptage embrassant les commentaires*/
+/* de catégorie) ; le registre réel ci-dessus fait foi, 73 entrées).     */
+/* Classés par motif.                                                    */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -186,15 +199,33 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *  d'acceptation est classée LOT 3 du plan (priorité Bas) et la
    *  décision produit « système réservé » (demande n°5 : les users
    *  passent par le chat, l'admin conservé) est codée en dur dans
-   *  lib/security/agent-system-access.ts. */
+   *  lib/security/agent-system-access.ts.
+   *  it.43 : 4 portes reculées ici après audit 4 canaux —
+   *   - /workspace/conversations/search : recherche sémantique de
+   *     conversations (Qdrant + repli textuel R2, défense multi-tenant
+   *     en profondeur, rate-limit) — décision produit LOT 13 « Recherche
+   *     globale » du plan (recherche contenu API + intégration palette),
+   *     UI pas échue ; matrice user-access (« chat ») + sonde e2e_wave19.
+   *   - /workspace/tasks/clarify : clarification plan-mode (lib/ai/router
+   *     + repli heuristique) — panneau tâches existant, étape pas échue.
+   *   - /files/workspaces : création d'espace d'exécution — chaîne lib
+   *     vivante (serverless-exec, user-terminal, file-engine, create-zip),
+   *     sonde e2e_cycle01, UI atelier pas échue.
+   *   - /developer/simulation : simulation SANS side-effect (VM V8
+   *     restreinte / analyse statique) — chemin vivant côté runtime
+   *     (secure-tool-executor), bouton « Simuler » de l'IDE pas échu. */
   "pre-ui-roadmap": [
     "/agents/generate",
+    "/developer/simulation",
+    "/files/workspaces",
     "/knowledge",
     "/knowledge/triggers",
     "/knowledge/triggers/[id]",
     "/skills",
     "/skills/create",
     "/skills/import",
+    "/workspace/conversations/search",
+    "/workspace/tasks/clarify",
   ],
   /** Vrais orphelins connus : fonctionnalités livrées SANS surface
    *  utilisateur détectée. Chaque entrée est un candidat UI (ou un
@@ -207,7 +238,10 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *  à l'it.38 (décision produit LOT 6, voir cette catégorie) ; les
    *  4 /admin/* + /ads/{generate,publish} sont partis en
    *  « conserver-motive » / « candidat-ui-documente » à l'it.40
-   *  (classification affinée, voir ces catégories). */
+   *  (classification affinée, voir ces catégories) ; à l'it.43,
+   *  /developer/secrets est CÂBLÉ (panneau Secrets de l'onglet Extensions
+   *  du portail développeur) et 5 entrées rejoignent « conserver-motive »
+   *  / « pre-ui-roadmap » (audit 4 canaux, voir ces catégories). */
   /** Outils d'EXPLOITATION (ops) invoqués par un opérateur authentifié
    *  (console, curl, cron VPS) — PAS D'UI par conception : l'utilisateur
    *  final n'a pas à déclencher un rapprochement de paiements ni une
@@ -228,11 +262,17 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *   - /admin/migrate-firestore-r2 : SEUL lecteur Firestore restant du
    *     projet (Task 111-b) — pont de migration 1:1 vers R2, relançable
    *     et idempotent, invocation ponctuelle opérateur par conception.
+   *   - /storage/r2-diagnostic (it.43) : diagnostic R2 bout-en-bout
+   *     exécuté depuis le runtime de production (config, connectivité,
+   *     listing, création bucket, CORS, cycle put/get/delete) — double
+   *     garde session ADMIN + header x-diag-secret à temps constant :
+   *     outil opérateur (curl/console) par conception, jamais une UI.
    *  Verrou dédié it.40 en fin de fichier (routes + libs + docs). */
   "conserver-motive": [
     "/admin/billing/reconcile",
     "/admin/extensions/reviews",
     "/admin/migrate-firestore-r2",
+    "/storage/r2-diagnostic",
   ],
   /** API documentées au CONTRAT PRODUIT sans appelant dans le dépôt :
    *  les supprimer serait un breaking change contractuel (leçon it.39
@@ -257,20 +297,14 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
   "orphelin-connu": [
     "/business/pulse",
     "/deployments/create",
-    "/developer/secrets",
-    "/developer/simulation",
-    "/files/workspaces",
     "/ia/auto-apprentissage/rapport",
     "/media/professeur-statut",
     "/monde/stats",
     "/neural/evolve",
     "/observability/org",
     "/provisioning/intent",
-    "/storage/r2-diagnostic",
     "/tools/execute",
     "/training/hub/inspect",
-    "/workspace/conversations/search",
-    "/workspace/tasks/clarify",
   ],
 };
 
@@ -602,6 +636,98 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     expect(
       plan.includes("UI d'acceptation"),
       "Le plan plateforme doit toujours référencer l'UI d'acceptation de la génération d'agent (LOT 3) — entrée pre-ui-roadmap /agents/generate à réviser sinon",
+    ).toBe(true);
+  });
+
+  it("le panneau Secrets reste câblé et les 5 portes reculées it.43 restent vivantes avec leurs libs", () => {
+    // Constat it.43 : audit 4 canaux du 5e lot orphelin (6 endpoints).
+    //  - /developer/secrets : CÂBLÉ — panneau « Secrets… » dans l'onglet
+    //    Extensions du portail développeur (GET refs déclarées/configurées,
+    //    PUT valeur, DELETE retrait). Les valeurs sont stockées SERVEUR
+    //    uniquement : l'API ne les retourne jamais, l'UI n'affiche que
+    //    l'état « configuré / à définir ». requireDeveloperAccess (rôle
+    //    développeur) + ownership extension vérifié côté route.
+    //  - /storage/r2-diagnostic : outil OPS double-garde (session ADMIN +
+    //    header x-diag-secret à temps constant) — SEUL diagnostic R2
+    //    bout-en-bout exécuté depuis le runtime de production (config,
+    //    connectivité, listing, création bucket, CORS, cycle
+    //    put/get/delete). Invocation opérateur par conception.
+    //  - /workspace/conversations/search : recherche sémantique de
+    //    conversations (Qdrant + repli textuel R2, re-vérification
+    //    d'ownership par getConversation) — décision produit LOT 13
+    //    « Recherche globale » (UI pas échue).
+    //  - /workspace/tasks/clarify : clarification plan-mode (lib/ai/router,
+    //    repli heuristique sans 500) — étape du panneau tâches pas échue.
+    //  - /files/workspaces : création d'espace d'exécution — chaîne lib
+    //    vivante (serverless-exec, user-terminal, file-engine, create-zip).
+    //  - /developer/simulation : simulation SANS side-effect (VM V8
+    //    restreinte / analyse statique) — chemin vivant côté runtime
+    //    (secure-tool-executor) ; bouton IDE pas encore échu.
+    const panneau = readFileSync(
+      path.join(RACINE, "components/developer/tabs/secrets-panel.tsx"),
+      "utf8",
+    );
+    for (const fragment of [
+      "/api/developer/secrets?extensionId=",
+      '"/api/developer/secrets"',
+      "type=\"password\"",
+    ]) {
+      expect(
+        panneau.includes(fragment),
+        `components/developer/tabs/secrets-panel.tsx doit continuer à câbler l'API /developer/secrets (fragment attendu : ${fragment})`,
+      ).toBe(true);
+    }
+    const ongletExtensions = readFileSync(
+      path.join(RACINE, "components/developer/tabs/extensions-panel.tsx"),
+      "utf8",
+    );
+    expect(
+      ongletExtensions.includes("secrets-panel"),
+      "L'onglet Extensions doit continuer d'intégrer le panneau Secrets (câblage it.43)",
+    ).toBe(true);
+    // Les 6 portes du lot it.43 restent en place (câblée ou reculée
+    // documenté) — leur suppression détruirait une capacité réelle.
+    const portes = [
+      "app/api/developer/secrets/route.ts",
+      "app/api/storage/r2-diagnostic/route.ts",
+      "app/api/workspace/conversations/search/route.ts",
+      "app/api/workspace/tasks/clarify/route.ts",
+      "app/api/files/workspaces/route.ts",
+      "app/api/developer/simulation/route.ts",
+    ];
+    for (const rel of portes) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est une porte réelle du lot it.43 (câblée ou pre-UI/ops documentée) — sa suppression est une régression`,
+      ).toBe(true);
+    }
+    // Les libs servies par ces portes doivent rester vivantes.
+    const libsServies = [
+      "lib/chat/vector-index.ts",
+      "lib/chat/repository.ts",
+      "lib/agents/planner/clarification.ts",
+      "lib/execution/workspace-registry.ts",
+      "lib/sandbox/simulation.ts",
+      "lib/storage/permanent-user-storage.ts",
+      "lib/security/timing-safe.ts",
+      "lib/extensions/repository.ts",
+    ];
+    for (const rel of libsServies) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est le socle d'une porte du lot it.43 — sa disparition est une régression fonctionnelle`,
+      ).toBe(true);
+    }
+    // Anti-dérive roadmap : le plan doit toujours classer la Recherche
+    // globale (LOT 13) — sinon réviser la catégorie pre-ui-roadmap ET ce
+    // verrou.
+    const plan = readFileSync(
+      path.join(RACINE, "docs/plan-plateforme-enterprise.md"),
+      "utf8",
+    );
+    expect(
+      plan.includes("Recherche globale"),
+      "Le plan plateforme doit toujours référencer la Recherche globale (LOT 13) — entrée pre-ui-roadmap /workspace/conversations/search à réviser sinon",
     ).toBe(true);
   });
 });
