@@ -1,13 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { type User } from "firebase/auth";
 
 import { watchAuth } from "@/lib/firebase/client";
 import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
-import type { LiveAction } from "@/lib/live/types";
+import { PERMISSION_LABELS } from "@/lib/live/types";
+import type { Permission } from "@/lib/live/types";
 import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
+
+import { LiveExecuteur } from "@/components/live/live-executeur";
+import type { CameraFacing, SourceCapture } from "@/components/live/live-executeur";
 
 // it.52 (demande propriétaire : « le live doit fonctionner en interne avec
 // gen3 ») : l'ancien canal externe « Gemini Live » (clé opérateur +
@@ -16,23 +20,16 @@ import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 // components/live/live-interne-panel) ; cet espace reste la surface de
 // suivi HITL (sessions, décisions, approbations, arrêt) sur le même
 // pipeline interne.
-
-type Permission =
-  | "screen.read"
-  | "input.mouse"
-  | "input.keyboard"
-  | "files.read"
-  | "files.write"
-  | "browser.control";
-
-const PERMISSION_LABELS: Record<Permission, string> = {
-  "screen.read": "Observer l'écran",
-  "input.mouse": "Contrôler la souris",
-  "input.keyboard": "Contrôler le clavier",
-  "files.read": "Lire les fichiers",
-  "files.write": "Écrire des fichiers",
-  "browser.control": "Contrôler le navigateur",
-};
+//
+// it.53 (« un seul exécuteur, deux surfaces ») : la COPIE locale de la
+// boucle de capture (armement, partage d'écran/caméra natifs, envoi des
+// frames, journal, HITL, arrêt) est SUPPRIMÉE — ~250 lignes qui avaient
+// déjà divergé de celle du chat (pas de caméra, pas de carte
+// d'approbation inline, statuts incohérents). L'exécution navigateur
+// passe par l'exécuteur UNIQUE
+// components/live/live-executeur, le même que le chat : le dashboard
+// gagne la caméra mobile et la carte HITL inline, et toute évolution de
+// la boucle profite aux deux surfaces en même temps.
 
 interface LivePendingActionInfo {
   actionId: string;
@@ -65,35 +62,6 @@ interface CreatedSession {
   viewerToken: string;
 }
 
-interface FrameActionRef {
-  actionId: string;
-  action: LiveAction;
-}
-
-interface FrameResponse {
-  decision: { done: boolean; message: string } | null;
-  action?: FrameActionRef;
-  pendingApproval?: FrameActionRef;
-  pendingAction?: { actionId: string; approvedAt?: number | null } | null;
-  paused?: boolean;
-  pauseReason?: string;
-  error?: string;
-  code?: string;
-  /** Écran inchangé : le serveur a répondu sans nouvelle analyse (dédup). */
-  unchanged?: boolean;
-  /** Perception réellement disponible : guidage structurel ou dégradé. */
-  perception?: "structural-guided" | "structural-degraded";
-}
-
-type ObservationKind = "observation" | "action" | "result" | "pause" | "info" | "error";
-
-interface ObservationEntry {
-  id: number;
-  at: number;
-  kind: ObservationKind;
-  text: string;
-}
-
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-[var(--g3-warning-soft)] text-[var(--g3-warning-strong)] border-[var(--g3-warning-soft)]",
   connected: "bg-[var(--g3-secondary-soft)] text-[var(--g3-info)] border-[var(--g3-secondary-soft)]",
@@ -104,47 +72,10 @@ const STATUS_STYLES: Record<string, string> = {
   failed: "bg-[var(--g3-danger-soft)] text-[var(--g3-danger-strong)] border-[var(--g3-danger-soft)]",
 };
 
-const KIND_STYLES: Record<ObservationKind, string> = {
-  observation: "text-[var(--g3-text-secondary)]",
-  action: "text-[var(--g3-info)] font-medium",
-  result: "text-[var(--g3-muted)]",
-  pause: "text-[var(--g3-warning-strong)]",
-  info: "text-[var(--g3-success-strong)]",
-  error: "text-[var(--g3-danger-strong)]",
-};
-
-const FRAME_INTERVAL_MS = 3_000;
-const MAX_CAPTURE_WIDTH = 1280;
-const BROWSER_UNSUPPORTED_ERROR =
-  "Action réservée à un client PC : en mode navigateur, l'agent observe et décrit, mais ne peut pas agir sur l'ordinateur.";
+const PERMISSION_KEYS = Object.keys(PERMISSION_LABELS) as Permission[];
 
 function formatDate(ts: number) {
   return new Date(ts).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" });
-}
-
-function formatTime(ts: number) {
-  return new Date(ts).toLocaleTimeString("fr-FR", { timeStyle: "medium" });
-}
-
-function describeAction(action: LiveAction): string {
-  switch (action.type) {
-    case "mouse.move":
-      return `Déplacer la souris vers (${Math.round(action.x)}, ${Math.round(action.y)})`;
-    case "mouse.click":
-      return `Clic ${action.button === "left" ? "gauche" : action.button === "right" ? "droit" : "milieu"}`;
-    case "keyboard.type":
-      return `Saisir du texte (${action.text.length} caractères)`;
-    case "keyboard.key":
-      return `Appuyer sur la touche « ${action.key} »`;
-    case "wait":
-      return `Observer pendant ${action.ms >= 1000 ? `${Math.round(action.ms / 1000)} s` : `${action.ms} ms`}`;
-    case "file.read":
-      return `Lire le fichier ${action.path}`;
-    case "file.write":
-      return `Écrire le fichier ${action.path}`;
-    default:
-      return "Action inconnue";
-  }
 }
 
 function actionLabel(action: LivePendingActionInfo["action"] | LiveInFlightInfo["action"]): string {
@@ -152,15 +83,6 @@ function actionLabel(action: LivePendingActionInfo["action"] | LiveInFlightInfo[
   if (typeof action === "string") return action;
   const parts = [action.type, action.description].filter(Boolean);
   return parts.length > 0 ? parts.join(" — ") : "action inconnue";
-}
-
-function makeDeviceId(): string {
-  const raw = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-  return `web-${raw.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 16)}`;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function LiveDashboard() {
@@ -178,30 +100,14 @@ export function LiveDashboard() {
   ]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [browserError, setBrowserError] = useState("");
 
-  // État du client Live navigateur (aucun téléchargement requis).
-  const [liveSessionId, setLiveSessionId] = useState<string | null>(null);
-  const [liveStatus, setLiveStatus] = useState<"idle" | "starting" | "running" | "stopped">("idle");
-  const [observations, setObservations] = useState<ObservationEntry[]>([]);
-
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const loopRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const sendingRef = useRef(false);
-  /** Compteur d'échecs réseau consécutifs — visibles dans le journal (Task 45). */
-  const frameFailuresRef = useRef(0);
-  const runtimeRef = useRef<{ sessionId: string; deviceId: string } | null>(null);
-  const loggedPauseRef = useRef<string | null>(null);
-  const observationIdRef = useRef(0);
+  // Session exécutée dans CE navigateur via l'exécuteur partagé
+  // (components/live/live-executeur — le même que le chat).
+  const [sessionActive, setSessionActive] = useState<string | null>(null);
+  const [sourceLocale, setSourceLocale] = useState<SourceCapture>("screen");
+  const [facingLocale, setFacingLocale] = useState<CameraFacing>("environment");
 
   const sessionDisponible = useSessionAvailable();
-
-  const log = useCallback((kind: ObservationKind, text: string) => {
-    observationIdRef.current += 1;
-    const entry: ObservationEntry = { id: observationIdRef.current, at: Date.now(), kind, text };
-    setObservations((current) => [...current.slice(-120), entry]);
-  }, []);
 
   const loadSessions = useCallback(async () => {
     // authFetch : ID token Firebase si disponible, sinon cookie de session.
@@ -235,248 +141,6 @@ export function LiveDashboard() {
   };
 
   /* ------------------------------------------------------------------ */
-  /* Client Live navigateur : capture d'écran native + boucle de vision  */
-  /* ------------------------------------------------------------------ */
-
-  const sendActionResult = useCallback(
-    async (actionId: string, ok: boolean, errorMessage?: string) => {
-      const runtime = runtimeRef.current;
-      if (!runtime) return;
-      try {
-        await authFetch(`/api/live/sessions/${runtime.sessionId}/frames`, {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ deviceId: runtime.deviceId, actionId, ok, ...(errorMessage ? { error: errorMessage } : {}) }),
-        });
-      } catch {
-        // Le résultat sera considéré perdu côté serveur (reprise explicite).
-      }
-    },
-    [],
-  );
-
-  const executeBrowserAction = useCallback(
-    async (action: FrameActionRef) => {
-      log("action", `Action de l'agent : ${describeAction(action.action)}`);
-      if (action.action.type === "wait") {
-        await sleep(action.action.ms);
-        await sendActionResult(action.actionId, true);
-        log("result", "Attente terminée — l'agent poursuit son observation.");
-        return;
-      }
-      // Le navigateur ne contrôle ni la souris, ni le clavier, ni les
-      // fichiers : le résultat honnête est un échec explicite, que le
-      // moteur de vision intègre pour adapter ses décisions suivantes.
-      await sendActionResult(action.actionId, false, BROWSER_UNSUPPORTED_ERROR);
-      log("result", `Non exécutable dans le navigateur : ${describeAction(action.action)}.`);
-    },
-    [log, sendActionResult],
-  );
-
-  const stopCaptureLoop = useCallback(() => {
-    if (loopRef.current) {
-      clearInterval(loopRef.current);
-      loopRef.current = null;
-    }
-  }, []);
-
-  const teardownStream = useCallback(() => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-  }, []);
-
-  const captureAndSendFrame = useCallback(async () => {
-    if (sendingRef.current) return;
-    const runtime = runtimeRef.current;
-    const video = videoRef.current;
-    const stream = streamRef.current;
-    if (!runtime || !video || !stream || stream.getVideoTracks().every((track) => track.readyState !== "live")) return;
-    if (document.visibilityState !== "visible") return;
-    sendingRef.current = true;
-    try {
-      const sourceWidth = video.videoWidth;
-      const sourceHeight = video.videoHeight;
-      if (!sourceWidth || !sourceHeight) return;
-      const scale = Math.min(1, MAX_CAPTURE_WIDTH / sourceWidth);
-      const width = Math.max(1, Math.round(sourceWidth * scale));
-      const height = Math.max(1, Math.round(sourceHeight * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext("2d");
-      if (!context) return;
-      context.drawImage(video, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-      const jpegBase64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
-      if (jpegBase64.length < 64) return;
-
-      const response = await authFetch(`/api/live/sessions/${runtime.sessionId}/frames`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          deviceId: runtime.deviceId,
-          timestamp: Date.now(),
-          width,
-          height,
-          jpegBase64,
-        }),
-      });
-
-      if (response.status === 409) {
-        const data = (await response.json().catch(() => ({}))) as FrameResponse;
-        if (data.code === "LIVE_PAUSED") {
-          const key = data.pendingAction?.actionId ?? "paused";
-          if (loggedPauseRef.current !== key) {
-            loggedPauseRef.current = key;
-            log("pause", data.pendingAction ? "Action sensible en attente de votre validation ci-contre." : data.error || "Session en pause.");
-          }
-        }
-        return;
-      }
-      if (response.status === 429 || response.status === 403 || response.status === 401) {
-        const data = (await response.json().catch(() => ({}))) as FrameResponse;
-        if (loggedPauseRef.current !== `http-${response.status}`) {
-          loggedPauseRef.current = `http-${response.status}`;
-          log("error", data.error || "Envoi d'image refusé par le serveur.");
-        }
-        return;
-      }
-      if (!response.ok) return;
-
-      const data = (await response.json()) as FrameResponse;
-      frameFailuresRef.current = 0;
-      // Écran inchangé (dédup serveur) : rien de nouveau à journaliser —
-      // éviter de spammer le journal toutes les 3 secondes.
-      if (data.unchanged) return;
-      if (data.decision?.message) {
-        log(data.decision.done ? "info" : "observation", data.decision.message);
-      }
-      if (data.decision?.done) {
-        stopCaptureLoop();
-        setLiveStatus("idle");
-        log("info", "Objectif atteint — l'agent se met en pause. Vous pouvez arrêter la session.");
-        return;
-      }
-      if (data.pendingApproval) {
-        log("pause", `Action sensible à approuver : ${describeAction(data.pendingApproval.action)}`);
-        return;
-      }
-      if (data.action) {
-        await executeBrowserAction(data.action);
-      }
-    } catch {
-      // Frame perdue (réseau, onglet) : la boucle suivante réessaie — mais
-      // l'utilisateur est informé dès 2 échecs consécutifs (Task 45 : plus
-      // aucun échec silencieux).
-      frameFailuresRef.current += 1;
-      if (frameFailuresRef.current === 2) {
-        log("error", "Connexion instable : plusieurs images n'ont pas pu être envoyées. La session continue de réessayer.");
-      }
-    } finally {
-      sendingRef.current = false;
-    }
-  }, [executeBrowserAction, log, stopCaptureLoop]);
-
-  const stopBrowserLive = useCallback(
-    async (stopSession: boolean) => {
-      stopCaptureLoop();
-      teardownStream();
-      const runtime = runtimeRef.current;
-      runtimeRef.current = null;
-      setLiveStatus("stopped");
-      setLiveSessionId(null);
-      if (runtime && stopSession) {
-        try {
-          await authFetch(`/api/live/sessions/${runtime.sessionId}`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ action: "stop" }),
-          });
-        } catch {}
-        log("info", "Session Live arrêtée.");
-      }
-      await loadSessions();
-    },
-    [loadSessions, log, stopCaptureLoop, teardownStream],
-  );
-
-  const startBrowserLive = useCallback(
-    async (target: { id: string }) => {
-      if (sessionDisponible === false) {
-        setBrowserError("Session expirée. Reconnectez-vous.");
-        return;
-      }
-      if (!navigator.mediaDevices?.getDisplayMedia) {
-        setBrowserError("Votre navigateur ne prend pas en charge le partage d'écran natif (utilisez Chrome, Edge ou Firefox sur ordinateur).");
-        return;
-      }
-      setBrowserError("");
-      setLiveStatus("starting");
-      try {
-        const deviceId = makeDeviceId();
-        const startResponse = await authFetch(`/api/live/sessions/${target.id}/start`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ deviceId }),
-        });
-        if (!startResponse.ok) {
-          const data = (await startResponse.json().catch(() => ({}))) as FrameResponse;
-          throw new Error(data.error || "Démarrage impossible");
-        }
-
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: { frameRate: 2 },
-          audio: false,
-        });
-        streamRef.current = stream;
-        runtimeRef.current = { sessionId: target.id, deviceId };
-        loggedPauseRef.current = null;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play().catch(() => undefined);
-        }
-        stream.getVideoTracks().forEach((track) =>
-          track.addEventListener("ended", () => {
-            log("info", "Partage d'écran interrompu depuis le navigateur.");
-            void stopBrowserLive(false);
-          }),
-        );
-
-        setLiveSessionId(target.id);
-        setLiveStatus("running");
-        log("info", "Partage d'écran actif — l'agent observe votre ordinateur.");
-        await loadSessions();
-
-        stopCaptureLoop();
-        loopRef.current = setInterval(() => {
-          void captureAndSendFrame();
-        }, FRAME_INTERVAL_MS);
-      } catch (e) {
-        teardownStream();
-        runtimeRef.current = null;
-        setLiveStatus("idle");
-        const message = e instanceof Error ? e.message : "Démarrage impossible";
-        setBrowserError(
-          /permission|denied|dismissed/i.test(message)
-            ? "Partage d'écran refusé : sélectionnez l'écran à partager pour démarrer l'agent."
-            : message,
-        );
-      }
-    },
-    [loadSessions, log, sessionDisponible, stopBrowserLive, stopCaptureLoop, teardownStream, captureAndSendFrame],
-  );
-
-  // Nettoyage si l'onglet se ferme pendant une session active.
-  useEffect(
-    () => () => {
-      if (loopRef.current) clearInterval(loopRef.current);
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-    },
-    [],
-  );
-
-  /* ------------------------------------------------------------------ */
   /* Sessions : création, arrêt, approbations                            */
   /* ------------------------------------------------------------------ */
 
@@ -505,7 +169,6 @@ export function LiveDashboard() {
 
   const stopSession = async (id: string) => {
     if (sessionDisponible === false) return;
-    if (liveSessionId === id) await stopBrowserLive(false);
     await authFetch(`/api/live/sessions/${id}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -551,8 +214,7 @@ export function LiveDashboard() {
   // qu'à consommer du quota Firestore. useVisiblePolling ne redémarre
   // l'intervalle que lorsque `ms` change : l'alternance 6 s ↔ 15 s suit
   // proprement le dernier statut connu des sessions.
-  const uneSessionEnCours =
-    liveStatus === "running" || sessions.some((session) => session.status === "running");
+  const uneSessionEnCours = sessions.some((session) => session.status === "running");
   useVisiblePolling(loadSessions, authReady ? (uneSessionEnCours ? 6_000 : 15_000) : null);
 
   if (!authReady || sessionDisponible === null) {
@@ -572,8 +234,6 @@ export function LiveDashboard() {
       </div>
     );
   }
-
-  const sessionActive = liveSessionId ?? created?.session.id ?? null;
 
   return (
     <div className="space-y-5">
@@ -603,7 +263,7 @@ export function LiveDashboard() {
         <div className="mt-4">
           <div className="text-xs uppercase tracking-widest text-[var(--g3-muted)]">Permissions accordées</div>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {(Object.keys(PERMISSION_LABELS) as Permission[]).map((permission) => (
+            {PERMISSION_KEYS.map((permission) => (
               <button
                 key={permission}
                 onClick={() => togglePermission(permission)}
@@ -650,17 +310,13 @@ export function LiveDashboard() {
             <div className="text-sm font-semibold text-[var(--g3-success-strong)]">Session créée — {created.session.name}</div>
             <div className="mt-1 text-xs text-[var(--g3-muted)]">ID : {created.session.id}</div>
             <button
-              onClick={() => {
-                setObservations([]);
-                void startBrowserLive(created.session);
-              }}
-              disabled={liveStatus === "starting" || liveStatus === "running"}
+              onClick={() => setSessionActive(created.session.id)}
               className="g3-btn g3-btn-primary mt-4"
             >
-              {liveStatus === "starting" ? "Démarrage…" : liveStatus === "running" ? "Agent actif" : "Tester dans ce navigateur"}
+              Tester dans ce navigateur
             </button>
             <p className="mt-3 text-xs leading-5 text-[var(--g3-muted)]">
-              Votre navigateur vous demandera quel écran partager. La session
+              L’exécuteur partagé démarre ci-contre (le même que le chat). La session
               expire au bout de 24 h si elle reste inactive.
             </p>
           </div>
@@ -669,87 +325,66 @@ export function LiveDashboard() {
 
         <div className="space-y-5">
           <section className="rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="font-serif text-lg font-semibold">Agent Live — dans le navigateur</h2>
-                <p className="mt-1 text-xs text-[var(--g3-muted)]">
-                  Aucun téléchargement : partage d’écran natif, suivi et guidage
-                  par l’IA interne en temps réel.
+            <h2 className="font-serif text-lg font-semibold">Exécuteur navigateur — moteur interne gen3</h2>
+            <p className="mt-1 text-xs leading-5 text-[var(--g3-muted)]">
+              it.53 : le MÊME exécuteur que le chat (une seule boucle, un seul composant) —
+              écran PC ou caméra mobile, décisions du moteur de vision interne, HITL inline.
+            </p>
+
+            {sessionActive ? (
+              <div className="mt-4">
+                <LiveExecuteur
+                  key={sessionActive}
+                  sessionId={sessionActive}
+                  sourceInitiale={sourceLocale}
+                  cameraFacingInitiale={facingLocale}
+                  onFermer={() => { setSessionActive(null); void loadSessions(); }}
+                />
+              </div>
+            ) : (
+              <div className="mt-4">
+                <p className="rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-3 text-xs leading-5 text-[var(--g3-muted)]">
+                  Aucune session exécutée dans ce navigateur. Créez une session ci-contre puis
+                  « Tester dans ce navigateur », reprenez une session récente, ou activez le live
+                  directement depuis le Chat IA (bouton « Agent Live »).
                 </p>
+                <div className="mt-3">
+                  <div className="text-xs uppercase tracking-widest text-[var(--g3-muted)]">Source de capture de l’exécuteur</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      aria-pressed={sourceLocale === "screen"}
+                      onClick={() => setSourceLocale("screen")}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold ${sourceLocale === "screen" ? "bg-[var(--g3-deep)] text-white" : "border border-[var(--g3-border-strong)] text-[var(--g3-muted)]"}`}
+                    >
+                      Écran (PC)
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={sourceLocale === "camera"}
+                      onClick={() => setSourceLocale("camera")}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold ${sourceLocale === "camera" ? "bg-[var(--g3-deep)] text-white" : "border border-[var(--g3-border-strong)] text-[var(--g3-muted)]"}`}
+                    >
+                      Caméra (mobile)
+                    </button>
+                    {sourceLocale === "camera" ? (
+                      <button
+                        type="button"
+                        onClick={() => setFacingLocale((facing) => (facing === "environment" ? "user" : "environment"))}
+                        className="rounded-full border border-[var(--g3-border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-muted)]"
+                      >
+                        Caméra {facingLocale === "environment" ? "arrière" : "avant"} ⇄
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               </div>
-              <span className="rounded-full border border-[var(--g3-border)] bg-[var(--g3-surface)] px-2.5 py-1 text-[11px] text-[var(--g3-muted)]">
-                {liveStatus === "running" ? "LIVE" : liveStatus === "starting" ? "démarrage" : liveStatus === "stopped" ? "arrêté" : "hors ligne"}
-              </span>
-            </div>
-
-            <div className="relative mt-4 overflow-hidden rounded-2xl border border-[var(--g3-border)] bg-black aspect-video flex items-center justify-center">
-              <video ref={videoRef} muted playsInline autoPlay className="h-full w-full object-contain" />
-              {liveStatus !== "running" && liveStatus !== "starting" && (
-                <span className="absolute text-sm text-[var(--g3-faint)]">Aucun partage d’écran actif</span>
-              )}
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {sessionActive && liveStatus !== "running" && (
-                <button
-                  onClick={() => {
-                    const target = created?.session.id === sessionActive
-                      ? created.session
-                      : sessions.find((item) => item.id === sessionActive);
-                    if (target) {
-                      setObservations([]);
-                      void startBrowserLive(target);
-                    }
-                  }}
-                  disabled={liveStatus === "starting"}
-                  className="g3-btn g3-btn-primary"
-                >
-                  {liveStatus === "starting" ? "Démarrage…" : "Partager l’écran et démarrer"}
-                </button>
-              )}
-              {liveStatus === "running" && liveSessionId && (
-                <button onClick={() => void stopBrowserLive(true)} className="g3-btn g3-btn-ghost">
-                  Arrêter la session
-                </button>
-              )}
-              {liveStatus === "stopped" && (
-                <button onClick={() => setLiveStatus("idle")} className="rounded-xl border border-[var(--g3-border)] px-4 py-2 text-xs font-semibold text-[var(--g3-muted)] hover:bg-[var(--g3-elevated)]">
-                  Réinitialiser
-                </button>
-              )}
-            </div>
-            {browserError && (
-              <div className="mt-3 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3 text-sm text-[var(--g3-warning-strong)]">{browserError}</div>
             )}
-
-            <div className="mt-4">
-              <div className="text-xs uppercase tracking-widest text-[var(--g3-muted)]">Journal de l’agent</div>
-              <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-3">
-                {observations.length === 0 ? (
-                  <p className="text-xs text-[var(--g3-faint)]">
-                    Les observations de l’agent apparaîtront ici dès qu’une session est active.
-                  </p>
-                ) : (
-                  observations.map((entry) => (
-                    <p key={entry.id} className={`text-xs leading-5 ${KIND_STYLES[entry.kind]}`}>
-                      <span className="mr-2 font-mono text-[10px] text-[var(--g3-faint)]">{formatTime(entry.at)}</span>
-                      {entry.text}
-                    </p>
-                  ))
-                )}
-              </div>
-            </div>
 
             <p className="mt-4 rounded-xl border border-[var(--g3-warning-soft)] bg-[var(--g3-warning-soft)] p-3 text-xs leading-5 text-[var(--g3-warning-strong)]">
               En mode navigateur, l’agent observe, analyse et vous guide action par
               action — il ne contrôle pas votre clavier ni votre souris. Chaque
               action sensible exige de toute façon votre validation.
-            </p>
-            <p className="mt-2 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-3 text-xs leading-5 text-[var(--g3-muted)]">
-              Perception actuelle : <strong>structurelle</strong> — le moteur IA
-              interne mesure l’écran (dimensions, activité, écran inchangé) et
-              vous guide selon votre objectif, sans interpréter les pixels ni
-              inventer de contenu d’écran.
             </p>
           </section>
 
@@ -810,12 +445,9 @@ export function LiveDashboard() {
                     <div className="mt-3 flex flex-wrap gap-2">
                       {["pending", "connected", "running", "paused"].includes(session.status) && (
                         <>
-                          {liveSessionId !== session.id && (
+                          {sessionActive !== session.id && (
                             <button
-                              onClick={() => {
-                                setObservations([]);
-                                void startBrowserLive(session);
-                              }}
+                              onClick={() => setSessionActive(session.id)}
                               className="rounded-lg border border-[var(--g3-secondary-soft)] bg-[var(--g3-secondary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-info)] hover:bg-[var(--g3-secondary-soft)]"
                             >
                               Tester dans le navigateur
@@ -843,7 +475,8 @@ export function LiveDashboard() {
         <p className="mt-2 text-sm leading-6 text-[var(--g3-text-secondary)]">
           it.52 (demande propriétaire) : l&apos;agent live s&apos;active désormais directement dans la conversation
           (bouton « Agent Live » sous le chat) — moteur de vision INTERNE gen3, écran PC ou caméra mobile,
-          aucune clé externe. Cet espace reste votre tableau de bord : sessions, décisions, approbations et arrêt.
+          aucune clé externe. Cet espace reste votre tableau de bord : sessions, décisions, approbations et arrêt,
+          avec le MÊME exécuteur que le chat (it.53).
         </p>
         <Link href="/chat" className="g3-btn g3-btn-primary mt-4 inline-flex text-xs">Ouvrir le Chat IA pour activer le live</Link>
       </section>

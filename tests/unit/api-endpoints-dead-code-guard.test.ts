@@ -204,6 +204,19 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* OU caméra mobile getUserMedia — la caméra redevient accessible SANS   */
 /* service externe) ; l'espace /live devient la surface de suivi HITL    */
 /* avec renvoi honnête vers le chat ; verrou bidirectionnel (21e).       */
+/* Puis it.53 : UN SEUL EXÉCUTEUR, DEUX SURFACES — la boucle de capture   */
+/* navigateur du live (armement, getDisplayMedia/getUserMedia, frames,   */
+/* journal, HITL inline, arrêt) vivait en DEUX COPIES divergentes        */
+/* (panneau du chat vs dashboard /live — la copie dashboard avait perdu  */
+/* la caméra et la carte d'approbation inline) : elle est EXTRAITE dans  */
+/* l'exécuteur UNIQUE components/live/live-executeur, consommé par le    */
+/* chat ET par /live (« Tester dans ce navigateur ») — le dashboard      */
+/* gagne la caméra mobile et la carte HITL inline, les codes terminaux   */
+/* de la porte frames (LIVE_STOPPED/EXPIRED/FAILED/DEVICE_MISMATCH)      */
+/* arrêtent proprement la boucle, jeton de génération anti-course        */
+/* (StrictMode) ; PERMISSION_LABELS unifiés dans lib/live/types ;        */
+/* 3 tests structurels du panneau réécrits + 4 tests de l'exécuteur +    */
+/* verrou bidirectionnel (22e).                                          */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -1198,11 +1211,13 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     const chat = readFileSync(path.join(RACINE, "components/chat/nova-chat.tsx"), "utf8");
     expect(chat.includes('import("@/components/live/live-interne-panel")'), "Le chat doit charger le panneau live INTERNE (lazy) — régression du câblage it.52").toBe(true);
     expect(chat.includes("live-gemini-panel"), "Plus AUCUNE référence au canal externe Gemini dans le chat — régression it.52").toBe(false);
-    // Le panneau interne est réel et consomme les portes maison.
+    // Le panneau interne est réel (activation) et délègue l'exécution à
+    // l'exécuteur unique (it.53) qui consomme les portes maison.
     const panel = readFileSync(path.join(RACINE, "components/live/live-interne-panel.tsx"), "utf8");
     expect(panel.includes('authFetch("/api/live/sessions", {'), "Le panneau interne doit créer des sessions réelles via la porte /api/live/sessions — régression it.52").toBe(true);
-    expect(panel.includes("/actions/${pendingApproval.actionId}/approve`"), "L'approbation HITL doit rester possible depuis le chat — régression it.52").toBe(true);
-    expect(panel.includes("navigator.mediaDevices.getUserMedia"), "La caméra mobile doit rester accessible via le moteur INTERNE (fallback honnête) — régression it.52").toBe(true);
+    const executeur = readFileSync(path.join(RACINE, "components/live/live-executeur.tsx"), "utf8");
+    expect(executeur.includes("/actions/${pendingApproval.actionId}/approve`"), "L'approbation HITL doit rester possible depuis le chat (exécuteur unique) — régression it.52/it.53").toBe(true);
+    expect(executeur.includes("navigator.mediaDevices.getUserMedia"), "La caméra mobile doit rester accessible via le moteur INTERNE (fallback honnête) — régression it.52/it.53").toBe(true);
     // Le canal externe est BIEN supprimé du dépôt (code + tests).
     expect(existsSync(path.join(RACINE, "app/live/live-gemini-panel.tsx")), "Le panneau Gemini externe doit rester supprimé (moteur interne gen3) — régression it.52").toBe(false);
     expect(existsSync(path.join(RACINE, "lib/live/gemini-live-client.ts")), "Le client Gemini externe doit rester supprimé — régression it.52").toBe(false);
@@ -1215,5 +1230,47 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     expect(dashboard.includes("LiveGeminiPanel"), "L'espace /live ne doit plus embarquer le canal externe — régression it.52").toBe(false);
     // Le test structurel du panneau reste en place.
     expect(existsSync(path.join(RACINE, "components/live/live-interne-panel.test.ts")), "Le test structurel du panneau interne doit rester en place — il verrouille le contrat UI↔portes").toBe(true);
+  });
+
+  it("l'exécution navigateur du live est UNIQUE — un seul exécuteur partagé par le chat et /live (it.53)", () => {
+    // it.53 : la boucle de capture vivait en DEUX COPIES divergentes
+    // (panneau du chat vs dashboard /live). Elle est désormais EXTRAITE
+    // dans l'exécuteur unique components/live/live-executeur : toute
+    // réapparition d'une boucle en copie est une régression.
+    const panel = readFileSync(path.join(RACINE, "components/live/live-interne-panel.tsx"), "utf8");
+    const dashboard = readFileSync(path.join(RACINE, "app/live/live-dashboard.tsx"), "utf8");
+    const executeur = readFileSync(path.join(RACINE, "components/live/live-executeur.tsx"), "utf8");
+
+    // L'exécuteur existe, est réel, et porte TOUTE la boucle (armement,
+    // captures écran/caméra, frames, HITL, arrêt).
+    expect(existsSync(path.join(RACINE, "components/live/live-executeur.tsx")), "L'exécuteur navigateur unique doit exister — régression it.53").toBe(true);
+    expect(executeur.includes("/api/live/sessions/${sessionId}/start"), "L'exécuteur doit armer la session (POST /start) — régression it.53").toBe(true);
+    expect(executeur.includes("navigator.mediaDevices.getDisplayMedia"), "L'exécuteur doit capturer l'écran PC — régression it.53").toBe(true);
+    expect(executeur.includes("navigator.mediaDevices.getUserMedia"), "L'exécuteur doit capturer la caméra mobile — régression it.53").toBe(true);
+    expect(executeur.includes("CODES_TERMINAUX"), "L'exécuteur doit arrêter la boucle sur les codes terminaux de la porte — régression it.53").toBe(true);
+    expect(executeur.includes("generationRef"), "L'exécuteur doit être protégé contre le double-montage StrictMode (jeton de génération) — régression it.53").toBe(true);
+
+    // Les DEUX surfaces consomment l'exécuteur — et NE COPIENT PLUS la boucle.
+    expect(panel.includes('from "@/components/live/live-executeur"'), "Le panneau du chat doit déléguer l'exécution à l'exécuteur unique — régression it.53").toBe(true);
+    expect(dashboard.includes('from "@/components/live/live-executeur"'), "Le dashboard /live doit exécuter via l'exécuteur unique — régression it.53").toBe(true);
+    expect(dashboard.includes("getDisplayMedia"), "Le dashboard ne doit PLUS copier la boucle de capture (getDisplayMedia supprimé) — régression it.53").toBe(false);
+    expect(dashboard.includes("captureAndSendFrame"), "Le dashboard ne doit PLUS copier la boucle de frames — régression it.53").toBe(false);
+    expect(panel.includes("getDisplayMedia"), "Le panneau du chat ne doit PLUS copier la capture — régression it.53").toBe(false);
+
+    // L'unicité est vérifiée par balayage : un seul fichier client dans
+    // components/live contient getDisplayMedia (l'exécuteur).
+    const dossierLive = path.join(RACINE, "components/live");
+    const fichiersAvecCapture = readdirSync(dossierLive).filter((file) =>
+      file.endsWith(".tsx") && !file.endsWith(".test.ts") &&
+      readFileSync(path.join(dossierLive, file), "utf8").includes("getDisplayMedia"),
+    );
+    expect(fichiersAvecCapture, "Un SEUL composant client doit contenir la capture d'écran (l'exécuteur) — régression it.53").toEqual(["live-executeur.tsx"]);
+
+    // Les labels de permissions ont une source unique (lib/live/types).
+    expect(dashboard.includes('PERMISSION_LABELS } from "@/lib/live/types"') || dashboard.includes('import { PERMISSION_LABELS } from "@/lib/live/types"'), "Le dashboard doit consommer les labels partagés — régression it.53").toBe(true);
+    expect(panel.includes('from "@/lib/live/types"'), "Le panneau doit consommer les labels partagés — régression it.53").toBe(true);
+
+    // Le test structurel de l'exécuteur reste en place.
+    expect(existsSync(path.join(RACINE, "components/live/live-executeur.test.ts")), "Le test structurel de l'exécuteur doit rester en place — régression it.53").toBe(true);
   });
 });

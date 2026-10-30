@@ -10,6 +10,25 @@ export const LivePermissionSchema = z.enum([
 ]);
 export type LivePermission = z.infer<typeof LivePermissionSchema>;
 
+/** Alias court utilisé par les composants client (panneau chat, exécuteur,
+ *  dashboard /live) — même ensemble que le schéma serveur. */
+export type Permission = LivePermission;
+
+/**
+ * Labels métier des permissions (données d'affichage isomorphes —
+ * it.53 : source UNIQUE partagée par la carte d'activation du chat,
+ * l'exécuteur navigateur et le formulaire du dashboard /live, qui
+ * dupliquaient chacun leur propre Record).
+ */
+export const PERMISSION_LABELS: Record<LivePermission, string> = {
+  "screen.read": "Observer l'écran",
+  "input.mouse": "Contrôler la souris",
+  "input.keyboard": "Contrôler le clavier",
+  "files.read": "Lire les fichiers",
+  "files.write": "Écrire des fichiers",
+  "browser.control": "Contrôler le navigateur",
+};
+
 export const LiveSessionStatusSchema = z.enum([
   "pending", "connected", "running", "paused", "disconnected", "stopped", "failed",
 ]);
