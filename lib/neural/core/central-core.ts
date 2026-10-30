@@ -198,6 +198,10 @@ export class NoyauCentralGen3 {
     // 2. Vérification et maintien de la santé neuronale
     this.verifierSanteNeuronale();
 
+    // MÉTABOLISME (architecture cerveau) : instantané du travail réel du pas
+    // (neurones évalués vs reposés, transmissions réelles vs scan dense).
+    const metabolisme = { ...this.cerveau.metabolismeDernierPas };
+
     // 3. Transit des ordres vers le corps sémantique (Écoute des résonances)
     const actionsDeclenchees: EffectorActionResult[] = [];
     for (const effecteur of this.effecteurs) {
@@ -218,6 +222,7 @@ export class NoyauCentralGen3 {
       spikedNeurones: spikedNeurons,
       neuronesActifs: spikedNeurons.length,
       sante: { ...this.metriquesSante },
+      metabolisme,
       actionsCorps: actionsDeclenchees,
     };
   }

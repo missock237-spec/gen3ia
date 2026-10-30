@@ -1418,3 +1418,64 @@ html[data-theme="light"] .nova-telemetrie .ligne code { color: #1e2430; }
   .nova-modele-chip { padding: 6px 11px; font-size: 12.5px; }
   .nova-topbar .nova-statut { display: none; }
 }
+
+/* ---- AGENT LIVE SOUS LE CHAT (commande 6) ----
+   Voile plein écran : l'agent live (vision écran/caméra + voix) s'ouvre
+   DANS le chat, sans quitter la conversation. Le fond cliquable referme ;
+   le panneau stoppe la propagation (clics internes conservés). */
+.nova-live-voile {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--g3-bg) 72%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.nova-live-panneau {
+  display: flex;
+  flex-direction: column;
+  width: min(880px, 100%);
+  max-height: min(86vh, 860px);
+  overflow: hidden;
+  border: 1px solid var(--g3-border);
+  border-radius: 20px;
+  background: var(--g3-surface);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 0.4);
+}
+
+.nova-live-tete {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--g3-border);
+}
+
+.nova-live-titre { font-weight: 700; font-size: 15px; color: var(--g3-text); }
+
+.nova-live-sous { margin-top: 2px; font-size: 12px; line-height: 1.5; color: var(--g3-muted); }
+.nova-live-sous a { color: var(--g3-text); text-decoration: underline; }
+
+.nova-live-corps {
+  overflow-y: auto;
+  padding: 14px 18px 18px;
+  max-height: calc(min(86vh, 860px) - 74px);
+}
+
+.nova-live-chargement {
+  padding: 28px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--g3-muted);
+}
+
+@media (max-width: 640px) {
+  .nova-live-voile { padding: 8px; }
+  .nova-live-panneau { border-radius: 14px; max-height: 94vh; }
+  .nova-live-corps { max-height: calc(94vh - 84px); }
+}

@@ -15,8 +15,12 @@
 import { Neurone } from "./neuron";
 import { Synapse } from "./synapse";
 import { createRng, randUniform } from "./rng";
-import { NEURAL_CONFIG_DEFAUTS } from "./types";
-import type { NeuralConfig } from "./types";
+import { METABOLISME_CUMUL_ZERO, NEURAL_CONFIG_DEFAUTS } from "./types";
+import type {
+  MetabolismeCumul,
+  MetabolismePas,
+  NeuralConfig,
+} from "./types";
 
 /** État sérialisable du réseau (persistance, cf. training/persistence.ts). */
 export interface ReseauStateExport {
@@ -49,6 +53,31 @@ export class ReseauNeuronalGen3 {
 
   /** Configuration effective (remplacée uniquement par importState). */
   config: NeuralConfig;
+
+  /**
+   * INDEX INVERSE DES SYNAPSES (métabolisme cérébral, 2026-10-30) :
+   * { idSource → synapses sortantes } — la transmission devient
+   * ÉVÉNEMENTIELLE (coût ∝ spikes réels) au lieu de scanner toutes les
+   * synapses à chaque pas. Reconstruit paresseusement : le test de longueur
+   * capte TOUTE mutation topologique (genererConnexionsInitiales,
+   * importState, importStateEtendu, pushes directs du trainer/runtime).
+   */
+  private indexSortants: Map<number, Synapse[]> | null = null;
+
+  /** Longueur des synapses lors de la dernière construction de l'index. */
+  private tailleIndexee = -1;
+
+  /** Métabolisme du DERNIER pas exécuté (comptage exact, télémétrie honnête). */
+  metabolismeDernierPas: MetabolismePas = {
+    neuronesEvalues: 0,
+    neuronesReposes: 0,
+    spikes: 0,
+    transmissions: 0,
+    synapsesDenses: 0,
+  };
+
+  /** Métabolisme cumulé depuis la création / la dernière restauration. */
+  metabolismeCumul: MetabolismeCumul = { ...METABOLISME_CUMUL_ZERO };
 
   constructor(config: Partial<NeuralConfig> = {}) {
     this.config = { ...NEURAL_CONFIG_DEFAUTS, ...config };
@@ -88,13 +117,52 @@ export class ReseauNeuronalGen3 {
   }
 
   /**
+   * Index inverse paresseux : reconstruit { idSource → synapses sortantes }
+   * UNIQUEMENT quand la topologie a changé (longueur des synapses ≠ longueur
+   * indexée). Chaque liste conserve l'ordre d'insertion global — la
+   * transmission événementielle visite donc les synapses d'un même neurone
+   * dans le même ordre relatif que le scan dense historique.
+   */
+  private obtenirIndexSortants(): Map<number, Synapse[]> {
+    if (this.indexSortants && this.tailleIndexee === this.synapses.length) {
+      return this.indexSortants;
+    }
+    const index = new Map<number, Synapse[]>();
+    for (const synapse of this.synapses) {
+      const sortantes = index.get(synapse.sourceId);
+      if (sortantes) sortantes.push(synapse);
+      else index.set(synapse.sourceId, [synapse]);
+    }
+    this.indexSortants = index;
+    this.tailleIndexee = this.synapses.length;
+    return index;
+  }
+
+  /** Copie défensive du métabolisme cumulé (télémétrie / API). */
+  getMetabolisme(): MetabolismeCumul {
+    return { ...this.metabolismeCumul };
+  }
+
+  /**
    * Un pas de temps dynamique dans le cerveau. ORDRE EXACT de la source :
    *  1. Injection des entrées externes (ex : du corps sémantique) ;
-   *  2. Update de tous les neurones → collecte des spikes ;
+   *  2. Update des neurones → collecte des spikes ;
    *  3. Transmission le long des synapses dont la source a spike :
    *     la cible reçoit le poids, et la plasticité s'applique si la cible a
    *     spike dans la fenêtre (`currentTime - lastSpikeTime < plasticityWindow`)
    *     → weight = min(1, weight + learningRate).
+   *
+   * MÉTABOLISME CÉRÉBRAL (2026-10-30, fidélité préservée) — le coût suit
+   * l'ACTIVITÉ réelle et plus la TAILLE du réseau, comme un cerveau
+   * biologique (≈ 20 W pour 86 milliards de neurones) :
+   *  - un neurone d'énergie nulle SANS stimulation est resté au repos :
+   *    0 × (1 − decay) = 0 et aucun spike possible → évaluation sautée
+   *    (strictement bit-à-bit équivalent : seule sa stateHistory — non
+   *    utilisée en production — ne grossit plus) ;
+   *  - la transmission est ÉVÉNEMENTIELLE via l'index inverse : seules les
+   *    synapses des neurones spikés transmettent. Le résultat est identique
+   *    au scan dense (chaque synapse spikée transmet exactement une fois,
+   *    même poids, même plasticité ; le cumul par cible est commutatif).
    *
    * @returns Les IDs des neurones ayant spike pendant ce pas.
    */
@@ -103,30 +171,45 @@ export class ReseauNeuronalGen3 {
     currentTime: number,
   ): number[] {
     // 1. Injection des entrées externes (ex: du corps sémantique)
+    const stimules = new Set<number>();
     for (const idTexte of Object.keys(externalInputs)) {
       const neuroneId = Number(idTexte);
       const neurone = this.neurones.get(neuroneId);
       if (neurone) {
         neurone.receiveInput(externalInputs[neuroneId]);
+        stimules.add(neuroneId);
       }
     }
 
-    // 2. Propagation des signaux à travers les synapses
+    // 2. Update des neurones ACTIFS (repos biologique = coût zéro pour les
+    //    neurones silencieux non stimulés).
     const spikedNeurones: number[] = [];
+    let neuronesEvalues = 0;
+    let neuronesReposes = 0;
     for (const [id, neurone] of this.neurones) {
+      if (neurone.energy === 0 && !stimules.has(id)) {
+        neuronesReposes += 1;
+        continue;
+      }
+      neuronesEvalues += 1;
       if (neurone.updateState(currentTime)) {
         spikedNeurones.push(id);
       }
     }
 
-    // 3. Transmettre l'énergie le long des synapses
-    const spikedSet = new Set(spikedNeurones);
-    for (const synapse of this.synapses) {
-      if (spikedSet.has(synapse.sourceId)) {
+    // 3. Transmettre l'énergie le long des synapses des neurones SPICÉS
+    //    uniquement (propagation événementielle, index inverse).
+    const index = this.obtenirIndexSortants();
+    let transmissions = 0;
+    for (const idSource of spikedNeurones) {
+      const sortantes = index.get(idSource);
+      if (!sortantes) continue;
+      for (const synapse of sortantes) {
         const target = this.neurones.get(synapse.targetId);
         if (!target) continue;
         target.receiveInput(synapse.weight);
         synapse.lastActivation = currentTime;
+        transmissions += 1;
 
         // Plasticité synaptique (Renforcement si la cible s'est activée récemment)
         const timeDiff = currentTime - target.lastSpikeTime;
@@ -136,6 +219,22 @@ export class ReseauNeuronalGen3 {
         }
       }
     }
+
+    // Métabolisme : comptage EXACT du travail réel du pas.
+    this.metabolismeDernierPas = {
+      neuronesEvalues,
+      neuronesReposes,
+      spikes: spikedNeurones.length,
+      transmissions,
+      synapsesDenses: this.synapses.length,
+    };
+    this.metabolismeCumul.pas += 1;
+    this.metabolismeCumul.neuronesEvalues += neuronesEvalues;
+    this.metabolismeCumul.neuronesReposes += neuronesReposes;
+    this.metabolismeCumul.spikes += spikedNeurones.length;
+    this.metabolismeCumul.transmissions += transmissions;
+    this.metabolismeCumul.transmissionsEvitees +=
+      this.synapses.length - transmissions;
 
     return spikedNeurones;
   }
@@ -235,6 +334,18 @@ export class ReseauNeuronalGen3 {
     );
     this.learningRate = config.learningRate;
     this.config = config;
+    // Restauration = nouveau départ métabolique : les compteurs décrivent
+    // l'activité du processus courant, pas celle du cerveau restauré.
+    this.indexSortants = null;
+    this.tailleIndexee = -1;
+    this.metabolismeDernierPas = {
+      neuronesEvalues: 0,
+      neuronesReposes: 0,
+      spikes: 0,
+      transmissions: 0,
+      synapsesDenses: 0,
+    };
+    this.metabolismeCumul = { ...METABOLISME_CUMUL_ZERO };
   }
 
   /**

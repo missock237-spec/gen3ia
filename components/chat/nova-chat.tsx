@@ -12,7 +12,13 @@
  *  4. Bouton de SÉLECTION D'EFFORT (Rapide ⚡ / Équilibré 🎯 / Expert 🧠 —
  *     budget de réflexion du moteur neuronal Gen3) ;
  *  5. Bouton de RECHERCHE WEB (toggle : force une recherche réelle
- *     web.search pour le tour — champ « webSearch » de l'API).
+ *     web.search pour le tour — champ « webSearch » de l'API) ;
+ *  6. Bouton AGENT LIVE (demande du propriétaire 2026-10-30 : « le système
+ *     agent live doit passer sous le chat pour l'activer dans le chat ») —
+ *     ouvre l'agent live (vision écran/caméra + voix) EN OVERLAY DANS LE
+ *     CHAT, sans quitter la conversation. Le panneau est chargé en
+ *     LAZY (next/dynamic) : aucun octet Gemini Live ne pèse sur le chat
+ *     tant que l'utilisateur ne l'active pas (métabolisme cérébral).
  *
  * Toutes les fonctionnalités d'agents IA passent sous la commande de l'IA :
  * l'utilisateur DEMANDE en langage naturel (« crée un agent commercial
@@ -31,6 +37,7 @@
  */
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import CarteAutoApprentissage from "@/components/chat/auto-apprentissage-carte";
@@ -44,6 +51,21 @@ import { useVoiceInput } from "./use-voice-input";
 import { cancelSpeech, speakFr } from "./voice-speak";
 import { useWebGpuMedia } from "./use-webgpu-media";
 import "./nova-chat.css";
+
+/**
+ * AGENT LIVE SOUS LE CHAT (demande du propriétaire) : le panneau Gemini
+ * Live (vision écran/caméra + voix, même mécanique que /live) est chargé
+ * DYNAMIQUEMENT — chunk séparé, téléchargé uniquement à l'activation.
+ */
+const LiveGeminiPanel = dynamic(
+  () => import("@/app/live/live-gemini-panel").then((m) => m.LiveGeminiPanel),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="nova-live-chargement" role="status">Chargement de l&apos;agent live…</p>
+    ),
+  },
+);
 
 /* ================= Configuration ================= */
 
@@ -611,6 +633,9 @@ export default function NovaChat() {
   const [toast, setToast] = React.useState<{ texte: string; cle: number } | null>(null);
   const [charge, setCharge] = React.useState(false);
   const [dropActif, setDropActif] = React.useState(false);
+  /* AGENT LIVE SOUS LE CHAT : voile plein écran activable depuis le
+     composer (commande 6) — l'agent live vit DANS le chat. */
+  const [liveOuvert, setLiveOuvert] = React.useState(false);
   /* Chat voix : indicateur « lecture vocale en cours » de la réponse IA. */
   const [lectureVocale, setLectureVocale] = React.useState(false);
 
@@ -2166,6 +2191,19 @@ export default function NovaChat() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" /></svg>
                     <span className="txt-long">Recherche web</span>
                   </button>
+
+                  {/* 6) AGENT LIVE (sous le chat — demande du propriétaire :
+                      activable DANS la conversation, sans changer de page). */}
+                  <button
+                    type="button"
+                    className={`nova-pill${liveOuvert ? " actif" : ""}`}
+                    aria-pressed={liveOuvert}
+                    onClick={() => setLiveOuvert((o) => !o)}
+                    title={liveOuvert ? "Fermer l'agent live" : "Activer l'agent live (vision + voix) ici, dans le chat"}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" /></svg>
+                    <span className="txt-long">Agent Live</span>
+                  </button>
                 </div>
 
                 <div className="nova-barre-gauche" style={{ marginLeft: "auto" }}>
@@ -2249,6 +2287,43 @@ export default function NovaChat() {
       {toast ? (
         <div className="nova-toast visible" role="status" key={toast.cle}>
           {toast.texte}
+        </div>
+      ) : null}
+
+      {/* AGENT LIVE SOUS LE CHAT : voile plein écran — même panneau que /live
+          (clé API Gemini dans le sessionStorage du navigateur, jamais côté
+          serveur), fermable d'un clic sur le fond ou via la croix. */}
+      {liveOuvert ? (
+        <div
+          className="nova-live-voile"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Agent live"
+          onClick={() => setLiveOuvert(false)}
+        >
+          <div className="nova-live-panneau" onClick={(e) => e.stopPropagation()}>
+            <div className="nova-live-tete">
+              <div>
+                <p className="nova-live-titre">Agent Live — dans le chat</p>
+                <p className="nova-live-sous">
+                  Vision (écran/caméra) + voix en direct, sans quitter la conversation. Tableau de bord complet :{" "}
+                  <a href="/live" onClick={() => setLiveOuvert(false)}>/live</a>
+                </p>
+              </div>
+              <button
+                type="button"
+                className="nova-bouton-ico"
+                aria-label="Fermer l'agent live"
+                title="Fermer l'agent live"
+                onClick={() => setLiveOuvert(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="nova-live-corps">
+              <LiveGeminiPanel />
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

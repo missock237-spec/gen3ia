@@ -130,6 +130,15 @@ export class EntraineurRPIA {
    * Entraînement complet : `epoques` pas vers la cible, avec courbe
    * d'erreur. HONNÊTETÉ : le rapport ne déclare la convergence que si
    * l'erreur finale est STRICTEMENT inférieure à l'erreur initiale.
+   *
+   * MÉTABOLISME (décision mesurée du 2026-10-30) : PAS d'early-exit ici.
+   * La courbe d'erreur RPIA oscille par nature (interférence d'ondes) et
+   * les nouveaux minima apparaissent TARD (mesuré : encore en amélioration
+   * entre les époques 100 et 120 sur cible réelle ; +2.3e-2 d'erreur finale
+   * si l'on coupe après 25 époques sur cible sinusoïdale). Le budget complet
+   * d'époques EST le métabolisme correct de cette couche : chaque pas reste
+   * productif. L'économie d'énergie du cerveau est portée par la propagation
+   * événementielle du réseau (network.ts), équivalence mathématique prouvée.
    */
   entrainer(
     cible: OndeCible,

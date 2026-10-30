@@ -40,6 +40,15 @@ interface EtatCerveau {
     indiceHomeostasie: number;
     modeActuel: string;
   };
+  /** MÉTABOLISME CÉRÉBRAL : travail réel cumulé (architecture événementielle). */
+  metabolisme?: {
+    pas: number;
+    neuronesEvalues: number;
+    neuronesReposes: number;
+    spikes: number;
+    transmissions: number;
+    transmissionsEvitees: number;
+  };
   pools: Record<string, number[]>;
   hippocampe: { toursMemorises: number; fenetreMax: number };
   langage: { paires: number; pairesPersonnalisees: number; vocabulaire: number; themes: number };
@@ -120,7 +129,21 @@ interface ReponseDomaines {
 interface MessageConversation {
   role: "utilisateur" | "reseaux";
   texte: string;
-  meta?: { intention?: string; scoreResonance?: number; motsCles?: string[]; latencyMs?: number };
+  meta?: {
+    intention?: string;
+    scoreResonance?: number;
+    motsCles?: string[];
+    latencyMs?: number;
+    metabolisme?: {
+      neuronesEvalues: number;
+      neuronesReposes: number;
+      spikes: number;
+      transmissions: number;
+      synapsesDenses: number;
+      transmissionsEvitees: number;
+      tauxActivite: number;
+    };
+  };
 }
 
 interface MediaGenere {
@@ -371,6 +394,7 @@ export function NeuralConsole() {
             scoreResonance: data.reponse?.scoreResonance,
             motsCles: data.reponse?.motsCles,
             latencyMs: data.reponse?.latencyMs,
+            metabolisme: data.reponse?.metabolisme ?? undefined,
           },
         },
       ]);
@@ -497,6 +521,11 @@ export function NeuralConsole() {
             <Metrique label="Poids synaptique moyen" valeur={cerveau ? cerveau.stats.poidsMoyen.toFixed(3) : "—"} sous={cerveau ? `min ${cerveau.stats.poidsMin.toFixed(2)} · max ${cerveau.stats.poidsMax.toFixed(2)}` : undefined} />
             <Metrique label="Homéostasie" valeur={sante ? PCT(sante.indiceHomeostasie) : "—"} sous={sante ? `énergie moyenne ${sante.energieMoyenne.toFixed(3)} · ${sante.modeActuel}` : undefined} />
             <Metrique
+              label="Métabolisme cérébral"
+              valeur={cerveau?.metabolisme ? `${PCT(cerveau.metabolisme.transmissionsEvitees / Math.max(1, cerveau.metabolisme.transmissions + cerveau.metabolisme.transmissionsEvitees))} d'économie` : "—"}
+              sous={cerveau?.metabolisme ? `propagation événementielle : ${cerveau.metabolisme.transmissions.toLocaleString("fr-FR")} transmissions réelles, ${cerveau.metabolisme.transmissionsEvitees.toLocaleString("fr-FR")} évitées · ${cerveau.metabolisme.neuronesReposes.toLocaleString("fr-FR")} neurones au repos sur ${cerveau.metabolisme.pas.toLocaleString("fr-FR")} pas` : undefined}
+            />
+            <Metrique
               label="Hippocampe (mémoire court terme)"
               valeur={cerveau ? `${cerveau.hippocampe.toursMemorises}/${cerveau.hippocampe.fenetreMax}` : "—"}
               sous="Fenêtre de discussion du superviseur central"
@@ -541,6 +570,9 @@ export function NeuralConsole() {
                     <p className="g3v6-metric mt-2 text-[10px] text-[var(--g3v6-spike-text)]">
                       intention {m.meta.intention} · résonance {m.meta.scoreResonance !== undefined ? PCT(m.meta.scoreResonance) : "—"}
                       {m.meta.latencyMs !== undefined ? ` · ${m.meta.latencyMs} ms` : ""}
+                      {m.meta.metabolisme
+                        ? ` · métabolisme : ${m.meta.metabolisme.spikes.toLocaleString("fr-FR")} spikes, ${m.meta.metabolisme.transmissions.toLocaleString("fr-FR")}/${m.meta.metabolisme.synapsesDenses.toLocaleString("fr-FR")} transmissions (événementiel)`
+                        : ""}
                     </p>
                   ) : null}
                 </div>

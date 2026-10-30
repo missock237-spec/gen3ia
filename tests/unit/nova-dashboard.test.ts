@@ -154,3 +154,46 @@ describe("Exigence 5 — live agent préservé", () => {
     expect(pkg.name).toBeTruthy();
   });
 });
+
+/**
+ * Exigence 6 (demande du propriétaire, 2026-10-30) — « le système agent
+ * live doit passer sous le chat pour l'activer dans le chat » : l'agent
+ * live est activable DEPUIS le composer du chat (6e commande), en voile
+ * plein écran, SANS quitter la conversation. Le panneau Gemini Live est
+ * chargé en LAZY (next/dynamic) : aucune dépendance live dans le bundle
+ * du chat tant que l'utilisateur ne l'active pas.
+ */
+describe("Exigence 6 — l'agent live s'active DANS le chat", () => {
+  const CSS = "components/chat/nova-chat.css";
+
+  it("le composer expose la 6e commande « Agent Live » (toggle)", () => {
+    const nova = read(NOVA);
+    expect(nova).toContain("6) AGENT LIVE");
+    expect(nova).toContain('aria-pressed={liveOuvert}');
+    expect(nova).toContain('className={`nova-pill${liveOuvert ? " actif" : ""}`}');
+    expect(nova).toContain("Agent Live");
+  });
+
+  it("le panneau Gemini Live réel est embarqué en voile modal (pas une redirection)", () => {
+    const nova = read(NOVA);
+    // Chargement LAZY du VRAI panneau /live — même mécanique, zéro copie.
+    expect(nova).toContain('import("@/app/live/live-gemini-panel")');
+    expect(nova).toContain("ssr: false,");
+    // Voile modal accessible : dialog + aria-modal + fermeture.
+    expect(nova).toContain('className="nova-live-voile"');
+    expect(nova).toContain('aria-modal="true"');
+    expect(nova).toContain('aria-label="Agent live"');
+    expect(nova).toContain('aria-label="Fermer l\'agent live"');
+    expect(nova).toContain("<LiveGeminiPanel />");
+    // Lien honnête vers le tableau de bord complet.
+    expect(nova).toContain('href="/live"');
+  });
+
+  it("les styles du voile live existent (surface + responsive)", () => {
+    const css = read(CSS);
+    expect(css).toContain(".nova-live-voile");
+    expect(css).toContain(".nova-live-panneau");
+    expect(css).toContain(".nova-live-corps");
+    expect(css).toContain("@media (max-width: 640px)");
+  });
+});

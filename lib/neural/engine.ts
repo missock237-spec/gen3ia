@@ -125,6 +125,28 @@ export interface TelemetrieRPIA {
   noeudsEnergises: number;
 }
 
+/**
+ * MÉTABOLISME DU TOUR (architecture « cerveau humain ») — travail réellement
+ * effectué par le réseau pour CE tour (somme exacte des pas des cycles) :
+ * le coût suit l'activité, pas la taille du réseau. Chiffres 100 % mesurés.
+ */
+export interface MetabolismeTour {
+  /** Neurones réellement évalués (décroissance + test de seuil). */
+  neuronesEvalues: number;
+  /** Neurones restés au repos (coût zéro — énergie nulle sans stimulation). */
+  neuronesReposes: number;
+  /** Spikes émis pendant les cycles du tour. */
+  spikes: number;
+  /** Transmissions synaptiques réelles (sources spikées uniquement). */
+  transmissions: number;
+  /** Synapses qu'un scan dense AURAIT visitées (référence d'économie). */
+  synapsesDenses: number;
+  /** Transmissions évitées par la propagation événementielle. */
+  transmissionsEvitees: number;
+  /** Part du scan dense réellement payée (0–1, moins c'est mieux). */
+  tauxActivite: number;
+}
+
 /** Handlers de streaming — signature identique à lib/ai/router.ts. */
 export interface NeuralStreamHandlers {
   onDelta: (delta: string) => void | Promise<void>;
@@ -355,6 +377,7 @@ export class NeuralEngine {
 
     const resonances: Record<string, number> = {};
     let dernierRapport: CycleReport | undefined;
+    const rapports: CycleReport[] = [];
     // Fenêtre neuronale : identifiant unique — le Cortex v2 (effecteur)
     // remet ses énergies columnnaires à zéro à chaque nouvelle fenêtre
     // (miroir de l'adaptation (d), cf. effecteur-cortex.ts).
@@ -367,6 +390,7 @@ export class NeuralEngine {
           : { intensite: 0 },
         { prompt, __fenetreNeuronale: fenetre },
       );
+      rapports.push(dernierRapport);
       this.majResonancesMax(
         resonances,
         dernierRapport.spikedNeurones,
@@ -400,6 +424,7 @@ export class NeuralEngine {
       Date.now() - debut,
       resonance?.telemetrie,
       domaine,
+      this.sommerMetabolismeTour(rapports),
     );
   }
 
@@ -444,6 +469,7 @@ export class NeuralEngine {
     // conversationnel (bruit) — les télémétries réelles restent dans raw.
     const resonances: Record<string, number> = {};
     let dernierRapport: CycleReport | undefined;
+    const rapports: CycleReport[] = [];
     // Fenêtre neuronale (cf. generate) — le Cortex v2 suit chaque fenêtre.
     const fenetre = nouvelleFenetreNeuronale();
     // Injection en VOLÉE UNIQUE (cycle 1) puis propagation libre — cf. trainer.
@@ -454,6 +480,7 @@ export class NeuralEngine {
           : { intensite: 0 },
         { prompt, __fenetreNeuronale: fenetre },
       );
+      rapports.push(dernierRapport);
       this.majResonancesMax(
         resonances,
         dernierRapport.spikedNeurones,
@@ -496,6 +523,7 @@ export class NeuralEngine {
       Date.now() - debut,
       resonance?.telemetrie,
       domaine,
+      this.sommerMetabolismeTour(rapports),
     );
   }
 
@@ -525,6 +553,7 @@ export class NeuralEngine {
 
     const resonances: Record<string, number> = {};
     let dernierRapport: CycleReport | undefined;
+    const rapports: CycleReport[] = [];
     // Fenêtre neuronale (cf. generate) — le Cortex v2 suit chaque fenêtre.
     const fenetre = nouvelleFenetreNeuronale();
     // Injection en VOLÉE UNIQUE (cycle 1) puis propagation libre — cf. trainer.
@@ -535,6 +564,7 @@ export class NeuralEngine {
           : { intensite: 0 },
         { prompt, __fenetreNeuronale: fenetre },
       );
+      rapports.push(dernierRapport);
       this.majResonancesMax(
         resonances,
         dernierRapport.spikedNeurones,
@@ -567,6 +597,7 @@ export class NeuralEngine {
       Date.now() - debut,
       resonance?.telemetrie,
       domaine,
+      this.sommerMetabolismeTour(rapports),
     );
   }
 
@@ -720,6 +751,43 @@ export class NeuralEngine {
     }
   }
 
+  /**
+   * Somme exacte du métabolisme des cycles du tour (données mesurées par le
+   * réseau à chaque pas). null si aucun rapport ne porte de métabolisme
+   * (intégrations minimales) — jamais un chiffre inventé.
+   */
+  private sommerMetabolismeTour(rapports: CycleReport[]): MetabolismeTour | null {
+    let somme: MetabolismeTour | null = null;
+    for (const rapport of rapports) {
+      const pas = rapport.metabolisme;
+      if (!pas) continue;
+      if (!somme) {
+        somme = {
+          neuronesEvalues: 0,
+          neuronesReposes: 0,
+          spikes: 0,
+          transmissions: 0,
+          synapsesDenses: 0,
+          transmissionsEvitees: 0,
+          tauxActivite: 0,
+        };
+      }
+      somme.neuronesEvalues += pas.neuronesEvalues;
+      somme.neuronesReposes += pas.neuronesReposes;
+      somme.spikes += pas.spikes;
+      somme.transmissions += pas.transmissions;
+      somme.synapsesDenses += pas.synapsesDenses;
+    }
+    if (!somme) return null;
+    somme.transmissionsEvitees =
+      somme.synapsesDenses - somme.transmissions;
+    somme.tauxActivite =
+      somme.synapsesDenses > 0
+        ? Math.round((somme.transmissions / somme.synapsesDenses) * 1e4) / 1e4
+        : 0;
+    return somme;
+  }
+
   /** Construit la réponse conforme AIResponse à partir du décodage réel. */
   private construireReponse(
     prompt: string,
@@ -728,6 +796,7 @@ export class NeuralEngine {
     latencyMs: number,
     telemetrieRPIA?: TelemetrieRPIA,
     domaine?: { label: string; nom: string; nomEn: string | null; score: number; source: string } | null,
+    metabolismeTour?: MetabolismeTour | null,
   ): NeuralAIResponse {
     // Estimation honnête documentée : un SNN ne compte pas de tokens de LLM,
     // on rapporte les mots réels du prompt et de la réponse.
@@ -764,6 +833,10 @@ export class NeuralEngine {
         // réellement exécutée pour ce tour (null sans couche — jamais un
         // chiffre inventé).
         rpia: telemetrieRPIA ?? null,
+        // MÉTABOLISME CÉRÉBRAL : travail réel du réseau pour ce tour
+        // (architecture événementielle — le coût suit l'activité, pas la
+        // taille du réseau ; null si absent, jamais un chiffre inventé).
+        metabolisme: metabolismeTour ?? null,
         // COUCHE DES 18 DOMAINES : domaine reconnu pour ce tour (détection
         // lexicale sur les mots-clés réels des datasets — null si aucun).
         ...(domaine

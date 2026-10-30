@@ -112,6 +112,54 @@ export interface Effecteur {
 }
 
 /**
+ * MÉTABOLISME D'UN PAS DE TEMPS (architecture « cerveau humain », 2026-10-30)
+ * — comptage EXACT du travail réellement effectué par le réseau pendant un
+ * pas, au lieu d'un coût implicite proportionnel à la TAILLE du réseau.
+ *
+ * Le cerveau biologique ne paie que l'activité : un neurone au repos sans
+ * stimulation consomme quasi rien (0 × decay = 0), et seules les synapses
+ * des neurones qui spikent transmettent. Ces compteurs rendent ce principe
+ * mesurable et vérifiable (télémétrie honnête, jamais estimée).
+ */
+export interface MetabolismePas {
+  /** Neurones réellement évalués (décroissance + test de seuil). */
+  neuronesEvalues: number;
+  /** Neurones restés au repos : énergie nulle sans stimulation → évaluation sautée (coût zéro). */
+  neuronesReposes: number;
+  /** Spikes émis pendant le pas. */
+  spikes: number;
+  /** Transmissions synaptiques réelles (synapses de sources spikées uniquement). */
+  transmissions: number;
+  /**
+   * Taille du scan « dense » de référence (toutes les synapses) — le rapport
+   * transmissions / synapsesDenses mesure l'économie événementielle réelle.
+   */
+  synapsesDenses: number;
+}
+
+/** Métabolisme cumulé depuis la création (ou la restauration) du réseau. */
+export interface MetabolismeCumul {
+  /** Pas de temps exécutés. */
+  pas: number;
+  neuronesEvalues: number;
+  neuronesReposes: number;
+  spikes: number;
+  transmissions: number;
+  /** Transmissions évitées par la propagation événementielle (scan dense − réel). */
+  transmissionsEvitees: number;
+}
+
+/** Métabolisme cumulé zéro (état initial / restauration). */
+export const METABOLISME_CUMUL_ZERO: MetabolismeCumul = {
+  pas: 0,
+  neuronesEvalues: 0,
+  neuronesReposes: 0,
+  spikes: 0,
+  transmissions: 0,
+  transmissionsEvitees: 0,
+};
+
+/**
  * Rapport d'un cycle complet du noyau central.
  * Reprise typée du dictionnaire Python, enrichie de la liste exacte des
  * neurones spike (`spikedNeurones`) nécessaire au décodage côté moteur.
@@ -127,6 +175,8 @@ export interface CycleReport {
   neuronesActifs: number;
   /** Instantané des métriques de santé après homéostasie. */
   sante: HealthMetrics;
+  /** Métabolisme réel du pas (architecture événementielle — null si absent). */
+  metabolisme?: MetabolismePas;
   /** Actions réellement déclenchées par le corps sémantique. */
   actionsCorps: EffectorActionResult[];
 }

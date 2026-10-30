@@ -41,6 +41,9 @@ export async function GET(request: NextRequest) {
       constellation: snapshot.echantillonSynapses,
       energies: snapshot.energies,
       sante: { ...runtime.noyau.metriquesSante },
+      // MÉTABOLISME CÉRÉBRAL (architecture événementielle) : travail réel
+      // cumulé du cerveau — le coût suit l'activité, pas la taille du réseau.
+      metabolisme: runtime.reseau.getMetabolisme(),
       pools: Object.fromEntries(runtime.espace.outputPools),
       hippocampe: {
         toursMemorises: runtime.hippocampe.getHistory().length,
