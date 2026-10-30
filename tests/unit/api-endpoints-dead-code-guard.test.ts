@@ -71,7 +71,7 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 79 endpoints orphelins au 2026-10-30 (it.37 ;     */
+/* Baseline honnête — 79 endpoints orphelins au 2026-10-30 (it.38 ;     */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
@@ -85,8 +85,11 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* doublons morts /orchestrator* SUPPRIMÉS (it.37 — la lib du workflow  */
 /* d'approbation reste vivante via agent/chat/approve, ads/*,           */
 /* messaging ; les entrées HTTP n'avaient AUCUN appelant, l'UI passe     */
-/* par /api/team/[teamId]/orchestrator). Classés par motif.             */
-/* Réviser à chaque suppression/ajout d'UI.                             */
+/* par /api/team/[teamId]/orchestrator), puis RECULS DE /skills* et     */
+/* /knowledge* vers « pre-ui-roadmap » (it.38 — API de données de       */
+/* l'agent, UI classée LOT 6 du plan plateforme, décision produit        */
+/* documentée ; total inchangé, classification corrigée). Classés par    */
+/* motif. Réviser à chaque suppression/ajout d'UI.                       */
 /* ------------------------------------------------------------------ */
 
 const BASELINE_ORPHELINS: Record<string, string[]> = {
@@ -148,13 +151,33 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/v1/essaim/manifeste",
     "/v1/wallet",
   ],
+  /** Endpoints PRÉ-UI (roadmap LOT 6 du plan plateforme) : la LIB et la
+   *  porte HTTP sont DÉJÀ construites et vivantes côté agent (tool
+   *  knowledge.search enregistrée dans le runtime, catalog capacités),
+   *  l'UI de gestion n'est PAS ENCORE ÉCHUE — décision produit documentée
+   *  (docs/plan-plateforme-enterprise.md : « Skills backend réels, zéro
+   *  UI — pas de @Skills dans le composer », « UI Knowledge Spaces »
+   *  classée LOT 6). Constat it.38 : 4 canaux vérifiés (aucun fetch
+   *  frontend, aucun fetch serveur, SDK hors scope, tests = unitaires lib)
+   *  — ce ne sont NI des candidats UI imminents NI des doublons morts :
+   *  ce sont les API de données de l'agent, en attente de leur LOT. */
+  "pre-ui-roadmap": [
+    "/knowledge",
+    "/knowledge/triggers",
+    "/knowledge/triggers/[id]",
+    "/skills",
+    "/skills/create",
+    "/skills/import",
+  ],
   /** Vrais orphelins connus : fonctionnalités livrées SANS surface
    *  utilisateur détectée. Chaque entrée est un candidat UI (ou un
    *  doublon mort à supprimer). Ex. : /business/* (lot métier sans
    *  écran), /settings/export-data (constat it.27, câblé it.29),
    *  /extensions/{installed,licenses,purchases,usage} (lot marketplace,
-   *  câblé it.31 sur /extensions), /skills* … ; les doublons morts
-   *  /orchestrator* ont été SUPPRIMÉS à l'it.37 (voir verrou dédié) */
+   *  câblé it.31 sur /extensions) … ; les doublons morts
+   *  /orchestrator* ont été SUPPRIMÉS à l'it.37 (voir verrou dédié) ;
+   *  les 6 /skills* + /knowledge* sont partis en « pre-ui-roadmap »
+   *  à l'it.38 (décision produit LOT 6, voir cette catégorie). */
   "orphelin-connu": [
     "/admin/billing/reconcile",
     "/admin/extensions/reviews",
@@ -174,17 +197,11 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/developer/simulation",
     "/files/workspaces",
     "/ia/auto-apprentissage/rapport",
-    "/knowledge",
-    "/knowledge/triggers",
-    "/knowledge/triggers/[id]",
     "/media/professeur-statut",
     "/monde/stats",
     "/neural/evolve",
     "/observability/org",
     "/provisioning/intent",
-    "/skills",
-    "/skills/create",
-    "/skills/import",
     "/storage/r2-diagnostic",
     "/tools/execute",
     "/training/hub/inspect",
@@ -334,5 +351,51 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
         `${rel} est VIVANT (consommé par l'UI ou d'autres entrées HTTP) — sa disparition est une régression, pas un nettoyage`,
       ).toBe(true);
     }
+  });
+
+  it("les 6 API /skills* + /knowledge* restent des portes PRE-UI vivantes (it.38) — ni supprimées ni câblées en avance de phase", () => {
+    // Constat it.38 : ces 6 endpoints sont les API de DONNÉES de l'agent.
+    // Leur lib est consommée par le runtime agent (tool knowledge.search
+    // dans lib/agents/tool-resolver, catalog capacités) et la porte HTTP
+    // est déjà construite (Zod, rate-limit, org-scoping). L'UI de gestion
+    // est classée LOT 6 du plan plateforme — pas encore échue. Décision
+    // produit documentée dans docs/plan-plateforme-enterprise.md.
+    const portesPreUi = [
+      "app/api/skills/route.ts",
+      "app/api/skills/create/route.ts",
+      "app/api/skills/import/route.ts",
+      "app/api/knowledge/route.ts",
+      "app/api/knowledge/triggers/route.ts",
+      "app/api/knowledge/triggers/[id]/route.ts",
+    ];
+    for (const rel of portesPreUi) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est la porte de données de l'agent (LOT 6) — la supprimer détruirait l'infrastructure pré-UI`,
+      ).toBe(true);
+    }
+    // La chaîne lib côté agent doit rester vivante (sinon l'outil agent
+    // knowledge.search et le catalog capacités se cassent).
+    const chainesLib = [
+      "lib/knowledge/ingestion.ts",
+      "lib/skills/repository.ts",
+      "lib/capabilities/catalog.ts",
+    ];
+    for (const rel of chainesLib) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est le socle agent des API pre-UI — sa disparition est une régression fonctionnelle`,
+      ).toBe(true);
+    }
+    // La décision produit doit rester documentée (anti-dérive : si le plan
+    // change, mettre à jour CE verrou ET la catégorie pre-ui-roadmap).
+    const plan = readFileSync(
+      path.join(RACINE, "docs/plan-plateforme-enterprise.md"),
+      "utf8",
+    );
+    expect(
+      plan.includes("UI Knowledge Spaces"),
+      "Le plan plateforme doit toujours référencer l'UI Knowledge Spaces (LOT 6) — catégorie pre-ui-roadmap à réviser sinon",
+    ).toBe(true);
   });
 });
