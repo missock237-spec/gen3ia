@@ -204,11 +204,24 @@ export class NoyauCentralGen3 {
 
     // 3. Transit des ordres vers le corps sémantique (Écoute des résonances)
     const actionsDeclenchees: EffectorActionResult[] = [];
+    // MÉTABOLISME DES EFFECTEURS : le coût réel du corps est MESURÉ (dureeMs
+    // produits par les effecteurs, ex. Tool OS) — une action sans durée
+    // mesurée compte dans `actions` mais jamais dans `coutMesureMs`
+    // (télémétrie honnête, aucun chiffre inventé).
+    let coutMesureMs = 0;
+    let actionsMesurees = 0;
     for (const effecteur of this.effecteurs) {
       const resultatsEffecteur = effecteur.evaluerEtExecuter(
         spikedNeurons,
         contexte,
       );
+      for (const action of resultatsEffecteur) {
+        const duree = action.dureeMs;
+        if (typeof duree === "number" && Number.isFinite(duree) && duree >= 0) {
+          coutMesureMs += duree;
+          actionsMesurees += 1;
+        }
+      }
       if (resultatsEffecteur.length > 0) {
         actionsDeclenchees.push(...resultatsEffecteur);
       }
@@ -223,6 +236,11 @@ export class NoyauCentralGen3 {
       neuronesActifs: spikedNeurons.length,
       sante: { ...this.metriquesSante },
       metabolisme,
+      metabolismeEffecteurs: {
+        actions: actionsDeclenchees.length,
+        actionsMesurees,
+        coutMesureMs,
+      },
       actionsCorps: actionsDeclenchees,
     };
   }

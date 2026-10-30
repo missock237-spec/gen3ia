@@ -37,6 +37,34 @@ describe("NeuralEngine — couche des domaines", () => {
     expect(raw.domaine).toBeUndefined();
   });
 
+  it("métabolisme des effecteurs : raw.metabolisme.effecteurs porte le coût réel du corps", async () => {
+    const runtime = getNeuralRuntime();
+    const reponse = await runtime.engine.generate({
+      task: "chat",
+      messages: [{ role: "user", content: "Bonjour, présente-toi brièvement." }],
+    });
+
+    const raw = reponse.raw as {
+      metabolisme?: {
+        effecteurs?: {
+          actions: number;
+          actionsMesurees: number;
+          coutMesureMs: number;
+        } | null;
+      };
+    };
+    expect(raw.metabolisme).toBeDefined();
+    // VERROU MÉTABOLISME DU CORPS : le champ est toujours présent (le noyau
+    // produit l'instantané à chaque cycle), le coût est 100 % mesuré —
+    // actionsMesurees ne peut jamais dépasser actions, et aucun chiffre
+    // n'est inventé (0 action → 0 coût).
+    expect(raw.metabolisme!.effecteurs).toBeDefined();
+    const corps = raw.metabolisme!.effecteurs!;
+    expect(corps.actions).toBeGreaterThanOrEqual(0);
+    expect(corps.actionsMesurees).toBeLessThanOrEqual(corps.actions);
+    expect(corps.coutMesureMs).toBeGreaterThanOrEqual(0);
+  });
+
   afterAll(() => {
     resetBrain();
   });

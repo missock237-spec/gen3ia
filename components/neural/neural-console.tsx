@@ -70,7 +70,7 @@ interface EtatNeural {
   sante: { cyclesTotaux: number; energieMoyenne: number; indiceHomeostasie: number; modeActuel: string };
   horlogeVirtuelle: number;
   poolsSortie: Record<string, number[]>;
-  outils: Array<{ nom: string; description: string; utilisations: number; succesHistorique: number }>;
+  outils: Array<{ nom: string; description: string; utilisations: number; succesHistorique: number; coutCumulMs: number; coutDernierMs: number }>;
   competences: Array<{ nom: string; version: string; description: string }>;
   historiqueEntrainement: Array<{ epochs: number; samples: number; accuracyTrain: number; accuracyTest: number; startedAt: string }>;
   dernierJobEntrainement: JobEntrainement | null;
@@ -142,6 +142,11 @@ interface MessageConversation {
       synapsesDenses: number;
       transmissionsEvitees: number;
       tauxActivite: number;
+      effecteurs?: {
+        actions: number;
+        actionsMesurees: number;
+        coutMesureMs: number;
+      } | null;
     };
   };
 }
@@ -526,6 +531,11 @@ export function NeuralConsole() {
               sous={cerveau?.metabolisme ? `propagation événementielle : ${cerveau.metabolisme.transmissions.toLocaleString("fr-FR")} transmissions réelles, ${cerveau.metabolisme.transmissionsEvitees.toLocaleString("fr-FR")} évitées · ${cerveau.metabolisme.neuronesReposes.toLocaleString("fr-FR")} neurones au repos sur ${cerveau.metabolisme.pas.toLocaleString("fr-FR")} pas` : undefined}
             />
             <Metrique
+              label="Métabolisme du corps (outils)"
+              valeur={etat ? `${etat.outils.reduce((s, o) => s + (o.coutCumulMs || 0), 0).toLocaleString("fr-FR")} ms mesurés` : "—"}
+              sous={etat ? `${etat.outils.reduce((s, o) => s + o.utilisations, 0).toLocaleString("fr-FR")} exécutions réelles sur ${etat.outils.length} outils — coût 100 % mesuré, jamais estimé` : undefined}
+            />
+            <Metrique
               label="Hippocampe (mémoire court terme)"
               valeur={cerveau ? `${cerveau.hippocampe.toursMemorises}/${cerveau.hippocampe.fenetreMax}` : "—"}
               sous="Fenêtre de discussion du superviseur central"
@@ -572,6 +582,9 @@ export function NeuralConsole() {
                       {m.meta.latencyMs !== undefined ? ` · ${m.meta.latencyMs} ms` : ""}
                       {m.meta.metabolisme
                         ? ` · métabolisme : ${m.meta.metabolisme.spikes.toLocaleString("fr-FR")} spikes, ${m.meta.metabolisme.transmissions.toLocaleString("fr-FR")}/${m.meta.metabolisme.synapsesDenses.toLocaleString("fr-FR")} transmissions (événementiel)`
+                        : ""}
+                      {m.meta.metabolisme?.effecteurs
+                        ? ` · corps : ${m.meta.metabolisme.effecteurs.coutMesureMs.toLocaleString("fr-FR")} ms mesurés / ${m.meta.metabolisme.effecteurs.actions.toLocaleString("fr-FR")} action(s)`
                         : ""}
                     </p>
                   ) : null}

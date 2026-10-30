@@ -160,6 +160,23 @@ export const METABOLISME_CUMUL_ZERO: MetabolismeCumul = {
 };
 
 /**
+ * MÉTABOLISME DU CORPS SÉMANTIQUE (extension effecteurs, 2026-10-30) — le
+ * cerveau ne paie pas seulement ses pas de calcul, il paie aussi les actions
+ * réellement déclenchées par ses effecteurs (Tool OS, moteurs média...).
+ * Coût 100 % MESURÉ (dureeMs réels d'exécution), jamais estimé : une action
+ * dont la durée n'a pas été mesurée compte dans `actions` mais pas dans
+ * `coutMesureMs` (télémétrie honnête).
+ */
+export interface MetabolismeEffecteurs {
+  /** Actions réellement déclenchées par le corps sémantique ce cycle. */
+  actions: number;
+  /** Actions dont la durée d'exécution a été réellement mesurée. */
+  actionsMesurees: number;
+  /** Somme réelle des durées mesurées (ms) des actions mesurables. */
+  coutMesureMs: number;
+}
+
+/**
  * Rapport d'un cycle complet du noyau central.
  * Reprise typée du dictionnaire Python, enrichie de la liste exacte des
  * neurones spike (`spikedNeurones`) nécessaire au décodage côté moteur.
@@ -177,6 +194,8 @@ export interface CycleReport {
   sante: HealthMetrics;
   /** Métabolisme réel du pas (architecture événementielle — null si absent). */
   metabolisme?: MetabolismePas;
+  /** Métabolisme réel du corps sémantique (coût mesuré des effecteurs). */
+  metabolismeEffecteurs: MetabolismeEffecteurs;
   /** Actions réellement déclenchées par le corps sémantique. */
   actionsCorps: EffectorActionResult[];
 }

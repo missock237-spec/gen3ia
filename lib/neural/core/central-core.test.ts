@@ -157,4 +157,57 @@ describe("NoyauCentralGen3 — executerCycle", () => {
     expect(rapport.actionsCorps[0].type).toBe("TEST");
     expect(rapport.actionsCorps[0].status).toBe("SUCCES");
   });
+
+  it("métabolisme des effecteurs : le coût mesuré des actions remonte dans le rapport", () => {
+    const noyau = monterNoyau();
+    noyau.enregistrerEffecteur({
+      nom: "effecteur_mesure",
+      evaluerEtExecuter: () => [
+        { type: "TEST", status: "SUCCES", dureeMs: 12 },
+        { type: "TEST", status: "SUCCES", dureeMs: 5 },
+      ],
+    });
+
+    const rapport = noyau.executerCycle();
+
+    expect(rapport.actionsCorps).toHaveLength(2);
+    // Somme exacte des durées réellement mesurées — jamais estimée.
+    expect(rapport.metabolismeEffecteurs).toEqual({
+      actions: 2,
+      actionsMesurees: 2,
+      coutMesureMs: 17,
+    });
+  });
+
+  it("métabolisme des effecteurs : action sans durée mesurée → comptée, jamais estimée", () => {
+    const noyau = monterNoyau();
+    noyau.enregistrerEffecteur({
+      nom: "effecteur_sans_duree",
+      evaluerEtExecuter: () => [
+        { type: "TEST", status: "SUCCES", details: "pas de dureeMs" },
+      ],
+    });
+
+    const rapport = noyau.executerCycle();
+
+    expect(rapport.actionsCorps).toHaveLength(1);
+    expect(rapport.metabolismeEffecteurs).toEqual({
+      actions: 1,
+      actionsMesurees: 0,
+      coutMesureMs: 0,
+    });
+  });
+
+  it("métabolisme des effecteurs : cycle sans action → coût nul", () => {
+    const noyau = monterNoyau();
+
+    const rapport = noyau.executerCycle();
+
+    expect(rapport.actionsCorps).toHaveLength(0);
+    expect(rapport.metabolismeEffecteurs).toEqual({
+      actions: 0,
+      actionsMesurees: 0,
+      coutMesureMs: 0,
+    });
+  });
 });

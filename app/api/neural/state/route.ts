@@ -57,6 +57,9 @@ export async function GET(request: NextRequest) {
           description: outil.description,
           utilisations: outil.utilisations,
           succesHistorique: outil.succesHistorique,
+          // MÉTABOLISME DES EFFECTEURS : coût réel mesuré par outil (ms).
+          coutCumulMs: outil.coutCumulMs,
+          coutDernierMs: outil.coutDernierMs,
         }),
       ),
       competences: Array.from(

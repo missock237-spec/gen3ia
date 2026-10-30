@@ -163,4 +163,54 @@ describe("SystemeExploitationOutils", () => {
     expect(actions).toEqual([]);
     expect(toolOs.registreOutils.get("double")?.utilisations).toBe(0);
   });
+
+  it("métabolisme des effecteurs : le coût cumulé est mesuré par outil (succès)", () => {
+    const espace = new EspaceFiltreResonant();
+    const toolOs = new SystemeExploitationOutils(espace);
+    // Outil qui travaille réellement ≥ 3 ms (attente active : horloge murale,
+    // jamais simulée) — la borne basse du coût mesuré est donc déterministe.
+    toolOs.enregistrerOutil(
+      "travaille",
+      () => {
+        const t0 = Date.now();
+        while (Date.now() - t0 < 3) {
+          /* consommation réelle */
+        }
+        return "fait";
+      },
+      "travaille au moins 3 ms",
+    );
+
+    toolOs.executerEnSandbox("travaille", {});
+    const apres1 = toolOs.registreOutils.get("travaille");
+    expect(apres1?.coutDernierMs).toBeGreaterThanOrEqual(3);
+    expect(apres1?.coutCumulMs).toBe(apres1?.coutDernierMs);
+
+    toolOs.executerEnSandbox("travaille", {});
+    const apres2 = toolOs.registreOutils.get("travaille");
+    expect(apres2?.coutDernierMs).toBeGreaterThanOrEqual(3);
+    // Cumul exact : somme des deux durées mesurées (jamais estimée).
+    expect(apres2?.coutCumulMs).toBeGreaterThanOrEqual(6);
+  });
+
+  it("métabolisme des effecteurs : le coût d'un échec est aussi mesuré", () => {
+    const espace = new EspaceFiltreResonant();
+    const toolOs = new SystemeExploitationOutils(espace);
+    toolOs.enregistrerOutil(
+      "echoue",
+      () => {
+        throw new Error("panne simulée de test");
+      },
+      "échoue toujours",
+    );
+
+    const resultats = toolOs.executerEnSandbox("echoue", {});
+
+    // Un outil qui échoue coûte du temps réel aussi : la durée est mesurée
+    // et remontée dans l'action + cumulée dans le registre.
+    expect(resultats[0]["dureeMs"]).toBeGreaterThanOrEqual(0);
+    const outil = toolOs.registreOutils.get("echoue");
+    expect(outil?.coutDernierMs).toBe(resultats[0]["dureeMs"]);
+    expect(outil?.coutCumulMs).toBe(outil?.coutDernierMs);
+  });
 });

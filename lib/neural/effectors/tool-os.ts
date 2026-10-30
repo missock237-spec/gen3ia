@@ -31,6 +31,10 @@ export interface OutilEnregistre {
   description: string;
   utilisations: number;
   succesHistorique: number;
+  /** Coût cumulé RÉELLEMENT mesuré des exécutions (ms) — métabolisme des effecteurs. */
+  coutCumulMs: number;
+  /** Durée de la dernière exécution mesurée (ms). */
+  coutDernierMs: number;
 }
 
 /** Garde de type : une commande d'outil valide possède un `nom` string. */
@@ -81,6 +85,8 @@ export class SystemeExploitationOutils implements Effecteur {
       description,
       utilisations: 0,
       succesHistorique: 1.0,
+      coutCumulMs: 0,
+      coutDernierMs: 0,
     });
     console.log(`[NEURAL] [Tool OS] Outil '${nomOutil}' enregistré et intégré au Corps Sémantique.`);
   }
@@ -135,9 +141,12 @@ export class SystemeExploitationOutils implements Effecteur {
 
     outilInfo.utilisations += 1;
 
+    // MÉTABOLISME DES EFFECTEURS : la durée est mesurée pour TOUTE exécution
+    // (succès comme échec) — un outil qui échoue coûte du temps réel aussi.
+    const debutExec = Date.now();
+
     try {
       // Exécution sécurisée de la fonction de l'outil
-      const debutExec = Date.now();
       const resultatExecution = outilInfo.execute(args);
       const dureeMs = Date.now() - debutExec;
 
@@ -146,6 +155,8 @@ export class SystemeExploitationOutils implements Effecteur {
         1.0,
         outilInfo.succesHistorique * 1.05,
       );
+      outilInfo.coutDernierMs = dureeMs;
+      outilInfo.coutCumulMs += dureeMs;
 
       const feedback: EffectorActionResult = actionEffecteur(
         CANAL_EXECUTER_OUTIL_OS,
@@ -161,10 +172,13 @@ export class SystemeExploitationOutils implements Effecteur {
       );
       return [feedback];
     } catch (erreur: unknown) {
+      const dureeMs = Date.now() - debutExec;
       outilInfo.succesHistorique = Math.max(
         0.1,
         outilInfo.succesHistorique * 0.8,
       );
+      outilInfo.coutDernierMs = dureeMs;
+      outilInfo.coutCumulMs += dureeMs;
       const message =
         erreur instanceof Error ? erreur.message : String(erreur);
       const feedback: EffectorActionResult = actionEffecteur(
@@ -173,6 +187,7 @@ export class SystemeExploitationOutils implements Effecteur {
         {
           outil: nomOutil,
           erreur: message,
+          dureeMs,
         },
       );
       console.log(

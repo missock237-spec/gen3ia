@@ -8,7 +8,7 @@ import type {
   AIUsage,
 } from "@/lib/ai/models";
 
-import type { CycleReport } from "./core/types";
+import type { CycleReport, MetabolismeEffecteurs } from "./core/types";
 import type { NoyauCentralGen3 } from "./core/central-core";
 import type { EspaceFiltreResonant } from "./core/resonant-space";
 import { encodeText } from "./encoding/text-encoder";
@@ -145,6 +145,12 @@ export interface MetabolismeTour {
   transmissionsEvitees: number;
   /** Part du scan dense réellement payée (0–1, moins c'est mieux). */
   tauxActivite: number;
+  /**
+   * Métabolisme du CORPS SÉMANTIQUE pour ce tour (coût réel mesuré des
+   * effecteurs déclenchés) — null si aucun rapport ne le porte (jamais un
+   * chiffre inventé).
+   */
+  effecteurs: MetabolismeEffecteurs | null;
 }
 
 /** Handlers de streaming — signature identique à lib/ai/router.ts. */
@@ -759,6 +765,34 @@ export class NeuralEngine {
   private sommerMetabolismeTour(rapports: CycleReport[]): MetabolismeTour | null {
     let somme: MetabolismeTour | null = null;
     for (const rapport of rapports) {
+      // Métabolisme du corps sémantique : agrégé indépendamment du pas réseau
+      // (un effecteur déclenché sans pas réseau mesurable reste un coût réel).
+      const corps = rapport.metabolismeEffecteurs;
+      if (corps) {
+        if (!somme) {
+          somme = {
+            neuronesEvalues: 0,
+            neuronesReposes: 0,
+            spikes: 0,
+            transmissions: 0,
+            synapsesDenses: 0,
+            transmissionsEvitees: 0,
+            tauxActivite: 0,
+            effecteurs: null,
+          };
+        }
+        if (!somme.effecteurs) {
+          somme.effecteurs = {
+            actions: 0,
+            actionsMesurees: 0,
+            coutMesureMs: 0,
+          };
+        }
+        somme.effecteurs.actions += corps.actions;
+        somme.effecteurs.actionsMesurees += corps.actionsMesurees;
+        somme.effecteurs.coutMesureMs += corps.coutMesureMs;
+      }
+
       const pas = rapport.metabolisme;
       if (!pas) continue;
       if (!somme) {
@@ -770,6 +804,7 @@ export class NeuralEngine {
           synapsesDenses: 0,
           transmissionsEvitees: 0,
           tauxActivite: 0,
+          effecteurs: null,
         };
       }
       somme.neuronesEvalues += pas.neuronesEvalues;
