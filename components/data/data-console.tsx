@@ -11,8 +11,10 @@ import { EmptyState, LoadingState } from "@/components/shells/states";
  *
  * Destination « Gestion des datasets » (restructuration des parcours) :
  * liste des datasets par projet d'entraînement, import de fichier réel
- * (csv/json/jsonl/txt — parsé côté serveur : stats, doublons, PII) et
- * import depuis les hubs Hugging Face / Kaggle (recherche réelle).
+ * (csv/json/jsonl/txt — parsé côté serveur : stats, doublons, PII),
+ * import depuis les hubs Hugging Face / Kaggle (recherche réelle) et
+ * INSPECTION RÉELLE d'un jeu du hub avant import (fichiers, splits
+ * déclarés, licence, échantillon de lignes — it.48).
  *
  * Le hachage #projet-<id> (posé par le Laboratoire) pré-sélectionne le
  * projet concerné : les deux espaces forment un même parcours cohérent.
@@ -60,6 +62,28 @@ interface HubResult {
   downloads?: number;
   likes?: number;
   [key: string]: unknown;
+}
+
+/** Contrat de la porte /api/training/hub/inspect (it.48) : le détail
+ *  remonté par l'API du hub — tout ce qui n'est pas exposé est null et
+ *  affiché comme tel (honnêteté de la porte, restituée côté console). */
+interface HubDetail {
+  provider: string;
+  ref: string;
+  name: string;
+  description: string;
+  sizeBytes: number | null;
+  downloads: number | null;
+  likes: number | null;
+  license: string | null;
+  lastModified: string | null;
+  tags: string[];
+  files: Array<{ name: string; sizeBytes: number; downloadable: boolean }>;
+  splits: Array<{ name: string; rows: number | null }>;
+  columns: string[];
+  previewRows: Array<Record<string, unknown>>;
+  notes: string[];
+  inspectedAt: string;
 }
 
 const SPLITS = ["train", "validation", "test", "unassigned"] as const;
@@ -116,6 +140,12 @@ export function DataConsole() {
   const [hubBusy, setHubBusy] = useState(false);
   const [hubError, setHubError] = useState<string | null>(null);
   const [hubSearched, setHubSearched] = useState(false);
+
+  // Inspection hub (it.48)
+  const [inspect, setInspect] = useState<HubDetail | null>(null);
+  const [inspectBusy, setInspectBusy] = useState(false);
+  const [inspectError, setInspectError] = useState<string | null>(null);
+  const [inspecte, setInspecte] = useState<string | null>(null);
 
   // Le Laboratoire renvoie #projet-<id> pour pré-sélectionner le projet.
   useEffect(() => {
@@ -241,6 +271,39 @@ export function DataConsole() {
       setActionError(error instanceof Error ? error.message : "L'import depuis le hub a échoué.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  /* Inspection réelle du jeu — GET /api/training/hub/inspect (it.48) :
+   * fichiers, splits déclarés, licence et échantillon de lignes remontés
+   * par l'API du hub — avant de décider d'importer. À la demande (clic),
+   * jamais au montage : le rate-limit de la porte reste disponible. */
+  const inspecterDuHub = async (ref: string) => {
+    if (!ref.trim() || inspectBusy) return;
+    setInspectBusy(true);
+    setInspectError(null);
+    setInspect(null);
+    setInspecte(ref);
+    try {
+      const params = new URLSearchParams({ provider, ref });
+      const response = await authFetch(`/api/training/hub/inspect?${params.toString()}`, { cache: "no-store" });
+      const data = await readJsonSafely<{ dataset?: HubDetail; error?: string }>(response);
+      if (response.status === 401) {
+        setInspectError("Connectez-vous pour inspecter un jeu du hub.");
+        return;
+      }
+      if (response.status === 429) {
+        setInspectError("Trop d'inspections : patientez un instant.");
+        return;
+      }
+      if (!response.ok || !data?.dataset) {
+        throw new Error(data?.error ?? `L'inspection a échoué (erreur ${response.status}).`);
+      }
+      setInspect(data.dataset);
+    } catch (error) {
+      setInspectError(error instanceof Error ? error.message : "Inspection indisponible (réseau).");
+    } finally {
+      setInspectBusy(false);
     }
   };
 
@@ -426,18 +489,128 @@ export function DataConsole() {
                         {String(result.title ?? result.name ?? ref)}
                         {result.downloads != null && <span className="ml-2 text-xs text-[var(--g3-faint)]">{String(result.downloads)} téléchargements</span>}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => void importerDuHub(ref)}
-                        disabled={busy || !selectedProject || !ref}
-                        className="inline-flex min-h-9 items-center rounded-full bg-[var(--g3-primary-soft)] px-4 py-1.5 text-xs font-semibold text-[var(--g3-primary-strong)] transition enabled:hover:brightness-105 disabled:opacity-50"
-                      >
-                        Importer dans le projet
-                      </button>
+                      <span className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void inspecterDuHub(ref)}
+                          disabled={inspectBusy || !ref}
+                          className="inline-flex min-h-9 items-center rounded-full border border-[var(--g3-border)] px-4 py-1.5 text-xs font-semibold transition enabled:hover:border-[var(--g3-primary-border)] disabled:opacity-50"
+                        >
+                          {inspectBusy && inspecte === ref ? "Inspection…" : "Inspecter"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void importerDuHub(ref)}
+                          disabled={busy || !selectedProject || !ref}
+                          className="inline-flex min-h-9 items-center rounded-full bg-[var(--g3-primary-soft)] px-4 py-1.5 text-xs font-semibold text-[var(--g3-primary-strong)] transition enabled:hover:brightness-105 disabled:opacity-50"
+                        >
+                          Importer dans le projet
+                        </button>
+                      </span>
                     </li>
                   );
                 })}
               </ul>
+            )}
+            {inspectError && (
+              <p className="mt-3 text-sm text-[var(--g3-danger-strong)]" role="alert">{inspectError}</p>
+            )}
+            {inspect && (
+              <div className="mt-4 rounded-2xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4 text-sm" role="status">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="font-semibold text-[var(--g3-text)]">{inspect.name}</h4>
+                  <span className="text-xs text-[var(--g3-faint)]">{SOURCE_LABEL[inspect.provider] ?? inspect.provider} · {inspect.ref}</span>
+                </div>
+                {inspect.description && <p className="mt-1 text-xs text-[var(--g3-muted)]">{inspect.description}</p>}
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
+                  <div>
+                    <dt className="text-[var(--g3-faint)]">Licence</dt>
+                    <dd className="text-[var(--g3-text)]">{inspect.license ?? "non exposé par le hub"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--g3-faint)]">Taille</dt>
+                    <dd className="text-[var(--g3-text)]">{inspect.sizeBytes == null ? "non exposée" : formatBytesFr(inspect.sizeBytes)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--g3-faint)]">Téléchargements</dt>
+                    <dd className="text-[var(--g3-text)]">{inspect.downloads ?? "non exposés"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--g3-faint)]">Dernière modification</dt>
+                    <dd className="text-[var(--g3-text)]">{formatDateFr(inspect.lastModified)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--g3-faint)]">J&apos;aime</dt>
+                    <dd className="text-[var(--g3-text)]">{inspect.likes ?? "non exposés"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--g3-faint)]">Tags</dt>
+                    <dd className="text-[var(--g3-text)]">{inspect.tags.length > 0 ? inspect.tags.join(", ") : "—"}</dd>
+                  </div>
+                </dl>
+
+                <h5 className="mt-3 text-xs font-semibold uppercase tracking-wide text-[var(--g3-muted)]">Splits déclarés</h5>
+                {inspect.splits.length === 0 ? (
+                  <p className="text-xs text-[var(--g3-muted)]">Le hub n&apos;a pas exposé de splits pour ce jeu.</p>
+                ) : (
+                  <ul className="mt-1 flex flex-wrap gap-2">
+                    {inspect.splits.map((item) => (
+                      <li key={item.name} className="rounded-full bg-[var(--g3-surface)] px-2.5 py-0.5 text-xs text-[var(--g3-text)]">
+                        {item.name}{item.rows == null ? "" : ` · ${item.rows} lignes`}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <h5 className="mt-3 text-xs font-semibold uppercase tracking-wide text-[var(--g3-muted)]">Fichiers ({inspect.files.length})</h5>
+                {inspect.files.length === 0 ? (
+                  <p className="text-xs text-[var(--g3-muted)]">Aucun fichier exposé par le hub.</p>
+                ) : (
+                  <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto text-xs">
+                    {inspect.files.map((file) => (
+                      <li key={file.name} className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-[var(--g3-text)]">{file.name}</span>
+                        <span className="flex shrink-0 items-center gap-2 text-[var(--g3-faint)]">
+                          {formatBytesFr(file.sizeBytes)}
+                          <span className={file.downloadable ? "text-[var(--g3-success-strong)]" : "text-[var(--g3-warning-strong)]"}>
+                            {file.downloadable ? "importable" : "format non géré"}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {inspect.columns.length > 0 && (
+                  <p className="mt-3 text-xs text-[var(--g3-muted)]">Colonnes : {inspect.columns.join(", ")}</p>
+                )}
+
+                <h5 className="mt-3 text-xs font-semibold uppercase tracking-wide text-[var(--g3-muted)]">Échantillon réel</h5>
+                {inspect.previewRows.length === 0 ? (
+                  <p className="text-xs text-[var(--g3-muted)]">Aucun échantillon remonté (voir limites ci-dessous).</p>
+                ) : (
+                  <ul className="mt-1 space-y-1.5 text-xs">
+                    {inspect.previewRows.map((row, index) => (
+                      <li key={index} className="rounded-xl bg-[var(--g3-surface)] px-3 py-2 text-[var(--g3-text)]">
+                        {Object.entries(row).map(([colonne, valeur]) => (
+                          <span key={colonne} className="mr-2 inline-block">
+                            <span className="text-[var(--g3-faint)]">{colonne} :</span> {String(valeur ?? "")}
+                          </span>
+                        ))}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {inspect.notes.length > 0 && (
+                  <ul className="mt-3 space-y-1 text-xs text-[var(--g3-muted)]">
+                    {inspect.notes.map((note, index) => (
+                      <li key={index}>· {note}</li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-3 text-[11px] text-[var(--g3-faint)]">Inspection générée le {formatDateFr(inspect.inspectedAt)} — données remontées telles quelles par le hub, rien n&apos;est inventé.</p>
+              </div>
             )}
           </section>
 

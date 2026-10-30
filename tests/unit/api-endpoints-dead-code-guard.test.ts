@@ -71,7 +71,7 @@ function inventaireSurfaceUtilisateur(): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Baseline honnête — 70 endpoints orphelins au 2026-10-30 (it.47 ;      */
+/* Baseline honnête — 69 endpoints orphelins au 2026-10-30 (it.48 ;      */
 /* 103 à l'it.29, puis settings/export-data, tool-consents et           */
 /* memory/consent câblés (it.29-30), le lot marketplace                 */
 /* extensions/{installed,purchases,licenses,usage} câblé sur /extensions*/
@@ -153,6 +153,12 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* résumés par domaine, instantané daté, 4 tests structurels + verrou    */
 /* bidirectionnel) — l'entrée sort du registre (pre-ui-roadmap 13→12,    */
 /* total 71→70).                                                         */
+/* Puis it.48 : INSPECTION RÉELLE DES JEUX DU HUB — la porte             */
+/* /training/hub/inspect est CÂBLÉE dans la console Data (bouton         */
+/* « Inspecter » sur chaque résultat de la recherche : licence, splits   */
+/* déclarés, fichiers, échantillon réel, limites honnêtes restituées,    */
+/* instantané daté — 4 tests structurels + verrou bidirectionnel) —      */
+/* l'entrée sort du registre (pre-ui-roadmap 12→11, total 70→69).        */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -267,7 +273,9 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *   - /training/hub/inspect : inspection RÉELLE des jeux du hub
    *     (fichiers, splits, licence, échantillon) — la console Data
    *     (components/data/data-console) consomme déjà /training/hub/search
-   *     (sibling) ; l'inspection est l'étape suivante de la même surface. */
+   *     (sibling) ; l'inspection est l'étape suivante de la même surface.
+   *     it.48 : SORT de cette catégorie — la console Data consomme
+   *     désormais la porte (bouton « Inspecter » + panneau détaillé). */
   "pre-ui-roadmap": [
     "/agents/generate",
     "/developer/simulation",
@@ -279,7 +287,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/skills",
     "/skills/create",
     "/skills/import",
-    "/training/hub/inspect",
     "/workspace/tasks/clarify",
   ],
   /** VIDÉE à l'it.45 (audit 4 canaux du 6e lot) : les 10 dernières
@@ -947,7 +954,7 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     const changelog = readFileSync(path.join(RACINE, "docs/journal/CHANGELOG.md"), "utf8");
     expect(changelog.includes("post-SaaS"), "Le CHANGELOG doit continuer à documenter la vague concepts post-SaaS (/business/pulse #7, /provisioning/intent #4) — motifs candidat-ui-documente à réviser sinon").toBe(true);
     const dataConsole = readFileSync(path.join(RACINE, "components/data/data-console.tsx"), "utf8");
-    expect(dataConsole.includes("/training/hub/search"), "La console Data doit rester câblée au sibling /training/hub/search — surface naturelle d'/training/hub/inspect à réviser sinon").toBe(true);
+    expect(dataConsole.includes("/training/hub/search"), "La console Data doit rester câblée au sibling /training/hub/search (l'inspection hub/inspect est câblée depuis l'it.48) — régression sinon").toBe(true);
     const testBusiness = readFileSync(path.join(RACINE, "tests/unit/business-dashboard.test.ts"), "utf8");
     expect(testBusiness.includes("/business/pulse reste"), "Le test studio métier doit continuer à documenter l'exclusion volontaire de /business/pulse (mission POST coûteuse) — motif candidat-ui-documente à réviser sinon").toBe(true);
     const consoleNeurale = readFileSync(path.join(RACINE, "components/neural/neural-console.tsx"), "utf8");
@@ -999,6 +1006,29 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     // catégorie).
     for (const [categorie, endpoints] of Object.entries(BASELINE_ORPHELINS)) {
       expect(endpoints, `/ia/auto-apprentissage/rapport est CÂBLÉE depuis l'it.47 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain("/ia/auto-apprentissage/rapport");
+    }
+  });
+
+  it("l'inspection des jeux du hub reste câblée dans la console Data (it.48) — porte vivante, registre à jour", () => {
+    // it.48 : la porte /training/hub/inspect est consommée par la console
+    // Data (bouton « Inspecter » sur chaque résultat de la recherche hub :
+    // licence, splits déclarés, fichiers, échantillon réel, limites
+    // honnêtes restituées, instantané daté) — l'entrée a quitté
+    // pre-ui-roadmap (70→69).
+    const dataConsole = readFileSync(path.join(RACINE, "components/data/data-console.tsx"), "utf8");
+    expect(dataConsole.includes("`/api/training/hub/inspect?${params.toString()}`"), "La console Data doit interroger la porte inspect (provider + ref) — régression du câblage it.48").toBe(true);
+    expect(dataConsole.includes("non exposé par le hub"), "Les champs non exposés par le hub doivent rester signalés comme tels (honnêteté) — régression it.48").toBe(true);
+    expect(dataConsole.includes("Inspection générée le"), "L'inspection doit rester datée (instantané, pas données vivantes) — régression it.48").toBe(true);
+    // La porte reste réelle (contrat GET inspectHubDataset).
+    expect(existsSync(path.join(RACINE, "app/api/training/hub/inspect/route.ts")), "La porte /api/training/hub/inspect est le socle de l'inspection des jeux — sa suppression est une régression").toBe(true);
+    // Les libs servies restent vivantes.
+    expect(existsSync(path.join(RACINE, "lib/training/hub/index.ts")), "lib/training/hub est la façade hub unifiée (search + inspect + import) — sa disparition est une régression fonctionnelle").toBe(true);
+    // Le test structurel du composant reste en place.
+    expect(existsSync(path.join(RACINE, "components/data/data-hub-inspect.test.ts")), "Le test structurel de l'inspection doit rester en place — il verrouille le contrat UI↔porte").toBe(true);
+    // Registre : l'entrée est sortie (et n'est revenue dans aucune autre
+    // catégorie).
+    for (const [categorie, endpoints] of Object.entries(BASELINE_ORPHELINS)) {
+      expect(endpoints, `/training/hub/inspect est CÂBLÉE depuis l'it.48 — elle ne doit plus figurer dans « ${categorie} »`).not.toContain("/training/hub/inspect");
     }
   });
 });
