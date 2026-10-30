@@ -93,7 +93,15 @@ function inventaireSurfaceUtilisateur(): string[] {
 /* (it.39 — la connexion Composio vivante passe par la porte GÉNÉRIQUE  */
 /* /api/integrations/composio/connect appelée par nova-chat +           */
 /* connectors-panel ; /ads/generate + /ads/publish restent des candidats */
-/* UI documentés — guide-technique). Classés par motif.                  */
+/* UI documentés — guide-technique), puis AFFINAGE DE CLASSIFICATION     */
+/* (it.40 — total inchangé 81 : les 4 /admin/* audités 4 canaux (0       */
+/* appelant UI, libs toutes vivantes) et /ads/{generate,publish} sont    */
+/* reclassés en 2 catégories explicites : « conserver-motive » (outils   */
+/* ops sans UI par conception : reconcile paiement Chariow, modération   */
+/* avis, migration Firestore→R2) et « candidat-ui-documente » (API au    */
+/* contrat produit : mfa-requirement dans enterprise-security.md,        */
+/* generate/publish dans guide-technique — sous-statut it.39 élevé).     */
+/* Classés par motif.                                                    */
 /* Réviser à chaque suppression/ajout d'UI.                              */
 /* ------------------------------------------------------------------ */
 
@@ -182,14 +190,57 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
    *  câblé it.31 sur /extensions) … ; les doublons morts
    *  /orchestrator* ont été SUPPRIMÉS à l'it.37 (voir verrou dédié) ;
    *  les 6 /skills* + /knowledge* sont partis en « pre-ui-roadmap »
-   *  à l'it.38 (décision produit LOT 6, voir cette catégorie). */
-  "orphelin-connu": [
+   *  à l'it.38 (décision produit LOT 6, voir cette catégorie) ; les
+   *  4 /admin/* + /ads/{generate,publish} sont partis en
+   *  « conserver-motive » / « candidat-ui-documente » à l'it.40
+   *  (classification affinée, voir ces catégories). */
+  /** Outils d'EXPLOITATION (ops) invoqués par un opérateur authentifié
+   *  (console, curl, cron VPS) — PAS D'UI par conception : l'utilisateur
+   *  final n'a pas à déclencher un rapprochement de paiements ni une
+   *  migration de stockage. Constat it.40 : audit 4 canaux des 4
+   *  /admin/* — 0 fetch frontend, 0 fetch serveur, docs internes
+   *  vérifiées, 0 test d'intégration UI ; chaque lib servie est vivante
+   *  (webhook Chariow, repository extensions 16+ portes, moteur r2fs,
+   *  mfa lecture via session+topup). Motivations :
+   *   - /admin/billing/reconcile : rattrapage des livraisons Chariow
+   *     coincées (Task 104-b) — le chemin de RECOUVREMENT du canal de
+   *     paiement unique (règle plateforme) ; le webhook temps réel
+   *     (/webhooks/chariow, vivant) ne couvre pas les baux expirés ;
+   *     documenté docs/analyse-projet.md (rapprochement périodique).
+   *   - /admin/extensions/reviews : modération hide/show des avis de la
+   *     marketplace (repository vivant, signalements /reports existants)
+   *     — l'UI admin de modération nécessiterait d'abord une route GET
+   *     de liste (inexistante) : chantier documenté, pas une perte.
+   *   - /admin/migrate-firestore-r2 : SEUL lecteur Firestore restant du
+   *     projet (Task 111-b) — pont de migration 1:1 vers R2, relançable
+   *     et idempotent, invocation ponctuelle opérateur par conception.
+   *  Verrou dédié it.40 en fin de fichier (routes + libs + docs). */
+  "conserver-motive": [
     "/admin/billing/reconcile",
     "/admin/extensions/reviews",
     "/admin/migrate-firestore-r2",
+  ],
+  /** API documentées au CONTRAT PRODUIT sans appelant dans le dépôt :
+   *  les supprimer serait un breaking change contractuel (leçon it.39
+   *  §8.3 — « les API documentées ne sont pas du code mort »). Le câblage
+   *  UI reste leur destin naturel — l'entrée sortira de la baseline le
+   *  jour où une surface utilisateur consommera la porte.
+   *   - /admin/security/mfa-requirement : politique MFA par compte
+   *     (Task 63), documentée DEUX FOIS dans docs/enterprise-security.md
+   *     (tableau des endpoints + « jamais par l'utilisateur ») ; lib
+   *     mfa vivante côté lecture (auth/session, billing/topup) ; garde
+   *     anti-locked-out : refuse tant qu'Identity Platform est inactif.
+   *   - /ads/generate + /ads/publish : sous-statut implicite it.39
+   *     élevé en catégorie explicite — guide-technique.md les documente
+   *     (« Génération de contenu publicitaire multi-canal », « Publication
+   *     de campagnes ») avec flux payant complet (wallet, media-meter,
+   *     action-approvals). */
+  "candidat-ui-documente": [
     "/admin/security/mfa-requirement",
     "/ads/generate",
     "/ads/publish",
+  ],
+  "orphelin-connu": [
     "/agents/generate",
     "/ai/generate",
     "/business/pulse",
@@ -441,5 +492,61 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
         `${rel} est VIVANT (UI générique, infra OAuth, ou candidat UI documenté) — sa disparition est une régression, pas un nettoyage`,
       ).toBe(true);
     }
+  });
+
+  it("les 4 outils ops /admin/* restent vivants avec leurs libs et leurs docs (it.40) — outils d'exploitation, pas du code mort", () => {
+    // Constat it.40 : audit 4 canaux des 4 /admin/* — 0 fetch frontend,
+    // 0 fetch serveur, docs vérifiées (analyse-projet, enterprise-security),
+    // 0 test d'intégration UI. Ce sont des outils d'EXPLOITATION invoqués
+    // par un opérateur authentifié (console/curl/cron VPS) : pas d'UI par
+    // conception, pas des doublons morts. Leurs libs servies sont toutes
+    // vivantes : /webhooks/chariow (porte temps réel du paiement),
+    // repository extensions (16+ portes), moteur r2fs (chemin de données),
+    // lib mfa (lecture via auth/session + billing/topup).
+    const outilsOps = [
+      "app/api/admin/billing/reconcile/route.ts",
+      "app/api/admin/extensions/reviews/route.ts",
+      "app/api/admin/migrate-firestore-r2/route.ts",
+      "app/api/admin/security/mfa-requirement/route.ts",
+    ];
+    for (const rel of outilsOps) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est un OUTIL OPS documenté (catégorie conserver-motive / candidat-ui-documente) — sa suppression détruirait une capacité d'exploitation (recouvrement paiement, modération, migration, politique MFA)`,
+      ).toBe(true);
+    }
+    // Les libs servies par ces outils doivent rester vivantes.
+    const libsServies = [
+      "lib/billing/chariow-delivery.ts",
+      "lib/extensions/repository.ts",
+      "lib/r2fs/store.ts",
+      "lib/security/mfa.ts",
+      "lib/security/admin-access.ts",
+    ];
+    for (const rel of libsServies) {
+      expect(
+        existsSync(path.join(RACINE, rel)),
+        `${rel} est le socle d'un outil ops /admin/* — sa disparition est une régression fonctionnelle`,
+      ).toBe(true);
+    }
+    // Anti-dérive documentaire : les docs qui justifient la classification
+    // doivent continuer à référencer les outils (sinon, réviser les
+    // catégories conserver-motive / candidat-ui-documente ET ce verrou).
+    const analyseProjet = readFileSync(
+      path.join(RACINE, "docs/analyse-projet.md"),
+      "utf8",
+    );
+    expect(
+      analyseProjet.includes("billing/reconcile"),
+      "docs/analyse-projet.md doit toujours documenter le rapprochement Chariow — catégorie conserver-motive à réviser sinon",
+    ).toBe(true);
+    const docSecurite = readFileSync(
+      path.join(RACINE, "docs/enterprise-security.md"),
+      "utf8",
+    );
+    expect(
+      docSecurite.includes("mfa-requirement"),
+      "docs/enterprise-security.md doit toujours documenter la politique MFA admin — catégorie candidat-ui-documente à réviser sinon",
+    ).toBe(true);
   });
 });
