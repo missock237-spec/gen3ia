@@ -1,0 +1,439 @@
+{
+  "session": "campagne-substrat-ecole-it69",
+  "date": "2026-10-31T21:46:00.463Z",
+  "environnement": "serveur-local",
+  "demandeProprietaire": "entraîne gen3 dans tous les domaines, continue jusqu'au niveau requis (it.65) — depuis tes propres serveurs locaux, 1 million de données par domaine, questions dans le cadre (instruction raffinée)",
+  "parametres": {
+    "colonnes": 8388608,
+    "facteurElargissement": 8,
+    "fraisParDomaine": 100000,
+    "offsetBijection": 30000000,
+    "cyclesParEchantillon": 3,
+    "tailleLot": 2000,
+    "lrBoost": 0.15,
+    "graine": 20261101,
+    "horlogeSonde": 90000000000,
+    "seuilAreteSaturee": 0.999,
+    "budgetPoidsSortants": 6,
+    "homoeostasie": true,
+    "formatTexte": "Q: <question> R: <réponse charte> — bijection texte offset 30M+ (jamais vue it.63/65/66/67/68), génération paresseuse lot par lot"
+  },
+  "memoire": {
+    "avantAllocation": {
+      "rss": 96,
+      "external": 4.7,
+      "arrayBuffers": 2.3
+    },
+    "apresAllocation": {
+      "rss": 897.9,
+      "external": 980.7,
+      "arrayBuffers": 978.3
+    },
+    "plafondRssMo": 2600,
+    "picRssMo": 1407.2
+  },
+  "sources": {
+    "generateur": "lib/gen3/generateur-datasets.ts — paireGenere (bijection texte, espace ≥ 141,9 M/domaine, offset anti-rejoue)",
+    "mecanique": "lib/neural/training/entrainement-ondes.ts — entrainerDomainesParOndes (EOD it.57/63 inchangée)",
+    "substrat": "lib/neural/core/v2/cortex-columnnaire.ts — CortexColumnnaire (homéostasie it.67/68 activée)"
+  },
+  "entrainement": {
+    "echantillonsTotaux": 1900000,
+    "dureeMs": 271943,
+    "horlogeFinale": 5700000,
+    "metabolisme": {
+      "evaluees": 329976083,
+      "reposes": 47814735623917,
+      "transmissions": 255831600,
+      "ms": 82364.618,
+      "normalisations": 24147
+    },
+    "mesuresStabilite": [
+      {
+        "bloc": 1,
+        "echantillons": 190000,
+        "transmissions": 25815132,
+        "transmissionsCumul": 25815132,
+        "aretesSaturees": 686925,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 542,
+        "normalisationsCumul": 542,
+        "rssMo": 1212.6
+      },
+      {
+        "bloc": 2,
+        "echantillons": 380000,
+        "transmissions": 24891336,
+        "transmissionsCumul": 50706468,
+        "aretesSaturees": 1530943,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 1999,
+        "normalisationsCumul": 2541,
+        "rssMo": 1240.7
+      },
+      {
+        "bloc": 3,
+        "echantillons": 570000,
+        "transmissions": 24813720,
+        "transmissionsCumul": 75520188,
+        "aretesSaturees": 1934669,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2533,
+        "normalisationsCumul": 5074,
+        "rssMo": 1241
+      },
+      {
+        "bloc": 4,
+        "echantillons": 760000,
+        "transmissions": 24914232,
+        "transmissionsCumul": 100434420,
+        "aretesSaturees": 2123612,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2784,
+        "normalisationsCumul": 7858,
+        "rssMo": 1241.5
+      },
+      {
+        "bloc": 5,
+        "echantillons": 950000,
+        "transmissions": 25941300,
+        "transmissionsCumul": 126375720,
+        "aretesSaturees": 2230092,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2945,
+        "normalisationsCumul": 10803,
+        "rssMo": 1242
+      },
+      {
+        "bloc": 6,
+        "echantillons": 1140000,
+        "transmissions": 25690104,
+        "transmissionsCumul": 152065824,
+        "aretesSaturees": 2291069,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2715,
+        "normalisationsCumul": 13518,
+        "rssMo": 1242.3
+      },
+      {
+        "bloc": 7,
+        "echantillons": 1330000,
+        "transmissions": 27114972,
+        "transmissionsCumul": 179180796,
+        "aretesSaturees": 2325500,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2890,
+        "normalisationsCumul": 16408,
+        "rssMo": 1243.5
+      },
+      {
+        "bloc": 8,
+        "echantillons": 1520000,
+        "transmissions": 25679268,
+        "transmissionsCumul": 204860064,
+        "aretesSaturees": 2342926,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2584,
+        "normalisationsCumul": 18992,
+        "rssMo": 1243.5
+      },
+      {
+        "bloc": 9,
+        "echantillons": 1710000,
+        "transmissions": 26058180,
+        "transmissionsCumul": 230918244,
+        "aretesSaturees": 2351531,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2711,
+        "normalisationsCumul": 21703,
+        "rssMo": 1243.4
+      },
+      {
+        "bloc": 10,
+        "echantillons": 1900000,
+        "transmissions": 24913356,
+        "transmissionsCumul": 255831600,
+        "aretesSaturees": 2355593,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2444,
+        "normalisationsCumul": 24147,
+        "rssMo": 1243.4
+      }
+    ]
+  },
+  "bilan": {
+    "criteres": {
+      "c1_donnees_fraises_19_domaines": {
+        "valeur": 19,
+        "sur": 19,
+        "seuil": 100000,
+        "atteint": true
+      },
+      "c2_renforts_positifs": {
+        "valeur": 19,
+        "sur": 19,
+        "atteint": true
+      },
+      "c3_gain_trace": {
+        "valeur": 14,
+        "sur": 19,
+        "atteint": false
+      },
+      "c4_stabilite": {
+        "ratioTransmissionsFinDebut": 0.965,
+        "seuil": 3,
+        "aretesSatureesFin": 2355593,
+        "poidsMaxFin": 1,
+        "listeAttentePlafonnee": true,
+        "normalisationsTotales": 24147,
+        "atteint": true
+      }
+    },
+    "limitesHonnetes": [
+      "la comparaison avec it.66/68 (13/19 à 2^20) porte sur le PROTOCOLE identique (graine, cycles, lots, lr, sondes formule it.66/68) avec une matière fraîche DÉCALÉE (offset 30M vs 10M) — les textes diffèrent, le rôle des sondes (textes entraînés début/fin) est identique",
+      "la trace reste une mesure interne du substrat sparse-colonne — elle ne prétend pas mesurer une qualité linguistique externe",
+      "l'élargissement ×8 est mesuré sur le serveur local (mémoire réelle télémétrée) ; le runtime de production reste 2^20 — la portée de cette campagne est la PREUVE de discrimination, pas un déploiement mémoire",
+      "les réponses de gen3 en production viennent du PONT VOCATION — ces campagnes renforcent le substrat neuronal, elles ne remplacent pas le pont (rôles distincts, it.66)"
+    ]
+  },
+  "parDomaine": [
+    {
+      "id": "recherche-web",
+      "label": "Recherche web",
+      "bande": 1,
+      "echantillonsFrais": 100000,
+      "renforts": 52992055,
+      "annulations": 52991945,
+      "resonanceMoyenne": 0.0008282042271798716,
+      "traceAvant": 3.365633388753625,
+      "traceApres": 3.047182805568391,
+      "gainTrace": 0.9053816781562284
+    },
+    {
+      "id": "controle-donnees",
+      "label": "Contrôle de données",
+      "bande": 4,
+      "echantillonsFrais": 100000,
+      "renforts": 52948010,
+      "annulations": 52947990,
+      "resonanceMoyenne": 0.0008458400424830577,
+      "traceAvant": 2.806560696769404,
+      "traceApres": 3.5534181361767043,
+      "gainTrace": 1.2661112728710975
+    },
+    {
+      "id": "redaction-texte",
+      "label": "Rédaction de texte",
+      "bande": 5,
+      "echantillonsFrais": 100000,
+      "renforts": 53004043,
+      "annulations": 53003957,
+      "resonanceMoyenne": 0.000833267440928371,
+      "traceAvant": 3.277266767988438,
+      "traceApres": 3.32768454312049,
+      "gainTrace": 1.0153840925079767
+    },
+    {
+      "id": "analyse-documents",
+      "label": "Analyse de documents",
+      "bande": 1,
+      "echantillonsFrais": 100000,
+      "renforts": 52848014,
+      "annulations": 52847986,
+      "resonanceMoyenne": 0.0008199447565219806,
+      "traceAvant": 2.877785844009598,
+      "traceApres": 3.292692752068409,
+      "gainTrace": 1.1441757415418807
+    },
+    {
+      "id": "generation-code",
+      "label": "Génération de code",
+      "bande": 3,
+      "echantillonsFrais": 100000,
+      "renforts": 53264095,
+      "annulations": 53263905,
+      "resonanceMoyenne": 0.0009519302496411276,
+      "traceAvant": 2.7977988609892503,
+      "traceApres": 3.461291085490497,
+      "gainTrace": 1.2371479357406872
+    },
+    {
+      "id": "analyse-donnees",
+      "label": "Analyse de données",
+      "bande": 3,
+      "echantillonsFrais": 100000,
+      "renforts": 52808013,
+      "annulations": 52807987,
+      "resonanceMoyenne": 0.00078605446859919,
+      "traceAvant": 3.1934741470925947,
+      "traceApres": 3.4648869261279525,
+      "gainTrace": 1.0849898156471558
+    },
+    {
+      "id": "cybersecurite",
+      "label": "Cybersécurité",
+      "bande": 0,
+      "echantillonsFrais": 100000,
+      "renforts": 53732015,
+      "annulations": 53731985,
+      "resonanceMoyenne": 0.0010808888225618879,
+      "traceAvant": 3.0088163805926595,
+      "traceApres": 3.378766283904309,
+      "gainTrace": 1.1229552942139922
+    },
+    {
+      "id": "medecine-sante",
+      "label": "Médecine et santé",
+      "bande": 1,
+      "echantillonsFrais": 100000,
+      "renforts": 52867857,
+      "annulations": 52868143,
+      "resonanceMoyenne": 0.0008158035357790358,
+      "traceAvant": 3.033209634764532,
+      "traceApres": 3.344546244883481,
+      "gainTrace": 1.1026426286368822
+    },
+    {
+      "id": "commerce-economie",
+      "label": "Commerce et économie",
+      "bande": 6,
+      "echantillonsFrais": 100000,
+      "renforts": 52959995,
+      "annulations": 52960005,
+      "resonanceMoyenne": 0.0008303154087867163,
+      "traceAvant": 3.252498526482951,
+      "traceApres": 3.3750889599201406,
+      "gainTrace": 1.0376911572561882
+    },
+    {
+      "id": "langue-communication",
+      "label": "Langue et communication",
+      "bande": 6,
+      "echantillonsFrais": 100000,
+      "renforts": 53771990,
+      "annulations": 53772010,
+      "resonanceMoyenne": 0.0010284411446057464,
+      "traceAvant": 3.020818310023384,
+      "traceApres": 3.3982414957226483,
+      "gainTrace": 1.1249407104184106
+    },
+    {
+      "id": "ingenierie-industrie",
+      "label": "Ingénierie et industrie",
+      "bande": 2,
+      "echantillonsFrais": 100000,
+      "renforts": 54792272,
+      "annulations": 54791728,
+      "resonanceMoyenne": 0.0013841268885230282,
+      "traceAvant": 3.7152911765634062,
+      "traceApres": 3.4737771560214044,
+      "gainTrace": 0.9349945915234027
+    },
+    {
+      "id": "art-creation-multimedia",
+      "label": "Art et création multimédia",
+      "bande": 0,
+      "echantillonsFrais": 100000,
+      "renforts": 53911911,
+      "annulations": 53912089,
+      "resonanceMoyenne": 0.001158074506779117,
+      "traceAvant": 3.343388132209612,
+      "traceApres": 3.4130355013015445,
+      "gainTrace": 1.0208313741443782
+    },
+    {
+      "id": "agriculture-environnement",
+      "label": "Agriculture et environnement",
+      "bande": 7,
+      "echantillonsFrais": 100000,
+      "renforts": 53992074,
+      "annulations": 53991926,
+      "resonanceMoyenne": 0.0010814219053470809,
+      "traceAvant": 3.5483753043167487,
+      "traceApres": 3.426867259189876,
+      "gainTrace": 0.9657567098443467
+    },
+    {
+      "id": "droit-administration",
+      "label": "Droit et administration",
+      "bande": 2,
+      "echantillonsFrais": 100000,
+      "renforts": 53628213,
+      "annulations": 53627787,
+      "resonanceMoyenne": 0.0010378731607034617,
+      "traceAvant": 3.143238937048847,
+      "traceApres": 3.4127523977529997,
+      "gainTrace": 1.0857438667889485
+    },
+    {
+      "id": "education-recherche",
+      "label": "Éducation et recherche",
+      "bande": 1,
+      "echantillonsFrais": 100000,
+      "renforts": 53876019,
+      "annulations": 53875981,
+      "resonanceMoyenne": 0.0011193498988964095,
+      "traceAvant": 3.309506173680829,
+      "traceApres": 3.397878038301672,
+      "gainTrace": 1.0267024323216645
+    },
+    {
+      "id": "transport-immobilier",
+      "label": "Transport et immobilier",
+      "bande": 2,
+      "echantillonsFrais": 100000,
+      "renforts": 54120052,
+      "annulations": 54119948,
+      "resonanceMoyenne": 0.0012048437064284632,
+      "traceAvant": 3.429782653826399,
+      "traceApres": 3.4173467456208684,
+      "gainTrace": 0.996374141028541
+    },
+    {
+      "id": "sciences-humaines-sociales",
+      "label": "Sciences humaines et sociales",
+      "bande": 1,
+      "echantillonsFrais": 100000,
+      "renforts": 54943891,
+      "annulations": 54944109,
+      "resonanceMoyenne": 0.001433105545984353,
+      "traceAvant": 3.113410534476166,
+      "traceApres": 3.4071968379625557,
+      "gainTrace": 1.0943615691644788
+    },
+    {
+      "id": "ia-specialisee-emergente",
+      "label": "Domaines spécialisés et émergents en IA",
+      "bande": 4,
+      "echantillonsFrais": 100000,
+      "renforts": 54431957,
+      "annulations": 54432043,
+      "resonanceMoyenne": 0.0012583966475424651,
+      "traceAvant": 3.731910268023791,
+      "traceApres": 3.3554411137498033,
+      "gainTrace": 0.8991215953128089
+    },
+    {
+      "id": "apprentissage-entre-ia",
+      "label": "Apprentissage autonome avec d'autres IA",
+      "bande": 3,
+      "echantillonsFrais": 100000,
+      "renforts": 54363820,
+      "annulations": 54364180,
+      "resonanceMoyenne": 0.0013053839644445483,
+      "traceAvant": 3.1964649798645417,
+      "traceApres": 3.3167750298872853,
+      "gainTrace": 1.037638469615845
+    }
+  ]
+}
