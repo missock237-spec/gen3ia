@@ -1,0 +1,1780 @@
+{
+  "session": "campagne-boucle-continue-it70",
+  "date": "2026-10-31T23:55:15.654Z",
+  "environnement": "serveur-local",
+  "demandeProprietaire": "un système qui apprend du générateur pour s'améliorer en continu (it.65) — depuis tes propres serveurs locaux, 1 million de données par domaine, questions dans le cadre (instruction raffinée)",
+  "parametres": {
+    "colonnes": 8388608,
+    "vagues": [
+      {
+        "vague": 1,
+        "offsetBijection": 30000000,
+        "fraisParDomaine": 100000,
+        "horloges": "0 → 5 700 000",
+        "note": "rejeu EXACT it.69 (ancrage reproductibilité)"
+      },
+      {
+        "vague": 2,
+        "offsetBijection": 50000000,
+        "fraisParDomaine": 100000,
+        "horloges": "90 010 000 000 → 90 015 700 000",
+        "note": "matière jamais vue, même cortex — la boucle continue ; départ APRÈS les sondes de phase 1 (horloge MONOTONE, leçon it.70)"
+      }
+    ],
+    "cyclesParEchantillon": 3,
+    "tailleLot": 2000,
+    "lrBoost": 0.15,
+    "graine": 20261101,
+    "horloges": {
+      "sondesPhase1": 90000000000,
+      "vague2Depart": 90010000000,
+      "sondesPhase2": 90030000000
+    },
+    "seuilAreteSaturee": 0.999,
+    "budgetPoidsSortants": 6,
+    "homoeostasie": true,
+    "formatTexte": "Q: <question> R: <réponse charte> — bijections texte offsets 30M (it.69) et 50M (jamais vue), génération paresseuse lot par lot"
+  },
+  "memoire": {
+    "avantAllocation": {
+      "rss": 96.5,
+      "external": 4.8,
+      "arrayBuffers": 2.4
+    },
+    "apresAllocation": {
+      "rss": 901.8,
+      "external": 980.8,
+      "arrayBuffers": 978.2
+    },
+    "plafondRssMo": 2600,
+    "picRssMo": 1459
+  },
+  "sources": {
+    "generateur": "lib/gen3/generateur-datasets.ts — paireGenere (bijection texte, espace ≥ 141,9 M/domaine, offsets anti-rejoue)",
+    "mecanique": "lib/neural/training/entrainement-ondes.ts — entrainerDomainesParOndes (EOD it.57/63 inchangée)",
+    "substrat": "lib/neural/core/v2/cortex-columnnaire.ts — CortexColumnnaire (homéostasie it.67/68 activée)"
+  },
+  "entrainement": {
+    "vague1": {
+      "echantillons": 1900000,
+      "dureeMs": 279734,
+      "horlogeFinale": 5700000
+    },
+    "vague2": {
+      "echantillons": 1900000,
+      "dureeMs": 323528,
+      "horlogeFinale": 90015700000
+    },
+    "metabolisme": {
+      "evaluees": 667313131,
+      "reposes": 95629463886869,
+      "transmissions": 508269468,
+      "ms": 159173.154,
+      "normalisations": 47980
+    },
+    "mesuresStabilite": [
+      {
+        "vague": 1,
+        "bloc": 1,
+        "echantillons": 190000,
+        "transmissions": 25815132,
+        "transmissionsCumul": 25815132,
+        "aretesSaturees": 686925,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 542,
+        "normalisationsCumul": 542,
+        "rssMo": 1209.9
+      },
+      {
+        "vague": 1,
+        "bloc": 2,
+        "echantillons": 380000,
+        "transmissions": 24891336,
+        "transmissionsCumul": 50706468,
+        "aretesSaturees": 1530943,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 1999,
+        "normalisationsCumul": 2541,
+        "rssMo": 1239
+      },
+      {
+        "vague": 1,
+        "bloc": 3,
+        "echantillons": 570000,
+        "transmissions": 24813720,
+        "transmissionsCumul": 75520188,
+        "aretesSaturees": 1934669,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2533,
+        "normalisationsCumul": 5074,
+        "rssMo": 1241.9
+      },
+      {
+        "vague": 1,
+        "bloc": 4,
+        "echantillons": 760000,
+        "transmissions": 24914232,
+        "transmissionsCumul": 100434420,
+        "aretesSaturees": 2123612,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2784,
+        "normalisationsCumul": 7858,
+        "rssMo": 1242.6
+      },
+      {
+        "vague": 1,
+        "bloc": 5,
+        "echantillons": 950000,
+        "transmissions": 25941300,
+        "transmissionsCumul": 126375720,
+        "aretesSaturees": 2230092,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2945,
+        "normalisationsCumul": 10803,
+        "rssMo": 1243.1
+      },
+      {
+        "vague": 1,
+        "bloc": 6,
+        "echantillons": 1140000,
+        "transmissions": 25690104,
+        "transmissionsCumul": 152065824,
+        "aretesSaturees": 2291069,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2715,
+        "normalisationsCumul": 13518,
+        "rssMo": 1243.9
+      },
+      {
+        "vague": 1,
+        "bloc": 7,
+        "echantillons": 1330000,
+        "transmissions": 27114972,
+        "transmissionsCumul": 179180796,
+        "aretesSaturees": 2325500,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2890,
+        "normalisationsCumul": 16408,
+        "rssMo": 1244.2
+      },
+      {
+        "vague": 1,
+        "bloc": 8,
+        "echantillons": 1520000,
+        "transmissions": 25679268,
+        "transmissionsCumul": 204860064,
+        "aretesSaturees": 2342926,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2584,
+        "normalisationsCumul": 18992,
+        "rssMo": 1244.2
+      },
+      {
+        "vague": 1,
+        "bloc": 9,
+        "echantillons": 1710000,
+        "transmissions": 26058180,
+        "transmissionsCumul": 230918244,
+        "aretesSaturees": 2351531,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2711,
+        "normalisationsCumul": 21703,
+        "rssMo": 1244.2
+      },
+      {
+        "vague": 1,
+        "bloc": 10,
+        "echantillons": 1900000,
+        "transmissions": 24913356,
+        "transmissionsCumul": 255831600,
+        "aretesSaturees": 2355593,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2444,
+        "normalisationsCumul": 24147,
+        "rssMo": 1244.4
+      },
+      {
+        "vague": 2,
+        "bloc": 11,
+        "echantillons": 190000,
+        "transmissions": 25409808,
+        "transmissionsCumul": 281241408,
+        "aretesSaturees": 2356963,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2128,
+        "normalisationsCumul": 26275,
+        "rssMo": 1459
+      },
+      {
+        "vague": 2,
+        "bloc": 12,
+        "echantillons": 380000,
+        "transmissions": 24268680,
+        "transmissionsCumul": 305510088,
+        "aretesSaturees": 2358086,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2227,
+        "normalisationsCumul": 28502,
+        "rssMo": 1436.8
+      },
+      {
+        "vague": 2,
+        "bloc": 13,
+        "echantillons": 570000,
+        "transmissions": 24616368,
+        "transmissionsCumul": 330126456,
+        "aretesSaturees": 2358558,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2376,
+        "normalisationsCumul": 30878,
+        "rssMo": 1436.5
+      },
+      {
+        "vague": 2,
+        "bloc": 14,
+        "echantillons": 760000,
+        "transmissions": 24283332,
+        "transmissionsCumul": 354409788,
+        "aretesSaturees": 2358725,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2272,
+        "normalisationsCumul": 33150,
+        "rssMo": 1437
+      },
+      {
+        "vague": 2,
+        "bloc": 15,
+        "echantillons": 950000,
+        "transmissions": 25997220,
+        "transmissionsCumul": 380407008,
+        "aretesSaturees": 2358795,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2458,
+        "normalisationsCumul": 35608,
+        "rssMo": 1437
+      },
+      {
+        "vague": 2,
+        "bloc": 16,
+        "echantillons": 1140000,
+        "transmissions": 25025520,
+        "transmissionsCumul": 405432528,
+        "aretesSaturees": 2358824,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2413,
+        "normalisationsCumul": 38021,
+        "rssMo": 1437
+      },
+      {
+        "vague": 2,
+        "bloc": 17,
+        "echantillons": 1330000,
+        "transmissions": 26889720,
+        "transmissionsCumul": 432322248,
+        "aretesSaturees": 2358840,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2581,
+        "normalisationsCumul": 40602,
+        "rssMo": 1437
+      },
+      {
+        "vague": 2,
+        "bloc": 18,
+        "echantillons": 1520000,
+        "transmissions": 25143048,
+        "transmissionsCumul": 457465296,
+        "aretesSaturees": 2358850,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2427,
+        "normalisationsCumul": 43029,
+        "rssMo": 1437
+      },
+      {
+        "vague": 2,
+        "bloc": 19,
+        "echantillons": 1710000,
+        "transmissions": 26040408,
+        "transmissionsCumul": 483505704,
+        "aretesSaturees": 2358854,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2535,
+        "normalisationsCumul": 45564,
+        "rssMo": 1437
+      },
+      {
+        "vague": 2,
+        "bloc": 20,
+        "echantillons": 1900000,
+        "transmissions": 24763764,
+        "transmissionsCumul": 508269468,
+        "aretesSaturees": 2358856,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 2416,
+        "normalisationsCumul": 47980,
+        "rssMo": 1437
+      }
+    ]
+  },
+  "bilan": {
+    "criteres": {
+      "c1_donnees_fraises": {
+        "vague1": {
+          "valeur": 19,
+          "sur": 19,
+          "seuil": 100000,
+          "atteint": true
+        },
+        "vague2": {
+          "valeur": 19,
+          "sur": 19,
+          "seuil": 100000,
+          "atteint": true
+        },
+        "atteint": true
+      },
+      "c2_renforts_positifs": {
+        "vague1": {
+          "valeur": 19,
+          "sur": 19,
+          "atteint": true
+        },
+        "vague2": {
+          "valeur": 19,
+          "sur": 19,
+          "atteint": true
+        },
+        "atteint": true
+      },
+      "c3a_reproduction_it69": {
+        "valeur": 14,
+        "sur": 19,
+        "baseline": "substrat neuf (sémantique it.66/69)",
+        "attendu": 14,
+        "reproduit": true,
+        "atteint": false
+      },
+      "c3b_boucle_continue": {
+        "valeur": 6,
+        "sur": 19,
+        "baseline": "état après vague 1 (sémantique documentée — gain marginal d'une vague neuve sur substrat entraîné)",
+        "atteint": false
+      },
+      "survie_memoire": {
+        "valeur": 13,
+        "sur": 19,
+        "baseline": "trace vague 1 après vague 1 vs après vague 2",
+        "atteint": false
+      },
+      "c4_stabilite": {
+        "ratioTransmissionsVague1": 0.965,
+        "ratioTransmissionsVague2": 0.975,
+        "seuil": 3,
+        "aretesSatureesFin": 2358856,
+        "poidsMaxFin": 1,
+        "normalisationsTotales": 47980,
+        "atteint": true
+      }
+    },
+    "limitesHonnetes": [
+      "le C3b mesure le gain d'une vague NEUVE sur un substrat DÉJÀ ENTRAÎNÉ (baseline = état après vague 1) — ce n'est PAS la sémantique it.66/69 (substrat neuf) : les deux nombres ne sont pas interchangeables, l'ancrage de comparabilité est le C3a (rejeu exact it.69)",
+      "la vague 1 partage son protocole avec it.69 mais tourne dans un processus différent — la reproductibilité inter-processus est MESURÉE (C3a attendu 14/19), pas supposée",
+      "la carte des interférences échantillonne 2×200 textes/domaine (bijections 30M/50M, horloge d'analyse 0) — c'est une CORRÉLATION observée sur un échantillon, pas une causalité prouvée ni un recensement exhaustif des 100 000 textes/domaine",
+      "le CHAMP cortical (bus inter-régions) est par vague — pas de rétroaction champ→cortex : le substrat est l'objet continu, les renforts C2 de chaque vague viennent d'un champ de session (sémantique it.66/69) ; la campagne est REPRENABLE par checkpoints binaires du cortex (structure reconstruite depuis la graine, poids restaurés bit à bit), chaque échantillon entraîné UNE fois",
+      "la trace reste une mesure interne du substrat sparse-colonne — elle ne prétend pas mesurer une qualité linguistique externe ; les réponses de gen3 en production viennent du PONT VOCATION (rôles distincts, it.66) ; le runtime de production reste 2^20 (VPS 2 Go) — la portée est la PREUVE de discrimination et de continuité"
+    ]
+  },
+  "parDomaine": [
+    {
+      "id": "recherche-web",
+      "label": "Recherche web",
+      "bandeVocab": 1,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52992055,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50012017,
+      "traceScratchV1": 3.365633,
+      "traceApresVague1": 3.047183,
+      "c3a": 0.905382,
+      "c3aAtteint": false,
+      "traceAvantVague2": 3.305051,
+      "traceApresVague2": 3.410598,
+      "c3b": 1.031935,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.107477,
+      "survie": 1.019787,
+      "survieAtteint": true
+    },
+    {
+      "id": "controle-donnees",
+      "label": "Contrôle de données",
+      "bandeVocab": 4,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52948010,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 49999982,
+      "traceScratchV1": 2.806561,
+      "traceApresVague1": 3.553418,
+      "c3a": 1.266111,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.303066,
+      "traceApresVague2": 3.402692,
+      "c3b": 1.030161,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.366118,
+      "survie": 0.94729,
+      "survieAtteint": false
+    },
+    {
+      "id": "redaction-texte",
+      "label": "Rédaction de texte",
+      "bandeVocab": 5,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53004043,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50003996,
+      "traceScratchV1": 3.277267,
+      "traceApresVague1": 3.327685,
+      "c3a": 1.015384,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.30033,
+      "traceApresVague2": 3.346044,
+      "c3b": 1.013851,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.110878,
+      "survie": 0.934848,
+      "survieAtteint": false
+    },
+    {
+      "id": "analyse-documents",
+      "label": "Analyse de documents",
+      "bandeVocab": 1,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52848014,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 49999989,
+      "traceScratchV1": 2.877786,
+      "traceApresVague1": 3.292693,
+      "c3a": 1.144176,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.30253,
+      "traceApresVague2": 3.313131,
+      "c3b": 1.00321,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 4.254932,
+      "survie": 1.292235,
+      "survieAtteint": true
+    },
+    {
+      "id": "generation-code",
+      "label": "Génération de code",
+      "bandeVocab": 3,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53264095,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50003962,
+      "traceScratchV1": 2.797799,
+      "traceApresVague1": 3.461291,
+      "c3a": 1.237148,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.304482,
+      "traceApresVague2": 3.306269,
+      "c3b": 1.000541,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.503449,
+      "survie": 1.01218,
+      "survieAtteint": true
+    },
+    {
+      "id": "analyse-donnees",
+      "label": "Analyse de données",
+      "bandeVocab": 3,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52808013,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 49999885,
+      "traceScratchV1": 3.193474,
+      "traceApresVague1": 3.464887,
+      "c3a": 1.08499,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.304523,
+      "traceApresVague2": 3.304509,
+      "c3b": 0.999996,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.580477,
+      "survie": 1.03336,
+      "survieAtteint": true
+    },
+    {
+      "id": "cybersecurite",
+      "label": "Cybersécurité",
+      "bandeVocab": 0,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53732015,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50004016,
+      "traceScratchV1": 3.008816,
+      "traceApresVague1": 3.378766,
+      "c3a": 1.122955,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.302389,
+      "traceApresVague2": 3.302194,
+      "c3b": 0.999941,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.565665,
+      "survie": 1.055316,
+      "survieAtteint": true
+    },
+    {
+      "id": "medecine-sante",
+      "label": "Médecine et santé",
+      "bandeVocab": 1,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52867857,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50024007,
+      "traceScratchV1": 3.03321,
+      "traceApresVague1": 3.344546,
+      "c3a": 1.102643,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.302307,
+      "traceApresVague2": 3.302422,
+      "c3b": 1.000035,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.557304,
+      "survie": 1.063613,
+      "survieAtteint": true
+    },
+    {
+      "id": "commerce-economie",
+      "label": "Commerce et économie",
+      "bandeVocab": 6,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52959995,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 49999959,
+      "traceScratchV1": 3.252499,
+      "traceApresVague1": 3.375089,
+      "c3a": 1.037691,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.302257,
+      "traceApresVague2": 3.302105,
+      "c3b": 0.999954,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.524377,
+      "survie": 1.044232,
+      "survieAtteint": true
+    },
+    {
+      "id": "langue-communication",
+      "label": "Langue et communication",
+      "bandeVocab": 6,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53771990,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50004039,
+      "traceScratchV1": 3.020818,
+      "traceApresVague1": 3.398241,
+      "c3a": 1.124941,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.302824,
+      "traceApresVague2": 3.302262,
+      "c3b": 0.99983,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.537113,
+      "survie": 1.040866,
+      "survieAtteint": true
+    },
+    {
+      "id": "ingenierie-industrie",
+      "label": "Ingénierie et industrie",
+      "bandeVocab": 2,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 54792272,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50008252,
+      "traceScratchV1": 3.715291,
+      "traceApresVague1": 3.473777,
+      "c3a": 0.934995,
+      "c3aAtteint": false,
+      "traceAvantVague2": 3.303089,
+      "traceApresVague2": 3.302891,
+      "c3b": 0.99994,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.380423,
+      "survie": 0.973126,
+      "survieAtteint": false
+    },
+    {
+      "id": "art-creation-multimedia",
+      "label": "Art et création multimédia",
+      "bandeVocab": 0,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53911911,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50008011,
+      "traceScratchV1": 3.343388,
+      "traceApresVague1": 3.413036,
+      "c3a": 1.020831,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.302578,
+      "traceApresVague2": 3.302089,
+      "c3b": 0.999852,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.473541,
+      "survie": 1.017728,
+      "survieAtteint": true
+    },
+    {
+      "id": "agriculture-environnement",
+      "label": "Agriculture et environnement",
+      "bandeVocab": 7,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53992074,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50008005,
+      "traceScratchV1": 3.548375,
+      "traceApresVague1": 3.426867,
+      "c3a": 0.965757,
+      "c3aAtteint": false,
+      "traceAvantVague2": 3.302212,
+      "traceApresVague2": 3.302104,
+      "c3b": 0.999967,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.471616,
+      "survie": 1.013058,
+      "survieAtteint": true
+    },
+    {
+      "id": "droit-administration",
+      "label": "Droit et administration",
+      "bandeVocab": 2,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53628213,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50012117,
+      "traceScratchV1": 3.143239,
+      "traceApresVague1": 3.412752,
+      "c3a": 1.085744,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.303241,
+      "traceApresVague2": 3.303112,
+      "c3b": 0.999961,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.39102,
+      "survie": 0.993632,
+      "survieAtteint": false
+    },
+    {
+      "id": "education-recherche",
+      "label": "Éducation et recherche",
+      "bandeVocab": 1,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53876019,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50011985,
+      "traceScratchV1": 3.309506,
+      "traceApresVague1": 3.397878,
+      "c3a": 1.026702,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.302643,
+      "traceApresVague2": 3.30254,
+      "c3b": 0.999969,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.379112,
+      "survie": 0.994477,
+      "survieAtteint": false
+    },
+    {
+      "id": "transport-immobilier",
+      "label": "Transport et immobilier",
+      "bandeVocab": 2,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 54120052,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 49999934,
+      "traceScratchV1": 3.429783,
+      "traceApresVague1": 3.417347,
+      "c3a": 0.996374,
+      "c3aAtteint": false,
+      "traceAvantVague2": 3.303473,
+      "traceApresVague2": 3.303312,
+      "c3b": 0.999951,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.484387,
+      "survie": 1.019618,
+      "survieAtteint": true
+    },
+    {
+      "id": "sciences-humaines-sociales",
+      "label": "Sciences humaines et sociales",
+      "bandeVocab": 1,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 54943891,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50011997,
+      "traceScratchV1": 3.113411,
+      "traceApresVague1": 3.407197,
+      "c3a": 1.094362,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.302885,
+      "traceApresVague2": 3.302721,
+      "c3b": 0.99995,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.366604,
+      "survie": 0.988086,
+      "survieAtteint": false
+    },
+    {
+      "id": "ia-specialisee-emergente",
+      "label": "Domaines spécialisés et émergents en IA",
+      "bandeVocab": 4,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 54431957,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50015978,
+      "traceScratchV1": 3.73191,
+      "traceApresVague1": 3.355441,
+      "c3a": 0.899122,
+      "c3aAtteint": false,
+      "traceAvantVague2": 3.303147,
+      "traceApresVague2": 3.302963,
+      "c3b": 0.999944,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.421949,
+      "survie": 1.019821,
+      "survieAtteint": true
+    },
+    {
+      "id": "apprentissage-entre-ia",
+      "label": "Apprentissage autonome avec d'autres IA",
+      "bandeVocab": 3,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 54363820,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50028119,
+      "traceScratchV1": 3.196465,
+      "traceApresVague1": 3.316775,
+      "c3a": 1.037638,
+      "c3aAtteint": true,
+      "traceAvantVague2": 3.304442,
+      "traceApresVague2": 3.304358,
+      "c3b": 0.999975,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.42762,
+      "survie": 1.03342,
+      "survieAtteint": true
+    }
+  ],
+  "pointsDeSonde": {
+    "vague1": [
+      {
+        "domaine": "recherche-web",
+        "indice": "debut",
+        "ratioScratch": 2.710358,
+        "ratioApresVague1": 2.963103,
+        "ratioApresVague2": 3.221725
+      },
+      {
+        "domaine": "recherche-web",
+        "indice": "fin",
+        "ratioScratch": 4.046889,
+        "ratioApresVague1": 3.13168,
+        "ratioApresVague2": 2.993988
+      },
+      {
+        "domaine": "controle-donnees",
+        "indice": "debut",
+        "ratioScratch": 3.156339,
+        "ratioApresVague1": 3.612697,
+        "ratioApresVague2": 3.217848
+      },
+      {
+        "domaine": "controle-donnees",
+        "indice": "fin",
+        "ratioScratch": 2.463874,
+        "ratioApresVague1": 3.494342,
+        "ratioApresVague2": 3.515678
+      },
+      {
+        "domaine": "redaction-texte",
+        "indice": "debut",
+        "ratioScratch": 3.009873,
+        "ratioApresVague1": 3.253737,
+        "ratioApresVague2": 3.17957
+      },
+      {
+        "domaine": "redaction-texte",
+        "indice": "fin",
+        "ratioScratch": 3.548898,
+        "ratioApresVague1": 3.401953,
+        "ratioApresVague2": 3.042461
+      },
+      {
+        "domaine": "analyse-documents",
+        "indice": "debut",
+        "ratioScratch": 2.690885,
+        "ratioApresVague1": 3.207852,
+        "ratioApresVague2": 4.487789
+      },
+      {
+        "domaine": "analyse-documents",
+        "indice": "fin",
+        "ratioScratch": 3.066772,
+        "ratioApresVague1": 3.377956,
+        "ratioApresVague2": 4.025112
+      },
+      {
+        "domaine": "generation-code",
+        "indice": "debut",
+        "ratioScratch": 2.838008,
+        "ratioApresVague1": 3.45702,
+        "ratioApresVague2": 3.30048
+      },
+      {
+        "domaine": "generation-code",
+        "indice": "fin",
+        "ratioScratch": 2.757685,
+        "ratioApresVague1": 3.465563,
+        "ratioApresVague2": 3.708835
+      },
+      {
+        "domaine": "analyse-donnees",
+        "indice": "debut",
+        "ratioScratch": 2.812196,
+        "ratioApresVague1": 3.433221,
+        "ratioApresVague2": 3.472283
+      },
+      {
+        "domaine": "analyse-donnees",
+        "indice": "fin",
+        "ratioScratch": 3.583449,
+        "ratioApresVague1": 3.496611,
+        "ratioApresVague2": 3.689352
+      },
+      {
+        "domaine": "cybersecurite",
+        "indice": "debut",
+        "ratioScratch": 3.261825,
+        "ratioApresVague1": 3.368987,
+        "ratioApresVague2": 3.546929
+      },
+      {
+        "domaine": "cybersecurite",
+        "indice": "fin",
+        "ratioScratch": 2.759517,
+        "ratioApresVague1": 3.388551,
+        "ratioApresVague2": 3.584422
+      },
+      {
+        "domaine": "medecine-sante",
+        "indice": "debut",
+        "ratioScratch": 2.874192,
+        "ratioApresVague1": 3.361613,
+        "ratioApresVague2": 3.502744
+      },
+      {
+        "domaine": "medecine-sante",
+        "indice": "fin",
+        "ratioScratch": 3.193727,
+        "ratioApresVague1": 3.327497,
+        "ratioApresVague2": 3.612036
+      },
+      {
+        "domaine": "commerce-economie",
+        "indice": "debut",
+        "ratioScratch": 2.943875,
+        "ratioApresVague1": 3.384704,
+        "ratioApresVague2": 3.603583
+      },
+      {
+        "domaine": "commerce-economie",
+        "indice": "fin",
+        "ratioScratch": 3.566786,
+        "ratioApresVague1": 3.365479,
+        "ratioApresVague2": 3.445532
+      },
+      {
+        "domaine": "langue-communication",
+        "indice": "debut",
+        "ratioScratch": 2.9589,
+        "ratioApresVague1": 3.409388,
+        "ratioApresVague2": 3.448717
+      },
+      {
+        "domaine": "langue-communication",
+        "indice": "fin",
+        "ratioScratch": 3.082963,
+        "ratioApresVague1": 3.387102,
+        "ratioApresVague2": 3.625963
+      },
+      {
+        "domaine": "ingenierie-industrie",
+        "indice": "debut",
+        "ratioScratch": 3.573662,
+        "ratioApresVague1": 3.46746,
+        "ratioApresVague2": 3.350827
+      },
+      {
+        "domaine": "ingenierie-industrie",
+        "indice": "fin",
+        "ratioScratch": 3.858085,
+        "ratioApresVague1": 3.480097,
+        "ratioApresVague2": 3.41007
+      },
+      {
+        "domaine": "art-creation-multimedia",
+        "indice": "debut",
+        "ratioScratch": 3.213962,
+        "ratioApresVague1": 3.412888,
+        "ratioApresVague2": 3.499736
+      },
+      {
+        "domaine": "art-creation-multimedia",
+        "indice": "fin",
+        "ratioScratch": 3.473797,
+        "ratioApresVague1": 3.413183,
+        "ratioApresVague2": 3.447385
+      },
+      {
+        "domaine": "agriculture-environnement",
+        "indice": "debut",
+        "ratioScratch": 3.502564,
+        "ratioApresVague1": 3.439678,
+        "ratioApresVague2": 3.469204
+      },
+      {
+        "domaine": "agriculture-environnement",
+        "indice": "fin",
+        "ratioScratch": 3.594308,
+        "ratioApresVague1": 3.414066,
+        "ratioApresVague2": 3.474027
+      },
+      {
+        "domaine": "droit-administration",
+        "indice": "debut",
+        "ratioScratch": 3.218639,
+        "ratioApresVague1": 3.409306,
+        "ratioApresVague2": 3.376446
+      },
+      {
+        "domaine": "droit-administration",
+        "indice": "fin",
+        "ratioScratch": 3.06817,
+        "ratioApresVague1": 3.4162,
+        "ratioApresVague2": 3.405607
+      },
+      {
+        "domaine": "education-recherche",
+        "indice": "debut",
+        "ratioScratch": 3.51911,
+        "ratioApresVague1": 3.388299,
+        "ratioApresVague2": 3.376701
+      },
+      {
+        "domaine": "education-recherche",
+        "indice": "fin",
+        "ratioScratch": 3.102432,
+        "ratioApresVague1": 3.407462,
+        "ratioApresVague2": 3.381523
+      },
+      {
+        "domaine": "transport-immobilier",
+        "indice": "debut",
+        "ratioScratch": 3.058124,
+        "ratioApresVague1": 3.419707,
+        "ratioApresVague2": 3.508003
+      },
+      {
+        "domaine": "transport-immobilier",
+        "indice": "fin",
+        "ratioScratch": 3.809642,
+        "ratioApresVague1": 3.414987,
+        "ratioApresVague2": 3.460803
+      },
+      {
+        "domaine": "sciences-humaines-sociales",
+        "indice": "debut",
+        "ratioScratch": 2.931037,
+        "ratioApresVague1": 3.412255,
+        "ratioApresVague2": 3.36828
+      },
+      {
+        "domaine": "sciences-humaines-sociales",
+        "indice": "fin",
+        "ratioScratch": 3.297755,
+        "ratioApresVague1": 3.40214,
+        "ratioApresVague2": 3.364928
+      },
+      {
+        "domaine": "ia-specialisee-emergente",
+        "indice": "debut",
+        "ratioScratch": 3.805448,
+        "ratioApresVague1": 3.372953,
+        "ratioApresVague2": 3.415214
+      },
+      {
+        "domaine": "ia-specialisee-emergente",
+        "indice": "fin",
+        "ratioScratch": 3.658683,
+        "ratioApresVague1": 3.337947,
+        "ratioApresVague2": 3.428686
+      },
+      {
+        "domaine": "apprentissage-entre-ia",
+        "indice": "debut",
+        "ratioScratch": 3.211405,
+        "ratioApresVague1": 3.321462,
+        "ratioApresVague2": 3.426404
+      },
+      {
+        "domaine": "apprentissage-entre-ia",
+        "indice": "fin",
+        "ratioScratch": 3.181538,
+        "ratioApresVague1": 3.312089,
+        "ratioApresVague2": 3.428837
+      }
+    ],
+    "vague2": [
+      {
+        "domaine": "recherche-web",
+        "indice": "debut",
+        "ratioAvantVague2": 3.306261,
+        "ratioApresVague2": 3.407244
+      },
+      {
+        "domaine": "recherche-web",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303841,
+        "ratioApresVague2": 3.413952
+      },
+      {
+        "domaine": "controle-donnees",
+        "indice": "debut",
+        "ratioAvantVague2": 3.303089,
+        "ratioApresVague2": 3.407361
+      },
+      {
+        "domaine": "controle-donnees",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303044,
+        "ratioApresVague2": 3.398023
+      },
+      {
+        "domaine": "redaction-texte",
+        "indice": "debut",
+        "ratioAvantVague2": 3.300345,
+        "ratioApresVague2": 3.361417
+      },
+      {
+        "domaine": "redaction-texte",
+        "indice": "fin",
+        "ratioAvantVague2": 3.300315,
+        "ratioApresVague2": 3.330685
+      },
+      {
+        "domaine": "analyse-documents",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302711,
+        "ratioApresVague2": 3.316661
+      },
+      {
+        "domaine": "analyse-documents",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302349,
+        "ratioApresVague2": 3.309603
+      },
+      {
+        "domaine": "generation-code",
+        "indice": "debut",
+        "ratioAvantVague2": 3.304355,
+        "ratioApresVague2": 3.307146
+      },
+      {
+        "domaine": "generation-code",
+        "indice": "fin",
+        "ratioAvantVague2": 3.304609,
+        "ratioApresVague2": 3.305392
+      },
+      {
+        "domaine": "analyse-donnees",
+        "indice": "debut",
+        "ratioAvantVague2": 3.304661,
+        "ratioApresVague2": 3.30471
+      },
+      {
+        "domaine": "analyse-donnees",
+        "indice": "fin",
+        "ratioAvantVague2": 3.304385,
+        "ratioApresVague2": 3.304307
+      },
+      {
+        "domaine": "cybersecurite",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302038,
+        "ratioApresVague2": 3.302303
+      },
+      {
+        "domaine": "cybersecurite",
+        "indice": "fin",
+        "ratioAvantVague2": 3.30274,
+        "ratioApresVague2": 3.302084
+      },
+      {
+        "domaine": "medecine-sante",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302433,
+        "ratioApresVague2": 3.302287
+      },
+      {
+        "domaine": "medecine-sante",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302181,
+        "ratioApresVague2": 3.302556
+      },
+      {
+        "domaine": "commerce-economie",
+        "indice": "debut",
+        "ratioAvantVague2": 3.301677,
+        "ratioApresVague2": 3.302236
+      },
+      {
+        "domaine": "commerce-economie",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302838,
+        "ratioApresVague2": 3.301974
+      },
+      {
+        "domaine": "langue-communication",
+        "indice": "debut",
+        "ratioAvantVague2": 3.303055,
+        "ratioApresVague2": 3.302425
+      },
+      {
+        "domaine": "langue-communication",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302593,
+        "ratioApresVague2": 3.302099
+      },
+      {
+        "domaine": "ingenierie-industrie",
+        "indice": "debut",
+        "ratioAvantVague2": 3.303,
+        "ratioApresVague2": 3.303243
+      },
+      {
+        "domaine": "ingenierie-industrie",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303178,
+        "ratioApresVague2": 3.302539
+      },
+      {
+        "domaine": "art-creation-multimedia",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302107,
+        "ratioApresVague2": 3.302526
+      },
+      {
+        "domaine": "art-creation-multimedia",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303049,
+        "ratioApresVague2": 3.301653
+      },
+      {
+        "domaine": "agriculture-environnement",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302411,
+        "ratioApresVague2": 3.302081
+      },
+      {
+        "domaine": "agriculture-environnement",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302013,
+        "ratioApresVague2": 3.302126
+      },
+      {
+        "domaine": "droit-administration",
+        "indice": "debut",
+        "ratioAvantVague2": 3.303164,
+        "ratioApresVague2": 3.303346
+      },
+      {
+        "domaine": "droit-administration",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303318,
+        "ratioApresVague2": 3.302879
+      },
+      {
+        "domaine": "education-recherche",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302268,
+        "ratioApresVague2": 3.301933
+      },
+      {
+        "domaine": "education-recherche",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303018,
+        "ratioApresVague2": 3.303146
+      },
+      {
+        "domaine": "transport-immobilier",
+        "indice": "debut",
+        "ratioAvantVague2": 3.303963,
+        "ratioApresVague2": 3.303051
+      },
+      {
+        "domaine": "transport-immobilier",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302984,
+        "ratioApresVague2": 3.303572
+      },
+      {
+        "domaine": "sciences-humaines-sociales",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302432,
+        "ratioApresVague2": 3.301909
+      },
+      {
+        "domaine": "sciences-humaines-sociales",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303337,
+        "ratioApresVague2": 3.303533
+      },
+      {
+        "domaine": "ia-specialisee-emergente",
+        "indice": "debut",
+        "ratioAvantVague2": 3.303582,
+        "ratioApresVague2": 3.302963
+      },
+      {
+        "domaine": "ia-specialisee-emergente",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302712,
+        "ratioApresVague2": 3.302962
+      },
+      {
+        "domaine": "apprentissage-entre-ia",
+        "indice": "debut",
+        "ratioAvantVague2": 3.304474,
+        "ratioApresVague2": 3.303943
+      },
+      {
+        "domaine": "apprentissage-entre-ia",
+        "indice": "fin",
+        "ratioAvantVague2": 3.304409,
+        "ratioApresVague2": 3.304773
+      }
+    ]
+  },
+  "diagnostic": {
+    "methode": "échantillon 400 textes/domaine (bijections 30 000 000/50 000 000) ; autoPorteur = part des colonnes de balayage complet retombant dans l'interval entraîné du domaine ; topInterferents = part des colonnes de balayage du domaine retrouvée dans les colonnes repliées d'un autre domaine",
+    "parDomaine": [
+      {
+        "id": "recherche-web",
+        "bandeVocab": 1,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "analyse-documents",
+            "part": 0.5443,
+            "memeBande": true
+          },
+          {
+            "id": "medecine-sante",
+            "part": 0.5286,
+            "memeBande": true
+          },
+          {
+            "id": "transport-immobilier",
+            "part": 0.4609,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "controle-donnees",
+        "bandeVocab": 4,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "analyse-documents",
+            "part": 0.5062,
+            "memeBande": false
+          },
+          {
+            "id": "transport-immobilier",
+            "part": 0.4924,
+            "memeBande": false
+          },
+          {
+            "id": "recherche-web",
+            "part": 0.4716,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "redaction-texte",
+        "bandeVocab": 5,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "analyse-donnees",
+            "part": 0.5616,
+            "memeBande": false
+          },
+          {
+            "id": "langue-communication",
+            "part": 0.5354,
+            "memeBande": false
+          },
+          {
+            "id": "analyse-documents",
+            "part": 0.5152,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "analyse-documents",
+        "bandeVocab": 1,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "recherche-web",
+            "part": 0.4941,
+            "memeBande": true
+          },
+          {
+            "id": "medecine-sante",
+            "part": 0.4539,
+            "memeBande": true
+          },
+          {
+            "id": "controle-donnees",
+            "part": 0.4326,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "generation-code",
+        "bandeVocab": 3,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "analyse-donnees",
+            "part": 0.5426,
+            "memeBande": true
+          },
+          {
+            "id": "droit-administration",
+            "part": 0.5074,
+            "memeBande": false
+          },
+          {
+            "id": "langue-communication",
+            "part": 0.5037,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "analyse-donnees",
+        "bandeVocab": 3,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "analyse-documents",
+            "part": 0.5202,
+            "memeBande": false
+          },
+          {
+            "id": "langue-communication",
+            "part": 0.4755,
+            "memeBande": false
+          },
+          {
+            "id": "controle-donnees",
+            "part": 0.4683,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "cybersecurite",
+        "bandeVocab": 0,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "analyse-donnees",
+            "part": 0.4207,
+            "memeBande": false
+          },
+          {
+            "id": "analyse-documents",
+            "part": 0.3452,
+            "memeBande": false
+          },
+          {
+            "id": "redaction-texte",
+            "part": 0.3393,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "medecine-sante",
+        "bandeVocab": 1,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "recherche-web",
+            "part": 0.5172,
+            "memeBande": true
+          },
+          {
+            "id": "analyse-documents",
+            "part": 0.4892,
+            "memeBande": true
+          },
+          {
+            "id": "controle-donnees",
+            "part": 0.4217,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "commerce-economie",
+        "bandeVocab": 6,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "langue-communication",
+            "part": 0.5121,
+            "memeBande": true
+          },
+          {
+            "id": "analyse-donnees",
+            "part": 0.4863,
+            "memeBande": false
+          },
+          {
+            "id": "transport-immobilier",
+            "part": 0.467,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "langue-communication",
+        "bandeVocab": 6,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "analyse-documents",
+            "part": 0.4239,
+            "memeBande": false
+          },
+          {
+            "id": "analyse-donnees",
+            "part": 0.4019,
+            "memeBande": false
+          },
+          {
+            "id": "transport-immobilier",
+            "part": 0.4019,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "ingenierie-industrie",
+        "bandeVocab": 2,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "analyse-documents",
+            "part": 0.5541,
+            "memeBande": false
+          },
+          {
+            "id": "recherche-web",
+            "part": 0.5143,
+            "memeBande": false
+          },
+          {
+            "id": "medecine-sante",
+            "part": 0.492,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "art-creation-multimedia",
+        "bandeVocab": 0,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "controle-donnees",
+            "part": 0.4025,
+            "memeBande": false
+          },
+          {
+            "id": "transport-immobilier",
+            "part": 0.3861,
+            "memeBande": false
+          },
+          {
+            "id": "medecine-sante",
+            "part": 0.3738,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "agriculture-environnement",
+        "bandeVocab": 7,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "transport-immobilier",
+            "part": 0.5157,
+            "memeBande": false
+          },
+          {
+            "id": "langue-communication",
+            "part": 0.4913,
+            "memeBande": false
+          },
+          {
+            "id": "controle-donnees",
+            "part": 0.4774,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "droit-administration",
+        "bandeVocab": 2,
+        "autoPorteur": 0.0019,
+        "topInterferents": [
+          {
+            "id": "langue-communication",
+            "part": 0.5637,
+            "memeBande": false
+          },
+          {
+            "id": "generation-code",
+            "part": 0.529,
+            "memeBande": false
+          },
+          {
+            "id": "analyse-donnees",
+            "part": 0.529,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "education-recherche",
+        "bandeVocab": 1,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "transport-immobilier",
+            "part": 0.5021,
+            "memeBande": false
+          },
+          {
+            "id": "recherche-web",
+            "part": 0.4893,
+            "memeBande": true
+          },
+          {
+            "id": "controle-donnees",
+            "part": 0.4836,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "transport-immobilier",
+        "bandeVocab": 2,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "analyse-documents",
+            "part": 0.5063,
+            "memeBande": false
+          },
+          {
+            "id": "controle-donnees",
+            "part": 0.5007,
+            "memeBande": false
+          },
+          {
+            "id": "recherche-web",
+            "part": 0.4979,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "sciences-humaines-sociales",
+        "bandeVocab": 1,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "agriculture-environnement",
+            "part": 0.5043,
+            "memeBande": false
+          },
+          {
+            "id": "langue-communication",
+            "part": 0.5022,
+            "memeBande": false
+          },
+          {
+            "id": "commerce-economie",
+            "part": 0.5,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "ia-specialisee-emergente",
+        "bandeVocab": 4,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "apprentissage-entre-ia",
+            "part": 0.419,
+            "memeBande": false
+          },
+          {
+            "id": "education-recherche",
+            "part": 0.1912,
+            "memeBande": false
+          },
+          {
+            "id": "recherche-web",
+            "part": 0.1717,
+            "memeBande": false
+          }
+        ]
+      },
+      {
+        "id": "apprentissage-entre-ia",
+        "bandeVocab": 3,
+        "autoPorteur": 0,
+        "topInterferents": [
+          {
+            "id": "ia-specialisee-emergente",
+            "part": 0.3475,
+            "memeBande": false
+          },
+          {
+            "id": "analyse-documents",
+            "part": 0.1081,
+            "memeBande": false
+          },
+          {
+            "id": "education-recherche",
+            "part": 0.1081,
+            "memeBande": false
+          }
+        ]
+      }
+    ],
+    "chargeParBande": [
+      {
+        "bande": 0,
+        "domaines": [
+          "cybersecurite",
+          "art-creation-multimedia"
+        ],
+        "effectif": 2
+      },
+      {
+        "bande": 1,
+        "domaines": [
+          "recherche-web",
+          "analyse-documents",
+          "medecine-sante",
+          "education-recherche",
+          "sciences-humaines-sociales"
+        ],
+        "effectif": 5
+      },
+      {
+        "bande": 2,
+        "domaines": [
+          "ingenierie-industrie",
+          "droit-administration",
+          "transport-immobilier"
+        ],
+        "effectif": 3
+      },
+      {
+        "bande": 3,
+        "domaines": [
+          "generation-code",
+          "analyse-donnees",
+          "apprentissage-entre-ia"
+        ],
+        "effectif": 3
+      },
+      {
+        "bande": 4,
+        "domaines": [
+          "controle-donnees",
+          "ia-specialisee-emergente"
+        ],
+        "effectif": 2
+      },
+      {
+        "bande": 5,
+        "domaines": [
+          "redaction-texte"
+        ],
+        "effectif": 1
+      },
+      {
+        "bande": 6,
+        "domaines": [
+          "commerce-economie",
+          "langue-communication"
+        ],
+        "effectif": 2
+      },
+      {
+        "bande": 7,
+        "domaines": [
+          "agriculture-environnement"
+        ],
+        "effectif": 1
+      }
+    ]
+  }
+}
