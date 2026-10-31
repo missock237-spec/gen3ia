@@ -1,0 +1,215 @@
+{
+  "date": "2026-10-31T00:18:04.443Z",
+  "methode": "EOD — Entraînement par Ondes de Domaine (it.57)",
+  "contexte": "it.59 — vocation de gen3 : entraînement réel sur les 19 domaines de la charte",
+  "cortex": {
+    "colonnes": 1048576,
+    "voisins": 12,
+    "bandes": 32
+  },
+  "options": {
+    "cyclesParEchantillon": 3,
+    "lrBoost": 0.15,
+    "maxParDomaine": 200
+  },
+  "totalEchantillons": 133,
+  "domaines": [
+    {
+      "domaine": "recherche-web",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3500,
+      "annulations": 3500
+    },
+    {
+      "domaine": "controle-donnees",
+      "bande": 4,
+      "porteurFrequence": 1,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3500,
+      "annulations": 3500
+    },
+    {
+      "domaine": "redaction-texte",
+      "bande": 5,
+      "porteurFrequence": 1.1875,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3502,
+      "annulations": 3498
+    },
+    {
+      "domaine": "analyse-documents",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3501,
+      "annulations": 3499
+    },
+    {
+      "domaine": "generation-code",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3501,
+      "annulations": 3499
+    },
+    {
+      "domaine": "analyse-donnees",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3497,
+      "annulations": 3503
+    },
+    {
+      "domaine": "cybersecurite",
+      "bande": 0,
+      "porteurFrequence": 0.25,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3499,
+      "annulations": 3501
+    },
+    {
+      "domaine": "medecine-sante",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3500,
+      "annulations": 3500
+    },
+    {
+      "domaine": "commerce-economie",
+      "bande": 6,
+      "porteurFrequence": 1.375,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3496,
+      "annulations": 3504
+    },
+    {
+      "domaine": "langue-communication",
+      "bande": 6,
+      "porteurFrequence": 1.375,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3504,
+      "annulations": 3496
+    },
+    {
+      "domaine": "ingenierie-industrie",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3500,
+      "annulations": 3500
+    },
+    {
+      "domaine": "art-creation-multimedia",
+      "bande": 0,
+      "porteurFrequence": 0.25,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3497,
+      "annulations": 3503
+    },
+    {
+      "domaine": "agriculture-environnement",
+      "bande": 7,
+      "porteurFrequence": 1.5625,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3500,
+      "annulations": 3500
+    },
+    {
+      "domaine": "droit-administration",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3501,
+      "annulations": 3499
+    },
+    {
+      "domaine": "education-recherche",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3500,
+      "annulations": 3500
+    },
+    {
+      "domaine": "transport-immobilier",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3500,
+      "annulations": 3500
+    },
+    {
+      "domaine": "sciences-humaines-sociales",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3499,
+      "annulations": 3501
+    },
+    {
+      "domaine": "ia-specialisee-emergente",
+      "bande": 4,
+      "porteurFrequence": 1,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3501,
+      "annulations": 3499
+    },
+    {
+      "domaine": "apprentissage-entre-ia",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3500,
+      "annulations": 3500
+    }
+  ],
+  "metabolisme": {
+    "evaluees": 11609,
+    "reposes": 418370215,
+    "transmissions": 9516,
+    "ms": 12.853
+  },
+  "dureeMs": 28
+}
