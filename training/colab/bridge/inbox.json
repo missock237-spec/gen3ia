@@ -1,0 +1,11 @@
+{
+  "id": "2026-10-31-etape1-env",
+  "stop": false,
+  "commands": [
+    "nvidia-smi || echo 'PAS DE GPU — passe le runtime Colab en GPU (Execution > Modifier le type d execution > GPU)'",
+    "df -h /content && free -h && nproc",
+    "python3 --version && pip --version",
+    "python3 -c \"import torch; print('torch', torch.__version__, '| cuda disponible:', torch.cuda.is_available(), '|', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'n/a')\" 2>/dev/null || echo 'torch absent (normal, sera installe par le notebook v4)'",
+    "ls -la /content | head -20"
+  ]
+}
