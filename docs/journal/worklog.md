@@ -4755,3 +4755,10 @@ intacts ; sonde locale 11/11 endpoints (TTFB < 900 ms). it.64 close.
 - VERROU 33ᵉ (lib/gen3/amelioration-continue.guard.test.ts, 10 tests). Validation : tsc 0,
   eslint 0, suite complète **5406/5406** (12 skipped).
 - Rapport : docs/rapports/rapport-job-478451-2026-10-31-2255.md
+Vérification production + navigateur (15:03-15:30 UTC) : CI 53c1b1d success (5406 tests) ;
+release cd-latest 15:03:57Z ; poller PULL (backoff) a swappé → **prod 53c1b1d LIVE** ; sonde
+ROUGE transitoire (15:05, fenêtre de swap) → issue #112 **auto-refermée avec preuve** après
+dispatch (run vert 10/10) — 2ᵉ cycle complet du canal d'alarme. NAVIGATEUR (agent-browser) :
+/vocation rend les sections it.65/64/63 + le verdict niveau requis honnête (C1-C2 « atteint »,
+C3-C5 « en cours ») ; /chat 200 (UI) mais POST /api/chat 401 anonyme (moteur conversationnel
+sous requireUser — test complet nécessitant le compte app du propriétaire) ; portes 401 intacts.
