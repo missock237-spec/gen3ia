@@ -22,9 +22,13 @@
  *     tableaux), précision selon le sujet saisi, honnêteté absolue
  *     (zéro invention), clarification unique si la demande est ambiguë.
  *
- * Le module est PUR et SANS DÉPENDANCE : testable, importable depuis le
+ * Le module est PUR : testable, importable depuis le
  * client (constantes) comme depuis le serveur (décision de routage).
+ * it.59 — unique dépendance : lib/gen3/vocation (module pur également) —
+ * la vocation de gen3 fait partie du prompt système de qualité.
  */
+
+import { sectionVocationGen3 } from "@/lib/gen3/vocation";
 
 export type ResponseQualityMode = "premium" | "free";
 
@@ -70,9 +74,12 @@ export const EXCELLENCE_PAR_DOMAINE = [
 /**
  * System prompt de qualité COMPLET, utilisé par les surfaces conversationnelles
  * qui n'ont pas encore de system prompt (chat générique historique).
+ * it.59 — la vocation de gen3 (19 domaines) y est injectée : aucune surface
+ * générique ne parle de gen3 sans connaître sa raison d'être.
  */
 export const RESPONSE_QUALITY_SYSTEM = [
   "Tu es l'assistant IA de Gen3ia. À CHAQUE requête, quelle que soit sa longueur, tu produis une réponse d'exigence professionnelle : claire, précise et adaptée au sujet saisi — la même qualité qu'un assistant de premier plan.",
+  sectionVocationGen3(),
   RESPONSE_FORMAT_RULES,
   EXCELLENCE_PAR_DOMAINE,
 ].join("\n\n");

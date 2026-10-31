@@ -12,6 +12,9 @@ import type { ConversationMessage } from "./types";
 import { detectImageRatio, enhanceImagePrompt, extractImagePrompt } from "@/lib/ai/image-intent";
 import { languageDirective } from "@/lib/ai/prompt-enhancer";
 import { RESPONSE_FORMAT_RULES, EXCELLENCE_PAR_DOMAINE, preferFreeForVisibleAnswers } from "@/lib/ai/response-quality";
+// it.59 — LA VOCATION DE GEN3 : gen3 sait, à chaque tour, qu'il a été créé
+// pour exécuter des tâches dans les 19 domaines (charte, module pur).
+import { sectionVocationGen3 } from "@/lib/gen3/vocation";
 import { generate, generateStream } from "@/lib/ai/router";
 // Durcissement production — barrière anti-désinformation au niveau des
 // agents Studio, désormais appliquée AUSSI au chat principal : grounding
@@ -125,6 +128,10 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
     // entraîné (maths étape par étape, code exécutable, mécanismes sciences,
     // sécurité défensive, chiffres business…) — demande utilisateur directe.
     EXCELLENCE_PAR_DOMAINE,
+    // it.59 — LA VOCATION : gen3 SAIT qu'il a été créé pour exécuter des
+    // tâches dans les 19 domaines (recherche web → apprentissage avec
+    // d'autres IA) — charte injectée à CHAQUE tour conversationnel.
+    sectionVocationGen3(),
     // Compréhension exacte : répondre dans la LANGUE du dernier message.
     languageDirective(ctx.message),
     "La génération d'IMAGES, la production de VIDÉOS, la synthèse d'AUDIOS (moteur audio neural local — composition sonore, pas de parole naturelle) et l'analyse de médias (mesures réelles : format, dimensions, durée, codecs, palette) sont effectuées par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré un média comme s'il était affiché, et n'invente jamais d'URL.",
