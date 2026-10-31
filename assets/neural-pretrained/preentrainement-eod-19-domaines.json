@@ -1,0 +1,1109 @@
+{
+  "date": "2026-10-31T02:23:02.554Z",
+  "methode": "EOD — Entraînement par Ondes de Domaine (it.57)",
+  "contexte": "it.61 — pré-entraînement enrichi des 19 domaines de vocation (dépôt + Hugging Face)",
+  "environnement": {
+    "type": "local-sandbox",
+    "hfTokenFourni": true
+  },
+  "cortex": {
+    "colonnes": 1048576,
+    "voisins": 12,
+    "bandes": 32
+  },
+  "options": {
+    "cyclesParEchantillon": 3,
+    "lrBoost": 0.15,
+    "maxParDomaine": 200
+  },
+  "sources": {
+    "depot": 3596,
+    "huggingface": 305,
+    "charte": 7,
+    "erreurs": {
+      "recherche-web": [],
+      "controle-donnees": [],
+      "redaction-texte": [],
+      "analyse-documents": [],
+      "generation-code": [],
+      "analyse-donnees": [],
+      "cybersecurite": [],
+      "medecine-sante": [],
+      "commerce-economie": [],
+      "langue-communication": [],
+      "ingenierie-industrie": [],
+      "art-creation-multimedia": [],
+      "agriculture-environnement": [],
+      "droit-administration": [],
+      "education-recherche": [],
+      "transport-immobilier": [],
+      "sciences-humaines-sociales": [],
+      "ia-specialisee-emergente": [],
+      "apprentissage-entre-ia": []
+    }
+  },
+  "totalEchantillons": 3606,
+  "domaines": [
+    {
+      "domaine": "recherche-web",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 100000,
+      "annulations": 100000
+    },
+    {
+      "domaine": "controle-donnees",
+      "bande": 4,
+      "porteurFrequence": 1,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 99999,
+      "annulations": 100001
+    },
+    {
+      "domaine": "redaction-texte",
+      "bande": 5,
+      "porteurFrequence": 1.1875,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 100006,
+      "annulations": 99994
+    },
+    {
+      "domaine": "analyse-documents",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 99999,
+      "annulations": 100001
+    },
+    {
+      "domaine": "generation-code",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 100000,
+      "annulations": 100000
+    },
+    {
+      "domaine": "analyse-donnees",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 100012,
+      "annulations": 99988
+    },
+    {
+      "domaine": "cybersecurite",
+      "bande": 0,
+      "porteurFrequence": 0.25,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 99999,
+      "annulations": 100001
+    },
+    {
+      "domaine": "medecine-sante",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 99999,
+      "annulations": 100001
+    },
+    {
+      "domaine": "commerce-economie",
+      "bande": 6,
+      "porteurFrequence": 1.375,
+      "echantillons": 199,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 199,
+      "renforts": 99498,
+      "annulations": 99502
+    },
+    {
+      "domaine": "langue-communication",
+      "bande": 6,
+      "porteurFrequence": 1.375,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 99987,
+      "annulations": 100013
+    },
+    {
+      "domaine": "ingenierie-industrie",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 100003,
+      "annulations": 99997
+    },
+    {
+      "domaine": "art-creation-multimedia",
+      "bande": 0,
+      "porteurFrequence": 0.25,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 100000,
+      "annulations": 100000
+    },
+    {
+      "domaine": "agriculture-environnement",
+      "bande": 7,
+      "porteurFrequence": 1.5625,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 99998,
+      "annulations": 100002
+    },
+    {
+      "domaine": "droit-administration",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 100002,
+      "annulations": 99998
+    },
+    {
+      "domaine": "education-recherche",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 99997,
+      "annulations": 100003
+    },
+    {
+      "domaine": "transport-immobilier",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "echantillons": 7,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 7,
+      "renforts": 3500,
+      "annulations": 3500
+    },
+    {
+      "domaine": "sciences-humaines-sociales",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 99999,
+      "annulations": 100001
+    },
+    {
+      "domaine": "ia-specialisee-emergente",
+      "bande": 4,
+      "porteurFrequence": 1,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 100005,
+      "annulations": 99995
+    },
+    {
+      "domaine": "apprentissage-entre-ia",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "echantillons": 200,
+      "resonanceMoyenne": 0,
+      "paquetsEmis": 200,
+      "renforts": 100014,
+      "annulations": 99986
+    }
+  ],
+  "sonde": {
+    "protocole": "TRACE (mesure principale) : rejeu déterministe de 3 échantillons entraînés par domaine à leur horloge exacte (le mappage onde→colonne balaye le substrat — la trace d'un domaine vit dans les arêtes CSR de SES colonnes), comparaison cortex témoin vierge / cortex entraîné, ratio = activation bande-porteuse / moyenne des 31 autres. GENERALISATION (honnêteté) : vocabulaire fréquent et texte réel jamais entraînés — gain attendu ≈ 1, rapporté tel quel.",
+    "assimiles": 19,
+    "total": 19,
+    "generalisationVocabulaireEnMontee": 1,
+    "generalisationTexteEnMontee": 5,
+    "domaines": [
+      {
+        "domaine": "recherche-web",
+        "bande": 1,
+        "porteurFrequence": 0.4375,
+        "trace": {
+          "avant": {
+            "porteur": 0.09290659884493448,
+            "autres": 0.02926107745661502,
+            "ratio": 3.175091518167291
+          },
+          "apres": {
+            "porteur": 0.12263525559420858,
+            "autres": 0.028302088529219074,
+            "ratio": 4.333081477983505
+          },
+          "gain": 1.3647107345380152,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.08632141485688809,
+            "autres": 0.029473502746552,
+            "ratio": 2.9287803217412467
+          },
+          "apres": {
+            "porteur": 0.08376730587964652,
+            "autres": 0.029555893358721087,
+            "ratio": 2.834199760533688
+          },
+          "gain": 0.9677065020870778
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.0795182291117776,
+            "autres": 0.029692960351232988,
+            "ratio": 2.6780162089320148
+          },
+          "apres": {
+            "porteur": 0.08465599794346812,
+            "autres": 0.029527225872791347,
+            "ratio": 2.8670488148186197
+          },
+          "gain": 1.0705868042381979
+        }
+      },
+      {
+        "domaine": "controle-donnees",
+        "bande": 4,
+        "porteurFrequence": 1,
+        "trace": {
+          "avant": {
+            "porteur": 0.0871355355303736,
+            "autres": 0.02944724078934279,
+            "ratio": 2.9590390540735725
+          },
+          "apres": {
+            "porteur": 0.11555867441231578,
+            "autres": 0.028530365341538202,
+            "ratio": 4.050374856015969
+          },
+          "gain": 1.3688142609811131,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.08784359967150256,
+            "autres": 0.02942440001059669,
+            "ratio": 2.9853998599756393
+          },
+          "apres": {
+            "porteur": 0.08784359967150256,
+            "autres": 0.02942440001059669,
+            "ratio": 2.9853998599756393
+          },
+          "gain": 1
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.0812754804462009,
+            "autres": 0.029636274824316095,
+            "ratio": 2.742432405152204
+          },
+          "apres": {
+            "porteur": 0.07934142622581049,
+            "autres": 0.029698663670135142,
+            "ratio": 2.6715486968390403
+          },
+          "gain": 0.9741529788737929
+        }
+      },
+      {
+        "domaine": "redaction-texte",
+        "bande": 5,
+        "porteurFrequence": 1.1875,
+        "trace": {
+          "avant": {
+            "porteur": 0.07983182100689014,
+            "autres": 0.029682844483648704,
+            "ratio": 2.6894936248736823
+          },
+          "apres": {
+            "porteur": 0.10954341997898559,
+            "autres": 0.028724405807129497,
+            "ratio": 3.8136009049070227
+          },
+          "gain": 1.4179624259515158,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.06798060203027201,
+            "autres": 0.030065141869991232,
+            "ratio": 2.2611103025635524
+          },
+          "apres": {
+            "porteur": 0.06798060203027201,
+            "autres": 0.030065141869991232,
+            "ratio": 2.2611103025635524
+          },
+          "gain": 1
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.09541441236905633,
+            "autres": 0.029180180246159475,
+            "ratio": 3.269836291762256
+          },
+          "apres": {
+            "porteur": 0.09541441236905633,
+            "autres": 0.029180180246159475,
+            "ratio": 3.269836291762256
+          },
+          "gain": 1
+        }
+      },
+      {
+        "domaine": "analyse-documents",
+        "bande": 1,
+        "porteurFrequence": 0.4375,
+        "trace": {
+          "avant": {
+            "porteur": 0.10028454515869101,
+            "autres": 0.029023079188429318,
+            "ratio": 3.45533788843024
+          },
+          "apres": {
+            "porteur": 0.11318875799239732,
+            "autres": 0.028606814258309767,
+            "ratio": 3.956706152958574
+          },
+          "gain": 1.1450996344545932,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.08411268538241404,
+            "autres": 0.02954475208443826,
+            "ratio": 2.8469585780250184
+          },
+          "apres": {
+            "porteur": 0.08411268538241404,
+            "autres": 0.02954475208443826,
+            "ratio": 2.8469585780250184
+          },
+          "gain": 1
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.09055678073945907,
+            "autres": 0.029336878040662612,
+            "ratio": 3.08678996496976
+          },
+          "apres": {
+            "porteur": 0.09302546380928894,
+            "autres": 0.029257243102926163,
+            "ratio": 3.1795703881609065
+          },
+          "gain": 1.0300572517871507
+        }
+      },
+      {
+        "domaine": "generation-code",
+        "bande": 3,
+        "porteurFrequence": 0.8125,
+        "trace": {
+          "avant": {
+            "porteur": 0.0916611307041671,
+            "autres": 0.029301253848252672,
+            "ratio": 3.128232367763782
+          },
+          "apres": {
+            "porteur": 0.11223897947225044,
+            "autres": 0.0286374522750887,
+            "ratio": 3.9193074297983372
+          },
+          "gain": 1.252882448946737,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.10331383339016204,
+            "autres": 0.028925360213220577,
+            "ratio": 3.5717388695799746
+          },
+          "apres": {
+            "porteur": 0.10331383339016204,
+            "autres": 0.028925360213220577,
+            "ratio": 3.5717388695799746
+          },
+          "gain": 1
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.10954398488257037,
+            "autres": 0.02872438758443321,
+            "ratio": 3.8136229905885353
+          },
+          "apres": {
+            "porteur": 0.11141587232827029,
+            "autres": 0.0286640041184429,
+            "ratio": 3.886961216858863
+          },
+          "gain": 1.0192305916057554
+        }
+      },
+      {
+        "domaine": "analyse-donnees",
+        "bande": 3,
+        "porteurFrequence": 0.8125,
+        "trace": {
+          "avant": {
+            "porteur": 0.08416661400731205,
+            "autres": 0.029543012451377026,
+            "ratio": 2.848951647901058
+          },
+          "apres": {
+            "porteur": 0.10724037144132226,
+            "autres": 0.02879869769544122,
+            "ratio": 3.723792394206013
+          },
+          "gain": 1.307074620571215,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.08442381155652866,
+            "autres": 0.029534715756241017,
+            "ratio": 2.8584602693760126
+          },
+          "apres": {
+            "porteur": 0.08329027587556784,
+            "autres": 0.02957128142336878,
+            "ratio": 2.816593392863506
+          },
+          "gain": 0.9853533467086999
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.09051242063319272,
+            "autres": 0.02933830901183249,
+            "ratio": 3.0851273874267253
+          },
+          "apres": {
+            "porteur": 0.08999868561295928,
+            "autres": 0.02935488110925937,
+            "ratio": 3.0658848618048435
+          },
+          "gain": 0.9937628100219448
+        }
+      },
+      {
+        "domaine": "cybersecurite",
+        "bande": 0,
+        "porteurFrequence": 0.25,
+        "trace": {
+          "avant": {
+            "porteur": 0.10319004493159574,
+            "autres": 0.02892935338930337,
+            "ratio": 3.566966863827322
+          },
+          "apres": {
+            "porteur": 0.10819210228677134,
+            "autres": 0.028767996700426735,
+            "ratio": 3.760849370688591
+          },
+          "gain": 1.0543550064418694,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.0739748116895399,
+            "autres": 0.02987178026807936,
+            "ratio": 2.4764112157248466
+          },
+          "apres": {
+            "porteur": 0.0739748116895399,
+            "autres": 0.02987178026807936,
+            "ratio": 2.4764112157248466
+          },
+          "gain": 1
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.08799085019456482,
+            "autres": 0.02941964999372371,
+            "ratio": 2.990887050435219
+          },
+          "apres": {
+            "porteur": 0.08772494375610083,
+            "autres": 0.02942822762077094,
+            "ratio": 2.9809795168970044
+          },
+          "gain": 0.9966874263818244
+        }
+      },
+      {
+        "domaine": "medecine-sante",
+        "bande": 1,
+        "porteurFrequence": 0.4375,
+        "trace": {
+          "avant": {
+            "porteur": 0.09420873495444758,
+            "autres": 0.029219073065985562,
+            "ratio": 3.2242205199903355
+          },
+          "apres": {
+            "porteur": 0.11929471495355588,
+            "autres": 0.028409847904724003,
+            "ratio": 4.199062077122894
+          },
+          "gain": 1.3023495294718492,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.10867927203479871,
+            "autres": 0.028752281547264565,
+            "ratio": 3.779848630660694
+          },
+          "apres": {
+            "porteur": 0.11993281688107371,
+            "autres": 0.028389263971578264,
+            "ratio": 4.224583525699846
+          },
+          "gain": 1.1176594457861704
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.0844975402424912,
+            "autres": 0.02953233741153254,
+            "ratio": 2.8611870122239105
+          },
+          "apres": {
+            "porteur": 0.0844975402424912,
+            "autres": 0.02953233741153254,
+            "ratio": 2.8611870122239105
+          },
+          "gain": 1
+        }
+      },
+      {
+        "domaine": "commerce-economie",
+        "bande": 6,
+        "porteurFrequence": 1.375,
+        "trace": {
+          "avant": {
+            "porteur": 0.09500971287209863,
+            "autres": 0.029193235068641982,
+            "ratio": 3.254511281421964
+          },
+          "apres": {
+            "porteur": 0.11358580414499365,
+            "autres": 0.028594006317903427,
+            "ratio": 3.972364099041089
+          },
+          "gain": 1.2205716175319201,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.11350189488699373,
+            "autres": 0.0285967130681615,
+            "ratio": 3.9690538775018327
+          },
+          "apres": {
+            "porteur": 0.11350189488699373,
+            "autres": 0.0285967130681615,
+            "ratio": 3.9690538775018327
+          },
+          "gain": 1
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.08930281018005864,
+            "autres": 0.02937732870386908,
+            "ratio": 3.0398546811472755
+          },
+          "apres": {
+            "porteur": 0.09120214923663104,
+            "autres": 0.029316059702044154,
+            "ratio": 3.1109961626347653
+          },
+          "gain": 1.023402921833303
+        }
+      },
+      {
+        "domaine": "langue-communication",
+        "bande": 6,
+        "porteurFrequence": 1.375,
+        "trace": {
+          "avant": {
+            "porteur": 0.06641714418746116,
+            "autres": 0.030115575993952867,
+            "ratio": 2.2054083973289287
+          },
+          "apres": {
+            "porteur": 0.10733545436673747,
+            "autres": 0.02879563050429879,
+            "ratio": 3.727491028568163
+          },
+          "gain": 1.690159080323943,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.1395182998966959,
+            "autres": 0.02775747419688078,
+            "ratio": 5.02633268816563
+          },
+          "apres": {
+            "porteur": 0.13775794857355972,
+            "autres": 0.027814259723433557,
+            "ratio": 4.9527814129634535
+          },
+          "gain": 0.9853668111990773
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.11173658575329325,
+            "autres": 0.028653658524087307,
+            "ratio": 3.89955738668985
+          },
+          "apres": {
+            "porteur": 0.11173658575329325,
+            "autres": 0.028653658524087307,
+            "ratio": 3.89955738668985
+          },
+          "gain": 1
+        }
+      },
+      {
+        "domaine": "ingenierie-industrie",
+        "bande": 2,
+        "porteurFrequence": 0.625,
+        "trace": {
+          "avant": {
+            "porteur": 0.09101495272696913,
+            "autres": 0.029322098299130028,
+            "ratio": 3.103971339243123
+          },
+          "apres": {
+            "porteur": 0.12035597512070491,
+            "autres": 0.028375613705783717,
+            "ratio": 4.241528531105324
+          },
+          "gain": 1.3664844380101733,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.09151385101206455,
+            "autres": 0.029306004806062425,
+            "ratio": 3.122699652090872
+          },
+          "apres": {
+            "porteur": 0.08939250230354322,
+            "autres": 0.029374435409563124,
+            "ratio": 3.043207505341214
+          },
+          "gain": 0.9745437744240205
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.11022057225363253,
+            "autres": 0.02870256218536669,
+            "ratio": 3.840095234070282
+          },
+          "apres": {
+            "porteur": 0.10997208333624922,
+            "autres": 0.028710577956895182,
+            "ratio": 3.8303681486787395
+          },
+          "gain": 0.99746696766652
+        }
+      },
+      {
+        "domaine": "art-creation-multimedia",
+        "bande": 0,
+        "porteurFrequence": 0.25,
+        "trace": {
+          "avant": {
+            "porteur": 0.10160778078370432,
+            "autres": 0.028980394168267604,
+            "ratio": 3.5060869149585567
+          },
+          "apres": {
+            "porteur": 0.11837588073823878,
+            "autres": 0.028439487718121336,
+            "ratio": 4.162377392712702
+          },
+          "gain": 1.1871860263800398,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.1002108031449379,
+            "autres": 0.029025457963066516,
+            "ratio": 3.452514109250275
+          },
+          "apres": {
+            "porteur": 0.09925863718900488,
+            "autres": 0.029056172993903066,
+            "ratio": 3.4160946525832077
+          },
+          "gain": 0.9894513228578881
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.09281414692791516,
+            "autres": 0.029264059776518865,
+            "ratio": 3.171608711734116
+          },
+          "apres": {
+            "porteur": 0.09255343883240906,
+            "autres": 0.029272469715083585,
+            "ratio": 3.1617912575623204
+          },
+          "gain": 0.9969045821650465
+        }
+      },
+      {
+        "domaine": "agriculture-environnement",
+        "bande": 7,
+        "porteurFrequence": 1.5625,
+        "trace": {
+          "avant": {
+            "porteur": 0.09451946696547088,
+            "autres": 0.029209049452726746,
+            "ratio": 3.2359651798476183
+          },
+          "apres": {
+            "porteur": 0.11342935166588212,
+            "autres": 0.028599053172068317,
+            "ratio": 3.9661925513207046
+          },
+          "gain": 1.2256598359032629,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.11536563945922484,
+            "autres": 0.02853659227550888,
+            "ratio": 4.042726557726928
+          },
+          "apres": {
+            "porteur": 0.11536563945922484,
+            "autres": 0.02853659227550888,
+            "ratio": 4.042726557726928
+          },
+          "gain": 1
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.09004525937068357,
+            "autres": 0.029353378729977956,
+            "ratio": 3.067628438927282
+          },
+          "apres": {
+            "porteur": 0.08862518802928744,
+            "autres": 0.029399187482926213,
+            "ratio": 3.014545489760802
+          },
+          "gain": 0.9826957696398713
+        }
+      },
+      {
+        "domaine": "droit-administration",
+        "bande": 2,
+        "porteurFrequence": 0.625,
+        "trace": {
+          "avant": {
+            "porteur": 0.09443361960364048,
+            "autres": 0.02921181872246321,
+            "ratio": 3.232719622863578
+          },
+          "apres": {
+            "porteur": 0.12348527897249795,
+            "autres": 0.028274668420241997,
+            "ratio": 4.367346670070731
+          },
+          "gain": 1.3509822006159904,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.10423494106014713,
+            "autres": 0.0288956470625759,
+            "ratio": 3.6072886976511653
+          },
+          "apres": {
+            "porteur": 0.1031888096741021,
+            "autres": 0.028929393236319288,
+            "ratio": 3.5669192516818544
+          },
+          "gain": 0.9888089228911462
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.09888546272875053,
+            "autres": 0.02906821087971773,
+            "ratio": 3.4018420720123372
+          },
+          "apres": {
+            "porteur": 0.09766786100423665,
+            "autres": 0.029107488354702043,
+            "ratio": 3.3554204270070356
+          },
+          "gain": 0.9863539682258555
+        }
+      },
+      {
+        "domaine": "education-recherche",
+        "bande": 1,
+        "porteurFrequence": 0.4375,
+        "trace": {
+          "avant": {
+            "porteur": 0.09608786489758137,
+            "autres": 0.02915845597104576,
+            "ratio": 3.295368760026123
+          },
+          "apres": {
+            "porteur": 0.12878412283128554,
+            "autres": 0.02810373797318434,
+            "ratio": 4.5824552931061024
+          },
+          "gain": 1.3905743565614723,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.11945979392510603,
+            "autres": 0.028404522776609483,
+            "ratio": 4.2056610091502264
+          },
+          "apres": {
+            "porteur": 0.11945979392510603,
+            "autres": 0.028404522776609483,
+            "ratio": 4.2056610091502264
+          },
+          "gain": 1
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.07711458628877071,
+            "autres": 0.029770497216491266,
+            "ratio": 2.590302262269686
+          },
+          "apres": {
+            "porteur": 0.07683486935737734,
+            "autres": 0.02977952034331041,
+            "ratio": 2.580124477210974
+          },
+          "gain": 0.9960708118095091
+        }
+      },
+      {
+        "domaine": "transport-immobilier",
+        "bande": 2,
+        "porteurFrequence": 0.625,
+        "trace": {
+          "avant": {
+            "porteur": 0.10581828755025456,
+            "autres": 0.028844571369346633,
+            "ratio": 3.6685685564635757
+          },
+          "apres": {
+            "porteur": 0.12890820757391722,
+            "autres": 0.028099735239551057,
+            "ratio": 4.58752392059822
+          },
+          "gain": 1.250494259543155,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.0834297497590856,
+            "autres": 0.029566782265835954,
+            "ratio": 2.8217392413204068
+          },
+          "apres": {
+            "porteur": 0.08194143427194833,
+            "autres": 0.029614792442840376,
+            "ratio": 2.7669089503194666
+          },
+          "gain": 0.9805686187447701
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.08387251974477611,
+            "autres": 0.029552499363071742,
+            "ratio": 2.838085493695388
+          },
+          "apres": {
+            "porteur": 0.08318789094367998,
+            "autres": 0.029574584163107095,
+            "ratio": 2.812816927023879
+          },
+          "gain": 0.9910966154023051
+        }
+      },
+      {
+        "domaine": "sciences-humaines-sociales",
+        "bande": 1,
+        "porteurFrequence": 0.4375,
+        "trace": {
+          "avant": {
+            "porteur": 0.0970469859965594,
+            "autres": 0.029127516580756154,
+            "ratio": 3.3317974681259304
+          },
+          "apres": {
+            "porteur": 0.1276323342543,
+            "autres": 0.028140892443409674,
+            "ratio": 4.535475714246236
+          },
+          "gain": 1.3612699324119935,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.08807640870248187,
+            "autres": 0.029416890041855423,
+            "ratio": 2.994076143914722
+          },
+          "apres": {
+            "porteur": 0.08807640870248187,
+            "autres": 0.029416890041855423,
+            "ratio": 2.994076143914722
+          },
+          "gain": 1
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.12817455961183008,
+            "autres": 0.028123401302844197,
+            "ratio": 4.557576739441806
+          },
+          "apres": {
+            "porteur": 0.13780391497111708,
+            "autres": 0.027812776936415585,
+            "ratio": 4.954698169339892
+          },
+          "gain": 1.0871343375222517
+        }
+      },
+      {
+        "domaine": "ia-specialisee-emergente",
+        "bande": 4,
+        "porteurFrequence": 1,
+        "trace": {
+          "avant": {
+            "porteur": 0.09029519112726186,
+            "autres": 0.029345316415249612,
+            "ratio": 3.0769881588442844
+          },
+          "apres": {
+            "porteur": 0.12716061872761333,
+            "autres": 0.028156109073302793,
+            "ratio": 4.516270994566687
+          },
+          "gain": 1.467757027788822,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.09590742555907561,
+            "autres": 0.029164276594868536,
+            "ratio": 3.2885240697501326
+          },
+          "apres": {
+            "porteur": 0.09528380348075455,
+            "autres": 0.029184393436104693,
+            "ratio": 3.26488894447526
+          },
+          "gain": 0.9928128471090472
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.08306742214282026,
+            "autres": 0.029578470253457407,
+            "ratio": 2.8083745180537374
+          },
+          "apres": {
+            "porteur": 0.08183657213420231,
+            "autres": 0.02961817509244509,
+            "ratio": 2.763052479728129
+          },
+          "gain": 0.9838618253960595
+        }
+      },
+      {
+        "domaine": "apprentissage-entre-ia",
+        "bande": 3,
+        "porteurFrequence": 0.8125,
+        "trace": {
+          "avant": {
+            "porteur": 0.08567269391548062,
+            "autres": 0.029494429228532886,
+            "ratio": 2.9047076399295406
+          },
+          "apres": {
+            "porteur": 0.1302496344633927,
+            "autres": 0.02805646340440669,
+            "ratio": 4.642411004764593
+          },
+          "gain": 1.5982369244146044,
+          "assimile": true
+        },
+        "vocabulaireJamaisEntraines": {
+          "avant": {
+            "porteur": 0.07721669297413884,
+            "autres": 0.02976720345244713,
+            "ratio": 2.5940190551487947
+          },
+          "apres": {
+            "porteur": 0.07616679874001374,
+            "autres": 0.02980107100838665,
+            "ratio": 2.555840987009453
+          },
+          "gain": 0.9852822715147127
+        },
+        "texteJamaisEntraines": {
+          "avant": {
+            "porteur": 0.08010315336241391,
+            "autres": 0.029674091827018908,
+            "ratio": 2.6994306625916096
+          },
+          "apres": {
+            "porteur": 0.08010315336241391,
+            "autres": 0.029674091827018908,
+            "ratio": 2.6994306625916096
+          },
+          "gain": 1
+        }
+      }
+    ]
+  },
+  "metabolisme": {
+    "evaluees": 634633,
+    "reposes": 11342860535,
+    "transmissions": 459348,
+    "ms": 126.396
+  },
+  "dureeMs": 350
+}
