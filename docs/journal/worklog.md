@@ -4695,3 +4695,31 @@ honnête), console /neural (synthèse). Gardes 30ᵉ (campagne B + surfaces, 10 
 31ᵉ (campagne A + plan + sondes, 10 tests). Anomalie outil résolue : binaire ffmpeg-static
 tronqué par npm ci (3 tests vidéo « code null ») — re-téléchargé, 4/4 verts.
 5386/5386, tsc 0, eslint 0. Rapport : docs/rapports/rapport-job-478451-2026-10-31-1130.md.
+
+### 478451-iter64-1910 (2026-10-31 19:10 +08:00) — it.64 : LA CAMPAGNE MILLION DEVIENT LISIBLE — la campagne A (données uniques 1M+/domaine) branchée sur les surfaces (API + /vocation + console), garde 32ᵉ
+
+Tick 19:10 — anti-doublon : remote main = **22cc6a1** (it.63 close : demande propriétaire
+« plus de 1 million de données dans chaque domaine » — campagne A 19 182 944 échantillons à
+données uniques + campagne B 19 038 000 passages). Aucune session parallèle en vol. Prod
+22cc6a1e LIVE constatée d'emblée (build 10:14:10Z), portes 401 intacts.
+ANOMALIE RÉSOLUE : sonde « Surveillance synthétique » ROUGE sur 22cc6a1 (×2, 10:09/10:16 UTC) —
+diagnostic transparent : les 10 endpoints étaient ✅, l'échec = « livraison bloquée » vue à
+10:16:54Z pendant la fenêtre de swap du canal PULL (release + poller 2 min) ; sonde relancée
+(workflow_dispatch) → run 41196084458 VERT 10/10 → **issue #111 refermée automatiquement avec
+preuve** (premier cycle complet ROUGE→VERT→auto-clôture sur incident réel).
+it.64 — **la campagne A (celle qui satisfait littéralement « > 1 million de DONNÉES par
+domaine » : 1 005 000 textes uniques/domaine) devient lisible comme la campagne B** :
+lecteur `lib/gen3/pretrain-million.ts` (rapport committé → ResumeMillion typé, null si
+absent/corrompu — aucune métrique fabriquée, cache invalidable, chemin injectable) ;
+`GET /api/neural/domaines` expose `vocation.preentrainementMillion` ; page publique `/vocation`
+— nouvelle section session million (sources détaillées 86 939 dépôt + 1 005 HF + 19 095 000
+procéduraux, plan rendu tel quel, BILAN 4 SIGNAUX en pastilles, tableau par domaine construit
+depuis la charte : échantillons/renforts/gain trace/gain vocabulaire, métabolisme réel,
+4 limites honnêtes citées, repli honnête) ; console `/neural` contrat + synthèse + lien preuve.
+GARDE 32ᵉ (lib/gen3/pretrain-million.guard.test.ts, 10 tests) : artefact réel > 1M/domaine,
+constante 1 005 000 VÉRIFIÉE dans les 19 domaines, sources cohérentes, ordre ids = charte,
+bilan rapporté tel quel (trace déclarée = gains>1 exacts), lecteur hermétique, surfaces câblées,
+ZÉRO chiffre mesuré en dur. Anomalie documentaire notée : rapport it.63 disait « dépôt 87 939 »,
+l'artefact machine dit 86 939 (somme vérifiée ✓) — surfaces alimentées par le lecteur uniquement.
+Validation : tsc 0, eslint 0 (5 fichiers), ciblés 54/54, suite complète **5396/5396** (12 skipped).
+Rapport : docs/rapports/rapport-job-478451-2026-10-31-1910.md

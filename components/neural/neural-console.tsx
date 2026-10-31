@@ -189,6 +189,23 @@ interface ReponseDomaines {
       }>;
       artefactCortical: { present: boolean; tailleOctets: number | null };
     } | null;
+    /* it.64 — session million à données uniques (campagne A, même contrat
+       que GET /api/neural/domaines → vocation.preentrainementMillion). */
+    preentrainementMillion?: {
+      date: string;
+      totalEchantillons: number;
+      lot: number;
+      cyclesParEchantillon: number;
+      sources: { depot: number; huggingface: number; proceduraux: number; totalSession: number };
+      bilan: {
+        donneesParDomaine: { ok: number; total: number };
+        porteursRenforces: { ok: number; total: number; renfortsTotaux: number };
+        stabiliteBandes: { ok: number; total: number };
+        traceParDomaine: { ok: number; total: number };
+      };
+      assimilesTrace: number;
+      totalDomaines: number;
+    } | null;
   };
 }
 
@@ -910,6 +927,33 @@ export function NeuralConsole() {
                 <p className="mt-1 text-[10px] text-[var(--g3-muted)]">
                   Campagne du {domaines.vocation.preentrainementMasse.date.slice(0, 10)} — plus d&apos;un million de données par domaine,
                   sonde TRACE + GÉNÉRALISATION contre cortex témoin. Détail par domaine :{" "}
+                  <a href="/vocation" className="underline hover:text-[var(--g3-text)]">page publique /vocation</a>.
+                </p>
+              </div>
+            )}
+
+            {/* it.64 — session million à données uniques (campagne A) */}
+            {domaines?.vocation.preentrainementMillion && (
+              <div className="mt-3 rounded-xl border border-[var(--g3-border)] p-3">
+                <p className="text-xs font-semibold text-[var(--g3-text)]">
+                  Session million — données uniques (it.63, campagne A) :{" "}
+                  <span className="text-[var(--g3v6-spike-text)]">
+                    {domaines.vocation.preentrainementMillion.totalEchantillons.toLocaleString("fr-FR")} échantillons
+                  </span>{" "}
+                  — bilan données {domaines.vocation.preentrainementMillion.bilan.donneesParDomaine.ok}/
+                  {domaines.vocation.preentrainementMillion.bilan.donneesParDomaine.total} · porteurs{" "}
+                  {domaines.vocation.preentrainementMillion.bilan.porteursRenforces.ok}/
+                  {domaines.vocation.preentrainementMillion.bilan.porteursRenforces.total} · bandes{" "}
+                  {domaines.vocation.preentrainementMillion.bilan.stabiliteBandes.ok}/
+                  {domaines.vocation.preentrainementMillion.bilan.stabiliteBandes.total} · trace{" "}
+                  {domaines.vocation.preentrainementMillion.assimilesTrace}/
+                  {domaines.vocation.preentrainementMillion.totalDomaines} (limite sparse-colonne documentée).
+                </p>
+                <p className="mt-1 text-[10px] text-[var(--g3-muted)]">
+                  Campagne du {domaines.vocation.preentrainementMillion.date.slice(0, 10)} — 1 005 000 textes uniques par
+                  domaine (bijection mixte-radix), plan interclassé round-robin (lot{" "}
+                  {domaines.vocation.preentrainementMillion.lot.toLocaleString("fr-FR")}, {" "}
+                  {domaines.vocation.preentrainementMillion.cyclesParEchantillon} cycles/échantillon). Détail par domaine :{" "}
                   <a href="/vocation" className="underline hover:text-[var(--g3-text)]">page publique /vocation</a>.
                 </p>
               </div>

@@ -12,6 +12,9 @@ import { DOMAINES_VOCATION, MISSION_GEN3, NB_DOMAINES_VOCATION } from "@/lib/gen
 // it.63 — résumé du pré-entraînement massif (plus d'un million de données
 // par domaine) — rapport committé par la campagne réelle, null si absent.
 import { lireResumeMasse } from "@/lib/gen3/pretrain-masse";
+// it.64 — la session million à données uniques (campagne A : 1 005 000
+// textes uniques/domaine) devient lisible elle aussi — même honnêteté.
+import { lireResumeMillion } from "@/lib/gen3/pretrain-million";
 
 /**
  * LES DOMAINES DE GEN3 — inventaire honnête :
@@ -58,6 +61,10 @@ export async function GET(request: NextRequest) {
         // it.63 — pré-entraînement massif (honnête : null si la campagne
         // n'a pas committé de rapport — aucune métrique inventée).
         preentrainementMasse: lireResumeMasse(),
+        // it.64 — session million à données uniques (campagne A, le critère
+        // propriétaire « > 1 million de données par domaine ») — même
+        // honnêteté : null si le rapport n'est pas committé.
+        preentrainementMillion: lireResumeMillion(),
       },
       datasets,
       coucheDomaines: {
