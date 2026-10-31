@@ -1,0 +1,793 @@
+{
+  "date": "2026-10-31T09:49:57.730Z",
+  "methode": "EOD (it.57) — analyse des ondes, traitement colonnaire, consolidation plastique + bus inter-régions — mécanique inchangée, échelle million",
+  "contexte": "it.63 — demande propriétaire : « réalisé encore un pré-entraînement de gen3 avec plus de 1 million de données et de dataset dans chaque domaine »",
+  "environnement": "local-sandbox",
+  "cortex": {
+    "colonnes": 1048576,
+    "voisins": 12,
+    "bandes": 32
+  },
+  "options": {
+    "cyclesParEchantillon": 3,
+    "lrBoost": 0.15,
+    "tailleLot": 2000,
+    "plan": "interclassement round-robin — un lot de ≤ 2000 échantillons par domaine et par round (ordre de la charte), continuité d'horloge entre lots (équivalence bit-à-bit vérifiée au démarrage)",
+    "graine": 20261031,
+    "motifPlan": "Pilot mesuré : l'entraînement SÉQUENTIEL par blocs à l'échelle million effondre les bandes dominées (bandes 2/6/7 : sonde de trace ×0,46–0,63) par spirale de punition compétitive ×0.95 ; l'interclassement maintient toutes les bandes en renfort régulier — analyse conservée comme résultat du pilot."
+  },
+  "sources": {
+    "depot": 86939,
+    "huggingface": 1005,
+    "proceduraux": 19095000,
+    "totalSession": 19182944,
+    "note": "Corpus procédural déterministe (graine 20261031, bijection mixte-radix — unicité garantie) : vocabulaire de domaine issu de la charte de vocation réelle (taches/motsCles/outils), gabarits FR/EN génériques — synthétique, étiqueté comme tel (même approche que training/gen3-domain-datasets)."
+  },
+  "totalEchantillons": 19182944,
+  "bilan": {
+    "donneesParDomaine": {
+      "ok": 19,
+      "total": 19,
+      "critere": "> 1 000 000 échantillons réellement traités par domaine (demande propriétaire) — chaque échantillon traverse la pipeline EOD complète (analyse → traitement → consolidation)"
+    },
+    "porteursRenforces": {
+      "ok": 19,
+      "total": 19,
+      "renfortsTotaux": 9615431899,
+      "critere": "porteur de la bande du domaine émis dans le bus inter-régions et renforcé (renforts mesurés ≈ 505 M/domaine)"
+    },
+    "stabiliteBandes": {
+      "ok": 19,
+      "total": 19,
+      "critere": "lecture du porteur ≥ 2.5 en fin de session (le pilot en blocs séquentiels montrait un effondrement à ≈ 1.67 pour les bandes dominées — l'interclassement l'élimine)"
+    },
+    "traceParDomaine": {
+      "ok": 12,
+      "total": 19,
+      "critere": "sonde de rejeu it.61 (gain > 1) — régime sparse-colonne, hors de portée à 1 M/domaine (saturation des arêtes CSR) : cf. limites honnêtes"
+    }
+  },
+  "domaines": [
+    {
+      "domaine": "recherche-web",
+      "label": "Recherche web",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "sources": {
+        "depot": 3400,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1008400
+      },
+      "echantillons": 1008400,
+      "resonanceMoyenne": 0.00005850973610093314,
+      "paquetsEmis": 1010272,
+      "renforts": 505135895,
+      "annulations": 505136105,
+      "sondeTrace": {
+        "avant": 3.485054,
+        "apres": 2.853043,
+        "gain": 0.818651
+      },
+      "sondeVocabulaire": {
+        "avant": 3.405505,
+        "apres": 3.405505,
+        "gain": 1
+      },
+      "sondeGeneralisation": {
+        "avant": 3.481057,
+        "apres": 3.098769,
+        "gain": 0.890181
+      },
+      "depotFichiers": [
+        "datasets/contextual_understanding/sample.jsonl:200",
+        "datasets/rag_documents/sample.jsonl:200",
+        "datasets/knowledge/train.jsonl:3000"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "controle-donnees",
+      "label": "Contrôle de données",
+      "bande": 4,
+      "porteurFrequence": 1,
+      "sources": {
+        "depot": 600,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1005600
+      },
+      "echantillons": 1005600,
+      "resonanceMoyenne": 0.000059326363109674335,
+      "paquetsEmis": 1007504,
+      "renforts": 503751863,
+      "annulations": 503752137,
+      "sondeTrace": {
+        "avant": 3.551678,
+        "apres": 2.844639,
+        "gain": 0.800928
+      },
+      "sondeVocabulaire": {
+        "avant": 1.941327,
+        "apres": 2.879148,
+        "gain": 1.483083
+      },
+      "sondeGeneralisation": {
+        "avant": 2.637016,
+        "apres": 2.516676,
+        "gain": 0.954365
+      },
+      "depotFichiers": [
+        "datasets/databases/sample.jsonl:200",
+        "datasets/ml_data/sample.jsonl:200",
+        "datasets/ml_evaluation/sample.jsonl:200"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "redaction-texte",
+      "label": "Rédaction de texte",
+      "bande": 5,
+      "porteurFrequence": 1.1875,
+      "sources": {
+        "depot": 10345,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1015345
+      },
+      "echantillons": 1015345,
+      "resonanceMoyenne": 0.00005137290570530988,
+      "paquetsEmis": 1017025,
+      "renforts": 508512508,
+      "annulations": 508512492,
+      "sondeTrace": {
+        "avant": 3.136608,
+        "apres": 3.044885,
+        "gain": 0.970757
+      },
+      "sondeVocabulaire": {
+        "avant": 3.443969,
+        "apres": 3.443969,
+        "gain": 1
+      },
+      "sondeGeneralisation": {
+        "avant": 3.442676,
+        "apres": 3.313577,
+        "gain": 0.9625
+      },
+      "depotFichiers": [
+        "datasets/writing/train.jsonl:8000",
+        "datasets/text_generation/sample.jsonl:200",
+        "datasets/abbreviations/train.jsonl:2145"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "analyse-documents",
+      "label": "Analyse de documents",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "sources": {
+        "depot": 3400,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1008400
+      },
+      "echantillons": 1008400,
+      "resonanceMoyenne": 0.00008618157818004511,
+      "paquetsEmis": 1011128,
+      "renforts": 505564174,
+      "annulations": 505563826,
+      "sondeTrace": {
+        "avant": 3.204654,
+        "apres": 3.037923,
+        "gain": 0.947972
+      },
+      "sondeVocabulaire": {
+        "avant": 3.015774,
+        "apres": 3.015774,
+        "gain": 1
+      },
+      "sondeGeneralisation": {
+        "avant": 4.2469,
+        "apres": 4.038286,
+        "gain": 0.950879
+      },
+      "depotFichiers": [
+        "datasets/rag_documents/sample.jsonl:200",
+        "datasets/contextual_understanding/sample.jsonl:200",
+        "datasets/knowledge/train.jsonl:3000"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "generation-code",
+      "label": "Génération de code",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "sources": {
+        "depot": 12400,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1017400
+      },
+      "echantillons": 1017400,
+      "resonanceMoyenne": 0.00008237173825002955,
+      "paquetsEmis": 1019976,
+      "renforts": 509987987,
+      "annulations": 509988013,
+      "sondeTrace": {
+        "avant": 3.004882,
+        "apres": 3.400142,
+        "gain": 1.131539
+      },
+      "sondeVocabulaire": {
+        "avant": 2.624098,
+        "apres": 2.440663,
+        "gain": 0.930096
+      },
+      "sondeGeneralisation": {
+        "avant": 3.03065,
+        "apres": 2.9707,
+        "gain": 0.980219
+      },
+      "depotFichiers": [
+        "datasets/code/train.jsonl:12000",
+        "datasets/tools/sample.jsonl:200",
+        "datasets/databases/sample.jsonl:200"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "analyse-donnees",
+      "label": "Analyse de données",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "sources": {
+        "depot": 600,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1005600
+      },
+      "echantillons": 1005600,
+      "resonanceMoyenne": 0.000046048846339253966,
+      "paquetsEmis": 1007040,
+      "renforts": 503520011,
+      "annulations": 503519989,
+      "sondeTrace": {
+        "avant": 2.806226,
+        "apres": 3.35158,
+        "gain": 1.194337
+      },
+      "sondeVocabulaire": {
+        "avant": 2.500697,
+        "apres": 2.327522,
+        "gain": 0.930749
+      },
+      "sondeGeneralisation": {
+        "avant": 3.535516,
+        "apres": 3.35474,
+        "gain": 0.948868
+      },
+      "depotFichiers": [
+        "datasets/ml_data/sample.jsonl:200",
+        "datasets/ml_evaluation/sample.jsonl:200",
+        "datasets/math/sample.jsonl:200"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "cybersecurite",
+      "label": "Cybersécurité",
+      "bande": 0,
+      "porteurFrequence": 0.25,
+      "sources": {
+        "depot": 6200,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1011200
+      },
+      "echantillons": 1011200,
+      "resonanceMoyenne": 0.00007738315231367833,
+      "paquetsEmis": 1013704,
+      "renforts": 506852002,
+      "annulations": 506851998,
+      "sondeTrace": {
+        "avant": 3.659729,
+        "apres": 3.318403,
+        "gain": 0.906735
+      },
+      "sondeVocabulaire": {
+        "avant": 4.13909,
+        "apres": 3.958458,
+        "gain": 0.95636
+      },
+      "sondeGeneralisation": {
+        "avant": 3.658439,
+        "apres": 3.274455,
+        "gain": 0.895042
+      },
+      "depotFichiers": [
+        "datasets/security/train.jsonl:6000",
+        "datasets/security_v4/sample.jsonl:200"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "medecine-sante",
+      "label": "Médecine et santé",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "sources": {
+        "depot": 3000,
+        "hf": 500,
+        "genere": 1005000,
+        "total": 1008500
+      },
+      "echantillons": 1008500,
+      "resonanceMoyenne": 0.00006137597743838263,
+      "paquetsEmis": 1010468,
+      "renforts": 505234125,
+      "annulations": 505233875,
+      "sondeTrace": {
+        "avant": 3.578597,
+        "apres": 3.316391,
+        "gain": 0.926729
+      },
+      "sondeVocabulaire": {
+        "avant": 2.906243,
+        "apres": 2.906243,
+        "gain": 1
+      },
+      "sondeGeneralisation": {
+        "avant": 3.274782,
+        "apres": 3.095678,
+        "gain": 0.945308
+      },
+      "depotFichiers": [
+        "datasets/knowledge/train.jsonl:3000"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "commerce-economie",
+      "label": "Commerce et économie",
+      "bande": 6,
+      "porteurFrequence": 1.375,
+      "sources": {
+        "depot": 11600,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1016600
+      },
+      "echantillons": 1016600,
+      "resonanceMoyenne": 0.00007765635968132882,
+      "paquetsEmis": 1019112,
+      "renforts": 509556093,
+      "annulations": 509555907,
+      "sondeTrace": {
+        "avant": 2.779647,
+        "apres": 3.312549,
+        "gain": 1.191716
+      },
+      "sondeVocabulaire": {
+        "avant": 4.893244,
+        "apres": 4.893244,
+        "gain": 1
+      },
+      "sondeGeneralisation": {
+        "avant": 3.40709,
+        "apres": 3.40709,
+        "gain": 1
+      },
+      "depotFichiers": [
+        "datasets/business/train.jsonl:11600"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "langue-communication",
+      "label": "Langue et communication",
+      "bande": 6,
+      "porteurFrequence": 1.375,
+      "sources": {
+        "depot": 2545,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1007545
+      },
+      "echantillons": 1007545,
+      "resonanceMoyenne": 0.00006358341319429575,
+      "paquetsEmis": 1009577,
+      "renforts": 504788481,
+      "annulations": 504788519,
+      "sondeTrace": {
+        "avant": 2.945097,
+        "apres": 3.35649,
+        "gain": 1.139688
+      },
+      "sondeVocabulaire": {
+        "avant": 3.255008,
+        "apres": 2.947831,
+        "gain": 0.905629
+      },
+      "sondeGeneralisation": {
+        "avant": 3.441457,
+        "apres": 3.441457,
+        "gain": 1
+      },
+      "depotFichiers": [
+        "datasets/abbreviations/train.jsonl:2145",
+        "datasets/nlp_comprehension/sample.jsonl:200",
+        "datasets/conversational_memory/sample.jsonl:200"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "ingenierie-industrie",
+      "label": "Ingénierie et industrie",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "sources": {
+        "depot": 600,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1005600
+      },
+      "echantillons": 1005600,
+      "resonanceMoyenne": 0.00009332687592348585,
+      "paquetsEmis": 1008664,
+      "renforts": 504331276,
+      "annulations": 504332724,
+      "sondeTrace": {
+        "avant": 2.821577,
+        "apres": 3.307938,
+        "gain": 1.172372
+      },
+      "sondeVocabulaire": {
+        "avant": 3.729331,
+        "apres": 4.219304,
+        "gain": 1.131384
+      },
+      "sondeGeneralisation": {
+        "avant": 3.614961,
+        "apres": 3.557859,
+        "gain": 0.984204
+      },
+      "depotFichiers": [
+        "datasets/sciences/sample.jsonl:200",
+        "datasets/problem_solving/sample.jsonl:200",
+        "datasets/reasoning/sample.jsonl:200"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "art-creation-multimedia",
+      "label": "Art et création multimédia",
+      "bande": 0,
+      "porteurFrequence": 0.25,
+      "sources": {
+        "depot": 21249,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1026249
+      },
+      "echantillons": 1026249,
+      "resonanceMoyenne": 0.00006837389241509277,
+      "paquetsEmis": 1028465,
+      "renforts": 514232497,
+      "annulations": 514232503,
+      "sondeTrace": {
+        "avant": 3.16494,
+        "apres": 3.772793,
+        "gain": 1.192058
+      },
+      "sondeVocabulaire": {
+        "avant": 2.913345,
+        "apres": 4.309083,
+        "gain": 1.479084
+      },
+      "sondeGeneralisation": {
+        "avant": 2.912838,
+        "apres": 2.867625,
+        "gain": 0.984478
+      },
+      "depotFichiers": [
+        "datasets/music/train.jsonl:7300",
+        "datasets/video/train.jsonl:8349",
+        "datasets/multimodal/train.jsonl:5400",
+        "datasets/image_generation/sample.jsonl:200"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "agriculture-environnement",
+      "label": "Agriculture et environnement",
+      "bande": 7,
+      "porteurFrequence": 1.5625,
+      "sources": {
+        "depot": 200,
+        "hf": 500,
+        "genere": 1005000,
+        "total": 1005700
+      },
+      "echantillons": 1005700,
+      "resonanceMoyenne": 0.00010256445655199258,
+      "paquetsEmis": 1009060,
+      "renforts": 504530331,
+      "annulations": 504529669,
+      "sondeTrace": {
+        "avant": 3.177858,
+        "apres": 3.121659,
+        "gain": 0.982315
+      },
+      "sondeVocabulaire": {
+        "avant": 3.685007,
+        "apres": 3.453267,
+        "gain": 0.937113
+      },
+      "sondeGeneralisation": {
+        "avant": 3.570328,
+        "apres": 2.991663,
+        "gain": 0.837924
+      },
+      "depotFichiers": [
+        "datasets/sciences/sample.jsonl:200"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "droit-administration",
+      "label": "Droit et administration",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "sources": {
+        "depot": 3000,
+        "hf": 5,
+        "genere": 1005000,
+        "total": 1008005
+      },
+      "echantillons": 1008005,
+      "resonanceMoyenne": 0.00006186357952042828,
+      "paquetsEmis": 1009989,
+      "renforts": 504993922,
+      "annulations": 504995078,
+      "sondeTrace": {
+        "avant": 2.8891,
+        "apres": 3.281873,
+        "gain": 1.13595
+      },
+      "sondeVocabulaire": {
+        "avant": 2.716659,
+        "apres": 4.006888,
+        "gain": 1.474932
+      },
+      "sondeGeneralisation": {
+        "avant": 2.844955,
+        "apres": 3.182937,
+        "gain": 1.118801
+      },
+      "depotFichiers": [
+        "datasets/knowledge/train.jsonl:3000"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "education-recherche",
+      "label": "Éducation et recherche",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "sources": {
+        "depot": 3400,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1008400
+      },
+      "echantillons": 1008400,
+      "resonanceMoyenne": 0.00007039755401820132,
+      "paquetsEmis": 1010632,
+      "renforts": 505315980,
+      "annulations": 505316020,
+      "sondeTrace": {
+        "avant": 3.261386,
+        "apres": 3.426854,
+        "gain": 1.050735
+      },
+      "sondeVocabulaire": {
+        "avant": 3.993362,
+        "apres": 3.66295,
+        "gain": 0.91726
+      },
+      "sondeGeneralisation": {
+        "avant": 3.541054,
+        "apres": 3.483732,
+        "gain": 0.983812
+      },
+      "depotFichiers": [
+        "datasets/knowledge/train.jsonl:3000",
+        "datasets/intent_recognition/sample.jsonl:200",
+        "datasets/sciences/sample.jsonl:200"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "transport-immobilier",
+      "label": "Transport et immobilier",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "sources": {
+        "depot": 0,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1005000
+      },
+      "echantillons": 1005000,
+      "resonanceMoyenne": 0.0000718200553304447,
+      "paquetsEmis": 1007320,
+      "renforts": 503660627,
+      "annulations": 503659373,
+      "sondeTrace": {
+        "avant": 3.198982,
+        "apres": 3.42546,
+        "gain": 1.070797
+      },
+      "sondeVocabulaire": {
+        "avant": 3.769882,
+        "apres": 5.344836,
+        "gain": 1.417773
+      },
+      "sondeGeneralisation": {
+        "avant": 3.763076,
+        "apres": 3.66485,
+        "gain": 0.973897
+      },
+      "depotFichiers": [],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "sciences-humaines-sociales",
+      "label": "Sciences humaines et sociales",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "sources": {
+        "depot": 3200,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1008200
+      },
+      "echantillons": 1008200,
+      "resonanceMoyenne": 0.00012289042886427513,
+      "paquetsEmis": 1011968,
+      "renforts": 505984117,
+      "annulations": 505983883,
+      "sondeTrace": {
+        "avant": 2.978918,
+        "apres": 3.404065,
+        "gain": 1.142719
+      },
+      "sondeVocabulaire": {
+        "avant": 4.133563,
+        "apres": 3.996423,
+        "gain": 0.966823
+      },
+      "sondeGeneralisation": {
+        "avant": 3.938541,
+        "apres": 3.731546,
+        "gain": 0.947444
+      },
+      "depotFichiers": [
+        "datasets/professions/sample.jsonl:200",
+        "datasets/knowledge/train.jsonl:3000"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "ia-specialisee-emergente",
+      "label": "Domaines spécialisés et émergents en IA",
+      "bande": 4,
+      "porteurFrequence": 1,
+      "sources": {
+        "depot": 600,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1005600
+      },
+      "echantillons": 1005600,
+      "resonanceMoyenne": 0.00015724011028654667,
+      "paquetsEmis": 1010592,
+      "renforts": 505296052,
+      "annulations": 505295948,
+      "sondeTrace": {
+        "avant": 3.190362,
+        "apres": 3.339359,
+        "gain": 1.046702
+      },
+      "sondeVocabulaire": {
+        "avant": 3.01428,
+        "apres": 3.428929,
+        "gain": 1.137562
+      },
+      "sondeGeneralisation": {
+        "avant": 2.565469,
+        "apres": 3.213837,
+        "gain": 1.252729
+      },
+      "depotFichiers": [
+        "datasets/ml_training/sample.jsonl:200",
+        "datasets/multimodal_v4/sample.jsonl:200",
+        "datasets/tools/sample.jsonl:200"
+      ],
+      "hfErreurs": []
+    },
+    {
+      "domaine": "apprentissage-entre-ia",
+      "label": "Apprentissage autonome avec d'autres IA",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "sources": {
+        "depot": 600,
+        "hf": 0,
+        "genere": 1005000,
+        "total": 1005600
+      },
+      "echantillons": 1005600,
+      "resonanceMoyenne": 0.00008544310978824088,
+      "paquetsEmis": 1008368,
+      "renforts": 504183958,
+      "annulations": 504184042,
+      "sondeTrace": {
+        "avant": 2.555047,
+        "apres": 3.303604,
+        "gain": 1.292972
+      },
+      "sondeVocabulaire": {
+        "avant": 3.23922,
+        "apres": 2.989158,
+        "gain": 0.922802
+      },
+      "sondeGeneralisation": {
+        "avant": 3.751112,
+        "apres": 3.661587,
+        "gain": 0.976134
+      },
+      "depotFichiers": [
+        "datasets/ml_management/sample.jsonl:200",
+        "datasets/ml_evaluation/sample.jsonl:200",
+        "datasets/reasoning/sample.jsonl:200"
+      ],
+      "hfErreurs": []
+    }
+  ],
+  "assimiles": {
+    "trace": 12,
+    "total": 19
+  },
+  "sonde": {
+    "vocabulaire": {
+      "avant": 3.3326106594953235,
+      "apres": 3.559431325663212
+    },
+    "generalisation": {
+      "avant": 3.4030482157038136,
+      "apres": 3.3087928478960023,
+      "note": "À l'échelle million, le texte de charte tenu à l'écart partage son VOCABULAIRE avec le corpus procédural (les taches/motsCles de la charte y sont massivement représentés) : un gain > 1 mesure ce recouvrement de tokens, PAS une généralisation sémantique — celle-ci reste hors de portée de la méthode (cf. Limites honnêtes, it.61)."
+    }
+  },
+  "metabolisme": {
+    "evaluees": 2163696665,
+    "reposes": 60342160366567,
+    "transmissions": 1736519328,
+    "ms": 256340.829
+  },
+  "dureeMs": 21213,
+  "dureeSession": {
+    "dernierePhaseMs": 21213,
+    "note": "Session étendue exécutée par appels successifs avec reprise par checkpoints (var/neural-million/ — un point de contrôle écrit à chaque fin de round). dureeMs = durée de la dernière phase (sondes + rapport) ; la consolidation des 19 domaines s'étale sur la wall-clock totale de la session, horodatée en console."
+  },
+  "limitesHonnetes": [
+    "Le corpus procédural est synthétique (gabarits + lexique de charte) : il inscrit la FRÉQUENCE PORTEUSE de chaque domaine dans le substrat, il ne remplace pas des données réelles massives.",
+    "La généralisation SÉMANTIQUE à des textes jamais vus reste hors de portée de la méthode (la trace vit dans les colonnes stimulées — documenté it.61) ; le gain > 1 de la sonde de charte mesure un recouvrement de vocabulaire, pas une compréhension.",
+    "Le mécanisme de TRACE par domaine (it.61) est SPARSE-COLONNE : à plus d'un million d'échantillons/domaine sur 1 048 576 colonnes, chaque colonne est stimulée des dizaines de fois par domaine et les arêtes CSR saturent (cap 1.0) — la discrimination par trace se compresse (bilan.traceParDomaine porte la mesure réelle). La conserver à cette échelle exigerait un substrat ≈ 8.4 M de colonnes (≈ 930 Mo d'état, itération candidate). L'assimilation à l'échelle million se lit dans le bilan : données 19/19, porteurs renforcés 19/19, bandes stables 19/19.",
+    "Le checkpoint (var/neural-million/) est hors git : l'artefact commis est le rapport de session + sondes, comme it.61."
+  ]
+}

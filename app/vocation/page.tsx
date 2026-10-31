@@ -6,6 +6,7 @@ import {
   MISSION_GEN3,
   NB_DOMAINES_VOCATION,
 } from "@/lib/gen3/vocation";
+import { lireResumeMasse } from "@/lib/gen3/pretrain-masse";
 
 /**
  * /vocation — LA CHARTE LISIBLE DE LA VOCATION DE GEN3 (it.62).
@@ -18,11 +19,14 @@ import {
  * a été créé, les tâches qu'il y exécute et les outils réels qu'il y
  * mobilise.
  *
- * Composant serveur PUR : la charte est un module statique zéro IO
- * (lib/gen3/vocation.ts) — aucun fetch, aucune donnée utilisateur,
- * aucun secret. Page publique (la vocation est une promesse publique).
- * Le pré-entraînement par ondes correspondant (méthode EOD it.57) est
- * pilotable depuis la console /neural (onglet Entraînement — it.62).
+ * Composant serveur : la charte est un module statique zéro IO
+ * (lib/gen3/vocation.ts) ; le résumé du pré-entraînement massif lit le
+ * rapport committé par la campagne réelle (lib/gen3/pretrain-masse.ts —
+ * null si absent, honnêteté : aucune métrique inventée). Aucune donnée
+ * utilisateur, aucun secret. Page publique (la vocation est une promesse
+ * publique). Le pré-entraînement par ondes correspondant (méthode EOD
+ * it.57) est pilotable depuis la console /neural (onglet Entraînement —
+ * it.62).
  */
 
 export const metadata: Metadata = {
@@ -32,6 +36,11 @@ export const metadata: Metadata = {
 };
 
 export default function PageVocation() {
+  // it.63 — résumé du pré-entraînement massif committé (null si absent).
+  const masse = lireResumeMasse();
+  const masseParId = new Map(masse?.parDomaine.map((d) => [d.id, d]) ?? []);
+  const formatM = (n: number) => `${(n / 1_000_000).toFixed(3).replace(".", ",")}`;
+
   return (
     <div className="min-h-full bg-[var(--g3-bg)] text-[var(--g3-text)]">
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-10 sm:px-6">
@@ -86,6 +95,76 @@ export default function PageVocation() {
               </p>
             </article>
           ))}
+        </section>
+
+        {/* it.63 — pré-entraînement massif (preuve d'assimilation honnête) */}
+        <section aria-label="Pré-entraînement massif par domaine" className="g3v6-card p-5">
+          <h2 className="text-sm font-bold">Pré-entraînement massif — plus d&apos;un million de données par domaine</h2>
+          {masse ? (
+            <>
+              <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--g3-muted)]">
+                Campagne réelle du {masse.date.slice(0, 10)} — {masse.totalEchantillons.toLocaleString("fr-FR")} échantillons traités
+                par la méthode des ondes de domaine ({masse.epoques.toLocaleString("fr-FR")} époques entrelacées de {masse.lot.toLocaleString("fr-FR")}),
+                chaque domaine recevant plus d&apos;un million de données. Sonde d&apos;assimilation : rejeu des échantillons entraînés
+                (TRACE à l&apos;horloge exacte) et textes jamais vus (GÉNÉRALISATION), comparés à un cortex témoin vierge —
+                gains mesurés, aucun chiffre inventé. Assimilation (gain ≥ {masse.seuilAssimile.toLocaleString("fr-FR")}) :{" "}
+                <strong className="text-[var(--g3v6-spike-text)]">{masse.assimiles}/{masse.totalDomaines} domaines</strong>.
+              </p>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-left text-[12px]">
+                  <thead className="text-[10px] uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">
+                    <tr>
+                      <th className="py-1.5 pr-3">Domaine</th>
+                      <th className="py-1.5 pr-3">Échantillons</th>
+                      <th className="py-1.5 pr-3">Gain trace</th>
+                      <th className="py-1.5 pr-3">Gain généralisation</th>
+                      <th className="py-1.5">Assimilation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DOMAINES_VOCATION.map((domaine) => {
+                      const d = masseParId.get(domaine.id);
+                      return (
+                        <tr key={domaine.id} className="border-t border-[var(--g3-border)]">
+                          <td className="py-1.5 pr-3 font-medium">{domaine.label}</td>
+                          <td className="py-1.5 pr-3 text-[var(--g3-muted)]">
+                            {d ? `${formatM(d.echantillons)} M` : "—"}
+                          </td>
+                          <td className="py-1.5 pr-3 text-[var(--g3-muted)]">{d ? `×${d.gainTrace.toFixed(2).replace(".", ",")}` : "—"}</td>
+                          <td className="py-1.5 pr-3 text-[var(--g3-muted)]">{d ? `×${d.gainGeneralisation.toFixed(2).replace(".", ",")}` : "—"}</td>
+                          <td className="py-1.5">
+                            {d ? (
+                              d.assimile ? (
+                                <span className="rounded-full border border-[var(--g3-border)] px-2 py-0.5 text-[11px] font-semibold text-[var(--g3v6-spike-text)]">assimilé</span>
+                              ) : (
+                                <span className="rounded-full border border-[var(--g3-border)] px-2 py-0.5 text-[11px] text-[var(--g3-muted)]">gain faible — rapporté tel quel</span>
+                              )
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-[11px] text-[var(--g3-faint)]">
+                Artefact cortical committé (amorçage production) :{" "}
+                {masse.artefactCortical.present && masse.artefactCortical.tailleOctets !== null
+                  ? `${(masse.artefactCortical.tailleOctets / 1e6).toFixed(1).replace(".", ",")} Mo — chargé au démarrage si aucun état local plus récent`
+                  : "absent — le cortex de production démarre à neuf"}
+                . 19 domaines répartis sur 8 bandes-porteuses du vocabulaire fréquentiel (bandes partagées : la
+                discrimination mesurée est celle de la bande).
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--g3-muted)]">
+              Aucune campagne massive committée à ce jour — cette section affichera les résultats mesurés
+              (échantillons réellement traités, gains de sonde, artefact cortical) dès qu&apos;un rapport de campagne
+              sera livré avec le dépôt.
+            </p>
+          )}
         </section>
 
         {/* Piste d'action — entraînement + vérification */}

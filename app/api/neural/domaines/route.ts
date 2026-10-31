@@ -9,6 +9,9 @@ import { ZONE_DOMAINES } from "@/lib/neural/core/types";
 // it.59 — LA VOCATION DE GEN3 : les 19 domaines déclarés (charte) sont
 // exposés à côté des 18 datasets d'entraînement — source de vérité unique.
 import { DOMAINES_VOCATION, MISSION_GEN3, NB_DOMAINES_VOCATION } from "@/lib/gen3/vocation";
+// it.63 — résumé du pré-entraînement massif (plus d'un million de données
+// par domaine) — rapport committé par la campagne réelle, null si absent.
+import { lireResumeMasse } from "@/lib/gen3/pretrain-masse";
 
 /**
  * LES DOMAINES DE GEN3 — inventaire honnête :
@@ -52,6 +55,9 @@ export async function GET(request: NextRequest) {
           taches: domaine.taches,
           outils: domaine.outils,
         })),
+        // it.63 — pré-entraînement massif (honnête : null si la campagne
+        // n'a pas committé de rapport — aucune métrique inventée).
+        preentrainementMasse: lireResumeMasse(),
       },
       datasets,
       coucheDomaines: {

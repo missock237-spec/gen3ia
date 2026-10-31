@@ -17,7 +17,13 @@
  *  2. TRAITEMENT DES ONDES — la signature pilote l'injection corticale :
  *     la COLONNE cible est dérivée de l'ONDE elle-même
  *     (colonne = f(sin(phase), fréquence)), l'intensité = amplitude — le
- *     cortex est stimulé PAR les ondes, pas par un hash direct. Le pas
+ *     cortex est stimulé PAR les ondes, pas par un hash direct. it.63 :
+ *     l'onde d'un domaine balaye SA BANDE-PORTEUSE (chaque domaine possède
+ *     sa fréquence — son onde vit dans sa bande, cf. le vocabulaire du bus
+ *     d'ondes) : les colonnes stimulées restent dérivées de l'onde (phase +
+ *     fréquence), mais à l'intérieur de l'intervalle de la bande du
+ *     domaine. Sans bande cible (paramètre absent), le balayage reste
+ *     substrat-complet (comportement it.57 conservé). Le pas
  *     columnnaire (CSR, décroissance paresseuse) propage l'énergie ; à la
  *     fin des cycles, la résonance graduée des bandes est lue.
  *
@@ -94,18 +100,35 @@ export const GAIN_ONDE_INTENSITE = 2.0;
 /**
  * TRAITEMENT DES ONDES — la signature pilote l'injection corticale :
  * colonne = f(onde) (sin de la phase + porteur fréquentiel), intensité =
- * amplitude × GAIN_ONDE_INTENSITE. Déterministe, étalé sur tout le
- * cortex (les ondes balayent le substrat, elles ne le concentrent pas).
+ * amplitude × GAIN_ONDE_INTENSITE. Déterministe. it.63 — `bandeCible`
+ * plie le balayage dans l'INTERVALLE de la bande (l'onde du domaine vit
+ * dans sa bande-porteuse) ; sans bandeCible, balayage substrat-complet
+ * (it.57). `nbBandes` est le nombre de bandes PHYSIQUES du cortex
+ * (parBande = nbColonnes / nbBandes, même découpage que la plasticité).
  */
 export function colonnesDepuisOndes(
   paquets: readonly PaquetOnde[],
   nbColonnes: number,
+  bandeCible?: number,
+  nbBandes = 32,
 ): Array<[number, number]> {
+  const parBande =
+    bandeCible === undefined
+      ? nbColonnes
+      : Math.max(1, Math.floor(nbColonnes / Math.max(1, nbBandes)));
+  const base =
+    bandeCible === undefined
+      ? 0
+      : Math.min(Math.max(0, bandeCible), Math.max(1, nbBandes) - 1) * parBande;
+  const largeur = bandeCible === undefined ? Math.max(1, nbColonnes - 1) : parBande;
   const accumulate = new Map<number, number>();
   for (const p of paquets) {
     const onde = (Math.sin(p.phase) + 1) / 2; // [0, 1] — la phase décide
     const balayage = (onde + p.frequence / 1.75) % 1; // la fréquence décale
-    const colonne = Math.floor(balayage * Math.max(1, nbColonnes - 1));
+    const colonne = Math.min(
+      nbColonnes - 1,
+      base + Math.floor(balayage * largeur),
+    );
     const suivant = Math.min(3.0, (accumulate.get(colonne) ?? 0) + p.amplitude * GAIN_ONDE_INTENSITE);
     accumulate.set(colonne, suivant);
   }
@@ -126,6 +149,12 @@ export interface OptionsOndes {
   lrBoost?: number;
   /** Cap d'échantillons par domaine (défaut 200, garde-fou de coût). */
   maxParDomaine?: number;
+  /** it.63 — horloge de départ de la session (continuité des phases d'onde
+   *  entre lots d'une même session étendue ; défaut 0 — sémantique inchangée).
+   *  Les phases des ondes analysées intègrent horloge × 0.1 : passer la même
+   *  horloge globale qu'une session d'un bloc rend le fractionnement en lots
+   *  BIT-À-BIT équivalent (même séquence horloge → mêmes colonnes). */
+  horlogeInitiale?: number;
 }
 
 /** Rapport honnête PAR domaine. */
@@ -169,6 +198,7 @@ export function entrainerDomainesParOndes(
   const cyclesParEchantillon = Math.max(1, Math.min(8, options.cyclesParEchantillon ?? 3));
   const lrBoost = options.lrBoost ?? 0.15;
   const maxParDomaine = Math.max(1, Math.min(2000, options.maxParDomaine ?? 200));
+  const horlogeInitiale = Math.max(0, Math.floor(options.horlogeInitiale ?? 0));
 
   // Répartition par domaine + cap honnête par domaine.
   const parDomaine = new Map<string, ExempleOnde[]>();
@@ -181,7 +211,7 @@ export function entrainerDomainesParOndes(
 
   const metabolisme = { evaluees: 0, reposes: 0, transmissions: 0, ms: 0 };
   const rapports: RapportDomaineOndes[] = [];
-  let horloge = 0;
+  let horloge = horlogeInitiale;
   let totalEchantillons = 0;
 
   for (const [domaine, liste] of parDomaine) {
@@ -194,9 +224,15 @@ export function entrainerDomainesParOndes(
     let annulations = 0;
 
     for (const exemple of liste) {
-      // 1+2. Analyse des ondes → traitement : injection DÉRIVÉE de l'onde.
+      // 1+2. Analyse des ondes → traitement : injection DÉRIVÉE de l'onde,
+      // balayée dans la BANDE-PORTEUSE du domaine (it.63).
       const paquets = analyserOndeTexte(exemple.texte, horloge);
-      const injections = colonnesDepuisOndes(paquets, cortex.config.colonnes);
+      const injections = colonnesDepuisOndes(
+        paquets,
+        cortex.config.colonnes,
+        bande,
+        cortex.config.bandes,
+      );
       const stimulees = injections.map(([c]) => c);
 
       for (let c = 0; c < cyclesParEchantillon; c++) {

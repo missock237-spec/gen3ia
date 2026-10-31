@@ -170,6 +170,25 @@ interface ReponseDomaines {
       taches: string[];
       outils: string[];
     }>;
+    /* it.63 — résumé du pré-entraînement massif (rapport committé, null
+       si aucune campagne — honnêteté : rien d'inventé côté client). */
+    preentrainementMasse?: {
+      date: string;
+      epoques: number;
+      lot: number;
+      totalEchantillons: number;
+      assimiles: number;
+      totalDomaines: number;
+      seuilAssimile: number;
+      parDomaine: Array<{
+        id: string;
+        echantillons: number;
+        gainTrace: number;
+        assimile: boolean;
+        gainGeneralisation: number;
+      }>;
+      artefactCortical: { present: boolean; tailleOctets: number | null };
+    } | null;
   };
 }
 
@@ -873,6 +892,27 @@ export function NeuralConsole() {
               </div>
             ) : (
               <p className="mt-3 text-xs text-[var(--g3-faint)]">Chargement de la charte de vocation…</p>
+            )}
+
+            {/* it.63 — résumé du pré-entraînement massif committé */}
+            {domaines?.vocation.preentrainementMasse && (
+              <div className="mt-4 rounded-xl border border-[var(--g3-border)] p-3">
+                <p className="text-xs font-semibold text-[var(--g3-text)]">
+                  Pré-entraînement massif (it.63) :{" "}
+                  <span className="text-[var(--g3v6-spike-text)]">
+                    {domaines.vocation.preentrainementMasse.totalEchantillons.toLocaleString("fr-FR")} échantillons
+                  </span>{" "}
+                  — {domaines.vocation.preentrainementMasse.epoques.toLocaleString("fr-FR")} époques ×{" "}
+                  {domaines.vocation.preentrainementMasse.lot.toLocaleString("fr-FR")} par domaine — assimilation{" "}
+                  {domaines.vocation.preentrainementMasse.assimiles}/{domaines.vocation.preentrainementMasse.totalDomaines} domaines
+                  (gain ≥ {domaines.vocation.preentrainementMasse.seuilAssimile.toLocaleString("fr-FR")}).
+                </p>
+                <p className="mt-1 text-[10px] text-[var(--g3-muted)]">
+                  Campagne du {domaines.vocation.preentrainementMasse.date.slice(0, 10)} — plus d&apos;un million de données par domaine,
+                  sonde TRACE + GÉNÉRALISATION contre cortex témoin. Détail par domaine :{" "}
+                  <a href="/vocation" className="underline hover:text-[var(--g3-text)]">page publique /vocation</a>.
+                </p>
+              </div>
             )}
 
             {/* it.62 — le rapport honnête de la dernière session d'ondes */}

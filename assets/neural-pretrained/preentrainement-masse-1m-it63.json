@@ -1,0 +1,603 @@
+{
+  "date": "2026-10-31T08:57:58.807Z",
+  "methode": "EOD — Entraînement par Ondes de Domaine (it.57), campagne massive it.63",
+  "contexte": "it.63 — pré-entraînement massif : plus d'un million de données par domaine (demande propriétaire)",
+  "environnement": {
+    "type": "local-sandbox",
+    "serviceIaDistant": false
+  },
+  "cortex": {
+    "colonnes": 1048576,
+    "voisins": 12,
+    "bandes": 32
+  },
+  "options": {
+    "lot": 2000,
+    "epoques": 501,
+    "cyclesParEchantillon": 3,
+    "lrBoost": 0.15,
+    "seuilAssimile": 1.25,
+    "ordonnancement": "époques entrelacées (ordre de la charte)"
+  },
+  "sources": {
+    "description": "Échantillons textuels déterministes dérivés de la charte de vocation (mission, tâches, mots-clés) + mots-clés réels des corpus gen3-domain-datasets (générateur seedé du dépôt) — aucun texte externe.",
+    "aliasCorpus": {
+      "recherche-web": [
+        "recherche_web"
+      ],
+      "controle-donnees": [
+        "analyse_donnees",
+        "test"
+      ],
+      "redaction-texte": [
+        "redaction_documents"
+      ],
+      "analyse-documents": [
+        "redaction_documents",
+        "multimodal"
+      ],
+      "generation-code": [
+        "developpement_web"
+      ],
+      "analyse-donnees": [
+        "analyse_donnees"
+      ],
+      "cybersecurite": [
+        "cybersecurite",
+        "hacker"
+      ],
+      "medecine-sante": [
+        "sante_medical"
+      ],
+      "commerce-economie": [
+        "vente",
+        "conseiller_commercial"
+      ],
+      "langue-communication": [
+        "redaction_documents",
+        "sciences_humaines"
+      ],
+      "ingenierie-industrie": [
+        "construction_machines"
+      ],
+      "art-creation-multimedia": [
+        "generation_images",
+        "video",
+        "son",
+        "clips_musicaux",
+        "multimodal"
+      ],
+      "education-recherche": [
+        "recherche_scientifique"
+      ],
+      "sciences-humaines-sociales": [
+        "sciences_humaines"
+      ],
+      "domaines-specialises-emergents-ia": [
+        "multimodal",
+        "test"
+      ]
+    },
+    "domainesSansCorpus": [
+      "agriculture-environnement",
+      "droit-administration",
+      "transport-immobilier",
+      "ia-specialisee-emergente",
+      "apprentissage-entre-ia"
+    ]
+  },
+  "totalEchantillons": 19038000,
+  "echantillonsParDomaine": {
+    "recherche-web": 1002000,
+    "controle-donnees": 1002000,
+    "redaction-texte": 1002000,
+    "analyse-documents": 1002000,
+    "generation-code": 1002000,
+    "analyse-donnees": 1002000,
+    "cybersecurite": 1002000,
+    "medecine-sante": 1002000,
+    "commerce-economie": 1002000,
+    "langue-communication": 1002000,
+    "ingenierie-industrie": 1002000,
+    "art-creation-multimedia": 1002000,
+    "agriculture-environnement": 1002000,
+    "droit-administration": 1002000,
+    "education-recherche": 1002000,
+    "transport-immobilier": 1002000,
+    "sciences-humaines-sociales": 1002000,
+    "ia-specialisee-emergente": 1002000,
+    "apprentissage-entre-ia": 1002000
+  },
+  "horlogeFinale": 57114000,
+  "metabolisme": {
+    "evaluees": 2387562262,
+    "reposes": 59885982101738,
+    "transmissions": 1840664496,
+    "ms": 492425.2509999985
+  },
+  "sonde": {
+    "protocole": "TRACE : rejeu de 3 échantillons entraînés/domaine à leur horloge exacte, ratio activation bande-porteuse / moyenne des 31 autres, comparé à un cortex témoin vierge. GÉNÉRALISATION : textes jamais vus (même vocabulaire, structure distincte). Gains rapportés tels quels — aucune métrique inventée. — RÉPARATION it.63 : le run initial lisait un témoin NUL (ratiosTemoin = 0 → gains vides ×10⁹) ; la sonde a été RE-MESURÉE à l'état cortical final (cortex-v2.bin, inchangé) avec un témoin vierge et le protocole cycle-1 identique — points de sonde reconstruits à l'identique (échantillonnage déterministe + horloges exactes du planning époques).",
+    "assimiles": 19,
+    "total": 19,
+    "seuilAssimile": 1.25,
+    "domaines": [
+      {
+        "domaine": "recherche-web",
+        "bande": 1,
+        "porteurFrequence": 0.4375,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            6.867879949003656,
+            7.0137550098787065,
+            9.681317280123867
+          ],
+          "ratiosTemoin": [
+            2.601304211917959,
+            2.499659549222714,
+            3.508061813179505
+          ],
+          "gain": 2.73700571982177,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 6.667515477367351,
+          "ratioTemoin": 3.127844058794544,
+          "gain": 2.1316649270350707
+        }
+      },
+      {
+        "domaine": "controle-donnees",
+        "bande": 4,
+        "porteurFrequence": 1,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            7.658027498457018,
+            11.084781833781031,
+            8.350854631771208
+          ],
+          "ratiosTemoin": [
+            2.475593012095287,
+            4.8410081757790735,
+            3.255745866254059
+          ],
+          "gain": 2.5626915031539186,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 6.770211165294574,
+          "ratioTemoin": 3.0841164488106454,
+          "gain": 2.195186620759871
+        }
+      },
+      {
+        "domaine": "redaction-texte",
+        "bande": 5,
+        "porteurFrequence": 1.1875,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            8.134291531828621,
+            9.170750478533101,
+            8.76051875696374
+          ],
+          "ratiosTemoin": [
+            2.9719619128053094,
+            3.5781181439079432,
+            4.045197313666973
+          ],
+          "gain": 2.4601112227786883,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 7.171668653986902,
+          "ratioTemoin": 3.332607241570191,
+          "gain": 2.151969354362892
+        }
+      },
+      {
+        "domaine": "analyse-documents",
+        "bande": 1,
+        "porteurFrequence": 0.4375,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            7.066788623604205,
+            7.937893169534225,
+            6.8061925838400095
+          ],
+          "ratiosTemoin": [
+            2.673664555615846,
+            3.3198167104270673,
+            2.719670642386445
+          ],
+          "gain": 2.5032129137881736,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 5.920293307447421,
+          "ratioTemoin": 2.8887346399528204,
+          "gain": 2.0494417263415077
+        }
+      },
+      {
+        "domaine": "generation-code",
+        "bande": 3,
+        "porteurFrequence": 0.8125,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            5.640866309780757,
+            9.015461000984848,
+            6.681990283900924
+          ],
+          "ratiosTemoin": [
+            3.2491143340311526,
+            3.9765792776897713,
+            3.34507223585624
+          ],
+          "gain": 2.0186160494281786,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 6.587740509710851,
+          "ratioTemoin": 2.683328652625339,
+          "gain": 2.455062857568892
+        }
+      },
+      {
+        "domaine": "analyse-donnees",
+        "bande": 3,
+        "porteurFrequence": 0.8125,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            8.11864340753155,
+            6.524954236789805,
+            8.085829233720803
+          ],
+          "ratiosTemoin": [
+            3.2755270597385087,
+            2.679265094272733,
+            4.693836702437643
+          ],
+          "gain": 2.134493293404348,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 4.517736623800518,
+          "ratioTemoin": 2.8576996062151236,
+          "gain": 1.5808997607638782
+        }
+      },
+      {
+        "domaine": "cybersecurite",
+        "bande": 0,
+        "porteurFrequence": 0.25,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            6.059962409802315,
+            7.774485700176711,
+            7.11904182804646
+          ],
+          "ratiosTemoin": [
+            2.8309213171296976,
+            2.613543780065848,
+            3.2736844578368323
+          ],
+          "gain": 2.403433183356037,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 7.437603292209369,
+          "ratioTemoin": 3.541836908138877,
+          "gain": 2.099928225130387
+        }
+      },
+      {
+        "domaine": "medecine-sante",
+        "bande": 1,
+        "porteurFrequence": 0.4375,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            8.104067282712862,
+            6.81642115960614,
+            8.885574367553575
+          ],
+          "ratiosTemoin": [
+            3.695099048868352,
+            3.014966798515,
+            3.625684936090232
+          ],
+          "gain": 2.303273686507364,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 4.818864491717224,
+          "ratioTemoin": 2.9524547574798112,
+          "gain": 1.6321552360824534
+        }
+      },
+      {
+        "domaine": "commerce-economie",
+        "bande": 6,
+        "porteurFrequence": 1.375,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            6.500939436620423,
+            9.72854112021912,
+            7.239383624851304
+          ],
+          "ratiosTemoin": [
+            3.2063808825778066,
+            3.781447350789734,
+            3.178910662072476
+          ],
+          "gain": 2.308396470397907,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 8.298548737079265,
+          "ratioTemoin": 3.8127230099970015,
+          "gain": 2.17654120567384
+        }
+      },
+      {
+        "domaine": "langue-communication",
+        "bande": 6,
+        "porteurFrequence": 1.375,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            6.6860561345181635,
+            6.662652930078774,
+            9.982749854445817
+          ],
+          "ratiosTemoin": [
+            2.911200786214801,
+            2.463740807181855,
+            3.6088800371270824
+          ],
+          "gain": 2.5970527776031296,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 6.042329533684047,
+          "ratioTemoin": 3.8845951984341776,
+          "gain": 1.5554592499418265
+        }
+      },
+      {
+        "domaine": "ingenierie-industrie",
+        "bande": 2,
+        "porteurFrequence": 0.625,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            6.730722911546124,
+            7.053806223779063,
+            8.287019460095078
+          ],
+          "ratiosTemoin": [
+            2.4539728414687763,
+            2.3389470426051777,
+            3.4281948898676453
+          ],
+          "gain": 2.68473913846578,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 6.87011942073399,
+          "ratioTemoin": 3.4202776896884757,
+          "gain": 2.008643754700435
+        }
+      },
+      {
+        "domaine": "art-creation-multimedia",
+        "bande": 0,
+        "porteurFrequence": 0.25,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            7.601553966526775,
+            7.85690364134131,
+            6.831368930532751
+          ],
+          "ratiosTemoin": [
+            4.043611549106978,
+            3.256888847530263,
+            2.956384036803462
+          ],
+          "gain": 2.1731576175050695,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 6.276147002392614,
+          "ratioTemoin": 2.7814200260494593,
+          "gain": 2.256454236905322
+        }
+      },
+      {
+        "domaine": "agriculture-environnement",
+        "bande": 7,
+        "porteurFrequence": 1.5625,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            8.908576170497751,
+            7.033765845160963,
+            8.289622166079434
+          ],
+          "ratiosTemoin": [
+            3.598214371303235,
+            2.5427547804118227,
+            2.6427703355829517
+          ],
+          "gain": 2.7587298344605404,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 7.024260253344842,
+          "ratioTemoin": 3.2252972493403913,
+          "gain": 2.1778644603319526
+        }
+      },
+      {
+        "domaine": "droit-administration",
+        "bande": 2,
+        "porteurFrequence": 0.625,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            5.991252944803025,
+            10.005608451026706,
+            6.954470614309465
+          ],
+          "ratiosTemoin": [
+            3.356444638470572,
+            4.7213495728342485,
+            2.4922150562708203
+          ],
+          "gain": 2.1713634708480596,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 5.2261839234510585,
+          "ratioTemoin": 3.4289471342673856,
+          "gain": 1.5241366281862094
+        }
+      },
+      {
+        "domaine": "education-recherche",
+        "bande": 1,
+        "porteurFrequence": 0.4375,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            6.960996668794786,
+            8.025061613333495,
+            10.828097681569748
+          ],
+          "ratiosTemoin": [
+            2.375905852530027,
+            2.014833012921262,
+            4.0009195518444
+          ],
+          "gain": 3.076168580753188,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 3.903967765339386,
+          "ratioTemoin": 2.9625892033985384,
+          "gain": 1.317755347538884
+        }
+      },
+      {
+        "domaine": "transport-immobilier",
+        "bande": 2,
+        "porteurFrequence": 0.625,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            4.766694979858727,
+            8.705344955776445,
+            9.156701359814539
+          ],
+          "ratiosTemoin": [
+            2.950584673615361,
+            3.002251108838336,
+            3.3221264756927136
+          ],
+          "gain": 2.4397664018065814,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 4.4025280389012655,
+          "ratioTemoin": 3.45341591481174,
+          "gain": 1.2748328459421217
+        }
+      },
+      {
+        "domaine": "sciences-humaines-sociales",
+        "bande": 1,
+        "porteurFrequence": 0.4375,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            6.20159154221937,
+            11.036890775325897,
+            8.885018870193472
+          ],
+          "ratiosTemoin": [
+            3.0437981738968083,
+            4.227535713755065,
+            3.631816610621205
+          ],
+          "gain": 2.395958965427137,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 6.151883092905811,
+          "ratioTemoin": 3.2044005298278058,
+          "gain": 1.919823391502308
+        }
+      },
+      {
+        "domaine": "ia-specialisee-emergente",
+        "bande": 4,
+        "porteurFrequence": 1,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            5.8082546050689245,
+            9.598211733720099,
+            6.32317565704144
+          ],
+          "ratiosTemoin": [
+            3.502352247259339,
+            3.865341734697725,
+            3.2172758839080964
+          ],
+          "gain": 2.0528770767600477,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 6.101985223828342,
+          "ratioTemoin": 2.588644760665403,
+          "gain": 2.3572122820976973
+        }
+      },
+      {
+        "domaine": "apprentissage-entre-ia",
+        "bande": 3,
+        "porteurFrequence": 0.8125,
+        "echantillons": 1002000,
+        "trace": {
+          "ratios": [
+            7.992401275537189,
+            8.109507877208213,
+            8.05042721183254
+          ],
+          "ratiosTemoin": [
+            3.769878524886429,
+            3.701072273388091,
+            3.7009796913828144
+          ],
+          "gain": 2.161876712976106,
+          "assimile": true
+        },
+        "generalisation": {
+          "ratio": 5.9225295194584735,
+          "ratioTemoin": 2.938553654831065,
+          "gain": 2.015457335523436
+        }
+      }
+    ]
+  },
+  "dureeMs": 3807741,
+  "dureeEntrainementMs": 3414896
+}

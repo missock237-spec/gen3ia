@@ -4676,3 +4676,22 @@ Stage Summary:
 - CI 5172dce : CodeQL success, Guérisseur success, Déploiement VPS success, CI annulée (supersession par le push docs immédiat). CI f3d3c7a : **success** (03:40:39) + CodeQL success + Déploiement VPS success — ANOMALIE DE CANAL documentée : transfert SCP impossible après 6 tentatives (PerSourcePenalties sshd — historique #79→#88) sur les DEUX runs, le **canal PULL faisant autorité** a pris le relais (release cd-latest 03:41:29 + poller PM2 2 min) → prod **f3d3c7a LIVE** constatée 03:49 UTC.
 - Vérification production (03:49 UTC) : version.json = f3d3c7a (build 03:40:56Z) ; **GET /vocation anonyme 200** — titre « La vocation de gen3 », mission « CRÉÉ POUR EXÉCUTER DES TÂCHES », **19/19 domaines rendus dans l'ordre du propriétaire**, outils réels cités (web.search…), lien console présent ; sitemap.xml contient /vocation ; accueil 200 ; /api/neural/domaines et /api/neural/train **401 anonymes** (requireUser/admin intacts).
 - Rappels owner : PAT rotation **n°55** ; **#109 — UNE commande console** (install-pull-mode.sh, 14e occurrence) ; sauvegardes it.23 ; PR #110 + Dependabot #100-#103 ; phases #95-#97 ; CSP unsafe-inline ; nginx banner. it.63 proposée : **(a)** panneau de suivi du pont Colab (lecture out-*.log de la branche colab-bridge — ferme la boucle it.60) OU **(b)** historique des sessions d'ondes (rapportsOndes persistés, progression inter-sessions de la résonance par domaine) OU (c) rattrapage PAT. Rapport : docs/rapports/rapport-job-478451-2026-10-31-1110.md
+
+### 478451-iter63-1130 (2026-10-31 11:30 +08:00) — it.63 : LE PRÉ-ENTRAÎNEMENT À L'ÉCHELLE MILLION — deux campagnes locales réelles (données uniques 1M+/domaine + époques bande-contraintes, sonde réparée), surfaces lisibles, gardes 30ᵉ+31ᵉ
+
+Demande propriétaire : « réalisé encore un preentrainement de gen3 avec plus de 1 million
+de données et de dataset dans chaque domaine ». Deux campagnes locales réelles (SNN local,
+zéro service IA externe) livrées en coordination (deux sessions concurrentes dans le même
+worktree, fusion documentée) : A) session million à DONNÉES UNIQUES — 19 182 944
+échantillons (1 005 000 uniques/domaine + dépôt 87 939 + HF 1 005), plan round-robin,
+équivalence bit-à-bit lots≡bloc vérifiée, bilan 4 signaux (données 19/19, porteurs 19/19
+≈ 505 M renforts/domaine, bandes stables 19/19, trace 12/19 — limite sparse-colonne
+documentée) ; B) campagne époques bande-contrainte — 19 038 000 passages (501 × 2000),
+extension `bandeCible` du trainer, sonde de trace 19/19 (gains ×2,02–3,08) APRÈS
+RÉPARATION d'un témoin nul (division par zéro → gains ×10⁹ invalides — re-mesure à l'état
+cortex-v2.bin inchangé, note de traçabilité dans l'artefact). Surfaces : GET
+/api/neural/domaines expose `preentrainementMasse`, page /vocation (tableau + repli
+honnête), console /neural (synthèse). Gardes 30ᵉ (campagne B + surfaces, 10 tests) et
+31ᵉ (campagne A + plan + sondes, 10 tests). Anomalie outil résolue : binaire ffmpeg-static
+tronqué par npm ci (3 tests vidéo « code null ») — re-téléchargé, 4/4 verts.
+5386/5386, tsc 0, eslint 0. Rapport : docs/rapports/rapport-job-478451-2026-10-31-1130.md.
