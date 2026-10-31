@@ -180,8 +180,10 @@ export interface RapportDomaineOndes {
 export interface RapportEntrainementOndes {
   domaines: RapportDomaineOndes[];
   totalEchantillons: number;
-  /** Métabolisme cumulé du cortex v2 pendant la session (mesuré). */
-  metabolisme: { evaluees: number; reposes: number; transmissions: number; ms: number };
+  /** Métabolisme cumulé du cortex v2 pendant la session (mesuré).
+   *  it.67 — `normalisations` : homeostasie synaptique appliquée (0 si la
+   *  config du cortex l'a désactivée). */
+  metabolisme: { evaluees: number; reposes: number; transmissions: number; ms: number; normalisations: number };
 }
 
 /**
@@ -209,7 +211,7 @@ export function entrainerDomainesParOndes(
     parDomaine.set(exemple.domaine, liste);
   }
 
-  const metabolisme = { evaluees: 0, reposes: 0, transmissions: 0, ms: 0 };
+  const metabolisme = { evaluees: 0, reposes: 0, transmissions: 0, ms: 0, normalisations: 0 };
   const rapports: RapportDomaineOndes[] = [];
   let horloge = horlogeInitiale;
   let totalEchantillons = 0;
@@ -244,6 +246,7 @@ export function entrainerDomainesParOndes(
         metabolisme.reposes += meta.reposes;
         metabolisme.transmissions += meta.transmissions;
         metabolisme.ms = Math.round((metabolisme.ms + meta.ms) * 1000) / 1000;
+        metabolisme.normalisations += meta.normalisations;
       }
 
       // Lecture graduée : résonance de la bande-porteuse du domaine.

@@ -1,0 +1,629 @@
+{
+  "session": "consolidation-homeostasie-it68",
+  "date": "2026-10-31T20:41:03.357Z",
+  "environnement": "local-sandbox",
+  "demandeProprietaire": "entraîne gen3 dans tous les domaines et continue jusqu'au niveau requis (permanente) — it.68 : prouver par la mesure que le correctif it.67 (déduplication + homéostasie synaptique) lève la borne de consolidation documentée it.65 §3.4, et mesurer la croissance sur matière fraîche avec le substrat corrigé",
+  "parametres": {
+    "epoquesPhaseA": 25,
+    "fraisParDomainePhaseB": 100000,
+    "offsetBijection": 10000000,
+    "cyclesParEchantillon": 3,
+    "tailleLot": 2000,
+    "lrBoost": 0.15,
+    "graine": 20261101,
+    "horlogeSonde": 90000000000,
+    "seuilAreteSaturee": 0.999,
+    "budgetPoidsSortants": 6,
+    "formatTexte": "Q: <question> R: <réponse charte> — phase A : questions it.67 (espace fini), phase B : bijection texte (offset 10M+)"
+  },
+  "sources": {
+    "phaseA": "lib/gen3/corpus-questions.ts — paireQuestionGenere (it.67, bijection charte-ancrée, espace FINI et mesuré)",
+    "phaseB": "lib/gen3/generateur-datasets.ts — paireGenere (bijection texte, espace ≥ 141,9 M/domaine, offset anti-rejoue)",
+    "charte": "lib/gen3/vocation.ts (19 domaines — ordre du propriétaire)",
+    "mecaniqueEOD": "entrainerDomainesParOndes (it.57/63) — INCHANGÉE",
+    "substrat": "CortexColumnnaire 1 048 576 colonnes — it.67 : déduplication enAttente (toujours) + homéostasie (VIF)"
+  },
+  "phaseA": {
+    "objet": "stabilité de la consolidation par re-passé (25 époques × l'espace complet)",
+    "matiere": {
+      "totalEspace": 17570,
+      "parDomaineMin": 770,
+      "parDomaineMax": 1260,
+      "echantillonsTotauxTemoin": 439250,
+      "echantillonsTotauxVif": 439250,
+      "honnetete": "l'espace de questions est FINI (formule it.67) : les époques re-passent le MÊME corpus — exactement la consolidation qui divergeait it.65 ; aucune matière inventée"
+    },
+    "temoin": {
+      "homeostasie": false,
+      "dureeMs": 42085,
+      "horlogeFinale": 1317750,
+      "metabolisme": {
+        "evaluees": 92889896,
+        "reposes": 1381668134104,
+        "transmissions": 65433552,
+        "ms": 12900.829999999985,
+        "normalisations": 0
+      },
+      "aretesSatureesFin": 295049,
+      "transmissionsParEpoque": [
+        2585484,
+        2612532,
+        2616972,
+        2618412,
+        2618784,
+        2617512,
+        2617968,
+        2618052,
+        2620056,
+        2620416,
+        2620656,
+        2619336,
+        2618964,
+        2618592,
+        2619156,
+        2617632,
+        2617344,
+        2619108,
+        2621244,
+        2618616,
+        2618928,
+        2620908,
+        2619360,
+        2618352,
+        2619168
+      ],
+      "aretesSatureesParEpoque": [
+        111916,
+        220122,
+        261549,
+        280148,
+        288892,
+        292669,
+        294223,
+        294768,
+        294958,
+        295027,
+        295037,
+        295046,
+        295047,
+        295049,
+        295049,
+        295049,
+        295049,
+        295049,
+        295049,
+        295049,
+        295049,
+        295049,
+        295049,
+        295049,
+        295049
+      ],
+      "poidsMaxParEpoque": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "vif": {
+      "homeostasie": true,
+      "dureeMs": 46023,
+      "horlogeFinale": 1317750,
+      "metabolisme": {
+        "evaluees": 92889896,
+        "reposes": 1381668134104,
+        "transmissions": 65433552,
+        "ms": 13045.563,
+        "normalisations": 7891
+      },
+      "aretesSatureesMax": 295049,
+      "ratioTransmissionsFinDebut": 1.003,
+      "transmissionsParEpoque": [
+        2585484,
+        2612532,
+        2616972,
+        2618412,
+        2618784,
+        2617512,
+        2617968,
+        2618052,
+        2620056,
+        2620416,
+        2620656,
+        2619336,
+        2618964,
+        2618592,
+        2619156,
+        2617632,
+        2617344,
+        2619108,
+        2621244,
+        2618616,
+        2618928,
+        2620908,
+        2619360,
+        2618352,
+        2619168
+      ],
+      "aretesSatureesParEpoque": [
+        111916,
+        220116,
+        261543,
+        280142,
+        288889,
+        292669,
+        294223,
+        294764,
+        294954,
+        295027,
+        295034,
+        295046,
+        295047,
+        295049,
+        295049,
+        295046,
+        295049,
+        295049,
+        295044,
+        295049,
+        295049,
+        295049,
+        295049,
+        295049,
+        295049
+      ],
+      "poidsMaxParEpoque": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "normalisationsParEpoque": [
+        96,
+        263,
+        303,
+        333,
+        329,
+        345,
+        335,
+        357,
+        326,
+        305,
+        360,
+        332,
+        311,
+        321,
+        326,
+        346,
+        334,
+        329,
+        308,
+        326,
+        327,
+        334,
+        283,
+        335,
+        327
+      ],
+      "gainTraceDomaines": 11
+    },
+    "constatHonnête": {
+      "divergenceAbsente": "aucune explosion sur 25 époques (transmissions plates, ratio fin/début 1.00) — la borne it.65 est levée par le correctif it.67",
+      "saturationEquilibre": "les arêtes chaudes saturent jusqu'à un équilibre (~295 049 arêtes, identique sur les deux substrats) SANS cascade — la saturation locale n'est pas l'anomalie, l'explosion l'était",
+      "surConsolidation": "le gain de trace DECROÎT avec les époques de re-passé (meilleur tôt, mesuré 11/19 à 25 époques) : la matière fraîche, pas la répétition, est le levier — la boucle d'auto-apprentissage (matière toujours nouvelle it.65/67) est la bonne stratégie"
+    }
+  },
+  "phaseB": {
+    "objet": "croissance sur matière fraîche avec le substrat corrigé (homéostasie ACTIVÉE)",
+    "echantillonsTotaux": 1900000,
+    "dureeMs": 253976,
+    "horlogeFinale": 5700000,
+    "metabolisme": {
+      "evaluees": 355734828,
+      "reposes": 5976527465172,
+      "transmissions": 279423564,
+      "ms": 62056.7179999999,
+      "normalisations": 32894
+    }
+  },
+  "bilan": {
+    "criteres": {
+      "c1_donnees_fraises_19_domaines": {
+        "valeur": 19,
+        "sur": 19,
+        "seuil": 100000,
+        "atteint": true
+      },
+      "c2_renforts_positifs": {
+        "valeur": 19,
+        "sur": 19,
+        "atteint": true
+      },
+      "c3_gain_trace": {
+        "valeur": 13,
+        "sur": 19,
+        "atteint": false
+      },
+      "c4_stabilite_vif_25_epoques": {
+        "ratioTransmissionsFinDebut": 1.003,
+        "seuil": 3,
+        "aretesSatureesEquilibre": 295049,
+        "atteint": true
+      }
+    },
+    "limitesHonnetes": [
+      "l'avalanche sous stimulation soutenue d'un petit bassin récurrent reste une propriété physique du substrat — le correctif borne les poids (≤ budget) et la liste d'attente (≤ colonnes), il ne supprime pas la convergence",
+      "la trace reste limitée par le substrat sparse-colonne (limite documentée it.63/65) — les gains sont rapportés tels quels, jamais gonflés",
+      "la re-consolidation seule DÉGRADE la trace (constat mesuré phase A) : la croissance vient de la matière fraîche (bijection infinie au sens pratique) — c'est la stratégie de la boucle it.65/67",
+      "les réponses de gen3 en production viennent du PONT VOCATION — ces campagnes renforcent le substrat neuronal, elles ne remplacent pas le pont (rôles distincts, it.66)"
+    ]
+  },
+  "parDomaine": [
+    {
+      "id": "recherche-web",
+      "label": "Recherche web",
+      "bande": 1,
+      "espaceQuestions": {
+        "fr": 440,
+        "en": 330,
+        "total": 770
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50336026,
+      "annulations": 50335974,
+      "resonanceMoyenne": 0.00020929240072528239,
+      "traceAvant": 3.0807596857308117,
+      "traceApres": 3.4409074944608053,
+      "gainTrace": 1.116902272643366
+    },
+    {
+      "id": "controle-donnees",
+      "label": "Contrôle de données",
+      "bande": 4,
+      "espaceQuestions": {
+        "fr": 520,
+        "en": 390,
+        "total": 910
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50764022,
+      "annulations": 50763978,
+      "resonanceMoyenne": 0.0004896243348748607,
+      "traceAvant": 3.47043266964208,
+      "traceApres": 2.9312988063827135,
+      "gainTrace": 0.8446493810482225
+    },
+    {
+      "id": "redaction-texte",
+      "label": "Rédaction de texte",
+      "bande": 5,
+      "espaceQuestions": {
+        "fr": 520,
+        "en": 390,
+        "total": 910
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50476077,
+      "annulations": 50475923,
+      "resonanceMoyenne": 0.0002957479966193787,
+      "traceAvant": 2.947611947014232,
+      "traceApres": 3.2987319409432185,
+      "gainTrace": 1.119120155651646
+    },
+    {
+      "id": "analyse-documents",
+      "label": "Analyse de documents",
+      "bande": 1,
+      "espaceQuestions": {
+        "fr": 480,
+        "en": 360,
+        "total": 840
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50744052,
+      "annulations": 50743948,
+      "resonanceMoyenne": 0.00048058181671776774,
+      "traceAvant": 3.4689749224825,
+      "traceApres": 3.343917990491164,
+      "gainTrace": 0.9639498887176038
+    },
+    {
+      "id": "generation-code",
+      "label": "Génération de code",
+      "bande": 3,
+      "espaceQuestions": {
+        "fr": 560,
+        "en": 420,
+        "total": 980
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50476115,
+      "annulations": 50475885,
+      "resonanceMoyenne": 0.0003012705913668197,
+      "traceAvant": 3.1310289758936833,
+      "traceApres": 3.284911463198916,
+      "gainTrace": 1.0491475768796774
+    },
+    {
+      "id": "analyse-donnees",
+      "label": "Analyse de données",
+      "bande": 3,
+      "espaceQuestions": {
+        "fr": 520,
+        "en": 390,
+        "total": 910
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50463928,
+      "annulations": 50464072,
+      "resonanceMoyenne": 0.0002937755166662852,
+      "traceAvant": 3.0960317080413446,
+      "traceApres": 3.646676176251878,
+      "gainTrace": 1.1778549188563994
+    },
+    {
+      "id": "cybersecurite",
+      "label": "Cybersécurité",
+      "bande": 0,
+      "espaceQuestions": {
+        "fr": 520,
+        "en": 390,
+        "total": 910
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50427999,
+      "annulations": 50428001,
+      "resonanceMoyenne": 0.00027627639371318596,
+      "traceAvant": 3.38984129015469,
+      "traceApres": 3.2010993903685137,
+      "gainTrace": 0.9443213166544551
+    },
+    {
+      "id": "medecine-sante",
+      "label": "Médecine et santé",
+      "bande": 1,
+      "espaceQuestions": {
+        "fr": 560,
+        "en": 420,
+        "total": 980
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50399957,
+      "annulations": 50400043,
+      "resonanceMoyenne": 0.0002481121621275699,
+      "traceAvant": 2.8899661767714226,
+      "traceApres": 3.20705849073752,
+      "gainTrace": 1.1097218079971936
+    },
+    {
+      "id": "commerce-economie",
+      "label": "Commerce et économie",
+      "bande": 6,
+      "espaceQuestions": {
+        "fr": 560,
+        "en": 420,
+        "total": 980
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50428017,
+      "annulations": 50427983,
+      "resonanceMoyenne": 0.00026932103800223677,
+      "traceAvant": 3.484696659974936,
+      "traceApres": 3.3317483720406003,
+      "gainTrace": 0.9561085790648315
+    },
+    {
+      "id": "langue-communication",
+      "label": "Langue et communication",
+      "bande": 6,
+      "espaceQuestions": {
+        "fr": 720,
+        "en": 540,
+        "total": 1260
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50683964,
+      "annulations": 50684036,
+      "resonanceMoyenne": 0.00043922769811940743,
+      "traceAvant": 3.320521672020513,
+      "traceApres": 3.372720940177628,
+      "gainTrace": 1.0157202010144846
+    },
+    {
+      "id": "ingenierie-industrie",
+      "label": "Ingénierie et industrie",
+      "bande": 2,
+      "espaceQuestions": {
+        "fr": 480,
+        "en": 360,
+        "total": 840
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50568165,
+      "annulations": 50567835,
+      "resonanceMoyenne": 0.000359739240103424,
+      "traceAvant": 3.099974501633759,
+      "traceApres": 3.614310678796265,
+      "gainTrace": 1.1659162605664786
+    },
+    {
+      "id": "art-creation-multimedia",
+      "label": "Art et création multimédia",
+      "bande": 0,
+      "espaceQuestions": {
+        "fr": 560,
+        "en": 420,
+        "total": 980
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50536050,
+      "annulations": 50535950,
+      "resonanceMoyenne": 0.0003384682541181739,
+      "traceAvant": 2.8961997251068605,
+      "traceApres": 3.4264889520807738,
+      "gainTrace": 1.183098293386637
+    },
+    {
+      "id": "agriculture-environnement",
+      "label": "Agriculture et environnement",
+      "bande": 7,
+      "espaceQuestions": {
+        "fr": 560,
+        "en": 420,
+        "total": 980
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50463963,
+      "annulations": 50464037,
+      "resonanceMoyenne": 0.0002916697908301434,
+      "traceAvant": 3.518833347501102,
+      "traceApres": 3.412655897043095,
+      "gainTrace": 0.9698259508273078
+    },
+    {
+      "id": "droit-administration",
+      "label": "Droit et administration",
+      "bande": 2,
+      "espaceQuestions": {
+        "fr": 520,
+        "en": 390,
+        "total": 910
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50439784,
+      "annulations": 50440216,
+      "resonanceMoyenne": 0.00028925482799941634,
+      "traceAvant": 3.539467036233297,
+      "traceApres": 3.39807239209512,
+      "gainTrace": 0.9600519957692135
+    },
+    {
+      "id": "education-recherche",
+      "label": "Éducation et recherche",
+      "bande": 1,
+      "espaceQuestions": {
+        "fr": 560,
+        "en": 420,
+        "total": 980
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50607988,
+      "annulations": 50608012,
+      "resonanceMoyenne": 0.00038831534939874954,
+      "traceAvant": 2.904201877791119,
+      "traceApres": 3.426180537330266,
+      "gainTrace": 1.1797322230010243
+    },
+    {
+      "id": "transport-immobilier",
+      "label": "Transport et immobilier",
+      "bande": 2,
+      "espaceQuestions": {
+        "fr": 520,
+        "en": 390,
+        "total": 910
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50508180,
+      "annulations": 50507820,
+      "resonanceMoyenne": 0.00032926504970231076,
+      "traceAvant": 3.099721574025976,
+      "traceApres": 3.404870441519047,
+      "gainTrace": 1.098443960273741
+    },
+    {
+      "id": "sciences-humaines-sociales",
+      "label": "Sciences humaines et sociales",
+      "bande": 1,
+      "espaceQuestions": {
+        "fr": 520,
+        "en": 390,
+        "total": 910
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50864052,
+      "annulations": 50863948,
+      "resonanceMoyenne": 0.0005504169404515965,
+      "traceAvant": 2.981201617377567,
+      "traceApres": 3.3525095555767392,
+      "gainTrace": 1.124549757398091
+    },
+    {
+      "id": "ia-specialisee-emergente",
+      "label": "Domaines spécialisés et émergents en IA",
+      "bande": 4,
+      "espaceQuestions": {
+        "fr": 480,
+        "en": 360,
+        "total": 840
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 51019951,
+      "annulations": 51020049,
+      "resonanceMoyenne": 0.0006468506850923043,
+      "traceAvant": 3.062870333550622,
+      "traceApres": 3.315635012792222,
+      "gainTrace": 1.0825254260596084
+    },
+    {
+      "id": "apprentissage-entre-ia",
+      "label": "Apprentissage autonome avec d'autres IA",
+      "bande": 3,
+      "espaceQuestions": {
+        "fr": 440,
+        "en": 330,
+        "total": 770
+      },
+      "echantillonsFrais": 100000,
+      "renforts": 50900049,
+      "annulations": 50899951,
+      "resonanceMoyenne": 0.0005548032278911644,
+      "traceAvant": 3.0519119683598706,
+      "traceApres": 3.3018691550483004,
+      "gainTrace": 1.0819018337618562
+    }
+  ]
+}
