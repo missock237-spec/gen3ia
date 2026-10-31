@@ -34,6 +34,10 @@ import type { TrainingReport } from "./training/trainer";
 import { CortexLangagierGen3 } from "./generation/language";
 import type { EtatLangage } from "./generation/language";
 import { CORPUS_GEN3 } from "./generation/corpus";
+// CORPUS DE QUESTIONS DE LA VOCATION (it.66) : les questions du cadre
+// d'apprentissage (19 domaines de la charte) sont apprises par le cortex
+// à CHAQUE démarrage — le SNN connaît les questions de son cadre.
+import { CORPUS_QUESTIONS_VOCATION } from "../gen3/corpus-questions";
 // ABRÉVIATIONS FR/EN : ingestion cortex one-shot au démarrage (demande
 // utilisateur « entraîne gen3 à comprendre les abréviations ») — idempotent
 // via marqueur var/neural, jamais bloquant.
@@ -386,6 +390,16 @@ export function getNeuralRuntime(): NeuralRuntime {
   //    restaurées à l'étape 9 depuis la persistance du cerveau.
   const cortex = new CortexLangagierGen3();
   const statsCorpus = cortex.apprendre(CORPUS_GEN3);
+  // Paires question→réponse de la vocation (déterministes, charte-source) :
+  // mêmes règles que le corpus d'amorçage — réapprises au démarrage,
+  // pur et déterministe. Les doublons éventuels sont ignorés par apprendre.
+  const statsVocation = cortex.apprendre(
+    CORPUS_QUESTIONS_VOCATION.map((paire) => ({
+      motif: paire.question,
+      reponse: paire.reponse,
+      theme: `vocation:${paire.domaineId}`,
+    })),
+  );
   // Ingestion des abréviations (fire-and-forget : le démarrage ne l'attend
   // pas — la compréhension à l'encodage est immédiate, la réponse pédagogique
   // cortex arrive une fraction de seconde plus tard, une seule fois).
@@ -490,7 +504,7 @@ export function getNeuralRuntime(): NeuralRuntime {
       );
     }
     console.log(
-      `[NEURAL] Cortex langagier amorcé : ${statsCorpus.pairesAjoutees} paires, vocabulaire ${statsCorpus.vocabulaire} tokens.`,
+      `[NEURAL] Cortex langagier amorcé : ${statsCorpus.pairesAjoutees} paires, vocabulaire ${statsCorpus.vocabulaire} tokens ; vocation : ${statsVocation.pairesAjoutees} paires question→réponse (19 domaines).`,
     );
   }
 

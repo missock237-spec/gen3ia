@@ -31,7 +31,8 @@ interface EntreeCache {
       | "cortex_contexte"
       | "decoder_intention"
       | "pilotage"
-      | "connaissances_utilisateur";
+      | "connaissances_utilisateur"
+      | "vocation";
     theme?: string;
     scoreAppariement?: number;
     clePair?: string;

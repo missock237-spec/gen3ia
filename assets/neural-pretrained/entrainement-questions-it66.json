@@ -1,0 +1,284 @@
+{
+  "session": "entrainement-questions-it66",
+  "date": "2026-10-31T18:35:06.610Z",
+  "environnement": "local-sandbox",
+  "demandeProprietaire": "entraîne gen3 depuis tes propres serveurs locaux — 1 million de données par domaine (atteint it.63, campagne A : 1 005 000 textes uniques/domaine) — et fais en sorte qu'il soit capable de répondre à des questions qui rentrent dans son cadre d'apprentissage (it.66 : pont vocation + corpus de questions + cette campagne d'ondes QA)",
+  "parametres": {
+    "cibleParDomaine": 100000,
+    "offsetBijection": 10000000,
+    "cyclesParEchantillon": 3,
+    "tailleLot": 2000,
+    "lrBoost": 0.15,
+    "graine": 20261101,
+    "horlogeSonde": 90000000000,
+    "formatTexte": "Q: <question> R: <réponse charte>"
+  },
+  "sources": {
+    "generateur": "lib/gen3/generateur-datasets.ts (bijection mixte-radix, espace ≥ 141,9 M/domaine)",
+    "charte": "lib/gen3/vocation.ts (19 domaines — ordre du propriétaire)",
+    "antiRejoue": "indexes 10 000 000+ — matière nouvelle, jamais les textes it.63/it.65"
+  },
+  "totalEchantillons": 1900000,
+  "lots": 950,
+  "horlogeFinale": 5700000,
+  "metabolisme": {
+    "evaluees": 355777820,
+    "reposes": 5976527422180,
+    "transmissions": 279423564,
+    "ms": 62621.22599999996
+  },
+  "bilan": {
+    "criteres": {
+      "c1_donnees_19_domaines": {
+        "valeur": 19,
+        "sur": 19,
+        "atteint": true
+      },
+      "c2_renforts_positifs": {
+        "valeur": 19,
+        "sur": 19,
+        "atteint": true
+      },
+      "c3_gain_trace": {
+        "valeur": 13,
+        "sur": 19,
+        "atteint": false
+      }
+    },
+    "limitesHonnetes": [
+      "la trace reste limitée par le substrat sparse-colonne (limite documentée it.63/it.65 : à grande échelle les arêtes CSR saturent)",
+      "les réponses de gen3 viennent du PONT VOCATION (ancrage charte déterministe) — cette campagne renforce le substrat neuronal (plasticité QA), elle ne remplace pas le pont",
+      "corpus SYNTHÉTIQUE ancré charte : gen3 répond à des questions DE SON CADRE, pas au-delà (honnêteté it.61)"
+    ]
+  },
+  "parDomaine": [
+    {
+      "id": "recherche-web",
+      "label": "Recherche web",
+      "bande": 1,
+      "echantillons": 100000,
+      "renforts": 50336026,
+      "annulations": 50335974,
+      "resonanceMoyenne": 0.00020929240072528239,
+      "traceAvant": 3.0807596857308117,
+      "traceApres": 3.4409074944608053,
+      "gainTrace": 1.116902272643366
+    },
+    {
+      "id": "controle-donnees",
+      "label": "Contrôle de données",
+      "bande": 4,
+      "echantillons": 100000,
+      "renforts": 50764022,
+      "annulations": 50763978,
+      "resonanceMoyenne": 0.0004896243348748607,
+      "traceAvant": 3.47043266964208,
+      "traceApres": 2.9320089757064274,
+      "gainTrace": 0.8448540152801228
+    },
+    {
+      "id": "redaction-texte",
+      "label": "Rédaction de texte",
+      "bande": 5,
+      "echantillons": 100000,
+      "renforts": 50476077,
+      "annulations": 50475923,
+      "resonanceMoyenne": 0.0002957479966193787,
+      "traceAvant": 2.947611947014232,
+      "traceApres": 3.2987319409432185,
+      "gainTrace": 1.119120155651646
+    },
+    {
+      "id": "analyse-documents",
+      "label": "Analyse de documents",
+      "bande": 1,
+      "echantillons": 100000,
+      "renforts": 50744055,
+      "annulations": 50743945,
+      "resonanceMoyenne": 0.0004803810576228774,
+      "traceAvant": 3.4689749224825,
+      "traceApres": 3.343917990491164,
+      "gainTrace": 0.9639498887176038
+    },
+    {
+      "id": "generation-code",
+      "label": "Génération de code",
+      "bande": 3,
+      "echantillons": 100000,
+      "renforts": 50476115,
+      "annulations": 50475885,
+      "resonanceMoyenne": 0.0003012705913668197,
+      "traceAvant": 3.1310289758936833,
+      "traceApres": 3.284911463198916,
+      "gainTrace": 1.0491475768796774
+    },
+    {
+      "id": "analyse-donnees",
+      "label": "Analyse de données",
+      "bande": 3,
+      "echantillons": 100000,
+      "renforts": 50463922,
+      "annulations": 50464078,
+      "resonanceMoyenne": 0.00029366167489270424,
+      "traceAvant": 3.0960317080413446,
+      "traceApres": 3.6451302169155464,
+      "gainTrace": 1.1773555830994962
+    },
+    {
+      "id": "cybersecurite",
+      "label": "Cybersécurité",
+      "bande": 0,
+      "echantillons": 100000,
+      "renforts": 50427999,
+      "annulations": 50428001,
+      "resonanceMoyenne": 0.00027627639371318596,
+      "traceAvant": 3.38984129015469,
+      "traceApres": 3.2010993903685137,
+      "gainTrace": 0.9443213166544551
+    },
+    {
+      "id": "medecine-sante",
+      "label": "Médecine et santé",
+      "bande": 1,
+      "echantillons": 100000,
+      "renforts": 50399957,
+      "annulations": 50400043,
+      "resonanceMoyenne": 0.0002481121621275699,
+      "traceAvant": 2.8899661767714226,
+      "traceApres": 3.207409979558295,
+      "gainTrace": 1.109843431849957
+    },
+    {
+      "id": "commerce-economie",
+      "label": "Commerce et économie",
+      "bande": 6,
+      "echantillons": 100000,
+      "renforts": 50428017,
+      "annulations": 50427983,
+      "resonanceMoyenne": 0.00026932103800223677,
+      "traceAvant": 3.484696659974936,
+      "traceApres": 3.3317490658200595,
+      "gainTrace": 0.9561087781580458
+    },
+    {
+      "id": "langue-communication",
+      "label": "Langue et communication",
+      "bande": 6,
+      "echantillons": 100000,
+      "renforts": 50683964,
+      "annulations": 50684036,
+      "resonanceMoyenne": 0.00043922769811940743,
+      "traceAvant": 3.320521672020513,
+      "traceApres": 3.372740963383435,
+      "gainTrace": 1.0157262311530546
+    },
+    {
+      "id": "ingenierie-industrie",
+      "label": "Ingénierie et industrie",
+      "bande": 2,
+      "echantillons": 100000,
+      "renforts": 50568165,
+      "annulations": 50567835,
+      "resonanceMoyenne": 0.000359739240103424,
+      "traceAvant": 3.099974501633759,
+      "traceApres": 3.6142928163727146,
+      "gainTrace": 1.1659104984469704
+    },
+    {
+      "id": "art-creation-multimedia",
+      "label": "Art et création multimédia",
+      "bande": 0,
+      "echantillons": 100000,
+      "renforts": 50536050,
+      "annulations": 50535950,
+      "resonanceMoyenne": 0.0003384682541181739,
+      "traceAvant": 2.8961997251068605,
+      "traceApres": 3.4264791089218023,
+      "gainTrace": 1.1830948947401672
+    },
+    {
+      "id": "agriculture-environnement",
+      "label": "Agriculture et environnement",
+      "bande": 7,
+      "echantillons": 100000,
+      "renforts": 50463966,
+      "annulations": 50464034,
+      "resonanceMoyenne": 0.00029162049940794754,
+      "traceAvant": 3.518833347501102,
+      "traceApres": 3.41276300667648,
+      "gainTrace": 0.969856389788977
+    },
+    {
+      "id": "droit-administration",
+      "label": "Droit et administration",
+      "bande": 2,
+      "echantillons": 100000,
+      "renforts": 50439784,
+      "annulations": 50440216,
+      "resonanceMoyenne": 0.00028925482799941634,
+      "traceAvant": 3.539467036233297,
+      "traceApres": 3.398110723860533,
+      "gainTrace": 0.9600628255820132
+    },
+    {
+      "id": "education-recherche",
+      "label": "Éducation et recherche",
+      "bande": 1,
+      "echantillons": 100000,
+      "renforts": 50607991,
+      "annulations": 50608009,
+      "resonanceMoyenne": 0.00038805192215061725,
+      "traceAvant": 2.904201877791119,
+      "traceApres": 3.4258795889537037,
+      "gainTrace": 1.1796285978436742
+    },
+    {
+      "id": "transport-immobilier",
+      "label": "Transport et immobilier",
+      "bande": 2,
+      "echantillons": 100000,
+      "renforts": 50508180,
+      "annulations": 50507820,
+      "resonanceMoyenne": 0.00032926504970231076,
+      "traceAvant": 3.099721574025976,
+      "traceApres": 3.40500021180116,
+      "gainTrace": 1.0984858254151784
+    },
+    {
+      "id": "sciences-humaines-sociales",
+      "label": "Sciences humaines et sociales",
+      "bande": 1,
+      "echantillons": 100000,
+      "renforts": 50864052,
+      "annulations": 50863948,
+      "resonanceMoyenne": 0.0005504169404515965,
+      "traceAvant": 2.981201617377567,
+      "traceApres": 3.35240725194997,
+      "gainTrace": 1.1245154411592386
+    },
+    {
+      "id": "ia-specialisee-emergente",
+      "label": "Domaines spécialisés et émergents en IA",
+      "bande": 4,
+      "echantillons": 100000,
+      "renforts": 51019951,
+      "annulations": 51020049,
+      "resonanceMoyenne": 0.0006468506850923043,
+      "traceAvant": 3.062870333550622,
+      "traceApres": 3.3155789455393463,
+      "gainTrace": 1.0825071205987922
+    },
+    {
+      "id": "apprentissage-entre-ia",
+      "label": "Apprentissage autonome avec d'autres IA",
+      "bande": 3,
+      "echantillons": 100000,
+      "renforts": 50900049,
+      "annulations": 50899951,
+      "resonanceMoyenne": 0.0005548032278911644,
+      "traceAvant": 3.0519119683598706,
+      "traceApres": 3.301937374768314,
+      "gainTrace": 1.08192418687057
+    }
+  ]
+}

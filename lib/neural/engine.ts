@@ -24,6 +24,7 @@ import { HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
 import { composerDepuisConnaissances } from "./connaissances-pont";
+import { composerDepuisVocation } from "./vocation-pont";
 import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
 import type { CoucheOndesNeuronales } from "./core/couche-rpia";
 import { INTENSITE_MAX_PAR_NEURONE } from "./encoding/text-encoder";
@@ -39,7 +40,8 @@ export type SourceLangage =
   | "cortex_contexte"
   | "decoder_intention"
   | "pilotage"
-  | "connaissances_utilisateur";
+  | "connaissances_utilisateur"
+  | "vocation";
 
 /** Composition finale : texte émis + provenance (traçabilité). */
 export interface CompositionReponse {
@@ -416,9 +418,13 @@ export class NeuralEngine {
     const memoire = this.memoirePour(options);
     // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
     const domaine = detecterDomaine(messageUtilisateur);
+    // PONT VOCATION (it.66) : une question qui tombe dans le cadre
+    // d'apprentissage (19 domaines de la charte) reçoit une réponse
+    // ancrée dans ce cadre — AVANT le repli cortex/décodeur.
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
+      composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
     this.memoriser(messageUtilisateur, composition.texte, memoire);
     this.evoluer(messageUtilisateur, composition);
@@ -505,9 +511,12 @@ export class NeuralEngine {
     const memoire = this.memoirePour(options);
     // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
     const domaine = detecterDomaine(messageUtilisateur);
+    // PONT VOCATION (it.66) : même chaîne que generate() — le chemin réel
+    // du chat répond depuis le cadre d'apprentissage quand la question y tombe.
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
+      composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
 
     // La réponse composée est émise par segments (phrases réelles). Les
@@ -586,8 +595,11 @@ export class NeuralEngine {
     const memoire = this.memoirePour(options);
     // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
     const domaine = detecterDomaine(messageUtilisateur);
+    // PONT VOCATION (it.66) : variante générateur — même ancrage vocation
+    // que les deux chemins principaux (génération et flux).
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
+      composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
 
     for (const segment of segmenterTexte(composition.texte)) {

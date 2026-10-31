@@ -9,6 +9,7 @@ import {
 import { lireResumeMasse } from "@/lib/gen3/pretrain-masse";
 import { lireResumeMillion } from "@/lib/gen3/pretrain-million";
 import { lireResumeContinue } from "@/lib/gen3/amelioration-continue";
+import TesteurQuestionsVocation from "@/components/neural/testeur-questions";
 
 /**
  * /vocation — LA CHARTE LISIBLE DE LA VOCATION DE GEN3 (it.62).
@@ -72,6 +73,11 @@ export default function PageVocation() {
             <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">Outils réels du registre de la plateforme</span>
           </div>
         </header>
+
+        {/* it.66 — TESTEUR PUBLIC : poser une question à gen3 dans son cadre
+            d'apprentissage (POST /api/neural/questions — réponse réelle du
+            pont vocation, ancrée charte, honnête hors cadre) */}
+        <TesteurQuestionsVocation />
 
         {/* Les 19 domaines */}
         <section aria-label="Les 19 domaines de la vocation" className="grid gap-3 sm:grid-cols-2">

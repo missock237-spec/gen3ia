@@ -29,6 +29,7 @@ describe("API — chemins PUBLICS (préservés, anonyme inclus)", () => {
     "/api/health",
     "/api/health/infra",
     "/api/neural/public-stats",
+    "/api/neural/questions",
     "/api/status",
     "/api/deploy-info",
     "/api/auth/session",

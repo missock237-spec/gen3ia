@@ -94,6 +94,10 @@ const PUBLIC_API_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/api/health": "sante",
   "/api/health/infra": "sante",
   "/api/neural/public-stats": "public",
+  // QUESTIONS VOCATION (it.66) : réponse ancrée charte, aucune donnée
+  // utilisateur, aucune écriture — le test demandé par le propriétaire
+  // (poser une question à gen3 depuis le navigateur) est public.
+  "/api/neural/questions": "public",
   "/api/status": "systeme",
   "/api/deploy-info": "systeme",
   // SLI Prometheus (Task G) : la route applique SA PROPRE garde Bearer
