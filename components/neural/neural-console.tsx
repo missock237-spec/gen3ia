@@ -109,6 +109,22 @@ interface JobEntrainement {
     parDomaine: Record<string, number>;
     dureeMs: number;
   };
+  /* it.62 — rapport honnête de la session d'entraînement PAR ONDES
+     (source « ondes » — même contrat que RapportEntrainementOndes). */
+  rapportOndes?: {
+    totalEchantillons: number;
+    metabolisme: { evaluees: number; reposes: number; transmissions: number; ms: number };
+    domaines: Array<{
+      domaine: string;
+      bande: number;
+      porteurFrequence: number;
+      echantillons: number;
+      resonanceMoyenne: number;
+      paquetsEmis: number;
+      renforts: number;
+      annulations: number;
+    }>;
+  };
 }
 
 /* Contrats GET + POST /api/neural/evolve (it.46 — évolution pilotée). */
@@ -141,6 +157,19 @@ interface ReponseDomaines {
     synapses: number;
     neurones: string;
     tailleReseau: number;
+  };
+  /* it.59/it.62 — la charte de vocation de gen3 (19 domaines, même
+     contrat que GET /api/neural/domaines → vocation). */
+  vocation: {
+    mission: string;
+    total: number;
+    domaines: Array<{
+      id: string;
+      label: string;
+      mission: string;
+      taches: string[];
+      outils: string[];
+    }>;
   };
 }
 
@@ -475,14 +504,18 @@ export function NeuralConsole() {
 
   /* ---------------- Entraînement ---------------- */
 
-  const lancerEntrainement = useCallback(async (source: "corpus" | "domaines" | "complet" = "corpus") => {
+  const lancerEntrainement = useCallback(async (
+    demande: { source: "corpus"; } | { source: "domaines"; } | { source: "complet"; }
+      | { source: "ondes"; domainesOndes: string[] } = { source: "corpus" },
+  ) => {
     if (lancement) return;
+    const source = demande.source;
     setLancement(source === "corpus" ? "démarrage…" : `démarrage (${source})…`);
     try {
       const reponse = await fetch("/api/neural/train", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(source === "corpus" ? {} : { source }),
+        body: JSON.stringify(source === "corpus" ? {} : demande),
       });
       const data = await reponse.json();
       setLancement(reponse.ok ? (data.job?.status === "en_cours" ? "en cours — la courbe se met à jour en direct." : "terminé.") : `échec : ${String(data.error ?? "")}`);
@@ -787,6 +820,97 @@ export function NeuralConsole() {
       {/* Onglet ENTRAÎNEMENT */}
       {onglet === "entrainement" && (
         <div className="space-y-6">
+          {/* it.62 — LA VOCATION DE GEN3 : la charte des 19 domaines pour
+              lesquels gen3 a été créé, et le PRÉ-ENTRAÎNEMENT PAR ONDES
+              piloté depuis la console (POST source "ondes" + domainesOndes
+              = ids de la vocation — la demande propriétaire it.61 devient
+              un bouton vérifiable en production). */}
+          <div className="g3v6-card p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="max-w-2xl">
+                <p className="text-sm font-semibold text-[var(--g3-text)]">
+                  La vocation de gen3 — les 19 domaines pour lesquels il a été créé
+                </p>
+                <p className="mt-1 text-[11px] text-[var(--g3-muted)]">
+                  Charte d&apos;identité (it.59). Le pré-entraînement PAR ONDES (méthode EOD — analyse, traitement puis consolidation des ondes sur le cortex 1M) renforce la bande-porteuse de CHACUN des 19 domaines ; le rapport honnête par domaine (résonance, paquets d&apos;onde, renforts/annulations du bus, métabolisme mesuré) s&apos;affiche sous la carte après l&apos;exécution.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <a href="/vocation" className="rounded-xl border border-[var(--g3-border)] px-4 py-2.5 text-sm text-[var(--g3-muted)] transition hover:bg-[var(--g3-hover)]">
+                  Voir la charte complète
+                </a>
+                {estOperateur ? (
+                  <button
+                    type="button"
+                    onClick={() => void lancerEntrainement({ source: "ondes", domainesOndes: domaines?.vocation.domaines.map((d) => d.id) ?? [] })}
+                    disabled={Boolean(lancement) || jobEnCours || !domaines}
+                    className="rounded-xl bg-[var(--g3-primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--g3-primary-strong)] disabled:opacity-50"
+                  >
+                    {jobEnCours ? "Entraînement en cours…" : "Pré-entraîner les 19 domaines (ondes)"}
+                  </button>
+                ) : (
+                  <p className="max-w-xs rounded-xl border border-[var(--g3-border)] px-4 py-2.5 text-[11px] text-[var(--g3-muted)]">
+                    Le lancement du pré-entraînement par ondes est réservé aux opérateurs — la charte et le dernier rapport restent consultables par tous.
+                  </p>
+                )}
+              </div>
+            </div>
+            {domaines ? (
+              <div className="mt-4">
+                <p className="text-[11px] italic text-[var(--g3-muted)]">{domaines.vocation.mission}</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {domaines.vocation.domaines.map((v, i) => (
+                    <div key={v.id} className="rounded-xl border border-[var(--g3-border)] p-3">
+                      <p className="text-xs font-semibold text-[var(--g3-text)]">
+                        <span className="mr-1 text-[10px] font-normal text-[var(--g3-faint)]">{String(i + 1).padStart(2, "0")}</span>
+                        {v.label}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-[10px] text-[var(--g3-muted)]">{v.mission}</p>
+                      <p className="mt-1 text-[10px] text-[var(--g3-faint)]">Outils : {v.outils.join(" · ")}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-[var(--g3-faint)]">Chargement de la charte de vocation…</p>
+            )}
+
+            {/* it.62 — le rapport honnête de la dernière session d'ondes */}
+            {job?.rapportOndes ? (
+              <div className="mt-5">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Metrique label="Ondes · échantillons" valeur={job.rapportOndes.totalEchantillons.toLocaleString("fr-FR")} sous={`${job.rapportOndes.domaines.length} domaine(s) du porteur`} />
+                  <Metrique label="Ondes · transmissions" valeur={job.rapportOndes.metabolisme.transmissions.toLocaleString("fr-FR")} sous="paquets propagés le long des arêtes" />
+                  <Metrique label="Ondes · métabolisme" valeur={`${PCT(job.rapportOndes.metabolisme.evaluees / Math.max(1, job.rapportOndes.metabolisme.evaluees + job.rapportOndes.metabolisme.reposes))} du substrat`} sous="repos gratuit — architecture événementielle" />
+                </div>
+                <table className="mt-3 w-full text-left text-xs">
+                  <thead>
+                    <tr className="text-[var(--g3-faint)]">
+                      <th className="pb-2 pr-4 font-semibold">Domaine</th>
+                      <th className="pb-2 pr-4 font-semibold">Bande</th>
+                      <th className="pb-2 pr-4 font-semibold">Éch.</th>
+                      <th className="pb-2 pr-4 font-semibold">Résonance</th>
+                      <th className="pb-2 pr-4 font-semibold">Paquets</th>
+                      <th className="pb-2 font-semibold">Renforts / annulations</th>
+                    </tr>
+                  </thead>
+                  <tbody className="g3v6-metric text-[var(--g3-text-secondary)]">
+                    {job.rapportOndes.domaines.map((d) => (
+                      <tr key={d.domaine} className="border-t border-[var(--g3-border)]">
+                        <td className="py-2 pr-4">{d.domaine}</td>
+                        <td className="py-2 pr-4">{d.bande} <span className="text-[var(--g3-faint)]">(ω {d.porteurFrequence.toFixed(2)})</span></td>
+                        <td className="py-2 pr-4">{d.echantillons}</td>
+                        <td className="py-2 pr-4 text-[var(--g3v6-spike-text)]">{d.resonanceMoyenne.toFixed(4)}</td>
+                        <td className="py-2 pr-4">{d.paquetsEmis.toLocaleString("fr-FR")}</td>
+                        <td className="py-2">{d.renforts.toLocaleString("fr-FR")} / {d.annulations.toLocaleString("fr-FR")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </div>
+
           {/* LES 18 DOMAINES — couche d'expertise v3 (neurones 100-135) */}
           <div className="g3v6-card p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -800,10 +924,10 @@ export function NeuralConsole() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <button type="button" onClick={() => void lancerEntrainement("domaines")} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl bg-[var(--g3-primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--g3-primary-strong)] disabled:opacity-50">
+                <button type="button" onClick={() => void lancerEntrainement({ source: "domaines" })} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl bg-[var(--g3-primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--g3-primary-strong)] disabled:opacity-50">
                   Entraîner sur mes 18 domaines
                 </button>
-                <button type="button" onClick={() => void lancerEntrainement("complet")} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl border border-[var(--g3-border)] px-4 py-2.5 text-sm text-[var(--g3-muted)] transition hover:bg-[var(--g3-hover)] disabled:opacity-50">
+                <button type="button" onClick={() => void lancerEntrainement({ source: "complet" })} disabled={Boolean(lancement) || jobEnCours} className="rounded-xl border border-[var(--g3-border)] px-4 py-2.5 text-sm text-[var(--g3-muted)] transition hover:bg-[var(--g3-hover)] disabled:opacity-50">
                   Corpus + domaines
                 </button>
               </div>

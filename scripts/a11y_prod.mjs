@@ -34,6 +34,7 @@ const PAGES = [
   "/en",
   "/faq",
   "/neural",
+  "/vocation",
   "/integrations",
   "/live",
   "/essaim",

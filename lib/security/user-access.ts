@@ -264,6 +264,10 @@ const PUBLIC_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/privacy": "public",
   "/en": "public",
   "/monitoring": "public",
+  // it.62 — LA CHARTE DE VOCATION DE GEN3 est une promesse publique :
+  // les 19 domaines pour lesquels le moteur a été créé (mission, tâches,
+  // outils réels) — module statique zéro IO, aucune donnée utilisateur.
+  "/vocation": "public",
   // Fichiers servis depuis /public et routes système
   "/robots.txt": "public",
   "/sitemap.xml": "public",
