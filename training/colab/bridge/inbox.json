@@ -1,11 +1,12 @@
 {
-  "id": "2026-10-31-etape1-env",
+  "id": "2026-10-31-etape2-preentrainement-eod",
   "stop": false,
+  "timeout_s": 3600,
   "commands": [
-    "nvidia-smi || echo 'PAS DE GPU — passe le runtime Colab en GPU (Execution > Modifier le type d execution > GPU)'",
-    "df -h /content && free -h && nproc",
-    "python3 --version && pip --version",
-    "python3 -c \"import torch; print('torch', torch.__version__, '| cuda disponible:', torch.cuda.is_available(), '|', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'n/a')\" 2>/dev/null || echo 'torch absent (normal, sera installe par le notebook v4)'",
-    "ls -la /content | head -20"
+    "nvidia-smi 2>/dev/null | head -4 || echo 'Pas de GPU — sans importance : la méthode EOD est un substrat CPU événementiel (coût ∝ activité), elle tourne sur CPU.'",
+    "node --version 2>/dev/null || (curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs) && echo \"node: $(node --version)\"",
+    "rm -rf /content/gen3ia && git clone --depth 1 https://$GEN3IA_PAT@github.com/missock237-spec/gen3ia /content/gen3ia && cd /content/gen3ia && git log --oneline -1",
+    "cd /content/gen3ia && echo \"Datasets présents dans la session Colab : $(ls datasets/ | wc -l) dossiers\" && HF_TOKEN=$HF_TOKEN GEN3IA_ENV=google-colab npx -y tsx@4.19.2 scripts/preentrainement-colab.ts",
+    "cd /content/gen3ia && python3 -c \"import json; r=json.load(open('assets/neural-pretrained/preentrainement-eod-19-domaines.json')); s=r['sonde']; print('ASSIMILATION:', s['assimiles'], '/', s['total'], 'domaines —', r['methode']); [print(' ', d['domaine'], 'gain trace ×%.2f' % d['trace']['gain'], '✓' if d['trace']['assimile'] else '✗') for d in s['domaines']]\""
   ]
 }
