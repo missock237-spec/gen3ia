@@ -3,7 +3,7 @@
  * saturante) et preuve du correctif (déduplication + homéostasie).
  * Petit cortex, poids saturés à 1.0, re-stimulation répétée du même motif.
  */
-import { CortexColumnnaire } from "../gen3ia/lib/neural/core/v2/cortex-columnnaire";
+import { CortexColumnnaire } from "../lib/neural/core/v2/cortex-columnnaire";
 
 function scenario(normalisation: boolean, cycles: number): {
   maxSpikes: number;
