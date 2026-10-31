@@ -120,16 +120,23 @@ describe("executerCycleAuto", () => {
     expect(rapport?.message).toContain("Kaggle ignoré");
   }, 30_000);
 
-  it("anti-rejoue : un second cycle identique n'ingère plus rien (échec honnête)", async () => {
+  it("anti-rejoue : un second cycle identique n'ingère plus rien des hubs — la SOURCE INTERNE prend le relais (it.65)", async () => {
     const chemin = await cheminEtat();
     const client = clientHubFactice();
     const plafonds = { maxDatasetsParCycle: 4, maxParObjectif: 2, maxLignesParDataset: 1000, maxPairesParDataset: 100, maxEchantillonsParDataset: 100, maxEchantillonsParCycle: 100, parFichierOctets: 1_048_576, totalParCycleOctets: 8_388_608 };
     await executerCycleAuto({ client, cheminEtat: chemin, plafonds });
 
     const second = await executerCycleAuto({ client, cheminEtat: chemin, plafonds });
-    expect(second?.statut).toBe("echec");
+    // it.65 — le générateur interne fournit un lot TOUJOURS NOUVEAU quand
+    // les hubs n'ont rien : le cycle se termine honnêtement (la matière est
+    // synthétique et le rapport le dit — amélioration continue sans hub).
+    expect(second?.statut).toBe("termine");
     expect(second?.message).toContain("Aucun nouveau dataset ingéré");
-    expect(second?.datasetsIngestes).toEqual([]);
+    expect(second?.message).toContain("Source interne active");
+    expect(second?.message).toContain("generateur-interne-vocation");
+    expect(second?.datasetsIngestes).toEqual(["generateur-interne-vocation"]);
+    expect(second?.generateur?.reference).toBe("generateur-interne-vocation");
+    expect(second?.generateur?.paires).toBeGreaterThan(0);
   }, 30_000);
 
   it("échec d'un téléchargement : consigné honnêtement, le cycle continue", async () => {
@@ -145,15 +152,18 @@ describe("executerCycleAuto", () => {
     expect(erreursHf.some((e) => e.includes("org/dialogues-fr") && e.includes("interrompu"))).toBe(true);
   }, 30_000);
 
-  it("panne réseau totale : échec explicite, jamais de progression fictive", async () => {
+  it("panne réseau totale : la source interne évite l'échec, erreurs de hubs consignées honnêtement (it.65)", async () => {
     const chemin = await cheminEtat();
     const client = clientHubFactice();
     client.rechercher = async () => {
       throw new Error("connexion hub impossible (test)");
     };
     const rapport = await executerCycleAuto({ client, cheminEtat: chemin });
-    expect(rapport?.statut).toBe("echec");
-    expect(rapport?.message).toContain("Aucun nouveau dataset ingéré");
+    // it.65 — même en panne totale des hubs, gen3 continue de s'améliorer
+    // via le générateur interne (lot nouveau, mention honnête dans le
+    // rapport) — l'erreur hub reste consignée, rien n'est masqué.
+    expect(rapport?.statut).toBe("termine");
+    expect(rapport?.generateur?.paires).toBeGreaterThan(0);
     expect(rapport?.hubs[0]?.erreurs.some((e) => e.includes("connexion hub impossible"))).toBe(true);
   }, 30_000);
 

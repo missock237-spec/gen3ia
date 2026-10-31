@@ -1,0 +1,702 @@
+{
+  "date": "2026-10-31T14:49:31.996Z",
+  "methode": "EOD (it.57/63) — analyse des ondes, traitement colonnaire, consolidation plastique + bus inter-régions ; phase 1 masse interclassée, phase 2 consolidation par époques",
+  "contexte": "it.65 — demande propriétaire : « crée un système qui va permettre à gen3 d'apprendre du générateur de dataset, pour qu'il puisse toujours continuer à s'améliorer en continu... crée 5 millions de données et de dataset... entraîne gen3 dans ta propre base de données et utilise tes outils... continue jusqu'à ce qu'il atteigne le niveau requis »",
+  "environnement": "local-sandbox — SNN purement local, zéro service IA externe",
+  "cortex": {
+    "colonnes": 1048576,
+    "voisins": 12,
+    "bandesLecture": 8,
+    "seuil": 1,
+    "decroissance": 0.1,
+    "plasticiteFenetre": 2,
+    "lrBoost": 0.15,
+    "seed": 42,
+    "bandes": 32
+  },
+  "options": {
+    "cyclesParEchantillon": 3,
+    "lrBoost": 0.05,
+    "tailleLot": 2000,
+    "plan": "phase 1 interclassée round-robin (ordre de la charte) + phase 2 époques de consolidation sur le cœur du corpus",
+    "graine": 20261031,
+    "epoquesConsolidation": 5,
+    "epoquesMax": 10,
+    "budgetMinutes": 9
+  },
+  "sources": {
+    "generateur": 5000000,
+    "depot": 86939,
+    "totalSession": 5086939,
+    "manifeste": "var/datasets-generateur/manifeste.json (SHA-256 audités, recompte intégral 5 000 000 ✓)",
+    "note": "Sources = générateur interne (synthétique, étiqueté) + datasets réels du dépôt (datasets/) — « ta propre base de données ». Hugging Face non utilisé dans cette campagne."
+  },
+  "totalEchantillons": 5276939,
+  "horlogeFinale": 15830817,
+  "metabolisme": {
+    "evaluees": 600676704,
+    "reposes": 16599214089888,
+    "transmissions": 481302012,
+    "ms": 109307.186
+  },
+  "bilan": {
+    "donneesParDomaine": {
+      "ok": 19,
+      "total": 19,
+      "critere": "chaque domaine a reçu SA PART INTÉGRALE du dataset généré (≥ 263 157 échantillons) + ses données réelles du dépôt"
+    },
+    "porteursRenforces": {
+      "ok": 19,
+      "total": 19,
+      "renfortsTotaux": 2644970131,
+      "critere": "porteur du domaine émis dans le bus inter-régions et renforcé (mesuré)"
+    },
+    "stabiliteBandes": {
+      "ok": 0,
+      "total": 19,
+      "critere": "lecture du porteur ≥ 2.5 en fin de session"
+    },
+    "traceParDomaine": {
+      "ok": 10,
+      "total": 19,
+      "critere": "sonde de rejeu it.61 (gain > 1) — rejeu horloge exacte vs témoin vierge"
+    },
+    "vocabulaire": {
+      "ok": 9,
+      "total": 19,
+      "critere": "sonde de vocabulaire (12 tokens fréquents du corpus généré) gain ≥ 1"
+    }
+  },
+  "niveauRequis": {
+    "C1_donnees_5M": {
+      "requis": "≥ 5 000 000 échantillons générés réellement traités",
+      "constate": "5 086 939 passés (5 000 000 générés + 86 939 dépôt), compteur de session 5 276 939",
+      "atteint": true
+    },
+    "C2_porteurs": {
+      "requis": "19/19 renforcés",
+      "constate": "19/19",
+      "atteint": true
+    },
+    "C3_bandes": {
+      "requis": "19/19 stables (≥ 2,5)",
+      "constate": "0/19",
+      "atteint": false
+    },
+    "C4_trace": {
+      "requis": "19/19 gain trace > 1",
+      "constate": "10/19",
+      "atteint": false
+    },
+    "C5_vocabulaire": {
+      "requis": "19/19 gain ≥ 1",
+      "constate": "9/19",
+      "atteint": false
+    }
+  },
+  "domaineRapports": [
+    {
+      "domaine": "recherche-web",
+      "label": "Recherche web",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 276558,
+      "depot": 3400,
+      "renforts": 138506876,
+      "annulations": 138507124,
+      "porteurLecture": 0.09326809658610308,
+      "sondeTrace": {
+        "avant": 3.4726961059379176,
+        "apres": 3.1887165139808644,
+        "gain": 0.9182250380413419
+      },
+      "sondeVocabulaire": {
+        "avant": 4.245441736624129,
+        "apres": 3.737942662742466,
+        "gain": 0.8804602429227508
+      },
+      "generalisation": {
+        "ratio": 2.983321864763203,
+        "ratioTemoin": 3.4494645692216817,
+        "gain": 0.864865200060989
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/contextual_understanding/sample.jsonl:200",
+        "datasets/rag_documents/sample.jsonl:200",
+        "datasets/knowledge/train.jsonl:3000"
+      ]
+    },
+    {
+      "domaine": "controle-donnees",
+      "label": "Contrôle de données",
+      "bande": 4,
+      "porteurFrequence": 1,
+      "echantillons": 273758,
+      "depot": 600,
+      "renforts": 137110956,
+      "annulations": 137111044,
+      "porteurLecture": 0.11617976471489005,
+      "sondeTrace": {
+        "avant": 2.7522260461979404,
+        "apres": 4.0750059371516505,
+        "gain": 1.4806218198469063
+      },
+      "sondeVocabulaire": {
+        "avant": 3.62692672628293,
+        "apres": 3.486033963124472,
+        "gain": 0.9611536780885418
+      },
+      "generalisation": {
+        "ratio": 2.484896071412512,
+        "ratioTemoin": 2.6363189622684007,
+        "gain": 0.9425627577606929
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/databases/sample.jsonl:200",
+        "datasets/ml_data/sample.jsonl:200",
+        "datasets/ml_evaluation/sample.jsonl:200"
+      ]
+    },
+    {
+      "domaine": "redaction-texte",
+      "label": "Rédaction de texte",
+      "bande": 5,
+      "porteurFrequence": 1.1875,
+      "echantillons": 283503,
+      "depot": 10345,
+      "renforts": 141975467,
+      "annulations": 141975533,
+      "porteurLecture": 0.08223348523389766,
+      "sondeTrace": {
+        "avant": 2.783309025243906,
+        "apres": 2.77765423039052,
+        "gain": 0.9979683194348531
+      },
+      "sondeVocabulaire": {
+        "avant": 2.9944864791646633,
+        "apres": 2.9944864791646633,
+        "gain": 1
+      },
+      "generalisation": {
+        "ratio": 3.23002150135657,
+        "ratioTemoin": 3.530196507562705,
+        "gain": 0.9149693209533597
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/writing/train.jsonl:8000",
+        "datasets/text_generation/sample.jsonl:200",
+        "datasets/abbreviations/train.jsonl:2145"
+      ]
+    },
+    {
+      "domaine": "analyse-documents",
+      "label": "Analyse de documents",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 276558,
+      "depot": 3400,
+      "renforts": 138787132,
+      "annulations": 138786868,
+      "porteurLecture": 0.10115751779505944,
+      "sondeTrace": {
+        "avant": 3.0020751120697926,
+        "apres": 3.4888015572586677,
+        "gain": 1.162130002421325
+      },
+      "sondeVocabulaire": {
+        "avant": 3.6906700872753113,
+        "apres": 4.331466408433387,
+        "gain": 1.1736260099127833
+      },
+      "generalisation": {
+        "ratio": 4.001097225190005,
+        "ratioTemoin": 4.226877565117557,
+        "gain": 0.9465846037768372
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/rag_documents/sample.jsonl:200",
+        "datasets/contextual_understanding/sample.jsonl:200",
+        "datasets/knowledge/train.jsonl:3000"
+      ]
+    },
+    {
+      "domaine": "generation-code",
+      "label": "Génération de code",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "echantillons": 285558,
+      "depot": 12400,
+      "renforts": 143159059,
+      "annulations": 143158941,
+      "porteurLecture": 0.09730458023413084,
+      "sondeTrace": {
+        "avant": 2.9240836509349197,
+        "apres": 3.3415944306446415,
+        "gain": 1.1427834595553485
+      },
+      "sondeVocabulaire": {
+        "avant": 3.3025836834245386,
+        "apres": 3.3025836834245386,
+        "gain": 1
+      },
+      "generalisation": {
+        "ratio": 2.710275261128139,
+        "ratioTemoin": 2.7832650126163245,
+        "gain": 0.973775493473554
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/code/train.jsonl:12000",
+        "datasets/tools/sample.jsonl:200",
+        "datasets/databases/sample.jsonl:200"
+      ]
+    },
+    {
+      "domaine": "analyse-donnees",
+      "label": "Analyse de données",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "echantillons": 273758,
+      "depot": 600,
+      "renforts": 137062999,
+      "annulations": 137063001,
+      "porteurLecture": 0.09650978108616899,
+      "sondeTrace": {
+        "avant": 3.180814983788894,
+        "apres": 3.3113841755453213,
+        "gain": 1.041048974059125
+      },
+      "sondeVocabulaire": {
+        "avant": 3.321449419558463,
+        "apres": 4.336567156314616,
+        "gain": 1.3056249271112181
+      },
+      "generalisation": {
+        "ratio": 2.9547514046469945,
+        "ratioTemoin": 3.1715248298108625,
+        "gain": 0.9316500936312091
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/ml_data/sample.jsonl:200",
+        "datasets/ml_evaluation/sample.jsonl:200",
+        "datasets/math/sample.jsonl:200"
+      ]
+    },
+    {
+      "domaine": "cybersecurite",
+      "label": "Cybersécurité",
+      "bande": 0,
+      "porteurFrequence": 0.25,
+      "echantillons": 279358,
+      "depot": 6200,
+      "renforts": 140055010,
+      "annulations": 140054990,
+      "porteurLecture": 0.09634892856431376,
+      "sondeTrace": {
+        "avant": 2.834384651357403,
+        "apres": 3.3052766492584205,
+        "gain": 1.166135530572925
+      },
+      "sondeVocabulaire": {
+        "avant": 3.048398697350726,
+        "apres": 4.059943444691261,
+        "gain": 1.331828231070837
+      },
+      "generalisation": {
+        "ratio": 3.2744552954191857,
+        "ratioTemoin": 3.658439102877479,
+        "gain": 0.8950416293232056
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/security/train.jsonl:6000",
+        "datasets/security_v4/sample.jsonl:200"
+      ]
+    },
+    {
+      "domaine": "medecine-sante",
+      "label": "Médecine et santé",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 276158,
+      "depot": 3000,
+      "renforts": 138359043,
+      "annulations": 138358957,
+      "porteurLecture": 0.0963808713563523,
+      "sondeTrace": {
+        "avant": 3.403111141159146,
+        "apres": 3.3064893353150744,
+        "gain": 0.9716078018506439
+      },
+      "sondeVocabulaire": {
+        "avant": 3.769695145923357,
+        "apres": 3.668078755506314,
+        "gain": 0.9730438705297075
+      },
+      "generalisation": {
+        "ratio": 3.2103239318918857,
+        "ratioTemoin": 3.4617442046571907,
+        "gain": 0.9273717935522037
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/knowledge/train.jsonl:3000"
+      ]
+    },
+    {
+      "domaine": "commerce-economie",
+      "label": "Commerce et économie",
+      "bande": 6,
+      "porteurFrequence": 1.375,
+      "echantillons": 284758,
+      "depot": 11600,
+      "renforts": 142791024,
+      "annulations": 142790976,
+      "porteurLecture": 0.09632727258960798,
+      "sondeTrace": {
+        "avant": 4.035193623865349,
+        "apres": 3.3044545438868003,
+        "gain": 0.8189085461335144
+      },
+      "sondeVocabulaire": {
+        "avant": 2.798557987571438,
+        "apres": 2.68712602470663,
+        "gain": 0.9601823641462196
+      },
+      "generalisation": {
+        "ratio": 3.213070484538474,
+        "ratioTemoin": 3.213070484538474,
+        "gain": 1
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/business/train.jsonl:11600"
+      ]
+    },
+    {
+      "domaine": "langue-communication",
+      "label": "Langue et communication",
+      "bande": 6,
+      "porteurFrequence": 1.375,
+      "echantillons": 275703,
+      "depot": 2545,
+      "renforts": 138123514,
+      "annulations": 138123486,
+      "porteurLecture": 0.09634875250462886,
+      "sondeTrace": {
+        "avant": 3.356887506057259,
+        "apres": 3.3052699655115507,
+        "gain": 0.9846233928147523
+      },
+      "sondeVocabulaire": {
+        "avant": 3.220704085986109,
+        "apres": 3.220704085986109,
+        "gain": 1
+      },
+      "generalisation": {
+        "ratio": 3.4902786066388085,
+        "ratioTemoin": 3.4902786066388085,
+        "gain": 1
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/abbreviations/train.jsonl:2145",
+        "datasets/nlp_comprehension/sample.jsonl:200",
+        "datasets/conversational_memory/sample.jsonl:200"
+      ]
+    },
+    {
+      "domaine": "ingenierie-industrie",
+      "label": "Ingénierie et industrie",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "echantillons": 273758,
+      "depot": 600,
+      "renforts": 137207349,
+      "annulations": 137206651,
+      "porteurLecture": 0.09630351363874477,
+      "sondeTrace": {
+        "avant": 3.2102206509418836,
+        "apres": 3.303552650538537,
+        "gain": 1.0290733908179395
+      },
+      "sondeVocabulaire": {
+        "avant": 3.6898040193186867,
+        "apres": 3.4345181973332575,
+        "gain": 0.9308131758085713
+      },
+      "generalisation": {
+        "ratio": 3.6183743936134456,
+        "ratioTemoin": 3.6823669586017753,
+        "gain": 0.9826218935516877
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/sciences/sample.jsonl:200",
+        "datasets/problem_solving/sample.jsonl:200",
+        "datasets/reasoning/sample.jsonl:200"
+      ]
+    },
+    {
+      "domaine": "art-creation-multimedia",
+      "label": "Art et création multimédia",
+      "bande": 0,
+      "porteurFrequence": 0.25,
+      "echantillons": 294407,
+      "depot": 21249,
+      "renforts": 147551515,
+      "annulations": 147551485,
+      "porteurLecture": 0.09644950101168237,
+      "sondeTrace": {
+        "avant": 2.7213277522761103,
+        "apres": 3.309095102830341,
+        "gain": 1.215985505627767
+      },
+      "sondeVocabulaire": {
+        "avant": 1.6435329224631894,
+        "apres": 1.4455621804989895,
+        "gain": 0.8795456183089427
+      },
+      "generalisation": {
+        "ratio": 2.947030964418191,
+        "ratioTemoin": 2.9975647864152535,
+        "gain": 0.9831417081538727
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/music/train.jsonl:7300",
+        "datasets/video/train.jsonl:8349",
+        "datasets/multimodal/train.jsonl:5400",
+        "datasets/image_generation/sample.jsonl:200"
+      ]
+    },
+    {
+      "domaine": "agriculture-environnement",
+      "label": "Agriculture et environnement",
+      "bande": 7,
+      "porteurFrequence": 1.5625,
+      "echantillons": 273358,
+      "depot": 200,
+      "renforts": 137147116,
+      "annulations": 137146884,
+      "porteurLecture": 0.09654597973345165,
+      "sondeTrace": {
+        "avant": 3.285915126796531,
+        "apres": 3.312758928068072,
+        "gain": 1.0081693532047222
+      },
+      "sondeVocabulaire": {
+        "avant": 4.624389519714947,
+        "apres": 4.624389519714947,
+        "gain": 1
+      },
+      "generalisation": {
+        "ratio": 3.315699305151526,
+        "ratioTemoin": 3.6304306800669575,
+        "gain": 0.913307427506197
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/sciences/sample.jsonl:200"
+      ]
+    },
+    {
+      "domaine": "droit-administration",
+      "label": "Droit et administration",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "echantillons": 276158,
+      "depot": 3000,
+      "renforts": 138307126,
+      "annulations": 138306874,
+      "porteurLecture": 0.09631097358871961,
+      "sondeTrace": {
+        "avant": 3.3776451484502363,
+        "apres": 3.303835826254135,
+        "gain": 0.9781476978924305
+      },
+      "sondeVocabulaire": {
+        "avant": 2.592880378788552,
+        "apres": 2.592880378788552,
+        "gain": 1
+      },
+      "generalisation": {
+        "ratio": 3.050979487726224,
+        "ratioTemoin": 2.6906617170229237,
+        "gain": 1.1339141849098642
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/knowledge/train.jsonl:3000"
+      ]
+    },
+    {
+      "domaine": "education-recherche",
+      "label": "Éducation et recherche",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 276558,
+      "depot": 3400,
+      "renforts": 138531085,
+      "annulations": 138530915,
+      "porteurLecture": 0.0963435549786602,
+      "sondeTrace": {
+        "avant": 3.120748859823336,
+        "apres": 3.305072653211627,
+        "gain": 1.059063962423021
+      },
+      "sondeVocabulaire": {
+        "avant": 3.465983261991638,
+        "apres": 3.253821556842687,
+        "gain": 0.9387874409332727
+      },
+      "generalisation": {
+        "ratio": 3.433992319879822,
+        "ratioTemoin": 3.545414044936415,
+        "gain": 0.9685730006017982
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/knowledge/train.jsonl:3000",
+        "datasets/intent_recognition/sample.jsonl:200",
+        "datasets/sciences/sample.jsonl:200"
+      ]
+    },
+    {
+      "domaine": "transport-immobilier",
+      "label": "Transport et immobilier",
+      "bande": 2,
+      "porteurFrequence": 0.625,
+      "echantillons": 273158,
+      "depot": 0,
+      "renforts": 136918826,
+      "annulations": 136919174,
+      "porteurLecture": 0.09629206344973142,
+      "sondeTrace": {
+        "avant": 3.939358569991188,
+        "apres": 3.3031180165757346,
+        "gain": 0.8384913325072421
+      },
+      "sondeVocabulaire": {
+        "avant": 2.4522156690554073,
+        "apres": 2.3054677844744975,
+        "gain": 0.9401570235307088
+      },
+      "generalisation": {
+        "ratio": 3.2782925144638586,
+        "ratioTemoin": 3.4573797135386184,
+        "gain": 0.9482014664534881
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": []
+    },
+    {
+      "domaine": "sciences-humaines-sociales",
+      "label": "Sciences humaines et sociales",
+      "bande": 1,
+      "porteurFrequence": 0.4375,
+      "echantillons": 276358,
+      "depot": 3200,
+      "renforts": 138679062,
+      "annulations": 138678938,
+      "porteurLecture": 0.09635899787003495,
+      "sondeTrace": {
+        "avant": 3.32155291666261,
+        "apres": 3.3056589142481863,
+        "gain": 0.9952148880920454
+      },
+      "sondeVocabulaire": {
+        "avant": 3.432368082272252,
+        "apres": 3.432368082272252,
+        "gain": 1
+      },
+      "generalisation": {
+        "ratio": 3.7876590931950216,
+        "ratioTemoin": 4.012699596115451,
+        "gain": 0.9439179291820692
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/professions/sample.jsonl:200",
+        "datasets/knowledge/train.jsonl:3000"
+      ]
+    },
+    {
+      "domaine": "ia-specialisee-emergente",
+      "label": "Domaines spécialisés et émergents en IA",
+      "bande": 4,
+      "porteurFrequence": 1,
+      "echantillons": 273757,
+      "depot": 600,
+      "renforts": 137418524,
+      "annulations": 137418476,
+      "porteurLecture": 0.09633251914087605,
+      "sondeTrace": {
+        "avant": 3.449018519686621,
+        "apres": 3.3046537101545916,
+        "gain": 0.9581432199601102
+      },
+      "sondeVocabulaire": {
+        "avant": 2.30731678292613,
+        "apres": 2.2442438258892827,
+        "gain": 0.972663936957604
+      },
+      "generalisation": {
+        "ratio": 3.397504167868244,
+        "ratioTemoin": 2.604309402229479,
+        "gain": 1.3045700963793827
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/ml_training/sample.jsonl:200",
+        "datasets/multimodal_v4/sample.jsonl:200",
+        "datasets/tools/sample.jsonl:200"
+      ]
+    },
+    {
+      "domaine": "apprentissage-entre-ia",
+      "label": "Apprentissage autonome avec d'autres IA",
+      "bande": 3,
+      "porteurFrequence": 0.8125,
+      "echantillons": 273757,
+      "depot": 600,
+      "renforts": 137278448,
+      "annulations": 137278552,
+      "porteurLecture": 0.09621165909223772,
+      "sondeTrace": {
+        "avant": 2.829186224117388,
+        "apres": 3.3000662841741177,
+        "gain": 1.1664365731893906
+      },
+      "sondeVocabulaire": {
+        "avant": 3.266001494221445,
+        "apres": 2.9820297837038554,
+        "gain": 0.9130521798535542
+      },
+      "generalisation": {
+        "ratio": 3.402861007928618,
+        "ratioTemoin": 3.661229302441729,
+        "gain": 0.929431272075529
+      },
+      "lectureBandeStable": false,
+      "depotFichiers": [
+        "datasets/ml_management/sample.jsonl:200",
+        "datasets/ml_evaluation/sample.jsonl:200",
+        "datasets/reasoning/sample.jsonl:200"
+      ]
+    }
+  ],
+  "limitesHonnetes": [
+    "Le corpus généré est SYNTHÉTIQUE (gabarits + lexique de charte) : il inscrit la FRÉQUENCE PORTEUSE de chaque domaine, il ne remplace pas des données réelles massives.",
+    "La généralisation SÉMANTIQUE à des textes jamais vus reste hors de portée de la méthode (trace dans les colonnes stimulées — it.61) ; le gain de la sonde de charte mesure un recouvrement de vocabulaire, rapporté tel quel.",
+    "La trace vit dans les arêtes CSR du substrat 1M colonnes : à l'échelle million/domaine, la saturation borne la trace (limite documentée it.63 — substrat 8,4 M colonnes candidat it.66).",
+    "La comparaison avec « les meilleures IA actuelles » (LLM frontière) n'est PAS revendiquée : gen3 est un SNN local mesuré sur SES critères opérationnels (C1-C5), pas un transformateur génératif.",
+    "La consolidation profonde est BORNÉE par une cascade CSR saturante (constat it.65) : après ~20 époques de re-passé du cœur, les poids du sous-réseau atteignent 1.0 et la liste des transmissions en attente croît sans amortissement (le lot cybersécurité de l'époque 21 diverge de façon déterministe) — le plafond de la liste en attente est le candidat it.66. La sonde intermédiaire à horloges ARRIÈRE neutralise par ailleurs la décroissance paresseuse (dt ≤ 0) : les sondes de milieu de session utilisent une horloge AVANT (90e9) et le rejeu exact est réservé au rapport final sur un cortex scratch.",
+    "Le critère C3 (lecture du porteur ≥ 2,5) est exprimé dans l'échelle de la campagne A (somme d'énergie du bus) ; le rejeu exact it.65 lit des FRACTIONS de bande (0..1, ~0,08-0,12) — les deux échelles ne sont pas comparables, les deux sont rapportées telles quelles."
+  ]
+}

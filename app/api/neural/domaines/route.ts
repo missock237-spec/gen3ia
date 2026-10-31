@@ -15,6 +15,9 @@ import { lireResumeMasse } from "@/lib/gen3/pretrain-masse";
 // it.64 — la session million à données uniques (campagne A : 1 005 000
 // textes uniques/domaine) devient lisible elle aussi — même honnêteté.
 import { lireResumeMillion } from "@/lib/gen3/pretrain-million";
+// it.65 — le système d'amélioration continue (générateur de datasets +
+// campagne 5M) devient lisible — niveau requis C1-C5 rapporté tel quel.
+import { lireResumeContinue } from "@/lib/gen3/amelioration-continue";
 
 /**
  * LES DOMAINES DE GEN3 — inventaire honnête :
@@ -65,6 +68,10 @@ export async function GET(request: NextRequest) {
         // propriétaire « > 1 million de données par domaine ») — même
         // honnêteté : null si le rapport n'est pas committé.
         preentrainementMillion: lireResumeMillion(),
+        // it.65 — amélioration continue : générateur de datasets + campagne
+        // 5M + niveau requis C1-C5 (honnête : null si non committé, un
+        // critère non atteint est affiché comme tel).
+        ameliorationContinue: lireResumeContinue(),
       },
       datasets,
       coucheDomaines: {

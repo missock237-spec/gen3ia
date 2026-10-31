@@ -46,6 +46,10 @@ import type {
   RapportCycleAuto,
   RapportHubCycle,
 } from "./types";
+// it.65 — SOURCE INTERNE : le générateur de datasets (charte de vocation)
+// garantit que la boucle n'est plus jamais à court de matière — gen3 peut
+// continuer à s'améliorer en continu, sans aucun accès réseau.
+import { apportGenerateur, REF_GENERATEUR } from "./generateur";
 import type { PaireLangage } from "@/lib/neural/generation/corpus";
 import type { TrainingSample } from "@/lib/neural/training/dataset";
 
@@ -631,6 +635,21 @@ export async function executerCycleAuto(opts: OptionsCycle = {}): Promise<Rappor
       }
     }
 
+    // 3 bis. SOURCE INTERNE — GÉNÉRATEUR DE DATASETS (it.65) : si les hubs
+    // n'ont rien fourni ce cycle (non configurés, rien de nouveau, erreurs),
+    // la fabrique interne produit un lot TOUJOURS NOUVEAU de paires de
+    // vocation (offset bijection = cycle × taille — anti-rejoue) : gen3
+    // continue à s'améliorer en continu, même sans aucun accès réseau.
+    let sourceGenerateur = false;
+    if (paires.length === 0 && echantillons.length === 0) {
+      try {
+        paires.push(...apportGenerateur(etat.cyclesExecutes));
+        sourceGenerateur = true;
+      } catch (erreur: unknown) {
+        erreursHub.huggingface.push(`générateur interne : ${messageErreur(erreur)}`);
+      }
+    }
+
     // 4. ENTRAÎNER — cortex langagier + SNN supervisés (réels).
     let langage: RapportCycleAuto["langage"];
     let intention: RapportCycleAuto["intention"];
@@ -666,11 +685,14 @@ export async function executerCycleAuto(opts: OptionsCycle = {}): Promise<Rappor
       ? " Kaggle ignoré (KAGGLE_API_TOKEN absent)."
       : "";
     const statut: RapportCycleAuto["statut"] =
-      ingeres.length === 0 ? "echec" : "termine";
+      ingeres.length === 0 && !sourceGenerateur ? "echec" : "termine";
+    const mentionGenerateur = sourceGenerateur
+      ? ` Source interne active (${REF_GENERATEUR}) : ${paires.length} paire(s) générée(s) depuis la charte de vocation — matière toujours nouvelle, amélioration continue sans hub.`
+      : "";
     const message =
       ingeres.length === 0
-        ? `Aucun nouveau dataset ingéré (${choisis.length} candidat(s), ${considerees.huggingface + considerees.kaggle} résultat(s)).${mentionKaggle}`
-        : `${ingeres.length} dataset(s) ingéré(s) — ${paires.length} paire(s), ${echantillons.length} échantillon(s) ; entraînement ${langage || intention ? "appliqué" : "non appliqué"}.${mentionKaggle}`;
+        ? `Aucun nouveau dataset ingéré (${choisis.length} candidat(s), ${considerees.huggingface + considerees.kaggle} résultat(s)).${mentionGenerateur}${mentionKaggle}`
+        : `${ingeres.length} dataset(s) ingéré(s) — ${paires.length} paire(s), ${echantillons.length} échantillon(s) ; entraînement ${langage || intention ? "appliqué" : "non appliqué"}.${mentionGenerateur}${mentionKaggle}`;
 
     const rapport: RapportCycleAuto = {
       v: 1,
@@ -682,7 +704,8 @@ export async function executerCycleAuto(opts: OptionsCycle = {}): Promise<Rappor
       hubs,
       ...(langage ? { langage } : {}),
       ...(intention ? { intention } : {}),
-      datasetsIngestes: ingeres,
+      ...(sourceGenerateur ? { generateur: { paires: paires.length, reference: REF_GENERATEUR } } : {}),
+      datasetsIngestes: sourceGenerateur && ingeres.length === 0 ? [REF_GENERATEUR] : ingeres,
     };
 
     // 6. PERSISTER — état + cerveau (le cerveau est déjà sauvegardé par

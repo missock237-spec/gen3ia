@@ -8,6 +8,7 @@ import {
 } from "@/lib/gen3/vocation";
 import { lireResumeMasse } from "@/lib/gen3/pretrain-masse";
 import { lireResumeMillion } from "@/lib/gen3/pretrain-million";
+import { lireResumeContinue } from "@/lib/gen3/amelioration-continue";
 
 /**
  * /vocation — LA CHARTE LISIBLE DE LA VOCATION DE GEN3 (it.62).
@@ -23,12 +24,13 @@ import { lireResumeMillion } from "@/lib/gen3/pretrain-million";
  * Composant serveur : la charte est un module statique zéro IO
  * (lib/gen3/vocation.ts) ; les résumés des campagnes de pré-entraînement
  * lisent les rapports committés par les campagnes réelles
- * (lib/gen3/pretrain-masse.ts campagne B, lib/gen3/pretrain-million.ts
- * campagne A — null si absent, honnêteté : aucune métrique inventée).
- * Aucune donnée utilisateur, aucun secret. Page publique (la vocation est
- * une promesse publique). Le pré-entraînement par ondes correspondant
- * (méthode EOD it.57) est pilotable depuis la console /neural (onglet
- * Entraînement — it.62).
+ * (lib/gen3/pretrain-masse.ts campagne B it.63, lib/gen3/pretrain-million.ts
+ * campagne A, lib/gen3/amelioration-continue.ts it.65 — null si absent,
+ * honnêteté : aucune métrique inventée, un critère non atteint est affiché
+ * comme tel). Aucune donnée utilisateur, aucun secret. Page publique (la
+ * vocation est une promesse publique). Le pré-entraînement par ondes
+ * correspondant (méthode EOD it.57) est pilotable depuis la console
+ * /neural (onglet Entraînement — it.62).
  */
 
 export const metadata: Metadata = {
@@ -44,6 +46,9 @@ export default function PageVocation() {
   // it.64 — résumé de la session million à données uniques (campagne A).
   const million = lireResumeMillion();
   const millionParId = new Map(million?.parDomaine.map((d) => [d.id, d]) ?? []);
+  // it.65 — amélioration continue (générateur + campagne 5M + niveau requis).
+  const continu = lireResumeContinue();
+  const continuParId = new Map(continu?.parDomaine.map((d) => [d.id, d]) ?? []);
   const formatM = (n: number) => `${(n / 1_000_000).toFixed(3).replace(".", ",")}`;
   const fmtFr = (n: number) => n.toLocaleString("fr-FR");
 
@@ -101,6 +106,108 @@ export default function PageVocation() {
               </p>
             </article>
           ))}
+        </section>
+
+        {/* it.65 — AMÉLIORATION CONTINUE : le générateur de datasets + la
+            campagne 5M + le niveau requis C1-C5 (rapporté tel quel) */}
+        <section aria-label="Amélioration continue par générateur de datasets" className="g3v6-card p-5">
+          <h2 className="text-sm font-bold">Amélioration continue — gen3 apprend de son générateur de datasets</h2>
+          {continu ? (
+            <>
+              <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--g3-muted)]">
+                Campagne réelle du {continu.date.slice(0, 10)} — le générateur interne (fabrique déterministe
+                alimentée par la charte de vocation, bijection mixte-radix : chaque texte est unique et
+                re-générable à l&apos;identique) a produit {fmtFr(continu.sources.generateur)} échantillons, auxquels
+                s&apos;ajoutent {fmtFr(continu.sources.depot)} textes réels du dépôt (« la propre base de données
+                de gen3 ») : {fmtFr(continu.totalEchantillons)} échantillons réellement traités par la méthode
+                des ondes, puis {fmtFr(continu.epoquesConsolidation)} époques de consolidation (lots de{" "}
+                {fmtFr(continu.lot)}, cap {fmtFr(continu.epoquesMax)}). Le générateur est aussi branché sur la
+                boucle d&apos;auto-apprentissage : quand les hubs externes n&apos;ont rien de nouveau, la fabrique
+                interne produit un lot toujours nouveau — gen3 peut s&apos;améliorer en continu, sans aucun accès
+                réseau.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">
+                  Données : <strong className="text-[var(--g3v6-spike-text)]">{continu.bilan.donneesParDomaine.ok}/{continu.bilan.donneesParDomaine.total}</strong>
+                </span>
+                <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">
+                  Porteurs renforcés : <strong className="text-[var(--g3v6-spike-text)]">{continu.bilan.porteursRenforces.ok}/{continu.bilan.porteursRenforces.total}</strong>{" "}
+                  ({fmtFr(continu.bilan.porteursRenforces.renfortsTotaux)} mesurés)
+                </span>
+                <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">
+                  Bandes stables : {continu.bilan.stabiliteBandes.ok}/{continu.bilan.stabiliteBandes.total}
+                </span>
+                <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">
+                  Trace : {continu.bilan.traceParDomaine.ok}/{continu.bilan.traceParDomaine.total}
+                </span>
+                <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">
+                  Vocabulaire : {continu.bilan.vocabulaire.ok}/{continu.bilan.vocabulaire.total}
+                </span>
+              </div>
+              <p className="mt-3 text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">
+                Niveau requis (critères opérationnels, rapportés tels quels)
+              </p>
+              <ul className="mt-1 space-y-1 text-[12px]">
+                {continu.niveauRequis.map((c) => (
+                  <li key={c.critere} className="flex flex-wrap items-baseline gap-2">
+                    <span
+                      className={
+                        c.atteint
+                          ? "rounded-full border border-[var(--g3-border)] px-2 py-0.5 text-[10px] font-semibold text-[var(--g3v6-spike-text)]"
+                          : "rounded-full border border-[var(--g3-border)] px-2 py-0.5 text-[10px] text-[var(--g3-muted)]"
+                      }
+                    >
+                      {c.atteint ? "atteint" : "en cours"}
+                    </span>
+                    <span className="font-medium">{c.critere}</span>
+                    <span className="text-[var(--g3-muted)]">— {c.requis} · constaté : {c.constate}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-left text-[12px]">
+                  <thead className="text-[10px] uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">
+                    <tr>
+                      <th className="py-1.5 pr-3">Domaine</th>
+                      <th className="py-1.5 pr-3">Échantillons</th>
+                      <th className="py-1.5 pr-3">Renforts</th>
+                      <th className="py-1.5 pr-3">Gain trace</th>
+                      <th className="py-1.5 pr-3">Gain vocabulaire</th>
+                      <th className="py-1.5">Bande stable</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DOMAINES_VOCATION.map((domaine) => {
+                      const d = continuParId.get(domaine.id);
+                      return (
+                        <tr key={domaine.id} className="border-t border-[var(--g3-border)]">
+                          <td className="py-1.5 pr-3 font-medium">{domaine.label}</td>
+                          <td className="py-1.5 pr-3 text-[var(--g3-muted)]">{d ? fmtFr(d.echantillons) : "—"}</td>
+                          <td className="py-1.5 pr-3 text-[var(--g3-muted)]">{d ? `${formatM(d.renforts)} M` : "—"}</td>
+                          <td className="py-1.5 pr-3 text-[var(--g3-muted)]">{d ? `×${d.gainTrace.toFixed(2).replace(".", ",")}` : "—"}</td>
+                          <td className="py-1.5 pr-3 text-[var(--g3-muted)]">{d ? `×${d.gainVocabulaire.toFixed(2).replace(".", ",")}` : "—"}</td>
+                          <td className="py-1.5 text-[var(--g3-muted)]">{d ? (d.bandeStable ? "oui" : "non — rapporté tel quel") : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-[var(--g3-faint)]">
+                Métabolisme mesuré : {fmtFr(continu.metabolisme.evaluees)} colonnes évaluées, {fmtFr(continu.metabolisme.transmissions)} transmissions
+                (repos gratuit — architecture événementielle). {continu.limitesHonnetes.length} limites honnêtes
+                documentées dans l&apos;artefact — notamment : le corpus généré est synthétique (il inscrit la
+                fréquence porteuse de chaque domaine), et la comparaison avec les LLM frontière n&apos;est pas
+                revendiquée : gen3 est mesuré sur SES critères opérationnels.
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--g3-muted)]">
+              Aucune campagne d&apos;amélioration continue committée à ce jour — cette section affichera le
+              bilan du générateur (données générées, échantillons traités, niveau requis C1-C5) dès qu&apos;un
+              rapport de campagne sera livré avec le dépôt.
+            </p>
+          )}
         </section>
 
         {/* it.64 — session million à données uniques (campagne A) : le

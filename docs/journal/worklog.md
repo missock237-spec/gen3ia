@@ -4728,3 +4728,30 @@ publiée 11:35:06Z, poller PULL a swappé → **prod 005f238 LIVE** (build 11:34
 /vocation (200) rend les DEUX campagnes (A : 19 182 944 + bilan 4 signaux + tableau par
 domaine depuis la charte ; B : 19 038 000 intact) ; portes /api/neural/* 401 anonymes
 intacts ; sonde locale 11/11 endpoints (TTFB < 900 ms). it.64 close.
+
+### 478451-iter65-2255 (2026-10-31 22:55 +08:00) — it.65 : LE GÉNÉRATEUR DE DATASETS + L'AMÉLIORATION CONTINUE + LA CAMPAGNE 5M (demande propriétaire : « un système qui permette à gen3 d'apprendre du générateur de dataset, pour qu'il puisse toujours continuer à s'améliorer en continu... 5 millions de données... ta propre base de données... continue jusqu'au niveau requis »)
+
+- FABRIQUE lib/gen3/generateur-datasets.ts : bijection mixte-radix index→texte (unicité testée
+  60k/domaine, espace combinatoire ≥ 141,9 M/domaine), vocabulaire exclusivement charte réelle,
+  écriture JSONL.gz par lots + manifeste SHA-256 — scripts/generer-datasets-5m.ts : **5 000 000
+  échantillons réellement écrits et recomptés** (2 508 lots, 32,1 Mo gz, 19/19 domaines) ;
+  manifeste commis en preuve (assets/neural-pretrained/manifeste-generateur-5m-it65.json).
+- SOURCE INTERNE de la boucle auto (lib/entrainement-auto/generateur.ts + boucle.ts) : fallback
+  hubs muets → 228 paires de vocation TOUJOURS NOUVELLES par cycle (anti-rejoue offset), rapport
+  cycle étendu (generateur: {paires, reference}) — amélioration continue sans aucun accès réseau.
+- CAMPAGNE scripts/amelioration-continue-gen3.ts : EOD it.57/63, masse interclassée (5 086 939
+  échantillons = 5M générés + 86 939 dépôt en 2 562 lots, horloge monotone 0→15,26 M) + époques de
+  consolidation (lr 0.05), checkpoints var/neural-continue/ + --reprendre (amélioration CONTINUE).
+  ANOMALIES RÉPARÉES EN ROUTE (analyses conservées) : horloge pré-assignée par domaine → cascade
+  CSR (dt ≤ 0) — corrigé par assignerHorloges dans l'ordre d'entraînement ; lecteur checkpoint
+  Int32 vs Float64Array réel — recalisé ; sondes à horloges arrière en milieu de session —
+  remplacées par sonde AVANT (90e9) + rejeu EXACT final sur cortex-scratch ; cascade CSR saturante
+  à ~20 époques (poids → 1.0, enAttente explosive, lot cyber déterministe) — BORNÉE et documentée
+  comme limite substrat (candidat it.66 : plafond enAttente).
+- BILAN HONNÊTE (artefact commis amelioration-continue-gen3-it65.json) : **C1 données 19/19 ✓
+  (5 276 939 traités) · C2 porteurs 19/19 ✓ (2 644 970 131 renforts)** · C3 bandes 0/19 (échelle
+  de rejeu = fractions, rapportée telle quelle) · C4 trace 10/19 (×0,82-×1,48) · C5 vocab 9/19 —
+  parité LLM frontière NON revendiquée (limite it.61), garde 33ᵉ interdit le maquillage.
+- VERROU 33ᵉ (lib/gen3/amelioration-continue.guard.test.ts, 10 tests). Validation : tsc 0,
+  eslint 0, suite complète **5406/5406** (12 skipped).
+- Rapport : docs/rapports/rapport-job-478451-2026-10-31-2255.md

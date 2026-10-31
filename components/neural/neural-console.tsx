@@ -206,6 +206,22 @@ interface ReponseDomaines {
       assimilesTrace: number;
       totalDomaines: number;
     } | null;
+    /* it.65 — amélioration continue (générateur + campagne 5M + niveau
+       requis C1-C5, même contrat que GET /api/neural/domaines). */
+    ameliorationContinue?: {
+      date: string;
+      totalEchantillons: number;
+      sources: { generateur: number; depot: number; totalSession: number };
+      epoquesConsolidation: number;
+      bilan: {
+        donneesParDomaine: { ok: number; total: number };
+        porteursRenforces: { ok: number; total: number };
+        stabiliteBandes: { ok: number; total: number };
+        traceParDomaine: { ok: number; total: number };
+        vocabulaire: { ok: number; total: number };
+      };
+      niveauRequis: Array<{ critere: string; atteint: boolean }>;
+    } | null;
   };
 }
 
@@ -954,6 +970,36 @@ export function NeuralConsole() {
                   domaine (bijection mixte-radix), plan interclassé round-robin (lot{" "}
                   {domaines.vocation.preentrainementMillion.lot.toLocaleString("fr-FR")}, {" "}
                   {domaines.vocation.preentrainementMillion.cyclesParEchantillon} cycles/échantillon). Détail par domaine :{" "}
+                  <a href="/vocation" className="underline hover:text-[var(--g3-text)]">page publique /vocation</a>.
+                </p>
+              </div>
+            )}
+
+            {/* it.65 — amélioration continue : générateur + campagne 5M */}
+            {domaines?.vocation.ameliorationContinue && (
+              <div className="mt-3 rounded-xl border border-[var(--g3-border)] p-3">
+                <p className="text-xs font-semibold text-[var(--g3-text)]">
+                  Amélioration continue (it.65) :{" "}
+                  <span className="text-[var(--g3v6-spike-text)]">
+                    {domaines.vocation.ameliorationContinue.totalEchantillons.toLocaleString("fr-FR")} échantillons
+                  </span>{" "}
+                  (générateur {domaines.vocation.ameliorationContinue.sources.generateur.toLocaleString("fr-FR")} + dépôt{" "}
+                  {domaines.vocation.ameliorationContinue.sources.depot.toLocaleString("fr-FR")}) — bilan données{" "}
+                  {domaines.vocation.ameliorationContinue.bilan.donneesParDomaine.ok}/
+                  {domaines.vocation.ameliorationContinue.bilan.donneesParDomaine.total} · porteurs{" "}
+                  {domaines.vocation.ameliorationContinue.bilan.porteursRenforces.ok}/
+                  {domaines.vocation.ameliorationContinue.bilan.porteursRenforces.total} · bandes{" "}
+                  {domaines.vocation.ameliorationContinue.bilan.stabiliteBandes.ok}/
+                  {domaines.vocation.ameliorationContinue.bilan.stabiliteBandes.total} · trace{" "}
+                  {domaines.vocation.ameliorationContinue.bilan.traceParDomaine.ok}/
+                  {domaines.vocation.ameliorationContinue.bilan.traceParDomaine.total} · vocabulaire{" "}
+                  {domaines.vocation.ameliorationContinue.bilan.vocabulaire.ok}/
+                  {domaines.vocation.ameliorationContinue.bilan.vocabulaire.total}.
+                </p>
+                <p className="mt-1 text-[10px] text-[var(--g3-muted)]">
+                  {domaines.vocation.ameliorationContinue.epoquesConsolidation.toLocaleString("fr-FR")} époques de consolidation — niveau requis{" "}
+                  {domaines.vocation.ameliorationContinue.niveauRequis.filter((c) => c.atteint).length}/
+                  {domaines.vocation.ameliorationContinue.niveauRequis.length} critères (rapportés tels quels). Détail :{" "}
                   <a href="/vocation" className="underline hover:text-[var(--g3-text)]">page publique /vocation</a>.
                 </p>
               </div>

@@ -171,6 +171,9 @@ export interface RapportCycleAuto {
   intention?: RapportIntentionCycle;
   /** Références réellement ingérées ce cycle. */
   datasetsIngestes: string[];
+  /** it.65 — présent si la SOURCE INTERNE (générateur de datasets) a
+   *  fourni la matière ce cycle (hubs muets — amélioration continue). */
+  generateur?: { paires: number; reference: string };
   /** Présent en régime maîtrise : progression du catalogue. */
   maitrise?: RapportMaitrise;
 }

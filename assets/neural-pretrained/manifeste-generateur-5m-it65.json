@@ -1,0 +1,184 @@
+{
+  "date": "2026-10-31T12:00:41.547Z",
+  "demande": "génération de 5 000 000 données par le générateur interne (demande propriétaire it.65 : « 5 millions de données et de dataset »)",
+  "methode": "bijection mixte-radix index→texte, vocabulaire exclusivement issu de la charte de vocation réelle (taches/motsCles/outils), gabarits FR/EN génériques, graine déterministe",
+  "licence": "CC-BY-4.0-synthetic-gen3ia",
+  "graine": 65103100,
+  "totalDemande": 5000000,
+  "totalEcrit": 5000000,
+  "tailleLot": 2000,
+  "domaines": [
+    {
+      "id": "recherche-web",
+      "label": "Recherche web",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 141926400,
+      "sha256": "697dcb33d10773ac00272c98f71181506d0965b4acca1faa23a3146a856fdee3",
+      "octets": 1710410
+    },
+    {
+      "id": "controle-donnees",
+      "label": "Contrôle de données",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 209664000,
+      "sha256": "d190ed4d9e264373725f78004afd3d5ec698a2911c23362c831e695ae8631a62",
+      "octets": 1713832
+    },
+    {
+      "id": "redaction-texte",
+      "label": "Rédaction de texte",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 209664000,
+      "sha256": "765aef40074477fc4f0aa0f1a26fad90204c2fb62f09d63b56be313cdf8a8fd3",
+      "octets": 1677110
+    },
+    {
+      "id": "analyse-documents",
+      "label": "Analyse de documents",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 193536000,
+      "sha256": "a14f44ecaf5969ea1b1e6513a4a9c7653ff72201aefd454806064a98aca0ec5d",
+      "octets": 1746197
+    },
+    {
+      "id": "generation-code",
+      "label": "Génération de code",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 225792000,
+      "sha256": "9886ad8cf165efec8586fb38d4ea1b92d9f08aa8c7f48c95b2f98ebbb2808b81",
+      "octets": 1697936
+    },
+    {
+      "id": "analyse-donnees",
+      "label": "Analyse de données",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 209664000,
+      "sha256": "b281cb7f7f4de7e1bd91fa27a24b828046098bb4fff86997a81994ad66e417d7",
+      "octets": 1699615
+    },
+    {
+      "id": "cybersecurite",
+      "label": "Cybersécurité",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 209664000,
+      "sha256": "af89a5221b386faac1489bb0edc8efa778c2e07ca6c2f8324226a69dd6ea409b",
+      "octets": 1736384
+    },
+    {
+      "id": "medecine-sante",
+      "label": "Médecine et santé",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 180633600,
+      "sha256": "05900e07af6ea8599ee66757a82f14be6f999f9d484f4ffabba30032d9af3e39",
+      "octets": 1691812
+    },
+    {
+      "id": "commerce-economie",
+      "label": "Commerce et économie",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 225792000,
+      "sha256": "2a907799f21b830911551240b03d3dc89b08d5d42f92504f19f3fa48952b3738",
+      "octets": 1694571
+    },
+    {
+      "id": "langue-communication",
+      "label": "Langue et communication",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 290304000,
+      "sha256": "73725e07df45841ba69a351fcecc96f9281187f25d3bf4edc33be9c53a548ffd",
+      "octets": 1686079
+    },
+    {
+      "id": "ingenierie-industrie",
+      "label": "Ingénierie et industrie",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 193536000,
+      "sha256": "5b6bf0c553959e26fd599beb45cd05ace65e384e4b1fe3d9fff3e32ff1ec8e83",
+      "octets": 1683289
+    },
+    {
+      "id": "art-creation-multimedia",
+      "label": "Art et création multimédia",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 270950400,
+      "sha256": "f299b812ef6f4b28c7847724a29283964af35007ea9167421d2f73ec6c9586c9",
+      "octets": 1653732
+    },
+    {
+      "id": "agriculture-environnement",
+      "label": "Agriculture et environnement",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 225792000,
+      "sha256": "eaa4fab8b14a5e91085aaab44d046d264fedae09826406db9d0899b2e45c8686",
+      "octets": 1707299
+    },
+    {
+      "id": "droit-administration",
+      "label": "Droit et administration",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 209664000,
+      "sha256": "d79a1592317c0faa9ddf3ee93c7f46869dce593da297bc9c97265ba7b68c7aad",
+      "octets": 1660347
+    },
+    {
+      "id": "education-recherche",
+      "label": "Éducation et recherche",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 225792000,
+      "sha256": "b5d77f1058fb677b26cefe1f0620286f85d4277aa6f92d7644060e21c70e6c33",
+      "octets": 1658206
+    },
+    {
+      "id": "transport-immobilier",
+      "label": "Transport et immobilier",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 209664000,
+      "sha256": "7c675ad17c9f981871e0ca5f12fae8a4a682d1669b7a9f2906b4697af9c0c4af",
+      "octets": 1658843
+    },
+    {
+      "id": "sciences-humaines-sociales",
+      "label": "Sciences humaines et sociales",
+      "echantillons": 263158,
+      "lots": 132,
+      "espaceCombinatoire": 209664000,
+      "sha256": "3429792915fd684c7d0403a8708d5b284e2d5c590b04244f4f5210e32276e329",
+      "octets": 1684739
+    },
+    {
+      "id": "ia-specialisee-emergente",
+      "label": "Domaines spécialisés et émergents en IA",
+      "echantillons": 263157,
+      "lots": 132,
+      "espaceCombinatoire": 193536000,
+      "sha256": "aaa659c14e2e96315fa35d2da3a3dd59b551da5f1c559a423d78e93aa4e2b600",
+      "octets": 1652924
+    },
+    {
+      "id": "apprentissage-entre-ia",
+      "label": "Apprentissage autonome avec d'autres IA",
+      "echantillons": 263157,
+      "lots": 132,
+      "espaceCombinatoire": 177408000,
+      "sha256": "24ff5bede58c4eb07ec1ef7b0800ef8a8c6a3fcade94609f9cb5de5eb9fd1d07",
+      "octets": 1703311
+    }
+  ],
+  "noteHonnete": "Corpus SYNTHÉTIQUE étiqueté comme tel : il inscrit la fréquence porteuse de chaque domaine dans le substrat, il ne remplace pas des données réelles massives (cf. Limites honnêtes it.61/63). Reproductible à l'identique depuis la graine."
+}
