@@ -4723,3 +4723,8 @@ ZÉRO chiffre mesuré en dur. Anomalie documentaire notée : rapport it.63 disai
 l'artefact machine dit 86 939 (somme vérifiée ✓) — surfaces alimentées par le lecteur uniquement.
 Validation : tsc 0, eslint 0 (5 fichiers), ciblés 54/54, suite complète **5396/5396** (12 skipped).
 Rapport : docs/rapports/rapport-job-478451-2026-10-31-1910.md
+Vérification production (11:40-11:44 UTC) : CI 005f238 **5/5 success** ; release cd-latest
+publiée 11:35:06Z, poller PULL a swappé → **prod 005f238 LIVE** (build 11:34:44Z) ;
+/vocation (200) rend les DEUX campagnes (A : 19 182 944 + bilan 4 signaux + tableau par
+domaine depuis la charte ; B : 19 038 000 intact) ; portes /api/neural/* 401 anonymes
+intacts ; sonde locale 11/11 endpoints (TTFB < 900 ms). it.64 close.
