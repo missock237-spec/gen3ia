@@ -232,10 +232,19 @@ export function getNeuralRuntime(): NeuralRuntime {
 
   // 1-bis. CORTEX V2 — étage columnnaire + champ cortical (1e9 neurones).
   //    Activé par défaut ; GEN3_CORTEX_V2=off retombe sur le noyau v1 seul.
+  //    it.67 — HOMEOSTASIE SYNAPTIQUE activée sur le cortex VIF : il
+  //    ré-apprend ses paires QA à chaque démarrage + la boucle auto — sans
+  //    homéostasie, la plasticité sature les poids vers 1.0 (anomalie
+  //    it.65 §3.4). La mise à l'échelle plafonne la somme des poids
+  //    sortants (ratios préservés) : le substrat reste entraînable
+  //    indéfiniment. La télémétrie (metabolisme.normalisations) le mesure.
   const configV2 = configCortexV2DepuisEnv();
   let cortexV2: EffecteurCortexV2 | null = null;
   if (configV2.actif) {
-    const cortex = new CortexColumnnaire({ colonnes: configV2.colonnes });
+    const cortex = new CortexColumnnaire({
+      colonnes: configV2.colonnes,
+      normalisationHomeostatique: true,
+    });
     const champ = new ChampCorticalGen3(SEED_RUNTIME);
     cortexV2 = new EffecteurCortexV2(reseau, cortex, champ, SEED_RUNTIME + 2);
   }

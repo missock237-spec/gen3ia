@@ -160,7 +160,11 @@ describe("garde 33ᵉ — générateur de datasets et amélioration continue (it
     expect(boucle).toContain("paires.length === 0 && echantillons.length === 0");
     expect(boucle).toContain("sourceGenerateur");
     const types = readFileSync(CHEMIN_TYPES, "utf8");
-    expect(types).toContain("generateur?: { paires: number; reference: string }");
+    // it.67 — le champ `questions` est ADDITIF (les artefacts it.65
+    // restent conformes) ; `paires` et `reference` sont inchangés.
+    expect(types).toContain(
+      "generateur?: { paires: number; questions?: number; reference: string }",
+    );
     const source = readFileSync(CHEMIN_SOURCE, "utf8");
     expect(source).toContain("paireGenere");
     expect(source).toContain("server-only");

@@ -51,6 +51,9 @@ export interface MetabolismePasV2 {
   transmissions: number;
   /** Coût réel du pas en millisecondes (performance.now). */
   ms: number;
+  /** it.67 — normalisations homeostatiques appliquées ce pas (0 si la
+   *  config est désactivée ; mesure honnête, jamais estimée). */
+  normalisations: number;
 }
 
 /** Configuration du cortex columnnaire. */
@@ -80,6 +83,20 @@ export interface CortexColumnnaireConfig {
   seed: number;
   /** Nombre de bandes de sortie (groupes de colonnes pour la résonance). */
   bandes: number;
+  /** it.67 — HOMEOSTASIE SYNAPTIQUE (échelle synaptique) : après chaque
+   *  spike, si la somme des poids sortants de la colonne dépasse
+   *  `budgetPoidsSortants`, ils sont remis à l'échelle (ratios préservés
+   *  — le signal appris reste, la saturation disparaît). DÉFAUT FALSE :
+   *  la sémantique exacte v1 (équivalence prouvée par le test de fidélité)
+   *  reste le comportement par défaut ; les sessions d'entraînement
+   *  longues (consolidation multi-époques) l'activent pour lever
+   *  l'anomalie documentée it.65 §3.4 (cascade CSR saturante). */
+  normalisationHomeostatique: boolean;
+  /** it.67 — budget de la somme des poids sortants d'une colonne (lorsque
+   *  la normalisation homeostatique est active). Défaut : voisins × 0.5
+   *  (moyenne 0.5/arête — au-dessus de l'initial 0.1-0.5, sous la
+   *  saturation 1.0). */
+  budgetPoidsSortants: number;
 }
 
 /** Valeurs par défaut — it.56 (demande propriétaire : « un million de
@@ -97,6 +114,8 @@ export const CORTEX_CONFIG_DEFAUTS: CortexColumnnaireConfig = {
   lrBoost: 0.15,
   seed: 42,
   bandes: 32,
+  normalisationHomeostatique: false,
+  budgetPoidsSortants: 6.0,
 };
 
 /** Intensité par occurrence d'un token projeté (aligné sur l'encodeur v1). */
@@ -144,8 +163,17 @@ export class CortexColumnnaire {
   readonly csrCible: Uint32Array;
   readonly csrPoids: Float32Array;
 
-  /** Colonnes recevant une transmission (évaluées au cycle suivant). */
+  /** Colonnes recevant une transmission (évaluées au cycle suivant).
+   *  it.67 — DÉDUPLIQUÉE (drapeau `enFile`) : une même colonne ne peut
+   *  être empilée qu'UNE fois par cycle. EXACT (les doublons étaient des
+   *  ré-évaluations sans effet : drapeau de spike ou décroissance dt=0 —
+   *  l'équivalence v1 reste prouvée par le test de fidélité, inchangé) et
+   *  BORNÉ : la liste ne peut plus dépasser `colonnes` entrées — c'est le
+   *  « plafond de la liste d'attente » demandé par le rapport it.65
+   *  §3.4, sans perte de propagation (déduplication, pas troncature). */
   private enAttente: number[] = [];
+  /** it.67 — drapeau « déjà en file ce cycle » (déduplication). */
+  private enFile: Uint8Array;
 
   /** Résonance SPIKE par bande du dernier pas (mécanique pulsaire). */
   private dernierResonance: Float32Array;
@@ -156,6 +184,7 @@ export class CortexColumnnaire {
     reposes: 0,
     transmissions: 0,
     ms: 0,
+    normalisations: 0,
   };
 
   /**
@@ -177,6 +206,7 @@ export class CortexColumnnaire {
     this.dernierSpike = new Float64Array(n);
     this.dernierTouche = new Float64Array(n);
     this.flagSpike = new Uint8Array(n);
+    this.enFile = new Uint8Array(n);
     this.dernierResonance = new Float32Array(this.config.bandes);
     this.energieBandes = new Float32Array(this.config.bandes);
 
@@ -297,6 +327,9 @@ export class CortexColumnnaire {
     const spikes: number[] = [];
     const { voisins, plasticiteFenetre, lrBoost, bandes, colonnes } =
       this.config;
+    const normaliser = this.config.normalisationHomeostatique;
+    const budget = this.config.budgetPoidsSortants;
+    let normalisations = 0;
 
     // ---- (1)+(2) Évaluation : transmissions en attente + injections ------
     // (une colonne ne franchit le seuil que lorsqu'elle reçoit de l'énergie)
@@ -306,6 +339,7 @@ export class CortexColumnnaire {
       this.enAttente = [];
       evaluees += attente.length;
       for (const c of attente) {
+        this.enFile[c] = 0; // it.67 : libère le drapeau de déduplication
         if (this.evaluerColonne(c, 0, t)) spikes.push(c);
       }
     }
@@ -331,11 +365,29 @@ export class CortexColumnnaire {
         this.energies[cible] += this.csrPoids[p];
         this.energieBandes[Math.min(bandes - 1, Math.floor(cible / parBande))] +=
           this.csrPoids[p];
-        this.enAttente.push(cible);
+        if (this.enFile[cible] === 0) {
+          this.enFile[cible] = 1;
+          this.enAttente.push(cible);
+        }
         // Plasticité (renforcement si la cible a spiké récemment).
         const dt = t - this.dernierSpike[cible];
         if (dt > 0 && dt < plasticiteFenetre) {
           this.csrPoids[p] = Math.min(1.0, this.csrPoids[p] + lrBoost);
+        }
+      }
+      // it.67 — HOMEOSTASIE SYNAPTIQUE (si activée) : la somme des poids
+      // sortants de la colonne qui vient de spiker est plafonnée au budget
+      // (mise à l'échelle, ratios préservés). Chaque spike injecte alors au
+      // plus `budget` d'énergie au total — la cascade CSR (anomalie it.65
+      // §3.4 : poids tous saturés à 1.0 → avalanche) est physiquement
+      // bornée. Hors config : sémantique v1 exacte, zéro changement.
+      if (normaliser) {
+        let somme = 0;
+        for (let k = 0; k < voisins; k++) somme += this.csrPoids[base + k];
+        if (somme > budget) {
+          const facteur = budget / somme;
+          for (let k = 0; k < voisins; k++) this.csrPoids[base + k] *= facteur;
+          normalisations += 1;
         }
       }
     }
@@ -362,6 +414,7 @@ export class CortexColumnnaire {
     this.metabolismeDernierPas.reposes = colonnes - evaluees;
     this.metabolismeDernierPas.transmissions = spikes.length * voisins;
     this.metabolismeDernierPas.ms = cout;
+    this.metabolismeDernierPas.normalisations = normalisations;
 
     return spikes;
   }
@@ -385,6 +438,12 @@ export class CortexColumnnaire {
       accumule.set(colonne, suivant);
     }
     return Array.from(accumule.entries());
+  }
+
+  /** it.67 — taille ACTUELLE de la liste d'attente (télémétrie honnête
+   *  du plafond : ne peut jamais dépasser `config.colonnes`). */
+  get tailleListeAttente(): number {
+    return this.enAttente.length;
   }
 
   /**
@@ -457,6 +516,7 @@ export class CortexColumnnaire {
     this.energies.fill(0);
     this.dernierTouche.fill(0);
     this.enAttente = [];
+    this.enFile.fill(0);
     this.dernierResonance.fill(0);
     this.energieBandes.fill(0);
     // flagSpike est déjà toujours libéré en fin de pas.

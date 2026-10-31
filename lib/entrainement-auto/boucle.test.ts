@@ -134,9 +134,12 @@ describe("executerCycleAuto", () => {
     expect(second?.message).toContain("Aucun nouveau dataset ingéré");
     expect(second?.message).toContain("Source interne active");
     expect(second?.message).toContain("generateur-interne-vocation");
+    // it.67 — le lot interne inclut AUSSI des questions du cadre.
+    expect(second?.message).toContain("generateur-questions-vocation");
     expect(second?.datasetsIngestes).toEqual(["generateur-interne-vocation"]);
     expect(second?.generateur?.reference).toBe("generateur-interne-vocation");
     expect(second?.generateur?.paires).toBeGreaterThan(0);
+    expect(second?.generateur?.questions).toBeGreaterThan(0);
   }, 30_000);
 
   it("échec d'un téléchargement : consigné honnêtement, le cycle continue", async () => {
@@ -164,6 +167,7 @@ describe("executerCycleAuto", () => {
     // rapport) — l'erreur hub reste consignée, rien n'est masqué.
     expect(rapport?.statut).toBe("termine");
     expect(rapport?.generateur?.paires).toBeGreaterThan(0);
+    expect(rapport?.generateur?.questions).toBeGreaterThan(0);
     expect(rapport?.hubs[0]?.erreurs.some((e) => e.includes("connexion hub impossible"))).toBe(true);
   }, 30_000);
 

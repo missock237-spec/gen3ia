@@ -172,8 +172,10 @@ export interface RapportCycleAuto {
   /** Références réellement ingérées ce cycle. */
   datasetsIngestes: string[];
   /** it.65 — présent si la SOURCE INTERNE (générateur de datasets) a
-   *  fourni la matière ce cycle (hubs muets — amélioration continue). */
-  generateur?: { paires: number; reference: string };
+   *  fourni la matière ce cycle (hubs muets — amélioration continue).
+   *  it.67 — `questions` : paires question→réponse du cadre d'apprentissage
+   *  incluses dans le lot (forme question→réponse, ancrée charte). */
+  generateur?: { paires: number; questions?: number; reference: string };
   /** Présent en régime maîtrise : progression du catalogue. */
   maitrise?: RapportMaitrise;
 }

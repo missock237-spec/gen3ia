@@ -49,7 +49,14 @@ import type {
 // it.65 — SOURCE INTERNE : le générateur de datasets (charte de vocation)
 // garantit que la boucle n'est plus jamais à court de matière — gen3 peut
 // continuer à s'améliorer en continu, sans aucun accès réseau.
-import { apportGenerateur, REF_GENERATEUR } from "./generateur";
+// it.67 — la source génère AUSSI des QUESTIONS du cadre d'apprentissage
+// (paires question→réponse ancrées charte — forme question→réponse).
+import {
+  apportGenerateur,
+  apportQuestionsVocation,
+  REF_QUESTIONS_VOCATION,
+  REF_GENERATEUR,
+} from "./generateur";
 import type { PaireLangage } from "@/lib/neural/generation/corpus";
 import type { TrainingSample } from "@/lib/neural/training/dataset";
 
@@ -640,10 +647,17 @@ export async function executerCycleAuto(opts: OptionsCycle = {}): Promise<Rappor
     // la fabrique interne produit un lot TOUJOURS NOUVEAU de paires de
     // vocation (offset bijection = cycle × taille — anti-rejoue) : gen3
     // continue à s'améliorer en continu, même sans aucun accès réseau.
+    // it.67 — le lot inclut AUSSI des QUESTIONS du cadre d'apprentissage
+    // (paires question→réponse ancrées charte) : le SNN s'entraîne à la
+    // FORME question→réponse de son cadre, cycle après cycle.
     let sourceGenerateur = false;
+    let questionsVocation = 0;
     if (paires.length === 0 && echantillons.length === 0) {
       try {
         paires.push(...apportGenerateur(etat.cyclesExecutes));
+        const questions = apportQuestionsVocation(etat.cyclesExecutes);
+        questionsVocation = questions.length;
+        paires.push(...questions);
         sourceGenerateur = true;
       } catch (erreur: unknown) {
         erreursHub.huggingface.push(`générateur interne : ${messageErreur(erreur)}`);
@@ -687,7 +701,7 @@ export async function executerCycleAuto(opts: OptionsCycle = {}): Promise<Rappor
     const statut: RapportCycleAuto["statut"] =
       ingeres.length === 0 && !sourceGenerateur ? "echec" : "termine";
     const mentionGenerateur = sourceGenerateur
-      ? ` Source interne active (${REF_GENERATEUR}) : ${paires.length} paire(s) générée(s) depuis la charte de vocation — matière toujours nouvelle, amélioration continue sans hub.`
+      ? ` Source interne active (${REF_GENERATEUR}) : ${paires.length - questionsVocation} paire(s) générée(s) depuis la charte de vocation + ${questionsVocation} question(s) du cadre (${REF_QUESTIONS_VOCATION}) — matière toujours nouvelle, amélioration continue sans hub.`
       : "";
     const message =
       ingeres.length === 0
@@ -704,7 +718,15 @@ export async function executerCycleAuto(opts: OptionsCycle = {}): Promise<Rappor
       hubs,
       ...(langage ? { langage } : {}),
       ...(intention ? { intention } : {}),
-      ...(sourceGenerateur ? { generateur: { paires: paires.length, reference: REF_GENERATEUR } } : {}),
+      ...(sourceGenerateur
+        ? {
+            generateur: {
+              paires: paires.length - questionsVocation,
+              questions: questionsVocation,
+              reference: REF_GENERATEUR,
+            },
+          }
+        : {}),
       datasetsIngestes: sourceGenerateur && ingeres.length === 0 ? [REF_GENERATEUR] : ingeres,
     };
 

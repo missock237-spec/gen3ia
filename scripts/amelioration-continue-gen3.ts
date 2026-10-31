@@ -553,7 +553,14 @@ async function principal() {
   }
 
   // Cortex + champ — même substrat que it.61/63 (1 048 576 colonnes).
-  const cortex = new CortexColumnnaire(CORTEX_CONFIG_DEFAUTS);
+  // it.67 — HOMEOSTASIE SYNAPTIQUE sur le cortex d'entraînement : la
+  // re-consolidation multi-époques ne peut plus saturer les poids à 1.0
+  // (anomalie it.65 §3.4 — cascade CSR). Les sondes/témoins gardent la
+  // config exacte (rejeu fidèle des poids restaurés).
+  const cortex = new CortexColumnnaire({
+    ...CORTEX_CONFIG_DEFAUTS,
+    normalisationHomeostatique: true,
+  });
   const champ = new ChampCorticalGen3(20261031);
 
   const depotComptes: Record<string, { textes: number; fichiers: string[] }> = {};

@@ -150,6 +150,106 @@ function reponseMissionEN(label: string, taches: readonly string[]): string {
   );
 }
 
+/** EN — réponse « tâche précise » ancrée charte (contenu traduit strict). */
+function reponseTachePreciseEN(label: string, tache: string, outils: readonly string[]): string {
+  return (
+    `Yes: "${tache}" is part of the tasks I execute in the "${label}" domain. ` +
+    `I rely on the platform's real tools: ${citerOutils(outils)}. ` +
+    `Give me the context (file, topic, goal) and I will perform the task.`
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* IT.67 — GÉNÉRATION DE QUESTIONS TOUJOURS NOUVELLES (source interne   */
+/* de la boucle d'auto-apprentissage). L'espace question→réponse est    */
+/* FINI ET MESURÉ : gabarits × tâches × mots-clés × 2 langues, tout     */
+/* tiré de la charte — au-delà, le modulo rejoue (consolidation de la   */
+/* FORME question→réponse, jamais de contenu inventé).                  */
+/* ------------------------------------------------------------------ */
+
+/** Gabarits de questions FR (la tâche et le mot-clé sont interpolés).
+ *  Chaque gabarit emploie la tâche (t), le mot-clé (m) et le label (l). */
+const GABARITS_QUESTIONS_FR: readonly ((t: string, m: string, l: string) => string)[] = [
+  (t, m, l) => `peux-tu t'occuper de « ${t} » pour ${m} (${l}) ?`,
+  (t, m, l) => `comment procèdes-tu pour « ${t} » en ${l}, volet ${m} ?`,
+  (t, m) => `j'ai besoin d'aide : « ${t} », côté ${m}.`,
+  (t, m) => `que fais-tu exactement pour « ${t} » quand il s'agit de ${m} ?`,
+  (t, m, l) => `${l} : prends en charge « ${t} » sur ${m}.`,
+  (t, m) => `ton approche pour « ${t} » (${m}) ?`,
+  (t, m, l) => `est-ce que « ${t} » en ${l} (volet ${m}) fait partie de ce que tu sais faire ?`,
+  (t, m, l) => `pour ${m}, qui peut réaliser « ${t} » dans ${l} ?`,
+];
+
+/** Gabarits de questions EN (même charte, traduction stricte). */
+const GABARITS_QUESTIONS_EN: readonly ((t: string, m: string, l: string) => string)[] = [
+  (t, m, l) => `can you handle "${t}" for ${m} (${l}) ?`,
+  (t, m, l) => `how do you proceed with "${t}" in ${l} (${m}) ?`,
+  (t, m) => `i need help: "${t}", ${m} side.`,
+  (t, m) => `what exactly do you do for "${t}" when it comes to ${m} ?`,
+  (t, m, l) => `${l}: take over "${t}" on ${m}.`,
+  (t, m) => `your approach to "${t}" (${m}) ?`,
+];
+
+/** Une paire question→réponse GÉNÉRÉE (complète, avec la langue). */
+export interface PaireQuestionGenere extends PaireQuestionVocation {
+  /** Indice bijection qui a produit la paire (traçabilité anti-rejoue). */
+  indice: number;
+}
+
+/**
+ * GÉNÉRATEUR DÉTERMINISTE de questions du cadre d'apprentissage :
+ * l'indice `i` est décomposé en digits (langue, gabarit, tâche, mot-clé)
+ * — bijection exacte dans l'espace mesuré par `espaceQuestionsDomaine`.
+ * La réponse est composée DEPUIS LA CHARTE uniquement (tâche citée +
+ * mission + outils réels du registre) — zéro invention, zéro statistique.
+ */
+export function paireQuestionGenere(
+  domaineId: string,
+  i: number,
+): PaireQuestionGenere {
+  const domaine = DOMAINES_VOCATION.find((d) => d.id === domaineId);
+  if (!domaine) throw new Error(`Domaine de vocation inconnu : ${domaineId}`);
+  const { label, mission, taches, outils, motsCles } = domaine;
+  const idx = Math.max(0, Math.floor(i));
+
+  const langue: "fr" | "en" = idx % 2 === 0 ? "fr" : "en";
+  const rest = Math.floor(idx / 2);
+  const gabarits = langue === "fr" ? GABARITS_QUESTIONS_FR.length : GABARITS_QUESTIONS_EN.length;
+  const gabarit = rest % gabarits;
+  const rest2 = Math.floor(rest / gabarits);
+  const tache = taches[rest2 % taches.length] ?? taches[0] ?? "tâche de vocation";
+  const motcle =
+    motsCles[Math.floor(rest2 / Math.max(1, taches.length)) % Math.max(1, motsCles.length)] ??
+    motsCles[0] ??
+    "vocation";
+
+  const labelMin = label.toLowerCase();
+  const question =
+    langue === "fr"
+      ? (GABARITS_QUESTIONS_FR[gabarit] ?? GABARITS_QUESTIONS_FR[0]!)(tache, motcle, labelMin)
+      : (GABARITS_QUESTIONS_EN[gabarit] ?? GABARITS_QUESTIONS_EN[0]!)(tache, motcle, labelMin);
+
+  const reponse =
+    langue === "fr"
+      ? reponseTachePreciseFR(label, tache, mission, outils)
+      : reponseTachePreciseEN(label, tache, outils);
+
+  return { question, reponse, domaineId, theme: "tache-precise", langue, indice: idx };
+}
+
+/** Espace de questions d'un domaine (fini, calculé depuis la charte). */
+export function espaceQuestionsDomaine(domaineId: string): {
+  fr: number;
+  en: number;
+  total: number;
+} {
+  const domaine = DOMAINES_VOCATION.find((d) => d.id === domaineId);
+  if (!domaine) throw new Error(`Domaine de vocation inconnu : ${domaineId}`);
+  const fr = GABARITS_QUESTIONS_FR.length * domaine.taches.length * Math.max(1, domaine.motsCles.length);
+  const en = GABARITS_QUESTIONS_EN.length * domaine.taches.length * Math.max(1, domaine.motsCles.length);
+  return { fr, en, total: fr + en };
+}
+
 /** Construit les paires du corpus (déterministe, ordre de la charte). */
 function construireCorpus(): PaireQuestionVocation[] {
   const paires: PaireQuestionVocation[] = [];
